@@ -117,3 +117,46 @@ Predictions with blind/not-blind first, then the Gate 0 sheet, then measurements
 predictions, then every gate with a verdict. A gate that did not run is written **NOT YET RUN**.
 No judgement words. **A negative result — the output ignores authored motion — is a full
 success and the most important thing this experiment could find.**
+
+---
+
+## Amendment 1 — 2026-08-10, advisor: the noise-floor justification is HALF WRONG
+
+**Appended before E03 ran, on evidence from E02's A1b arm. It does not change E03's question,
+its arms, or its ceiling — it changes what a result may be read to mean.**
+
+The "Gates" section says:
+
+> *"The noise floor is zero on lossless frames (E02, 3/3 pairs bit-identical), so a single run
+> per arm reads directly. No repeat runs are needed for the floor."*
+
+**The measurement is right and the inference from it is wrong.** E02 measured the floor for
+**re-running the same submission** — identical payload, identical seed — and found it bit-identical,
+three pairs out of three. That is a *reproducibility* floor. It is **not** the floor for **drawing a
+second sample from the model**, which has never been measured on this route.
+
+E02 A1b is why this matters. A1a and A1b differ by one operation on the control, and their timing
+correlations came out +0.521 and +0.581. That gap has **zero measurement variance** — repeat runs
+are bit-identical — and it is still **two numbers from two single generations**. E02's closing
+ruling refused to read it as an ordering, and the same refusal binds here.
+
+**What this changes for E03, concretely:**
+
+1. **P1 and P2 are safe as written, because they are CATEGORICAL.** *Does the arm go up.* *At which
+   frame does it pass horizontal.* A categorical difference between B1 and B3 — arm rises vs arm
+   does not — is not a small numeric gap and does not need a between-generation floor to be read.
+   **This is why the spec's arm design survives its own broken justification**, and it is worth
+   noticing that the design was better than the reasoning offered for it.
+2. **Any MAGNITUDE comparison between arms is out of bounds** on one generation each. If B1's arm
+   passes horizontal at frame 18 and the control at frame 16, that two-frame gap may **not** be
+   reported as "close tracking" or compared against any other arm's gap as an ordering. Report the
+   numbers; do not rank them.
+3. **If a result turns out to hinge on a small numeric gap, that is a HALT** — report it with its
+   evidence and stop. The remedy is a measured between-generation floor, which is its own
+   experiment with its own ceiling, and it is not to be improvised out of E03's spare generation.
+   The fourth generation stays reserved for a fired gate, exactly as the spec says.
+
+**Nothing measured in E02 is withdrawn by this amendment.** The zero floor stands as what it is —
+the reason a lossless tap is mandatory and the reason a codec can never again be mistaken for model
+variance. What is withdrawn is the sentence "a single run per arm reads directly," which is true for
+a categorical read and false for a numeric one.
