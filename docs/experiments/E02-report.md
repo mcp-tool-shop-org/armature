@@ -223,6 +223,23 @@ is exactly why the spec made Gate C a one-submission-then-halt andon rather than
 **Credits spent: 0. Generations submitted: 0. Uploads that succeeded: 0** (the PNG upload
 returned a URL; the PUT was not executed, so nothing was transferred).
 
+## 8b. A second input the spec did not name — found, and not a blocker
+
+Every arm needs a `reference_image` (A2 is defined as *"same prompt, same reference, no
+control video"*, so the reference is held constant across arms and cannot be omitted). The
+spec never says where it comes from. Enumerated rather than commissioned — four plates
+already sit beside the subject GLB:
+
+```
+blackguard_apose_{0,1,2,3}.png    RGB, 1024x1024, no alpha
+```
+
+So no reference needs generating. **Whether these depict the same character as
+`blackguard_unirig_rigged.glb` is not something I can settle** — a shared filename stem is
+exactly the kind of evidence this repo has been burned by twice, and identity is canon and
+the Director's. They are named here as the candidates, with their measured properties, for
+his eye. E05 owns reference count and identity; E02 needs only that one exists, and one does.
+
 ## 9. Tests
 
 121 pass (E01's 103, plus 10 for `subject.py` and 8 for Gate R), and **121 pass under `-O`**
