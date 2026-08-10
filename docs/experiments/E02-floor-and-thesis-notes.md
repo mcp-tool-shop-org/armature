@@ -1,3 +1,6 @@
+> **E02 is closed. Read [E02-closing-ruling.md](E02-closing-ruling.md) first — this
+> document is retained for its corrections and is not the current statement.**
+
 # E02 — the floor was the codec, and A2 changes what the thesis is about
 
 **Advisor notes, 2026-08-10. PROVISIONAL** — E02 is still open (see

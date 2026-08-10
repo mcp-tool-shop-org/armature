@@ -1,3 +1,6 @@
+> **E02 is closed. Read [E02-closing-ruling.md](E02-closing-ruling.md) first — this
+> document is retained for its corrections and is not the current statement.**
+
 # E02 — canon ruling: the reference plates and the mesh are the same character
 
 **Director's ruling, 2026-08-10.** Asked whether `blackguard_apose_{0..3}.png` depict the same

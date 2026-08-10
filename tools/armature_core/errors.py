@@ -52,6 +52,36 @@ class G5ConventionConformance(GateFailure):
     gate = "G5"
 
 
+class GateRRoundTrip(GateFailure):
+    """The encoded control video did not decode back to the frames that went in.
+
+    E02's andon on the upload bridge. It exists for a failure that is silent by
+    construction: `-qp 0` is *luma*-lossless while x264 still defaults to `yuv420p`,
+    which subsamples chroma 4:1. A grayscale channel (R=G=B) survives that untouched,
+    so the corruption would appear only in the true-RGB normal channel — and the
+    video would look correct either way.
+    """
+
+    gate = "R"
+
+
+class GateBBatching(GateFailure):
+    """The control batch that reached the sampler was not the batch we submitted.
+
+    E02's andon on the PNG-batch bridge. `BatchImagesNode` takes an auto-grow list of
+    IMAGE links; if that list were mis-encoded so only the first link bound, the run
+    would proceed on a 1-frame control and nothing would error.
+
+    **Why this gate does not count output frames.** `WanVaceToVideo` pads a short
+    `control_video` up to `length` and emits `length` frames regardless, so the output
+    is 33 frames whether the control batch held 33 images or 1. Counting the output
+    would be a check that cannot fail. This gate counts the **batch itself**, saved
+    straight off the batch node, which is the only quantity the defect actually moves.
+    """
+
+    gate = "B"
+
+
 class SpecError(ArmatureError):
     """The shot spec is malformed, incomplete, or names something unknown."""
 

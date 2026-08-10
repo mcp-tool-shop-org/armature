@@ -20,6 +20,8 @@ from .errors import (
     G2Completeness,
     G4BboxSanity,
     G5ConventionConformance,
+    GateBBatching,
+    GateRRoundTrip,
 )
 
 
@@ -52,6 +54,33 @@ GENERATOR_PROFILES = {
         frame_modulus=4,
         frame_residue=1,
         source="F24 / docs.comfy.org tutorials/video/wan/vace, fetched 2026-08-10",
+    ),
+    # A3's row. Its provenance is DERIVED, and the derivation is stated rather than
+    # dressed up as a separate retrieval, because there is no Fun-Control-specific
+    # document behind it.
+    #
+    # What is measured: both saved E02 graphs load the SAME VAE file,
+    # `wan_2.1_vae.safetensors` (armature-E02-vace-control node 105 and
+    # armature-E02-funcontrol node 92, widget values read 2026-08-10). The 4n+1 frame
+    # form is a property of that VAE's temporal compression factor of 4, and the /16
+    # divisor of the spatial compression plus patch size — so both constraints follow
+    # from the component the two routes share, not from the route.
+    #
+    # What is NOT measured: `Wan22FunControlToVideo`'s own schema enforces neither
+    # (length min 1 max 16384, dims min 16 max 16384, measured via get_node), so
+    # nothing upstream will catch an illegal frame count on this route either.
+    "wan-fun-control": GeneratorProfile(
+        name="wan-fun-control",
+        dim_divisor=16,
+        frame_modulus=4,
+        frame_residue=1,
+        source=(
+            "DERIVED 2026-08-10 from the shared VAE: both E02 graphs load "
+            "wan_2.1_vae.safetensors (measured widget values), and 4n+1 / div-16 are "
+            "properties of that VAE's temporal and spatial compression, so F24's "
+            "constraint transfers on a measured shared component rather than on the "
+            "family name. No Fun-Control-specific document was retrieved."
+        ),
     ),
 }
 
@@ -251,3 +280,117 @@ def g5_openpose_conformance(keypoint_count, limb_seq, reference_count, reference
             },
         )
     return True
+
+
+def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label="decoded video"):
+    """Gate R · ANDON — the encode/decode round trip. Raises before any credit is spent.
+
+    `source` and `decoded` are equal-length sequences of uint8 arrays, each either
+    (H, W) or (H, W, 3). Raises `GateRRoundTrip` unless every pixel of every frame is
+    identical.
+
+    **Per-channel, deliberately.** The failure this gate exists to catch is chroma
+    subsampling, which touches only the colour-difference channels — so a scalar mean
+    over a grayscale (R=G=B) sequence is exactly zero whether or not the encoder is
+    subsampling, and a gate reporting that scalar would read green on a pipeline that
+    silently destroys the normal channel. The report therefore names *which channel*
+    differs, and the caller is expected to run this on the channel that can actually
+    fail rather than only on one that cannot.
+
+    Frame count is checked first and separately: a decode that returns fewer frames
+    than went in is the single most likely bridge failure (a frame-count form the
+    muxer rounds), and it would otherwise surface as a confusing shape error.
+    """
+    import numpy as np
+
+    ev = {
+        "n_source": len(source),
+        "n_decoded": len(decoded),
+        "source": source_label,
+        "decoded": decoded_label,
+    }
+
+    if len(source) != len(decoded):
+        raise GateRRoundTrip(
+            f"frame count changed through the bridge: {len(source)} in, "
+            f"{len(decoded)} out",
+            ev,
+        )
+    if not source:
+        raise GateRRoundTrip("no frames to compare; the round trip proves nothing", ev)
+
+    problems, per_frame = [], []
+    for i, (a, b) in enumerate(zip(source, decoded)):
+        a = np.asarray(a)
+        b = np.asarray(b)
+        if a.shape != b.shape:
+            problems.append(f"frame {i}: shape {a.shape} in, {b.shape} out")
+            continue
+        d = np.abs(a.astype(np.int16) - b.astype(np.int16))
+        if d.any():
+            rec = {
+                "frame": i,
+                "max_abs": int(d.max()),
+                "mean_abs": float(d.mean()),
+                "n_px_differing": int((d != 0).any(axis=-1).sum() if d.ndim == 3 else (d != 0).sum()),
+            }
+            if d.ndim == 3:
+                rec["per_channel_max_abs"] = [int(d[..., c].max()) for c in range(d.shape[2])]
+                rec["per_channel_mean_abs"] = [float(d[..., c].mean()) for c in range(d.shape[2])]
+            per_frame.append(rec)
+            problems.append(
+                f"frame {i}: max |delta| {rec['max_abs']} over "
+                f"{rec['n_px_differing']} px"
+            )
+
+    if problems:
+        ev["frames_differing"] = len(per_frame)
+        ev["detail"] = per_frame[:8]
+        raise GateRRoundTrip(
+            f"the encode/decode round trip is not lossless: "
+            + "; ".join(problems[:6])
+            + (f" (+{len(problems) - 6} more frames)" if len(problems) > 6 else ""),
+            ev,
+        )
+
+    ev["verdict"] = "identical"
+    return ev
+
+
+def gate_b_batching(expected_frames, observed_batch_images, evidence=None):
+    """Gate B · ANDON — the control batch actually carried every frame. Raises.
+
+    `observed_batch_images` is the count of images returned by a save node wired
+    directly to the batch node's output — the batch as the sampler received it, not the
+    generated video. See `GateBBatching` for why the output frame count is the wrong
+    quantity: `WanVaceToVideo` pads a short control up to `length`, so the video is 33
+    frames either way and a check on it could never fire.
+
+    **The andon is on the direction the invariant does not bound.** A batch larger than
+    submitted is as wrong as a smaller one — duplicated links, or an auto-grow slot
+    bound twice — and `!=` catches both, where `<` would wave the duplicate through.
+    """
+    ev = dict(evidence or {})
+    ev.update({"expected_frames": expected_frames, "observed_batch_images": observed_batch_images})
+
+    if not isinstance(observed_batch_images, int) or observed_batch_images < 0:
+        raise GateBBatching(
+            f"batch image count is not a count: {observed_batch_images!r}; the batch "
+            f"was not observed, so batching is unverified rather than verified",
+            ev,
+        )
+    if observed_batch_images != expected_frames:
+        short = observed_batch_images < expected_frames
+        raise GateBBatching(
+            f"the control batch carried {observed_batch_images} image(s), not "
+            f"{expected_frames}"
+            + (
+                " — BatchImagesNode bound only part of its auto-grow list, and the run "
+                "would have proceeded on a padded control with no error anywhere"
+                if short
+                else " — more images than were submitted; a link is bound twice"
+            ),
+            ev,
+        )
+    ev["verdict"] = "batch intact"
+    return ev

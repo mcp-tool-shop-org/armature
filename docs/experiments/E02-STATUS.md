@@ -1,3 +1,6 @@
+> **E02 is closed. Read [E02-closing-ruling.md](E02-closing-ruling.md) first — this
+> document is retained for its corrections and is not the current statement.**
+
 # E02 — status: EXPERIMENTING. Nothing here is settled.
 
 **Director, 2026-08-10: _"Let's not write anything in stone just yet, as we're experimenting."_**
