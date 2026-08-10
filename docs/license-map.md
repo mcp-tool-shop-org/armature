@@ -28,6 +28,22 @@ clause, and the date it was fetched. **Entries older than 90 days are advisory u
 | **HunyuanVideo** | Tencent Hunyuan Community | **CONDITIONAL** — territory + MAU | [LICENSE.txt](https://raw.githubusercontent.com/Tencent-Hunyuan/HunyuanVideo/main/LICENSE.txt) | "worldwide territory, excluding the territory of the European Union, United Kingdom and South Korea"; >100M MAU must request a license |
 | **CogVideoX-5b** | Zhipu custom | **CONDITIONAL** — registration + traffic cap | [LICENSE](https://huggingface.co/zai-org/CogVideoX-5b/raw/main/LICENSE) | "must register and obtain a basic commercial license"; "must not exceed 1 million visits per month" |
 
+### Added 2026-08-10 (second pass — local KB + Comfy consult #1)
+
+| Model / component | License | Commercial | Source | Note |
+|---|---|---|---|---|
+| **Wan2.2-Fun-A14B-Control** | Apache-2.0 | **YES** | `readouts/model-knowledge` KB (retrieval-verified) | "VACE-style control conditioning" |
+| **Wan2.2-VACE-Fun-A14B** | Apache-2.0 | **YES** | same | finetuned from Wan2.2-I2V-A14B |
+| **Wan2.2-Animate-14B** | Apache-2.0 | **YES** | same | animate a still from a driving video |
+| **umt5-xxl** (text encoder, both graphs) | Apache-2.0 | **YES** | [HF card](https://huggingface.co/google/umt5-xxl) — `cardData.license: apache-2.0`, retrieved at ruling time | ⚠ the Comfy-Org **repackaged** repo Cloud serves declares **no license at all** (blank field). Apache permits redistribution so the upstream grant governs — but the redistribution asserts nothing itself, which is worth knowing before anyone cites the repack as the authority. |
+| **CausVid `Wan21_CausVid…_1_3B`** speed-LoRA | CC-BY-NC (flagged) | **NO — BANNED** | flagged by Comfy consult #1; **not independently retrieved** | Was bypassed inside the VACE graph. **Ruled: delete, not bypass** — see below. |
+| **lightx2v 4-step** speed-LoRAs | Apache-2.0 | YES (but excluded) | Comfy consult #1 | Commercially clean; excluded on *methodology* grounds, not licensing — a 4-step/cfg-1 trajectory confounds a control-strength curve. |
+
+**Ruling — a bypassed non-commercial node still counts as present.** The gate's words are
+"anywhere in the pipeline — including experiments." A bypassed node is one accidental
+un-bypass from executing, and the workflow JSON is an artifact we version, share and cite; it
+would carry a reference to a non-commercial model. **Bypassing is not removal. Delete it.**
+
 **Ruling — Wan 2.x is the default generation route.** It is the only family that is
 unconditionally Apache 2.0 across base, VACE and Fun-Control, and it explicitly disclaims rights
 in outputs. HunyuanVideo's territory exclusion (EU/UK/South Korea) makes it unusable for a game
