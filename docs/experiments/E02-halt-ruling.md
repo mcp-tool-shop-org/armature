@@ -1,3 +1,6 @@
+> **E02 is closed. Read [E02-closing-ruling.md](E02-closing-ruling.md) first — this
+> document is retained for its corrections and is not the current statement.**
+
 # E02 — advisor ruling on the halt
 
 **Ruled 2026-08-10.** Report: [E02-report.md](E02-report.md) · predictions:

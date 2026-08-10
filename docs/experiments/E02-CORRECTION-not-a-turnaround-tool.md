@@ -1,3 +1,6 @@
+> **E02 is closed. Read [E02-closing-ruling.md](E02-closing-ruling.md) first — this
+> document is retained for its corrections and is not the current statement.**
+
 # E02 — CORRECTION: the turntable is our input, not armature's ceiling
 
 **Director, 2026-08-10: _"How is armature being shrunk to just making turnarounds?"_**

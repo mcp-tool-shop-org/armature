@@ -1,7 +1,8 @@
 #!/usr/bin/env python
-"""build_payload — assemble an E02 submission, with the gates that must fire first.
+"""build_payload — assemble a submission, with the gates that must fire first.
 
-    python tools/build_payload.py --arm=A1a --out=<payload.json>
+    python tools/build_payload.py --experiment=E02 --arm=A1a --out=<payload.json>
+    python tools/build_payload.py --experiment=E03 --arm=B1  --out=<payload.json>
 
 Emits ComfyUI **API format**. The bridge is the one ruled in `E02-halt-ruling.md`:
 33 x `LoadImage` -> `BatchImagesNode` -> `control_video`. There is no encoder anywhere in
@@ -23,6 +24,25 @@ decoration — it is the only way to observe the batch the sampler actually rece
 Counting *output video* frames cannot work: `WanVaceToVideo` pads a short `control_video`
 up to `length`, so a 1-image batch and a 33-image batch both yield 33 frames. See
 `GateBBatching`.
+
+--------------------------------------------------------------------------------
+Two experiments, one builder (E03, 2026-08-10)
+
+E03 varies the *subject's* motion instead of the camera's, so it needs a different prompt,
+a different control source and — measured, not assumed — **no `reference_image` at all**
+(`get_node WanVaceToVideo`: `reference_image` is `required: false`). Rather than fork a
+second 240-line builder, the parts that differ are data in `EXPERIMENTS` and the emitted
+graph shape is shared. **The E02 rows are pinned by payload sha256 in
+`tests/test_build_payload.py`**, so a refactor that moved E02's bytes fails a test rather
+than quietly re-topologising an experiment that has already been run and reported.
+
+**The distinct-name check binds in both directions now.** Server names are
+content-addressed, so E02 could demand 33 distinct names from 33 frames and catch a
+collapsed batch. E03's B3 arm is *defined* as one held pose repeated 33 times — 33 frames
+with exactly ONE distinct name — so a hard "must be 33 distinct" check would refuse the
+arm. The expectation is therefore computed from the local frames' own content hashes and
+compared: a moving control that collapsed raises, and a static arm that did not collapse
+raises too.
 """
 
 import argparse
@@ -53,8 +73,19 @@ class PayloadError(ArmatureError):
     """The payload could not be built as specified."""
 
 
-def _load_uploads():
-    with open("outputs/E02/uploads_depth_pershot.json", encoding="utf-8") as fh:
+# A1b is the polarity arm. Its control is a full-image `255-x` of A1a's, which is ALSO the
+# semantically correct near-dark map: E01's exporter writes BACKGROUND_DEPTH = 0.0 (black =
+# far) and subject near = bright, so inverting sends the background to 255, which still
+# reads "far" under the near-dark convention. One transform on identical geometry, so the
+# two arms differ by exactly one thing.
+UPLOAD_MAP = {
+    "A1a": "outputs/E02/uploads_depth_pershot.json",
+    "A1b": "outputs/E02/uploads_depth_pershot_inverted.json",
+}
+
+
+def _load_uploads(arm="A1a"):
+    with open(UPLOAD_MAP.get(arm, UPLOAD_MAP["A1a"]), encoding="utf-8") as fh:
         control = json.load(fh)
     with open("outputs/E02/uploads_reference.json", encoding="utf-8") as fh:
         ref = json.load(fh)["reference_apose_0"]
@@ -74,7 +105,7 @@ def _load_uploads():
 
 
 def build(arm):
-    keys, control_names, ref_name = _load_uploads()
+    keys, control_names, ref_name = _load_uploads(arm)
     use_control = arm != "A2"
 
     # ---- Gate L · ANDON. First statement that matters; nothing is emitted if it raises.
@@ -150,7 +181,8 @@ def build(arm):
             "bridge": "33 x LoadImage -> BatchImagesNode",
             "source_dir": "outputs/E02/control_480x832/depth_pershot",
             "normalization": "per-shot",
-            "polarity": "near-bright (as rendered, F19)",
+            "polarity": ("near-dark (full-image 255-x of A1a)" if arm == "A1b"
+                         else "near-bright (as rendered, F19)"),
             "frame_keys": keys,
             "server_names": control_names,
         },
