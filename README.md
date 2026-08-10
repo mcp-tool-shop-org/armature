@@ -15,19 +15,20 @@ frame.
 
 ---
 
-## State: day zero — nothing has been measured
+## State: day one — the thesis is still untested
 
-This repo was founded on 2026-08-10. **No experiment has run, no code exists beyond scaffold,
-and no claim in this file is backed by a measurement taken here.** That is the honest state and
-this section will change only as evidence arrives.
+This repo was founded on 2026-08-10. **No generation has run, no cloud credit has been spent,
+and the thesis this repo exists to test is untested.** That is the honest state and this
+section changes only as evidence arrives.
 
 | | |
 |---|---|
-| Experiments run | 0 |
+| Experiments completed | 0 — **E01 (the control-sequence exporter) is in flight** |
 | Generation probes | 0 |
 | Credits spent | 0 |
-| License map | **populated** 2026-08-10 — 20+ rows from retrieved license documents, 5 recorded UNVERIFIED |
+| License map | **populated** 2026-08-10 — 20+ rows from retrieved license documents, 4 still UNVERIFIED |
 | Research grounding | 24 findings, **34/34 citations resolved** against a retrieval oracle |
+| Public surfaces | landing page + 5 handbook pages built; **not yet deployed** |
 
 The thesis this repo exists to test — *does a CG-rendered control sequence hold a character
 through a video model* — is **untested**. The roadmap treats a negative answer as a full
