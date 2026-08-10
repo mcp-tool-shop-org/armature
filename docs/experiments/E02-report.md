@@ -273,3 +273,148 @@ bridge*:
 - **(c)** something else.
 
 I have not chosen. The measurements for each are above.
+
+---
+
+# E02 — report, part 2 (resumed after the halt was lifted)
+
+**Bridge (a) adopted per [E02-halt-ruling.md](E02-halt-ruling.md). Canon settled per
+[E02-canon-ruling.md](E02-canon-ruling.md).** Rebased on both. One generation submitted,
+then halted, exactly as Gate C specifies.
+
+## 11. Gate B — PASS, but built on a different quantity than the one specified
+
+**The check the ruling named cannot fire.** It asks Gate B to assert "the output frame
+count equals the submitted control frame count". Traced before implementing:
+`WanVaceToVideo` truncates or pads `control_video` to `length` and emits `length` frames
+regardless — so a 1-image batch and a 33-image batch **both** yield 33 output frames. The
+quantity does not move when the defect is present, and this repo's own law is that a check
+that cannot fail is not a check.
+
+Implemented instead against the quantity that does move: a `SaveImage` wired directly to
+`BatchImagesNode`'s output, so the batch is observed *as the sampler received it*. This
+still honours the ruling's principle — verify from an output, never from the absence of an
+error — and it rides the same single submission the ruling asked for.
+
+| | |
+|---|---|
+| submitted control frames | 33 |
+| images returned by the batch probe (node 301) | **33** |
+| **Gate B** | **PASS — batch intact** |
+
+The gate binds in both directions (`!=`, not `<`), so a duplicated auto-grow link fires it
+too. `test_the_rejected_check_could_not_fire` pins the reasoning in executable form so the
+weaker check is not re-derived later.
+
+## 12. The autogrow encoding — and dry_run's third failure
+
+The first submission was **rejected by the server before executing**:
+
+```
+node 300 BatchImagesNode: required_input_missing, details "image0",
+input_name "images.image0"
+```
+
+`COMFY_AUTOGROW_V3` slots are **dotted keys** — `images.image0`, `images.image1`, … — not
+a list of links under a bare `images` key. **The list form passed `dry_run` clean**:
+`{"status":"validated","warnings":[]}`.
+
+That is the **third measured instance in E02** of `dry_run` validating something the real
+path refuses. The first two were a `LoadImage` naming a file that does not exist, accepted
+without a warning. This one is stronger: a structurally invalid graph, validated silently.
+CLAUDE.md already says a `dry_run` PASS does not prove link sanity; E02 now has receipts.
+
+**Cost of learning it: zero.** The rejection happened at prompt validation, before the
+worker ran, and no GPU-hours bucket appeared. `verify_topology` now rejects the bare-list
+form by name so it cannot come back quietly.
+
+## 13. "Lossless by construction" is FALSIFIED as stated — measured, with the mechanism
+
+The ruling chose bridge (a) partly because it is *"lossless by CONSTRUCTION rather than by
+measurement — there's no codec left to prove anything about."* The first half is true: there
+is no codec. **The conclusion does not follow, and the measurement says so.**
+
+Comparing the 33 probe images (the batch as the sampler received it) against the 33 local
+source PNGs:
+
+| | |
+|---|---|
+| frames compared | 33 |
+| frames differing | **33 of 33** |
+| max abs delta | **1** |
+| distinct signed deltas | **{−1, 0} — never +1** |
+| background (src 0) | 36,656,196 px, **100.000% unchanged** |
+| subject (src > 0) | 2,880,444 px, **100.000% exactly 1 lower** |
+
+The relationship is a pure deterministic function of the source value:
+
+```
+out = max(src - 1, 0)        exact for every value present;  0 -> 0,  254 -> 253
+```
+
+**Two candidate mechanisms; I tested one and killed it.** My first hypothesis was ComfyUI's
+`SaveImage` truncating a float32 round trip (`astype` floors rather than rounds).
+Reproduced locally: float32 `x/255 x 255` recovers **all 256 values exactly**, predicting
+zero loss. Falsified. What survives is a **255-vs-256 divisor mismatch** somewhere in the
+path — `floor(255 * v/256)` reproduces `max(v-1, 0)` exactly — but *where* it sits I cannot
+determine from this run.
+
+**What I cannot separate, stated plainly:** whether the −1 is applied on **ingest** (the
+sampler genuinely received `src−1`) or only on **save** (the sampler received `src`, and my
+probe is the thing that shifted). The probe is the only window onto the batch, so it cannot
+observe itself. Separating them needs a second run driven by a known synthetic ramp, and
+that costs credits, so it is not mine to authorise.
+
+**What is true either way:** the offset is uniform, one-sided, deterministic, and applied to
+every non-background pixel identically. A constant offset preserves every gradient in the
+depth map, so the control's *structure* is intact and only its absolute level moves by
+1/255 (0.4%). Whether that matters to the model is not a question a measurement answers —
+but "lossless" is the wrong word for the observable bridge, and the record should not carry
+it.
+
+## 14. Gate C — HALTED, and the cost is NOT YET OBSERVABLE
+
+One generation submitted (`prompt_id 382dbb1f-57e6-47b2-a80b-2e675b35db11`), completed, and
+halted. The arithmetic Gate C asks for cannot be done yet:
+
+- `estimate_credits` returns **0 — no paid API nodes**. Wan runs as open weights, so its
+  entire cost is the GPU time that estimator explicitly excludes.
+- The **invoice-backed usage report has not moved.** `GPU Hours Product` reads
+  **$12.253086 both before and after** the run, and the 2026-08-10 bucket carries no
+  GPU-hours entry at all — while the job demonstrably occupied a GPU for roughly five
+  minutes of wall clock.
+- **No cost, credit, duration or billing field exists anywhere on the job record.** Its
+  fields are `source_node_id`, `filename_prefix`, `class_type`, `filename`, `url`,
+  `suggested_save_path`, `download_command`.
+
+The provider's billing lags, so **the number Gate C needs does not exist yet**. I am not
+inventing one, and not estimating one from adjacent days — a per-day GPU total containing an
+unknown number of runs is not this run's cost. **Gate C stands OPEN**: one submission made,
+arithmetic pending an observable figure, and the projection against the 12-generation
+ceiling waits on it.
+
+## 15. Gate 0 — the sheet exists
+
+`outputs/E02/sheets/E02-A1a-gate0.png` — control | output | reference | provenance, native
+480x832 in both rows with no resampling, plus the 33-frame clip and all 33 stills.
+Delivered to the Director. **No arm metric is quoted anywhere above**: sections 11-14 are
+gate verdicts and bridge measurements, which is the ordering Gate 0 governs.
+
+## 16. Status after part 2
+
+| item | verdict |
+|---|---|
+| Gate L (incl. the new `wan-fun-control` row) | **PASS** |
+| Gate B — batching | **PASS (33 of 33)** |
+| Gate R | **N/A for this route** — retained in the tree with its 18 tests |
+| Gate C — credit bound | **HALTED — cost not yet observable** |
+| Gate 0 — the sheet | **BUILT** for A1a |
+| A1a | **RUN** — one generation |
+| A0 (noise floor, 3 repeats) | **NOT YET RUN** |
+| A1b · A2 · A3 | **NOT YET RUN** |
+| P1 · P2 · P3 · P4 | **NOT YET MEASURED** |
+
+**Generations submitted: 1** (plus one server-side rejection that never executed).
+**Credits spent: one generation's worth, unpriced.**
+
+Tests: 130 pass, including under `-O`.
