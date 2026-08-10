@@ -418,3 +418,151 @@ gate verdicts and bridge measurements, which is the ordering Gate 0 governs.
 **Credits spent: one generation's worth, unpriced.**
 
 Tests: 130 pass, including under `-O`.
+
+---
+
+# E02 — report, part 3: the lossless tap, A0, and A2
+
+Four generations (ledger: **6 of 12 spent, 6 left**). Prompt ids `1beb4773` (A0r1),
+`d2d68367` (A0r2), `82e2fbea` (A0r3), `626e6531` (A2).
+
+## 17. The lossless output tap
+
+`SaveImage` on node 8 (`VAEDecode`), alongside the existing `CreateVideo`/`SaveVideo` path.
+No extra generation — the same frames, taken before any codec. `verify_topology` now fails
+a payload whose tap is not wired to node 8, so a floor cannot be measured through H.264
+again by accident.
+
+## 18. Codec contamination — measured directly, and it is large
+
+One generation emits both the lossless frames and its own H.264 copy, so the codec error
+can be measured with **zero model variance in it**:
+
+| A0r1 lossless vs A0r1's own H.264 | |
+|---|---|
+| per-frame max abs delta | min **43** · median **52** · max **64** |
+| per-frame mean abs delta | median **1.73** |
+
+That is the same order as the entire provisional floor. Two caveats kept in view: H.264
+error is a deterministic function of content, so it partly cancels when two *similar*
+videos are differenced, and max-delta is not additive. So this alone does not overturn the
+earlier number — it establishes that the codec is not a negligible term at this magnitude.
+
+## 19. A0 — the noise floor is EXACTLY ZERO
+
+Precondition checked first, because a floor measured on runs with different inputs is not
+a floor: **the control input was byte-identical across all three runs** (max abs delta 0
+over 33 frames, all three pairs), and the `max(src-1,0)` bridge offset reproduced
+identically in each. So what follows is model variance and nothing else.
+
+| A0, three identical submissions, **lossless** frames | |
+|---|---|
+| pairs compared | 3 (r1\|r2, r1\|r3, r2\|r3) |
+| frames identical | **33 of 33, every pair** |
+| **pairs bit-identical** | **3 of 3** |
+| per-frame max abs delta | **0 at every frame index** |
+| px differing by >8 | **0.000%** |
+
+**The floor is zero, and it is zero at every frame index** — there is no shape, because
+there is no variance. Reported per-index anyway, as instructed, so the absence is legible.
+
+### Verified hard, because the claim is large
+
+1. **Three genuinely distinct jobs** — 201 distinct download URLs, no reuse; video outputs
+   `E02_A1a_00001/2/3` with three different sha256 and three different byte sizes.
+2. **The videos differ while the frames do not.** Same source frames, three different mp4s.
+3. **Cross-checked against the first A1a generation** (`382dbb1f`, a separate job with no
+   tap): its H.264 differenced against A0r1's lossless gives median max 52, range 43-68 —
+   the *same* distribution as A0r1's own H.264 against its own lossless. So that earlier
+   generation produced the same frames too. Determinism holds across jobs, not just within
+   this batch.
+
+### The provisional floor was measuring the codec — reproduced exactly
+
+Differencing **the same two runs** two ways:
+
+| | max abs delta |
+|---|---|
+| on **lossless** frames | **0** at every frame |
+| on **H.264** frames | min 1 · median 15 · max 56 · px>8 0.123% |
+
+and the H.264 shape by frame index:
+
+```
+f000..f032:  1  3  3  2  1 11 11  6  2  9 15 13 16 20 18 17 13 13 11 12 12 47 47 49 31 50 52 56 55 54 54 52 55
+early f0-4  : [1, 3, 3, 2, 1]
+late  f29-32: [54, 54, 52, 55]
+```
+
+That reproduces the provisional floor's reported shape — early near-identical, late in the
+50s-70s — from frames that are **provably identical**. The mechanism is H.264 encoder
+nondeterminism accumulating away from the keyframe: early frames sit next to an I-frame and
+encode almost the same way twice; later P/B frames diverge as rate-control state drifts.
+
+**So the provisional floor was correctly measured and was measuring the encoder.** Its
+numbers stand as a characterisation of the review path. They are not the provider's
+variance, and the "floor is a function of frame index" finding is a property of H.264, not
+of Wan.
+
+**Consequence:** on lossless frames there is **no floor to subtract**. Arm-to-arm
+differences can be read directly. The early/late split remains mandatory for anything read
+off a video, and is moot for anything read off `lossless/`.
+
+### P1 — registered blind, and I was wrong
+
+| clause | registered | measured |
+|---|---|---|
+| A — bit-identical pairs of 3 | **0** | **3** |
+| B — mean abs delta of closest pair | 12/255 | **0** — no difference exists |
+| structural claim — "bimodal, lands on the far mode, >5/255 not <2/255" | predicted far mode | **neither mode; there is no divergence at all** |
+
+The reasoning behind the structural claim — diffusion is chaotic, so any early perturbation
+amplifies rather than averages out — was sound *conditional on there being a perturbation*.
+There is none. I registered the possibility of exactly this outcome ("if the provider pins
+GPU model, container and kernel selection, 3/3 bit-identical is entirely plausible and I
+would not be surprised") and still put 0 as the number, so the miss is on the number and
+not on the reasoning.
+
+## 20. A2 — the no-control row, and the null is NOT empty
+
+Same prompt, same reference image, same seed, `control_video` absent (14 nodes; no
+`BatchImagesNode`, verified in code before submission).
+
+**A2 also produces a horned armored figure that turns.** That is the finding that makes A2
+load-bearing: the A1a sheet on its own could never have distinguished "control worked" from
+"the prompt and reference alone produce a turning armored figure", because the latter is
+what A2 shows they do.
+
+The panel is `outputs/E02/sheets/E02-thesis-A1a-vs-A2.png` — one control row, two output
+rows, same five frame indices. Delivered to the Director with both clips at 8fps.
+
+### Diagnostic — motion *timing*, gating nothing
+
+Estimator-free, so no licence question: per-frame temporal energy
+`d(t) = mean|frame(t) - frame(t-1)|`, then correlated against the control's own profile.
+Floor and ceiling stated before reading: identical repeat runs give 1.000 by construction;
+an arm ignoring the control gives ~0.
+
+| | corr with control |
+|---|---|
+| **A1a** (control present) | **+0.521** |
+| **A2** (no control) | **−0.064** |
+
+**This does not answer P3.** P3 is *same place at the same time*, and that is an eye check
+on the panel. This says only whether the clips move at the same moments. It is a diagnostic
+and it gates nothing.
+
+## 21. Status
+
+| item | verdict |
+|---|---|
+| lossless tap | **BUILT**, enforced by `verify_topology` |
+| A0 — noise floor | **ZERO on lossless frames**, 3/3 pairs bit-identical |
+| provisional floor | **overturned** — reproduced as H.264 encoder nondeterminism |
+| A2 — no-control | **RUN**; the null is not empty |
+| Gate 0 sheets | A1a **BUILT**, thesis panel **BUILT** |
+| P1 | **MEASURED — registered 0, measured 3. Wrong.** |
+| P2 · P3 · P4 | **NOT YET MEASURED** (A1b and A3 unrun) |
+| ceiling | **6 of 12 spent, 6 left** |
+
+Review artifacts are 8fps (0.5x) from here on. Generation untouched.

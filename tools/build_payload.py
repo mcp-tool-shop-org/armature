@@ -129,6 +129,14 @@ def build(arm):
     wf["114"] = {"class_type": "SaveVideo", "inputs": {
         "filename_prefix": f"video/E02_{arm}", "format": "auto", "codec": "auto",
         "video": ["68", 0]}}
+    # ---- THE LOSSLESS OUTPUT TAP. Costs no extra generation: these are the same frames
+    # `CreateVideo` is about to hand to `SaveVideo`, taken off `VAEDecode` before any
+    # codec touches them. The first noise floor was measured through H.264 on BOTH sides,
+    # so its deltas carried codec noise of unknown size on top of model variance. A floor
+    # measured through an uncharacterised codec is a moving denominator, which is the
+    # thing this repo keeps paying for. Everything downstream reads these, not the video.
+    wf["302"] = {"class_type": "SaveImage", "inputs": {
+        "filename_prefix": f"E02/{arm}/lossless", "images": ["8", 0]}}
 
     verify_topology(wf, arm, use_control)
     meta = {
@@ -197,6 +205,12 @@ def verify_topology(wf, arm, use_control):
             problems.append("A2 must have NO control_video; the arm would not be the arm")
         if any(n["class_type"] == "BatchImagesNode" for n in wf.values()):
             problems.append("A2 still carries a batch node")
+
+    if wf.get("302", {}).get("inputs", {}).get("images") != ["8", 0]:
+        problems.append(
+            "the lossless tap is not wired to VAEDecode (node 8); the floor would be "
+            "measured through the H.264 path again"
+        )
 
     for dead in ("LoadVideo", "GetVideoComponents", "Canny"):
         if any(n["class_type"] == dead for n in wf.values()):
