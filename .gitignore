@@ -1,0 +1,37 @@
+# Generated artifacts — the record is specs, reports, provenance JSON and sha256 manifests,
+# never the binaries themselves.
+outputs/
+scratch/
+*.mp4
+*.mov
+*.webm
+*.glb
+*.gltf
+*.blend
+*.blend1
+*.exr
+*.npy
+
+# Renders and sheets live under outputs/; anything that escapes is still ignored by extension
+# EXCEPT documentation figures, which are committed deliberately under docs/figures/.
+!docs/figures/**
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets — API keys for cloud generation never enter the repo
+.env
+*.key
+credentials.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
