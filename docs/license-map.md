@@ -37,7 +37,7 @@ clause, and the date it was fetched. **Entries older than 90 days are advisory u
 | **Wan2.2-Animate-14B** | Apache-2.0 | **YES** | same | animate a still from a driving video |
 | **umt5-xxl** (text encoder, both graphs) | Apache-2.0 | **YES** | [HF card](https://huggingface.co/google/umt5-xxl) — `cardData.license: apache-2.0`, retrieved at ruling time | ⚠ the Comfy-Org **repackaged** repo Cloud serves declares **no license at all** (blank field). Apache permits redistribution so the upstream grant governs — but the redistribution asserts nothing itself, which is worth knowing before anyone cites the repack as the authority. |
 | **CausVid `Wan21_CausVid…_1_3B`** speed-LoRA | CC-BY-NC (flagged) | **NO — BANNED** | flagged by Comfy consult #1; **not independently retrieved** | Was bypassed inside the VACE graph. **Ruled: delete, not bypass** — see below. |
-| **lightx2v 4-step** speed-LoRAs | Apache-2.0 | YES (but excluded) | Comfy consult #1 | Commercially clean; excluded on *methodology* grounds, not licensing — a 4-step/cfg-1 trajectory confounds a control-strength curve. |
+| **lightx2v 4-step** speed-LoRAs | Apache-2.0 | YES (but excluded) | [HF](https://huggingface.co/lightx2v/Wan2.2-Lightning) + [HF](https://huggingface.co/lightx2v/Wan2.1-T2V-14B-StepDistill-CfgDistill-Lightx2v) — **retrieved 2026-08-10**, upgraded from consult-sourced | Commercially clean; excluded on *methodology* grounds, not licensing — a 4-step/cfg-1 trajectory confounds a control-strength curve. |
 
 **Ruling — a bypassed non-commercial node still counts as present.** The gate's words are
 "anywhere in the pipeline — including experiments." A bypassed node is one accidental
