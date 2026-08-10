@@ -1,6 +1,6 @@
 # Working in this repo
 
-**armature** — the scene is the skeleton; the model is the skin. Canonical character meshes
+**armature** — you block the shot; the model shoots it. Canonical character meshes
 (GLB) are staged and animated in headless Blender; those renders become the per-frame
 **control sequences** and reference stacks that drive video-diffusion generation, so
 AI-generated video keeps **one persistent main character** whose position and pose are known

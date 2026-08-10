@@ -15,8 +15,8 @@ and how do we know when to stop." Read it at the start of every session here.
 A video model can produce motion, light and life that no renderer can. It cannot be told
 *who is on screen and where they are standing*. armature supplies exactly that: a canonical
 character mesh is staged and animated in headless Blender, and the render becomes a per-frame
-**control sequence** the video model must obey. The scene is the skeleton; the model is the
-skin. Structure comes from geometry we own; life comes from the model; **identity is a named,
+**control sequence** the video model must obey. You block the shot; the model shoots it.
+Structure comes from geometry we own; life comes from the model; **identity is a named,
 versioned thing that rides in the prompt and the reference stack, never an accident of a
 lucky frame**.
 
@@ -63,6 +63,7 @@ and its gates have been reported — not when it feels finished.
 | **E07** | executor | Continuity across cuts | one character, several shots, assembled | the Director judges the cut, not the clips |
 | **E08** | executor | Shot length and extension drift | where coherence ends, measured not assumed | — |
 | **P01** | executor | The tool surface | CLI (+ MCP if earned), tests, docs, `docs/license-map.md` current | shipcheck audit passes |
+| **S01** | executor | Public surfaces *(runs alongside the arc, not gated on it)* | landing page + 5 handbook pages, Astro/Starlight, built locally | the page states day zero honestly and builds |
 | **P02** | advisor+executor | Ship | shipcheck → full treatment → publish | CI green on the org repo |
 | **F01** | Director | Fill | a shot in a real game project | the Director says so |
 
