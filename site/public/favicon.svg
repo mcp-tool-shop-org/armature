@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="armature">
+  <title>armature</title>
+  <rect width="64" height="64" rx="14" fill="#23252b"/>
+  <g stroke="#d68d66" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- wire-loop head -->
+    <circle cx="32" cy="12" r="5.4" stroke-width="3.3"/>
+    <!-- neck, spine, pelvis -->
+    <path d="M32 17.4V23M32 23v13.5M25.5 36.5h13" stroke-width="4"/>
+    <!-- T-pose arms: the bind pose, which is what makes the figure read as a rig -->
+    <path d="M13.5 25.5h37" stroke-width="4"/>
+    <!-- legs -->
+    <path d="M26.2 36.5 23.8 45 23 54M37.8 36.5 40.2 45 41 54" stroke-width="4"/>
+    <!-- feet -->
+    <path d="M20.4 55.2h4M39.6 55.2h4" stroke-width="3.4"/>
+  </g>
+  <!-- ball joints: elbows, shoulders, hips, knees -->
+  <g fill="#d68d66">
+    <circle cx="16.2" cy="25.5" r="3.05"/>
+    <circle cx="24.4" cy="25.5" r="3.05"/>
+    <circle cx="39.6" cy="25.5" r="3.05"/>
+    <circle cx="47.8" cy="25.5" r="3.05"/>
+    <circle cx="25.5" cy="36.5" r="3.05"/>
+    <circle cx="38.5" cy="36.5" r="3.05"/>
+    <circle cx="23.8" cy="45" r="3.05"/>
+    <circle cx="40.2" cy="45" r="3.05"/>
+  </g>
+</svg>
