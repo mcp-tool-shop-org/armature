@@ -566,3 +566,148 @@ and it gates nothing.
 | ceiling | **6 of 12 spent, 6 left** |
 
 Review artifacts are 8fps (0.5x) from here on. Generation untouched.
+
+---
+
+# E02 — report, part 4 (final): A1b, and the doc consolidation
+
+One generation (`bf9b76cd-be00-47bb-b696-e590f55bb310`). **Ledger: 7 of 12 spent, 5 unspent.**
+A3 not run — deferred by ruling.
+
+## 22. A1b — the polarity arm
+
+**One variable, verified in code before submission.** All nine experimental parameters are
+byte-identical to A1a: seed `654654950714624`, both prompts, the whole `WanVaceToVideo` node
+(480x832x33, strength 1.0), the reference image, and all three model files. The 35 nodes
+that differ are the 33 control frames plus three output `filename_prefix` strings.
+
+**The inversion.** Full-image `255-x` on A1a's frames — no re-render, and it is also the
+semantically correct near-dark map, because E01's exporter writes `BACKGROUND_DEPTH = 0.0`
+(black = far) so the background goes to 255 and still reads "far" under the inverted
+convention. Verified before upload: exact `255-x` on all 33 frames; background 0 -> 255;
+subject brighter than ground in A1a, darker than ground in A1b.
+
+The 33 inverted frames uploaded to **33 distinct server names with zero overlap** against
+A1a's 33 — content-addressed naming confirming the two arms really were fed different data.
+
+| gate | verdict |
+|---|---|
+| Gate L | **PASS** (480x832x33, wan-vace) |
+| Gate B | **PASS** — 33 of 33 off the batch node |
+| bridge offset | `max(src-1, 0)`, identical to A1a |
+| lossless tap | present, enforced by `verify_topology` |
+| Gate 0 sheet | **BUILT** before any metric below |
+
+## 23. P2 — measured against what was registered
+
+The original clause B was **withdrawn before A1b ran** (commit `d5fa350`, 19:24:59) because
+A0's floor measured zero, which made "exceeds the floor by 3x" a condition that could not
+fail. The re-registration was made while A1b did not yet exist.
+
+| registered | measured |
+|---|---|
+| timing correlation vs control: **+0.30** | **+0.581** |
+| A1b nearer A1a than A2 on that unit | **correct** — \|A1b−A1a\| 0.061 vs \|A1b−A2\| 0.646 |
+| direction: **WORSE** than A1a | **the Director's call on the sheet** — see below |
+
+**The number missed, and it missed in the direction I did not expect.** I predicted A1b
+would track *less* well than A1a (+0.30 against A1a's +0.521). Measured, A1b sits at
+**+0.581**, slightly above A1a rather than below it.
+
+Two cautions on that comparison, because it is one shot:
+
+- the difference (0.581 vs 0.521) is **exact, not noisy** — repeat runs are bit-identical, so
+  this statistic has zero measurement variance;
+- but zero measurement variance is not evidence of a real ordering. It is two numbers from
+  two single generations, and nothing here establishes that a 0.06 gap on this unit means
+  anything. **I am not claiming A1b tracks better than A1a.**
+
+### The three diagnostics, in full — read directly, because the floor is 0
+
+**1 — motion timing vs the control** (unit registered in advance; A2 anchors the null):
+
+| arm | corr with control |
+|---|---|
+| A1a near-bright | +0.521 |
+| **A1b near-dark** | **+0.581** |
+| A2 no control | −0.064 |
+| corr(A1a, A1b) with each other | +0.343 |
+| corr(A1a, A2) with each other | −0.113 |
+
+**2 — A1a vs A1b, pixel difference**, reported EARLY and LATE separately as standing practice:
+
+| | value |
+|---|---|
+| per-frame max abs delta | min 241 · median 250 · max 255 |
+| per-frame mean abs delta | min 30.5 · median 34.3 · max 39.6 |
+| **early** f0-4 mean abs delta | 35.9 · 36.4 · 36.2 · 35.3 · 35.0 |
+| **late** f29-32 mean abs delta | 39.0 · 39.5 · 39.5 · 39.6 |
+
+The early/late split is nearly flat here (~35 vs ~39). That split exists because on **video**
+the floor climbs steeply with frame index; on lossless frames there is no floor, so what
+remains is the arm difference itself.
+
+**3 — did the control's polarity carry into the output's tone?** Registered nowhere; measured
+because the sheet raised it:
+
+| | mean luma |
+|---|---|
+| control near-bright | 10.9 |
+| control near-dark | 244.1 |
+| A1a output | 138.3 |
+| A1b output | 150.0 |
+| A2 output (no control) | 159.6 |
+
+A **233-level** difference in the control produced an **11.7-level** difference in output
+mean luma, in the same direction. So some tone carries, and it is a small fraction of the
+input swing. What that implies is not a measurement and is not mine to state.
+
+### What P2's direction clause needs
+
+I defined it before measuring, deliberately in terms no metric settles:
+
+> **AS WELL** — for at least **28 of 33** frames, A1b's figure occupies the same region of
+> frame and shows the same facing as A1a's, judged by eye at full size.
+
+That count is the Director's to make on `E02-A1a-vs-A1b-polarity.png`. **P2 is reported as
+measured-and-unruled**: the numeric clause missed, and the direction clause is registered,
+unjudged, and waiting on an eye.
+
+## 24. Doc consolidation
+
+The verbatim header was added to the top of seven documents:
+
+`E02-halt-ruling` · `E02-canon-ruling` · `E02-bridge-ruling` · `E02-gateC-and-noise-floor` ·
+`E02-floor-and-thesis-notes` · `E02-CORRECTION-not-a-turnaround-tool` · `E02-STATUS`
+
+**21 insertions, 0 deletions**, verified with `git diff --numstat`. Nothing was removed.
+
+## 25. Final state of E02
+
+| arm | status |
+|---|---|
+| A0 (x3) | run — floor **zero** on lossless frames |
+| A1a | run |
+| A1b | run |
+| A2 | run — the null is **not** empty |
+| A3 | **NOT RUN — deferred by ruling** |
+
+| prediction | outcome |
+|---|---|
+| P1 | **measured — registered 0 bit-identical pairs, measured 3. Wrong.** |
+| P2 | numeric clause **missed** (+0.30 registered, +0.581 measured); direction clause **unruled** |
+| P3 | **unruled** — the Director's eye on the thesis panel |
+| P4 | **not measured** — A3 deferred |
+
+**Generations: 7 of 12. Credits: 28 of a 48-credit ceiling.** Five generations unspent — the
+ceiling was a bound and not a budget.
+
+Tests: 130 pass, including under `-O`.
+
+### One process note
+
+At session start my working tree was checked out on a branch named `E03-authored-motion`,
+not on `E02-first-contact`, so the first `git rebase` updated that branch instead. No
+advisor commits are on `E02-first-contact` — all seven ahead of `origin/main` are the
+executor's, verified by author. `E03-authored-motion` was left where it was and nothing was
+tidied. Reported rather than fixed silently, per the standing instruction.

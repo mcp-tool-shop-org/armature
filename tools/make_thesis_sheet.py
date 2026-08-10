@@ -46,6 +46,7 @@ def main():
     ap.add_argument("--frames", default="0,8,16,24,32")
     ap.add_argument("--tile-height", type=int, default=300)
     ap.add_argument("--meta", default=None)
+    ap.add_argument("--title", default=None)
     a = ap.parse_args()
 
     idx = [int(v) for v in a.frames.split(",") if v.strip()]
@@ -75,8 +76,9 @@ def main():
 
     sheet = Image.new("RGB", (width, height), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((MARGIN, 6), "E02 THESIS PANEL   -   same control, same prompt, same reference."
-                        "   A1a HAS control_video.  A2 HAS NONE.", fill=FG)
+    d.text((MARGIN, 6), a.title or ("E02 THESIS PANEL   -   same control, same prompt, "
+                                    "same reference.   A1a HAS control_video.  A2 HAS NONE."),
+           fill=FG)
 
     y = HDR
     for title, ddir, names in rows:
