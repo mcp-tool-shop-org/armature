@@ -1,28 +1,27 @@
-# The repo's first workflow, added by S01 alongside the public surfaces.
-#
 # Studio Actions rules binding: ubuntu-latest only, paths-gated (never "all
 # pushes"), workflow_dispatch fallback, and the required concurrency block.
 #
-# ⚠ THIS FILE IS SHARED. It currently carries ONE job because S01 built one
-# thing. The exporter arc's Python tests belong in a SECOND job here, not in a
-# third workflow file: `release.yml` is already spoken for by the PyPI Trusted
-# Publisher registration, which authenticates the workflow FILENAME (see
-# docs/publishing.md), and the studio rule caps this repo at two workflow files.
+# Pages deployment is NO LONGER an open question — it was ruled and it lives in
+# pages.yml. See docs/dispatches/S01-ruling.md §2 for the measurement (71 of 71
+# deploying repos in this org use a workflow build) and why a third workflow
+# file is correct here despite the two-file cap.
 #
-# ⚠ THIS JOB BUILDS THE SITE. IT DOES NOT DEPLOY IT. GitHub Pages deployment
-# for this repo is an OPEN QUESTION as of 2026-08-10 and was deliberately not
-# improvised here — see docs/dispatches/S01-report.md for the measured finding
-# and the decision the Director has to make.
+# `release.yml` stays reserved for the PyPI Trusted Publisher: OIDC
+# authenticates the workflow FILENAME (docs/publishing.md).
 name: ci
 
 on:
   push:
     paths:
       - "site/**"
+      - "tools/**"
+      - "tests/**"
       - ".github/workflows/**"
   pull_request:
     paths:
       - "site/**"
+      - "tools/**"
+      - "tests/**"
       - ".github/workflows/**"
   workflow_dispatch:
 
@@ -31,7 +30,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Pull-request only, deliberately. On a push to main, pages.yml already builds
+  # site/ before deploying it, so running this job there would burn a second
+  # build of identical bytes for no coverage.
   site-build:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,3 +53,33 @@ jobs:
       - name: build site
         working-directory: site
         run: npm run build
+
+  # E01's suite. The Blender-dependent tests carry
+  # `pytest.mark.skipif(not os.path.isfile(BLENDER))`, so on a runner with no
+  # Blender they SKIP VISIBLY rather than passing silently — the skip count in
+  # the log is the honest record of what this runner could not exercise.
+  # Blender-side coverage is the rig's job, not CI's.
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: install test dependencies
+        run: python -m pip install --upgrade pip numpy pillow pytest
+
+      - name: run tests
+        run: python -m pytest tests -q
+
+      # The ANDON tests assert that G1 still raises under `python -O` and
+      # PYTHONOPTIMIZE=1. Running the suite a second time under -O is what
+      # proves the gate is not an `assert` the interpreter is licensed to
+      # delete — 87 of facet's ANDONs were removable by an environment
+      # variable, and this repo does not add the 88th.
+      - name: run tests under -O (gates must still raise)
+        run: python -O -m pytest tests -q
+        env:
+          PYTHONOPTIMIZE: "1"
