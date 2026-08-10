@@ -13,7 +13,9 @@ executor's** — fourth premise of mine falsified, same shape as the other three
 
 Three reasons, in order of weight:
 
-**It is lossless by construction rather than by measurement.** Gate R proved the *encode* was
+⚠ **WITHDRAWN 2026-08-10 — see [E02-bridge-ruling.md](E02-bridge-ruling.md) §1.** Measured, the bridge applies `out = max(src-1, 0)`: a uint8/float divisor mismatch in Comfy's own image handling, which no absence of a codec could prevent. I inferred *byte-exact transport* from *no lossy codec*; those are different claims. **The ruling stands on its other two legs** — the corrected sentence is that removing the codec is what makes the transport a single deterministic offset rather than content-dependent loss. Original text follows.
+
+~~**It is lossless by construction rather than by measurement.**~~ Gate R proved the *encode* was
 sound; the PNG route removes the codec entirely, so there is nothing to prove. A property
 guaranteed by construction beats the same property established by a passing gate — that is the
 same reasoning that made E01's `--exclude-from-atlas` preferable to a hole-detection gate.
