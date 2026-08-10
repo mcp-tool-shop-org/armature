@@ -6,6 +6,8 @@
 
 **You block the shot. The model shoots it.**
 
+**[Landing page & handbook →](https://mcp-tool-shop-org.github.io/armature/)**
+
 A video model can produce motion, light and life that no renderer can. It cannot be told *who
 is on screen and where they are standing*. armature supplies exactly that: a canonical
 character mesh is staged and animated in headless Blender, and the render becomes a per-frame
@@ -27,12 +29,12 @@ section changes only as evidence arrives.
 
 | | |
 |---|---|
-| Experiments completed | 0 — **E01 (the control-sequence exporter) is in flight** |
-| Generation probes | 0 |
-| Credits spent | 0 |
+| Experiments completed | **1** — E01, the control-sequence exporter: merged, ruled, 103 tests. **E02 is specified and in flight** |
+| Generation probes | **0** — no video model has been asked anything yet |
+| Credits spent | **0** |
 | License map | **populated** 2026-08-10 — 20+ rows from retrieved license documents, 4 still UNVERIFIED |
 | Research grounding | 24 findings, **34/34 citations resolved** against a retrieval oracle |
-| Public surfaces | landing page + 5 handbook pages built; **not yet deployed** |
+| Public surfaces | **live** — [landing page + 5 handbook pages](https://mcp-tool-shop-org.github.io/armature/), CI and Pages green |
 
 The thesis this repo exists to test — *does a CG-rendered control sequence hold a character
 through a video model* — is **untested**. The roadmap treats a negative answer as a full
