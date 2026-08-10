@@ -1,0 +1,60 @@
+---
+import '../styles/global.css';
+import BaseLayout from '@mcptoolshop/site-theme/components/BaseLayout.astro';
+import Hero from '@mcptoolshop/site-theme/components/Hero.astro';
+import Section from '@mcptoolshop/site-theme/components/Section.astro';
+import FeatureGrid from '@mcptoolshop/site-theme/components/FeatureGrid.astro';
+import DataTable from '@mcptoolshop/site-theme/components/DataTable.astro';
+import { config } from '../site-config';
+
+// Hand-written rather than mapped from config.sections: the section titles are
+// sentences, not nav labels, and the handbook is not a section.
+const nav = [
+  { href: '#how-it-works', label: 'How it works' },
+  { href: '#where-this-is', label: 'Where this is' },
+  { href: '#established', label: 'Evidence' },
+  { href: 'handbook/', label: 'Handbook' },
+];
+
+const repo = config.repoUrl;
+const links = [
+  { href: 'handbook/', label: 'Handbook', desc: 'The thesis, the method, the license gate, the roadmap.' },
+  { href: repo, label: 'GitHub', desc: 'The repo. The record is specs, reports and provenance.' },
+  { href: `${repo}/blob/main/docs/ROADMAP.md`, label: 'Roadmap', desc: 'The whole arc, session by session, with the drift tripwires named in advance.' },
+  { href: `${repo}/blob/main/docs/license-map.md`, label: 'License map', desc: 'Every row carries the licence document it was read from and the date it was fetched.' },
+  { href: `${repo}/blob/main/docs/research-grounding.md`, label: 'Research grounding', desc: 'The 24 findings this page cites, with resolvable identifiers.' },
+];
+---
+
+<BaseLayout
+  title={config.title}
+  description={config.description}
+  logoBadge={config.logoBadge}
+  brandName={config.brandName}
+  repoUrl={config.repoUrl}
+  footerText={config.footerText}
+  nav={nav}
+>
+  <Hero {...config.hero} />
+
+  {config.sections.map((s) => (
+    <Section id={s.id} title={s.title} subtitle={s.subtitle}>
+      {s.kind === 'features' && <FeatureGrid features={s.features} />}
+      {s.kind === 'data-table' && <DataTable columns={s.columns} rows={s.rows} />}
+    </Section>
+  ))}
+
+  <Section id="links" title="Links">
+    <div class="mt-8 grid gap-6 md:grid-cols-3">
+      {links.map((l) => (
+        <a
+          href={l.href}
+          class="rounded-2xl border border-edge-subtle bg-surface p-6 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        >
+          <h3 class="text-lg font-semibold">{l.label}</h3>
+          <p class="mt-2 text-sm text-dim">{l.desc}</p>
+        </a>
+      ))}
+    </div>
+  </Section>
+</BaseLayout>

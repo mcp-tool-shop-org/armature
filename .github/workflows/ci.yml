@@ -1,0 +1,52 @@
+# The repo's first workflow, added by S01 alongside the public surfaces.
+#
+# Studio Actions rules binding: ubuntu-latest only, paths-gated (never "all
+# pushes"), workflow_dispatch fallback, and the required concurrency block.
+#
+# ⚠ THIS FILE IS SHARED. It currently carries ONE job because S01 built one
+# thing. The exporter arc's Python tests belong in a SECOND job here, not in a
+# third workflow file: `release.yml` is already spoken for by the PyPI Trusted
+# Publisher registration, which authenticates the workflow FILENAME (see
+# docs/publishing.md), and the studio rule caps this repo at two workflow files.
+#
+# ⚠ THIS JOB BUILDS THE SITE. IT DOES NOT DEPLOY IT. GitHub Pages deployment
+# for this repo is an OPEN QUESTION as of 2026-08-10 and was deliberately not
+# improvised here — see docs/dispatches/S01-report.md for the measured finding
+# and the decision the Director has to make.
+name: ci
+
+on:
+  push:
+    paths:
+      - "site/**"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # `npm ci` and not `npm install`: the lockfile is committed, and a build
+      # that resolves fresh dependencies is not the build that was verified on
+      # the rig. If this step fails on a lockfile mismatch, that IS the signal.
+      - name: install site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: build site
+        working-directory: site
+        run: npm run build

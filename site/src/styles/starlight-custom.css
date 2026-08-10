@@ -1,0 +1,18 @@
+/* Align Starlight with the @mcptoolshop/site-theme dark palette. */
+/* Accent #06b6d4 (cyan) — armature. anchor is emerald, facet is amber. */
+:root {
+  --sl-color-accent-low: #164e63;
+  --sl-color-accent: #06b6d4;
+  --sl-color-accent-high: #67e8f9;
+  --sl-color-bg-nav: #09090b;
+  --sl-color-bg-sidebar: #09090b;
+  --sl-color-bg: #09090b;
+  --sl-color-black: #09090b;
+  --sl-color-hairline-light: #27272a;
+  --sl-color-hairline: #27272a;
+  --sl-color-gray-6: #18181b;
+  --sl-color-gray-5: #27272a;
+  --sl-color-white: #fafafa;
+  --sl-color-text: #e4e4e7;
+  --sl-color-text-accent: #67e8f9;
+}
