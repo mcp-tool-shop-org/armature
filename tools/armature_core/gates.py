@@ -20,6 +20,7 @@ from .errors import (
     G2Completeness,
     G4BboxSanity,
     G5ConventionConformance,
+    GateBBatching,
     GateRRoundTrip,
 )
 
@@ -326,4 +327,43 @@ def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label
         )
 
     ev["verdict"] = "identical"
+    return ev
+
+
+def gate_b_batching(expected_frames, observed_batch_images, evidence=None):
+    """Gate B · ANDON — the control batch actually carried every frame. Raises.
+
+    `observed_batch_images` is the count of images returned by a save node wired
+    directly to the batch node's output — the batch as the sampler received it, not the
+    generated video. See `GateBBatching` for why the output frame count is the wrong
+    quantity: `WanVaceToVideo` pads a short control up to `length`, so the video is 33
+    frames either way and a check on it could never fire.
+
+    **The andon is on the direction the invariant does not bound.** A batch larger than
+    submitted is as wrong as a smaller one — duplicated links, or an auto-grow slot
+    bound twice — and `!=` catches both, where `<` would wave the duplicate through.
+    """
+    ev = dict(evidence or {})
+    ev.update({"expected_frames": expected_frames, "observed_batch_images": observed_batch_images})
+
+    if not isinstance(observed_batch_images, int) or observed_batch_images < 0:
+        raise GateBBatching(
+            f"batch image count is not a count: {observed_batch_images!r}; the batch "
+            f"was not observed, so batching is unverified rather than verified",
+            ev,
+        )
+    if observed_batch_images != expected_frames:
+        short = observed_batch_images < expected_frames
+        raise GateBBatching(
+            f"the control batch carried {observed_batch_images} image(s), not "
+            f"{expected_frames}"
+            + (
+                " — BatchImagesNode bound only part of its auto-grow list, and the run "
+                "would have proceeded on a padded control with no error anywhere"
+                if short
+                else " — more images than were submitted; a link is bound twice"
+            ),
+            ev,
+        )
+    ev["verdict"] = "batch intact"
     return ev

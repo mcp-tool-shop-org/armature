@@ -65,6 +65,23 @@ class GateRRoundTrip(GateFailure):
     gate = "R"
 
 
+class GateBBatching(GateFailure):
+    """The control batch that reached the sampler was not the batch we submitted.
+
+    E02's andon on the PNG-batch bridge. `BatchImagesNode` takes an auto-grow list of
+    IMAGE links; if that list were mis-encoded so only the first link bound, the run
+    would proceed on a 1-frame control and nothing would error.
+
+    **Why this gate does not count output frames.** `WanVaceToVideo` pads a short
+    `control_video` up to `length` and emits `length` frames regardless, so the output
+    is 33 frames whether the control batch held 33 images or 1. Counting the output
+    would be a check that cannot fail. This gate counts the **batch itself**, saved
+    straight off the batch node, which is the only quantity the defect actually moves.
+    """
+
+    gate = "B"
+
+
 class SpecError(ArmatureError):
     """The shot spec is malformed, incomplete, or names something unknown."""
 
