@@ -2,7 +2,7 @@
   <img src="docs/assets/logo-wide.png" alt="armature — you block the shot, the model shoots it" width="820">
 </p>
 
-# armature
+#
 
 **You block the shot. The model shoots it.**
 
