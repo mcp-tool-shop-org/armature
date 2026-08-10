@@ -702,12 +702,30 @@ The verbatim header was added to the top of seven documents:
 **Generations: 7 of 12. Credits: 28 of a 48-credit ceiling.** Five generations unspent — the
 ceiling was a bound and not a budget.
 
-Tests: 130 pass, including under `-O`.
+Tests: **130 pass** for the executor's own tree, including under `-O`. See the correction
+below — the raw count is 140 and 10 of those are not the executor's.
 
-### One process note
+### Process notes — two, both reported rather than fixed silently
 
-At session start my working tree was checked out on a branch named `E03-authored-motion`,
-not on `E02-first-contact`, so the first `git rebase` updated that branch instead. No
-advisor commits are on `E02-first-contact` — all seven ahead of `origin/main` are the
-executor's, verified by author. `E03-authored-motion` was left where it was and nothing was
-tidied. Reported rather than fixed silently, per the standing instruction.
+**1. The branch pointer.** At session start my working tree was checked out on a branch named
+`E03-authored-motion`, not on `E02-first-contact`, so the first `git rebase` updated that
+branch instead. No advisor commits are on `E02-first-contact` — all commits ahead of
+`origin/main` are the executor's, verified by author. `E03-authored-motion` was left where it
+was.
+
+**2. Files appeared in my working tree mid-session that I did not write.**
+`tools/invert_frames.py` (19:26:50) and `tests/test_invert_frames.py` (19:27:31) — both
+written after my P2 commit at 19:24:59, while this executor session was live. They implement
+the same `255-x` transform I had already performed inline, as a recorded re-runnable tool
+with 10 tests, and those tests pass.
+
+**They are left untracked and uncommitted.** Committing them would attribute another seat's
+work to the executor and would tidy away the very thing the standing rule exists to surface;
+deleting them would be worse. The standing instruction covers commits on the branch, and no
+commit appeared — but a write into a live executor's working tree is the same class of event,
+and it is reported on that basis for the advisor to rule on.
+
+**Correction to a number in this report.** The line above originally read "Tests: 130 pass"
+and the suite at that moment reported **140**, because those 10 foreign tests were collected.
+Measured both ways: **130 passing without `tests/test_invert_frames.py`, 140 with it.** 130 is
+the executor's count; the extra 10 belong to a file the executor did not author.
