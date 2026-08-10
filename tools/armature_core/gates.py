@@ -20,6 +20,7 @@ from .errors import (
     G2Completeness,
     G4BboxSanity,
     G5ConventionConformance,
+    GateRRoundTrip,
 )
 
 
@@ -251,3 +252,78 @@ def g5_openpose_conformance(keypoint_count, limb_seq, reference_count, reference
             },
         )
     return True
+
+
+def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label="decoded video"):
+    """Gate R · ANDON — the encode/decode round trip. Raises before any credit is spent.
+
+    `source` and `decoded` are equal-length sequences of uint8 arrays, each either
+    (H, W) or (H, W, 3). Raises `GateRRoundTrip` unless every pixel of every frame is
+    identical.
+
+    **Per-channel, deliberately.** The failure this gate exists to catch is chroma
+    subsampling, which touches only the colour-difference channels — so a scalar mean
+    over a grayscale (R=G=B) sequence is exactly zero whether or not the encoder is
+    subsampling, and a gate reporting that scalar would read green on a pipeline that
+    silently destroys the normal channel. The report therefore names *which channel*
+    differs, and the caller is expected to run this on the channel that can actually
+    fail rather than only on one that cannot.
+
+    Frame count is checked first and separately: a decode that returns fewer frames
+    than went in is the single most likely bridge failure (a frame-count form the
+    muxer rounds), and it would otherwise surface as a confusing shape error.
+    """
+    import numpy as np
+
+    ev = {
+        "n_source": len(source),
+        "n_decoded": len(decoded),
+        "source": source_label,
+        "decoded": decoded_label,
+    }
+
+    if len(source) != len(decoded):
+        raise GateRRoundTrip(
+            f"frame count changed through the bridge: {len(source)} in, "
+            f"{len(decoded)} out",
+            ev,
+        )
+    if not source:
+        raise GateRRoundTrip("no frames to compare; the round trip proves nothing", ev)
+
+    problems, per_frame = [], []
+    for i, (a, b) in enumerate(zip(source, decoded)):
+        a = np.asarray(a)
+        b = np.asarray(b)
+        if a.shape != b.shape:
+            problems.append(f"frame {i}: shape {a.shape} in, {b.shape} out")
+            continue
+        d = np.abs(a.astype(np.int16) - b.astype(np.int16))
+        if d.any():
+            rec = {
+                "frame": i,
+                "max_abs": int(d.max()),
+                "mean_abs": float(d.mean()),
+                "n_px_differing": int((d != 0).any(axis=-1).sum() if d.ndim == 3 else (d != 0).sum()),
+            }
+            if d.ndim == 3:
+                rec["per_channel_max_abs"] = [int(d[..., c].max()) for c in range(d.shape[2])]
+                rec["per_channel_mean_abs"] = [float(d[..., c].mean()) for c in range(d.shape[2])]
+            per_frame.append(rec)
+            problems.append(
+                f"frame {i}: max |delta| {rec['max_abs']} over "
+                f"{rec['n_px_differing']} px"
+            )
+
+    if problems:
+        ev["frames_differing"] = len(per_frame)
+        ev["detail"] = per_frame[:8]
+        raise GateRRoundTrip(
+            f"the encode/decode round trip is not lossless: "
+            + "; ".join(problems[:6])
+            + (f" (+{len(problems) - 6} more frames)" if len(problems) > 6 else ""),
+            ev,
+        )
+
+    ev["verdict"] = "identical"
+    return ev

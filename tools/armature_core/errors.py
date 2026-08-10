@@ -52,6 +52,19 @@ class G5ConventionConformance(GateFailure):
     gate = "G5"
 
 
+class GateRRoundTrip(GateFailure):
+    """The encoded control video did not decode back to the frames that went in.
+
+    E02's andon on the upload bridge. It exists for a failure that is silent by
+    construction: `-qp 0` is *luma*-lossless while x264 still defaults to `yuv420p`,
+    which subsamples chroma 4:1. A grayscale channel (R=G=B) survives that untouched,
+    so the corruption would appear only in the true-RGB normal channel — and the
+    video would look correct either way.
+    """
+
+    gate = "R"
+
+
 class SpecError(ArmatureError):
     """The shot spec is malformed, incomplete, or names something unknown."""
 
