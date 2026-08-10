@@ -137,3 +137,75 @@ stronger reason than the one it gives, and I am recording that before running ra
 after.
 
 **Confidence:** low. This is the prediction I most expect to miss.
+
+---
+
+# P2 — re-registered before A1b runs (2026-08-10)
+
+**Registered before any A1b submission exists.** Blind to A1b entirely: no inverted frames
+have been uploaded and no generation has been requested at the time of writing. Not blind
+to A1a, A2 and the floor, all of which are measured and reported.
+
+## Withdrawal — the original clause B is degenerate, and the floor is why
+
+The clause registered at the top of this file read:
+
+> **Clause B — the unit:** mean per-pixel absolute difference **between A1a's and A1b's
+> outputs**, read against **A0's measured noise floor** … **Prediction: A1a-vs-A1b exceeds
+> A0's floor by more than 3x.**
+
+**A0's floor measured exactly zero.** Any difference whatsoever is more than 3x zero, so the
+condition can no longer fail. That is this repo's own disqualifier — *a check that cannot
+fail is not a check* — and the fault is mine: I picked a unit defined as a multiple of a
+quantity that had not been measured yet, which is the same shape as defining a pass
+condition as a fraction of an unmeasured number.
+
+**Withdrawn, not re-derived.** The repo's rule is to withdraw a broken condition rather than
+retune it while looking at the results it would judge. What follows is a fresh
+pre-registration, and it is legitimate as one because **A1b does not exist yet** — the floor
+is not A1b's result.
+
+## What I predict
+
+**Direction: WORSE than A1a, but not "not at all".**
+
+The mechanism, stated so it can be wrong for a reason. Inverting is not only a depth-polarity
+flip. In A1a the background is 0 (black) and the subject is bright; after `255-x` the
+background is 255 (white) and the subject is darker than its surround. So **figure/ground
+contrast inverts as well as depth ordering**, and a white field reading as "nearest" is
+strongly out of distribution for a depth control. But the silhouette *boundary* survives
+inversion untouched — an edge is an edge at either polarity — so I expect the model to still
+find and place the figure while reading its interior structure wrongly.
+
+## What I would accept as "as well" — stated before measuring
+
+Judged by eye on the A1a-vs-A1b sheet, at full size, at the same frame indices:
+
+- **AS WELL** — for at least **28 of 33** frames, A1b's figure occupies the same region of
+  frame and shows the same facing as A1a's. That is: the two controlled arms are
+  interchangeable on placement and facing to the Director's eye.
+- **WORSE** — the figure is present and roughly placed, but structure or facing visibly
+  degrades on a meaningful number of frames relative to A1a.
+- **NOT AT ALL** — the figure does not track the control's orbit; A1b reads closer to A2
+  (unconstrained) than to A1a.
+
+**I predict WORSE.**
+
+## Numeric diagnostics, gating nothing, floor now known to be 0
+
+Registered as numbers so they can miss:
+
+| quantity | registered prediction |
+|---|---|
+| temporal-timing correlation vs control (same unit as A1a +0.521, A2 −0.064) | **+0.30** — positive and tracking, weaker than A1a |
+| is A1b nearer A1a or A2 on that unit? | **nearer A1a** |
+| mean abs delta A1a vs A1b, whole clip, 0-255 | **> 0** and read directly, because the floor is 0 |
+
+The timing correlation has the floor/ceiling property the repo asks for: an arm ignoring the
+control sits near 0 (A2 measured −0.064), an arm following it sits well above (A1a measured
++0.521). A1b cannot move that scale; it only takes a position on it.
+
+**Where I expect to be wrong if I am wrong:** that the model is more polarity-agnostic than I
+think, because the silhouette carries most of the placement information and the interior
+gradient carries little of it at strength 1.0. If that is so, A1b comes out AS WELL and my
+direction call is simply wrong.
