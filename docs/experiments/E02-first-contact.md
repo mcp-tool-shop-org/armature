@@ -33,7 +33,8 @@ the property this spec depends on** — not that the thing exists.
 
 | # | Premise | Status |
 |---|---|---|
-| 1 | Both graphs exist on Comfy Cloud, are licence-clean, portrait 480×832, 33 frames | **MEASURED** — `list_saved_workflows` + `get_saved_workflow` read at spec time; VACE is 24 nodes with no LoRA loader of any class |
+| 1a | Both graphs exist on Cloud and are licence-clean | **MEASURED** — `get_saved_workflow` at spec time: VACE is 24 nodes (down from 27) with **no LoRA loader of any class**, models `wan2.1_vace_14B_fp16` / `umt5_xxl_fp16` / `wan_2.1_vae` |
+| 1b | Both are portrait 480×832 at 33 frames | **ASSUMED — corrected 2026-08-10.** This line originally said MEASURED. It was not: the summary surface exposes node ids, types and model names but **not** widget values, so the dimensions were never read. **The executor verifies `WanVaceToVideo`/`Wan22FunControlToVideo` width, height and length in the graph before the first submission and reports the values.** Fourth instance in this repo of marking a premise MEASURED on a partial check |
 | 2 | Wan 2.1 VACE / 2.2 Fun-Control weights are Apache-2.0 and disclaim output rights | **RETRIEVED** — licence documents fetched 2026-08-10, not re-verified since |
 | 3 | E01's exporter emits byte-identical frames across runs | **MEASURED** — G3, two process pairs, 0 pixel and 0 byte difference |
 | 4 | A lossless encode preserves our frames exactly through the upload path | **ASSUMED — and Gate R exists precisely because it is assumed** |
@@ -148,7 +149,7 @@ metric approximates it — the Director judges the sheets.
 
 | Standard | Score | Evidence |
 |---|---|---|
-| PIN_PER_STEP | **2** | Workflow filenames pin the graphs; every submission records payload, seed, model ids and control-input hashes. Not 3 until a replay is demonstrated. |
+| PIN_PER_STEP | **2** | Workflow filenames pin the graphs **by content, not by bytes** — see the note below. Every submission records payload, seed, model ids and control-input hashes. Not 3 until a replay is demonstrated. |
 | ANDON_AUTHORITY | **2** | Gates R, C, L and 0 each halt. Not 3 until one fires on a real defect. |
 | NAMED_COMPENSATORS | **2** | **Spent credits have NO compensator** — stated, not skipped. The bound (Gate C) is the honest treatment of an unrecoverable action. Uploaded assets: `delete_uploaded_control_video`, owner executor. |
 | DECOMPOSE_BY_SECRETS | **2** | Encode/upload, submission, and measurement are separate stages; the graphs are external artifacts pinned by name. |
@@ -156,3 +157,24 @@ metric approximates it — the Director judges the sheets.
 | EXTERNAL_VERIFIER | **2** | The executor does not grade its own output. A3 is a second implementation checking the first. Not 3 until a different-family check runs on an E02 artifact. |
 
 **13 / 18.** No row below 2; no remediation item required.
+
+### ⚠ How the graphs are pinned — measured, because the obvious answer is wrong
+
+**A saved workflow's file size changes without the graph changing.** Measured 2026-08-10:
+between two listings minutes apart, with **identical modified timestamps**, the byte sizes moved
+— VACE 26431 → 26436, Fun-Control 56129 → 56102. Re-fetched, the VACE graph is **semantically
+identical**: same 24 node ids and types, same models, same prompts, same seed.
+
+So the bytes drift under server-side re-serialization while the graph stands still. This is
+facet's law in a new place — *a byte mismatch is not evidence the content changed* — and it
+matters because a naive byte-hash pin would produce a **false halt** on an unchanged graph,
+which this lineage has already paid for twice with PNG hashes.
+
+**The pin is therefore the parsed graph, not the file.** Any replay check normalizes the JSON
+before hashing (canonical key order, whitespace stripped) and compares node ids, types, links
+and widget values — never raw bytes. `modified` is also not a change signal here: it did not
+move when the size did.
+
+**Also measured: bookmarking does not promote a workflow.** After the Director bookmarked both,
+`workflow_id` is still `null` and the paths are still bare filenames rather than `workflows/…`.
+Bookmarking is a UI convenience; the record tier remains unreached and is a manual editor step.
