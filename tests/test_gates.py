@@ -179,3 +179,34 @@ def test_g5_red_on_a_dropped_pair():
 
     with pytest.raises(G5ConventionConformance):
         gates.g5_openpose_conformance(18, openpose.LIMB_SEQ[:-1], 18, openpose.LIMB_SEQ)
+
+
+# --- A3's profile row, added for E02. ---------------------------------------------
+
+
+def test_wan_fun_control_profile_exists_and_binds_the_same_constraints():
+    """A3 could not run until this row existed: G1 raises on an unknown generator.
+
+    The row's provenance is a derivation from the VAE both routes share, not a
+    separate retrieval, and the profile's `source` says so in those words. This test
+    pins that the row is honest about it — if someone later rewrites the source string
+    to imply a Fun-Control document was fetched, this fails.
+    """
+    from armature_core.gates import GENERATOR_PROFILES, g1_generator_legality
+
+    p = GENERATOR_PROFILES["wan-fun-control"]
+    assert (p.dim_divisor, p.frame_modulus, p.frame_residue) == (16, 4, 1)
+    assert "DERIVED" in p.source
+    assert "No Fun-Control-specific document was retrieved." in p.source
+    assert g1_generator_legality(480, 832, 33, "wan-fun-control") is p
+
+
+def test_wan_fun_control_rejects_the_same_near_misses_as_vace():
+    """Both routes must halt on the same illegal frames, or A3 is not comparable."""
+    from armature_core.errors import G1GeneratorLegality
+    from armature_core.gates import g1_generator_legality
+
+    for w, h, n in ((480, 832, 32), (470, 832, 33), (480, 830, 33)):
+        for gen in ("wan-vace", "wan-fun-control"):
+            with pytest.raises(G1GeneratorLegality):
+                g1_generator_legality(w, h, n, gen)

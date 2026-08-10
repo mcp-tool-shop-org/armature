@@ -55,6 +55,33 @@ GENERATOR_PROFILES = {
         frame_residue=1,
         source="F24 / docs.comfy.org tutorials/video/wan/vace, fetched 2026-08-10",
     ),
+    # A3's row. Its provenance is DERIVED, and the derivation is stated rather than
+    # dressed up as a separate retrieval, because there is no Fun-Control-specific
+    # document behind it.
+    #
+    # What is measured: both saved E02 graphs load the SAME VAE file,
+    # `wan_2.1_vae.safetensors` (armature-E02-vace-control node 105 and
+    # armature-E02-funcontrol node 92, widget values read 2026-08-10). The 4n+1 frame
+    # form is a property of that VAE's temporal compression factor of 4, and the /16
+    # divisor of the spatial compression plus patch size — so both constraints follow
+    # from the component the two routes share, not from the route.
+    #
+    # What is NOT measured: `Wan22FunControlToVideo`'s own schema enforces neither
+    # (length min 1 max 16384, dims min 16 max 16384, measured via get_node), so
+    # nothing upstream will catch an illegal frame count on this route either.
+    "wan-fun-control": GeneratorProfile(
+        name="wan-fun-control",
+        dim_divisor=16,
+        frame_modulus=4,
+        frame_residue=1,
+        source=(
+            "DERIVED 2026-08-10 from the shared VAE: both E02 graphs load "
+            "wan_2.1_vae.safetensors (measured widget values), and 4n+1 / div-16 are "
+            "properties of that VAE's temporal and spatial compression, so F24's "
+            "constraint transfers on a measured shared component rather than on the "
+            "family name. No Fun-Control-specific document was retrieved."
+        ),
+    ),
 }
 
 
