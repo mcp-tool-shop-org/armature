@@ -1,0 +1,45 @@
+{
+  "spec_version": 1,
+  "name": "E01-anchor",
+  "generator": "wan-vace",
+  "asset": {
+    "path": "E:\\AI\\training\\facet_next\\E14_strokes\\run\\final\\longsword_hero.glb",
+    "sha256": "ab62bb4bd753f2cef4db74d0f6c1128566e032e5d811f97b1b1abc5ad8e5cd90",
+    "note": "read-only; E:\\AI\\training is not in git and has no revert"
+  },
+  "resolution": {
+    "width": 512,
+    "height": 768
+  },
+  "frames": {
+    "count": 33,
+    "fps": 16
+  },
+  "channels": ["depth", "normal", "mask", "edge"],
+  "camera": {
+    "type": "orbit",
+    "target": "bbox_center",
+    "radius": "auto",
+    "fit_margin": 1.15,
+    "elevation_deg": 8.0,
+    "azimuth_start_deg": 0.0,
+    "azimuth_sweep_deg": 360.0,
+    "lens_mm": 50.0,
+    "sensor_mm": 36.0,
+    "clip_start": 0.05,
+    "clip_end": 1000.0
+  },
+  "edge": {
+    "depth_rel_threshold": 0.02,
+    "normal_angle_deg": 30.0
+  },
+  "render": {
+    "engine": "BLENDER_EEVEE",
+    "samples": 1,
+    "filter_size": 0.01,
+    "film_transparent": true
+  },
+  "gates": {
+    "g4_tolerance_px": 2
+  }
+}

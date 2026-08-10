@@ -74,6 +74,22 @@ gets a row here before it runs.
 | Item | Commercial | Source | Operative clause |
 |---|---|---|---|
 | **Comfy Cloud** | **YES** | [Terms of Service](https://www.comfy.org/terms-of-service) | "Customer retains all right, title, and interest in and to… Output"; also "will not use Input or Output to train generative AI" |
+| **Blender 5.2.0 LTS** (build `fbe6228777e7`, 2026-07-14) | **YES** | the build's own bundled `license/license.md` and `license/spdx/GPL-3.0-or-later.txt`, read on this rig 2026-08-10 | licence: "While Blender itself is released under [GPU-GPL 3.0 or later] `© 2011-2026 Blender Foundation`" *(the "GPU-GPL" typo is verbatim from Blender's auto-generated file)*. Output, GPL-3.0 §2 Basic Permissions: **"The output from running a covered work is covered by this License only if the output, given its content, constitutes a covered work."** Also: "This License explicitly affirms your unlimited permission to run the unmodified Program." |
+
+**Blender — resolved by E01's executor, 2026-08-10.** The founding swarm recorded this row as
+UNVERIFIED because blender.org and docs.blender.org both returned **403** to the fetcher; both
+still did on re-attempt today, and `blender/blender@main:COPYING` turns out to be a pointer file
+rather than the licence text. The route that worked is better than either: **the installed build
+carries its own licence documents**, so the retrieved text is the licence of the exact binary that
+rendered E01 rather than of whatever is at HEAD — which is what "check the exact variant and
+version you are about to run" asks for.
+
+The output clause is the one that matters here and it is narrow: GPL-3.0 covers a render only if
+the render *itself* constitutes a covered work. A depth or normal pass of geometry we own is not
+derived from Blender's source, so E01's control sequences are not covered works. This row states
+what the licence says; it is not legal advice, and the "given its content" qualifier is the part a
+future arm should re-read before shipping anything that embeds Blender-authored content (its
+bundled fonts, matcaps or asset library, each carrying its own licence in the same file).
 
 ## UNVERIFIED — treated as NO until retrieved
 
@@ -81,7 +97,7 @@ Recorded honestly rather than assumed. Each blocks the thing that depends on it.
 
 | Item | Why unverified | Blocks |
 |---|---|---|
-| **Blender GPL / output statement** | blender.org and docs.blender.org both returned **403** to the fetcher | Nothing in practice — GPL covering software rather than output is near-universal — but the primary source is **not retrieved**, so it is written here as unverified rather than asserted. Re-fetch before the claim is published anywhere. |
+| ~~**Blender GPL / output statement**~~ | ~~blender.org and docs.blender.org both returned **403** to the fetcher~~ | **RESOLVED 2026-08-10 by E01's executor** — retrieved from the installed build's own bundled licence documents; row filed under *Services and tools* above. The web sources still 403; the local route is the better one. |
 | **Kling terms** | HTTP 446 (Cloudflare block) on two URLs | Kling may not be used until fetched |
 | **MiniMax terms** | JS-rendered page, no text returned | MiniMax may not be used until fetched |
 | **ByteDance / Seedance output ownership** | BytePlus master ToS retrieved but contains **no AI-output clause**; the operative service-specific agreement was not located | Seedance may not be used until fetched |
