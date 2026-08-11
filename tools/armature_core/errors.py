@@ -107,6 +107,32 @@ class GateBBatching(GateFailure):
     gate = "B"
 
 
+class GateSSeedRegistration(GateFailure):
+    """A seed was about to be submitted that no committed list pre-registered.
+
+    E04's andon, and it guards a failure with no technical symptom at all. Every other
+    gate in this tool passes on a seed-shopped run: the frame is legal, the batch is
+    intact, the topology verifies, the lossless tap is wired. The output is a perfectly
+    well-formed generation. What is wrong is *epistemic* — a seed chosen after seeing a
+    result turns a measurement of the between-generation floor into a selection of it,
+    and the resulting number would be quoted forever as the denominator every later arm
+    comparison is read against.
+
+    **Why a committed list rather than a rule against seed-shopping.** A rule forbids;
+    a list removes the possibility. The seeds are written into the spec in the commit
+    that opens the experiment, before the first submission, so git timestamps the
+    registration ahead of every artifact it governs.
+
+    **The andon is on the direction the invariant does not bound.** Nothing else here
+    looks at *which* seed is used — the seed was a module constant that no flag could
+    move, so varying it at all is the new freedom, and this gate is what bounds it. It
+    therefore binds in both directions: an experiment that pre-registered seeds must use
+    one of them, and an experiment that pre-registered none may not vary its seed at all.
+    """
+
+    gate = "S"
+
+
 class SpecError(ArmatureError):
     """The shot spec is malformed, incomplete, or names something unknown."""
 

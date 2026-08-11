@@ -29,9 +29,9 @@ still judged by eye and still open.
 
 | | |
 |---|---|
-| Experiments | **4 closed** — E01 exporter · E02 first contact · E03 authored motion · E06 reference-onto-schematic. **E04 in flight.** E05 withdrawn on a falsified premise |
-| Generation probes | **12** |
-| Credits | **48** projected, at the measured 4 per generation |
+| Experiments | **5 closed** — E01 exporter · E02 first contact · E03 authored motion · E04 the noise floor · E06 reference-onto-schematic. E05 withdrawn on a falsified premise |
+| Generation probes | **22** |
+| Credits | **88** projected, at the measured 4 per generation |
 | License map | **9 rows UNVERIFIED and treated as NO**; every other row carries a retrieved license document |
 | Tests | **206**, passing under `-O` |
 | Public surfaces | **live** — [landing page + handbook](https://mcp-tool-shop-org.github.io/armature/), CI and Pages green |
@@ -55,8 +55,10 @@ still judged by eye and still open.
 - **A real character performing.** A control's silhouette becomes the body, so a wire-armature
   control returns a wire-armature body wearing armour. Authored motion on a character needs a
   **rigged character mesh** — the blocking dependency, confirmed twice, and the next work.
-- **The between-generation noise floor** (E04, in flight). Until it exists, no two arms may be
-  ranked on a fine numeric gap — a rule this repo applies to its own results.
+- **A threshold for reading a gap.** E04 measured the between-generation floor — **SD ≈ 0.16** on
+  the tracking statistic at 33 frames, against a fixed-seed floor of **exactly zero** — so gaps are
+  now quoted in units of it. That is a *unit*, deliberately **not** a significance rule: the
+  Director's eye still rules on the artifact, and E02's unread 0.060 gap turns out to be 0.37 SD.
 
 A negative answer remains a full success here, and the roadmap said so before any evidence arrived.
 

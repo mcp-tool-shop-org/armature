@@ -230,3 +230,70 @@ written **NOT YET RUN**. **No judgement words.** The Director decides what the n
 | EXTERNAL_VERIFIER | **1** | Honestly weak and named rather than inflated: the verifier is the advisor's ruling plus the Director's eye, which is a different *kind* of check rather than a different model family. Unchanged by this experiment; carries the pipeline's standing remediation. |
 
 **15 / 18.** The two sub-3 scores are named with their reasons rather than argued away.
+
+---
+
+## AMENDMENT 1 — 2026-08-10, executor, before the first submission
+
+Four premises were checked before any credit was spent. Two held, two moved. Appended in
+place rather than edited into the table above, so the spec shows its own corrections.
+
+### A. Premise 2 (**ASSUMED** → **MEASURED TRUE**)
+
+*"The KSampler seed is the only field that need change, and nothing else is seed-derived."*
+
+Both on-disk payloads were diffed field by field (48 and 49 nodes). **Exactly one
+seed-bearing field exists in each: node 3, `KSampler.seed`.** No other field named `seed`
+or `noise`, and nothing else derives from it. Varying the seed varies nothing else. This is
+now enforced rather than trusted: `tests/test_gate_s.py` diffs every E04 payload at every
+registered seed against the E02 payload actually submitted and permits only node 3's seed
+and three output-name strings.
+
+### B. Premise 1 (**MEASURED** → **MEASURED, with the wrong file named**)
+
+The spec named `A1a.json` as C-bright's base. **It cannot be**: A1a ran *before* the
+lossless output tap existed, so its payload carries no node 302 and re-running it would
+return no frames the statistic is defined on.
+
+**C-bright's base is `A0.json`** — which is `A1a.json` plus the tap and nothing else
+(diffed: node 302 is the sole difference; same seed, same control, same prompts, same
+models). This is not a change of condition. It is the same condition, captured losslessly.
+`build_payload.py --experiment=E02 --arm=A1a` already emits exactly `A0.json`, and the
+sha256 pinned in `tests/test_build_payload.py` has been pinning those bytes all along.
+
+### C. Premise 5 — the commission is built, and its anchor moved a published attribution
+
+`tools/measure_tracking.py` exists and reproduces **all five** figures E02 published
+(+0.521, +0.581, −0.064, +0.343, −0.113) within 0.0005.
+
+**But E02's published +0.521 for A1a was computed on A0r1's lossless frames, not on A1a's
+own.** A1a's own frames are H.264 and return **+0.545**. The E02 report is not wrong about
+the *condition* — it is silent about *which frames*, and the difference is 0.024, which is
+40% of the very gap this experiment exists to put a floor under. Every E04 number is
+computed from `lossless/` and nothing else.
+
+Also measured while anchoring, and both are now context for every number here:
+
+* the **fixed-seed** floor on this statistic is exactly zero (A0r1/r2/r3 all
+  +0.5206918475), so any spread E04 measures is between-generation and nothing else;
+* the control's energy profile is **bit-identical** under `255 − x`, so both conditions
+  correlate against the same reference profile and the conditions differ only in output.
+
+### D. Premise 6 (**ASSUMED** → **MEASURED TRUE**)
+
+Both reused seed-1 runs are on disk, 33 lossless frames each, manifest-hashed before use:
+`A0r1/lossless` `fe33cb6b…`, `A1b/lossless` `3ff2212f…`. Neither needed regenerating.
+
+### E. Reported, not fixed — E02's A1b distinct-name check could not fire
+
+`EXPERIMENTS["E02"]["arms"]["A1b"]["source_dir"]` names
+`outputs/E02/control_480x832_inverted/depth_pershot`, **which is not on disk**. With the
+directory absent, `_distinct_source_frames` returns `None` and the distinct-name check
+degrades to "at least one distinct image" — so for that arm it could not have caught a
+collapsed batch. A1b's batch was in fact intact (33 distinct server names, and Gate B
+passed), so nothing about E02's result is in question; the *check* was not doing its job.
+
+**Not fixed here.** It is E02's row on an experiment already run and reported, and
+`tools/build_payload.py` is a surface E06 is editing in parallel this round. E04's own
+C-dark row names `control_480x832_neardark/depth_pershot`, which is on disk, so the check
+binds at 33 for these submissions. **Disposition is the advisor's.**

@@ -121,6 +121,7 @@ E03_NEGATIVE = (
     "text, watermark"
 )
 
+<<<<<<< HEAD
 # E06's D2 prompt. D1 reuses E03_POSITIVE verbatim, so the pair differs in exactly one
 # clause — the subject — and the second sentence is byte-identical between them.
 #
@@ -137,6 +138,23 @@ E06_D2_POSITIVE = (
     "The blackguard, a lone armored warrior in dark plate armor, horned helm and heavy "
     "cloak, stands in the centre of an empty studio. Plain grey seamless "
     "background, even neutral lighting, full body in frame."
+=======
+# E04's pre-registered seeds. **Committed in the spec that opens the experiment, before the
+# first submission** — `docs/experiments/E04-the-between-generation-floor.md`, section
+# "Pre-registered seeds". Gate S reads this list; it is the list, not a copy of it, and the
+# spec and this constant are checked against each other by `tests/test_gate_s.py` so the
+# two cannot drift apart into a registry that registers nothing.
+#
+# The first entry is E02's pinned seed: A0 (= A1a's payload plus the lossless tap) and A1b
+# both ran on it, and those two runs join E04 as seed 1 of their respective conditions.
+E04_SEEDS = (
+    654654950714624,
+    654654950714625,
+    654654950715624,
+    654654950724624,
+    654654950814624,
+    654654951714624,
+>>>>>>> E04-run
 )
 
 #: Per-experiment configuration. An arm whose `uploads` is None carries no control video.
@@ -179,6 +197,7 @@ EXPERIMENTS = {
                    "polarity": "near-bright (as rendered; the convention A1a ran on)"},
         },
     },
+<<<<<<< HEAD
     # E06 changes ONE of the two things that separate A1a (painted knight) from B1 (black
     # stick figure): it takes B1's control byte-identical and adds E02's reference plate.
     # Same uploads manifest, same source_dir, same pinned depth window, same seed, same
@@ -201,6 +220,42 @@ EXPERIMENTS = {
                    "normalization": "per-shot, window PINNED to [3.181118, 3.363516]",
                    "polarity": "near-bright (as rendered; the convention A1a ran on)",
                    "positive": E06_D2_POSITIVE},
+=======
+    # E04 — the between-generation floor. Both conditions REUSE E02's uploaded control
+    # frames and E02's prompts, reference and models byte-for-byte, because a floor
+    # measured under any other conditions is not the floor under E02's numbers. The only
+    # field that varies is the KSampler seed, and `seed_registry` is what makes that
+    # freedom bounded rather than open.
+    #
+    # Verified before this row was written, by diffing the on-disk payloads: node 3's
+    # `seed` is the ONLY seed-bearing field in either graph (48 and 49 nodes), so varying
+    # it varies nothing else. E04 premise 2, marked ASSUMED in the spec, MEASURED here.
+    "E04": {
+        "positive": POSITIVE,
+        "negative": NEGATIVE,
+        "reference": ("outputs/E02/uploads_reference.json", "reference_apose_0"),
+        "seed_registry": E04_SEEDS,
+        "arms": {
+            # C-bright is A1a's condition. Its base payload on disk is **A0.json**, not
+            # A1a.json: A1a ran before the lossless tap existed and its payload carries no
+            # node 302, so it cannot produce the frames this experiment's statistic is
+            # defined on. A0 is A1a's payload plus the tap and nothing else — diffed, node
+            # 302 is the sole difference — and A0r1's frames are what E02's published
+            # +0.521 was actually computed from.
+            "C-bright": {"uploads": UPLOAD_MAP["A1a"],
+                         "source_dir": "outputs/E02/control_480x832/depth_pershot",
+                         "normalization": "per-shot",
+                         "polarity": "near-bright (as rendered, F19)"},
+            # E02's A1b row names `control_480x832_inverted/depth_pershot`, which does not
+            # exist on disk — so its distinct-name check silently degrades to "at least one
+            # distinct image" and cannot catch a collapsed batch. That row is E02's, has
+            # already run, and is not edited here. This row names the directory that IS on
+            # disk, so the check binds at 33 for E04's own submissions.
+            "C-dark": {"uploads": UPLOAD_MAP["A1b"],
+                       "source_dir": "outputs/E02/control_480x832_neardark/depth_pershot",
+                       "normalization": "per-shot",
+                       "polarity": "near-dark (full-image 255-x of C-bright)"},
+>>>>>>> E04-run
         },
     },
 }
@@ -259,13 +314,14 @@ def _load_uploads(arm="A1a", experiment="E02"):
     return keys, names, ref
 
 
-def build(arm, experiment="E02"):
+def build(arm, experiment="E02", seed=None):
     if experiment not in EXPERIMENTS:
         raise PayloadError(f"unknown experiment {experiment!r}; known: {sorted(EXPERIMENTS)}")
     cfg = EXPERIMENTS[experiment]
     if arm not in cfg["arms"]:
         raise PayloadError(f"unknown arm {arm!r} for {experiment}; known: {sorted(cfg['arms'])}")
 
+<<<<<<< HEAD
     # The prompt is per-experiment with a per-ARM override, because E06's two arms differ in
     # exactly the prompt and nothing else. An arm that carries no override inherits the
     # experiment's, so **no E02 or E03 arm's bytes can move through this**: none of them
@@ -274,6 +330,19 @@ def build(arm, experiment="E02"):
     POSITIVE_TEXT = arm_cfg.get("positive", cfg["positive"])
     NEGATIVE_TEXT = arm_cfg.get("negative", cfg["negative"])
     use_control = arm_cfg["uploads"] is not None
+=======
+    # ---- Gate S · ANDON — the seed was pre-registered. Deliberately the FIRST gate in
+    # this function: it is the only one guarding a defect that leaves no trace in the
+    # artifact. An illegal frame (Gate L) fails loudly downstream; a seed nobody committed
+    # to in advance produces a flawless generation and a number whose meaning is gone.
+    # Nothing is read from disk and nothing is emitted before it.
+    seed_used = SEED if seed is None else seed
+    gate_s = gates.gate_s_seed_registration(
+        seed_used, cfg.get("seed_registry"), experiment, seed_was_explicit=seed is not None)
+
+    POSITIVE_TEXT, NEGATIVE_TEXT = cfg["positive"], cfg["negative"]
+    use_control = cfg["arms"][arm]["uploads"] is not None
+>>>>>>> E04-run
     if use_control:
         keys, control_names, ref_name = _load_uploads(arm, experiment)
     else:
@@ -307,6 +376,13 @@ def build(arm, experiment="E02"):
         wf["134"] = {"class_type": "LoadImage", "inputs": {"image": ref_name}}
         vace_inputs["reference_image"] = ["134", 0]
 
+    # Where an experiment varies its seed, the seed has to reach the output names too, or
+    # six submissions of one arm would overwrite each other on the server and the run that
+    # came back would not be the run that was asked for. For every experiment WITHOUT a
+    # seed registry this is exactly `arm`, so E02's and E03's emitted bytes are untouched
+    # — pinned by `test_E02_payload_bytes_have_not_moved`.
+    run_tag = arm if not cfg.get("seed_registry") else f"{arm}-s{gate_s['registry_index'] + 1}"
+
     if use_control:
         # COMFY_AUTOGROW_V3 slots are DOTTED keys — `images.image0`, `images.image1`, ...
         # A list of links under a bare `images` key is rejected by the server with
@@ -322,12 +398,13 @@ def build(arm, experiment="E02"):
         # Gate B probe: the batch as the sampler receives it, saved so it can be counted
         # and compared pixel-for-pixel against the local source frames.
         wf["301"] = {"class_type": "SaveImage", "inputs": {
-            "filename_prefix": f"{experiment}/{arm}/batchprobe", "images": ["300", 0]}}
+            "filename_prefix": f"{experiment}/{run_tag}/batchprobe", "images": ["300", 0]}}
         vace_inputs["control_video"] = ["300", 0]
 
     wf["49"] = {"class_type": "WanVaceToVideo", "inputs": vace_inputs}
     wf["3"] = {"class_type": "KSampler", "inputs": {
-        "seed": SEED, "steps": 30, "cfg": 6, "sampler_name": "uni_pc", "scheduler": "simple",
+        "seed": seed_used, "steps": 30, "cfg": 6, "sampler_name": "uni_pc",
+        "scheduler": "simple",
         "denoise": 1, "model": ["48", 0], "positive": ["49", 0], "negative": ["49", 1],
         "latent_image": ["49", 2]}}
     wf["58"] = {"class_type": "TrimVideoLatent", "inputs": {
@@ -336,7 +413,7 @@ def build(arm, experiment="E02"):
     wf["68"] = {"class_type": "CreateVideo", "inputs": {
         "fps": FPS, "bit_depth": 8, "images": ["8", 0]}}
     wf["114"] = {"class_type": "SaveVideo", "inputs": {
-        "filename_prefix": f"video/{experiment}_{arm}", "format": "auto", "codec": "auto",
+        "filename_prefix": f"video/{experiment}_{run_tag}", "format": "auto", "codec": "auto",
         "video": ["68", 0]}}
     # ---- THE LOSSLESS OUTPUT TAP. Costs no extra generation: these are the same frames
     # `CreateVideo` is about to hand to `SaveVideo`, taken off `VAEDecode` before any
@@ -345,7 +422,7 @@ def build(arm, experiment="E02"):
     # measured through an uncharacterised codec is a moving denominator, which is the
     # thing this repo keeps paying for. Everything downstream reads these, not the video.
     wf["302"] = {"class_type": "SaveImage", "inputs": {
-        "filename_prefix": f"{experiment}/{arm}/lossless", "images": ["8", 0]}}
+        "filename_prefix": f"{experiment}/{run_tag}/lossless", "images": ["8", 0]}}
 
     verify_topology(wf, arm, use_control, expects_reference=cfg["reference"] is not None)
     meta = {
@@ -354,7 +431,9 @@ def build(arm, experiment="E02"):
         "resolution": [WIDTH, HEIGHT],
         "length": LENGTH,
         "fps": FPS,
-        "seed": SEED,
+        "seed": seed_used,
+        "run_tag": run_tag,
+        "gate_S": gate_s,
         "gate_L": {"verdict": "PASS", "profile": profile.as_dict()},
         "control": "none (the null — no control_video)" if not use_control else {
             "bridge": "33 x LoadImage -> BatchImagesNode",
@@ -462,9 +541,15 @@ def main(argv=None):
     ap.add_argument("--arm", required=True,
                     choices=sorted({a for e in EXPERIMENTS.values() for a in e["arms"]}))
     ap.add_argument("--out", required=True)
+    # Gate S is what makes this flag safe to exist. Any seed given here is checked against
+    # the experiment's committed list before a payload is built, and an experiment that
+    # pre-registered no seeds refuses the flag outright.
+    ap.add_argument("--seed", type=int, default=None,
+                    help="pre-registered seed; refused by Gate S if not on the "
+                         "experiment's committed list")
     a = ap.parse_args(argv)
 
-    wf, meta = build(a.arm, a.experiment)
+    wf, meta = build(a.arm, a.experiment, seed=a.seed)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=1)

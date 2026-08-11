@@ -6,12 +6,33 @@
 A0. Three identical submissions, same seed, same payload — so every difference between
 them is the provider, not us.
 
-**The floor is not a scalar.** The first pass through this data showed the early frames
-of a clip agreeing almost exactly while the late frames diverged badly, which means a
-single number would understate the floor at the end of a clip and overstate it at the
-start. Any later arm compared on a whole-clip average would read a late-clip difference
-as an effect when it is the floor. So this reports **per frame index**, and reports the
-EARLY and LATE windows separately as their own rows.
+**CORRECTED 2026-08-10 (E04). The rationale below was measuring the codec, not the
+provider.** It read, and this is kept rather than deleted because the correction is more
+useful than the original:
+
+    "**The floor is not a scalar.** The first pass through this data showed the early
+    frames of a clip agreeing almost exactly while the late frames diverged badly, which
+    means a single number would understate the floor at the end of a clip and overstate
+    it at the start."
+
+**That early/late shape was H.264.** E02's A0 re-measured the same three submissions on
+the lossless VAEDecode tap and found **33 of 33 frames identical in all 3 pairs — the
+fixed-seed floor is exactly zero, at every frame index, early and late alike.** There is
+no shape to report because there is no divergence to have a shape. The observed early/late
+gradient was the encoder's, and it disappeared when the encoder left the path.
+
+**Why the per-index reporting stays anyway.** It is now the instrument that *proves* the
+floor is flat rather than an instrument that assumes it is not: a scalar mean of zero and
+a per-index row of zeros look identical on a good run and differ completely on a bad one,
+and this tool must be able to catch the day a provider stops being deterministic. The
+EARLY/LATE rows stay for the same reason — they are how a returning gradient would
+announce itself. **What must not be inherited is the claim that the gradient is there.**
+
+⚠ **This is the fixed-seed floor and nothing else.** Zero here means *re-running one
+submission* costs nothing. It says nothing about the spread across *different seeds*,
+which is a separate quantity measured by E04, and nothing about any statistic other than
+the pixel one — the timing correlation has its own floor and its own instrument
+(`measure_tracking.py`).
 
 Read on the **lossless** frames only (`lossless/`, the VAEDecode tap). The earlier floor
 came through H.264 on both sides; on this rig the codec alone moves a single generation's
