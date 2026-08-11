@@ -76,15 +76,15 @@ should not have.
   is written.**
 * **Distribution:** Python, so PyPI. facet already ships `facet-mcp`, so the packaging pattern is
   in-house and established.
-* **Name:** proposed **`record-index`**. ⚠ **The name is a Director decision** — surface it and get
-  a yes before the repo is created, because a repo name is expensive to change and an OIDC Trusted
-  Publisher is configured against it.
+* **Name: `record-index`** — **RULED by the Director, 2026-08-10.** Settled; do not re-open it. The
+  OIDC Trusted Publisher is configured against this name.
 
 ## Sequencing — load-bearing, and it is not negotiable
 
-1. **facet pushes its 4 unpushed commits first.** Nothing in this dispatch starts until facet's
-   `origin/main` equals its local `HEAD`. Extracting from a tree whose record is not published is
-   how a migration loses an unpublished fix.
+1. ~~**facet pushes its unpushed commits first.**~~ **DONE 2026-08-10** — facet pushed at
+   `407484f..ec6b33d` (5 commits), verified level with `origin/main`, index rebuilt via
+   `record_build` and reading **`SERVING`** with staleness null. **The E32 seat is closed** (the
+   Director's word). facet's tree is free.
 2. **Enumerate and classify** (the section above). **Report and stop for a ruling.** Do not extract
    on your own classification.
 3. **Build the tool** in its own repo, with tests.
