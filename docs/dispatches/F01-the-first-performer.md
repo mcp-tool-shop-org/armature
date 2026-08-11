@@ -5,6 +5,12 @@
 2026-08-11 — the Director picked the concept and the facet seat is running (runs as facet
 E33; first seat ended clean on a cost directive, successor continues from its state block).**
 
+**Twin ruling, 2026-08-11 (Director):** **r3 — terracotta — approved as the projection
+reference.** His note, recorded verbatim: *"r3 is the best, but it's lacking any wood grain
+texture."* The grain lack is a standing note for a future finish iteration, NOT a change
+order — no second twin round runs; r3 projects as-is. The seat resumes through projection →
+brush → fill to the finished unrigged GLB, whose hash lands in E07 premise 1.
+
 **Venue ruling, 2026-08-11 (dispatcher):** the twin stage runs on **Comfy Cloud**, facet's
 measured convention (zero credits measured across E04/E10/E12/E13); the local restylize graph
 is VRAM-falsified (31,006 MiB against the 31,200 ceiling, which is never raised) and is not
