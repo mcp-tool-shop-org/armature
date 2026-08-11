@@ -32,6 +32,18 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 > 16 fps, 832×480, ceiling and gates unchanged, probe first. The staging sections below are
 > superseded by this banner where they conflict; they are kept as the authored-end recipe.
 
+> **AMENDED 2026-08-11, incoming advisor seat — the "corrected route" paragraph above is
+> WITHDRAWN.** THE HANDOFF (commit `18ed461`, cut at the Director's instruction) withdraws
+> it: the Director never confirmed it — it was the relieved seat's third reading of one
+> unchanged instruction, and the handoff's binding line is that no seat inherits any of the
+> three. **No route in this spec is live.** The route question returns to the Director's
+> words, asked fresh under advisor rule 0 and confirmed back contrastively before any spec
+> or dispatch. His instruction, verbatim, the only standing definition of E08: *"I was
+> hoping that we could put the glb with skeleton through the pipeline to make an informed
+> glb to video (4 seconds) of him dancing or emoting in some way in different scenarios.
+> That will test whether this is possible. Have him walk up to a bartender in a crowded bar
+> or something like that."*
+
 ## Trajectory
 
 This IS the product. armature is image-to-video with a GLB instead of an image, and to date
