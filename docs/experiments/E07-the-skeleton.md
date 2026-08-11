@@ -4,6 +4,19 @@
 report** · **Director judges the sheet** · **Credit ceiling: 0 generations. This experiment
 spends no credits.**
 
+> ## ⛔ BLOCKED on F01 — do not start until premise 1 carries a hash
+>
+> **AMENDED 2026-08-11, same day, before any work:** the subject is no longer the blackguard.
+> The Director ruled the first performer comes **fresh off the facet line** — *"I want to use
+> something from the facet pipeline, not an old glb"* — and he was right about the blackguard
+> twice over: the audit's own §2e names a black-armoured figure as the palette that starves
+> the judgment, and this spec reused it anyway. The subject is now the **F01 deliverable**
+> ([F01-the-first-performer.md](../dispatches/F01-the-first-performer.md)). A rig-wide survey
+> of the 284 existing GLBs (eight rendered: `outputs/E07/cast-survey/`) found no
+> facet-canonical character, which is the enumeration that justifies the commission. Nothing
+> else in this spec changes: the gates, the site-list rule, the probe arc and the dailies
+> sheet all bind on whichever character F01 delivers.
+
 ## Trajectory
 
 **armature is image-to-video with a GLB instead of an image** — movies, cutscenes, character
@@ -31,12 +44,12 @@ when posed** — so that authored performances are staged on *him*, not on a wir
 
 | # | premise | status |
 |---|---|---|
-| 1 | The canonical asset is `E:\AI\training\_p0_packs_modernize\_mesh_line\blackguard\blackguard_unirig_rigged.glb`, sha256 `404e8445…` | **MEASURED** — `specs/E02-control-blackguard.json`, re-verify the hash before first use |
-| 2 | Its rig imports as 30 EMPTYs, 0/18 named sites | **MEASURED** — E01 report; re-verify on import and record what Blender 5.2 actually produces |
-| 3 | A sibling file in that directory may be a cleaner unrigged source | **ASSUMED** — enumerate the directory before choosing the source; a pre-rig A-pose GLB beats stripping a broken rig. Choice recorded with reasons |
+| 1 | The subject is the **F01 deliverable** — a facet-line painted character GLB from the Director-picked concept | **PENDING — F01.** Path + sha256 land in this row on delivery; E07 does not start before this row carries a hash |
+| 2 | The delivered GLB carries no pre-existing rig (facet's route emits unrigged painted meshes) | **ASSUMED** — verify on import; if a rig exists, report what it is before touching it |
+| 3 | No existing GLB on this rig qualifies as the subject | **MEASURED 2026-08-11** — 284 GLBs surveyed, eight rendered with stats (`outputs/E07/cast-survey/E07-cast-survey.png`); Director ruled the performer comes off the facet line, new |
 | 4 | Blender 5.2 slotted-action API shape | **MEASURED** — `tools/make_test_armature.py` `_action_fcurves`, measured on this rig 2026-08-10 |
 | 5 | `ARMATURE_AUTO` automatic weights produce a usable, non-shredding deform on this mesh | **ASSUMED — this is the thing the experiment measures.** UniRig's shredding of faced characters is a measured property of UniRig, not of skinning in general; whether Blender's bone-heat weighting fails the same way here is unknown |
-| 6 | The GLB's mesh is skinnable as imported (object count, loose parts, manifoldness) | **ASSUMED** — measure on import, report per-object stats before rigging |
+| 6 | The delivered mesh is skinnable as imported (object count, loose parts, manifoldness) | **ASSUMED** — measure on import, report per-object stats before rigging |
 
 ## Instruments — enumerated first, one commission justified
 
@@ -61,9 +74,10 @@ first bone is placed. A site list chosen after seeing what was easy to rig is na
 
 1. **Verify the watchdog** (`pwsh -NoProfile -File E:\AI\training\_watchdog_start.ps1` — live
    heartbeat confirmed) before any Blender/GPU step. It was found dead 2026-08-11.
-2. Enumerate the blackguard directory; choose and record the source (premise 3).
-3. Import; measure premise 6; set scene fps **before** any animation work (E03 closing,
-   Ruling 9 — the fps-ordering law).
+2. Verify the F01 delivery: premise 1's hash against the file on disk; copy it into
+   `outputs/E07/subject/` and work from the copy.
+3. Import; measure premises 2 and 6; set scene fps **before** any animation work (E03
+   closing, Ruling 9 — the fps-ordering law).
 4. Build the armature: named bones per the registered list, joint heads/tails placed to the
    mesh; parent with `ARMATURE_AUTO`.
 5. Author the probe action: the **E03 arm arc** — one arm, 0→90°, 33 keys at 16 fps — the same
