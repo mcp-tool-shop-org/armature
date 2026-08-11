@@ -41,13 +41,24 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--control", required=True)
     ap.add_argument("--arms", required=True, help="LABEL:dir,LABEL:dir")
-    ap.add_argument("--reference", required=True)
+    ap.add_argument("--reference", required=True,
+                    help="path to the reference plate, or the literal 'none'")
     ap.add_argument("--out", required=True)
     ap.add_argument("--frames", default="0,8,16,24,32")
     ap.add_argument("--tile-height", type=int, default=300)
     ap.add_argument("--meta", default=None)
     ap.add_argument("--title", default=None)
+    ap.add_argument("--control-label", default="CONTROL   depth, per-shot, near-bright")
+    ap.add_argument("--captions", default=None,
+                    help="'idx=text,idx=text' per-frame labels, replacing azimuth")
     a = ap.parse_args()
+
+    captions = None
+    if a.captions:
+        captions = {}
+        for part in a.captions.split(","):
+            k, _, v = part.partition("=")
+            captions[int(k)] = v
 
     idx = [int(v) for v in a.frames.split(",") if v.strip()]
     th = a.tile_height
@@ -65,13 +76,15 @@ def main():
         s = th / im.height
         return im.resize((max(1, round(im.width * s)), th), Image.LANCZOS)
 
-    rows = [("CONTROL   depth, per-shot, near-bright", a.control, cn)]
+    rows = [(a.control_label, a.control, cn)]
     for lab, d in arms:
         rows.append((f"OUTPUT  {lab}", d, listing(d)))
 
     tw = fit(_rgb(os.path.join(a.control, cn[0]))).width
-    ref = fit(_rgb(a.reference))
-    width = MARGIN + len(idx) * (tw + MARGIN) + ref.width + MARGIN * 2
+    # `none` is a real value: E03's arms deliberately carry no reference image.
+    ref = None if a.reference.lower() == "none" else fit(_rgb(a.reference))
+    ref_w = ref.width if ref is not None else 260
+    width = MARGIN + len(idx) * (tw + MARGIN) + ref_w + MARGIN * 2
     height = HDR + len(rows) * (LABEL_H + th + LABEL_H + MARGIN) + MARGIN
 
     sheet = Image.new("RGB", (width, height), BG)
@@ -89,12 +102,31 @@ def main():
                 continue
             t = fit(_rgb(os.path.join(ddir, names[fi])))
             sheet.paste(t, (x, y + LABEL_H))
-            az = 360.0 * fi / len(cn)
-            d.text((x, y + LABEL_H + th + 2), f"f{fi:03d}  az {az:.0f}d", fill=DIM)
+            if captions is not None:
+                cap = f"f{fi:03d}  {captions.get(fi, '')}"
+            else:
+                cap = f"f{fi:03d}  az {360.0 * fi / len(cn):.0f}d"
+            d.text((x, y + LABEL_H + th + 2), cap, fill=DIM)
             x += tw + MARGIN
         if title.startswith("CONTROL"):
-            sheet.paste(ref, (x, y + LABEL_H))
-            d.text((x, y + LABEL_H + th + 2), "REFERENCE (both arms)", fill=DIM)
+            if ref is not None:
+                sheet.paste(ref, (x, y + LABEL_H))
+                d.text((x, y + LABEL_H + th + 2), "REFERENCE (all arms)", fill=DIM)
+            else:
+                for i, ln in enumerate([
+                    "REFERENCE: NONE.",
+                    "",
+                    "Held constant (absent)",
+                    "across all three arms.",
+                    "reference_image is",
+                    "required: false on",
+                    "WanVaceToVideo (measured).",
+                    "",
+                    "The subject carries no",
+                    "identity for a reference",
+                    "to preserve or lose.",
+                ]):
+                    d.text((x, y + LABEL_H + 4 + i * 15), ln, fill=DIM)
         y += LABEL_H + th + LABEL_H + MARGIN
 
     sheet.save(a.out)
