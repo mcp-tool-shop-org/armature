@@ -85,6 +85,16 @@ def rigid_segment_weights(verts, bones, radii, blend_band=BLEND_BAND):
     for j, b in enumerate(bones):
         u[:, j] = segment_distance(p, b["head"], b["tail"]) / float(radii[b["name"]])
 
+    if m == 1:
+        only = bones[0]["name"]
+        return ({only: np.ones(n, dtype=np.float64)},
+                {"rule": "single deforming bone; every vertex belongs to it",
+                 "blend_band_normalised": float(blend_band), "vertices": int(n),
+                 "vertices_rigid": int(n), "vertices_blended": 0, "blended_fraction": 0.0,
+                 "vertices_with_any_weight": int(n), "weight_sum_min": 1.0,
+                 "weight_sum_max": 1.0, "vertices_with_weight": {only: int(n)},
+                 "vertices_dominated": {only: int(n)}, "bones_with_no_vertices": []})
+
     order = np.argpartition(u, 1, axis=1)[:, :2]
     first = u[np.arange(n), order[:, 0]]
     second = u[np.arange(n), order[:, 1]]
