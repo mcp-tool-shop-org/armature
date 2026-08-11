@@ -87,8 +87,8 @@ today's invoice, no prompt_id anywhere). Total cloud contact: 66 free uploads.
 
 **The three wrong dispatches, so you can avoid all three:** (1) authored walk cycle +
 control render — he stopped it: the model should generate the motion; (2) one GLB beauty
-render + prompt into no-control VACE — plain I2V; he stopped it: *"Do you think that I went
-through all of this to do an image to video?"*; (3) this seat's two-stage generative frame
+render + prompt into no-control VACE — plain I2V; he stopped it: reducing the product to
+plain image-to-video defeated the point of the whole pipeline; (3) this seat's two-stage generative frame
 (prompt → motion model → his skeleton → video model) — **never confirmed by him; treat as
 noise.** The spec (docs/experiments/E08-the-first-shot.md) carries the halt banner; its
 "proposed corrected route" paragraph is WITHDRAWN by this handoff.

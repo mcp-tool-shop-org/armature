@@ -5,8 +5,8 @@ non-manifold shell**. Bone heat refuses it (E03), envelope tears it, and rigid p
 inner wall out into the open air (arm (c), twice). This stage attacks the geometry instead of
 the partition.
 
-**Licence, ruled by the Director 2026-08-11:** *"it's not fit for the pipeline, as it isn't
-non-commercial safe."* QuadRemesher (Exoside) is **struck** — not enabled, not measured, no
+**Licence, ruled by the Director 2026-08-11:** he ruled it not fit for the pipeline on
+commercial-safety grounds. QuadRemesher (Exoside) is **struck** — not enabled, not measured, no
 licence row. The gate protects the **pipeline's** cleanliness and reproducibility, not one
 rig's right to run a tool. Everything here is Blender's own: ``voxel_remesh`` and
 ``quadriflow_remesh``, licence-clean by construction under Blender's GPL.

@@ -4,7 +4,7 @@
 
 Separate **rigid parts** articulating at the sculpted ball joints, each parented to its bone.
 **No armature modifier, no vertex weights, no deformation anywhere.** Commissioned after both
-deforming arms failed at the Director's eye — *"This is a hard fail."* — on the ranked
+deforming arms failed at the Director's eye — ruled a hard fail — on the ranked
 recommendation of Comfy Agent consult #5 (`docs/comfy-consult-5.md`), whose atlas-survives
 promise the advisor calibrated on this exact performer before any of this was scripted:
 298,366 of 298,366 far-from-cut faces came through a full-mesh bisect with **byte-identical

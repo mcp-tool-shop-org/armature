@@ -4,7 +4,7 @@
     <venv-python> tools\\sheet_compose.py <dir>\\panels.json
 
 Built for the judgement it exists to serve: **is every pivot on its sculpted ball?** The
-Director caught the first skeleton at 1:1 — *"This looks like it's not lined up properly"* —
+Director caught the first skeleton at 1:1 — he saw it was not lined up properly —
 so the joint insets are framed on the **ball centre**, identical camera before and after, and
 rendered at native size so the two rows are the same zoom he was looking at.
 

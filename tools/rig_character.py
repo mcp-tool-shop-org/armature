@@ -541,8 +541,8 @@ def build_pass(glb_path, name, bands, label, bind=True, envelope_radii="measured
 
     With `bind=False` the mesh is never parented to the armature: the skeleton is placed and
     exported, and nothing is attached to it. That is the **skeleton-approval** mode the
-    Director gated the experiment at — *"Nothing moves forward until I approve the
-    skeleton."* Gate P's liveness clause deliberately does not run there, because there is no
+    Director gated the experiment at — nothing moves forward until he approves the
+    skeleton. Gate P's liveness clause deliberately does not run there, because there is no
     binding for it to be about; a liveness reading on an unbound mesh would be a check
     reporting on a thing that does not exist yet.
     """
@@ -889,8 +889,8 @@ def export_rigged(ctx, probe, out_path, animated=True):
 def run_skeleton(args, out_dir, source_sha, started):
     """Skeleton-approval mode. Places the pivots, gates the names, exports, and stops.
 
-    **Nothing is bound.** The Director gated the experiment here — *"Nothing moves forward
-    until I approve the skeleton"* — so the binding arms do not run and Gate P's liveness
+    **Nothing is bound.** The Director gated the experiment here — nothing moves forward
+    until he approves the skeleton — so the binding arms do not run and Gate P's liveness
     clause is NOT YET RUN by design, not by omission.
     """
     first = build_pass(args["glb"], args["name"], args["bands"], "determinism-probe",

@@ -3,7 +3,7 @@
 **A real stop-motion armature in software.** Separate rigid parts articulating at the
 sculpted balls, parented to bones, with **no deformation anywhere** — no skin weights, no
 armature modifier, nothing to shred and nothing to step. Commissioned as E07 arm (c) after
-both deforming arms failed at the Director's eye (*"This is a hard fail."*), on the ranked
+both deforming arms failed at the Director's eye (ruled a hard fail), on the ranked
 recommendation of Comfy Agent consult #5.
 
 Two prescriptions from that consult are binding here, and both are encoded in this module:
