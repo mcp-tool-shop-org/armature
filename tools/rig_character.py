@@ -44,7 +44,7 @@ import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 from armature_core import landmarks, posearc, rig_gates, sitelist  # noqa: E402
-from armature_core.errors import ArmatureError  # noqa: E402
+from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "1.0.0"
 
@@ -628,5 +628,47 @@ def main():
     print("RIG_OK " + json.dumps({"glb": out_glb, "sha256": out_sha, "manifest": path}))
 
 
+def _write_halt(out_dir, exc, source_sha, glb):
+    """Record a fired andon where the run can be read back, then re-raise.
+
+    A gate that halts and leaves nothing behind makes the executor the only witness. The
+    evidence dict each gate carries is the measurement that stopped the run, so it is
+    written beside the outputs the run did not produce — and the process still exits
+    non-zero, because a halt that returns success is not a halt.
+    """
+    rec = {
+        "tool": "rig_character", "tool_version": TOOL_VERSION,
+        "outcome": "HALTED — a gate fired",
+        "gate": getattr(exc, "gate", "?"),
+        "exception": type(exc).__name__,
+        "message": str(exc),
+        "evidence": getattr(exc, "evidence", {}),
+        "blender": bpy.app.version_string,
+        "source": {"path": glb, "sha256": source_sha},
+        "outputs_not_produced": ["<name>_rigged.glb", "rig_manifest.json"],
+        "note": ("Nothing downstream of the gate ran. No rigged GLB exists, no manifest "
+                 "was written, and no export was attempted. Gates after the one that "
+                 "fired are NOT YET RUN, not passed."),
+    }
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, "halt.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(rec, fh, indent=2, default=str)
+    print("HALT " + json.dumps({"gate": rec["gate"], "record": path}))
+    return path
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except GateFailure as exc:
+        import traceback
+        traceback.print_exc()
+        _args = parse_args()
+        _write_halt(os.path.abspath(_args["out"]), exc,
+                    sha256_file(_args["glb"]), _args["glb"])
+        # MEASURED 2026-08-11: letting the exception propagate out of a `-b -P` script
+        # prints the traceback and Blender still exits **0**. A caller reading the exit
+        # code — a shell chain, a CI step, a later session's `if ($LASTEXITCODE -eq 0)` —
+        # would see the halt as a success. A halt that returns success is not a halt.
+        sys.exit(2)
