@@ -714,3 +714,46 @@ no metric here picks it, and the diagnostics in §21 gate nothing.
 configuration at all given §22.1; whether (b)'s joint seams are correct for a jointed mannequin
 or want a wider blend band; and the standing item **skeleton v2 — articulated fingers**, which
 needs a mesh that sculpts fingers before it needs a rig that names them.
+
+---
+
+## ⛔ BOTH BINDING ARMS FAILED — Director's ruling, 2026-08-11
+
+**Director, on the binding comparison sheet, verbatim:**
+
+> *"This is a hard fail."*
+
+**Both arms failed at his eye.** Arm **(a2) ARMATURE_ENVELOPE** for the tearing; arm **(b)
+rigid-per-segment** for the joint stepping. Neither is a route forward.
+
+**The advisor's recommendation of (b) is OVERRULED, and it is recorded as the advisor's error.**
+It graded **relative improvement** — (b) is measurably cleaner than (a2) on every diagnostic in
+the report's §21 — where the question was **shippability**. A binding that is the better of two
+failures is still a failure, and no diagnostic in this experiment was ever entitled to make that
+call. *Metrics are diagnostics; the Director's eye is the judge.*
+
+### E07 status
+
+| | |
+|---|---|
+| **skeleton** | **APPROVED**, with the reservation recorded verbatim above (*"I'm not really happy with it"*) |
+| **binding** | **UNRESOLVED — both arms failed** |
+| **experiment** | **OPEN**, and PARKED |
+
+### Parked pending an ecosystem consult
+
+The route decision now waits on the consult's answer, not on another arm from this seat.
+Brief: **`docs/comfy-consult-5-brief.md`** (on `main` once pushed).
+
+**Explicitly NOT to be done while parked:**
+
+- no further binding arms
+- **no tuning of the blend band** — retuning a parameter after seeing the result it would be
+  judged by is exactly what this repo has a law against, and the fact that (b) came close makes
+  the temptation stronger, not weaker
+- no merge
+
+**What stands and does not need re-running:** the 22-bone named skeleton with every limb pivot
+on its own sculpted ball; Gates N, P and D on it; the joint-ball offset table; the measured
+method for this character class (*where the subject carries a sculpted marker, the marker is the
+pivot*); and the standing item **skeleton v2 — articulated fingers**.
