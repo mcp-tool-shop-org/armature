@@ -4,7 +4,15 @@
 report** · **Director judges the sheet** · **Credit ceiling: 0 generations. This experiment
 spends no credits.**
 
-> ## ⛔ BLOCKED on F01 — do not start until premise 1 carries a hash
+> ## ✅ UNBLOCKED 2026-08-11 — F01 delivered as facet E33; premise 1 carries the hash
+>
+> The performer exists: `E:\AI\training\facet_E33\out\performer_textured.glb`, sha256
+> `9e20ea7d…b1aa`, 21,588,628 bytes, 299,956 tris, one mesh object, one embedded 4096
+> atlas, terracotta register (Director's r3 ruling), **unrigged** — hash re-verified
+> independently by the dispatching seat before this banner lifted. Known asset facts the
+> rig work inherits: **67 interior shells, watertight false** (a TRELLIS shell asset —
+> premise 5/6's measurement is exactly how skinning behaves on it), and the brush stage
+> was declared not-run, so hand-interior texels are dilation fill (irrelevant to rigging).
 >
 > **AMENDED 2026-08-11, same day, before any work:** the subject is no longer the blackguard.
 > The Director ruled the first performer comes **fresh off the facet line** — *"I want to use
@@ -44,7 +52,7 @@ when posed** — so that authored performances are staged on *him*, not on a wir
 
 | # | premise | status |
 |---|---|---|
-| 1 | The subject is the **F01 deliverable** — a facet-line painted character GLB from the Director-picked concept | **PENDING — F01.** Path + sha256 land in this row on delivery; E07 does not start before this row carries a hash |
+| 1 | The subject is the **F01 deliverable** — a facet-line painted character GLB from the Director-picked concept | **MEASURED 2026-08-11** — `E:\AI\training\facet_E33\out\performer_textured.glb`, sha256 `9e20ea7d800c0ffd2cff101a5e1bcc01fa13c620bbbe3ef05ae23b093547b1aa`, hash re-verified by the dispatcher; full provenance in facet E33's manifest (117 files, per-file sha256) |
 | 2 | The delivered GLB carries no pre-existing rig (facet's route emits unrigged painted meshes) | **ASSUMED** — verify on import; if a rig exists, report what it is before touching it |
 | 3 | No existing GLB on this rig qualifies as the subject | **MEASURED 2026-08-11** — 284 GLBs surveyed, eight rendered with stats (`outputs/E07/cast-survey/E07-cast-survey.png`); Director ruled the performer comes off the facet line, new |
 | 4 | Blender 5.2 slotted-action API shape | **MEASURED** — `tools/make_test_armature.py` `_action_fcurves`, measured on this rig 2026-08-10 |
