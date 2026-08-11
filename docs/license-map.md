@@ -112,6 +112,17 @@ what the licence says; it is not legal advice, and the "given its content" quali
 future arm should re-read before shipping anything that embeds Blender-authored content (its
 bundled fonts, matcaps or asset library, each carrying its own licence in the same file).
 
+
+### Rigging vendors — the class is CLOSED (2026-08-10)
+
+| Vendor | Commercial | Note |
+|---|---|---|
+| **Tripo** (partner/3d — import · rig · retarget) | **NO — LICENCE CONFLICT** | ⛔ **Director's ruling, 2026-08-10.** The only Cloud vendor whose import node (`FILE_3D_GLB` → `MODEL_TASK_ID`) can rig **a mesh we supply**, and it is out. Comfy consult #1 (2026-08-01) had already left Tripo P1's licence open, and recorded that swapping to v3.1 *moved* the question rather than resolving it — same vendor, same ToS. |
+| **Meshy** (partner/3d — rig) | not retrieved | Moot: its rig node takes a `MESHY_TASK_ID` obtainable only from a Meshy *generation* node, so it **cannot rig our canonical character**. |
+| **Rodin · Tencent/Hunyuan3D** | — | **No rig node exists** in either family — verified by absence, consult #7. |
+
+**Consequence — ruled:** with Tripo out, Meshy unable to take our mesh, no rig node elsewhere, and **no open-weights auto-rig on Cloud** (verified by absence), **there is no Cloud rigging route that survives this gate. Rigging happens locally** — which carries no licence question at all and keeps the control path estimator-free by construction.
+
 ## UNVERIFIED — treated as NO until retrieved
 
 Recorded honestly rather than assumed. Each blocks the thing that depends on it.

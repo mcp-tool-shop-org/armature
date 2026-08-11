@@ -429,3 +429,86 @@ unverified-convention wall as consult #4's `pose_video`. Recorded for later; not
 
 *Also recorded, unverified but useful:* `strength` 0 is reasoned to be plain t2v — i.e. **A2** — so
 no arm is ever spent at 0.
+
+---
+
+# Consult #7 — rigging. The Cloud class is CLOSED, and that settles the route.
+
+## ⛔ Tripo is OUT — licence conflict. Director, 2026-08-10.
+
+The consult identified Tripo as the one Cloud vendor able to rig **a mesh we supply** — its import
+node takes `FILE_3D_GLB` and returns a `MODEL_TASK_ID`, which its rig node consumes. **The Director
+ruled it out on a licence conflict before any spec was written and before any credit was spent.**
+
+**The warning was already in the record I had read this session.** Comfy consult #1 (2026-08-01)
+left open: *"Licence verification: Fun ControlNet 2602 and **Tripo P1** — both decisive for
+commercial use, both explicitly NOT verified by the consult."* And its round-2 note: *"swapped Tripo
+P1 → v3.1 for licence reasons — which didn't even work, same vendor, same ToS: the licence question
+**moved**, it didn't resolve."*
+
+**That is *enumerate the resource before commissioning one*, missed again**, and caught by the
+Director rather than by this seat. Zero credits lost.
+
+## The consequence: there is NO Cloud rigging route at all
+
+| vendor | rig node? | takes our mesh? | status |
+|---|---|---|---|
+| **Tripo** | yes | **yes — the only one** | ⛔ **OUT — licence conflict** |
+| **Meshy** | yes | **no** — its rig node takes a `MESHY_TASK_ID`, obtainable only from a Meshy *generation* node | cannot take our character |
+| **Rodin** | **no rig node** | — | — |
+| **Tencent / Hunyuan3D** | **no rig node** | — | — |
+
+Verified by absence: **there is no open-weights auto-rig on Cloud.** That tier generates geometry,
+never skeletons.
+
+**Ruled: the Cloud rigging class is closed. Rigging happens locally.**
+
+## And that is the better answer, not a consolation
+
+The Cloud route was already disqualified for our work on its own terms:
+
+* **The pose vocabulary is a fixed preset enum** — `walk / run / slash / jump`, plus quadruped and
+  serpentine gaits — **not arbitrary keyframes.** armature authors performances; a preset list only
+  ever reached shots that happened to fit it.
+* It traded away the **estimator-free, licence-clean-by-construction** property — armature's
+  structural advantage — for a per-vendor ToS dependency.
+* Its go/no-go was **unknowable without spending**: no schema exposes the skeleton a vendor writes,
+  so the bone names could not be established in advance.
+
+**Local rigging has none of those problems:** arbitrary poses, no licence question, no vendor
+dependency, and the rig is an asset owned outright. It costs crew time, once, on one character.
+
+## What this consult is worth — the route it CLOSED, and the hazards
+
+1. **Foreclosure by enumeration.** From live schemas rather than assumption: no Cloud rigging path
+   survives our gate. That ends the search instead of leaving it open.
+2. **Wan Animate stays NO**, reaffirmed — no licence-clean statement of its pose convention exists,
+   and reading `WanAnimatePreprocess` to learn it makes that tier a **spec dependency even if the
+   node is never run.**
+3. **The Q4 hazards**, which bind on whoever authors control from a posed mesh.
+
+## ⚑ Q4 — control-authoring hazards, and one CORRECTS an earlier consult
+
+1. **Self-occlusion is the top risk, *because of* our horns result.** When an arm crosses the torso,
+   **depth** separates them by Z; a **flat silhouette/segmentation** control merges them into one
+   blob. We measured that the reference **invents silhouette where the control is silent** — a
+   merged blob is exactly that, and it may resolve differently frame to frame.
+   ⚑ **This corrects consult #3's segmentation recommendation.** Seg/ID frees surface but discards
+   the front/back information depth carries. **Prefer depth wherever occlusion or foreshortening is
+   in play.** Our depth-from-Z-buffer path was right and stays.
+2. **Foreshortening reads as "small," not "toward camera."** A limb aimed at the lens collapses to a
+   stub with no cue it is foreshortened rather than truncated. Depth mitigates — the stub is
+   *bright*. Watch thrusts and reaches toward camera.
+3. **Frame-coherence is where ambiguity bites.** One ambiguous frame survives; the model resolving it
+   *differently* across frames reads as flicker even though our control is deterministic. **Author a
+   few degrees of stand-off** between limb and body across transitions.
+4. **Extreme poses fail on the SURFACE while the outline stays correct** — smeared plate, a cape
+   doing nothing sensible. **We would misread that as control failure if we did not separate the
+   two.** Named in advance so we do not.
+5. **Whatever terminates a limb in the control becomes the hand or foot.** Our bristled cylinder ends
+   generalise. A real posed mesh helps — but **fingers sit below silhouette resolution at 480×832**,
+   so expect mitten-hands and do not author shots depending on finger pose.
+6. **Scale consistency is a gift.** Figure width tracked control within **0.007 of frame width**, so
+   consistent framing in Blender yields consistent framing out — and an inconsistent camera distance
+   between shots shows as the character changing size, which the reference will not correct. **Lock
+   camera framing per character like a real shoot.**
