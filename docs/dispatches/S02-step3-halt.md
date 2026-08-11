@@ -110,6 +110,30 @@ now exists carrying **12 rulings** — it did not at step 2. The ruling's own re
 N` across four closing rulings) is already behind. Stated so nothing downstream quotes a fixed number
 for a record that is moving under two live seats.
 
+## 4b. ⚑ facet's seat is live again — step 4's precondition no longer holds
+
+The dispatch's sequencing step 1 recorded facet as free: *"The E32 seat is closed (the Director's
+word). facet's tree is free."* That was true at step 2 and **is not true now.**
+
+Observed during this session, without touching anything: `tools/diagnostics/e32_route_preprocess.py`
+appeared modified in facet's working tree at 22:39:13, then cleared. Re-checked: facet's **HEAD moved
+`ec6b33d` → `16605ae`** at 22:43:12 — *"CI repair: a tool that could not answer `--help` without a
+GPU stack"*, 1 file, +5/−1. facet is clean and level with `origin/main` at the new HEAD.
+
+I did not write, commit or delete it — the transient ` M` was that same file's mtime moving under
+git's stat cache while a facet seat was mid-commit; its content re-hashed identical and the flag
+cleared on the next status.
+
+**This is load-bearing for step 4, which writes into facet's tree.** The dispatch's own rule:
+*"Before touching facet at all, confirm with the Director that its seat is closed; a write into a
+live executor's tree is the failure this project has paid for four times today."* That confirmation
+was given for the state at step 2 and does not carry to a tree that has since taken a commit from
+another seat. **Step 4 needs it again.**
+
+Also: the seat that just committed touches `tools/diagnostics/`, which this dispatch put explicitly
+**out of scope** (`instrument_census.py` and its population stay in facet). The two do not collide on
+a file — but they are both in one tree, and that is the condition the rule names.
+
 ## 5. What was NOT done, and why
 
 Items (a) lift the twelve inline sites, (b) split conventions from mechanism, (d) unrecognised-input
@@ -151,6 +175,7 @@ separately again, the interaction in §2 recurs. They want ruling together.
 | G4 `record_build` writes db + certificate as a pair, `record_health` reads SERVING | **NOT YET RUN** |
 | G5 armature's first index builds and verifies | **NOT YET RUN** |
 
-**Untouched:** facet's tree is clean at `ec6b33d`. No armature document was edited — E02-canon
-parsing to zero is reported in §2, not repaired. No other seat's tree was written to; the E04 and
-E06 seats are at `540da16` and `81a4518`.
+**Untouched:** facet's tree is clean and level with origin at `16605ae` — **moved by its own seat
+during this session, not by me** (§4b). No armature document was edited — E02-canon parsing to zero
+is reported in §2, not repaired. No other seat's tree was written to; the E04 and E06 seats are at
+`540da16` and `81a4518`.
