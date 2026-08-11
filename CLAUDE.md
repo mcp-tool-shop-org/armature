@@ -76,6 +76,18 @@ results, and the session that runs it does not decide their meaning.
 
 ## Rules for an advisor session
 
+0. **Before any product-defining dispatch, confirm the frame with the Director
+   contrastively — one or two lines: "I'm about to build X, not Y — stop me if you meant
+   Y."** A product-defining dispatch is one that stakes out WHAT armature does, not how.
+   Earned 2026-08-11, the most expensive way: the advisor specced E08 as authored-motion-
+   plus-control while the Director meant model-generated performance from a GLB-informed
+   reference — his scope sentence was in this very file, quoted in three documents, and the
+   repo's control-first momentum still won. Every execution gate passed on a spec built
+   inside the wrong frame; the check that was missing costs one sentence and ten seconds.
+   Trajectory rows police spend direction; this rule polices whether the advisor understood
+   the Director at all. They are not the same check, and today proved a seat cannot
+   administer the second one to itself.
+
 1. **Rule when the evidence is in; do not predict when it is not.** Deciding is the job.
 2. **Correct in place, with the measurement that overturned the claim.** Never quietly delete
    a wrong statement; the correction is more useful than the original.
