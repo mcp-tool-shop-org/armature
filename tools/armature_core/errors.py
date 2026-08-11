@@ -133,8 +133,93 @@ class GateSSeedRegistration(GateFailure):
     gate = "S"
 
 
+class GateNNames(GateFailure):
+    """The rig that was about to ship does not name every registered site. E07's andon.
+
+    **The invariant unbounded elsewhere: nothing else prevents a half-named rig from
+    shipping.** E01 measured the whole problem — four rigged GLBs on this machine, every
+    one of them naming its bones `bone_0 … bone_N`, zero of 18 anatomical sites findable
+    in any of them. Not one of those files reports anything wrong. They import, they
+    carry a skin, they pose. The defect is entirely in the names, and a name is exactly
+    the kind of thing every other check is blind to: rest-pose fidelity is unaffected by
+    what a bone is called, determinism reproduces a wrong name perfectly, and a render
+    looks identical. A rig that skins beautifully and names nothing is E01's result
+    reproduced with more steps.
+
+    **It binds in both directions.** A missing site is the obvious clause. An
+    *unregistered* bone is the second, and it is the one that is easy to miss: the site
+    list is committed before the first bone precisely so the rig cannot acquire a bone
+    that no list registered, and a gate checking only coverage would have left that door
+    open itself.
+
+    **It is checked on the re-imported export, not only on the in-memory armature.**
+    The names that matter are the ones a downstream consumer reads out of the GLB. An
+    in-memory armature naming all 22 bones proves nothing about what the glTF exporter
+    wrote — `export_def_bones` alone would silently drop every non-deforming marker.
+    """
+
+    gate = "N"
+
+
+class GatePRestPose(GateFailure):
+    """Skinning is not the identity at the bind pose. E07's andon on silent collapse.
+
+    Linear-blend skinning evaluated at the rest pose is the identity map *when the
+    weights on each vertex sum to 1* — every bone contributes its own rest matrix, and
+    the weighted sum reduces to the vertex's original position no matter what the
+    weights are. So this gate does not test whether the weighting is any good. It tests
+    the one thing that must hold regardless: that binding the mesh did not move it.
+
+    **What it catches that nothing else does.** A partially failed bone-heat solve
+    leaves vertices whose weights sum to less than 1; those vertices contract toward
+    the origin the instant the modifier is live, and a vertex weighted to nothing at all
+    may collapse to the object origin outright. Blender reports bone-heat failure as an
+    *info message*, not an error. The export succeeds, the manifest is written, the
+    names all check out, determinism reproduces the collapse exactly — and the character
+    ships with a dent in him that no other check in this tool can see.
+
+    Bounded by the mesh's own bbox diagonal rather than by a constant in metres, because
+    a global constant must not govern a local feature.
+    """
+
+    gate = "P"
+
+
+class GateDDeterminism(GateFailure):
+    """Two builds from identical inputs produced different rigs. E07's andon on recipe.
+
+    *A recipe that does not reproduce its output is not a recipe.* Everything downstream
+    of this tool — E08's authored performance, every control sequence rendered from it,
+    every comparison drawn against those — is quoted against a rig. If the rig is not
+    reproducible then none of those numbers has a fixed referent, and the failure is
+    silent in every direction: one run is as plausible as another, and the difference
+    only ever surfaces as an unexplained shift in a later experiment.
+
+    **Compared as parsed objects, never bytes.** A GLB carries timestamps, exporter
+    version strings and float noise that differ between byte-identical *rigs*; a hash
+    mismatch would therefore fire on runs that are the same and, worse, a hash *match*
+    would be quoted as proof of a property it never tested. This gate compares bone
+    heads, tails, rolls, parents, deform flags and per-vertex weight vectors — the
+    quantities that are actually the contract.
+    """
+
+    gate = "D"
+
+
 class SpecError(ArmatureError):
     """The shot spec is malformed, incomplete, or names something unknown."""
+
+
+class LandmarkError(ArmatureError):
+    """The mesh does not present the anatomy the landmark derivation requires.
+
+    Raised rather than guessed. A silhouette that does not resolve into a trunk, two
+    arms and two legs is a subject this derivation cannot place bones on, and placing
+    them anyway would produce a rig whose joints are in invented positions while every
+    gate downstream reports green — the names would check out, the rest pose would be
+    preserved, and the build would be perfectly deterministic. Halting is the only
+    signal that survives.
+    """
 
 
 class NotInsideBlender(ArmatureError):
