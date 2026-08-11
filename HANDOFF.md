@@ -31,6 +31,43 @@ general video tool whose input modality is a scene you own. The game is one cons
 armature sits downstream of facet (`E:\AI\facet`) — facet cuts and paints the figure; armature
 stages and performs it — and **never writes into facet's tree**.
 
+## 1b. armature and facet are ONE SYSTEM — added 2026-08-11 by the next advisor, after paying for not knowing it
+
+**"Downstream of facet" undersells it, and the Director corrected it in one line: the repos
+share a database.** The connection is infrastructural, not thematic:
+
+- **One record engine.** Both repos' evidence trails run on the extracted `record-index`
+  package. facet's record is a **queryable SQLite + FTS5 database** — `npx @mcptoolshop/facet`
+  serves it; `facet-index` (`build` / `verify` / `q` / `claims`) queries it from inside the
+  checkout; the `facet-mcp` server exists precisely so *"an assistant can query the evidence
+  trail instead of reading it."* armature's own index is S02's deliverable — 47 rulings, 15/15
+  seeded, on the same package — sitting unmerged on `S02-run`.
+- **One publish chain binds both** (§4): `record-index` is not on PyPI, so facet cannot push
+  and `S02-run` cannot merge until it is. A ruling on either side moves the other.
+- **One advisor seat spans both.** Commissions cross the boundary (F01 — armature commissions,
+  a facet seat builds), assets flow facet→armature, and the audit trail of one is working
+  context for the other.
+
+**THE RULE, and what it cost to earn on the day it was added:** never advise, spec, or
+dispatch about the other repo from memory, from this handoff, or from any secondhand summary.
+**Read its record, or query it — the database is the point.** This seat dispatched a facet
+build carrying the sentence *"the subject is bare clay, so the surface job is faithful clay
+material"* — written without having read facet's route, whose README diagram opens at
+**"form-exaggerated clay concept"**: monochrome clay is the route's *entry stage*, and colour
+enters inside the route at the styled-twin stage. The order would have stopped facet's
+pipeline at its own front door. The Director caught it in one line (*"Have you even read the
+facet pipeline?"*), the live seat was corrected mid-flight, and F01's gate A4 is corrected in
+place (`f7a8b4e`). One query against facet's index — or ten minutes in its README — would have
+prevented all of it.
+
+**Dispatched-seat model tiering — same day, same class of error (cost discipline):** the
+Agent tool **inherits the dispatching session's model when `model` is omitted**. This seat
+runs Fable, so an executor dispatched without setting the tier burns Fable tokens on
+route-following — which happened on F01's first stage before the Director caught the spend.
+**Executor seats default to `opus`** (`sonnet` for mechanical sweeps); Fable is for judgment
+work, and only deliberately. Set the `model` parameter on every Agent dispatch — the default
+is a trap with a bill attached.
+
 ---
 
 ## 2. ⚠ THE DIRECTOR HAS CALLED AN AUDIT. Here is the finding that caused it.
