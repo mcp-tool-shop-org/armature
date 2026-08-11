@@ -950,3 +950,135 @@ first n-gon, and the joint bisects leave n-gons at every cut.
 **Arm (c) fixed is delivered as the control arm, with its residue flagged.** Arm (d) — the
 retopo route on stock Blender — is **NOT STARTED**; the two rulings above are recorded and its
 amendment is in the spec.
+---
+
+# ROUND 6 — arm (d), the retopo route on stock Blender. The mesh was the disease.
+
+**Zero credits.** Everything local, everything headless, everything Blender's own.
+
+## 38. ⚑ IMPERFECTIONS, flagged before anything else
+
+1. **Faceting at 1:1.** Limbs and joint balls read as polygonal against the smooth original.
+   **Measured, not assumed:** the retopo mesh is **97.3 % smooth-shaded with custom normals
+   present**, so this is *geometry*, not shading — 39,705 quads is too coarse for the
+   Director's zoom. A higher target is the obvious next lever and was not tried.
+2. **A jagged sliver past the fingertips** in the wrist inset at frame 33.
+3. **A dark smudge under the mouth** in the baked atlas that is not in the original.
+4. **The `neck` bone is nearly dead** — **0** vertices dominated, 1,642 carrying any weight
+   at a mean of **0.084**.
+5. **20,171 of 39,707 vertices carry a weight sum below 0.999** (min **0.8961**). Bone heat
+   left half the mesh under-normalised.
+6. **A stray `Icosphere` (80 faces) is inside the exported GLB.** Contamination in the
+   deliverable, and it is what made this round's first sheet report "the arc did not survive
+   the round trip" — the sheet tool had taken it for the character.
+7. **The glTF round trip re-splits every UV seam** (39,707 → 164,152 verts). Any consumer must
+   weld on import or the mesh is non-manifold again.
+
+## 39. Outer-shell extraction
+
+Rule: welded-position connected components; keep the component with the most faces; delete the
+rest; weld by distance at 1e-6 x diagonal to repair the glTF seam splits.
+
+| | before | after |
+|---|---|---|
+| faces | 299,956 | **147,450** (152,506 interior deleted, **50.84 %**) |
+| verts | 399,140 | **73,684** (42,208 welded away) |
+| non-manifold / boundary edges | — | **98 / 34** — still not a closed manifold |
+
+## 40. Retopology — both routes, measured
+
+| | route | result |
+|---|---|---|
+| **A** | QuadriFlow direct on the extracted shell | **DECLINED.** The shell is non-manifold; the voxel pass is not optional |
+| **B** | voxel remesh at **0.002169** (= smallest measured limb radius, `elbow.R` 0.01301, / 6) → 140,068 quads in 0.1 s → QuadriFlow | **39,705 faces, 100 % quads, closed manifold**, 22.5 s |
+
+Deviation of B from the surface it replaced: mean **2.8e-05**, p99 **0.00038**, max **0.003583**
+= **0.335 %** of the 1.069 diagonal. Diagnostic only; it gates nothing.
+
+## 41. **QuadriFlow is scale-sensitive, and its error message is misleading**
+
+MEASURED. `quadriflow_remesh` returns `{'CANCELLED'}` in 0.0 s at scale **x1** and **x10**,
+and `{'FINISHED'}` in 2.2 s at **x100**. It warns *"The mesh needs to be manifold and have
+face normals that point in a consistent direction"* — but the mesh passes **all three** of
+Blender's own manifold clauses (0 edges not shared by exactly two faces, 0 directed edges used
+more than once, 0 vertices with more than one fan), **identically to a control mesh the
+operator accepts**. Recalculating normals does not help; clearing custom normals does not help;
+a virgin datablock does not help. The figure is simply too small in absolute units. A uniform
+scale is exactly invertible, so the route scales up, remeshes, and scales back.
+
+Controls that make this a finding rather than a guess: an 81,920-tri ico-sphere is accepted
+(→ 7,586 quads, 1.6 s), and a **voxel-remeshed** ico-sphere is accepted too — so neither size
+nor voxel output is the objection.
+
+## 42. UVs and the bake
+
+`uv.smart_project`'s **island_margin must stay at 0.0**, measured: **0.0 → packed UV area
+0.627**; **0.002 → 0.0028**; **0.0039** (16 px at 4096, which is what a pixel intuition
+suggests) **→ 0.00077**. Thousands of islands each demand that margin and the packer shrinks
+them all. **The UNWRAP gate caught this before a single ray was cast.**
+
+Bake: Cycles GPU, samples 1, DIFFUSE/COLOR, Selected-to-Active,
+**cage 0.01075** (= 3 x the measured max deviation), max ray
+0.0215, margin 16 px, **4096**. 5.6 s.
+Atlas non-black **99.23 %**.
+
+The **BAKE gate fired first**, on Blender's *"No active and selected image texture node found"*.
+Cycles finds its destination by the material's active-and-selected image node, and setting it at
+construction time is not enough — it is now re-asserted immediately before the bake call.
+
+## 43. ⚑ THE MAJOR FINDING — bone heat was never broken by this character
+
+Gate P's liveness clause fired on the mesh as exported: **max displacement 0.000**. The root
+cause is not the character and not the topology this round built:
+
+| mesh | verts | boundary edges | bones with weight | unweighted verts |
+|---|---|---|---|---|
+| **as exported** (UV-split) | 164,152 | **164,152** | **0 / 17** | **100.00 %** |
+| **welded in-session** | 39,707 | **0** | **17 / 17** | **0.00 %** |
+
+**E03's headline is overturned.** Bone heat's zero weights were a property of **the glTF
+importer splitting a vertex per (position, uv, normal)** — every UV island edge is a hole, and
+bone heat cannot solve a diffusion problem on a surface full of holes. It was never a property
+of the performer. `rig_character` now welds on import unconditionally, with the measurement
+in its docstring. The weld is safe for the atlas because Blender stores UVs **per loop**.
+
+## 44. Gates and weights — with numbers
+
+| gate | result |
+|---|---|
+| N pre-export | **22 / 22** registered sites map to one bone each |
+| N post-export | **22 / 22** |
+| P rest pose (kept + first build) | **rest pose preserved** |
+| P liveness | **passes** — the posed mesh moves |
+| D determinism | **two builds agree on bones, hierarchy AND weights** |
+
+Weights: **39,707** vertices, **0** with no weight, sum mean **0.9909**, min **0.8961**, none
+above 1.001, **1.69** influences per vertex. **Shells: 1** (the subject had 67).
+
+Probe arc, per structure — only the posed limb moves, and every other bone is exactly zero:
+
+| bone | max displacement | frac of diagonal |
+|---|---|---|
+| wrist.L | **0.7436** | 0.696 |
+| elbow.L | **0.6110** | 0.572 |
+| shoulder.L | **0.3798** | 0.355 |
+| chest | 0.0287 | 0.027 |
+| head / spine | 0.0083 / 0.0058 | 0.008 / 0.005 |
+| **all 11 others** | **0.0000** | 0.000 |
+
+## 45. Arm (d) artifacts
+
+| artifact | sha256 | bytes |
+|---|---|---|
+| sheet `rig-auto-sheet\E07-rig-armature.png` | aecf7608e9c291e1a18a2d7a3c751950fe8479bea5c781ba3bb869da3dc8b4d0 | 3201368 |
+| retopo sheet `retopo\E07-retopo.png` | 22d948599299a9d7fde8379cb0c1af3e3a5f78cc2230440532b1996e558b1e90 | 2208019 |
+| rigged GLB `rig-auto\performer_auto.glb` | f74eed431c09b2a5a89f15f6d8d732ce3f5ef2fabb7ae074162e931176ff2535 | 22701352 |
+| baked GLB `baked\performer_retopo_textured.glb` | a4af07f4e62a8d2963fde9fdd905700083ff8aa6ec7de74769753673f4d5b044 | 19395824 |
+| atlas `baked\terracotta_retopo_4096.png` | 4fabb6fe7e2bc8b866c2b2d68b019fd198236d66a3610207cb8e44b8efd82098 | 13188584 |
+| retopo GLB `retopo\B_voxel_then_quadriflow.glb` | d36cf52fa3710fb8b805b0f5ee2ab3d7f017f3e6ee905b723d22097e120a9ad5 | 9981116 |
+
+## 46. Licence
+
+**Blender 5.2 built-ins only** — `voxel_remesh`, `quadriflow_remesh`, `uv.smart_project`,
+Cycles bake. GPL, **COMMERCIAL: YES**, and no per-rig entitlement is involved.
+**QuadRemesher was not enabled, not measured, and carries no licence row.**

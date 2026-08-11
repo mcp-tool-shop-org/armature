@@ -425,6 +425,46 @@ def bone_table(arm_obj):
             for b in arm_obj.data.bones}
 
 
+def weld_seam_splits(mesh_obj):
+    """Merge the vertices glTF split at every UV and normal seam. **Not optional.**
+
+    MEASURED 2026-08-11, and it overturns the headline of E03. A glTF file stores one vertex
+    per (position, uv, normal) combination, so a mesh of 39,707 vertices comes back as
+    **164,152** with **164,152 boundary edges** — every UV island edge is a hole as far as
+    Blender is concerned. Bone heat solves a diffusion problem on that surface and cannot:
+    binding the file as imported gives **0 of 17 bones any weight and leaves 100 % of
+    vertices unweighted**, which is exactly the result E03 recorded and attributed to the
+    character. Welding the coincident vertices first, on the same file, gives **17 of 17 bones
+    live, 0 % unweighted, weight sum 0.9909, 1.69 influences per vertex**.
+
+    The weld is safe for the atlas: Blender stores UVs **per loop**, not per vertex, so
+    merging two coincident vertices that carry different UVs keeps both faces' coordinates.
+    Verified by rendering the welded mesh textured.
+    """
+    import bmesh as _bmesh
+    src = world_verts(mesh_obj)
+    diagonal = float(np.linalg.norm(src.max(0) - src.min(0)))
+    bm = _bmesh.new()
+    bm.from_mesh(mesh_obj.data)
+    before_v = len(bm.verts)
+    before_boundary = sum(1 for e in bm.edges if e.is_boundary)
+    _bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=1e-6 * diagonal)
+    after_boundary = sum(1 for e in bm.edges if e.is_boundary)
+    after_nm = sum(1 for e in bm.edges if not e.is_manifold)
+    rec = {"verts_before": before_v, "verts_after": len(bm.verts),
+           "verts_merged": before_v - len(bm.verts),
+           "boundary_edges_before": before_boundary, "boundary_edges_after": after_boundary,
+           "non_manifold_edges_after": after_nm,
+           "closed_manifold_after": after_boundary == 0 and after_nm == 0,
+           "merge_distance": 1e-6 * diagonal,
+           "why": "glTF splits a vertex per (position, uv, normal); bone heat cannot solve "
+                  "on a surface whose every UV island edge is a boundary"}
+    bm.to_mesh(mesh_obj.data)
+    bm.free()
+    mesh_obj.data.update()
+    return rec
+
+
 def build_pass(glb_path, name, bands, label, bind=True, envelope_radii="measured"):
     """One complete build, from a fresh scene to a rig.
 
@@ -447,6 +487,7 @@ def build_pass(glb_path, name, bands, label, bind=True, envelope_radii="measured
             f"this tool will not answer by picking the biggest"
         )
     mesh_obj = meshes[0]
+    weld = weld_seam_splits(mesh_obj)
     premise2 = {
         "pre_existing_armatures": [o.name for o in armatures],
         "pre_existing_empties": [o.name for o in bpy.data.objects if o.type == "EMPTY"],
@@ -506,6 +547,7 @@ def build_pass(glb_path, name, bands, label, bind=True, envelope_radii="measured
         "label": label, "scene": scene, "mesh": mesh_obj, "armature": arm_obj,
         "source": source, "diagonal": diagonal, "landmarks": lm, "weights": weights,
         "fingerprint": fingerprint, "gate_p": gate_p, "premise2": premise2,
+        "weld_on_import": weld,
         "premise6": premise6, "shell_id": shell_id, "shell_sizes": shell_sizes,
         "bone_lengths": bone_lengths, "bbox_lo": lo.tolist(), "bbox_hi": hi.tolist(),
         "heuristic_landmarks": heuristic_marks, "joint_balls": balls, "shells": shells,
@@ -802,6 +844,7 @@ def run_skeleton(args, out_dir, source_sha, started):
         "site_to_bone_map": {b.name: b.as_dict() for b in sitelist.BONES},
         "registered_site_count": len(sitelist.ALL_NAMES),
         "premise_2_pre_existing_rig": ctx["premise2"],
+        "weld_on_import": ctx["weld_on_import"],
         "premise_6_skinnability": ctx["premise6"],
         "bbox": {"lo": ctx["bbox_lo"], "hi": ctx["bbox_hi"], "diagonal": ctx["diagonal"]},
         "facing": ctx["landmarks"]["facing"],
@@ -872,6 +915,7 @@ def main():
             "blender": bpy.app.version_string, "source": args["glb"],
             "source_sha256": source_sha,
             "premise_2_pre_existing_rig": ctx["premise2"],
+        "weld_on_import": ctx["weld_on_import"],
             "premise_6_skinnability": ctx["premise6"],
             "landmarks": ctx["landmarks"]["landmarks"],
             "landmark_provenance": ctx["landmarks"]["provenance"],
@@ -937,6 +981,7 @@ def main():
         "registered_site_count": len(sitelist.ALL_NAMES),
         "e01_site_count": len(sitelist.E01_SITES),
         "premise_2_pre_existing_rig": ctx["premise2"],
+        "weld_on_import": ctx["weld_on_import"],
         "premise_6_skinnability": ctx["premise6"],
         "bbox": {"lo": ctx["bbox_lo"], "hi": ctx["bbox_hi"], "diagonal": ctx["diagonal"]},
         "facing": ctx["landmarks"]["facing"],
