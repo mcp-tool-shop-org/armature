@@ -3,6 +3,7 @@
 
     python tools/build_payload.py --experiment=E02 --arm=A1a --out=<payload.json>
     python tools/build_payload.py --experiment=E03 --arm=B1  --out=<payload.json>
+    python tools/build_payload.py --experiment=E06 --arm=D1  --out=<payload.json>
 
 Emits ComfyUI **API format**. The bridge is the one ruled in `E02-halt-ruling.md`:
 33 x `LoadImage` -> `BatchImagesNode` -> `control_video`. There is no encoder anywhere in
@@ -43,6 +44,21 @@ with exactly ONE distinct name — so a hard "must be 33 distinct" check would r
 arm. The expectation is therefore computed from the local frames' own content hashes and
 compared: a moving control that collapsed raises, and a static arm that did not collapse
 raises too.
+
+--------------------------------------------------------------------------------
+A third experiment, and it needed no new gate (E06, 2026-08-10)
+
+E06 re-runs B1's control byte-identical WITH E02's reference plate, to separate the two
+things that differ between A1a (a painted knight) and B1 (a black stick figure). Its only
+axis is reference presence — and `verify_topology(expects_reference=...)`, written for E03
+so a reference could not silently appear or vanish between arms of one experiment, already
+binds that axis in both directions. **Enumerating the file first turned a commission into a
+config entry**, which is the cheaper branch and the reason to look before building.
+
+The one structural addition is a **per-arm `positive` override**, because E06's D1 and D2
+differ in exactly the prompt. D1 carries no override and therefore inherits E03's positive
+literally rather than by copy — a retyped prompt is a second variable that no report would
+catch. No E02 or E03 arm carries an override, so their bytes cannot move through it.
 """
 
 import argparse
@@ -105,6 +121,24 @@ E03_NEGATIVE = (
     "text, watermark"
 )
 
+# E06's D2 prompt. D1 reuses E03_POSITIVE verbatim, so the pair differs in exactly one
+# clause — the subject — and the second sentence is byte-identical between them.
+#
+# **Executor choice, flagged for the advisor to overrule.** "Names the character" could mean
+# a bare proper name; a bare proper name is not a canon element to a text encoder, which
+# resolves tokens and not lore. So this names the character AND the attributes E02's own
+# prompt named for the same subject (dark plate, horned helm, cloak) — the ones the
+# Director's canon ruling read off the identity sheet: horned helm, tattered cape,
+# segmented pauldrons. Naming only "blackguard" would test whether one token means anything
+# to umt5, which is not the question E06 asks.
+#
+# It still names NO motion, holding E03's discriminator hygiene constant across D1 and D2.
+E06_D2_POSITIVE = (
+    "The blackguard, a lone armored warrior in dark plate armor, horned helm and heavy "
+    "cloak, stands in the centre of an empty studio. Plain grey seamless "
+    "background, even neutral lighting, full body in frame."
+)
+
 #: Per-experiment configuration. An arm whose `uploads` is None carries no control video.
 #: `source_dir` is the LOCAL directory the uploads came from; it is what the distinct-name
 #: check derives its expectation from, so it is not decoration.
@@ -143,6 +177,30 @@ EXPERIMENTS = {
                    "source_dir": "outputs/E03/control_static/depth_pershot",
                    "normalization": "per-shot, window PINNED to [3.181118, 3.363516]",
                    "polarity": "near-bright (as rendered; the convention A1a ran on)"},
+        },
+    },
+    # E06 changes ONE of the two things that separate A1a (painted knight) from B1 (black
+    # stick figure): it takes B1's control byte-identical and adds E02's reference plate.
+    # Same uploads manifest, same source_dir, same pinned depth window, same seed, same
+    # negative — so `verify_topology(expects_reference=True)` is guarding the only axis
+    # this experiment moves, which is why E06 commissions no gate of its own.
+    "E06": {
+        "positive": E03_POSITIVE,     # D1: B1's prompt, unchanged
+        "negative": E03_NEGATIVE,
+        "reference": ("outputs/E02/uploads_reference.json", "reference_apose_0"),
+        "arms": {
+            # D1 carries no `positive` override, so it inherits E03's word for word. That
+            # is the mechanism by which "prompt unchanged" is enforced rather than retyped:
+            # a typo in a copied prompt would be a second variable nothing would report.
+            "D1": {"uploads": "outputs/E03/uploads_posearc.json",
+                   "source_dir": "outputs/E03/control_posearc/depth_pershot",
+                   "normalization": "per-shot, window PINNED to [3.181118, 3.363516]",
+                   "polarity": "near-bright (as rendered; the convention A1a ran on)"},
+            "D2": {"uploads": "outputs/E03/uploads_posearc.json",
+                   "source_dir": "outputs/E03/control_posearc/depth_pershot",
+                   "normalization": "per-shot, window PINNED to [3.181118, 3.363516]",
+                   "polarity": "near-bright (as rendered; the convention A1a ran on)",
+                   "positive": E06_D2_POSITIVE},
         },
     },
 }
@@ -208,8 +266,14 @@ def build(arm, experiment="E02"):
     if arm not in cfg["arms"]:
         raise PayloadError(f"unknown arm {arm!r} for {experiment}; known: {sorted(cfg['arms'])}")
 
-    POSITIVE_TEXT, NEGATIVE_TEXT = cfg["positive"], cfg["negative"]
-    use_control = cfg["arms"][arm]["uploads"] is not None
+    # The prompt is per-experiment with a per-ARM override, because E06's two arms differ in
+    # exactly the prompt and nothing else. An arm that carries no override inherits the
+    # experiment's, so **no E02 or E03 arm's bytes can move through this**: none of them
+    # carries one. `tests/test_build_payload.py` pins E02's sha256 against exactly that.
+    arm_cfg = cfg["arms"][arm]
+    POSITIVE_TEXT = arm_cfg.get("positive", cfg["positive"])
+    NEGATIVE_TEXT = arm_cfg.get("negative", cfg["negative"])
+    use_control = arm_cfg["uploads"] is not None
     if use_control:
         keys, control_names, ref_name = _load_uploads(arm, experiment)
     else:
@@ -284,7 +348,6 @@ def build(arm, experiment="E02"):
         "filename_prefix": f"{experiment}/{arm}/lossless", "images": ["8", 0]}}
 
     verify_topology(wf, arm, use_control, expects_reference=cfg["reference"] is not None)
-    arm_cfg = cfg["arms"][arm]
     meta = {
         "experiment": experiment,
         "arm": arm,
