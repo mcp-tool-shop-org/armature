@@ -81,13 +81,20 @@ remains the open canon question, judged only by the Director's eye.
   commit, SECURITY.md with a *measured* zero-egress claim, CHANGELOG, repo metadata.
 - **armature S02 MERGED + CLOSED** ([S02-closing-ruling.md](docs/dispatches/S02-closing-ruling.md)
   rules the five open questions). armature CI green on the merge.
-- **facet push: IN FLIGHT.** A sweep seat is clearing the 20 pre-existing hermetic failures
-  (wheel-fixture deps resolution; source-scan guards re-pointing at code that moved into the
-  package; one CRLF check; PAID_RE unfrozen from E01–E15), then pushes facet's ~5 local
-  commits and watches CI to green. Verify it landed green before treating facet as current.
-- **The 0.1.1 queue:** the four pinned record-index defects (verify-doubling, E-form arc
-  regex, sub-ruling locator, declared-empty fields) + the certificate duplication resolving
-  toward the package + whatever the facet sweep surfaces.
+- **facet: PUSHED AND GREEN** (`1e4a527`, CI run 31524341279 success, Pages success; 0
+  ahead, tree clean). The sweep cleared all 20 hermetic failures — hermetic 887/0, complete
+  suite 927/0 — re-pointed or retired the moved-property guards per the S02 ruling, fixed
+  the wheel fixture, unfroze `PAID_RE` (31/31 law attributions, was 16/15-null), and proved
+  the published wheel byte-identical to the checkout across all ten modules.
+- **The sweep also found a FIFTH record-index defect** my dispatch had misclassified as the
+  wheel-venv mechanism: a rootless `Binding` on a db verb exits 2 where the contract
+  promises 4 REFUSED. Now pinned strict-xfail in the package (`4d4c801`, CI green), README
+  and known-defects page corrected in place, 4→5, dated.
+- **The 0.1.1 queue:** the five pinned record-index defects + the certificate duplication
+  resolving toward the package. **facet-side small items, advisor's to fold:**
+  `verify.experiment_coverage` declares E01–E15 while 33 experiments exist (gates nothing,
+  sibling of the PAID_RE class); `docs/advisor-kickoff.md` says "highest T-number: T63"
+  while T65 exists.
 
 ## 5. Working rules that earned their keep today
 
