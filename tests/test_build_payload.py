@@ -134,6 +134,136 @@ def test_unknown_experiment_and_arm_raise():
 
 
 @pytest.mark.skipif(not HAVE_E03_UPLOADS, reason="E03 upload records are gitignored output")
+@pytest.mark.skipif(not HAVE_E02_UPLOADS, reason="E02 upload records are gitignored output")
+class TestE06Arms:
+    """E06 = B1's control byte-identical + E02's reference. Two arms, one prompt apart.
+
+    What would this look like if the code were wrong in the way these exist to catch?
+    The failure E06 cannot survive is **a second variable** — a control that is not
+    actually B1's, a reference that reached one arm and not the other, or a prompt that
+    drifted while being copied. Each test below is one of those.
+    """
+
+    def test_D1_carries_B1s_control_BYTE_IDENTICALLY(self):
+        """The whole experiment is 'B1 plus a reference'. If the control differs at all,
+        two things changed and the run answers nothing."""
+        b1, m1 = bp.build("B1", "E03")
+        d1, m_d1 = bp.build("D1", "E06")
+
+        assert m_d1["control"]["server_names"] == m1["control"]["server_names"]
+        assert m_d1["control"]["frame_keys"] == m1["control"]["frame_keys"]
+        assert m_d1["control"]["source_dir"] == m1["control"]["source_dir"]
+        assert m_d1["control"]["normalization"] == m1["control"]["normalization"]
+        assert m_d1["control"]["polarity"] == m1["control"]["polarity"]
+        # the 33 LoadImage nodes and the batch node are the control, as emitted
+        for nid in [str(200 + i) for i in range(33)] + ["300"]:
+            assert d1[nid] == b1[nid], f"node {nid} differs from B1's"
+
+    def test_D1_differs_from_B1_in_the_REFERENCE_AND_NOTHING_ELSE(self):
+        """The one-variable claim, enforced on the emitted graph rather than asserted in
+        a doc. Anything outside the reference node and the two output prefixes is a
+        second variable."""
+        b1, m1 = bp.build("B1", "E03")
+        d1, m_d1 = bp.build("D1", "E06")
+
+        assert m_d1["positive"] == m1["positive"], "D1's prompt must be B1's, unchanged"
+        assert m_d1["negative"] == m1["negative"]
+        assert m_d1["seed"] == m1["seed"]
+        assert m_d1["resolution"] == m1["resolution"] and m_d1["length"] == m1["length"]
+        assert m_d1["models"] == m1["models"]
+        assert d1["3"]["inputs"] == b1["3"]["inputs"], "sampler settings must not move"
+        assert d1["48"]["inputs"]["shift"] == b1["48"]["inputs"]["shift"]
+
+        added = set(d1) - set(b1)
+        assert added == {"134"}, f"D1 adds only the reference LoadImage; it added {added}"
+        assert not (set(b1) - set(d1)), "D1 may not drop a node B1 had"
+
+        differing = {k for k in b1 if b1[k] != d1[k]}
+        # WanVaceToVideo gains reference_image; 301/302/114 carry the E06 filename prefix.
+        assert differing == {"49", "301", "302", "114"}, differing
+        vace_b1 = dict(b1["49"]["inputs"])
+        vace_d1 = dict(d1["49"]["inputs"])
+        assert vace_d1.pop("reference_image") == ["134", 0]
+        assert vace_d1 == vace_b1, "strength/width/height/length must be untouched"
+
+    def test_D2_differs_from_D1_in_the_PROMPT_AND_NOTHING_ELSE(self):
+        d1, m_d1 = bp.build("D1", "E06")
+        d2, m_d2 = bp.build("D2", "E06")
+
+        assert m_d2["positive"] != m_d1["positive"], "D2 is defined by naming the character"
+        assert m_d2["negative"] == m_d1["negative"]
+        assert m_d2["reference_image"] == m_d1["reference_image"]
+        assert m_d2["control"]["server_names"] == m_d1["control"]["server_names"]
+        assert m_d2["seed"] == m_d1["seed"]
+        assert set(d2) == set(d1)
+        differing = {k for k in d1 if d1[k] != d2[k]}
+        # node 6 is the positive CLIPTextEncode; the rest is the per-arm output prefix.
+        assert differing == {"6", "301", "302", "114"}, differing
+        assert d2["7"] == d1["7"], "the negative encode may not move"
+
+    def test_BOTH_E06_arms_carry_the_SAME_reference_as_E02_used(self):
+        """A reference that differs between arms is a second variable; a reference that is
+        not E02's is a different experiment."""
+        _wf_a1a, m_a1a = bp.build("A1a", "E02")
+        names = set()
+        for arm in ("D1", "D2"):
+            wf, meta = bp.build(arm, "E06")
+            assert wf["49"]["inputs"]["reference_image"] == ["134", 0]
+            assert wf["134"]["class_type"] == "LoadImage"
+            names.add(meta["reference_image"])
+        assert len(names) == 1, "the two arms must share one reference"
+        assert names == {m_a1a["reference_image"]}, "and it must be the plate A1a ran on"
+
+    def test_D2s_prompt_names_the_character_and_still_names_no_motion(self):
+        """D2's variable is identity, not performance. A prompt that also asked for the
+        arm to rise would make P2 unreadable on this arm."""
+        m = bp.build("D2", "E06")[1]
+        assert "blackguard" in m["positive"].lower()
+        for motion_word in ("raise", "raises", "lift", "turn", "turns", "moves", "waves"):
+            assert motion_word not in m["positive"].lower().split(), m["positive"]
+        # the scene half is byte-identical to D1's, so the diff is one clause
+        tail = "Plain grey seamless background, even neutral lighting, full body in frame."
+        assert m["positive"].endswith(tail)
+        assert bp.build("D1", "E06")[1]["positive"].endswith(tail)
+
+    def test_both_E06_arms_carry_33_distinct_control_images(self):
+        for arm in ("D1", "D2"):
+            assert bp.build(arm, "E06")[1]["control"]["distinct_images"] == 33
+
+    def test_both_E06_arms_keep_the_lossless_tap_on_VAEDecode(self):
+        for arm in ("D1", "D2"):
+            assert bp.build(arm, "E06")[0]["302"]["inputs"]["images"] == ["8", 0]
+
+
+def test_a_per_arm_prompt_override_does_not_leak_into_arms_without_one():
+    """The override is the one structural change E06 made to a shared builder. If it
+    leaked, E02's and E03's prompts would move and the byte pin above would be the only
+    thing standing between a silent re-topologising and the wire."""
+    assert "positive" not in bp.EXPERIMENTS["E02"]["arms"]["A1a"]
+    assert "positive" not in bp.EXPERIMENTS["E03"]["arms"]["B1"]
+    assert "positive" not in bp.EXPERIMENTS["E06"]["arms"]["D1"]
+    assert bp.EXPERIMENTS["E06"]["positive"] == bp.EXPERIMENTS["E03"]["positive"]
+
+
+def test_an_E06_arm_that_lost_its_reference_is_caught_by_the_existing_gate():
+    """E06 commissions no gate because this one already exists. Driven to failure so the
+    claim is demonstrated rather than asserted: strip the reference off an E06-shaped
+    graph and `verify_topology` must refuse it."""
+    wf = {
+        "49": {"class_type": "WanVaceToVideo", "inputs": {"control_video": ["300", 0]}},
+        "302": {"class_type": "SaveImage", "inputs": {"images": ["8", 0]}},
+        "8": {"class_type": "VAEDecode", "inputs": {}},
+        "300": {"class_type": "BatchImagesNode",
+                "inputs": {f"images.image{i}": [str(200 + i), 0] for i in range(33)}},
+        "301": {"class_type": "SaveImage", "inputs": {"images": ["300", 0]}},
+    }
+    for i in range(33):
+        wf[str(200 + i)] = {"class_type": "LoadImage", "inputs": {"image": f"{i}.png"}}
+    with pytest.raises(bp.PayloadError, match="expects it present"):
+        bp.verify_topology(wf, "D1", use_control=True, expects_reference=True)
+
+
+@pytest.mark.skipif(not HAVE_E03_UPLOADS, reason="E03 upload records are gitignored output")
 def test_the_distinct_name_check_binds_in_BOTH_directions(tmp_path, monkeypatch):
     """A moving control that collapsed on upload must raise, and so must a static arm that
     did not collapse. E02's version only caught the first."""
