@@ -116,6 +116,7 @@ remains the open canon question, judged only by the Director's eye.
 | Repeated facet's "zero credits" claim without its meaning | Corrected: partner credits vs metered GPU-hours, §5 |
 | Invented jargon at the Director ("who the mascot is painted") | His correction; the vocabulary rule in §5 and in the memory store |
 | Matched the armature banner's dimensions without looking at its composition | Rebuilt to the true layout after his catch |
+| Sent the E07 halt sheet without examining its own insets | The Director caught misaligned joint pivots at his zoom — the bones sat off the sculpted ball-joints the character literally carries. Placement re-derived from measured ball centers; the look-at-images law violated twice in one day by the seat that polices it |
 | Reused the blackguard as E07's subject after my own audit named the palette as starving the judgment | His catch; the survey → F01 commission replaced it |
 
 **What worked:** independent verification before acting (the GLB hash, the CI watches, the
