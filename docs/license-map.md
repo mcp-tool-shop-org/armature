@@ -39,6 +39,13 @@ clause, and the date it was fetched. **Entries older than 90 days are advisory u
 | **CausVid `Wan21_CausVid…_1_3B`** speed-LoRA | CC-BY-NC (flagged) | **NO — BANNED** | flagged by Comfy consult #1; **not independently retrieved** | Was bypassed inside the VACE graph. **Ruled: delete, not bypass** — see below. |
 | **lightx2v 4-step** speed-LoRAs | Apache-2.0 | YES (but excluded) | [HF](https://huggingface.co/lightx2v/Wan2.2-Lightning) + [HF](https://huggingface.co/lightx2v/Wan2.1-T2V-14B-StepDistill-CfgDistill-Lightx2v) — **retrieved 2026-08-10**, upgraded from consult-sourced | Commercially clean; excluded on *methodology* grounds, not licensing — a 4-step/cfg-1 trajectory confounds a control-strength curve. |
 
+**Ruling 2026-08-11 (E09 calibration ruling) — the Comfy-Org repack tier.** The served
+`wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors`, `…_low_noise…`, and
+`wan_2.1_vae.safetensors` are Comfy-Org repacks of weights this map already rules Apache
+(Wan 2.2 T2V-A14B; Wan 2.1). Per the umt5 precedent above, the upstream grant governs and
+the repack asserts nothing itself — covered, no new rows. The lightx2v exclusion is
+methodological and unchanged.
+
 **Ruling — a bypassed non-commercial node still counts as present.** The gate's words are
 "anywhere in the pipeline — including experiments." A bypassed node is one accidental
 un-bypass from executing, and the workflow JSON is an artifact we version, share and cite; it
@@ -84,7 +91,12 @@ exists for:**
    weights tier, UNVERIFIED = NO) plus a SAM2 mask path at its top level. The template is not
    runnable under this gate as served; the clean route is the core `WanAnimateToVideo` node in
    a graph we build, with `pose_video` fed by frames rendered from our own rig — sidestepped
-   by construction, not substitution, again.
+   by construction, not substitution, again. **Second instance, same day (E09 Gate ROUTE):**
+   the served `video_wan2_2_14B_t2v` wires this map's excluded lightx2v 4-step LoRAs at
+   strength 1.0 (not bypassed), runs both samplers on the excluded 4-step/cfg-1 trajectory,
+   randomizes one sampler's seed, and exposes no length or seed slot — evidence
+   `outputs/E09/route/route_gate_evidence.json` on `E09-run`. The pattern is now law in
+   CLAUDE.md: a served template is a reference, never a route.
 
 **Architectural consequence, and it is a large one.** armature renders depth from Blender's own
 Z-buffer and can draw a skeleton from known bone transforms. Where it does that, **no depth or
