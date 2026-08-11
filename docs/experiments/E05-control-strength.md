@@ -1,5 +1,32 @@
 # E05 — control strength: where does the model stop copying and start painting?
 
+> # WITHDRAWN 2026-08-10 — its premise is falsified
+>
+> **This experiment is withdrawn, not deferred.** Its premise was *"the model may be reproducing
+> the control rather than painting over it, and if it ever paints, that lives below strength
+> 1.0."*
+>
+> **E02's A1a falsifies it, and A1a was already on disk when this spec was written.** A1a is a
+> solid-figure depth control with a reference at `strength` 1.0, and it produced a fully painted
+> armoured knight — cape, plate, plinth, studio light, cast shadow — with silhouette and placement
+> obeyed from the control. **At full strength, with a body to paint, the model paints.** There is
+> no copying problem to sweep for.
+>
+> Withdrawn rather than re-derived, per the standing law: withdrawing is not choosing a new number,
+> and that is the whole difference. **This seat's error is that the deciding artifact existed and
+> was not read before the spec was written** — *enumerate the resource before commissioning one*,
+> which is this repo's most-repeated law and was missed by the seat that keeps citing it.
+>
+> **What survives, demoted to a candidate:** A1a's figure is small and plinth-bound where A2's (no
+> control) is large and dynamic, so control at 1.0 does appear to constrain **composition and
+> scale**. That is a refinement question, not the thesis question, and it waits.
+>
+> **Superseded by [E06](E06-reference-onto-schematic.md)**, which changes the one variable A1a and
+> B1 leave confounded. Nothing below was run and no credits were spent.
+
+---
+
+
 **Seat:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
 report** · **Director judges the sheet** · **Credit ceiling: 4 generations (16 credits); 3 planned,
 1 reserved for a fired gate.**

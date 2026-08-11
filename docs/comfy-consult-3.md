@@ -369,3 +369,63 @@ glTF-parsing custom node with an unretrieved licence, and a new dependency — *
 already hold locally in Python.** Our architecture rasterizes locally by design (*generation runs
 on Comfy Cloud; rendering and measurement run locally*). We are the compiler, and the compiler
 runs here. The answer would be interesting and would change nothing.
+
+---
+
+# Consult #6 — and its top-priority experiment was already on disk
+
+The consult decomposed E03's B1 into **two sufficient, confounded explanations**: the **subject**
+(a wire armature is ~30 cylinders with no body — even perfect interpretation of that depth yields
+sticks) and **OOD-copy** (a sparse high-contrast control far from the training manifold degrades
+toward literal reproduction). It was explicit that it could not verify the second, and its key
+structural point:
+
+> These two explanations are **not separable by a strength sweep**, and they **are** separable by a
+> single control/subject swap. Priority 1: *solid figure, depth control, reference on — one
+> generation.*
+
+## ⭐ That experiment is E02's A1a, and it ran on 2026-08-10. Zero credits needed.
+
+A1a **is** solid figure + depth control + reference on + strength 1.0. Read off
+`outputs/E02/sheets/E02-thesis-A1a-vs-A2.png` by this seat:
+
+**A1a produced a fully painted armoured knight** — horned helm, cape, plate, standing on a plinth in
+a lit studio with a cast shadow. Material, light, staging and ground **invented by the model**,
+silhouette and placement **obeyed from the control**. It is emphatically **not** a re-drawn depth map.
+
+**Ruled — the subject explanation dominates and OOD-copy is a red herring:**
+
+* **At `strength` 1.0, with a body to paint, the model paints.** No copying problem exists on a real
+  subject.
+* **E03's B1 returned sticks because a wire armature is sticks**, not because the control was
+  out-of-distribution and not because strength was too high.
+* *Enumerate the resource before commissioning one* — the deciding generation was already in hand,
+  and the consult's own #1 cost nothing.
+
+## ⛔ E05 (the strength sweep) is WITHDRAWN, not deferred
+
+E05's premise was *"the model may be copying rather than painting; that behaviour lives below 1.0."*
+**A1a falsifies the premise.** Withdrawn rather than re-derived, per the standing law — withdrawing
+is not choosing a new number, and that is the whole difference.
+
+**What survives as a demoted candidate:** A1a's figure is small and plinth-bound where A2's (no
+control) is large and dynamic, so control at 1.0 does appear to constrain **composition and scale**.
+That is a *refinement* question, not the thesis question, and it waits.
+
+## The modality answer, kept for when it is needed
+
+Ranked by appearance freedom, all authorable from geometry we own with **no estimator and no licence
+exposure** — the payoff of the from-geometry decision, and the consult confirmed the whole set stays
+clear of the DWPose/Depth-Anything tier by construction:
+
+**drawn skeleton** (loosest — pins joints, says nothing about silhouette) → **flat-shaded
+segmentation/ID** (pins silhouette and region, no depth gradient, surface free) → **canny/edge** →
+**normals** → **dense depth** (tightest; encodes full 3D form).
+
+Its recommendation was **segmentation/ID** as the "constrain geometry, free surface" candidate,
+with the honest caveat that it **cannot promise VACE responds to seg as strongly as to depth**. And
+for a drawn skeleton it **does not know the convention Wan's pose channel expects** — the same
+unverified-convention wall as consult #4's `pose_video`. Recorded for later; not the next move.
+
+*Also recorded, unverified but useful:* `strength` 0 is reasoned to be plain t2v — i.e. **A2** — so
+no arm is ever spent at 0.
