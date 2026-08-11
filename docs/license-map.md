@@ -97,6 +97,17 @@ video-extracted control, and E01 is designed to keep it.
 their own license and are not yet in this table. Any pose/depth ControlNet or adapter checkpoint
 gets a row here before it runs.
 
+## Motion data and motion-capture tier — surveyed 2026-08-11 (the E08 study-swarm)
+
+| Item | License | Commercial | Source | Operative clause |
+|---|---|---|---|---|
+| **AMASS** (the mocap dataset behind the open text-to-motion line) | MPI-IS custom, non-commercial | **NO — BANNED, and it reaches through weights** | [license](https://amass.is.tue.mpg.de/license.html), fetched 2026-08-11 | "This license also prohibits the use of the Dataset to train methods/algorithms/neural networks/etc. for commercial use of any kind." Closes the released weights of MDM / MotionGPT / MoMask / T2M-GPT / OmniControl / OMG for this pipeline regardless of their MIT code — the data licence purports to bind trained models. Commercial contact: ps-license@tue.mpg.de. |
+
+The rest of the surveyed tier (SMPL/SMPL-X body models, MediaPipe Pose, hosted
+text-to-motion vendors) sits in the UNVERIFIED table below until each licence document is
+fetched by this map's own procedure. Full survey with measured quality numbers:
+[research-grounding-e08.md](research-grounding-e08.md).
+
 ## Services and tools
 
 | Item | Commercial | Source | Operative clause |
@@ -104,6 +115,7 @@ gets a row here before it runs.
 | **Comfy Cloud** | **YES** | [Terms of Service](https://www.comfy.org/terms-of-service) | "Customer retains all right, title, and interest in and to… Output"; also "will not use Input or Output to train generative AI" |
 | **Blender 5.2.0 LTS** (build `fbe6228777e7`, 2026-07-14) | **YES** | the build's own bundled `license/license.md` and `license/spdx/GPL-3.0-or-later.txt`, read on this rig 2026-08-10 | licence: "While Blender itself is released under [GPU-GPL 3.0 or later] `© 2011-2026 Blender Foundation`" *(the "GPU-GPL" typo is verbatim from Blender's auto-generated file)*. Output, GPL-3.0 §2 Basic Permissions: **"The output from running a covered work is covered by this License only if the output, given its content, constitutes a covered work."** Also: "This License explicitly affirms your unlimited permission to run the unmodified Program." |
 | **ComfyUI core node code** (`WanAnimateToVideo` · `Wan22FunControlToVideo` · `WanVaceToVideo` · `WanFirstLastFrameToVideo` et al.) | **YES — same output logic as the Blender row** | [LICENSE](https://raw.githubusercontent.com/comfyanonymous/ComfyUI/master/LICENSE), fetched 2026-08-11 (consult #6 ruling) | GPL-3.0. Output, §2: "The output from running a covered work is covered by this License only if the output, given its content, constitutes a covered work." The nodes execute hosted on Comfy Cloud; we redistribute no GPL code, and a generated video is not derived from the node source. Output ownership is separately granted by the Comfy Cloud ToS row above. Caveat, recorded honestly: fetched from the upstream repo at `master`; that Cloud serves this exact tree is asserted by category — the same shape every served-core-node claim carries. |
+| **Wan-Video/Wan2.2 code repo** (the convention source: `wan/modules/animate/preprocess/human_visualization.py`) | **YES** | [LICENSE.txt](https://raw.githubusercontent.com/Wan-Video/Wan2.2/main/LICENSE.txt), fetched 2026-08-11 | Apache-2.0 — "perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license." Resolves procedure note 7 for the pose-render route: the drawing convention (palette, limbSeq, stickwidth formula, separate hand pass) is defined in commercially-licensed source, so reading and matching it puts no banned tier in the pipeline. |
 
 **Blender — resolved by E01's executor, 2026-08-10.** The founding swarm recorded this row as
 UNVERIFIED because blender.org and docs.blender.org both returned **403** to the fetcher; both
@@ -155,6 +167,9 @@ Recorded honestly rather than assumed. Each blocks the thing that depends on it.
 | ~~**Core Wan nodes** `WanAnimateToVideo`, `WanFirstLastFrameToVideo`~~ | ~~ASSUMED-FROM-CATEGORY, not retrieved~~ | **RESOLVED 2026-08-11 by the consult #6 ruling** — the core node code licence is fetched and filed under *Services and tools* (ComfyUI core, GPL-3.0, narrow output clause). Closes the node-code question for the core Wan conditioning tier. |
 | **"Wan Animate 2"** (`video_wan_animate2` template) | model name, weight files and licence unidentified from catalog metadata; the consult's claimed node class `WanAnimate2ToVideo` does not resolve in the node catalog (checked twice, 2026-08-11); the conditioning core hides inside subgraph blueprints | the Animate-2 route — treated NO until its own round identifies class, weights and LICENSE |
 | **SCAIL-2** (`video_wan21_scail2_character_replacement`, + `_int8`) | weight files, upstream repo and licence unlocated in catalog metadata; template-level only, no raw node schema; background likely inherited from the driving video (consult #6, marked SPECULATION there) | any SCAIL-2 route — treated NO |
+| **SMPL / SMPL-X body-model licences** | reported research-only with commercial via Meshcapade (E08 study-swarm G2, agent-retrieved URLs) — not yet fetched by this map | any SMPL-dependent lift route (WHAM / TRAM / 4D-Humans at inference; GVHMR and SMPLer-X are additionally NC at the code layer) — treated NO |
+| **MediaPipe Pose Landmarker** (shipped models + repo) | reported Apache-2.0 with no GHUM dependency at inference (E08 study-swarm G4) — not yet fetched by this map | the self-hosted lift chain (Arm B) — not adopted until fetched |
+| **DeepMotion SayMotion · Uthana · Cartwheel terms** | vendor pages claim commercial rights to generated output by contract; the terms documents are not fetched and no vendor discloses its training-data chain | the hosted text-to-motion arm (Arm A) — per-vendor terms fetch + Director decision before any use |
 | **`WanAnimatePreprocess` detector tier** (ViTPose/DWPose weights) | licence not retrieved | Wan 2.2 Animate via *detected* pose. Authoring pose from Blender geometry sidesteps this entirely |
 | **rembg bundled weights (u2net / isnet)** | individual model licenses not fetched | rembg may not be used until fetched — the MIT applies to the code only |
 

@@ -60,6 +60,17 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 > resolution.** The consult's interim suggestion to hand-author the first shot's motion is
 > rejected as out of frame (ruling R6).
 
+> **STUDY-SWARM RUN AND GATED, same day**
+> ([research-grounding-e08.md](../research-grounding-e08.md)): five Sonnet research lanes,
+> existence oracle-resolved, load-bearing claims verified by two non-Claude families. What
+> it fixes for this spec: the pose-render convention is code-defined in an Apache repo and
+> exactly matchable (G6–G8); one locked reference-render set is reused across all shots
+> (G14); the face channel and character mask are armed (G7, G12); the probe measures
+> scene-from-prompt strength (G15) and identity under the skeleton route (G9, G13) as
+> explicit clauses. SLOT 1 narrows to two arms — a hosted vendor contract (G5) or the
+> self-hosted MediaPipe lift chain (G4, G16, G17) — **the pick is the Director's; the
+> rewrite waits on it.**
+
 ## Trajectory
 
 This IS the product. armature is image-to-video with a GLB instead of an image, and to date
