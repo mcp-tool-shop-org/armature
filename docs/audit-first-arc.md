@@ -223,3 +223,21 @@ untracked); the roadmap re-cut per §5.5 once §4 is decided.
 **Standing hazard:** the VRAM watchdog was found dead this session (heartbeat 7.5 h stale). No
 GPU work — Blender renders included — until
 `pwsh -NoProfile -File E:\AI\training\_watchdog_start.ps1` shows a live heartbeat.
+
+---
+
+## AMENDMENT 1 — 2026-08-11, advisor, on the Director's reading
+
+The Director restated the audit's target in his words, and they are sharper than §2's framing:
+the drift shrank *"a complete professional glb to video pipeline that we could use to make
+movies, game cutscenes, game character poses and movement"* into a turnaround repo, and he had
+to correct it twice in two sessions. That is the finding; the validity/value mechanics in §2
+are the anatomy of it, not a substitute for it.
+
+**His direction going forward is ruled and supersedes §4's renumbering proposal:** the method
+stays **experiments** — aimed at the full pipeline, consulting the Comfy Agent as needed,
+trajectory held true. The SH-series is therefore **DROPPED**; the E-series continues under §5's
+conditions, which stand in full. §5.1's trajectory requirement and the scope block now bind
+mechanically in `CLAUDE.md` (this commit) rather than living as prose here. E07 (the skeleton)
+is the first spec dispatched under them; E08 (the first authored performance of the character)
+follows it and is where credits next flow.

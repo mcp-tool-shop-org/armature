@@ -6,6 +6,27 @@
 AI-generated video keeps **one persistent main character** whose position and pose are known
 every frame. The previz scene is ground truth; the video model paints life over it.
 
+## The scope, in the Director's words — read before any other rule
+
+> *"It shouldn't be at all limited to a game. You should be able to make cutscenes, movies,
+> anything that you could do with image to video but with glb."* — Director, 2026-08-11
+
+**armature is image-to-video with a GLB instead of an image.** Movies, game cutscenes,
+character poses and movement, any footage at all — everything spatial is authored, and the
+model paints life over it. The game is one consumer, not the boundary. There is no end to the
+possibilities, and the repo's job is to open them, not to pick one.
+
+This scope has been shrunk twice — to "a turnaround tool," then to "a tool for making game
+footage" — and corrected twice by the Director. **Describing armature by a use-case is the
+drift signature.** If a spec, ruling, summary, or README line names a narrower product than
+*footage from a scene you own*, stop and re-read this block before writing another word.
+
+**Every credit-spending spec carries a `Trajectory` row** — what this spend advances toward
+the full scope — with the same force as its licence rows. A spec that cannot fill the row does
+not run; the advisor checks it at dispatch; an executor who finds it missing halts before the
+first submission. Earned the expensive way: 22 generations and zero shots, because hygiene had
+gates and purpose had prose (`docs/audit-first-arc.md` §2).
+
 armature sits **downstream of facet** (`E:\AI\facet`): facet cuts and paints the figure;
 armature stages and performs it. armature consumes facet's canonical assets and turnarounds
 and **never writes into facet's tree**.
@@ -173,7 +194,8 @@ Every non-trivial change runs as a numbered experiment in `docs/experiments/`:
 spec written BEFORE the work  →  report written AFTER  →  advisor ruling LAST
 ```
 
-A spec carries: the question; hypotheses with predictions; arms varying one thing each; the
+A spec carries: **the Trajectory row** (what this advances toward the full GLB→video scope —
+see the scope block at the top of this file); the question; hypotheses with predictions; arms varying one thing each; the
 metrics; the gates; **the credit ceiling**; **the license checks it introduces**; an explicit
 out-of-scope section; **every premise marked measured or assumed**; and a standards-compliance
 block scoring the six workflow standards. Amendments are appended in place with dates and
