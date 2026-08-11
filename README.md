@@ -14,6 +14,11 @@ character mesh is staged and animated in headless Blender, and the render become
 **control sequence** the video model must obey — so AI-generated video can carry one persistent
 main character whose position and pose are known every frame.
 
+**armature is image-to-video with a GLB instead of an image.** Everything spatial is authored,
+and the model paints life over it. The deliverable is footage — film, cutscenes, character
+poses and movement, any shot at all. A game is one consumer of that footage, never the
+boundary of the tool.
+
 Stage your character in Blender. Render the control sequence. Let the video model paint the life
 over it. Structure comes from geometry you own; life comes from the model; identity is a named,
 versioned thing that rides in the prompt and the reference stack — never an accident of a lucky

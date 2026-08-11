@@ -19,12 +19,28 @@ records why.
 Two bars, in order. The second is the real one:
 
 1. **built** — the tool ships: repo public, quality gates pass, published, CI green.
-2. **filled** — **the Director has accepted a shot armature produced and used it in a real game
-   project.**
+2. **filled** — **the Director has accepted a shot armature produced and used it in a real
+   project.** *(Corrected 2026-08-11: this line used to say "a real game project." The game is
+   one consumer — a cutscene, a film shot, or any footage counts the same.)*
 
 A test count is not the second bar. A demo reel is not the second bar. Until a shot is accepted
 and used in a real project, armature is `built`, and the roadmap says so out loud. The studio has
 a name for the failure this prevents: tools that get built and never filled.
+
+## The arc as run — recorded 2026-08-11, after the audit
+
+The plan below was authored on day one and the first arc re-cut it silently, which the
+repo-wide [audit](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/audit-first-arc.md)
+names as a first-class failure: E03–E06 as run bear little resemblance to E03–E06 as planned,
+and identity — the planned experiment closest to the product — never ran while two unplanned
+proxies did. What actually ran: exporter (E01) · first contact (E02) · authored motion (E03) ·
+the between-generation noise floor (E04) · reference-onto-schematic (E06) · one withdrawal
+un-run (E05). The measurements are real and kept; the framing failure is the audit's subject.
+
+**What governs now:** every credit-spending spec carries a Trajectory row — what the spend
+advances toward the full GLB→video scope — with the same force as its licence rows. The
+current line: the first performer built fresh through facet's route (F01/E33) → the named-bone
+rig (E07) → **the first authored performance of a real character (E08)**.
 
 ## The arc
 
@@ -36,7 +52,7 @@ a name for the failure this prevents: tools that get built and never filled.
 | **D — Control** | Which control signal, at what strength. Arms vary one thing each. |
 | **E — Identity** | How many reference views, arranged how. A per-character adapter runs only if the reference stack leaves a gap worth the training cost. |
 | **F — Continuity** | Whether the same character survives across separate generations, and where a single shot's coherence ends. |
-| **G — Ship** | The tool surface, then the quality gates, then the full treatment, then a real shot in a real game. |
+| **G — Ship** | The tool surface, then the quality gates, then the full treatment, then a real shot in a real project. |
 
 **Phase C is where the thesis lives or dies.** If a CG-rendered control sequence does not hold a
 character in a real video model, the honest outcome is to say so and stop — and that is written
@@ -85,7 +101,7 @@ carries the measurement that produced it, or it is marked provisional.
 ## Where publishing sits
 
 Publishing is in Phase G, after the thesis has been tested. Names are claimed and the release
-path is registered, but **the repo is at day zero and nothing has been published**. The details,
+path is registered, but **nothing has been published from this repo yet**. The details,
 including a load-bearing constraint about which workflow filename the release path authenticates,
 are in
 [docs/publishing.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/publishing.md).

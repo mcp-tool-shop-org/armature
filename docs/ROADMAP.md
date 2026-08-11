@@ -39,7 +39,9 @@ Two bars, in order. The studio's `built | filled` rule governs, and the second i
 1. **built** — the tool ships: repo public under `mcp-tool-shop-org`, shipcheck hard gates A–D
    pass, full treatment applied, published, CI green.
 2. **filled** — **the Director has accepted a shot armature produced and used it in a real
-   game project.** A test count is not this bar. A demo reel is not this bar. Until a shot is
+   project.** *(Corrected 2026-08-11: this read "a real game project" — the shrinkage the
+   Director corrected twice. Film, cutscene, or any footage counts the same; the game is one
+   consumer.)* A test count is not this bar. A demo reel is not this bar. Until a shot is
    accepted and used, armature is `built`, and this file says so.
 
 ---
@@ -166,3 +168,27 @@ should settle, not the advisor's taste:
 
 **Nothing above is a prediction.** Where this file states a number or a mechanism later, it
 carries the measurement that produced it or it is marked provisional.
+
+---
+
+## THE RE-CUT — recorded 2026-08-11, after the audit, per this file's own header
+
+This file's header requires that a re-cut phase records why in this file. The first arc re-cut
+E03–E06 silently — this section records it late, with the audit
+([docs/audit-first-arc.md](audit-first-arc.md)) as the reason the lateness is itself a finding.
+
+**As planned → as run:** E03 *control modality* → authored motion · E04 *control strength* →
+the between-generation noise floor · E05 *identity, reference stack* → a strength sweep,
+withdrawn un-run · E06 *identity, LoRA vs zero-shot* → reference-onto-schematic. Identity —
+Phase E, the planned work closest to the product — never ran; control strength has still never
+been varied. The measurements bought are real and stand (see the audit §3); the framing failure
+is the audit's subject: every instrument bounded validity and nothing bounded value.
+
+**What governs from here:** the scope block at the top of [CLAUDE.md](../CLAUDE.md) — armature
+is image-to-video with a GLB instead of an image, in the Director's words — and the
+**Trajectory row** every credit-spending spec must carry. The E-series continues, aimed at the
+full pipeline. The line as of this writing: **F01/E33** (the first performer, built fresh
+through facet's route, the tool's own clay-armature figure) → **E07** (the named-bone rig — the
+twice-confirmed blocking dependency) → **E08** (the first authored performance of a real
+character: the first frames of the product). Phases E–G of the original arc remain the shape of
+what follows — identity, continuity, ship — re-entered through shots rather than proxies.

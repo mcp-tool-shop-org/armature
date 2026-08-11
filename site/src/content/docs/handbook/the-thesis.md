@@ -12,9 +12,11 @@ on screen and where they are standing*. armature stages a canonical character me
 Blender and turns the render into a per-frame **control sequence** the video model must obey.
 You block the shot; the model shoots it. Structure comes from geometry we own; life comes from
 the model; **identity is a named, versioned thing that rides in the prompt and the reference
-stack, never an accident of a lucky frame.**
+stack, never an accident of a lucky frame.** The deliverable is footage — film, cutscenes,
+character performance, anything image-to-video can make, made from a scene you own. A game is
+one consumer, not the boundary.
 
-**That thesis is now partly measured.** As of 2026-08-10, across 12 generations in four closed
+**That thesis is now partly measured.** As of 2026-08-11, across 22 generations in five closed
 experiments:
 
 - a rendered control sequence **governs where the figure is, at what scale, and when it moves**;
