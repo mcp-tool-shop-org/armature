@@ -50,6 +50,16 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 > **the spec below is rewritten after its answers return** — until then the staging sections
 > remain the authored-end recipe only.
 
+> **CONSULT #6 ANSWERED AND RULED, same day** ([comfy-consult-6.md](../comfy-consult-6.md)):
+> SLOT 2 is provisionally adopted on the core `WanAnimateToVideo` node in a graph we build
+> ourselves — the served template wires the banned detector tier and is unusable under the
+> gate — with `pose_video` from rig-rendered frames, identity on GLB reference renders, and
+> `background_video` unconnected so the prompt paints the scene. SLOT 1 (prompt → skeletal
+> motion) is confirmed unfilled on Cloud; the licence-fetch pass on the consult's named
+> out-of-Cloud candidates is the next action, and **the spec rewrite follows its
+> resolution.** The consult's interim suggestion to hand-author the first shot's motion is
+> rejected as out of frame (ruling R6).
+
 ## Trajectory
 
 This IS the product. armature is image-to-video with a GLB instead of an image, and to date

@@ -66,7 +66,8 @@ Director decisions, not defaults.
 | **BiRefNet** | MIT | **YES** | [LICENSE](https://raw.githubusercontent.com/ZhengPeng7/BiRefNet/main/LICENSE) | "deal in the Software without restriction… and/or sell copies" |
 | **rembg** | MIT (code) | **CONDITIONAL** | [LICENSE.txt](https://raw.githubusercontent.com/danielgatis/rembg/main/LICENSE.txt) | MIT covers code only — **bundled weights (u2net/isnet) carry separate licenses, not yet fetched** |
 
-**Two traps confirmed, both of the kind this gate exists for:**
+**Two traps confirmed at founding, a third measured 2026-08-11 — all of the kind this gate
+exists for:**
 
 1. **OpenPose is non-commercial** — the single most widely used pose extractor in the ControlNet
    ecosystem, and it is banned here. ⚑ **Corrected 2026-08-10:** this line used to read "DWPose
@@ -78,6 +79,12 @@ Director decisions, not defaults.
    same family, same page structure, different license — exactly the "check the exact variant"
    law. V3's weights are NC across the board while its code is Apache; the weights are what a
    pipeline actually runs.
+3. **The served Animate template wires the banned tier (measured 2026-08-11, consult #6
+   calibration).** `video_wan2_2_14B_animate` carries two `DWPreprocessor` nodes (the DWPose
+   weights tier, UNVERIFIED = NO) plus a SAM2 mask path at its top level. The template is not
+   runnable under this gate as served; the clean route is the core `WanAnimateToVideo` node in
+   a graph we build, with `pose_video` fed by frames rendered from our own rig — sidestepped
+   by construction, not substitution, again.
 
 **Architectural consequence, and it is a large one.** armature renders depth from Blender's own
 Z-buffer and can draw a skeleton from known bone transforms. Where it does that, **no depth or
@@ -96,6 +103,7 @@ gets a row here before it runs.
 |---|---|---|---|
 | **Comfy Cloud** | **YES** | [Terms of Service](https://www.comfy.org/terms-of-service) | "Customer retains all right, title, and interest in and to… Output"; also "will not use Input or Output to train generative AI" |
 | **Blender 5.2.0 LTS** (build `fbe6228777e7`, 2026-07-14) | **YES** | the build's own bundled `license/license.md` and `license/spdx/GPL-3.0-or-later.txt`, read on this rig 2026-08-10 | licence: "While Blender itself is released under [GPU-GPL 3.0 or later] `© 2011-2026 Blender Foundation`" *(the "GPU-GPL" typo is verbatim from Blender's auto-generated file)*. Output, GPL-3.0 §2 Basic Permissions: **"The output from running a covered work is covered by this License only if the output, given its content, constitutes a covered work."** Also: "This License explicitly affirms your unlimited permission to run the unmodified Program." |
+| **ComfyUI core node code** (`WanAnimateToVideo` · `Wan22FunControlToVideo` · `WanVaceToVideo` · `WanFirstLastFrameToVideo` et al.) | **YES — same output logic as the Blender row** | [LICENSE](https://raw.githubusercontent.com/comfyanonymous/ComfyUI/master/LICENSE), fetched 2026-08-11 (consult #6 ruling) | GPL-3.0. Output, §2: "The output from running a covered work is covered by this License only if the output, given its content, constitutes a covered work." The nodes execute hosted on Comfy Cloud; we redistribute no GPL code, and a generated video is not derived from the node source. Output ownership is separately granted by the Comfy Cloud ToS row above. Caveat, recorded honestly: fetched from the upstream repo at `master`; that Cloud serves this exact tree is asserted by category — the same shape every served-core-node claim carries. |
 
 **Blender — resolved by E01's executor, 2026-08-10.** The founding swarm recorded this row as
 UNVERIFIED because blender.org and docs.blender.org both returned **403** to the fetcher; both
@@ -144,7 +152,9 @@ Recorded honestly rather than assumed. Each blocks the thing that depends on it.
 | **`FL_WanVaceToVideoMultiRef`** / Fill custom-node pack | licence not retrieved | multi-reference VACE route — stay on core `WanVaceToVideo` |
 | **`WanVaceAdvanced` tier** (`VaceStrengthTester`, `VaceAdvancedModelPatch`) | licence not retrieved | any scheduled/advanced VACE control strength |
 | **`FL_WanFirstLastFrameToVideo`** (Fill Nodes) | licence not retrieved | first/last-frame conditioning — use core `WanFirstLastFrameToVideo` instead if ever needed |
-| **Core Wan nodes** `WanAnimateToVideo`, `WanFirstLastFrameToVideo` | **ASSUMED-FROM-CATEGORY, not retrieved.** Consult #4 placed them in the Wan/Apache tier by node category and was explicit it did not fetch either licence | both nodes. Assumed is not verified; neither is used without a retrieved row |
+| ~~**Core Wan nodes** `WanAnimateToVideo`, `WanFirstLastFrameToVideo`~~ | ~~ASSUMED-FROM-CATEGORY, not retrieved~~ | **RESOLVED 2026-08-11 by the consult #6 ruling** — the core node code licence is fetched and filed under *Services and tools* (ComfyUI core, GPL-3.0, narrow output clause). Closes the node-code question for the core Wan conditioning tier. |
+| **"Wan Animate 2"** (`video_wan_animate2` template) | model name, weight files and licence unidentified from catalog metadata; the consult's claimed node class `WanAnimate2ToVideo` does not resolve in the node catalog (checked twice, 2026-08-11); the conditioning core hides inside subgraph blueprints | the Animate-2 route — treated NO until its own round identifies class, weights and LICENSE |
+| **SCAIL-2** (`video_wan21_scail2_character_replacement`, + `_int8`) | weight files, upstream repo and licence unlocated in catalog metadata; template-level only, no raw node schema; background likely inherited from the driving video (consult #6, marked SPECULATION there) | any SCAIL-2 route — treated NO |
 | **`WanAnimatePreprocess` detector tier** (ViTPose/DWPose weights) | licence not retrieved | Wan 2.2 Animate via *detected* pose. Authoring pose from Blender geometry sidesteps this entirely |
 | **rembg bundled weights (u2net / isnet)** | individual model licenses not fetched | rembg may not be used until fetched — the MIT applies to the code only |
 
