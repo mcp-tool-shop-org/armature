@@ -5,6 +5,33 @@ rules after the report** · **Director judges the footage** · **Credit ceiling:
 (≈24 credits at the measured 4/generation); 3 planned in wave 1, 3 reserved.** Spend
 authority stands (Director, 2026-08-10) — the ceiling is the discipline, not the constraint.
 
+> ## ⛔ HALTED AND REFRAMED 2026-08-11 — the advisor dispatched the wrong product
+>
+> The Director, watching the executor author a walk cycle: *"He's moving the model around
+> manually when the model should be generating everything."* **He is right and the spec
+> below this banner describes the wrong route.** The advisor read "have him walk up to a
+> bartender" through the arc's control-first lineage — author the motion, model paints over
+> it — when the scope sentence says the other thing: the GLB replaces the **image** in
+> image-to-video. It supplies *who he is*; **the model generates the performance.** This
+> misdispatch earned CLAUDE.md advisor rule 0 (contrastive frame confirmation before any
+> product-defining dispatch).
+>
+> **The halt was clean: 0 generations, 0 credits** — verified three ways by the stopped seat
+> (empty queue at halt, no generation bucket on today's invoice, no prompt_id on disk). Its
+> gait tooling (`walk.py` + `author_walk.py` + framing, 371 tests, branch `E08-run` @
+> `0c49e67`) is banked as the **authored end of armature's control dial** — a recorded tool,
+> not this experiment's route. Its two findings (the distinct-name check's silent
+> degradation inherits into its test; glTF export re-splits posed vertices) ride the record.
+>
+> **THE CORRECTED ROUTE — PROPOSED, awaiting the Director's frame confirmation under rule 0:**
+> rendered views of the performer from the GLB serve as the **reference**; the scenario lives
+> in the **prompt**; the model generates **all motion** — no authored animation, no control
+> channels, the skeleton unused this wave. Route = the already-mapped Apache Wan VACE
+> configuration with the control input absent (E02's no-control shape): zero new nodes, zero
+> new licence rows. Wave 1: the bar walk, then a dance and an emote variant. 65 frames @
+> 16 fps, 832×480, ceiling and gates unchanged, probe first. The staging sections below are
+> superseded by this banner where they conflict; they are kept as the authored-end recipe.
+
 ## Trajectory
 
 This IS the product. armature is image-to-video with a GLB instead of an image, and to date
