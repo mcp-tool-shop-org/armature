@@ -23,9 +23,10 @@ frame.
 
 ## State: the thesis is under test, and three things are measured
 
-Founded **2026-08-10**. Four experiments closed, **12 generations spent**. The thesis is no longer
+Founded **2026-08-10**. Five experiments closed, **22 generations spent**. The thesis is no longer
 untested: parts are measured, one part is confirmed blocked, and the part that matters most is
-still judged by eye and still open.
+still judged by eye and still open. A repo-wide audit of the first arc is at
+[docs/audit-first-arc.md](docs/audit-first-arc.md).
 
 | | |
 |---|---|
@@ -33,7 +34,7 @@ still judged by eye and still open.
 | Generation probes | **22** |
 | Credits | **88** projected, at the measured 4 per generation |
 | License map | **9 rows UNVERIFIED and treated as NO**; every other row carries a retrieved license document |
-| Tests | **206**, passing under `-O` |
+| Tests | **262**, passing under `-O` |
 | Public surfaces | **live** — [landing page + handbook](https://mcp-tool-shop-org.github.io/armature/), CI and Pages green |
 
 ### What is measured
