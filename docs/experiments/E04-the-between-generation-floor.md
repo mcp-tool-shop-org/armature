@@ -10,7 +10,21 @@ its information value, because that reasoning was never about money.
 
 ---
 
-> ## STATUS: DEFERRED 2026-08-10 — not withdrawn, and still correct
+> ## STATUS: ACTIVE — un-deferred by the Director, 2026-08-10
+>
+> **The Director has called E04 on**, and that is his call: credits are his and the deferral was a
+> priority judgement by this seat, never a correctness one. Nothing in this spec changed; the
+> reasoning that deferred it is kept below, unedited, because it is still the honest account of why
+> it was not first.
+>
+> ⚠ **Two things this seat must flag before it runs.** (1) **E06 is live in parallel** and both
+> experiments add a gate to `tools/build_payload.py` — E04 adds **Gate S**, E06 adds **Gate V**.
+> That file is a **shared surface this round**; see the paste block. (2) E05 is **WITHDRAWN** — do
+> not run it, and do not take its strength ladder as context for anything here.
+>
+> ### The superseded deferral reasoning, kept
+>
+> ## (was) DEFERRED 2026-08-10 — not withdrawn, and still correct
 >
 > Deferred by the Director after E03. Nothing in this spec is wrong; it is simply not the next
 > question. **E03's result was categorical** (85.0 deg against 0.062 deg, a factor of ~1370) and
