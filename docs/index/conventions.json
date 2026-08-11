@@ -1,0 +1,456 @@
+{
+  "schema": "record-index-conventions/1",
+  "_note": "armature's declaration — the SECOND repo to adopt these conventions, and the one whose adoption was the extraction's gate condition. Conventions are a FULL declaration: record-index supplies no default for anything absent here, so every field is stated even where the answer is 'armature has none of these'. Where a value differs from facet's, the difference is a fact about armature's record and is commented.",
+  "repo": {
+    "name": "armature",
+    "db_rel": "docs/index/armature.db",
+    "db_env": "ARMATURE_INDEX_DB"
+  },
+  "markers": [
+    "CLAUDE.md",
+    "docs/experiments"
+  ],
+  "corpora": {
+    "experiments_dir": "docs/experiments",
+    "record_roots": [
+      "docs"
+    ],
+    "_record_top_files": "HANDOFF.md is armature's dispatch record and carries no `## Session handoff` headers — it is indexed as prose rather than as handoff rows, which is a difference from facet, not a defect.",
+    "record_top_files": [
+      "CLAUDE.md",
+      "README.md",
+      "HANDOFF.md"
+    ],
+    "law_files": [
+      "CLAUDE.md"
+    ],
+    "_prose_files": "EMPTY BY DECLARATION, not by omission. armature has no docs/context-architecture.md, no docs/handbook/, no docs/profiles-design.md, no docs/style-registers.md. Declaring the emptiness is a different statement from leaving the key out, and only one of them is a declaration.",
+    "prose_files": [],
+    "_profile_files": "EMPTY BY DECLARATION. armature has no profiles registry and is not expected to grow one; this is exactly the case that used to be a CONVENTIONS_INVALID refusal rather than an empty table.",
+    "profile_files": [],
+    "_experiments_table": "EMPTY BY DECLARATION. armature has no docs/experiments/README.md, so every experiment row comes from disk and the absence is reported by verify rather than raised on.",
+    "experiments_table": "",
+    "sweep_extra_files": [],
+    "_sweep_extra_dirs": "the published Starlight handbook, swept so a stale sync is visible.",
+    "sweep_extra_dirs": [
+      "site/src/content/docs"
+    ]
+  },
+  "discovery": {
+    "ruling_doc": "^E\\d\\d-.*ruling.*\\.md$",
+    "_kickoff_doc": "MATCHES NOTHING TODAY, and that is measured rather than assumed: armature has zero `E\\d\\d-*kickoff*.md` documents — its dispatches are docs/dispatches/S\\d\\d-*.md and its handoff record is HANDOFF.md. The pattern is declared in facet's shape so that a kickoff, if armature ever writes one, is discovered rather than silently missed.",
+    "kickoff_doc": "^E\\d\\d-.*kickoff.*\\.md$",
+    "_ruling_arc": "STEM-DERIVED, and load-bearing here specifically: armature carries FOUR E02 ruling documents (bridge, canon, closing, halt). Stem-derived they are four distinct arcs numbering from 1 independently. Keyed on the E-number they would be one arc and — once the second header form below is admitted — would collide on rulings 1–7 from three documents at once. Measured before this file was written.",
+    "ruling_arc": {
+      "strip_from": "ruling"
+    },
+    "kickoff_arc": {
+      "leading": true
+    },
+    "experiment_prefix": "^(E\\d\\d)",
+    "experiment_file": "^E\\d\\d[-.]",
+    "spec_file_fragments": [
+      "spec",
+      "-predictions",
+      "-control-sequence",
+      "-authored-motion",
+      "-the-between",
+      "-reference-onto",
+      "-first-contact"
+    ],
+    "report_file_fragment": "report",
+    "topical_ruling_files": []
+  },
+  "headers": {
+    "_ruling": "TWO FORMS, and this is the field the extraction added a list for. armature's closing rulings write `## Ruling N` (facet's form). Its EARLY ruling documents — E01, E02-bridge, E02-halt — write `## N. RULING — …`, and only the sections that announce RULING are rulings: those files also carry `## N.` sections that are ordinary prose, and admitting every `## N.` would mint rulings out of section headings. The `## N.` headings that are NOT admitted are counted and named by verify's ruling-header vocabulary rather than silently dropped.",
+    "ruling": [
+      "^## Ruling (\\d+)\\b(.*)$",
+      "^## (\\d+)\\. RULING\\b(.*)$"
+    ],
+    "_addenda": "armature writes no post-ingest addenda. Declared empty.",
+    "addenda": [],
+    "_amendment": "armature writes no blockquoted amendment headers. Declared empty.",
+    "amendment": [],
+    "handoff": [
+      "^## Session handoff\\s*(\\d*)\\s*\\((.*)$"
+    ],
+    "sub_ruling": "^\\*\\*(\\d+)([a-z])\\s+[—–-]",
+    "sub_closure": "^\\*\\*(\\d+)([a-z])-([A-Z][A-Z-]+)\\b"
+  },
+  "vocabularies": {
+    "_verdicts": "armature's own shouted verdicts, MEASURED against its record rather than copied from facet: ADMISSIBLE and CORRECTED are armature's and are absent from facet's list; facet's DESIGNATED/ADOPTED/MINTED/BANKED have no site here and are not carried. Ordered most- to least specific; the first hit in a holding wins.",
+    "verdicts": [
+      "ACCEPTED",
+      "REJECTED",
+      "RATIFIED",
+      "ADMISSIBLE",
+      "WITHDRAWN",
+      "FALSIFIED",
+      "CONFIRMED",
+      "CORRECTED",
+      "SUSPENDED",
+      "CLOSED",
+      "CLEARED",
+      "HALTED",
+      "VOID",
+      "RULED"
+    ],
+    "authority": {
+      "pattern": "\\bDirector\\b",
+      "named": "Director",
+      "default": "advisor"
+    },
+    "experiment_status": [
+      "ACCEPTED",
+      "RULED",
+      "IN FLIGHT",
+      "CLOSED",
+      "HALTED",
+      "STAGED",
+      "OPEN"
+    ],
+    "status_words": [
+      [
+        "ACCEPTED",
+        "\\bACCEPTED\\b"
+      ],
+      [
+        "REJECTED",
+        "\\bREJECTED\\b"
+      ],
+      [
+        "SUPERSEDED",
+        "\\bSUPERSEDED\\b|\\bsuperseded\\b"
+      ],
+      [
+        "WITHDRAWN",
+        "\\bWITHDRAWN\\b|\\bwithdrawn\\b"
+      ],
+      [
+        "FROZEN",
+        "\\bfrozen as canon\\b|\\bFROZEN\\b"
+      ]
+    ],
+    "_artifact_kinds": "⚑ THE VIDEO EXTENSIONS ARE THE POINT. facet's map carries no mp4/mkv/webm/mov, and running facet's parsers over armature dropped six artifact mentions silently — in the repo whose entire product is video. That silent drop is why verify now counts unrecognised inputs, and this is the declaration that fixes it here.",
+    "artifact_kinds": {
+      "glb": "mesh",
+      "gltf": "mesh",
+      "obj": "mesh",
+      "ply": "mesh",
+      "png": "render",
+      "exr": "render",
+      "jpg": "render",
+      "mp4": "video",
+      "mkv": "video",
+      "webm": "video",
+      "mov": "video",
+      "npy": "array",
+      "npz": "array",
+      "json": "data",
+      "jsonl": "log",
+      "csv": "data",
+      "py": "script",
+      "ps1": "script",
+      "sh": "script",
+      "mjs": "script"
+    },
+    "artifact_extensions": [
+      "csv",
+      "exr",
+      "glb",
+      "gltf",
+      "jpg",
+      "json",
+      "jsonl",
+      "mjs",
+      "mkv",
+      "mov",
+      "mp4",
+      "npy",
+      "npz",
+      "obj",
+      "ply",
+      "png",
+      "ps1",
+      "py",
+      "sh",
+      "webm"
+    ],
+    "_phenomenon_markers": "EMPTY BY DECLARATION. Measured: none of facet's seven naming verbs fires anywhere in armature's record — 0 of 7. armature does not mint phenomena in that house style, so it declares no markers and gets no phenomena table rather than inheriting a vocabulary that describes another repo's prose.",
+    "phenomenon_markers": [],
+    "supersede_verbs": [
+      "CORRECTED",
+      "corrected",
+      "WITHDRAWN",
+      "withdrawn",
+      "SUPERSEDED",
+      "superseded",
+      "VOID",
+      "void"
+    ]
+  },
+  "_laws": "armature's laws are inherited from facet's law book and cite arcs across the whole range, so the pattern is the general one rather than facet's frozen E01–E15 — which, measured, no longer covers even facet's own arcs.",
+  "laws": {
+    "paid_for_by": "\\b(E\\d\\d)\\b"
+  },
+  "sweep": {
+    "current_state_files": [
+      "README.md",
+      "CLAUDE.md",
+      "HANDOFF.md"
+    ],
+    "current_state_dirs": [
+      "site/src/content/docs/"
+    ],
+    "historical_dirs": [
+      "docs/experiments/",
+      "docs/dispatches/"
+    ],
+    "bannered": "",
+    "banner": "SUPERSEDED",
+    "split_at_release": "",
+    "current_state_extra": {},
+    "historical_extra": {},
+    "self_reference_exclude": [],
+    "claim_families": [
+      {
+        "label": "rulings range",
+        "kind": "ruling",
+        "unit": "max",
+        "pattern": "\\bRulings?\\s+1\\s*[–—-]\\s*(\\d+)"
+      },
+      {
+        "label": "rulings cardinal",
+        "kind": "ruling",
+        "unit": "count",
+        "pattern": "\\b(\\d+)\\s+rulings\\b"
+      },
+      {
+        "label": "handoffs cardinal",
+        "kind": "handoff",
+        "unit": "count",
+        "pattern": "\\b(\\d+)\\s+handoffs\\b"
+      },
+      {
+        "label": "experiment span",
+        "kind": "experiment",
+        "unit": "max",
+        "pattern": "\\bE01\\s*[–—-]\\s*E?(\\d+)"
+      }
+    ]
+  },
+  "verify": {
+    "_count_checks": "The verifier's OWN greps, written independently of the parser's patterns so the two are not one implementation checking itself. Every leg names a file that exists today and a count the record carries; a leg that grepped a file which is not there would be a check that cannot fail.",
+    "count_checks": [
+      [
+        "E02-closing numbered rulings",
+        "docs/experiments/E02-closing-ruling.md",
+        "^## Ruling (\\d+)\\b",
+        "rulings",
+        "arc='E02-closing' AND kind='ruling'"
+      ],
+      [
+        "E03-closing numbered rulings",
+        "docs/experiments/E03-closing-ruling.md",
+        "^## Ruling (\\d+)\\b",
+        "rulings",
+        "arc='E03-closing' AND kind='ruling'"
+      ],
+      [
+        "E04-closing numbered rulings",
+        "docs/experiments/E04-closing-ruling.md",
+        "^## Ruling (\\d+)\\b",
+        "rulings",
+        "arc='E04-closing' AND kind='ruling'"
+      ],
+      [
+        "E06-closing numbered rulings",
+        "docs/experiments/E06-closing-ruling.md",
+        "^## Ruling (\\d+)\\b",
+        "rulings",
+        "arc='E06-closing' AND kind='ruling'"
+      ],
+      [
+        "E01 RULING sections",
+        "docs/experiments/E01-ruling.md",
+        "^## (\\d+)\\. RULING\\b",
+        "rulings",
+        "arc='E01' AND kind='ruling'"
+      ],
+      [
+        "E02-bridge RULING sections",
+        "docs/experiments/E02-bridge-ruling.md",
+        "^## (\\d+)\\. RULING\\b",
+        "rulings",
+        "arc='E02-bridge' AND kind='ruling'"
+      ],
+      [
+        "E02-halt RULING sections",
+        "docs/experiments/E02-halt-ruling.md",
+        "^## (\\d+)\\. RULING\\b",
+        "rulings",
+        "arc='E02-halt' AND kind='ruling'"
+      ]
+    ],
+    "_sequences": "Pre-registered bounds, one per arc that carries numbered rulings. The record carrying MORE than a bound prints as a completeness note; it never silently widens the gate.",
+    "sequences": [
+      [
+        "E02-closing",
+        "ruling",
+        1,
+        9
+      ],
+      [
+        "E03-closing",
+        "ruling",
+        1,
+        12
+      ],
+      [
+        "E04-closing",
+        "ruling",
+        1,
+        10
+      ],
+      [
+        "E06-closing",
+        "ruling",
+        1,
+        10
+      ],
+      [
+        "E01",
+        "ruling",
+        1,
+        2
+      ]
+    ],
+    "_handoff_coverage": "NULL BY DECLARATION — armature has no `## Session handoff` documents at all, so a coverage check here would be a check that cannot fail.",
+    "handoff_coverage": null,
+    "_experiment_coverage": "NULL BY DECLARATION for the same reason as above: armature's arcs are still opening and a fixed span would go stale the week it was written. The record is moving under live seats.",
+    "experiment_coverage": null,
+    "_seeded": "THE EXTERNAL VERIFIER'S KEY. Every phrase here ran report-only through `q` FIRST and its target ranked <= 3 BEFORE the row entered the gate — seeds are ruled in from measured ranks, never added and then tuned until green. Populated in the commit that measured them.",
+    "seeded": [
+      [
+        "is the character arm admissible",
+        "the post-fix character arm is ADMISSIBLE",
+        [
+          "docs/experiments/E01-ruling.md",
+          "Ruling 1"
+        ]
+      ],
+      [
+        "what happened to the depth alias",
+        "both normalizations ship depth alias",
+        [
+          "docs/experiments/E01-ruling.md",
+          "Ruling 2"
+        ]
+      ],
+      [
+        "which bridge was adopted",
+        "adopt bridge the PNG batch re-topologised",
+        [
+          "docs/experiments/E02-halt-ruling.md",
+          "Ruling 1"
+        ]
+      ],
+      [
+        "was the synthetic ramp run spent",
+        "accept the synthetic-ramp run",
+        [
+          "docs/experiments/E02-bridge-ruling.md",
+          "Ruling 2"
+        ]
+      ],
+      [
+        "the withdrawal of clause B",
+        "The withdrawal of clause B is UPHELD",
+        [
+          "docs/experiments/E02-closing-ruling.md",
+          "Ruling 3"
+        ]
+      ],
+      [
+        "the stale pointer branch",
+        "E03-authored-motion branch is a STALE POINTER",
+        [
+          "docs/experiments/E02-closing-ruling.md",
+          "Ruling 6"
+        ]
+      ],
+      [
+        "whose eye governs",
+        "The Director's eye governs and it overturns the report's framing",
+        [
+          "docs/experiments/E03-closing-ruling.md",
+          "Ruling 1"
+        ]
+      ],
+      [
+        "is G6 sufficient",
+        "G6 is necessary and not sufficient",
+        [
+          "docs/experiments/E03-closing-ruling.md",
+          "Ruling 9"
+        ]
+      ],
+      [
+        "the invented rigging blocker",
+        "the June no-rigging decision is not a blocker",
+        [
+          "docs/experiments/E03-closing-ruling.md",
+          "Ruling 12"
+        ]
+      ],
+      [
+        "does E04 give a threshold",
+        "E04 gives a UNIT it does not give a THRESHOLD",
+        [
+          "docs/experiments/E04-closing-ruling.md",
+          "Ruling 3"
+        ]
+      ],
+      [
+        "the between-generation floor",
+        "The floor is measured and it is portable",
+        [
+          "docs/experiments/E04-closing-ruling.md",
+          "Ruling 1"
+        ]
+      ],
+      [
+        "the byte pin key mismatch",
+        "the pin's key says A1a its bytes are A0's",
+        [
+          "docs/experiments/E04-closing-ruling.md",
+          "Ruling 7b"
+        ]
+      ],
+      [
+        "is the rigging gap confirmed",
+        "the rigging gap is CONFIRMED not routed around",
+        [
+          "docs/experiments/E06-closing-ruling.md",
+          "Ruling 2"
+        ]
+      ],
+      [
+        "can the reference extend a silhouette",
+        "the reference CAN extend a silhouette the control leaves",
+        [
+          "docs/experiments/E06-closing-ruling.md",
+          "Ruling 4"
+        ]
+      ],
+      [
+        "the byte versus pixel catch",
+        "The byte-versus-pixel catch is upheld",
+        [
+          "docs/experiments/E06-closing-ruling.md",
+          "Ruling 8"
+        ]
+      ]
+    ]
+  }
+}
