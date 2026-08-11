@@ -140,6 +140,7 @@ silhouette only where the control is silent.
 **What it forecloses:** routing around the rigging gap with a wire armature. That door is measured
 shut.
 
-**Next:** rigging is the blocking dependency, unchanged and now confirmed twice. The June
-no-rigging decision was made for 8-direction sprite turnarounds and is the Director's to apply or
-set aside here.
+**Next:** rigging is the blocking dependency, unchanged and now confirmed twice — **and nothing
+governs against it.** See E03's closing ruling, Ruling 7, for the retraction of the "June decision"
+framing this seat raised three times. There is no permission to obtain. The next step is to rig a
+character.
