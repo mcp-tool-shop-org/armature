@@ -122,7 +122,7 @@ E07 should take, if any, is the advisor's ruling and the Director's call.
 
 ---
 
-## 3. Premises — re-verified, and what moved
+## 3. Premises — re-measured, and what moved
 
 | # | premise | status after measurement |
 |---|---|---|
@@ -337,7 +337,7 @@ perfectly.
 
 | Standard | Score | Evidence |
 |---|---|---|
-| PIN_PER_STEP | **2** | source pinned by sha256 and re-verified three times; tool version and per-file tool hashes written into the manifest path; Blender build string recorded. Not 3: no byte-replay of Blender internals is claimed |
+| PIN_PER_STEP | **2** | source pinned by sha256 and re-computed three times; tool version and per-file tool hashes written into the manifest path; Blender build string recorded. Not 3: no byte-replay of Blender internals is claimed |
 | ANDON_AUTHORITY | **3** | Gates N/P/D raise inside the tool with no skip flag; **the andon fired and the run stopped**; the halt is recorded and exits 2 |
 | NAMED_COMPENSATORS | **3** | nothing irreversible: 0 credits, all outputs new files under `outputs/E07/` (`rm -r` undoes), sources opened read-only, no write into `E:\AI\facet` or `E:\AI\training` |
 | DECOMPOSE_BY_SECRETS | **3** | the site list is data; landmarks, gates and the Blender driver are separate modules, the first three importable and testable without bpy; rendering and compositing split because they need different interpreters |
