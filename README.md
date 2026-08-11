@@ -21,24 +21,44 @@ frame.
 
 ---
 
-## State: day one — the thesis is still untested
+## State: the thesis is under test, and three things are measured
 
-This repo was founded on 2026-08-10. **No generation has run, no cloud credit has been spent,
-and the thesis this repo exists to test is untested.** That is the honest state and this
-section changes only as evidence arrives.
+Founded **2026-08-10**. Four experiments closed, **12 generations spent**. The thesis is no longer
+untested: parts are measured, one part is confirmed blocked, and the part that matters most is
+still judged by eye and still open.
 
 | | |
 |---|---|
-| Experiments completed | **1** — E01, the control-sequence exporter: merged, ruled, 103 tests. **E02 is specified and in flight** |
-| Generation probes | **0** — no video model has been asked anything yet |
-| Credits spent | **0** |
-| License map | **populated** 2026-08-10 — 20+ rows from retrieved license documents, 4 still UNVERIFIED |
-| Research grounding | 24 findings, **34/34 citations resolved** against a retrieval oracle |
-| Public surfaces | **live** — [landing page + 5 handbook pages](https://mcp-tool-shop-org.github.io/armature/), CI and Pages green |
+| Experiments | **4 closed** — E01 exporter · E02 first contact · E03 authored motion · E06 reference-onto-schematic. **E04 in flight.** E05 withdrawn on a falsified premise |
+| Generation probes | **12** |
+| Credits | **48** projected, at the measured 4 per generation |
+| License map | **9 rows UNVERIFIED and treated as NO**; every other row carries a retrieved license document |
+| Tests | **206**, passing under `-O` |
+| Public surfaces | **live** — [landing page + handbook](https://mcp-tool-shop-org.github.io/armature/), CI and Pages green |
 
-The thesis this repo exists to test — *does a CG-rendered control sequence hold a character
-through a video model* — is **untested**. The roadmap treats a negative answer as a full
-success, and says so in advance.
+### What is measured
+
+- **A rendered control sequence governs where the figure is, at what scale, and when it moves.**
+  Both control arms track the control; the no-control arm does not (E02).
+- **Control governs authored subject motion, categorically** — an 85.0° arm sweep against 0.062°
+  when the same control is held still (E03).
+- **Control owns the outline; the reference owns surface, material and costume** (E06). The
+  reference can *extend* a silhouette only where the control is silent — horns above the head, yes;
+  the limbs, no.
+- **Inverting the depth control end-to-end does not break tracking.** The model reads the
+  *geometry*, not the tone; a 233-level swing in control luma moved output luma by 11.7 (E02).
+
+### What is not
+
+- **Whether the figure on screen is the same character.** Canon, judged by eye, and no metric here
+  approximates it. Open.
+- **A real character performing.** A control's silhouette becomes the body, so a wire-armature
+  control returns a wire-armature body wearing armour. Authored motion on a character needs a
+  **rigged character mesh** — the blocking dependency, confirmed twice, and the next work.
+- **The between-generation noise floor** (E04, in flight). Until it exists, no two arms may be
+  ranked on a fine numeric gap — a rule this repo applies to its own results.
+
+A negative answer remains a full success here, and the roadmap said so before any evidence arrived.
 
 ## How this repo works
 

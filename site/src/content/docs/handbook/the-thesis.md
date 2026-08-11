@@ -14,8 +14,24 @@ You block the shot; the model shoots it. Structure comes from geometry we own; l
 the model; **identity is a named, versioned thing that rides in the prompt and the reference
 stack, never an accident of a lucky frame.**
 
-**That thesis is untested in this repo.** What follows is the published evidence that made it
-worth testing, gathered by a founding research swarm on 2026-08-10 and recorded in
+**That thesis is now partly measured.** As of 2026-08-10, across 12 generations in four closed
+experiments:
+
+- a rendered control sequence **governs where the figure is, at what scale, and when it moves**;
+- it **governs authored subject motion** — an 85.0° arm sweep against 0.062° when the same control
+  is held still;
+- **control owns the outline and the reference owns surface, material and costume**, with the
+  reference able to *extend* a silhouette only where the control is silent;
+- and inverting the depth control end-to-end **does not break tracking**, so the model is reading
+  geometry rather than tone.
+
+**Two things remain open, and one is the whole point.** Whether the figure on screen is the *same
+character* is canon, judged by eye, and unresolved. And a control's silhouette becomes the body —
+so a character that performs needs a **rigged character mesh**, which no asset here currently has.
+Full detail in `docs/experiments/`; every claim above is traceable to a numbered ruling.
+
+What follows is the published evidence that made the thesis worth testing, gathered by a founding
+research swarm on 2026-08-10 and recorded in
 [docs/research-grounding.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/research-grounding.md).
 Findings are cited by their number there.
 
