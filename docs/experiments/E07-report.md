@@ -757,3 +757,124 @@ Brief: **`docs/comfy-consult-5-brief.md`** (on `main` once pushed).
 on its own sculpted ball; Gates N, P and D on it; the joint-ball offset table; the measured
 method for this character class (*where the subject carries a sculpted marker, the marker is the
 pivot*); and the standing item **skeleton v2 — articulated fingers**.
+
+---
+
+# ROUND 4 — arm (c): the rigid-parts armature
+
+**E07 un-parked on Comfy Agent consult #5**, which ranked the rigid-parts route first *"and
+it's not close"*, with its atlas-survives promise calibrated on this performer before any
+scripting: full-mesh bisect left **298,366 of 298,366 far-from-cut faces byte-identical**, 0
+changed, 0 missing.
+
+## 26. What was built
+
+**17 rigid parts, one per deforming bone, each bone-parented. No armature modifier, no vertex
+group, no weight anywhere.** The figure articulates the way a physical ball-jointed mannequin
+does, which is what this character *is*.
+
+| quantity | value |
+|---|---|
+| parts | **17** |
+| faces before the joint cuts | 299,956 |
+| faces after | **306,110** (+6,154 created by 16 planar cuts) |
+| face assignment | **plain nearest bone segment** to the face centroid — the consult's prescription |
+| collar | **0.9 × that joint's own radius**, 12 of 16 joints sized from a measured sculpted ball |
+| atlas | 1 embedded image, sha `e76671b5…`, **byte-identical through the route** |
+
+### ⛔ A halt on the way in, and it was my substitution
+
+The first run **fired Gate PARTS**: `neck` was assigned **zero of 306,110 faces**.
+
+I had carried arm (b)'s normalisation — dividing each distance by that bone's own measured
+radius — into the assignment without flagging it. That rule is right where it came from: it
+stops a thin arm bone stealing torso flesh that merely happens to be nearer. **It is wrong
+here**, and the mechanism is exact: the neck bone is 0.05 long and thin, sits between the
+chest and the head which are both far fatter, and normalisation squeezes a short thin bone
+*between two fat ones* out entirely. The consult and the dispatch both specify **plain nearest
+bone segment**; that is what shipped, and both rules stay runnable behind `--assignment=`.
+
+⚑ **This is the third time this seat has substituted a rule for the specified one without
+flagging it first** — measured envelope radii in round 3, and this. The pattern is that the
+substitution is always locally defensible and always unflagged. Recorded as a standing habit
+to watch, not as a one-off.
+
+## 27. Gates — all raising inside `tools/rig_parts.py`
+
+| gate | verdict | measured |
+|---|---|---|
+| **PARTS** accounting | **PASS** | 306,110 faces partitioned across 17 parts, each exactly once, none unassigned, no empty part |
+| **N** part↔bone, pre-export | **PASS** | 17 / 17 |
+| **N** part↔bone, on the re-imported GLB | **PASS** | 17 / 17 |
+| **P** bind pose | **PASS** | bone parenting moved nothing: max 4.03e-08 against 1.069e-04 |
+| **RIGID** arrival | **PASS** | worst transform error **2.70e-07**, worst internal-distance change **1.25e-07**, figure max displacement **0.76223** |
+| **D** determinism | **PASS** | 17 parts identical across two full builds |
+| **ATLAS** untouched | **PASS** | the embedded 4096 atlas is byte-identical in the export |
+
+**The arc arrives whole.** 0.76223 is the same figure displacement arm (b) produced — and arm
+(a) delivered 0.2211 of it. Each part lands on its own bone's rest-to-pose transform to within
+2.7e-07, and no part's internal distances move by more than 1.25e-07: **nothing deforms**,
+measured rather than asserted.
+
+## 28. ⚑ What this seat can already see
+
+1. **A flat shard protrudes from the character's left armpit**, visible at full-body scale in
+   frames 17 and 33 and dominating the `shoulder` inset. **Measured mechanism:** the mesh is
+   double-walled and **50.84 % of all faces (152,506 of 299,956) are interior**. `shoulder.L`
+   is assigned **21,664 interior faces**, 52.8 % of its total, spanning x ∈ [0.032, 0.165] and
+   z ∈ [0.096, 0.313] — torso *inner wall* reaching up to **0.0638 from the shoulder bone,
+   4.2× that bone's own 0.0151 radius**. When the arm swings 90°, that inner sheet rotates out
+   of the torso and becomes visible. **Gate PARTS cannot see this**: the partition is
+   perfectly valid, and interior geometry is assigned exactly like any other face. This is the
+   single largest thing on the sheet and it is the first thing to look at.
+2. **A torn, jagged seam on the chest where `shoulder.L` was taken**, visible along the left
+   edge of the `shoulder` inset. The collar reaches along the *limb axis*; the shoulder/chest
+   boundary on the torso surface is a broad irregular region the collar does not close.
+3. **The elbow, wrist and hip insets read as ball joints** — no stepping, no tearing, no gap.
+   The collar appears to be doing its job on the limb joints, which are the ones it was sized
+   from.
+4. **Four of 16 joints have no sculpted ball** (hips→spine, spine→chest, chest→neck,
+   neck→head) and their collars fall back to that bone's own cross-section radius. Labelled
+   `FALLBACK` in the manifest. None of them articulates in this probe, so the sheet does not
+   test them.
+5. **The dark speckles are in the source asset**, as recorded in round 3 — present in every
+   render of the unbound mesh.
+
+None of this is a verdict. The joint-seam read is the Director's.
+
+## 29. Round 4 artifacts
+
+| artifact | path | sha256 | bytes |
+|---|---|---|---|
+| **the sheet** | `E:\AI\armature-E07\outputs\E07\parts-sheet\E07-parts-armature.png` | `207f834ba7fcdb37f94a3491a0b359496ccf6142f47e686100009d7ce6a6697f` | 1,719,569 |
+| **parts GLB** | `outputs\E07\parts\performer_parts.glb` | `ac46e65bc3f624f2081bb97aeea9382c5e4d8fd03b507b510f5f6cb4660f31d4` | 53,521,656 |
+| manifest | `outputs\E07\parts\parts_manifest.json` | `54e146b1646145f78fbaf38f1f6c6fc06ef682eb4dc027fb37284e1d8b9e0c97` | 44,580 |
+
+**The sheet** is `rest | frame 17 | frame 33 | 1:1 insets on the joints under articulation`.
+The insets are framed on the **posed bone position at frame 33** — where the collar is doing
+its work — rather than at rest, where every seam is closed by definition. Orthographic
+throughout, uniform scale per row, panels never resampled, no gate states and no debug text.
+The builder **raises** if a re-imported GLB sits still at frame 33, so a sheet can never
+quietly show a route that did not move.
+
+## 30. Tests, round 4
+
+**338 pass / 35 skipped**, 32 new across `tests/test_parts.py` and `tests/test_glb.py`. The
+load-bearing ones: the neck-squeeze regression (a hollow-tube fixture, because a volume-filled
+one hands the neck its on-axis points for free and the defect never reproduces); Gate PARTS
+fired with a face assigned to nothing and with a part left empty; the collar proven to reach
+past the joint in **both** directions and to borrow nothing at zero width; and the atlas gate
+fired on a single flipped byte — after two earlier versions of that fixture "changed" a byte
+to the value it already held and passed while comparing a file with itself.
+
+One real code defect was found by its own test: `joint_planes`'s no-radius branch raised
+`TypeError` instead of the `ArmatureError` it exists to raise, so the failure path was broken
+in exactly the case it was written for.
+
+## 31. Where round 4 stopped
+
+**At the Director's eye, on the joint-seam read.** The route clears every gate, the atlas is
+untouched, the arc arrives whole and nothing deforms. Whether the seams read — and what to do
+about the armpit shard in §28.1 — is his.
+
+**Not merged.** The advisor closes E07.

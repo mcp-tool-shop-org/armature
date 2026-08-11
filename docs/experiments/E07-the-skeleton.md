@@ -369,3 +369,46 @@ Brief: **`docs/comfy-consult-5-brief.md`** (on `main` once pushed).
 on its own sculpted ball; Gates N, P and D on it; the joint-ball offset table; the measured
 method for this character class (*where the subject carries a sculpted marker, the marker is the
 pivot*); and the standing item **skeleton v2 — articulated fingers**.
+
+---
+
+## Amendment 4 — 2026-08-11: arm (c), the rigid-parts armature, on consult #5's ranking
+
+**E07 un-parks.** Comfy Agent consult #5 ([comfy-consult-5.md](../comfy-consult-5.md), brief
+[comfy-consult-5-brief.md](../comfy-consult-5-brief.md)) ranked the rigid-parts route first
+**"and it's not close"**, and its load-bearing promise was calibrated on this performer before
+any of it was scripted:
+
+> full-mesh bisect, faces far from the cut: **298,366 → 298,366 with byte-identical UVs, 0
+> changed, 0 missing**; 1,590 cut-band faces split to 1,980 with interpolated UVs. **PASS.**
+
+**The arm:** a real stop-motion armature in software — separate rigid parts articulating at
+the sculpted balls, **no deformation anywhere**. No armature modifier, no vertex weights.
+It sidesteps every measured failure at once: no bone heat to fail silently, no manifold
+requirement, no weights to blend into shards or steps.
+
+**The consult's two shell-class prescriptions are binding:**
+
+1. **Face assignment by spatial region, never `Separate → By Loose Parts`.** 67 interior
+   shells would explode a connectivity split into 67 anatomy-free fragments. Every face —
+   interior shells included — is assigned by a nearest-bone-segment test on its centroid.
+2. **Collar overlap at every joint.** Each part reaches *past* the joint plane into its
+   neighbour so the two interpenetrate, exactly as a physical ball-jointed armature does, and
+   no gap opens under articulation. The collar is **a fixed fraction of that joint's own
+   measured ball radius** — per structure, never a length in metres — recorded per joint.
+
+**Gates, all raising inside `tools/rig_parts.py`:** PARTS accounting (every face assigned
+exactly once, the part list is the registered segment list, nothing unassigned — the direction
+nothing else bounds) · part↔bone registration, pre-export and on the re-imported GLB · P
+(bone parenting moved nothing at bind) · **RIGID arrival** (each part lands exactly on its own
+bone's rest-to-pose transform, and every part's internal distances are invariant) · D
+determinism · **ATLAS untouched** (the embedded image is byte-identical in the export — for
+this asset the image bytes ARE the contract, because "no re-bake" is the promise the route was
+ranked on).
+
+**Arms (a) envelope and (b) rigid-per-segment stay in the record** as the measured failures
+that motivated the consult, per the Director's ruling: *"This is a hard fail."*
+
+**E07 status:** skeleton APPROVED with its reservation intact · binding **arm (c) delivered,
+awaiting the Director's eye on the joint-seam read** · arms (a) and (b) FAILED · the standing
+item **skeleton v2 — articulated fingers** unchanged.
