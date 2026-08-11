@@ -23,6 +23,7 @@ from .errors import (
     G6SubjectMotion,
     GateBBatching,
     GateRRoundTrip,
+    GateSSeedRegistration,
 )
 
 
@@ -447,4 +448,67 @@ def gate_b_batching(expected_frames, observed_batch_images, evidence=None):
             ev,
         )
     ev["verdict"] = "batch intact"
+    return ev
+
+
+def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
+    """Gate S · ANDON — the seed was pre-registered. Raises before a payload exists.
+
+    `registry` is the experiment's committed seed list, or None for an experiment that
+    pre-registered none. `seed_was_explicit` says whether a caller *chose* this seed
+    rather than inheriting the module's pinned constant.
+
+    **It binds in both directions, and the second direction is the one that is easy to
+    miss.** An experiment WITH a registry must draw from it — that is the obvious clause,
+    and it stops a seed being picked after a result is seen. An experiment WITHOUT a
+    registry may not vary its seed *at all* — because the moment a `--seed` flag exists,
+    every experiment that never pre-registered anything becomes shoppable, and a gate
+    that checked only registered experiments would have opened that door itself. E02 and
+    E03 ran on a pinned constant no flag could move; that property has to survive the
+    flag being added.
+
+    Returns a verdict record for the meta file; the only paths out are that record or a
+    raise. There is no argument that disables it, no environment variable, and no
+    `assert` — see `GateSSeedRegistration` for what it is actually protecting, which is
+    not a technical property of the output but the meaning of the number computed from it.
+    """
+    ev = {
+        "gate": "S",
+        "experiment": experiment,
+        "seed": seed,
+        "seed_was_explicit": bool(seed_was_explicit),
+        "registry_size": len(registry) if registry else 0,
+    }
+
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise GateSSeedRegistration(
+            f"seed must be an int, got {type(seed).__name__} ({seed!r}); a seed that is "
+            f"not an integer cannot be compared against the committed list at all",
+            ev,
+        )
+
+    if not registry:
+        if seed_was_explicit:
+            raise GateSSeedRegistration(
+                f"{experiment} has no pre-registered seed list, so its seed may not be "
+                f"varied; {seed} was supplied explicitly. Pre-register the seeds in the "
+                f"spec, in the commit that opens the experiment, before the first "
+                f"submission — a seed chosen after a result is seen is seed-shopping, "
+                f"and no later check can tell the difference",
+                ev,
+            )
+        ev["verdict"] = f"N/A — {experiment} pre-registered no seeds and did not vary its own"
+        return ev
+
+    if seed not in registry:
+        raise GateSSeedRegistration(
+            f"seed {seed} is not in {experiment}'s pre-registered list of "
+            f"{len(registry)} seed(s). The list is committed in the spec before the "
+            f"first submission precisely so this cannot be decided now: registered "
+            f"{sorted(registry)}",
+            dict(ev, registry=sorted(registry)),
+        )
+
+    ev["verdict"] = "seed is pre-registered"
+    ev["registry_index"] = sorted(registry).index(seed)
     return ev
