@@ -123,6 +123,14 @@ bundled fonts, matcaps or asset library, each carrying its own licence in the sa
 
 **Consequence — ruled:** with Tripo out, Meshy unable to take our mesh, no rig node elsewhere, and **no open-weights auto-rig on Cloud** (verified by absence), **there is no Cloud rigging route that survives this gate. Rigging happens locally** — which carries no licence question at all and keeps the control path estimator-free by construction.
 
+### Retopo tools — a second axis the gate protects, ruled 2026-08-11
+
+| Tool | Pipeline-fit | Note |
+|---|---|---|
+| **QuadRemesher (Exoside)** | **NO — RULED OUT** | ⛔ **Director's ruling, 2026-08-11:** *"it's not fit for the pipeline, as it isn't non-commercial safe."* A proprietary paid addon cannot be a canonical route stage regardless of who owns a seat licence — the gate protects the **pipeline's** cleanliness and reproducibility, not one rig's right to run a tool. The advisor's same-day "owned-commercial YES" is corrected in place: it graded the wrong axis. |
+| **Blender built-in remeshers** (Voxel, QuadriFlow) | **YES** | Ship inside Blender — covered by the Blender 5.2.0 LTS row above; headless-scriptable; zero new dependency. The E07 arm-(d) route uses these. |
+| **Instant Meshes or any other external retopo** | **UNVERIFIED — treated as NO** | Enters only through a retrieved licence document ruled through this gate before first use. |
+
 ## UNVERIFIED — treated as NO until retrieved
 
 Recorded honestly rather than assumed. Each blocks the thing that depends on it.
