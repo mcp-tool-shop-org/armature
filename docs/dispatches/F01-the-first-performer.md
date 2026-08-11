@@ -1,8 +1,22 @@
 # F01 — the first performer: a character off the facet line
 
 **Commissioning seat:** armature advisor · **Written:** 2026-08-11 · **Executing side:** a
-**facet session**, under facet's own CLAUDE.md and discipline · **Status: WAITING on the
-Director's concept pick.**
+**facet session**, under facet's own CLAUDE.md and discipline · **Status: DISPATCHED
+2026-08-11 — the Director picked the concept and the facet seat is running.**
+
+> ## The pick — the armature itself
+>
+> **Input:** `outputs/E07/concepts/00-directors-pick-clay-armature.png` · sha256
+> `75338325…E0DC` · 1,216,363 bytes · Director-generated (Qwen-Image 2512, Comfy canvas;
+> the image is the contract — its generation params were not recorded, the pinned file is).
+>
+> A clay mannequin figure with visible ball-and-socket joints, thumbprint texture, a simple
+> readable face, A-pose, empty hands, feet planted, pale backdrop. **The tool's own mascot is
+> its first performer.** Two properties worth naming: every articulation point is *drawn on
+> the body*, so deformation quality reads directly on the sheet; and the figure is the
+> nearest living relative of facet E32's subject (the thin-tube clay armature mark), so
+> facet's own record carries measured findings for this geometry class. The E32 report and
+> rulings are governing reading for the executing seat.
 
 **Director's direction (2026-08-11):** *"We're going to need to make a new glb, obviously,
 because I want to use something from the facet pipeline, not an old glb."*
