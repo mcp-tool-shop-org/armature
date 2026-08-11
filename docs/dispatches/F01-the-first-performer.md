@@ -50,7 +50,7 @@ an edit pass) rather than re-designing the character — the Director's pick is 
 | A1 | Humanoid; the face reads at head-crop distance (painted eyes, distinct features) |
 | A2 | Neutral A/T-pose; arms clear of torso; hands empty; feet present and distinct |
 | A3 | Single mesh object (or a documented, deliberate split); embedded textures ≥ 2048 px; triangles in the 200k–1.2M band seen on this rig |
-| A4 | The concept's colour and material variety survive the bake — judged by the Director beside the concept, per Gate 0 discipline |
+| A4 | ~~The concept's colour and material variety survive the bake~~ **CORRECTED 2026-08-11, the Director's catch:** the concept is a route-native **clay input** — facet's route begins at "form-exaggerated clay concept" and colour enters *inside* the route, at the styled-twin stage. A4 now reads: **the styled twin's colour and material variety survive projection**, judged by the Director beside the twin, per Gate 0 discipline. The twin itself is a Director ruling: no styled design of this figure exists anywhere, so the twin stage is where his painted identity is decided, and that decision is canon — the executing seat produces twin candidates and stops for his eye before projecting |
 | A5 | Provenance recorded per facet's discipline: generator (TRELLIS.2 or commercially-clean equivalent), every tool in the route, licence rows for anything new entering |
 | A6 | Delivery = pinned path + sha256 + manifest. armature **copies** the file into its own tree; no armature session edits facet's tree |
 
