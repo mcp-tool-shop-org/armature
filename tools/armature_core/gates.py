@@ -20,6 +20,7 @@ from .errors import (
     G2Completeness,
     G4BboxSanity,
     G5ConventionConformance,
+    G6SubjectMotion,
     GateBBatching,
     GateRRoundTrip,
 )
@@ -280,6 +281,59 @@ def g5_openpose_conformance(keypoint_count, limb_seq, reference_count, reference
             },
         )
     return True
+
+
+def g6_subject_motion(frame_signatures, animation_mode):
+    """G6 · ANDON — a spec that asked for a performance got one. Raises.
+
+    `frame_signatures` is one hashable value per frame, derived from the subject's
+    **evaluated** world-space vertices (so it follows modifiers, parenting and the
+    imported glTF action, not the authored intent). `animation_mode` is the spec's
+    `subject.animation`.
+
+    **Only `per_frame` is checked, and that is the point.** In `static` mode a constant
+    subject is correct — E01 pins the scene to frame 1 deliberately so P3 measures
+    normalisation on geometry that does not move — so checking it there would be a check
+    that cannot fail. In `per_frame` mode the spec has asserted that the subject performs,
+    and every other gate in this tool is blind to whether it did: legality, completeness
+    and bbox sanity all pass on 33 identical frames.
+
+    **What it does NOT claim.** A partially-broken action — some frames moving, some not —
+    is not caught, because the failure this exists for is binary: the glTF round trip
+    either carried the action or it did not. The per-frame displacement diagnostic in the
+    manifest is where a weak or truncated arc shows itself, and it gates nothing.
+
+    Raising on *all* frames identical rather than on *any* adjacent pair identical is
+    deliberate: a slow arc can legitimately hold still between two frames, and a gate that
+    fired on that would be a gate that fails on correct work.
+    """
+    ev = {
+        "animation_mode": animation_mode,
+        "n_frames": len(frame_signatures),
+        "distinct_signatures": len(set(frame_signatures)),
+    }
+    if animation_mode != "per_frame":
+        ev["verdict"] = f"N/A — subject.animation is {animation_mode!r}, not 'per_frame'"
+        return ev
+
+    if len(frame_signatures) < 2:
+        raise G6SubjectMotion(
+            f"subject.animation is 'per_frame' but the shot is {len(frame_signatures)} "
+            f"frame(s) long; motion is undefined over fewer than two frames",
+            ev,
+        )
+    if ev["distinct_signatures"] == 1:
+        raise G6SubjectMotion(
+            f"subject.animation is 'per_frame' but the subject's evaluated geometry is "
+            f"IDENTICAL at all {len(frame_signatures)} frames — the authored performance "
+            f"did not reach the render. Every other gate passes on this: the frames are "
+            f"legal, complete, and the mask matches the projected mesh, because a static "
+            f"mesh projects consistently. Check that the GLB carries an action, that the "
+            f"scene frame range spans the shot, and that export fps matches render fps",
+            ev,
+        )
+    ev["verdict"] = "subject moved"
+    return ev
 
 
 def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label="decoded video"):

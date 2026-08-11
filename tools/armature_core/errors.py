@@ -52,6 +52,31 @@ class G5ConventionConformance(GateFailure):
     gate = "G5"
 
 
+class G6SubjectMotion(GateFailure):
+    """A spec asked for a performance and the subject did not move.
+
+    E03's andon, and it stands on a failure that is **silent in every other check**.
+    E01 renders an existing pose, so `configure_render` pinned the scene to frame 1 and
+    an animated asset could not move. E03 authors a performance instead, which means the
+    animation now has to survive an export to glTF, a re-import, and a frame-rate mapping
+    from seconds back to frames — any one of which can drop it.
+
+    If it does drop, **every other gate still passes**: the frames are legal (G1), all 33
+    are written and non-empty (G2), and the mask agrees with the projected mesh at every
+    frame (G4) because a static mesh projects consistently. Gate B would count 33 images in
+    the batch. The run would produce a perfectly well-formed control sequence of a figure
+    standing still, be submitted, and cost credits — and the experiment would conclude that
+    authored motion does not transfer, when what actually happened is that no motion was
+    ever authored into the frames.
+
+    **The andon is on the direction the invariant does not bound.** Nothing else in this
+    tool looks at whether the geometry changes between frames, so that is what this checks:
+    in `per_frame` mode, the subject's evaluated vertices must differ across the shot.
+    """
+
+    gate = "G6"
+
+
 class GateRRoundTrip(GateFailure):
     """The encoded control video did not decode back to the frames that went in.
 

@@ -22,6 +22,11 @@ SPEC_VERSION = 1
 
 KNOWN_CHANNELS = ("depth", "normal", "mask", "edge", "pose")
 
+#: How the subject behaves across the shot. `static` is E01/E02: the scene frame is pinned
+#: so only the camera moves. `per_frame` is E03: the scene frame advances with the control
+#: frame, so an action carried by the asset performs — and G6 checks that it actually did.
+ANIMATION_MODES = ("static", "per_frame")
+
 DEFAULTS = {
     "spec_version": SPEC_VERSION,
     "camera": {
@@ -37,6 +42,16 @@ DEFAULTS = {
         "clip_start": 0.05,
         "clip_end": 1000.0,
     },
+    # E01/E02 render an existing pose while the camera moves; E03 renders a performance.
+    # The default `static` reproduces E01's behaviour exactly — the scene frame stays
+    # pinned at 1, so an asset carrying an action cannot move the subject. Opting in is
+    # explicit because the opt-in ALSO arms G6: a spec saying `per_frame` is asserting the
+    # subject performs, and G6 halts the run if it turns out it did not.
+    "subject": {"animation": "static"},
+    # The depth normalisation window. `per_shot` is E01/E02's behaviour: the shot's own
+    # measured z extent maps to 0..255. A two-number window pins it instead, which is what
+    # lets two arms share one tonal scale — see the note in `normalise_spec`.
+    "depth": {"window": "per_shot"},
     "edge": {"depth_rel_threshold": 0.02, "normal_angle_deg": 30.0},
     "render": {
         "engine": "BLENDER_EEVEE",
@@ -127,12 +142,60 @@ def normalise_spec(raw, spec_path=None):
     if len(set(channels)) != len(channels):
         raise SpecError(f"spec.channels contains duplicates: {channels}")
 
+    # A pinned depth window exists so two arms can share one tonal scale.
+    #
+    # E03's B1 and B3 render the SAME asset and differ only in whether the timeline
+    # advances — but per-shot normalisation is computed from each shot's own z extent, and
+    # the raised arm widens B1's extent by 11%. Measured: B1's frame 0 and B3's frames hold
+    # identical geometry and still differed by up to 26 of 255 levels. That is a second
+    # difference between the arms, and B3 is the discriminator, so it must differ from B1 in
+    # exactly one thing. Pinning the window to B1's measured extent removes it.
+    depth = _require(spec, "depth", dict, "spec")
+    window = depth.get("window")
+    if window != "per_shot":
+        if (not isinstance(window, (list, tuple)) or len(window) != 2
+                or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                           for v in window)):
+            raise SpecError(
+                "spec.depth.window must be 'per_shot' or a 2-number [z_min, z_max]"
+            )
+        if not window[0] < window[1]:
+            raise SpecError(
+                f"spec.depth.window is [{window[0]}, {window[1]}]; z_min must be below "
+                f"z_max or the normalisation collapses"
+            )
+
+    subject = _require(spec, "subject", dict, "spec")
+    animation = subject.get("animation")
+    if animation not in ANIMATION_MODES:
+        # Not a soft default: silently falling back to `static` would render 33 identical
+        # frames for a spec that asked for a performance, and G6 would never be armed
+        # because the mode it keys on never arrived.
+        raise SpecError(
+            f"spec.subject.animation {animation!r} is not one of {list(ANIMATION_MODES)}"
+        )
+
     cam = spec["camera"]
     if cam.get("type") != "orbit":
         raise SpecError(f"spec.camera.type {cam.get('type')!r} is not implemented (only 'orbit')")
     radius = cam.get("radius")
     if radius != "auto" and not isinstance(radius, (int, float)):
         raise SpecError("spec.camera.radius must be a number or the string 'auto'")
+
+    # `target` may be pinned numerically as well as derived. E03 needs this: its animated
+    # arm fits the camera to the union of every frame while its static arm fits the bind
+    # pose, so leaving both on `bbox_center` would frame the two arms DIFFERENTLY — and the
+    # static arm is the discriminator, which must differ from the animated one in exactly
+    # one thing. Pinning both target and radius makes the framing identical by construction
+    # rather than identical by coincidence.
+    target = cam.get("target")
+    if target != "bbox_center":
+        if (not isinstance(target, (list, tuple)) or len(target) != 3
+                or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                           for v in target)):
+            raise SpecError(
+                "spec.camera.target must be 'bbox_center' or a 3-number [x, y, z]"
+            )
 
     if spec_path:
         spec.setdefault("_spec_path", os.path.abspath(spec_path))

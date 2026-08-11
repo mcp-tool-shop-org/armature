@@ -15,7 +15,7 @@ class FakeBackend:
     name = "fake"
 
     def __init__(self, width, height, *, box=(10, 20, 60, 90), z_near=2.0, z_far=5.0,
-                 lie_about_bbox=False, breathe=0.0):
+                 lie_about_bbox=False, breathe=0.0, moves=False):
         self.width = width
         self.height = height
         self.box = box
@@ -23,6 +23,11 @@ class FakeBackend:
         self.z_far = z_far
         self.lie_about_bbox = lie_about_bbox
         self.breathe = breathe
+        # `moves` reports whether the subject's geometry changes between frames — G6's
+        # quantity. The default is False and that is the honest default: this backend's
+        # box is in the same place every frame, so a per-frame spec driven by it SHOULD
+        # trip G6. That is the failure G6 exists for, reproduced without Blender.
+        self.moves = moves
         self.prepared = False
 
     def prepare(self, spec, asset_path, width, height, work_dir, need_normal):
@@ -61,6 +66,8 @@ class FakeBackend:
             "projected_bbox": projected,
             "azimuth_deg": 360.0 * index / count,
             "camera_matrix": np.eye(4).tolist(),
+            "scene_frame": 1 + index,
+            "geometry_signature": f"frame{index}" if self.moves else "static-subject",
         }
 
     def provenance(self):
