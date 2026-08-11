@@ -124,6 +124,8 @@ Recorded honestly rather than assumed. Each blocks the thing that depends on it.
 | **ByteDance / Seedance output ownership** | BytePlus master ToS retrieved but contains **no AI-output clause**; the operative service-specific agreement was not located | Seedance may not be used until fetched |
 | **`FL_WanVaceToVideoMultiRef`** / Fill custom-node pack | licence not retrieved | multi-reference VACE route — stay on core `WanVaceToVideo` |
 | **`WanVaceAdvanced` tier** (`VaceStrengthTester`, `VaceAdvancedModelPatch`) | licence not retrieved | any scheduled/advanced VACE control strength |
+| **`FL_WanFirstLastFrameToVideo`** (Fill Nodes) | licence not retrieved | first/last-frame conditioning — use core `WanFirstLastFrameToVideo` instead if ever needed |
+| **Core Wan nodes** `WanAnimateToVideo`, `WanFirstLastFrameToVideo` | **ASSUMED-FROM-CATEGORY, not retrieved.** Consult #4 placed them in the Wan/Apache tier by node category and was explicit it did not fetch either licence | both nodes. Assumed is not verified; neither is used without a retrieved row |
 | **`WanAnimatePreprocess` detector tier** (ViTPose/DWPose weights) | licence not retrieved | Wan 2.2 Animate via *detected* pose. Authoring pose from Blender geometry sidesteps this entirely |
 | **rembg bundled weights (u2net / isnet)** | individual model licenses not fetched | rembg may not be used until fetched — the MIT applies to the code only |
 
@@ -139,5 +141,17 @@ to establish, which is itself an argument for the open-weights route being the d
 4. `NO` → the dependency does not enter, and the spec names what replaces it.
 5. `CONDITIONAL` → surfaced to the Director with the condition stated, before use.
 6. `UNVERIFIED` → treated as `NO` until retrieved.
+7. ⚑ **A non-commercial dependency can enter as a SPECIFICATION, not only as a runtime import.**
+   Added 2026-08-10 (Comfy consult #4). If the only documentation of a format, convention or
+   colour table we must match lives in non-commercially-licensed source, then *reading it to
+   learn the spec* puts that tier back in the pipeline — the same logic as our own ruling that
+   **a bypassed non-commercial node is still present**, one layer up. "We re-implemented it
+   ourselves" does not obviously launder a table lifted from it.
+   **Bounded honestly: this is a risk to surface, not a settled legal conclusion.** Licences
+   govern copying and distribution; learning a fact is not automatically a derivative work, and a
+   verbatim table is a different object from a fact. **Prefer determining such a convention
+   empirically.** Where that is impractical, retrieve the licence and route the question to the
+   Director. ⚠ Note the failure mode that makes this urgent rather than academic: a wrong
+   convention of this kind **fails silently** — the model simply obeys weakly and no gate fires.
 
 The check is recorded **in the spec that introduces the dependency**, and the row lands here.
