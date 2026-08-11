@@ -20,6 +20,7 @@ Blender 5.2 API notes, all measured on this rig 2026-08-10 rather than inherited
     0 is the top row, which is PNG's order.
 """
 
+import hashlib
 import math
 import os
 
@@ -27,7 +28,14 @@ import bpy
 import mathutils
 import numpy as np
 
+from .errors import G6SubjectMotion
+
 SKY_Z = 1e9
+
+
+def scene_fps():
+    sc = bpy.context.scene
+    return sc.render.fps / (sc.render.fps_base or 1.0)
 
 
 # --------------------------------------------------------------------------- scene
@@ -38,8 +46,44 @@ def reset_scene():
     return bpy.context.scene
 
 
-def import_glb(path):
-    """Import a GLB and return (mesh_objects, armature_objects, info)."""
+def set_frame_rate(scene, fps):
+    """Pin the scene's frame rate. MUST be called before `import_glb`.
+
+    glTF stores animation key times in **seconds**, and the importer converts them to
+    frames using the scene's rate *at import time*. Setting the rate afterwards does not
+    move the keys — they are already on the wrong frames.
+    """
+    scene.render.fps = int(fps)
+    scene.render.fps_base = 1.0
+    return scene
+
+
+def import_glb(path, expected_fps=None):
+    """Import a GLB and return (mesh_objects, armature_objects, info).
+
+    `expected_fps` makes the ordering requirement executable rather than a comment.
+
+    MEASURED 2026-08-10, and it cost a full debugging pass: importing at Blender's default
+    24 fps a 33-key action authored and exported at 16 fps lands the keys on frames 1..49.
+    The render then samples frames 1..33 and captures the first **two thirds** of the
+    performance — a 0..90° arm raise arrives as a 0..60° one. Every frame is well-formed,
+    the action is present with the right number of keys, the arc is smooth and monotonic,
+    and **G6 passes**, because the subject genuinely does move. Only the authored ground
+    truth disagrees: the union bbox topped out at 1.1013 m where the wrist should reach
+    1.1314 m, which is sin(60°)/sin(90°) of the authored rise, to five digits.
+
+    The andon is here, inside the function performing the import, because this is the last
+    moment the mistake is still cheap.
+    """
+    if expected_fps is not None and int(scene_fps()) != int(expected_fps):
+        raise G6SubjectMotion(
+            f"scene frame rate is {scene_fps()} fps but the shot is {expected_fps} fps, and "
+            f"the glTF importer maps key times (seconds) to frames using the rate it finds "
+            f"NOW. Importing here would silently place the action on the wrong frames and "
+            f"the render would sample a fraction of the performance — call "
+            f"`set_frame_rate(scene, fps)` before importing",
+            {"scene_fps": scene_fps(), "expected_fps": expected_fps, "asset": path},
+        )
     before = set(bpy.data.objects.keys())
     bpy.ops.import_scene.gltf(filepath=path)
     added = [bpy.data.objects[k] for k in bpy.data.objects.keys() if k not in before]
@@ -128,13 +172,45 @@ def configure_render(scene, spec, width, height):
     else:
         scene.eevee.taa_render_samples = int(r["samples"])
 
-    # E01 renders an existing pose, not a performance: the scene frame is pinned so
-    # any animation the asset carries cannot move the subject while the camera does.
-    # P3 measures normalisation on *static* geometry, and this is what makes it static.
-    scene.frame_start = 1
-    scene.frame_end = 1
+    # The frame rate is set BEFORE anything else touches the timeline because glTF stores
+    # keyframe times in **seconds**. An action exported at 16 fps and evaluated at Blender's
+    # 24 fps default lands its keys on different frames, so a 33-frame arc would be sampled
+    # over 22 of them and the last third of the shot would hold the final pose. Nothing
+    # errors when that happens; the arc is simply the wrong shape.
+    scene.render.fps = int(spec["frames"]["fps"])
+    scene.render.fps_base = 1.0
+
+    animation = spec["subject"]["animation"]
+    if animation == "per_frame":
+        # E03 renders a performance: the frame range spans the shot and `set_scene_frame`
+        # advances it per control frame. G6 checks the subject actually moved.
+        scene.frame_start = 1
+        scene.frame_end = int(spec["frames"]["count"])
+    else:
+        # E01/E02 render an existing pose, not a performance: the scene frame is pinned so
+        # any animation the asset carries cannot move the subject while the camera does.
+        # P3 measures normalisation on *static* geometry, and this is what makes it static.
+        scene.frame_start = 1
+        scene.frame_end = 1
     scene.frame_set(1)
     return scene
+
+
+def set_scene_frame(scene, frame_index):
+    """Advance the timeline to control frame `frame_index` (0-based) and settle it.
+
+    Scene frames are 1-based and control frames are 0-based, so the shot's first control
+    frame is scene frame 1 — which is also the frame `configure_render` leaves the scene on
+    and the frame the bind pose is authored at.
+
+    The depsgraph update is not optional: `frame_set` schedules the evaluation, and reading
+    `matrix_world` or evaluated vertices before it settles returns the *previous* frame's
+    values. That failure is silent and would show up as a one-frame lag between the control
+    and its own manifest.
+    """
+    scene.frame_set(1 + int(frame_index))
+    bpy.context.view_layer.update()
+    return scene.frame_current
 
 
 # ------------------------------------------------------------------------ geometry
@@ -174,6 +250,58 @@ def world_bounds(objects):
     half = (hi - lo) * 0.5
     radius = float(np.linalg.norm(pts - center, axis=1).max())
     return center, half, radius
+
+
+def world_bounds_over_frames(scene, objects, count):
+    """`world_bounds` over the union of every frame in the shot.
+
+    A performance changes the subject's extent, so bounds taken at the bind pose are the
+    wrong input to `auto_radius`. E03's arc is the concrete case: the wire figure is 1.000
+    tall in T-pose, and raising the right arm overhead puts the wrist above the head — a
+    camera fitted to the bind pose frames the shot too tightly and crops the hand out at
+    exactly the moment the experiment is asking about.
+
+    Fitting the union instead makes framing constant across the shot, which matters twice
+    over here: the camera is static, so any breathing in the framing would be the subject's
+    size changing rather than the camera moving, and that is a second variable inside a
+    measurement of one.
+    """
+    lo = hi = None
+    pts_max_r = 0.0
+    centers = []
+    for i in range(count):
+        set_scene_frame(scene, i)
+        pts = _evaluated_world_vertices(objects)
+        if pts.shape[0] == 0:
+            continue
+        f_lo, f_hi = pts.min(axis=0), pts.max(axis=0)
+        lo = f_lo if lo is None else np.minimum(lo, f_lo)
+        hi = f_hi if hi is None else np.maximum(hi, f_hi)
+        centers.append(pts)
+    if lo is None:
+        return None
+    center = (lo + hi) * 0.5
+    half = (hi - lo) * 0.5
+    # The sphere is measured about the UNION centre, over every frame's vertices, so it
+    # bounds the whole performance rather than the worst single frame about its own centre.
+    for pts in centers:
+        pts_max_r = max(pts_max_r, float(np.linalg.norm(pts - center, axis=1).max()))
+    set_scene_frame(scene, 0)
+    return center, half, pts_max_r
+
+
+def evaluated_geometry_signature(objects):
+    """A hash of the subject's evaluated world-space vertices at the current frame.
+
+    G6's quantity. Taken from *evaluated* geometry so it follows the imported glTF action,
+    parenting and modifiers — the authored intent is irrelevant here, only what the
+    renderer is about to draw. Rounded to 1e-9 before hashing so float noise in the
+    depsgraph cannot manufacture motion that is not there.
+    """
+    pts = _evaluated_world_vertices(objects)
+    if pts.shape[0] == 0:
+        return "empty"
+    return hashlib.sha256(np.round(pts, 9).tobytes()).hexdigest()
 
 
 # -------------------------------------------------------------------------- camera

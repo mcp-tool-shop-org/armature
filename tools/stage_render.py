@@ -108,7 +108,14 @@ class BlenderBackend:
     def prepare(self, spec, asset_path, width, height, work_dir, need_normal):
         bs = self._bs
         scene = bs.reset_scene()
-        imported_meshes, armatures, info = bs.import_glb(asset_path)
+        # The frame rate is pinned BEFORE the import, not by `configure_render` after it:
+        # glTF key times are in seconds and the importer resolves them against whatever
+        # rate the scene carries at that moment. See `import_glb`, which raises if this
+        # ordering is ever broken again.
+        bs.set_frame_rate(scene, spec["frames"]["fps"])
+        imported_meshes, armatures, info = bs.import_glb(
+            asset_path, expected_fps=spec["frames"]["fps"]
+        )
         if not imported_meshes:
             raise SpecError(f"{asset_path} imported no mesh objects; nothing to render")
         bs.configure_render(scene, spec, width, height)
@@ -126,13 +133,22 @@ class BlenderBackend:
             o.name for o in imported_meshes if o.name not in {m.name for m in meshes}
         )
 
-        bounds = bs.world_bounds(meshes)
+        # A performance changes the subject's extent, so a camera fitted to the bind pose
+        # would crop the shot exactly where the motion is. Fit the union of every frame.
+        animation = spec["subject"]["animation"]
+        if animation == "per_frame":
+            bounds = bs.world_bounds_over_frames(scene, meshes, spec["frames"]["count"])
+        else:
+            bounds = bs.world_bounds(meshes)
         if bounds is None:
             raise SpecError(f"{asset_path} has no evaluated geometry")
         center, half, sphere_r = bounds
 
         cam = bs.make_camera(scene, spec)
         c = spec["camera"]
+        measured_center = [float(v) for v in center]
+        if c["target"] != "bbox_center":
+            center = np.asarray(c["target"], dtype=np.float64)
         radius = c["radius"]
         if radius == "auto":
             radius = bs.auto_radius(
@@ -152,10 +168,21 @@ class BlenderBackend:
             scene=scene, cam=cam, meshes=meshes, armatures=armatures,
             outputs=outputs, exr_dir=exr_dir, width=width, height=height,
             center=center, radius=radius, spec=spec, need_normal=need_normal,
+            animation=animation,
         )
         return {
             "import": info,
-            "subject_bbox_center": [float(v) for v in center],
+            "subject_animation": animation,
+            "bounds_fitted_over": (
+                f"union of {spec['frames']['count']} frames" if animation == "per_frame"
+                else "the bind pose"
+            ),
+            "subject_bbox_center": measured_center,
+            "camera_target_resolved": [float(v) for v in center],
+            "camera_target_source": (
+                "spec.camera.target (pinned)" if c["target"] != "bbox_center"
+                else "measured bbox centre"
+            ),
             "subject_bbox_half_extent": [float(v) for v in half],
             "subject_sphere_radius": float(sphere_r),
             "camera_radius_resolved": radius,
@@ -165,6 +192,14 @@ class BlenderBackend:
     def render_frame(self, index, count):
         st = self._state
         bs, spec = self._bs, st["spec"]
+
+        # The subject moves BEFORE anything is measured about it: the geometry signature,
+        # the projected bbox and the render itself must all describe the same frame.
+        scene_frame = None
+        if st["animation"] == "per_frame":
+            scene_frame = bs.set_scene_frame(st["scene"], index)
+        signature = bs.evaluated_geometry_signature(st["meshes"])
+
         c = spec["camera"]
         az = bs.orbit_azimuth(index, count, c["azimuth_start_deg"], c["azimuth_sweep_deg"])
         st["cam"].matrix_world = bs.orbit_matrix(
@@ -189,6 +224,8 @@ class BlenderBackend:
             "cam_rot_3x3": cam_rot,
             "projected_bbox": projected,
             "azimuth_deg": float(az),
+            "scene_frame": scene_frame,
+            "geometry_signature": signature,
             "camera_matrix": [list(map(float, row)) for row in st["cam"].matrix_world],
             "master_paths": {k: os.path.relpath(v, os.path.dirname(st["exr_dir"]))
                              for k, v in paths.items()},
@@ -272,6 +309,8 @@ def run_export(spec, out_dir, backend=None):
         rec = {
             "frame": i,
             "azimuth_deg": f.get("azimuth_deg"),
+            "scene_frame": f.get("scene_frame"),
+            "geometry_signature": f.get("geometry_signature"),
             "camera_matrix": f.get("camera_matrix"),
             "mask_px": int(mask.sum()),
             "mask_bbox": list(mask_bbox) if mask_bbox else None,
@@ -317,11 +356,24 @@ def run_export(spec, out_dir, backend=None):
     if "depth" in requested:
         mins = [r["z_min"] for r in per_frame]
         maxs = [r["z_max"] for r in per_frame]
-        shot_min, shot_max = float(min(mins)), float(max(maxs))
+        measured_min, measured_max = float(min(mins)), float(max(maxs))
+
+        # A pinned window lets two arms share one tonal scale; see shotspec.normalise_spec.
+        # The MEASURED extent is recorded either way, so a pinned window that no longer fits
+        # its shot is visible in the manifest rather than silently clipping.
+        window = spec["depth"]["window"]
+        pinned = window != "per_shot"
+        shot_min, shot_max = (float(window[0]), float(window[1])) if pinned else (
+            measured_min, measured_max
+        )
         p3 = {
             "shot_z_min": shot_min,
             "shot_z_max": shot_max,
             "shot_z_range": shot_max - shot_min,
+            "window_source": "spec.depth.window (pinned)" if pinned else "measured per-shot",
+            "measured_z_min": measured_min,
+            "measured_z_max": measured_max,
+            "measured_within_window": shot_min <= measured_min and measured_max <= shot_max,
             "per_frame": [],
         }
         for i in range(count):
@@ -361,6 +413,14 @@ def run_export(spec, out_dir, backend=None):
         with open(os.path.join(out_dir, "p3_normalization.json"), "w", encoding="utf-8") as fh:
             json.dump(p3, fh, indent=2)
 
+    # ---- G6 · ANDON — the subject performed. Runs on the whole shot, so it cannot run
+    #      inside the frame loop, and it runs before G2 because a control sequence of a
+    #      figure standing still is a *worse* artifact than a short one: it is complete,
+    #      well-formed, passes every other gate, and is wrong.
+    g6_detail = gates.g6_subject_motion(
+        [r["geometry_signature"] for r in per_frame], spec["subject"]["animation"]
+    )
+
     # ---- G2 · ANDON — completeness. Before the manifest, which is what makes a run
     #      look finished.
     expected = {d: names for d in emitted}
@@ -386,6 +446,10 @@ def run_export(spec, out_dir, backend=None):
                    "max_delta_px": max((max(r["g4_deltas_px"]) for r in per_frame), default=None)},
             "G5": {"verdict": "NOT RUN — pose was not emitted"}
             if "pose" not in requested else {"verdict": "PASS"},
+            "G6": {
+                "verdict": "PASS" if spec["subject"]["animation"] == "per_frame" else "N/A",
+                "detail": g6_detail,
+            },
         },
         "frames": per_frame,
         "p3": p3,

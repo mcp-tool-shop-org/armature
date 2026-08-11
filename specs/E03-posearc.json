@@ -1,0 +1,63 @@
+{
+  "spec_version": 1,
+  "name": "E03-posearc",
+  "generator": "wan-vace",
+  "asset": {
+    "path": "E:\\AI\\armature-E03\\outputs\\E03\\subject\\wire_t030_armraise.glb",
+    "note": "Generated, not obtained: tools/make_test_armature.py --pose-arc=arm_r_raise --thickness=0.030 --frames=33 --fps=16 --arc-start-deg=0 --arc-end-deg=90. Licence-clean by construction; no row in docs/license-map.md because nothing was acquired. Ground truth for every frame is in the .joints.json sidecar beside it."
+  },
+  "subject": {
+    "animation": "per_frame"
+  },
+  "resolution": {
+    "width": 480,
+    "height": 832
+  },
+  "frames": {
+    "count": 33,
+    "fps": 16
+  },
+  "channels": [
+    "depth",
+    "mask"
+  ],
+  "camera": {
+    "type": "orbit",
+    "target": [
+      0.0007239030958211268,
+      3.725289649675334e-09,
+      0.5649739010246009
+    ],
+    "radius": 3.2893308729746606,
+    "fit_margin": 1.15,
+    "elevation_deg": 8.0,
+    "azimuth_start_deg": 270.0,
+    "azimuth_sweep_deg": 0.0,
+    "lens_mm": 50.0,
+    "sensor_mm": 36.0,
+    "clip_start": 0.05,
+    "clip_end": 1000.0
+  },
+  "render": {
+    "engine": "BLENDER_EEVEE",
+    "samples": 1,
+    "filter_size": 0.01,
+    "film_transparent": true
+  },
+  "gates": {
+    "g4_tolerance_px": 2
+  },
+  "_notes": {
+    "camera_is_static": "azimuth_sweep_deg is 0, so orbit_azimuth returns azimuth_start_deg at every frame and the camera does not move. E02 varied the camera and held the subject; E03 does the reverse, and one variable changes at a time.",
+    "why_azimuth_270": "The wire figure is planar at y=0 and the arc rotates about +Y, so the whole performance stays in the y=0 plane. A camera on the Y axis therefore sees it face-on with no foreshortening anywhere. 270 deg places the camera at -Y looking toward +Y; 0 deg would put it on the X axis, where the arm would swing directly at the lens and read as almost no motion at all.",
+    "why_radius_is_pinned_not_auto": "PINNED, together with the camera TARGET, so this spec and E03-static.json frame the subject identically. `auto` fits the subject's bounding sphere and `bbox_center` derives the aim point, and B1 computes both over the union of all 33 frames while B3 computes them from the bind pose alone. On auto the two arms would differ in framing AND scale as well as in motion, and B3 is the discriminator - it must differ from B1 in exactly one thing. Both numbers are B1's own union fit, measured and written back.",
+    "measured_framing": "union bbox centre [0.000724, 0.0, 0.564974], half extent [0.400724, 0.0465, 0.566474], bounding sphere 0.5816472058900698, resolved auto radius 3.2893308729746606 at fit_margin 1.15 - measured 2026-08-10 from the pose-arc asset over all 33 frames.",
+    "why_depth_window_is_pinned": "PINNED to B1's own measured extent so B1 and B3 share one tonal scale. Per-shot normalisation is computed from each shot's z extent, and the raised arm widens B1's by 11%%: measured, B1 frame 0 and B3 (identical geometry) differed by up to 26 of 255 levels. That is a second difference between the arms and B3 is the discriminator, so it must differ from B1 in exactly one thing. B3's geometry is a subset of B1's, so nothing clips; `measured_within_window` in each manifest records that."
+  },
+  "depth": {
+    "window": [
+      3.1811180114746094,
+      3.363515615463257
+    ]
+  }
+}

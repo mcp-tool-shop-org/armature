@@ -10,6 +10,24 @@ its information value, because that reasoning was never about money.
 
 ---
 
+> ## STATUS: DEFERRED 2026-08-10 — not withdrawn, and still correct
+>
+> Deferred by the Director after E03. Nothing in this spec is wrong; it is simply not the next
+> question. **E03's result was categorical** (85.0 deg against 0.062 deg, a factor of ~1370) and
+> needed no floor to be read, and **[E05](E05-control-strength.md) is categorical too** — *is a
+> character there, is the control still obeyed* — judged by eye.
+>
+> **E04 becomes REQUIRED the moment any arm comparison turns on a magnitude rather than a
+> category.** Until it is measured, no armature document may rank two arms on a fine numeric gap,
+> and both E03's and E05's specs carry that prohibition explicitly. Measuring the apparatus before
+> we know the pipeline can produce a character at all would be optimising the ruler while the
+> subject is unresolved.
+>
+> ⚠ **One scope point survives the deferral and should be read now:** the floor is a property of
+> the **statistic**, not of the model, and this spec measures it **at 33 frames**. If armature
+> moves to 81 frames (consult #3: well inside Wan's trained horizon), this floor does not
+> automatically travel with it.
+
 ## The question
 
 **When nothing about a generation changes except the seed, how much does the tracking statistic
