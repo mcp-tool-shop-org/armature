@@ -2,7 +2,7 @@
 
 **From:** the armature advisor seat, 2026-08-11 · **Relay:** the Director carries this brief to
 the Comfy Agent and returns its answer · **Trigger:** the Director confirmed E08's frame —
-generative at both ends, with the rigged character load-bearing in the middle · **Numbering:**
+both stages generative, with the character's own rig carrying the performance between them · **Numbering:**
 this file continues the brief series in this repo (01, 3, 5 → 6); the licence map also cites a
 brief-less round as consult #7 (2026-08-10), so the series is not chronological — the file
 series is what this number tracks.
@@ -13,11 +13,11 @@ series is what this number tracks.
 
 armature is a previz-to-video pipeline: a canonical character GLB is staged in **headless
 Blender 5.2** and its renders drive video generation on Comfy Cloud. The Director has confirmed
-the first product shot's frame, and it is **generative at both ends**: a prompt goes into a
+the first product shot's frame, and **both of its stages are generative**: a prompt goes into a
 motion model, the generated motion lands on the character's **own rigged skeleton**, and a
-video model paints him performing it. Nobody hand-keys anything. The rig is the socket the
-generated performance plugs into — the character (22-bone skeleton, mesh we own) receives the
-motion, and from that rigged geometry we can render **any** driving or control form ourselves:
+video model paints him performing it. No motion is hand-authored at any stage. The rig is
+where the generated performance arrives — the character (22-bone skeleton, mesh we own)
+receives it, and from that rigged geometry we can render **any** driving or control form ourselves:
 pose sticks in a convention you name, depth, masks, or a full CG render of the character
 performing, from any angle. The shot: **the character dances in a crowded bar, ~4 seconds.**
 It exists to show three things — the character in action; the **same** character available

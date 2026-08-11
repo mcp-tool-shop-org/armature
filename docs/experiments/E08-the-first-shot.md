@@ -7,9 +7,9 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 
 > ## ⛔ HALTED AND REFRAMED 2026-08-11 — the advisor dispatched the wrong product
 >
-> The Director, watching the executor author a walk cycle: watching the executor hand-author a walk cycle, he ruled that the model, not the seat, should generate the motion **He is right and the spec
-> below this banner describes the wrong route.** The advisor read "have him walk up to a
-> bartender" through the arc's control-first lineage — author the motion, model paints over
+> Watching the executor hand-author a walk cycle, the Director ruled that the model, not the
+> seat, should generate the motion. **He is right and the spec
+> below this banner describes the wrong route.** The advisor read the walk-to-the-bartender instruction through the arc's control-first lineage — author the motion, model paints over
 > it — when the scope sentence says the other thing: the GLB replaces the **image** in
 > image-to-video. It supplies *who he is*; **the model generates the performance.** This
 > misdispatch earned CLAUDE.md advisor rule 0 (contrastive frame confirmation before any
@@ -37,13 +37,13 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 > unchanged instruction, and the handoff's binding line is that no seat inherits any of the
 > three. **No route in this spec is live.** The route question returns to the Director's
 > words, asked fresh under advisor rule 0 and confirmed back contrastively before any spec
-> or dispatch. His instruction, verbatim, the only standing definition of E08: put the rigged GLB through the pipeline for an informed 4-second GLB-to-video of the performer dancing or emoting across scenarios — for example, walking up to a bartender in a crowded bar — to test whether the capability is possible
+> or dispatch. His instruction, paraphrased — the only standing definition of E08: put the rigged GLB through the pipeline for an informed 4-second GLB-to-video of the performer dancing or emoting across scenarios — for example, walking up to a bartender in a crowded bar — to test whether the capability is possible
 
-> **FRAME CONFIRMED 2026-08-11, later the same day.** The Director confirmed the route shape
-> in his own message: **generative at both ends** — a motion model generates the performance
-> from the prompt, the performance lands on the character's rigged skeleton, and a video
-> model paints him performing it; nobody hand-keys anything, and the rig is the socket the
-> generated performance plugs into. The shot he named: the character **dancing in a crowded
+> **FRAME CONFIRMED 2026-08-11, later the same day.** The Director confirmed the route
+> shape: **both stages generative** — a motion model generates the performance from the
+> prompt, the performance lands on the character's rigged skeleton, and a video model paints
+> him performing it; no motion is hand-authored, and the character's own rig is where the
+> generated performance arrives. The shot he named: the character **dancing in a crowded
 > bar**, to show the character in action, the same character available across multiple shots,
 > and the scene arriving from prompt + GLB. Comfy consult #6
 > (`docs/comfy-consult-6-brief.md`) is dispatched for what fills the two generative slots;
@@ -54,7 +54,7 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 
 This IS the product. armature is image-to-video with a GLB instead of an image, and to date
 not one frame of an authored performance exists. E08 stages the Director's named shot —
-*"Have him walk up to a bartender in a crowded bar"* — as previz: the performer walks, stops
+the walk to the bartender in a crowded bar — as previz: the performer walks, stops
 at the bar, gestures; the control sequence carries his authored motion; the prompt and
 reference carry his identity and the scene; **Wan paints everything armature stayed silent
 about** (E06: the reference and prompt can extend where control is silent — this shot is that
