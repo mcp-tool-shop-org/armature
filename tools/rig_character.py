@@ -334,6 +334,77 @@ def _write_weights(mesh_obj, weights, quantisation):
     return written
 
 
+def normalise_weights(mesh_obj):
+    """Make every weighted vertex's influences sum to exactly 1.
+
+    Bone heat does not guarantee it. MEASURED on this subject before normalisation:
+    **20,171 of 39,707 vertices summed below 0.999**, the lowest at **0.8961**. A vertex whose
+    weights sum to 0.90 is skinned at 90 % — it lags the bone it belongs to by a tenth of
+    every motion, which reads as a soft, rubbery joint rather than as an obvious bug.
+
+    ``vertex_group_normalize_all`` with ``lock_active=False`` divides each vertex's weights by
+    their sum. Vertices with no weight at all are left alone, so this cannot invent a binding
+    where bone heat found none — which is exactly the failure Gate P's liveness clause exists
+    to catch, and it must stay catchable.
+    """
+    def _sums(table):
+        # read_weights returns {group name: per-vertex array}, not a matrix.
+        return (np.sum(list(table.values()), axis=0) if table
+                else np.zeros(len(mesh_obj.data.vertices)))
+
+    sums_before = _sums(read_weights(mesh_obj, len(mesh_obj.data.vertices)))
+    bpy.ops.object.select_all(action="DESELECT")
+    mesh_obj.select_set(True)
+    bpy.context.view_layer.objects.active = mesh_obj
+    bpy.ops.object.vertex_group_normalize_all(group_select_mode="ALL", lock_active=False)
+    sums_after = _sums(read_weights(mesh_obj, len(mesh_obj.data.vertices)))
+    weighted = sums_after > 1e-6
+    return {
+        "operator": "bpy.ops.object.vertex_group_normalize_all(lock_active=False)",
+        "vertices": int(len(sums_after)),
+        "unweighted_left_alone": int((~weighted).sum()),
+        "before": {"min": float(sums_before.min()), "mean": float(sums_before.mean()),
+                   "below_0.999": int((sums_before < 0.999).sum())},
+        "after": {"min": float(sums_after[weighted].min()) if weighted.any() else 0.0,
+                  "mean": float(sums_after[weighted].mean()) if weighted.any() else 0.0,
+                  "max": float(sums_after[weighted].max()) if weighted.any() else 0.0,
+                  "below_0.999": int((sums_after[weighted] < 0.999).sum()),
+                  "above_1.001": int((sums_after[weighted] > 1.001).sum())},
+    }
+
+
+def gate_objects_registered(scene, subject, armature):
+    """Nothing rides along into the export that nobody registered.
+
+    Gate N refuses an unregistered BONE name; this is the same andon for OBJECTS, and it
+    exists because a decoy leaked once. An 80-face ``Icosphere`` reached a delivered GLB and
+    this round's sheet mistook it for the character, reporting that the arc had not survived.
+    Whether it originates in the file or in Blender's importer is recorded by the gate rather
+    than assumed: the evidence lists every object with its collection and render visibility.
+    """
+    registered = {subject.name, armature.name}
+    seen = []
+    for ob in scene.objects:
+        hidden = ob.hide_render or any(c.hide_render for c in ob.users_collection)
+        seen.append({"name": ob.name, "type": ob.type, "hide_render": bool(ob.hide_render),
+                     "collections": [c.name for c in ob.users_collection],
+                     "effectively_hidden": bool(hidden)})
+    strays = [o for o in seen
+              if o["name"] not in registered and not o["effectively_hidden"]
+              and o["type"] in {"MESH", "ARMATURE"}]
+    record = {"gate": "OBJ", "registered": sorted(registered), "objects": seen,
+              "strays": strays,
+              "verdict": (f"{len(seen)} object(s) in the scene, none unregistered and "
+                          f"render-visible" if not strays else "STRAY OBJECTS")}
+    if strays:
+        raise ArmatureError(
+            f"the export would carry {len(strays)} object(s) nobody registered: "
+            f"{[o['name'] for o in strays]}. Gate N refuses an unregistered bone; an "
+            f"unregistered object is the same defect one level up, and one already leaked "
+            f"into a delivered GLB.")
+    return record
+
+
 def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_multiple=1.0,
                   envelope_radii="measured"):
     """Bind the mesh by one named route. Returns (seconds, a record of what was applied)."""
@@ -518,10 +589,14 @@ def build_pass(glb_path, name, bands, label, bind=True, envelope_radii="measured
     arm_obj, bone_lengths = build_armature(scene, snapped, name)
     radii = landmarks.bone_radii(lm, sitelist.BONES)
 
-    gate_p, weights, t_skin, bind_record = None, {}, None, None
+    gate_p, weights, t_skin, bind_record, normalisation = None, {}, None, None, None
     if bind:
         t_skin, bind_record = apply_binding(mesh_obj, arm_obj, bind, source, radii,
                                             envelope_radii=envelope_radii)
+        # Normalise BEFORE liveness and Gate P, so both read the weights that ship. This
+        # cannot manufacture a binding: a vertex with no influences is left untouched, and
+        # the liveness clause below still fails on a dead bind.
+        normalisation = normalise_weights(mesh_obj)
         # Liveness BEFORE Gate P, so Gate P's reading is known to be about a bound mesh and
         # not about an evaluation that never carried the modifier. Restored immediately; no
         # keyframe exists yet, so nothing survives the restore.
@@ -547,7 +622,7 @@ def build_pass(glb_path, name, bands, label, bind=True, envelope_radii="measured
         "label": label, "scene": scene, "mesh": mesh_obj, "armature": arm_obj,
         "source": source, "diagonal": diagonal, "landmarks": lm, "weights": weights,
         "fingerprint": fingerprint, "gate_p": gate_p, "premise2": premise2,
-        "weld_on_import": weld,
+        "weld_on_import": weld, "normalisation": normalisation,
         "premise6": premise6, "shell_id": shell_id, "shell_sizes": shell_sizes,
         "bone_lengths": bone_lengths, "bbox_lo": lo.tolist(), "bbox_hi": hi.tolist(),
         "heuristic_landmarks": heuristic_marks, "joint_balls": balls, "shells": shells,
@@ -765,6 +840,7 @@ def export_rigged(ctx, probe, out_path, animated=True):
         # export_def_bones=True would drop every non-deforming marker and fire Gate N.
         "export_def_bones": False, "export_apply": False, "export_materials": "EXPORT",
     }
+    gate_obj = gate_objects_registered(ctx["scene"], ctx["mesh"], ctx["armature"])
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
     dropped = sorted(set(wanted) - set(kwargs))
@@ -805,7 +881,7 @@ def export_rigged(ctx, probe, out_path, animated=True):
         "reimported_bone_names": reimported,
         "reimported_mesh_objects": [o.name for o in meshes],
         "reimported_actions": actions,
-        "gate_n_post": gate_n_post,
+        "gate_n_post": gate_n_post, "gate_obj": gate_obj,
         "gate_p_round_trip": gate_p_round_trip,
     }
 
@@ -845,6 +921,7 @@ def run_skeleton(args, out_dir, source_sha, started):
         "registered_site_count": len(sitelist.ALL_NAMES),
         "premise_2_pre_existing_rig": ctx["premise2"],
         "weld_on_import": ctx["weld_on_import"],
+        "weight_normalisation": ctx.get("normalisation"),
         "premise_6_skinnability": ctx["premise6"],
         "bbox": {"lo": ctx["bbox_lo"], "hi": ctx["bbox_hi"], "diagonal": ctx["diagonal"]},
         "facing": ctx["landmarks"]["facing"],
@@ -861,6 +938,7 @@ def run_skeleton(args, out_dir, source_sha, started):
         "gates": {
             "N_pre_export": gate_n_pre,
             "N_post_export": export["gate_n_post"],
+            "OBJ_registered_objects": export["gate_obj"],
             "P_rest_pose_round_trip": export["gate_p_round_trip"],
             "P_evaluation_liveness": {
                 "verdict": "NOT YET RUN",
@@ -870,7 +948,7 @@ def run_skeleton(args, out_dir, source_sha, started):
             "D_determinism": gate_d,
         },
         "export": {k: v for k, v in export.items()
-                   if k not in ("gate_n_post", "gate_p_round_trip")},
+                   if k not in ("gate_n_post", "gate_p_round_trip", "gate_obj")},
         "probe_action": {"verdict": "NOT AUTHORED",
                          "reason": "an arc on an unbound skeleton moves no geometry"},
         "deformation_diagnostics": {
@@ -916,6 +994,7 @@ def main():
             "source_sha256": source_sha,
             "premise_2_pre_existing_rig": ctx["premise2"],
         "weld_on_import": ctx["weld_on_import"],
+        "weight_normalisation": ctx.get("normalisation"),
             "premise_6_skinnability": ctx["premise6"],
             "landmarks": ctx["landmarks"]["landmarks"],
             "landmark_provenance": ctx["landmarks"]["provenance"],
@@ -982,6 +1061,7 @@ def main():
         "e01_site_count": len(sitelist.E01_SITES),
         "premise_2_pre_existing_rig": ctx["premise2"],
         "weld_on_import": ctx["weld_on_import"],
+        "weight_normalisation": ctx.get("normalisation"),
         "premise_6_skinnability": ctx["premise6"],
         "bbox": {"lo": ctx["bbox_lo"], "hi": ctx["bbox_hi"], "diagonal": ctx["diagonal"]},
         "facing": ctx["landmarks"]["facing"],
@@ -993,6 +1073,7 @@ def main():
         "gates": {
             "N_pre_export": gate_n_pre,
             "N_post_export": export["gate_n_post"],
+            "OBJ_registered_objects": export["gate_obj"],
             "P_rest_pose_kept_build": ctx["gate_p"],
             "P_rest_pose_first_build": gate_p_first,
             "D_determinism": gate_d,
@@ -1045,14 +1126,17 @@ def _write_halt(out_dir, exc, source_sha, glb):
 if __name__ == "__main__":
     try:
         main()
-    except GateFailure as exc:
+    except BaseException as exc:                                      # noqa: BLE001
         import traceback
         traceback.print_exc()
         _args = parse_args()
+        # MEASURED AGAIN 2026-08-11: this clause caught only GateFailure, so an ordinary
+        # AttributeError propagated out and Blender exited **0** -- the very hazard the
+        # comment below describes, in the file that describes it. Every exit is non-zero.
         _write_halt(os.path.abspath(_args["out"]), exc,
                     sha256_file(_args["glb"]), _args["glb"])
         # MEASURED 2026-08-11: letting the exception propagate out of a `-b -P` script
         # prints the traceback and Blender still exits **0**. A caller reading the exit
         # code — a shell chain, a CI step, a later session's `if ($LASTEXITCODE -eq 0)` —
         # would see the halt as a success. A halt that returns success is not a halt.
-        sys.exit(2)
+        sys.exit(2 if isinstance(exc, GateFailure) else 1)

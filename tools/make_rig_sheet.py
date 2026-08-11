@@ -36,6 +36,10 @@ def parse_args():
     p.add_argument("--reference", required=True, help="the ORIGINAL textured GLB")
     p.add_argument("--out", required=True)
     p.add_argument("--title", default="E07 arm (d) — retopologised, baked, bone-heat bound")
+    p.add_argument("--after-label", default=None,
+                   help="what the AFTER column actually is. Derived from the mesh when "
+                        "omitted -- a hard-coded label outlived its route once already and "
+                        "described a 4096 bake on a mesh that was never baked.")
     return vars(p.parse_args(argv))
 
 
@@ -130,8 +134,11 @@ def main():
     ref = [o for o in bpy.data.objects if o.type == "MESH" and o is not mesh][0]
     ref.hide_render = True
     fidelity = []
-    for label, shown in (("before — original mesh, 299,956 tris, source atlas", ref),
-                         ("after — retopologised, 4096 atlas baked old to new", mesh)):
+    after_label = args["after_label"] or (
+        f"after — {len(mesh.data.polygons):,} faces, {len(mesh.data.vertices):,} verts")
+    before_label = (f"before — original mesh, {len(ref.data.polygons):,} tris, "
+                    f"source atlas")
+    for label, shown in ((before_label, ref), (after_label, mesh)):
         ref.hide_render = shown is not ref
         mesh.hide_render = shown is not mesh
         ortho_camera(scene, f"cam_fid_{shown.name}", centre, height * 1.10, (700, 1120))
@@ -151,8 +158,10 @@ def main():
                  "panels": fidelity})
 
     spec = {"title": args["title"],
-            "subtitle": "one skinned mesh, 39,707 verts, bone-heat weights · the arc is "
-                        "E03's: the character's LEFT arm, 0°→90° about +Y, 33 keys at 16 fps",
+            "subtitle": (f"one skinned mesh, {len(mesh.data.vertices):,} verts, "
+                         f"{len(mesh.data.polygons):,} faces, bone-heat weights normalised "
+                         f"to 1.0 · the arc is E03's: the character's LEFT arm, 0°→90° "
+                         f"about +Y, 33 keys at 16 fps"),
             "out": out_dir, "filename": "E07-rig-armature.png", "rows": rows}
     with open(os.path.join(out_dir, "panels.json"), "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)

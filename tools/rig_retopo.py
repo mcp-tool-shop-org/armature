@@ -79,6 +79,11 @@ def parse_args():
     p.add_argument("--glb", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--target-faces", type=int, default=TARGET_FACES)
+    p.add_argument("--voxel", type=float, default=None,
+                   help="override the voxel size. The default derives it from the smallest "
+                        "LIMB radius, which is far too coarse for the face: at 0.002169 the "
+                        "mouth crease is about one voxel wide and comes back as a ragged "
+                        "trench. Features, not limbs, set this number.")
     return vars(p.parse_args(argv))
 
 
@@ -288,7 +293,7 @@ def main():
     diagonal = float(np.linalg.norm(hi - lo))
 
     smallest_name, smallest_r, all_radii = smallest_limb_radius(ob)
-    voxel = smallest_r * VOXEL_PER_SMALLEST_RADIUS
+    voxel = args["voxel"] if args["voxel"] else smallest_r * VOXEL_PER_SMALLEST_RADIUS
 
     extraction = extract_outer_shell(ob, diagonal)
     ob.name = ob.data.name = "outer_shell"
@@ -315,8 +320,11 @@ def main():
         results["B_voxel_then_quadriflow"] = {
             "route": f"voxel remesh at {voxel:.5f} (= {smallest_name} radius "
                      f"{smallest_r:.5f} / 6) then QuadriFlow at x100 scale",
-            "voxel_size": voxel, "voxel_derivation":
-                f"smallest measured limb radius ({smallest_name} = {smallest_r:.5f}) / 6",
+            "voxel_size": voxel,
+            "voxel_derivation": ("explicit override -- limb radii do not bound facial "
+                                 "features" if args["voxel"] else
+                                 f"smallest measured limb radius ({smallest_name} = "
+                                 f"{smallest_r:.5f}) / 6"),
             "seconds_voxel": round(vsecs, 1), "seconds_quadriflow": round(qsecs, 1),
             "returned": returned,
             "after_voxel_before_quadriflow": after_voxel,

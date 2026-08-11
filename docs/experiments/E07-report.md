@@ -1082,3 +1082,117 @@ Probe arc, per structure — only the posed limb moves, and every other bone is 
 **Blender 5.2 built-ins only** — `voxel_remesh`, `quadriflow_remesh`, `uv.smart_project`,
 Cycles bake. GPL, **COMMERCIAL: YES**, and no per-rig entitlement is involved.
 **QuadRemesher was not enabled, not measured, and carries no licence row.**
+---
+
+# ROUND 7 — the polish round, and it overturned arm (d)'s own route. REPAIR, not resample.
+
+## 47. ⚑ IMPERFECTIONS, flagged first
+
+1. **Dark notches on both ear rims** and a speck near the nose — this is where the repair's
+   593 removed-and-refilled faces landed. Visible at 1:1 on the face sheet.
+2. **A dark crease at the armpit** in the shoulder inset at frame 33, and creasing where the
+   thigh meets the pelvis in the hip inset. Bone-heat skinning pinching at the limb roots.
+3. **The `neck` bone remains weak** — reported post-normalisation below.
+4. Round 6's sheet **mislabelled its own artifact** ("39,707 verts", "4096 atlas baked old to
+   new") after the route changed underneath it. Labels are now derived from the mesh.
+
+## 48. ⚑ THE ATTRIBUTION WAS WRONG — reconciled by measurement
+
+Round 6 claimed the zero weights were the glTF importer's UV-splitting and "never a property
+of the performer." **That is not what the measurement says.** Round 1's sweep row
+("welded to 67 shells → 0") was right and my account was too clean. One thing varied at a time
+on the ORIGINAL subject:
+
+| mesh | verts | shells | non-manifold V / E | boundary E | bones |
+|---|---|---|---|---|---|
+| ORIGINAL as imported | 399,140 | 159,125 | 133,925 / 532,074 | 532,074 | **0 / 17** |
+| ORIGINAL welded (the new importer path) | 149,643 | 76 | 897 / 699 | 165 | **0 / 17** |
+| ORIGINAL interior stripped only | 115,892 | 7,439 | 2,073 / 76,394 | 76,394 | **0 / 17** |
+| ORIGINAL stripped **and** welded | 73,684 | **1** | 125 / 98 | 34 | **0 / 17** |
+| RETOPO as imported | 164,152 | 42,371 | 0 / 164,152 | 164,152 | **0 / 17** |
+| RETOPO welded | 39,707 | **1** | **0 / 0** | **0** | **17 / 17** |
+
+**The final causal account:** Blender's bone heat is **all-or-nothing with respect to
+manifoldness**. It is not "the importer", and not "the double wall" — it is **any** remaining
+defect. A single shell with **125 bad vertices in 73,684 (0.17 %)** still zeroes **all 17
+bones and 100 % of vertices**. The UV-split is *sufficient* to break it; welding is *necessary*
+but nowhere near sufficient. **Both rows in the record stand**, and the reconciliation is that
+they were measuring different distances from the same cliff edge.
+
+## 49. The voxel route destroys the face — and the metric could not see it
+
+At voxel 0.002169 the mouth returns as a **ragged trench** and the eyelids as steps.
+**Raising the QuadriFlow target does not help**, because the damage happens in the voxel pass
+before QuadriFlow ever runs. Densities measured: 39,705 quads (dev max 0.335 % of diagonal),
+95,858 (0.203 %), 147,112 (0.144 %) — all closed manifold, all 100 % quads, and **all with the
+same ruined face**. The deviation metric read **0.144 %** while the face was destroyed,
+because a two-millimetre mouth crease averages to nothing against a body of smooth limb.
+*Metrics are diagnostics; the eye is the judge* — stated as a number.
+
+Finer voxels do not rescue it: **0.0012 is the finest QuadriFlow will accept** on this figure
+and the mouth is still serrated there. QuadriFlow's acceptance is **not monotonic in size** —
+164,592 faces FINISHED, 291,078 CANCELLED, 453,572 FINISHED, 652,394 CANCELLED — so it is
+solver-dependent, reported through the same misleading manifold message.
+
+## 50. REPAIR — the route that keeps the character
+
+The extracted, welded shell is not a broken mesh; it is an intact mesh with a few bad
+stitches: **125 non-manifold verts, 98 non-manifold edges, 34 boundary edges out of ~221,000**.
+One pass of *select non-manifold → grow → delete faces → fill holes* takes it to **0 / 0 / 0**.
+
+| | value |
+|---|---|
+| passes needed | **1** |
+| faces | 147,450 → **146,857** (**593 removed, 0.40 %**, budget 2 %) |
+| final | **closed manifold, one shell** |
+| UVs / atlas | **the ORIGINAL survive — no unwrap, no bake** |
+
+Because nothing is resampled, texture fidelity is exact by construction rather than by
+measurement, and the face, hands and toes are the sculptor's own.
+
+## 51. Gates, weights and the arc — repaired route
+
+| gate | result |
+|---|---|
+| N pre / post export | **22 / 22** · **22 / 22** |
+| **OBJ registered objects** (new) | **2 objects, none unregistered and render-visible** |
+| P rest pose, both builds | **preserved** |
+| P liveness | **passes** |
+| D determinism | **bones, hierarchy AND weights agree** |
+
+**Weight normalisation:** before min **0.8978**, mean **0.9866**, **41,385** vertices below
+0.999 → after **min = mean = max = 1.000000**, **0** below 0.999, **0** above 1.001, **0**
+unweighted vertices left alone. Isolation survived: **11 bones at exactly 0.0**.
+
+| bone | max displacement |
+|---|---|
+| wrist.L | **0.7556** |
+| elbow.L | **0.5999** |
+| shoulder.L | **0.4119** |
+| chest / spine / head | 0.0282 / 0.0115 / 0.0080 |
+| **the other 11** | **0.0000** |
+
+Mesh: **73,512 verts, 146,857 faces, ONE shell**, 0 unweighted.
+
+## 52. The Icosphere — measured, and it was not mine
+
+The new **OBJ gate** lists every object in the export scene: **`performer_repaired` and
+`performer_rig`, and nothing else.** The 80-face `Icosphere` is **created by Blender's
+glTF importer** in its hidden `glTF_not_exported` collection — it is not in the file this
+tool writes. "Delete it before export" would have deleted nothing. The gate now proves that
+per run instead of assuming it, and the sheet identifies the subject by *has vertex groups and
+an armature modifier* rather than by index.
+
+## 53. Round 7 artifacts
+
+| artifact | sha256 |
+|---|---|
+| sheet `rig-repaired-sheet\E07-rig-armature.png` | d3886473b36f6eda1b85ce7d338bb7a04b64a059742d7a3e52a1dad1b58465c3 |
+| face check `diagnose-repaired\E07-diagnose-repaired.png` | 1974298c2e515e4ecb74453d5d98c4dc6ffe129171145cc0beda56e970e8527a |
+| voxel damage `diagnose\E07-diagnose.png` | 0131af6393b9663b7190480b9c5f9158e5e30ec2c1210f626284189f058353d3 |
+| density `density\E07-density.png` | 093c829788422c6e41dbf4bd5dbd6f05a79c452f79760c3ada3cfa0baa2bc4a3 |
+| rigged GLB `rig-repaired\performer_auto.glb` | 7f56c9ac101218db78c10aa5764b9a72a7d8b6f4b539f035b7739351ed6e2a24 |
+| repaired GLB `repaired\performer_repaired.glb` | 501a6db79cea0afae3dde52875c965ade3878365b0790fe94ade96882038987e |
+
+`tools/rig_retopo.py` stays in the tree, runnable, with its measurements — the voxel route is
+falsified for this character, not deleted.
