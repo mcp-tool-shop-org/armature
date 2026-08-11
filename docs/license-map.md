@@ -55,7 +55,8 @@ Director decisions, not defaults.
 | Tool | License | Commercial | Source | Operative clause |
 |---|---|---|---|---|
 | **OpenPose (CMU)** | CMU Academic / Non-Commercial | **NO — BANNED** | [LICENSE](https://raw.githubusercontent.com/CMU-Perceptual-Computing-Lab/openpose/master/LICENSE) | "may be used for your own noncommercial internal research purposes" |
-| **DWPose** | Apache 2.0 | **YES** | [LICENSE](https://raw.githubusercontent.com/IDEA-Research/DWPose/onnx/LICENSE) | "perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license" |
+| **DWPose (code)** | Apache 2.0 | **YES — CODE ONLY** | [LICENSE](https://raw.githubusercontent.com/IDEA-Research/DWPose/onnx/LICENSE) | "perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license" |
+| **DWPose / ViTPose WEIGHTS** | not fetched | **UNVERIFIED — treated as NO** | — | ⚑ **Narrowed 2026-08-10 (Comfy consult #3).** The row above cited the *code* licence and was read as clearing the detector. The **weights are a separate grant and were never fetched** — the identical trap this map already records for `rembg`. Costs armature nothing: we render pose from geometry, so no detector is in the pipeline. Blocks any pose-preprocessor route, incl. `WanAnimatePreprocess`. |
 | **RTMPose / MMPose** | Apache 2.0 | **YES** | [LICENSE](https://raw.githubusercontent.com/open-mmlab/mmpose/main/LICENSE) | same grant |
 | **Depth Anything V2 Small** | Apache 2.0 | **YES** | [HF card](https://huggingface.co/depth-anything/Depth-Anything-V2-Small) | `apache-2.0` |
 | **Depth Anything V2 Large** | CC-BY-NC-4.0 | **NO — BANNED** | [HF card](https://huggingface.co/depth-anything/Depth-Anything-V2-Large) | `cc-by-nc-4.0` |
@@ -68,7 +69,11 @@ Director decisions, not defaults.
 **Two traps confirmed, both of the kind this gate exists for:**
 
 1. **OpenPose is non-commercial** — the single most widely used pose extractor in the ControlNet
-   ecosystem, and it is banned here. DWPose or RTMPose replace it.
+   ecosystem, and it is banned here. ⚑ **Corrected 2026-08-10:** this line used to read "DWPose
+   or RTMPose replace it," which cleared a *replacement* on the strength of a **code** licence.
+   Their weights are a separate, unfetched grant. **The honest replacement is not another
+   detector — it is rendering pose from geometry we own**, which is what armature does and why
+   the whole tier stays out of the pipeline.
 2. **The Small/Large split is real.** Depth Anything V2 **Small is Apache; Large is CC-BY-NC**,
    same family, same page structure, different license — exactly the "check the exact variant"
    law. V3's weights are NC across the board while its code is Apache; the weights are what a
@@ -117,6 +122,9 @@ Recorded honestly rather than assumed. Each blocks the thing that depends on it.
 | **Kling terms** | HTTP 446 (Cloudflare block) on two URLs | Kling may not be used until fetched |
 | **MiniMax terms** | JS-rendered page, no text returned | MiniMax may not be used until fetched |
 | **ByteDance / Seedance output ownership** | BytePlus master ToS retrieved but contains **no AI-output clause**; the operative service-specific agreement was not located | Seedance may not be used until fetched |
+| **`FL_WanVaceToVideoMultiRef`** / Fill custom-node pack | licence not retrieved | multi-reference VACE route — stay on core `WanVaceToVideo` |
+| **`WanVaceAdvanced` tier** (`VaceStrengthTester`, `VaceAdvancedModelPatch`) | licence not retrieved | any scheduled/advanced VACE control strength |
+| **`WanAnimatePreprocess` detector tier** (ViTPose/DWPose weights) | licence not retrieved | Wan 2.2 Animate via *detected* pose. Authoring pose from Blender geometry sidesteps this entirely |
 | **rembg bundled weights (u2net / isnet)** | individual model licenses not fetched | rembg may not be used until fetched — the MIT applies to the code only |
 
 **Note the shape of these gaps:** every unverified row is a **partner API** or a bundled weight,
