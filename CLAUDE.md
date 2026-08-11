@@ -251,6 +251,12 @@ assets    consumed from E:\AI\training\... and E:\AI\facet\... — READ ONLY, ne
   spec that first uses it.
 - **A `dry_run` PASS does not prove link sanity.** Submit saved workflow files verbatim and
   check link topology in code before submission.
+- **A served template is a reference, never a route.** Measured twice on 2026-08-11: the
+  served Animate template wires the banned detector tier, and the served T2V template wires
+  the licence map's excluded 4-step trajectory at strength 1.0 under a randomizing seed with
+  no length or seed slot exposed. Every graph this pipeline submits is built in-repo and
+  passes **Gate ROUTE** (`tools/armature_core/route_gates.py`, E09 — it walks subgraph
+  blueprints) before Gates S and L arm.
 - **argparse eats leading minus signs** — use `--views=-30,0,30`.
 - **Scripts create their own output directories.** Two facet runs died on this.
 - Big binaries (renders, videos, GLBs) stay out of git — `outputs/` is ignored. The record is

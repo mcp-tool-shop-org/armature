@@ -142,3 +142,25 @@ owner = executor, listed in the report. No publishes, no releases, no external p
 (`NOT YET RUN` where true); both meters (credits, GPU-hours); the Gate 0 sheet path;
 predictions vs outcomes with blindness disclosed. The advisor rules after; the Director's
 eye decides what the numbers cannot.
+
+## Amendments
+
+**A1 — 2026-08-11 (executor, on `E09-run` @ `e7b4db5`; recorded here for the main copy):**
+premise 2's checkout path was wrong in this spec — the banked gait module is
+`tools/armature_core/walk.py` (with `tools/author_walk.py`, `tools/preview_walk.py` and
+`tests/test_walk.py` beside it), not `tools/walk.py`.
+
+**A2 — 2026-08-11 (advisor, [E09-calibration-ruling.md](E09-calibration-ruling.md)):**
+premise 6 is **FALSIFIED** — the saved E02 route is a Wan 2.1 VACE control graph, and the
+one served Wan 2.2 T2V template fails Gate ROUTE on four counts (the excluded lightx2v
+4-step LoRAs wired at strength 1.0; a randomizing seed, so Gate S cannot arm; no length or
+seed slot, so 832×480×65 cannot be set; both samplers on the excluded 4-step/cfg-1
+trajectory). Evidence: `outputs/E09/route/route_gate_evidence.json` on `E09-run`.
+**Stage B2 now runs on the clean in-repo T2V graph commissioned by ruling R8:** the two
+mapped Wan 2.2 T2V UNETs + umt5 CLIP + Wan 2.1 VAE (Comfy-Org repacks covered by the map's
+repack ruling), two `CLIPTextEncode`, two `KSamplerAdvanced` at the model's reference
+full-step trajectory (values recorded in the payload), no speed LoRAs, seeds pinned `fixed`
+from a committed Gate S list, `EmptyHunyuanLatentVideo` at 832×480×65. Admission:
+**Gate ROUTE green on our own graph** → Gate S → Gate L on the actual graph →
+`save_workflow`, submit the saved file verbatim. Ceiling unchanged: 8 credits, one probe
+first.
