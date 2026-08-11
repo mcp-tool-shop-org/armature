@@ -49,4 +49,4 @@ dailies-standard sheet — rest, arc frames, 1:1 joint insets under articulation
 **the Director's eye rules on the joint seam read**, per his standing gate.
 
 Arms (a) envelope and (b) rigid-per-segment stay in the record as the measured failures
-that motivated this consult, per his ruling: *"This is a hard fail."*
+that motivated this consult, per his ruling: he ruled it a hard failure

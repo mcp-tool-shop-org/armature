@@ -3,8 +3,7 @@
 **Seat:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
 report** · **Director judges the sheets** · **Credit ceiling: 12 generations (48 credits).**
 
-**Spend authority:** the Director raised the budget on 2026-08-10 — *"You have the authority to
-increase the spend as needed."* That removes the scarcity constraint. It does **not** remove the
+**Spend authority:** the Director raised the budget on 2026-08-10 — he granted standing authority to increase spend as needed That removes the scarcity constraint. It does **not** remove the
 discipline: a ceiling is stated before the first submission and an arm's cost is weighed against
 its information value, because that reasoning was never about money.
 

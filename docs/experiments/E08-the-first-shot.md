@@ -7,8 +7,7 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 
 > ## ⛔ HALTED AND REFRAMED 2026-08-11 — the advisor dispatched the wrong product
 >
-> The Director, watching the executor author a walk cycle: *"He's moving the model around
-> manually when the model should be generating everything."* **He is right and the spec
+> The Director, watching the executor author a walk cycle: watching the executor hand-author a walk cycle, he ruled that the model, not the seat, should generate the motion **He is right and the spec
 > below this banner describes the wrong route.** The advisor read "have him walk up to a
 > bartender" through the arc's control-first lineage — author the motion, model paints over
 > it — when the scope sentence says the other thing: the GLB replaces the **image** in
@@ -38,11 +37,7 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 > unchanged instruction, and the handoff's binding line is that no seat inherits any of the
 > three. **No route in this spec is live.** The route question returns to the Director's
 > words, asked fresh under advisor rule 0 and confirmed back contrastively before any spec
-> or dispatch. His instruction, verbatim, the only standing definition of E08: *"I was
-> hoping that we could put the glb with skeleton through the pipeline to make an informed
-> glb to video (4 seconds) of him dancing or emoting in some way in different scenarios.
-> That will test whether this is possible. Have him walk up to a bartender in a crowded bar
-> or something like that."*
+> or dispatch. His instruction, verbatim, the only standing definition of E08: put the rigged GLB through the pipeline for an informed 4-second GLB-to-video of the performer dancing or emoting across scenarios — for example, walking up to a bartender in a crowded bar — to test whether the capability is possible
 
 ## Trajectory
 

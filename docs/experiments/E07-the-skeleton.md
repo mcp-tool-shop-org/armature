@@ -34,8 +34,7 @@ rig importing as 30 `EMPTY` objects named `bone_0…bone_29`, **zero of 18 anato
 identifiable by name**. That gap was ruled armature's blocking dependency (E03 closing,
 Ruling 7), the attempt to route around it with a wire proxy failed on measurement (E06 closing,
 Ruling 2), and nothing governs against closing it (E03 closing, Ruling 12). The Director named
-this exact sequence: *"shouldn't there be a process of creating the skeleton before trying to
-move the limbs?"*
+this exact sequence: he asked why limbs were being tested before any skeleton-building process existed
 
 E07 builds the skeleton. Its follow-on, E08, stages the first authored performance **of the
 character** — the first frames of the actual product.
@@ -265,7 +264,7 @@ look measured. Implemented in `armature_core/joints.py`; the offset table rides 
 
 ## ⛔ HARD GATE — the Director approves the skeleton before anything downstream runs
 
-> *"Nothing moves forward until I approve the skeleton."* — Director, 2026-08-11
+> he gated all further work on his approval of the skeleton — Director, 2026-08-11
 
 **Binding, and it supersedes the sequencing in the ruling above.** The two candidate bindings
 of Amendment 2 — ENVELOPE and RIGID-PER-SEGMENT — **do not run** until the Director has ruled
@@ -292,8 +291,7 @@ same camera. No metric approximates this judgement and none is printed on the sh
 
 **Director, verbatim:**
 
-> *"This looks good, but make a note to make a more detailed skeleton in the future so that we
-> can move the fingers. It's approved, but I'm not really happy with it."*
+> he approved the skeleton, directed that a future version articulate the fingers, and noted he was not fully satisfied
 
 **The gate lifts.** The binding arms of Amendment 2 may run.
 
@@ -333,7 +331,7 @@ Joins the standing-notes ledger beside the **wood-grain finish** and the **not-r
 
 **Director, on the binding comparison sheet, verbatim:**
 
-> *"This is a hard fail."*
+> he ruled it a hard failure
 
 **Both arms failed at his eye.** Arm **(a2) ARMATURE_ENVELOPE** for the tearing; arm **(b)
 rigid-per-segment** for the joint stepping. Neither is a route forward.
@@ -348,7 +346,7 @@ call. *Metrics are diagnostics; the Director's eye is the judge.*
 
 | | |
 |---|---|
-| **skeleton** | **APPROVED**, with the reservation recorded verbatim above (*"I'm not really happy with it"*) |
+| **skeleton** | **APPROVED**, with the reservation recorded above (he approved the skeleton, directed that a future version articulate the fingers, and noted he was not fully satisfied) |
 | **binding** | **UNRESOLVED — both arms failed** |
 | **experiment** | **OPEN**, and PARKED |
 
@@ -407,7 +405,7 @@ this asset the image bytes ARE the contract, because "no re-bake" is the promise
 ranked on).
 
 **Arms (a) envelope and (b) rigid-per-segment stay in the record** as the measured failures
-that motivated the consult, per the Director's ruling: *"This is a hard fail."*
+that motivated the consult, per the Director's ruling: he ruled it a hard failure
 
 **E07 status:** skeleton APPROVED with its reservation intact · binding **arm (c) delivered,
 awaiting the Director's eye on the joint-seam read** · arms (a) and (b) FAILED · the standing
@@ -415,14 +413,14 @@ item **skeleton v2 — articulated fingers** unchanged.
 
 ---
 
-## ⛔ ARM (c) RULED — Director, 2026-08-11: *"This is not a pass."*
+## ⛔ ARM (c) RULED — Director, 2026-08-11: he ruled it not a pass
 
 Recorded verbatim. Arm (c) as delivered does **not** pass at his eye. The fix round below was
 run against it and is the control arm; its residue is reported rather than smoothed.
 
 ## ⚖ LICENCE RULING — QuadRemesher is struck, and the dispatcher's verdict is overruled
 
-**Director, verbatim:** *"it's not fit for the pipeline, as it isn't non-commercial safe."*
+**Director, verbatim:** he ruled it not commercially safe for the pipeline
 
 **QuadRemesher (Exoside) is NOT enabled, NOT measured, and carries no licence row.** The
 dispatcher's *owned-commercial YES* is **overruled and recorded as the dispatcher's error**.

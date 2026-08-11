@@ -1,8 +1,6 @@
 # Random routes — kept alive on purpose
 
-**Director's call, 2026-08-10:** *"We can keep FLF2V as a 'Random' Route… Not the main pipeline,
-but we shouldn't abandon it entirely if that's its only fault. In time we can possibly tame it
-with a structured prompt."*
+**Director's call, 2026-08-10:** he chose to keep FLF2V as a random route rather than abandon it entirely
 
 ## What a random route is, and why the repo has this file
 

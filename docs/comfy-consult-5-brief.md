@@ -2,7 +2,7 @@
 
 **From:** the armature advisor seat, 2026-08-11 · **Relay:** the Director carries this brief to
 the Comfy Agent and returns its answer · **Trigger:** both binding approaches failed at the
-Director's eye — his ruling, verbatim: *"This is a hard fail."*
+Director's eye — he ruled both binding approaches a hard failure
 
 ---
 

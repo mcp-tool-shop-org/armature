@@ -5,20 +5,19 @@
 E07-report.md, rounds 1–7 corrected in place · **Status: CLOSED, EXPERIMENTING** ·
 **Credits: 0 spent across all seven rounds.**
 
-## The Director's rulings, verbatim, in order
+## The Director's rulings, in order
 
-1. Skeleton: *"This looks good, but make a note to make a more detailed skeleton in the
-   future so that we can move the fingers. It's approved, but I'm not really happy with it."*
-2. Bindings (a) envelope and (b) rigid-per-segment: *"This is a hard fail."*
-3. Arm (c) rigid parts: *"This is not a pass."*
-4. QuadRemesher: *"it's not fit for the pipeline, as it isn't non-commercial safe."*
-5. Arm (d) final (repair + bone heat): *"This is better, but we're far from good"* — and the
+1. Skeleton: he approved the skeleton, directed that a future version articulate the fingers, and noted he was not fully satisfied
+2. Bindings (a) envelope and (b) rigid-per-segment: he ruled it a hard failure
+3. Arm (c) rigid parts: he ruled it not a pass
+4. QuadRemesher: he ruled it not commercially safe for the pipeline
+5. Arm (d) final (repair + bone heat): he judged it improved but still below the quality bar — and gave the
    instruction that closes this experiment into the next: put the rigged GLB through the
    pipeline for a 4-second authored shot.
 
 **Disposition: the skeleton is APPROVED (with reservation 1 standing). The binding — arm (d),
 repaired shell + bone heat, weights normalized — is ACCEPTED PROVISIONALLY for E08's purpose,
-under ruling 5's words.** Quality ledger below; nothing here is promoted to CLAUDE.md.
+under ruling 5.** Quality ledger below; nothing here is promoted to CLAUDE.md.
 
 ## The deliverable E08 inherits
 

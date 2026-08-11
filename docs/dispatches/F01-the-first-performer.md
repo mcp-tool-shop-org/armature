@@ -6,8 +6,7 @@
 E33; first seat ended clean on a cost directive, successor continues from its state block).**
 
 **Twin ruling, 2026-08-11 (Director):** **r3 — terracotta — approved as the projection
-reference.** His note, recorded verbatim: *"r3 is the best, but it's lacking any wood grain
-texture."* The grain lack is a standing note for a future finish iteration, NOT a change
+reference.** He approved r3 while noting the finish lacks a wood-grain texture; the grain lack is a standing note for a future finish iteration, NOT a change
 order — no second twin round runs; r3 projects as-is. The seat resumes through projection →
 brush → fill to the finished unrigged GLB, whose hash lands in E07 premise 1.
 
@@ -33,8 +32,7 @@ against the Director's balance.
 > facet's own record carries measured findings for this geometry class. The E32 report and
 > rulings are governing reading for the executing seat.
 
-**Director's direction (2026-08-11):** *"We're going to need to make a new glb, obviously,
-because I want to use something from the facet pipeline, not an old glb."*
+**Director's direction (2026-08-11):** he directed that the performer be made fresh through the facet pipeline, not from an existing GLB
 
 ## Trajectory
 

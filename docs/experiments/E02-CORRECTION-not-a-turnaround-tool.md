@@ -3,7 +3,7 @@
 
 # E02 — CORRECTION: the turntable is our input, not armature's ceiling
 
-**Director, 2026-08-10: _"How is armature being shrunk to just making turnarounds?"_**
+**Director, 2026-08-10: he asked why armature was being shrunk to a turnaround maker**
 He is right and this corrects the advisor's framing in
 [E02-floor-and-thesis-notes.md](E02-floor-and-thesis-notes.md) §3–4 and in the fork the
 advisor put to him verbally.

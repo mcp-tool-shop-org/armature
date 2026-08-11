@@ -1,8 +1,7 @@
 # The first-arc audit — called by the Director, 2026-08-11
 
-**Seat:** advisor (incoming 2026-08-11) · **Trigger — his words:** *"These experiments all seem
-very repetitive and basic… we're going to need to audit the entire repo before proceeding and
-weigh whether it's best to start from scratch, with everything we've learned so far."*
+**Seat:** advisor (incoming 2026-08-11) · **Trigger:** the Director called a repo-wide audit, judging the experiments repetitive and
+basic, and asked this seat to weigh whether to start from scratch carrying the learnings.
 
 **Why this seat grades it:** the founding rule — the seat that designs an experiment does not
 grade its results. This seat designed nothing in the arc; every document cited below was read
@@ -87,10 +86,10 @@ the first authored shot — the seat recommends which and why."* The studio's ow
 portfolio question *more* important, and it was never asked once.
 
 **2d. The pace made the portfolio question unaskable.** The entire arc — E01 through E06, S01,
-S02, four consults, two handoffs — ran in roughly 36 hours, under a standing instruction that
-*"this is a marathon."* At sprint pace each seat optimised its own experiment; no session ever
-stepped back to ask what the last three spends had bought toward footage. The Director's
-*"horrible night"* is that cost surfacing.
+S02, four consults, two handoffs — ran in roughly 36 hours, under the standing marathon
+instruction. At sprint pace each seat optimised its own experiment; no session ever
+stepped back to ask what the last three spends had bought toward footage. The Director's late-night
+assessment closing that session is that cost surfacing.
 
 **2e. The setup work never happened, and the subject sabotaged the judge.** Every judgment
 artifact in the repo's life shows a **black-armoured figure on grey or white** — the palette
@@ -184,8 +183,8 @@ The call is his. This document gives him the ledger to make it, and nothing here
    route is hand-rigging or transfer from a named-bone skeleton.
 3. **The first credit after that buys the first authored shot.** Staged, lit, on a facet
    canonical asset, with a shot spec in `specs/`. Rig → stage → shoot, in that order — the
-   sequence the Director named (*"shouldn't there be a process of creating the skeleton before
-   trying to move the limbs?"*) and the arc never ran.
+   sequence the Director named (he asked why limbs were being tested before any
+   skeleton-building process existed) and the arc never ran.
 4. **Corrections get enforcement surfaces.** The spec template gains a standing-corrections row
    the advisor checks at dispatch, the way premises are checked now. A correction that matters
    more than that gets a gate. Prose is not a binding.
@@ -228,9 +227,8 @@ GPU work — Blender renders included — until
 
 ## AMENDMENT 1 — 2026-08-11, advisor, on the Director's reading
 
-The Director restated the audit's target in his words, and they are sharper than §2's framing:
-the drift shrank *"a complete professional glb to video pipeline that we could use to make
-movies, game cutscenes, game character poses and movement"* into a turnaround repo, and he had
+The Director restated the audit's target as he directed, and they are sharper than §2's framing:
+the drift shrank a complete professional GLB-to-video pipeline for movies, game cutscenes, and character poses and movement into a turnaround repo, and he had
 to correct it twice in two sessions. That is the finding; the validity/value mechanics in §2
 are the anatomy of it, not a substitute for it.
 

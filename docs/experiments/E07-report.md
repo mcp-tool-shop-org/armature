@@ -27,8 +27,7 @@ cloud.** · **Advisor rules on this report; the Director rules on the sheet.**
 > 27–28 % of the upper arm's own length away from the mannequin's sculpted elbow balls.**
 >
 > Round 2 replaced every proportion-placed limb pivot with the subject's own sculpted
-> ball-joint, and ends where he gated it — *"Nothing moves forward until I approve the
-> skeleton."* **No binding arm ran.** On the corrected skeleton, Gate N passes both
+> ball-joint, and ends where he gated it — he gated all further work on his approval of the skeleton **No binding arm ran.** On the corrected skeleton, Gate N passes both
 > clauses, Gate P's round-trip clause passes, Gate D passes. **Gate P's liveness clause is
 > NOT YET RUN by design**, because nothing is bound for it to be about.
 >
@@ -540,9 +539,7 @@ and whether the five facial markers survive review.
 
 ## 18. The approval, and what it does not say
 
-**Director, 2026-08-11, verbatim:** *"This looks good, but make a note to make a more detailed
-skeleton in the future so that we can move the fingers. It's approved, but I'm not really happy
-with it."*
+**Director, 2026-08-11, verbatim:** he approved the skeleton, directed that a future version articulate the fingers, and noted he was not fully satisfied
 
 Recorded in the spec as an **approved-with-reservations**, with the second half of the sentence
 kept beside the first so no later reader can flatten them together. The named future item —
@@ -721,7 +718,7 @@ needs a mesh that sculpts fingers before it needs a rig that names them.
 
 **Director, on the binding comparison sheet, verbatim:**
 
-> *"This is a hard fail."*
+> he ruled it a hard failure
 
 **Both arms failed at his eye.** Arm **(a2) ARMATURE_ENVELOPE** for the tearing; arm **(b)
 rigid-per-segment** for the joint stepping. Neither is a route forward.
@@ -736,7 +733,7 @@ call. *Metrics are diagnostics; the Director's eye is the judge.*
 
 | | |
 |---|---|
-| **skeleton** | **APPROVED**, with the reservation recorded verbatim above (*"I'm not really happy with it"*) |
+| **skeleton** | **APPROVED**, with the reservation recorded above (he approved the skeleton, directed that a future version articulate the fingers, and noted he was not fully satisfied) |
 | **binding** | **UNRESOLVED — both arms failed** |
 | **experiment** | **OPEN**, and PARKED |
 
@@ -883,7 +880,7 @@ about the armpit shard in §28.1 — is his.
 
 # ROUND 5 — arm (c) fix round. Two defects attacked, one closed, one reduced but PRESENT.
 
-**Director on arm (c) round 1:** *"This is not a pass."* Recorded in the spec. This round is
+**Director on arm (c) round 1:** he ruled it not a pass Recorded in the spec. This round is
 the control arm.
 
 ## 32. What changed

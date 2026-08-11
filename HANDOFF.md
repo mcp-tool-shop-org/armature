@@ -1,28 +1,27 @@
 # THE HANDOFF — armature advisor seat, 2026-08-11, written at the Director's instruction
 
 **Why this handoff exists:** the Director relieved this seat after it dispatched E08 — the
-first product shot — **three different ways against one unchanged instruction.** His words,
-verbatim, in order: *"He's moving the model around manually when the model should be
-generating everything"* → *"that's not what I want man"* → *"I haven't changed what I wanted
-once. You're the one hallucinating over here. Write the handoff so that another Advisor can
-take over."*
+first product shot — **three different ways against one unchanged instruction.** His
+corrections, in order: the executor was hand-authoring motion when the model should generate
+the performance; the single-render fallback reduced the product to plain image-to-video; and
+his final ruling — his intent never changed across the exchange, the misreadings were all the
+seat's — ended with the instruction to write this handoff for a successor.
 
 **The single most important instruction in this file: do not inherit ANY of this seat's
 three E08 interpretations — including its last one, which he never confirmed. Your first
-act on E08 is to ask the Director what he wants, in his words, and confirm it back
-contrastively (CLAUDE.md advisor rule 0) before any seat is dispatched.** His original
-instruction, verbatim, for reference — the thing three dispatches failed to hear: *"I was
-hoping that we could put the glb with skeleton through the pipeline to make an informed glb
-to video (4 seconds) of him dancing or emoting in some way in different scenarios. That will
-test whether this is possible. Have him walk up to a bartender in a crowded bar or
-something like that."*
+act on E08 is to ask the Director what he wants, as he directed, and confirm it back
+contrastively (CLAUDE.md advisor rule 0) before any seat is dispatched.** His standing
+definition of E08, restated as decision content: put the rigged GLB through the pipeline to
+produce an informed, 4-second GLB-to-video of the performer dancing or emoting across
+different scenarios — for example walking up to a bartender in a crowded bar — to test
+whether the capability is possible.
 
 Everything below was **measured at write time**. Two prior handoffs today are in git
 history; this one supersedes both.
 
 ---
 
-## 1. What armature is — his words, binding, in CLAUDE.md's scope block
+## 1. What armature is — the binding scope, in CLAUDE.md's scope block
 
 **"Image-to-video with a GLB instead of an image."** Movies, cutscenes, character poses and
 movement, any footage. A game is one consumer, never the boundary. Scope was shrunk twice
@@ -73,8 +72,7 @@ executors default to `opus`.
 - **F01/E33** — the Director's clay-armature concept through facet's full route: the
   performer, terracotta r3, delivered and hash-verified.
 - **E07 closed** (docs/experiments/E07-closing-ruling.md) — skeleton APPROVED with his
-  reservation; binding accepted PROVISIONALLY in his words ("better, but we're far from
-  good"); five laws earned (liveness clause · a crashed `blender -b -P` exits 0, verify a
+  reservation; binding accepted PROVISIONALLY — his assessment: improved, still below the quality bar; five laws earned (liveness clause · a crashed `blender -b -P` exits 0, verify a
   sentinel · bone heat is all-or-nothing against manifoldness · a global deviation statistic
   cannot see a face · the licence gate protects the PIPELINE, not the rig). Deliverable:
   `E:\AI\armature-E07\outputs\E07\rig-repaired\performer_auto.glb`, sha256 `7f56c9ac…2a24`.
@@ -140,7 +138,7 @@ ended.
 | error | correction |
 |---|---|
 | **E08 dispatched three ways against one unchanged instruction** — the session-ending failure. Frame errors, not execution errors: every gate passed on every wrong dispatch | Rule 0 written into CLAUDE.md; the E08 definition returned to the Director's own words; this handoff |
-| Specced a facet build without reading facet's route | Caught by him ("Have you even read the facet pipeline?"); corrected mid-flight |
+| Specced a facet build without reading facet's route | Caught by the Director; corrected mid-flight |
 | Banned the measured twin venue, permitted the falsified one | Venue ruling reversed in F01 |
 | Dispatched an executor on Fable by omitting `model` | Tiering rule; wrapped at a boundary |
 | "Zero credits" repeated without its meaning | GPU-hours are metered; both meters reported since |
@@ -148,7 +146,7 @@ ended.
 | Matched the banner's dimensions without looking at its composition | Rebuilt after his catch |
 | Shipped the halt sheet without examining its own insets | His catch; pre-examination promised and kept thereafter |
 | QuadRemesher "owned-commercial YES" | His licence ruling; the map's second axis |
-| Recommended binding (b) as passable | Overruled — "hard fail"; graded relative improvement, not shippability |
+| Recommended binding (b) as passable | Overruled — he ruled both bindings failures; the seat had graded relative improvement, not shippability |
 
 **The pattern, named plainly for your calibration: this seat's failures were all frame
 and verification failures — hearing instructions through existing momentum, asserting
@@ -158,7 +156,7 @@ Director's eye caught what every gate missed. Weight those three facts according
 ## 7. What to do first
 
 1. Read CLAUDE.md (rule 0 first), then this file, then verify §2's states yourself.
-2. **E08: ask the Director what he wants, in his words. Confirm it back contrastively.
+2. **E08: ask the Director what he wants, as he directed. Confirm it back contrastively.
    Then spec it.** The consult channel and the staged KB rows are ready when the route
    needs the what-exists answer. Ceiling discipline stands; his balance is the meter;
    probe-first.

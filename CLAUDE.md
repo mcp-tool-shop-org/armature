@@ -8,8 +8,8 @@ every frame. The previz scene is ground truth; the video model paints life over 
 
 ## The scope, in the Director's words — read before any other rule
 
-> *"It shouldn't be at all limited to a game. You should be able to make cutscenes, movies,
-> anything that you could do with image to video but with glb."* — Director, 2026-08-11
+> The Director's scope ruling, 2026-08-11: armature is not limited to games — it makes
+> cutscenes, movies, anything image-to-video can make, with a GLB in place of the image.
 
 **armature is image-to-video with a GLB instead of an image.** Movies, game cutscenes,
 character poses and movement, any footage at all — everything spatial is authored, and the

@@ -6,7 +6,7 @@
 
 ## Ruling 1 — The Director's eye governs, and it overturns the report's framing
 
-**Director, on seeing the sheet: "Not a good result on E03. The lady's arms don't move."**
+**Director, on seeing the sheet: he judged the E03 result poor: the figure's arms do not move
 
 That judgement stands and it is correct. The report's headline — *"B1's arm rises, B3's does not"* —
 is true and is not the thing that matters.
@@ -97,8 +97,7 @@ The second unmoved lever is the reference image, absent throughout E03 and prese
 
 ## Ruling 7 — ⚑ The sequencing error, and it is this seat's lineage to own
 
-**The Director's question — *"shouldn't there be a process of creating the skeleton before trying
-to move the limbs?"* — is correct, and the answer is that no such process exists here.**
+**The Director's question — he asked why limbs were being tested before any skeleton-building process existed — is correct, and the answer is that no such process exists here.**
 
 What the thesis needs: canonical character mesh → **rig it with anatomically named bones** → pose
 it on purpose → render control → generate. **E03 has neither of the first two.** It built a figure
@@ -199,8 +198,7 @@ model paints life over a previz.
 
 ## Ruling 12 — RETRACTION: the "June no-rigging decision" is not a blocker, and I invented that it was
 
-**Director, 2026-08-10:** *"Why would a June no-rigging decision made for 8-direction sprite
-turnarounds affect this? You're the one who made that blocking rule. Makes no sense."*
+**Director, 2026-08-10:** he rejected the framing outright: the June decision was for sprite turnarounds, and the blocking rule was this seat's own invention
 
 **Correct on every clause.** This seat raised the June decision as a standing constraint armature
 had to clear, wrote it into two closing rulings, and asked the Director to adjudicate it three
