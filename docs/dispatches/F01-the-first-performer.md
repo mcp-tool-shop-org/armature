@@ -2,7 +2,16 @@
 
 **Commissioning seat:** armature advisor · **Written:** 2026-08-11 · **Executing side:** a
 **facet session**, under facet's own CLAUDE.md and discipline · **Status: DISPATCHED
-2026-08-11 — the Director picked the concept and the facet seat is running.**
+2026-08-11 — the Director picked the concept and the facet seat is running (runs as facet
+E33; first seat ended clean on a cost directive, successor continues from its state block).**
+
+**Venue ruling, 2026-08-11 (dispatcher):** the twin stage runs on **Comfy Cloud**, facet's
+measured convention (zero credits measured across E04/E10/E12/E13); the local restylize graph
+is VRAM-falsified (31,006 MiB against the 31,200 ceiling, which is never raised) and is not
+attempted. The dispatcher's earlier "local ComfyUI only" order is reversed by this ruling —
+it was written before facet's record was read, banned the measured venue and permitted the
+falsified one. Cloud enters at the twin stage only; any nonzero credit delta is reported
+against the Director's balance.
 
 > ## The pick — the armature itself
 >
