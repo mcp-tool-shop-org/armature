@@ -533,3 +533,184 @@ will key on the measured joint boundaries this round produced, per the addendum.
 **Open and not this seat's to close:** whether the corrected pivots are right by eye; whether
 the torso chain, neck and head — which carry no sculpted ball — are acceptable on heuristics;
 and whether the five facial markers survive review.
+
+---
+
+# ROUND 3 — the skeleton approved with reservations, and the two bindings run
+
+## 18. The approval, and what it does not say
+
+**Director, 2026-08-11, verbatim:** *"This looks good, but make a note to make a more detailed
+skeleton in the future so that we can move the fingers. It's approved, but I'm not really happy
+with it."*
+
+Recorded in the spec as an **approved-with-reservations**, with the second half of the sentence
+kept beside the first so no later reader can flatten them together. The named future item —
+**skeleton v2: articulated fingers** — joins the standing-notes ledger beside the wood-grain
+finish and the not-run brush pass, with the honest cost attached: **it is not only a rig
+iteration.** Measured on this performer, the hand reads as a **mitten with a thumb** — the arm
+column runs unbroken to z = −0.2455 with no per-finger separation in any Z band, and the ball
+search finds a wrist ball and nothing below it. No rig articulates fingers a mesh does not
+sculpt as separate forms, so v2 is likely an F-series mesh iteration first.
+
+## 19. Three binding runs, not two — and the third is a halt
+
+| arm | configuration | outcome |
+|---|---|---|
+| **(a1)** envelope, **measured** radii | head/tail radius = that structure's own measured cross-section; falloff 1.0 × it | **⛔ HALTED at Gate N** |
+| **(a2)** envelope, **Blender defaults** | absolute radii, untouched — the configuration the mechanism sweep measured at 100 % coverage | all gates pass |
+| **(b)** rigid per segment | nearest bone segment normalised by that bone's own radius, blend band 0.35 in normalised units | all gates pass |
+
+### (a1) halted, and Gate N's second clause is what caught it
+
+**`GateNNames: 1 bone(s) that no committed list registered: ['neutral_bone']`** — 22/22
+registered sites mapped, plus one extra.
+
+The mechanism, measured: envelope radii sized from the mesh leave **1,162 of 399,140 vertices
+(0.29 %) with no weight at all**, all of them in the fingers and toes that stick out past every
+envelope (unweighted bbox z ∈ [−0.494, −0.136], x ∈ [−0.149, +0.145]). Blender's glTF exporter
+then invents a `neutral_bone` to bind them to, so the skin stays valid — and the rig ships with
+a bone nobody registered holding the extremities.
+
+**This is the clause added beyond the spec earning its keep.** Gate N as specced checks that
+every registered site maps to a bone; coverage alone would have passed this export. The
+unregistered-bone direction is what fired.
+
+**Not re-parameterised past.** The envelope falloff multiple was not tuned upward until coverage
+reached 100 %. Instead the arm the advisor's ruling actually named — Blender's defaults, which
+is what the sweep measured at 100 % — was run as **(a2)** and reported separately.
+
+⚑ **Flagged for the advisor:** this seat substituted measured radii for Blender's defaults on
+the global-constant law **without flagging it before running**. That substitution is what moved
+coverage off 100 %. Both configurations are now runnable (`--envelope-radii=measured|default`)
+and both are reported; the choice of which is "arm (a)" is the advisor's, not this seat's.
+
+## 20. Gates — per arm
+
+| gate | (a2) envelope | (b) rigid |
+|---|---|---|
+| **N** pre-export | **PASS** 22/22 | **PASS** 22/22 |
+| **N** on re-imported GLB | **PASS** 22/22 | **PASS** 22/22 |
+| **P** rest-pose fidelity | **PASS** — max 1.68e-08 (threshold 1.069e-04) | **PASS** — max 6.21e-08 |
+| **P** evaluation liveness | **PASS** — 395,711 vertices respond, max 0.02351 | **PASS** — 37,961 respond, max 0.08076 |
+| **D** determinism | **PASS** | **PASS** |
+| probe arc | authored — `shoulder.L`, 33 keys @ 16 fps | authored — same |
+
+The probe is E03's arc on both: the **+X-side arm, which is measured to be the character's
+LEFT**, 0°→90° about +Y, 33 keys at 16 fps.
+
+## 21. Per-structure deformation diagnostics — DIAGNOSTIC, gating nothing
+
+### Weights
+
+| | (a2) envelope | (b) rigid |
+|---|---|---|
+| vertices with no weight | 0 | 0 |
+| mean weight sum | **7.7164** | **1.0000** |
+| mean bone influences per vertex | **9.86** (max 15) | 1.88 by construction |
+| vertices rigid / blended | — | 330,117 / **69,023 (17.29 %)** |
+| shells spanning >1 dominant bone | 679 | 577 |
+
+### Cross-talk — bones that moved when only the LEFT ARM was authored to move
+
+**(a2) envelope — 11 bones off the authored chain moved more than 0.01:**
+`ankle.R`, `chest`, `elbow.R`, `head`, `hip.R`, `hips`, `knee.R`, `neck`, `shoulder.R`,
+`spine`, `wrist.R`. The largest are `knee.L` 0.2211, `ankle.L` 0.1701, `hip.L` 0.1694,
+`hip.R` 0.1054, `knee.R` 0.1054, `head` 0.0561.
+
+**(b) rigid — one, and it is small:** `chest`, max 0.0186 with a **mean of 0.00033 and a p95 of
+0.00007** — a handful of vertices inside the shoulder blend band, not the chest moving.
+
+### Magnitude of the authored arc actually delivered
+
+| | (a2) envelope | (b) rigid |
+|---|---|---|
+| whole-mesh max displacement, frame 1 → 33 (in-process) | 0.2211 | **0.7622** |
+| same, measured on the re-imported GLB | 0.3699 | **0.7622** |
+| `wrist.L`-dominated vertices | **49** | **5,555** |
+
+E03 Ruling 9's family, one step over: **a gate that fires on the right axis can still be blind
+to the axis that matters.** Every gate passes on (a2), and the authored 90° raise arrives as a
+fraction of itself because each vertex is averaged across ~10 bones, most of which do not move.
+The number is a diagnostic; the sheet is where it is judged.
+
+## 22. ⚑ What this seat can already see, flagged rather than left to be found
+
+The dispatching seat will examine every inset before the Director does. These are visible in
+the sheet now:
+
+1. **(a2) is torn, not merely soft.** At frames 17 and 33 the figure carries shards flying out
+   of the torso and hip, the face is split down the middle, and the character's left leg is
+   dislocated and broken into separate pieces. This is visible at full-body scale, not only at
+   1:1.
+2. **(a2)'s `hand` inset is an empty grey panel.** The camera is framed on the *authored*
+   position of the wrist at frame 33 — identical in both rows by construction — and (a2)'s hand
+   is not there, because that arm delivers a fraction of the arc. The panel is truthful and it
+   reads like a missing render. Flagged rather than re-framed: widening the inset to find the
+   hand would destroy the 1:1 the comparison depends on, and the full-body arc panels already
+   show where the hand went.
+3. **(b) shows a legible seam at the elbow and at the wrist.** The blend band is 0.35 in
+   normalised units and 17.29 % of vertices sit in it; where two rigid segments meet, the
+   transition is a visible step at 1:1 rather than a smooth bend. On a jointed mannequin that
+   may be correct and it may not — it is the Director's call, and it is the single thing about
+   (b) most likely to draw his eye.
+4. **(b) pulls slightly at the armpit.** `chest`'s 0.0186 max is a small group of vertices at
+   the shoulder boundary following the arm; visible in the `shoulder` inset as a slight drag
+   where the arm meets the torso.
+5. **Small dark speckles on the torso and legs are in the SOURCE asset, not the binding.** They
+   appear identically in both rest-pose panels and in every earlier render of the unbound mesh.
+   Named so they are not read as a binding artifact.
+
+None of these is a verdict. The Director's eye picks the binding.
+
+## 23. Round 3 artifacts
+
+| artifact | path | sha256 | bytes |
+|---|---|---|---|
+| **the comparison sheet** | `E:\AI\armature-E07\outputs\E07\compare\E07-binding-comparison.png` | `7006ad51ad23c845e08670241a30b906030f2be238c09deef74ae52915364880` | 3,191,947 |
+| **(b) rigid GLB** | `outputs\E07\bind\performer_rigid.glb` | `c5e0677e0d20f4d289ecfcd0738a803a74f4427d9e2dee645b329c96fa7bd05b` | 29,633,120 |
+| **(a2) envelope GLB** | `outputs\E07\bind\performer_envelope_default.glb` | `1c134db715ec15af3a5136908617763343dc87fbf2cd1bf4a6efc9036c091457` | 29,633,120 |
+| (b) manifest | `outputs\E07\bind\rig_manifest_rigid.json` | `67007a555047168873737ab91752085341bc8138728a3f4a730592a31013f02a` | 47,885 |
+| (a2) manifest | `outputs\E07\bind\rig_manifest_envelope_default.json` | `458012757c7aa0860aa11cdd5d9dfd21c87c2160c6fb0c0aaac14c90da421ce4` | 51,761 |
+| (a1) halt record | `outputs\E07\bind\halt.json` | `85ecdb68cf6adcfc7468c35a4f7973135aa8497f3b1030870b4436b816ec8975` | 1,047 |
+
+**The sheet** is `rest | the arc at frames 17 and 33 | 1:1 joint insets`, arm (a) above arm (b),
+uniform panels, no gate states and no debug text. Every camera is orthographic and every panel
+in a row shares one `ortho_scale`. The joint insets are framed on the **posed bone position at
+frame 33, read from the armature rather than from either mesh** — both arms carry the same
+authored action on the same skeleton, so that point is identical in both and a difference in
+where the body ends up reads as the difference it is. The builder **raises** if a re-imported
+GLB comes back identical at frames 1 and 33, so a sheet can never quietly show a binding that
+did not move.
+
+## 24. The rigid arm's assignment rule, recorded
+
+For each vertex and each deforming bone with segment `head → tail` and measured cross-section
+radius `r`:
+
+1. `d` = distance to the segment, clamped at both ends.
+2. `u = d / r` — **normalised by that bone's own measured radius**, so a thin arm bone cannot
+   capture torso flesh that merely happens to be nearer to it than to the thick chest bone.
+3. The vertex goes to the bone with the smallest `u`. If the second-smallest belongs to a bone
+   **adjacent in the hierarchy** and `u₂ − u₁ < 0.35`, the two share it:
+   `w₁ = 0.5 + 0.5 (u₂ − u₁)/0.35`, `w₂ = 1 − w₁`.
+
+**The boundary lands on the sculpted ball** because adjacent limb bones now share a head and
+tail that are measured ball centres, so for near-collinear bones the surface where `u` ties is
+the plane through that ball. The band is dimensionless — `u` is already divided by each
+structure's own radius — so no length in metres governs it. Weights sum to **exactly 1.0** on
+every vertex (measured min and max both 1.0), which is what keeps skinning the identity at bind
+and is the property Gate P reads. Blend-band weights are quantised at 1e-3 and the rigid
+majority is exactly 1.0; the quantisation is recorded in the manifest.
+
+## 25. Where round 3 stopped
+
+**Both arms are built, gated, exported and on one sheet.** The Director's eye picks the binding;
+no metric here picks it, and the diagnostics in §21 gate nothing.
+
+**Not merged.** The advisor closes E07.
+
+**Open, and not this seat's to close:** which binding; whether (a) is worth another
+configuration at all given §22.1; whether (b)'s joint seams are correct for a jointed mannequin
+or want a wider blend band; and the standing item **skeleton v2 — articulated fingers**, which
+needs a mesh that sculpts fingers before it needs a rig that names them.

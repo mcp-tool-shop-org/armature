@@ -438,6 +438,23 @@ def derive(verts, n_bands=200):
         put(f"toe_{side}", (ank["cx"], toe_y, z_ground),
             "MEASURED — furthest foot vertex in the measured facing direction, at ground")
 
+    # The trunk column, every band from the crotch up. Its per-band radii are how the torso,
+    # neck and head bones get a measured thickness — the same way the limb traces size the
+    # arms and legs. See `cross_section_radius`.
+    def trunk_pick(band):
+        cs = band["clusters"]
+        return min(cs, key=lambda c: abs(c["cx"])) if cs else None
+
+    trunk_trace = _column_trace(bands, reg["trunk_and_arms"][1], len(bands),
+                               trunk_pick, expected)[::-1]
+    if len(trunk_trace) < 4:
+        raise LandmarkError(
+            f"the trunk column resolves to {len(trunk_trace)} bands; a torso read off fewer "
+            f"than four is noise"
+        )
+    traces["trunk"] = trunk_trace
+    trace_health["trunk"] = {"kept": len(trunk_trace), "dropped": 0, "max_jump": None}
+
     # --- head markers. Nose is measured; eyes and ears are not on a clay mannequin.
     head = verts[verts[:, 2] >= z_head_base]
     if len(head) == 0:
@@ -494,3 +511,52 @@ def derive(verts, n_bands=200):
         "trace_health": trace_health,
         "n_bands": n_bands,
     }
+
+#: Which measured cross-section trace sizes each deform bone. Not part of the registered site
+#: list -- a measurement detail, kept beside the names it keys on rather than inside the
+#: registration, which is a document about NAMES.
+BONE_CROSS_SECTION = {
+    "hips": "trunk", "spine": "trunk", "chest": "trunk", "neck": "trunk", "head": "trunk",
+    "shoulder.L": "arm_L", "elbow.L": "arm_L", "wrist.L": "arm_L",
+    "shoulder.R": "arm_R", "elbow.R": "arm_R", "wrist.R": "arm_R",
+    "hip.L": "leg_L", "knee.L": "leg_L", "ankle.L": "leg_L",
+    "hip.R": "leg_R", "knee.R": "leg_R", "ankle.R": "leg_R",
+}
+
+
+def cross_section_radius(derived, trace_key, z_lo, z_hi):
+    """That structure's own measured radius over a height span. Sizes a bone, per structure.
+
+    Returns the median of the trace's `r_mean` over the bands the bone spans -- a real
+    radial distance from the limb's own centroid, not half a bbox width. A bone whose span
+    catches no band falls back to the single nearest band rather than to a constant: a
+    length in metres must not enter here, because a global constant must not govern a local
+    feature.
+    """
+    trace = (derived.get("traces") or {}).get(trace_key) or []
+    if not trace:
+        raise LandmarkError(f"no trace {trace_key!r} to size a bone against")
+    lo, hi = (z_lo, z_hi) if z_lo <= z_hi else (z_hi, z_lo)
+    band = [p["r_mean"] for p in trace if lo - 1e-9 <= p["z"] <= hi + 1e-9]
+    if not band:
+        nearest = min(trace, key=lambda p: min(abs(p["z"] - lo), abs(p["z"] - hi)))
+        band = [nearest["r_mean"]]
+    return float(np.median(band))
+
+
+def bone_radii(derived, bones):
+    """Measured radius for every deform bone, keyed by name."""
+    marks = derived["landmarks"]
+    out = {}
+    for b in bones:
+        if not b.deform:
+            continue
+        key = BONE_CROSS_SECTION.get(b.name)
+        if key is None:
+            raise LandmarkError(
+                f"bone {b.name!r} has no cross-section trace registered in "
+                f"BONE_CROSS_SECTION; it cannot be sized from a measurement"
+            )
+        out[b.name] = cross_section_radius(derived, key,
+                                           marks[b.head][2], marks[b.tail][2])
+    return out

@@ -44,7 +44,7 @@ import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 from armature_core import (  # noqa: E402
-    blender_scene, joints, landmarks, posearc, rig_gates, sitelist)
+    binding, blender_scene, joints, landmarks, posearc, rig_gates, sitelist)
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "1.1.0"
@@ -78,7 +78,8 @@ def sha256_file(path):
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     args = {"glb": None, "out": None, "measure_only": False, "bands": 200,
-            "name": "performer", "mode": "skeleton"}
+            "name": "performer", "mode": "skeleton", "binding": "rigid",
+            "envelope_radii": "measured"}
     for token in argv:
         if token == "--measure-only":
             args["measure_only"] = True
@@ -257,14 +258,152 @@ def build_armature(scene, marks, name):
     return arm_obj, lengths
 
 
-def skin(mesh_obj, arm_obj):
+#: Weight quantisation for the procedural arm. Only the blend band carries fractional
+#: weights — rigid vertices are exactly 1.0 — and Blender's armature modifier normalises by
+#: the accumulated weight, so this cannot move the bind pose. Recorded because it is a
+#: property of the arm, not an implementation detail.
+RIGID_WEIGHT_QUANTISATION = 1e-3
+
+
+def _parent_to(mesh_obj, arm_obj, kind):
     bpy.ops.object.select_all(action="DESELECT")
     mesh_obj.select_set(True)
     arm_obj.select_set(True)
     bpy.context.view_layer.objects.active = arm_obj
+    bpy.ops.object.parent_set(type=kind)
+
+
+def _set_envelopes(arm_obj, radii, distance_multiple):
+    """Envelope radii from the MEASURED cross-section of the structure each bone runs through.
+
+    Blender's defaults are absolute lengths — 0.1 head/tail radius, 0.25 envelope distance —
+    on a figure 1.0 units tall. That is a global constant governing a local feature, and it
+    is why the mechanism sweep measured a mean of 7.4 bone influences per vertex on this
+    subject. Sized from the mesh instead; the multiple applied to the falloff is declared
+    here rather than tuned against a coverage number.
+    """
+    bpy.context.view_layer.objects.active = arm_obj
+    bpy.ops.object.mode_set(mode="EDIT")
+    applied = {}
+    try:
+        for eb in arm_obj.data.edit_bones:
+            r = radii.get(eb.name)
+            if r is None:                       # the non-deforming facial markers
+                eb.head_radius = eb.tail_radius = 0.0
+                eb.envelope_distance = 0.0
+                applied[eb.name] = {"deform": False, "head_radius": 0.0,
+                                    "tail_radius": 0.0, "envelope_distance": 0.0}
+                continue
+            eb.head_radius = eb.tail_radius = float(r)
+            eb.envelope_distance = float(r) * distance_multiple
+            applied[eb.name] = {"deform": True, "head_radius": float(r),
+                                "tail_radius": float(r),
+                                "envelope_distance": float(r) * distance_multiple}
+    finally:
+        bpy.ops.object.mode_set(mode="OBJECT")
+    return applied
+
+
+def _write_weights(mesh_obj, weights, quantisation):
+    """Push computed weights into vertex groups.
+
+    Rigid vertices (weight exactly 1.0) go in one call per bone; only the blend band is
+    quantised, and it is the small minority. A per-vertex loop over 400k vertices would move
+    the same numbers far more slowly.
+    """
+    groups = {g.name: g for g in mesh_obj.vertex_groups}
+    written = 0
+    for name, w in weights.items():
+        group = groups.get(name)
+        if group is None:
+            raise ArmatureError(
+                f"no vertex group named {name!r} on the mesh; the armature was parented "
+                f"without empty groups and there is nowhere to write weights"
+            )
+        full = np.flatnonzero(w >= 1.0)
+        if len(full):
+            group.add(full.tolist(), 1.0, "REPLACE")
+            written += len(full)
+        partial = np.flatnonzero((w > 0.0) & (w < 1.0))
+        if len(partial):
+            q = np.round(w[partial] / quantisation) * quantisation
+            for value in np.unique(q):
+                sel = partial[q == value]
+                group.add(sel.tolist(), float(value), "REPLACE")
+                written += len(sel)
+    return written
+
+
+def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_multiple=1.0,
+                  envelope_radii="measured"):
+    """Bind the mesh by one named route. Returns (seconds, a record of what was applied)."""
     t0 = time.time()
-    bpy.ops.object.parent_set(type="ARMATURE_AUTO")
-    return time.time() - t0
+    if mode == "auto":
+        # FALSIFIED on this subject in round 1. Kept runnable, with the reason attached.
+        _parent_to(mesh_obj, arm_obj, "ARMATURE_AUTO")
+        rec = {"binding": "auto", "operator": "parent_set(ARMATURE_AUTO)",
+               "note": ("Blender bone-heat weighting. Measured on this subject to produce "
+                        "ZERO weights across all 17 deform groups — see E07 round 1.")}
+    elif mode == "envelope":
+        # TWO configurations, both runnable, because they are genuinely different arms and
+        # the difference was measured rather than argued:
+        #
+        #   measured — head/tail radius from the structure's own cross-section, falloff a
+        #     declared multiple of it. 1.88 bone influences per vertex, and **1,162 of
+        #     399,140 vertices (0.29 %) left unweighted**, all in the fingers and toes that
+        #     stick out past every envelope. glTF then adds a `neutral_bone` to hold them
+        #     and **Gate N fires** on the unregistered name.
+        #   default — Blender's own absolute radii, untouched. 100 % coverage, and 9.86
+        #     influences per vertex against a weight sum of 7.7.
+        #
+        # The advisor's ruling named "ARMATURE_ENVELOPE (measured 100% coverage)", which is
+        # the DEFAULT configuration as the mechanism sweep ran it. This seat substituted
+        # measured radii on the global-constant law without flagging it first; both are run
+        # and reported rather than one being quietly chosen.
+        if envelope_radii == "measured":
+            applied = _set_envelopes(arm_obj, radii, envelope_distance_multiple)
+            source_note = ("measured cross-section of the structure each bone runs through "
+                           "(landmarks.bone_radii); falloff a declared multiple of it")
+        elif envelope_radii == "default":
+            applied = {b.name: {"deform": bool(b.use_deform),
+                                "head_radius": float(b.head_radius),
+                                "tail_radius": float(b.tail_radius),
+                                "envelope_distance": float(b.envelope_distance)}
+                       for b in arm_obj.data.bones}
+            source_note = ("Blender's own defaults, untouched — absolute lengths on a figure "
+                           "1.0 units tall, which is a global constant governing a local "
+                           "feature and is recorded as such")
+        else:
+            raise ArmatureError(
+                f"unknown --envelope-radii={envelope_radii!r}; known: measured, default")
+        _parent_to(mesh_obj, arm_obj, "ARMATURE_ENVELOPE")
+        rec = {
+            "binding": "envelope", "operator": "parent_set(ARMATURE_ENVELOPE)",
+            "envelope_radii": envelope_radii,
+            "radii_source": source_note,
+            "envelope_distance_multiple_of_bone_radius":
+                envelope_distance_multiple if envelope_radii == "measured" else None,
+            "envelopes_applied": applied,
+            "smoothing_applied": False,
+            "smoothing_note": ("No vertex-group smoothing was run. Envelope weights are "
+                               "already a distance falloff, and whether an additional blur "
+                               "improves the read is a judgement this seat does not make."),
+        }
+    elif mode == "rigid":
+        _parent_to(mesh_obj, arm_obj, "ARMATURE_NAME")
+        bones = [{"name": b.name, "head": tuple(b.head_local), "tail": tuple(b.tail_local),
+                  "parent": b.parent.name if b.parent else None}
+                 for b in arm_obj.data.bones if b.use_deform]
+        weights, diag = binding.rigid_segment_weights(source, bones, radii)
+        written = _write_weights(mesh_obj, weights, RIGID_WEIGHT_QUANTISATION)
+        rec = {"binding": "rigid",
+               "operator": "parent_set(ARMATURE_NAME) + computed weights",
+               "assignment": diag, "weight_entries_written": written,
+               "weight_quantisation": RIGID_WEIGHT_QUANTISATION,
+               "radii_source": "measured cross-section (landmarks.bone_radii)"}
+    else:
+        raise ArmatureError(f"unknown binding {mode!r}; known: auto, envelope, rigid")
+    return time.time() - t0, rec
 
 
 def read_weights(ob, n_verts):
@@ -286,7 +425,7 @@ def bone_table(arm_obj):
             for b in arm_obj.data.bones}
 
 
-def build_pass(glb_path, name, bands, label, bind=True):
+def build_pass(glb_path, name, bands, label, bind=True, envelope_radii="measured"):
     """One complete build, from a fresh scene to a rig.
 
     With `bind=False` the mesh is never parented to the armature: the skeleton is placed and
@@ -336,10 +475,12 @@ def build_pass(glb_path, name, bands, label, bind=True):
     ruling = joints.verdict(offsets)
 
     arm_obj, bone_lengths = build_armature(scene, snapped, name)
+    radii = landmarks.bone_radii(lm, sitelist.BONES)
 
-    gate_p, weights, t_skin = None, {}, None
+    gate_p, weights, t_skin, bind_record = None, {}, None, None
     if bind:
-        t_skin = skin(mesh_obj, arm_obj)
+        t_skin, bind_record = apply_binding(mesh_obj, arm_obj, bind, source, radii,
+                                            envelope_radii=envelope_radii)
         # Liveness BEFORE Gate P, so Gate P's reading is known to be about a bound mesh and
         # not about an evaluation that never carried the modifier. Restored immediately; no
         # keyframe exists yet, so nothing survives the restore.
@@ -368,9 +509,10 @@ def build_pass(glb_path, name, bands, label, bind=True):
         "premise6": premise6, "shell_id": shell_id, "shell_sizes": shell_sizes,
         "bone_lengths": bone_lengths, "bbox_lo": lo.tolist(), "bbox_hi": hi.tolist(),
         "heuristic_landmarks": heuristic_marks, "joint_balls": balls, "shells": shells,
-        "offset_table": offsets, "placement_ruling": ruling, "bound": bool(bind),
+        "offset_table": offsets, "placement_ruling": ruling, "bound": bind or False,
+        "bone_radii": radii, "binding_record": bind_record,
         "timings": {"landmarks_s": t_landmarks, "joint_balls_s": t_balls,
-                    "skin_s": t_skin},
+                    "bind_s": t_skin},
     }
 
 
@@ -752,12 +894,15 @@ def main():
         raise ArmatureError(f"unknown --mode={args['mode']!r}; known: skeleton, full")
 
     # Two full builds from the same input. The second is the one kept; Gate D compares.
-    first = build_pass(args["glb"], args["name"], args["bands"], "determinism-probe")
+    mode = args["binding"]
+    first = build_pass(args["glb"], args["name"], args["bands"], "determinism-probe",
+                       bind=mode, envelope_radii=args["envelope_radii"])
     fp_first = first["fingerprint"]
     gate_p_first = first["gate_p"]
     del first
 
-    ctx = build_pass(args["glb"], args["name"], args["bands"], "kept")
+    ctx = build_pass(args["glb"], args["name"], args["bands"], "kept", bind=mode,
+                     envelope_radii=args["envelope_radii"])
     gate_d = rig_gates.gate_d_determinism(fp_first, ctx["fingerprint"], ctx["diagonal"])
 
     gate_n_pre = rig_gates.gate_n_names(
@@ -767,22 +912,21 @@ def main():
     probe = author_probe(ctx)
     diagnostics = deformation_diagnostics(ctx, probe)
 
-    out_glb = os.path.join(out_dir, f"{args['name']}_rigged.glb")
+    tag = mode if mode != "envelope" else f"envelope_{args['envelope_radii']}"
+    out_glb = os.path.join(out_dir, f"{args['name']}_{tag}.glb")
     export = export_rigged(ctx, probe, out_glb)
     out_sha = sha256_file(out_glb)
 
     manifest = {
         "tool": "rig_character",
         "tool_version": TOOL_VERSION,
-        "tool_sha256": {os.path.basename(p): sha256_file(p) for p in [
-            os.path.abspath(__file__),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         "armature_core", "sitelist.py"),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         "armature_core", "landmarks.py"),
-            os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         "armature_core", "rig_gates.py"),
-        ]},
+        "mode": "full",
+        "binding": mode,
+        "binding_record": ctx["binding_record"],
+        "bone_radii_measured": ctx["bone_radii"],
+        "joint_ball_offset_table": ctx["offset_table"],
+        "placement_ruling": ctx["placement_ruling"],
+        "tool_sha256": _tool_hashes(),
         "blender": bpy.app.version_string,
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started)),
         "elapsed_s": round(time.time() - started, 2),
@@ -816,10 +960,11 @@ def main():
                  "character, are the Director's on the sheet at his zoom. No number here "
                  "approximates either."),
     }
-    path = os.path.join(out_dir, "rig_manifest.json")
+    path = os.path.join(out_dir, f"rig_manifest_{tag}.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2)
-    print("RIG_OK " + json.dumps({"glb": out_glb, "sha256": out_sha, "manifest": path}))
+    print("RIG_OK " + json.dumps({"binding": tag, "glb": out_glb, "sha256": out_sha,
+                                  "manifest": path}))
 
 
 def _write_halt(out_dir, exc, source_sha, glb):

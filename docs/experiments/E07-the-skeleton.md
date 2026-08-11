@@ -285,3 +285,44 @@ Consequences, so the record does not have to infer them:
 The approval artifact is `outputs/E07/approval/E07-skeleton-approval.png`: the figure with the
 skeleton in place, and a per-joint 1:1 inset row showing every pivot **before | after** at the
 same camera. No metric approximates this judgement and none is printed on the sheet.
+
+---
+
+## ✅ SKELETON APPROVED — 2026-08-11 — **with reservations, and the difference is on the record**
+
+**Director, verbatim:**
+
+> *"This looks good, but make a note to make a more detailed skeleton in the future so that we
+> can move the fingers. It's approved, but I'm not really happy with it."*
+
+**The gate lifts.** The binding arms of Amendment 2 may run.
+
+**An approved-with-reservations is not a clean approval, and this section exists so no later
+reader can flatten the two together.** The skeleton passes for what E07 asked of it — 22 named
+bones, every limb pivot on its own sculpted ball. It does **not** satisfy the Director, and the
+sentence that says so is quoted above rather than paraphrased into a checkmark. Anything
+downstream that cites "the skeleton was approved" must carry the second half of his sentence
+with it.
+
+### Named future item — **skeleton v2: articulated fingers**
+
+Joins the standing-notes ledger beside the **wood-grain finish** and the **not-run brush pass**.
+
+**What it needs, honestly stated — it is not only a rig iteration:**
+
+1. **Finger bones.** E07's registered site list puts finger and face bones explicitly out of
+   scope, and the list is 18 keypoint sites + 4 structural. A hand that articulates needs a new
+   registration: at minimum 3 phalanx bones × 4 fingers + 3 for the thumb per hand, which is
+   **30 additional bones** and a site list roughly 2.4× the size of E07's.
+2. **A hand mesh that separates the fingers, which this subject does not have.** Measured on
+   this performer: the hand reads as a **mitten with a thumb** — the arm column runs unbroken
+   to z = −0.2455 with no per-finger separation in any Z band, and the joint-ball search finds
+   a wrist ball and nothing below it. **No rig can articulate fingers that the mesh does not
+   sculpt as separate forms.** Weighting a mitten to five finger chains moves one lump five
+   ways.
+3. **Therefore v2 is likely an F-series mesh iteration first, and a rig iteration second.** The
+   order matters: commissioning finger bones against the current mesh would produce a rig whose
+   every gate passes and whose fingers cannot move — the same shape of defect as E01's
+   `bone_0 … bone_29`, one level further in.
+
+**Not scheduled here.** E07 does not open it, and nothing in E07 forecloses it.
