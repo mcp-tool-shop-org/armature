@@ -1,4 +1,4 @@
-# E07 report — the skeleton: 22 named bones stand on him, and nothing is attached to them
+# E07 report — the skeleton: 22 named bones, now standing on his own sculpted joints
 
 **Seat:** executor · **Run:** 2026-08-11 · **Spec:**
 [E07-the-skeleton.md](E07-the-skeleton.md) · **Registrations:**
@@ -6,18 +6,33 @@
 committed before the subject was imported once · **Credits spent: 0. Nothing went to any
 cloud.** · **Advisor rules on this report; the Director rules on the sheet.**
 
-> ## ⛔ HALTED — Gate P fired, and the experiment's central premise is falsified
+> ## ⛔ ROUND 1 HALTED — Gate P fired, and the experiment's central premise is falsified
 >
 > **`ARMATURE_AUTO` produced no weights on this mesh. Not a poor deform — no deform.**
 > All 17 deform vertex groups were created and every one is empty: **0 of 399,140 vertices
 > carry any weight at all.** `parent_set` reports this as an INFO-level warning and returns
 > success.
 >
-> The run stopped inside the first build pass. **No rigged GLB exists. No manifest was
-> written. No export was attempted.** Gates N and D are **NOT YET RUN** — not passed.
+> The run stopped inside the first build pass. **No rigged GLB existed. No manifest was
+> written. No export was attempted.** Gates N and D were **NOT YET RUN** — not passed.
 > Record: `outputs/E07/rig/halt.json`, exit code 2.
 >
 > Nothing was re-parameterised to get past this.
+
+> ## ⏸ ROUND 2 — the skeleton, corrected and standing at the Director's hard gate
+>
+> The advisor upheld the halt and adopted Gate P's liveness clause into law. **Then the
+> Director zoomed the halt sheet's joint insets** and ruled: *"This looks like it's not
+> lined up properly."* He was right, and §12 is the measurement: **the elbow pivots sat
+> 27–28 % of the upper arm's own length away from the mannequin's sculpted elbow balls.**
+>
+> Round 2 replaced every proportion-placed limb pivot with the subject's own sculpted
+> ball-joint, and ends where he gated it — *"Nothing moves forward until I approve the
+> skeleton."* **No binding arm ran.** On the corrected skeleton, Gate N passes both
+> clauses, Gate P's round-trip clause passes, Gate D passes. **Gate P's liveness clause is
+> NOT YET RUN by design**, because nothing is bound for it to be about.
+>
+> Approval artifact: `outputs/E07/approval/E07-skeleton-approval.png`.
 
 ---
 
@@ -106,7 +121,10 @@ export" has no referent.
 
 ---
 
-## 2. Gates — verdicts
+## 2. Gates — verdicts, ROUND 1
+
+**These are round 1's verdicts and they are left as they stood.** Round 2 re-ran the gates on
+the corrected skeleton; those verdicts are in **§13** and do not overwrite these.
 
 | gate | verdict | evidence |
 |---|---|---|
@@ -362,3 +380,156 @@ this mesh, 18/18 findable by E01's own matcher against E01's 0/18, sides mirrori
 Open questions belong to the advisor and the Director, not to this seat: whether E07 re-runs
 on a different weighting route, whether the subject's geometry is cleaned upstream in facet,
 and whether the 18-site list's five facial markers survive review.
+
+---
+
+# ROUND 2 — the Director's catch, and the skeleton that came out of it
+
+## 12. The placement finding: proportion used where the subject carried markers
+
+**The Director, at 1:1 on the halt sheet's joint insets:** *"This looks like it's not lined up
+properly."* Two hypotheses were on the table and the addendum required they be discriminated
+by measurement, not by reasoning: either the bones were genuinely misplaced, or the sheet's
+overlay projector was wrong — the same instrument class as the tracer defect caught in §5.
+
+### The instrument, ruled out by the shape of the error rather than by inspection
+
+**A projection or overlay error applies one transform to every marker.** If the overlay were
+the defect, every offset would be near-equal. Measured:
+
+| quantity | value |
+|---|---|
+| joints matched to a sculpted ball | **12 / 12** |
+| smallest offset | 0.00417 (`ankle.R`) |
+| largest offset | 0.07598 (`elbow.R`) |
+| **spread ratio** | **18.2 ×** |
+| best single translation that would explain all of it | (−0.0000, +0.0014, +0.0221) |
+| error still left after removing that translation | **0.0539** |
+
+**Ruled: the subject.** No one transform produces an 18-fold spread. The renderer was not at
+fault and was not changed.
+
+### The offset table — verbatim, per site
+
+Offset is the distance from the pivot as E07 first placed it to the centre of that joint's
+sculpted ball. The fraction is of **that segment's own length**, never of standing height.
+
+| site | offset | % of its segment | segment | segment length | ball radius | ball verts | matched |
+|---|---|---|---|---|---|---|---|
+| `shoulder.L` | 0.01643 | **6.1 %** | shoulder→elbow | 0.27057 | 0.02422 | 3495 | yes |
+| `elbow.L` | 0.07398 | **27.3 %** | shoulder→elbow | 0.27057 | 0.01565 | 130 | yes |
+| `wrist.L` | 0.02500 | **15.8 %** | elbow→wrist | 0.15806 | 0.01633 | 146 | yes |
+| `hip.L` | 0.01022 | **4.1 %** | hip→knee | 0.24709 | 0.02424 | 289 | yes |
+| `knee.L` | 0.02406 | **9.7 %** | hip→knee | 0.24709 | 0.02282 | 266 | yes |
+| `ankle.L` | 0.00430 | **1.7 %** | knee→ankle | 0.24638 | 0.01695 | 151 | yes |
+| `shoulder.R` | 0.01690 | **6.2 %** | shoulder→elbow | 0.27241 | 0.02413 | 3480 | yes |
+| `elbow.R` | 0.07598 | **27.9 %** | shoulder→elbow | 0.27241 | 0.01534 | 123 | yes |
+| `wrist.R` | 0.03102 | **19.3 %** | elbow→wrist | 0.16099 | 0.01620 | 143 | yes |
+| `hip.R` | 0.01033 | **4.3 %** | hip→knee | 0.24072 | 0.02409 | 285 | yes |
+| `knee.R` | 0.01986 | **8.2 %** | hip→knee | 0.24072 | 0.02295 | 278 | yes |
+| `ankle.R` | 0.00417 | **1.6 %** | knee→ankle | 0.25608 | 0.01695 | 145 | yes |
+
+The Director estimated 15–20 % from the knee inset. Measured, the knees are 8–10 % and **the
+elbows are 27–28 %** — he read the right defect off a joint carrying less than half the worst
+case.
+
+### The named finding
+
+**Placement by proportion when the subject carries its own markers.** E07's first skeleton put
+the elbow at 0.44 along the arm's measured centreline because a figure standing with straight
+limbs presents no *bend* to read a joint from. §1's P2 correction recorded that as "10 of 18
+sites have no measurable feature," and that sentence was **wrong about this subject**: he is a
+clay artist's mannequin and he is covered in sculpted ball-joints. The features existed. The
+derivation looked for a bend and never asked whether the sculptor had already marked the joint.
+
+**Standing method for this character class, now in the spec (Amendment 3):** where the subject
+carries a sculpted marker, **the marker is the pivot**. Proportion is the fallback for sites
+that genuinely have none, and those sites are named rather than left to look measured.
+
+### How a ball is found, and what still has none
+
+The joints are separate shells. Welding the glTF seam-splits collapses the file's 21,514
+vertex-split shells to the asset's real **67 pieces**, and among those the joints stand out by
+bbox aspect (≥ 0.58) and by residual around a least-squares sphere fit (≤ 0.20). **15
+candidates** passed; **12 were claimed, each by exactly one site**, with a search radius bounded
+by that segment's own length and a size window expressed as a multiple of that limb's own
+measured cross-section radius — so the face's 0.006-radius pieces cannot be claimed as elbows
+without a length in metres appearing anywhere.
+
+**Sites that still carry no measured marker, named:** the torso chain (`hips`, `spine`,
+`chest`), `neck`, `head`, the five facial markers (`nose`, `eye.L/R`, `ear.L/R`), and the limb
+ends (`hand_end`, `toe`, `head_top`). This mannequin sculpts no ball at any of them, and their
+provenance strings say so.
+
+## 13. Round 2 gates — on the corrected skeleton
+
+| gate | verdict | evidence |
+|---|---|---|
+| **N** — names, pre-export | **PASS** | 22 / 22 registered sites map to exactly one bone |
+| **N** — names, on the re-imported export | **PASS** | 22 / 22, read back out of the GLB |
+| **P** — round-trip positions | **PASS** | 149,643 unique positions in, 149,643 out, identical at float32; vertex count 399,140 → 399,903 |
+| **P** — evaluation liveness | **NOT YET RUN** | by design: nothing is bound, so there is no deform for it to be about |
+| **D** — determinism | **PASS** | two builds agree on bones, hierarchy and weights; the offset table is reproduced identically by the second build |
+| probe action | **NOT AUTHORED** | an arc on an unbound skeleton moves no geometry |
+| deformation diagnostics | **NOT YET RUN** | they require weights |
+
+## 14. Two more instrument defects, both found by a gate declining to fire
+
+**1 · A gate silently opted out, which is worse than one that fails.** Gate P's round-trip
+clause selected the re-imported subject with `type == "MESH"` and skipped itself when the count
+was not 1. The count is **2**: Blender's glTF importer drops a decoy `Icosphere` into a hidden
+`glTF_not_exported` collection — the same decoy E01's G4 fired on, documented in
+`probe_subject.py`, and walked into anyway. The manifest carried
+`"P_rest_pose_round_trip": null`, and nothing downstream could tell that from a pass. Selection
+is now render-visibility, and an ambiguous subject **raises**.
+
+**2 · Gate P's fidelity clause is the wrong instrument for an export round trip.** With the
+decoy filtered out it fired: 399,140 vertices in, **399,903** out. That is not damage — glTF
+re-splits vertices at attribute discontinuities, and multiplicity is the exporter's business.
+The property that must hold is that the **set of positions** is unchanged, and it is exactly:
+149,643 unique positions both ways, identical to the last float32 bit. A new round-trip clause
+compares position sets; the index-wise clause stays where vertex order genuinely is preserved,
+which is the armature modifier. **The first version of that comparison was reading two
+different arrays against each other, and it raised and said so rather than returning a number.**
+
+## 15. Round 2 artifacts
+
+| artifact | path | sha256 | bytes |
+|---|---|---|---|
+| **the approval sheet** | `E:\AI\armature-E07\outputs\E07\approval\E07-skeleton-approval.png` | `1cfb65a719c6518fe1391dbab6aa59d8f911779bf0a830b4cf901ac6f965e11d` | 3,379,616 |
+| **skeleton GLB** | `E:\AI\armature-E07\outputs\E07\skeleton\performer_skeleton.glb` | `4ccb7837a3a93e983597906173e4dd7b71c00e83e759485b5688107af83e88ff` | 21,619,240 |
+| skeleton manifest | `outputs/E07/skeleton/skeleton_manifest.json` | `0fc42e5b38ff5301583bde93d5f42ee4d66815eb17a91184bc5cc9900e0ea446` | 40,969 |
+| subject (unchanged) | `outputs/E07/subject/performer_textured.glb` | `9e20ea7d800c0ffd2cff101a5e1bcc01fa13c620bbbe3ef05ae23b093547b1aa` | 21,588,628 |
+
+**The sheet** is `the figure with the skeleton in place | before | after`. Full-body front and
+side carry the skeleton over the lit terracotta body; the six joint insets are framed on the
+**ball centre**, so the camera is identical in both rows and the only thing that moves between
+them is the pivot. Every camera is orthographic and every panel in a row shares one
+`ortho_scale`; panels are pasted at their rendered size and never resampled. The inset zoom was
+widened once, before the Director saw it, because at the first zoom the *before* elbow pivot
+fell outside the frame entirely — a panel showing a bone and no pivot reads as a missing render
+rather than as the 27 % error it is. No gate state is printed on the sheet and no debug text.
+
+## 16. Tests, round 2
+
+**291 passed / 35 skipped**, 18 new. `tests/test_joints.py` drives the instrument-versus-subject
+ruling in **both** directions — a uniform offset must read as the instrument and a spread must
+read as the subject, because a discriminator that only ever sees one answer is not a
+discriminator. It also fixes the uniqueness property (one ball cannot be claimed by two sites)
+and the size window (a facial fragment near a wrist must not become the wrist pivot just
+because it is round and close). `tests/test_rig_gates.py` gains the round-trip clause, driven
+with the measured case: identical positions at changed multiplicity must pass, one moved
+position must fire.
+
+## 17. Where round 2 stopped
+
+**At the Director's hard gate, with the skeleton built, gated and exported.** Round 1's halt
+stands and is not reopened: premise 5 remains falsified, and no binding arm ran this round.
+
+**Waiting on his word:** the two candidate bindings (ENVELOPE and RIGID-PER-SEGMENT), the probe
+arc, the deformation diagnostics, and everything downstream of E07. The rigid-per-segment arm
+will key on the measured joint boundaries this round produced, per the addendum.
+
+**Open and not this seat's to close:** whether the corrected pivots are right by eye; whether
+the torso chain, neck and head — which carry no sculpted ball — are acceptable on heuristics;
+and whether the five facial markers survive review.

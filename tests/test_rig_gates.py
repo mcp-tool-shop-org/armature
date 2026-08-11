@@ -231,3 +231,49 @@ def test_gate_d_tolerance_scales_with_the_subject_not_with_metres():
     with pytest.raises(GateDDeterminism):
         rig_gates.gate_d_determinism(a, b, bbox_diagonal=1.0)
     rig_gates.gate_d_determinism(a, b, bbox_diagonal=1000.0)
+
+
+# ------------------------------------------------- Gate P, the round-trip clause
+
+
+def test_round_trip_passes_when_only_vertex_MULTIPLICITY_changed():
+    """The measured case. glTF re-splits vertices at attribute discontinuities: this
+    subject went out as 399,140 vertices and came back as 399,903, over the same 149,643
+    positions. An index-wise comparison reads two different arrays against each other —
+    which is what the first version of this code did, until it raised and said so."""
+    rng = np.random.default_rng(3)
+    base = rng.uniform(-0.5, 0.5, size=(400, 3)).astype(np.float32)
+    doubled = np.concatenate([base, base[:37]], axis=0)   # 37 seam-splits
+    ev = rig_gates.gate_p_round_trip_positions(base, doubled, DIAGONAL)
+    assert ev["unique_positions_source"] == ev["unique_positions_roundtrip"] == 400
+    assert ev["n_roundtrip_vertices"] == 437
+    assert ev["max_deviation"] == 0.0
+
+
+def test_round_trip_fires_when_a_position_actually_moved():
+    rng = np.random.default_rng(3)
+    base = rng.uniform(-0.5, 0.5, size=(400, 3)).astype(np.float32)
+    moved = base.copy()
+    moved[11, 2] += 0.01
+    with pytest.raises(GatePRestPose) as exc:
+        rig_gates.gate_p_round_trip_positions(base, moved, DIAGONAL)
+    assert exc.value.evidence["positions_only_in_source"] == 1
+    assert exc.value.evidence["positions_only_in_roundtrip"] == 1
+    assert exc.value.evidence["max_deviation"] > 0.009
+
+
+def test_round_trip_tolerates_a_last_bit_difference_the_format_is_entitled_to():
+    """float32 is glTF's storage precision. Firing on one ULP would fire on correct exports."""
+    rng = np.random.default_rng(3)
+    base = rng.uniform(-0.5, 0.5, size=(400, 3)).astype(np.float32)
+    nudged = base.copy()
+    nudged[5] = np.nextafter(nudged[5], np.float32(1.0))
+    ev = rig_gates.gate_p_round_trip_positions(base, nudged, DIAGONAL)
+    assert ev["positions_only_in_source"] == 1
+    assert ev["max_deviation"] < ev["threshold"]
+
+
+def test_round_trip_fires_on_a_degenerate_diagonal():
+    a = np.zeros((10, 3), dtype=np.float32)
+    with pytest.raises(GatePRestPose):
+        rig_gates.gate_p_round_trip_positions(a, a, 0.0)

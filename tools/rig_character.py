@@ -43,10 +43,17 @@ import bmesh  # noqa: E402
 import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
-from armature_core import landmarks, posearc, rig_gates, sitelist  # noqa: E402
+from armature_core import (  # noqa: E402
+    blender_scene, joints, landmarks, posearc, rig_gates, sitelist)
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.1.0"
+
+#: Weld distance for the throwaway copy the joint-ball search runs on, as a fraction of the
+#: subject's own bbox diagonal. glTF splits a vertex at every UV and normal seam, so the
+#: duplicates sit at *identical* positions and any tiny epsilon recovers the asset's real
+#: shells. Expressed per-structure so it is not a length in metres.
+BALL_WELD_FRACTION = 1e-6
 
 #: E03's authored arc, reused verbatim so E08 compares character-control against
 #: wire-control on the same authored transform: rotate about +Y by -theta, 0 -> 90 degrees,
@@ -70,7 +77,8 @@ def sha256_file(path):
 
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    args = {"glb": None, "out": None, "measure_only": False, "bands": 200, "name": "performer"}
+    args = {"glb": None, "out": None, "measure_only": False, "bands": 200,
+            "name": "performer", "mode": "skeleton"}
     for token in argv:
         if token == "--measure-only":
             args["measure_only"] = True
@@ -180,6 +188,45 @@ def measure_subject(ob):
     }, shell_id, sizes
 
 
+def measure_joint_balls(ob, diagonal):
+    """The subject's own sculpted ball-joints, found on a THROWAWAY welded copy.
+
+    The mesh handed to the rig is never touched: `bmesh.from_mesh` reads into a private
+    bmesh, the weld happens there, and it is freed without `to_mesh`. The balls come back as
+    world-space points, which is all the skeleton needs — nothing downstream depends on the
+    welded topology existing.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=BALL_WELD_FRACTION * diagonal)
+    bm.verts.ensure_lookup_table()
+    n = len(bm.verts)
+    parent = np.arange(n, dtype=np.int64)
+
+    def find(x):
+        root = x
+        while parent[root] != root:
+            root = parent[root]
+        while parent[x] != root:
+            parent[x], x = root, parent[x]
+        return root
+
+    for e in bm.edges:
+        a, b = find(e.verts[0].index), find(e.verts[1].index)
+        if a != b:
+            parent[b] = a
+    labels = np.array([find(i) for i in range(n)], dtype=np.int64)
+    co = np.empty((n, 3), dtype=np.float64)
+    for i, v in enumerate(bm.verts):
+        co[i] = v.co
+    bm.free()
+
+    m = np.array(ob.matrix_world, dtype=np.float64)
+    world = co @ m[:3, :3].T + m[:3, 3]
+    shells = joints.describe_shells(world, labels)
+    return joints.candidate_balls(shells), shells
+
+
 def build_armature(scene, marks, name):
     arm_data = bpy.data.armatures.new(f"{name}_armature")
     arm_obj = bpy.data.objects.new(f"{name}_rig", arm_data)
@@ -239,8 +286,16 @@ def bone_table(arm_obj):
             for b in arm_obj.data.bones}
 
 
-def build_pass(glb_path, name, bands, label):
-    """One complete build, from a fresh scene to a skinned mesh. Gate P raises inside it."""
+def build_pass(glb_path, name, bands, label, bind=True):
+    """One complete build, from a fresh scene to a rig.
+
+    With `bind=False` the mesh is never parented to the armature: the skeleton is placed and
+    exported, and nothing is attached to it. That is the **skeleton-approval** mode the
+    Director gated the experiment at — *"Nothing moves forward until I approve the
+    skeleton."* Gate P's liveness clause deliberately does not run there, because there is no
+    binding for it to be about; a liveness reading on an unbound mesh would be a check
+    reporting on a thing that does not exist yet.
+    """
     scene = fresh_scene(PROBE_FPS)
     bpy.ops.import_scene.gltf(filepath=glb_path)
 
@@ -269,28 +324,41 @@ def build_pass(glb_path, name, bands, label):
     lm = landmarks.derive(source, n_bands=bands)
     t_landmarks = time.time() - t0
 
-    arm_obj, bone_lengths = build_armature(scene, lm["landmarks"], name)
-    t_skin = skin(mesh_obj, arm_obj)
+    # The subject's own sculpted ball-joints, and the pivots moved onto them. Placement by
+    # proportion is the fallback for sites that carry no marker, never the default: this
+    # mannequin sculpts a ball at every limb joint and those balls are the ground truth.
+    t0 = time.time()
+    balls, shells = measure_joint_balls(mesh_obj, diagonal)
+    heuristic_marks = dict(lm["landmarks"])
+    snapped, offsets = joints.snap_sites_to_balls(lm, balls)
+    lm["landmarks"] = snapped
+    t_balls = time.time() - t0
+    ruling = joints.verdict(offsets)
 
-    # Liveness BEFORE Gate P, so Gate P's reading is known to be about a bound mesh and
-    # not about an evaluation that never carried the modifier. Restored immediately; no
-    # keyframe exists yet, so nothing survives the restore.
-    bpy.context.view_layer.update()
-    rest_before = evaluated_world_verts(mesh_obj)
-    pb = arm_obj.pose.bones["shoulder.L"]
-    saved = pb.matrix_basis.copy()
-    pb.matrix_basis = Matrix.Rotation(math.radians(30.0), 4, "Y")
-    bpy.context.view_layer.update()
-    probed = evaluated_world_verts(mesh_obj)
-    pb.matrix_basis = saved
-    bpy.context.view_layer.update()
+    arm_obj, bone_lengths = build_armature(scene, snapped, name)
 
-    liveness = rig_gates.gate_p_evaluation_is_live(rest_before, probed, diagonal)
-    bound = evaluated_world_verts(mesh_obj)
-    gate_p = rig_gates.gate_p_rest_pose(source, bound, diagonal)
-    gate_p["evaluation_liveness"] = liveness
+    gate_p, weights, t_skin = None, {}, None
+    if bind:
+        t_skin = skin(mesh_obj, arm_obj)
+        # Liveness BEFORE Gate P, so Gate P's reading is known to be about a bound mesh and
+        # not about an evaluation that never carried the modifier. Restored immediately; no
+        # keyframe exists yet, so nothing survives the restore.
+        bpy.context.view_layer.update()
+        rest_before = evaluated_world_verts(mesh_obj)
+        pb = arm_obj.pose.bones["shoulder.L"]
+        saved = pb.matrix_basis.copy()
+        pb.matrix_basis = Matrix.Rotation(math.radians(30.0), 4, "Y")
+        bpy.context.view_layer.update()
+        probed = evaluated_world_verts(mesh_obj)
+        pb.matrix_basis = saved
+        bpy.context.view_layer.update()
 
-    weights = read_weights(mesh_obj, len(source))
+        liveness = rig_gates.gate_p_evaluation_is_live(rest_before, probed, diagonal)
+        bound = evaluated_world_verts(mesh_obj)
+        gate_p = rig_gates.gate_p_rest_pose(source, bound, diagonal)
+        gate_p["evaluation_liveness"] = liveness
+        weights = read_weights(mesh_obj, len(source))
+
     fingerprint = rig_gates.rig_fingerprint(bone_table(arm_obj), weights, len(source))
 
     return {
@@ -299,7 +367,10 @@ def build_pass(glb_path, name, bands, label):
         "fingerprint": fingerprint, "gate_p": gate_p, "premise2": premise2,
         "premise6": premise6, "shell_id": shell_id, "shell_sizes": shell_sizes,
         "bone_lengths": bone_lengths, "bbox_lo": lo.tolist(), "bbox_hi": hi.tolist(),
-        "timings": {"landmarks_s": t_landmarks, "skin_s": t_skin},
+        "heuristic_landmarks": heuristic_marks, "joint_balls": balls, "shells": shells,
+        "offset_table": offsets, "placement_ruling": ruling, "bound": bool(bind),
+        "timings": {"landmarks_s": t_landmarks, "joint_balls_s": t_balls,
+                    "skin_s": t_skin},
     }
 
 
@@ -493,12 +564,19 @@ def deformation_diagnostics(ctx, probe):
 # ----------------------------------------------------------------------- export
 
 
-def export_rigged(ctx, probe, out_path):
-    """Export, then Gate N on the RE-IMPORTED result. Raises before any manifest exists."""
+def export_rigged(ctx, probe, out_path, animated=True):
+    """Export, then Gate N on the RE-IMPORTED result. Raises before any manifest exists.
+
+    The re-import also re-reads the mesh, so Gate P's fidelity clause runs on the round trip
+    itself: whatever else the exporter did, the vertices a consumer loads must be the
+    vertices that went in. In skeleton mode that is the *whole* of the rest-pose path,
+    because nothing is bound — see `build_pass`.
+    """
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     wanted = {
         "filepath": out_path, "export_format": "GLB", "use_selection": False,
-        "export_yup": True, "export_animations": True, "export_frame_range": True,
+        "export_yup": True, "export_animations": animated,
+        "export_frame_range": animated,
         "export_animation_mode": "ACTIONS", "export_skins": True,
         # export_def_bones=True would drop every non-deforming marker and fire Gate N.
         "export_def_bones": False, "export_apply": False, "export_materials": "EXPORT",
@@ -515,15 +593,125 @@ def export_rigged(ctx, probe, out_path):
     reimported = sorted(b.name for a in arms for b in a.data.bones)
     gate_n_post = rig_gates.gate_n_names(reimported, sitelist.ALL_NAMES,
                                          "the re-imported exported GLB")
+
+    # MEASURED 2026-08-11, and it was a gate silently not running. Selecting the re-imported
+    # subject by `type == "MESH"` returns TWO objects: `geometry_0` and an `Icosphere` — the
+    # decoy Blender's glTF importer drops into its hidden `glTF_not_exported` collection,
+    # the same decoy E01's G4 fired on. The first version of this code skipped Gate P when
+    # the count was not 1, so the round-trip clause reported `null` and the manifest carried
+    # a gate that had quietly declined to run. Selection is now render-visibility, and an
+    # ambiguous subject **raises** rather than returning None: a gate that opts out is worse
+    # than one that fails, because nothing downstream can tell the difference.
+    meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    visible = blender_scene.render_visible_meshes(bpy.context.scene, meshes)
+    if len(visible) != 1:
+        raise ArmatureError(
+            f"the re-imported export presents {len(visible)} render-visible mesh object(s) "
+            f"({[o.name for o in visible]}, from {[o.name for o in meshes]}); Gate P's "
+            f"round-trip clause cannot say which one is the subject, and guessing would "
+            f"make it report on geometry nobody asked about"
+        )
+    gate_p_round_trip = rig_gates.gate_p_round_trip_positions(
+        ctx["source"], world_verts(visible[0]), ctx["diagonal"])
     actions = [a.name for a in bpy.data.actions]
     return {
         "export_kwargs": {k: v for k, v in kwargs.items() if k != "filepath"},
         "requested_but_not_supported_by_this_blender": dropped,
         "reimported_armatures": [a.name for a in arms],
         "reimported_bone_names": reimported,
+        "reimported_mesh_objects": [o.name for o in meshes],
         "reimported_actions": actions,
         "gate_n_post": gate_n_post,
+        "gate_p_round_trip": gate_p_round_trip,
     }
+
+
+def run_skeleton(args, out_dir, source_sha, started):
+    """Skeleton-approval mode. Places the pivots, gates the names, exports, and stops.
+
+    **Nothing is bound.** The Director gated the experiment here — *"Nothing moves forward
+    until I approve the skeleton"* — so the binding arms do not run and Gate P's liveness
+    clause is NOT YET RUN by design, not by omission.
+    """
+    first = build_pass(args["glb"], args["name"], args["bands"], "determinism-probe",
+                       bind=False)
+    fp_first, offsets_first = first["fingerprint"], first["offset_table"]
+    del first
+
+    ctx = build_pass(args["glb"], args["name"], args["bands"], "kept", bind=False)
+    gate_d = rig_gates.gate_d_determinism(fp_first, ctx["fingerprint"], ctx["diagonal"])
+    gate_n_pre = rig_gates.gate_n_names(
+        [b.name for b in ctx["armature"].data.bones], sitelist.ALL_NAMES,
+        "the built armature, before export")
+
+    out_glb = os.path.join(out_dir, f"{args['name']}_skeleton.glb")
+    export = export_rigged(ctx, None, out_glb, animated=False)
+
+    manifest = {
+        "tool": "rig_character", "tool_version": TOOL_VERSION, "mode": "skeleton",
+        "tool_sha256": _tool_hashes(),
+        "blender": bpy.app.version_string,
+        "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started)),
+        "elapsed_s": round(time.time() - started, 2),
+        "source": {"path": args["glb"], "sha256": source_sha,
+                   "bytes": os.path.getsize(args["glb"])},
+        "output": {"path": out_glb, "sha256": sha256_file(out_glb),
+                   "bytes": os.path.getsize(out_glb)},
+        "site_to_bone_map": {b.name: b.as_dict() for b in sitelist.BONES},
+        "registered_site_count": len(sitelist.ALL_NAMES),
+        "premise_2_pre_existing_rig": ctx["premise2"],
+        "premise_6_skinnability": ctx["premise6"],
+        "bbox": {"lo": ctx["bbox_lo"], "hi": ctx["bbox_hi"], "diagonal": ctx["diagonal"]},
+        "facing": ctx["landmarks"]["facing"],
+        "regions": ctx["landmarks"]["regions"],
+        "landmarks_after_snap": ctx["landmarks"]["landmarks"],
+        "landmarks_before_snap": ctx["heuristic_landmarks"],
+        "landmark_provenance": ctx["landmarks"]["provenance"],
+        "joint_ball_offset_table": ctx["offset_table"],
+        "placement_ruling": ctx["placement_ruling"],
+        "joint_balls_detected": ctx["joint_balls"],
+        "offset_table_reproduced_by_second_build":
+            offsets_first == ctx["offset_table"],
+        "bone_lengths": ctx["bone_lengths"],
+        "gates": {
+            "N_pre_export": gate_n_pre,
+            "N_post_export": export["gate_n_post"],
+            "P_rest_pose_round_trip": export["gate_p_round_trip"],
+            "P_evaluation_liveness": {
+                "verdict": "NOT YET RUN",
+                "reason": ("nothing is bound in skeleton mode, so there is no deform for a "
+                           "liveness clause to be about. It runs when a binding arm runs."),
+            },
+            "D_determinism": gate_d,
+        },
+        "export": {k: v for k, v in export.items()
+                   if k not in ("gate_n_post", "gate_p_round_trip")},
+        "probe_action": {"verdict": "NOT AUTHORED",
+                         "reason": "an arc on an unbound skeleton moves no geometry"},
+        "deformation_diagnostics": {
+            "verdict": "NOT YET RUN",
+            "reason": "no binding exists; deformation statistics require weights",
+        },
+        "timings": ctx["timings"],
+        "note": ("Skeleton-approval mode. The Director approves the skeleton before any "
+                 "binding arm runs; no metric here approximates that judgement."),
+    }
+    path = os.path.join(out_dir, "skeleton_manifest.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, indent=2)
+    print("SKELETON_OK " + json.dumps(
+        {"glb": out_glb, "sha256": manifest["output"]["sha256"], "manifest": path}))
+
+
+def _tool_hashes():
+    here = os.path.dirname(os.path.abspath(__file__))
+    return {os.path.basename(p): sha256_file(p) for p in [
+        os.path.abspath(__file__),
+        os.path.join(here, "armature_core", "sitelist.py"),
+        os.path.join(here, "armature_core", "landmarks.py"),
+        os.path.join(here, "armature_core", "joints.py"),
+        os.path.join(here, "armature_core", "rig_gates.py"),
+    ]}
 
 
 def main():
@@ -556,6 +744,12 @@ def main():
             json.dump(rec, fh, indent=2)
         print("MEASURE_OK " + path)
         return
+
+    if args["mode"] == "skeleton":
+        run_skeleton(args, out_dir, source_sha, started)
+        return
+    if args["mode"] != "full":
+        raise ArmatureError(f"unknown --mode={args['mode']!r}; known: skeleton, full")
 
     # Two full builds from the same input. The second is the one kept; Gate D compares.
     first = build_pass(args["glb"], args["name"], args["bands"], "determinism-probe")

@@ -104,6 +104,9 @@ first bone is placed. A site list chosen after seeing what was easy to rig is na
   (bounded by the structure's own size, per the global-constant law; linear-blend skinning at
   bind pose with normalized weights should be identity, so this is tight by design). Raises on
   breach.
+- **Gate P, second clause — evaluation liveness.** *(Amendment 1, 2026-08-11 — see below.)*
+  Before the fidelity clause is read, a bone is posed and the mesh is re-evaluated: max vertex
+  displacement must **exceed** the same threshold. Raises if it does not.
 - **Gate D — determinism.** A second run from the same inputs reproduces bone heads, tails,
   parents and weights within float tolerance — compared as **parsed objects, never bytes**
   (bytes-are-not-content law). Raises on mismatch.
@@ -164,3 +167,121 @@ decides whether the skeleton is fit to perform.
 
 **14 / 18.** Sub-3 scores carry their reasons above rather than remediation theater; the two 2s
 are honest ceilings for a local build experiment.
+
+---
+
+## Amendment 1 — 2026-08-11, after the first run halted. Executor's clause, adopted into law by the advisor.
+
+**Gate P as originally written could not fail on this subject, and that is how the halt was
+found.** The fidelity clause read a max displacement of **exactly 0.0**. That reading has two
+causes and only one of them is the good one: either skinning is genuinely the identity at
+bind, or the evaluated mesh never carried the armature modifier at all. **Both read 0.0.**
+
+On this subject it was the second. `ARMATURE_AUTO` created all 17 deform vertex groups and
+left every one empty — 0 of 399,140 vertices weighted — and `parent_set` reported that as an
+INFO-level warning while returning success. Without a second clause, the run would have
+exported a rigged GLB with all 22 names correct, a perfect rest pose and **no skinning
+whatsoever**, and every gate in this spec would have reported green.
+
+**The clause, now binding:** before the fidelity clause is read, the tool poses a deform bone
+and re-evaluates the mesh. Max vertex displacement must **exceed** 1e-4 × the mesh's own bbox
+diagonal. If it does not, the deform is not live and the fidelity reading is vacuous — a
+perfect identity is what an unbound mesh always reports. Raises inside the tool, no skip flag.
+
+**Why it belongs here rather than in the executor's notes:** it is *put the andon on the
+direction the invariant does not bound*, applied one level deeper than the spec had it. The
+fidelity clause bounds displacement from **above**. Nothing bounded it from **below**, and
+zero is the value both success and total failure take. A check that cannot fail is not a check.
+
+### Standing hazard, same date — an exit code from Blender is not a verdict
+
+**An unhandled exception inside `blender -b -P script.py` prints its traceback and Blender
+still exits 0.** Measured on this rig 2026-08-11. A caller reading `$LASTEXITCODE` — a shell
+chain, a CI step, a later session's `if` — would have read this experiment's halt as a
+success, which is the same defect class as a gate behind a shell `&&`.
+
+**Binding on every Blender invocation in this repo's tools:** verify a **success sentinel in
+the output** (`RIG_OK`, `MEASURE_OK`, `SHEET_OK`, `PANELS_OK`, `DIAGNOSIS_OK`, …), never the
+exit code alone. Tools additionally catch their own `GateFailure`, write a `halt.json` beside
+the outputs they did not produce, and call `sys.exit(2)` — a halt that returns success is not
+a halt.
+
+### Amendment 2 — 2026-08-11, advisor ruling on the halt: the arm is amended, not abandoned
+
+**Premise 5 stays FALSIFIED and is not retried.** Bone heat is dead on this mesh as delivered;
+the mechanism sweep (`tools/diagnose_bone_heat.py`) rules out bone count, seam fragmentation,
+interior shells, and scale from 0.1× to 100×.
+
+**The non-manifold repair route is NOT taken this arm.** It mutates paid-for geometry and its
+UV atlas. Recorded as a fallback only.
+
+**Two candidate bindings run instead, both through the full gated pipeline** — Gate N, Gate P
+with the liveness clause, Gate D, the probe arc, and per-structure deformation diagnostics
+each:
+
+- **(a) ENVELOPE** — `ARMATURE_ENVELOPE`, measured at 100% vertex coverage in the sweep.
+  Exactly what was applied is recorded in the manifest.
+- **(b) RIGID-PER-SEGMENT** — procedural weights: each vertex assigned to its limb-segment
+  bone by nearest bone segment, with a small blend band at the joints. The assignment rule is
+  recorded in the manifest. **Rationale on the record:** the subject is a jointed clay
+  mannequin. Rigid segments articulating at drawn joints are not a fallback for this
+  character — they are what the character *is*.
+
+**The Director picks the binding from the sheet. No metric picks it.** The dailies sheet
+becomes a comparison sheet — rest | arc frames | 1:1 joint insets, arm (a) beside arm (b),
+uniform panels, no gate states printed.
+
+**Also accepted in the same ruling:** the site→bone disposition (18 keypoint sites + 4
+structural, facial markers non-deforming); the P2 joint-versus-limb correction; and the
+glTF-split-versus-welded units finding — the last two noted for the closing ruling.
+
+### Amendment 3 — 2026-08-11, Director's catch at 1:1, and the hard gate that follows
+
+**The Director zoomed the halt sheet's joint insets and ruled:**
+
+> *"This looks like it's not lined up properly."*
+
+He was right, and the measurement is not close: **the elbow pivots sat 27–28 % of the upper
+arm's own length away from the mannequin's sculpted elbow balls.** Wrists 16–19 %, knees
+8–10 %, shoulders 6 %, hips 4 %, ankles under 2 %.
+
+**The named finding: placement by proportion when the subject carries its own markers.**
+E07's first skeleton put the elbow at 0.44 along the arm's measured centreline because a
+figure standing with straight limbs presents no *bend* to read a joint from. That reasoning
+was right about silhouettes and wrong about this subject — he is a clay artist's mannequin
+and he is covered in sculpted ball-joints. The balls were in the mesh the whole time.
+
+**Instrument or subject, ruled from the spread rather than asserted.** A projection or overlay
+error applies one transform to every marker and produces near-equal offsets. These differ by a
+factor of **18.2** between joints, and removing the best single translation still leaves
+0.0539 of error. **The subject.** The renderer was not at fault.
+
+**The standing method for this character class, now binding:** where the subject carries a
+sculpted marker, **the marker is the pivot**. Proportion heuristics are the fallback for sites
+that genuinely have no marker, and every such site is named in the report rather than left to
+look measured. Implemented in `armature_core/joints.py`; the offset table rides every manifest.
+
+---
+
+## ⛔ HARD GATE — the Director approves the skeleton before anything downstream runs
+
+> *"Nothing moves forward until I approve the skeleton."* — Director, 2026-08-11
+
+**Binding, and it supersedes the sequencing in the ruling above.** The two candidate bindings
+of Amendment 2 — ENVELOPE and RIGID-PER-SEGMENT — **do not run** until the Director has ruled
+on the skeleton-approval sheet. Neither does the probe arc, the deformation diagnostics, E08,
+or anything else downstream of E07.
+
+Consequences, so the record does not have to infer them:
+
+- Gate P's **liveness clause is NOT YET RUN** this round *by design, not by omission* — there
+  is no binding for it to be about, and a liveness reading on an unbound mesh would report on
+  a thing that does not exist yet.
+- The probe action is **NOT AUTHORED** — an arc on an unbound skeleton moves no geometry.
+- **Deformation diagnostics are NOT YET RUN** — they require weights.
+- `rig_character.py --mode=skeleton` is the mode this gate defines. `--mode=full` remains in
+  the tree and runnable, and is what resumes after approval.
+
+The approval artifact is `outputs/E07/approval/E07-skeleton-approval.png`: the figure with the
+skeleton in place, and a per-joint 1:1 inset row showing every pivot **before | after** at the
+same camera. No metric approximates this judgement and none is printed on the sheet.

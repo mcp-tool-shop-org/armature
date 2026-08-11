@@ -110,10 +110,17 @@ def band_profile(verts, n_bands=200, gap_frac=GAP_FRAC, min_cluster_frac=MIN_CLU
             if len(g) < floor:
                 continue
             c = bx[g]
+            cx, cy = float(c[:, 0].mean()), float(c[:, 1].mean())
+            # Mean radial distance from this cluster's own centroid — a real radius, not a
+            # bbox width. This is the profile the sculpted ball-joints show up as peaks in,
+            # and a bbox width would smear them: a ball and a flattened-but-wide section
+            # give the same x extent.
+            rad = np.hypot(c[:, 0] - cx, c[:, 1] - cy)
             clusters.append({
                 "x_lo": float(c[:, 0].min()), "x_hi": float(c[:, 0].max()),
                 "y_lo": float(c[:, 1].min()), "y_hi": float(c[:, 1].max()),
-                "cx": float(c[:, 0].mean()), "cy": float(c[:, 1].mean()),
+                "cx": cx, "cy": cy,
+                "r_mean": float(rad.mean()), "r_p90": float(np.percentile(rad, 90)),
                 "n": int(len(g)),
             })
         clusters.sort(key=lambda c: -c["n"])
@@ -198,6 +205,7 @@ def _column_trace(bands, lo_band, hi_band, picker, expected):
         trace.append({"i": i, "z": bands[i]["z"], "cx": c["cx"], "cy": c["cy"],
                       "x_lo": c["x_lo"], "x_hi": c["x_hi"],
                       "y_lo": c["y_lo"], "y_hi": c["y_hi"], "n": c["n"],
+                      "r_mean": c["r_mean"], "r_p90": c["r_p90"],
                       "x_width": c["x_hi"] - c["x_lo"], "y_width": c["y_hi"] - c["y_lo"]})
     return trace
 

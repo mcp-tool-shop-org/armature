@@ -131,6 +131,76 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal,
     return ev
 
 
+def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal,
+                                epsilon_frac=REST_POSE_EPSILON_FRAC, max_probe=20000):
+    """Gate P, round-trip clause — the exported surface is the surface that went in.
+
+    **Why this is a point-set comparison where the bind clause is index-wise.** The armature
+    modifier is a deform: it preserves vertex order, so `gate_p_rest_pose` can compare index
+    for index. A glTF *export* does not — it re-splits vertices at attribute discontinuities,
+    and on this subject 399,140 vertices came back as 399,903. Comparing those index-wise
+    reads two different arrays against each other, which is what the first version of this
+    code did until it raised and said so.
+
+    What has to hold is that the **set of positions** is unchanged; multiplicity is the
+    exporter's business. Measured on this subject: 149,643 unique positions in, 149,643 out,
+    identical to the last float32 bit.
+
+    Compared at float32 because that is glTF's storage precision. Demanding float64 would be
+    asking for a precision the format does not carry, and would fire on a correct export.
+    """
+    a = np.unique(np.ascontiguousarray(np.asarray(source, dtype=np.float32)), axis=0)
+    b = np.unique(np.ascontiguousarray(np.asarray(roundtrip, dtype=np.float32)), axis=0)
+    ev = {"unique_positions_source": int(len(a)), "unique_positions_roundtrip": int(len(b)),
+          "n_source_vertices": int(len(np.asarray(source))),
+          "n_roundtrip_vertices": int(len(np.asarray(roundtrip))),
+          "epsilon_frac": epsilon_frac, "bbox_diagonal": float(bbox_diagonal),
+          "compared_at": "float32 — glTF's storage precision"}
+    if not (bbox_diagonal > 0):
+        raise GatePRestPose(f"bbox diagonal is {bbox_diagonal}; no threshold can be derived",
+                            ev)
+
+    dtype = [("x", np.float32), ("y", np.float32), ("z", np.float32)]
+    va, vb = a.view(dtype).ravel(), b.view(dtype).ravel()
+    only_source = np.setdiff1d(va, vb)
+    only_roundtrip = np.setdiff1d(vb, va)
+    ev["positions_only_in_source"] = int(len(only_source))
+    ev["positions_only_in_roundtrip"] = int(len(only_roundtrip))
+
+    if not len(only_source) and not len(only_roundtrip):
+        ev["verdict"] = "the exported surface is the source surface, position for position"
+        ev["max_deviation"] = 0.0
+        return ev
+
+    # Positions differ. They may still be inside tolerance — measure, rather than firing on
+    # a last-bit rounding difference the format is entitled to.
+    threshold = epsilon_frac * float(bbox_diagonal)
+    worst = 0.0
+    for odd, against in ((only_source, b), (only_roundtrip, a)):
+        if not len(odd):
+            continue
+        pts = np.stack([odd["x"], odd["y"], odd["z"]], axis=1).astype(np.float64)
+        if len(pts) > max_probe:
+            ev["probe_truncated_at"] = max_probe
+            pts = pts[:max_probe]
+        ref = against.astype(np.float64)
+        for chunk in np.array_split(pts, max(1, len(pts) // 256 + 1)):
+            d = np.linalg.norm(chunk[:, None, :] - ref[None, :, :], axis=2).min(axis=1)
+            worst = max(worst, float(d.max()))
+    ev.update({"threshold": threshold, "max_deviation": worst})
+
+    if worst > threshold:
+        raise GatePRestPose(
+            f"the export round trip moved the surface: {len(only_source)} position(s) only "
+            f"in the source and {len(only_roundtrip)} only in the export, the worst of them "
+            f"{worst:.9f} from any position in the other (> {threshold:.9f}). Vertex "
+            f"multiplicity may change through glTF; the set of positions may not",
+            ev,
+        )
+    ev["verdict"] = f"positions agree within {threshold:.9f}"
+    return ev
+
+
 def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal, min_frac=1e-4):
     """Gate P, second clause · ANDON — the identity reading was not vacuous.
 
