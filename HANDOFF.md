@@ -69,7 +69,7 @@ remains the open canon question, judged only by the Director's eye.
 | step | state at write time |
 |---|---|
 | **F01 / facet E33** — the first performer | **DELIVERED.** The Director's own clay-armature concept through facet's full route: `E:\AI\training\facet_E33\out\performer_textured.glb`, sha256 `9e20ea7d…b1aa`, 299,956 tris, one mesh, one 4096 atlas, terracotta (his r3 ruling), unrigged, 67 interior shells. His wood-grain note + the not-run brush stage (hand-interior texels are dilation fill) are standing notes for a finish iteration, NOT change orders |
-| **E07** — the skeleton | **IN FLIGHT** (opus seat, worktree `E:\AI\armature-E07`, branch E07-run). Named-bone rig on the performer, gates N/P/D, zero credits, dailies-standard deformation sheet. Its delivery block pins the rigged GLB; **the sheet goes to the Director's eye** |
+| **E07** — the skeleton | **IN FLIGHT, ⛔ DIRECTOR-GATED** (opus seat, worktree `E:\AI\armature-E07`, branch E07-run). Bone heat bound zero weights (halt upheld, liveness clause adopted); joint pivots were caught off the sculpted ball-joints at the Director's zoom and are being re-derived from measured ball centers. **His standing order, 2026-08-11: "Nothing moves forward until I approve the skeleton."** The seat delivers the skeleton approval sheet and stands down; binding arms, E08, and everything downstream wait on his word |
 | **E08** — the first authored performance | NEXT. Him, moving on purpose, reference stack carrying who he is. Spec opens with a Comfy Agent consult round (reference stacking, strength below 1.0 with a real body, the 81-frame class). This is the first frames of the actual product |
 
 ## 4. The publish chain — executed 2026-08-11 on the Director's green light
@@ -128,9 +128,12 @@ satisfied.
 
 1. Verify §3 and §4's IN FLIGHT items yourself — E07's delivery block and the facet sweep's
    CI conclusion. Do not inherit them.
-2. When E07 lands: the deformation sheet goes to the Director's eye; rule on the report;
-   then write E08 — the first authored performance — opening with the Comfy Agent consult
-   round, under the Trajectory row.
+2. When E07's skeleton approval sheet lands: it goes to the Director's eye, **pre-examined
+   by you at his zoom first** — pivots on the sculpted balls, every inset. ⛔ **Nothing
+   proceeds until he approves the skeleton** — not the binding arms, not E08, nothing
+   downstream. After his approval: the two-binding comparison (envelope vs rigid-per-segment,
+   his eye picks), then E08 — the first authored performance — opening with the Comfy Agent
+   consult round, under the Trajectory row.
 3. When the facet sweep lands green, the one-system state is fully current; fold anything it
    surfaced into the 0.1.1 queue.
 4. Small leftovers, none urgent: `tools/invert_frames.py` adoption (E02 closing, Ruling 5);
