@@ -412,3 +412,43 @@ that motivated the consult, per the Director's ruling: *"This is a hard fail."*
 **E07 status:** skeleton APPROVED with its reservation intact · binding **arm (c) delivered,
 awaiting the Director's eye on the joint-seam read** · arms (a) and (b) FAILED · the standing
 item **skeleton v2 — articulated fingers** unchanged.
+
+---
+
+## ⛔ ARM (c) RULED — Director, 2026-08-11: *"This is not a pass."*
+
+Recorded verbatim. Arm (c) as delivered does **not** pass at his eye. The fix round below was
+run against it and is the control arm; its residue is reported rather than smoothed.
+
+## ⚖ LICENCE RULING — QuadRemesher is struck, and the dispatcher's verdict is overruled
+
+**Director, verbatim:** *"it's not fit for the pipeline, as it isn't non-commercial safe."*
+
+**QuadRemesher (Exoside) is NOT enabled, NOT measured, and carries no licence row.** The
+dispatcher's *owned-commercial YES* is **overruled and recorded as the dispatcher's error**.
+
+**The principle, stated so it is not re-litigated:** the licence gate protects the
+**pipeline's** cleanliness and reproducibility, not one rig's right to run a tool. A canonical
+route stage cannot depend on a proprietary paid addon — a licence that lives on one machine is
+not a licence the route has. *Owned by the Director* and *fit for the pipeline* are different
+questions, and only the second one is the gate's business.
+
+## Amendment 5 — arm (d), the retopo route, **stock Blender only**
+
+Attacks the root cause rather than the symptom: the double-walled non-manifold shell is why
+bone heat dies, why envelope tears, and why rigid parts carry inner wall into the open.
+
+1. **Outer-shell extraction** — delete the interior wall using the measured classification
+   (50.84 % of faces), recording rule and counts.
+2. **Retopo with Blender built-ins, headless** — `bpy.ops.object.quadriflow_remesh` directly,
+   or voxel remesh at a per-structure-justified size first (to weld and close) then QuadriFlow
+   to target. Both measured and reported side by side where cheap. **The sculpted balls must
+   survive as geometry; they are the character**, along with the mitten hands and the toes.
+3. **If Blender's built-ins cannot hold the character's features at any reasonable count,
+   STOP and report with renders.** The next external candidate — Instant Meshes or anything
+   else — needs a **retrieved licence document ruled through the gate BEFORE it runs**.
+   Nothing external enters on an assumption again.
+4. New UVs + automated terracotta bake old→new, with a **texture-fidelity row** on the sheet.
+   The approved skeleton unchanged on its measured pivots. `ARMATURE_AUTO` bone heat with the
+   liveness clause armed — **zero weights on a clean manifold single-shell mesh would be a
+   major finding: halt and report, never fall back silently.**

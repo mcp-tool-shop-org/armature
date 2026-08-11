@@ -232,3 +232,18 @@ def test_determinism_fires_when_a_part_is_missing_from_the_second_build():
     with pytest.raises(parts.GatePartsDeterminism) as exc:
         parts.gate_parts_determinism(a, b, 1.069)
     assert "neck" in str(exc.value)
+
+
+def test_the_collar_is_a_disc_around_the_joint_not_a_slab_across_the_figure():
+    """The armpit blade, reproduced. A face on the far side of the body sits inside the
+    plane band and must still be refused: without the radial bound the shoulder collar
+    reached across the performer's torso and swept out as a flat shard when the arm moved."""
+    planes = parts.joint_planes(BONES, {}, {"neck": 0.05, "head": 0.05}, RADII)
+    centroids = np.array([(0.0, 0.0, 0.27),      # at the joint, just behind the plane
+                          (0.6, 0.0, 0.27)])     # same band, far across the figure
+    labels = np.array([NAMES.index("chest"), NAMES.index("chest")])
+    borrowed, detail = parts.collar_faces(centroids, labels, NAMES, planes)
+    assert 0 in borrowed["neck"], "the face at the joint should be borrowed"
+    assert 1 not in borrowed["neck"], (
+        "a face 0.6 from the joint axis was borrowed: the collar is still a slab")
+    assert detail[0]["collar_radius"] > 0

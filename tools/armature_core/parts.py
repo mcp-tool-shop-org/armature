@@ -33,6 +33,12 @@ from .errors import ArmatureError, GateFailure
 
 #: Collar depth as a fraction of that joint's own measured ball radius.
 COLLAR_BALL_FRACTION = 0.9
+#: Collar RADIUS about the joint axis, as a multiple of that joint's own radius. Without
+#: it the collar is an infinite slab: measured on the performer, `shoulder.L` borrowed
+#: 16,023 faces spanning x from -0.047 to +0.167 -- a slice straight across the body,
+#: reaching 0.219 from the shoulder ball, nine times its 0.0242 radius. That slab is the
+#: flat blade that appeared at the armpit the moment the arm rotated.
+COLLAR_RADIAL_MULTIPLE = 2.0
 
 
 class GatePartsAccounting(GateFailure):
@@ -162,13 +168,53 @@ def joint_planes(bones, marks, ball_radius, limb_radius,
     return out
 
 
-def collar_faces(centroids, labels, bone_names, planes):
+def clamp_to_joint_planes(centroids, labels, bone_names, planes):
+    """No part may own geometry on the far side of its OWN joint plane.
+
+    **The chest tear, and the rule that closes it.** Nearest-segment assignment let
+    `shoulder.L` own a broad patch of torso *surface* behind its own shoulder ball — the
+    shoulder bone is simply nearer to the armpit than the chest bone is. That patch rotated
+    away with the arm and left a raw opening in the chest, visible as a torn seam at 1:1.
+
+    The fix is not a cap and not a wider collar: it is a boundary. A limb part's territory
+    **begins at its own measured joint plane**; anything it was given behind that plane goes
+    back to its parent. The parts still interpenetrate, because the collar then reaches
+    `collar` either side of the same plane — so the seam is covered without any part carrying
+    a piece of its neighbour's body that swings away when it moves.
+
+    Per joint and bounded by that joint's own measured plane. No length in metres appears.
+    """
+    c = np.asarray(centroids, dtype=np.float64)
+    labels = np.asarray(labels).copy()
+    index = {name: i for i, name in enumerate(bone_names)}
+    detail = []
+    for plane in planes:
+        p = np.asarray(plane["point"], dtype=np.float64)
+        n = np.asarray(plane["normal"], dtype=np.float64)
+        child, parent = index[plane["child"]], index[plane["parent"]]
+        behind = np.flatnonzero((labels == child) & (((c - p) @ n) < 0.0))
+        labels[behind] = parent
+        detail.append({"joint": f"{plane['parent']}->{plane['child']}",
+                       "faces_returned_to_parent": int(len(behind))})
+    return labels, detail
+
+
+def collar_faces(centroids, labels, bone_names, planes,
+                 radial_multiple=COLLAR_RADIAL_MULTIPLE):
     """Faces each part borrows from its neighbour so the two interpenetrate at the joint.
 
-    For a joint whose normal points from the parent part toward the child part, the parent
-    takes the child's faces lying within `collar` **past** the plane, and the child takes the
-    parent's faces within `collar` **before** it. Returns {part name: face index array} of
-    borrowed faces only — the primary partition is untouched.
+    A collar is a **disc around the joint**, not a slab across the figure. Two bounds, both
+    per structure:
+
+    * along the joint normal — within `collar` either side of the plane, and
+    * about the joint axis — within `radial_multiple` × that joint's own radius of the point.
+
+    **The second bound is the fix for the armpit blade.** Without it the plane test alone
+    admits everything in an infinite slab, and on this performer the shoulder collar reached
+    across the torso to x = -0.047 and out to 0.219 from the ball — nine times its radius.
+    Those faces rotated with the arm and swept out of the body as a flat serrated shard,
+    visible at full-body scale. Nothing else could see it: the partition stayed valid, the
+    parts stayed rigid, the arc still arrived whole.
     """
     c = np.asarray(centroids, dtype=np.float64)
     labels = np.asarray(labels)
@@ -180,14 +226,17 @@ def collar_faces(centroids, labels, bone_names, planes):
         n = np.asarray(plane["normal"], dtype=np.float64)
         collar = float(plane["collar"])
         s = (c - p) @ n
+        radial = np.linalg.norm((c - p) - s[:, None] * n[None, :], axis=1)
+        near = radial <= radial_multiple * float(plane["radius"])
         pi, ci = index[plane["parent"]], index[plane["child"]]
 
-        into_parent = np.flatnonzero((labels == ci) & (s >= 0.0) & (s <= collar))
-        into_child = np.flatnonzero((labels == pi) & (s < 0.0) & (s >= -collar))
+        into_parent = np.flatnonzero((labels == ci) & (s >= 0.0) & (s <= collar) & near)
+        into_child = np.flatnonzero((labels == pi) & (s < 0.0) & (s >= -collar) & near)
         borrowed[plane["parent"]].append(into_parent)
         borrowed[plane["child"]].append(into_child)
         detail.append({"joint": f"{plane['parent']}->{plane['child']}",
                        "collar": collar, "radius": plane["radius"],
+                       "collar_radius": float(radial_multiple * plane["radius"]),
                        "radius_source": plane["radius_source"],
                        "faces_lent_to_parent": int(len(into_parent)),
                        "faces_lent_to_child": int(len(into_child))})

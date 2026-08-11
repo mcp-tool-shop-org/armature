@@ -878,3 +878,75 @@ untouched, the arc arrives whole and nothing deforms. Whether the seams read —
 about the armpit shard in §28.1 — is his.
 
 **Not merged.** The advisor closes E07.
+
+---
+
+# ROUND 5 — arm (c) fix round. Two defects attacked, one closed, one reduced but PRESENT.
+
+**Director on arm (c) round 1:** *"This is not a pass."* Recorded in the spec. This round is
+the control arm.
+
+## 32. What changed
+
+| change | rule | measured effect |
+|---|---|---|
+| **Interior-wall pairing** | every interior face inherits the part of the exterior face it backs — normal ray both directions, nearer hit wins; nearest exterior face where the ray misses or lands > 3x further | 155,786 interior faces (50.89 %) re-parented: **141,654 by ray, 14,132 by nearest (ray rejected), 0 by nearest-no-hit, 0 unpaired**. Pairing distance mean 0.00316, max 0.0709 |
+| **Joint-plane clamp** | no part may own geometry behind its own measured joint plane; it goes back to the parent | 13,973 faces returned chest←shoulder.L, 13,347 chest←shoulder.R, 1,551 + 2,598 hips←hip.L/R |
+| **Radial collar bound** | the collar is a **disc** about the joint axis (2.0 x that joint's own radius), not a slab | chest→shoulder.L collar **15,743 → 9,747 faces** |
+
+`shoulder.L` went from **42,281 → 29,033** primary faces; `chest` gained **+25,626**.
+
+## 33. Gates — beside round 1's
+
+| gate | round 1 | fix round |
+|---|---|---|
+| PARTS accounting | 306,110 across 17, each once | **same** |
+| N pre / post | 17/17 · 17/17 | **17/17 · 17/17** |
+| P bind pose | 4.03e-08 | **4.03e-08** |
+| RIGID arrival | worst xform 2.70e-07, figure 0.76223 | **figure 0.76223**, unchanged |
+| D determinism | pass | **pass** |
+| ATLAS untouched | byte-identical | **byte-identical** |
+
+## 34. ⚑ RESIDUE — the armpit shard is REDUCED, NOT GONE
+
+**It is still visible** in frames 17 and 33 and in the shoulder inset, at roughly half its
+former size. Reported as residue, not as a fix.
+
+**Why the first diagnosis was wrong.** I attributed the shard to interior faces assigned to
+`shoulder.L`. Pairing them away changed nothing visible. The measurement that found the real
+source: the collar was an **infinite slab** perpendicular to the arm axis — `shoulder.L`
+borrowed 16,023 faces spanning x from **−0.047 to +0.167**, crossing the body centreline, out
+to **0.219 from the shoulder ball, nine times its 0.0242 radius**. Bounding the collar
+radially cut that to 9,747 and roughly halved the blade.
+
+**What still produces it, measured.** `shoulder.L`'s **primary** faces still reach
+**x = +0.032** (near the body centreline) and **0.2102** from the ball, with **3,824 faces
+beyond 4x the ball radius**. The joint-plane clamp bounds the part along the arm axis only:
+the half-space `s >= 0` on a plane perpendicular to a down-and-outward arm still contains a
+wedge of lower torso, and nearest-bone hands that wedge to the shoulder. **A limb part needs a
+radial bound about its own bone axis, not only a plane.** Not attempted here — the route is
+superseded by arm (d), which attacks the geometry rather than the partition.
+
+## 35. Fix-round artifacts
+
+| artifact | sha256 | bytes |
+|---|---|---|
+| sheet `outputs\E07\parts-fixed-sheet\E07-parts-armature.png` | 910138a9a56a44d000a302c5c06b758cd2cb9bd922d369489e4796c95e1d560c | 1694747 |
+| GLB `outputs\E07\parts-fixed\performer_parts.glb` | 1ff394d36038924b6df9f6384e3d773cab225a28fcffae2830cc4190e3490759 | 53689640 |
+| manifest `parts_manifest.json` | f17605fb87e7677a8906b6cc93fb71f32ff2a317bcd30265450afb32a8881de6 | 47307 |
+
+## 36. Also fixed, and it is the standing hazard biting its own documentation
+
+`rig_parts.py`'s error handler caught only `GateFailure`. An ordinary `ValueError` from
+the BVH build propagated out of `blender -b -P` and **Blender exited 0** — the run printed a
+traceback and reported success, which is exactly the hazard Amendment 1 records. Every exit
+from that handler is now non-zero: 2 for a fired gate, 1 for an unhandled error.
+
+The `ValueError` itself: `BVHTree.FromPolygons(..., all_triangles=True)` raises on the
+first n-gon, and the joint bisects leave n-gons at every cut.
+
+## 37. Where round 5 stopped
+
+**Arm (c) fixed is delivered as the control arm, with its residue flagged.** Arm (d) — the
+retopo route on stock Blender — is **NOT STARTED**; the two rulings above are recorded and its
+amendment is in the spec.

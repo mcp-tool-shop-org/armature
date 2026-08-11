@@ -130,6 +130,116 @@ def bisect_at_joints(bm, planes, diagonal):
     return record
 
 
+def classify_shells(bm, diagonal):
+    """Which faces are the outer surface and which are the wall lining it.
+
+    Connectivity on **welded** positions, without touching the mesh: glTF splits a vertex at
+    every UV and normal seam, so the file presents 21,514 shells where the asset has 67.
+    Vertices are grouped by rounded position, groups are unioned across edges, and the
+    component carrying the most faces is the exterior.
+    """
+    coords = np.array([list(v.co) for v in bm.verts], dtype=np.float64)
+    key = np.round(coords / (1e-6 * diagonal)).astype(np.int64)
+    _, rep = np.unique(key, axis=0, return_inverse=True)
+    groups = int(rep.max()) + 1
+    parent = np.arange(groups, dtype=np.int64)
+
+    def find(x):
+        root = x
+        while parent[root] != root:
+            root = parent[root]
+        while parent[x] != root:
+            parent[x], x = root, parent[x]
+        return root
+
+    for e in bm.edges:
+        a, b = find(rep[e.verts[0].index]), find(rep[e.verts[1].index])
+        if a != b:
+            parent[b] = a
+    root = np.array([find(i) for i in range(groups)], dtype=np.int64)
+    comp_of_vert = root[rep]
+    face_comp = np.array([comp_of_vert[f.verts[0].index] for f in bm.faces], dtype=np.int64)
+    uniq, counts = np.unique(face_comp, return_counts=True)
+    exterior = int(uniq[int(np.argmax(counts))])
+    return face_comp, exterior, int(len(uniq))
+
+
+def pair_interior_faces(bm, face_comp, exterior, labels, ray_reject_multiple=3.0):
+    """An interior face inherits the part of the exterior face it backs.
+
+    **The armpit shard, and the rule that kills it by construction.** Nearest-bone assignment
+    is blind to wall-ness: the torso's inner wall near the armpit is simply nearer the
+    shoulder bone than the chest bone, so 21,664 interior faces went to `shoulder.L` and swung
+    out of the body when the arm rotated. An inner wall has no business belonging to a bone
+    the surface it lines does not belong to.
+
+    Each interior face casts along **both** directions of its own normal and takes the nearer
+    exterior hit. A ray landing more than `ray_reject_multiple` times further than the nearest
+    exterior face is rejected in favour of that nearest face -- a grazing normal can otherwise
+    pair a hip to a shoulder. No hit at all falls back to nearest. Every branch is counted:
+    which rule fired how often is what makes this auditable rather than magic.
+    """
+    from mathutils.bvhtree import BVHTree
+
+    ext_idx = np.flatnonzero(face_comp == exterior)
+    int_idx = np.flatnonzero(face_comp != exterior)
+    if not len(ext_idx) or not len(int_idx):
+        return np.asarray(labels).copy(), {"interior_faces": int(len(int_idx)),
+                                           "note": "nothing to pair"}
+
+    bm.faces.ensure_lookup_table()
+    bm.normal_update()
+    verts = [v.co.copy() for v in bm.verts]
+    polys = [[v.index for v in bm.faces[int(i)].verts] for i in ext_idx]
+    # all_triangles=False: the joint bisects leave n-gons at every cut, and asserting
+    # triangles raises on the first one. FromPolygons triangulates internally and still
+    # reports the POLYGON index, which is what the pairing needs.
+    bvh = BVHTree.FromPolygons(verts, polys, all_triangles=False)
+
+    out = np.asarray(labels).copy()
+    stats = {"by_ray": 0, "by_nearest_no_hit": 0, "by_nearest_ray_rejected": 0,
+             "unpaired": 0}
+    distances = []
+    for fi in int_idx:
+        f = bm.faces[int(fi)]
+        origin = f.calc_center_median()
+        n = f.normal
+        best = None
+        for direction in (n, -n):
+            loc, nrm, idx, dist = bvh.ray_cast(origin, direction)
+            if idx is not None and (best is None or dist < best[0]):
+                best = (dist, idx)
+        near_loc, near_nrm, near_idx, near_dist = bvh.find_nearest(origin)
+
+        if best is not None and near_idx is not None and                 best[0] > ray_reject_multiple * max(near_dist, 1e-12):
+            chosen = near_idx
+            stats["by_nearest_ray_rejected"] += 1
+            distances.append(float(near_dist))
+        elif best is not None:
+            chosen = best[1]
+            stats["by_ray"] += 1
+            distances.append(float(best[0]))
+        elif near_idx is not None:
+            chosen = near_idx
+            stats["by_nearest_no_hit"] += 1
+            distances.append(float(near_dist))
+        else:
+            stats["unpaired"] += 1
+            continue
+        out[fi] = out[int(ext_idx[int(chosen)])]
+
+    d = np.array(distances) if distances else np.zeros(1)
+    stats.update({
+        "interior_faces": int(len(int_idx)), "exterior_faces": int(len(ext_idx)),
+        "interior_fraction": float(len(int_idx)) / (len(int_idx) + len(ext_idx)),
+        "ray_reject_multiple": ray_reject_multiple,
+        "pairing_distance_mean": float(d.mean()), "pairing_distance_max": float(d.max()),
+        "rule": ("normal ray both directions, nearer hit wins; nearest exterior face where "
+                 "the ray misses or lands >3x further than the nearest face"),
+    })
+    return out, stats
+
+
 def face_centroids(bm):
     bm.faces.ensure_lookup_table()
     return np.array([list(f.calc_center_median()) for f in bm.faces], dtype=np.float64)
@@ -249,6 +359,11 @@ def build_pass(args, label):
     centroids = face_centroids(bm)
     labels = parts.assign_faces(centroids, deform, limb_radii,
                                 normalise=args["assignment"] == "normalised")
+    # Round 2 of arm (c). Order matters: clamp the exterior to its own joint planes FIRST,
+    # then let every interior face inherit the already-clamped part of the surface it lines.
+    labels, clamp_detail = parts.clamp_to_joint_planes(centroids, labels, names, planes)
+    face_comp, exterior_shell, n_shells = classify_shells(bm, diagonal)
+    labels, pairing = pair_interior_faces(bm, face_comp, exterior_shell, labels)
     accounting = parts.gate_parts_accounting(labels, len(bm.faces), names)
     borrowed, collar_detail = parts.collar_faces(centroids, labels, names, planes)
 
@@ -272,6 +387,8 @@ def build_pass(args, label):
             "source": source, "diagonal": diagonal, "landmarks": lm, "offsets": offsets,
             "planes": planes, "collar_detail": collar_detail, "accounting": accounting,
             "part_stats": part_stats, "bone_lengths": bone_lengths, "cuts": cuts,
+            "clamp_detail": clamp_detail, "pairing": pairing,
+            "shells_welded": n_shells,
             "deform": deform, "names": names, "limb_radii": limb_radii,
             "faces_before_cut": faces_before_cut, "faces_after_cut": len(centroids),
             "bbox_lo": lo.tolist(), "bbox_hi": hi.tolist()}
@@ -405,6 +522,9 @@ def main():
                      "is measured to leave the neck with zero faces on this performer."),
         },
         "collar_per_joint": ctx["collar_detail"],
+        "joint_plane_clamp": ctx["clamp_detail"],
+        "interior_wall_pairing": ctx["pairing"],
+        "shells_after_weld": ctx["shells_welded"],
         "joint_planes": ctx["planes"],
         "parts": ctx["part_stats"],
         "part_count": len(ctx["parts"]),
@@ -432,16 +552,26 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except GateFailure as exc:
+    except BaseException as exc:                      # noqa: BLE001
+        # MEASURED AGAIN 2026-08-11, and it is the standing hazard of Amendment 1 biting the
+        # very file that documents it: this handler previously caught only GateFailure, so an
+        # ordinary ValueError propagated out of `blender -b -P` and **Blender exited 0**. The
+        # run printed a traceback and reported success. Every exit from here is non-zero.
         import traceback
         traceback.print_exc()
-        a = parse_args()
-        d = os.path.abspath(a["out"])
-        os.makedirs(d, exist_ok=True)
-        rec = {"tool": "rig_parts", "outcome": "HALTED — a gate fired",
-               "gate": getattr(exc, "gate", "?"), "exception": type(exc).__name__,
-               "message": str(exc), "evidence": getattr(exc, "evidence", {})}
-        with open(os.path.join(d, "halt.json"), "w", encoding="utf-8") as fh:
-            json.dump(rec, fh, indent=2, default=str)
-        print("HALT " + json.dumps({"gate": rec["gate"]}))
-        sys.exit(2)
+        gate = getattr(exc, "gate", None)
+        try:
+            a = parse_args()
+            d = os.path.abspath(a["out"])
+            os.makedirs(d, exist_ok=True)
+            rec = {"tool": "rig_parts",
+                   "outcome": ("HALTED — a gate fired" if gate
+                               else "FAILED — an unhandled error"),
+                   "gate": gate or "n/a", "exception": type(exc).__name__,
+                   "message": str(exc), "evidence": getattr(exc, "evidence", {}),
+                   "traceback": traceback.format_exc()}
+            with open(os.path.join(d, "halt.json"), "w", encoding="utf-8") as fh:
+                json.dump(rec, fh, indent=2, default=str)
+            print(("HALT " if gate else "ERROR ") + json.dumps({"gate": rec["gate"]}))
+        finally:
+            sys.exit(2 if gate else 1)
