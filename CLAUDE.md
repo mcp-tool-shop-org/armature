@@ -106,6 +106,13 @@ results, and the session that runs it does not decide their meaning.
 
 ## Rules for everyone (the portable core — full stories in facet's CLAUDE.md)
 
+- **The Director's conversational words are private to the session.** Public surfaces —
+  this repo, its docs, its site, its commit messages — carry decisions and facts in neutral
+  prose, never quotations from chat. When a ruling must be recorded, record the ruling, not
+  the sentence it arrived in. Verbatim capture for seat calibration, where needed at all,
+  lives only in private local session records, never on GitHub. Earned 2026-08-11: a seat
+  published his words across a day of public documents and he named it what it was — a
+  breach of trust and privacy.
 - **An inherited claim is a hypothesis wearing a fact's clothes.** Checking one costs minutes;
   building on one costs a session. This binds hardest on the premises of *your own dispatch* —
   an executor has least reason to doubt those, so every spec marks each premise **measured**
