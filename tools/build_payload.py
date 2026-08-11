@@ -121,7 +121,6 @@ E03_NEGATIVE = (
     "text, watermark"
 )
 
-<<<<<<< HEAD
 # E06's D2 prompt. D1 reuses E03_POSITIVE verbatim, so the pair differs in exactly one
 # clause — the subject — and the second sentence is byte-identical between them.
 #
@@ -138,7 +137,8 @@ E06_D2_POSITIVE = (
     "The blackguard, a lone armored warrior in dark plate armor, horned helm and heavy "
     "cloak, stands in the centre of an empty studio. Plain grey seamless "
     "background, even neutral lighting, full body in frame."
-=======
+)
+
 # E04's pre-registered seeds. **Committed in the spec that opens the experiment, before the
 # first submission** — `docs/experiments/E04-the-between-generation-floor.md`, section
 # "Pre-registered seeds". Gate S reads this list; it is the list, not a copy of it, and the
@@ -154,7 +154,6 @@ E04_SEEDS = (
     654654950724624,
     654654950814624,
     654654951714624,
->>>>>>> E04-run
 )
 
 #: Per-experiment configuration. An arm whose `uploads` is None carries no control video.
@@ -197,7 +196,6 @@ EXPERIMENTS = {
                    "polarity": "near-bright (as rendered; the convention A1a ran on)"},
         },
     },
-<<<<<<< HEAD
     # E06 changes ONE of the two things that separate A1a (painted knight) from B1 (black
     # stick figure): it takes B1's control byte-identical and adds E02's reference plate.
     # Same uploads manifest, same source_dir, same pinned depth window, same seed, same
@@ -220,7 +218,8 @@ EXPERIMENTS = {
                    "normalization": "per-shot, window PINNED to [3.181118, 3.363516]",
                    "polarity": "near-bright (as rendered; the convention A1a ran on)",
                    "positive": E06_D2_POSITIVE},
-=======
+        },
+    },
     # E04 — the between-generation floor. Both conditions REUSE E02's uploaded control
     # frames and E02's prompts, reference and models byte-for-byte, because a floor
     # measured under any other conditions is not the floor under E02's numbers. The only
@@ -255,7 +254,6 @@ EXPERIMENTS = {
                        "source_dir": "outputs/E02/control_480x832_neardark/depth_pershot",
                        "normalization": "per-shot",
                        "polarity": "near-dark (full-image 255-x of C-bright)"},
->>>>>>> E04-run
         },
     },
 }
@@ -321,16 +319,6 @@ def build(arm, experiment="E02", seed=None):
     if arm not in cfg["arms"]:
         raise PayloadError(f"unknown arm {arm!r} for {experiment}; known: {sorted(cfg['arms'])}")
 
-<<<<<<< HEAD
-    # The prompt is per-experiment with a per-ARM override, because E06's two arms differ in
-    # exactly the prompt and nothing else. An arm that carries no override inherits the
-    # experiment's, so **no E02 or E03 arm's bytes can move through this**: none of them
-    # carries one. `tests/test_build_payload.py` pins E02's sha256 against exactly that.
-    arm_cfg = cfg["arms"][arm]
-    POSITIVE_TEXT = arm_cfg.get("positive", cfg["positive"])
-    NEGATIVE_TEXT = arm_cfg.get("negative", cfg["negative"])
-    use_control = arm_cfg["uploads"] is not None
-=======
     # ---- Gate S · ANDON — the seed was pre-registered. Deliberately the FIRST gate in
     # this function: it is the only one guarding a defect that leaves no trace in the
     # artifact. An illegal frame (Gate L) fails loudly downstream; a seed nobody committed
@@ -340,9 +328,15 @@ def build(arm, experiment="E02", seed=None):
     gate_s = gates.gate_s_seed_registration(
         seed_used, cfg.get("seed_registry"), experiment, seed_was_explicit=seed is not None)
 
-    POSITIVE_TEXT, NEGATIVE_TEXT = cfg["positive"], cfg["negative"]
-    use_control = cfg["arms"][arm]["uploads"] is not None
->>>>>>> E04-run
+
+    # The prompt is per-experiment with a per-ARM override, because E06's two arms differ in
+    # exactly the prompt and nothing else. An arm that carries no override inherits the
+    # experiment's, so **no E02 or E03 arm's bytes can move through this**: none of them
+    # carries one. `tests/test_build_payload.py` pins E02's sha256 against exactly that.
+    arm_cfg = cfg["arms"][arm]
+    POSITIVE_TEXT = arm_cfg.get("positive", cfg["positive"])
+    NEGATIVE_TEXT = arm_cfg.get("negative", cfg["negative"])
+    use_control = arm_cfg["uploads"] is not None
     if use_control:
         keys, control_names, ref_name = _load_uploads(arm, experiment)
     else:
