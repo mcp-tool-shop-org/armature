@@ -71,6 +71,14 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 > self-hosted MediaPipe lift chain (G4, G16, G17) — **the pick is the Director's; the
 > rewrite waits on it.**
 
+> **SLOT 1 RULED, same day: the self-hosted clean chain.** The Director picked the
+> fully-owned route — Wan T2V performance clip → MediaPipe lift → the studio's own solver
+> onto the rig — over any hosted vendor contract; marathon pace, studio-building over
+> shortcuts. The MediaPipe licence is fetched at all three layers (repo, package, the
+> models' own Apache card — map rows landed 2026-08-11). **E09
+> ([E09-clean-chain-calibration.md](E09-clean-chain-calibration.md)) is dispatched to build
+> and calibrate the chain's solver; this spec's rewrite follows E09's report.**
+
 ## Trajectory
 
 This IS the product. armature is image-to-video with a GLB instead of an image, and to date
