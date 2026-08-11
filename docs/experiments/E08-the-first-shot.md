@@ -39,6 +39,17 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 > words, asked fresh under advisor rule 0 and confirmed back contrastively before any spec
 > or dispatch. His instruction, verbatim, the only standing definition of E08: put the rigged GLB through the pipeline for an informed 4-second GLB-to-video of the performer dancing or emoting across scenarios — for example, walking up to a bartender in a crowded bar — to test whether the capability is possible
 
+> **FRAME CONFIRMED 2026-08-11, later the same day.** The Director confirmed the route shape
+> in his own message: **generative at both ends** — a motion model generates the performance
+> from the prompt, the performance lands on the character's rigged skeleton, and a video
+> model paints him performing it; nobody hand-keys anything, and the rig is the socket the
+> generated performance plugs into. The shot he named: the character **dancing in a crowded
+> bar**, to show the character in action, the same character available across multiple shots,
+> and the scene arriving from prompt + GLB. Comfy consult #6
+> (`docs/comfy-consult-6-brief.md`) is dispatched for what fills the two generative slots;
+> **the spec below is rewritten after its answers return** — until then the staging sections
+> remain the authored-end recipe only.
+
 ## Trajectory
 
 This IS the product. armature is image-to-video with a GLB instead of an image, and to date
