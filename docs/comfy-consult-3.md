@@ -289,3 +289,83 @@ after #3. The two exotic routes were worth asking about precisely so they could 
 instead of discovered expensively.
 
 Unchanged and still the first thing to build: **`control_masks` + the geometry silhouette.**
+
+---
+
+# Consult #5 — can GLB metadata annotations influence video generation?
+
+**Core answer ACCEPTED:** no node reads glTF `extras`; ComfyUI never sees the `.glb`, because
+Blender has already rasterized the mesh into an IMAGE sequence upstream. There is no
+`extras` → conditioning socket. **We are the compiler between the annotation and the tensor.**
+
+Route 2's principle is the keeper and it is exactly where armature already lives:
+**don't hand the model the annotation, hand it the render of the annotation.** Our depth pass is
+already metadata-as-channel — the Z-buffer is the mesh's own geometry rendered into a tensor the
+model was trained to obey. The pattern is proven; the question is only what else gets rendered.
+
+**Four things the consult missed or under-weighted**, because it read "influence generation" as
+"reach the sampler."
+
+## 1. ⭐ The highest-value use is not conditioning at all — it is GATING
+
+Annotations are **authored, exact and machine-readable**. That makes them the right input to a
+gate we do not have.
+
+**Nothing today prevents submitting the right control sequence with the wrong reference image.**
+The "same man" invariant — the thing this whole repo exists to protect — is currently held by
+nobody. If the mesh declares its canonical character id, the payload builder can **raise** when
+the reference does not match it.
+
+Per the standing law: the check lives **inside** the tool performing the submission, it `raise`s,
+no shell chain, no `assert`, no skip flag. That converts identity from a hope into an andon. It
+costs zero credits and it is the first thing I would build out of this idea.
+
+## 2. And provenance — annotations pin MEANING, where hashes pin bytes
+
+*A recipe that does not reproduce its output is not a recipe.* Today our record pins control-input
+hashes. **A hash tells you the input changed; an annotation tells you what it was** — which
+character, which canonical mesh version, which shot. That is the difference between a record that
+detects drift and a record that explains it.
+
+## 3. Route 3 is not "out-of-band" for us — it is native
+
+The consult framed build-time graph decisions as legitimate-but-decoupled. For armature it is the
+**main** route: we build payloads programmatically and no tab is ever in the path. An
+annotation-driven build is **more** reproducible than a hand-set one, not less — that is
+`PIN_PER_STEP` exactly.
+
+## 4. ⚠ Route 1 carries facet's recorded identity failure, and the consult called it merely "soft"
+
+Metadata → positive prompt is not just advisory. E02 measured that **prompt and reference supply
+*who***, and facet's law is sharper still: *"if a canon element is not named in the prompt, it is
+arriving by accident and will leave the same way"* — learned when a registration improvement
+**silently replaced the character**, because identity was riding in an artifact nobody had
+declared was carrying it.
+
+**Auto-concatenating annotations into the positive prompt recreates that exact failure**: identity
+riding in a data file nobody reviewed. An auto-generated prompt is an **unreviewed** prompt.
+
+**Ruled:** annotations may **propose** prompt text. Canon elements are named in a **versioned,
+reviewed** prompt. Material and mood may be assembled; identity may not.
+
+## 5. A constraint the consult glossed — Route 2 has socket contention
+
+`WanVaceToVideo` has **one** `control_video`, and depth is already in it. A segmentation / ID pass
+is therefore **not additive — it competes**, and consult #3 established there is no
+`ControlNetApplyAdvanced` equivalent for VACE. A second dense control would have to *replace*
+depth or be composited into a single image, which is its own experiment.
+
+**`control_masks` is a separate socket, so masks ARE additive.** That is precisely why the mask
+route is the cheap one and the ID-pass route is not — and it is another reason `control_masks`
+stays the first thing to build.
+
+## 6. Declining the offered `Load3D` round, with the reason
+
+The consult offered to verify whether any `Load3D`-family node exposes glTF `extras`. **Not worth
+a round.**
+
+Even if one did, using it would mean routing the `.glb` **to Cloud** — an upload path, a
+glTF-parsing custom node with an unretrieved licence, and a new dependency — **to obtain data we
+already hold locally in Python.** Our architecture rasterizes locally by design (*generation runs
+on Comfy Cloud; rendering and measurement run locally*). We are the compiler, and the compiler
+runs here. The answer would be interesting and would change nothing.
