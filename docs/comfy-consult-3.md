@@ -258,7 +258,17 @@ Our one genuine advantage — **our endpoints are authored geometry, not guesses
 the exact first and last frame of every chunk — is real and specific to armature, and it still
 does not make the path necessary.
 
-**Ruled: FLF2V is at most a one-generation probe, and only after VACE chaining has been tried.**
+⚑ **THIS RULING IS SUPERSEDED — Director, 2026-08-10.** FLF2V is kept as a **random route**:
+[docs/random-routes.md](random-routes.md) RR-1. The reasoning below grades FLF2V on how well it
+duplicates the dense-control arm, which is judging a capability by our own test design — the
+shrinking family. Stated properly it is a **different instrument**: authored keys with
+model-invented in-betweens, where a shot costs *two poses* instead of a full animation, and where
+we can supply the best endpoints anyone could (authored geometry, not guesses). It is not on the
+critical path and it is not closed. The identity risk is real and is the thing it must be
+measured on. **Read RR-1 rather than the paragraph below.**
+
+**Superseded ruling, kept because the correction is more useful than the original: FLF2V is at
+most a one-generation probe, and only after VACE chaining has been tried.**
 If it is ever run, the cheapest discriminator comes first: *does the two-node stack produce
 coherent output at all, or do the two conditionings fight?* If they fight, the path is closed
 regardless of the endpoint advantage.
