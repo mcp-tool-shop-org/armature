@@ -4,6 +4,13 @@
 `309664a`. **One generation** (`prompt_id` `ecedbe1c-8658-4119-8151-cfa693db1c50`, seed
 `2026081231`). Reserve seeds `2026081232` and `2026081233` **unspent**. **No gate fired.**
 
+> **This is the WAVE 1 report.** Wave 2 ran 2026-08-12 on reserve seed `2026081232` and has
+> its own report: [E11-w2-report.md](E11-w2-report.md). Its one-line summary, so no reader
+> of this document carries a stale picture — wave 2's camera embedding was delivered to the
+> plain I2V experts rather than to the Fun-Camera weights that exist for it, every gate
+> passed, and the frames contain no subject after f1. **Nothing in the wave-1 record below
+> is changed or superseded by that run**; the reserve count above is (one spent, one left).
+
 This report carries measurements, gate states and predictions against outcomes. It contains
 no judgement of whether the footage is good; the Director's eye is the verifier of record
 and the advisor rules on what the measurements mean.
