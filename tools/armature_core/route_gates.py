@@ -106,6 +106,25 @@ SEED_NODES = {
 #: the link inputs dropped, and the served template's own `widgets_values` for that node,
 #: `[640, 640, 81, 1]`. `WanFirstLastFrameToVideo` shares the declaration order and is
 #: entered here now because it is the same object one socket wider — not used by E11.
+#: `WanCameraImageToVideo` was added 2026-08-12 (E11 wave 2) under the same warning — the
+#: day it was first used. It sizes its own latent from its own width/height/length exactly
+#: as the three above do, so a camera-route graph likewise contains no `Empty*LatentVideo`
+#: node at all, and leaving it out would have put Gate L back in the vacuous state E08
+#: measured.
+#:
+#: ⚠ **Only ONE reading of its widget order was available, and that is recorded rather than
+#: dressed up as two.** The convention above is to measure widget order two ways and require
+#: agreement; here the second source does not exist. `get_node`'s `input_details` order
+#: (positive, negative, vae, width, height, length, batch_size, then the optional
+#: clip_vision_output / start_image / camera_conditions links) with the link inputs dropped
+#: gives width, height, length, batch_size — the first reading. `search_templates` was
+#: searched for a served workflow wiring this class on 2026-08-12 and **none of the 201
+#: templates wires the Fun-Camera tier at all**, so no `widgets_values` reading exists to
+#: check it against. The exposure is bounded: widget order is irrelevant in API format,
+#: where inputs are keyed by name, and matters only when re-reading the SAVED file. So the
+#: second reading is taken empirically there instead — `camera_widget_order_evidence`
+#: reports the values standing at these indices on the converted file, and the builder's
+#: saved-graph step requires them to be the ones it set.
 LATENT_NODES = {
     "EmptyHunyuanLatentVideo": {"width": 0, "height": 1, "length": 2},
     "EmptyLatentVideo": {"width": 0, "height": 1, "length": 2},
@@ -113,6 +132,29 @@ LATENT_NODES = {
     "WanAnimateToVideo": {"width": 0, "height": 1, "length": 2},
     "WanImageToVideo": {"width": 0, "height": 1, "length": 2},
     "WanFirstLastFrameToVideo": {"width": 0, "height": 1, "length": 2},
+    "WanCameraImageToVideo": {"width": 0, "height": 1, "length": 2},
+}
+
+#: Nodes that solve a CAMERA TRAJECTORY from their own width/height/length. These do **not**
+#: size the video latent — they emit a `WAN_CAMERA_EMBEDDING` — so they do not belong in
+#: `LATENT_NODES`, and Gate L must not count them among the frames it checked. They get
+#: their own table because of a failure mode nothing above can see.
+#:
+#: ⚠ **A camera embedding solved for a different frame than the one being generated passes
+#: every other gate in this file.** Gate L would find the conditioning node's 832x480x65
+#: legal and report a PROVEN frame; the seed clause would find every seed pinned; the
+#: licence clause would find no banned weights. Meanwhile the trajectory steering the camera
+#: would have been solved for, say, 81 frames, and the run would generate 65 frames of a
+#: camera path computed for a clip a quarter longer — silently, with a clean receipt.
+#: `WanCameraEmbedding` **defaults to length 81 while this route runs 65**, so the defect is
+#: one omitted argument away rather than hypothetical. `verify` therefore checks agreement
+#: rather than trusting that whoever wired the graph passed the same numbers twice.
+#:
+#: Widget order from `get_node` `input_details`, fetched 2026-08-12: camera_pose, width,
+#: height, length, then the optional speed / fx / fy / cx / cy floats. Every input is a
+#: literal — there are no link inputs to drop — so save-format indices are 1, 2, 3.
+CAMERA_NODES = {
+    "WanCameraEmbedding": {"width": 1, "height": 2, "length": 3},
 }
 
 #: Widget values that name a weight file. Anything ending in one of these is a component.
@@ -251,6 +293,78 @@ def latents(graph):
         rec["checkable"] = None not in (rec["width"], rec["height"], rec["length"])
         out.append(rec)
     return out
+
+
+def cameras(graph):
+    """Every camera-trajectory node's width, height and frame count.
+
+    Shaped exactly like `latents()` — including the `checkable` flag, for the same reason: a
+    dimension arriving over a link is `None`, and a `None` is no answer rather than a small
+    number. These records are reported separately from the latents so that Gate L's count of
+    "frames checked" cannot be inflated by a node that sizes no frame at all.
+    """
+    api = is_api_format(graph)
+    out = []
+    for where, n in _iter_nodes(graph):
+        spec = CAMERA_NODES.get(n.get("type"))
+        if not spec:
+            continue
+        rec = {"node_id": n.get("id"), "class": n.get("type"), "where": where}
+        if api:
+            inp = n.get("inputs") or {}
+            for key in ("width", "height", "length"):
+                v = inp.get(key)
+                rec[key] = v if not isinstance(v, list) else None
+        else:
+            wv = n.get("widgets_values") or []
+            for key in ("width", "height", "length"):
+                i = spec[key]
+                rec[key] = wv[i] if len(wv) > i else None
+        rec["checkable"] = None not in (rec["width"], rec["height"], rec["length"])
+        out.append(rec)
+    return out
+
+
+def camera_widget_order_evidence(graph, expect):
+    """The empirical SECOND reading of `CAMERA_NODES` widget order, on a save-format graph.
+
+    `CAMERA_NODES` and the camera entry of `LATENT_NODES` were each derived from a single
+    source — the `get_node` schema — because no served template wires this tier to check
+    them against. Positional indices derived once and never confirmed are exactly what the
+    `LATENT_NODES` warning is about, so the confirmation is taken here instead: read the
+    values standing at those indices on the file the cloud will actually execute, and hand
+    back what was found. `expect` is `{"width": .., "height": .., "length": ..}` — the
+    numbers the builder set.
+
+    Returns evidence with `agrees` per node. It reports; the caller decides whether a
+    disagreement halts, because on an API-format graph there is nothing positional to
+    confirm and the honest answer there is `not_applicable`, not `PASS`.
+    """
+    ev = {"check": "camera widget order (empirical second reading)", "expect": dict(expect),
+          "nodes": []}
+    if is_api_format(graph):
+        ev["verdict"] = "not_applicable — API format keys inputs by name, nothing positional"
+        return ev
+    for where, n in _iter_nodes(graph):
+        spec = CAMERA_NODES.get(n.get("type")) or LATENT_NODES.get(n.get("type"))
+        if not spec or n.get("type") not in set(CAMERA_NODES) | {"WanCameraImageToVideo"}:
+            continue
+        wv = n.get("widgets_values") or []
+        found = {k: (wv[spec[k]] if len(wv) > spec[k] else None)
+                 for k in ("width", "height", "length")}
+        ev["nodes"].append({
+            "node_id": n.get("id"), "class": n.get("type"), "where": where,
+            "indices": {k: spec[k] for k in ("width", "height", "length")},
+            "found": found, "widgets_values": wv,
+            "agrees": all(found[k] == expect[k] for k in ("width", "height", "length")),
+        })
+    disagree = [n for n in ev["nodes"] if not n["agrees"]]
+    ev["verdict"] = (
+        "CONTRADICTED — the declared indices do not carry the builder's numbers"
+        if disagree else
+        f"the declared indices carry the builder's numbers on {len(ev['nodes'])} node(s)")
+    ev["agrees"] = not disagree
+    return ev
 
 
 def _frame_triple(frame):
@@ -444,6 +558,51 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                     *want, clash[0]["node_class"], clash[0]["node_id"],
                     clash[0]["width"], clash[0]["height"], clash[0]["length"]), ev)
 
+    # · ANDON — a camera trajectory solved for a frame other than the one being generated.
+    # See CAMERA_NODES: this defect passes every other clause in this function, and the
+    # node's own default length (81) is not this route's (65), so it is one omitted argument
+    # away. The andon is put on the direction the other clauses do not bound.
+    cams = cameras(graph)
+    ev["cameras"] = cams
+    if cams:
+        graph_frames = {(f["width"], f["height"], f["length"])
+                        for f in ev["frame_legality"] if f["source"] == "graph"}
+        target = None
+        if supplied is not None:
+            target = (supplied["width"], supplied["height"], supplied["length"])
+        elif len(graph_frames) == 1:
+            target = next(iter(graph_frames))
+
+        unchecked = [c for c in cams if not c["checkable"]]
+        if unchecked:
+            ev["camera_agreement_verdict"] = "INDETERMINATE"
+            raise RouteGate(
+                "the camera trajectory's frame is UNPROVEN: " + ", ".join(
+                    f"node {c['node_id']} ({c['class']}) does not pin width, height and "
+                    f"length as literals" for c in unchecked) +
+                ". A trajectory whose frame cannot be read cannot be shown to match the "
+                "one being generated, and every other clause here passes either way", ev)
+        if target is None:
+            ev["camera_agreement_verdict"] = "INDETERMINATE"
+            raise RouteGate(
+                f"the graph carries {len(cams)} camera-trajectory node(s) but no single "
+                f"frame to check them against: the graph pins {sorted(graph_frames)} and "
+                f"the caller supplied none. Pass frame=(width, height, length) — the "
+                f"agreement is the whole point of the check", ev)
+        off = [c for c in cams
+               if (c["width"], c["height"], c["length"]) != target]
+        if off:
+            ev["camera_agreement_verdict"] = "CONTRADICTED"
+            raise RouteGate(
+                "the camera trajectory is solved for a different frame than the one being "
+                "generated: " + "; ".join(
+                    f"node {c['node_id']} ({c['class']}) is {c['width']}x{c['height']}x"
+                    f"{c['length']} against the generated {target[0]}x{target[1]}x"
+                    f"{target[2]}" for c in off) +
+                ". The run would still produce video, and every other gate would pass on "
+                "it", ev)
+        ev["camera_agreement_verdict"] = "AGREES"
+
     # · ANDON — the clause E08 found passing vacuously. "Nothing to check" and "everything
     # checked out" must not be the same verdict.
     if not ev["frame_legality"]:
@@ -459,7 +618,9 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     ev["frame_legality_verdict"] = "PROVEN"
     ev["verdict"] = (f"{len(comp)} weight file(s), {len(sd)} seed(s) all pinned, "
                      f"{ev['latents_checkable']} of {len(lat)} latent(s) checkable, "
-                     f"{len(ev['frame_legality'])} frame(s) checked and generator-legal")
+                     f"{len(ev['frame_legality'])} frame(s) checked and generator-legal"
+                     + (f", {len(cams)} camera trajectory(s) on the generated frame"
+                        if cams else ""))
     return ev
 
 

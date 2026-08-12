@@ -76,6 +76,23 @@ WIDGET_INDEX = {
     "CreateVideo": {"fps": 0, "bit_depth": 1},
     "SaveImage": {"filename_prefix": 0},
     "SaveVideo": {"filename_prefix": 0, "format": 1, "codec": 2},
+    # E11 wave 2's camera tier. **These two rows were written because this check HALTED the
+    # wave-2 submission on its own hole** — the second time it has done so, after the
+    # `VAEDecode` case recorded above, and both times before a credit was spent rather than
+    # after. The gate refused to skip a class it had no row for, which is the entire point
+    # of looking the table up with `is None`.
+    #
+    # Unlike every row above, these indices are not a derivation: they were READ OFF the
+    # save-format file the cloud converted, 2026-08-12 —
+    # `WanCameraEmbedding.widgets_values == ["Static", 832, 480, 65, 1, 0.5, 0.5, 0.5, 0.5]`
+    # and `WanCameraImageToVideo.widgets_values == [832, 480, 65, 1]`. That makes them the
+    # empirical SECOND reading that `route_gates.LATENT_NODES` promised and could not supply
+    # from a served template, and they agree with the `get_node` schema order that
+    # `route_gates.CAMERA_NODES` was derived from. Neither class takes a
+    # `control_after_generate` insertion — that shift is particular to the sampler above.
+    "WanCameraEmbedding": {"camera_pose": 0, "width": 1, "height": 2, "length": 3,
+                           "speed": 4, "fx": 5, "fy": 6, "cx": 7, "cy": 8},
+    "WanCameraImageToVideo": {"width": 0, "height": 1, "length": 2, "batch_size": 3},
 }
 
 

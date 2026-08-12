@@ -431,3 +431,126 @@ def test_the_e08_shot_would_have_gone_red_under_this_clause():
         assert "INDETERMINATE" in str(exc.value)
     finally:
         RG.LATENT_NODES = saved
+
+
+# ---------------------------------------------------------------------------------------
+# The camera tier (E11 wave 2). Every fixture below is a graph that Gate L, Gate S and the
+# licence clause all pass, because the defect being caught is invisible to all three.
+
+def _camera_api(length=65, cam_length=None, cam_wh=(832, 480)):
+    """The wave-2 shape: an embedding feeding a camera conditioning node feeding a sampler."""
+    return {
+        "10": {"class_type": "UNETLoader",
+               "inputs": {"unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+                          "weight_dtype": "default"}},
+        "45": {"class_type": "WanCameraEmbedding", "inputs": {
+            "camera_pose": "Static", "width": cam_wh[0], "height": cam_wh[1],
+            "length": length if cam_length is None else cam_length, "speed": 1.0}},
+        "50": {"class_type": "WanCameraImageToVideo", "inputs": {
+            "width": 832, "height": 480, "length": length, "batch_size": 1,
+            "positive": ["30", 0], "negative": ["31", 0], "vae": ["21", 0],
+            "start_image": ["40", 0], "camera_conditions": ["45", 0]}},
+        "60": {"class_type": "KSamplerAdvanced", "inputs": {
+            "add_noise": "enable", "noise_seed": 2026081232, "steps": 20, "cfg": 3.5,
+            "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0,
+            "end_at_step": 10, "return_with_leftover_noise": "enable",
+            "latent_image": ["50", 2]}},
+    }
+
+
+def test_the_camera_conditioning_node_sizes_its_own_latent():
+    """Without its `LATENT_NODES` row Gate L would examine zero frames on this graph and,
+    with a frame supplied, still report PROVEN — the E08 shape, one route later."""
+    lat = RG.latents(_camera_api())
+    assert [l["class"] for l in lat] == ["WanCameraImageToVideo"]
+    assert (lat[0]["width"], lat[0]["height"], lat[0]["length"]) == (832, 480, 65)
+    assert lat[0]["checkable"] is True
+
+
+def test_an_illegal_frame_on_the_camera_route_is_caught_from_the_graph_alone():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_camera_api(length=64))
+    assert "4n+1" in str(exc.value)
+
+
+def test_the_camera_trajectory_must_be_solved_for_the_generated_frame():
+    """THE clause this tier exists for. The node's own default length is 81 and this route
+    runs 65, so a forgotten argument produces exactly this graph: 65 frames of a camera path
+    solved for 81. Gate L passes it, Gate S passes it, the licence clause passes it."""
+    g = _camera_api(length=65, cam_length=81)
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g, frame=(832, 480, 65))
+    assert "solved for a different frame" in str(exc.value)
+    assert exc.value.evidence["camera_agreement_verdict"] == "CONTRADICTED"
+    # and every other clause was clean on it
+    assert all(f["legal"] for f in exc.value.evidence["frame_legality"])
+    assert all(s["pinned"] for s in exc.value.evidence["seeds"])
+
+
+def test_a_camera_aspect_that_disagrees_is_caught_too():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_camera_api(cam_wh=(1280, 720)), frame=(832, 480, 65))
+    assert exc.value.evidence["camera_agreement_verdict"] == "CONTRADICTED"
+
+
+def test_an_agreeing_camera_passes_and_is_reported():
+    ev = RG.verify(_camera_api(), frame=(832, 480, 65))
+    assert ev["camera_agreement_verdict"] == "AGREES"
+    assert [c["class"] for c in ev["cameras"]] == ["WanCameraEmbedding"]
+
+
+def test_the_camera_node_does_not_inflate_the_count_of_frames_checked():
+    """A trajectory node sizes no frame. If it were counted as one, Gate L's
+    'nothing was checkable' andon could be satisfied by a node that checks nothing."""
+    ev = RG.verify(_camera_api(), frame=(832, 480, 65))
+    assert [l["class"] for l in ev["latents"]] == ["WanCameraImageToVideo"]
+    assert ev["latents_checkable"] == 1
+    assert {f["source"] for f in ev["frame_legality"]} == {"graph", "supplied"}
+
+
+def test_a_camera_length_arriving_over_a_link_is_unproven_not_assumed():
+    g = _camera_api()
+    g["45"]["inputs"]["length"] = ["99", 0]
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g, frame=(832, 480, 65))
+    assert "UNPROVEN" in str(exc.value)
+    assert exc.value.evidence["camera_agreement_verdict"] == "INDETERMINATE"
+
+
+def test_a_camera_with_nothing_to_check_against_halts_rather_than_passing():
+    """Two disagreeing graph frames and no supplied one: there is no single answer to
+    compare the trajectory against, and 'no answer' must not read as agreement."""
+    g = _camera_api()
+    g["51"] = {"class_type": "EmptyLatentVideo",
+               "inputs": {"width": 832, "height": 480, "length": 33}}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert exc.value.evidence["camera_agreement_verdict"] == "INDETERMINATE"
+
+
+def test_camera_widget_order_is_confirmed_empirically_on_save_format():
+    """`CAMERA_NODES` was derived from ONE source. This is the second reading."""
+    g = graph(top=[{"id": 45, "type": "WanCameraEmbedding",
+                    "widgets_values": ["Static", 832, 480, 65, 1.0, 0.5, 0.5, 0.5, 0.5]}])
+    ev = RG.camera_widget_order_evidence(g, {"width": 832, "height": 480, "length": 65})
+    assert ev["agrees"] is True
+    assert ev["nodes"][0]["found"] == {"width": 832, "height": 480, "length": 65}
+
+
+def test_camera_widget_order_evidence_catches_a_shifted_index():
+    """If the declared indices were off by one — the failure a single-source derivation
+    invites — the values found would not be the builder's."""
+    g = graph(top=[{"id": 45, "type": "WanCameraEmbedding",
+                    "widgets_values": [832, 480, 65, 1.0]}])  # camera_pose omitted
+    ev = RG.camera_widget_order_evidence(g, {"width": 832, "height": 480, "length": 65})
+    assert ev["agrees"] is False
+    assert ev["verdict"].startswith("CONTRADICTED")
+
+
+def test_camera_widget_order_evidence_is_honest_about_api_format():
+    """There is nothing positional to confirm in API format, and the honest verdict for a
+    check that cannot run is not PASS."""
+    ev = RG.camera_widget_order_evidence(_camera_api(),
+                                         {"width": 832, "height": 480, "length": 65})
+    assert ev["verdict"].startswith("not_applicable")
+    assert "agrees" not in ev

@@ -15,6 +15,17 @@
     "2026081232": "reserve, spendable only on a named cause the probe surfaces",
     "2026081233": "reserve, same condition"
   },
+  "wave_2_allocation": {
+    "recorded_utc": "2026-08-12",
+    "recorded_by": "executor seat, on E11-nocontrol, BEFORE the first submission of any wave-2 graph and committed ahead of it",
+    "seed_spent": 2026081232,
+    "the_named_cause": "Two defects the Director's eye named on the wave-1 probe, both ruled fixable and both dispatched as wave 2: (1) a large uncommanded push-in — the horizon found on 4 of 65 frames and never again — against which consult #7's WanCameraEmbedding/WanCameraImageToVideo pair is the licensed counter; (2) the motion reading as a drunken wobble rather than a dance, which his diagnosis attributes to the bar language pulling the performance toward it. The reserve's condition — 'spendable only on a named cause the probe surfaces' — is met by both, and the advisor's ruling R3 recommended exactly this spend.",
+    "why_not_a_fresh_registration": "This list already binds in both directions: an experiment that pre-registered seeds MUST use one of them. Registering a new number for wave 2 would leave a registered seed unspent while the run drew from outside the committed list, which is the second clause's defect wearing a receipt. So wave 2 draws 2026081232 — a number fixed on this file's git timestamp, before wave 1's result existed, let alone wave 2's.",
+    "remaining_after_wave_2": {
+      "2026081233": "reserve, unspent, same condition — the ceiling's second reserve, spendable only on a named cause wave 2 surfaces and the Director's word"
+    },
+    "the_two_seed_rule_still_binds": "Wave 2 runs ONE seed. Nothing it reports about the scene may be written as a property of the route, exactly as for wave 1. Note additionally that wave 2 is a COMPOSED wave — the camera embedding and the prompt surgery move together by the Director's direction — so no observation may be attributed to either lever alone, and the report says so rather than implying a single-variable read."
+  },
   "why_the_index_starts_at_31": "specs/E09-A3-seeds.json registered 2026081201-02, specs/E08-seeds.json registered 2026081211-13 and specs/E10-seeds.json registered 2026081221-22 on this same calendar day. Reusing any of those numbers would put a seed registered for one experiment onto another, and the record would afterwards have to explain which run a number belonged to. The offset keeps every seed on this rig traceable to exactly one registration.",
   "why_a_new_seed_and_not_E08_s": "E11 runs a different model family (Wan 2.2 I2V-A14B, two experts) through a different conditioning node on a differently-shaped latent path, and its high-noise sampler is a KSamplerAdvanced rather than E08's KSampler. The same integer would not reproduce E08's noise field even in principle, so registering a fresh number states that plainly rather than implying a same-seed comparison the route cannot deliver. E10's report records the same rider for the frame-count case.",
   "the_two_seed_reading_rule": "E10's closing ruling R3 stands and E11 is read under it from birth: a scene observation from ONE seed is an observation, never a route property. The probe registered here is one seed, so nothing this experiment reports about the scene may be written as a property of the route. The reserves are what a second seed would be drawn from, on a named cause and the advisor's call, not this seat's.",
