@@ -260,44 +260,114 @@ def test_the_channel_order_evidence_is_still_in_the_banked_file():
 
 # ------------------------------------------------------------------------- 3. the rig
 
-def test_the_rig_map_resolves_against_the_registered_site_list():
+def registered_landmarks():
+    """Every landmark name the registered site list places a bone end on."""
+    out = set()
+    for b in sitelist.BONES:
+        out.add(b.head)
+        out.add(b.tail)
+    return out
+
+
+def test_the_map_resolves_against_the_registered_site_list():
     sitelist.validate()
-    assert aapose.require_rig_map(sitelist.ALL_NAMES)
-    assert len(aapose.RIG_SITES) == 20
-    for bone, end in aapose.RIG_SITES:
-        assert bone in sitelist.ALL_NAMES
-        assert end in ("head", "tail")
+    assert aapose.require_rig_map(registered_landmarks())
+    assert len(aapose.LANDMARK_SITES) == 20
+    for site in aapose.LANDMARK_SITES:
+        assert site in registered_landmarks()
 
 
-def test_toes_come_off_the_ankle_bones_tails():
-    """The only place toe positions exist on a 22-bone rig; a head would put both toes
-    inside the ankles and the feet would read as stumps."""
+def test_the_map_names_landmarks_not_bone_ends():
+    """The correction of 2026-08-12. Reading toes off the ankle bones' TAILS works in the
+    authored rig and breaks through glTF, which has no tail and makes one up for every leaf
+    bone. Landmarks survive because they are measured and carried in the rig manifest."""
+    assert aapose.LANDMARK_SITES[18] == "toe_L"
+    assert aapose.LANDMARK_SITES[19] == "toe_R"
     by = sitelist.by_name()
-    assert aapose.RIG_SITES[18] == ("ankle.L", "tail")
-    assert aapose.RIG_SITES[19] == ("ankle.R", "tail")
     assert by["ankle.L"].tail == "toe_L"
     assert by["ankle.R"].tail == "toe_R"
+    assert all(isinstance(s, str) for s in aapose.LANDMARK_SITES)
 
 
 def test_left_and_right_are_not_crossed():
-    """AAPose L/R are the SUBJECT's own sides, and so are the rig's `.L`/`.R` suffixes."""
+    """AAPose L/R are the SUBJECT's own sides, and so are the rig's `_L`/`_R` suffixes."""
     for i, name in enumerate(aapose.KEYPOINT_NAMES):
-        bone = aapose.RIG_SITES[i][0]
-        if name.startswith("L") and name != "LToe":
-            assert bone.endswith(".L") or bone in ("nose", "neck"), (name, bone)
-        if name.startswith("R") and name != "RToe":
-            assert bone.endswith(".R") or bone in ("nose", "neck"), (name, bone)
-    assert aapose.RIG_SITES[18][0].endswith(".L")   # LToe
-    assert aapose.RIG_SITES[19][0].endswith(".R")   # RToe
+        site = aapose.LANDMARK_SITES[i]
+        if name in ("Nose", "Neck"):
+            continue
+        assert site.endswith("_L") if name.startswith("L") else site.endswith("_R"), \
+            (name, site)
 
 
-def test_require_rig_map_raises_on_a_missing_bone():
-    """A keypoint with no bone would be written as a zero and drawn as a limb running to
-    the corner of the frame, with nothing erroring."""
-    crippled = tuple(n for n in sitelist.ALL_NAMES if n != "ear.R")
+def test_every_keypoint_has_its_own_landmark():
+    """Two keypoints sharing a landmark would collapse a limb to a point and draw nothing."""
+    assert len(set(aapose.LANDMARK_SITES)) == 20
+
+
+def test_require_rig_map_raises_on_a_missing_landmark():
+    """A keypoint with nothing behind it would be written as a zero and drawn as a limb
+    running to the corner of the frame, with nothing erroring."""
+    crippled = registered_landmarks() - {"ear_R"}
     with pytest.raises(ArmatureError) as exc:
         aapose.require_rig_map(crippled)
-    assert "ear.R" in str(exc.value)
+    assert "ear_R" in str(exc.value)
+
+
+def test_require_rig_map_also_covers_the_hand_sites():
+    """The hands read three landmarks each; a missing hand end is as silent as a missing
+    joint, and would splay a hand of zero length across the frame."""
+    crippled = registered_landmarks() - {"hand_end_L"}
+    with pytest.raises(ArmatureError) as exc:
+        aapose.require_rig_map(crippled)
+    assert "hand_end_L" in str(exc.value)
+
+
+# ------------------------------------------------------------------- the hand frame
+
+def test_hand_frame_returns_an_orthonormal_pair_and_the_hands_own_length():
+    d, s, L = aapose.hand_frame((0, 0, 0), (0, 0.1, 0), (0, -0.3, 0.05))
+    assert L == pytest.approx(0.1)
+    assert np.linalg.norm(d) == pytest.approx(1.0)
+    assert np.linalg.norm(s) == pytest.approx(1.0)
+    assert float(np.dot(d, s)) == pytest.approx(0.0, abs=1e-12)
+
+
+def test_hand_frame_survives_a_hand_collinear_with_its_forearm():
+    """A straight arm makes the palm plane undefined. Left to itself the cross product is
+    zero, the normalisation is a divide-by-zero, and NaNs reach pixel coordinates where cv2
+    draws something arbitrary without complaint."""
+    d, s, L = aapose.hand_frame((0, 0, 0), (0, 0, 0.1), (0, 0, -0.3))
+    assert np.isfinite(d).all() and np.isfinite(s).all()
+    assert float(np.dot(d, s)) == pytest.approx(0.0, abs=1e-12)
+
+
+def test_hand_frame_refuses_a_zero_length_hand():
+    with pytest.raises(ArmatureError):
+        aapose.hand_frame((0, 0, 0), (0, 0, 0), (0, -1, 0))
+
+
+def test_hand_frame_rolls_with_the_forearm():
+    """Same hand direction, elbow swung out of the previous plane: the palm must roll with
+    it. If it did not, the constructed hand would sit in a fixed world orientation and the
+    thumb would point the same way whatever the arm did."""
+    a = aapose.hand_frame((0, 0, 0), (0, 0.1, 0), (0.3, -0.2, 0.0))[1]
+    b = aapose.hand_frame((0, 0, 0), (0, 0.1, 0), (0.0, -0.2, 0.3))[1]
+    assert not np.allclose(a, b)
+
+
+def test_hand_frame_is_rigid_under_a_rotation_of_the_whole_arm():
+    """Rotating wrist, hand and elbow together by 90 degrees about Z must rotate the frame
+    by the same 90 degrees — no more, no less."""
+    def rot_z(p):
+        x, y, z = p
+        return (-y, x, z)
+
+    w, h, e = (0.0, 0.0, 0.0), (0.0, 0.1, 0.0), (0.3, -0.2, 0.05)
+    d1, s1, L1 = aapose.hand_frame(w, h, e)
+    d2, s2, L2 = aapose.hand_frame(rot_z(w), rot_z(h), rot_z(e))
+    assert L2 == pytest.approx(L1)
+    assert np.allclose(d2, rot_z(d1))
+    assert np.allclose(s2, rot_z(s1))
 
 
 # -------------------------------------------------------------------------- the hand

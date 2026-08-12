@@ -17,6 +17,7 @@ also set how far across the frame he travels. Size wins and the traverse follows
 trade is in `solve_camera`'s signature, not buried in it.
 """
 
+import json
 import math
 
 WORLD_UP = (0.0, 0.0, 1.0)
@@ -113,6 +114,50 @@ def project(point, target, radius, azimuth_deg, elevation_deg,
     ndc_x = (_dot(v, right) / -z) / math.tan(hx)
     ndc_y = (_dot(v, up) / -z) / math.tan(hy)
     return 0.5 + 0.5 * ndc_x, 0.5 - 0.5 * ndc_y, True
+
+
+def load_pinned_camera(path, expect=None):
+    """(target, radius) from a prior camera record, or raise naming what disagreed.
+
+    Any JSON carrying `camera.target` and `camera.radius` will do — a
+    `render_provenance.json`, a `keypoints.json`, a `shot_spec`. Two uses: overlaying one
+    tool's output on another tool's render, and locking one composition across a series of
+    shots (E08's reference-set discipline, G14, applied to framing).
+
+    **`expect` is not optional discipline, it is the andon.** Pinning a camera skips the
+    framing solve, and skipping the solve skips its gate. A record pinned at a different
+    azimuth or lens would project a perfectly plausible skeleton of the same body seen from
+    somewhere else, and every downstream check — counts, legality, ink, in-canvas — passes
+    on it. So the caller states the angles it projects at and any disagreement raises here,
+    where the mistake is still cheap.
+    """
+    with open(path, "r", encoding="utf-8") as fh:
+        rec = json.load(fh)
+    cam = rec.get("camera")
+    if not isinstance(cam, dict) or "target" not in cam or "radius" not in cam:
+        raise FramingError(
+            f"{path} carries no camera.target/camera.radius to pin to; its top-level keys "
+            f"are {sorted(rec)[:12]}")
+    target = cam["target"]
+    if not (isinstance(target, (list, tuple)) and len(target) == 3):
+        raise FramingError(f"{path}: camera.target is not a 3-vector: {target!r}")
+    radius = float(cam["radius"])
+    if not (radius > 0.0):
+        raise FramingError(f"{path}: camera.radius is {radius}, which is not a distance")
+
+    for field, ours in sorted((expect or {}).items()):
+        theirs = cam.get(field)
+        if theirs is None:
+            raise FramingError(
+                f"{path}: the pinned camera does not record {field}, so it cannot be shown "
+                f"to match the {ours} this caller projects at. A camera that agrees by "
+                f"silence is not a camera that agrees")
+        if abs(float(theirs) - float(ours)) > 1e-9:
+            raise FramingError(
+                f"{path}: the pinned camera's {field} is {theirs} and this caller projects "
+                f"at {ours}. The result would be a plausible view of the same body from "
+                f"somewhere else, and every downstream check passes on that")
+    return tuple(float(v) for v in target), radius
 
 
 def _extent(points, target, radius, az, el, lens, sensor, width, height):

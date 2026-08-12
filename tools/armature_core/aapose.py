@@ -195,55 +195,104 @@ def hand_stickwidth(height, width, stickwidth_type="v2"):
 
 # --------------------------------------------------------------------- the rig map
 
-#: AAPose index (0-based, matching KEYPOINT_NAMES) -> (bone name, which end).
-#: `head` is the bone's pivot; `tail` is its far end. Every one of the 20 resolves; nothing
-#: here is invented or interpolated.
-RIG_SITES = (
-    ("nose", "head"),          # 0  Nose
-    ("neck", "head"),          # 1  Neck      — bone `neck` head sits on landmark neck_base
-    ("shoulder.R", "head"),    # 2  RShoulder
-    ("elbow.R", "head"),       # 3  RElbow
-    ("wrist.R", "head"),       # 4  RWrist
-    ("shoulder.L", "head"),    # 5  LShoulder
-    ("elbow.L", "head"),       # 6  LElbow
-    ("wrist.L", "head"),       # 7  LWrist
-    ("hip.R", "head"),         # 8  RHip
-    ("knee.R", "head"),        # 9  RKnee
-    ("ankle.R", "head"),       # 10 RAnkle
-    ("hip.L", "head"),         # 11 LHip
-    ("knee.L", "head"),        # 12 LKnee
-    ("ankle.L", "head"),       # 13 LAnkle
-    ("eye.R", "head"),         # 14 REye
-    ("eye.L", "head"),         # 15 LEye
-    ("ear.R", "head"),         # 16 REar
-    ("ear.L", "head"),         # 17 LEar
-    ("ankle.L", "tail"),       # 18 LToe     — sitelist: ankle.L tail is landmark toe_L
-    ("ankle.R", "tail"),       # 19 RToe     — sitelist: ankle.R tail is landmark toe_R
+#: AAPose index (0-based, matching KEYPOINT_NAMES) -> the rig LANDMARK that supplies it.
+#: Landmarks, not bones-and-ends: `toe_L` / `toe_R` are measured landmarks in the rig
+#: manifest, whereas the ankle bones' tails do not survive a glTF round trip — the importer
+#: synthesises a tail for every leaf bone, and the ankles are leaves. Measured 2026-08-12;
+#: the falsified route is kept runnable at
+#: `tools/superseded/project_pose_keypoints_from_glb.py` with its numbers.
+LANDMARK_SITES = (
+    "nose",          # 0  Nose      — MEASURED (furthest head vertex along the facing)
+    "neck_base",     # 1  Neck      — bone `neck` head sits here
+    "shoulder_R",    # 2  RShoulder
+    "elbow_R",       # 3  RElbow
+    "wrist_R",       # 4  RWrist
+    "shoulder_L",    # 5  LShoulder
+    "elbow_L",       # 6  LElbow
+    "wrist_L",       # 7  LWrist
+    "hip_R",         # 8  RHip
+    "knee_R",        # 9  RKnee
+    "ankle_R",       # 10 RAnkle
+    "hip_L",         # 11 LHip
+    "knee_L",        # 12 LKnee
+    "ankle_L",       # 13 LAnkle
+    "eye_R",         # 14 REye      — DERIVED: this mesh carries no eye feature
+    "eye_L",         # 15 LEye      — DERIVED
+    "ear_R",         # 16 REar      — DERIVED: no ear feature either
+    "ear_L",         # 17 LEar      — DERIVED
+    "toe_L",         # 18 LToe      — MEASURED (furthest foot vertex, at ground)
+    "toe_R",         # 19 RToe      — MEASURED
 )
 
-#: Which bone supplies each hand's frame. The mannequin has mitten hands with no fingers, so
-#: the 21 hand keypoints are SYNTHESISED in this bone's own space — see `mitten_hand`.
-HAND_BONES = {"left": "wrist.L", "right": "wrist.R"}
+#: Each hand's frame, as (wrist, hand end, elbow) landmarks. The mannequin has mitten hands
+#: with no fingers, so the 21 hand keypoints are SYNTHESISED in this frame — see
+#: `mitten_hand`. The elbow is here only to orient the palm; see `hand_frame`.
+HAND_SITES = {
+    "left": ("wrist_L", "hand_end_L", "elbow_L"),
+    "right": ("wrist_R", "hand_end_R", "elbow_R"),
+}
 
 
-def require_rig_map(all_names):
-    """Raise unless every site this convention needs is a registered bone. ANDON.
+def required_sites():
+    """Every rig landmark this convention reads, body and hands."""
+    out = list(LANDMARK_SITES)
+    for triple in HAND_SITES.values():
+        out.extend(triple)
+    return tuple(dict.fromkeys(out))
 
-    Called before any keypoint is sampled. **The andon is on the direction the invariant
-    does not bound:** a missing bone would otherwise surface as a keypoint silently left at
+
+def require_rig_map(available_sites):
+    """Raise unless every landmark this convention needs exists. ANDON.
+
+    Called before any keypoint is placed. **The andon is on the direction the invariant does
+    not bound:** a missing landmark would otherwise surface as a keypoint silently left at
     the origin, which draws a limb running to the corner of the frame and errors nowhere.
     """
-    have = set(all_names)
-    missing = sorted({b for b, _ in RIG_SITES if b not in have}
-                     | {b for b in HAND_BONES.values() if b not in have})
+    have = set(available_sites)
+    missing = sorted(s for s in required_sites() if s not in have)
     if missing:
         raise ArmatureError(
-            f"the AAPose-20 rig map names bone(s) the rig does not carry: {missing}. "
-            f"A keypoint with no bone behind it would be written as a zero and drawn as a "
-            f"limb running off the frame, with nothing erroring. Rig bones present: "
+            f"the AAPose-20 map names rig landmark(s) that are not available: {missing}. "
+            f"A keypoint with nothing behind it would be written as a zero and drawn as a "
+            f"limb running off the frame, with nothing erroring. Available: "
             f"{sorted(have)}"
         )
     return True
+
+
+def hand_frame(wrist, hand_end, elbow):
+    """(palm_dir, palm_side, length) for one hand, from three rig landmarks.
+
+    `palm_dir` runs wrist -> hand end, so its length is this hand's own measured length.
+    `palm_side` is the in-plane perpendicular — the direction a thumb splays — built from the
+    forearm so that the constructed hand turns with the arm instead of sitting in a fixed
+    world orientation.
+
+    **The degenerate case is handled rather than left to produce a NaN.** When the hand is
+    exactly collinear with the forearm the cross product vanishes and the plane is
+    undefined; world up is the fallback reference, and if the hand points straight up too,
+    world +X. A NaN here would propagate into pixel coordinates and cv2 would draw
+    something at an arbitrary place without complaint.
+    """
+    w = np.asarray(wrist, dtype=np.float64)
+    h = np.asarray(hand_end, dtype=np.float64)
+    e = np.asarray(elbow, dtype=np.float64)
+
+    v = h - w
+    length = float(np.linalg.norm(v))
+    if length <= 0.0:
+        raise ArmatureError(
+            "wrist and hand end are the same point; this hand has no length and no direction"
+        )
+    d = v / length
+
+    for ref in (w - e, np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0])):
+        n = np.cross(ref, d)
+        if np.linalg.norm(n) > 1e-9:
+            n = n / np.linalg.norm(n)
+            s = np.cross(n, d)
+            return d, s / np.linalg.norm(s), length
+    raise ArmatureError("could not build a palm plane; every reference was collinear")
 
 
 def check_convention(keypoint_count, limb_seq, palette):
