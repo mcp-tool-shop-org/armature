@@ -92,10 +92,19 @@ w1 and w3) · wood grain · ear-rim notches · skeleton v2 fingers (needs the ha
 first).
 **Instruments:** `make_lift_sheet` camera-claim fix · `make_gate0_sheet` E02 literals ·
 a foot instrument valid on hip-origin motion · the axis-offset second-fixture condition.
-**Admin:** GPU-bucket reconciliation when invoice windows close (**checked 2026-08-12:**
-the invoice-backed usage report posts no August buckets yet — every line item ends
-2026-08-01 — so the arc's zero-credit claim stands unfalsified, unconfirmed until August
-posts) · the movement-library sourcing survey (**requested 2026-08-12** — study-swarm
+**Admin:** GPU-bucket reconciliation (**corrected 2026-08-12 evening — the afternoon
+note was a granularity artifact:** month-grouped buckets close with the month, but
+day-granularity shows GPU-hours accruing daily: ≈$15.29 across Aug 1–12 account-wide,
+of which ≈$6.44 falls on Aug 10–12, armature's lifetime — shared with whatever else ran
+those days; attribution is not derivable from product-level grouping. **No per-usage
+invoice exists** — Comfy unified payments onto Comfy Credits (the platform's own
+notice: partner nodes and cloud workflows both draw the one pool), and the pool read
+**12,962 credits** at the Director's same-evening check — the balance-at-a-timestamp
+anchor a future drawdown bracket needs; the reconciliation surface is the usage ledger
+plus that credits balance, and
+closing the item means matching the arc's recorded prompt_ids to job-level records. The
+arc's "zero credits" stands as what was observed at submission; the drawdown question
+is now open, with data) · the movement-library sourcing survey (**requested 2026-08-12** — study-swarm
 dispatched on the E09-ruled frame; synthesis lands in
 `docs/research-grounding-movement-library.md`) · the official Wan prompt guide remains
 unretrieved in original form (DingTalk, JS-rendered; attempted-and-recorded —
