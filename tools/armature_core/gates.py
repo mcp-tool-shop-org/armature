@@ -104,6 +104,41 @@ GENERATOR_PROFILES = {
             "which accepts length up to 16384 and would enforce nothing."
         ),
     ),
+    # E11's row. Its provenance is DERIVED and the derivation is written out rather than
+    # borrowed from the sibling row above, because `WanImageToVideo`'s schema does NOT
+    # carry the step fields `WanAnimateToVideo`'s does — measured via `get_node`
+    # 2026-08-12, it declares width/height/length as plain INT with min 16/16/1 and max
+    # 16384 and would enforce nothing at all.
+    #
+    # What IS measured, three ways that agree:
+    #   * the shared VAE. This route loads `wan_2.1_vae.safetensors`, the same file the
+    #     E02 graphs load, and 4n+1 / div-16 are properties of that VAE's temporal
+    #     compression factor of 4 and its spatial compression plus patch size. This is the
+    #     identical transfer the `wan-fun-control` row above records, on a measured shared
+    #     component rather than on a family name.
+    #   * the node's own declared defaults: width 832, height 480, length 81 — each of
+    #     which already satisfies the constraint being claimed.
+    #   * the documented reference workflow's latent, 640x640x81, likewise.
+    #
+    # The 81-frame trained horizon is inherited from the Wan family record (consult #3),
+    # exactly as the `wan-animate` row inherits it, and is marked as inherited here too.
+    "wan-i2v": GeneratorProfile(
+        name="wan-i2v",
+        dim_divisor=16,
+        frame_modulus=4,
+        frame_residue=1,
+        source=(
+            "DERIVED 2026-08-12 (E11) from the shared VAE — this route loads "
+            "wan_2.1_vae.safetensors, and 4n+1 / div-16 are properties of that VAE's "
+            "temporal and spatial compression — and CONFIRMED against two independent "
+            "readings: the WanImageToVideo schema's own defaults (832x480x81, get_node "
+            "2026-08-12) and the documented reference workflow's latent (640x640x81, "
+            "Comfy-Org/workflow_templates video_wan2_2_14B_i2v.json @ 5d6089c4250f). The "
+            "schema itself declares only min/max and would enforce neither constraint. "
+            "The trained-horizon bound is inherited from the Wan family record "
+            "(consult #3), not measured here."
+        ),
+    ),
 }
 
 

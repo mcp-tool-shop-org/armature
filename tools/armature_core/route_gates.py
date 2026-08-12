@@ -96,11 +96,23 @@ SEED_NODES = {
 #: Widget order for `WanAnimateToVideo` is read from its `define_schema` declaration order,
 #: keeping only the non-link inputs: width, height, length, batch_size,
 #: continue_motion_max_frames, video_frame_offset.
+#:
+#: `WanImageToVideo` and `WanFirstLastFrameToVideo` were added 2026-08-12 (E11) under the
+#: warning above — the day the first of them was used, not the day one of them broke
+#: something. Both size their own latent from their own width/height/length exactly as
+#: `WanAnimateToVideo` does, so an I2V graph likewise contains no `Empty*LatentVideo` node
+#: at all. Widget order measured two ways and required to agree: `get_node`'s
+#: `input_details` order (positive, negative, vae, width, height, length, batch_size) with
+#: the link inputs dropped, and the served template's own `widgets_values` for that node,
+#: `[640, 640, 81, 1]`. `WanFirstLastFrameToVideo` shares the declaration order and is
+#: entered here now because it is the same object one socket wider — not used by E11.
 LATENT_NODES = {
     "EmptyHunyuanLatentVideo": {"width": 0, "height": 1, "length": 2},
     "EmptyLatentVideo": {"width": 0, "height": 1, "length": 2},
     "WanVaceToVideo": {"width": 0, "height": 1, "length": 2},
     "WanAnimateToVideo": {"width": 0, "height": 1, "length": 2},
+    "WanImageToVideo": {"width": 0, "height": 1, "length": 2},
+    "WanFirstLastFrameToVideo": {"width": 0, "height": 1, "length": 2},
 }
 
 #: Widget values that name a weight file. Anything ending in one of these is a component.

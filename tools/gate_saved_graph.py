@@ -46,6 +46,11 @@ WIDGET_INDEX = {
                  "denoise": 6},
     "WanAnimateToVideo": {"width": 0, "height": 1, "length": 2, "batch_size": 3,
                           "continue_motion_max_frames": 4, "video_frame_offset": 5},
+    # ---- E11, 2026-08-12: the I2V route's conditioning node. Four widgets, not six: its
+    # schema carries no `continue_motion_max_frames` / `video_frame_offset` at all, so a
+    # table entry copied from the Animate row would look right and compare `batch_size`
+    # against nothing.
+    "WanImageToVideo": {"width": 0, "height": 1, "length": 2, "batch_size": 3},
     "LoadImage": {"image": 0},
     # Every input this graph pins is a link; the empty entry is a recorded fact, not the
     # silence of a class nobody thought about (the table is looked up with `is None`).
