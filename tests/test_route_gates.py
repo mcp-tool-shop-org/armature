@@ -223,6 +223,46 @@ def test_gate_s_still_refuses_a_randomising_save_format_seed():
     assert "not pinned" in str(exc.value)
 
 
+def test_gate_s_reads_a_save_format_sampler_that_has_connected_inputs():
+    """Measured at use, E10 2026-08-12: save format spells `inputs` as a LIST of slot
+    dicts and API format as a mapping, and the noise check called `.get` on it. E09's
+    saved samplers had EMPTY input arrays, so `or {}` swallowed the difference and the
+    defect waited for a graph whose sampler was actually wired — which every real one is."""
+    saved = {"nodes": [
+        {"id": 49, "type": "WanAnimateToVideo", "widgets_values": [832, 480, 81, 1, 5, 0]},
+        {"id": 3, "type": "KSampler",
+         "inputs": [{"name": "model", "type": "MODEL", "link": 1},
+                    {"name": "latent_image", "type": "LATENT", "link": 4}],
+         "widgets_values": [2026081221, "fixed", 20, 6, "uni_pc", "simple", 1]}]}
+    ev = RG.gate_s_registration(saved, [2026081221])
+    live = [s for s in ev["seeds"] if s["adds_noise"]]
+    assert len(live) == 1 and live[0]["seed"] == 2026081221
+
+
+def test_a_plain_KSampler_is_never_read_as_noise_free():
+    """`KSampler` has no `add_noise` input at all. Reading widget 0 for it — which the
+    table used to invite — asks whether its SEED equals "disable"."""
+    saved = {"nodes": [{"id": 3, "type": "KSampler", "inputs": [],
+                        "widgets_values": ["disable", "fixed", 20, 6, "euler", "simple", 1]}]}
+    assert RG.seeds(saved)[0]["seed"] == "disable"
+    ev = RG.gate_s_registration(saved, ["disable"])
+    assert ev["seeds"][0]["adds_noise"] is True
+
+
+def test_a_save_format_advanced_sampler_with_noise_disabled_is_still_read_as_inert():
+    saved = {"nodes": [
+        {"id": 4, "type": "KSamplerAdvanced",
+         "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+         "widgets_values": ["disable", 0, "fixed", 40, 3.0, "euler", "simple", 25, 10000,
+                            "disable"]},
+        {"id": 3, "type": "KSamplerAdvanced",
+         "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+         "widgets_values": ["enable", 4242, "fixed", 40, 4.0, "euler", "simple", 0, 25,
+                            "enable"]}]}
+    ev = RG.gate_s_registration(saved, [4242])
+    assert sorted(s["adds_noise"] for s in ev["seeds"]) == [False, True]
+
+
 def test_the_gate_is_not_an_assert():
     import os
     src = open(os.path.join(TOOLS, "armature_core", "route_gates.py"),

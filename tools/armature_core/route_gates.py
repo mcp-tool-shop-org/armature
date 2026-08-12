@@ -62,9 +62,16 @@ RULED_COMPONENTS = {
 }
 
 #: Node classes that carry a seed, and where it lives in `widgets_values`.
+#:
+#: `add_noise` is the third entry and it is per-class rather than assumed: `KSamplerAdvanced`
+#: carries the switch as its first widget, and **`KSampler` has no such input at all** — it
+#: always adds noise. Reading widget 0 for both (which this table let a caller do until
+#: 2026-08-12) asks a `KSampler` whether its SEED equals "disable"; the answer is right for
+#: the wrong reason on every graph, and would be wrong outright on a class whose first
+#: widget happened to be a disabling literal.
 SEED_NODES = {
-    "KSampler": {"seed": 0, "control": 1},
-    "KSamplerAdvanced": {"seed": 1, "control": 2},
+    "KSampler": {"seed": 0, "control": 1, "add_noise": None},
+    "KSamplerAdvanced": {"seed": 1, "control": 2, "add_noise": 0},
 }
 
 #: Node classes that size a video latent, and where width/height/length live in save
@@ -309,15 +316,27 @@ def gate_s_registration(graph, registered):
                 f"literal={s['seed_is_literal']})" for s in loose), ev)
     # add_noise="disable" samplers take no noise from their seed; theirs is inert and is
     # reported rather than demanded, so a two-expert split does not need a second entry.
+    #
+    # **The two formats spell `inputs` differently and that is not cosmetic.** In API format
+    # it is a mapping of name -> literal-or-link; in save format it is a LIST of slot dicts.
+    # Calling `.get` on the list raised outright on the first save-format graph whose
+    # sampler had any connected input (measured 2026-08-12, E10): E09's saved samplers had
+    # empty input arrays, `or {}` swallowed them, and the defect waited for a graph with
+    # links. It is a crash rather than a wrong answer, which is the good kind of latent bug.
+    api = is_api_format(graph)
     live = []
     for s in found:
         n = next((x for _, x in _iter_nodes(graph) if str(x.get("id")) == str(s["node_id"])),
                  None)
+        slot = SEED_NODES[s["class"]].get("add_noise")
         adds = True
-        if n is not None:
-            inp = n.get("inputs") or {}
-            wv = n.get("widgets_values") or []
-            adds = (inp.get("add_noise", wv[0] if wv else "enable")) not in ("disable", False)
+        if n is not None and slot is not None:
+            if api:
+                adds = (n.get("inputs") or {}).get("add_noise", "enable") \
+                    not in ("disable", False)
+            else:
+                wv = n.get("widgets_values") or []
+                adds = (wv[slot] if len(wv) > slot else "enable") not in ("disable", False)
         s["adds_noise"] = adds
         if adds:
             live.append(s)
