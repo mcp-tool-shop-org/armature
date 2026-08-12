@@ -106,3 +106,60 @@ Recorded because it is the useful half.
 - If the detector locks onto the render's background or a shadow rather than the figure, the
   visibility numbers would look plausible. The gate reports per-landmark presence, and the
   sheet carries the overlay so the Director can see where the detector thought he was.
+
+---
+
+## H5 — the A3 diagnostic donor: do reference-exact settings restore motion?
+
+**BLIND.** Written 2026-08-12 before the A3 graph was submitted and before any A3 output
+existed; committed ahead of the submission so git timestamps the order. Nothing about this
+run has been looked at. The seed (`2026081201`), the graph (sha256 `c537194b6b9fbfa9…`)
+and the three admission gates were fixed first.
+
+**What moved, and the honest limit on what this run can answer.** A3 authorises two
+changes at once — the sampling values (steps 40→20, split 65 %→50 % of steps on the
+high-noise expert, shift 12.0→8.0, cfg 4.0/3.0→3.5/3.5, `euler`/`simple` now sourced
+rather than unsourced) and the prompt. They move together by the amendment's design,
+because this generation is simultaneously the graph-fault diagnostic and the donor
+re-roll. **A pass therefore cannot attribute the recovery to either one**, and I predict
+in advance that I will not be able to, rather than discovering the confound afterwards and
+crediting whichever change I prefer.
+
+- **H5a — the motion clause passes.** Mean consecutive-frame absolute pixel difference on
+  the lossless frames lands **between 4 and 12 / 255** (the probe measured 0.703; the gate
+  asks for ≥ 2.0). I hold this at roughly 80 %.
+- **H5b — the framing clause is the closer call.** Ankle landmarks inside the image on
+  ≥ 80 % of frames. I hold this at roughly 60 % — better than even, not comfortably. The
+  frame is 832×480, and a standing figure head-to-feet in a 16:9 landscape frame is a
+  demanding request no matter how the prompt is worded. **If it fails I predict it fails
+  partially — ankles in-image on 30–79 % of frames, cut at the bottom edge on the frames
+  where she is tallest — rather than at the probe's 0 %.**
+- **H5c — the prompt is the larger of the two causes.** Stated so it can be wrong: I
+  believe the probe's stillness and crop came mostly from its own wording — `mid-shot` is
+  a term of art for a waist-up framing and sat in the same sentence as "head to feet," and
+  "dances slowly and evenly" over a held limbs-apart pose describes something close to a
+  still. The two-expert split ran *more* of its steps on the high-noise expert (which the
+  Wan paper says governs overall layout, i.e. motion), not fewer, so I do not expect the
+  split to have been what suppressed motion. **This run cannot test that belief**; it is
+  recorded now so that a pass cannot be retro-fitted into evidence for the settings.
+- **H5d — rendering changes visibly.** The probe read as a backlit near-silhouette against
+  a high-key backdrop. At cfg 3.5 on both experts rather than 4.0/3.0 I expect less extreme
+  contrast and a more evenly-lit figure. Weak — held at roughly 55 %.
+- **H5e — no quality threshold is offered.** Whether the donor is worth lifting is
+  answered by A3's two stated numbers and nothing else; whether the result is worth a shot
+  is the Director's call at the sheet. This seat proposes no additional pass line.
+
+### What would make me wrong in a way I would not notice
+
+- If the clip contains a **camera move or a cut** rather than a moving dancer, the mean
+  consecutive-frame difference rises and H5a "passes" while measuring the wrong thing
+  entirely. The frames are looked at in motion and at full size before the number is
+  quoted, and the prompt's fixed-camera clauses are what the sheet is checked against.
+- If the detector places ankles inside the image by **extrapolating** them onto a body
+  whose feet are still cropped, the framing clause passes on landmarks that were never
+  observed. Per-landmark visibility is carried beside the in-image fraction for exactly
+  this, and the probe's own numbers (heel visibility 0.22–0.24 while 100 % out of frame)
+  are the shape that failure takes.
+- If the figure is **small in frame** because the camera went far enough back to include
+  the feet, every landmark could be in-image while the pose is too small for the detector
+  to resolve well. Visibility and the figure's pixel height are both reported.
