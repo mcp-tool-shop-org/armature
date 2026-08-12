@@ -67,10 +67,26 @@ SEED_NODES = {
     "KSamplerAdvanced": {"seed": 1, "control": 2},
 }
 
-#: Node classes that size a video latent, and where width/height/length live.
+#: Node classes that size a video latent, and where width/height/length live in save
+#: format's positional `widgets_values`.
+#:
+#: ⚠ **A conditioning node can size a latent too, and forgetting that disarms Gate L
+#: silently.** Added 2026-08-12 (E08): `WanAnimateToVideo` emits its own zeroed latent from
+#: its own width/height/length inputs, so an Animate graph contains no `Empty*LatentVideo`
+#: node at all — and this table drove `latents()`, which drove `frame_legality()`. On the
+#: first E08 graph Gate L therefore examined ZERO latents and reported the graph legal
+#: without checking anything, which is the failure mode CLAUDE.md names outright: a check
+#: that cannot fail is not a check. Any future conditioning node that sizes a latent belongs
+#: here the day it is first used.
+#:
+#: Widget order for `WanAnimateToVideo` is read from its `define_schema` declaration order,
+#: keeping only the non-link inputs: width, height, length, batch_size,
+#: continue_motion_max_frames, video_frame_offset.
 LATENT_NODES = {
     "EmptyHunyuanLatentVideo": {"width": 0, "height": 1, "length": 2},
     "EmptyLatentVideo": {"width": 0, "height": 1, "length": 2},
+    "WanVaceToVideo": {"width": 0, "height": 1, "length": 2},
+    "WanAnimateToVideo": {"width": 0, "height": 1, "length": 2},
 }
 
 #: Widget values that name a weight file. Anything ending in one of these is a component.
