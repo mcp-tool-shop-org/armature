@@ -117,6 +117,13 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--frames", default="0,16,32,48,64")
     ap.add_argument("--tile-h", type=int, default=420)
+    ap.add_argument("--source-uncropped", action="store_true",
+                    help="show the source column at full frame. Use when the source is a "
+                         "GENERATED clip: there is no empty plate to difference against, "
+                         "and cropping to the detector's own landmarks would let the "
+                         "instrument on trial choose what the Director gets to see.")
+    ap.add_argument("--labels", default=None,
+                    help="three comma-separated column headings")
     a = ap.parse_args()
 
     idx = [int(v) for v in a.frames.split(",") if v.strip() != ""]
@@ -129,15 +136,19 @@ def main():
 
     src_paths = [os.path.join(a.source, src[i]) for i in idx]
     lif_paths = [os.path.join(a.lifted, lif[i]) for i in idx]
-    box_s = subject_box(src_paths, os.path.join(a.source, "empty_plate.png"))
-    box_l = subject_box(lif_paths, os.path.join(a.lifted, "empty_plate.png"))
-    # ONE box for both columns, so a limb that moved is not confused with a crop that did.
-    box = (min(box_s[0], box_l[0]), min(box_s[1], box_l[1]),
-           max(box_s[2], box_l[2]), max(box_s[3], box_l[3]))
-
     full_size = _rgb(src_paths[0]).size
+    box_l = subject_box(lif_paths, os.path.join(a.lifted, "empty_plate.png"))
 
-    def tile(path, overlay=None):
+    if a.source_uncropped:
+        box_s = (0, 0, full_size[0], full_size[1])
+    else:
+        box_s = subject_box(src_paths, os.path.join(a.source, "empty_plate.png"))
+        # ONE box across both columns, so a limb that moved is not confused with a crop
+        # that did. Only possible when the two are the same camera on the same rig.
+        box_s = box_l = (min(box_s[0], box_l[0]), min(box_s[1], box_l[1]),
+                         max(box_s[2], box_l[2]), max(box_s[3], box_l[3]))
+
+    def tile(path, box, overlay=None):
         im = _rgb(path).crop(box)
         if overlay is not None:
             im = draw_landmarks(im, overlay[0], overlay[1], box, full_size)
@@ -146,45 +157,54 @@ def main():
 
     rows = []
     for i in idx:
-        row = [tile(os.path.join(a.source, src[i])),
-               tile(os.path.join(a.source, src[i]),
+        row = [tile(os.path.join(a.source, src[i]), box_s),
+               tile(os.path.join(a.source, src[i]), box_s,
                     overlay=(det[i]["image"], det[i]["visibility"])
                     if det[i]["fired"] else None),
-               tile(os.path.join(a.lifted, lif[i]))]
+               tile(os.path.join(a.lifted, lif[i]), box_l)]
         rows.append((i, row))
 
-    tw = rows[0][1][0].width
-    W = MARGIN + len(rows[0][1]) * (tw + MARGIN)
+    widths = [max(r[1][c].width for r in rows) for c in range(3)]
+    xs, acc = [], MARGIN
+    for w in widths:
+        xs.append(acc)
+        acc += w + MARGIN
+    W = acc
     H = MARGIN + LABEL_H + len(rows) * (a.tile_h + LABEL_H + MARGIN)
     sheet = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(sheet)
-    for c, name in enumerate(("source render 1920x1080",
-                              "what the detector saw (33 landmarks)",
-                              "the rig performing the solved lift")):
-        d.text((MARGIN + c * (tw + MARGIN), 4), name, fill=FG)
+    labels = (a.labels.split(",") if a.labels else
+              ["source render 1920x1080", "what the detector saw (33 landmarks)",
+               "the rig performing the solved lift"])
+    for c, name in enumerate(labels[:3]):
+        d.text((xs[c], 4), name.strip(), fill=FG)
 
     y = MARGIN + LABEL_H
     for i, row in rows:
         for c, im in enumerate(row):
-            x = MARGIN + c * (tw + MARGIN)
-            sheet.paste(im, (x, y))
+            sheet.paste(im, (xs[c], y))
             if c == 0:
-                d.text((x + 4, y + a.tile_h + 3), f"frame {i:03d}", fill=DIM)
+                d.text((xs[c] + 4, y + a.tile_h + 3), f"frame {i:03d}", fill=DIM)
         y += a.tile_h + LABEL_H + MARGIN
-    d.text((MARGIN, H - LABEL_H + 2),
-           f"crop x{box[0]}-{box[2]} y{box[1]}-{box[3]} of 1920x1080 — "
-           f"union of subject pixels vs the empty plate; full frames on disk uncropped",
-           fill=DIM)
+    note = (f"source shown UNCROPPED at {full_size[0]}x{full_size[1]} (a generated clip has "
+            f"no empty plate to difference against); lifted cropped "
+            f"x{box_l[0]}-{box_l[2]} y{box_l[1]}-{box_l[3]}"
+            if a.source_uncropped else
+            f"crop x{box_s[0]}-{box_s[2]} y{box_s[1]}-{box_s[3]} — union of subject pixels "
+            f"vs the empty plate")
+    d.text((MARGIN, H - LABEL_H + 2), note + "; full frames on disk uncropped", fill=DIM)
     sheet.save(a.out)
 
     with open(os.path.splitext(a.out)[0] + ".json", "w", encoding="utf-8") as fh:
-        json.dump({"tool": "make_lift_sheet", "frames": idx, "crop_box": list(box),
+        json.dump({"tool": "make_lift_sheet", "frames": idx,
+                   "crop_box_source": list(box_s), "crop_box_lifted": list(box_l),
                    "source": os.path.abspath(a.source),
                    "lifted": os.path.abspath(a.lifted),
                    "detection": os.path.abspath(a.detection),
                    "sheet": os.path.abspath(a.out)}, fh, indent=2)
     print("MAKE_LIFT_SHEET_OK " + json.dumps({"out": os.path.abspath(a.out),
-                                              "frames": idx, "crop": list(box)}))
+                                              "frames": idx, "crop_source": list(box_s),
+                   "crop_lifted": list(box_l)}))
 
 
 if __name__ == "__main__":

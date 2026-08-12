@@ -367,3 +367,232 @@ hashes above.
 
 No publishes, no releases, no external posts, no writes to the memory store, and nothing
 written into facet's or E07's trees.
+
+---
+---
+
+# Part 2 — Stage B2, run under amendment A2
+
+**Appended 2026-08-11 by the same executor seat, after
+[E09-calibration-ruling.md](E09-calibration-ruling.md).** Stages A and B1 above stand as
+ruled; the B2 halt was upheld and B2 re-scoped to the clean in-repo graph commissioned by
+R8. **One probe generation ran.** Measurements only; no judgement words. The Director
+judges the sheet.
+
+## 10. The meters, part 2
+
+| meter | reading |
+|---|---|
+| **Credits** | **0 of the ceiling of 8.** `estimate_credits` on the exact graph, before submission: *"0 credits — no paid API nodes found in this workflow."* The route is entirely open weights, so it bills GPU-hours and **the credit ceiling is not the binding meter on it**. Premise 5's 4-credits-per-generation number was measured on E02's route and does not transfer. Ledger: one submission, `prompt_id 8cf803af-ff3c-4a43-beee-b2d529850627`, reserve unspent |
+| **GPU-hours (cloud)** | **NOT YET REFLECTED IN THE INVOICE.** The workspace's 2026-08-11 *GPU Hours Product* bucket read `$3.636348` both before and after the run — the invoice-backed report lags. This is recorded as *not yet visible*, not as zero. The measurable proxy is wall clock: submitted, then terminal on the eighth `wait_for_job` poll, so **queue + execution ran roughly 3–4 minutes** for 40 steps across two 14B experts at 832×480×65 |
+| **GPU (local)** | Two further headless Blender passes: the applier on the solved dance, and a 65-frame 1920×1080 render of the rig performing it |
+
+## 11. Gate states, part 2
+
+| gate | state |
+|---|---|
+| watchdog liveness | **PASS** — re-verified before any GPU work this session |
+| licence pin | **PASS** — no new dependency. All four weights are map-covered; the fp8-scaled files are Comfy-Org repacks of the mapped Apache weights under the map's 2026-08-11 repack ruling. **No LoRA of any kind is loaded** |
+| **Gate ROUTE** | **PASS, twice** — on the API graph we built, and again on the save-format file the cloud returned, because "submit the saved file verbatim" only means something if the saved file is what was checked. 4 weight files, 2 seeds pinned, 1 latent legal |
+| **Gate S** | **PASS** — seed list committed at `1017558`, *before* the graph was built. One noise-bearing seed, `20260811`, pinned `fixed`, drawn from the committed list; the low-noise expert's seed is inert (`add_noise=disable`) and is reported rather than demanded |
+| **Gate L** | **PASS on the actual graph** — 832×480×65: 832/16 = 52, 480/16 = 30, 65 = 4·16+1, ≤ 81 |
+| **Gate C** | **PASS** — priced at 0 credits before submission; ceiling 8 not approached |
+| dry-run pre-flight | **PASS**, no warnings — and it did *not* stand in for the in-code checks, per CLAUDE.md |
+| **detection** (B2) | **PASS — a pose on 65 of 65 frames** |
+| **lossless tap** | **PASS** — 65 PNGs straight off the `VAEDecode`, which is what the review was cut from |
+| Gate N / OBJ / SPACE / MOTION_RECORD / ARRIVED | **PASS** — applier on the solved dance, `ARRIVED` max 5.348e-06 against 1.069e-04 |
+| Blender success-sentinel | **PASS** on both invocations |
+
+## 12. The graph, and where every number came from
+
+Built in-repo, 15 nodes, sha256 `7e8b8877abfc118d…`. Saved as
+`armature-E09-B2-t2v-clean`; the save→convert round trip changed nothing (node 50 came back
+byte-equal on every input).
+
+Fetched verbatim from Wan-Video/Wan2.2 (Apache-2.0) and kept beside the graph:
+
+| value | from |
+|---|---|
+| `sample_steps = 40` | `wan/configs/wan_t2v_A14B.py` |
+| `sample_shift = 12.0` | same |
+| `boundary = 0.875` | same |
+| `sample_guide_scale = (3.0, 4.0)  # low noise, high noise` | same — so cfg 4.0 on the high-noise expert, 3.0 on the low |
+| `num_train_timesteps = 1000`, `sample_fps = 16`, `sample_neg_prompt` | `wan/configs/shared_config.py`, negative used verbatim |
+| `euler` / `simple` | **neither source** — a port necessity, recorded as one: the reference's `unipc` solver has no ComfyUI equivalent for this graph |
+
+**The two-expert split is derived, not dialled.** The reference switches on the *timestep*
+(`t ≥ boundary · num_train_timesteps`); ComfyUI splits on a step index. With
+`σ' = shift·σ/(1 + (shift−1)·σ)` and `simple` stepping σ linearly 1→0, the crossing lands
+at **step 26 of 40** — high-noise 0..26, low-noise 26..40. The whole 41-row schedule is in
+the payload record. The served template's own 2-of-4 split is not the reference's and was
+not used.
+
+**Prompt, verbatim** (recorded because a paraphrased prompt is a different experiment):
+
+> A single dancer alone in an empty studio, filmed head to feet in one continuous mid-shot.
+> She dances slowly and evenly, facing the camera, with her arms held out away from her body
+> and her legs apart, so that her arms and legs stay clear of her torso and never cross or
+> overlap each other. Plain flat pale grey backdrop, even soft studio lighting, no props, no
+> furniture. The camera does not move. One person only, whole body visible in frame at all
+> times.
+
+## 13. A scrambling defect caught before any measurement
+
+`get_output` returns **content-addressed filenames** — `00f09b64…`, `0211117d…` — so
+sorting them alphabetically produces a random frame order. The first download did exactly
+that. Every count would have been right (65 frames), every gate would have passed, and the
+lift would have been measured on a **shuffled clip**, with the resulting jitter read as
+detector noise.
+
+Caught and settled by measurement rather than by assumption: mean consecutive-frame
+absolute pixel difference is **0.703** in the results-array order and **5.314** sorted —
+7.6× apart. The array order is temporal; the sequence was rewritten in it, and the evidence
+is at `outputs/E09/b2-probe/frame_order_evidence.json`.
+
+## 14. What the generation produced — measured, not graded
+
+| observation | measurement |
+|---|---|
+| single person, plain backdrop, static camera, arms clear of the torso, legs apart | all present |
+| **the body is cropped above the ankle** | all six lower-leg landmarks (`left/right_ankle`, `left/right_heel`, `left/right_foot_index`) lie **outside the image on 100 % of frames**; knees outside on 25 % (L) and 34 % (R). "head to feet" and "whole body visible in frame at all times" were asked for and not delivered |
+| rendering | a backlit near-silhouette against a high-key backdrop |
+| motion magnitude | mean consecutive-frame pixel difference **0.703 / 255** — the dancer is close to static in a held second position |
+
+## 15. B2 measurements
+
+### 15.1 Detection — the gate, and it passed
+
+| quantity | B2 (generated dancer) | B1 (rendered mannequin) |
+|---|---|---|
+| frames returning a pose | **65 / 65** | 65 / 65 |
+| mean visibility, all 33 | **0.8613** | 0.8482 |
+| face landmarks | **1.0000** | 0.9999 |
+| torso landmarks | **0.9991** | 0.9999 |
+| **lower-leg landmarks** | **0.3058** | — |
+| lowest per-landmark | `right_heel` 0.219, `left_heel` 0.242, `right_foot_index` 0.278, `right_ankle` 0.325 | `left_elbow` 0.212 |
+
+The weak landmarks moved from B1's occluded far-side arm to B2's **cropped-away feet**. In
+both cases the weakness is geometric — what the frame does or does not contain — not the
+surface detail I predicted in H2c.
+
+### 15.2 Scale, bone length, round trip
+
+Detector→rig scale **0.8718**, from a pose-invariant summed-bone-length ratio (B1 fitted
+this against ground truth; B2 has none, so the method differs and is recorded).
+
+Per-bone residual after removing that scale, median over 65 frames: `elbow.R` **+0.629**,
+`ankle.L` −0.518, `wrist.L` −0.474, `elbow.L` +0.458, `shoulder.L` −0.364, `hip.L` +0.361 …
+**median |residual| over all 14 limb bones: 0.298** (B1: 0.246).
+
+Position round-trip on the solved rotations: median **0.3203**, max 0.3292, against a
+figure whose bbox diagonal is 1.069 (B1 detected: 0.2707). No gate — the observation comes
+from another body entirely.
+
+### 15.3 Jitter
+
+| series | median-of-medians | median-of-p90 | max |
+|---|---|---|---|
+| B2 detected | **0.539°** | 1.525° | 176.749° |
+| B2 after one EMA pass (α = 0.5) | **0.409°** | 1.126° | 124.135° |
+| B1 detected, for comparison | 16.69° | 93.18° | — |
+| B1 authored ground truth | 0.46° | 3.11° | — |
+
+Worst B2 bones: `shoulder.L` 4.06°, `elbow.L` 2.73°, `knee.L` 1.38°, `knee.R` 1.24°.
+
+### 15.4 Twist
+
+`wrist.L`, `wrist.R`, `ankle.L`, `ankle.R` — underdetermined **65/65** each, as in B1.
+Every other limb bone 0/65, with bend-sine medians from **0.0706** (`shoulder.L` — the
+arms are held nearly straight, so its twist is the worst-conditioned on the clip) to
+0.9922 (`knee.R`).
+
+### 15.5 Feet
+
+The ratio is **not quoted as a reading** — R3 ruled it valid on world-rooted motion and
+invalid on hip-origin lifted motion. Numerator and denominator separately:
+
+| series | slower-foot path | hips path | max per-contact slip |
+|---|---|---|---|
+| B2 detected | 0.2483 | 0.0035 | 0.0442 |
+| B2 + one EMA pass | 0.1482 | 0.0035 | 0.0506 |
+| B1 detected, for comparison | 3.8515 | 0.1950 | 0.3370 |
+
+The denominator is 0.0035 — the hips are effectively fixed, which is what a hip-origin
+landmark stream on a dancer who does not travel produces.
+
+### 15.6 The axis convention — assumed here, and the assumption is named
+
+B2 has no camera record, so the basis is the frontal-camera convention, **ASSUMED**. B1
+measured what that assumption costs on a *known* camera: median 16.26° off the best fit,
+landing almost entirely on the root (`hips` 27.98° vs 19.14° with an oracle fit) with every
+limb bone identical to two decimal places. Root motion is out of scope (premise 7), so the
+limbs — which is what a dance is — carry the cost B1 measured for them, which was none.
+
+## 16. The Gate 0 sheet, and the review materials
+
+`outputs/E09/sheets/E09-B2-gate0.png` (sha256 `74794aadb2198796…`) — **source | what the
+detector saw | the performer's rig performing the solved lift**, frames 0/16/32/48/64,
+built before any number above was written into this report.
+
+The source column is shown **uncropped at 832×480** and the reason is recorded on the sheet
+itself: a generated clip has no empty plate to difference against, and cropping to the
+detector's own landmarks would let the instrument on trial choose what the Director sees.
+The lifted column is cropped against its own empty plate.
+
+Review materials, from `lossless/` and nothing else:
+
+- `outputs/E09/b2-review/review_0.5x_8fps.webp` — **lossless** animated WEBP, 8 fps against
+  a 16 fps source = **0.50×**, native 832×480, 65 frames.
+- 20 native-resolution stills at frames 0/16/32/48/64 on both hands and both feet.
+  **Hands: in frame on 5 of 5 stills. Feet: outside the image on 5 of 5** — the still is
+  cut anyway and the sidecar records that the landmark was outside, because that is the
+  finding rather than a missing file.
+
+Per R2, the arms are what a dance is and are inspected first: `shoulder.L` carries the
+clip's worst twist conditioning (bend-sine median 0.0706) and its largest jitter (4.06°).
+
+## 17. Predictions H4 versus outcomes
+
+Registered blind at `e7b4db5`, before any B2 work.
+
+| clause | predicted | measured | outcome |
+|---|---|---|---|
+| **H4a** — frame-to-frame solved-rotation change larger on the generated clip than on the rendered fixture | B2 > B1 | B2 **0.539°** vs B1 **16.69°** — B2 is **31× smaller** | **MISS, and reversed.** The prediction assumed a generated dance would move at least as much as the authored walk. The measured confound is in the source itself: mean consecutive-frame pixel difference 0.703/255, i.e. the dancer is nearly static, so there is little motion for jitter to ride on |
+| **H4b** — the foot-slip diagnostic on the solved dance exceeds the fixture's | B2 > B1 | max per-contact slip B2 **0.0442** vs B1 **0.3370**; numerator 0.2483 vs 3.8515 | **MISS on the stated comparison.** Feet were the defect class, but for a reason the prediction did not name: they were **never observed at all** — outside the image on 100 % of frames — so the foot landmarks are extrapolations, not slippage |
+| **H4c** — no threshold offered; numerator and denominator reported separately; worth-a-shot is the Director's call | — | held throughout | **HELD** |
+
+Three of the six blind clauses across H2/H3/H4 have now missed, and every one of them
+missed on *which thing would be weak* rather than on magnitude.
+
+## 18. Artifacts, part 2
+
+| artifact | path | sha256 (first 32) |
+|---|---|---|
+| the graph, as built | `outputs/E09/route/E09-B2-t2v.api.json` | `7e8b8877abfc118d1daf3c9c668c9318` |
+| payload record (every value + its source, the 41-row schedule) | `outputs/E09/route/E09-B2-payload-record.json` | — |
+| admission on the saved file | `outputs/E09/route/E09-B2-saved-admission.json` | — |
+| Wan 2.2 reference configs, as fetched | `outputs/E09/route/wan22_{shared_config,t2v_A14B}.py` | `3ae102e029d4d0e3…`, `a1f3a70472aece6d…` |
+| **65 lossless frames** | `outputs/E09/b2-probe/lossless/` | per-frame in `lossless_manifest.json` |
+| frame-order evidence | `outputs/E09/b2-probe/frame_order_evidence.json` | — |
+| probe mp4 (convenience only) | `outputs/E09/b2-probe/probe.mp4` | `1b54f0a4eade8c2798df6afeaafdfefd` |
+| detection record | `outputs/E09/b2-measure/detection_raw.json` | — |
+| B2 measurements | `outputs/E09/b2-measure/measurement.json` | — |
+| solved motion (raw, EMA) | `outputs/E09/b2-measure/lifted{,_ema}.motion.json` | — |
+| the rig performing the dance | `outputs/E09/b2-lifted/performer_dance_ema.glb` | `9aebeeb8e60da914aa0a2a49541bab7d` |
+| **the Gate 0 sheet** | `outputs/E09/sheets/E09-B2-gate0.png` | `74794aadb21987968b70b875788dde51` |
+| **the review clip, lossless 0.5×** | `outputs/E09/b2-review/review_0.5x_8fps.webp` | `2886431deed0900c87b24dbb2e244d8b` |
+
+Suite after B2: **442 passed, 35 skipped.**
+
+## 19. Compensators, part 2
+
+| act | compensator | state |
+|---|---|---|
+| the probe generation | **none exists** — spent GPU-hours have no undo | one generation, reserve unspent |
+| saved cloud workflow `armature-E09-B2-t2v-clean` | delete server-side | present; owner executor |
+| downloaded outputs under `outputs/E09/b2-*` | delete the directories | written; owner executor |
+| `E:\AI-Models\mediapipe\pose_landmarker_heavy.task` | delete the file | unchanged from part 1 |
+| worktree + branch `E09-run` | `git worktree remove` + branch delete | owner advisor, after the ruling |
+
+No uploads were made (the graph is text-to-video and takes no input files). No publishes,
+no releases, no external posts, no writes to the memory store.

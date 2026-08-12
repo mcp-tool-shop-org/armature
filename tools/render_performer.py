@@ -97,7 +97,11 @@ def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser()
     ap.add_argument("--glb", required=True)
-    ap.add_argument("--motion", required=True)
+    ap.add_argument("--motion", default=None,
+                    help="an AUTHORED motion record (walk.motion.json) to frame against")
+    ap.add_argument("--lift", default=None,
+                    help="a SOLVED motion record (lift_clip/measure_lift output) to frame "
+                         "against; used when there is no authored ground truth, as in B2")
     ap.add_argument("--manifest", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--fps", type=int, default=16)
@@ -187,20 +191,50 @@ def main():
     out = os.path.abspath(a.out)
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
-    with open(a.motion, encoding="utf-8") as fh:
-        motion = json.load(fh)
+    if not (a.motion or a.lift):
+        raise RenderGate(
+            "give either --motion (authored ground truth) or --lift (a solved record); the "
+            "camera is SOLVED against where the body actually goes, and framing a "
+            "performance against nothing would fit the rest pose and clip the performance",
+            {})
     with open(a.manifest, encoding="utf-8") as fh:
         rig = json.load(fh)
-    gt = motion["ground_truth"]
-    count = len(gt)
     lo, hi = rig["bbox"]["lo"], rig["bbox"]["hi"]
 
-    all_points, end_points = [], []
-    for rec in gt:
-        pts = body_cloud(rec["world"], lo, hi)
-        all_points.extend(pts)
-        if rec["frame"] == count - 1:
-            end_points = pts
+    if a.motion:
+        with open(a.motion, encoding="utf-8") as fh:
+            gt = json.load(fh)["ground_truth"]
+        clouds = [body_cloud(rec["world"], lo, hi) for rec in gt]
+        frame_source = {"kind": "authored", "path": os.path.abspath(a.motion)}
+    else:
+        # No ground truth exists for a generated clip, so the framing cloud is computed
+        # from the SOLVED rotations through the same kinematics the solver inverts —
+        # `lift_solve.fk_sites` — rather than from the rest pose, which would frame a
+        # standing figure and clip whatever the performance actually did.
+        from armature_core import lift_solve as LS  # noqa: E402  (only this branch needs it)
+        rest = {}
+        for name, rec in rig["landmarks"].items():
+            p = rec["p"] if isinstance(rec, dict) and "p" in rec else rec
+            if isinstance(p, (list, tuple)) and len(p) == 3:
+                rest[name] = tuple(float(v) for v in p)
+        with open(a.lift, encoding="utf-8") as fh:
+            frames = json.load(fh)["frames"]
+        clouds = []
+        for fr in frames:
+            placed = LS.fk_sites(rest, {
+                "local": {k: tuple(map(tuple, v)) for k, v in fr["local"].items()},
+                "root": {"hips_delta_translation": tuple(fr["root"])}})
+            world = {k: list(v) for k, v in placed.items()}
+            # `body_cloud` hangs the torso's own half-extents on "hips"; the solver's site
+            # list calls that landmark "crotch". Aliased rather than renamed, so the two
+            # vocabularies stay each correct in their own module.
+            world["hips"] = world["crotch"]
+            clouds.append(body_cloud(world, lo, hi))
+        frame_source = {"kind": "solved_lift", "path": os.path.abspath(a.lift)}
+
+    count = len(clouds)
+    all_points = [p for c in clouds for p in c]
+    end_points = clouds[-1]
 
     sol = framing.solve_camera(all_points, end_points, AZIMUTH_DEG, ELEVATION_DEG,
                                LENS_MM, SENSOR_MM, WIDTH, HEIGHT,
@@ -297,7 +331,7 @@ def main():
             "tool": "render_performer", "tool_version": TOOL_VERSION,
             "blender": blender_scene.blender_provenance(),
             "source": {"glb": os.path.abspath(a.glb), "sha256": _sha256(a.glb),
-                       "motion": os.path.abspath(a.motion),
+                       "framed_against": frame_source,
                        "manifest": os.path.abspath(a.manifest)},
             "resolution": [WIDTH, HEIGHT], "frames": count, "fps": a.fps,
             "floor_drawn": bool(a.floor),
