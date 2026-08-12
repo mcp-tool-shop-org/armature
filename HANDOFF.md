@@ -84,6 +84,13 @@ MediaPipe Apache at all three layers) · the payload/fetch/measure tooling per e
 camera-tier second seeds fold into its arms). The `@`-tag investigation ran the same
 day: **consult brief #8** (`docs/comfy-consult-8-brief.md`) carries the measured Wan
 2.6/2.7 reference-tier node contracts and the open questions.
+**Same day, later:** **E13 is specced and QUEUED behind E12's landing**
+(`docs/experiments/E13-composed-route-probe.md` — the composed route: authored
+references into `wan2.7-r2v`, on the Director's word). Its dispatch gates: E12 landed ·
+the provider-terms gate (map row added 2026-08-12 — provider document unfetched; the
+Director may alternatively rule the retrieved Comfy ToS row sufficient) · a fresh
+credit re-estimate (bundled estimate today: 106–211 credits per generation, four
+submissions ceiling).
 
 **Product:** a scene-bearing start frame on the camera tier (alpha-law composite over a
 real bar plate — the direct answer to w3's void) · the cfg/sampler correction (catalog:
