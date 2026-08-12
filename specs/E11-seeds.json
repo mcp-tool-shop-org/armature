@@ -24,7 +24,18 @@
     "remaining_after_wave_2": {
       "2026081233": "reserve, unspent, same condition — the ceiling's second reserve, spendable only on a named cause wave 2 surfaces and the Director's word"
     },
+    "SPENT_ON_WAVE_3": "2026081233 was spent on wave 3 — see wave_3_allocation below. The ceiling is now exhausted: 3 of 3.",
     "the_two_seed_rule_still_binds": "Wave 2 runs ONE seed. Nothing it reports about the scene may be written as a property of the route, exactly as for wave 1. Note additionally that wave 2 is a COMPOSED wave — the camera embedding and the prompt surgery move together by the Director's direction — so no observation may be attributed to either lever alone, and the report says so rather than implying a single-variable read."
+  },
+  "wave_3_allocation": {
+    "recorded_utc": "2026-08-12",
+    "recorded_by": "executor seat, on E11-nocontrol, BEFORE the first submission of any wave-3 graph and committed ahead of it",
+    "seed_spent": 2026081233,
+    "the_named_cause": "Wave 2's generation was spent on a graph that could not have worked: WanCameraImageToVideo fed a camera embedding to the plain Wan 2.2 I2V experts, which have no channel for it, and returned 65 frames whose subject survived one frame. The advisor's E11 w2 ruling R5 dispatches wave 3 as the corrected wave 2 on this last reserve. The cause is named, mechanical, and now refused in-tool by Gate PAIR, whose red test is wave 2's exact graph.",
+    "what_this_seed_buys_that_wave_2_did_not": "The camera lever's FIRST actual test, and the prompt surgery's first actual test. Neither has been measured: wave 2's frames had no subject to judge either on.",
+    "the_ceiling_is_now_exhausted": "3 of 3 generations spent (2026081231 wave 1, 2026081232 wave 2, 2026081233 wave 3). There is no reserve left. Any further generation on E11 needs a new ceiling from the Director, and this seat will not assume one.",
+    "the_two_seed_rule_still_binds": "Wave 3 runs ONE seed. Nothing it reports about the scene may be written as a property of the route. Wave 3 is additionally a MULTI-BREAK wave — weights, length, resolution and start frame all move together with the camera lever and the prompt surgery — so its comparison to wave 1 is route-level and no observation may be attributed to any single change. The report says so rather than implying otherwise.",
+    "why_not_a_fresh_number": "Same clause as wave 2: this list binds in both directions, and an experiment that pre-registered seeds must draw from them. 2026081233 was fixed on this file's git timestamp before wave 1's result existed."
   },
   "why_the_index_starts_at_31": "specs/E09-A3-seeds.json registered 2026081201-02, specs/E08-seeds.json registered 2026081211-13 and specs/E10-seeds.json registered 2026081221-22 on this same calendar day. Reusing any of those numbers would put a seed registered for one experiment onto another, and the record would afterwards have to explain which run a number belonged to. The offset keeps every seed on this rig traceable to exactly one registration.",
   "why_a_new_seed_and_not_E08_s": "E11 runs a different model family (Wan 2.2 I2V-A14B, two experts) through a different conditioning node on a differently-shaped latent path, and its high-noise sampler is a KSamplerAdvanced rather than E08's KSampler. The same integer would not reproduce E08's noise field even in principle, so registering a fresh number states that plainly rather than implying a same-seed comparison the route cannot deliver. E10's report records the same rider for the frame-count case.",
