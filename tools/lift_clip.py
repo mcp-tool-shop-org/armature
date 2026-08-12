@@ -47,6 +47,7 @@ import numpy as np
 from armature_core import lift_solve as LS
 from armature_core import sitelist, walk
 from armature_core.errors import ArmatureError, GateFailure
+from armature_core import donor_gate as DG
 
 TOOL_VERSION = "E09.2"
 EMA_ALPHA = 0.5
@@ -251,6 +252,17 @@ def main():
     names, rows = detect(a.frames, a.model, a.fps)
     gate = gate_detection(rows)                        # raises; the halt is the result
 
+    # Gate DONOR (amendment A3 §2) — is this clip fit to be a baseline at all? It runs
+    # HERE, after detection and before a single rotation is solved, because the tool that
+    # performs the lift is the one that has to refuse to perform it. A donor failing this
+    # gate is a recorded take, not a baseline, and nothing downstream of this line runs
+    # on one. `--skip-donor-gate` does not exist and is not coming: the probe passed every
+    # other gate in this file while being a near-still figure with its feet outside the
+    # frame, which is precisely the run this andon is here to stop.
+    donor = DG.gate_donor(
+        DG.mean_consecutive_frame_difference(DG.frame_paths(a.frames)),
+        DG.ankle_framing(rows, gate))                  # raises; the halt is the result
+
     sites = sorted(LS.SITE_FROM_LANDMARK)
     obs = [LS.convert_axes(LS.sites_from_landmarks(r["world"]), FRONTAL_BASIS) for r in rows]
     scale, per_frame_scale, rest_total = pose_invariant_scale(rest, obs)
@@ -288,7 +300,7 @@ def main():
                    "manifest": os.path.abspath(a.manifest),
                    "model": os.path.abspath(a.model), "model_sha256": _sha256(a.model),
                    "fps": a.fps},
-        "gates": {"DETECT": gate},
+        "gates": {"DETECT": gate, "DONOR": donor},
         "axis_convention": {
             "basis": [list(r) for r in FRONTAL_BASIS], "status": "ASSUMED",
             "why": ("a generated clip carries no camera record, so the basis cannot be "

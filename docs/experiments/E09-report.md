@@ -596,3 +596,287 @@ Suite after B2: **442 passed, 35 skipped.**
 
 No uploads were made (the graph is text-to-video and takes no input files). No publishes,
 no releases, no external posts, no writes to the memory store.
+
+---
+
+# ADDENDUM — Stage B2 under amendment A3, 2026-08-12
+
+Executor seat, `E09-run`. One generation. Every number below was measured before it was
+written, and every artifact named was opened at full size before it was described.
+
+## 20. The meters, part 3
+
+| meter | reading |
+|---|---|
+| generations this resumption | **1 of the 2 A3 allows**; the reserve seed `2026081202` is unspent |
+| paid API credits | **0** — the graph loads only OSS weights and calls no partner node |
+| GPU-hours, before submission | `GPU Hours Product` bucket for 2026-08-12 UTC read **$0.354051** |
+| GPU-hours, after | **NOT YET SETTLED.** The usage report re-queried after the run returned the same bucket value; the invoice had not updated inside the session. The delta must be read later against the pre-run figure recorded above, and this seat does not quote a number it did not see move |
+| Gate C (ceiling 8 credits) | not approached — nothing billed to credits |
+
+## 21. Gate states, part 3
+
+| gate | state |
+|---|---|
+| ROUTE, on the graph we built | **PASS** — 4 weight files, 0 LoRA, 2 seeds pinned, 1 latent legal |
+| S, on a new committed seed list | **PASS** — `specs/E09-A3-seeds.json`, committed at `9950544` before the first submission; seed `2026081201`, disjoint from the probe's list |
+| L, on the actual graph | **PASS** — 832x480x65 |
+| round trip, built -> saved | **PASS** — 39 literal values compared one by one on the saved file; all equal |
+| ROUTE / S / L re-run on the **saved** file | **PASS** — the cloud executes the saved graph, not ours, so it is gated on its own bytes |
+| DETECT | **PASS** — a pose on 65 of 65 frames |
+| **DONOR (new, A3 §2)** | **PASS** — both clauses; margins in §23 |
+| fps ordering, ARRIVED (applier) | **PASS** — ARRIVED max 7.368e-06 over 65 frames |
+| FRAMING (lifted render) | **PASS** — min coverage 0.0271 at frame 12 |
+| the lossless tap | present; every measurement below is off `lossless/`, never the mp4 |
+| watchdog | verified alive at session start and again before the Blender work |
+
+## 22. Where the sampling values came from this time
+
+A3 named two suspects. They resolved differently from each other, and the difference is
+the finding.
+
+Wan's own repository carries **no ComfyUI numbers at all**. Its README line 41 designates
+the page that does: "Wan2.2 has been integrated into ComfyUI ([CN] | [EN])", pointing at
+`docs.comfy.org/tutorials/video/wan/wan2_2`. That page states no numbers in prose either —
+it serves a workflow file. So the documented ComfyUI trajectory is the one that file
+carries, by the model authors' own pointer rather than by this seat's choice of a
+convenient source.
+
+The file at `main` is **not** that trajectory: it now carries only the lightx2v 4-step
+variant Gate ROUTE excludes. The values below come from two pinned revisions of
+`Comfy-Org/workflow_templates` (MIT) — `5d6089c4250f` (2025-08-02, the last revision whose
+file contains *only* the non-distilled workflow: 16 nodes, no LoRA node anywhere) and
+`dcc00d29d79d` (2025-09-29, whose commit message names it, "Fix Wan2.2 t2v template
+(non-lightning workflow)"). Both were fetched, banked with hashes, and their wiring traced
+through the `links` array in code rather than read off node order.
+
+| value | probe (2026-08-11) | A3 (this run) | where A3's came from |
+|---|---|---|---|
+| steps | 40 | **20** | `KSamplerAdvanced.steps`, both samplers, both pins |
+| expert split | step 26 of 40 — **65%** of steps on high-noise, *solved* from boundary x shift | step 10 of 20 — **50%**, **read off** the workflow | `start_at_step` / `end_at_step`, both pins |
+| shift | 12.0 (Wan native) | **8.0** | `ModelSamplingSD3.shift`, both branches, both pins |
+| cfg | 4.0 high / 3.0 low (Wan native, asymmetric) | **3.5 on both** | `KSamplerAdvanced.cfg`, both pins |
+| sampler / scheduler | `euler` / `simple`, **unsourced**, recorded as a port necessity | `euler` / `simple`, **sourced** | both pins |
+| negative prompt | Wan `shared_config.sample_neg_prompt` | unchanged | see the correction below |
+
+**The `euler`/`simple` suspect is discharged, not changed.** The probe called the pair a
+port necessity because it looked only at Wan's own configs; the documented ComfyUI
+reference names exactly that pair. Same two strings, different epistemic status.
+
+**The split suspect is real.** 65% of steps on the high-noise expert against a documented
+50% is a different trajectory, and it is the one thing under test that this run actually
+moved. Shift and cfg moved with it because a split index detached from the schedule that
+defines it is not a value: at shift 8 over 20 steps, Wan's own boundary of 0.875 would put
+the crossing at step 11, one step from the documented 10 — recorded in the payload as a
+diagnostic, not as a gate, because the document governs.
+
+### A correction, caught by a check before a credit was spent
+
+This seat wrote that both pinned revisions carry the same negative prompt. **That was
+false**, and the test written to verify the citation against the banked bytes failed on it.
+Measured: `5d6089c4250f` reproduces Wan's `shared_config.sample_neg_prompt` byte-for-byte;
+`dcc00d29d79d` **appends two tokens** to it (nudity / NSFW terms). The two pins agree on
+every *sampling* value and disagree here. The graph uses Wan's own upstream string, the
+drift is recorded in `NEGATIVE_DRIFT`, and the claim is corrected in place rather than
+deleted.
+
+## 23. Gate DONOR — the numbers, and how close they were
+
+**Verdict: PASS on both clauses.** The margins are not equal and the report will not
+flatten them.
+
+| clause | threshold | measured | margin |
+|---|---|---|---|
+| motion — mean consecutive-frame absolute pixel difference | >= 2.0 / 255 | **2.0176 / 255** | clears by **0.9%** |
+| framing — both ankles inside the image, counted per frame | >= 80% of frames | **100.0%** | clears by 20 points |
+
+**The motion clause passed on the mean, and the mean is carried by a tail.** The
+per-pair series: median **1.9355**, min 0.8359, max 3.4008, and **34 of 64 consecutive
+pairs fall below the 2.0 threshold**. A gate defined on the median rather than the mean
+would have failed this clip. A3 defines it on the mean; the mean is what was applied; the
+distribution is recorded here so nobody reads "passed" as "moves comfortably."
+
+The framing clause reversed the probe completely, and the landmarks were **observed rather
+than extrapolated** — the failure mode this seat wrote down in advance as the one it might
+not notice:
+
+| | probe | A3 |
+|---|---|---|
+| both ankles in image | 0% of frames | **100%** |
+| `left_ankle` / `right_ankle` mean visibility | 0.381 / 0.325 | **0.991 / 0.991** |
+| `left_heel` / `right_heel` visibility | 0.242 / 0.219 | **0.936 / 0.927** |
+| lower-leg landmark visibility (6) | 0.306 | **0.970** |
+| knees outside the image | 25% / 34% | **0% / 0%** |
+| mean visibility, all 33 | 0.861 | **0.986** |
+
+## 24. What the generation produced — measured, not graded
+
+| observation | measurement |
+|---|---|
+| single person, plain backdrop, static camera, floor visible under the feet | present on every frame inspected |
+| **the whole body is in frame** | lowest foot landmark sits at y = 426 px of 480; ~54 px of floor below the feet |
+| **the figure is small** | 205 px tall in a 480 px frame — **42.8%** of frame height; 150 px wide in 832 |
+| head size | ear-to-ear **13.5 px** |
+| hand size | wrist-to-index **9.3 px** |
+| hands, at native resolution and at 6x nearest-neighbour | a dark wedge with **no finger structure** — there are not enough pixels for a hand to exist |
+| face, same treatment | eyes, nose and mouth are dark smudges; no resolved features |
+| limb travel across the clip | wrists 1629 / 1652 px of path, bounding span ~173 px (~84% of her own height); ankles 483 / 534 px; hip midpoint 405 px of path, span 74 px — she works in place rather than travelling |
+| rendering | still a dark figure against a high-key backdrop, and **less extreme than the probe**: figure mean luminance 15.0 -> **66.4**, figure-to-backdrop contrast 143.3 -> **100.8** |
+
+**The framing clause and structural detail pull against each other at this frame size, and
+the prompt is what put them in tension.** Asking the camera far enough back to include the
+feet is what shrank the head to 13.5 px and the hand to 9.3. Both facts come from the same
+sentence.
+
+## 25. B2 measurements under A3, beside the probe's
+
+| quantity | A3 donor | probe | B1 fixture |
+|---|---|---|---|
+| frames returning a pose | 65 / 65 | 65 / 65 | 65 / 65 |
+| detector -> rig scale | 0.8136 | 0.8718 | — |
+| median abs bone-length residual over 12 limb bones | **0.2583** | 0.2977 | 0.246 |
+| position round-trip on solved rotations, median | **0.2696** (bbox diagonal 1.069) | 0.3203 | 0.2707 |
+| jitter, median-of-medians | **7.072 deg** | 0.539 deg | 16.69 deg |
+| jitter after one EMA pass (alpha = 0.5) | **5.297 deg** | 0.409 deg | — |
+| jitter, median-of-p90 | 19.397 deg | 1.525 deg | 93.18 deg |
+| twist underdetermined 65/65 | `wrist.L/R`, `ankle.L/R` | same four | same four |
+| feet — slower-foot path | **1.5749** | 0.2483 | 3.8515 |
+| feet — hips path (the denominator R3 ruled invalid here) | 0.0676 | 0.0035 | 0.1950 |
+| feet — max per-contact slip | **0.1261** | 0.0442 | 0.3370 |
+
+The foot ratio is still **not quoted as a reading** (R3: valid on world-rooted motion,
+invalid on hip-origin lifted motion). Numerator and denominator are carried separately.
+
+### The root, measured because the sheet misled the eye
+
+Read off the contact sheet, the rig looked tilted far off vertical. **At full size it is
+not**, and the measurement agrees with the full-size frame rather than with the tile:
+
+| | A3 | probe |
+|---|---|---|
+| hips deviation from vertical, median | **9.60 deg** | 20.24 deg |
+| same, max | 13.90 deg | 21.83 deg |
+
+For comparison, the **source** dancer's shoulder-to-hip line sits a median 4.06 deg off
+image-vertical (p90 13.45 deg). The axis convention remains **ASSUMED** (§15.6) — a
+generated clip carries no camera record — and this is what that assumption costs here.
+
+*Sheets locate; full size decides.* This seat read the tile wrong and the full frame
+right, which is the entire reason the rule exists.
+
+## 26. The sheet and the review materials
+
+`outputs/E09/sheets/E09-B2-A3-gate0.png` (sha256 `31126076394fd09d…`) — **source | what
+the detector saw | the rig performing the solved lift**, frames 0/16/32/48/64, built
+before any number above was written into this report.
+
+Read off the middle column: all 33 landmarks land on the figure, including both ankles and
+both feet on the floor, at every sampled frame. Nothing locked onto the backdrop or the
+reflection.
+
+**A limitation of the sheet, named rather than fixed.** `make_lift_sheet`'s own docstring
+says the lifted column is "on the identical camera." It is not, and was not for the probe
+either: the source is a frontal generated clip while `render_performer` uses the banked E08
+three-quarter camera (azimuth 225 deg, elevation 6 deg). Comparing the two columns requires
+a mental rotation. The convention is unchanged from the probe, so the two runs stay
+comparable; correcting it is an advisor call, not an executor's improvisation mid-run.
+
+Review materials, from `lossless/` and nothing else:
+
+- `outputs/E09/b2-a3-review/review_0.5x_8fps.webp` — the **donor**, lossless animated WEBP,
+  8 fps against 16 = **0.50x**, native 832x480, 65 frames.
+- `outputs/E09/b2-a3-review-lifted/review_0.5x_8fps.webp` — the **rig performing the lift**,
+  same rate, 1920x1080.
+- 24 native-resolution stills at frames 0/6/16/32/48/64 on both hands and both feet, plus
+  tight 64 px hand and face crops and a 6x nearest-neighbour enlargement for inspection
+  (the enlargement is for viewing only and is labelled as such).
+- `outputs/E09/b2-a3-review/strip_every8.png` — every 8th frame side by side.
+
+Per R2 the arms were inspected first: they carry the clip's largest excursion (wrist span
+~173 px) and the largest solved jitter, and at 9.3 px the hands have no internal structure
+to inspect.
+
+## 27. Predictions H5 versus outcomes
+
+Registered blind at `9950544`, before the submission and before any A3 output existed.
+
+| clause | predicted | measured | outcome |
+|---|---|---|---|
+| **H5a** — motion clause passes, mean 4–12 / 255, held at ~80% | pass, 4–12 | **2.0176**, pass | **SPLIT: right on the clause, wrong on the magnitude.** It cleared the gate by 0.9% and landed below the bottom of my stated range. I predicted a clip that moves; I got one that barely qualifies as moving by the amendment's own number |
+| **H5b** — framing clause passes, held at ~60%; if it fails, partially (30–79%) | pass, uncomfortably | **100%**, both ankles, visibility 0.99 | **HIT**, by a much wider margin than predicted. The failure branch I described did not occur |
+| **H5c** — the prompt is the larger cause; **this run cannot test that** | untestable here | untestable here | **HELD as stated.** Two variables moved together by A3's design. The recovery is **not** attributed to either, and the belief recorded in advance stays a belief |
+| **H5d** — rendering less extreme at cfg 3.5, held at ~55% | less contrast | figure luminance 15.0 -> 66.4; contrast 143.3 -> 100.8 | **HIT on direction**, with a confound: the prompt and the figure's size and pose also changed, so this is not a clean isolation of cfg |
+| **H5e** — no additional threshold offered | — | held throughout | **HELD** |
+
+**What the diagnostic did and did not establish.** The clip cleared both of A3's clauses,
+so A3 item 3 governs and the lift proceeded. What produced the change is **not located**:
+the sampling values and the prompt moved together. The one asymmetry worth recording is
+that the probe's failures were framing and stillness, and the prompt's two deleted clauses
+addressed exactly those — `mid-shot` (a term of art for a waist-up framing, sitting in the
+same sentence as "head to feet") and "dances slowly and evenly" over a held limbs-apart
+pose. That is an argument, not a measurement, and it is written here as one.
+
+## 28. Artifacts, part 3
+
+| artifact | path | sha256 (first 32) |
+|---|---|---|
+| the graph, as built | `outputs/E09/route2/E09-B2-A3-t2v.api.json` | `c537194b6b9fbfa9ba965df85591381e` |
+| payload record (every value + its documented source, the delta table, the prompt change log) | `outputs/E09/route2/E09-B2-A3-payload-record.json` | — |
+| the saved file, as the cloud received it | `outputs/E09/route2/E09-B2-A3-t2v.saved.json` | — |
+| admission on the saved file (39 values compared) | `outputs/E09/route2/E09-B2-A3-saved-admission.json` | — |
+| Wan's own README, as fetched | `outputs/E09/route2/wan22_README.md` | `c04923dc9c509fe56b7f08a958b815dc` |
+| reference workflow @ `5d6089c4250f` | `outputs/E09/route2/template_5d6089c4250f.json` | `530a17dcb2cc60e352e037fb6b47a131` |
+| reference workflow @ `dcc00d29d79d` | `outputs/E09/route2/template_dcc00d29d79d.json` | `76922b9bec0b092b200eba893d4d6170` |
+| the `main` revision, banked as the counter-example | `outputs/E09/route2/comfy_template_video_wan2_2_14B_t2v.json` | — |
+| **65 lossless frames** | `outputs/E09/b2-a3/lossless/` | per-frame in `lossless_manifest.json` |
+| frame-order evidence | `outputs/E09/b2-a3/frame_order_evidence.json` | array order 2.0176 vs hash-sorted 4.5442, ratio 2.25x |
+| donor mp4 (convenience only) | `outputs/E09/b2-a3/donor.mp4` | `2469b0b2678080cbe90af3630bb99f08` |
+| detection record | `outputs/E09/b2-a3-measure/detection_raw.json` | — |
+| measurements, incl. gate DONOR's evidence | `outputs/E09/b2-a3-measure/measurement.json` | — |
+| solved motion (raw, EMA) | `outputs/E09/b2-a3-measure/lifted{,_ema}.motion.json` | — |
+| the rig performing the dance | `outputs/E09/b2-a3-lifted/performer_dance_ema.glb` | `cd4e2f6ee85ef536130cebe27fe2282f` |
+| **the Gate 0 sheet** | `outputs/E09/sheets/E09-B2-A3-gate0.png` | `31126076394fd09d5adc971e0e8db23d` |
+| **the donor review clip, lossless 0.5x** | `outputs/E09/b2-a3-review/review_0.5x_8fps.webp` | `2fcba5170117409c75393dbe09714d8a` |
+| **the lifted review clip, lossless 0.5x** | `outputs/E09/b2-a3-review-lifted/review_0.5x_8fps.webp` | `5fde3984856fb7db3a9e914eb85017d6` |
+| motion strip, every 8th frame | `outputs/E09/b2-a3-review/strip_every8.png` | `cd9d73158077d422a2bac49c2a98b166` |
+
+New in the tree this session: `tools/armature_core/donor_gate.py` (gate DONOR),
+`tools/gate_saved_graph.py` (round trip + admission on the saved file),
+`tools/fetch_t2v_run.py` (ordered download + the order discriminator), the `reference` /
+`derived` profile split in `tools/build_t2v_payload.py`, and `specs/E09-A3-seeds.json`.
+
+Suite after A3: **480 passed, 35 skipped** (was 442/35).
+
+Two checks fired on their own authors before any credit was spent, which is the only
+reason they are worth having: the saved-file round trip halted on a node class missing from
+its own widget table, and the citation check falsified this seat's claim about the negative
+prompt.
+
+## 29. Compensators, part 3
+
+| act | compensator | state |
+|---|---|---|
+| the A3 generation | **none exists** — spent GPU-hours have no undo | one generation; reserve seed `2026081202` unspent |
+| saved cloud workflow `armature-E09-B2-A3-t2v-reference` | delete server-side | present; owner executor |
+| downloaded outputs under `outputs/E09/b2-a3*`, `outputs/E09/route2` | delete the directories | written; owner executor |
+| worktree + branch `E09-run` | `git worktree remove` + branch delete | owner advisor, after the ruling |
+
+No uploads (the graph is text-to-video and takes no input files). No publishes, no
+releases, no external posts, no writes to the memory store.
+
+## 30. For the advisor
+
+Four items this seat measured but has no authority to rule on:
+
+1. **The licence map has no row for `Comfy-Org/workflow_templates`** (MIT). It was cited as
+   documentation for numeric settings, not loaded as a dependency and not copied as code,
+   so no row was added. Whether the map should carry one anyway is the advisor's call.
+2. **The motion clause cleared by 0.9% on a mean whose median is below threshold.** Whether
+   a donor that qualifies this narrowly is the baseline E09 closes on is a ruling, not a
+   measurement.
+3. **The aspect ratio is a named, unexercised lever.** The frame was deliberately held at the
+   probe's 832x480 so the diagnostic had one moving group of variables rather than two; the
+   reference workflow's own latent is 640x640x81. A portrait or square frame is the direct
+   lever on figure size, and figure size is what put framing and structural detail in tension.
+4. **`make_lift_sheet` claims a camera identity it does not have** (§26). Unchanged from the
+   probe, so comparability holds; correcting it changes every future sheet.
