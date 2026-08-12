@@ -104,6 +104,65 @@ GENERATOR_PROFILES = {
             "which accepts length up to 16384 and would enforce nothing."
         ),
     ),
+    # E11's row. Its provenance is DERIVED and the derivation is written out rather than
+    # borrowed from the sibling row above, because `WanImageToVideo`'s schema does NOT
+    # carry the step fields `WanAnimateToVideo`'s does — measured via `get_node`
+    # 2026-08-12, it declares width/height/length as plain INT with min 16/16/1 and max
+    # 16384 and would enforce nothing at all.
+    #
+    # What IS measured, three ways that agree:
+    #   * the shared VAE. This route loads `wan_2.1_vae.safetensors`, the same file the
+    #     E02 graphs load, and 4n+1 / div-16 are properties of that VAE's temporal
+    #     compression factor of 4 and its spatial compression plus patch size. This is the
+    #     identical transfer the `wan-fun-control` row above records, on a measured shared
+    #     component rather than on a family name.
+    #   * the node's own declared defaults: width 832, height 480, length 81 — each of
+    #     which already satisfies the constraint being claimed.
+    #   * the documented reference workflow's latent, 640x640x81, likewise.
+    #
+    # The 81-frame trained horizon is inherited from the Wan family record (consult #3),
+    # exactly as the `wan-animate` row inherits it, and is marked as inherited here too.
+    "wan-i2v": GeneratorProfile(
+        name="wan-i2v",
+        dim_divisor=16,
+        frame_modulus=4,
+        frame_residue=1,
+        source=(
+            "DERIVED 2026-08-12 (E11) from the shared VAE — this route loads "
+            "wan_2.1_vae.safetensors, and 4n+1 / div-16 are properties of that VAE's "
+            "temporal and spatial compression — and CONFIRMED against two independent "
+            "readings: the WanImageToVideo schema's own defaults (832x480x81, get_node "
+            "2026-08-12) and the documented reference workflow's latent (640x640x81, "
+            "Comfy-Org/workflow_templates video_wan2_2_14B_i2v.json @ 5d6089c4250f). The "
+            "schema itself declares only min/max and would enforce neither constraint. "
+            "The trained-horizon bound is inherited from the Wan family record "
+            "(consult #3), not measured here."
+        ),
+    ),
+    # E11 wave 3's row. Same VAE as `wan-i2v` above — the Fun-Camera checkpoint is a
+    # DERIVATIVE of Wan2.2-I2V-A14B and loads `wan_2.1_vae.safetensors`, so div-16 and 4n+1
+    # carry over unchanged. It gets its own row rather than borrowing the I2V one because
+    # its trained envelope is stated on its OWN card and differs from the I2V default: a
+    # route running the camera weights reads its constraints from the camera model's
+    # document, not from a neighbour's. Wave 2 is the whole argument for that distinction.
+    "wan-fun-camera": GeneratorProfile(
+        name="wan-fun-camera",
+        dim_divisor=16,
+        frame_modulus=4,
+        frame_residue=1,
+        source=(
+            "DERIVED 2026-08-12 (E11 wave 3) from the shared VAE — this route loads "
+            "wan_2.1_vae.safetensors and div-16 / 4n+1 are properties of that VAE's "
+            "spatial and temporal compression, identical to the wan-i2v row above. The "
+            "model's OWN envelope is quoted verbatim from "
+            "huggingface.co/alibaba-pai/Wan2.2-Fun-A14B-Control-Camera README_en.md, "
+            "fetched 2026-08-12: 'multi-resolution (512, 768, 1024) video prediction, "
+            "trained with 81 frames at 16 FPS'. Those tiers are the TRAINED envelope, not "
+            "limits any node enforces — the schema declares only min/max — so they bound "
+            "in-distribution CHOICE rather than legality, and the frame is derived against "
+            "them in build_camera_i2v_payload.FRAME_DERIVATION."
+        ),
+    ),
 }
 
 

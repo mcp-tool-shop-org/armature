@@ -431,3 +431,292 @@ def test_the_e08_shot_would_have_gone_red_under_this_clause():
         assert "INDETERMINATE" in str(exc.value)
     finally:
         RG.LATENT_NODES = saved
+
+
+# ---------------------------------------------------------------------------------------
+# The camera tier (E11 wave 2). Every fixture below is a graph that Gate L, Gate S and the
+# licence clause all pass, because the defect being caught is invisible to all three.
+
+def _camera_api(length=65, cam_length=None, cam_wh=(832, 480)):
+    """A camera graph with the CORRECT pairing: the embedding, the camera conditioning node,
+    and the camera-trained experts that can receive it.
+
+    ⚠ These loaders said `wan2.2_i2v_*` until 2026-08-12, when Gate PAIR went red on seven
+    tests in this file at once. That was the gate working: the helper had encoded wave 2's
+    defect — a camera node over the plain I2V base — into every fixture built on it, so the
+    clauses below were quietly being checked on a graph that could only produce noise. The
+    wrong pairing now lives in exactly one place, `tests/fixtures/E11-w2-camera-i2v.api.json`,
+    where it is the subject of a test rather than the substrate of one.
+    """
+    return {
+        "10": {"class_type": "UNETLoader",
+               "inputs": {"unet_name":
+                          "wan2.2_fun_camera_high_noise_14B_fp8_scaled.safetensors",
+                          "weight_dtype": "default"}},
+        "11": {"class_type": "UNETLoader",
+               "inputs": {"unet_name":
+                          "wan2.2_fun_camera_low_noise_14B_fp8_scaled.safetensors",
+                          "weight_dtype": "default"}},
+        "45": {"class_type": "WanCameraEmbedding", "inputs": {
+            "camera_pose": "Static", "width": cam_wh[0], "height": cam_wh[1],
+            "length": length if cam_length is None else cam_length, "speed": 1.0}},
+        "50": {"class_type": "WanCameraImageToVideo", "inputs": {
+            "width": 832, "height": 480, "length": length, "batch_size": 1,
+            "positive": ["30", 0], "negative": ["31", 0], "vae": ["21", 0],
+            "start_image": ["40", 0], "camera_conditions": ["45", 0]}},
+        "60": {"class_type": "KSamplerAdvanced", "inputs": {
+            "add_noise": "enable", "noise_seed": 2026081232, "steps": 20, "cfg": 3.5,
+            "sampler_name": "euler", "scheduler": "simple", "start_at_step": 0,
+            "end_at_step": 10, "return_with_leftover_noise": "enable",
+            "latent_image": ["50", 2]}},
+    }
+
+
+def test_the_camera_conditioning_node_sizes_its_own_latent():
+    """Without its `LATENT_NODES` row Gate L would examine zero frames on this graph and,
+    with a frame supplied, still report PROVEN — the E08 shape, one route later."""
+    lat = RG.latents(_camera_api())
+    assert [l["class"] for l in lat] == ["WanCameraImageToVideo"]
+    assert (lat[0]["width"], lat[0]["height"], lat[0]["length"]) == (832, 480, 65)
+    assert lat[0]["checkable"] is True
+
+
+def test_an_illegal_frame_on_the_camera_route_is_caught_from_the_graph_alone():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_camera_api(length=64))
+    assert "4n+1" in str(exc.value)
+
+
+def test_the_camera_trajectory_must_be_solved_for_the_generated_frame():
+    """THE clause this tier exists for. The node's own default length is 81 and this route
+    runs 65, so a forgotten argument produces exactly this graph: 65 frames of a camera path
+    solved for 81. Gate L passes it, Gate S passes it, the licence clause passes it."""
+    g = _camera_api(length=65, cam_length=81)
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g, frame=(832, 480, 65))
+    assert "solved for a different frame" in str(exc.value)
+    assert exc.value.evidence["camera_agreement_verdict"] == "CONTRADICTED"
+    # and every other clause was clean on it
+    assert all(f["legal"] for f in exc.value.evidence["frame_legality"])
+    assert all(s["pinned"] for s in exc.value.evidence["seeds"])
+
+
+def test_a_camera_aspect_that_disagrees_is_caught_too():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_camera_api(cam_wh=(1280, 720)), frame=(832, 480, 65))
+    assert exc.value.evidence["camera_agreement_verdict"] == "CONTRADICTED"
+
+
+def test_an_agreeing_camera_passes_and_is_reported():
+    ev = RG.verify(_camera_api(), frame=(832, 480, 65))
+    assert ev["camera_agreement_verdict"] == "AGREES"
+    assert [c["class"] for c in ev["cameras"]] == ["WanCameraEmbedding"]
+
+
+def test_the_camera_node_does_not_inflate_the_count_of_frames_checked():
+    """A trajectory node sizes no frame. If it were counted as one, Gate L's
+    'nothing was checkable' andon could be satisfied by a node that checks nothing."""
+    ev = RG.verify(_camera_api(), frame=(832, 480, 65))
+    assert [l["class"] for l in ev["latents"]] == ["WanCameraImageToVideo"]
+    assert ev["latents_checkable"] == 1
+    assert {f["source"] for f in ev["frame_legality"]} == {"graph", "supplied"}
+
+
+def test_a_camera_length_arriving_over_a_link_is_unproven_not_assumed():
+    g = _camera_api()
+    g["45"]["inputs"]["length"] = ["99", 0]
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g, frame=(832, 480, 65))
+    assert "UNPROVEN" in str(exc.value)
+    assert exc.value.evidence["camera_agreement_verdict"] == "INDETERMINATE"
+
+
+def test_a_camera_with_nothing_to_check_against_halts_rather_than_passing():
+    """Two disagreeing graph frames and no supplied one: there is no single answer to
+    compare the trajectory against, and 'no answer' must not read as agreement."""
+    g = _camera_api()
+    g["51"] = {"class_type": "EmptyLatentVideo",
+               "inputs": {"width": 832, "height": 480, "length": 33}}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert exc.value.evidence["camera_agreement_verdict"] == "INDETERMINATE"
+
+
+def test_camera_widget_order_is_confirmed_empirically_on_save_format():
+    """`CAMERA_NODES` was derived from ONE source. This is the second reading."""
+    g = graph(top=[{"id": 45, "type": "WanCameraEmbedding",
+                    "widgets_values": ["Static", 832, 480, 65, 1.0, 0.5, 0.5, 0.5, 0.5]}])
+    ev = RG.camera_widget_order_evidence(g, {"width": 832, "height": 480, "length": 65})
+    assert ev["agrees"] is True
+    assert ev["nodes"][0]["found"] == {"width": 832, "height": 480, "length": 65}
+
+
+def test_camera_widget_order_evidence_catches_a_shifted_index():
+    """If the declared indices were off by one — the failure a single-source derivation
+    invites — the values found would not be the builder's."""
+    g = graph(top=[{"id": 45, "type": "WanCameraEmbedding",
+                    "widgets_values": [832, 480, 65, 1.0]}])  # camera_pose omitted
+    ev = RG.camera_widget_order_evidence(g, {"width": 832, "height": 480, "length": 65})
+    assert ev["agrees"] is False
+    assert ev["verdict"].startswith("CONTRADICTED")
+
+
+def test_camera_widget_order_evidence_is_honest_about_api_format():
+    """There is nothing positional to confirm in API format, and the honest verdict for a
+    check that cannot run is not PASS."""
+    ev = RG.camera_widget_order_evidence(_camera_api(),
+                                         {"width": 832, "height": 480, "length": 65})
+    assert ev["verdict"].startswith("not_applicable")
+    assert "agrees" not in ev
+
+
+# =======================================================================================
+# GATE PAIR (E11 w2 ruling R3). The first two tests are the ones that matter: the gate runs
+# on the REAL graphs, banked under tests/fixtures/ because outputs/ is gitignored and a red
+# test against a file nobody can check out is not a test.
+
+import json  # noqa: E402
+import os  # noqa: E402
+
+FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+
+
+def fixture(name):
+    with open(os.path.join(FIXTURES, name), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def test_gate_pair_goes_RED_on_the_exact_wave_2_graph():
+    """THE red test. This is the graph that ran on 2026-08-12, byte for byte, and produced
+    65 frames with no subject after the first. Every other clause in route_gates passed on
+    it — so this test also asserts that, because a gate that only goes red where the others
+    already did would not have saved the generation."""
+    g = fixture("E11-w2-camera-i2v.api.json")
+
+    with pytest.raises(RG.PairGate) as exc:
+        RG.pairing(g)
+    ev = exc.value.evidence
+    assert ev["verdict"] == "CONTRADICTED"
+    assert "WanCameraImageToVideo" in str(exc.value)
+    assert "'fun_camera'" in str(exc.value)
+    assert ev["families_present"] == ["i2v"]
+    assert sorted(w["file"] for w in ev["model_weights"]) == [
+        "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+        "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"]
+
+    # and the whole gate now refuses the graph, where before it admitted it
+    with pytest.raises(RG.PairGate):
+        RG.verify(g, frame=(832, 480, 65))
+
+
+def test_every_other_clause_still_passes_on_the_wave_2_graph():
+    """The measurement that makes the gate necessary rather than redundant: licence, seeds,
+    latents, frame legality and the camera/frame agreement were all green on the graph that
+    could only produce noise."""
+    g = fixture("E11-w2-camera-i2v.api.json")
+    assert [c for c in RG.components(g)
+            if c["ruling"]["verdict"] in ("BANNED", "EXCLUDED")] == []
+    assert all(s["pinned"] for s in RG.seeds(g))
+    lat = RG.latents(g)
+    assert len(lat) == 1 and lat[0]["checkable"] is True
+    assert RG.frame_legality(832, 480, 65)["legal"] is True
+    cams = RG.cameras(g)
+    assert len(cams) == 1
+    assert (cams[0]["width"], cams[0]["height"], cams[0]["length"]) == (832, 480, 65)
+
+
+def test_gate_pair_is_GREEN_on_the_wave_1_graph():
+    """Wave 1 wired WanImageToVideo over the I2V experts — the pairing that ran clean."""
+    g = fixture("E11-w1-probe-i2v.api.json")
+    ev = RG.pairing(g)
+    assert ev["families_present"] == ["i2v"]
+    assert ev["conditioning_nodes"] == [
+        {"node_id": "50", "class": "WanImageToVideo", "requires": "i2v"}]
+    assert "1 conditioning node(s) paired" in ev["verdict"]
+    RG.verify(g, frame=(832, 480, 65))       # the whole gate still admits it
+
+
+def test_gate_pair_is_GREEN_on_the_corrected_pairing():
+    """What wave 3 must look like: the same conditioning class over the camera experts."""
+    g = _camera_api()
+    g["10"]["inputs"]["unet_name"] = "wan2.2_fun_camera_high_noise_14B_fp8_scaled.safetensors"
+    g["11"] = {"class_type": "UNETLoader", "inputs": {
+        "unet_name": "wan2.2_fun_camera_low_noise_14B_fp8_scaled.safetensors"}}
+    ev = RG.pairing(g)
+    assert ev["families_present"] == ["fun_camera"]
+    assert ev["verdict"].startswith("1 conditioning node(s) paired")
+
+
+@pytest.mark.parametrize("cls,fam,good", [
+    ("WanAnimateToVideo", "animate", "wan2.2_animate_14B_bf16.safetensors"),
+    ("WanVaceToVideo", "vace", "Wan2.1-VACE-14B_fp8.safetensors"),
+    ("WanImageToVideo", "i2v", "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"),
+])
+def test_each_mapped_class_pairs_with_its_own_family_and_refuses_the_others(cls, fam, good):
+    base = {"10": {"class_type": "UNETLoader", "inputs": {"unet_name": good}},
+            "50": {"class_type": cls, "inputs": {}}}
+    assert RG.pairing(base)["families_present"] == [fam]
+    wrong = dict(base)
+    wrong["10"] = {"class_type": "UNETLoader",
+                   "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}}
+    with pytest.raises(RG.PairGate) as exc:
+        RG.pairing(wrong)
+    assert exc.value.evidence["verdict"] == "CONTRADICTED"
+
+
+def test_a_conditioning_class_in_neither_table_halts():
+    """Fail-closed, the pattern that stopped this wave twice in gate_saved_graph."""
+    g = {"10": {"class_type": "UNETLoader",
+                "inputs": {"unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"}},
+         "50": {"class_type": "WanSomethingNewToVideo", "inputs": {}}}
+    with pytest.raises(RG.PairGate) as exc:
+        RG.pairing(g)
+    assert "neither" in str(exc.value)
+    assert exc.value.evidence["verdict"] == "INDETERMINATE"
+
+
+def test_a_graph_with_conditioning_and_no_readable_model_is_unproven():
+    g = {"50": {"class_type": "WanCameraImageToVideo", "inputs": {}}}
+    with pytest.raises(RG.PairGate) as exc:
+        RG.pairing(g)
+    assert "UNPROVEN" in str(exc.value)
+    assert exc.value.evidence["verdict"] == "INDETERMINATE"
+
+
+def test_the_vae_and_text_encoder_do_not_count_as_family_evidence():
+    """Counting wan_2.1_vae as 'a Wan model' would make the gate answer the wrong question:
+    the denoiser is the thing that either has the channel or does not."""
+    g = {"21": {"class_type": "VAELoader", "inputs": {"vae_name": "wan_2.1_vae.safetensors"}},
+         "20": {"class_type": "CLIPLoader",
+                "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors"}},
+         "50": {"class_type": "WanCameraImageToVideo", "inputs": {}}}
+    with pytest.raises(RG.PairGate) as exc:
+        RG.pairing(g)
+    assert exc.value.evidence["model_weights"] == []
+
+
+def test_controlnet_appliers_are_exempt_by_record_not_by_omission():
+    g = {"10": {"class_type": "UNETLoader",
+                "inputs": {"unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"}},
+         "50": {"class_type": "WanImageToVideo", "inputs": {}},
+         "90": {"class_type": "ControlNetApplyAdvanced", "inputs": {}}}
+    ev = RG.pairing(g)
+    assert {"node_id": "90", "class": "ControlNetApplyAdvanced", "requires": None} \
+        in ev["conditioning_nodes"]
+
+
+def test_the_two_tables_cover_every_latent_sizing_conditioning_class():
+    """Completeness, checked rather than assumed: any Wan conditioning node that sizes a
+    latent must have a pairing row, or the next one repeats wave 2."""
+    covered = set(RG.CONDITIONING_WEIGHT_FAMILY) | RG.CONDITIONING_FAMILY_EXEMPT
+    conditioning_latents = {c for c in RG.LATENT_NODES if c.startswith("Wan")}
+    assert conditioning_latents <= covered, conditioning_latents - covered
+
+
+def test_gate_pair_walks_into_subgraph_definitions():
+    """A served template hides its loaders; the pairing question must reach them."""
+    g = graph(top=[{"id": 50, "type": "WanCameraImageToVideo", "widgets_values": [832, 480, 65, 1]}],
+              sub=[loader(83, "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors")])
+    with pytest.raises(RG.PairGate) as exc:
+        RG.pairing(g)
+    assert exc.value.evidence["model_weights"][0]["where"] != "top"

@@ -1,0 +1,235 @@
+{
+  "10": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "11": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "12": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "shift": 8.0,
+      "model": [
+        "10",
+        0
+      ]
+    }
+  },
+  "13": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "shift": 8.0,
+      "model": [
+        "11",
+        0
+      ]
+    }
+  },
+  "20": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    }
+  },
+  "21": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    }
+  },
+  "30": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "a slender jointed clay mannequin, a smooth bald head, a simple readable face with drawn brows, closed lidded eyes, a small closed smile, small ears, ball-and-socket shoulders and elbows, ball-and-socket wrists and ankles, ball-and-socket hips and knees, sculpted thumbprint hatching on the torso and limbs, empty open hands, simple rounded feet, unglazed terracotta, matte sculpted clay. He is dancing, a full and energetic dance: knees bending and springing, hips swinging from side to side, shoulders rolling, both arms lifting and swinging wide above his head, torso twisting, his weight rocking from one foot to the other, bouncing on the beat, fast and loose and continuous, never standing still. Behind him, a dim warmly lit bar interior.",
+      "clip": [
+        "20",
+        0
+      ]
+    }
+  },
+  "31": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走，爪状的手，钩状的手指",
+      "clip": [
+        "20",
+        0
+      ]
+    }
+  },
+  "40": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "adcab015d182b1eaf590ac5626174840fa5719afd97cda6bc0dcc31dedc3e9dd.png"
+    }
+  },
+  "41": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "E11/w2/startprobe",
+      "images": [
+        "40",
+        0
+      ]
+    }
+  },
+  "45": {
+    "class_type": "WanCameraEmbedding",
+    "inputs": {
+      "camera_pose": "Static",
+      "width": 832,
+      "height": 480,
+      "length": 65,
+      "speed": 1.0,
+      "fx": 0.5,
+      "fy": 0.5,
+      "cx": 0.5,
+      "cy": 0.5
+    }
+  },
+  "50": {
+    "class_type": "WanCameraImageToVideo",
+    "inputs": {
+      "width": 832,
+      "height": 480,
+      "length": 65,
+      "batch_size": 1,
+      "positive": [
+        "30",
+        0
+      ],
+      "negative": [
+        "31",
+        0
+      ],
+      "vae": [
+        "21",
+        0
+      ],
+      "start_image": [
+        "40",
+        0
+      ],
+      "camera_conditions": [
+        "45",
+        0
+      ]
+    }
+  },
+  "60": {
+    "class_type": "KSamplerAdvanced",
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 2026081232,
+      "steps": 20,
+      "cfg": 3.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 10,
+      "return_with_leftover_noise": "enable",
+      "model": [
+        "12",
+        0
+      ],
+      "positive": [
+        "50",
+        0
+      ],
+      "negative": [
+        "50",
+        1
+      ],
+      "latent_image": [
+        "50",
+        2
+      ]
+    }
+  },
+  "61": {
+    "class_type": "KSamplerAdvanced",
+    "inputs": {
+      "add_noise": "disable",
+      "noise_seed": 0,
+      "steps": 20,
+      "cfg": 3.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 10,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable",
+      "model": [
+        "13",
+        0
+      ],
+      "positive": [
+        "50",
+        0
+      ],
+      "negative": [
+        "50",
+        1
+      ],
+      "latent_image": [
+        "60",
+        0
+      ]
+    }
+  },
+  "70": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "61",
+        0
+      ],
+      "vae": [
+        "21",
+        0
+      ]
+    }
+  },
+  "71": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "E11/w2/lossless",
+      "images": [
+        "70",
+        0
+      ]
+    }
+  },
+  "80": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "fps": 16,
+      "bit_depth": 8,
+      "images": [
+        "70",
+        0
+      ]
+    }
+  },
+  "81": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "video/E11_w2",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "80",
+        0
+      ]
+    }
+  }
+}

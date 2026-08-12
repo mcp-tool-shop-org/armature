@@ -38,6 +38,72 @@ def saved(length=81, fps=20, extra_link=None, drop_link=False):
     ]}
 
 
+# ---------------------------------------------------------- the camera tier (E11 wave 2)
+
+CAMERA_API = {
+    "45": {"class_type": "WanCameraEmbedding",
+           "inputs": {"camera_pose": "Static", "width": 832, "height": 480, "length": 65,
+                      "speed": 1.0, "fx": 0.5, "fy": 0.5, "cx": 0.5, "cy": 0.5}},
+    "50": {"class_type": "WanCameraImageToVideo",
+           "inputs": {"width": 832, "height": 480, "length": 65, "batch_size": 1,
+                      "positive": ["30", 0], "negative": ["31", 0], "vae": ["21", 0],
+                      "start_image": ["40", 0], "camera_conditions": ["45", 0]}},
+}
+
+
+def camera_saved(pose="Static", cam_length=65, gen_length=65):
+    """The shape the cloud's converter actually emitted, 2026-08-12."""
+    return {"nodes": [
+        {"id": 45, "type": "WanCameraEmbedding", "inputs": [],
+         "widgets_values": [pose, 832, 480, cam_length, 1, 0.5, 0.5, 0.5, 0.5]},
+        {"id": 50, "type": "WanCameraImageToVideo",
+         "inputs": [{"name": "positive", "type": "CONDITIONING", "link": 6},
+                    {"name": "clip_vision_output", "type": "CLIP_VISION_OUTPUT",
+                     "link": None},
+                    {"name": "start_image", "type": "IMAGE", "link": 9},
+                    {"name": "camera_conditions", "type": "WAN_CAMERA_EMBEDDING",
+                     "link": 10}],
+         "widgets_values": [832, 480, gen_length, 1]},
+    ]}
+
+
+def test_the_camera_tier_round_trips():
+    """The rows these two classes needed were written after this check HALTED wave 2 on its
+    own hole — the second sighting of that species, both times before a credit was spent."""
+    ev = GSG.round_trip(CAMERA_API, camera_saved())
+    assert ev["all_equal"] is True
+    assert ev["n_values_compared"] == 13
+
+
+def test_a_camera_pose_changed_by_the_round_trip_is_caught():
+    """`camera_pose` sits at widget 0 and is the whole lever; a converter that dropped or
+    re-defaulted it would leave a graph that still generates video."""
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.round_trip(CAMERA_API, camera_saved(pose="Zoom In"))
+    assert "camera_pose" in str(exc.value)
+
+
+def test_a_camera_length_changed_by_the_round_trip_is_caught():
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.round_trip(CAMERA_API, camera_saved(cam_length=81))
+    assert "45.length" in str(exc.value)
+
+
+def test_the_generated_length_changed_by_the_round_trip_is_caught():
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.round_trip(CAMERA_API, camera_saved(gen_length=81))
+    assert "50.length" in str(exc.value)
+
+
+def test_an_unrecorded_class_still_halts_rather_than_being_skipped():
+    """The fail-closed lookup that produced both rows above. `is None` halts; `{}` passes."""
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.round_trip({"99": {"class_type": "WanSomethingNobodyHasMet", "inputs": {"a": 1}}},
+                       {"nodes": [{"id": 99, "type": "WanSomethingNobodyHasMet",
+                                   "widgets_values": [1]}]})
+    assert "add one rather than skipping the node" in str(exc.value)
+
+
 # ------------------------------------------------------------------- the value half
 
 def test_a_faithful_round_trip_compares_every_pinned_value():
