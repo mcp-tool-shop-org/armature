@@ -66,11 +66,22 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
+from armature_core import route_gates  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
-TOOL_VERSION = "E08.1"
+TOOL_VERSION = "E10.1"
 EXPERIMENT = "E08"
 
+#: E08's shot, and the defaults. `--length` and `--fps` are E10's variables and nothing
+#: else moves: E10 drives the SAME dance resampled to 81 samples over the identical
+#: duration, so the frame count rises and the playback rate rises with it.
+#:
+#: **`fps` reaches `CreateVideo` and nothing upstream of it** — measured from the node
+#: schema 2026-08-12: `CreateVideo` takes `fps` as a FLOAT (min 1, max 120), and it sits
+#: downstream of `VAEDecode`, after every sampling step. `WanAnimateToVideo` and `KSampler`
+#: carry no fps input at all. So the rate is a presentation parameter here: it decides how
+#: fast the convenience video plays and cannot change a generated pixel. The lossless
+#: `SaveImage` tap that every measurement reads bypasses it entirely.
 WIDTH, HEIGHT, LENGTH, FPS = 832, 480, 65, 16
 
 #: Weights. Every one is ruled in `docs/license-map.md`:
@@ -136,6 +147,14 @@ def parse_args(argv=None):
                          "center-crop; 'letterbox' names a pre-fitted reference. The choice "
                          "and its measured consequence are recorded either way")
     ap.add_argument("--seeds-registry", default=None)
+    ap.add_argument("--experiment", default=EXPERIMENT,
+                    help="names the output files and the server-side filename prefixes")
+    ap.add_argument("--length", type=int, default=LENGTH,
+                    help="frame count; Gate L and Gate ROUTE both check it (argparse eats "
+                         "leading minus signs, so pass flags as --flag=value)")
+    ap.add_argument("--fps", type=float, default=FPS,
+                    help="the CreateVideo rate. Presentation only — it is downstream of "
+                         "VAEDecode and cannot change a generated pixel")
     return ap.parse_args(argv)
 
 
@@ -175,18 +194,19 @@ def identity_clause(path=TWIN_PROMPT_JSON):
     return text.strip().strip(","), original, log
 
 
-def build(uploads, seed, negative, positive, registry, reference_fit):
+def build(uploads, seed, negative, positive, registry, reference_fit,
+          experiment=EXPERIMENT, length=LENGTH, fps=FPS):
     """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists."""
-    gate_s = gates.gate_s_seed_registration(seed, registry, EXPERIMENT,
+    gate_s = gates.gate_s_seed_registration(seed, registry, experiment,
                                             seed_was_explicit=seed is not None)
     seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)
-    profile = gates.g1_generator_legality(WIDTH, HEIGHT, LENGTH, "wan-animate")
+    profile = gates.g1_generator_legality(WIDTH, HEIGHT, length, "wan-animate")
 
     pose_name = uploads["pose_pack"]
     packed = uploads.get("pose_frames")
-    if packed != LENGTH:
+    if packed != length:
         raise PayloadError(
-            f"the pose pack declares {packed} frames and the shot is {LENGTH}. The "
+            f"the pose pack declares {packed} frames and the shot is {length}. The "
             f"conditioning node pads a short pose video by REPEATING its last frame and "
             f"truncates a long one, both silently — so a miscount arrives as a performance "
             f"that freezes or ends early, with every gate green")
@@ -216,11 +236,11 @@ def build(uploads, seed, negative, positive, registry, reference_fit):
     # counted and compared pixel-for-pixel against the local stick frames. This is the half
     # the local round trip cannot prove — that the SERVER decodes the pack the same way.
     wf["301"] = {"class_type": "SaveImage",
-                 "inputs": {"filename_prefix": f"{EXPERIMENT}/probe/batchprobe",
+                 "inputs": {"filename_prefix": f"{experiment}/probe/batchprobe",
                             "images": ["200", 0]}}
 
     wf["49"] = {"class_type": "WanAnimateToVideo", "inputs": {
-        "width": WIDTH, "height": HEIGHT, "length": LENGTH, "batch_size": 1,
+        "width": WIDTH, "height": HEIGHT, "length": length, "batch_size": 1,
         "continue_motion_max_frames": 5, "video_frame_offset": 0,
         "positive": ["6", 0], "negative": ["7", 0], "vae": ["105", 0],
         "reference_image": ["134", 0], "pose_video": ["200", 0],
@@ -236,23 +256,31 @@ def build(uploads, seed, negative, positive, registry, reference_fit):
     wf["8"] = {"class_type": "VAEDecode",
                "inputs": {"samples": ["58", 0], "vae": ["105", 0]}}
     wf["68"] = {"class_type": "CreateVideo",
-                "inputs": {"fps": FPS, "bit_depth": 8, "images": ["8", 0]}}
+                "inputs": {"fps": fps, "bit_depth": 8, "images": ["8", 0]}}
     wf["114"] = {"class_type": "SaveVideo", "inputs": {
-        "filename_prefix": f"video/{EXPERIMENT}_probe", "format": "auto", "codec": "auto",
+        "filename_prefix": f"video/{experiment}_probe", "format": "auto", "codec": "auto",
         "video": ["68", 0]}}
     # THE LOSSLESS OUTPUT TAP — the same frames CreateVideo is about to hand SaveVideo,
     # taken off VAEDecode before any codec touches them. Everything downstream reads these.
     wf["302"] = {"class_type": "SaveImage", "inputs": {
-        "filename_prefix": f"{EXPERIMENT}/probe/lossless", "images": ["8", 0]}}
+        "filename_prefix": f"{experiment}/probe/lossless", "images": ["8", 0]}}
 
     verify_topology(wf)
 
+    # Gate ROUTE on the graph THIS tool just built, in-tool, with the frame values stated.
+    # Supplying them is not a convenience: `WanAnimateToVideo` sizes its own latent, and
+    # E08 measured what happens when the gate cannot find one — it reported the graph legal
+    # having examined zero frames. The route gate now refuses to call an empty examination
+    # a pass, and a caller that knows its own shape says so.
+    gate_route = route_gates.verify(wf, frame=(WIDTH, HEIGHT, length))
+
     meta = {
-        "experiment": EXPERIMENT, "tool_version": TOOL_VERSION,
-        "resolution": [WIDTH, HEIGHT], "length": LENGTH, "fps": FPS,
+        "experiment": experiment, "tool_version": TOOL_VERSION,
+        "resolution": [WIDTH, HEIGHT], "length": length, "fps": fps,
         "seed": seed_used,
         "gate_S": gate_s,
         "gate_L": {"verdict": "PASS", "profile": profile.as_dict()},
+        "gate_ROUTE_built": gate_route,
         "models": {"unet": UNET_NAME, "clip": CLIP_NAME, "vae": VAE_NAME},
         "sampler": {"steps": STEPS, "cfg": CFG, "sampler_name": SAMPLER,
                     "scheduler": SCHEDULER, "shift": SHIFT, "denoise": 1.0,
@@ -356,7 +384,8 @@ def main(argv=None):
     ident, ident_original, drops = identity_clause()
     positive = ident + ". " + SCENE_CLAUSE
 
-    wf, meta = build(uploads, a.seed, negative, positive, registry, a.reference_fit)
+    wf, meta = build(uploads, a.seed, negative, positive, registry, a.reference_fit,
+                     experiment=a.experiment, length=a.length, fps=a.fps)
     meta["prompt_record"] = {
         "identity_clause_source": TWIN_PROMPT_JSON,
         "identity_clause_original": ident_original,
@@ -368,17 +397,19 @@ def main(argv=None):
             open(neg_path, "rb").read()).hexdigest(),
     }
 
-    gpath = os.path.join(out, "E08-probe-animate.api.json")
+    gpath = os.path.join(out, f"{a.experiment}-probe-animate.api.json")
     with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=2, ensure_ascii=False)
-    mpath = os.path.join(out, "E08-probe-payload-record.json")
+    mpath = os.path.join(out, f"{a.experiment}-probe-payload-record.json")
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
     print("BUILD_ANIMATE_OK " + json.dumps({
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
+        "length": meta["length"], "fps": meta["fps"],
         "payload_sha256": meta["payload_sha256"][:32],
-        "gate_L": meta["gate_L"]["verdict"], "gate_S": meta["gate_S"].get("verdict")},
+        "gate_L": meta["gate_L"]["verdict"], "gate_S": meta["gate_S"].get("verdict"),
+        "gate_ROUTE_built": meta["gate_ROUTE_built"]["verdict"]},
         ensure_ascii=False))
     return 0
 

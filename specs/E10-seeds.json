@@ -1,0 +1,20 @@
+{
+  "experiment": "E10",
+  "stage": "densified driving — the same dance, 81 samples over the identical duration",
+  "registered_utc": "2026-08-12",
+  "registered_by": "executor seat, on E10-density, before the first submission of any E10 graph",
+  "gate": "S",
+  "seeds": [
+    2026081221,
+    2026081222
+  ],
+  "how_these_were_chosen": "The date as a plain integer with a run index appended, continuing the rule specs/E09-seeds.json, specs/E09-A3-seeds.json and specs/E08-seeds.json use: 2026-08-12, runs 21 and 22. The property that matters is that both numbers are fixed BEFORE any result is seen, and a date-derived seed is checkable against this file's own git timestamp. Neither seed was drawn from a prior run, from any served template, or from anything this seat had already looked at.",
+  "allocation": {
+    "2026081221": "the probe — the one generation this spec authorises up front",
+    "2026081222": "reserve, spendable only on a named cause the probe surfaces"
+  },
+  "why_the_index_starts_at_21": "specs/E09-A3-seeds.json registered 2026081201-02 and specs/E08-seeds.json registered 2026081211-13 on this same calendar day. Reusing any of those numbers would put a seed registered for one experiment onto another, and the record would afterwards have to explain which run a number belonged to. The offset keeps every seed on this rig traceable to exactly one registration.",
+  "why_a_new_seed_at_all_when_everything_else_is_pinned": "A new frame count is a new generation. The Animate route's latent is sized 832x480x81 here against 832x480x65 in E08, so the sampler's noise tensor has a different shape and the same integer would not reproduce E08's noise field even in principle. Registering a fresh number states that plainly rather than implying a same-seed comparison the route cannot deliver.",
+  "ceiling": "2 generations — 1 probe plus 1 reserve on a named cause. estimate_credits is re-confirmed before the first submission and both meters are reported; on an all-OSS graph it returns 0 by construction (E08 §12), so the ceiling is enforced by counting generations. Spent credits have no compensator; the bound is the honest treatment.",
+  "binds_in_both_directions": "An experiment that pre-registered seeds must use one of them, and an experiment that pre-registered none may not vary its seed at all. tools/armature_core/gates.py::gate_s_seed_registration enforces both clauses at build time and tools/armature_core/route_gates.py::gate_s_registration enforces them again against the graph that is about to run."
+}
