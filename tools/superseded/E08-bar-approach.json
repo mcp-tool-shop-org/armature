@@ -1,0 +1,52 @@
+{
+  "asset": {
+    "path": "E:\\AI\\armature-E08\\outputs\\E08\\walk\\performer_walk.glb",
+    "sha256": "ef0dc34589b195bce38eaf8c6bbd5d4015efd38068791001407ef0d2bddda510"
+  },
+  "camera": {
+    "azimuth_start_deg": 225.0,
+    "azimuth_sweep_deg": 0.0,
+    "clip_end": 1000.0,
+    "clip_start": 0.05,
+    "elevation_deg": 6.0,
+    "lens_mm": 50.0,
+    "radius": 4.023673048,
+    "sensor_mm": 36.0,
+    "target": [
+      -0.080291929,
+      -0.740522761,
+      0.077891146
+    ],
+    "type": "orbit"
+  },
+  "channels": [
+    "depth",
+    "mask"
+  ],
+  "depth": {
+    "window": "per_shot"
+  },
+  "frames": {
+    "count": 65,
+    "fps": 16
+  },
+  "gates": {
+    "g4_tolerance_px": 2
+  },
+  "generator": "wan-vace",
+  "name": "E08-bar-approach",
+  "render": {
+    "engine": "BLENDER_EEVEE",
+    "film_transparent": true,
+    "filter_size": 0.01,
+    "samples": 1
+  },
+  "resolution": {
+    "height": 480,
+    "width": 832
+  },
+  "spec_version": 1,
+  "subject": {
+    "animation": "per_frame"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "solution": {
+    "target": [
+      -0.08029192887039313,
+      -0.7405227606958684,
+      0.07789114630625626
+    ],
+    "radius": 4.023673047658351,
+    "azimuth_deg": 225.0,
+    "elevation_deg": 6.0,
+    "lens_mm": 50.0,
+    "sensor_mm": 36.0,
+    "resolution": [
+      832,
+      480
+    ],
+    "achieved": {
+      "union_height_frac": 0.7200000000000043,
+      "union_x": [
+        0.3033454439360882,
+        0.7439658423299536
+      ],
+      "union_y": [
+        0.17999999999999783,
+        0.9000000000000021
+      ],
+      "end_centre_x": 0.6600000000000001,
+      "end_x": [
+        0.596461884465053,
+        0.7235381155349472
+      ],
+      "end_y": [
+        0.17999999999999783,
+        0.8983858437368241
+      ]
+    },
+    "requested": {
+      "height_frac": 0.72,
+      "end_x_frac": 0.66,
+      "target_y_frac": 0.54
+    },
+    "in_frame": true
+  },
+  "hips_screen_x": {
+    "frame_0": 0.35920208672496967,
+    "frame_last": 0.6610270804312288
+  },
+  "motion": "E:\\AI\\armature-E08\\outputs\\E08\\walk\\performer_walk.motion.json"
+}
