@@ -16,13 +16,23 @@ frame that came out of it, at the same frame index, and prints the provenance be
 Whether the figure is the right character is canon and the Director's; whether it is in the
 right place is his eye on this panel.
 
-Sheets locate; full size decides. Every tile is native resolution — 480x832 in, 480x832
-out, no resampling — so what is on the sheet is what is in the file.
+Sheets locate; full size decides. Every tile is native resolution — frames go on the
+sheet at their own size, no resampling — so what is on the sheet is what is in the file.
+
+**2026-08-12 — the literals are gone.** The provenance panel carried E02-era literals
+(a model name, a sampler line, "of 33", a Gate R route claim, a bridge-fidelity note),
+the header defaulted a missing experiment name to "E02", the reference-absent column
+baked E03's rationale, and the default caption derived an azimuth from an orbit the tool
+assumed. The E11 report logged the third stale-label sighting and named this fix. Every
+line now derives from the run's own record, and a value the record does not carry prints
+`NOT RECORDED` — the `make_startframe_sheet` convention, whose docstring records why it
+was born separate.
 """
 
 import argparse
 import json
 import os
+import textwrap
 
 from PIL import Image, ImageDraw
 
@@ -32,6 +42,7 @@ HDR_H = 22
 BG = (18, 18, 20)
 FG = (235, 235, 235)
 DIM = (140, 140, 150)
+MISSING = "NOT RECORDED"
 
 
 def _rgb(path):
@@ -43,6 +54,91 @@ def _rgb(path):
     return im.convert("RGB")
 
 
+def _get(meta, *path, default=MISSING):
+    """Walk a dotted path through the record, or return `NOT RECORDED` — a string that
+    cannot be mistaken for a measurement (the `make_startframe_sheet` convention)."""
+    cur = meta
+    for key in path:
+        if not isinstance(cur, dict) or key not in cur:
+            return default
+        cur = cur[key]
+    return cur if cur is not None else default
+
+
+def header_text(meta):
+    """The sheet header, derived. The old header defaulted a missing experiment name to
+    "E02" — a fallback that names an experiment is a placeholder shaped like evidence."""
+    return (f"{_get(meta, 'experiment')} {_get(meta, 'arm')}  -  "
+            f"GATE 0 SHEET   control | output | reference | provenance")
+
+
+def output_heading(meta):
+    """The OUTPUT column heading, from the record. It used to bake E02's model name."""
+    return f"OUTPUT  ({_get(meta, 'models', 'unet')})"
+
+
+def frame_caption(fi, captions=None):
+    """Per-frame caption. The old default derived an azimuth from the frame count — an
+    orbit assumption baked into the tool, printing angles that never happened on any
+    non-orbiting run. Azimuth (or anything else) now arrives only via `captions`."""
+    if captions is not None and fi in captions:
+        return f"f{fi:03d}  {captions[fi]}"
+    return f"f{fi:03d}"
+
+
+def reference_absent_lines(meta):
+    """The reference column when the run deliberately carries none. The old block baked
+    E03's rationale into every such sheet; the reason now comes from the run's record
+    (`reference_absent_reason`) or prints `NOT RECORDED`."""
+    return (["NONE - deliberately", "absent, not a gap.", ""]
+            + textwrap.wrap(f"reason: {_get(meta, 'reference_absent_reason')}", width=20))
+
+
+def provenance_lines(meta):
+    """Every line of the provenance panel, derived from the run's record. A value the
+    record does not carry prints `NOT RECORDED`. This panel used to bake E02-era
+    literals — model, sampler line, a control denominator, a Gate R route claim and a
+    bridge-fidelity note — the stale-label defect whose third sighting (E11) named this
+    fix."""
+    models = _get(meta, "models", default={})
+    models = models if isinstance(models, dict) else {}
+    ctl = meta.get("control")
+    is_ctl = isinstance(ctl, dict)
+    ctl_d = ctl if is_ctl else {}
+
+    def cv(key):
+        return ctl_d.get(key, MISSING) if is_ctl else "-"
+
+    lines = [
+        f"arm            {_get(meta, 'arm')}",
+        f"prompt_id      {_get(meta, 'prompt_id')}",
+        f"model          {models.get('unet', MISSING)}",
+        f"text encoder   {models.get('clip', MISSING)}",
+        f"vae            {models.get('vae', MISSING)}",
+        f"frame          {_get(meta, 'resolution')} x {_get(meta, 'length')} @ "
+        f"{_get(meta, 'fps')}fps",
+        f"seed           {_get(meta, 'seed')}",
+        f"sampler        {_get(meta, 'sampler_name')} / {_get(meta, 'scheduler')} / "
+        f"{_get(meta, 'steps')} steps / cfg {_get(meta, 'cfg')}",
+        f"payload sha256 {str(_get(meta, 'payload_sha256', default=''))[:32]}",
+        "",
+        f"control bridge {cv('bridge') if is_ctl else (str(ctl) if ctl else 'NONE - no control_video recorded')}",
+        f"normalization  {cv('normalization')}",
+        f"polarity       {cv('polarity')}",
+        f"distinct imgs  {cv('distinct_images')} of {cv('total_images')}",
+        f"reference      {meta.get('reference_image') or 'NONE (recorded absent)'}",
+        "",
+        f"Gate L         {_get(meta, 'gate_L', 'verdict')}",
+        f"Gate B         {_get(meta, 'gate_B', default='NOT YET RUN')}",
+        f"Gate R         {_get(meta, 'gate_R')}",
+        f"Gate C         {_get(meta, 'gate_C', default='NOT YET RUN')}",
+        f"Gate 6         {_get(meta, 'gate_G6')}",
+    ]
+    if is_ctl:
+        lines += ["", f"bridge fidelity {ctl_d.get('bridge_fidelity', MISSING)}"]
+    return lines
+
+
 def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, captions=None):
     """Assemble the panel.
 
@@ -52,9 +148,9 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
     reference to preserve. The column is then labelled as deliberately absent rather than
     filled with a stand-in: a sheet must not contain a placeholder shaped like evidence.
 
-    `captions` overrides the per-frame label. E02's arms orbited, so a frame's azimuth was
-    the useful caption; E03 holds the camera still and moves the subject, so an azimuth
-    caption would print a number that never changes and imply the camera did something.
+    `captions` adds a per-frame label beside the frame index. The default is the bare
+    index: the tool used to compute an azimuth from the frame count, which was E02's
+    orbit baked in — on a run that does not orbit it printed angles that never happened.
     """
     cnames = sorted(n for n in os.listdir(control_dir) if n.endswith(".png"))
     onames = sorted(n for n in os.listdir(frames_dir) if n.endswith(".png"))
@@ -70,11 +166,7 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
             continue
         c = fit(_rgb(os.path.join(control_dir, cnames[fi])))
         o = fit(_rgb(os.path.join(frames_dir, onames[fi])))
-        if captions is not None:
-            label = f"f{fi:03d}  {captions.get(fi, '')}"
-        else:
-            label = f"f{fi:03d}  az {360.0 * fi / len(cnames):.0f}d"
-        cols.append((label, c, o))
+        cols.append((frame_caption(fi, captions), c, o))
 
     rtile = fit(ref) if ref is not None else None
     ref_w = rtile.width if rtile is not None else 220
@@ -84,16 +176,15 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
 
     sheet = Image.new("RGB", (width, height), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((MARGIN, 6), f"{meta.get('experiment', 'E02')} {meta.get('arm','?')}  -  "
-                        f"GATE 0 SHEET   control | output | reference | provenance", fill=FG)
+    d.text((MARGIN, 6), header_text(meta), fill=FG)
 
     y0 = HDR_H + MARGIN
     ctl_meta = meta.get("control")
-    ctl_desc = (ctl_meta.get("polarity", "") if isinstance(ctl_meta, dict)
+    ctl_desc = (ctl_meta.get("polarity", MISSING) if isinstance(ctl_meta, dict)
                 else "NONE - this arm has no control_video")
     d.text((MARGIN, y0), f"CONTROL  ({ctl_desc})", fill=DIM)
     y1 = y0 + LABEL_H + tile_h + LABEL_H
-    d.text((MARGIN, y1), "OUTPUT  (Wan 2.1 VACE 14B fp16)", fill=DIM)
+    d.text((MARGIN, y1), output_heading(meta), fill=DIM)
 
     x = MARGIN
     for label, c, o in cols:
@@ -109,55 +200,13 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
         d.text((x, y0 + LABEL_H + tile_h + 2), os.path.basename(reference), fill=DIM)
     else:
         # Named as deliberately absent. NOT a blank tile that could read as a missing file.
-        for i, ln in enumerate([
-            "NONE - and that is",
-            "the arm, not a gap.",
-            "",
-            "reference_image is",
-            "required: false on",
-            "WanVaceToVideo",
-            "(measured).",
-            "",
-            "Held constant",
-            "(absent) across all",
-            "three E03 arms. The",
-            "subject carries no",
-            "identity for a",
-            "reference to keep.",
-        ]):
+        for i, ln in enumerate(reference_absent_lines(meta)):
             d.text((x, y0 + LABEL_H + 6 + i * 15), ln, fill=DIM)
 
     px = x + ref_w + MARGIN
     d.text((px, y0), "PROVENANCE", fill=DIM)
-    ctl = meta.get("control")
-    lines = [
-        f"arm            {meta.get('arm')}",
-        f"prompt_id      {meta.get('prompt_id','NOT RECORDED')}",
-        f"model          {meta.get('models',{}).get('unet','?')}",
-        f"text encoder   {meta.get('models',{}).get('clip','?')}",
-        f"vae            {meta.get('models',{}).get('vae','?')}",
-        f"frame          {meta.get('resolution')} x {meta.get('length')} @ {meta.get('fps')}fps",
-        f"seed           {meta.get('seed')}",
-        f"sampler        uni_pc / simple / 30 steps / cfg 6",
-        f"payload sha256 {str(meta.get('payload_sha256',''))[:32]}",
-        "",
-        f"control bridge {ctl.get('bridge') if isinstance(ctl, dict) else ctl}",
-        f"normalization  {ctl.get('normalization') if isinstance(ctl, dict) else '-'}",
-        f"polarity       {ctl.get('polarity') if isinstance(ctl, dict) else '-'}",
-        f"distinct imgs  {ctl.get('distinct_images') if isinstance(ctl, dict) else '-'} of 33",
-        f"reference      {meta.get('reference_image') or 'NONE (held absent across arms)'}",
-        "",
-        f"Gate L         {meta.get('gate_L',{}).get('verdict','?')}",
-        f"Gate B         {meta.get('gate_B','NOT YET RUN')}",
-        f"Gate R         N/A for this route (no codec in the path)",
-        f"Gate C         {meta.get('gate_C','NOT YET RUN')}",
-        f"Gate 6         {meta.get('gate_G6','-')}",
-        "",
-        "bridge fidelity  out = max(src-1, 0), measured",
-        "  deterministic, one-sided, structure-preserving",
-    ]
     yy = y0 + LABEL_H
-    for ln in lines:
+    for ln in provenance_lines(meta):
         d.text((px, yy), ln, fill=DIM if not ln.startswith("Gate") else FG)
         yy += 15
     return sheet
