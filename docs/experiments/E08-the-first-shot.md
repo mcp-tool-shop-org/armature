@@ -196,6 +196,21 @@ movement-library sourcing arc · the brush pass.
 | UNCERTAINTY_GATED_HUMANS | 2 | blind hypotheses; halts surface contrastively; identity is the Director's |
 | EXTERNAL_VERIFIER | 2 | gates + the Director's eye; no self-grading anywhere |
 
+## Amendments (the rewrite's)
+
+**R-A1 — 2026-08-12 (the Director's call, mid-run):** the executor read the core node's
+source and found `WanAnimateToVideo` **center-crops `reference_image` to the generation
+size** (`common_upscale(..., "area", "center")`) — so the 352×1024 portrait twin would have
+reached the model as a 204-row band (19.9 %: hips and thighs; no head, no face, no hands).
+Surfaced with options; **the Director ruled: letterbox the whole figure.** The letterbox
+derivation is a committed, tested tool rather than an inline script, and the padded
+reference is hashed into the payload record. What this changes about the probe's reading:
+clause 2 (identity) is now measured through a whole-figure reference whose face is small —
+the figure scales to ≈165×480 inside the 832×480 frame — stacked on the stylized-reference
+floor (G13). **Wave 1's identity result is therefore a floor, not the route's ceiling**;
+the named lever is a native-832×480 reference set with the figure filling the frame, which
+arrives with the brush-passed GLB renders (ledger). Premise 3 carries this note.
+
 ---
 
 ## Trajectory
