@@ -140,3 +140,10 @@ claimed, the probe remains the baseline, and the target is the shot.
    improved-by-prompt-alone (genuinely uncertain — the mitten geometry may bind).
 6. **Deliverables:** A/B vs the wave-1 probe at true tempo, the Gate 0 sheet, zooms at
    hands and face, the horizon-persistence diagnostic beside the camera claim.
+
+**Standing ruling folded 2026-08-12 (applies to every run AFTER wave 2, whose start frame
+stays pinned for comparability):** authored character inputs are rendered **RGBA with a
+real alpha**; the submitted RGB composite is a deliberate, recorded choice per route —
+never a baked grey void (the Director's ruling after the probe's studio bled through
+frame 0; law in CLAUDE.md). The render and reference-fit tools gain the alpha default on
+their next touch, with tests.
