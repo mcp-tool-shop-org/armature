@@ -5,7 +5,10 @@
 causes); `estimate_credits` recorded before submission; both meters reported. **Spec
 written 2026-08-12 by the advisor, before the work, at the Director's direction.
 DISPATCH HOLDS until E10 closes** — his sequencing: the density experiment runs to its end
-first.
+first. **HOLD RELEASED 2026-08-12** — E10 closed on the Director's A/B verdict
+([E10-closing-ruling.md](E10-closing-ruling.md)). One reading rule folded at release: E11's
+scene and identity observations are read under the **two-seed rule** (E10 ruling R3) — a
+single-seed scene outcome is an observation, never a route property.
 
 ## Trajectory
 
