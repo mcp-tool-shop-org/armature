@@ -286,7 +286,21 @@ def test_a_drifted_trajectory_halts(w1_path):
 
 
 # --------------------------------------------------------------------- the prompt surgery
+#
+# build_prompt() reads the twin's identity clause from facet's tree — a rig-local asset
+# armature consumes read-only and never copies (a fixture copy would fork canon). On a
+# runner without that tree these tests SKIP VISIBLY, the same convention ci.yml documents
+# for the Blender-dependent suite: the skip count is the honest record of what the runner
+# could not exercise.
+import build_animate_payload as E08_SRC
 
+requires_facet_tree = pytest.mark.skipif(
+    not os.path.isfile(E08_SRC.TWIN_PROMPT_JSON),
+    reason="rig-local facet asset (E33 twin prompt JSON) not present on this runner",
+)
+
+
+@requires_facet_tree
 def test_the_performance_clause_dominates_and_the_ratio_is_recorded():
     positive, log = B.build_prompt()
     d = log["dominance"]
@@ -294,6 +308,7 @@ def test_the_performance_clause_dominates_and_the_ratio_is_recorded():
     assert positive.index(B.PERFORMANCE_CLAUSE) < positive.index(B.SET_DRESSING_CLAUSE)
 
 
+@requires_facet_tree
 def test_a_prompt_whose_set_dressing_outweighs_the_performance_halts(monkeypatch):
     """The dispatch's instruction, made checkable. Wave 1's proportion was the defect."""
     monkeypatch.setattr(B, "SET_DRESSING_CLAUSE", B.PERFORMANCE_CLAUSE + " and more bar")
@@ -302,12 +317,14 @@ def test_a_prompt_whose_set_dressing_outweighs_the_performance_halts(monkeypatch
     assert "does not dominate" in str(exc.value)
 
 
+@requires_facet_tree
 def test_the_failed_camera_sentence_is_gone_from_the_positive():
     positive, log = B.build_prompt()
     assert B.CAMERA_SENTENCE_DROPPED not in positive
     assert log["dropped"]["sentence"] == B.CAMERA_SENTENCE_DROPPED
 
 
+@requires_facet_tree
 def test_the_identity_clause_is_carried_verbatim_from_its_own_source():
     positive, log = B.build_prompt()
     ident = log["carried_verbatim"]["identity_clause"]
