@@ -102,3 +102,15 @@ pad A/B · aspect / figure size · the reference set · anything touching identi
 | DECOMPOSE_BY_SECRETS | 2 | resampler = pure module apart from render/encode shells |
 | UNCERTAINTY_GATED_HUMANS | 2 | blind H-degrees; H-E10d names the null outcome as a priced result |
 | EXTERNAL_VERIFIER | 2 | analytic slerp tests + the Director's eye on true-tempo A/B; the executor judges nothing |
+
+## Amendments
+
+**A1 — 2026-08-12 (at use; [E10-probe-ruling.md](E10-probe-ruling.md) R4):** premise 4 was
+false as stated — the motion record stores rotations as 3×3 matrices, not quaternions. The
+resampler converts (tested: all 1430 matrices orthonormal to 2.55e-15) and slerps on the
+converted form.
+
+**A2 — 2026-08-12 (at use; the advisor's inconsistency, owned):** the spec's "~19.95 fps"
+conflicted with its own endpoints-exact clause. Endpoint-exact arithmetic over the
+identical span gives **20.0 fps exactly**; deliverables carry 20.0, and both conventions
+(frames÷duration vs frames÷fps) are recorded in the report.
