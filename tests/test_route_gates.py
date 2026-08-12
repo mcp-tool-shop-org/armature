@@ -223,6 +223,46 @@ def test_gate_s_still_refuses_a_randomising_save_format_seed():
     assert "not pinned" in str(exc.value)
 
 
+def test_gate_s_reads_a_save_format_sampler_that_has_connected_inputs():
+    """Measured at use, E10 2026-08-12: save format spells `inputs` as a LIST of slot
+    dicts and API format as a mapping, and the noise check called `.get` on it. E09's
+    saved samplers had EMPTY input arrays, so `or {}` swallowed the difference and the
+    defect waited for a graph whose sampler was actually wired — which every real one is."""
+    saved = {"nodes": [
+        {"id": 49, "type": "WanAnimateToVideo", "widgets_values": [832, 480, 81, 1, 5, 0]},
+        {"id": 3, "type": "KSampler",
+         "inputs": [{"name": "model", "type": "MODEL", "link": 1},
+                    {"name": "latent_image", "type": "LATENT", "link": 4}],
+         "widgets_values": [2026081221, "fixed", 20, 6, "uni_pc", "simple", 1]}]}
+    ev = RG.gate_s_registration(saved, [2026081221])
+    live = [s for s in ev["seeds"] if s["adds_noise"]]
+    assert len(live) == 1 and live[0]["seed"] == 2026081221
+
+
+def test_a_plain_KSampler_is_never_read_as_noise_free():
+    """`KSampler` has no `add_noise` input at all. Reading widget 0 for it — which the
+    table used to invite — asks whether its SEED equals "disable"."""
+    saved = {"nodes": [{"id": 3, "type": "KSampler", "inputs": [],
+                        "widgets_values": ["disable", "fixed", 20, 6, "euler", "simple", 1]}]}
+    assert RG.seeds(saved)[0]["seed"] == "disable"
+    ev = RG.gate_s_registration(saved, ["disable"])
+    assert ev["seeds"][0]["adds_noise"] is True
+
+
+def test_a_save_format_advanced_sampler_with_noise_disabled_is_still_read_as_inert():
+    saved = {"nodes": [
+        {"id": 4, "type": "KSamplerAdvanced",
+         "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+         "widgets_values": ["disable", 0, "fixed", 40, 3.0, "euler", "simple", 25, 10000,
+                            "disable"]},
+        {"id": 3, "type": "KSamplerAdvanced",
+         "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
+         "widgets_values": ["enable", 4242, "fixed", 40, 4.0, "euler", "simple", 0, 25,
+                            "enable"]}]}
+    ev = RG.gate_s_registration(saved, [4242])
+    assert sorted(s["adds_noise"] for s in ev["seeds"]) == [False, True]
+
+
 def test_the_gate_is_not_an_assert():
     import os
     src = open(os.path.join(TOOLS, "armature_core", "route_gates.py"),
@@ -286,7 +326,8 @@ def test_wan_animate_over_the_trained_horizon_raises():
 def test_the_shot_shape_is_legal_and_the_verdict_counts_the_latent():
     ev = RG.verify(_animate_api())
     assert ev["frame_legality"][0]["legal"] is True
-    assert "1 latent(s) all generator-legal" in ev["verdict"]
+    assert ev["frame_legality_verdict"] == "PROVEN"
+    assert "1 of 1 latent(s) checkable" in ev["verdict"]
 
 
 def test_wan_animate_latent_is_read_in_save_format_too():
@@ -295,3 +336,98 @@ def test_wan_animate_latent_is_read_in_save_format_too():
                        "widgets_values": [832, 480, 65, 1, 5, 0]}]}
     lat = RG.latents(save)
     assert (lat[0]["width"], lat[0]["height"], lat[0]["length"]) == (832, 480, 65)
+    assert lat[0]["checkable"] is True
+
+
+# ------------------------------------------------- E08's commission, shipped E10 2026-08-12
+#
+# Adding `WanAnimateToVideo` to the table fixed one graph. The SHAPE of the failure —
+# "nothing was checkable" reported as "everything checked out" — needed the gate to stop
+# treating an empty examination as a pass. These fixtures are that clause.
+
+def _unrecorded_latent_api():
+    """A graph whose latent is sized by a node nobody has put in the table yet.
+
+    This is not hypothetical: it is exactly the state the first E08 Animate graph was in,
+    and the state the NEXT unrecorded conditioning node will put a graph in.
+    """
+    return {
+        "10": {"class_type": "UNETLoader",
+               "inputs": {"unet_name": "wan2.2_animate_14B_bf16.safetensors",
+                          "weight_dtype": "default"}},
+        "49": {"class_type": "SomeFutureConditioningNodeThatSizesItsOwnLatent",
+               "inputs": {"width": 832, "height": 480, "length": 999, "vae": ["105", 0]}},
+        "3": {"class_type": "KSampler",
+              "inputs": {"seed": 2026081211, "steps": 20, "cfg": 6.0,
+                         "sampler_name": "uni_pc", "scheduler": "simple", "denoise": 1.0,
+                         "model": ["10", 0], "latent_image": ["49", 2]}},
+    }
+
+
+def test_a_graph_with_no_checkable_latent_and_no_supplied_frame_goes_RED():
+    """THE red test. Before this clause, this graph passed Gate L having checked nothing."""
+    g = _unrecorded_latent_api()
+    assert RG.latents(g) == []
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert "INDETERMINATE" in str(exc.value)
+    assert exc.value.evidence["frame_legality_verdict"] == "INDETERMINATE"
+    assert exc.value.evidence["frame_legality"] == []
+
+
+def test_the_same_graph_is_admitted_when_the_builder_states_the_frame():
+    """`frame` is not a skip flag: the supplied numbers are checked like any others and
+    are labelled `supplied` in the evidence, so a report cannot pretend the graph proved
+    them."""
+    ev = RG.verify(_unrecorded_latent_api(), frame=(832, 480, 81))
+    assert ev["frame_legality_verdict"] == "PROVEN"
+    assert [f["source"] for f in ev["frame_legality"]] == ["supplied"]
+    assert ev["latents_checkable"] == 0
+
+
+def test_a_supplied_frame_that_is_illegal_still_raises():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_unrecorded_latent_api(), frame=(832, 480, 82))
+    assert "4n+1" in str(exc.value)
+
+
+def test_a_supplied_frame_contradicting_the_graphs_own_latent_raises():
+    """Both numbers legal, one of them wrong. Nothing downstream compares them."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_animate_api(length=65), frame=(832, 480, 81))
+    assert "not the number that runs" in str(exc.value)
+    assert exc.value.evidence["frame_legality_verdict"] == "CONTRADICTED"
+
+
+def test_a_latent_whose_dimensions_arrive_over_links_is_not_checkable():
+    """A `None` is not a small frame — it is no answer, and it must not read as one."""
+    g = _animate_api()
+    g["49"]["inputs"]["length"] = ["77", 0]
+    lat = RG.latents(g)
+    assert lat[0]["checkable"] is False and lat[0]["length"] is None
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert "INDETERMINATE" in str(exc.value)
+
+
+def test_a_supplied_frame_must_carry_all_three_numbers():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_unrecorded_latent_api(), frame={"width": 832, "height": 480})
+    assert "two out of three proves nothing" in str(exc.value)
+
+
+def test_the_e08_shot_would_have_gone_red_under_this_clause():
+    """The historical case, reconstructed: the table WITHOUT `WanAnimateToVideo`.
+
+    The point of the fixture is that the fix does not depend on the table being complete.
+    """
+    table = dict(RG.LATENT_NODES)
+    table.pop("WanAnimateToVideo")
+    saved = RG.LATENT_NODES
+    try:
+        RG.LATENT_NODES = table
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(_animate_api(length=65))
+        assert "INDETERMINATE" in str(exc.value)
+    finally:
+        RG.LATENT_NODES = saved

@@ -34,11 +34,22 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates as RG  # noqa: E402
 
-TOOL_VERSION = "E09.3"
+TOOL_VERSION = "E10.1"
 
 #: Where each API-format input lands in a save-format node's `widgets_values`. Written out
 #: rather than zipped positionally, because the whole point is to catch a positional slip.
 WIDGET_INDEX = {
+    # ---- E10, 2026-08-12: the Animate route's classes. `KSampler` has the same
+    # control_after_generate insertion `KSamplerAdvanced` does, one slot earlier, which is
+    # the shift a positional zip would sail past for the second time.
+    "KSampler": {"seed": 0, "steps": 2, "cfg": 3, "sampler_name": 4, "scheduler": 5,
+                 "denoise": 6},
+    "WanAnimateToVideo": {"width": 0, "height": 1, "length": 2, "batch_size": 3,
+                          "continue_motion_max_frames": 4, "video_frame_offset": 5},
+    "LoadImage": {"image": 0},
+    # Every input this graph pins is a link; the empty entry is a recorded fact, not the
+    # silence of a class nobody thought about (the table is looked up with `is None`).
+    "TrimVideoLatent": {},
     "UNETLoader": {"unet_name": 0, "weight_dtype": 1},
     "ModelSamplingSD3": {"shift": 0},
     "CLIPLoader": {"clip_name": 0, "type": 1, "device": 2},
@@ -57,7 +68,7 @@ WIDGET_INDEX = {
     # silence of a node nobody thought about. (Caught by this check firing on its own hole
     # before the first submission, 2026-08-12.)
     "VAEDecode": {},
-    "CreateVideo": {"fps": 0},
+    "CreateVideo": {"fps": 0, "bit_depth": 1},
     "SaveImage": {"filename_prefix": 0},
     "SaveVideo": {"filename_prefix": 0, "format": 1, "codec": 2},
 }
@@ -111,12 +122,61 @@ def round_trip(api_graph, saved_graph):
     return {"n_values_compared": len(checked), "all_equal": True, "values": checked}
 
 
+def link_round_trip(api_graph, saved_graph):
+    """Every socket we wired is wired there, and every socket we left empty is empty there.
+
+    The value round trip above compares literals; this compares TOPOLOGY, and it is the
+    clause E08 checked by eye. The failure it guards is specific and silent: a save/convert
+    round trip that attached something to `background_video` would produce a graph that
+    runs, costs the same, and makes the scene-from-prompt clause unmeasurable — while every
+    widget value still matched. It binds in both directions for the same reason Gate S
+    does: a lost link and an invented link are different defects and both pass a
+    value-only comparison.
+    """
+    saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
+    wired, empty, problems = [], [], []
+    for node_id, node in api_graph.items():
+        s = saved_by_id.get(str(node_id))
+        if s is None:
+            continue                                  # `round_trip` already raised on this
+        for slot in (s.get("inputs") or []):
+            name = slot.get("name")
+            ours = node["inputs"].get(name)
+            we_linked = isinstance(ours, list)
+            they_linked = slot.get("link") is not None
+            if we_linked and not they_linked:
+                problems.append(f"node {node_id}.{name}: we wired it and the saved file "
+                                f"carries no link")
+            elif they_linked and not we_linked:
+                problems.append(f"node {node_id}.{name}: the saved file wired it and we "
+                                f"left it empty")
+            elif we_linked:
+                wired.append(f"{node_id}.{name}")
+            else:
+                empty.append(f"{node_id}.{name}")
+    if problems:
+        raise RG.RouteGate(
+            "the saved file's topology is not the topology this repo built: "
+            + "; ".join(problems),
+            {"wired": wired, "empty_in_both": empty, "problems": problems})
+    return {"n_links": len(wired), "links": sorted(wired),
+            "optional_sockets_empty_in_both": sorted(empty)}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--saved", required=True)
     ap.add_argument("--api", required=True)
     ap.add_argument("--seeds", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--experiment", default="E09")
+    ap.add_argument("--stage", default="B2")
+    ap.add_argument("--frame", default=None,
+                    help="width,height,length — the shape the caller knows it is "
+                         "generating. Gate L is INDETERMINATE and raises on a graph whose "
+                         "latent it cannot read, so a route whose conditioning node sizes "
+                         "its own latent states the shape here (argparse eats leading "
+                         "minus signs: pass as --frame=832,480,81)")
     a = ap.parse_args(argv)
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
@@ -126,31 +186,41 @@ def main(argv=None):
     with open(a.seeds, encoding="utf-8") as fh:
         registered = json.load(fh)["seeds"]
 
+    frame = None
+    if a.frame:
+        parts = [int(v) for v in a.frame.split(",")]
+        if len(parts) != 3:
+            raise RG.RouteGate(f"--frame={a.frame!r} is not width,height,length; two out "
+                               f"of three proves nothing", {"supplied": a.frame})
+        frame = tuple(parts)
+
     equality = round_trip(api, saved)                       # 0 — is it even our graph
-    gate_route = RG.verify(saved)                           # 1
+    topology = link_round_trip(api, saved)                  # 0b — is it wired as we wired it
+    gate_route = RG.verify(saved, frame=frame)              # 1
     gate_s = RG.gate_s_registration(saved, registered)      # 2
-    lat = RG.latents(saved)[0]
-    gate_l = RG.frame_legality(lat["width"], lat["height"], lat["length"])   # 3
-    if not gate_l["legal"]:
-        raise RG.RouteGate(f"Gate L on the saved graph: {gate_l['problems']}", gate_l)
+    checked = [f for f in gate_route["frame_legality"]]     # 3 — already raised if illegal
+    shapes = sorted({f"{f['width']}x{f['height']}x{f['length']}" for f in checked})
 
     record = {
         "tool": "gate_saved_graph", "tool_version": TOOL_VERSION,
-        "experiment": "E09", "stage": "B2", "amendment": "A3",
+        "experiment": a.experiment, "stage": a.stage,
         "saved_file": {"path": os.path.abspath(a.saved),
                        "sha256": hashlib.sha256(open(a.saved, "rb").read()).hexdigest()},
         "api_file": {"path": os.path.abspath(a.api),
                      "sha256": hashlib.sha256(open(a.api, "rb").read()).hexdigest()},
         "round_trip": equality,
-        "gates": {"ROUTE": gate_route, "S": gate_s, "L": gate_l},
+        "topology_round_trip": topology,
+        "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked},
     }
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2, ensure_ascii=False)
 
     print("SAVED_ADMISSION_OK " + json.dumps({
         "round_trip_values_compared": equality["n_values_compared"],
+        "links_compared": topology["n_links"],
+        "optional_sockets_empty_in_both": topology["optional_sockets_empty_in_both"],
         "gate_ROUTE": gate_route["verdict"], "gate_S": gate_s["verdict"],
-        "gate_L": f"{lat['width']}x{lat['height']}x{lat['length']} legal",
+        "gate_L": f"{', '.join(shapes)} legal ({gate_route['frame_legality_verdict']})",
         "record": a.out}))
     return 0
 

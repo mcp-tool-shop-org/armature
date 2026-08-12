@@ -40,6 +40,15 @@ def parse_args(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--frames", default="0,16,32,48,64")
     ap.add_argument("--provenance", default="outputs/E08/route/E08-probe-payload-record.json")
+    ap.add_argument("--prompt-id", required=True,
+                    help="the run this sheet shows. Required, and NOT defaulted: a sheet "
+                         "whose provenance block names another run's id is a placeholder "
+                         "shaped like evidence")
+    ap.add_argument("--seeds-file", required=True,
+                    help="the committed seed registry this run's seed was drawn from")
+    ap.add_argument("--previz-label", default="previz (motion ground truth)")
+    ap.add_argument("--gates", default=None,
+                    help="one line naming the gate states this run actually recorded")
     return ap.parse_args(argv)
 
 
@@ -69,7 +78,7 @@ def main(argv=None):
         pv = cv2.imread(os.path.join(a.previz, f"{i:05d}.png"))
         ct = cv2.imread(os.path.join(a.sticks, f"{i:05d}.png"))
         pt = cv2.imread(os.path.join(a.painted, f"{i:05d}.png"))
-        tiles = [label(fit(pv, cv2), f"f{i}  E09 previz (motion ground truth)", cv2),
+        tiles = [label(fit(pv, cv2), f"f{i}  {a.previz_label}", cv2),
                  label(fit(ct, cv2), f"f{i}  control: AAPose-20 sticks", cv2),
                  label(fit(pt, cv2), f"f{i}  painted output", cv2),
                  label(ref, "reference (letterboxed twin)", cv2)]
@@ -79,23 +88,30 @@ def main(argv=None):
 
     body = np.concatenate(rows, axis=0)
 
+    # Every number below is READ from the run's own payload record. The first version of
+    # this block hardcoded E08's prompt_id, frame count, fps and gate line as string
+    # literals, so pointing the tool at another run produced a sheet that quoted one run's
+    # seed beside another run's identifiers — a report carrying a placeholder shaped like
+    # evidence, which is the thing CLAUDE.md names outright. Corrected E10, 2026-08-12.
+    w, h = rec["resolution"]
+    unconnected = ", ".join(sorted(rec.get("unconnected_inputs") or {}))
     lines = [
-        "E08 PROBE - provenance",
-        f"prompt_id           eb1fb0df-d754-4b2f-a4f4-b2f3b9d8c29f",
-        f"seed                {rec['seed']}   (specs/E08-seeds.json, committed pre-submission)",
+        f"{rec['experiment']} PROBE - provenance",
+        f"prompt_id           {a.prompt_id}",
+        f"seed                {rec['seed']}   ({a.seeds_file}, committed pre-submission)",
         f"model               {rec['models']['unet']}",
         f"clip / vae          {rec['models']['clip']} / {rec['models']['vae']}",
         f"sampler             {rec['sampler']['steps']} steps, cfg {rec['sampler']['cfg']}, "
         f"{rec['sampler']['sampler_name']}/{rec['sampler']['scheduler']}, shift {rec['sampler']['shift']}",
-        f"frame               832x480x65 @ 16 fps   (Gate L: legal, 4n+1, <=81)",
+        f"frame               {w}x{h}x{rec['length']} @ {rec['fps']} fps   "
+        f"(Gate L: legal, 4n+1, <=81)",
         f"payload sha256      {rec['payload_sha256'][:48]}",
-        "control             65 AAPose-20 stick frames, Wan convention @ 29d4a35d,",
+        f"control             {rec['pose_video']['declared_frames']} AAPose-20 stick frames, "
+        f"Wan convention @ 29d4a35d,",
         "                    rendered from the E09 A3 rig - no detector anywhere",
         "reference           twin_r3_v0.png letterboxed 352x1024 -> 832x480 (Director ruling)",
-        "unconnected         background_video, face_video, character_mask,",
-        "                    clip_vision_output, continue_motion",
-        "gates               ROUTE / S / L pass on built AND saved; Gate B identical on",
-        "                    all 65 frames; Gate R identical on the pose pack",
+        f"unconnected         {unconnected}",
+        f"gates               {a.gates or 'NOT RECORDED — pass --gates'}",
         "meters              estimate_credits 0 (no paid API nodes); GPU time is the meter",
     ]
     panel = np.zeros((26 * len(lines) + 24, body.shape[1], 3), np.uint8)
