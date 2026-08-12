@@ -104,6 +104,13 @@ def main(argv=None):
                     help="the frames the server returned off the pose LoadImage")
     ap.add_argument("--painted", default=None, help="the lossless output frames; diagnostic")
     ap.add_argument("--out", required=True)
+    # The two labels below travel into the evidence file. They are flags as of E11 because
+    # this gate is not only about pose sticks: the I2V route's single uploaded artifact is
+    # a START FRAME, and evidence reading "N local stick frames" over a comparison of one
+    # rendered start frame is a label asserting something that is not true — the defect
+    # class E10's closing lesson names.
+    ap.add_argument("--source-label", default=None)
+    ap.add_argument("--decoded-label", default=None)
     a = ap.parse_args(argv)
 
     src_paths = frame_paths(a.sticks)
@@ -114,8 +121,8 @@ def main(argv=None):
     got = [load_rgb(p) for p in got_paths]
     gate_px = gates.gate_r_round_trip(
         src, got,
-        source_label=f"{len(src)} local stick frames",
-        decoded_label=f"{len(got)} server batchprobe frames")
+        source_label=a.source_label or f"{len(src)} local stick frames",
+        decoded_label=a.decoded_label or f"{len(got)} server batchprobe frames")
 
     record = {
         "tool": "gate_b_frames", "tool_version": TOOL_VERSION,
