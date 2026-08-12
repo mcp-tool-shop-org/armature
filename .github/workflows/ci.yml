@@ -68,8 +68,11 @@ jobs:
         with:
           python-version: "3.13"
 
+      # opencv is pinned to the rig's verified version: the aapose golden-frame
+      # tests assert byte-stable rasterization, and the rasterizer's version is
+      # the axis that matters. Headless build — no GUI stack on a runner.
       - name: install test dependencies
-        run: python -m pip install --upgrade pip numpy pillow pytest
+        run: python -m pip install --upgrade pip numpy pillow pytest opencv-python-headless==5.0.0
 
       - name: run tests
         run: python -m pytest tests -q
