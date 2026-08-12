@@ -129,7 +129,13 @@ export (`docs/wan26-image-guide-notes.md`). The notes flag the guide's 2.6+
 reference-video mode (`@`-tag identity lock) as a new-conditioning-tier consult
 trigger, and hold its stationary-camera-default claim against E11 w1's measured
 push-in · E11's uploads and
-saved cloud workflows are live server-side with their deletes listed in the reports.
+saved cloud workflows are live server-side with their deletes listed in the reports ·
+**2026-08-12:** a Director-retrieved lead sheet on Kling / MiniMax H3 / Seedance is
+distilled at `docs/video-provider-field-notes.md` — lead tier only; it hands fresh
+fetch targets to the map's three blocked partner-terms rows, corrects its own biggest
+claim against the vendor's primary source (H3 open weights = announced intent
+2026-07-31, not shipped fact), and logs one catalog discrepancy (Seedance 2.5
+reference caps: 50 claimed vs 20/6/6 measured on the Comfy template).
 
 ## 7. The consult channel
 
