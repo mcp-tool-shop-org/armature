@@ -106,3 +106,44 @@ per the direction) · touching the skeletal route's tooling.
 | DECOMPOSE_BY_SECRETS | 2 | the render commission is scene-side; the payload builder reuses the gated pattern |
 | UNCERTAINTY_GATED_HUMANS | 2 | blind H-degrees; H-E11d prices the route's cost as a measurement, not a verdict |
 | EXTERNAL_VERIFIER | 2 | gates + the Director's eye on the two-pipeline sheet; the executor judges nothing |
+
+## The probe's verdicts (the Director's eye, 2026-08-12)
+
+**Identity HELD** — the face held up across the clip with no anchor; R1's re-pricing is
+confirmed. **Motion read as drunken wobble, not a dance** — his diagnosis: the bar language
+in the prompt pulled the performance toward it; the route's semantic gravity owns the
+performer as well as the world. **Hands read as a polygonal claw.** His ruling: fixable
+with prompt and polish; wave 2 proceeds with the acquired techniques.
+
+## WAVE 2 — camera held, performance clause dominant (dispatched 2026-08-12)
+
+A **composed** wave, said plainly: two levers move together (the camera embedding and the
+prompt surgery) because the Director ruled the probe's defects fixable-by-prompt and
+directed the acquired techniques applied — attribution between the two levers is not
+claimed, the probe remains the baseline, and the target is the shot.
+
+1. **Camera held:** the graph moves to `WanCameraImageToVideo` + `WanCameraEmbedding`
+   (`camera_pose = "Static"`) — both core, weights mapped Apache (consult #7 ruling). The
+   route-gate table extends for the new classes, per the E11 pattern.
+2. **Prompt surgery:** the performance clause leads and dominates — explicit dance
+   vocabulary, energy, rhythm — and the bar demotes to set-dressing clauses. **The open
+   fetch lands here:** the executor fetches and banks the official Wan prompting guidance
+   (zero spend), records its operative lines in the payload record, and crafts the prompt
+   per it. Negative extended against the named hand defect (claw/deformed-hand terms) —
+   prompt-side mitigation only; the hand **geometry** fix stays on the F-series ledger,
+   out of scope.
+3. **Held constant:** the same authored start frame (hash-pinned), same resolution and
+   length, seed freshly registered (Gate S).
+4. **Ceiling:** the two reserves — probe first, the second only on a named cause.
+5. **Blind predictions before submission:** camera held (horizon persistence vs the
+   probe's 4/65); dance-not-drunk (the Director's diagnosis under test); hands
+   improved-by-prompt-alone (genuinely uncertain — the mitten geometry may bind).
+6. **Deliverables:** A/B vs the wave-1 probe at true tempo, the Gate 0 sheet, zooms at
+   hands and face, the horizon-persistence diagnostic beside the camera claim.
+
+**Standing ruling folded 2026-08-12 (applies to every run AFTER wave 2, whose start frame
+stays pinned for comparability):** authored character inputs are rendered **RGBA with a
+real alpha**; the submitted RGB composite is a deliberate, recorded choice per route —
+never a baked grey void (the Director's ruling after the probe's studio bled through
+frame 0; law in CLAUDE.md). The render and reference-fit tools gain the alpha default on
+their next touch, with tests.
