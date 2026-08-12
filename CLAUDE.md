@@ -34,6 +34,18 @@ and **never writes into facet's tree**.
 This file is about **how to work here**. What is *true* here lives in README.md and
 `docs/experiments/`. Read those for facts; read this for method.
 
+## The posture — ruled by the Director, 2026-08-12
+
+Experiments here exist to **learn**, not to crown a method. This is a monorepo that is
+continuously redefined as experiments prove different paths — a route displaced by evidence
+is health, not churn, and **no route is canon by momentum**. Because the field moves,
+staying current is itself load-bearing: the pieces an experiment touches get a **dated field
+check** (current model versions, current developments — the consult channel, the
+model-knowledge KB and study-swarms are the instruments), and a technique older than its
+last check is advisory until re-verified, the same way the licence map ages its rows. Time
+is taken, not raced: calibration-before-spend stands, but no single path is the point — the
+learning is.
+
 ---
 
 ## Why this discipline exists
