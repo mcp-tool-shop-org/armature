@@ -79,6 +79,13 @@ SEED_NODES = {
 #: that cannot fail is not a check. Any future conditioning node that sizes a latent belongs
 #: here the day it is first used.
 #:
+#: ⚠ **Adding a class to this table fixes one graph; it does not fix the shape of that
+#: failure.** The next unrecorded latent-sizing node would disarm Gate L exactly the same
+#: way, and this table can only ever be complete about nodes somebody already met. So the
+#: gate no longer trusts the table to be complete: `verify` distinguishes "nothing was
+#: checkable" from "everything checked out" and raises on the first (E08 closing ruling's
+#: commission, shipped E10 2026-08-12).
+#:
 #: Widget order for `WanAnimateToVideo` is read from its `define_schema` declaration order,
 #: keeping only the non-link inputs: width, height, length, batch_size,
 #: continue_motion_max_frames, video_frame_offset.
@@ -197,7 +204,14 @@ def seeds(graph):
 
 
 def latents(graph):
-    """Every video latent's width, height and frame count."""
+    """Every video latent's width, height and frame count.
+
+    Each record carries `checkable`: whether all three numbers are literals this graph
+    pins. A dimension arriving over a link, or missing from a short `widgets_values`, is
+    `None` — and a `None` is not a small frame, it is **no answer**. `verify` counts the
+    checkable ones, because a list whose entries answer nothing is the shape the E08 defect
+    wore.
+    """
     api = is_api_format(graph)
     out = []
     for where, n in _iter_nodes(graph):
@@ -215,8 +229,26 @@ def latents(graph):
             for key in ("width", "height", "length"):
                 i = spec[key]
                 rec[key] = wv[i] if len(wv) > i else None
+        rec["checkable"] = None not in (rec["width"], rec["height"], rec["length"])
         out.append(rec)
     return out
+
+
+def _frame_triple(frame):
+    """`(width, height, length)` from a tuple or a mapping, or raise saying what arrived."""
+    if isinstance(frame, dict):
+        try:
+            return int(frame["width"]), int(frame["height"]), int(frame["length"])
+        except KeyError as exc:
+            raise RouteGate(
+                f"the supplied frame is missing {exc.args[0]!r}; Gate L needs all three of "
+                f"width, height and length, and two out of three proves nothing",
+                {"supplied": frame}) from None
+    if isinstance(frame, (list, tuple)) and len(frame) == 3:
+        return int(frame[0]), int(frame[1]), int(frame[2])
+    raise RouteGate(
+        f"the supplied frame {frame!r} is not (width, height, length) or a mapping "
+        f"carrying those three keys", {"supplied": frame})
 
 
 def frame_legality(width, height, length, family="wan"):
@@ -301,20 +333,42 @@ def gate_s_registration(graph, registered):
     return ev
 
 
-def verify(graph, *, family="wan", require_pinned_seeds=True, allow=()):
+def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=None):
     """The three questions at once. Raises on anything the record already ruled against.
 
     `allow` names component keys the caller has an explicit ruling for — it is not a skip
     flag, because a component named here still appears in the returned evidence with its
     verdict, so the report cannot omit that it ran.
+
+    `frame` is `(width, height, length)`, or a mapping carrying those keys, for the caller
+    that KNOWS the shape it is about to generate — the builder of the graph. It is not a
+    skip flag either: a supplied frame is checked against the generator's rules exactly as
+    a graph-read one is, it is labelled `supplied` in the evidence, and where the graph
+    also pins a checkable latent the two must agree or the gate raises.
+
+    **Why a caller may need to supply it — the E08 catch, 2026-08-12.** Gate L examined
+    ZERO latents on the first Animate graph and reported it legal: `WanAnimateToVideo`
+    emits its own latent, so no `Empty*LatentVideo` node existed and `latents()` came back
+    empty. Adding that class to the table fixed THAT graph. It did not fix the shape of the
+    failure, which is that "no latent was found" and "every latent found is legal" were the
+    same verdict. They are now different: with nothing checkable and nothing supplied the
+    frame-legality clause is **INDETERMINATE — unproven — and raises**, because a check
+    that cannot fail is not a check.
     """
     comp = components(graph)
     sd = seeds(graph)
     lat = latents(graph)
+    legality = [dict(frame_legality(l["width"], l["height"], l["length"], family),
+                     source="graph", node_id=l["node_id"], node_class=l["class"])
+                for l in lat if l["checkable"]]
+    supplied = None
+    if frame is not None:
+        w, h, n = _frame_triple(frame)
+        supplied = dict(frame_legality(w, h, n, family), source="supplied")
+        legality.append(supplied)
     ev = {"gate": "ROUTE", "components": comp, "seeds": sd, "latents": lat,
-          "frame_legality": [frame_legality(l["width"], l["height"], l["length"], family)
-                             for l in lat
-                             if None not in (l["width"], l["height"], l["length"])]}
+          "latents_checkable": sum(1 for l in lat if l["checkable"]),
+          "frame_legality": legality}
 
     bad = [c for c in comp
            if c["ruling"]["verdict"] in ("BANNED", "EXCLUDED")
@@ -343,8 +397,38 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=()):
         raise RouteGate(
             "Gate L: " + "; ".join("; ".join(f["problems"]) for f in illegal), ev)
 
+    # A supplied frame that disagrees with a frame the graph itself pins is not a small
+    # discrepancy to average over: one of the two is what will run, and the report would
+    # quote the other. Both are legal at this point, so nothing else in the chain looks.
+    if supplied is not None:
+        want = (supplied["width"], supplied["height"], supplied["length"])
+        clash = [f for f in ev["frame_legality"] if f["source"] == "graph"
+                 and (f["width"], f["height"], f["length"]) != want]
+        if clash:
+            ev["frame_legality_verdict"] = "CONTRADICTED"
+            raise RouteGate(
+                "Gate L: the caller supplied {}x{}x{} and the graph's {} node {} pins "
+                "{}x{}x{}. Both are legal, so nothing downstream would notice that the "
+                "number in the report is not the number that runs".format(
+                    *want, clash[0]["node_class"], clash[0]["node_id"],
+                    clash[0]["width"], clash[0]["height"], clash[0]["length"]), ev)
+
+    # · ANDON — the clause E08 found passing vacuously. "Nothing to check" and "everything
+    # checked out" must not be the same verdict.
+    if not ev["frame_legality"]:
+        ev["frame_legality_verdict"] = "INDETERMINATE"
+        raise RouteGate(
+            f"Gate L is INDETERMINATE on this graph and therefore UNPROVEN: none of its "
+            f"{len(lat)} latent-sizing node(s) pins width, height and length as literals, "
+            f"and the caller supplied no frame. Measured on E08, 2026-08-12: a graph in "
+            f"this state was reported LEGAL having examined zero frames. Pass "
+            f"frame=(width, height, length) if you know the shape being generated — the "
+            f"gate then checks it against the generator's rules like any other", ev)
+
+    ev["frame_legality_verdict"] = "PROVEN"
     ev["verdict"] = (f"{len(comp)} weight file(s), {len(sd)} seed(s) all pinned, "
-                     f"{len(lat)} latent(s) all generator-legal")
+                     f"{ev['latents_checkable']} of {len(lat)} latent(s) checkable, "
+                     f"{len(ev['frame_legality'])} frame(s) checked and generator-legal")
     return ev
 
 
