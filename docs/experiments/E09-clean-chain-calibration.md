@@ -190,7 +190,12 @@ despite the prompt's full-body clauses. Stage B2 resumes:
    owns outright) — advisor fetch and ruling before use.
 
 Bound: ≤ 2 further generations this resumption (the route bills GPU-hours; the probe
-billed 0 credits — both meters reported). Purpose on the record, ruled by the Director
+billed 0 credits — both meters reported).
+
+**A4 — 2026-08-12 (advisor, at the A3 ruling):** forward amendment to the donor acceptance
+gate — from the next experiment on, the motion clause requires **mean ≥ 2.0/255 AND median
+≥ 2.0/255** consecutive-frame difference. A3's donor passed the clause as written at its
+time (mean 2.0176, median 1.9355 — recorded); no retroactive judgement. Purpose on the record, ruled by the Director
 2026-08-12: **every pipeline licence-friendly end to end, so the studio's art can be
 published** — which is why the donor-sourcing order runs owned-generation first, fetched
 licence second, Director-owned footage always available.

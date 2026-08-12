@@ -102,3 +102,48 @@ waits on B2's report. **No quality verdict is made here** — B1's purpose was m
 and the chain's worth-a-shot call belongs to the Director at B2's sheet on the true
 population; if his eye rules the B1 sheet's third column disqualifying before B2 runs, that
 ruling overrides this one's sequencing.
+
+---
+
+# A3 ruling — the resumption ruled, 2026-08-12
+
+**Verified by this seat before ruling:** the suite (**480 passed / 35 skipped**, own run);
+tip `3b08e81`; the addendum's artifact table, compensators and §30 read; **the Gate 0 sheet
+examined at full size** — the correspondence between the source's poses and the rig's is
+legible row by row across all five sampled frames, ankles observed (heel visibility 0.94),
+and the earlier contact-sheet misread is noted as caught by the executor's own
+measure-then-look discipline.
+
+**R10 — Gate DONOR's pass stands as written.** The clause was defined on the mean before
+the generation ran; it passed on the mean (2.0176 against 2.0); a gate is never retuned
+while looking at the result it judged. The thinness is permanent record — median 1.9355,
+34 of 64 pairs below threshold — and amendment A4 raises the bar **forward**: future donors
+clear mean AND median. Never backward.
+
+**R11 — E09 closes as the baseline on the Director's eye.** The baseline's subject is the
+chain, not the choreography: the solver exact (Stage A), the floor decomposed (Stage B1),
+and a true-population donor lifted onto the rig with every gate green and both meters
+reported (A3). The closing act is his — the sheet and both review clips go to him; the
+merge of `E09-run` follows his look.
+
+**R12 — the suspects' resolution is adopted with its honesty intact.** `euler`/`simple`
+turned out documented (Wan's README designates docs.comfy.org; the day-0 workflow there
+names the pair) — sourced, no longer suspect. The expert split was the real difference:
+documented 10/20 (50 %) high-noise against the probe's derived 26/40 (65 %), with shift and
+cfg moving together as a schedule. **Which change restored motion — settings or prompt — is
+unattributed by design** (H5c pre-registered it); if attribution ever matters it costs one
+generation, and it is not spent now.
+
+**R13 — instruments adopted:** `donor_gate.py`, `gate_saved_graph.py` (whose round trip
+halted on a hole in its own widget table — fixed, not skipped), `fetch_t2v_run.py` (ordered
+download + the order discriminator). The citation check falsifying its own author's claim
+about the two template revisions' negative prompts is the pattern working as intended.
+`make_lift_sheet`'s camera-identity claim is an instrument-ledger defect: the fix rides the
+next commit that touches the tool, with a test shaped to catch the wrong claim.
+
+**R14 — the map takes the row, and the next variable gets its name.**
+`Comfy-Org/workflow_templates` lands as a documentation-tier MIT row (fetched this ruling —
+numeric settings cited, nothing loaded, nothing copied). The aspect-ratio / figure-size
+lever is named the **first variable experiment of the posture era**: one variable — the
+frame — against this baseline, with hands at 9.3 px and no finger structure as the numbers
+it exists to move.
