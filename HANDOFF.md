@@ -106,13 +106,16 @@ closing the item means matching the arc's recorded prompt_ids to job-level recor
 arc's "zero credits" stands as what was observed at submission; the drawdown question
 is now open, with data) · the movement-library sourcing survey (**requested 2026-08-12** — study-swarm
 dispatched on the E09-ruled frame; synthesis lands in
-`docs/research-grounding-movement-library.md`) · the official Wan **video** prompt guide remains
-unretrieved in original form (DingTalk, JS-rendered; attempted-and-recorded —
-**2026-08-12:** a secondary web rendition, page-dated 2025-03-19, was retrieved by the
-Director and distilled into `docs/wan21-prompt-guide-notes.md`; **later the same day**
-the Director retrieved the official **Wan 2.6 image** guide as a DingTalk Markdown
-export — distilled into `docs/wan26-image-guide-notes.md` — proving an export path into
-that document family; the video sibling via the same path closes this item) · E11's uploads and
+`docs/research-grounding-movement-library.md`) · the official Wan **video** prompt guide: **CLOSED 2026-08-12** — retrieved by the
+Director as an official-docs translation and distilled into
+`docs/wan-video-prompt-guide-notes.md` (primary video-prompting reference; the raw
+DingTalk original stays optional via the Director's proven export path). Same-day
+companions: the 2.1 secondary rendition (`docs/wan21-prompt-guide-notes.md`, kept for
+its dimension vocabulary) and the official **Wan 2.6 image** guide as a DingTalk
+export (`docs/wan26-image-guide-notes.md`). The notes flag the guide's 2.6+
+reference-video mode (`@`-tag identity lock) as a new-conditioning-tier consult
+trigger, and hold its stationary-camera-default claim against E11 w1's measured
+push-in · E11's uploads and
 saved cloud workflows are live server-side with their deletes listed in the reports.
 
 ## 7. The consult channel

@@ -1,5 +1,9 @@
 # Wan 2.1 prompt guide — distilled notes (secondary rendition)
 
+> **Superseded as the primary video-prompting reference, 2026-08-12 (same day):** the
+> official-docs translation landed in `docs/wan-video-prompt-guide-notes.md`. This
+> rendition stays for its fuller camera/atmosphere/style vocabulary.
+
 **Provenance.** Retrieved by the Director on 2026-08-12 as a local text export
 (`Wan 2.1 Prompt Guide.txt`) of a web rendition titled "Wan 2.1 Prompt Guide (Official
 Reference)" — byline "Wan AI Team", page-dated 2025-03-19, self-linking to a `wan2-2`
