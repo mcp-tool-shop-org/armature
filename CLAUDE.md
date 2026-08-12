@@ -269,6 +269,15 @@ assets    consumed from E:\AI\training\... and E:\AI\facet\... — READ ONLY, ne
   no length or seed slot exposed. Every graph this pipeline submits is built in-repo and
   passes **Gate ROUTE** (`tools/armature_core/route_gates.py`, E09 — it walks subgraph
   blueprints) before Gates S and L arm.
+- **A licence row is not a wiring claim.** Measured 2026-08-12, one generation of pure
+  noise: a mapped-Apache camera model and a graph that never loaded it — every gate green,
+  the embedding fed to a base with no channel for it. Every spec that adds a conditioning
+  node names the **exact weight files its graph loads** as a marked premise, and **every
+  amendment that dispatches work carries a premise table** — composed waves doubly. Gate
+  PAIR (route_gates: conditioning class → required weight family) is the mechanical form.
+- **Binding documents are read from `main` at dispatch time, never from the worktree's
+  checkout** — a branch cut before a ruling carries yesterday's licence map (measured the
+  same day: a "missing" row that had been on main for hours).
 - **Authored image inputs carry alpha, never a baked void** (the Director's ruling,
   2026-08-12, after the E11 probe's grey studio bled through frame 0): every reference or
   start-frame render of the character is authored **RGBA with a real alpha channel**; the
