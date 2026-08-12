@@ -26,6 +26,17 @@ import os
 from PIL import Image
 
 
+def clip_name(fps, source_fps):
+    """`review_<rate>x_<fps>fps.webp`, from the actual numbers.
+
+    The name was the literal `review_0.5x_8fps.webp` whatever the flags said, which was
+    true only while every source ran at 16 fps. On a 20 fps source the same file is 0.40x
+    at 8 fps and the filename asserted otherwise — a label on an artifact the Director
+    opens is evidence, and it may not be a placeholder. Corrected E10, 2026-08-12.
+    """
+    return f"review_{fps / float(source_fps):.2f}x_{fps}fps.webp"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", required=True)
@@ -45,7 +56,7 @@ def main():
         raise SystemExit(f"no frames in {a.frames}")
     ims = [Image.open(os.path.join(a.frames, n)).convert("RGB") for n in names]
 
-    clip = os.path.join(a.out, "review_0.5x_8fps.webp")
+    clip = os.path.join(a.out, clip_name(a.fps, a.source_fps))
     ims[0].save(clip, save_all=True, append_images=ims[1:],
                 duration=int(round(1000.0 / a.fps)), loop=0, lossless=True, quality=100)
 
