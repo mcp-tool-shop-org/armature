@@ -129,14 +129,19 @@ saved cloud workflows are live server-side with their deletes listed in the repo
 `docs/comfy-consult-{6,7}*` are the format precedents. **Calibration is mandatory every
 round**: verify the anchor plus one cheap claim against the live catalog before trusting
 anything — `get_node` existence checks are non-negotiable (one phantom node class caught at
-#6; five-for-five verified at #7). Licences: documents, never verdicts. **2026-08-12: brief #8 commissioned**
-(`docs/comfy-consult-8-brief.md`) — the new-conditioning-tier trigger fired: Wan 2.6/2.7
-reference-to-video partner nodes measured live in-catalog (2.7 takes reference images;
-`characterN` identifiers are the `@`-tag's API form), with Uni3C-for-Wan and native
-Animate2 surfacing in the runtime changelog. `docs.comfy.org/changelog` is adopted as a
-standing field-check source on the Director's pointer, same day. The prior standing
-triggers (the FLF beat wave, video-native scene-plate generation, further new
-conditioning tiers) remain.
+#6; five-for-five verified at #7). Licences: documents, never verdicts. **2026-08-12: brief #8 commissioned, ANSWERED and
+RULED the same day** (`docs/comfy-consult-8-brief.md` → `docs/comfy-consult-8.md`).
+Outcome: the r2v tier is **spatially opaque, measured on two instruments** — no spatial
+input, no path to local control; its parked candidate role is a composed route whose
+references are themselves authored. Uni3C pins to
+`Wan21_Uni3C_controlnet_fp16.safetensors` (documents unfetched — NO until then);
+Animate2's full spatial contract is banked for the driven route's unpark; terms and
+price for all of 2.6/2.7 remain unfetched and OURS at adoption. Channel convention
+earned: dynamic-combo field truth comes from our `get_node`; the agent's surface
+under-renders those nodes. `docs.comfy.org/changelog` is adopted as a standing
+field-check source on the Director's pointer, same day. The prior standing triggers
+(the FLF beat wave, video-native scene-plate generation, further new conditioning
+tiers) remain.
 
 ## 8. Seat calibration table — this seat's errors, for weighing everything above
 
