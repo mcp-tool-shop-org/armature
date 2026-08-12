@@ -241,7 +241,7 @@ means `E:/AI/...`.
 
 ```
 blender   "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
-python    E:\AI-Models\trellis2-env\Scripts\python.exe   (until this repo has its own venv)
+python    E:\AI\armature\.venv\Scripts\python.exe        (the repo venv; the suite runs on it)
 assets    consumed from E:\AI\training\... and E:\AI\facet\... — READ ONLY, never edited
 ```
 

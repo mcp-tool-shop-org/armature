@@ -38,6 +38,13 @@ earned the hardest way).
 - Worktrees hold outputs, hash-pinned in reports: `armature-E07/-E08/-E08b/-E09/-E10/-E11`.
   Merged branches are retired from origin; `E08-run` is **subsumed** (its bank reached main
   via the E09 merge) and stays local-only, pinned by its worktree.
+  **Correction (2026-08-12, verified on the rig):** a seventh worktree exists —
+  `armature-S02` (`S02-run`, the rulings-index adoption; fully merged, worktree retained).
+  And the subsumption claim ran short at file level: six halted-first-route files (two
+  tools, four shot specs) existed only on `E08-run` — folded byte-faithful into
+  `tools/superseded/` (see its `README-E08-first-route.md`) before the branch ref was
+  retired from origin the same day, on the Director's housekeeping word. Undo:
+  `git push origin E08-run` (the local branch and worktree remain).
 - **Zero credits spent across the whole E08–E11 arc** (GPU-hour billing; bucket
   reconciliation pending invoice-window resolution — §6 admin).
 
@@ -85,11 +92,16 @@ w1 and w3) · wood grain · ear-rim notches · skeleton v2 fingers (needs the ha
 first).
 **Instruments:** `make_lift_sheet` camera-claim fix · `make_gate0_sheet` E02 literals ·
 a foot instrument valid on hip-origin motion · the axis-offset second-fixture condition.
-**Admin:** GPU-bucket reconciliation when invoice windows close · the movement-library
-sourcing survey (on request; two admission paths ruled — fetched terms, or the owned
-chain) · the official Wan prompt guide remains unretrieved (DingTalk, JS-rendered;
-attempted-and-recorded) · E11's uploads and saved cloud workflows are live server-side
-with their deletes listed in the reports.
+**Admin:** GPU-bucket reconciliation when invoice windows close (**checked 2026-08-12:**
+the invoice-backed usage report posts no August buckets yet — every line item ends
+2026-08-01 — so the arc's zero-credit claim stands unfalsified, unconfirmed until August
+posts) · the movement-library sourcing survey (**requested 2026-08-12** — study-swarm
+dispatched on the E09-ruled frame; synthesis lands in
+`docs/research-grounding-movement-library.md`) · the official Wan prompt guide remains
+unretrieved in original form (DingTalk, JS-rendered; attempted-and-recorded —
+**2026-08-12:** a secondary web rendition, page-dated 2025-03-19, was retrieved by the
+Director and distilled into `docs/wan21-prompt-guide-notes.md`) · E11's uploads and
+saved cloud workflows are live server-side with their deletes listed in the reports.
 
 ## 7. The consult channel
 
