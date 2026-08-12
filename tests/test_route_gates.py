@@ -124,6 +124,105 @@ def test_an_unknown_generator_family_raises_rather_than_assuming_wan():
         RG.frame_legality(832, 480, 65, family="a-model-nobody-recorded")
 
 
+# ------------------------------------------------------------------ API format
+
+def api_graph(seed=4242, w=832, h=480, n=65, extra=None):
+    """The shape we hand the cloud: node-id keyed, class_type + inputs, links as [id, slot]."""
+    g = {
+        "1": {"class_type": "UNETLoader",
+              "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+                         "weight_dtype": "default"}},
+        "2": {"class_type": "EmptyHunyuanLatentVideo",
+              "inputs": {"width": w, "height": h, "length": n, "batch_size": 1}},
+        "3": {"class_type": "KSamplerAdvanced",
+              "inputs": {"add_noise": "enable", "noise_seed": seed, "steps": 40,
+                         "cfg": 4.0, "sampler_name": "euler", "scheduler": "simple",
+                         "start_at_step": 0, "end_at_step": 25,
+                         "return_with_leftover_noise": "enable",
+                         "model": ["1", 0], "positive": ["9", 0], "negative": ["9", 0],
+                         "latent_image": ["2", 0]}},
+        "4": {"class_type": "KSamplerAdvanced",
+              "inputs": {"add_noise": "disable", "noise_seed": 0, "steps": 40,
+                         "cfg": 3.0, "sampler_name": "euler", "scheduler": "simple",
+                         "start_at_step": 25, "end_at_step": 10000,
+                         "return_with_leftover_noise": "disable",
+                         "model": ["1", 0], "positive": ["9", 0], "negative": ["9", 0],
+                         "latent_image": ["3", 0]}},
+    }
+    if extra:
+        g.update(extra)
+    return g
+
+
+def test_api_format_is_detected_and_walked():
+    g = api_graph()
+    assert RG.is_api_format(g) is True
+    ev = RG.verify(g)
+    assert [l["length"] for l in ev["latents"]] == [65]
+    assert ev["frame_legality"][0]["legal"] is True
+    assert {c["file"] for c in ev["components"]} == {
+        "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}
+
+
+def test_save_format_is_still_detected():
+    assert RG.is_api_format(graph(top=CLEAN_TOP)) is False
+
+
+def test_an_api_seed_arriving_over_a_link_is_not_pinned():
+    """API format has no `control_after_generate` widget, so the failure looks different:
+    a seed fed from another node could compute anything, and the run would not be the run
+    the committed list registered."""
+    g = api_graph()
+    g["3"]["inputs"]["noise_seed"] = ["7", 0]
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert "Gate S" in str(exc.value)
+
+
+def test_an_excluded_lora_in_an_api_graph_is_caught_too():
+    g = api_graph(extra={"9": {"class_type": "LoraLoaderModelOnly", "inputs": {
+        "lora_name": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+        "strength_model": 1.0, "model": ["1", 0]}}})
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert "lightx2v" in str(exc.value)
+
+
+# ------------------------------------------------------------------ Gate S
+
+def test_gate_s_passes_when_the_live_seed_is_registered():
+    ev = RG.gate_s_registration(api_graph(seed=4242), [4242, 8484])
+    live = [s for s in ev["seeds"] if s["adds_noise"]]
+    assert len(live) == 1 and live[0]["seed"] == 4242
+
+
+def test_gate_s_refuses_an_unregistered_seed():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(api_graph(seed=999), [4242])
+    assert "does not pre-register" in str(exc.value)
+
+
+def test_gate_s_refuses_an_empty_registration():
+    """An experiment that pre-registered nothing may not vary its seed at all."""
+    with pytest.raises(RG.RouteGate):
+        RG.gate_s_registration(api_graph(), [])
+
+
+def test_gate_s_ignores_the_inert_seed_of_a_no_noise_sampler():
+    """The second expert runs add_noise=disable, so its seed draws no noise. Demanding it
+    be registered too would be a check that fires on a correct two-expert split."""
+    ev = RG.gate_s_registration(api_graph(seed=4242), [4242])
+    inert = [s for s in ev["seeds"] if not s["adds_noise"]]
+    assert len(inert) == 1 and inert[0]["seed"] == 0
+
+
+def test_gate_s_still_refuses_a_randomising_save_format_seed():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(
+            graph(top=[latent(3, 832, 480, 65), sampler(2, 4242, "randomize")]), [4242])
+    assert "not pinned" in str(exc.value)
+
+
 def test_the_gate_is_not_an_assert():
     import os
     src = open(os.path.join(TOOLS, "armature_core", "route_gates.py"),

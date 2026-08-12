@@ -83,14 +83,37 @@ class RouteGate(GateFailure):
     gate = "ROUTE"
 
 
+def is_api_format(graph):
+    """API format is node-id keyed with `class_type`; save format has a `nodes` array."""
+    if isinstance(graph.get("nodes"), list):
+        return False
+    return any(isinstance(v, dict) and "class_type" in v for v in graph.values())
+
+
 def _iter_nodes(graph):
-    """Every node in a save-format graph, INCLUDING the ones inside subgraph definitions.
+    """Every node in the graph, INCLUDING the ones inside subgraph definitions.
 
     The clause that matters. A served template can present four nodes at the top level and
     hide thirty inside a subgraph blueprint, and a check that walked only the top level
     would report a clean graph while the excluded LoRA sat two levels down. Measured on
     `video_wan2_2_14B_t2v`, 2026-08-11: 4 nodes visible, 30 hidden.
+
+    Yields `(where, node)` with the node normalised to `{id, type, widgets, inputs}`, so
+    the same three questions can be asked of a hand-built API graph and of a served
+    save-format one. **Both formats matter here**: we build in API format and the cloud is
+    handed a saved file, so the gate has to be able to read what we wrote AND what came
+    back.
     """
+    if is_api_format(graph):
+        for node_id, node in graph.items():
+            if not isinstance(node, dict) or "class_type" not in node:
+                continue
+            inputs = node.get("inputs") or {}
+            # A link is [node_id, slot]; anything else is a literal this graph pins.
+            widgets = [v for v in inputs.values() if not isinstance(v, list)]
+            yield ("api", {"id": node_id, "type": node["class_type"],
+                           "widgets_values": widgets, "inputs": inputs})
+        return
     for n in graph.get("nodes") or []:
         yield ("top", n)
     for d in (graph.get("definitions") or {}).get("subgraphs") or []:
@@ -119,34 +142,64 @@ def components(graph):
     return out
 
 
+#: The input names a seed lives under in API format, per node class.
+SEED_INPUTS = {"KSampler": "seed", "KSamplerAdvanced": "noise_seed"}
+
+
 def seeds(graph):
-    """Every seed in the graph and whether it is pinned or randomises."""
+    """Every seed in the graph and whether it is pinned.
+
+    **Pinned means something different in each format, and both meanings are the honest
+    one.** In save format the UI widget `control_after_generate` decides the next run's
+    seed, so `randomize` is not pinned however concrete the current number looks. In API
+    format that widget does not exist at all: a seed is pinned when it is a literal, and
+    unpinned when it arrives over a link from a node that could compute anything.
+    """
+    api = is_api_format(graph)
     out = []
     for where, n in _iter_nodes(graph):
-        spec = SEED_NODES.get(n.get("type"))
+        cls = n.get("type")
+        spec = SEED_NODES.get(cls)
         if not spec:
+            continue
+        if api:
+            key = SEED_INPUTS[cls]
+            value = (n.get("inputs") or {}).get(key)
+            literal = not isinstance(value, list)
+            out.append({"node_id": n.get("id"), "class": cls, "where": where,
+                        "seed": value if literal else None,
+                        "control_after_generate": None,
+                        "seed_is_literal": literal, "pinned": literal})
             continue
         wv = n.get("widgets_values") or []
         seed = wv[spec["seed"]] if len(wv) > spec["seed"] else None
         control = wv[spec["control"]] if len(wv) > spec["control"] else None
-        out.append({"node_id": n.get("id"), "class": n.get("type"), "where": where,
+        out.append({"node_id": n.get("id"), "class": cls, "where": where,
                     "seed": seed, "control_after_generate": control,
-                    "pinned": control == "fixed"})
+                    "seed_is_literal": True, "pinned": control == "fixed"})
     return out
 
 
 def latents(graph):
     """Every video latent's width, height and frame count."""
+    api = is_api_format(graph)
     out = []
     for where, n in _iter_nodes(graph):
         spec = LATENT_NODES.get(n.get("type"))
         if not spec:
             continue
-        wv = n.get("widgets_values") or []
-        out.append({"node_id": n.get("id"), "class": n.get("type"), "where": where,
-                    "width": wv[spec["width"]] if len(wv) > spec["width"] else None,
-                    "height": wv[spec["height"]] if len(wv) > spec["height"] else None,
-                    "length": wv[spec["length"]] if len(wv) > spec["length"] else None})
+        rec = {"node_id": n.get("id"), "class": n.get("type"), "where": where}
+        if api:
+            inp = n.get("inputs") or {}
+            for key in ("width", "height", "length"):
+                v = inp.get(key)
+                rec[key] = v if not isinstance(v, list) else None
+        else:
+            wv = n.get("widgets_values") or []
+            for key in ("width", "height", "length"):
+                i = spec[key]
+                rec[key] = wv[i] if len(wv) > i else None
+        out.append(rec)
     return out
 
 
@@ -178,6 +231,58 @@ def frame_legality(width, height, length, family="wan"):
     return {"gate": "L", "family": family, "width": width, "height": height,
             "length": length, "rules": rules, "problems": problems,
             "legal": not problems}
+
+
+def gate_s_registration(graph, registered):
+    """Gate S · ANDON — every seed about to run was pre-registered in a committed list.
+
+    E04's andon, and it guards a failure with no technical symptom at all: every other gate
+    passes on a seed-shopped run, and what is wrong is epistemic. A rule forbids; a list
+    removes the possibility, and git timestamps the list ahead of the artifacts it governs.
+
+    It binds in **both** directions. An unregistered seed is the obvious clause. A
+    registered list that the graph does not draw from is the second: a graph running some
+    other number while a tidy list sits in the repo is the same defect wearing a receipt.
+    """
+    found = seeds(graph)
+    reg = list(registered or [])
+    ev = {"gate": "S", "registered": reg, "seeds": found}
+    if not reg:
+        raise RouteGate(
+            "Gate S: no seed list was pre-registered, so no seed may be varied at all. "
+            "Commit the list before the first submission — that is what makes it a "
+            "registration rather than a note", ev)
+    loose = [s for s in found if not s["pinned"]]
+    if loose:
+        raise RouteGate(
+            "Gate S: " + ", ".join(
+                f"node {s['node_id']} ({s['class']}) is not pinned "
+                f"(control_after_generate={s['control_after_generate']!r}, "
+                f"literal={s['seed_is_literal']})" for s in loose), ev)
+    # add_noise="disable" samplers take no noise from their seed; theirs is inert and is
+    # reported rather than demanded, so a two-expert split does not need a second entry.
+    live = []
+    for s in found:
+        n = next((x for _, x in _iter_nodes(graph) if str(x.get("id")) == str(s["node_id"])),
+                 None)
+        adds = True
+        if n is not None:
+            inp = n.get("inputs") or {}
+            wv = n.get("widgets_values") or []
+            adds = (inp.get("add_noise", wv[0] if wv else "enable")) not in ("disable", False)
+        s["adds_noise"] = adds
+        if adds:
+            live.append(s)
+    unregistered = [s for s in live if s["seed"] not in reg]
+    if unregistered:
+        raise RouteGate(
+            "Gate S: " + ", ".join(
+                f"node {s['node_id']} would run seed {s['seed']}" for s in unregistered) +
+            f", which the committed list {reg} does not pre-register. A seed chosen after "
+            f"seeing a result turns a measurement into a selection of one", ev)
+    ev["verdict"] = (f"{len(live)} noise-bearing seed(s), all pinned and all drawn from "
+                     f"the committed list of {len(reg)}")
+    return ev
 
 
 def verify(graph, *, family="wan", require_pinned_seeds=True, allow=()):
