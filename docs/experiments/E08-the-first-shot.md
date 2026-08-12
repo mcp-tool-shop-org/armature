@@ -135,7 +135,8 @@ E09 baseline motion (`outputs/E09/b2-a3-lifted/performer_dance_ema.glb`, md5
 convention** — `human_visualization.py` at the sha banked in the E09 route2 evidence:
 zeroed-black canvas, the 20-entry OpenPose rainbow palette, the 18-point `limbSeq`
 including the five head keypoints (nose/eyes/ears markers derived from the head bone and
-skull geometry), `stickwidth = max(int(min(H,W)/200) − 1, 1)`, hands drawn separately
+skull geometry) *(corrected at use: the source defines 20 keypoints / 19 pairs — both toes
+included; closing ruling R2)*, `stickwidth = max(int(min(H,W)/200) − 1, 1)`, hands drawn separately
 (static mitten-hand sticks from the wrist bones — the rig has no fingers; recorded as a
 known degradation, G6). Tests: palette/topology/width assertions + golden frames. Frames at
 **832×480×65, 16 fps** (Gate L on the actual graph).

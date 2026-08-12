@@ -107,7 +107,11 @@ human_visualization.py` (Wan-Video/Wan2.2) — zeroed-black canvas; the 20-entry
 rainbow palette ([255,0,0], [255,85,0] … [100,100,0]); the classic 18-point `limbSeq`
 including five head keypoints (neck-nose, nose-eyes, eyes-ears: [2,1],[1,15],[15,17],
 [1,16],[16,18]); `stickwidth = max(int(min(H,W)/200) − 1, 1)`; hands drawn separately by
-`draw_handpose_new` (red joints, HSV-rainbow edges). The officially pinned detector variant
+`draw_handpose_new` (red joints, HSV-rainbow edges). **⚑ CORRECTED 2026-08-12 at E08 use:**
+transcription from the fetched source (pinned `29d4a35d`) measures the convention at
+**20 keypoints / 19 limb pairs — OpenPose-18 plus both toes**; this finding's "18-point"
+compression would have silently omitted the feet. The E08 commission transcribed from the
+source, not from this summary — the standing rule, vindicated. The officially pinned detector variant
 is ViTPose-H wholebody.** (File + repo LICENSE fetched 2026-08-11 — Apache-2.0, so reading
 and matching this source is licence-clean; convention detail deterministic-oracle-confirmed;
 detector pin agent-retrieved from `UserGuider.md`.)
