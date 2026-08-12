@@ -24,6 +24,7 @@ its own sake — it is the publishing plan.
 |---|---|---|---|---|
 | **Wan 2.1 T2V-14B** | Apache 2.0 | **YES** | [HF card](https://huggingface.co/Wan-AI/Wan2.1-T2V-14B) | "We claim no rights over the your generate contents" *(sic)* |
 | **Wan 2.2 T2V-A14B** | Apache 2.0 | **YES** | [HF card](https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B) | same output clause |
+| **Wan 2.2 I2V-A14B** | Apache 2.0 | **YES** | [HF card](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B), fetched 2026-08-12 (the E11 spec) | "claim no rights over the your generated contents" *(sic — the family's output clause)* |
 | **Wan 2.1 VACE-14B** | Apache 2.0 | **YES** | [HF card](https://huggingface.co/Wan-AI/Wan2.1-VACE-14B) | "licensed under the Apache 2.0 License" |
 | **Wan 2.1 Fun-14B-Control** | Apache 2.0 | **YES** | [HF card](https://huggingface.co/alibaba-pai/Wan2.1-Fun-14B-Control) | `apache-2.0` |
 | **Mochi 1 preview** | Apache 2.0 | **YES** | [HF card](https://huggingface.co/genmo/mochi-1-preview) | "releasing the model under a permissive Apache 2.0 license" |
