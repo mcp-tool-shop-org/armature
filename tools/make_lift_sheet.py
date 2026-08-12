@@ -14,8 +14,12 @@ are fixed by what has to be told apart:
   is not decoration. `visibility` numbers look perfectly healthy when a detector has locked
   onto a shadow or a floor seam, and nothing numeric in this chain would notice; the only
   instrument that catches it is a person looking at where the dots landed.
-* **lifted** — the performer's own rig performing the solved rotations, on the identical
-  camera, so the two columns are comparable without a mental transform.
+* **lifted** — the performer's own rig performing the solved rotations, rendered on
+  `render_performer`'s own camera. That camera is NOT necessarily the source's — E09
+  measured exactly that (a frontal generated donor beside the banked three-quarter
+  camera, az 225 / elev 6), so comparing the columns can take a mental rotation. The
+  sheet prints each camera when told (`--source-camera`, `--lifted-camera`) and
+  `NOT RECORDED` when not; it never claims the cameras match.
 
 **The tiles are cropped, and the crop is measured rather than composed.** The figure covers
 about 2% of a 1920x1080 frame, so a full-frame contact sheet would show a thumbnail of a
@@ -41,6 +45,7 @@ LABEL_H = 20
 BG = (18, 18, 20)
 FG = (235, 235, 235)
 DIM = (140, 140, 150)
+MISSING = "NOT RECORDED"
 
 #: The BlazePose skeleton, for drawing only. Not a convention any model consumes — the
 #: driving-signal convention is a separate thing entirely and lives in `armature_core`.
@@ -57,6 +62,29 @@ def _rgb(path):
         flat.paste(im, mask=im.split()[3])
         return flat
     return im.convert("RGB")
+
+
+def default_labels(full_size):
+    """Column headings derived from the frames actually loaded — never a baked size.
+
+    The first heading used to read "source render 1920x1080" as a literal; pointed at an
+    832x480 generated clip it labelled frames with a resolution they do not have.
+    """
+    w, h = full_size
+    return [f"source {w}x{h}",
+            "what the detector saw (33 landmarks)",
+            "the rig performing the solved lift"]
+
+
+def camera_note(source_camera=None, lifted_camera=None):
+    """The sheet's camera line. Identity is never claimed; an unknown camera says so.
+
+    E09 §26: this tool claimed the lifted column was "on the identical camera" while the
+    runs it served compared a frontal donor against the banked az-225 render. The honest
+    line carries what was passed in, and NOT RECORDED for what was not.
+    """
+    return (f"cameras: source {source_camera or MISSING} | "
+            f"lifted {lifted_camera or MISSING}")
 
 
 def subject_box(frame_paths, empty_plate, pad=0.10):
@@ -124,6 +152,12 @@ def main():
                          "instrument on trial choose what the Director gets to see.")
     ap.add_argument("--labels", default=None,
                     help="three comma-separated column headings")
+    ap.add_argument("--source-camera", default=None,
+                    help="the source clip's camera, as its own recipe records it; "
+                         "printed on the sheet and in the sidecar. Absent = NOT RECORDED.")
+    ap.add_argument("--lifted-camera", default=None,
+                    help="the render_performer camera behind the lifted column; "
+                         "printed on the sheet and in the sidecar. Absent = NOT RECORDED.")
     a = ap.parse_args()
 
     idx = [int(v) for v in a.frames.split(",") if v.strip() != ""]
@@ -173,9 +207,7 @@ def main():
     H = MARGIN + LABEL_H + len(rows) * (a.tile_h + LABEL_H + MARGIN)
     sheet = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(sheet)
-    labels = (a.labels.split(",") if a.labels else
-              ["source render 1920x1080", "what the detector saw (33 landmarks)",
-               "the rig performing the solved lift"])
+    labels = a.labels.split(",") if a.labels else default_labels(full_size)
     for c, name in enumerate(labels[:3]):
         d.text((xs[c], 4), name.strip(), fill=FG)
 
@@ -192,12 +224,16 @@ def main():
             if a.source_uncropped else
             f"crop x{box_s[0]}-{box_s[2]} y{box_s[1]}-{box_s[3]} — union of subject pixels "
             f"vs the empty plate")
-    d.text((MARGIN, H - LABEL_H + 2), note + "; full frames on disk uncropped", fill=DIM)
+    d.text((MARGIN, H - LABEL_H + 2),
+           note + "; " + camera_note(a.source_camera, a.lifted_camera)
+           + "; full frames on disk uncropped", fill=DIM)
     sheet.save(a.out)
 
     with open(os.path.splitext(a.out)[0] + ".json", "w", encoding="utf-8") as fh:
         json.dump({"tool": "make_lift_sheet", "frames": idx,
                    "crop_box_source": list(box_s), "crop_box_lifted": list(box_l),
+                   "source_camera": a.source_camera or MISSING,
+                   "lifted_camera": a.lifted_camera or MISSING,
                    "source": os.path.abspath(a.source),
                    "lifted": os.path.abspath(a.lifted),
                    "detection": os.path.abspath(a.detection),
