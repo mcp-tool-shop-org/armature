@@ -160,6 +160,163 @@ CAMERA_NODES = {
 #: Widget values that name a weight file. Anything ending in one of these is a component.
 WEIGHT_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".task")
 
+# =======================================================================================
+# GATE PAIR — does the model this graph loads have a channel for the conditioning wired
+# at it? Commissioned by the E11 wave-2 ruling (R3), 2026-08-12, and paid for by one
+# generation of pure noise.
+#
+# **What happened, because the gate exists to stop it happening again.** Wave 2 wired
+# `WanCameraImageToVideo` + `WanCameraEmbedding` — both core, both correctly schema-checked
+# via `get_node` before building — over the plain Wan 2.2 I2V experts. The camera tier is a
+# SEPARATE set of weights (`wan2.2_fun_camera_*`, a derivative of Wan2.2-I2V-A14B trained
+# for camera synthesis). The base has no channel for a camera embedding. Every check in this
+# file went green: the licence clause found no banned weights, Gate S found every seed
+# pinned, Gate L proved 832x480x65, the camera/frame andon found the trajectory solved for
+# the generated frame, the saved-file round trip compared 51 values and 23 links. The job
+# succeeded. The frames contained no subject after f1.
+#
+# The suite checked everything about the graph except **whether the model could receive what
+# was wired at it**, and no amount of care inside the other clauses would ever have caught
+# it: they are all questions about the graph's internal consistency, and this graph was
+# internally consistent. The missing question is about the relationship between two things
+# each of which was individually correct.
+#
+# ⚠ **A licence row is not a wiring claim** (now also a CLAUDE.md law). The wave-2 dispatch
+# said "weights mapped Apache" and that was TRUE — of weights the graph never loaded.
+
+#: Weight-file substrings that identify a model family, lower-cased. A file may match more
+#: than one and every match is recorded; the gate asks whether the REQUIRED family is among
+#: those present, never whether it is the only one.
+WEIGHT_FAMILIES = {
+    "fun_camera": ("fun_camera", "fun-camera", "control_camera", "control-camera"),
+    "fun_control": ("fun_control", "fun-control"),
+    "vace": ("vace",),
+    "animate": ("animate",),
+    "phantom": ("phantom",),
+    "i2v": ("i2v",),
+    "t2v": ("t2v",),
+}
+
+#: Conditioning class -> the weight family the loaded model MUST belong to.
+#:
+#: `WanFirstLastFrameToVideo` pairs with `i2v` on the same grounds as `WanImageToVideo`: it
+#: is the I2V conditioning shape one socket wider. It is entered here unused, deliberately —
+#: the cost of a row is nothing and the cost of its absence is measured above.
+CONDITIONING_WEIGHT_FAMILY = {
+    "WanCameraImageToVideo": "fun_camera",
+    "WanAnimateToVideo": "animate",
+    "WanVaceToVideo": "vace",
+    "Wan22FunControlToVideo": "fun_control",
+    "WanFunControlToVideo": "fun_control",
+    "WanPhantomSubjectToVideo": "phantom",
+    "WanImageToVideo": "i2v",
+    "WanFirstLastFrameToVideo": "i2v",
+}
+
+#: Conditioning classes that pair with NO diffusion-model family, recorded explicitly rather
+#: than by omission. ControlNet appliers carry their own weights, which the licence clause
+#: already populates; they attach to a base rather than requiring a variant of it.
+#:
+#: The two tables are exhaustive TOGETHER: `pairing` raises on a conditioning class it finds
+#: in neither, so the next new class announces itself instead of slipping through. That is
+#: the `gate_saved_graph` fail-closed pattern, which stopped this same wave twice.
+CONDITIONING_FAMILY_EXEMPT = {
+    "ControlNetApply", "ControlNetApplyAdvanced", "ControlNetApplySD3",
+    "ACN_AdvancedControlNetApply",
+}
+
+#: Node classes that load the DIFFUSION MODEL — the thing that either has the channel or
+#: does not. Deliberately not every loader: a VAE or a text encoder says nothing about
+#: whether the denoiser was trained on camera conditions, and counting `wan_2.1_vae` or
+#: `umt5_xxl` as evidence of a family would make this gate answer the wrong question.
+MODEL_LOADER_CLASSES = ("UNETLoader", "CheckpointLoaderSimple", "CheckpointLoader",
+                        "UnetLoaderGGUF", "DiffusersLoader")
+
+
+class PairGate(GateFailure):
+    """A conditioning node was wired at a model with no channel for it."""
+
+    gate = "PAIR"
+
+
+def families_of(filename):
+    """Every family a weight filename matches, lower-cased substring test."""
+    low = str(filename).lower()
+    return sorted(fam for fam, pats in WEIGHT_FAMILIES.items()
+                  if any(p in low for p in pats))
+
+
+def model_weights(graph):
+    """Every DIFFUSION-model weight file the graph loads, with the families it matches."""
+    out = []
+    for where, n in _iter_nodes(graph):
+        if n.get("type") not in MODEL_LOADER_CLASSES:
+            continue
+        for v in (n.get("widgets_values") or []):
+            if isinstance(v, str) and v.lower().endswith(WEIGHT_SUFFIXES):
+                out.append({"file": v, "node_id": n.get("id"), "class": n.get("type"),
+                            "where": where, "families": families_of(v)})
+    return out
+
+
+def pairing(graph):
+    """Gate PAIR · ANDON — every conditioning class is paired with a model that can take it.
+
+    Raises when a graph wires a conditioning class whose required weight family is absent
+    from the models it loads. Also raises, rather than passing quietly, when it cannot tell:
+    a conditioning class it has never met, or a graph that wires one and loads no diffusion
+    model this gate can read. "Nothing to check" and "everything checked out" are different
+    verdicts here for the same reason they are in `verify`.
+    """
+    loaded = model_weights(graph)
+    present = sorted({fam for w in loaded for fam in w["families"]})
+    cond = [(str(n.get("id")), n.get("type")) for _, n in _iter_nodes(graph)
+            if n.get("type") in CONDITIONING_WEIGHT_FAMILY
+            or n.get("type") in CONDITIONING_FAMILY_EXEMPT]
+
+    ev = {"gate": "PAIR", "model_weights": loaded, "families_present": present,
+          "conditioning_nodes": [{"node_id": i, "class": c,
+                                  "requires": CONDITIONING_WEIGHT_FAMILY.get(c)}
+                                 for i, c in cond]}
+
+    unknown = sorted({n.get("type") for _, n in _iter_nodes(graph)
+                      if isinstance(n.get("type"), str)
+                      and n["type"].startswith("Wan") and n["type"].endswith("ToVideo")
+                      and n["type"] not in CONDITIONING_WEIGHT_FAMILY
+                      and n["type"] not in CONDITIONING_FAMILY_EXEMPT})
+    if unknown:
+        ev["verdict"] = "INDETERMINATE"
+        raise PairGate(
+            f"conditioning class(es) {', '.join(unknown)} are in neither "
+            f"CONDITIONING_WEIGHT_FAMILY nor CONDITIONING_FAMILY_EXEMPT, so this gate "
+            f"cannot say whether the loaded model can receive them. Add a row rather than "
+            f"letting a new class through — the class this gate was built for passed every "
+            f"other check in this file", ev)
+
+    required = [(i, c, CONDITIONING_WEIGHT_FAMILY[c]) for i, c in cond
+                if c in CONDITIONING_WEIGHT_FAMILY]
+    if required and not loaded:
+        ev["verdict"] = "INDETERMINATE"
+        raise PairGate(
+            f"the graph wires {len(required)} conditioning node(s) but loads no diffusion "
+            f"model this gate can read ({', '.join(MODEL_LOADER_CLASSES)}), so the pairing "
+            f"is UNPROVEN. A check that cannot fail is not a check", ev)
+
+    missing = [(i, c, fam) for i, c, fam in required if fam not in present]
+    if missing:
+        ev["verdict"] = "CONTRADICTED"
+        raise PairGate(
+            "; ".join(
+                f"node {i} is {c}, which requires a {fam!r} model, but the graph loads "
+                f"{', '.join(w['file'] for w in loaded) or 'nothing'} "
+                f"(families present: {present or 'none'})" for i, c, fam in missing) +
+            ". Measured 2026-08-12: this exact pairing produced 65 frames with no subject "
+            "after the first, and every other gate in this file passed on it", ev)
+
+    ev["verdict"] = (f"{len(required)} conditioning node(s) paired against "
+                     f"{len(loaded)} model file(s); families present {present}")
+    return ev
+
 
 class RouteGate(GateFailure):
     """A graph was about to run that the repo's own record says it must not."""
@@ -525,6 +682,12 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                 for c in bad) +
             ". The licence map's ruling is that presence is presence — a bypassed node "
             "still counts, and these are not even bypassed", ev)
+
+    # · ANDON — Gate PAIR. Placed after the licence clause (a banned weight stays the
+    # headline) and before everything else, because every clause below is a question about
+    # the graph's internal consistency and this one is the only question about whether the
+    # model can receive what the graph wires at it. Wave 2 was internally consistent.
+    ev["pairing"] = pairing(graph)
 
     if require_pinned_seeds:
         loose = [s for s in sd if not s["pinned"]]

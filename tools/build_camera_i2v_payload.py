@@ -1,15 +1,35 @@
 #!/usr/bin/env python
-r"""build_camera_i2v_payload — E11 wave 2's camera-held graph, built in this repo.
+r"""build_camera_i2v_payload — E11's camera-held graph, built in this repo.
 
     python tools\build_camera_i2v_payload.py --uploads=<uploads.json> --out=<dir>
            --negative-source=<wan22_shared_config.py> --seeds-registry=specs\E11-seeds.json
-           --w1-record=<E11-probe-payload-record.json> [--seed=2026081232]
+           --w1-record=<E11-probe-payload-record.json> [--seed=2026081233]
 
-Wave 2 of the no-control route. Two levers move together, and the spec says so plainly: the
+The camera-held route. Two levers move together and the record says so throughout: the
 camera moves from the prompt to a **camera embedding**, and the prompt's centre of gravity
 moves from the bar to the **performance**. Attribution between the two is NOT claimed by
 this build or by the report it feeds; the wave-1 probe is the baseline and the target is the
 shot.
+
+--------------------------------------------------------------------------------
+⚠ THIS TOOL BUILT WAVE 2, WHICH PRODUCED NOTHING — READ THAT BEFORE TRUSTING IT
+
+At `TOOL_VERSION = "E11.2"` this file loaded `W1.UNET_HIGH` / `W1.UNET_LOW` — the plain
+Wan 2.2 I2V experts — under `WanCameraImageToVideo`. The camera tier is a **separate
+checkpoint**; the I2V base has no channel for a camera embedding. The run passed Gate PIN,
+Gate L, Gate S, Gate ROUTE on both the built and the saved graph, and Gate B, then returned
+65 frames whose subject survived exactly one frame.
+
+Two things changed as a result and both are load-bearing here:
+
+* the experts below are the **Fun-Camera** pair, named from `search_models` rather than
+  inherited from a neighbouring route;
+* `route_gates.pairing` (**Gate PAIR**) now refuses this class of mistake in-tool, and its
+  red test is wave 2's exact graph, banked at `tests/fixtures/E11-w2-camera-i2v.api.json`.
+
+The corrected wave also moves length, resolution and the start frame — see
+`DELIBERATE_BREAKS`, which the ledger gate requires to have ACTUALLY happened, because a
+report describing a correction that did not happen is wave 2's failure one wave later.
 
 --------------------------------------------------------------------------------
 ⚠ THE ROUTE'S NAME CHANGES HERE, AND THAT IS NOT A DETAIL
@@ -99,12 +119,79 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
 import build_i2v_payload as W1  # noqa: E402  - wave 1's trajectory, weights and frame
 
-TOOL_VERSION = "E11.2"
+TOOL_VERSION = "E11.3"
 EXPERIMENT = "E11"
-WAVE = 2
+WAVE = 3
 
-#: Held constant against wave 1 by import, not by retyping.
-WIDTH, HEIGHT, LENGTH, FPS = W1.WIDTH, W1.HEIGHT, W1.LENGTH, W1.FPS
+#: ---------------------------------------------------------------------------------------
+#: THE EXPERTS. Wave 2 loaded `W1.UNET_HIGH` / `W1.UNET_LOW` — the plain I2V pair — under a
+#: camera conditioning node, and produced 65 frames with no subject after the first. The
+#: camera tier is its own checkpoint. Names MEASURED via `search_models` 2026-08-12: the
+#: catalog serves exactly four `wan2.2_fun_camera` diffusion_model entries (bf16 and
+#: fp8_scaled, high and low), from Comfy-Org/Wan_2.2_ComfyUI_Repackaged
+#: `split_files/diffusion_models/`. The fp8_scaled pair is taken because that is the tier
+#: waves 1 and 2 ran, so the swap moves the model family and not the quantisation as well.
+UNET_HIGH = "wan2.2_fun_camera_high_noise_14B_fp8_scaled.safetensors"
+UNET_LOW = "wan2.2_fun_camera_low_noise_14B_fp8_scaled.safetensors"
+
+#: Text encoder and VAE stay wave 1's — same family, and the Fun-Camera card names no other.
+CLIP_NAME, VAE_NAME = W1.CLIP_NAME, W1.VAE_NAME
+
+#: ---------------------------------------------------------------------------------------
+#: THE FRAME, DERIVED — not assumed, and not inherited from a model this route does not run.
+#:
+#: The card's verbatim envelope (README_en.md, fetched 2026-08-12): *"multi-resolution (512,
+#: 768, 1024) video prediction, trained with 81 frames at 16 FPS"*.
+#:
+#: **Length** is 81: the card's own trained frame count, and 4·20+1 so Gate L's 4n+1 form
+#: holds. Waves 1 and 2 ran 65 — legal, but below this model's trained horizon for no reason
+#: that survives the model swap. (The Director's standing more-fps ruling agrees, though it
+#: is not the reason: the reason is the card.)
+#:
+#: **Resolution** is derived against the tiers rather than carried over. The tiers are area
+#: buckets, so for tier N the in-distribution frame at aspect r is w=N·√r, h=N/√r, rounded
+#: to the VAE's multiple of 16. Waves 1–2 ran 832×480 — area 399,360 — which sits BETWEEN
+#: the 512 tier (262,144) and the 768 tier (589,824) and matches neither. Enumerated:
+#:
+#:   tier 512  -> 688×384  = 264,192 px   — below waves 1–2, a resolution downgrade
+#:   tier 768  -> 1024×576 = 589,824 px   — EXACT: 768·4/3 = 1024, 768·3/4 = 576, no rounding
+#:   tier 1024 -> 1360×768 = 1,044,480 px — 2.6× waves 1–2, ~3.3× the pixel-frames
+#:
+#: The 768 tier is taken. It is the only tier that lands on a legal frame with **zero
+#: rounding** (both dims already multiples of 16), it is the nearest tier ABOVE waves 1–2 so
+#: the comparison is not read against a downgrade, and the 1024 tier would spend roughly
+#: 3.3× the pixel-frames of wave 1 on the last reserve for nothing the card promises.
+#:
+#: The aspect moves 1.733 → 1.778 (16:9) as a consequence, and that is a real change to the
+#: authored frame, recorded rather than smuggled: the start frame is re-rendered at this
+#: size, so the camera reframes the figure to it rather than anything being stretched.
+FRAME_DERIVATION = {
+    "source": ("huggingface.co/alibaba-pai/Wan2.2-Fun-A14B-Control-Camera README_en.md, "
+               "fetched 2026-08-12, verbatim: 'multi-resolution (512, 768, 1024) video "
+               "prediction, trained with 81 frames at 16 FPS'"),
+    "tiers_are": ("area buckets — for tier N at aspect r, w=N·√r and h=N/√r, rounded to the "
+                  "VAE's multiple of 16"),
+    "candidates": [
+        {"tier": 512, "frame": [688, 384], "area": 264192,
+         "rejected": "below waves 1–2's 399,360 px — a resolution downgrade"},
+        {"tier": 768, "frame": [1024, 576], "area": 589824, "chosen": True,
+         "why": ("exact: 768·4/3 = 1024 and 768·3/4 = 576, both already multiples of 16, so "
+                 "the tier is hit with zero rounding; and it is the nearest tier above "
+                 "waves 1–2")},
+        {"tier": 1024, "frame": [1360, 768], "area": 1044480,
+         "rejected": ("~3.3× wave 1's pixel-frames on the last reserve, for nothing the "
+                      "card promises over the 768 tier")},
+    ],
+    "waves_1_and_2_ran": {"frame": [832, 480], "area": 399360,
+                          "note": ("matches NO tier — it is the plain I2V model's default, "
+                                   "which is a different model's document")},
+    "aspect_change": {"from": 1.7333, "to": 1.7778,
+                      "consequence": ("the start frame is re-rendered at 1024×576, so the "
+                                      "camera reframes to the new aspect; nothing is "
+                                      "stretched or cropped from wave 1's pixels")},
+}
+
+WIDTH, HEIGHT, LENGTH, FPS = 1024, 576, 81, W1.FPS
 
 #: The camera lever. `Static` is the option consult #7 identified and `get_node` confirms is
 #: served; the rest are the node's declared defaults, unmoved.
@@ -238,9 +325,11 @@ def parse_args(argv=None):
                     help="path to Wan's shared_config.py; the base negative is READ from it "
                          "rather than retyped, then extended")
     ap.add_argument("--w1-record", required=True,
-                    help="wave 1's committed payload record. The start frame, frame size, "
-                         "length and sampling trajectory are pinned against it, and the "
-                         "positive is required to DIFFER from it")
+                    help="wave 1's committed payload record. The trajectory is pinned "
+                         "against it, the four DELIBERATE_BREAKS are required to have "
+                         "actually happened, and the positive is required to DIFFER")
+    ap.add_argument("--start-frame-sha256", default=None,
+                    help="the local sha256 of the re-authored start frame, into the record")
     ap.add_argument("--seeds-registry", default=None)
     ap.add_argument("--experiment", default=EXPERIMENT)
     ap.add_argument("--length", type=int, default=LENGTH,
@@ -323,73 +412,140 @@ def build_negative(negative_source):
     }
 
 
-def pin_against_wave1(positive, uploads, length, w1_record_path):
-    """Gate PIN(w2) · ANDON — everything the A/B holds constant, checked; the one thing it
-    moves, checked to have actually moved.
+#: What wave 3 deliberately breaks against wave 1, each with the reason and the authority.
+#: The E11 w2 ruling: *"The weights-held pin against wave 1 breaks by necessity; the
+#: comparison is route-level and says so."* A break that is listed is a stated limit on the
+#: comparison; a break that is not listed is a confound nobody noticed, and the difference
+#: between the two is entirely whether somebody wrote it down before the run.
+DELIBERATE_BREAKS = {
+    "weights": {
+        "wave_1": "wan2.2_i2v_{high,low}_noise_14B_fp8_scaled",
+        "wave_3": "wan2.2_fun_camera_{high,low}_noise_14B_fp8_scaled",
+        "why": ("THE correction. Wave 2 fed a camera embedding to the plain I2V base, which "
+                "has no channel for it, and produced 65 frames with no subject after the "
+                "first. Gate PAIR now refuses that pairing in-tool"),
+        "authority": "E11 w2 ruling R5(1)"},
+    "length": {
+        "wave_1": 65, "wave_3": 81,
+        "why": ("the Fun-Camera card's own trained frame count; 65 was the I2V default, a "
+                "different model's number"),
+        "authority": "E11 w2 ruling R5(2) + the card, fetched 2026-08-12"},
+    "resolution": {
+        "wave_1": [832, 480], "wave_3": [WIDTH, HEIGHT],
+        "why": ("derived against the card's 512/768/1024 training tiers — 832x480 matches "
+                "none of them. See FRAME_DERIVATION for the enumeration"),
+        "authority": "E11 w2 ruling R5(3)"},
+    "start_frame_pixels": {
+        "wave_1": "832x480 RGB, world background baked opaque",
+        "wave_3": ("1024x576, authored RGBA, submitted composite over a named colour "
+                   "recorded in the render provenance"),
+        "why": ("the alpha law (CLAUDE.md, the Director's ruling 2026-08-12) plus the "
+                "resolution change — the frame has to be re-rendered either way"),
+        "authority": "E11 w2 ruling R5(4)"},
+}
 
-    Wave 1's own pin was against E08 and is retired here with its reason. What survives is
-    the half that still has meaning: the start frame, the frame size, the length and the
-    sampling trajectory are the A/B's held variables, and each is compared against the
-    record wave 1 committed. The prompt is the moved variable, so the check on it is
-    INVERTED — a positive identical to wave 1's would mean the surgery silently did not
-    happen, and every other gate would pass on that graph.
+
+def ledger_against_wave1(positive, uploads, length, w1_record_path,
+                         start_frame_sha256=None):
+    """Gate LEDGER · ANDON — what still holds is checked; what breaks is named in advance.
+
+    Wave 2's `pin_against_wave1` asserted that the start frame, frame, length and trajectory
+    were all identical to wave 1's, and halted on drift. **Wave 3 breaks four of those on
+    purpose**, so an unchanged pin would either halt the corrected run or be quietly deleted
+    — and quietly deleting a pin is how a confound becomes invisible.
+
+    What replaces it keeps the same andon shape pointed at a different target:
+
+    * everything in `DELIBERATE_BREAKS` must ACTUALLY differ from wave 1. A "corrected" run
+      that silently still loaded the I2V experts, or still ran 65 frames, would produce a
+      report describing a correction that did not happen — the precise shape of wave 2's own
+      failure, one wave later.
+    * the sampling trajectory must still MATCH, because it is the one thing this wave holds.
+    * the positive must still differ from wave 1's (wave 2's inverted clause, unchanged).
+
+    So the gate raises both when something that should have moved did not, and when the one
+    thing that should have held did not.
     """
     with open(w1_record_path, encoding="utf-8") as fh:
         w1 = json.load(fh)
-    ev = {"gate": "PIN_W2", "wave_1_record": os.path.abspath(w1_record_path),
+    ev = {"gate": "LEDGER_W3", "wave_1_record": os.path.abspath(w1_record_path),
           "wave_1_seed": w1.get("seed"),
-          "released": {
-              "pin": "byte-identical to E08's positive and negative (wave 1's Gate PIN)",
-              "why": ("wave 2 is directed to rewrite the prompt, so the string can no "
-                      "longer be E08's. The comparison that pin supported — same prompt, "
-                      "different route — is retired with it, and the two-pipeline sheet "
-                      "against E08 remains wave 1's, not wave 2's")}}
+          "comparison_is": ("ROUTE-LEVEL, not single-variable. Four properties break "
+                            "deliberately and are listed below; no number from this run may "
+                            "be read as isolating any one lever"),
+          "deliberate_breaks": DELIBERATE_BREAKS}
     problems = []
 
-    held = {
-        "start_frame": (uploads.get("start_frame"),
-                        (w1.get("start_image") or {}).get("server_name")),
-        "width": (WIDTH, (w1.get("resolution") or [None, None])[0]),
-        "height": (HEIGHT, (w1.get("resolution") or [None, None])[1]),
+    # ---- the breaks must actually have happened.
+    w1_res = w1.get("resolution") or [None, None]
+    moved = {
         "length": (length, w1.get("length")),
+        "width": (WIDTH, w1_res[0]),
+        "height": (HEIGHT, w1_res[1]),
+        "unet_high": (UNET_HIGH, (w1.get("models") or {}).get("unet_high_noise")),
+        "unet_low": (UNET_LOW, (w1.get("models") or {}).get("unet_low_noise")),
     }
-    ev["held_constant"] = {k: {"wave_2": a, "wave_1": b, "agrees": a == b}
-                           for k, (a, b) in held.items()}
-    for key, (ours, theirs) in held.items():
-        if ours != theirs:
-            problems.append(f"{key} is {ours!r} here and {theirs!r} in wave 1; the A/B "
-                            f"would be comparing it as well as the two levers")
+    ev["breaks_verified"] = {k: {"wave_3": a, "wave_1": b, "differs": a != b}
+                             for k, (a, b) in moved.items()}
+    for key, (ours, theirs) in moved.items():
+        if theirs is not None and ours == theirs:
+            problems.append(
+                f"{key} is still wave 1's ({ours!r}), but this wave's whole purpose is that "
+                f"it changed. A report describing a correction that did not happen is wave "
+                f"2's failure one wave later")
 
+    if UNET_HIGH == W1.UNET_HIGH or UNET_LOW == W1.UNET_LOW:
+        problems.append(
+            "the experts are still the plain I2V pair — the pairing Gate PAIR exists to "
+            "refuse and the one that produced a clip with no subject")
+
+    # ---- the start frame must be a NEW authored artifact, not wave 1's upload reused.
+    ev["start_frame"] = {"wave_3_server_name": uploads.get("start_frame"),
+                         "wave_1_server_name": (w1.get("start_image") or {}).get(
+                             "server_name"),
+                         "wave_3_local_sha256": start_frame_sha256}
+    if uploads.get("start_frame") == (w1.get("start_image") or {}).get("server_name"):
+        problems.append(
+            "the start frame is wave 1's upload, but this wave re-authors it at a new "
+            "resolution under the alpha law — the old 832x480 baked-void frame cannot be "
+            "the input to a 1024x576 graph")
+
+    # ---- the one thing that must still hold.
     w1_traj = w1.get("trajectory") or {}
     traj = {k: v["value"] for k, v in W1.TRAJECTORY.items()}
     w1_vals = {k: (v or {}).get("value") for k, v in w1_traj.items()}
-    ev["trajectory"] = {"wave_2": traj, "wave_1": w1_vals, "agrees": traj == w1_vals}
+    ev["trajectory"] = {"wave_3": traj, "wave_1": w1_vals, "agrees": traj == w1_vals,
+                        "role": "the only property this wave holds against wave 1"}
     if traj != w1_vals:
         problems.append(f"the sampling trajectory differs from wave 1's: {traj} against "
-                        f"{w1_vals}")
+                        f"{w1_vals} — it is the one thing this wave holds, and nothing "
+                        f"would be comparable if it moved too")
 
+    # ---- wave 2's inverted clause, unchanged.
     w1_pos = w1.get("positive")
     ev["positive"] = {
-        "sha256_wave_2": hashlib.sha256(positive.encode("utf-8")).hexdigest(),
+        "sha256_wave_3": hashlib.sha256(positive.encode("utf-8")).hexdigest(),
         "sha256_wave_1": (hashlib.sha256(w1_pos.encode("utf-8")).hexdigest()
                           if isinstance(w1_pos, str) else None),
         "differs": isinstance(w1_pos, str) and w1_pos != positive,
-        "words_wave_2": word_count(positive),
+        "words_wave_3": word_count(positive),
         "words_wave_1": word_count(w1_pos) if isinstance(w1_pos, str) else None,
+        "note": ("the prompt surgery rides UNCHANGED from wave 2 — it has never been "
+                 "tested, because wave 2's frames had no subject to judge it on"),
     }
     if not isinstance(w1_pos, str):
         problems.append("wave 1's record carries no positive string to check against")
     elif w1_pos == positive:
         problems.append(
             "the positive built here is byte-identical to wave 1's, so the prompt surgery "
-            "this wave exists for did not happen. The run would measure the camera lever "
-            "while the report described two levers")
+            "did not happen and the run would measure the weight swap alone while the "
+            "report described two levers")
 
     if problems:
-        raise PayloadError("wave 2's payload is not the one the spec describes: "
+        raise PayloadError("wave 3's payload is not the one the ruling describes: "
                            + "; ".join(problems))
-    ev["verdict"] = ("start frame, frame, length and trajectory identical to wave 1; "
-                     "positive deliberately different")
+    ev["verdict"] = (f"{len(DELIBERATE_BREAKS)} deliberate breaks verified as actual; "
+                     f"trajectory held; positive still differs from wave 1's")
     return ev
 
 
@@ -399,7 +555,9 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
     gate_s = gates.gate_s_seed_registration(seed, registry, experiment,
                                             seed_was_explicit=seed is not None)
     seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)
-    profile = gates.g1_generator_legality(WIDTH, HEIGHT, length, "wan-i2v")
+    # `wan-fun-camera`, not `wan-i2v`: the route runs the camera weights, so it reads its
+    # legality constraints from the camera model's own row. Wave 2 is the argument.
+    profile = gates.g1_generator_legality(WIDTH, HEIGHT, length, "wan-fun-camera")
 
     steps = W1.TRAJECTORY["steps"]["value"]
     split = W1.TRAJECTORY["split_step"]["value"]
@@ -412,16 +570,16 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
 
     wf = {
         "10": {"class_type": "UNETLoader",
-               "inputs": {"unet_name": W1.UNET_HIGH, "weight_dtype": "default"}},
+               "inputs": {"unet_name": UNET_HIGH, "weight_dtype": "default"}},
         "11": {"class_type": "UNETLoader",
-               "inputs": {"unet_name": W1.UNET_LOW, "weight_dtype": "default"}},
+               "inputs": {"unet_name": UNET_LOW, "weight_dtype": "default"}},
         "12": {"class_type": "ModelSamplingSD3",
                "inputs": {"shift": shift, "model": ["10", 0]}},
         "13": {"class_type": "ModelSamplingSD3",
                "inputs": {"shift": shift, "model": ["11", 0]}},
         "20": {"class_type": "CLIPLoader",
-               "inputs": {"clip_name": W1.CLIP_NAME, "type": "wan", "device": "default"}},
-        "21": {"class_type": "VAELoader", "inputs": {"vae_name": W1.VAE_NAME}},
+               "inputs": {"clip_name": CLIP_NAME, "type": "wan", "device": "default"}},
+        "21": {"class_type": "VAELoader", "inputs": {"vae_name": VAE_NAME}},
         "30": {"class_type": "CLIPTextEncode",
                "inputs": {"text": positive, "clip": ["20", 0]}},
         "31": {"class_type": "CLIPTextEncode",
@@ -495,11 +653,32 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
         "gate_S": gate_s,
         "gate_L": {"verdict": "PASS", "profile": profile.as_dict()},
         "gate_ROUTE_built": gate_route,
-        "models": {"unet_high_noise": W1.UNET_HIGH, "unet_low_noise": W1.UNET_LOW,
-                   "clip": W1.CLIP_NAME, "vae": W1.VAE_NAME, "loras": []},
+        "models": {"unet_high_noise": UNET_HIGH, "unet_low_noise": UNET_LOW,
+                   "clip": CLIP_NAME, "vae": VAE_NAME, "loras": []},
+        "frame_derivation": FRAME_DERIVATION,
         "trajectory": W1.TRAJECTORY,
-        "trajectory_source": ("IMPORTED from build_i2v_payload, not retyped — 'held "
-                              "constant against wave 1' is a property of the code"),
+        "trajectory_source": ("IMPORTED from build_i2v_payload, not retyped — the sampling "
+                              "trajectory is the one thing this wave holds against waves "
+                              "1-2, so it is held by the code rather than by a claim"),
+        "trajectory_premise": {
+            "status": "ASSUMED — marked, not measured",
+            "claim": ("the trajectory read off the official I2V reference workflow (steps "
+                      "20, split 10, shift 8.0, cfg 3.5, euler, simple) transfers to the "
+                      "Fun-Camera derivative"),
+            "why_it_is_plausible": ("Fun-Camera is a derivative of Wan2.2-I2V-A14B and the "
+                                    "same A14B two-expert MoE architecture, so the high/low "
+                                    "split and shift are architectural properties it shares"),
+            "the_divergence_recorded": ("the Comfy catalog's `recommended` block for these "
+                                        "exact fun_camera files says steps 20, cfg 6.0, "
+                                        "sampler uni_pc, scheduler simple — cfg and sampler "
+                                        "BOTH differ from what this graph runs"),
+            "why_it_was_not_changed": ("this wave already moves weights, length, resolution "
+                                       "and the start frame. Changing cfg and the sampler "
+                                       "too would leave nothing held at all. It is marked "
+                                       "here as the first named candidate if the run "
+                                       "disappoints — not silently adopted, not silently "
+                                       "ignored"),
+        },
         "camera": {
             "node": "WanCameraEmbedding -> WanCameraImageToVideo.camera_conditions",
             "camera_pose": CAMERA_POSE, "speed": CAMERA_SPEED,
@@ -649,11 +828,12 @@ def main(argv=None):
 
     positive, prompt_log = build_prompt()
     negative, negative_log = build_negative(a.negative_source)
-    gate_pin = pin_against_wave1(positive, uploads, a.length, a.w1_record)
+    gate_ledger = ledger_against_wave1(positive, uploads, a.length, a.w1_record,
+                                       start_frame_sha256=a.start_frame_sha256)
 
     wf, meta = build(uploads, a.seed, negative, positive, registry,
                      experiment=a.experiment, length=a.length, fps=a.fps)
-    meta["gate_PIN_W2"] = gate_pin
+    meta["gate_LEDGER_W3"] = gate_ledger
     meta["prompt_record"] = {
         "surgery": prompt_log,
         "negative": negative_log,
@@ -671,11 +851,12 @@ def main(argv=None):
 
     print("BUILD_CAMERA_I2V_OK " + json.dumps({
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
-        "length": meta["length"], "fps": meta["fps"],
-        "camera_pose": CAMERA_POSE,
+        "resolution": meta["resolution"], "length": meta["length"], "fps": meta["fps"],
+        "camera_pose": CAMERA_POSE, "experts": [UNET_HIGH, UNET_LOW],
         "payload_sha256": meta["payload_sha256"][:32],
         "prompt_dominance": prompt_log["dominance"]["ratio"],
-        "gate_PIN_W2": gate_pin["verdict"],
+        "gate_LEDGER_W3": gate_ledger["verdict"],
+        "gate_PAIR": meta["gate_ROUTE_built"]["pairing"]["verdict"],
         "gate_L": meta["gate_L"]["verdict"], "gate_S": meta["gate_S"].get("verdict"),
         "gate_ROUTE_built": meta["gate_ROUTE_built"]["verdict"]}, ensure_ascii=False))
     return 0

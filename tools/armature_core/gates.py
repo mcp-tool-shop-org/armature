@@ -139,6 +139,30 @@ GENERATOR_PROFILES = {
             "(consult #3), not measured here."
         ),
     ),
+    # E11 wave 3's row. Same VAE as `wan-i2v` above — the Fun-Camera checkpoint is a
+    # DERIVATIVE of Wan2.2-I2V-A14B and loads `wan_2.1_vae.safetensors`, so div-16 and 4n+1
+    # carry over unchanged. It gets its own row rather than borrowing the I2V one because
+    # its trained envelope is stated on its OWN card and differs from the I2V default: a
+    # route running the camera weights reads its constraints from the camera model's
+    # document, not from a neighbour's. Wave 2 is the whole argument for that distinction.
+    "wan-fun-camera": GeneratorProfile(
+        name="wan-fun-camera",
+        dim_divisor=16,
+        frame_modulus=4,
+        frame_residue=1,
+        source=(
+            "DERIVED 2026-08-12 (E11 wave 3) from the shared VAE — this route loads "
+            "wan_2.1_vae.safetensors and div-16 / 4n+1 are properties of that VAE's "
+            "spatial and temporal compression, identical to the wan-i2v row above. The "
+            "model's OWN envelope is quoted verbatim from "
+            "huggingface.co/alibaba-pai/Wan2.2-Fun-A14B-Control-Camera README_en.md, "
+            "fetched 2026-08-12: 'multi-resolution (512, 768, 1024) video prediction, "
+            "trained with 81 frames at 16 FPS'. Those tiers are the TRAINED envelope, not "
+            "limits any node enforces — the schema declares only min/max — so they bound "
+            "in-distribution CHOICE rather than legality, and the frame is derived against "
+            "them in build_camera_i2v_payload.FRAME_DERIVATION."
+        ),
+    ),
 }
 
 

@@ -42,6 +42,90 @@ class StartFrameGate(GateFailure):
     gate = "WHOLE"
 
 
+class AlphaGate(GateFailure):
+    """An authored image input does not carry the alpha the law requires."""
+
+    gate = "ALPHA"
+
+
+def composite_colour(text):
+    """`"r,g,b"` linear floats -> a 3-tuple. THE ALPHA LAW's other half; no default.
+
+    The Director's ruling, 2026-08-12: authored image inputs carry alpha, never a baked
+    void, and the RGB each route submits is a **deliberate, recorded choice**. A default
+    value here would defeat exactly that — the grey studio that bled through three waves of
+    start frames was never chosen by anyone, which is why nobody could find the choice to
+    argue with. So the caller names the colour or the render does not happen.
+
+    Linear scene-referred floats, not sRGB bytes: `52,41,31` would be clamped nonsense and
+    `0.2,0.16,0.12` is a different (much lighter) colour than the same numbers read as
+    bytes. The check below catches the byte form rather than rendering it.
+    """
+    if not text or not str(text).strip():
+        raise AlphaGate(
+            "no composite colour was named: under the alpha law the render is authored "
+            "RGBA and the RGB actually submitted is composited over a NAMED background. "
+            "Pass linear floats, e.g. 0.035,0.022,0.014, with a reason",
+            {"supplied": text})
+    parts = [p.strip() for p in str(text).split(",")]
+    if len(parts) != 3:
+        raise AlphaGate(
+            f"the composite colour must be three linear floats `r,g,b`, got {text!r}",
+            {"supplied": text})
+    try:
+        rgb = tuple(float(p) for p in parts)
+    except ValueError:
+        raise AlphaGate(f"the composite colour carries a non-number: {text!r}",
+                        {"supplied": text}) from None
+    if any(c < 0.0 or c > 1.0 for c in rgb):
+        raise AlphaGate(
+            f"composite values are linear scene-referred floats in [0,1], got {rgb}. sRGB "
+            f"bytes like 52,41,31 are NOT linear floats — that form would render as a "
+            f"blown white void, which is the failure this law exists to end",
+            {"supplied": list(rgb)})
+    return rgb
+
+
+def gate_alpha(transparent_fraction, composite_rgb, why, master_path=None):
+    """Gate ALPHA · ANDON — the authored master really carries transparency.
+
+    **The andon goes on the direction the invariant does not bound.** Nothing else in the
+    render path can tell a genuine RGBA render from a baked void with a fourth channel full
+    of 255s: the file opens, the dimensions are right, the figure is in it, Gate WHOLE and
+    Gate COVERAGE both pass. If `film_transparent` silently stopped taking effect — an
+    engine change, a world node that writes alpha, a compositor added later — the law would
+    read as satisfied in the provenance and be violated in the file. So the master is
+    required to contain transparent pixels, and the fraction is reported either way.
+
+    `transparent_fraction` is a measured number, so this function stays free of bpy and can
+    be tested against every value it can take, including the two that matter: 0 and 1.
+    """
+    ev = {"gate": "ALPHA", "master": master_path,
+          "transparent_fraction": float(transparent_fraction),
+          "opaque_fraction": 1.0 - float(transparent_fraction),
+          "composite_linear_rgb": list(composite_rgb), "composite_why": why,
+          "note": ("the world background is alpha=0 and the floor plane is geometry, so an "
+                   "opaque floor beneath a transparent void is the expected shape")}
+    if not why:
+        raise AlphaGate(
+            "the composite colour was named but not explained. A choice nobody wrote down "
+            "is indistinguishable from a leftover a year later, which is the whole failure "
+            "mode this law addresses", ev)
+    if float(transparent_fraction) <= 0.0:
+        raise AlphaGate(
+            "the authored master carries NO transparent pixels, so it is not an RGBA "
+            "render — it is a baked void with a fourth channel. `film_transparent` did not "
+            "take effect, and every check after this one passes on the file anyway", ev)
+    if float(transparent_fraction) >= 1.0:
+        raise AlphaGate(
+            "the authored master is ENTIRELY transparent — nothing was rendered into it. "
+            "A fully transparent master would composite to a flat field of the chosen "
+            "colour and condition the generation on an empty picture", ev)
+    ev["verdict"] = (f"alpha authored; {float(transparent_fraction):.4f} of the frame is "
+                     f"transparent")
+    return ev
+
+
 def framing_cloud(points, cap=1500):
     """Reduce a vertex cloud to at most `cap` points, keeping every axis extreme.
 

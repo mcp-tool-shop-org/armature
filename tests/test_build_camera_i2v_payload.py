@@ -22,14 +22,14 @@ import build_i2v_payload as W1
 from armature_core import route_gates as RG
 
 
-UPLOADS = {"start_frame": "start.png"}
+UPLOADS = {"start_frame": "w3_start.png"}
 POS, NEG = "a jointed clay mannequin. He is dancing. Behind him, a bar.", "blurry"
 E11_SEEDS = [2026081231, 2026081232, 2026081233]
 
 
 def built(**kw):
     kw.setdefault("registry", E11_SEEDS)
-    return B.build(UPLOADS, kw.pop("seed", E11_SEEDS[1]), kw.pop("negative", NEG),
+    return B.build(UPLOADS, kw.pop("seed", E11_SEEDS[2]), kw.pop("negative", NEG),
                    kw.pop("positive", POS), kw.pop("registry"), **kw)
 
 
@@ -38,7 +38,8 @@ def w1_record(**over):
     rec = {
         "experiment": "E11", "seed": 2026081231,
         "resolution": [832, 480], "length": 65,
-        "start_image": {"server_name": "start.png"},
+        "start_image": {"server_name": "w1_start.png"},
+        "models": {"unet_high_noise": W1.UNET_HIGH, "unet_low_noise": W1.UNET_LOW},
         "trajectory": {k: {"value": v["value"]} for k, v in W1.TRAJECTORY.items()},
         "positive": "wave one's positive, ending: The camera is static.",
     }
@@ -98,20 +99,33 @@ def test_the_pose_must_be_static_not_a_move():
 
 
 def test_the_camera_frame_matches_the_generated_frame():
-    """`WanCameraEmbedding` defaults to length 81 and this route runs 65."""
     wf, _ = built()
-    assert wf["45"]["inputs"]["length"] == wf["50"]["inputs"]["length"] == 65
-    assert (wf["45"]["inputs"]["width"], wf["45"]["inputs"]["height"]) == (832, 480)
-    ev = RG.verify(wf, frame=(832, 480, 65))
+    assert wf["45"]["inputs"]["length"] == wf["50"]["inputs"]["length"] == 81
+    assert (wf["45"]["inputs"]["width"], wf["45"]["inputs"]["height"]) == (1024, 576)
+    ev = RG.verify(wf, frame=(1024, 576, 81))
     assert ev["camera_agreement_verdict"] == "AGREES"
 
 
-def test_a_camera_solved_for_the_nodes_default_length_is_caught_by_the_route_gate():
+def test_a_camera_solved_for_a_different_frame_is_caught_by_the_route_gate():
+    """⚠ The andon's original motivating case has INVERTED and the fixture says so rather
+    than quietly still passing: `WanCameraEmbedding` defaults to length 81, which was a
+    mismatch when this route ran 65 and is now the number we want. The check still matters —
+    any disagreement silently applies a trajectory solved for one clip to another — so the
+    fixture now uses a real mismatch instead of the default that no longer is one."""
+    assert 81 == B.LENGTH, "the node default and this route's length now coincide"
     wf, _ = built()
-    wf["45"]["inputs"]["length"] = 81
+    wf["45"]["inputs"]["length"] = 65          # wave 1/2's length, now the wrong one
     with pytest.raises(RG.RouteGate) as exc:
-        RG.verify(wf, frame=(832, 480, 65))
+        RG.verify(wf, frame=(1024, 576, 81))
     assert "solved for a different frame" in str(exc.value)
+
+
+def test_a_camera_solved_for_the_old_resolution_is_caught_too():
+    wf, _ = built()
+    wf["45"]["inputs"]["width"], wf["45"]["inputs"]["height"] = 832, 480
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(wf, frame=(1024, 576, 81))
+    assert exc.value.evidence["camera_agreement_verdict"] == "CONTRADICTED"
 
 
 # --------------------------------------------------- the performer is still uncontrolled
@@ -154,56 +168,120 @@ def test_clip_vision_stays_absent():
 # ------------------------------------------------------------------- held constant vs wave 1
 
 def test_the_trajectory_is_imported_not_retyped():
-    """'Held constant against wave 1' is a property of the code here, not a claim."""
+    """The one property held against wave 1 — a property of the code, not a claim."""
     wf, meta = built()
     assert meta["trajectory"] is W1.TRAJECTORY
     hi = wf["60"]["inputs"]
     assert (hi["steps"], hi["cfg"], hi["sampler_name"], hi["scheduler"]) == \
         (20, 3.5, "euler", "simple")
     assert wf["12"]["inputs"]["shift"] == 8.0
-    assert (meta["resolution"], meta["length"], meta["fps"]) == ([832, 480], 65, 16)
 
 
-def test_the_weights_are_wave_ones_weights():
+def test_the_divergence_from_the_catalogs_recommendation_is_recorded_not_hidden():
+    """The catalog recommends cfg 6.0 / uni_pc for these exact files and this graph runs
+    3.5 / euler. Marked ASSUMED rather than silently adopted or silently ignored."""
+    _, meta = built()
+    prem = meta["trajectory_premise"]
+    assert prem["status"].startswith("ASSUMED")
+    assert "uni_pc" in prem["the_divergence_recorded"]
+    assert "6.0" in prem["the_divergence_recorded"]
+
+
+def test_the_experts_are_the_camera_tier_not_the_i2v_base():
+    """The correction, asserted on the graph rather than trusted from a docstring."""
     wf, meta = built()
     unets = sorted(n["inputs"]["unet_name"] for n in wf.values()
                    if n["class_type"] == "UNETLoader")
-    assert unets == sorted([W1.UNET_HIGH, W1.UNET_LOW])
+    assert unets == sorted([B.UNET_HIGH, B.UNET_LOW])
+    assert all("fun_camera" in u for u in unets)
+    assert W1.UNET_HIGH not in unets and W1.UNET_LOW not in unets
     assert meta["models"]["loras"] == []
 
 
-def test_the_pin_passes_when_only_the_prompt_moved(w1_path):
-    ev = B.pin_against_wave1("a different positive entirely", UPLOADS, 65, w1_path())
+def test_gate_pair_passes_on_the_built_graph():
+    """The gate that would have stopped wave 2, run on what this builder now emits."""
+    _, meta = built()
+    pair = meta["gate_ROUTE_built"]["pairing"]
+    assert pair["families_present"] == ["fun_camera"]
+    assert "1 conditioning node(s) paired" in pair["verdict"]
+
+
+def test_the_frame_is_derived_against_the_cards_tiers_not_inherited():
+    wf, meta = built()
+    assert (meta["resolution"], meta["length"], meta["fps"]) == ([1024, 576], 81, 16)
+    assert wf["50"]["inputs"]["length"] == wf["45"]["inputs"]["length"] == 81
+    assert wf["50"]["inputs"]["width"] == wf["45"]["inputs"]["width"] == 1024
+    chosen = [c for c in meta["frame_derivation"]["candidates"] if c.get("chosen")]
+    assert len(chosen) == 1 and chosen[0]["tier"] == 768
+    assert chosen[0]["frame"] == [1024, 576]
+    # the tier is hit exactly — that is the whole reason it was chosen
+    assert chosen[0]["area"] == 768 * 768 == 1024 * 576
+
+
+def test_the_derivation_records_that_waves_1_and_2_matched_no_tier():
+    _, meta = built()
+    assert meta["frame_derivation"]["waves_1_and_2_ran"]["frame"] == [832, 480]
+    assert "matches NO tier" in meta["frame_derivation"]["waves_1_and_2_ran"]["note"]
+
+
+def test_81_frames_is_legal_and_is_the_cards_trained_horizon():
+    _, meta = built()
+    assert meta["gate_L"]["profile"]["name"] == "wan-fun-camera"
+    assert (81 - 1) % 4 == 0
+
+
+def test_the_ledger_passes_when_the_breaks_broke_and_the_trajectory_held(w1_path):
+    ev = B.ledger_against_wave1("a different positive entirely", UPLOADS, 81, w1_path())
     assert ev["positive"]["differs"] is True
-    assert all(v["agrees"] for v in ev["held_constant"].values())
+    assert ev["trajectory"]["agrees"] is True
+    assert all(v["differs"] for v in ev["breaks_verified"].values())
+    assert set(ev["deliberate_breaks"]) == {
+        "weights", "length", "resolution", "start_frame_pixels"}
 
 
 def test_a_positive_identical_to_wave_ones_halts(w1_path):
-    """The INVERTED check. A wave-2 build that quietly submitted wave 1's prompt would
-    measure one lever while the report described two — and nothing else would notice."""
+    """Wave 2's INVERTED check, unchanged. The prompt surgery has still never been tested,
+    so a build that quietly reverted it would measure the weight swap alone."""
     same = w1_record()["positive"]
     with pytest.raises(B.PayloadError) as exc:
-        B.pin_against_wave1(same, UPLOADS, 65, w1_path())
+        B.ledger_against_wave1(same, UPLOADS, 81, w1_path())
     assert "did not happen" in str(exc.value)
 
 
-def test_a_different_start_frame_halts(w1_path):
+def test_a_length_that_did_not_move_halts(w1_path):
+    """The ledger's own direction: a 'corrected' run that silently kept wave 1's 65 frames
+    would ship a report describing a correction that did not happen."""
     with pytest.raises(B.PayloadError) as exc:
-        B.pin_against_wave1("new positive", {"start_frame": "other.png"}, 65, w1_path())
-    assert "start_frame" in str(exc.value)
-
-
-def test_a_different_length_halts(w1_path):
-    with pytest.raises(B.PayloadError) as exc:
-        B.pin_against_wave1("new positive", UPLOADS, 33, w1_path())
+        B.ledger_against_wave1("new positive", UPLOADS, 65, w1_path())
+    assert "still wave 1's" in str(exc.value)
     assert "length" in str(exc.value)
 
 
+def test_reusing_wave_ones_start_frame_upload_halts(w1_path):
+    """The old 832x480 baked-void frame cannot be the input to a 1024x576 graph, and the
+    alpha law re-authors it regardless."""
+    with pytest.raises(B.PayloadError) as exc:
+        B.ledger_against_wave1("new positive", {"start_frame": "w1_start.png"}, 81,
+                               w1_path())
+    assert "wave 1's upload" in str(exc.value)
+
+
+def test_the_experts_still_being_the_i2v_pair_halts(w1_path, monkeypatch):
+    """THE clause wave 2 earned. If the swap silently did not happen, every other gate
+    passes and the report describes a correction that is not in the graph."""
+    monkeypatch.setattr(B, "UNET_HIGH", W1.UNET_HIGH)
+    monkeypatch.setattr(B, "UNET_LOW", W1.UNET_LOW)
+    with pytest.raises(B.PayloadError) as exc:
+        B.ledger_against_wave1("new positive", UPLOADS, 81, w1_path())
+    assert "plain I2V pair" in str(exc.value)
+
+
 def test_a_drifted_trajectory_halts(w1_path):
+    """The one property this wave holds; if it moved too, nothing would be comparable."""
     drifted = {k: {"value": v["value"]} for k, v in W1.TRAJECTORY.items()}
     drifted["cfg"] = {"value": 6.0}
     with pytest.raises(B.PayloadError) as exc:
-        B.pin_against_wave1("new positive", UPLOADS, 65, w1_path(trajectory=drifted))
+        B.ledger_against_wave1("new positive", UPLOADS, 81, w1_path(trajectory=drifted))
     assert "trajectory" in str(exc.value)
 
 

@@ -176,3 +176,78 @@ def test_the_mask_bbox_is_inclusive_and_row_major():
         [False, False, True, False],
     ]
     assert SF.mask_bbox(rows) == (1, 1, 2, 2)
+
+
+# ============================================================================ THE ALPHA LAW
+# The Director's ruling, 2026-08-12: authored image inputs carry alpha, never a baked void,
+# and the RGB each route submits is a deliberate, recorded choice. Every fixture below is a
+# way the law reads as satisfied in a provenance file while being violated in the render.
+
+class TestCompositeColour:
+
+    def test_a_named_linear_colour_parses(self):
+        assert SF.composite_colour("0.035,0.022,0.014") == (0.035, 0.022, 0.014)
+        assert SF.composite_colour(" 0.0 , 0.0 , 0.0 ") == (0.0, 0.0, 0.0)
+
+    def test_there_is_no_default_because_a_default_is_how_the_void_got_in(self):
+        """The grey studio was never chosen by anyone, which is why nobody could find the
+        choice to argue with. An unnamed colour halts the render."""
+        for empty in (None, "", "   "):
+            with pytest.raises(SF.AlphaGate) as exc:
+                SF.composite_colour(empty)
+            assert "NAMED background" in str(exc.value)
+
+    def test_srgb_bytes_are_refused_rather_than_rendered(self):
+        """`52,41,31` is the shape a human reaches for first and it is not linear. Rendered,
+        it clamps to a blown white void — the exact failure the law ends."""
+        with pytest.raises(SF.AlphaGate) as exc:
+            SF.composite_colour("52,41,31")
+        assert "blown white void" in str(exc.value)
+        assert exc.value.evidence["supplied"] == [52.0, 41.0, 31.0]
+
+    @pytest.mark.parametrize("bad", ["0.1,0.2", "0.1,0.2,0.3,0.4", "0.1,dim,0.3", ","])
+    def test_a_malformed_colour_halts(self, bad):
+        with pytest.raises(SF.AlphaGate):
+            SF.composite_colour(bad)
+
+
+class TestGateAlpha:
+
+    OK = dict(composite_rgb=(0.035, 0.022, 0.014), why="dim warm bar interior")
+
+    def test_a_normal_render_passes_and_reports_its_fraction(self):
+        ev = SF.gate_alpha(0.42, **self.OK)
+        assert ev["transparent_fraction"] == 0.42
+        assert ev["opaque_fraction"] == pytest.approx(0.58)
+        assert "alpha authored" in ev["verdict"]
+
+    def test_a_fully_opaque_master_is_a_baked_void_with_a_fourth_channel(self):
+        """THE clause. If film_transparent silently stops taking effect, the file still
+        opens, still has the right dimensions, still contains the figure, and Gate WHOLE and
+        Gate COVERAGE both pass on it. Only this notices."""
+        with pytest.raises(SF.AlphaGate) as exc:
+            SF.gate_alpha(0.0, **self.OK)
+        assert "baked void with a fourth channel" in str(exc.value)
+        assert exc.value.evidence["transparent_fraction"] == 0.0
+
+    def test_a_fully_transparent_master_is_caught_from_the_other_side(self):
+        """The opposite failure, which the same andon must bound: nothing rendered at all
+        composites to a flat field of the chosen colour and conditions on an empty picture."""
+        with pytest.raises(SF.AlphaGate) as exc:
+            SF.gate_alpha(1.0, **self.OK)
+        assert "ENTIRELY transparent" in str(exc.value)
+
+    def test_a_colour_chosen_without_a_reason_halts(self):
+        """'Deliberate and RECORDED' is two requirements. A choice nobody wrote down is
+        indistinguishable from a leftover a year later."""
+        with pytest.raises(SF.AlphaGate) as exc:
+            SF.gate_alpha(0.4, composite_rgb=(0.0, 0.0, 0.0), why=None)
+        assert "not explained" in str(exc.value)
+
+    def test_the_evidence_carries_the_choice_even_when_it_raises(self):
+        """A gate that hides what it saw makes the next reader re-measure it."""
+        with pytest.raises(SF.AlphaGate) as exc:
+            SF.gate_alpha(0.0, **self.OK)
+        ev = exc.value.evidence
+        assert ev["composite_linear_rgb"] == [0.035, 0.022, 0.014]
+        assert ev["composite_why"] == "dim warm bar interior"

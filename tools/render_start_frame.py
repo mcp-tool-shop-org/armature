@@ -120,6 +120,16 @@ def parse_args():
     ap.add_argument("--width", type=int, default=WIDTH)
     ap.add_argument("--height", type=int, default=HEIGHT)
     ap.add_argument("--height-frac", type=float, default=HEIGHT_FRAC)
+    ap.add_argument("--composite", default=None,
+                    help="the submitted RGB composite's background, as linear floats "
+                         "`r,g,b`. THE ALPHA LAW: the render is authored RGBA with a real "
+                         "alpha channel and this names the deliberate choice composited "
+                         "behind it. Required — there is no default, because a default is "
+                         "how a grey void becomes accidental (argparse eats leading minus "
+                         "signs: pass as --composite=r,g,b)")
+    ap.add_argument("--composite-why", default=None,
+                    help="one sentence, into the provenance, on why that colour. A choice "
+                         "nobody wrote down is indistinguishable from a leftover")
     ap.add_argument("--floor", type=int, default=1,
                     help="1 draws a ground plane; recorded either way")
     return ap.parse_args(argv)
@@ -131,6 +141,17 @@ def _sha256(path):
         for block in iter(lambda: fh.read(1 << 20), b""):
             h.update(block)
     return h.hexdigest()
+
+
+def _alpha_channel(path, width, height):
+    """The alpha plane of a rendered RGBA PNG, top row first."""
+    img = bpy.data.images.load(path)
+    try:
+        buf = np.empty(width * height * 4, dtype=np.float32)
+        img.pixels.foreach_get(buf)
+        return np.ascontiguousarray(buf.reshape(height, width, 4)[::-1, :, 3])
+    finally:
+        bpy.data.images.remove(img)
 
 
 def _pixels(path, width, height):
@@ -184,9 +205,15 @@ def main():
     scene.render.engine = "BLENDER_EEVEE"
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
-    scene.render.film_transparent = False
     scene.render.image_settings.file_format = "PNG"
     scene.view_settings.view_transform = "Standard"
+    # THE ALPHA LAW (CLAUDE.md, the Director's ruling 2026-08-12). `film_transparent` was
+    # False here until wave 3, which baked the world background into every authored input
+    # as opaque pixels — the grey studio that bled through the E11 probe's frame 0 and is
+    # the standing suspect for E08's washed bands. The render below is authored RGBA; the
+    # RGB the route actually submits is composited afterwards over a colour named on the
+    # command line and recorded in the provenance.
+    composite_rgb = SF.composite_colour(a.composite)
 
     # `render_visible_meshes` and not `type == 'MESH'`: the glTF importer drops a
     # 42-vertex Icosphere into a hidden `glTF_not_exported` collection, and framing against
@@ -229,7 +256,8 @@ def main():
     world = bpy.data.worlds.new("performer")
     scene.world = world
     world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs[0].default_value = (0.16, 0.16, 0.18, 1.0)
+    world.node_tree.nodes["Background"].inputs[0].default_value = (
+        composite_rgb[0], composite_rgb[1], composite_rgb[2], 1.0)
 
     key = bpy.data.lights.new("key", type="SUN")
     key.energy = 3.2
@@ -260,6 +288,24 @@ def main():
     cam.matrix_world = blender_scene.orbit_matrix(Vector(target), radius,
                                                   ELEVATION_DEG, AZIMUTH_DEG)
 
+    # ---- (1) THE AUTHORED MASTER, RGBA. `film_transparent` makes the WORLD background
+    # alpha=0 while the floor plane — real geometry — stays opaque, so what becomes
+    # transparent is exactly the void the law is about and nothing else.
+    rgba_path = os.path.join(out, "start_frame_rgba.png")
+    scene.render.film_transparent = True
+    scene.render.image_settings.color_mode = "RGBA"
+    scene.render.filepath = rgba_path
+    bpy.ops.render.render(write_still=True)
+
+    alpha_plane = _alpha_channel(rgba_path, width, height)
+    gate_alpha = SF.gate_alpha(float((alpha_plane < 0.5).mean()), composite_rgb,
+                               a.composite_why, master_path=rgba_path)
+
+    # ---- (2) THE SUBMITTED COMPOSITE, RGB, colour-managed by Blender over the chosen
+    # background rather than composited by hand in byte space. Same camera, same lights,
+    # same pose — only the film's treatment of the void differs between (1) and (2).
+    scene.render.film_transparent = False
+    scene.render.image_settings.color_mode = "RGB"
     frame_path = os.path.join(out, "start_frame.png")
     scene.render.filepath = frame_path
     bpy.ops.render.render(write_still=True)
@@ -304,14 +350,32 @@ def main():
                        blender_scene.evaluated_geometry_signature(subject)},
         "resolution": [width, height], "fps": a.fps, "floor_drawn": bool(a.floor),
         "staging": {
-            "inherited_from": "render_performer (E09/E10), verbatim",
-            "world_background": [0.16, 0.16, 0.18, 1.0],
+            "inherited_from": ("render_performer (E09/E10) for lights, lens and framing; "
+                               "the world background is NO LONGER inherited — see alpha"),
+            "world_background": list(composite_rgb) + [1.0],
             "key_sun_energy": 3.2, "fill_sun_energy": 1.1,
             "engine": "BLENDER_EEVEE", "view_transform": "Standard",
-            "consequence": ("the start frame shows a grey studio, not a bar. On the "
-                            "no-control route this frame is the model's only picture of "
-                            "the world, so the scene clause of the prompt is asking the "
-                            "model to REPLACE what it shows, not to fill a silence")},
+            "consequence": ("on the no-control route this frame is the model's only "
+                            "picture of the world, so whatever it shows is what the prompt "
+                            "must either keep or replace. What it shows is now a recorded "
+                            "choice rather than an inherited studio grey"),
+            "residual_not_changed": ("the floor plane is still lit by the two studio suns "
+                                     "and reads pale. Only the world void moved under the "
+                                     "alpha law; re-lighting the floor would be a second "
+                                     "variable this wave did not authorise")},
+        "alpha": {
+            "law": ("CLAUDE.md, the Director's ruling 2026-08-12 — authored image inputs "
+                    "carry alpha, never a baked void"),
+            "authored_master": {"path": rgba_path, "sha256": _sha256(rgba_path),
+                                "color_mode": "RGBA", "film_transparent": True},
+            "submitted_composite": {
+                "path": frame_path, "color_mode": "RGB", "film_transparent": False,
+                "background_linear_rgb": list(composite_rgb),
+                "why": a.composite_why,
+                "composited_by": ("Blender's own colour management on a second render of "
+                                  "the identical scene, not by hand in byte space — the "
+                                  "sRGB transfer is the renderer's, not this tool's")},
+            "gate_ALPHA": gate_alpha},
         "camera": {
             "azimuth_deg": AZIMUTH_DEG, "elevation_deg": ELEVATION_DEG,
             "lens_mm": LENS_MM, "sensor_mm": SENSOR_MM,
@@ -325,7 +389,10 @@ def main():
                               "cap": FRAMING_CLOUD_CAP}},
         "import_info": info,
         "outputs": {
-            "start_frame": {"path": frame_path, "sha256": _sha256(frame_path)},
+            "start_frame_rgba": {"path": rgba_path, "sha256": _sha256(rgba_path),
+                                 "role": "the authored master (RGBA)"},
+            "start_frame": {"path": frame_path, "sha256": _sha256(frame_path),
+                            "role": "the submitted composite (RGB)"},
             "empty_plate": {"path": plate_path, "sha256": _sha256(plate_path)}},
         "measured": {
             "silhouette_extent_px": extent,
@@ -337,6 +404,7 @@ def main():
             "POSE": {"verdict": "PASS", "scene_frame": scene.frame_current,
                      "action_frame_range": list(span) if span else None},
             "WHOLE": gate_whole,
+            "ALPHA": gate_alpha,
             "COVERAGE": ev_cov},
         "elapsed_s": time.time() - started,
     }
