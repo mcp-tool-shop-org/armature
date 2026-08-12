@@ -71,6 +71,11 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 > self-hosted MediaPipe lift chain (G4, G16, G17) — **the pick is the Director's; the
 > rewrite waits on it.**
 
+> **THE REWRITE IS IN: see "THE REWRITE — 2026-08-12" below the amendment chain.** E09
+> closed as the baseline ([E09-closing-ruling.md](E09-closing-ruling.md)); this spec's live
+> body is the rewrite section. The staging sections beneath it remain the authored-end
+> historical record.
+
 > **SLOT 1 RULED, same day: the self-hosted clean chain.** The Director picked the
 > fully-owned route — Wan T2V performance clip → MediaPipe lift → the studio's own solver
 > onto the rig — over any hosted vendor contract; marathon pace, studio-building over
@@ -78,6 +83,120 @@ authority stands (Director, 2026-08-10) — the ceiling is the discipline, not t
 > models' own Apache card — map rows landed 2026-08-11). **E09
 > ([E09-clean-chain-calibration.md](E09-clean-chain-calibration.md)) is dispatched to build
 > and calibrate the chain's solver; this spec's rewrite follows E09's report.**
+
+---
+
+# THE REWRITE — 2026-08-12: the first painted shot, on the calibrated chain
+
+**Seat: executor (run on Opus) · new branch `E08-shot` from `main` (≥ `3728a59`), fresh
+worktree `E:\AI\armature-E08b`** (the old `E08-run` bank is subsumed by the E09 merge and
+awaits retirement — do not build on it). **Ceiling: ≤ 3 generations wave 1** (1 probe + 2
+reserve on named causes); `estimate_credits` runs and is recorded BEFORE the first
+submission — this route's billing meter is a premise, not an assumption. Both meters
+reported.
+
+## Trajectory (the rewrite's)
+
+This is the product's first shot: footage of the performer, **both stages generative**,
+every dependency licence-mapped, publishable by construction. E09 supplies the motion (the
+baseline dance on his rig); this experiment supplies the paint. Everything after it — other
+dances, other scenes, the movement library, the bar walk — reuses what this shot proves.
+
+## The question
+
+**Does the painted output show HIM performing the baseline dance in a prompt-described
+scene?** Three clauses, read separately at the sheet: (1) **motion adherence** — the
+painted figure performs the rig's dance (panels against the previz); (2) **identity** — the
+same character; canon; the Director's eye only, with the stylized-reference floor expected
+lower than photoreal benchmarks (G13); (3) **scene-from-prompt** — how much of the bar
+arrives from text (G15 says motion is designed to dominate text; this clause is measured,
+never promised).
+
+## Route (consult #6 R1 + the grounding, all pieces measured)
+
+Own-built **`WanAnimateToVideo`** graph — the served template wires the banned detector
+tier (map trap #3); the template law stands. Inputs:
+
+- `positive` / `negative`: the scene prompt (a crowded, warmly lit bar) + the identity
+  clause; recorded verbatim in the payload record.
+- `pose_video`: **rig-rendered pose sticks** of the baseline dance — the commission below.
+- `reference_image`: the Director-approved twin, `E:\AI\training\facet_E33\twins\
+  twin_r3_v0.png`, hash-pinned at use — the canon seed of the locked reference set (G14);
+  the multi-view GLB reference set arrives only after the brush pass (ledger).
+- `background_video`: **unconnected** — clause 3 exists to measure what the prompt paints.
+- `face_video`: **unconnected in wave 1** (one-variable discipline; the expression lever is
+  named for later — G7).
+- `character_mask`: wired **only if** its animation-mode semantics verify from the node
+  schema/docs; the decision and its source are recorded either way.
+
+**The commission — `tools/render_pose_sticks.py` (+ pure module, tests ride):** render the
+E09 baseline motion (`outputs/E09/b2-a3-lifted/performer_dance_ema.glb`, md5
+`cd4e2f6ee85e…`, and its motion record) as pose-stick frames in the **pinned Wan
+convention** — `human_visualization.py` at the sha banked in the E09 route2 evidence:
+zeroed-black canvas, the 20-entry OpenPose rainbow palette, the 18-point `limbSeq`
+including the five head keypoints (nose/eyes/ears markers derived from the head bone and
+skull geometry), `stickwidth = max(int(min(H,W)/200) − 1, 1)`, hands drawn separately
+(static mitten-hand sticks from the wrist bones — the rig has no fingers; recorded as a
+known degradation, G6). Tests: palette/topology/width assertions + golden frames. Frames at
+**832×480×65, 16 fps** (Gate L on the actual graph).
+
+## Premises — marked
+
+| # | premise | status |
+|---|---|---|
+| 1 | The baseline motion (E09 A3), its GLB + motion record | **MEASURED** — hashes in the E09 report; re-verify at use |
+| 2 | The drawing convention | **MEASURED** — Apache source fetched + banked with hash (E09 route2); pin the sha in the payload record |
+| 3 | The twin reference, Director-approved | **MEASURED** — hash it at use |
+| 4 | `WanAnimateToVideo` socket schema (six optionals) | **MEASURED** — catalog `get_node`, 2026-08-11 (consult #6 calibration) |
+| 5 | Licence rows: Animate-14B weights (Apache), core node code (GPL-3.0, output clause), the convention source (Apache) | **MEASURED** — the map |
+| 6 | The model accepts CG-rendered sticks at product quality | **ASSUMED — this is the experiment** (G11: the render-don't-detect pattern is published; this exact model is not) |
+| 7 | Billing meter for this route | **ASSUMED until `estimate_credits` runs** — Gate C arms on the measured number before submission |
+
+## Hypotheses — executor states blind degrees before submission
+
+- **H-E08a (motion):** adherence visible at sheet level; degree predicted blind.
+- **H-E08b (identity):** unknown; the Director judges; the stylized floor (G13) is the
+  prior. Identity metrics ride as diagnostics and gate nothing.
+- **H-E08c (scene):** partial scene from prompt (G15); the measured fraction is the
+  finding, whatever it is.
+- **H-E08d (proportions):** the non-human skeleton is out-of-distribution risk (G9, G10) —
+  watch for the model "humanizing" his limbs; panels at the elbows and skull.
+
+## Gates
+
+Gate ROUTE on the built graph **and** on the saved file (`gate_saved_graph.py`) · Gate S
+(`specs/E08-seeds.json` committed before submission) · Gate L on the actual graph · Gate C
+(the measured billing number × ≤ 3 generations; halt before any submission that would
+exceed) · watchdog before local renders · uploads compensator: every uploaded artifact
+(stick frames, reference PNG) listed in the report with its server-side delete as the named
+undo. A fired gate halts the session.
+
+## The sheet and the report
+
+Gate 0 sheet: **control (sticks) | painted output | reference | provenance**, with the E09
+previz beside it as the motion's ground truth; review clip 0.5× / 8 fps from lossless;
+arms first, then hands, skull, and the bar itself. Report appended as
+`docs/experiments/E08-report.md`: measurements, both meters, gate states, predictions vs
+outcomes with blindness disclosed. The advisor rules; the Director judges the shot.
+
+## Out of scope (wave 1)
+
+Multi-shot persistence (the locked-set discipline starts here but is proven later) · the
+bar-walk locomotion shot · `face_video` · the aspect/figure-size variable (E10) · the
+movement-library sourcing arc · the brush pass.
+
+## Standards compliance (the rewrite's)
+
+| Standard | Score | Evidence |
+|---|---|---|
+| PIN_PER_STEP | 2 | convention sha, motion hashes, seeds, verbatim payloads |
+| ANDON_AUTHORITY | 3 | ROUTE/S/L/C raise in-tool before spend; saved-file re-admission |
+| NAMED_COMPENSATORS | 2 | uploads deletable server-side + bounded spend, both tabled — no skip |
+| DECOMPOSE_BY_SECRETS | 2 | sticks renderer = pure module + thin bpy shell |
+| UNCERTAINTY_GATED_HUMANS | 2 | blind hypotheses; halts surface contrastively; identity is the Director's |
+| EXTERNAL_VERIFIER | 2 | gates + the Director's eye; no self-grading anywhere |
+
+---
 
 ## Trajectory
 
