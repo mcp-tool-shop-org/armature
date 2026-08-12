@@ -10,6 +10,10 @@ clause, and the date it was fetched. **Entries older than 90 days are advisory u
 
 `CONDITIONAL` is a **Director decision**, surfaced with its condition. It is never a quiet yes.
 
+**The purpose, ruled by the Director 2026-08-12:** every pipeline licence-friendly end to
+end, so the studio's art can be published without encumbrance. The gate is not caution for
+its own sake — it is the publishing plan.
+
 **All rows below fetched 2026-08-10** by the founding study-swarm's license lane.
 
 ---

@@ -164,3 +164,33 @@ from a committed Gate S list, `EmptyHunyuanLatentVideo` at 832×480×65. Admissi
 **Gate ROUTE green on our own graph** → Gate S → Gate L on the actual graph →
 `save_workflow`, submit the saved file verbatim. Ceiling unchanged: 8 credits, one probe
 first.
+
+**A3 — 2026-08-12 (advisor, at the Director's direction: finish E09 as the baseline).**
+The 2026-08-11 B2 probe is ruled **failed, cause unlocated** — a near-still donor
+(first-to-last mean pixel difference 11/255, arm drift only) with the feet cropped out
+despite the prompt's full-body clauses. Stage B2 resumes:
+
+1. **The diagnostic-donor generation (authorized).** One T2V generation with the expert
+   split and sampler/scheduler taken **exactly from Wan's own reference documentation** —
+   each value's documented source recorded in the payload. The probe's derived step-26/40
+   split and its unsourced euler/simple pair are the suspects under test and are not
+   reused. Prompt strengthened for large full-body motion and explicit head-to-feet
+   framing. This run is simultaneously the graph-fault diagnostic and the donor re-roll;
+   both named causes stand, and the direction to proceed is the Director's.
+2. **Donor acceptance gate (new; runs before any lift).** Mean consecutive-frame pixel
+   difference ≥ 2.0/255 across the clip AND ankle landmarks inside the image on ≥ 80% of
+   frames — both quantities the probe already measures. A donor failing this gate never
+   reaches the lift; it is a recorded take, not a baseline.
+3. Donor passes → lift → solve → apply → the three-panel sheet and review clip at the
+   Director's standards → the B2 addendum appended to the report → **E09 closes as the
+   baseline** for the variable experiments the posture calls for.
+4. Diagnostic donor fails the gate too → **halt**: the graph-motion question becomes its
+   own experiment, and the baseline donor comes from a licence-cleared external source
+   instead (a stock clip under a fetched licence row, or footage the Director shoots and
+   owns outright) — advisor fetch and ruling before use.
+
+Bound: ≤ 2 further generations this resumption (the route bills GPU-hours; the probe
+billed 0 credits — both meters reported). Purpose on the record, ruled by the Director
+2026-08-12: **every pipeline licence-friendly end to end, so the studio's art can be
+published** — which is why the donor-sourcing order runs owned-generation first, fetched
+licence second, Director-owned footage always available.
