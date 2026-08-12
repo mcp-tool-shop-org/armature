@@ -1,0 +1,19 @@
+{
+  "experiment": "E09",
+  "stage": "B2",
+  "amendment": "A3",
+  "registered_utc": "2026-08-12",
+  "registered_by": "executor seat, on E09-run, before the first submission of any A3 graph",
+  "gate": "S",
+  "seeds": [
+    2026081201,
+    2026081202
+  ],
+  "how_these_were_chosen": "The resumption date as a plain integer with the generation index appended — 2026-08-12 run 01 and run 02. Same rule as specs/E09-seeds.json: the property that matters is that the number is fixed BEFORE any result is seen, and a date-derived seed is checkable against this file's own git timestamp. No seed here was drawn from a prior run, from any served template, or from anything this seat had already looked at.",
+  "allocation": {
+    "2026081201": "the diagnostic-donor generation A3.1 authorises",
+    "2026081202": "the reserve — A3 bounds this resumption at 2 generations total"
+  },
+  "why_a_new_list_rather_than_the_old_reserve": "specs/E09-seeds.json registered 20260811 (spent on the probe) and 20260812 (its reserve). Reusing 20260812 here would put a seed registered for one trajectory onto a different one, and the record would then have to explain which run a number belonged to. A same-seed re-roll against the probe was considered and rejected on the measurement, not on tidiness: the prompt changes in this run too, so an identical noise draw would isolate nothing, and the two trajectories diverge from step 0 anyway (different shift, different step count).",
+  "binds_in_both_directions": "An experiment that pre-registered seeds must use one of them, and an experiment that pre-registered none may not vary its seed at all. tools/armature_core/route_gates.py::gate_s_registration enforces both clauses in code against the graph that is about to run, and ignores the inert seed of an add_noise=disable sampler because demanding registration there would be a check that fires on a correct two-expert split."
+}

@@ -1,0 +1,17 @@
+{
+  "experiment": "E09",
+  "stage": "B2",
+  "registered_utc": "2026-08-11",
+  "registered_by": "executor seat, on E09-run, before the first submission of any B2 graph",
+  "gate": "S",
+  "seeds": [
+    20260811,
+    20260812
+  ],
+  "how_these_were_chosen": "The run date as a plain integer, and its successor for the reserve. Chosen because the rule they serve is that the number must be fixed BEFORE a result is seen, not that it be unpredictable — a date is checkable against this file's own git timestamp, which is the property that matters. No seed here was drawn from a prior run, from the served template (whose sampler carried 923510416338945 under control_after_generate=randomize), or from anything this seat had already looked at.",
+  "allocation": {
+    "20260811": "the one probe generation authorised by the spec",
+    "20260812": "the reserve, spendable only on a defect with a named cause"
+  },
+  "binds_in_both_directions": "An experiment that pre-registered seeds must use one of them, and an experiment that pre-registered none may not vary its seed at all. tools/armature_core/route_gates.py::gate_s_registration enforces both clauses in code against the graph that is about to run, and ignores the inert seed of an add_noise=disable sampler because demanding registration there would be a check that fires on a correct two-expert split."
+}
