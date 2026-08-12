@@ -77,7 +77,13 @@ B/R/S/L conventions · the fixtures convention (failures stay runnable, as test 
 the A/B builder (neither arm resampled) · the lift chain (solver round-trips < 1e-9;
 MediaPipe Apache at all three layers) · the payload/fetch/measure tooling per experiment.
 
-## 6. The levers — ALL awaiting the Director's word; none dispatched
+## 6. The levers — E12 dispatched 2026-08-12; the rest await the Director's word
+
+**2026-08-12:** the scene-bearing start frame and the cfg/sampler correction are now
+**E12** (`docs/experiments/E12-scene-bearing-start-frame.md` — executor session; the
+camera-tier second seeds fold into its arms). The `@`-tag investigation ran the same
+day: **consult brief #8** (`docs/comfy-consult-8-brief.md`) carries the measured Wan
+2.6/2.7 reference-tier node contracts and the open questions.
 
 **Product:** a scene-bearing start frame on the camera tier (alpha-law composite over a
 real bar plate — the direct answer to w3's void) · the cfg/sampler correction (catalog:
@@ -123,10 +129,14 @@ saved cloud workflows are live server-side with their deletes listed in the repo
 `docs/comfy-consult-{6,7}*` are the format precedents. **Calibration is mandatory every
 round**: verify the anchor plus one cheap claim against the live catalog before trusting
 anything — `get_node` existence checks are non-negotiable (one phantom node class caught at
-#6; five-for-five verified at #7). Licences: documents, never verdicts. **No brief is
-needed right now** — the standing levers' unknowns are measurable locally or already
-answered. Triggers for the next brief: the FLF beat wave (what pairs with it at
-current catalog state), video-native scene-plate generation, or any new conditioning tier.
+#6; five-for-five verified at #7). Licences: documents, never verdicts. **2026-08-12: brief #8 commissioned**
+(`docs/comfy-consult-8-brief.md`) — the new-conditioning-tier trigger fired: Wan 2.6/2.7
+reference-to-video partner nodes measured live in-catalog (2.7 takes reference images;
+`characterN` identifiers are the `@`-tag's API form), with Uni3C-for-Wan and native
+Animate2 surfacing in the runtime changelog. `docs.comfy.org/changelog` is adopted as a
+standing field-check source on the Director's pointer, same day. The prior standing
+triggers (the FLF beat wave, video-native scene-plate generation, further new
+conditioning tiers) remain.
 
 ## 8. Seat calibration table — this seat's errors, for weighing everything above
 
