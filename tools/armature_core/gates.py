@@ -84,6 +84,26 @@ GENERATOR_PROFILES = {
             "family name. No Fun-Control-specific document was retrieved."
         ),
     ),
+    # E08's row, and the first whose constraints come from the node's OWN schema rather
+    # than from a tutorial or a shared component. `get_node("WanAnimateToVideo")`, measured
+    # 2026-08-12, declares `width`/`height` with step=16 and `length` with step=4 default
+    # 77; the node's source computes `latent_length = ((length - 1) // 4) + 1`, which is the
+    # 4n+1 form written as arithmetic. The 81-frame trained horizon is NOT in the schema —
+    # `length` accepts up to 16384 — and is carried from the Wan family's own record
+    # (consult #3), so that half is inherited and is marked as such.
+    "wan-animate": GeneratorProfile(
+        name="wan-animate",
+        dim_divisor=16,
+        frame_modulus=4,
+        frame_residue=1,
+        source=(
+            "MEASURED 2026-08-12 from the WanAnimateToVideo schema (width/height step=16, "
+            "length step=4 default 77) and its source arithmetic "
+            "latent_length = ((length - 1) // 4) + 1. The trained-horizon bound is "
+            "inherited from the Wan family record (consult #3), not from this schema, "
+            "which accepts length up to 16384 and would enforce nothing."
+        ),
+    ),
 }
 
 

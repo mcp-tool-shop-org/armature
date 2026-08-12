@@ -229,3 +229,69 @@ def test_the_gate_is_not_an_assert():
                encoding="utf-8").read()
     for line in src.splitlines():
         assert not line.strip().startswith("assert "), line
+
+
+# ------------------------------------------------------------------ E08, 2026-08-12
+#
+# A conditioning node that sizes its own latent disarms Gate L unless it is in the table.
+# `WanAnimateToVideo` emits the latent itself, so an Animate graph carries no
+# `Empty*LatentVideo` node — and the first E08 graph passed Gate L having examined zero
+# latents. These fixtures fail if that regresses.
+
+def _animate_api(width=832, height=480, length=65):
+    return {
+        "10": {"class_type": "UNETLoader",
+               "inputs": {"unet_name": "wan2.2_animate_14B_bf16.safetensors",
+                          "weight_dtype": "default"}},
+        "49": {"class_type": "WanAnimateToVideo",
+               "inputs": {"width": width, "height": height, "length": length,
+                          "batch_size": 1, "continue_motion_max_frames": 5,
+                          "video_frame_offset": 0,
+                          "positive": ["6", 0], "negative": ["7", 0], "vae": ["105", 0]}},
+        "3": {"class_type": "KSampler",
+              "inputs": {"seed": 2026081201, "steps": 20, "cfg": 6.0,
+                         "sampler_name": "uni_pc", "scheduler": "simple", "denoise": 1.0,
+                         "model": ["10", 0], "positive": ["49", 0], "negative": ["49", 1],
+                         "latent_image": ["49", 2]}},
+    }
+
+
+def test_wan_animate_latent_is_seen_at_all():
+    """The regression this exists for: an Animate graph has no Empty*LatentVideo node, so
+    an empty result here means Gate L examined nothing and said the graph was legal."""
+    lat = RG.latents(_animate_api())
+    assert len(lat) == 1
+    assert lat[0]["class"] == "WanAnimateToVideo"
+    assert (lat[0]["width"], lat[0]["height"], lat[0]["length"]) == (832, 480, 65)
+
+
+def test_wan_animate_illegal_frame_raises_rather_than_passing_vacuously():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_animate_api(length=64))
+    assert "4n+1" in str(exc.value)
+
+
+def test_wan_animate_illegal_width_raises():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_animate_api(width=833))
+    assert "multiple of 16" in str(exc.value)
+
+
+def test_wan_animate_over_the_trained_horizon_raises():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_animate_api(length=85))
+    assert "81-frame" in str(exc.value)
+
+
+def test_the_shot_shape_is_legal_and_the_verdict_counts_the_latent():
+    ev = RG.verify(_animate_api())
+    assert ev["frame_legality"][0]["legal"] is True
+    assert "1 latent(s) all generator-legal" in ev["verdict"]
+
+
+def test_wan_animate_latent_is_read_in_save_format_too():
+    """The saved file is what the cloud receives, and its widgets are positional."""
+    save = {"nodes": [{"id": 49, "type": "WanAnimateToVideo",
+                       "widgets_values": [832, 480, 65, 1, 5, 0]}]}
+    lat = RG.latents(save)
+    assert (lat[0]["width"], lat[0]["height"], lat[0]["length"]) == (832, 480, 65)
