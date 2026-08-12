@@ -3,6 +3,7 @@ r"""render_start_frame — the one frame E11 hands an image-to-video model.
 
     blender -b -P tools\render_start_frame.py -- --glb=<performer.glb>
             --out=<dir> [--frame=0] [--width=832] [--height=480] [--height-frac=0.90]
+            --composite=r,g,b --composite-why="..." [--plate=<plate.png> --plate-why="..."]
 
 E11's commission. armature is image-to-video with a GLB instead of an image; this tool is
 where the GLB becomes the image. It stages one frame of a performance, lights it, and
@@ -39,6 +40,17 @@ The gates
   every count-, size- and legality-based check ever written.
 * **the pose andon** — the requested frame index exists inside the action's own range. A
   frame past the end holds the last pose and looks like a perfectly good render.
+* **Gate BACKDROP** (`armature_core.startframe`, only when `--plate` is given) — the plate
+  really is what stands behind the performer in the submitted file. Nothing else looks
+  there: a compositor that failed to wire still writes a right-sized file containing the
+  whole performer at healthy coverage, and the provenance still records a plate.
+
+**The plate route, added by E12.** `--plate` replaces the flat void with a picture of a
+world, and only that: `--composite` still names the world colour that LIGHTS the scene, the
+floor is still geometry, the camera and pose are untouched, and the flat composite is still
+rendered and kept beside the submitted one as the counterfactual. The plate must already be
+at the frame's exact size — `make_plate.py` does the fit, so the fit is an artifact with a
+hash and a recorded transform instead of a resize hidden inside a render.
 
 Prints `RENDER_START_FRAME_OK`. A crashed `blender -b -P` exits 0, so that line is the
 contract and `$LASTEXITCODE` proves nothing.
@@ -96,6 +108,16 @@ MARGIN_PX = 8
 #: A frame whose subject covers less of it than this is not a picture of the performer.
 MIN_SUBJECT_FRAC = 0.01
 
+#: Gate BACKDROP's two thresholds, in 8-bit levels, measured over the master's transparent
+#: region only. The submitted composite reaches the plate through Blender's compositor, so
+#: the plate is linearised on load and re-encoded by the Standard view transform on save;
+#: that round trip is near-identity but not bit-exact, and `TOL` is the room it needs.
+#: `MIN_SEPARATION` is the vacuity guard: below it, the plate and the flat fallback are the
+#: same picture over that region and a PASS would be proving nothing. Both are calibrated
+#: against the measured round trip in `tests/blender/check_plate_composite.py`, not guessed.
+PLATE_TOL_255 = 2.0
+PLATE_MIN_SEPARATION_255 = 4.0
+
 #: Points handed to the framing solve. The solve is approximate by construction (see
 #: `startframe.framing_cloud`); Gate WHOLE then runs on every vertex, so an under-report
 #: here costs margin, never correctness.
@@ -130,6 +152,14 @@ def parse_args():
     ap.add_argument("--composite-why", default=None,
                     help="one sentence, into the provenance, on why that colour. A choice "
                          "nobody wrote down is indistinguishable from a leftover")
+    ap.add_argument("--plate", default=None,
+                    help="a PLATE image, already at the generation's exact frame size (see "
+                         "make_plate.py), composited BEHIND the authored master instead of "
+                         "the flat colour. The flat composite is still rendered and kept as "
+                         "the counterfactual, and --composite still names the world that "
+                         "LIGHTS the scene, so the plate is the only thing that changes")
+    ap.add_argument("--plate-why", default=None,
+                    help="one sentence, into the provenance, on why THIS plate")
     ap.add_argument("--floor", type=int, default=1,
                     help="1 draws a ground plane; recorded either way")
     return ap.parse_args(argv)
@@ -159,6 +189,10 @@ def _pixels(path, width, height):
 
     `image.pixels` is bottom-up; the flip is what makes the reported bbox agree with the
     coordinates every other tool in this repo — and with the file a human opens — uses.
+
+    Every image Gate BACKDROP compares is read through THIS function, so whatever colour
+    convention Blender applies on load applies identically to all of them and the
+    differences between them stay meaningful.
     """
     img = bpy.data.images.load(path)
     try:
@@ -167,6 +201,59 @@ def _pixels(path, width, height):
         return np.ascontiguousarray(buf.reshape(height, width, 4)[::-1, :, :3])
     finally:
         bpy.data.images.remove(img)
+
+
+def _image_size(path):
+    """(width, height) of an image on disk, without decoding it into numpy."""
+    img = bpy.data.images.load(path)
+    try:
+        return int(img.size[0]), int(img.size[1])
+    finally:
+        bpy.data.images.remove(img)
+
+
+def wire_plate_composite(scene, plate_path):
+    """Point the render at `master OVER plate`, done by Blender's own compositor.
+
+    Alpha-over in the renderer rather than by hand in byte space, for the same reason the
+    flat composite is a second render rather than a numpy fill: the sRGB transfer is the
+    renderer's, and the performer's antialiased edge has to blend against the plate in
+    linear light or it acquires a fringe. The plate is declared sRGB on load so it is
+    linearised going in and the Standard view transform re-encodes it going out.
+
+    **The API here is Blender 5.x's, read off the running build rather than remembered.**
+    `Scene.node_tree` and `CompositorNodeComposite` are gone: the scene's compositor is a
+    `CompositorNodeTree` datablock hung on `Scene.compositing_node_group`, and its result
+    leaves through a group output socket. `Alpha Over` names its sockets now, and its
+    premultiply switch is the `Straight Alpha` boolean — left False, because Render Layers
+    hands this node an already-premultiplied foreground and converting it again would
+    darken every antialiased edge pixel against the plate.
+
+    Sockets are addressed by NAME throughout. The one place this file ever used positional
+    socket indices, it was addressing a node whose widget order had to be re-confirmed
+    empirically at every size change; names survive a release, positions do not.
+    """
+    scene.render.film_transparent = True          # the render layer must carry its alpha
+    scene.render.use_compositing = True
+
+    tree = bpy.data.node_groups.new("start_frame_plate", "CompositorNodeTree")
+    tree.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+    scene.compositing_node_group = tree
+
+    rl = tree.nodes.new("CompositorNodeRLayers")
+    rl.scene = scene
+    img = tree.nodes.new("CompositorNodeImage")
+    plate_img = bpy.data.images.load(plate_path)
+    plate_img.colorspace_settings.name = "sRGB"
+    img.image = plate_img
+    over = tree.nodes.new("CompositorNodeAlphaOver")
+    over.inputs["Straight Alpha"].default_value = False
+    out = tree.nodes.new("NodeGroupOutput")
+
+    tree.links.new(img.outputs["Image"], over.inputs["Background"])
+    tree.links.new(rl.outputs["Image"], over.inputs["Foreground"])
+    tree.links.new(over.outputs["Image"], out.inputs["Image"])
+    return plate_img
 
 
 def action_frame_range():
@@ -214,6 +301,23 @@ def main():
     # RGB the route actually submits is composited afterwards over a colour named on the
     # command line and recorded in the provenance.
     composite_rgb = SF.composite_colour(a.composite)
+
+    # ---- the plate, checked BEFORE anything renders. A plate at the wrong size would
+    # otherwise be discovered after four renders, and a compositor fed a mismatched image
+    # scales or tiles it rather than erroring — which is a reframed backdrop nobody chose.
+    # `make_plate.py` is what puts a picked still at the frame's exact size.
+    backdrop = os.path.abspath(a.plate) if a.plate else None
+    if backdrop:
+        if not os.path.isfile(backdrop):
+            raise RenderGate("no such plate", {"plate": backdrop})
+        pw, ph = _image_size(backdrop)
+        if (pw, ph) != (width, height):
+            raise RenderGate(
+                f"the plate is {pw}x{ph} and the frame is {width}x{height}. Fitting is not "
+                f"this tool's job precisely so that the fit is an artifact with its own "
+                f"hash and a recorded transform: run make_plate.py first",
+                {"plate": backdrop, "plate_size": [pw, ph],
+                 "frame_size": [width, height]})
 
     # `render_visible_meshes` and not `type == 'MESH'`: the glTF importer drops a
     # 42-vertex Icosphere into a hidden `glTF_not_exported` collection, and framing against
@@ -301,16 +405,19 @@ def main():
     gate_alpha = SF.gate_alpha(float((alpha_plane < 0.5).mean()), composite_rgb,
                                a.composite_why, master_path=rgba_path)
 
-    # ---- (2) THE SUBMITTED COMPOSITE, RGB, colour-managed by Blender over the chosen
+    # ---- (2) THE FLAT COMPOSITE, RGB, colour-managed by Blender over the chosen
     # background rather than composited by hand in byte space. Same camera, same lights,
     # same pose — only the film's treatment of the void differs between (1) and (2).
+    # With no plate this IS the submitted image. With a plate it is kept anyway, as the
+    # counterfactual Gate BACKDROP measures the plate's arrival against.
     scene.render.film_transparent = False
     scene.render.image_settings.color_mode = "RGB"
-    frame_path = os.path.join(out, "start_frame.png")
-    scene.render.filepath = frame_path
+    flat_path = os.path.join(out, "start_frame_flat.png" if backdrop else "start_frame.png")
+    scene.render.filepath = flat_path
     bpy.ops.render.render(write_still=True)
 
     # ---- the empty plate: same camera, same lights, same floor, character hidden.
+    # (An "empty plate" in the VFX sense — the background-only render. Not `--plate`.)
     for o in subject + arms:
         o.hide_render = True
     plate_path = os.path.join(out, "empty_plate.png")
@@ -319,10 +426,34 @@ def main():
     for o in subject + arms:
         o.hide_render = False
 
-    frame_px = _pixels(frame_path, width, height)
+    # COVERAGE is measured on the FLAT composite in both routes. Against a scene-bearing
+    # plate the empty-plate difference would count the whole backdrop as subject, and the
+    # gate that says "somebody is in the frame" would pass on a picture of an empty bar.
+    frame_px = _pixels(flat_path, width, height)
     plate_px = _pixels(plate_path, width, height)
     diff = np.abs(frame_px - plate_px).max(axis=2) > (1.0 / 255.0)
     frac = float(diff.mean())
+
+    # ---- (3) THE SUBMITTED COMPOSITE when a plate was named: the same master, alpha-over
+    # the plate, through the compositor. Everything the performer is lit by is unchanged;
+    # what fills the void is the only thing that moves.
+    frame_path, gate_backdrop = flat_path, None
+    if backdrop:
+        wire_plate_composite(scene, backdrop)
+        frame_path = os.path.join(out, "start_frame.png")
+        scene.render.filepath = frame_path
+        bpy.ops.render.render(write_still=True)
+
+        void = alpha_plane < 0.5
+        sub_px = _pixels(frame_path, width, height)
+        back_px = _pixels(backdrop, width, height)
+        gate_backdrop = SF.gate_backdrop(
+            void_vs_plate_255=float(np.abs(sub_px[void] - back_px[void]).mean() * 255.0),
+            plate_vs_flat_255=float(np.abs(back_px[void] - frame_px[void]).mean() * 255.0),
+            transparent_fraction=float(void.mean()),
+            why=a.plate_why, tol_255=PLATE_TOL_255,
+            min_separation_255=PLATE_MIN_SEPARATION_255,
+            plate=backdrop, plate_sha256=_sha256(backdrop))
     ev_cov = {
         "gate": "COVERAGE", "min_fraction": MIN_SUBJECT_FRAC, "subject_fraction": frac,
         "empty_plate": plate_path,
@@ -369,13 +500,33 @@ def main():
             "authored_master": {"path": rgba_path, "sha256": _sha256(rgba_path),
                                 "color_mode": "RGBA", "film_transparent": True},
             "submitted_composite": {
-                "path": frame_path, "color_mode": "RGB", "film_transparent": False,
+                "path": frame_path, "color_mode": "RGB",
+                "backdrop": "plate" if backdrop else "flat colour",
+                "film_transparent": bool(backdrop),
                 "background_linear_rgb": list(composite_rgb),
                 "why": a.composite_why,
-                "composited_by": ("Blender's own colour management on a second render of "
-                                  "the identical scene, not by hand in byte space — the "
-                                  "sRGB transfer is the renderer's, not this tool's")},
-            "gate_ALPHA": gate_alpha},
+                "composited_by": (
+                    ("Blender's compositor, alpha-over the plate on a second render of the "
+                     "identical scene — the plate linearised on load and re-encoded by the "
+                     "Standard view transform, so the performer's edge blends in linear "
+                     "light rather than by hand in byte space")
+                    if backdrop else
+                    ("Blender's own colour management on a second render of the identical "
+                     "scene, not by hand in byte space — the sRGB transfer is the "
+                     "renderer's, not this tool's"))},
+            "flat_counterfactual": {
+                "path": flat_path,
+                "role": ("the image this route would have submitted with no plate; kept as "
+                         "Gate BACKDROP's separation reference and as the COVERAGE source"
+                         if backdrop else "this run submitted the flat composite itself")},
+            "plate": ({"path": backdrop, "sha256": _sha256(backdrop),
+                       "size": [width, height], "why": a.plate_why,
+                       "note": ("the world the performer stands in. It changes the void "
+                                "only: the lights, the floor geometry, the camera and the "
+                                "pose are the flat route's")}
+                      if backdrop else None),
+            "gate_ALPHA": gate_alpha,
+            "gate_BACKDROP": gate_backdrop},
         "camera": {
             "azimuth_deg": AZIMUTH_DEG, "elevation_deg": ELEVATION_DEG,
             "lens_mm": LENS_MM, "sensor_mm": SENSOR_MM,
@@ -393,6 +544,9 @@ def main():
                                  "role": "the authored master (RGBA)"},
             "start_frame": {"path": frame_path, "sha256": _sha256(frame_path),
                             "role": "the submitted composite (RGB)"},
+            "start_frame_flat": ({"path": flat_path, "sha256": _sha256(flat_path),
+                                  "role": "the flat-colour composite, not submitted"}
+                                 if backdrop else None),
             "empty_plate": {"path": plate_path, "sha256": _sha256(plate_path)}},
         "measured": {
             "silhouette_extent_px": extent,
@@ -405,6 +559,8 @@ def main():
                      "action_frame_range": list(span) if span else None},
             "WHOLE": gate_whole,
             "ALPHA": gate_alpha,
+            "BACKDROP": gate_backdrop or {"verdict": "NOT APPLICABLE",
+                                          "detail": "no --plate; the void is a flat colour"},
             "COVERAGE": ev_cov},
         "elapsed_s": time.time() - started,
     }
@@ -419,6 +575,8 @@ def main():
         "smallest_margin_px": round(min(gate_whole["margins_px"].values()), 1),
         "subject_fraction": round(frac, 4),
         "gate_WHOLE": gate_whole["verdict"], "gate_COVERAGE": ev_cov["verdict"],
+        "gate_ALPHA": gate_alpha["verdict"],
+        "gate_BACKDROP": (gate_backdrop or {}).get("verdict", "NOT APPLICABLE"),
         "provenance": side}))
     return 0
 

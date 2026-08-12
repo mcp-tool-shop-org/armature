@@ -32,6 +32,8 @@ for this one: it sees the figure's shadow on the floor as subject, so its bounds
 where the *body* ends.
 """
 
+import math
+
 from . import framing
 from .errors import GateFailure
 
@@ -46,6 +48,12 @@ class AlphaGate(GateFailure):
     """An authored image input does not carry the alpha the law requires."""
 
     gate = "ALPHA"
+
+
+class BackdropGate(GateFailure):
+    """What stands behind the performer is not the plate the record names."""
+
+    gate = "BACKDROP"
 
 
 def composite_colour(text):
@@ -123,6 +131,133 @@ def gate_alpha(transparent_fraction, composite_rgb, why, master_path=None):
             "colour and condition the generation on an empty picture", ev)
     ev["verdict"] = (f"alpha authored; {float(transparent_fraction):.4f} of the frame is "
                      f"transparent")
+    return ev
+
+
+def cover_fit(src_w, src_h, width, height):
+    """Geometry for putting a plate behind the performer: COVER, never contain.
+
+    Returns the scale, the resized size and the crop box that take a source of `src_w x
+    src_h` to exactly `width x height` with **no padding anywhere**. Every returned box is
+    fully inside the resized image by construction, so a caller that crops to it can never
+    read a pixel that does not exist.
+
+    **Why cover and not contain, which is what this repo's other fitter does.**
+    `fit_reference.letterbox` deliberately pads: its subject is an identity reference, the
+    Director ruled that the whole figure must reach the model, and flat margin was the
+    accepted price. A backdrop is the opposite case. Padding a backdrop puts bands of
+    invented colour into the conditioning image, and this repo already has that disease on
+    file twice — the grey letterbox pads on E08's reference are the standing suspect for its
+    washed bands, and the baked grey void is what THE ALPHA LAW exists to end. A plate that
+    does not reach the frame edge is not a world; it is a picture of a world with a border
+    drawn round it, and the model paints the border too.
+
+    So the overhang is cropped and the loss is REPORTED rather than hidden. The centred crop
+    is the choice; what it discards is in the record, in both source and resized pixels, so
+    a later reader can see what left the frame without re-deriving it.
+
+    Pure arithmetic — no image library, no bpy — because the invariants worth testing here
+    (the box is exactly the target size; the box is inside the resized image; nothing is
+    ever padded) are testable over a sweep of aspects only if no file has to exist.
+    """
+    src_w, src_h = int(src_w), int(src_h)
+    width, height = int(width), int(height)
+    if src_w <= 0 or src_h <= 0:
+        raise BackdropGate(
+            f"degenerate plate of {src_w}x{src_h}; there is no image to stand behind the "
+            f"performer", {"source_size": [src_w, src_h]})
+    if width <= 0 or height <= 0:
+        raise BackdropGate(
+            f"degenerate target frame of {width}x{height}",
+            {"target_size": [width, height]})
+
+    scale = max(width / src_w, height / src_h)
+    # ceil, not round: rounding down by a single pixel would leave one row or column of the
+    # crop box outside the resized image, and the caller would pad it without meaning to —
+    # which is the one thing this function promises never to happen.
+    nw = max(width, int(math.ceil(src_w * scale - 1e-9)))
+    nh = max(height, int(math.ceil(src_h * scale - 1e-9)))
+    ox, oy = (nw - width) // 2, (nh - height) // 2
+
+    return {
+        "fit": "cover",
+        "source_size": [src_w, src_h], "target_size": [width, height],
+        "source_aspect": src_w / src_h, "target_aspect": width / height,
+        "scale": scale, "upscaled": scale > 1.0,
+        "resized_size": [nw, nh],
+        "crop_offset": [ox, oy],
+        "crop_box": [ox, oy, ox + width, oy + height],
+        "dropped_px_resized": {"x": nw - width, "y": nh - height},
+        "dropped_px_source": {"x": (nw - width) / scale, "y": (nh - height) / scale},
+        "kept_fraction_of_source_area": (width * height) / float(nw * nh),
+        "pads": False,
+        "note": ("cover fit: scale = max(width/src_w, height/src_h), then a centred crop. "
+                 "Nothing is padded; the overhang is cropped and reported"),
+    }
+
+
+def gate_backdrop(void_vs_plate_255, plate_vs_flat_255, transparent_fraction, why,
+                  tol_255, min_separation_255, plate=None, plate_sha256=None):
+    """Gate BACKDROP · ANDON — the plate really reached the submitted composite.
+
+    **The andon goes on the direction the invariant does not bound.** Every other check in
+    this module looks at the performer: Gate WHOLE says the body is inside the frame, Gate
+    COVERAGE says somebody is in it, Gate ALPHA says the master carries real transparency.
+    None of them looks at what fills the transparent part, and that is the whole variable of
+    a scene-bearing start frame. If a compositor node fails to wire, if the plate loads at
+    the wrong colour space, if a later edit renders the flat-colour path by mistake, the
+    file still opens, is still the right size, still contains the whole performer, still has
+    healthy coverage — and the run is conditioned on the void the plate was meant to end,
+    while the provenance records a plate. That is the exact failure shape THE ALPHA LAW was
+    written for, one layer further in.
+
+    Two measured numbers, because one of them alone can be fooled:
+
+    * `void_vs_plate_255` — mean absolute difference, over the master's transparent region,
+      between the submitted composite and the plate itself. Near zero when the plate
+      arrived.
+    * `plate_vs_flat_255` — mean absolute difference, over the same region, between the
+      plate and the flat-colour composite this route would otherwise have submitted. This
+      is the **vacuity guard**: if a plate is indistinguishable from the flat fallback there,
+      then the first number is near zero whether the compositing worked or not, and a green
+      verdict would be proving nothing. *A check that cannot fail is not a check*, so this
+      raises and says so rather than passing.
+
+    Both are measured quantities, so this function stays free of bpy and of any image
+    library and can be tested against every value it can take.
+    """
+    ev = {"gate": "BACKDROP", "plate": plate, "plate_sha256": plate_sha256,
+          "void_vs_plate_255": float(void_vs_plate_255),
+          "plate_vs_flat_255": float(plate_vs_flat_255),
+          "tol_255": float(tol_255), "min_separation_255": float(min_separation_255),
+          "transparent_fraction": float(transparent_fraction), "why": why,
+          "measured_over": ("the master's transparent region only — the part of the frame "
+                            "the performer and the floor do not occupy")}
+    if not why:
+        raise BackdropGate(
+            "the plate was named but not explained. A backdrop nobody wrote down a reason "
+            "for is indistinguishable from a leftover a year later, which is the failure "
+            "mode THE ALPHA LAW addresses", ev)
+    if float(transparent_fraction) <= 0.0:
+        raise BackdropGate(
+            "the authored master has NO transparent region, so there is nowhere for a plate "
+            "to be and nothing for this gate to measure. A green verdict here would be a "
+            "check that cannot fail", ev)
+    if float(plate_vs_flat_255) < float(min_separation_255):
+        raise BackdropGate(
+            f"the plate and the flat-colour fallback differ by only "
+            f"{float(plate_vs_flat_255):.3f}/255 over the transparent region, below the "
+            f"{float(min_separation_255)} needed for the check below to mean anything. "
+            f"Either this plate is the void it was meant to replace, or the plate never "
+            f"loaded — and in both cases a PASS would prove nothing", ev)
+    if float(void_vs_plate_255) > float(tol_255):
+        raise BackdropGate(
+            f"behind the performer the submitted composite differs from the plate by "
+            f"{float(void_vs_plate_255):.3f}/255 (tolerance {float(tol_255)}). The image "
+            f"about to condition the generation is not the plate this record names", ev)
+    ev["verdict"] = (f"the plate is behind the performer: {float(void_vs_plate_255):.3f}/255 "
+                     f"from the plate, {float(plate_vs_flat_255):.3f}/255 from the flat "
+                     f"fallback it replaces")
     return ev
 
 

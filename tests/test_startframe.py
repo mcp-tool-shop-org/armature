@@ -251,3 +251,137 @@ class TestGateAlpha:
         ev = exc.value.evidence
         assert ev["composite_linear_rgb"] == [0.035, 0.022, 0.014]
         assert ev["composite_why"] == "dim warm bar interior"
+
+
+# ========================================================================= THE PLATE
+# E12: the void becomes a picture of a world. Everything below is a way that picture fails
+# to arrive while every other check in the module still passes.
+
+class TestCoverFit:
+
+    def test_the_measured_case_this_was_built_for(self):
+        """E11 wave 1 painted 832x480; wave 3's frame — E12's — is 1024x576. The aspects
+        differ (1.733 vs 1.778), so a still lifted from one cannot simply be scaled into
+        the other, and this is the arithmetic that says what it costs."""
+        g = SF.cover_fit(832, 480, 1024, 576)
+        assert g["resized_size"] == [1024, 591]
+        assert g["crop_box"] == [0, 7, 1024, 583]
+        assert g["scale"] == pytest.approx(1024 / 832)
+        assert g["dropped_px_resized"] == {"x": 0, "y": 15}
+        assert g["pads"] is False
+
+    @pytest.mark.parametrize("sw,sh", [
+        (832, 480), (1920, 1080), (640, 640), (1024, 576), (3000, 1000), (100, 4000),
+        (17, 13), (1, 1), (1023, 575), (1025, 577),
+    ])
+    def test_it_never_pads_whatever_the_aspect(self, sw, sh):
+        """THE promise, over a sweep rather than one example. A resized image even one pixel
+        short of the target leaves part of the crop box outside it, and the caller fills
+        that strip with something nobody chose — which is the letterbox disease this fit
+        exists to avoid."""
+        w, h = 1024, 576
+        g = SF.cover_fit(sw, sh, w, h)
+        nw, nh = g["resized_size"]
+        x0, y0, x1, y1 = g["crop_box"]
+        assert nw >= w and nh >= h, "the resize left a gap the caller would have to pad"
+        assert 0 <= x0 and x1 <= nw, "the crop box reads columns outside the resized image"
+        assert 0 <= y0 and y1 <= nh, "the crop box reads rows outside the resized image"
+        assert (x1 - x0, y1 - y0) == (w, h)
+
+    def test_a_source_already_at_the_frames_aspect_is_not_cropped(self):
+        """When nothing needs to be discarded, nothing is: a fit that always cropped a
+        little would quietly reframe every plate that was already correct."""
+        g = SF.cover_fit(512, 288, 1024, 576)
+        assert g["crop_offset"] == [0, 0]
+        assert g["dropped_px_resized"] == {"x": 0, "y": 0}
+        assert g["kept_fraction_of_source_area"] == pytest.approx(1.0)
+
+    def test_a_downscale_is_reported_as_one(self):
+        """The caller picks its resampling filter off this flag; INTER_CUBIC on a 4x
+        downscale is how a plate acquires aliasing nobody asked for."""
+        assert SF.cover_fit(4096, 2304, 1024, 576)["upscaled"] is False
+        assert SF.cover_fit(832, 480, 1024, 576)["upscaled"] is True
+
+    def test_what_was_dropped_is_reported_in_source_pixels_too(self):
+        """Resized pixels are the tool's units; source pixels are the ones a human looking
+        at the original can find."""
+        g = SF.cover_fit(1920, 1080, 1024, 576)
+        assert g["dropped_px_source"]["x"] == pytest.approx(0.0, abs=1e-9)
+        assert g["dropped_px_source"]["y"] == pytest.approx(0.0, abs=1e-9)
+        g = SF.cover_fit(1000, 1000, 1024, 576)
+        assert g["dropped_px_source"]["y"] == pytest.approx(1000 - 576 / 1.024, abs=1e-6)
+
+    @pytest.mark.parametrize("sw,sh", [(0, 480), (832, 0), (-1, 480), (832, -1)])
+    def test_a_degenerate_source_halts(self, sw, sh):
+        with pytest.raises(SF.BackdropGate):
+            SF.cover_fit(sw, sh, 1024, 576)
+
+    @pytest.mark.parametrize("w,h", [(0, 576), (1024, 0)])
+    def test_a_degenerate_target_halts(self, w, h):
+        with pytest.raises(SF.BackdropGate):
+            SF.cover_fit(832, 480, w, h)
+
+
+class TestGateBackdrop:
+
+    OK = dict(void_vs_plate_255=0.4, plate_vs_flat_255=61.0, transparent_fraction=0.296,
+              why="the picked bar still", tol_255=2.0, min_separation_255=4.0)
+
+    def test_a_plate_that_arrived_passes_and_reports_both_numbers(self):
+        ev = SF.gate_backdrop(**self.OK)
+        assert ev["void_vs_plate_255"] == 0.4
+        assert ev["plate_vs_flat_255"] == 61.0
+        assert "the plate is behind the performer" in ev["verdict"]
+
+    def test_a_compositor_that_never_wired_is_caught(self):
+        """THE clause. The submitted file still opens, is still the right size, still holds
+        the whole performer, still passes WHOLE, ALPHA and COVERAGE — and behind him is the
+        void the plate was chosen to end, with a plate recorded in the provenance."""
+        with pytest.raises(SF.BackdropGate) as exc:
+            SF.gate_backdrop(**dict(self.OK, void_vs_plate_255=61.0))
+        assert "is not the plate this record names" in str(exc.value)
+        assert exc.value.evidence["void_vs_plate_255"] == 61.0
+
+    def test_a_plate_indistinguishable_from_the_void_is_refused_as_vacuous(self):
+        """The vacuity guard. If the plate matches the flat fallback over the region being
+        measured, the first number is near zero whether the compositing worked or not — so
+        a PASS would prove nothing, and a check that cannot fail is not a check."""
+        with pytest.raises(SF.BackdropGate) as exc:
+            SF.gate_backdrop(**dict(self.OK, plate_vs_flat_255=0.2))
+        assert "a PASS would prove nothing" in str(exc.value)
+
+    def test_the_vacuity_guard_runs_before_the_match_check(self):
+        """Order matters: a run where BOTH are near zero is the un-wired compositor with a
+        flat plate, and reporting it as a match failure would send the next reader looking
+        at the compositor's arithmetic instead of at the plate."""
+        with pytest.raises(SF.BackdropGate) as exc:
+            SF.gate_backdrop(**dict(self.OK, void_vs_plate_255=99.0, plate_vs_flat_255=0.0))
+        assert "a PASS would prove nothing" in str(exc.value)
+
+    def test_a_master_with_no_transparent_region_halts_rather_than_passing_vacuously(self):
+        """Gate ALPHA bounds this too, from its own side. Here it matters for a different
+        reason: with no void there is no region to measure, so the mean would be taken over
+        an empty set and every threshold below would be satisfied by nothing at all."""
+        with pytest.raises(SF.BackdropGate) as exc:
+            SF.gate_backdrop(**dict(self.OK, transparent_fraction=0.0))
+        assert "a check that cannot fail" in str(exc.value)
+
+    def test_a_plate_chosen_without_a_reason_halts(self):
+        with pytest.raises(SF.BackdropGate) as exc:
+            SF.gate_backdrop(**dict(self.OK, why=None))
+        assert "not explained" in str(exc.value)
+
+    def test_the_thresholds_are_the_callers_and_ride_the_evidence(self):
+        """A gate whose numbers live only in the tool makes the next reader open the tool
+        to find out what it compared against."""
+        ev = SF.gate_backdrop(**dict(self.OK, tol_255=0.5, min_separation_255=60.0))
+        assert ev["tol_255"] == 0.5 and ev["min_separation_255"] == 60.0
+        with pytest.raises(SF.BackdropGate):
+            SF.gate_backdrop(**dict(self.OK, tol_255=0.3))
+
+    def test_the_evidence_carries_the_plate_even_when_it_raises(self):
+        with pytest.raises(SF.BackdropGate) as exc:
+            SF.gate_backdrop(**dict(self.OK, void_vs_plate_255=61.0,
+                                    plate="p.png", plate_sha256="abc123"))
+        assert exc.value.evidence["plate"] == "p.png"
+        assert exc.value.evidence["plate_sha256"] == "abc123"
