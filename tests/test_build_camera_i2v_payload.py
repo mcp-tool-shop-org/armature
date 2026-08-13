@@ -168,13 +168,73 @@ def test_clip_vision_stays_absent():
 # ------------------------------------------------------------------- held constant vs wave 1
 
 def test_the_trajectory_is_imported_not_retyped():
-    """The one property held against wave 1 — a property of the code, not a claim."""
+    """The one property held against wave 1 — a property of the code, not a claim.
+
+    This asserted object IDENTITY with `W1.TRAJECTORY` until E12 wave 3, which is directed
+    to move cfg and sampler_name and so must be handed a copy. Identity was the mechanism,
+    not the property: what has to stay true is that every value the graph runs is W1's own
+    and none of it was retyped. The check is now field-by-field equality with W1 when
+    nothing is overridden — which still fails the moment somebody hard-codes a number here,
+    and which extends to the overridden case below, where identity could say nothing at all.
+    The pin is re-pointed, not dropped.
+    """
     wf, meta = built()
-    assert meta["trajectory"] is W1.TRAJECTORY
+    assert meta["trajectory"] == W1.TRAJECTORY
+    assert meta["trajectory_overrides"] == {}
     hi = wf["60"]["inputs"]
     assert (hi["steps"], hi["cfg"], hi["sampler_name"], hi["scheduler"]) == \
         (20, 3.5, "euler", "simple")
     assert wf["12"]["inputs"]["shift"] == 8.0
+
+
+# ------------------------------------------------- the trajectory break (E12 wave 3's rung)
+
+CATALOG = {"cfg": {"value": 6.0, "source": "catalog recommendation, re-read 2026-08-12"},
+           "sampler_name": {"value": "uni_pc", "source": "catalog, same read"}}
+
+
+def test_an_override_moves_exactly_the_named_fields_and_nothing_else():
+    """The rung: cfg and sampler move, every other trajectory field stays W1's."""
+    wf, meta = built(trajectory_overrides=CATALOG)
+    hi, lo = wf["60"]["inputs"], wf["61"]["inputs"]
+    assert (hi["cfg"], hi["sampler_name"]) == (6.0, "uni_pc")
+    assert (lo["cfg"], lo["sampler_name"]) == (6.0, "uni_pc")
+    assert (hi["steps"], hi["scheduler"], hi["start_at_step"], hi["end_at_step"]) == \
+        (20, "simple", 0, 10)
+    assert wf["12"]["inputs"]["shift"] == 8.0 == wf["13"]["inputs"]["shift"]
+    for field in ("steps", "split_step", "shift", "scheduler", "fps"):
+        assert meta["trajectory"][field] == W1.TRAJECTORY[field], (
+            f"{field} drifted while only cfg and sampler were authorised to move")
+
+
+def test_the_override_keeps_the_value_it_replaced():
+    """A number with no history is indistinguishable from a typo a month later."""
+    _, meta = built(trajectory_overrides=CATALOG)
+    assert meta["trajectory"]["cfg"]["was"] == 3.5
+    assert meta["trajectory"]["sampler_name"]["was"] == "euler"
+    assert meta["trajectory_overrides"] == CATALOG
+
+
+def test_an_override_that_changes_nothing_is_refused():
+    """A break that did not happen is wave 2's failure shape — the report describes a lever
+    that never moved, and every gate passes."""
+    with pytest.raises(B.PayloadError) as exc:
+        built(trajectory_overrides={"cfg": {"value": 3.5, "source": "x"}})
+    assert "what it already was" in str(exc.value)
+
+
+@pytest.mark.parametrize("field", ["steps", "split_step", "shift", "scheduler", "fps"])
+def test_the_structural_fields_are_not_overridable(field):
+    """Moving one of these makes the wave incomparable rather than informative, so the door
+    is closed in code rather than in a docstring."""
+    with pytest.raises(B.PayloadError) as exc:
+        built(trajectory_overrides={field: {"value": 999, "source": "x"}})
+    assert "structural" in str(exc.value)
+
+
+def test_an_unknown_trajectory_field_is_refused():
+    with pytest.raises(B.PayloadError):
+        built(trajectory_overrides={"cfg_scale": {"value": 6.0, "source": "x"}})
 
 
 def test_the_divergence_from_the_catalogs_recommendation_is_recorded_not_hidden():
@@ -233,10 +293,45 @@ def test_81_frames_is_legal_and_is_the_cards_trained_horizon():
 def test_the_ledger_passes_when_the_breaks_broke_and_the_trajectory_held(w1_path):
     ev = B.ledger_against_wave1("a different positive entirely", UPLOADS, 81, w1_path())
     assert ev["positive"]["differs"] is True
-    assert ev["trajectory"]["agrees"] is True
+    assert ev["trajectory"]["held_agrees"] is True
+    assert ev["trajectory"]["moved_on_purpose"] == []
     assert all(v["differs"] for v in ev["breaks_verified"].values())
     assert set(ev["deliberate_breaks"]) == {
         "weights", "length", "resolution", "start_frame_pixels"}
+
+
+def test_the_ledger_lets_an_authorised_trajectory_break_through(w1_path):
+    """E12's settings rung. cfg and sampler are named, so they are REQUIRED to differ from
+    wave 1's; everything else in the trajectory is still required to match."""
+    ev = B.ledger_against_wave1("a different positive entirely", UPLOADS, 81, w1_path(),
+                                trajectory_overrides=CATALOG)
+    assert ev["trajectory"]["moved_on_purpose"] == ["cfg", "sampler_name"]
+    assert ev["trajectory"]["held_agrees"] is True
+    assert "moved on cfg, sampler_name" in ev["verdict"]
+
+
+def test_an_unauthorised_trajectory_field_still_halts_the_wave(w1_path):
+    """The andon's shape is unchanged: only the named fields may move. This is the clause
+    that would catch a wave which moved the step split while claiming to move cfg."""
+    with pytest.raises(B.PayloadError) as exc:
+        B.ledger_against_wave1("a different positive entirely", UPLOADS, 81,
+                               w1_path(trajectory=dict(
+                                   w1_record()["trajectory"],
+                                   steps={"value": 40})),
+                               trajectory_overrides=CATALOG)
+    assert "NOT authorised to move" in str(exc.value)
+
+
+def test_a_declared_break_that_did_not_break_halts(w1_path):
+    """Wave 2's failure shape, one experiment later: a report describing a lever that never
+    moved, with every gate green."""
+    with pytest.raises(B.PayloadError) as exc:
+        B.ledger_against_wave1(
+            "a different positive entirely", UPLOADS, 81,
+            w1_path(trajectory=dict(w1_record()["trajectory"],
+                                    cfg={"value": 6.0}, sampler_name={"value": "uni_pc"})),
+            trajectory_overrides=CATALOG)
+    assert "never moved" in str(exc.value)
 
 
 def test_a_positive_identical_to_wave_ones_halts(w1_path):
