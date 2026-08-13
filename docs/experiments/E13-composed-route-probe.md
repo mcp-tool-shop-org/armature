@@ -60,6 +60,16 @@ Dispatch remains blocked until the Director rules. Watermark note: §II.1(a) ban
 removing applied marks; the node's `watermark=false` requests none be applied, which
 the clause does not prohibit.
 
+**Same-day addition — the API tier retrieved (the hunt closed what it could):** the
+Model Studio service-specific terms restrict trial usage only and are silent on
+paid-tier ownership (Comfy's assignment covers our side); the Model Studio FAQ
+publishes "never uses your data for model training" (vendor FAQ — weaker paper,
+recorded as such). The input-training fear is now bounded by two vendor commitments —
+Comfy's contractual no-training clause and Alibaba's published API-tier posture — with
+the consumer surface's heavy licence sitting on a page whose own text cannot describe
+API calls. The residual is the unseeable Comfy↔Alibaba reseller agreement, a residual
+every partner tier carries permanently. The Director's ruling remains the gate.
+
 ## Premises
 
 | premise | status |
