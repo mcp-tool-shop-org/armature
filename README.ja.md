@@ -28,26 +28,52 @@
 
 ## 状態：この仮説は、製品レベルで検証されます
 
-**設立日：2026年8月10日**。12回の実験が終了し、論文は「テスト中」の状態から「製品レベルで測定可能」の状態に移行しました。キャラクターは画面上で2回ダンスを披露しており、そのうち1回は独自のシステムによって制御され、もう1回は自由に踊りました。また、手動操作による世界観も、最後のフレーム（E12）の2つのシーンで表現されています。これらはすべて、監督の目で評価されました。設立当初からの過程に関する監査については、[docs/audit-first-arc.md](docs/audit-first-arc.md) を参照してください。2026年8月12日以降は、学習型のモノリポジトリとして運用されており、実験を通じて様々な手法が検証されていますが、特定のルートが絶対的な正解であるとは限りません（CLAUDE.md）。
+**2026年8月10日に設立。** 13回の実験が終了し、論文は「テスト中」から「製品レベルで測定済み」へと移行。キャラクターが自身の制御システムによって駆動され、自由に画面上で踊る。手作業で作られた世界が最後のフレームまで維持され、2つのシード（E12）を使用。そして、「アイデンティティは、ホストされた、人間が訓練した階層に保存され、作成者が指定した参照情報のみが供給される」（E13）。これらはすべて、ディレクターの目で評価される。設立時の監査は[docs/audit-first-arc.md](docs/audit-first-arc.md)を参照。2026年8月12日以降の状態は、学習型のモノリポジトリであり、実験によって経路が証明され、モーメンタムによって特定の経路が標準とされない（CLAUDE.md）。
 
 | | |
 |---|---|
-| 実験 | **E01～E12は閉鎖**（E05は虚偽の前提に基づいて中止）—制御段階（E01～E06）、装置の修理と骨格の承認（E07）、**最初の彩色された映像**（E08）、クリーンチェーンの基準線（E09）、高密度化された駆動方式の採用（E10）、制御なしのルート、3つの段階を経て明確な失敗を示す（E11）、**自由なルートで大きな成果を得る**、設定の基準線はカタログの6.0 / uni_pcに低下（E12）、**E13は2026年8月13日にリリース**—構成されたルートのテスト、wan2.7のリファレンスからビデオへの変換段階における参考文献。 |
-| 経路、ルート | **2つに、調査中のものを1つ追加**—**指定された経路**（リグでレンダリングされたAAPoseスティック→アニメーション化；ショットレベルで検証済み、AIアニメーションのビルドに使用）●**自由な経路**（GLB形式で作成された開始フレーム→6.0／uni_pcベースラインにおけるI2V／カメラ階層；アイデンティティは固定されず、ハンドを持つワールドが2つのシードを保持する）●**合成された経路**（ホストされたアイデンティティロック階層に参照を追加—E13のプローブ；その開示に関する注記は、経路ごとの開示に関する法律に従って仕様に準拠する）。 |
-| 使う、費やす。 | 初期段階の22回の実験では、それぞれ4クレジットを消費。E08～E12の一連の実験では、各提出時に0クレジット（GPU時間課金）となり、実験ごとに上限が設けられた。E12は、割り当てられた6回分の実験のうち4回を実行し、残りの2回は未使用のままとなった。 |
+| 実験 | **E01～E14まで終了**（E05は虚偽の前提に基づいて中止）。制御アーク（E01～E06）、リグの修理＋スケルトンの承認（E07）、**最初のレンダリングされたショット**（E08）、クリーンチェーンベースライン（E09）、高密度化された駆動方式を採用（E10）、制御なしの経路、3つの段階を経て指示的なハードフェイルに至る（E11）、**自由な経路が世界を獲得し、6.0 / uni_pcベースラインに到達**（E12）、**構成された経路がその疑問に答える**（E13 – 配信され、ゼロの費用で停止、サポートアークによって修復、再武装、実行、そして同じ日付内に終了。アイデンティティはディレクターの目で維持され、参照情報に基づいてモデルによって決定される世界を導く）。**LoRAシーンレバーを使用したライブテスト**（E14 – ベイクオフ：両方のスタイルLoRAが派生ウェイトにバインド。キャラクターは`technically_color`で維持され、フォトリアルなペアで失敗。勝者は解決できない配信ファイル階層とクレジット義務を持ち、これらはすべて記録される）。 |
+| 経路、ルート | **3つ、測定済み** – **駆動経路**（リグレンダリングされたAAPoseスティック → Animate。ショットレベルで証明され、一時停止され、再開時にライセンスがクリアされる）。**自由経路**（GLBによって作成された開始フレーム → カメラ階層は6.0 / uni_pcベースライン。アイデンティティはアンカーされていない状態で維持され、手作業で作られた世界が2つのシードで維持され、LoRAシーンレバーがライブで測定される – E14）。**構成経路**（作成者が指定した参照情報を、ホストされたアイデンティティロック階層に組み込む。E13によって卒業：アイデンティティがロックされ、モデルによって決定されたシネマトグラフィーと、参照情報に基づいて導かれる世界。仕様には開示に関する注意書きが含まれる）。 |
+| 使う、費やす。 | 設立時のアークにおける22回のプローブはそれぞれ4クレジット。E08～E12のアークでは**0クレジット**（GPU時間課金）が、実験ごとの上限内で使用された。**E13の4つの生成は、リポジトリで最初にパートナークレジットを使用したものであり、事前に指定された424～844の範囲内である。** E14の2つの生成では、2つの生成の上限で**0のパートナークレジット**が使用され、正確にその上限に達した。 |
 | ライセンスマップ | 採用されたすべての依存関係には、**取得済みのライセンス文書**が添付されます。検証されていない場合は「NO」として扱われます。また、サードパーティの層を経由する場合、追加で**ルートごとの情報開示**が行われます（2026年8月12日にディレクターによって決定）。ゲートの目的は、スタジオのアート作品を公開することです。 |
 | テスト | **1005：リグでのテスト**（スキップ回数13回、測定日：2026年8月13日）。また、`-O`の下でも同様の結果が得られました。CIは、実際に実行可能な範囲でリグ固有のアセットをテストし、**スキップが明確に確認できる**ようにします。 |
-| 状況 | **2026年8月13日より一般公開**（自主的な判断により、2026年8月11日から13日まで非公開）—バージョン0.1.0のリリースに向けて準備を進めています。記録はドキュメントツリーに保存されており、内容はすべて含まれています。 |
+| 状況 | **v0.1.1は2026年8月13日にリリース** – 現在の記録の状態であり、E14の終了が含まれる（v0.1.0は最初のマークされた状態であり、同じ日のうちに早期にカットされた）。記録はドキュメントツリーであり、完成している。 |
 
 ### 何が測定されているのか（電流の弧）
 
-- **アイデンティティの維持**：特定の要素（E08：映像全体を通して双子の顔に見える）と、制約のない状態（E11、第1段階：最後のフレームまですべての要素が参照やクリップ表示、制御信号なしで変化）。監督の視点が、両方の結果を決定づける。
-- **カメラは、カメラ階層の重み付けにおいて、1ピクセル単位での明確な指示に従う**（E11、第3段階）—そして、それがない場合でも意図せずズームインする（E11、第1段階）。
-- **信号を動かすのは密度であり、パフォーマンスではない**（E10）：リサンプリングによってステップが41%滑らかになり、パフォーマンスは8.6%向上。それでも視覚的に判断し、より多くのフレームレートの方が良いと判断する。
-- **ライセンスの問題は、配線に関する問題ではない**（E11、第2段階）：マッピングされたApacheモデルと、それを読み込まなかったグラフを使用すると、すべてのゲートが緑色になり、65フレームのノイズが発生する。ゲートペア機能が利用可能になった。
-- **シーンの構成は、シードに依存して変化する**（E10 / E11）：同じテキストを再構成することで、異なるシード間で世界全体が変更される。**シーンに関する主張を行うには、2つのシードが必要であり、それによって初めてそれが特性として確立される。**
-- **一貫した世界観の維持**（E12）：開始フレームで存在する実際の部屋が、カメラ階層における2つのシードを使用して、最後のフレームまで維持される。フィールド差分により、開始画像に単一の属性が割り当てられる。同じ階層で、プレビズの空虚な状態を維持し、別の空虚な状態を作り出す（E11、第3段階）：世界は作成され、その後維持される。
-- **カタログの6.0 / uni_pcは、カメラ階層の基準となる**（E12）：継承された3.5 / eulerという前提が、独自のレベルに落ちる。カタログの設定では、頭を失い、手足が生えた同じシードを使用して、人物をf80まで維持する。そのコストは明確であり、より強力な一貫性を追求することで、**範囲外のアイデンティティ条項**が2つのシードのうちの1つに適用され、対象に限定されたプロンプトが優先される。
+- **Identity holds** — driven (E08: the face reads as the twin's through the shot) *and*
+  unanchored (E11 wave 1: every feature to the last frame with no reference, no clip-vision,
+  no driving signal). The Director's eye is the verdict of record on both.
+- **The camera obeys explicit control to one pixel** on the camera-tier weights (E11 wave 3) —
+  and pushes in uncommanded without it (E11 wave 1).
+- **Density moves the signal, not the performance** (E10) — resampling smooths steps 41 %,
+  the performance 8.6 %; adopted anyway by eye: more fps reads better.
+- **A licence row is not a wiring claim** (E11 wave 2) — a mapped-Apache model and a graph that
+  never loaded it produced 65 frames of noise with every gate green. Gate PAIR now exists.
+- **Scene composition is seed-volatile** (E10 / E11) — identical text re-composed the world
+  wholesale across seeds. **A scene claim needs two seeds before it is a property.**
+- **A handed world holds** (E12) — a real room in the start frame survives to the last frame
+  on two seeds on the camera tier, one-variable-attributed to the start image by field diff.
+  The same tier handed a previz void held a void (E11 wave 3): worlds are authored, then kept.
+- **The catalog's 6.0 / uni_pc is the camera tier's baseline** (E12) — the inherited
+  3.5 / euler premise fell to its own rung: at the catalog settings the same seeds that lost a
+  head and grew a limb hold the figure to f80. The cost is named — stronger adherence pushed
+  the **unscoped identity clause** onto the crowd on one seed of two; the subject-scoped
+  prompt is the promoted lever.
+- **Identity survives a hosted tier fed only authored references** (E13) — on wan2.7's
+  reference-to-video, both arms, both seeds, the stylized wooden performer came through a
+  human-trained model as the same character at the Director's eye. Three blind predictions
+  across two seats expected the tier to overwrite non-human structure; none was right —
+  one-directional pessimism about these models is now written down as calibration doctrine.
+- **Reference grounds steer model-decided worlds, and dominate seed chaos on that tier**
+  (E13) — grey plates begat a grey studio, a warm bar clip begat a warm interior, and both
+  seeds per arm agreed. Mechanism attribution (plate-bleed vs studio-default) honestly open
+  at four generations; a property-grade claim runs under the two-seed law in a designed
+  follow-up.
+- **A constructed VIDEO reaches VIDEO sockets** (E13) — no upload path exists for clips, but
+  81 authored frames assembled in-graph (`CreateVideo`) were accepted at a reference-video
+  socket. Every VIDEO-typed input on the platform is in principle reachable from authored
+  frames.
 
 ### 何ではないのか
 

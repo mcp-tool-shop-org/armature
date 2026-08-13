@@ -24,7 +24,7 @@ exactly what they do.
 
 `main` carries the current state of every instrument and the evidence behind it. There is
 no release channel, no backport policy and no SLA. See [CHANGELOG.md](CHANGELOG.md) for
-what `v0.1.0` marks and what it deliberately does not.
+what `v0.1.1` marks and what it deliberately does not.
 
 ## Reporting a vulnerability
 

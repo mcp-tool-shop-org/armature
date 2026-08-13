@@ -17,6 +17,63 @@ them is — not an artifact anyone installs.
 
 ### Changed
 
+## [0.1.1] — 2026-08-13
+
+A patch-scale state of the record, cut the same day as v0.1.0: the fourteenth experiment
+closed and the free route's LoRA scene-lever priced live.
+
+### Added
+
+- **E14 closed — the LoRA scene-lever bake-off**
+  ([spec](docs/experiments/E14-lora-scene-lever.md) →
+  [report](docs/experiments/E14-report.md) →
+  [closing ruling](docs/experiments/E14-closing-ruling.md), with both seats' predictions
+  committed before the first submission). Two arms against the byte-pinned E12 wave-3
+  graph, two generations at a ceiling reached exactly, zero partner credits. The transfer
+  premise — the experiment's central ASSUMED question — resolved live on both arms: a
+  T2V-trained style LoRA binds visibly on the Fun-Camera derivative weights. The verdicts
+  of record: the style transform held on both arms; the character held on
+  `technically_color` and failed on the SmartphoneSnapshot pair. The winner carries two
+  standing caveats, recorded where they bind: the served single file's expert tier is
+  unresolvable in-graph (Gate PAIR reports NOT VISIBLE rather than a pass no gate
+  verified), and the `technically_color` grant sets `allowNoCredit: false` — published
+  footage from that arm carries a credits line for renderartist.
+- **`tools/build_lora_arm_payload.py`** — the in-repo arm builder: the LoRA insertion
+  point measured from the served template's walked subgraph rather than inherited from
+  convention, Gate LEDGER's break-aware boxes declared before the diff runs, and
+  **Gate PAIR_TIER**, which raises on a crossed tier-labeled pair and reports NOT VISIBLE
+  for an unlabeled single file. 32 tests, including the red test for the crossed pair the
+  spec named in advance.
+- **Consult #11** ([docs/comfy-consult-11.md](docs/comfy-consult-11.md)) — the
+  GLB→2.5D-sprite side question ruled reference-not-route: the local catalog's honest
+  limit banked (no headless mesh-camera render; the wired-camera path is splat-only;
+  Load3D's camera is serializable node state with round-trip fidelity NOT VISIBLE), the
+  capability located on the existing headless shelf, and orthographic projection named as
+  the one genuine gap — a candidate small spec, not dispatched.
+- `specs/E14-seeds.json` and the byte-pinned E12 wave-3 fixture
+  (`tests/fixtures/E12-w3-camera-i2v.api.json`), so the arms rebuild from the repo alone.
+
+### Fixed
+
+- **`make_thesis_sheet.py` stopped lying twice** — both defects the repo's named class, a
+  literal that lies when reused: the reference plate was silently dropped for any first
+  row not labelled `CONTROL`, and default captions fabricated a turnaround azimuth for
+  video frames. Four regression tests ride the fix; E03's socket prose removed from the
+  shared composer.
+
+### Changed
+
+- The grading law gains its complement, written in the E14 closing ruling: no seat's
+  frame-read approximates identity either — an identity prediction is graded only by the
+  eye that holds the canon, and grading waits for the verdict.
+- The seat-boundary law gains its mechanical form after a disclosed, ruled deviation: an
+  executor who finds binding documents self-contradictory halts and reports, the way a
+  gate fires; seat identity comes from the dispatch mechanics, never a session's
+  self-impression.
+- Front door, handbook and landing surfaces carry fourteen closed, three routes measured,
+  and the winner's caveats. Suite at the close-merge: **1183 passed, 13 skipped** on the
+  rig.
+
 ## [0.1.0] — 2026-08-13
 
 The first marked state of the record. Founded 2026-08-10; twelve experiments closed and a

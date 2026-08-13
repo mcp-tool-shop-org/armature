@@ -27,8 +27,9 @@ and the arc has been through a repo-wide audit — called by the Director, recor
 [docs/audit-first-arc.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/audit-first-arc.md) —
 whose finding is stated plainly rather than buried: the first arc bought clean measurements of
 the *mechanism* and zero frames of the *product*, and the work now runs under a binding
-trajectory rule because of it. **v0.1.0 — the first marked state of the record — was released
-2026-08-13**, hard gates green and translations landed before the tag.
+trajectory rule because of it. **v0.1.1 — the record's current marked state — was released
+2026-08-13**, the same day as v0.1.0 before it, hard gates green and translations landed
+before each tag.
 
 | | Measured, as of 2026-08-13 |
 |---|---|
