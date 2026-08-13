@@ -52,7 +52,7 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** at every submission (GPU-hour billing) under per-experiment ceilings — E12 spent 4 of its 6 bounded submissions, the rest lapsing unspent |
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
 | Tests | **1005 passing on the rig** (13 skips, measured 2026-08-13), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
-| Status | **public again as of 2026-08-13** (private by choice 2026-08-11 → 13) — organizing toward a **v0.1.0** release; the record is the docs tree, and it is complete |
+| Status | **v0.1.0 released 2026-08-13** — the first marked state of the record (public again the same day; private by choice 2026-08-11 → 13); the record is the docs tree, and it is complete |
 
 ### What is measured (the current arc)
 

@@ -20,7 +20,8 @@ challenge only because every claim came with receipts).
 - **THE POSTURE:** experiments exist to learn; the monorepo redefines itself as
   experiments prove paths; **no route is canon by momentum**; dated field checks keep
   technique fresh. The repo is PRIVATE by the Director's choice; the record is the tree.
-  *(2026-08-13: ruled PUBLIC again on his word; Pages re-lit; v0.1.0 treatment launched.)*
+  *(2026-08-13: ruled PUBLIC again on his word; Pages re-lit; the full treatment ran and
+  **v0.1.0 released** — tag at `ff9021b`, translations landed before the tag, audit exit 0.)*
 - **NEW LAW — Per-route disclosure (Director, 2026-08-12):** routes disclose what rides
   with them — provider data-use/training posture, AI-disclosure duties, watermark
   policy — grounded in the licence map's fetched documents. A route without its
