@@ -17,7 +17,7 @@ them is — not an artifact anyone installs.
 
 ### Changed
 
-## [0.1.0] — unreleased
+## [0.1.0] — 2026-08-13
 
 The first marked state of the record. Founded 2026-08-10; twelve experiments closed and a
 thirteenth dispatched by 2026-08-13.
@@ -62,9 +62,12 @@ carry alpha rather than a baked void. A licence row is not a wiring claim — th
 be shown to load the weights the row names. Binding documents are read from `main` at
 dispatch time. Each is recorded in CLAUDE.md next to the measurement that earned it.
 
-**The public surfaces.** README, the landing page and the five-page handbook under `site/`,
-deployed to GitHub Pages; SECURITY.md with a threat model measured against the tree; this
-changelog; and SHIP_GATE.md carrying the hard-gate results as they actually stand.
+**The public surfaces.** README with its seven translations — landed before this tag was
+cut, per the release-ordering rule that a tag is immutable and stale translations under it
+are forever; the landing page and the five-page handbook under `site/`, deployed to GitHub
+Pages; SECURITY.md with a threat model measured against the tree; this changelog; and
+SHIP_GATE.md carrying the hard-gate results as they actually stand — `shipcheck audit`
+exits 0 at this version.
 
 ### What this version deliberately does not mark
 
@@ -80,8 +83,3 @@ changelog; and SHIP_GATE.md carrying the hard-gate results as they actually stan
   experiments and will move again; the record documents each move rather than promising
   it will not happen.
 
-### Not yet done at this version
-
-- Translations of the README (eight languages, run locally) land before the release tag is
-  cut, per the studio's release-ordering rule — a tag is immutable and stale translations
-  under it are forever.
