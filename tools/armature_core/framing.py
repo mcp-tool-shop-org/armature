@@ -72,6 +72,31 @@ def half_fovs(lens_mm, sensor_mm, width, height):
     return math.atan(sx * 0.5 / lens_mm), math.atan(sy * 0.5 / lens_mm)
 
 
+def ortho_half_spans(ortho_scale, width, height):
+    """Half the world-space width and height an ORTHO frame covers, AUTO sensor fit.
+
+    The parallel-projection counterpart of `half_fovs`, and deliberately the same shape:
+    Blender's AUTO fit puts the sensor dimension on the LONGER image axis and derives the
+    other from the aspect, so `ortho_scale` spans the longer axis and the shorter one
+    follows. On a square frame the two are equal and the convention is invisible — which is
+    why S04's calibration render is taken at 352x1024 and not at the square preset it ships.
+
+    Returns HALF spans, because that is what the projection divides by.
+    """
+    if ortho_scale <= 0.0:
+        raise FramingError(
+            f"ortho_scale is {ortho_scale}, which spans no world at all; a parallel camera "
+            f"with a non-positive scale collapses every point onto the frame centre, and "
+            f"the render still saves as a well-formed image")
+    if width >= height:
+        sx = ortho_scale
+        sy = ortho_scale * height / width
+    else:
+        sy = ortho_scale
+        sx = ortho_scale * width / height
+    return 0.5 * sx, 0.5 * sy
+
+
 def camera_position(target, radius, elevation_deg, azimuth_deg):
     el, az = math.radians(elevation_deg), math.radians(azimuth_deg)
     return _add(target, (radius * math.cos(el) * math.cos(az),
@@ -98,11 +123,24 @@ def camera_basis(target, position):
 
 
 def project(point, target, radius, azimuth_deg, elevation_deg,
-            lens_mm, sensor_mm, width, height):
+            lens_mm, sensor_mm, width, height, ortho_scale=None):
     """Screen fractions (x right, y down) of a world point, plus whether it is in front.
 
     (0, 0) is the top-left corner and (1, 1) the bottom-right, so the numbers read the way
     a composition is discussed: "he arrives at 0.67" is two thirds across.
+
+    **`ortho_scale=None` is the perspective path and it is the one that was here before**
+    (S04): the camera placement, the basis, the behind-test and the perspective arithmetic
+    below are untouched, so a caller that does not pass the keyword cannot tell this
+    function changed. Passing a scale switches the divide: parallel projection drops the
+    `/-z` and measures the lateral offset against a fixed world span instead of a cone.
+
+    **The behind-test is kept in ORTHO too, and that is deliberate.** Parallel projection
+    has no perspective divide, so a point behind the camera does *not* mirror into frame —
+    the arithmetic would place it correctly. Blender's near plane would still clip it, and
+    `silhouette_extent`'s `n_behind` count is what Gate WHOLE raises on, so keeping the
+    test conservative means the ortho standoff has to be genuinely clipping-safe rather
+    than merely arithmetically survivable.
     """
     pos = camera_position(target, radius, elevation_deg, azimuth_deg)
     right, up, back = camera_basis(target, pos)
@@ -110,6 +148,9 @@ def project(point, target, radius, azimuth_deg, elevation_deg,
     z = _dot(v, back)          # positive means behind the camera
     if z >= -1e-9:
         return None, None, False
+    if ortho_scale is not None:
+        hx, hy = ortho_half_spans(ortho_scale, width, height)
+        return 0.5 + 0.5 * (_dot(v, right) / hx), 0.5 - 0.5 * (_dot(v, up) / hy), True
     hx, hy = half_fovs(lens_mm, sensor_mm, width, height)
     ndc_x = (_dot(v, right) / -z) / math.tan(hx)
     ndc_y = (_dot(v, up) / -z) / math.tan(hy)

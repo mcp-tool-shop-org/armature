@@ -49,6 +49,28 @@ class TurnaroundAlphaGate(TurnaroundGate):
     gate = "ALPHA"
 
 
+class TurnaroundCropGate(TurnaroundGate):
+    """A turnaround view's subject runs off the edge of its own cell. S04's andon.
+
+    **The direction the scale solve does not bound.** The shared `ortho_scale` is solved
+    from `silhouette_extent` over the sampled azimuths, and that extent is measured on a
+    cloud `framing_cloud` has already decimated to its cap. So the solve is fitted to a
+    *lower bound* on the silhouette: geometry between two surviving samples, at an azimuth
+    where the widest part of the figure falls between strides, projects further than
+    anything the solve ever saw. The scale then comes out slightly too tight and the cell
+    is cropped.
+
+    Every other check passes on that cell. Gate ALPHA passes — a cropped figure has
+    transparent pixels and opaque ones. Gate TURN passes — the eight views are still
+    distinct. Gate WHOLE passes *by construction*, because it reads the same decimated
+    projection the solve was fitted to, so it is the one gate structurally incapable of
+    seeing this. What is different about CROP is where it looks: at the **rendered alpha**,
+    which is the only place the real silhouette exists.
+    """
+
+    gate = "CROP"
+
+
 #: Alpha is measured in 8-bit counts, so the two saturated values are the two that matter.
 OPAQUE = 255
 
@@ -71,6 +93,108 @@ def orbit_azimuths(n_views, start_deg, sweep_deg):
         raise TurnaroundGate(
             f"a turnaround of {n} view(s) is not a turnaround", {"n_views": n})
     return [float(start_deg) + float(sweep_deg) * (i / float(n)) for i in range(n)]
+
+
+#: The two projections a turnaround can stand on. `PERSPECTIVE` is the one the tool shipped
+#: with; `ORTHOGRAPHIC` is S04's addition.
+PERSPECTIVE = "PERSP"
+ORTHOGRAPHIC = "ORTHO"
+
+
+def projection_plan(ortho, lens_mm, sensor_mm):
+    """Which camera the run stands on, and what quantity is shared across its views.
+
+    The whole branch between the two projections is this function, so that the claim "the
+    perspective path is untouched when the flag is absent" is a property of one testable
+    object rather than of a reader's careful eye over a render loop.
+
+    **The shared quantity is the point of the sprite path.** A perspective turnaround
+    shares a *radius*, and each view's scale then varies a little with what happens to be
+    near the lens. An ortho shot-set shares an *ortho_scale*, which is the frame's world
+    span itself — so a millimetre of character is the same number of pixels in every cell,
+    which is what makes the cells a sheet rather than eight photographs.
+
+    **The ortho plan carries no focal length, and that is the assertion, not an omission.**
+    Blender keeps a `lens` value on an ORTHO camera and ignores it; a plan that passed one
+    along would let a reader believe the lens still composes the shot.
+    """
+    if ortho:
+        return {
+            "projection": ORTHOGRAPHIC,
+            "blender_camera_type": "ORTHO",
+            "solved": "ortho_scale",
+            "shared_across_views": "ortho_scale",
+            "lens_mm": None,
+            "sensor_mm": None,
+            "radius_role": ("standoff only — parallel projection makes screen size "
+                            "independent of distance, so the radius has to be clipping-"
+                            "safe and nothing else"),
+        }
+    return {
+        "projection": PERSPECTIVE,
+        "blender_camera_type": "PERSP",
+        "solved": "radius",
+        "shared_across_views": "radius",
+        "lens_mm": float(lens_mm),
+        "sensor_mm": float(sensor_mm),
+        "radius_role": "composes the shot — it sets how large the subject draws",
+    }
+
+
+def gate_view_crop(view_index, subject_bbox, width, height, path=None, alpha_threshold=None):
+    """Gate CROP · ANDON, per view — the subject does not run off the edge of its cell.
+
+    `subject_bbox` is the INCLUSIVE `(x0, y0, x1, y1)` pixel box of the rendered subject,
+    measured off the written PNG's alpha channel, or `None` when no pixel is subject at
+    all. See `TurnaroundCropGate` for why this has to be measured on rendered alpha and
+    cannot be measured on the projection the scale was solved against.
+
+    **Contact is derived from the box alone**, so the verdict has exactly one source. A
+    second measurement (per-border pixel counts) computed off the same array would agree by
+    construction and read like corroboration it never provided.
+
+    Two clauses, and the first is a vacuity guard. A cell nobody rendered into has no box,
+    touches no border, and would sail through a gate written only against contact — passing
+    *because* the failure was total. Gate ALPHA catches that case in the tool, which is
+    precisely why this gate must not depend on Gate ALPHA having run: a gate whose andon is
+    load-bearing only in another gate's presence is not an andon.
+    """
+    w, h = int(width), int(height)
+    ev = {
+        "gate": "CROP", "view": int(view_index), "path": path,
+        "resolution": [w, h], "subject_bbox_px": (list(subject_bbox)
+                                                  if subject_bbox is not None else None),
+        "alpha_threshold": alpha_threshold,
+        "measured_on": "the rendered alpha channel of the written PNG",
+    }
+    if subject_bbox is None:
+        raise TurnaroundCropGate(
+            f"view {view_index} has no subject pixels at all, so whether it is cropped "
+            "cannot be answered. A gate written only against border contact PASSES this "
+            "cell — an empty frame touches no border — and passes it because the failure "
+            "was complete rather than partial", ev)
+
+    x0, y0, x1, y1 = (int(v) for v in subject_bbox)
+    clearances = {"left": x0, "right": (w - 1) - x1, "top": y0, "bottom": (h - 1) - y1}
+    ev["clearance_px"] = clearances
+    ev["border_contact"] = {side: (c <= 0) for side, c in clearances.items()}
+    ev["cropped"] = any(ev["border_contact"].values())
+
+    touching = sorted(side for side, hit in ev["border_contact"].items() if hit)
+    if touching:
+        raise TurnaroundCropGate(
+            f"view {view_index}: the subject reaches the frame border on "
+            + ", ".join(touching)
+            + f" (bbox {x0},{y0}..{x1},{y1} in {w}x{h}). The shared scale was solved from "
+              "a decimated projection, so a silhouette wider than the samples the solve "
+              "saw crops here and nowhere else: Gate ALPHA passes on a cropped figure, "
+              "Gate TURN passes on eight distinct cropped views, and Gate WHOLE passes "
+              "because it reads the same decimated projection the solve was fitted to",
+            ev)
+
+    ev["verdict"] = (f"view {view_index} whole in its cell; tightest clearance "
+                     f"{min(clearances.values())} px")
+    return ev
 
 
 def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path=None):

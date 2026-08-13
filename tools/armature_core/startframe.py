@@ -402,7 +402,7 @@ def framing_cloud(points, cap=1500):
 
 
 def silhouette_extent(points, target, radius, azimuth_deg, elevation_deg,
-                      lens_mm, sensor_mm, width, height):
+                      lens_mm, sensor_mm, width, height, ortho_scale=None):
     """Unclipped pixel bounds of a projected cloud, plus what fell behind the camera.
 
     Returns `{x0, x1, y0, y1, n_behind, n_points}` in PIXELS, with values free to be
@@ -412,11 +412,20 @@ def silhouette_extent(points, target, radius, azimuth_deg, elevation_deg,
     mirrors it into frame, so including it would move the bounds to a place the figure
     never occupied. Any point behind the lens is itself a framing failure, so the count is
     reported and the caller's gate raises on it.
+
+    `ortho_scale` is passed straight through to `framing.project`: `None` is the
+    perspective path this function has always taken, and a scale selects parallel
+    projection (S04). The bounds are still measured in pixels of the same frame, so Gate
+    WHOLE reads an ortho extent exactly as it reads a perspective one.
+
+    **These bounds are the PROJECTED CLOUD's, not the rendered subject's.** The cloud is
+    decimated to `framing_cloud`'s cap, so this is a lower bound on the true silhouette and
+    Gate CROP — which measures rendered alpha — is what binds the gap.
     """
     xs, ys, behind = [], [], 0
     for p in points:
         fx, fy, ok = framing.project(p, target, radius, azimuth_deg, elevation_deg,
-                                     lens_mm, sensor_mm, width, height)
+                                     lens_mm, sensor_mm, width, height, ortho_scale)
         if not ok:
             behind += 1
             continue
