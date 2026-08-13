@@ -84,6 +84,16 @@ MediaPipe Apache at all three layers) · the payload/fetch/measure tooling per e
 camera-tier second seeds fold into its arms). The `@`-tag investigation ran the same
 day: **consult brief #8** (`docs/comfy-consult-8-brief.md`) carries the measured Wan
 2.6/2.7 reference-tier node contracts and the open questions.
+**E12 CLOSED, same day** (`docs/experiments/E12-closing-ruling.md`): the free route
+has a world — a handed room holds to f80, two seeds, one-variable-proven — and the
+settings premise fell: **6.0 / uni_pc is the camera tier's baseline** on the
+Director's eye (wave-3 seed 1 ruled the route's strongest result). Costs named: the
+unscoped identity clause converts crowds under stronger adherence (one seed of two —
+the **subject-scoped prompt is the promoted next lever**); hands still fail at f80
+(presentation-first shape stands); the camera claim needs a seam-free instrument.
+A1w fell at Gate LOOK unrun; 4 of 6 spent, 2 lapsed; close-merge + the E09-pin
+re-lift check ordered. **E13's gates are due: E12 landed · the wan2.x terms decision
+remains the Director's.**
 **Same day, later:** **E13 is specced and QUEUED behind E12's landing**
 (`docs/experiments/E13-composed-route-probe.md` — the composed route: authored
 references into `wan2.7-r2v`, on the Director's word). Its dispatch gates: E12 landed ·
