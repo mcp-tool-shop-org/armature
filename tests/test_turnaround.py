@@ -210,6 +210,9 @@ PROBE = textwrap.dedent(
                                 [{"view": i, "sha256": "ab" * 32} for i in range(8)], 8),
         "turn_unhashed":    lambda: TA.gate_set_distinct([{"view": 0}], 1),
         "orbit_no_views":   lambda: TA.orbit_azimuths(0, 270.0, 360.0),
+        "crop_left":        lambda: TA.gate_view_crop(0, (0, 90, 980, 940), 1024, 1024),
+        "crop_last_index":  lambda: TA.gate_view_crop(0, (40, 90, 1023, 940), 1024, 1024),
+        "crop_empty_cell":  lambda: TA.gate_view_crop(0, None, 1024, 1024),
     }
     out = {"optimize_flag": sys.flags.optimize, "asserts_active": __debug__, "raised": {}}
     for name, fn in cases.items():
