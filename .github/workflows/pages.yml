@@ -55,6 +55,12 @@ jobs:
           path: site/dist
 
   deploy:
+    # Skipped while the repo is private: Pages went dark with the repo on
+    # 2026-08-11, and deploy-pages 404s against a Pages that does not exist
+    # (measured 2026-08-13, run 31726592984 — the first site/** push since the
+    # visibility change). The build job above stays load-bearing as the site's
+    # CI; deploys resume by themselves if the repo goes public again.
+    if: github.event.repository.private == false
     needs: build
     runs-on: ubuntu-latest
     environment:
