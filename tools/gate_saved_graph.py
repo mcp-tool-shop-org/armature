@@ -93,6 +93,17 @@ WIDGET_INDEX = {
     "WanCameraEmbedding": {"camera_pose": 0, "width": 1, "height": 2, "length": 3,
                            "speed": 4, "fx": 5, "fy": 6, "cx": 7, "cy": 8},
     "WanCameraImageToVideo": {"width": 0, "height": 1, "length": 2, "batch_size": 3},
+    # ---- S03, 2026-08-13: the assembly chain's batch node. Every input is a dotted
+    # COMFY_AUTOGROW_V3 link (`images.image0` …), so there is no literal to compare and the
+    # row is empty — a recorded fact, exactly as `VAEDecode` and `TrimVideoLatent` above,
+    # because the table is looked up with `is None` and an ABSENT class halts the check.
+    #
+    # This row is added by the spec that actually EXECUTES the class. E13's executor was
+    # ruled correct for declining to teach this table for a route that submitted nothing:
+    # a green row for an untravelled path marks it walked. `CreateVideo`, `SaveVideo` and
+    # `LoadImage` — the assembly chain's other three classes — already carried rows above,
+    # so this is the only one S03 adds.
+    "BatchImagesNode": {},
 }
 
 

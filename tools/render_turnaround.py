@@ -1,0 +1,379 @@
+#!/usr/bin/env python
+"""render_turnaround — an RGBA-true N-view turnaround of a static character GLB.
+
+    blender -b -P tools\\render_turnaround.py -- --glb=<textured.glb> --out=<dir>
+
+Note the `--key=value` form: argparse eats leading minus signs, and `--azimuth-start=-90`
+is the shape that survives.
+
+S03 Task A's instrument. A turnaround is the reference kit a route is *handed* when it has
+to bind identity, so this tool's whole product is eight pictures of one character that a
+route can actually consume — which means **authored RGBA, per the Director's ruling of
+2026-08-12**, and not the thing that ruling was made against.
+
+**What it is not.** It is not `stage_render` (control channels — depth/normal/mask/edge —
+orbiting a subject, no shaded pass), and it is not `render_performer` or
+`render_start_frame` (both shade and light beautifully, both stand at ONE azimuth, both
+render a *performance* frame). The orbit machinery lives in `blender_scene`
+(`orbit_azimuth`, `orbit_matrix`, `auto_radius`) and the alpha law lives in
+`armature_core.turnaround`; this file is the place they meet. Nothing here is re-invented:
+the staging — two suns, the 0.16/0.16/0.18 world, EEVEE, the Standard view transform, the
+50 mm lens on a 36 mm sensor — is E09/E10's, carried through `render_start_frame` verbatim.
+
+Prints `RENDER_TURNAROUND_OK`. A crashed `blender -b -P` exits 0, so that line is the
+contract and `$LASTEXITCODE` proves nothing.
+
+--------------------------------------------------------------------------------
+The gates
+
+* **Gate ALPHA, per view** (`turnaround.gate_view_alpha`) — the view carries transparent
+  pixels AND opaque ones. The defect it exists for is the reason S03 exists: the eight
+  views of `facet_E33/turn_final/` are RGBA files whose alpha extrema are (255, 255), a
+  flat grey void baked into the RGB, and no check anywhere reported it.
+* **Gate TURN** (`turnaround.gate_set_distinct`) — as many views as were asked for, and no
+  two byte-identical. A camera that never moved writes a well-formed set of N copies of the
+  front view, and every per-view gate passes on every one of them.
+* **Gate WHOLE, per view** (`startframe.gate_whole`) — the silhouette is inside the frame,
+  measured **unclipped**. A turnaround's widest view is not its narrowest, so a radius that
+  frames the front can still amputate the arms at three-quarter; this is the check that
+  binds the axis the height fit does not.
+
+Gate ALPHA and Gate TURN run after the frames and **before the manifest**, because the
+manifest is what makes a run look finished (`stage_render`'s doctrine, and why its G2 sits
+exactly there). All of them `raise`; none is an `assert` (deleted by -O / PYTHONOPTIMIZE=1)
+and none takes a skip flag.
+
+--------------------------------------------------------------------------------
+Why the radius is solved and not typed in
+
+`auto_radius` fits the subject's bounding SPHERE, which is rotation-invariant and correct
+for a control orbit whose framing must not breathe. It is wrong for a *portrait* turnaround
+frame: fitting a sphere into a 352-wide, 1024-tall frame is bounded by the narrow axis and
+spends two thirds of the frame on empty air. So the radius here is solved on the subject's
+own projected HEIGHT — the axis that barely moves as the camera goes round — to a target
+fraction of the frame, and the width is left to vary and gated per view.
+
+The solve runs through `framing.project`, the same projector `startframe.silhouette_extent`
+and Gate WHOLE use, rather than a closed form derived here. A hand-derived formula that
+disagreed with the projector by a few percent would produce a composition that passes its
+own arithmetic and fails the gate, and the disagreement would be invisible.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is writing PNGs and a manifest under `outputs/`. Compensator:
+delete the directory; owner: the executor session. Inputs are opened read-only —
+`E:\\AI\\training` and `E:\\AI\\facet` are not in git, have no revert, and are never
+written to.
+"""
+
+import argparse
+import hashlib
+import json
+import math
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import bpy  # noqa: E402
+import numpy as np  # noqa: E402
+from mathutils import Vector  # noqa: E402
+
+from armature_core import blender_scene, framing  # noqa: E402
+from armature_core import startframe as SF  # noqa: E402
+from armature_core import turnaround as TA  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
+
+TOOL_VERSION = "S03.1"
+
+#: The staging, inherited verbatim from E09/E10 via `render_start_frame`. Every one of
+#: these is a decision and belongs in the report rather than in a reader's assumptions.
+LENS_MM = 50.0
+SENSOR_MM = 36.0
+KEY_ENERGY, FILL_ENERGY = 3.2, 1.1
+#: The world colour LIGHTS the scene; it does not appear in the picture, because
+#: `film_transparent` makes the world background alpha 0. Linear RGB.
+WORLD_LINEAR = (0.16, 0.16, 0.18)
+
+#: The frame. 352x1024 is `turn_final`'s size, measured on the old set this one is rendered
+#: to stand beside — matching it is what makes the Task-B comparison a comparison rather
+#: than a resize.
+WIDTH, HEIGHT = 352, 1024
+
+#: Of the frame height, over the widest view. Derived from the old set by measurement
+#: (`turn_final` figures span rows 86..937 of 1024 = 0.831), so the new figure is drawn at
+#: the same scale as the one it is compared against.
+HEIGHT_FRAC = 0.831
+
+#: The performer faces -Y — MEASURED, not assumed: `rig_manifest_auto.json` records
+#: `facing_y_sign: -1.0` from the feet-primary instrument with the head cross-check
+#: agreeing. A camera at azimuth 270 therefore stands in front of him, which is view 0.
+AZIMUTH_START_DEG = 270.0
+SWEEP_DEG = 360.0
+ELEVATION_DEG = 0.0
+
+#: Gate WHOLE's margin. The figure must clear every border by this much.
+MARGIN_PX = 2.0
+
+
+class RenderTurnaroundGate(ArmatureError):
+    """The turnaround could not be composed at all."""
+
+
+def parse_args():
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--glb", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--views", type=int, default=8)
+    ap.add_argument("--azimuth-start", type=float, default=AZIMUTH_START_DEG,
+                    help="degrees; view 0 sits here. 270 puts the camera in front of a "
+                         "performer who faces -Y")
+    ap.add_argument("--sweep", type=float, default=SWEEP_DEG,
+                    help="degrees of the CLOSED path; view `views` would coincide with 0")
+    ap.add_argument("--elevation", type=float, default=ELEVATION_DEG)
+    ap.add_argument("--width", type=int, default=WIDTH)
+    ap.add_argument("--height", type=int, default=HEIGHT)
+    ap.add_argument("--height-frac", type=float, default=HEIGHT_FRAC)
+    ap.add_argument("--lens", type=float, default=LENS_MM)
+    ap.add_argument("--sensor", type=float, default=SENSOR_MM)
+    ap.add_argument("--fps", type=int, default=16,
+                    help="pinned before the import because glTF key times are SECONDS; a "
+                         "static subject has no action, and this keeps that true rather "
+                         "than assumed")
+    ap.add_argument("--prefix", default="turn")
+    return ap.parse_args(argv)
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def _alpha_stats(path, width, height):
+    """(alpha_min, alpha_max, transparent_fraction) in 8-bit counts, from the file on disk.
+
+    Measured off the WRITTEN PNG rather than off the render buffer. The buffer is what the
+    renderer believes it produced; the file is what a route is handed, and the two differ
+    exactly when the file format or the colour-mode setting drops the channel — which is
+    the failure this whole tool is aimed at.
+    """
+    img = bpy.data.images.load(path)
+    try:
+        buf = np.empty(width * height * 4, dtype=np.float32)
+        img.pixels.foreach_get(buf)
+        a = buf.reshape(height, width, 4)[..., 3]
+    finally:
+        bpy.data.images.remove(img)
+    counts = np.rint(a * 255.0).astype(np.int32)
+    return (int(counts.min()), int(counts.max()),
+            float((a < TA.TRANSPARENT_BELOW).mean()))
+
+
+def solve_radius_for_height(cloud, target, azimuths, elevation_deg, lens_mm, sensor_mm,
+                            width, height, height_frac):
+    """Orbit radius whose WIDEST-view projected height is `height_frac` of the frame.
+
+    Bisected through `framing.project` — the projector Gate WHOLE also uses — so the
+    composition this returns and the composition the gate measures cannot disagree. The
+    maximum is taken over every azimuth the run will actually render, so a view that
+    happens to project taller than view 0 (perspective: the near shoulder at three-quarter
+    sits closer to the lens than the front shoulder does) still fits.
+    """
+    def tallest(radius):
+        best = 0.0
+        for az in azimuths:
+            ext = SF.silhouette_extent(cloud, target, radius, az, elevation_deg,
+                                       lens_mm, sensor_mm, width, height)
+            best = max(best, (ext["y1"] - ext["y0"]) / float(height))
+        return best
+
+    lo, hi = 1e-3, 1.0
+    for _ in range(200):                      # grow until the figure is small enough
+        if tallest(hi) <= height_frac:
+            break
+        hi *= 2.0
+    else:                                     # pragma: no cover - unreachable in practice
+        raise RenderTurnaroundGate(
+            f"no orbit radius up to {hi:g} draws the subject at or below "
+            f"{height_frac:g} of the frame height")
+    for _ in range(80):
+        mid = 0.5 * (lo + hi)
+        if tallest(mid) > height_frac:
+            lo = mid
+        else:
+            hi = mid
+    return hi
+
+
+def main():
+    started = time.time()
+    a = parse_args()
+    out = os.path.abspath(a.out)
+    os.makedirs(out, exist_ok=True)           # scripts create their own output directories
+    width, height = int(a.width), int(a.height)
+
+    azimuths = TA.orbit_azimuths(a.views, a.azimuth_start, a.sweep)
+
+    # ---- fps FIRST, on an empty scene, before the import. glTF key times are seconds.
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    scene = bpy.context.scene
+    blender_scene.set_frame_rate(scene, a.fps)
+    meshes, arms, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
+    if not meshes:
+        raise RenderTurnaroundGate(f"{a.glb} imported no mesh objects; nothing to render")
+
+    scene.render.engine = "BLENDER_EEVEE"
+    scene.render.resolution_x, scene.render.resolution_y = width, height
+    scene.render.resolution_percentage = 100
+    scene.render.image_settings.file_format = "PNG"
+    scene.view_settings.view_transform = "Standard"
+
+    # The subject is STATIC: the scene frame is pinned so anything the asset carries cannot
+    # move it while the camera does. A turnaround of a walking figure is eight views of
+    # eight different poses, and nothing downstream could tell that from a bad mesh.
+    scene.frame_start = scene.frame_end = 1
+    scene.frame_set(1)
+
+    world = bpy.data.worlds.new("turnaround")
+    scene.world = world
+    world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs[0].default_value = (*WORLD_LINEAR, 1.0)
+
+    key = bpy.data.lights.new("key", type="SUN")
+    key.energy = KEY_ENERGY
+    ko = bpy.data.objects.new("key", key)
+    scene.collection.objects.link(ko)
+    ko.rotation_euler = (math.radians(58), 0.0, math.radians(-25))
+    fill = bpy.data.lights.new("fill", type="SUN")
+    fill.energy = FILL_ENERGY
+    fo = bpy.data.objects.new("fill", fill)
+    scene.collection.objects.link(fo)
+    fo.rotation_euler = (math.radians(65), 0.0, math.radians(150))
+
+    # NO floor. A ground plane is real geometry and renders opaque, so it would fill the
+    # lower frame with exactly the kind of baked, non-transparent backdrop this tool exists
+    # to stop shipping — and `turn_final`, the set this stands beside, has none either.
+
+    subject = [o for o in meshes]
+    verts = blender_scene._evaluated_world_vertices(subject)
+    lo = verts.min(axis=0)
+    hi = verts.max(axis=0)
+    target = ((lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5)
+    cloud = SF.framing_cloud(verts)
+
+    radius = solve_radius_for_height(cloud, target, azimuths, a.elevation, a.lens,
+                                     a.sensor, width, height, a.height_frac)
+
+    cam_data = bpy.data.cameras.new("turn_cam")
+    cam_data.lens, cam_data.sensor_fit, cam_data.sensor_width = a.lens, "AUTO", a.sensor
+    cam_data.clip_start, cam_data.clip_end = 0.01, 1000.0
+    cam = bpy.data.objects.new("turn_cam", cam_data)
+    scene.collection.objects.link(cam)
+    scene.camera = cam
+
+    # THE ALPHA LAW (CLAUDE.md, the Director's ruling 2026-08-12). `film_transparent`
+    # makes the WORLD background alpha 0 while the subject's own geometry stays opaque,
+    # so what becomes transparent is exactly the void the law is about and nothing else.
+    # There is no composite here on purpose: this tool's deliverable IS the RGBA master,
+    # and the RGB each consuming route submits is that route's own recorded choice.
+    scene.render.film_transparent = True
+    scene.render.image_settings.color_mode = "RGBA"
+
+    views = []
+    for i, az in enumerate(azimuths):
+        cam.matrix_world = blender_scene.orbit_matrix(Vector(target), radius,
+                                                      a.elevation, az)
+        path = os.path.join(out, f"{a.prefix}_{i}.png")
+        scene.render.filepath = path
+        bpy.ops.render.render(write_still=True)
+        if not os.path.isfile(path):          # pragma: no cover - Blender-side failure
+            raise RenderTurnaroundGate(f"view {i} rendered no file at {path}")
+
+        amin, amax, tfrac = _alpha_stats(path, width, height)
+        extent = SF.silhouette_extent(cloud, target, radius, az, a.elevation, a.lens,
+                                      a.sensor, width, height)
+        rec = {
+            "view": i, "azimuth_deg": az, "path": path,
+            "bytes": os.path.getsize(path), "sha256": _sha256(path),
+            "gate_ALPHA": TA.gate_view_alpha(i, amin, amax, tfrac, path),
+            "gate_WHOLE": SF.gate_whole(extent, width, height, MARGIN_PX),
+        }
+        views.append(rec)
+
+    # ---- the set-level andon, after the frames and BEFORE the manifest.
+    gate_turn = TA.gate_set_distinct(views, a.views)
+
+    manifest = {
+        "tool": "render_turnaround", "tool_version": TOOL_VERSION,
+        "blender": blender_scene.blender_provenance(),
+        "numpy": np.__version__,
+        "source": {"glb": os.path.abspath(a.glb), "sha256": _sha256(a.glb),
+                   "bytes": os.path.getsize(a.glb)},
+        "import_info": info,
+        "resolution": [width, height],
+        "camera": {
+            "type": "orbit", "n_views": int(a.views),
+            "azimuth_start_deg": float(a.azimuth_start), "sweep_deg": float(a.sweep),
+            "azimuths_deg": azimuths, "elevation_deg": float(a.elevation),
+            "lens_mm": float(a.lens), "sensor_mm": float(a.sensor),
+            "sensor_fit": "AUTO",
+            "radius": radius, "radius_solved_for": {
+                "height_frac": float(a.height_frac),
+                "over": "the tallest projected view of the set",
+                "why": ("a bounding-sphere fit is bounded by the narrow axis of a "
+                        "352x1024 frame and would spend most of it on empty air; the "
+                        "height is the axis that barely moves as the camera goes round"),
+            },
+            "target": list(target),
+        },
+        "subject": {
+            "animation": "static",
+            "bbox_lo": [float(v) for v in lo], "bbox_hi": [float(v) for v in hi],
+            "n_vertices": int(verts.shape[0]),
+            "facing": ("-Y, MEASURED in rig_manifest_auto.json (facing_y_sign -1.0, feet "
+                       "primary, head cross-check agrees) on this GLB's rigged descendant"),
+        },
+        "staging": {
+            "inherited_from": ("E09/E10 via render_start_frame — the same two suns, the "
+                               "same world, EEVEE, Standard view transform"),
+            "world_linear_rgb": list(WORLD_LINEAR),
+            "key_sun_energy": KEY_ENERGY, "fill_sun_energy": FILL_ENERGY,
+            "engine": "BLENDER_EEVEE", "view_transform": "Standard",
+            "floor_drawn": False,
+            "floor_why": ("a ground plane is opaque geometry and would bake a non-"
+                          "transparent backdrop into the lower frame, which is the defect "
+                          "this tool exists to stop shipping"),
+        },
+        "alpha": {
+            "law": "authored image inputs carry alpha, never a baked void",
+            "master": {"color_mode": "RGBA", "film_transparent": True},
+            "composite": ("NONE submitted by this tool. The deliverable is the RGBA "
+                          "master; the RGB composite is the consuming route's own "
+                          "recorded choice, per the law"),
+        },
+        "views": views,
+        "gates": {"TURN": gate_turn,
+                  "ALPHA": [v["gate_ALPHA"]["verdict"] for v in views],
+                  "WHOLE": [v["gate_WHOLE"]["verdict"] for v in views]},
+        "elapsed_s": round(time.time() - started, 2),
+    }
+    with open(os.path.join(out, "turnaround_manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, indent=1)
+
+    for v in views:
+        print(f"view {v['view']} az={v['azimuth_deg']:7.2f}  "
+              f"alpha={tuple(v['gate_ALPHA']['alpha_extrema'])}  "
+              f"transparent={v['gate_ALPHA']['transparent_fraction']:.4f}  "
+              f"h={v['gate_WHOLE']['height_frac']:.4f} w={v['gate_WHOLE']['width_frac']:.4f}")
+    print(f"radius {radius:.6f}   {gate_turn['verdict']}")
+    print("RENDER_TURNAROUND_OK")
+
+
+if __name__ == "__main__":
+    main()
