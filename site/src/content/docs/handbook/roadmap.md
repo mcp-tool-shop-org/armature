@@ -27,6 +27,10 @@ A test count is not the second bar. A demo reel is not the second bar. Until a s
 and used in a real project, armature is `built`, and the roadmap says so out loud. The studio has
 a name for the failure this prevents: tools that get built and never filled.
 
+As of 2026-08-13, armature is **built** by the first bar's own terms — public, hard gates green
+(`shipcheck audit` exit 0), v0.1.0 released. **`filled` remains open**, and this page keeps
+saying so out loud.
+
 ## The arc as run — recorded 2026-08-11, after the audit
 
 The plan below was authored on day one and the first arc re-cut it silently, which the
@@ -41,6 +45,20 @@ un-run (E05). The measurements are real and kept; the framing failure is the aud
 advances toward the full GLB→video scope — with the same force as its licence rows. The
 current line: the first performer built fresh through facet's route (F01/E33) → the named-bone
 rig (E07) → **the first authored performance of a real character (E08)**.
+
+## The arc as it stands — recorded 2026-08-13
+
+Twelve experiments closed (E05 withdrawn un-run), and **v0.1.0 — the first marked state of
+the record — released 2026-08-13**. The phase letters below map loosely onto what actually
+ran: foundation, the exporter and first contact (A–C) held; control (D) became the control
+arc and the **driven route**, proven at shot level and parked for AI-animation buildout;
+identity (E) is measured at the Director's eye three ways — driven (E08), unanchored (E11
+wave 1), and through a held world (E12) — with reference-view mechanics now **E13's probe**
+on a hosted identity-lock tier: dispatched, halted at zero spend on two structural premise
+failures, repaired by a support arc that rebuilt the reference kit with true alpha, and
+re-armed, all on 2026-08-13. Continuity (F) waits on the narration shelf. The posture since
+2026-08-12 is a **learning monorepo**: experiments prove paths, no route is canon by
+momentum, and three routes now stand where the plan imagined one.
 
 ## The arc
 
@@ -100,8 +118,11 @@ carries the measurement that produced it, or it is marked provisional.
 
 ## Where publishing sits
 
-Publishing is in Phase G, after the thesis has been tested. Names are claimed and the release
-path is registered, but **nothing has been published from this repo yet**. The details,
-including a load-bearing constraint about which workflow filename the release path authenticates,
-are in
+Publishing reached its first milestone on 2026-08-13: **v0.1.0**, a GitHub release marking a
+state of the record — twelve experiments, three routes, the laws, with translations landed
+before the tag because a tag is immutable. **Nothing ships to a package registry** — the
+reserved names remain unused, and a version here marks the record, not an installable
+artifact. *(This section read "nothing has been published from this repo yet" until the
+release; the day-zero half expired and the registry half stands.)* The details, including a
+load-bearing constraint about which workflow filename the release path authenticates, are in
 [docs/publishing.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/publishing.md).

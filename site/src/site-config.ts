@@ -16,7 +16,7 @@ export const config: DefaultSiteConfig = {
     'MIT Licensed — built by <a href="https://mcp-tool-shop.github.io/" style="color:var(--color-muted);text-decoration:underline">MCP Tool Shop</a>. Founded 2026-08-10; the record is the repo’s docs tree.',
 
   hero: {
-    badge: 'Twelve experiments closed · E13 dispatched · the thesis is measured at product level',
+    badge: 'v0.1.0 released 2026-08-13 · twelve experiments closed · the thesis is measured at product level',
     headline: 'armature —',
     headlineAccent: 'You block the shot. The model shoots it.',
     description:
@@ -79,7 +79,7 @@ export const config: DefaultSiteConfig = {
       rows: [
         [
           'Experiments',
-          '12 closed (one more withdrawn un-run on a falsified premise); E13 — the composed-route probe — dispatched 2026-08-13',
+          '12 closed (one more withdrawn un-run on a falsified premise); E13 — the composed-route probe — dispatched, halted at zero spend for a repair arc, and re-armed, all 2026-08-13',
         ],
         [
           'Routes',
@@ -103,7 +103,7 @@ export const config: DefaultSiteConfig = {
         ],
         [
           'What exists today',
-          'The routes, the instrument shelf, the licence map, the experiment record E01–E13, and this page',
+          'v0.1.0 — the first marked state of the record — plus the routes, the instrument shelf, the licence map, the experiment record E01–E13, and this page',
         ],
       ],
     },

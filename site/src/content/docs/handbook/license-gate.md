@@ -99,6 +99,13 @@ other way, and *which paper governs API-mediated calls* is recorded as not estab
 residual no fetch can close is the reseller agreement between the two vendors, a residual every
 partner tier carries permanently.
 
+**The Animate-2 loadout** resolved on 2026-08-13, off a consult round that delivered the
+served template's loader filenames as exact strings: the upstream, Wan2.2-Animate-2-14B, is
+Apache 2.0; the entire served loadout lives in one repack repo declaring the same; and the
+CLIP-vision upstream is MIT (with its intended-use caveat quoted in the map rather than
+discovered later). Every verdict YES — **the driven route's unpark is licence-clear**, and
+what still gates it is experimental, not legal.
+
 ## Per-route disclosure
 
 The condition attached to that ruling became standing law (Director, 2026-08-12): **any route

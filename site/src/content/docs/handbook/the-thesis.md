@@ -33,7 +33,8 @@ identity has held through paint at the judging eye three times: driven from the 
 unanchored with no reference and no driving signal at all (E11 wave 1), and through the camera
 tier, where a handed world also holds to the last frame on two seeds (E12). What remains open is
 route-shaped, not thesis-shaped: whether identity survives a *hosted* identity-lock tier fed
-only authored references is E13's question, dispatched 2026-08-13. Full detail in
+only authored references is E13's question — dispatched, halted at zero spend while its
+reference kit was rebuilt with true alpha, and re-armed, all on 2026-08-13. Full detail in
 `docs/experiments/`; every claim above is traceable to a numbered ruling.
 
 What follows is the published evidence that made the thesis worth testing, gathered by a founding

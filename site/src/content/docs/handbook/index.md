@@ -27,12 +27,13 @@ and the arc has been through a repo-wide audit — called by the Director, recor
 [docs/audit-first-arc.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/audit-first-arc.md) —
 whose finding is stated plainly rather than buried: the first arc bought clean measurements of
 the *mechanism* and zero frames of the *product*, and the work now runs under a binding
-trajectory rule because of it.
+trajectory rule because of it. **v0.1.0 — the first marked state of the record — was released
+2026-08-13**, hard gates green and translations landed before the tag.
 
 | | Measured, as of 2026-08-13 |
 |---|---|
 | Experiments closed | **12** (one more withdrawn un-run on a falsified premise) — the control arc · rig repair and skeleton approval · **the first painted shot** · the clean-chain baseline · densified driving · the no-control route's instructive hard fail · **the free route's first held world** |
-| Routes | the **driven route** (rig-rendered pose → Animate; proven at shot level, parked for AI-animation buildout) · the **free route** (authored start frame → camera tier at the 6.0 / uni_pc baseline) · the **composed route** under probe (E13, dispatched 2026-08-13) |
+| Routes | the **driven route** (rig-rendered pose → Animate; proven at shot level, parked — and licence-clear for its unpark as of 2026-08-13) · the **free route** (authored start frame → camera tier at the 6.0 / uni_pc baseline) · the **composed route** under probe (E13 — dispatched, halted at zero spend for a repair arc, and re-armed, all 2026-08-13) |
 | What a control sequence governs | **where** the figure is, at what scale, **when** it moves, and **authored subject motion** — 85.0° against 0.062° |
 | The division of labour | **control owns the outline; the reference owns surface, material and costume** |
 | Identity | **holds at the Director's eye** — driven (E08) and unanchored (E11 wave 1); whether it survives a hosted reference-to-video tier fed only authored references is E13's question |
