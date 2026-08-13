@@ -61,7 +61,18 @@ challenge only because every claim came with receipts).
   2026-08-13): A1 = four pinned kit views over the passed grey presentation; A2 rides
   the in-session cascade-batch probe as a deterministic branch (pass → four
   submissions; structural fail → stills-only at 2, ceiling 212–422; ambiguous →
-  HALT). The re-armed executor merges main into `E13-run` as its first act. **Deliver the
+  HALT). The re-armed executor merges main into `E13-run` as its first act.
+  **⭢ E13 RAN AND CLOSED, same day** (`docs/experiments/E13-closing-ruling.md`; the
+  close-merge `fb4828c` carries S03 home — both branches fully merged; suite on main
+  **1147 / 13**): the Director ruled **the character holds** on the hosted tier (both
+  arms, both seeds — the route's question answered YES) and **both interiors work —
+  reference grounds steer model-decided worlds and dominate seed chaos on this tier**
+  (mechanism caveat honest at n=4). Constructed VIDEO reaches VIDEO sockets — the
+  platform-wide class re-opened. The propagated texture holes became **facet's top
+  priority by his word** (facet `ea34a45`). First partner credits spent: four
+  generations, bracket held. The route graduates measured; its follow-ons (the
+  steering lever under the two-seed law, the subject-scoped clause, reference-count)
+  each await a spec and his word. **Deliver the
   executor paste block the moment he says go** (advisor rule 5).
 - **Two routes:** driven — parked for AI-animation buildout (Wan-Animate2's full
   spatial contract is banked in `docs/comfy-consult-8.md` for the unpark). free — the
