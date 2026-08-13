@@ -42,7 +42,7 @@ def _graph(n=81, **kw):
 
 def _gates(wf, gids, n=81, group=AS.GROUP_SIZE):
     return AS.gate_cascade_topology(wf, n, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                                    group_size=group)
+                                    "video", group_size=group)
 
 
 # ------------------------------------------------------------------ the plan itself
@@ -181,7 +181,7 @@ def test_an_unwired_save_raises_because_create_video_saves_nothing_itself():
     wf[str(B.SAVE_ID)]["inputs"]["video"] = ["999", 0]
     with pytest.raises(AS.AssemblyGate) as exc:
         _gates(wf, gids)
-    assert "output_node: false" in str(exc.value)
+    assert "a VIDEO that never exists" in str(exc.value)
 
 
 def test_a_group_pointing_at_a_batch_instead_of_a_loadimage_raises():
@@ -276,17 +276,20 @@ PROBE = textwrap.dedent(
         wf, gids = B.build(names)
         fi = wf[str(B.FINAL_BATCH_ID)]["inputs"]
         fi["images.image0"], fi["images.image1"] = fi["images.image1"], fi["images.image0"]
-        AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                                 "video")
 
     def dropped():
         wf, gids = B.build(names)
         del wf[str(B.FINAL_BATCH_ID)]["inputs"]["images.image2"]
-        AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                                 "video")
 
     def duplicated():
         wf, gids = B.build(names)
         wf["401"]["inputs"]["images.image0"] = wf["400"]["inputs"]["images.image0"]
-        AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                                 "video")
 
     def paid():
         wf, _ = B.build(names)

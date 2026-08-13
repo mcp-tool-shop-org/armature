@@ -1,0 +1,21 @@
+{
+  "experiment": "E13",
+  "stage": "the composed route, re-armed — A1 (four authored stills) and A2 (the cascade-constructed VIDEO) on wan2.7-r2v, per the RE-ARM amendment of 2026-08-13",
+  "registered_utc": "2026-08-13",
+  "registered_by": "executor seat, on E13-run, BEFORE the first submission of any wan2.7-r2v graph and committed ahead of it",
+  "gate": "S",
+  "seeds": [
+    2026081351,
+    2026081352
+  ],
+  "how_these_were_chosen": "The date-plus-index rule the arc has used since E09: 2026-08-13, runs 51 and 52. Both numbers are new — nothing in this repo has run either — because E13 carries no same-seed comparison to another experiment. E12's 2026081233 is deliberately NOT reused: it belongs to the camera tier's sampler and this is a different generator on a different surface, where holding a number across tiers would buy no comparison and would leave the record explaining which run a number belonged to.",
+  "allocation": {
+    "2026081351": "seed 1 — run on A1 and on A2, so the arms differ in reference modality and in nothing else.",
+    "2026081352": "seed 2 — run on A1 and on A2, same pairing. Two seeds per arm because this tier's worlds are model-decided, so world claims WILL arise and a scene observation from one seed is an observation, never a route property (E10 closing ruling R3)."
+  },
+  "the_pairing_is_the_point": "Four submissions, two seeds, two arms, every seed appearing once in each arm. The one variable between A1 and A2 is what sits in the reference slot; if the seeds differed across arms, every difference in the outputs would be two variables wide and the comparison the spec exists to make would not exist.",
+  "what_pinned_means_on_this_tier": "Wan2ReferenceVideoApi carries `seed` as a plain INT input (get_node, re-measured 2026-08-13) with no `control_after_generate` in API format. In API format a seed is pinned when it is a literal, which is how these are sent. In SAVE format the widget may exist, and route_gates.seeds() reads it there — which is why this tier is taught to SEED_NODES and SEED_INPUTS in the same commit that first submits it, rather than left as a class the seed table does not know. Before that teaching, Gate S on an r2v graph would have reported '0 noise-bearing seed(s), all pinned' having checked nothing: the vacuous shape the halt-era executor was ruled right to refuse.",
+  "what_a_pinned_seed_does_NOT_promise_here": "This is a hosted partner tier. A pinned seed makes the SUBMISSION reproducible as a request; it does not establish that the provider's generation is deterministic, and no run in this repo has measured that. CLAUDE.md's law stands: where a provider is nondeterministic, the record says so, and no repeat-variance floor has been measured on wan2.7-r2v. Nothing in E13 quotes a difference against an unmeasured floor.",
+  "ceiling": "FOUR submissions total — the branch the Stage-0 cascade probe selected before any submission, recorded in docs/experiments/E13-run-report.md §3. Bracket 424-844 credits at the re-estimated 106-211 per generation; HALT above 900 (did not fire). No re-runs: a fired gate ends the run where it stands. Spent credits have no compensator, so the bound is the honest treatment.",
+  "binds_in_both_directions": "An experiment that pre-registered seeds must use one of them, and an experiment that pre-registered none may not vary its seed at all. route_gates.gate_s_registration enforces both clauses against the saved file the cloud converts, and it can only do so on this tier because SEED_NODES now names the class."
+}

@@ -244,8 +244,8 @@ def gate_slot_ceiling(graph, cap=MAX_SLOTS_PER_NODE):
     return ev
 
 
-def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, save_id,
-                          group_size=GROUP_SIZE):
+def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consumer_id,
+                          consumer_input="video", group_size=GROUP_SIZE):
     """Gate CASCADE · ANDON — every frame reaches the video exactly once, in order.
 
     The flat gate above cannot describe this shape, and the failures it would miss are the
@@ -255,13 +255,20 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, save_i
     * groups wired to the final batch out of order — 81 frames, correct count, shuffled clip;
     * a frame in two groups and another in none — count right, clip wrong;
     * the final batch fed by a group's LoadImage rather than the group — silently short.
+
+    `consumer_id` / `consumer_input` name where the constructed VIDEO must go, because the
+    cascade has two callers with different terminals: the Stage-0 probe saves it
+    (`SaveVideo.video`), and E13's A2 arm feeds it to the generator's reference slot
+    (`Wan2ReferenceVideoApi.model.reference_videos.video1`). Hard-coding `SaveVideo` here
+    would have made this gate silently inapplicable to the arm that spends credits.
     """
     n = int(n_frames)
     plan = cascade_plan(n, group_size)
     ev = {"gate": "CASCADE", "n_frames": n, "group_size": int(group_size),
           "n_groups": len(plan), "group_nodes": [str(g) for g in group_ids],
           "final_node": str(final_id), "video_node": str(video_id),
-          "save_node": str(save_id), "plan": [list(p) for p in plan]}
+          "consumer": {"node": str(consumer_id), "input": consumer_input},
+          "plan": [list(p) for p in plan]}
     problems = []
 
     if len(group_ids) != len(plan):
@@ -331,19 +338,23 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, save_i
             f"CreateVideo.images is {video['inputs'].get('images')!r}, not the FINAL batch's "
             f"output — the video would carry one group instead of the clip")
 
-    save = graph.get(str(save_id))
-    if save is None or save.get("class_type") != "SaveVideo":
-        problems.append(f"node {save_id} is not a SaveVideo")
-    elif save["inputs"].get("video") != [str(video_id), 0]:
+    consumer = graph.get(str(consumer_id))
+    if consumer is None:
+        problems.append(f"the constructed VIDEO's consumer, node {consumer_id}, is not in "
+                        f"the graph")
+    elif consumer["inputs"].get(consumer_input) != [str(video_id), 0]:
         problems.append(
-            f"SaveVideo.video is {save['inputs'].get('video')!r}, not CreateVideo's output; "
-            f"CreateVideo is `output_node: false`, so nothing would be saved at all")
+            f"{consumer.get('class_type')}.{consumer_input} is "
+            f"{consumer['inputs'].get(consumer_input)!r}, not CreateVideo's output. "
+            f"CreateVideo is `output_node: false`, so a VIDEO nothing consumes is a VIDEO "
+            f"that never exists")
 
     if problems:
         ev["problems"] = problems
         raise AssemblyGate("; ".join(problems), ev)
 
     ev["verdict"] = (f"{n} distinct LoadImage nodes -> {len(plan)} group batch(es) of at "
-                     f"most {group_size} -> final batch -> CreateVideo -> SaveVideo, "
+                     f"most {group_size} -> final batch -> CreateVideo -> "
+                     f"{graph[str(consumer_id)].get('class_type')}.{consumer_input}, "
                      f"dotted slot keys, groups in frame order, every link resolved")
     return ev

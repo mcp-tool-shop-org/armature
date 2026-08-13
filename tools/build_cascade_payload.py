@@ -113,7 +113,7 @@ def main(argv=None):
     gate_paid = AS.gate_no_paid_nodes(wf)
     gate_ceiling = AS.gate_slot_ceiling(wf, cap=max(a.group, 1))
     gate_topo = AS.gate_cascade_topology(wf, len(names), group_ids, FINAL_BATCH_ID,
-                                         VIDEO_ID, SAVE_ID, group_size=a.group)
+                                         VIDEO_ID, SAVE_ID, "video", group_size=a.group)
     # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no
     # noise-bearing node at all, so the seed clause has nothing to decide, and a green
     # "0 seeds, all pinned" here would be the vacuous shape CLAUDE.md names. The clauses
