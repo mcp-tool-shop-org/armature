@@ -158,3 +158,86 @@ def test_a_missing_manifest_names_itself_rather_than_composing_a_partial_set(tmp
     with pytest.raises(SystemExit) as exc:
         MSS.load_set(str(tmp_path))
     assert "turnaround_manifest.json" in str(exc.value)
+
+
+# ------------------------------------------------- S05: comparing where the scale came from
+
+
+def _ortho_set(source, scale=1.1235359256161628, el=30.0):
+    """A loaded set shaped like `load_set`'s return, with S05's recorded source."""
+    return {"dir": f"d/{source}", "camera": {"elevation_deg": el}, "views": [],
+            "manifest": {}, "projection": "ORTHO", "ortho_scale": scale,
+            "ortho_scale_source": source, "radius": 2.05, "elevation_deg": el,
+            "resolution": [1024, 1024]}
+
+
+def test_the_row_tag_is_read_off_the_manifest_not_assigned_by_position():
+    """The defect this whole mode exists for. `compare` hard-tags its second row PERSP by
+    position, so pointing it at two ortho sets prints PERSP over a row whose own manifest
+    says ORTHO — and that sheet saves, opens, rules itself and looks finished."""
+    assert MSS.set_tag(_ortho_set("solved")) == "SOLVED"
+    assert MSS.set_tag(_ortho_set("pinned")) == "PINNED"
+    assert MSS.set_tag(dict(_ortho_set("solved"), projection="PERSP")) == "PERSP"
+
+
+def test_a_set_rendered_before_the_pin_existed_says_so_rather_than_claiming_solved():
+    """An S04 manifest has no source key. `None` there is silence about the question, not
+    an answer to it, and labelling it `SOLVED` would put a claim on the sheet that the
+    manifest never made."""
+    older = dict(_ortho_set("solved"), ortho_scale_source=None)
+    assert MSS.set_tag(older) == "ORTHO-SOURCE-NOT-RECORDED"
+    assert "NOT RECORDED" in MSS.row_title(older, "ORTHO")
+
+
+def test_the_row_title_names_the_source_and_keeps_the_scale_retypable():
+    """`.6f` truncates 1.1235359256161628 to 1.123536, which is a different world span. On
+    a pinned row the number IS the recipe — the next character in the roster is rendered by
+    retyping it — so the row carries the full repr."""
+    pinned = MSS.row_title(_ortho_set("pinned"), "PINNED")
+    assert "1.1235359256161628" in pinned
+    assert "PINNED, used verbatim" in pinned
+    assert "SOLVED from the largest silhouette" in MSS.row_title(_ortho_set("solved"),
+                                                                 "SOLVED")
+
+
+def test_the_scale_mode_refuses_two_sets_whose_tags_would_collide(tmp_path, monkeypatch):
+    """Not cosmetic: cells are written as `<tag>_<view>.png`, so two rows sharing a tag
+    overwrite each other and the sheet shows ONE set twice — ruled, labelled, and entirely
+    plausible as a comparison of two."""
+    monkeypatch.setattr(MSS, "load_set", lambda d: _ortho_set("solved"))
+    with pytest.raises(SystemExit) as exc:
+        MSS.main(["--ortho=a", "--second=b", f"--out={tmp_path}", "--mode=scale"])
+    assert "overwrite each other" in str(exc.value)
+
+
+def test_the_scale_mode_refuses_a_perspective_set(tmp_path, monkeypatch):
+    """A perspective set has no shared scale, so there is nothing to compare a source
+    against — and the row would be drawn as though there were."""
+    def fake(d):
+        return (_ortho_set("solved") if d.endswith("a")
+                else dict(_ortho_set("pinned"), projection="PERSP"))
+
+    monkeypatch.setattr(MSS, "load_set", fake)
+    with pytest.raises(SystemExit) as exc:
+        MSS.main(["--ortho=a", "--second=b", f"--out={tmp_path}", "--mode=scale"])
+    assert "no such scale to compare" in str(exc.value)
+
+
+def test_the_scale_mode_refuses_across_elevations(tmp_path, monkeypatch):
+    """Same refusal `compare` makes, for the same reason: two sets at different camera
+    heights are not a comparison of anything else."""
+    def fake(d):
+        return (_ortho_set("solved", el=30.0) if d.endswith("a")
+                else _ortho_set("pinned", el=0.0))
+
+    monkeypatch.setattr(MSS, "load_set", fake)
+    with pytest.raises(SystemExit) as exc:
+        MSS.main(["--ortho=a", "--second=b", f"--out={tmp_path}", "--mode=scale"])
+    assert "different elevations" in str(exc.value)
+
+
+def test_the_scale_mode_needs_its_second_set(tmp_path, monkeypatch):
+    monkeypatch.setattr(MSS, "load_set", lambda d: _ortho_set("solved"))
+    with pytest.raises(SystemExit) as exc:
+        MSS.main(["--ortho=a", f"--out={tmp_path}", "--mode=scale"])
+    assert "--second" in str(exc.value)

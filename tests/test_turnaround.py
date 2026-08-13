@@ -214,7 +214,24 @@ PROBE = textwrap.dedent(
         "crop_last_index":  lambda: TA.gate_view_crop(0, (40, 90, 1023, 940), 1024, 1024),
         "crop_empty_cell":  lambda: TA.gate_view_crop(0, None, 1024, 1024),
     }
-    out = {"optimize_flag": sys.flags.optimize, "asserts_active": __debug__, "raised": {}}
+    # S05's plan refusals are deliberately NOT GateFailures, so they get their own catch
+    # rather than a widened one — widening this to ArmatureError would silently turn every
+    # WRONG_ERROR above into a pass for any error in the same family.
+    plan_cases = {
+        "pin_on_perspective": lambda: TA.projection_plan(False, 50.0, 36.0,
+                                                         ortho_scale_pin=1.2),
+        "pin_zero":           lambda: TA.projection_plan(True, 50.0, 36.0,
+                                                         ortho_scale_pin=0.0),
+        "pin_negative":       lambda: TA.projection_plan(True, 50.0, 36.0,
+                                                         ortho_scale_pin=-1.0),
+        "pin_nan":            lambda: TA.projection_plan(True, 50.0, 36.0,
+                                                         ortho_scale_pin=float("nan")),
+        "pin_inf":            lambda: TA.projection_plan(True, 50.0, 36.0,
+                                                         ortho_scale_pin=float("inf")),
+    }
+
+    out = {"optimize_flag": sys.flags.optimize, "asserts_active": __debug__,
+           "raised": {}, "plan_raised": {}}
     for name, fn in cases.items():
         try:
             fn()
@@ -223,6 +240,14 @@ PROBE = textwrap.dedent(
             out["raised"][name] = "RAISED"
         except BaseException as exc:
             out["raised"][name] = "WRONG_ERROR:" + type(exc).__name__
+    for name, fn in plan_cases.items():
+        try:
+            fn()
+            out["plan_raised"][name] = "NO_RAISE"
+        except TA.TurnaroundPlanRefusal:
+            out["plan_raised"][name] = "RAISED"
+        except BaseException as exc:
+            out["plan_raised"][name] = "WRONG_ERROR:" + type(exc).__name__
     print("TURNAROUND " + json.dumps(out))
     """
 )
@@ -253,6 +278,20 @@ def test_every_turnaround_andon_survives_optimization(tmp_path, flag, env_var, l
     """87 of facet's ANDONs turned out to be removable by an environment variable."""
     res = _run(tmp_path, flag=flag, env_var=env_var)
     for name, outcome in res["raised"].items():
+        assert outcome == "RAISED", f"{label}/{name}: {outcome}"
+
+
+@pytest.mark.parametrize(
+    "flag,env_var,label",
+    [(False, False, "plain"), (True, False, "-O"), (False, True, "PYTHONOPTIMIZE=1")],
+)
+def test_the_plan_refusals_survive_optimization(tmp_path, flag, env_var, label):
+    """S05. A refusal that an environment variable deletes is not a refusal, and a pin
+    silently dropped under `-O` renders a roster on per-character scales with every gate
+    green — the exact failure the pin exists to prevent, reintroduced by a flag."""
+    res = _run(tmp_path, flag=flag, env_var=env_var)
+    assert res["plan_raised"], "the probe reported no plan cases at all"
+    for name, outcome in res["plan_raised"].items():
         assert outcome == "RAISED", f"{label}/{name}: {outcome}"
 
 

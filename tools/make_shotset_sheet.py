@@ -20,6 +20,20 @@ that touched its cell edge is visible AS touching it. This is a judging surface 
 submission; the alpha law's "the RGB composite is the consuming route's own recorded
 choice" is discharged here by recording it.
 
+**`--mode=scale` compares where the shared scale came from (S05).**
+
+    <venv-python> tools\\make_shotset_sheet.py --ortho=outputs/S05/solved \\
+        --second=outputs/S05/pinned_roomy --out=outputs/S05/sheets --mode=scale
+
+Two ORTHO sets of one subject at one preset, differing only in whether their shared
+`ortho_scale` was solved or pinned. It is a separate mode rather than a second use of
+`compare` because `compare` hard-tags its rows ORTHO and PERSP **by position**: pointed at
+two ortho sets it prints PERSP over a row whose own manifest says ORTHO, and that sheet
+saves, opens, rules and labels itself, and looks entirely finished. This mode reads both
+tags off the manifests, and refuses the two cases where it could not — a set that is not
+ORTHO at all, and two sets whose tags collide (their cells are named by tag, so they would
+overwrite each other and the sheet would show one set twice).
+
 **The two rules are a ruler, not an argument.** Every cell on a sheet carries horizontal
 lines at the SAME two frame rows — the highest silhouette top and the lowest silhouette
 bottom over every cell on that sheet — so the eye can read how each figure sits against a
@@ -44,7 +58,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sheet_compose  # noqa: E402
 
-TOOL_VERSION = "S04.1"
+TOOL_VERSION = "S05.1"
 
 #: The field each RGBA cutout is composited over, and the cell border drawn on top of it.
 #: Recorded here rather than chosen at the call site so two sheets cannot disagree.
@@ -66,6 +80,10 @@ def load_set(directory):
         "dir": directory, "manifest": man, "camera": cam,
         "projection": cam.get("projection", "NOT RECORDED"),
         "ortho_scale": cam.get("ortho_scale"),
+        # S05. A set rendered before the pin existed carries no source key at all, and
+        # `None` here reads out as "NOT RECORDED" rather than as "solved" — an older
+        # manifest is silent about the question, not an answer to it.
+        "ortho_scale_source": cam.get("ortho_scale_source"),
         "radius": cam.get("radius"),
         "elevation_deg": cam.get("elevation_deg"),
         "resolution": man["resolution"],
@@ -146,10 +164,30 @@ def view_label(v):
     return "   ".join(bits)
 
 
+#: How a set's row is tagged when the sheet compares SCALE SOURCE rather than projection.
+#: Read off each set's own manifest, never assigned by position — a row hard-tagged by
+#: where it happens to sit is how a sheet comes to say PERSP over a set whose manifest
+#: says ORTHO, and the sheet looks entirely finished either way.
+SOURCE_TAGS = {"solved": "SOLVED", "pinned": "PINNED"}
+
+
+def set_tag(s):
+    """This set's row tag, taken from what its manifest recorded."""
+    if s["projection"] != "ORTHO":
+        return s["projection"]
+    return SOURCE_TAGS.get(s.get("ortho_scale_source"), "ORTHO-SOURCE-NOT-RECORDED")
+
+
 def row_title(s, tag):
     cam = s["camera"]
     if s["projection"] == "ORTHO":
-        shared = f"ortho_scale {s['ortho_scale']:.6f} SHARED across all cells"
+        # Full precision, not `.6f`. On a pinned row this number IS the recipe — the next
+        # character in the roster is rendered by retyping it — and 1.123536 is a different
+        # world span from 1.1235359256161628.
+        src = {"pinned": "PINNED, used verbatim (no solve ran)",
+               "solved": "SOLVED from the largest silhouette of this subject"}.get(
+                   s.get("ortho_scale_source"), "source NOT RECORDED by this manifest")
+        shared = (f"ortho_scale {s['ortho_scale']!r} SHARED across all cells   [{src}]")
     else:
         shared = f"radius {s['radius']:.6f} shared; scale varies per view"
     return (f"{tag}  —  {s['projection']}   elevation {cam['elevation_deg']:.0f}deg   "
@@ -185,28 +223,63 @@ def build(sets, tags, out_dir, filename, title, subtitle):
     return os.path.join(out_dir, filename), rules
 
 
+def _refuse_across_elevations(a, b, what):
+    """Two sets at different camera heights are not a comparison of anything else."""
+    if a["camera"]["elevation_deg"] != b["camera"]["elevation_deg"]:
+        raise SystemExit(
+            f"the two sets are at different elevations "
+            f"({a['camera']['elevation_deg']} vs {b['camera']['elevation_deg']}); a "
+            f"comparison across elevation is not a comparison of {what}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--ortho", required=True)
     ap.add_argument("--persp", default=None)
+    ap.add_argument("--second", default=None,
+                    help="--mode=scale: the other ORTHO set, differing only in where its "
+                         "shared scale came from (S05)")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--mode", choices=("shotset", "compare"), default="shotset")
+    ap.add_argument("--mode", choices=("shotset", "compare", "scale"), default="shotset")
     a = ap.parse_args(argv)
 
     out_dir = os.path.abspath(a.out)
     os.makedirs(out_dir, exist_ok=True)          # scripts create their own directories
     ortho = load_set(a.ortho)
 
-    if a.mode == "compare":
+    if a.mode == "scale":
+        # S05. `compare` puts a PERSP row under an ORTHO one and hard-tags it by position,
+        # so pointing it at two ortho sets would print PERSP over a set whose own manifest
+        # says ORTHO — a mislabelled sheet that saves, opens and looks finished. This mode
+        # takes both tags off the manifests instead.
+        if not a.second:
+            raise SystemExit("--mode=scale needs --second")
+        second = load_set(a.second)
+        for s, flag in ((ortho, "--ortho"), (second, "--second")):
+            if s["projection"] != "ORTHO":
+                raise SystemExit(
+                    f"{flag} is a {s['projection']} set; --mode=scale compares where an "
+                    f"ORTHO run's shared scale came from, and a perspective set has no "
+                    f"such scale to compare")
+        _refuse_across_elevations(ortho, second, "scale source")
+        tags = [set_tag(ortho), set_tag(second)]
+        if tags[0] == tags[1]:
+            # Not cosmetic: the cell files are named `<tag>_<view>.png`, so two rows
+            # sharing a tag overwrite each other's cells and the sheet shows ONE set
+            # twice, ruled and labelled and entirely plausible.
+            raise SystemExit(
+                f"both sets record ortho_scale_source {ortho.get('ortho_scale_source')!r}, "
+                f"so both rows would be tagged {tags[0]!r}: the sheet could not name its "
+                f"own rows apart and their cells would overwrite each other")
+        sets = [ortho, second]
+        title = ("S05 — the same GLB at the same preset, one shared ortho_scale SOLVED "
+                 "above one PINNED   (diagnostics only; the Director's eye is the verdict)")
+        filename = "S05-solved-vs-pinned.png"
+    elif a.mode == "compare":
         if not a.persp:
             raise SystemExit("--mode=compare needs --persp")
         persp = load_set(a.persp)
-        if persp["camera"]["elevation_deg"] != ortho["camera"]["elevation_deg"]:
-            raise SystemExit(
-                f"the two sets are at different elevations "
-                f"({ortho['camera']['elevation_deg']} vs "
-                f"{persp['camera']['elevation_deg']}); a comparison across elevation is "
-                f"not a comparison of projection")
+        _refuse_across_elevations(ortho, persp, "projection")
         sets, tags = [ortho, persp], ["ORTHO", "PERSP"]
         title = ("S04 — the same GLB at the same elevation, parallel above perspective   "
                  "(diagnostics only; the Director's eye is the verdict)")

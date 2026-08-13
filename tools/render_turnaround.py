@@ -63,6 +63,32 @@ under parallel projection does not depend on distance, so the radius keeps only 
 positional role and is set to a clipping-safe standoff derived from the subject's own
 bounding sphere rather than from a constant in metres.
 
+--------------------------------------------------------------------------------
+`--ortho-scale`: the roster pin (S05)
+
+Absent the pin nothing below applies and the solve above is what runs; the branch is
+`turnaround.projection_plan` again, so "the solved path is untouched when no pin is given"
+is a property of one testable object rather than of a second careful reading of this loop.
+
+With the pin, **the solve does not run and the given number is used verbatim for every
+view**. The solve shares one scale across the views of ONE subject; the pin shares one
+scale across RUNS, which is what a cast needs and what a solve structurally cannot give:
+solved per character, a nine-foot brute and a halfling are each fitted to the same frame
+height and drawn the same size, every cell correctly framed and the relation between them —
+the thing a roster sheet exists to show — gone with no symptom anywhere.
+
+**`--height-frac` does not participate in a pinned run** and the manifest says so instead
+of carrying the value as though it had. There is no solve for a target height to target,
+and a recorded `height_frac` beside a pinned scale describes a fit that never happened.
+
+**The pin is not fitted to its subject, and that is the point and the exposure.** Gate CROP
+already stands on exactly that direction: it reads the rendered alpha, so a pin too tight
+for the character in front of it raises there. Gate WHOLE is upstream of it and reads the
+*projected* cloud, which the solve could never push out of frame (it fits to `height_frac`
+by construction) and a pin can — so on a pinned run Gate WHOLE is live in a direction it is
+not on a solved one.
+
+--------------------------------------------------------------------------------
 **`predicted_vs_measured` rides each view as a diagnostic and gates nothing.** It sets the
 projector's extent against the rendered alpha's bbox — two independent measurements of one
 silhouette, and the pair that exposes a wrong ortho aspect convention, which no gate here
@@ -116,7 +142,7 @@ from armature_core import startframe as SF  # noqa: E402
 from armature_core import turnaround as TA  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
-TOOL_VERSION = "S04.1"
+TOOL_VERSION = "S05.1"
 
 #: The staging, inherited verbatim from E09/E10 via `render_start_frame`. Every one of
 #: these is a decision and belongs in the report rather than in a reader's assumptions.
@@ -187,7 +213,50 @@ def parse_args():
                     help="parallel projection with ONE ortho_scale shared by every view "
                          "— the sprite shot-set. Absent, the perspective path runs "
                          "unchanged (S04)")
-    return ap.parse_args(argv)
+    ap.add_argument("--ortho-scale", type=float, default=None,
+                    help="pin the shared ortho_scale instead of solving it: one recorded "
+                         "number a whole ROSTER renders on, so relative character heights "
+                         "survive into the sheet. Used verbatim; --height-frac does not "
+                         "participate. Requires --ortho (S05)")
+    a = ap.parse_args(argv)
+
+    # The two refusals, at the parser, where the mistake is still free. `projection_plan`
+    # refuses the same two for callers who never reach this function.
+    if a.ortho_scale is not None:
+        if not a.ortho:
+            ap.error(
+                "--ortho-scale pins the parallel-projection frame span, and there is no "
+                "such span on the perspective path — what is shared there is the radius. "
+                "Accepting it here would render a perspective turnaround that silently "
+                "ignored the one number the run was pinned on. Pass --ortho, or drop the "
+                "pin")
+        if not (math.isfinite(a.ortho_scale) and a.ortho_scale > 0.0):
+            ap.error(
+                f"--ortho-scale={a.ortho_scale!r} is not a finite positive world span. A "
+                "non-positive span collapses every point onto the frame centre and a "
+                "non-finite one sends them nowhere at all; both still write a well-formed, "
+                "correctly-sized RGBA PNG that no later check reports on")
+
+    #: What was typed, kept beside what was parsed. `float(repr(x)) == x` already makes the
+    #: recorded double re-typable on its own; this is the other half of the recipe law —
+    #: the roster's next character is rendered by retyping a command line, and a manifest
+    #: that records only the parsed value cannot show that the two ever agreed.
+    a.ortho_scale_text = _pinned_text(argv)
+    return a
+
+
+def _pinned_text(argv):
+    """The `--ortho-scale` value exactly as it was typed, or None.
+
+    Blender-free and separately testable, because the thing it exists to preserve is a
+    string that no other measurement in this tool can reconstruct.
+    """
+    for i, tok in enumerate(argv):
+        if tok.startswith("--ortho-scale="):
+            return tok.split("=", 1)[1]
+        if tok == "--ortho-scale" and i + 1 < len(argv):
+            return argv[i + 1]
+    return None
 
 
 def _sha256(path):
@@ -293,6 +362,60 @@ def _predicted_vs_measured(extent, bbox):
                  "WIDER of the two (decimation under-reports, anti-aliasing over-reports), "
                  "so negative on x0/y0 and positive on x1/y1 is the ordinary sign pattern"),
     }
+
+
+def ortho_scale_record(plan, ortho_scale, height_frac, given_text, sphere_radius):
+    """The manifest's account of WHERE this run's shared scale came from, as the two
+    mutually exclusive sub-blocks `(solved_for, pinned_as)`. At most one is not None.
+
+    **Split out of `main` for the reason `_measure_alpha_plane` was**: the property that
+    matters here is which block is *absent*, and a block that is absent inside a Blender-
+    only function is a property nothing can test. The defect is one changed condition —
+    the pre-S05 code keyed the solve record off `ortho_scale is None`, and a pinned run has
+    a scale, so it would write a full solve record naming the `height_frac` the run never
+    targeted. The manifest would then describe a fit that never happened, in the same shape
+    a real fit is described in, and every gate would still be green.
+
+    So the condition is the SOURCE, and `height_frac` reaches the pinned block only as the
+    statement that it did not participate — never as a value.
+    """
+    if plan["ortho_scale_source"] == TA.SOLVED:
+        return {
+            "height_frac": float(height_frac),
+            "over": "the tallest projected view of the set",
+            "shared": True,
+            "why": ("one scale across every cell is the sprite property; a per-view solve "
+                    "frames each cell correctly and destroys the sheet, because a "
+                    "genuinely narrower profile view would be enlarged to match the front "
+                    "view's height"),
+            "subject_sphere_radius": sphere_radius,
+            "standoff_spheres": ORTHO_STANDOFF_SPHERES,
+        }, None
+    if plan["ortho_scale_source"] == TA.PINNED:
+        return None, {
+            "value": ortho_scale,
+            "given_text": given_text,
+            "used": "verbatim for every view; no solve ran",
+            "shared": True,
+            "height_frac_participates": False,
+            "height_frac_role": (
+                "--height-frac targets the solve, and a pinned run does not solve. Whatever "
+                "was on the command line did not reach this render and its VALUE is "
+                "deliberately not recorded here; recording it would describe a fit that "
+                "never happened"),
+            "why": ("one recorded number shared across every run of a roster is what keeps "
+                    "a nine-foot brute and a halfling in relation inside the sheet. Solved "
+                    "per character they would each be fitted to the same frame height and "
+                    "drawn the same size — every cell correctly framed, the roster's whole "
+                    "point gone"),
+            "unbounded_direction": (
+                "a pin is not fitted to this subject, so nothing in the solve keeps it wide "
+                "enough for him; Gate CROP reads the rendered alpha and is where that "
+                "direction is bound"),
+            "subject_sphere_radius": sphere_radius,
+            "standoff_spheres": ORTHO_STANDOFF_SPHERES,
+        }
+    return None, None
 
 
 def solve_radius_for_height(cloud, target, azimuths, elevation_deg, lens_mm, sensor_mm,
@@ -435,7 +558,7 @@ def main():
 
     # ---- THE BRANCH, and the only one. Everything that differs between a perspective
     # turnaround and an ortho shot-set is decided by `projection_plan` and read out below.
-    plan = TA.projection_plan(a.ortho, a.lens, a.sensor)
+    plan = TA.projection_plan(a.ortho, a.lens, a.sensor, ortho_scale_pin=a.ortho_scale)
 
     if plan["projection"] == TA.ORTHOGRAPHIC:
         # Standoff from the subject's OWN bounding sphere: parallel projection cannot let
@@ -444,8 +567,15 @@ def main():
         sphere_radius = float(
             np.linalg.norm(verts - np.asarray(target, dtype=verts.dtype), axis=1).max())
         radius = sphere_radius * ORTHO_STANDOFF_SPHERES
-        ortho_scale = solve_ortho_scale_for_height(
-            cloud, target, radius, azimuths, a.elevation, width, height, a.height_frac)
+        if plan["ortho_scale_source"] == TA.PINNED:
+            # VERBATIM. Not a starting point, not a hint to a solve, not clamped to
+            # anything: the pin's whole value is that the same number governs every run of
+            # a roster, and a tool that adjusted it "a little" for one subject would put
+            # that character back on his own private scale with nothing reporting it.
+            ortho_scale = plan["ortho_scale_pin"]
+        else:
+            ortho_scale = solve_ortho_scale_for_height(
+                cloud, target, radius, azimuths, a.elevation, width, height, a.height_frac)
     else:
         sphere_radius, ortho_scale = None, None
         radius = solve_radius_for_height(cloud, target, azimuths, a.elevation, a.lens,
@@ -514,6 +644,9 @@ def main():
     # ---- the set-level andon, after the frames and BEFORE the manifest.
     gate_turn = TA.gate_set_distinct(views, a.views)
 
+    solved_for, pinned_as = ortho_scale_record(
+        plan, ortho_scale, a.height_frac, a.ortho_scale_text, sphere_radius)
+
     manifest = {
         "tool": "render_turnaround", "tool_version": TOOL_VERSION,
         "blender": blender_scene.blender_provenance(),
@@ -533,17 +666,13 @@ def main():
             "lens_mm": plan["lens_mm"], "sensor_mm": plan["sensor_mm"],
             "sensor_fit": "AUTO",
             "ortho_scale": ortho_scale,
-            "ortho_scale_solved_for": (None if ortho_scale is None else {
-                "height_frac": float(a.height_frac),
-                "over": "the tallest projected view of the set",
-                "shared": True,
-                "why": ("one scale across every cell is the sprite property; a per-view "
-                        "solve frames each cell correctly and destroys the sheet, because "
-                        "a genuinely narrower profile view would be enlarged to match the "
-                        "front view's height"),
-                "subject_sphere_radius": sphere_radius,
-                "standoff_spheres": ORTHO_STANDOFF_SPHERES,
-            }),
+            "ortho_scale_source": plan["ortho_scale_source"],
+            "shared_across_runs": plan["shared_across_runs"],
+            "height_frac_participates": plan["height_frac_participates"],
+            # Both keyed off the SOURCE — never off `ortho_scale is None`, which a pinned
+            # run satisfies too. See `ortho_scale_record`, where the absence is testable.
+            "ortho_scale_solved_for": solved_for,
+            "ortho_scale_pinned_as": pinned_as,
             "radius": radius, "radius_solved_for": (None if ortho_scale is not None else {
                 "height_frac": float(a.height_frac),
                 "over": "the tallest projected view of the set",
@@ -598,7 +727,8 @@ def main():
               + (f"  bbox={v['subject_bbox_px']}" if v["subject_bbox_px"] else "")
               + (f"  d(meas-pred)={pvm}" if pvm else ""))
     print(f"projection {plan['projection']}   radius {radius:.6f}"
-          + ("" if ortho_scale is None else f"   ortho_scale {ortho_scale:.6f} (shared)")
+          + ("" if ortho_scale is None else
+             f"   ortho_scale {ortho_scale!r} ({plan['ortho_scale_source']}, shared)")
           + f"   {gate_turn['verdict']}")
     print("RENDER_TURNAROUND_OK")
 

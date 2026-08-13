@@ -23,55 +23,19 @@ symptom is invisible in any single cell: a character genuinely narrower in profi
 silently enlarged until he matches his own front view.
 """
 
-import importlib.util
 import math
-import os
 import sys
-import types
-from unittest import mock
 
 import pytest
 
 from armature_core import framing
 from armature_core import turnaround as TA
-from conftest import TOOLS
 
 
 LENS, SENSOR = 50.0, 36.0
 
-
-# --------------------------------------------------------------- the tool, without Blender
-
-
-@pytest.fixture(scope="module")
-def rt():
-    """`render_turnaround`, imported with Blender stubbed out.
-
-    The module does `import bpy` at the top, so the suite cannot import it the ordinary
-    way. The repo's existing idiom for this (`test_turnaround.py`, `test_framing.py`) is
-    to regex one function out of the source text and exec it — which works, and which
-    silently stops covering anything the regex does not reach. Stubbing the two modules
-    Blender owns and importing the real file covers `parse_args`, the solve, and the
-    module constants at once, and it fails loudly if the import surface changes.
-    """
-    saved = {k: sys.modules.get(k) for k in ("bpy", "mathutils")}
-    sys.modules["bpy"] = mock.MagicMock(name="bpy")
-    mathutils = types.ModuleType("mathutils")
-    mathutils.Vector = lambda v: v
-    mathutils.Matrix = mock.MagicMock(name="Matrix")
-    sys.modules["mathutils"] = mathutils
-    try:
-        path = os.path.join(TOOLS, "render_turnaround.py")
-        spec = importlib.util.spec_from_file_location("_rt_under_test", path)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        yield mod
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
+# The `rt` fixture — `render_turnaround` imported with Blender stubbed out — lives in
+# `conftest.py`, where S05's pin tests share the one copy.
 
 
 # ------------------------------------------------- the perspective path did not move
