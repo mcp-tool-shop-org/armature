@@ -49,7 +49,14 @@ challenge only because every claim came with receipts).
   the spec 2026-08-13 — remaining: his word, his pick, the re-estimate)*.
   **⭢ E13 DISPATCHED 2026-08-13:** the go was given; A2 = E12 wave-3 seed 1, pinned with
   hash and prompt_id in the spec's dispatch amendment; the re-estimate rides the executor
-  session as its first act. **Deliver the
+  session as its first act.
+  **⭢ E13 HALTED same day, zero spent** (two structural premise failures; the halt ruling
+  is `docs/experiments/E13-halt-ruling.md`) **⭢ S03 ran the repair kit and is RULED**
+  (`docs/dispatches/S03-ruling.md`, branch `S03-run` @ `ae2fc79` unmerged): the RGBA-true
+  turnaround exists and passed its gates; the frames→VIDEO chain works at 8 frames and
+  FAILS at 81 on a BatchImagesNode runtime slot cap — cascade batching is the named
+  zero-credit follow-up. **E13's re-arm waits on exactly one thing: the Director's eye on
+  the kit.** **Deliver the
   executor paste block the moment he says go** (advisor rule 5).
 - **Two routes:** driven — parked for AI-animation buildout (Wan-Animate2's full
   spatial contract is banked in `docs/comfy-consult-8.md` for the unpark). free — the
