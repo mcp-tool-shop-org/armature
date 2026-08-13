@@ -35,7 +35,9 @@ which must raise are proven not to be `assert`s the interpreter may delete.
 **The gates.** G1 generator legality · G2 completeness · G4 bbox sanity · G5 convention
 conformance · G6 subject motion · R control-video round-trip · B batching · S seed
 registration · N rig names · P rest pose · D determinism · ROUTE subgraph blueprints ·
-PAIR conditioning-class to weight-family. Each was earned by a specific silent failure,
+PAIR conditioning-class to weight-family · the break-aware LEDGER (named fields must
+move, unnamed must hold) · BACKDROP (start-frame discrimination at measured thresholds).
+Each was earned by a specific silent failure,
 each raises rather than asserts, and each carries the story of what it exists to catch in
 its own docstring.
 
