@@ -1,0 +1,14 @@
+{
+  "experiment": "E13",
+  "pinned_utc": "2026-08-13",
+  "pinned_by": "executor seat, on E13-run, BEFORE the first submission and committed ahead of it",
+  "tier": "wan2.7-r2v",
+  "prompt": "character1 walks forward a few steps, stops, shifts weight onto one leg, turns the head to look back over one shoulder, then slowly raises one arm and lowers it. Full body in frame from head to feet, unhurried deliberate movement, clear articulation at the joints.",
+  "negative_prompt": "blurry, low quality, extra limbs, text overlay",
+  "the_same_prompt_runs_on_both_arms_and_both_seeds": "One pinned wording, four submissions. The spec's one variable is reference modality; a prompt that differed between arms would make every difference in the outputs two variables wide.",
+  "why_performance_led": "The spec asks what a hosted identity-lock tier does with authored references, so the prompt describes what the figure DOES and not where it is. Walk, stop, weight shift, head turn over the shoulder, an arm raised and lowered: motions that put the hardest structure — hands, face turns, joints — in front of the camera, which is where the stills are extracted from (CLAUDE.md: video is judged in motion AND as frames, at the places structure is hardest).",
+  "no_scene_is_named": "Deliberate, and it is what makes R6/S6 answerable. The tier decides its own world; naming one would confound 'the model invented this world' with 'we asked for it', and the grey-plate-bleed question (R6) and the source-clip-scene question (S6) would both become unreadable.",
+  "no_quoted_dialogue": "Out of scope by the spec: quoted dialogue invokes the lip-sync / voice path, which this probe does not measure and does not budget for.",
+  "why_watermark_is_NOT_in_the_negative_prompt": "H-E13d and R7 ask whether `watermark=false` is honored. If the negative prompt also asked for no watermark, an absent watermark would have two possible causes and the clause would be unmeasurable. The negative is kept minimal for the same reason generally: every term in it is a second lever on the output that the arms do not vary.",
+  "framing_clause_is_a_framing_clause": "'Full body in frame from head to feet' names no place and no set. It is there because the references are whole-figure turnarounds and a crop would make the proportion clause (R2/S3) unreadable on half the frames."
+}

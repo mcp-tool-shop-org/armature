@@ -69,9 +69,41 @@ RULED_COMPONENTS = {
 #: 2026-08-12) asks a `KSampler` whether its SEED equals "disable"; the answer is right for
 #: the wrong reason on every graph, and would be wrong outright on a class whose first
 #: widget happened to be a disabling literal.
+#: ⚠ **A class absent from this table disarms Gate S silently.** E13's halt-era executor
+#: measured exactly that and refused to record it as a pass: on a `wan2.7-r2v` graph
+#: `seeds()` returned empty and `gate_s_registration` reported "0 noise-bearing seed(s),
+#: all pinned" — a green verdict having checked nothing. The halt ruling (R6) ruled the
+#: refusal correct and owed the row to **the first spec that arms this tier**, which is
+#: E13's re-arm.
+#:
+#: `Wan2ReferenceVideoApi` is a hosted partner node, not a sampler: it carries no
+#: `add_noise` input at all, so that entry is `None` for the same reason `KSampler`'s is.
+#: Its save-format widget indices are **READ OFF the file the cloud converted**, 2026-08-13,
+#: not derived — the standard the camera rows were held to. Both readings (the `get_node`
+#: declaration order, and the converted file's own `widgets_values`) are recorded in the
+#: E13 run report and required to agree.
 SEED_NODES = {
     "KSampler": {"seed": 0, "control": 1, "add_noise": None},
     "KSamplerAdvanced": {"seed": 1, "control": 2, "add_noise": 0},
+    "Wan2ReferenceVideoApi": {"seed": 6, "control": 7, "add_noise": None},
+}
+
+#: What a *hosted* tier constrains, where a local generator constrains pixels.
+#:
+#: ⚠ Gate L's `wan` rules describe a dim multiple of 16 and a 4n+1 frame count. **They do
+#: not describe this tier at all** — `wan2.7-r2v` takes a resolution enum, a ratio enum and
+#: an integer duration in seconds, and never receives a pixel dimension from us. Running the
+#: pixel rules against it was the second vacuous gate the E13 halt report recorded, and the
+#: halt ruling owed this table to the first spec that arms the tier. A check that cannot
+#: fail is not a check.
+HOSTED_TIER_RULES = {
+    "wan2.7-r2v": {
+        "resolutions": ("720P", "1080P"),
+        "ratios": ("16:9", "9:16", "1:1", "4:3", "3:4"),
+        "duration_s": (2, 10),
+        "measured": ("get_node('Wan2ReferenceVideoApi'), 2026-08-12, re-measured "
+                     "byte-consistent 2026-08-13"),
+    },
 }
 
 #: Node classes that size a video latent, and where width/height/length live in save
@@ -384,7 +416,8 @@ def components(graph):
 
 
 #: The input names a seed lives under in API format, per node class.
-SEED_INPUTS = {"KSampler": "seed", "KSamplerAdvanced": "noise_seed"}
+SEED_INPUTS = {"KSampler": "seed", "KSamplerAdvanced": "noise_seed",
+               "Wan2ReferenceVideoApi": "seed"}
 
 
 def seeds(graph):
@@ -571,6 +604,75 @@ def frame_legality(width, height, length, family="wan"):
             "legal": not problems}
 
 
+#: Where a hosted tier's enum values sit in SAVE format's positional `widgets_values`.
+#: Read off the file the cloud converted, 2026-08-13, and required to agree with the
+#: `get_node` declaration order — the same two-reading standard the camera rows carry.
+#: `gate_saved_graph.WIDGET_INDEX` holds the full row for the same class; this is the
+#: subset Gate L needs, kept here so `route_gates` does not import the gate that imports it.
+HOSTED_ENUM_WIDGETS = {
+    "Wan2ReferenceVideoApi": {"resolution": 3, "ratio": 4, "duration": 5},
+}
+
+
+def hosted_enums(graph):
+    """A hosted tier's `(node_id, resolution, ratio, duration)`, in EITHER format.
+
+    Found by the field rather than by the class name in API format, because the thing being
+    read is the field. In save format there are no field names at all — the values are
+    positional — so the class-keyed table above is the only way in, and a class missing
+    from it returns nothing rather than guessing an index.
+    """
+    api = is_api_format(graph)
+    for where, n in _iter_nodes(graph):
+        if api:
+            inp = n.get("inputs") or {}
+            if "model.resolution" in inp:
+                return (n.get("id"), inp.get("model.resolution"), inp.get("model.ratio"),
+                        inp.get("model.duration"))
+        else:
+            idx = HOSTED_ENUM_WIDGETS.get(n.get("type"))
+            if idx:
+                wv = n.get("widgets_values") or []
+                if len(wv) > max(idx.values()):
+                    return (n.get("id"), wv[idx["resolution"]], wv[idx["ratio"]],
+                            wv[idx["duration"]])
+    return (None, None, None, None)
+
+
+def hosted_frame_legality(resolution, ratio, duration, tier):
+    """Gate L, for a tier that constrains by enum rather than by pixels.
+
+    The clause `frame_legality` above cannot express: `wan2.7-r2v` never receives a width,
+    a height or a frame count from us, so asking whether 1024 is a multiple of 16 answers
+    a question this route does not pose. What it does constrain is a resolution enum, a
+    ratio enum and an integer number of seconds — and every one of those has an illegal
+    value the submission would be refused for, which is what makes this a gate and the
+    pixel clause a category error here.
+
+    Returns the same shape `frame_legality` does, so a caller reports both the same way.
+    """
+    rules = HOSTED_TIER_RULES.get(tier)
+    if rules is None:
+        raise RouteGate(
+            f"no recorded tier rules for {tier!r}; a hosted tier's constraints are recorded "
+            f"in the spec that first uses it, from that tier's own node contract",
+            {"known": sorted(HOSTED_TIER_RULES)})
+    problems = []
+    if resolution not in rules["resolutions"]:
+        problems.append(f"resolution {resolution!r} is not one of {rules['resolutions']}")
+    if ratio not in rules["ratios"]:
+        problems.append(f"ratio {ratio!r} is not one of {rules['ratios']}")
+    lo, hi = rules["duration_s"]
+    if not isinstance(duration, int) or isinstance(duration, bool):
+        problems.append(f"duration {duration!r} is not an integer number of seconds")
+    elif not lo <= duration <= hi:
+        problems.append(f"duration {duration} is outside {lo}..{hi} seconds")
+    return {"gate": "L", "tier": tier, "resolution": resolution, "ratio": ratio,
+            "duration_s": duration, "rules": {k: list(v) if isinstance(v, tuple) else v
+                                              for k, v in rules.items()},
+            "problems": problems, "legal": not problems}
+
+
 def gate_s_registration(graph, registered):
     """Gate S · ANDON — every seed about to run was pre-registered in a committed list.
 
@@ -635,12 +737,25 @@ def gate_s_registration(graph, registered):
     return ev
 
 
-def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=None):
+def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=None,
+           hosted_tier=None):
     """The three questions at once. Raises on anything the record already ruled against.
 
     `allow` names component keys the caller has an explicit ruling for — it is not a skip
     flag, because a component named here still appears in the returned evidence with its
     verdict, so the report cannot omit that it ran.
+
+    `hosted_tier` names a tier from `HOSTED_TIER_RULES` whose graph carries **no pixel
+    dimension at all** — `wan2.7-r2v` takes a resolution enum, a ratio enum and an integer
+    duration, and never receives a width or a frame count from us. On such a graph the
+    pixel clause is not merely unproven, it is INAPPLICABLE, and the enum clause is the one
+    that binds. It is not a skip flag: the tier must be a recorded one (an unknown name
+    raises), the enum values are checked exactly as the pixel rules would be, an illegal
+    one raises here, and the evidence carries both the enum verdict and the reason the
+    pixel clause did not apply — so a report cannot omit that the substitution happened.
+    Passing `frame` and `hosted_tier` together is refused: they are two answers to one
+    question. Owed to this tier by the E13 halt ruling (R6), which measured Gate L's `wan`
+    rules unable to describe it.
 
     `frame` is `(width, height, length)`, or a mapping carrying those keys, for the caller
     that KNOWS the shape it is about to generate — the builder of the graph. It is not a
@@ -657,6 +772,11 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     frame-legality clause is **INDETERMINATE — unproven — and raises**, because a check
     that cannot fail is not a check.
     """
+    if hosted_tier is not None and frame is not None:
+        raise RouteGate(
+            "verify() was given both a hosted tier and a pixel frame; they are two answers "
+            "to the same question and one of them would be the number nobody checked",
+            {"hosted_tier": hosted_tier, "frame": frame})
     comp = components(graph)
     sd = seeds(graph)
     lat = latents(graph)
@@ -767,7 +887,39 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         ev["camera_agreement_verdict"] = "AGREES"
 
     # · ANDON — the clause E08 found passing vacuously. "Nothing to check" and "everything
-    # checked out" must not be the same verdict.
+    # checked out" must not be the same verdict. On a hosted tier the honest third answer
+    # is INAPPLICABLE: there is no pixel dimension in the graph to check, and the enum
+    # clause below is what decides legality instead. It still raises on an illegal enum.
+    if hosted_tier is not None:
+        if lat:
+            raise RouteGate(
+                f"verify() was told this is hosted tier {hosted_tier!r}, but the graph "
+                f"carries {len(lat)} latent-sizing node(s). One of those two is wrong, and "
+                f"the pixel clause would go unchecked either way",
+                dict(ev, hosted_tier=hosted_tier))
+        node_id, res, ratio, dur = hosted_enums(graph)
+        if node_id is None:
+            raise RouteGate(
+                f"verify() was told this is hosted tier {hosted_tier!r}, but no node in the "
+                f"graph carries that tier's enum inputs. Gate L would then have nothing to "
+                f"decide in EITHER clause, which is the vacuous state this argument exists "
+                f"to remove", dict(ev, hosted_tier=hosted_tier))
+        tier_ev = dict(hosted_frame_legality(res, ratio, dur, hosted_tier),
+                       source="graph", node_id=node_id)
+        ev["hosted_frame_legality"] = tier_ev
+        ev["frame_legality_verdict"] = "INAPPLICABLE — hosted tier, enum clause instead"
+        ev["frame_legality_inapplicable_reason"] = (
+            f"{hosted_tier} receives no width, height or frame count from this graph; the "
+            f"pixel rules of family {family!r} decide nothing here, so the tier's own enum "
+            f"constraints are checked instead and are reported in `hosted_frame_legality`")
+        if not tier_ev["legal"]:
+            raise RouteGate("Gate L (hosted tier): " + "; ".join(tier_ev["problems"]), ev)
+        ev["verdict"] = (
+            f"{len(comp)} weight file(s), {len(sd)} seed(s) all pinned, hosted tier "
+            f"{hosted_tier} at {tier_ev['resolution']} {tier_ev['ratio']} "
+            f"{tier_ev['duration_s']}s — enum-legal; the pixel clause is inapplicable")
+        return ev
+
     if not ev["frame_legality"]:
         ev["frame_legality_verdict"] = "INDETERMINATE"
         raise RouteGate(

@@ -93,6 +93,35 @@ WIDGET_INDEX = {
     "WanCameraEmbedding": {"camera_pose": 0, "width": 1, "height": 2, "length": 3,
                            "speed": 4, "fx": 5, "fy": 6, "cx": 7, "cy": 8},
     "WanCameraImageToVideo": {"width": 0, "height": 1, "length": 2, "batch_size": 3},
+    # ---- S03, 2026-08-13: the assembly chain's batch node. Every input is a dotted
+    # COMFY_AUTOGROW_V3 link (`images.image0` …), so there is no literal to compare and the
+    # row is empty — a recorded fact, exactly as `VAEDecode` and `TrimVideoLatent` above,
+    # because the table is looked up with `is None` and an ABSENT class halts the check.
+    #
+    # This row is added by the spec that actually EXECUTES the class. E13's executor was
+    # ruled correct for declining to teach this table for a route that submitted nothing:
+    # a green row for an untravelled path marks it walked. `CreateVideo`, `SaveVideo` and
+    # `LoadImage` — the assembly chain's other three classes — already carried rows above,
+    # so this is the only one S03 adds.
+    "BatchImagesNode": {},
+    # ---- E13's re-arm, 2026-08-13: the composed route's hosted generator. The spec owed
+    # this row to "the first spec that arms this tier", and the halt-era executor was ruled
+    # correct for declining to write it for a route that submitted nothing.
+    #
+    # **Read off the file the cloud converted**, not derived — the standard the camera rows
+    # were held to. The converted node's widgets_values are:
+    #   ["wan2.7-r2v", <prompt>, <negative>, "720P", "16:9", 5, 2026081351, "fixed", false]
+    # and the `get_node` declaration order (model, prompt, negative_prompt, resolution,
+    # ratio, duration, seed, watermark, with the IMAGE/VIDEO reference slots dropped as
+    # links) agrees with it — two readings, required to agree, and they do.
+    #
+    # ⚠ `control_after_generate` is inserted at index 7, immediately after the seed, which
+    # shifts `watermark` from the 7 a positional zip would give it to 8. That is exactly the
+    # off-by-one this table exists to catch, and it is the third class in it to carry the
+    # insertion after the two samplers.
+    "Wan2ReferenceVideoApi": {"model": 0, "model.prompt": 1, "model.negative_prompt": 2,
+                              "model.resolution": 3, "model.ratio": 4, "model.duration": 5,
+                              "seed": 6, "watermark": 8},
 }
 
 
@@ -193,6 +222,11 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--experiment", default="E09")
     ap.add_argument("--stage", default="B2")
+    ap.add_argument("--hosted-tier", default=None,
+                    help="a tier from route_gates.HOSTED_TIER_RULES whose graph carries no "
+                         "pixel dimension at all (wan2.7-r2v). Gate L's pixel clause is "
+                         "INAPPLICABLE there, not skipped: the tier's own enum constraints "
+                         "are checked instead and an illegal one still raises")
     ap.add_argument("--frame", default=None,
                     help="width,height,length — the shape the caller knows it is "
                          "generating. Gate L is INDETERMINATE and raises on a graph whose "
@@ -218,10 +252,15 @@ def main(argv=None):
 
     equality = round_trip(api, saved)                       # 0 — is it even our graph
     topology = link_round_trip(api, saved)                  # 0b — is it wired as we wired it
-    gate_route = RG.verify(saved, frame=frame)              # 1
+    gate_route = RG.verify(saved, frame=frame, hosted_tier=a.hosted_tier)   # 1
     gate_s = RG.gate_s_registration(saved, registered)      # 2
     checked = [f for f in gate_route["frame_legality"]]     # 3 — already raised if illegal
-    shapes = sorted({f"{f['width']}x{f['height']}x{f['length']}" for f in checked})
+    if a.hosted_tier:
+        # The honest Gate L line for a tier that has no pixels to report.
+        t = gate_route["hosted_frame_legality"]
+        shapes = [f"{t['resolution']} {t['ratio']} {t['duration_s']}s"]
+    else:
+        shapes = sorted({f"{f['width']}x{f['height']}x{f['length']}" for f in checked})
 
     record = {
         "tool": "gate_saved_graph", "tool_version": TOOL_VERSION,
