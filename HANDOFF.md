@@ -121,7 +121,12 @@ valid on hip-origin motion (survey input: hip translation is a retargeter *setti
 read it from provenance) · the axis-offset second-fixture condition · the builder's
 stale `fit = "authored at 832x480"` string — **owed with a test by the first commit
 that touches `build_camera_i2v_payload`** (fourth stale-label sighting).
-**Admin:** the credits attribution pass (prompt_ids → job records; settles drawdown
+**Admin:** `docs/assets/mark-figure.png` — the Director ruled 2026-08-13 **keep as-is,
+keep an eye on it**: the 93% transparency is correct for a thin wire figure, not an
+error; the treatment's finding (RGB noise under the transparent pixels) matters only if
+the file ever rides a surface that flattens alpha — it is local-only, never
+brand-pushed, and re-authoring waits for a real consumer that needs it ·
+the credits attribution pass (prompt_ids → job records; settles drawdown
 questions with numbers) · movement-library adoptions off the survey
 (`docs/research-grounding-movement-library.md`; 100STYLE cleanest, one licence-map row
 away; the owned factory stands re-validated) · E12's cloud artifacts (two saved
