@@ -59,6 +59,58 @@ RULED_COMPONENTS = {
                  "reason": "non-commercial preprocessor tier"},
     "dwpose": {"verdict": "BANNED", "licence": "weights not fetched",
                "reason": "UNVERIFIED weights tier — treated as NO"},
+
+    # ---- the E14 style-LoRA field, mirrored from the licence map's 2026-08-13 fetch pass.
+    # Four of these are kills. They are entered BECAUSE they are dead: an absent row reads
+    # "NOT IN THIS TABLE", which is a shrug, and the point of a mirror is that naming a
+    # gate-dead file in a graph halts instead of shrugging.
+    "technically_color": {
+        "verdict": "ALLOWED",
+        "licence": "CivitAI grant matrix ['RentCivit', 'Rent', 'Image'], allowNoCredit false",
+        "reason": ("E14 arm T. Third-party-service use and image-commercial both granted. "
+                   "⚠ CREDIT REQUIRED: published footage from this LoRA credits renderartist. "
+                   "The page's 'Apache 2.0' badge is the BASE MODEL's, not this file's — "
+                   "reading it as the grant is a mistake this map made and corrected"),
+    },
+    "smartphonesnapshot": {
+        "verdict": "ALLOWED",
+        "licence": ("CivitAI grant matrix ['Image', 'RentCivit', 'Rent', 'Sell'], "
+                    "allowNoCredit true, allowDerivatives true"),
+        "reason": ("E14 arm S — the most permissive grant in the field. Served as a "
+                   "tier-labelled HIGH/LOW pair; the HIGH file's doubled .safetensors "
+                   "suffix is a Cloud provisioning artifact and is part of its served name"),
+    },
+    "candid_photography": {
+        "verdict": "BANNED",
+        "licence": "CivitAI grant matrix ['RentCivit'] ONLY",
+        "reason": ("withdrawn from E14 before it ran. No image-commercial right and no "
+                   "third-party-service right — both rights this route needs are withheld. "
+                   "Its first YES was read off the base model's Apache badge"),
+    },
+    "80s_fantasy": {
+        "verdict": "BANNED",
+        "licence": "CivitAI grant matrix ['RentCivit', 'Image'], allowDerivatives false",
+        "reason": ("image-commercial granted but 'Rent' — third-party generation-service "
+                   "use — is WITHHELD, and generation through Comfy Cloud is exactly that "
+                   "use. Revival would take the creator's grant, not a re-fetch"),
+    },
+    "instareal": {
+        "verdict": "BANNED",
+        "licence": "Instara Fair Use License",
+        "reason": ("prohibits use on any image/video generation service, platform or API; "
+                   "this route IS that use. `instagirl` is the same house and inherits it"),
+    },
+    "instagirl": {
+        "verdict": "BANNED",
+        "licence": "Instara Fair Use License (same house as instareal)",
+        "reason": "inherits the instareal row's verdict per the licence map",
+    },
+    "vintage_film_grain": {
+        "verdict": "BANNED",
+        "licence": "source unlocated — NOT RETRIEVED",
+        "reason": ("a licence that cannot be retrieved is treated as NO. Revivable only if "
+                   "a source page is found and fetched"),
+    },
 }
 
 #: Node classes that carry a seed, and where it lives in `widgets_values`.

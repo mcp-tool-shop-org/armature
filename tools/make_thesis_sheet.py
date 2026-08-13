@@ -50,7 +50,16 @@ def main():
     ap.add_argument("--title", default=None)
     ap.add_argument("--control-label", default="CONTROL   depth, per-shot, near-bright")
     ap.add_argument("--captions", default=None,
-                    help="'idx=text,idx=text' per-frame labels, replacing azimuth")
+                    help="'idx=text,idx=text' per-frame labels, replacing the frame index")
+    # Azimuth is opt-in as of E14. It used to be the DEFAULT caption, computed as
+    # 360*i/len(frames) — true for a turnaround, and a fabricated number on every video
+    # route, where the frames are time and not a camera orbit. E10's closing lesson names
+    # this class: a tool that bakes one experiment's meaning into a literal will lie the
+    # first time it is reused, and it lies in a caption a reader has no reason to doubt.
+    ap.add_argument("--azimuth-captions", action="store_true",
+                    help="label frames as turnaround azimuth (only true for a turnaround)")
+    ap.add_argument("--no-reference-note", default=None,
+                    help="pipe-separated lines drawn when --reference=none")
     a = ap.parse_args()
 
     captions = None
@@ -94,7 +103,7 @@ def main():
            fill=FG)
 
     y = HDR
-    for title, ddir, names in rows:
+    for row_i, (title, ddir, names) in enumerate(rows):
         d.text((MARGIN, y), title, fill=FG)
         x = MARGIN
         for fi in idx:
@@ -104,28 +113,24 @@ def main():
             sheet.paste(t, (x, y + LABEL_H))
             if captions is not None:
                 cap = f"f{fi:03d}  {captions.get(fi, '')}"
-            else:
+            elif a.azimuth_captions:
                 cap = f"f{fi:03d}  az {360.0 * fi / len(cn):.0f}d"
+            else:
+                cap = f"f{fi:03d}"
             d.text((x, y + LABEL_H + th + 2), cap, fill=DIM)
             x += tw + MARGIN
-        if title.startswith("CONTROL"):
+        # The reference rides the FIRST row, whatever that row is called. This was
+        # `title.startswith("CONTROL")` until E14, where the first row is a BASELINE rather
+        # than a control — and the reference plate was silently not drawn at all. A sheet
+        # that omits the reference on a label mismatch is the panel this repo requires,
+        # missing the third of its four columns, with nothing saying so.
+        if row_i == 0:
             if ref is not None:
                 sheet.paste(ref, (x, y + LABEL_H))
                 d.text((x, y + LABEL_H + th + 2), "REFERENCE (all arms)", fill=DIM)
             else:
-                for i, ln in enumerate([
-                    "REFERENCE: NONE.",
-                    "",
-                    "Held constant (absent)",
-                    "across all three arms.",
-                    "reference_image is",
-                    "required: false on",
-                    "WanVaceToVideo (measured).",
-                    "",
-                    "The subject carries no",
-                    "identity for a reference",
-                    "to preserve or lose.",
-                ]):
+                for i, ln in enumerate(
+                        (a.no_reference_note or "REFERENCE: NONE.").split("|")):
                     d.text((x, y + LABEL_H + 4 + i * 15), ln, fill=DIM)
         y += LABEL_H + th + LABEL_H + MARGIN
 
