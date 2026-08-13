@@ -34,6 +34,8 @@ where the *body* ends.
 
 import math
 
+import numpy as np
+
 from . import framing
 from .errors import GateFailure
 
@@ -215,6 +217,67 @@ def cover_fit(src_w, src_h, width, height, anchor_x=0.5, anchor_y=0.5):
         "note": ("cover fit: scale = max(width/src_w, height/src_h), then a crop placed by "
                  "the anchor. Nothing is padded; the overhang is cropped and reported"),
     }
+
+
+#: Below this, a lit-reference pixel carries too little signal for a ratio to mean anything:
+#: dividing two near-black values amplifies render noise into a bright speckle. Those pixels
+#: are held at "unshadowed" and counted, rather than being allowed to invent a shadow.
+SHADOW_FLOOR_EPS = 1.0 / 255.0
+
+
+def srgb_to_linear(a):
+    """sRGB-encoded values in [0,1] -> linear. The piecewise standard, not a 2.2 power.
+
+    Measured on this build, 2026-08-12: `bpy.types.Image.pixels` hands back the values as
+    STORED — byte 128 reads as 0.50196, not as its linear 0.21586 — so every array that
+    arrives from a rendered PNG is sRGB-encoded and has to be converted deliberately before
+    anything multiplies it. A shadow multiplied in the encoded domain is the wrong density,
+    which reads as a plausible shadow and is not the one the geometry casts.
+    """
+    a = np.asarray(a, dtype=np.float64)
+    return np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4)
+
+
+def linear_to_srgb(a):
+    """The inverse of `srgb_to_linear`, exact at the junction."""
+    a = np.clip(np.asarray(a, dtype=np.float64), 0.0, 1.0)
+    return np.where(a <= 0.0031308, a * 12.92, 1.055 * a ** (1 / 2.4) - 0.055)
+
+
+def shadow_ratio(cast_srgb, lit_srgb, eps=SHADOW_FLOOR_EPS):
+    """How much each pixel of a surface was darkened by the figure standing on it.
+
+    Two renders of the same floor — one with the figure casting onto it, one without — and
+    the ratio between them in LINEAR light is the shadow, independent of the floor's own
+    colour and of its lighting gradient. This is the authored-shadow-layer route, and it is
+    the route because the alternative was measured shut: `is_shadow_catcher` exists on the
+    object in Blender 5.2 and EEVEE ignores it outright — a catcher render came back
+    byte-identical to the ordinary opaque floor, and Cycles is not in this build's engine
+    list.
+
+    Returned per channel and clamped to [0, 1]: a ratio above 1 means the figure made the
+    floor BRIGHTER, which it cannot do, so it is sampling noise. Where the lit reference is
+    below `eps` the ratio is held at 1 — dividing two near-black pixels turns render noise
+    into bright speckle, and a shadow layer that invents light in the dark corners is worse
+    than no shadow layer.
+    """
+    cast = srgb_to_linear(cast_srgb)
+    lit = srgb_to_linear(lit_srgb)
+    dark = lit < float(eps)
+    ratio = np.divide(cast, np.maximum(lit, float(eps)))
+    ratio = np.clip(ratio, 0.0, 1.0)
+    ratio[dark] = 1.0
+    return ratio
+
+
+def apply_shadow(plate_srgb, ratio):
+    """Multiply a plate by a shadow ratio, in linear, and hand it back sRGB-encoded.
+
+    The plate arrives encoded (it is a PNG), the multiply belongs in linear, and the result
+    has to go back out encoded because that is what the compositor will read it as.
+    """
+    lin = srgb_to_linear(plate_srgb) * np.clip(np.asarray(ratio, dtype=np.float64), 0.0, 1.0)
+    return linear_to_srgb(lin)
 
 
 def band_source_rows(target_rows, geom):

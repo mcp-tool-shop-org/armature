@@ -7,6 +7,7 @@ renders, saves, uploads and generates without a single error anywhere.
 
 import math
 
+import numpy as np
 import pytest
 
 from armature_core import framing, startframe as SF
@@ -365,6 +366,74 @@ class TestCoverFit:
     def test_a_degenerate_target_halts(self, w, h):
         with pytest.raises(SF.BackdropGate):
             SF.cover_fit(832, 480, w, h)
+
+
+class TestShadowLayer:
+    """The authored shadow layer — A2w's treatment, and the branch a measurement forced.
+
+    `is_shadow_catcher` exists on the object in Blender 5.2 and EEVEE ignores it: a catcher
+    render came back byte-identical to an ordinary opaque floor. So the shadow is derived,
+    and derived arithmetic is arithmetic that can be wrong in silence — a shadow of the
+    wrong density still looks like a shadow.
+    """
+
+    def test_the_transfer_functions_round_trip(self):
+        a = np.linspace(0.0, 1.0, 257)
+        assert SF.linear_to_srgb(SF.srgb_to_linear(a)) == pytest.approx(a, abs=1e-9)
+
+    def test_the_encoding_is_the_piecewise_standard_not_a_gamma_power(self):
+        """Measured on this build: `Image.pixels` hands back byte 128 as 0.50196, so arrays
+        arrive sRGB-encoded and the conversion has to be the real one. A 2.2 power is wrong
+        by several levels in the shadows, which is exactly where a shadow layer lives."""
+        assert float(SF.srgb_to_linear(128 / 255.0)) == pytest.approx(0.21586, abs=1e-4)
+        assert float(SF.srgb_to_linear(0.04)) == pytest.approx(0.04 / 12.92, abs=1e-12)
+
+    def test_an_unshadowed_floor_produces_no_shadow_at_all(self):
+        """The identity case. If the figure casts nothing, the ratio is 1 everywhere and the
+        plate comes back untouched — a layer that darkened a little regardless would tint
+        every A2w frame with no one able to say why."""
+        lit = np.full((8, 8, 3), 0.5)
+        assert SF.shadow_ratio(lit.copy(), lit) == pytest.approx(np.ones((8, 8, 3)))
+        plate = np.random.default_rng(3).random((8, 8, 3))
+        assert SF.apply_shadow(plate, np.ones((8, 8, 3))) == pytest.approx(plate, abs=1e-9)
+
+    def test_the_ratio_is_taken_in_linear_and_that_changes_the_density(self):
+        """THE clause the colour space matters for. A floor at linear 0.4 shadowed to linear
+        0.1 is a quarter of the light; the same two values compared in the ENCODED domain
+        give 0.66/0.35 = 0.53, a shadow half as deep. Both look like shadows."""
+        lit = SF.linear_to_srgb(np.full((4, 4, 3), 0.40))
+        cast = SF.linear_to_srgb(np.full((4, 4, 3), 0.10))
+        assert SF.shadow_ratio(cast, lit) == pytest.approx(np.full((4, 4, 3), 0.25), abs=1e-6)
+        naive = np.asarray(cast) / np.asarray(lit)
+        assert abs(float(naive.mean()) - 0.25) > 0.2, (
+            "the fixture no longer demonstrates that the domain matters")
+
+    def test_a_ratio_above_one_is_clamped_because_a_shadow_cannot_add_light(self):
+        lit = np.full((4, 4, 3), 0.3)
+        cast = np.full((4, 4, 3), 0.9)
+        assert SF.shadow_ratio(cast, lit).max() == pytest.approx(1.0)
+
+    def test_near_black_reference_pixels_are_held_unshadowed_not_divided(self):
+        """Dividing two near-black pixels turns render noise into bright speckle. A shadow
+        layer that invents light in the dark corners is worse than no shadow layer, so those
+        pixels are held at 1 and the fact is recorded."""
+        lit = np.zeros((4, 4, 3))
+        cast = np.zeros((4, 4, 3))
+        cast[0, 0] = 0.02
+        r = SF.shadow_ratio(cast, lit)
+        assert r == pytest.approx(np.ones((4, 4, 3)))
+
+    def test_the_shadow_darkens_the_plate_and_never_brightens_it(self):
+        rng = np.random.default_rng(11)
+        plate = rng.random((16, 16, 3))
+        ratio = rng.random((16, 16, 3))
+        out = SF.apply_shadow(plate, ratio)
+        assert (out <= plate + 1e-9).all()
+        assert out.min() >= 0.0 and out.max() <= 1.0
+
+    def test_a_fully_occluded_pixel_goes_to_black(self):
+        assert SF.apply_shadow(np.full((2, 2, 3), 0.8),
+                               np.zeros((2, 2, 3))) == pytest.approx(np.zeros((2, 2, 3)))
 
 
 class TestGateBackdrop:

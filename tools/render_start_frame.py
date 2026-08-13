@@ -74,7 +74,7 @@ import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-from armature_core import blender_scene, framing, startframe as SF  # noqa: E402
+from armature_core import blender_scene, framing, pngio, startframe as SF  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "E11.1"
@@ -162,7 +162,111 @@ def parse_args():
                     help="one sentence, into the provenance, on why THIS plate")
     ap.add_argument("--floor", type=int, default=1,
                     help="1 draws a ground plane; recorded either way")
+    ap.add_argument("--shadow-layer", type=int, default=0,
+                    help="1 drops the rendered floor from the picture and keeps only the "
+                         "shadow it catches, multiplied onto the plate — so the figure "
+                         "rides the WHOLE plate instead of a band above our own floor. "
+                         "Needs --floor=1 (the plane must exist to catch anything) and "
+                         "--plate. The alternative treatment, an EEVEE shadow catcher, was "
+                         "measured shut on this build: see armature_core.startframe."
+                         "shadow_ratio")
+    ap.add_argument("--floor-material", default="default",
+                    choices=("default", "wood"),
+                    help="`default` leaves the plane unshaded, as every wave before E12 had "
+                         "it — a pale studio slab. `wood` builds a PROCEDURAL dark-wood "
+                         "material from shader nodes: no image file is read, so it adds no "
+                         "licence surface of any kind")
     return ap.parse_args(argv)
+
+
+#: The procedural floor, as numbers rather than as a picture. Kept out of the node-building
+#: code so the values can be read and changed without a Blender session, and so the one
+#: claim that matters for the licence map — *no image is involved* — is checkable by looking
+#: at a dict rather than by trusting a comment.
+WOOD = {
+    "plank_scale": 3.0,        # bands across the plane; low = wide boards
+    "grain_scale": 12.0,       # noise driving the grain within a board
+    "grain_distortion": 2.2,   # how far the grain bends the bands
+    "grain_detail": 6.0,
+    "dark_linear": (0.0130, 0.0072, 0.0038),   # linear, in the plate's own key
+    "light_linear": (0.0420, 0.0245, 0.0132),
+    # Rough and barely specular, because of the CAMERA and not because of taste. The shot
+    # sits at 6 degrees of elevation, a grazing view of the floor, and at grazing incidence
+    # Fresnel drives the specular lobe toward 1.0: the first values here (roughness 0.55,
+    # specular 0.30) measured a floor mean of 0.0999 looking down at 80 degrees and 0.3515
+    # at the angle the pipeline actually shoots from — a dark wood washed pale by reflected
+    # world. A rough surface scatters that grazing lobe instead of mirroring it.
+    "roughness": 0.95,
+    "specular": 0.02,
+}
+
+
+def build_wood_material(spec=WOOD):
+    """A dark-wood floor material built entirely from procedural nodes.
+
+    **The licence reason this is procedural.** A wood texture is the most ordinary asset in
+    the world to download, and the most ordinary way for a CC-BY-NC or a
+    research-only-derived image to enter a pipeline that has banned both outright. A shader
+    graph of noise and waves has no provenance to check because there is no third-party work
+    in it: the andon below refuses to return a material that reads any image at all, so the
+    claim on the record is enforced rather than asserted.
+
+    The colours are linear and dark on purpose. The plate this floor sits under is a dim bar;
+    a floor lit to studio brightness would read as a lit stage in front of a photograph,
+    which is the thing the Director's eye rejected in the band-only composite.
+    """
+    mat = bpy.data.materials.new("previz_floor_wood")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+
+    coord = nt.nodes.new("ShaderNodeTexCoord")
+    mapping = nt.nodes.new("ShaderNodeMapping")
+    mapping.inputs["Scale"].default_value = (spec["plank_scale"],) * 3
+
+    grain = nt.nodes.new("ShaderNodeTexNoise")
+    grain.inputs["Scale"].default_value = spec["grain_scale"]
+    grain.inputs["Detail"].default_value = spec["grain_detail"]
+
+    wave = nt.nodes.new("ShaderNodeTexWave")
+    wave.wave_type = "BANDS"
+    wave.bands_direction = "Y"
+    wave.inputs["Scale"].default_value = 1.0
+    wave.inputs["Distortion"].default_value = spec["grain_distortion"]
+    wave.inputs["Detail"].default_value = spec["grain_detail"]
+
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].color = (*spec["dark_linear"], 1.0)
+    ramp.color_ramp.elements[1].color = (*spec["light_linear"], 1.0)
+
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.inputs["Roughness"].default_value = spec["roughness"]
+    if "Specular IOR Level" in bsdf.inputs:
+        bsdf.inputs["Specular IOR Level"].default_value = spec["specular"]
+
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    nt.links.new(coord.outputs["Object"], mapping.inputs["Vector"])
+    nt.links.new(mapping.outputs["Vector"], grain.inputs["Vector"])
+    nt.links.new(mapping.outputs["Vector"], wave.inputs["Vector"])
+    nt.links.new(grain.outputs["Fac"], wave.inputs["Distortion"])
+    nt.links.new(wave.outputs["Fac"], ramp.inputs["Fac"])
+    nt.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    nt.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+
+    image_nodes = [n.bl_idname for n in nt.nodes if "TexImage" in n.bl_idname
+                   or "TexEnvironment" in n.bl_idname]
+    if image_nodes:
+        raise RenderGate(
+            "the procedural floor material reads an image, which is the one thing it exists "
+            "not to do: an image carries a licence, and this pipeline bans non-commercial "
+            "and research-only assets outright",
+            {"image_nodes": image_nodes})
+    return mat, {"kind": "procedural", "reads_image_file": False,
+                 "node_types": sorted({n.bl_idname for n in nt.nodes}),
+                 "spec": {k: list(v) if isinstance(v, tuple) else v
+                          for k, v in spec.items()},
+                 "licence_surface": ("none — no image, no third-party asset, no downloaded "
+                                     "texture; the material is shader nodes only")}
 
 
 def _sha256(path):
@@ -307,6 +411,11 @@ def main():
     # scales or tiles it rather than erroring — which is a reframed backdrop nobody chose.
     # `make_plate.py` is what puts a picked still at the frame's exact size.
     backdrop = os.path.abspath(a.plate) if a.plate else None
+    if a.shadow_layer and not (backdrop and a.floor):
+        raise RenderGate(
+            "--shadow-layer needs both --floor=1 and --plate: the plane has to exist to "
+            "catch a shadow, and the shadow has to be multiplied onto something",
+            {"floor": a.floor, "plate": backdrop})
     if backdrop:
         if not os.path.isfile(backdrop):
             raise RenderGate("no such plate", {"plate": backdrop})
@@ -374,6 +483,8 @@ def main():
     scene.collection.objects.link(fo)
     fo.rotation_euler = (math.radians(65), 0.0, math.radians(150))
 
+    floor_material = {"applied": None}
+    gob = None
     if a.floor:
         ground = bpy.data.meshes.new("ground")
         ground.from_pydata([(-20, -20, 0), (20, -20, 0), (20, 20, 0), (-20, 20, 0)], [],
@@ -382,6 +493,14 @@ def main():
         scene.collection.objects.link(gob)
         zs = [(o.matrix_world @ Vector(c)).z for o in subject for c in o.bound_box]
         gob.location = (0.0, 0.0, min(zs))
+        if a.floor_material == "wood":
+            mat, floor_material = build_wood_material()
+            ground.materials.append(mat)
+            floor_material["applied"] = "ground"
+        else:
+            floor_material = {"applied": None, "kind": "default",
+                              "note": ("no material assigned; Blender's default surface — "
+                                       "the pale studio slab every wave before E12 had")}
 
     cam_data = bpy.data.cameras.new("start_cam")
     cam_data.lens, cam_data.sensor_fit, cam_data.sensor_width = LENS_MM, "AUTO", SENSOR_MM
@@ -395,6 +514,12 @@ def main():
     # ---- (1) THE AUTHORED MASTER, RGBA. `film_transparent` makes the WORLD background
     # alpha=0 while the floor plane — real geometry — stays opaque, so what becomes
     # transparent is exactly the void the law is about and nothing else.
+    # Under --shadow-layer the floor is not IN the picture — it exists only to catch what the
+    # figure throws onto it. So it is hidden for every render that describes the frame, and
+    # shown again below only for the two that measure the shadow.
+    if a.shadow_layer:
+        gob.hide_render = True
+
     rgba_path = os.path.join(out, "start_frame_rgba.png")
     scene.render.film_transparent = True
     scene.render.image_settings.color_mode = "RGBA"
@@ -434,26 +559,81 @@ def main():
     diff = np.abs(frame_px - plate_px).max(axis=2) > (1.0 / 255.0)
     frac = float(diff.mean())
 
+    # ---- (2b) THE AUTHORED SHADOW LAYER. Two renders of the floor alone — one with the
+    # figure casting onto it, one without — and their ratio in linear light is the shadow,
+    # free of the floor's own colour and of its lighting gradient. The floor itself never
+    # reaches the picture; only what the figure did to it does.
+    shadow = None
+    if a.shadow_layer:
+        gob.hide_render = False
+        for o in subject + arms:
+            o.hide_render = True
+        lit_path = os.path.join(out, "shadow_lit.png")
+        scene.render.filepath = lit_path
+        bpy.ops.render.render(write_still=True)
+        for o in subject + arms:
+            o.hide_render = False
+        cast_path = os.path.join(out, "shadow_cast.png")
+        scene.render.filepath = cast_path
+        bpy.ops.render.render(write_still=True)
+        gob.hide_render = True
+
+        ratio = SF.shadow_ratio(_pixels(cast_path, width, height),
+                                _pixels(lit_path, width, height))
+        # Where the figure itself stands, the "cast" render is the figure, not the floor, so
+        # its ratio is meaningless — and the figure is opaque over it anyway. Held at 1 so
+        # no silhouette-shaped artefact is baked into the backdrop.
+        ratio[alpha_plane > 0.0] = 1.0
+        shadowed = SF.apply_shadow(_pixels(backdrop, width, height), ratio)
+        shadowed_path = os.path.join(out, "plate_shadowed.png")
+        pngio.write_png(shadowed_path,
+                        np.clip(shadowed * 255.0, 0, 255).round().astype(np.uint8))
+        darkened = ratio < 0.99
+        shadow = {
+            "treatment": "authored shadow layer (ratio of two floor renders, in linear)",
+            "why_not_a_shadow_catcher": (
+                "measured 2026-08-12 on this build: Object.is_shadow_catcher exists and "
+                "EEVEE ignores it — the catcher render came back byte-identical to the "
+                "ordinary opaque floor (mean alpha 0.7105664 both) — and Cycles is not in "
+                "this build's engine list. The alternative the spec allows was shut, so "
+                "this is the branch it left"),
+            "lit_reference": {"path": lit_path, "sha256": _sha256(lit_path)},
+            "cast_reference": {"path": cast_path, "sha256": _sha256(cast_path)},
+            "shadowed_plate": {"path": shadowed_path, "sha256": _sha256(shadowed_path)},
+            "darkened_fraction_of_frame": float(darkened.any(axis=2).mean()),
+            "min_ratio": float(ratio.min()), "mean_ratio_where_darkened": (
+                float(ratio[darkened].mean()) if darkened.any() else None),
+            "held_at_one_over_the_figure": True,
+            "eps": SF.SHADOW_FLOOR_EPS,
+        }
+        backdrop_for_composite = shadowed_path
+    else:
+        backdrop_for_composite = backdrop
+
     # ---- (3) THE SUBMITTED COMPOSITE when a plate was named: the same master, alpha-over
     # the plate, through the compositor. Everything the performer is lit by is unchanged;
     # what fills the void is the only thing that moves.
     frame_path, gate_backdrop = flat_path, None
     if backdrop:
-        wire_plate_composite(scene, backdrop)
+        wire_plate_composite(scene, backdrop_for_composite)
         frame_path = os.path.join(out, "start_frame.png")
         scene.render.filepath = frame_path
         bpy.ops.render.render(write_still=True)
 
         void = alpha_plane < 0.5
         sub_px = _pixels(frame_path, width, height)
-        back_px = _pixels(backdrop, width, height)
+        # Against the image the compositor was actually handed. Under --shadow-layer that is
+        # the SHADOWED plate: comparing to the unshadowed one would report the shadow as a
+        # failure to deliver the plate, which is the opposite of what happened.
+        back_px = _pixels(backdrop_for_composite, width, height)
         gate_backdrop = SF.gate_backdrop(
             void_vs_plate_255=float(np.abs(sub_px[void] - back_px[void]).mean() * 255.0),
             plate_vs_flat_255=float(np.abs(back_px[void] - frame_px[void]).mean() * 255.0),
             transparent_fraction=float(void.mean()),
             why=a.plate_why, tol_255=PLATE_TOL_255,
             min_separation_255=PLATE_MIN_SEPARATION_255,
-            plate=backdrop, plate_sha256=_sha256(backdrop))
+            plate=backdrop_for_composite,
+            plate_sha256=_sha256(backdrop_for_composite))
     ev_cov = {
         "gate": "COVERAGE", "min_fraction": MIN_SUBJECT_FRAC, "subject_fraction": frac,
         "empty_plate": plate_path,
@@ -480,6 +660,7 @@ def main():
                    "pose_signature":
                        blender_scene.evaluated_geometry_signature(subject)},
         "resolution": [width, height], "fps": a.fps, "floor_drawn": bool(a.floor),
+        "floor_material": floor_material,
         "staging": {
             "inherited_from": ("render_performer (E09/E10) for lights, lens and framing; "
                                "the world background is NO LONGER inherited — see alpha"),
@@ -525,6 +706,7 @@ def main():
                                 "only: the lights, the floor geometry, the camera and the "
                                 "pose are the flat route's")}
                       if backdrop else None),
+            "shadow_layer": shadow,
             "gate_ALPHA": gate_alpha,
             "gate_BACKDROP": gate_backdrop},
         "camera": {

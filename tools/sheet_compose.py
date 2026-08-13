@@ -49,7 +49,22 @@ def main():
     rows = [(r["title"], [(_panel(p), p.get("label", "")) for p in r["panels"]])
             for r in spec["rows"]]
 
-    width = max(PAD + sum(im.width + PAD for im, _ in panels) for _, panels in rows)
+    # The sheet is as wide as its widest ROW **or its longest line of text**. Sizing to the
+    # panels alone silently crops every title and label that overruns them, which on a sheet
+    # whose whole job is carrying gate numbers to a human means the numbers are the first
+    # thing to disappear — and a cropped sheet still saves, still opens, and looks fine.
+    ruler = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+
+    def _text_w(s, font):
+        return ruler.textlength(s, font=font) if s else 0
+
+    text_w = max(
+        [_text_w(spec["title"], f_title), _text_w(spec.get("subtitle", ""), f_lab)]
+        + [_text_w(t, f_row) for t, _ in rows]
+        + [_text_w(lab, f_lab) for _, panels in rows for _, lab in panels])
+    width = max(
+        max(PAD + sum(im.width + PAD for im, _ in panels) for _, panels in rows),
+        int(PAD + text_w + PAD) + 6)
     height = TITLE_H + sum(ROW_TITLE_H + panels[0][0].height + LABEL_H + PAD
                            for _, panels in rows) + PAD
     sheet = Image.new("RGB", (width, height), BG)
