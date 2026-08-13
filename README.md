@@ -38,20 +38,21 @@ frame.
 
 ## State: the thesis is measured at product level
 
-Founded **2026-08-10**. Twelve experiments closed and the thesis has moved from *under test*
-to **measured at product level**: the character has danced on screen twice — once driven from
-his own rig, once free — and a handed world now holds to the last frame on two seeds (E12),
-all judged by the Director's eye. The founding-arc audit is at
+Founded **2026-08-10**. Thirteen experiments closed and the thesis has moved from *under test*
+to **measured at product level**: the character has danced on screen driven from his own rig
+and free, a handed world holds to the last frame on two seeds (E12), and **identity now
+survives a hosted, human-trained tier fed nothing but authored references** (E13) — all
+judged by the Director's eye. The founding-arc audit is at
 [docs/audit-first-arc.md](docs/audit-first-arc.md); the posture since 2026-08-12 is a learning
 monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 
 | | |
 |---|---|
-| Experiments | **E01–E12 closed** (E05 withdrawn on a falsified premise) — the control arc (E01–E06) · rig repair + skeleton approval (E07) · **the first painted shot** (E08) · the clean-chain baseline (E09) · densified driving adopted (E10) · the no-control route, three waves to an instructive hard fail (E11) · **the free route gains a world**, and the settings baseline falls to the catalog's 6.0 / uni_pc (E12) · **E13 dispatched 2026-08-13** — the composed-route probe, authored references into the wan2.7 reference-to-video tier |
-| Routes | **two, plus one under probe** — the **driven route** (rig-rendered AAPose sticks → Animate; proven at shot level, parked for AI-animation buildout) · the **free route** (GLB-authored start frame → I2V / camera tiers at the 6.0 / uni_pc baseline; identity holds unanchored, and a handed world holds on two seeds) · the **composed route** (authored references into a hosted identity-lock tier — E13's probe; its disclosure note rides the spec per the per-route disclosure law) |
-| Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** at every submission (GPU-hour billing) under per-experiment ceilings — E12 spent 4 of its 6 bounded submissions, the rest lapsing unspent |
+| Experiments | **E01–E13 closed** (E05 withdrawn on a falsified premise) — the control arc (E01–E06) · rig repair + skeleton approval (E07) · **the first painted shot** (E08) · the clean-chain baseline (E09) · densified driving adopted (E10) · the no-control route, three waves to an instructive hard fail (E11) · **the free route gains a world** and the 6.0 / uni_pc baseline (E12) · **the composed route answers its question** (E13 — dispatched, halted at zero spend, repaired by a support arc, re-armed, run, and closed inside one date: identity holds at the Director's eye; reference grounds steer model-decided worlds) · **E14 in flight** — the LoRA scene-lever bake-off |
+| Routes | **three, measured** — the **driven route** (rig-rendered AAPose sticks → Animate; proven at shot level, parked, and licence-clear for its unpark) · the **free route** (GLB-authored start frame → camera tier at the 6.0 / uni_pc baseline; identity holds unanchored, and a handed world holds on two seeds) · the **composed route** (authored references into a hosted identity-lock tier — graduated by E13: identity-locked, model-decided cinematography with worlds steered by what the references carry; disclosure note in its spec) |
+| Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** (GPU-hour billing) under per-experiment ceilings; **E13's four generations are the repo's first partner-credit spend, inside their pre-stated 424–844 bracket** |
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
-| Tests | **1005 passing on the rig** (13 skips, measured 2026-08-13), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
+| Tests | **1147 passing on the rig** (13 skips, measured 2026-08-13 at the E13 close-merge), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
 | Status | **v0.1.0 released 2026-08-13** — the first marked state of the record (public again the same day; private by choice 2026-08-11 → 13); the record is the docs tree, and it is complete |
 
 ### What is measured (the current arc)
@@ -75,6 +76,20 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
   head and grew a limb hold the figure to f80. The cost is named — stronger adherence pushed
   the **unscoped identity clause** onto the crowd on one seed of two; the subject-scoped
   prompt is the promoted lever.
+- **Identity survives a hosted tier fed only authored references** (E13) — on wan2.7's
+  reference-to-video, both arms, both seeds, the stylized wooden performer came through a
+  human-trained model as the same character at the Director's eye. Three blind predictions
+  across two seats expected the tier to overwrite non-human structure; none was right —
+  one-directional pessimism about these models is now written down as calibration doctrine.
+- **Reference grounds steer model-decided worlds, and dominate seed chaos on that tier**
+  (E13) — grey plates begat a grey studio, a warm bar clip begat a warm interior, and both
+  seeds per arm agreed. Mechanism attribution (plate-bleed vs studio-default) honestly open
+  at four generations; a property-grade claim runs under the two-seed law in a designed
+  follow-up.
+- **A constructed VIDEO reaches VIDEO sockets** (E13) — no upload path exists for clips, but
+  81 authored frames assembled in-graph (`CreateVideo`) were accepted at a reference-video
+  socket. Every VIDEO-typed input on the platform is in principle reachable from authored
+  frames.
 
 ### What is not
 

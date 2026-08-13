@@ -60,6 +60,12 @@ re-armed, all on 2026-08-13. Continuity (F) waits on the narration shelf. The po
 2026-08-12 is a **learning monorepo**: experiments prove paths, no route is canon by
 momentum, and three routes now stand where the plan imagined one.
 
+*Later the same day:* E13 ran its four generations — the repo's first partner-credit
+spend, inside its pre-stated bracket — and closed with the identity verdict at the
+Director's eye: **the character survives the hosted tier**, and the reference's own
+ground steers the model-decided world. The composed route graduated from probe to
+measured route; E14, the LoRA scene-lever bake-off, dispatched behind it.
+
 ## The arc
 
 | Phase | What it is |

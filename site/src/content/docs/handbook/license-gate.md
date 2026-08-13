@@ -52,6 +52,13 @@ V2 **Large is CC-BY-NC-4.0**. Same family, same page structure, different licenc
 V3's *code* is Apache while its **weights** are CC-BY-NC across the board — and the weights are
 what a pipeline actually runs.
 
+**3. The badge is not the grant.** A community-LoRA page can render the *base model's* Apache
+badge beside an adapter whose actual grant matrix withholds the rights you need. Caught
+2026-08-13, twice in one afternoon: CivitAI's structured permissions API reversed two
+page-derived verdicts — one wrong YES killed, one wrong NO revived — and a third model died
+on a clause banning use "on any image/video generation service," which is what running it
+through a hosted tier *is*. Fetch the grant, not the badge.
+
 ## The architectural consequence, which is the interesting part
 
 armature renders depth from Blender's own Z-buffer, and can draw a skeleton from bone transforms

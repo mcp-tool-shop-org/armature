@@ -16,7 +16,7 @@ export const config: DefaultSiteConfig = {
     'MIT Licensed — built by <a href="https://mcp-tool-shop.github.io/" style="color:var(--color-muted);text-decoration:underline">MCP Tool Shop</a>. Founded 2026-08-10; the record is the repo’s docs tree.',
 
   hero: {
-    badge: 'v0.1.0 released 2026-08-13 · twelve experiments closed · the thesis is measured at product level',
+    badge: 'v0.1.0 released · thirteen experiments closed · identity holds — even on a hosted tier fed only authored references',
     headline: 'armature —',
     headlineAccent: 'You block the shot. The model shoots it.',
     description:
@@ -79,7 +79,7 @@ export const config: DefaultSiteConfig = {
       rows: [
         [
           'Experiments',
-          '12 closed (one more withdrawn un-run on a falsified premise); E13 — the composed-route probe — dispatched, halted at zero spend for a repair arc, and re-armed, all 2026-08-13',
+          '13 closed (one more withdrawn un-run on a falsified premise); E13 ran its full arc — dispatch, zero-spend halt, repair, re-arm, four generations, close — inside 2026-08-13; E14, the LoRA scene-lever bake-off, in flight',
         ],
         [
           'Routes',
@@ -99,7 +99,7 @@ export const config: DefaultSiteConfig = {
         ],
         [
           'The founding thesis',
-          'MEASURED — identity holds driven (E08) and unanchored (E11); the camera obeys authored control to one pixel (E11); a handed world holds to the last frame on two seeds (E12)',
+          'MEASURED — identity holds driven (E08), unanchored (E11), and through a hosted human-trained tier fed only authored references (E13); the camera obeys authored control to one pixel (E11); a handed world holds on two seeds (E12); reference grounds steer model-decided worlds (E13)',
         ],
         [
           'What exists today',
