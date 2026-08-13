@@ -1,13 +1,22 @@
 <p align="center">
-  <img src="docs/assets/logo-wide.png" alt="armature — you block the shot, the model shoots it" width="820">
+  <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português (BR)</a>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/brand/main/logos/armature/readme.png" alt="armature — you block the shot, the model shoots it" width="820">
+</p>
+
+<p align="center">
+  <a href="https://github.com/mcp-tool-shop-org/armature/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/armature/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
+  <a href="https://mcp-tool-shop-org.github.io/armature/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page"></a>
 </p>
 
 #
 
 **You block the shot. The model shoots it.**
 
-**[Landing page & handbook →](https://mcp-tool-shop-org.github.io/armature/)** *(the repo
-is private as of 2026-08-11 and Pages is dark with it — the record is this tree)*
+**[Landing page & handbook →](https://mcp-tool-shop-org.github.io/armature/)**
 
 A video model can produce motion, light and life that no renderer can. It cannot be told *who
 is on screen and where they are standing*. armature supplies exactly that: a canonical
@@ -43,7 +52,7 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** at every submission (GPU-hour billing) under per-experiment ceilings — E12 spent 4 of its 6 bounded submissions, the rest lapsing unspent |
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
 | Tests | **1005 passing on the rig** (13 skips, measured 2026-08-13), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
-| Status | **private by the Director's choice since 2026-08-11** — Pages dark; the record is the docs tree, and it is complete |
+| Status | **v0.1.0 released 2026-08-13** — the first marked state of the record (public again the same day; private by choice 2026-08-11 → 13); the record is the docs tree, and it is complete |
 
 ### What is measured (the current arc)
 
@@ -99,6 +108,28 @@ session six inherited claims were falsified, each in minutes, because each sat n
 code. armature is downstream of facet — facet cuts and paints the figure; armature stages and
 performs it.
 
+## Running it
+
+There is nothing to install. This is a repository you clone and run — no package on any
+registry, no service, no daemon. Every instrument is invoked directly:
+
+```
+python tools/<name>.py --help                       # measurement, sheets, payload builders
+blender -b -P tools/stage_render.py -- <args>       # staging and render, headless only
+pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, site build
+```
+
+| | |
+|---|---|
+| Platform | Windows 11 on the rig (Omen 45L, RTX 5090). The hermetic tests also run on `ubuntu-latest` in CI; Blender-dependent tests **skip visibly** where Blender is absent rather than passing silently |
+| Python | 3.13+ — CI runs 3.13, the rig venv runs 3.14. Test dependencies are numpy, pillow, pytest, opencv (pinned to the rig's version, because the pose-raster tests assert byte-stable rasterization) and matplotlib |
+| Blender | 5.2, headless only. A live GUI session produces artifacts with no recorded parameters, and a recipe that does not reproduce its output is not a recipe |
+| Node | 22, for the site under `site/` only |
+| Generation | runs on Comfy Cloud and is submitted by the operator; rendering and measurement run locally |
+
+Absolute rig paths are baked into many tools and docs — they are not secrets, but they do
+mean most instruments will not run unmodified on another machine.
+
 ## Standing rules that shape everything here
 
 **No non-commercial models, ever — including in experiments.** CC-BY-NC, research-only and
@@ -117,6 +148,35 @@ through a third-party tier documents its providers' data-use and training postur
 AI-content disclosure duties and its watermark policy, grounded in the licence map's fetched
 documents. Fully-local routes state that nothing leaves the rig. A route without its
 disclosure note is not complete — the first application rides E13's spec.
+
+## Trust and threat model
+
+The full policy is [SECURITY.md](SECURITY.md), measured against the tree rather than asserted.
+The short form:
+
+- **Data touched** — meshes, renders, videos, images and JSON on local disk, at paths you pass
+  on the command line, plus `docs/index/armature.db`, a SQLite index *derived* from this repo's
+  own markdown. Canonical assets are consumed read-only from sibling trees and never written to.
+- **Data NOT touched** — no credentials of any kind: none are read, stored or transmitted, and
+  a sweep of every tracked file for provider-prefixed keys, tokens, private-key blocks and
+  inline secret assignments returns zero matches. **No telemetry, analytics or usage counting**
+  is collected or sent; there is no opt-out because there is nothing to opt out of.
+- **Network egress** — no Python networking library is imported anywhere in `tools/` or
+  `tests/`. Two tools shell out to `curl.exe` to download the files listed in a dump *you*
+  paste in, from a generation *you* submitted. Nothing else here makes a network call.
+- **Permissions** — ordinary user permissions. No elevation, no service installation, no
+  registry or system-settings writes.
+- **The sharp edges, disclosed rather than claimed away** — file operations are not sandboxed;
+  a tool writes wherever its arguments say. Unexpected failures print a raw traceback.
+  Deliberate refusals do not: every gate raises a typed error carrying the measurement that
+  fired it, and **none of them is an `assert`** — the suite runs a second time under `-O` in CI
+  to prove they still raise.
+- **Support status** — `main` is the only supported state. No release channel, no backport
+  policy, no SLA.
+
+**Ship gate.** [SHIP_GATE.md](SHIP_GATE.md) carries the hard gates A–D as they actually stand,
+with every line either checked with its evidence or skipped with the reason on its merits. The
+soft-gate identity items are listed honestly, including the one still open.
 
 ## License
 

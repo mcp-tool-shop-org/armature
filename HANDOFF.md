@@ -20,6 +20,8 @@ challenge only because every claim came with receipts).
 - **THE POSTURE:** experiments exist to learn; the monorepo redefines itself as
   experiments prove paths; **no route is canon by momentum**; dated field checks keep
   technique fresh. The repo is PRIVATE by the Director's choice; the record is the tree.
+  *(2026-08-13: ruled PUBLIC again on his word; Pages re-lit; the full treatment ran and
+  **v0.1.0 released** — tag at `ff9021b`, translations landed before the tag, audit exit 0.)*
 - **NEW LAW — Per-route disclosure (Director, 2026-08-12):** routes disclose what rides
   with them — provider data-use/training posture, AI-disclosure duties, watermark
   policy — grounded in the licence map's fetched documents. A route without its
@@ -47,7 +49,19 @@ challenge only because every claim came with receipts).
   the spec 2026-08-13 — remaining: his word, his pick, the re-estimate)*.
   **⭢ E13 DISPATCHED 2026-08-13:** the go was given; A2 = E12 wave-3 seed 1, pinned with
   hash and prompt_id in the spec's dispatch amendment; the re-estimate rides the executor
-  session as its first act. **Deliver the
+  session as its first act.
+  **⭢ E13 HALTED same day, zero spent** (two structural premise failures; the halt ruling
+  is `docs/experiments/E13-halt-ruling.md`) **⭢ S03 ran the repair kit and is RULED**
+  (`docs/dispatches/S03-ruling.md`, branch `S03-run` @ `ae2fc79` unmerged): the RGBA-true
+  turnaround exists and passed its gates; the frames→VIDEO chain works at 8 frames and
+  FAILS at 81 on a BatchImagesNode runtime slot cap — cascade batching is the named
+  zero-credit follow-up. **E13's re-arm waits on exactly one thing: the Director's eye on
+  the kit.**
+  **⭢ THE EYE PASSED, same day — E13 RE-ARMED** (the spec's RE-ARM amendment,
+  2026-08-13): A1 = four pinned kit views over the passed grey presentation; A2 rides
+  the in-session cascade-batch probe as a deterministic branch (pass → four
+  submissions; structural fail → stills-only at 2, ceiling 212–422; ambiguous →
+  HALT). The re-armed executor merges main into `E13-run` as its first act. **Deliver the
   executor paste block the moment he says go** (advisor rule 5).
 - **Two routes:** driven — parked for AI-animation buildout (Wan-Animate2's full
   spatial contract is banked in `docs/comfy-consult-8.md` for the unpark). free — the
@@ -120,7 +134,17 @@ valid on hip-origin motion (survey input: hip translation is a retargeter *setti
 read it from provenance) · the axis-offset second-fixture condition · the builder's
 stale `fit = "authored at 832x480"` string — **owed with a test by the first commit
 that touches `build_camera_i2v_payload`** (fourth stale-label sighting).
-**Admin:** the credits attribution pass (prompt_ids → job records; settles drawdown
+**Admin:** ~~the Animate-2 licence fetch list~~ **FETCHED 2026-08-13, same day** — all
+rows landed YES (the map's *Added 2026-08-13* section; upstream Wan2.2-Animate-2-14B
+Apache, one repack repo hosts the whole loadout, the Director's export corroborating).
+**The unpark is licence-clear**; what gates it now is the consult #9 ruling's three
+measured questions + a movement-library adoption row at adoption time ·
+`docs/assets/mark-figure.png` — the Director ruled 2026-08-13 **keep as-is,
+keep an eye on it**: the 93% transparency is correct for a thin wire figure, not an
+error; the treatment's finding (RGB noise under the transparent pixels) matters only if
+the file ever rides a surface that flattens alpha — it is local-only, never
+brand-pushed, and re-authoring waits for a real consumer that needs it ·
+the credits attribution pass (prompt_ids → job records; settles drawdown
 questions with numbers) · movement-library adoptions off the survey
 (`docs/research-grounding-movement-library.md`; 100STYLE cleanest, one licence-map row
 away; the owned factory stands re-validated) · E12's cloud artifacts (two saved
@@ -132,7 +156,11 @@ optional via the export path.
 ## 7. The consult channel
 
 `docs/comfy-consult-8*` joins 6 and 7 as format precedent — brief, answer, calibration,
-ruling in one file pair. **Calibration is mandatory every round** (anchor + one cheap
+ruling in one file pair. **#9 filed 2026-08-13** (the Animate2 unpark surface): the
+loader inventory delivered exact filename strings — the ruling carries the licence
+fetch list — the pose branch measured detector-free at template level, and the
+chaining mechanism resolved by our own `get_node` where the agent's surface could not
+see it (the channel law's third confirmation). **Calibration is mandatory every round** (anchor + one cheap
 claim; `get_node` existence checks non-negotiable; field-level truth on dynamic-combo
 nodes is OURS to measure). Licences: documents, never verdicts. Standing next-brief
 triggers: the FLF beat wave · video-native scene-plate generation · any new

@@ -237,3 +237,57 @@ The Director's go was given 2026-08-13. The keys, recorded:
   commit. The executor's first check: the branched spec contains this amendment and the
   2026-08-13 disclosure note — a branch carrying yesterday's spec is the measured
   failure this law exists for.
+
+## Amendment — 2026-08-13: RE-ARM (the Director's eye passed the S03 kit)
+
+E13 halted the day it dispatched, before its first submission, on two structural
+premise failures ([E13-halt-ruling.md](E13-halt-ruling.md)); S03 built the repair kit
+and was ruled ([S03-ruling.md](../dispatches/S03-ruling.md)); **the Director's eye
+passed the kit the same day.** E13 re-arms as follows; everything not amended here
+stands as dispatched.
+
+**A1 resolves to the S03 kit.** `E:\AI\armature-S03\outputs\S03\turn_rgba\` —
+authority: `turnaround_manifest.json` beside it (source GLB `performer_textured.glb`,
+sha256 `9e20ea7d800c0ffd2cff101a5e1bcc01fa13c620bbbe3ef05ae23b093547b1aa`; Blender
+5.2.0 `fbe6228777e7`; 352×1024; orbit from azimuth 270° in 45° steps). The four
+submitted views, pinned by manifest entry: **`turn_0` (front, `83ab99d1…`) → image1 ·
+`turn_1` (three-quarter, `f61e2071…`) → image2 · `turn_2` (profile, `42fd871b…`) →
+image3 · `turn_4` (back, `8772ad21…`) → image4** — slot order exactly as listed,
+recorded in the payload record; full hashes verified against the manifest before
+compositing. **RGBA-law composite, pinned:** each view submits as RGB composited over
+the survey's neutral mid-grey — the presentation the Director's eye passed — with the
+plate value recorded. The patched views (1, 2) ride with his pass; identity at judging
+remains his eye's canon.
+
+**A2 rides a deterministic branch — the cascade-batch probe decides it, at zero
+partner credits, before any submission.** S03 measured the chain true at 8 frames and
+broken at 81 on a `BatchImagesNode` runtime slot cap (S03-ruling R4). The probe:
+assemble the 81 pinned frames (already uploaded, content-addressed — reuse S03's
+captured names) through **cascaded batching** — no single node loaded above the
+observed cap — into `CreateVideo(fps=16)` → save; download; decode-verify 81 frames /
+16 fps / per-frame pixel comparison by the S03 method. Graph built in-repo; Gate ROUTE
+walks it; the round-trip table is taught any new class with tests riding the commit;
+`estimate_credits` must read 0 / no-paid-nodes or the probe HALTS.
+
+- **Probe passes** → A2 = the constructed VIDEO into `reference_videos.video1`; the
+  four-submission design stands (2 arms × 2 seeds; bracket 424–844; halt > 900).
+- **Probe fails structurally** → E13 proceeds **stills-only**: A1 × the two seeds =
+  **2 submissions**, ceiling re-scoped **212–422**, halt unchanged; H-E13b and
+  H-E13c's A2 clause go VOID with the reason recorded; H-E13a and H-E13d stand. No
+  third shape: a second structural wall is a finding that ends the A2 question on
+  this tier.
+- An **ambiguous** probe error — one the executor cannot classify as structural
+  without interpretation — is a HALT, not a branch selection.
+
+**Premise updates:** A1 row → the S03 kit (MEASURED — gates ALPHA/TURN/WHOLE green;
+the Director's pass 2026-08-13). The coherence row → **VERIFIED** at three looks
+(executor, advisor, the Director's eye — the kit's subject is the A2 clip's
+performer). The A2 upload-path premise → replaced by the cascade premise (the cap
+MEASURED as present; the cascade shape ASSUMED until the probe runs). The
+r2v-acceptance premise unchanged: ASSUMED, provable only by the first A2 submission
+if the probe passes.
+
+**Branch state:** `E13-run` carries the halt-era spec. The re-armed executor's first
+act is `git merge origin/main` in the worktree, then a check that THIS amendment is
+present in the branched spec. The halt report and its predictions stand untouched —
+the re-armed run appends its own records beside them, never rewrites.

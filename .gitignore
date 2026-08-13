@@ -31,6 +31,11 @@ site/node_modules/
 site/dist/
 site/.astro/
 
+# Translation run cache (polyglot-mcp). The translated READMEs are committed; the
+# segment cache is a local artifact and demonstrably serves stale chunks exactly
+# when a number changes, so it never rides a commit.
+.polyglot-cache.json
+
 # Secrets — API keys for cloud generation never enter the repo
 .env
 *.key
