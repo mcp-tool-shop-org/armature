@@ -66,6 +66,21 @@ gates the unpark is experimental, not legal: the three measured questions fixed 
 consult #9 ruling, and a licence-map row for whichever movement library an adoption
 names (100STYLE's fresh fetch happens at adoption, per the survey's boundary).
 
+### Added 2026-08-13 (the E14 bake-off fetch pass — served Wan 2.2 style LoRAs)
+
+Consult #10 banked the served style-LoRA inventory; the Director picked the bake-off
+shape; this pass fetched the six shortlisted candidates' documents. Two survive.
+Community-LoRA rows age fast — re-fetch at any future adoption.
+
+| LoRA (served filename) | License | Commercial | Source | Note |
+|---|---|---|---|---|
+| **`wan22-14b-t2v-technically_color.safetensors`** | Apache-2.0 (page-declared) | **YES** | [Civitai 2106471](https://civitai.com/models/2106471/technically-color-wan-22), fetched 2026-08-13, creator renderartist | three-strip Technicolor look. Origin version is tier-labeled (LN); the served single file's tier identity is NOT VISIBLE — the spec that runs it carries that premise |
+| **`wan22-candid_photography.safetensors`** | Apache-2.0 (page-declared) | **YES** | [Civitai 1925758](https://civitai.com/models/1925758/candid-photography-wan-22), fetched 2026-08-13, creator peterkickasspeter | candid-photography look; origin publishes a HIGH/LOW pair, the Cloud serves one file — tier identity NOT VISIBLE, same premise |
+| ~~`wan2.2_instareal_highnoise` / `_lownoise`~~ | Instara Fair Use License | **NO — BANNED for this route** | [LICENSE.txt](https://huggingface.co/Instara/instareal-wan-2.2/raw/main/LICENSE.txt), fetched verbatim 2026-08-13 | "You are STRICTLY PROHIBITED from hosting or using this model on any public or private, commercial or free, image/video generation service, platform, application, or API." Generation through Comfy Cloud is exactly that use. (Outputs-selling is permitted by the licence, but the use itself is barred on our route; `instagirl` is the same house and inherits this row's verdict.) Note recorded without ruling on it: the Cloud serving this file sits oddly against this clause — that question belongs to Instara and Comfy, not this map |
+| ~~`wan22-14b-t2v-80s_fantasy_movie`~~ | not displayed | **NOT RETRIEVED → NO** | [Civitai 789313](https://civitai.com/models/789313/80s-fantasy-movie) (renders; no licence/permission flags shown; creator ArsMachina) | additionally: the model's Wan 2.2 versions are **T2I**-labeled, not video. Revivable only by a document (the Director's export path can capture the page's licence panel if it exists) |
+| ~~`WAN2.2-…_SmartphoneSnapshotPhotoReality_v3` (pair)~~ | unretrieved from origin | **NOT RETRIEVED → NO** | third-party bundles claim apache-2.0; the creator's (AI_Characters) own page did not yield terms | revivable by export of the creator's page |
+| ~~`wan22-14b-t2v-vintage_film_grain`~~ | source unlocated | **NOT RETRIEVED → NO** | — | revivable if a source page is found and exported |
+
 **Ruling 2026-08-11 (E09 calibration ruling) — the Comfy-Org repack tier.** The served
 `wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors`, `…_low_noise…`, and
 `wan_2.1_vae.safetensors` are Comfy-Org repacks of weights this map already rules Apache
