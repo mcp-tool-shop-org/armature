@@ -108,6 +108,35 @@ the same exchange. No re-runs; a fired gate still ends the run where it stands.
 
 H-E12a / H-E12c / H-E12d carry unchanged onto the new frames.
 
+## Amendment — 2026-08-12 evening: the Director's eye on the GLB, Gate LOOK's outcome,
+## and the wave-2 releases
+
+1. **The claw question closed at the source artifact.** The Director opened
+   `performer_dance_ema.glb` in Blender himself and **ruled the hand geometry good**. His
+   diagnosis, recorded as the ruling: from the banked camera azimuth, the bent wrist
+   presents the paddle-and-thumb as a closed-claw **silhouette** — a projection artifact,
+   not a mesh defect. (The leakage theory it answered was closed the same hour by three
+   receipts: E12 had generated nothing; the E12 figure pixel-matches w3's start frame at
+   0.46/255 on figure pixels; the GLB's last-write, 03:16, precedes E08's generation, and
+   E08's own spec names this GLB as its *input*.)
+2. **The hand lever is re-scoped on that evidence:** presentation first (wrist pose and
+   camera-relative staging), mesh surgery only if staging measures insufficient. The
+   promotion stands; its shape changes.
+3. **His ruling for wave 2: run as-is** — no wrist change; a mesh or pose edit now would
+   be a second variable.
+4. **Gate LOOK's outcome:** **A1w ruled broken at the Director's eye — not submitted;
+   its two submissions stay unspent.** A2w released and run (two seeds, 2 of 6 spent).
+5. **Stale-pin finding, owed:** the two E09 GLBs' on-disk md5s (`6614691d…`,
+   `819720ac…`) do not match their report pins (`cd4e2f6e…`, `9aebeeb8…`); file times sit
+   inside their own sessions and before E08's generation, reading as pins computed at
+   draft time and files re-exported before commit. **The deterministic re-lift check
+   (pinned motion record → solver → geometry compare) is ordered and still owed**; the
+   E09 report pins get their dated correction when it lands.
+6. **Fourth stale-label sighting, named not edited:** `build_camera_i2v_payload` writes
+   `start_image.fit = "authored at 832x480"` on a 1024×576 run. The fix rides the first
+   commit that touches the builder after E12 closes, with the test shaped to catch the
+   wrong claim.
+
 ## Arms — one variable per rung; the ladder is w3 → A1 → A2 (superseded above)
 
 - **A1 — the world variable.** Byte-identical to w3's payload except the start image:

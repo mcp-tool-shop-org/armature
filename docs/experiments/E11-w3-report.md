@@ -124,6 +124,13 @@ Source `outputs/E11/w3/measure/E11-w3-clip.json`, computed on the lossless PNG t
 | \|Δ luma\| median | 0.148 | 0.210 |
 | mean luma f0 → f80 | 158.6 → 163.4 (flat) | 180.8 → ~60 |
 
+> **Correction (2026-08-12, advisor, at the E12 wave-2 fold):** wave 1's endpoint above
+> reads "~60" where wave 1's own measurement record (`E11-clip.json`) has **f64 = 36.20**
+> (f0 = 180.76; the clip is 65 frames, so f80 does not exist for wave 1 — two defects in
+> one cell: a rounded value that matches no record, quoted at a frame index off the end).
+> Caught by the E12 executor's wave-1 reconciliation; not load-bearing for any ruling —
+> the cell's point (wave 1 darkens hard; w3 holds flat) stands with the true numbers.
+
 Correlation with f0 at f8 / f40 / f80: **0.9416 / 0.9151 / 0.9247** — high and without decline.
 The eleven frames where the horizon is NOT found are scattered singletons (1, 14, 27, 41, 42,
 50, 51, 52, 54, 68, 78), not a run — consistent with momentary column disagreement rather
