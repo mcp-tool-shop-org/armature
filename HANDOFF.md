@@ -56,7 +56,12 @@ challenge only because every claim came with receipts).
   turnaround exists and passed its gates; the frames→VIDEO chain works at 8 frames and
   FAILS at 81 on a BatchImagesNode runtime slot cap — cascade batching is the named
   zero-credit follow-up. **E13's re-arm waits on exactly one thing: the Director's eye on
-  the kit.** **Deliver the
+  the kit.**
+  **⭢ THE EYE PASSED, same day — E13 RE-ARMED** (the spec's RE-ARM amendment,
+  2026-08-13): A1 = four pinned kit views over the passed grey presentation; A2 rides
+  the in-session cascade-batch probe as a deterministic branch (pass → four
+  submissions; structural fail → stills-only at 2, ceiling 212–422; ambiguous →
+  HALT). The re-armed executor merges main into `E13-run` as its first act. **Deliver the
   executor paste block the moment he says go** (advisor rule 5).
 - **Two routes:** driven — parked for AI-animation buildout (Wan-Animate2's full
   spatial contract is banked in `docs/comfy-consult-8.md` for the unpark). free — the
