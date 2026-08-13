@@ -134,13 +134,22 @@ def gate_alpha(transparent_fraction, composite_rgb, why, master_path=None):
     return ev
 
 
-def cover_fit(src_w, src_h, width, height):
+def cover_fit(src_w, src_h, width, height, anchor_x=0.5, anchor_y=0.5):
     """Geometry for putting a plate behind the performer: COVER, never contain.
 
     Returns the scale, the resized size and the crop box that take a source of `src_w x
     src_h` to exactly `width x height` with **no padding anywhere**. Every returned box is
     fully inside the resized image by construction, so a caller that crops to it can never
     read a pixel that does not exist.
+
+    **The anchor is a composite choice and the caller makes it.** `anchor_y=0` keeps the top
+    of the source, `1` the bottom, `0.5` centres it; `anchor_x` the same across. The default
+    centres, which is the right default and the wrong thing to leave unstated: only a band of
+    the target frame is ever visible behind the performer, so the anchor decides which part
+    of the plate reaches the model at all, and a centred crop can spend that band on ceiling
+    while the content that makes the picture a room falls outside it. Under THE ALPHA LAW the
+    RGB actually submitted is a deliberate, recorded choice — this is the other half of that
+    choice, so the fraction rides the record next to the colour.
 
     **Why cover and not contain, which is what this repo's other fitter does.**
     `fit_reference.letterbox` deliberately pads: its subject is an identity reference, the
@@ -170,6 +179,13 @@ def cover_fit(src_w, src_h, width, height):
         raise BackdropGate(
             f"degenerate target frame of {width}x{height}",
             {"target_size": [width, height]})
+    for name, v in (("anchor_x", anchor_x), ("anchor_y", anchor_y)):
+        if not (0.0 <= float(v) <= 1.0):
+            raise BackdropGate(
+                f"{name}={v} is outside 0..1; an anchor is the fraction of the overhang "
+                f"taken off the near side, and a value outside that range would place the "
+                f"crop box off the resized image",
+                {"anchor_x": anchor_x, "anchor_y": anchor_y})
 
     scale = max(width / src_w, height / src_h)
     # ceil, not round: rounding down by a single pixel would leave one row or column of the
@@ -177,7 +193,11 @@ def cover_fit(src_w, src_h, width, height):
     # which is the one thing this function promises never to happen.
     nw = max(width, int(math.ceil(src_w * scale - 1e-9)))
     nh = max(height, int(math.ceil(src_h * scale - 1e-9)))
-    ox, oy = (nw - width) // 2, (nh - height) // 2
+    # floor, not round: it keeps the box inside the image at anchor 1.0 and reproduces the
+    # centred `//2` this function shipped with, so an existing recipe still cuts the same
+    # pixels it cut before the anchor existed.
+    ox = int((nw - width) * float(anchor_x))
+    oy = int((nh - height) * float(anchor_y))
 
     return {
         "fit": "cover",
@@ -185,15 +205,30 @@ def cover_fit(src_w, src_h, width, height):
         "source_aspect": src_w / src_h, "target_aspect": width / height,
         "scale": scale, "upscaled": scale > 1.0,
         "resized_size": [nw, nh],
+        "anchor": [float(anchor_x), float(anchor_y)],
         "crop_offset": [ox, oy],
         "crop_box": [ox, oy, ox + width, oy + height],
         "dropped_px_resized": {"x": nw - width, "y": nh - height},
         "dropped_px_source": {"x": (nw - width) / scale, "y": (nh - height) / scale},
         "kept_fraction_of_source_area": (width * height) / float(nw * nh),
         "pads": False,
-        "note": ("cover fit: scale = max(width/src_w, height/src_h), then a centred crop. "
-                 "Nothing is padded; the overhang is cropped and reported"),
+        "note": ("cover fit: scale = max(width/src_w, height/src_h), then a crop placed by "
+                 "the anchor. Nothing is padded; the overhang is cropped and reported"),
     }
+
+
+def band_source_rows(target_rows, geom):
+    """Which rows of the ORIGINAL plate end up inside a visible band of the target frame.
+
+    Only where the authored master is transparent does a plate show at all, so the band is
+    the whole of what a plate contributes — and the band is defined on the target frame
+    while the picture being chosen is at its own size. Without this map the two are
+    different coordinate systems, and "what the band carries" is a claim about the wrong
+    pixels.
+    """
+    y0, y1 = target_rows
+    oy, s = geom["crop_offset"][1], geom["scale"]
+    return [(y0 + oy) / s, (y1 + oy) / s]
 
 
 def gate_backdrop(void_vs_plate_255, plate_vs_flat_255, transparent_fraction, why,

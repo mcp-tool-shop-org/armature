@@ -311,6 +311,51 @@ class TestCoverFit:
         g = SF.cover_fit(1000, 1000, 1024, 576)
         assert g["dropped_px_source"]["y"] == pytest.approx(1000 - 576 / 1.024, abs=1e-6)
 
+    def test_the_default_anchor_cuts_exactly_what_it_cut_before_anchors_existed(self):
+        """The anchor arrived after a plate had already been fitted with a centred crop.
+        A default that shifted the box by a pixel would silently change every recipe that
+        predates it, and nothing would report the difference."""
+        assert (SF.cover_fit(832, 480, 1024, 576)["crop_box"]
+                == SF.cover_fit(832, 480, 1024, 576, 0.5, 0.5)["crop_box"] == [0, 7, 1024, 583])
+
+    @pytest.mark.parametrize("anchor_y,oy", [(0.0, 0), (0.5, 53), (1.0, 107)])
+    def test_the_anchor_places_the_crop_on_the_measured_plate(self, anchor_y, oy):
+        """The measured case: the Director's 1248x832 plate into E12's 1024x576 leaves 107
+        rows of overhang, and where those rows come off decides which part of the picture is
+        inside the band and which is discarded entirely."""
+        g = SF.cover_fit(1248, 832, 1024, 576, anchor_y=anchor_y)
+        assert g["resized_size"] == [1024, 683]
+        assert g["crop_offset"][1] == oy
+        assert g["crop_box"] == [0, oy, 1024, oy + 576]
+        assert g["anchor"] == [0.5, anchor_y]
+
+    @pytest.mark.parametrize("anchor_y", [0.0, 0.25, 0.5, 0.75, 1.0])
+    def test_no_anchor_puts_the_box_outside_the_resized_image(self, anchor_y):
+        """The promise the anchor must not break. At 1.0 a rounding-up would read one row
+        past the bottom of the image, and the caller would pad it — the one thing this
+        function exists to make impossible."""
+        for sw, sh in [(1248, 832), (832, 480), (1000, 1000), (3000, 1001)]:
+            g = SF.cover_fit(sw, sh, 1024, 576, anchor_y=anchor_y)
+            nw, nh = g["resized_size"]
+            x0, y0, x1, y1 = g["crop_box"]
+            assert 0 <= y0 and y1 <= nh and 0 <= x0 and x1 <= nw
+
+    @pytest.mark.parametrize("ax,ay", [(-0.1, 0.5), (0.5, 1.1), (2.0, 0.0)])
+    def test_an_anchor_outside_the_range_halts(self, ax, ay):
+        with pytest.raises(SF.BackdropGate):
+            SF.cover_fit(1248, 832, 1024, 576, anchor_x=ax, anchor_y=ay)
+
+    def test_the_band_map_follows_the_anchor(self):
+        """`band_source_rows` is what "the band carries" is measured on, so it has to move
+        with the anchor. If it did not, a bottom-anchored plate would be described by the
+        content of its centre — a claim about the wrong pixels."""
+        top = SF.cover_fit(1248, 832, 1024, 576, anchor_y=0.0)
+        bot = SF.cover_fit(1248, 832, 1024, 576, anchor_y=1.0)
+        assert SF.band_source_rows((0, 182), top)[0] == pytest.approx(0.0)
+        assert SF.band_source_rows((0, 182), top)[1] == pytest.approx(221.8, abs=0.1)
+        assert SF.band_source_rows((0, 182), bot)[0] == pytest.approx(130.4, abs=0.1)
+        assert SF.band_source_rows((0, 182), bot)[1] == pytest.approx(352.2, abs=0.1)
+
     @pytest.mark.parametrize("sw,sh", [(0, 480), (832, 0), (-1, 480), (832, -1)])
     def test_a_degenerate_source_halts(self, sw, sh):
         with pytest.raises(SF.BackdropGate):

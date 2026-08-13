@@ -68,7 +68,39 @@ def parse_args(argv=None):
     ap.add_argument("--source-note", default=None,
                     help="free text about the source's own provenance, e.g. a photograph's "
                          "owner and date")
+    ap.add_argument("--anchor", default="centre",
+                    help="where the cover crop sits: top | centre | bottom, or a pair "
+                         "x,y of fractions in 0..1. Only a band of the target frame is ever "
+                         "visible behind the performer, so this decides which part of the "
+                         "plate reaches the model at all - a recorded composite choice "
+                         "under the alpha law, not a default to leave unstated")
+    ap.add_argument("--visible-rows", default=None,
+                    help="y0,y1 of the TARGET frame that a plate actually shows in; the "
+                         "record then states which source rows land inside it")
+    ap.add_argument("--band-carries", default=None,
+                    help="one sentence, into the provenance, on what is actually inside "
+                         "that band - the thing the anchor was chosen for")
     return ap.parse_args(argv)
+
+
+#: Named anchors, as (x, y) fractions. Vertical only by name: a cover fit drops one axis,
+#: and every plate this tool has met so far drops rows.
+ANCHORS = {"top": (0.5, 0.0), "centre": (0.5, 0.5), "bottom": (0.5, 1.0)}
+
+
+def parse_anchor(text):
+    """`top|centre|bottom` or `x,y` -> a pair of fractions. No silent default."""
+    if text in ANCHORS:
+        return ANCHORS[text]
+    parts = [p.strip() for p in str(text).split(",")]
+    if len(parts) != 2:
+        raise ArmatureError(
+            f"--anchor must be one of {sorted(ANCHORS)} or a pair `x,y` of fractions in "
+            f"0..1; got {text!r}")
+    try:
+        return tuple(float(p) for p in parts)
+    except ValueError:
+        raise ArmatureError(f"--anchor carries a non-number: {text!r}") from None
 
 
 def _sha256(path):
@@ -113,14 +145,14 @@ def resolve_source(src, frames, index):
                   "frames_dir": os.path.abspath(frames), "n_frames": len(by_number)}
 
 
-def cover(img, width, height):
+def cover(img, width, height, anchor=(0.5, 0.5)):
     """Resize-then-crop `img` to exactly `width x height`. Returns (out, geometry).
 
     The geometry is `startframe.cover_fit`'s, computed before anything is resampled, so the
     numbers in the record are the numbers the pixels were actually put through.
     """
     h, w = img.shape[:2]
-    geom = SF.cover_fit(w, h, width, height)
+    geom = SF.cover_fit(w, h, width, height, anchor_x=anchor[0], anchor_y=anchor[1])
     nw, nh = geom["resized_size"]
     interp = cv2.INTER_AREA if geom["scale"] < 1.0 else cv2.INTER_CUBIC
     resized = cv2.resize(img, (nw, nh), interpolation=interp)
@@ -150,14 +182,35 @@ def main(argv=None):
         raise ArmatureError(f"cv2 could not read {src_path}")
     sh, sw = img.shape[:2]
 
-    fitted, geom = cover(img, a.width, a.height)
+    anchor = parse_anchor(a.anchor)
+    fitted, geom = cover(img, a.width, a.height, anchor=anchor)
     dst = os.path.join(out_dir, "plate.png")
     if not cv2.imwrite(dst, fitted):
         raise ArmatureError(f"cv2 refused to write {dst}")
 
+    band = None
+    if a.visible_rows:
+        vr = [int(v) for v in a.visible_rows.split(",")]
+        if len(vr) != 2 or not (0 <= vr[0] < vr[1] <= a.height):
+            raise ArmatureError(
+                f"--visible-rows must be y0,y1 inside 0..{a.height}; got "
+                f"{a.visible_rows!r}")
+        band = {"target_rows": vr,
+                "source_rows": SF.band_source_rows(vr, geom),
+                "fraction_of_target_rows": (vr[1] - vr[0]) / float(a.height),
+                "carries": a.band_carries or "NOT RECORDED",
+                "note": ("the band is the whole of what this plate contributes: outside it "
+                         "the authored master and its floor are opaque")}
+
     rec = {
         "tool": "make_plate", "tool_version": TOOL_VERSION,
         "why": a.why,
+        "anchor": {"requested": a.anchor, "fractions": list(anchor),
+                   "why_it_is_a_choice": (
+                       "only the band shows, so the anchor decides which part of the plate "
+                       "reaches the model at all - recorded under THE ALPHA LAW beside the "
+                       "composite colour")},
+        "visible_band": band,
         "source": dict(origin, path=src_path, sha256=_sha256(src_path),
                        size=[sw, sh], aspect=sw / sh,
                        prompt_id=a.prompt_id, note=a.source_note),
@@ -175,8 +228,10 @@ def main(argv=None):
         "plate": dst, "sha256": rec["derived"]["sha256"][:32],
         "source": src_path, "source_size": [sw, sh],
         "size": [a.width, a.height], "scale": round(geom["scale"], 6),
+        "anchor": list(anchor), "crop_offset": geom["crop_offset"],
         "dropped_px_resized": geom["dropped_px_resized"],
         "kept_fraction_of_source_area": round(geom["kept_fraction_of_source_area"], 6),
+        "band_source_rows": ([round(v, 1) for v in band["source_rows"]] if band else None),
         "provenance": rpath}, ensure_ascii=False))
     return 0
 

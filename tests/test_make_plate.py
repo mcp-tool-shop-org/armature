@@ -176,6 +176,68 @@ def test_a_plate_with_no_reason_never_gets_written(tmp_path):
     assert not out.exists(), "the output directory was created before the reason was checked"
 
 
+def test_the_named_anchors_resolve_and_a_bad_one_halts():
+    assert make_plate.parse_anchor("bottom") == (0.5, 1.0)
+    assert make_plate.parse_anchor("top") == (0.5, 0.0)
+    assert make_plate.parse_anchor("0.25,0.75") == (0.25, 0.75)
+    for bad in ("middle", "0.5", "a,b", ""):
+        with pytest.raises(ArmatureError):
+            make_plate.parse_anchor(bad)
+
+
+def test_the_anchor_actually_moves_the_pixels_not_only_the_record(tmp_path):
+    """A recorded choice that does not reach the file is worse than no record. The source
+    below has a distinct stripe near its top; a top anchor keeps it and a bottom anchor
+    does not, and the plate's own pixels are what says which happened."""
+    src = _gradient(1248, 832)
+    src[40:80, :] = (0, 255, 0)                      # a marker only the top crop keeps
+    path = _write(tmp_path / "s.png", src)
+
+    def band_of(anchor):
+        out = tmp_path / anchor
+        make_plate.main([f"--src={path}", f"--out={out}", "--width=1024", "--height=576",
+                         f"--anchor={anchor}", "--why=x", "--visible-rows=0,182"])
+        return np.asarray(Image.open(out / "plate.png"))[0:182]
+
+    assert (band_of("top")[:, :, 1] > 200).any(), "the top anchor lost the marker"
+    assert not (band_of("bottom")[:, :, 1] > 200).any(), (
+        "the bottom anchor kept a marker that is 40 source rows from the top")
+
+
+def test_the_band_the_record_claims_is_the_band_the_plate_has(tmp_path):
+    """`band_carries` is a sentence about pixels; this checks the sentence is pointed at the
+    right ones. The recorded source rows must be the rows that actually landed in the
+    band."""
+    src = _write(tmp_path / "s.png", _gradient(1248, 832))
+    out = tmp_path / "p"
+    make_plate.main([f"--src={src}", f"--out={out}", "--width=1024", "--height=576",
+                     "--anchor=bottom", "--why=x", "--visible-rows=0,182",
+                     "--band-carries=the crowd's faces and hands"])
+    rec = json.loads((out / "plate_provenance.json").read_text(encoding="utf-8"))
+    assert rec["anchor"]["fractions"] == [0.5, 1.0]
+    assert rec["visible_band"]["target_rows"] == [0, 182]
+    assert rec["visible_band"]["source_rows"][0] == pytest.approx(130.4, abs=0.1)
+    assert rec["visible_band"]["carries"] == "the crowd's faces and hands"
+    assert rec["transform"]["crop_offset"][1] == 107
+
+
+def test_a_band_the_target_frame_does_not_contain_halts(tmp_path):
+    src = _write(tmp_path / "s.png", _gradient(1248, 832))
+    for bad in ("0,900", "300,100"):
+        with pytest.raises(ArmatureError):
+            make_plate.main([f"--src={src}", f"--out={tmp_path / 'b'}", "--width=1024",
+                            "--height=576", "--why=x", f"--visible-rows={bad}"])
+
+
+def test_an_unstated_band_records_not_recorded_rather_than_a_guess(tmp_path):
+    src = _write(tmp_path / "s.png", _gradient(1248, 832))
+    out = tmp_path / "p"
+    make_plate.main([f"--src={src}", f"--out={out}", "--width=1024", "--height=576",
+                     "--anchor=bottom", "--why=x", "--visible-rows=0,182"])
+    rec = json.loads((out / "plate_provenance.json").read_text(encoding="utf-8"))
+    assert rec["visible_band"]["carries"] == "NOT RECORDED"
+
+
 def test_the_source_file_is_never_written_to(tmp_path):
     """The clip this plate came out of is an experiment's record. A tool that edited it in
     place would corrupt the evidence it was derived from."""
