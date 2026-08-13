@@ -131,3 +131,34 @@ reviving gate-dead candidates (fresh documents only).
 | DECOMPOSE_BY_SECRETS | 3 | one variable per arm (LoRA identity), strength and seed frozen; the sweep is deliberately a separate future spec |
 | UNCERTAINTY_GATED_HUMANS | 3 | the licence gate ran before the spec; the Director picked the shape contrastively; his eye is the sole verdict on all three judged axes |
 | EXTERNAL_VERIFIER | 2 | no model grades its own output; the standing human verifier rules; pixel-level Gate B decode-checks ride each arm |
+
+## Amendment — 2026-08-13: the arms reshuffle on the sharper instrument (pre-dispatch)
+
+On the Director's ask to revive two gate-dead candidates, the fetch pass re-ran through
+CivitAI's **structured API grant matrix** — a sharper instrument than page rendering —
+and the field reshuffled before anything ran. Corrections in the licence map, same day,
+owned there; the operative changes to this spec:
+
+- **Arm C (candid_photography) is WITHDRAWN — its YES was this seat's fetch error.**
+  The API grant is `["RentCivit"]` alone: no image-commercial right, no
+  third-party-service right. The page's "Apache 2.0" was the base model's badge. The
+  arm never ran; nothing to unwind.
+- **Arm S ENTERS — the SmartphoneSnapshot v3 pair, revived by document:**
+  `WAN2.2-HighNoise_SmartphoneSnapshotPhotoReality_v3_by-AI_Characters.safetensors.safetensors`
+  (served name, double suffix verbatim) → the **high-noise expert**;
+  `WAN2.2-LowNoise_…_v3_….safetensors` → the **low-noise expert**. Tier-matched pair
+  wiring: one loader per expert, tier-matched — **a crossed pair (HIGH on low or LOW on
+  high) is the named Gate-PAIR-class wiring error and the ledger record must make the
+  attachment visible.** Grant `["Image","RentCivit","Rent","Sell"]`, no-credit allowed.
+  Look (the Director's memo): candid mobile-camera realism.
+- **Arm T stands** (technically_color, single file on both experts) **with one added
+  obligation:** the creator's grant requires credit (`allowNoCredit: false`) — published
+  footage from arm T carries a credits-line for renderartist, recorded in the
+  disclosure note.
+- **80s_fantasy_movie stays out on its own retrieved document** — image-commercial
+  granted, service-use withheld; the route is the withheld right.
+- **The design is unchanged in shape:** two arms (T, S), two generations, one seed
+  (2026081233), strength 1.0, the E12 record as baseline, all gates and the ceiling as
+  written. H-E14a's "C: subtle" clause transfers to S (candid-phone realism is likewise
+  nearer the baseline than Technicolor); every other hypothesis reads unchanged with S
+  in C's place, and the blindness statement stands — no E14 artifact exists.
