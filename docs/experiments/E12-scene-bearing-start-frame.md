@@ -67,7 +67,48 @@ from inputs, `make_startframe_sheet` conventions), and **HALTS for the Director'
 pick**. No composite, no upload, no submission before his word names the plate. If he
 supplies a photograph instead, that is the pick.
 
-## Arms — one variable per rung; the ladder is w3 → A1 → A2
+## Amendment — 2026-08-12, after the Director's eye on the first composite
+
+The band-only composite was looked at full size by the Director and **ruled
+insufficient before any spend**: below the seam the frame read as a white void —
+wave 3's opaque studio floor, which the original one-variable rung deliberately kept.
+His word, same exchange: run **both** world-completion treatments, for the experiment.
+The arms restructure as follows; everything not named here is unchanged.
+
+**Wave 2 — the world comparison.** Settings pinned at w3's (3.5 / euler). One variable
+between arms: the world-completion treatment.
+
+- **A1w — the authored floor.** The previz floor gains a real material — **procedural
+  dark wood, no texture file, zero licence surface** — and the same character, pose and
+  camera re-render. The plate fills the band; the floor below the seam is ours, in
+  correct perspective, with the figure's true contact shadow. Two seeds.
+- **A2w — the full-bleed plate.** The rendered floor is dropped; the figure rides over
+  the **whole** plate with a recorded shadow treatment (shadow-catcher alpha or an
+  authored shadow layer — the choice recorded per the alpha law). The plate's own floor
+  carries a deliberate perspective mismatch with the figure's contact points — that
+  mismatch is the arm, not a defect to fix. Two seeds, the same pair as A1w.
+
+**Gate LOOK (new, human — the checkpoint the Director's eye just proved).** Both
+composites ride one sheet to the Director at full size BEFORE any upload or
+submission. His word releases Wave 2. No exceptions.
+
+**Wave 3 — the settings rung, moved.** The catalog correction (6.0 / uni_pc) runs on
+whichever world the Director rules better after Wave 2, same two seeds. The original
+H-E12b attaches here.
+
+**Ceiling amended 4 → 6 submissions** (2 + 2 + 2, itemized), on the Director's word in
+the same exchange. No re-runs; a fired gate still ends the run where it stands.
+
+**Blind additions (the advisor's, written before either frame exists):**
+
+| id | clause | prediction |
+|---|---|---|
+| H-E12e | A1w: the tier holds band + authored floor as one room; seam reads as depth | HOLDS on both seeds; feet contact intact |
+| H-E12f | A2w: the world holds, but feet/shadow contact degrades under the plate's mismatched floor perspective | contact visibly wrong on **at least one** of two seeds |
+
+H-E12a / H-E12c / H-E12d carry unchanged onto the new frames.
+
+## Arms — one variable per rung; the ladder is w3 → A1 → A2 (superseded above)
 
 - **A1 — the world variable.** Byte-identical to w3's payload except the start image:
   the character's authored RGBA composited **under the alpha law** over the picked plate
