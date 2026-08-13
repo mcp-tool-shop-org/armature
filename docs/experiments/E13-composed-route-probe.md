@@ -70,6 +70,16 @@ the consumer surface's heavy licence sitting on a page whose own text cannot des
 API calls. The residual is the unseeable Comfy↔Alibaba reseller agreement, a residual
 every partner tier carries permanently. The Director's ruling remains the gate.
 
+**RULED, same day (the Director): the CONDITIONAL is accepted — proceed via Comfy.**
+Training use assumed as the industry default; exposure accepted for open-source work;
+**disclosure attached as standing law** (*Per-route disclosure*, CLAUDE.md — this
+spec's route carries its disclosure note at dispatch). **The terms gate is CLEARED**,
+and with the E12 close-merge landed (`5668ea6`), **both dispatch keys are turned:
+E13 is dispatch-ready.** Remaining at dispatch, for the seat that runs it: the
+Director's word to go · his A2 reference-clip pick (E12 wave-3 seed 1 is the standing
+candidate) · the fresh credit re-estimate with exact overrides · the route disclosure
+note riding the spec per the new law.
+
 ## Premises
 
 | premise | status |

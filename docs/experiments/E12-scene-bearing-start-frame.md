@@ -132,6 +132,11 @@ H-E12a / H-E12c / H-E12d carry unchanged onto the new frames.
    draft time and files re-exported before commit. **The deterministic re-lift check
    (pinned motion record → solver → geometry compare) is ordered and still owed**; the
    E09 report pins get their dated correction when it lands.
+   **Correction (2026-08-12, at the close — the check landed MATCH, `a2b54a2`):** both
+   pins reproduce **byte-identically** from their own recorded inputs, 65/65 frames of
+   evaluated world-space geometry identical. The pins were right; **this seat's
+   draft-time-pins hypothesis is falsified and owned.** No E09 correction was needed —
+   the record beat the reading of it.
 6. **Fourth stale-label sighting, named not edited:** `build_camera_i2v_payload` writes
    `start_image.fit = "authored at 832x480"` on a 1024×576 run. The fix rides the first
    commit that touches the builder after E12 closes, with the test shaped to catch the

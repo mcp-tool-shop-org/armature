@@ -1,190 +1,161 @@
-# THE HANDOFF — armature advisor seat, 2026-08-12
+# THE HANDOFF — armature advisor seat, 2026-08-12 (evening)
 
-Supersedes the 2026-08-11 handoff (git history holds it). Written at the Director's
-direction after the E08–E11 arc closed — the repo turned around, in his words — so the next
-seat continues the experiments without a round trip. **Everything below was measured at
-write time.**
+Supersedes the 2026-08-12 morning handoff (git history holds it). Written at the
+Director's direction at session close, after the E12 arc closed and E13 reached
+dispatch-ready — so the next seat continues without a round trip. **Everything below
+was measured at write time; §3 is verified with your own commands, not inherited.**
 
 ## 1. Read first, in this order
 
-[CLAUDE.md](CLAUDE.md) — rule 0, the scope block, **THE POSTURE** block, and the
-non-negotiables (five new laws landed this arc) → this file → verify §3 with your own
-commands → the memory store's session-end entry (look-before-describing is permanent law,
-earned the hardest way).
+[CLAUDE.md](CLAUDE.md) — rule 0, the scope block, **THE POSTURE**, the non-negotiables
+(**Per-route disclosure is new today**, Director-ruled) → this file → verify §3 with
+your own commands → the memory store's session-end entries (2026-08-11 and 2026-08-12;
+**look-before-describing is permanent law** — this session it survived a live trust
+challenge only because every claim came with receipts).
 
 ## 2. The frame and the posture
 
-- **armature is image-to-video with a GLB instead of an image** — footage of every kind;
-  describing it by a use-case is the drift signature.
-- **THE POSTURE** (Director, 2026-08-12): experiments exist to **learn**; the monorepo
-  redefines itself as experiments prove paths; **no route is canon by momentum**; dated
-  field checks keep technique fresh — stale technique is advisory, like a stale licence row.
-- **The repo is PRIVATE by the Director's choice** (2026-08-11); Pages is dark; the record
-  is the tree. The licence gate's purpose, his ruling: every pipeline licence-friendly so
-  the studio's art can be **published**.
+- **armature is image-to-video with a GLB instead of an image** — footage of every
+  kind; describing it by a use-case is the drift signature.
+- **THE POSTURE:** experiments exist to learn; the monorepo redefines itself as
+  experiments prove paths; **no route is canon by momentum**; dated field checks keep
+  technique fresh. The repo is PRIVATE by the Director's choice; the record is the tree.
+- **NEW LAW — Per-route disclosure (Director, 2026-08-12):** routes disclose what rides
+  with them — provider data-use/training posture, AI-disclosure duties, watermark
+  policy — grounded in the licence map's fetched documents. A route without its
+  disclosure note is not complete. Fully-local routes state that nothing leaves the rig.
 
 ## 3. State at write time — verify, don't inherit
 
-- `main` green, suite **860 passed / 13 skipped** on the rig (CI skips rig-local assets
-  visibly — Blender and facet-tree dependencies).
-- **E01–E11 closed** (E05 withdrawn). Two routes:
-  **driven** — rig sticks → Animate; the first painted shot (E08) judged a strong first
-  result; density adopted at E10 ("the more fps the better"); **parked** for AI-animation
-  buildout, per the Director, not superseded.
-  **free** — GLB start frame → I2V / camera tiers; identity holds unanchored (E11 w1, his
-  eye); the camera tier obeys to one pixel but holds what it is handed (w3, **hard fail**:
-  a faithfully-held void plus arm deformation); the plain tier paints worlds but wanders
-  (w1).
-- Worktrees hold outputs, hash-pinned in reports: `armature-E07/-E08/-E08b/-E09/-E10/-E11`.
-  Merged branches are retired from origin; `E08-run` is **subsumed** (its bank reached main
-  via the E09 merge) and stays local-only, pinned by its worktree.
-  **Correction (2026-08-12, verified on the rig):** a seventh worktree exists —
-  `armature-S02` (`S02-run`, the rulings-index adoption; fully merged, worktree retained).
-  And the subsumption claim ran short at file level: six halted-first-route files (two
-  tools, four shot specs) existed only on `E08-run` — folded byte-faithful into
-  `tools/superseded/` (see its `README-E08-first-route.md`) before the branch ref was
-  retired from origin the same day, on the Director's housekeeping word. Undo:
-  `git push origin E08-run` (the local branch and worktree remain).
-- **Zero credits spent across the whole E08–E11 arc** (GPU-hour billing; bucket
-  reconciliation pending invoice-window resolution — §6 admin).
+- `main` green (CI run `31661728905` on the close), suite **1005 passed / 13 skipped**
+  on the rig at the E12 merge. Origin carries **exactly one head: `main`**.
+- **E01–E12 closed** (E05 withdrawn). E12's closing ruling
+  (`docs/experiments/E12-closing-ruling.md`): **the free route has a world** — a handed
+  room holds to f80 on two seeds, one-variable-proven by field diff — and
+  **6.0 / uni_pc is the camera tier's baseline** (the settings premise carried since
+  E11 fell to its own rung; the Director ruled wave-3 seed 1 the route's strongest
+  result). Costs named: the unscoped identity clause converts crowds under stronger
+  adherence (one seed of two); hands still fail at f80; the camera claim waits on a
+  seam-free instrument. Two human gates (PLATE, LOOK) fired usefully before any spend.
+- **E13 is SPEC'd and DISPATCH-READY** (`docs/experiments/E13-composed-route-probe.md`
+  — the composed route: authored references into `wan2.7-r2v`). **Both gates turned
+  2026-08-12:** E12 landed (merge `5668ea6`) and the terms CONDITIONAL was **ruled
+  accepted by the Director — proceed via Comfy, disclosure attached as law.** Remaining
+  at dispatch: his word to go · his A2 clip pick (E12 wave-3 seed 1 standing candidate)
+  · fresh credit re-estimate (bundled estimate 106–211 credits/generation; ceiling four
+  submissions, halt >900) · the route's disclosure note per the new law. **Deliver the
+  executor paste block the moment he says go** (advisor rule 5).
+- **Two routes:** driven — parked for AI-animation buildout (Wan-Animate2's full
+  spatial contract is banked in `docs/comfy-consult-8.md` for the unpark). free — the
+  camera tier at the new baseline; identity holds; worlds hold when handed.
+- Worktrees: `armature-E07/-E08/-E08b/-E09/-E10/-E11/-E12` (+ `-S02`, fully merged,
+  retained). All outputs live git-ignored in worktrees, hash-pinned in reports.
+- **Credits:** 4 generations spent in E12 (GPU-hour valuation; `estimate_credits` read
+  0 throughout); pool anchor **12,962 credits at 2026-08-12 evening** (the Director's
+  screenshot; Comfy unified payments onto credits — no per-usage invoice exists).
+  Attribution/reconciliation stays an open admin item; day-granularity usage pulls
+  work, month buckets close monthly (the granularity artifact is in the calibration
+  table below).
 
-## 4. The laws this arc earned (in CLAUDE.md or the rulings, each with its earning story)
+## 4. What this session earned (each in CLAUDE.md, the map, or a ruling)
 
-1. **A served template is a reference, never a route** — measured twice in one day.
-2. **A licence row is not a wiring claim** — E11 w2: one generation of noise, every gate
-   green; Gate PAIR and premise-table-every-amendment are the mechanical forms.
-3. **Binding docs are read from `main` at dispatch time** — a "missing" licence row that
-   had been on main for hours.
-4. **Authored image inputs carry alpha, never a baked void** — the Director's ruling;
-   Gate ALPHA; the submitted composite is a deliberate recorded choice.
-5. **Denoise time is not video time** — consult #7's calibration anchor.
-6. **Two seeds before a scene claim is a property** — E10/E11, both directions.
-7. **Look before describing** — permanent; the seat that skipped it nearly lost the repo.
-8. **Relative improvement is not shippability** — re-earned at E11 w3 (the ruling's framing
-   slant vs the Director's hard fail).
-9. **A resolution is a per-model documented fact** — 832×480 was another model's document.
-10. **Instruments derive labels from inputs, never bake them** — three stale-label
-    sightings across two experiments.
+1. **Per-route disclosure** — Director-ruled law; born from the wan2.x terms ruling.
+2. **The terms-paper trio for the wan2.x partner tier** — Comfy ToS (ownership + no
+   training) · wan.video consumer terms (Director's export, sha256-pinned: outputs
+   assigned, but User Content broadly licensed incl. training on that surface) ·
+   Model Studio API tier (trial-only restrictions; FAQ publishes never-trains).
+   The residual every partner tier carries: the unseeable reseller agreement.
+3. **The Director's export path beats JS walls** — three documents this session (the
+   Wan video guide, the 2.6 image guide, the wan.video terms) where every fetcher got
+   a shell. It is the standing retrieval instrument for walled documents.
+4. **Presentation-first hands** — his eye on the GLB itself ruled the mesh good; the
+   claw is a projection artifact (bent wrist against the banked azimuth). Mesh surgery
+   is the fallback, not the lever.
+5. **Gate LOOK** — a human look at every composite before spend; it fired twice and
+   changed the experiment both times at zero credits.
+6. **The break-aware ledger convention** — when a wave breaks a pin on purpose, the
+   andon keeps its shape and changes target: named fields must move, unnamed must
+   hold, structural fields refuse override.
+7. **Dynamic-combo field truth comes from our `get_node`** — the Comfy-side agent's
+   schema surface under-renders those nodes (consult #8's drift flag, resolved by
+   re-measurement).
+8. **`docs.comfy.org/changelog` is a standing field-check source** (the Director's
+   pointer) — it surfaced native Animate2 and Uni3C the day they mattered.
+9. **A lead sheet is not documents** — the provider field notes
+   (`docs/video-provider-field-notes.md`) are tiered lead-only; their biggest claim
+   was corrected against the vendor's own words before it could harden.
+10. **The subject-scoped identity clause is the promoted prompt lever** (E12 R3) —
+    and it feeds E13's `characterN` design directly.
 
-## 5. The instrument shelf (on main, tested, reusable)
+## 5. The instrument shelf (on main, tested)
 
-Gate ROUTE (admission for **every** submitted graph; walks subgraph blueprints) ·
-**Gate PAIR** (conditioning class → required weight family; its red test is the banked
-wave-2 collapse graph in `tests/fixtures/`) · Gate ALPHA · Gate DONOR (mean + median, A4) ·
-the saved-graph round-trip gate (fail-closed on unknown classes — twice proven on its own
-holes) · the overlay pre-spend gate (sticks over previz through a pinned camera) · Gates
-B/R/S/L conventions · the fixtures convention (failures stay runnable, as test subjects) ·
-the A/B builder (neither arm resampled) · the lift chain (solver round-trips < 1e-9;
-MediaPipe Apache at all three layers) · the payload/fetch/measure tooling per experiment.
+Everything from the morning handoff, plus: **Gate BACKDROP** (measured thresholds,
+~280× discrimination, falsifier shipped) · `cover_fit` (never pads) · `make_plate` +
+`--plate` · the break-aware **Gate LEDGER** · the plate pick sheet · the
+**evaluated-geometry comparator** (`armature_core.glb`, bpy-free arithmetic — the
+instrument that closed the pin question) · the de-literaled sheet tools
+(`make_lift_sheet`, `make_gate0_sheet` — fixed with tests, stale-label law #10) ·
+consult #8's calibration receipts.
 
-## 6. The levers — E12 dispatched 2026-08-12; the rest await the Director's word
+## 6. The levers — E13 first, the rest await the Director's word
 
-**2026-08-12:** the scene-bearing start frame and the cfg/sampler correction are now
-**E12** (`docs/experiments/E12-scene-bearing-start-frame.md` — executor session; the
-camera-tier second seeds fold into its arms). The `@`-tag investigation ran the same
-day: **consult brief #8** (`docs/comfy-consult-8-brief.md`) carries the measured Wan
-2.6/2.7 reference-tier node contracts and the open questions.
-**E12 CLOSED, same day** (`docs/experiments/E12-closing-ruling.md`): the free route
-has a world — a handed room holds to f80, two seeds, one-variable-proven — and the
-settings premise fell: **6.0 / uni_pc is the camera tier's baseline** on the
-Director's eye (wave-3 seed 1 ruled the route's strongest result). Costs named: the
-unscoped identity clause converts crowds under stronger adherence (one seed of two —
-the **subject-scoped prompt is the promoted next lever**); hands still fail at f80
-(presentation-first shape stands); the camera claim needs a seam-free instrument.
-A1w fell at Gate LOOK unrun; 4 of 6 spent, 2 lapsed; close-merge + the E09-pin
-re-lift check ordered. **E13's gates are due: E12 landed · the wan2.x terms decision
-remains the Director's.**
-**Same day, later:** **E13 is specced and QUEUED behind E12's landing**
-(`docs/experiments/E13-composed-route-probe.md` — the composed route: authored
-references into `wan2.7-r2v`, on the Director's word). Its dispatch gates: E12 landed ·
-the provider-terms gate (map row added 2026-08-12 — provider document unfetched; the
-Director may alternatively rule the retrieved Comfy ToS row sufficient) · a fresh
-credit re-estimate (bundled estimate today: 106–211 credits per generation, four
-submissions ceiling).
-
-**Product:** a scene-bearing start frame on the camera tier (alpha-law composite over a
-real bar plate — the direct answer to w3's void) · the cfg/sampler correction (catalog:
-6.0 / uni_pc for the camera weights; we ran 3.5 / euler — the one ASSUMED premise left
-open) · second seeds for the two world-behaviors (replacement vs persistence — a real
-per-shot dial if both replicate) · the smoothing lever (chop; density alone measured
-insufficient) · the narration shelf order (beats → camera → chaining → area-scheduling;
-consult #7, licensed, untested) · arm A2, the VACE-reference comparison (never run).
-**Finish (the performer):** the brush pass (atlas patches; blocks clean GLB reference
-sets) · **hand geometry — promoted twice** (prompt-side treatment measured insufficient in
-w1 and w3) · wood grain · ear-rim notches · skeleton v2 fingers (needs the hand mesh
-first).
-**Instruments:** `make_lift_sheet` camera-claim fix · `make_gate0_sheet` E02 literals ·
-a foot instrument valid on hip-origin motion · the axis-offset second-fixture condition.
-**Admin:** GPU-bucket reconciliation (**corrected 2026-08-12 evening — the afternoon
-note was a granularity artifact:** month-grouped buckets close with the month, but
-day-granularity shows GPU-hours accruing daily: ≈$15.29 across Aug 1–12 account-wide,
-of which ≈$6.44 falls on Aug 10–12, armature's lifetime — shared with whatever else ran
-those days; attribution is not derivable from product-level grouping. **No per-usage
-invoice exists** — Comfy unified payments onto Comfy Credits (the platform's own
-notice: partner nodes and cloud workflows both draw the one pool), and the pool read
-**12,962 credits** at the Director's same-evening check — the balance-at-a-timestamp
-anchor a future drawdown bracket needs; the reconciliation surface is the usage ledger
-plus that credits balance, and
-closing the item means matching the arc's recorded prompt_ids to job-level records. The
-arc's "zero credits" stands as what was observed at submission; the drawdown question
-is now open, with data) · the movement-library sourcing survey (**requested 2026-08-12** — study-swarm
-dispatched on the E09-ruled frame; synthesis lands in
-`docs/research-grounding-movement-library.md`) · the official Wan **video** prompt guide: **CLOSED 2026-08-12** — retrieved by the
-Director as an official-docs translation and distilled into
-`docs/wan-video-prompt-guide-notes.md` (primary video-prompting reference; the raw
-DingTalk original stays optional via the Director's proven export path). Same-day
-companions: the 2.1 secondary rendition (`docs/wan21-prompt-guide-notes.md`, kept for
-its dimension vocabulary) and the official **Wan 2.6 image** guide as a DingTalk
-export (`docs/wan26-image-guide-notes.md`). The notes flag the guide's 2.6+
-reference-video mode (`@`-tag identity lock) as a new-conditioning-tier consult
-trigger, and hold its stationary-camera-default claim against E11 w1's measured
-push-in · E11's uploads and
-saved cloud workflows are live server-side with their deletes listed in the reports ·
-**2026-08-12:** a Director-retrieved lead sheet on Kling / MiniMax H3 / Seedance is
-distilled at `docs/video-provider-field-notes.md` — lead tier only; it hands fresh
-fetch targets to the map's three blocked partner-terms rows, corrects its own biggest
-claim against the vendor's primary source (H3 open weights = announced intent
-2026-07-31, not shipped fact), and logs one catalog discrepancy (Seedance 2.5
-reference caps: 50 claimed vs 20/6/6 measured on the Comfy template).
+**Product:** **E13** (dispatch-ready — see §3) · the subject-scoped identity clause
+(promoted; spec-able alone or inside E13's prompt design) · second seeds for the plain
+tier's replacement behavior (E11, still one-seeded) · the smoothing lever (chop;
+filter/spline on the motion record) · the narration shelf (beats → camera → chaining →
+area-scheduling; FLF templates confirmed served, consult #8) · arm A2 VACE-reference
+(E11-era, never run) · the authored-floor treatment (fell at Gate LOOK; re-cut only,
+never inherit) · Uni3C as a camera-control candidate (weight pinned
+`Wan21_Uni3C_controlnet_fp16.safetensors`; its guidance input is a rendered camera
+trajectory — armature renders true guidance natively; documents unfetched → NO until
+rows).
+**Finish (the performer):** hand presentation (wrist/camera staging first) · the brush
+pass · wood grain · ear-rim notches · skeleton v2 fingers (behind the hand work).
+**Instruments:** the seam-free camera instrument (new, E12 R5) · the foot instrument
+valid on hip-origin motion (survey input: hip translation is a retargeter *setting* —
+read it from provenance) · the axis-offset second-fixture condition · the builder's
+stale `fit = "authored at 832x480"` string — **owed with a test by the first commit
+that touches `build_camera_i2v_payload`** (fourth stale-label sighting).
+**Admin:** the credits attribution pass (prompt_ids → job records; settles drawdown
+questions with numbers) · movement-library adoptions off the survey
+(`docs/research-grounding-movement-library.md`; 100STYLE cleanest, one licence-map row
+away; the owned factory stands re-validated) · E12's cloud artifacts (two saved
+workflows deletable, never executed; the upload has no delete endpoint — named in the
+close report) · Kling/MiniMax/Seedance rows now carry fresh lead URLs
+(`docs/video-provider-field-notes.md`) · the raw DingTalk video-guide original stays
+optional via the export path.
 
 ## 7. The consult channel
 
-`docs/comfy-consult-{6,7}*` are the format precedents. **Calibration is mandatory every
-round**: verify the anchor plus one cheap claim against the live catalog before trusting
-anything — `get_node` existence checks are non-negotiable (one phantom node class caught at
-#6; five-for-five verified at #7). Licences: documents, never verdicts. **2026-08-12: brief #8 commissioned, ANSWERED and
-RULED the same day** (`docs/comfy-consult-8-brief.md` → `docs/comfy-consult-8.md`).
-Outcome: the r2v tier is **spatially opaque, measured on two instruments** — no spatial
-input, no path to local control; its parked candidate role is a composed route whose
-references are themselves authored. Uni3C pins to
-`Wan21_Uni3C_controlnet_fp16.safetensors` (documents unfetched — NO until then);
-Animate2's full spatial contract is banked for the driven route's unpark; terms and
-price for all of 2.6/2.7 remain unfetched and OURS at adoption. Channel convention
-earned: dynamic-combo field truth comes from our `get_node`; the agent's surface
-under-renders those nodes. `docs.comfy.org/changelog` is adopted as a standing
-field-check source on the Director's pointer, same day. The prior standing triggers
-(the FLF beat wave, video-native scene-plate generation, further new conditioning
-tiers) remain.
+`docs/comfy-consult-8*` joins 6 and 7 as format precedent — brief, answer, calibration,
+ruling in one file pair. **Calibration is mandatory every round** (anchor + one cheap
+claim; `get_node` existence checks non-negotiable; field-level truth on dynamic-combo
+nodes is OURS to measure). Licences: documents, never verdicts. Standing next-brief
+triggers: the FLF beat wave · video-native scene-plate generation · any new
+conditioning tier · Uni3C's documents when a spec wants it.
 
 ## 8. Seat calibration table — this seat's errors, for weighing everything above
 
 | error | correction |
 |---|---|
-| Narrated an artifact without looking (the breathing photograph) — nearly cost the repo | look-before-describing permanent; every artifact opened at full size since, including by the executors |
-| The wave-2 amendment shipped without a premise table; "weights mapped Apache" hid the wiring claim | one generation of noise; laws #2, Gate PAIR, and the red test on the artifact that earned it |
-| Framed w3's world-persistence with a win's tone; the Director's eye ruled hard fail | the verdict recorded as rendered; the slant owned in the closing ruling |
-| The E10 spec's fps arithmetic contradicted its own endpoints clause | corrected at use (A2), owned in the ruling |
-| Four CI reds across two close-merges (deps missing from the CI manifest; rig-local tests unguarded) | fixed in-convention within the hour each time; the import sweep ended the whack-a-mole |
-| The relay once re-handed a spent dispatch block | wave labels in every block since; the executor's halt-before-spend was the save |
+| Read "no August buckets" off a month-granularity usage pull and reported no charges posted | day-granularity re-pull the same evening showed the accrual; corrected in place. Absence in a coarse view is not absence |
+| Hypothesized the E09 GLB pin mismatches as "pins computed at draft time" | **falsified by the deterministic re-lift (MATCH, both pins, `a2b54a2`)** — the pins were right; owned in the E12 amendment |
+| H-E12f predicted contact degradation; H-E12e sealed for an arm that then fell at Gate LOOK | MISS and VOID, owned in the closing ruling — both misses ran pessimistic about what the model does with a real world |
+| First swarm launch violated the research-gate hook's fetch-proof format; first writes hit the memory-gate with the constitution unread | re-spawned compliant / read and complied. The hooks are the Director's law, not friction |
+| Proposed a wrist re-pose mid-experiment | the Director ruled run-as-is — second-variable discipline; his call was the better experimental instinct, and the as-is run produced the f8 open-hand observation |
 
-**What held:** calibrate-then-rule on every consult round · zero unauthorized spend across
-the arc · every negative ruled a full result · the Director's eye the verdict of record,
-every time.
+**What held:** every artifact looked at before describing — including under a live
+trust challenge, answered with pixel diffs, file times, and the record's own
+dependency direction, never narration · zero unauthorized spend (four generations,
+each on his word, two human gates before any credit) · calibrate-then-rule on consult
+#8 · corrections in place all day (the w3 luma cell, the Animate2 catalog row, the
+morning handoff's own worktree claims).
 
 ## 9. What to do first
 
 1. Read §1's documents in order; verify §3 with your own commands.
-2. **Nothing is urgent.** The levers in §6 wait on the Director — surface them when he
-   asks what's next; never dispatch on momentum. Rule 0 stands for anything
-   product-defining.
-3. Marathon, not a race. Do not end a session he has not ended.
+2. **E13 moves only on the Director's word** — when he says go, deliver the executor
+   paste block in the same message (spec + amendments from main; his clip pick; the
+   re-estimate; the disclosure note). Never dispatch on momentum; rule 0 stands for
+   anything product-defining.
+3. Nothing else is urgent. Marathon, not a race. Do not end a session he has not ended.

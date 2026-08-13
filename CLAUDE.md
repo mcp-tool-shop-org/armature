@@ -199,6 +199,17 @@ Stylized game characters may break face-embedding tools outright; a diagnostic t
 numbers on a face it cannot find is noise wearing a unit. Any such number is quoted with
 evidence that its detector actually fired.
 
+### Per-route disclosure (the Director's ruling, 2026-08-12)
+
+armature is a monorepo of pipelines, and routes differ in what rides with them. Any
+route that sends assets through a third-party tier documents — in its specs and route
+docs, and on its public surfaces when the repo has them — what a user of that route is
+exposed to: the providers' data-use and training posture, AI-content disclosure duties,
+and watermark policy, each grounded in the licence map's fetched documents. Fully-local
+routes state that nothing leaves the rig. **A route without its disclosure note is not
+complete.** Origin: the wan2.x partner tier's terms were accepted with disclosure
+attached, never silently.
+
 ### Credits are bounded
 
 Cloud generation costs real money and **spent credits have no compensator** — the bound is the
