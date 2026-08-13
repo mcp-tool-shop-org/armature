@@ -116,3 +116,47 @@ def gate_atlas_untouched(source_path, export_path):
             ev)
     ev["verdict"] = f"{len(src_hashes)} embedded image(s) byte-identical through the route"
     return ev
+
+
+class ReliftMismatch(GateFailure):
+    """A re-solved lift is not the performance the pinned GLB carries."""
+
+    gate = "RELIFT"
+
+
+def compare_signatures(pinned, fresh, label=None):
+    """Two per-frame signature lists -> a verdict, or a raise naming the first divergence.
+
+    Pure, so the interesting cases are testable without Blender: unequal lengths (a lift that
+    dropped or gained a frame is not the same performance however well its frames match), an
+    empty pair (a comparison over nothing must not report agreement), and a divergence at a
+    frame that is not the first (a check that only ever compared frame 0 would pass on a rest
+    pose and miss the whole clip).
+    """
+    ev = {"gate": "RELIFT", "label": label,
+          "n_pinned": len(pinned), "n_fresh": len(fresh)}
+    if not pinned or not fresh:
+        raise ReliftMismatch(
+            "one of the two clips carries no frames, so there is nothing to compare and a "
+            "PASS would be agreement about nothing", ev)
+    if len(pinned) != len(fresh):
+        raise ReliftMismatch(
+            f"frame counts differ: pinned {len(pinned)}, fresh {len(fresh)}. A lift that "
+            f"dropped or gained a frame is not the same performance however well the "
+            f"frames it kept agree", ev)
+
+    diverged = [i for i, (a, b) in enumerate(zip(pinned, fresh)) if a != b]
+    ev["n_frames_compared"] = len(pinned)
+    ev["n_frames_differing"] = len(diverged)
+    if diverged:
+        i = diverged[0]
+        ev["first_divergent_frame"] = i
+        ev["pinned_signature"] = pinned[i]
+        ev["fresh_signature"] = fresh[i]
+        raise ReliftMismatch(
+            f"the re-solved lift diverges from the pinned GLB at frame {i} "
+            f"({len(diverged)} of {len(pinned)} frames differ). Either the solver is not "
+            f"deterministic or the pinned file is not what the recorded inputs produce — "
+            f"and every generation conditioned on it has an unrecorded ancestor", ev)
+    ev["verdict"] = (f"all {len(pinned)} frames of evaluated geometry identical")
+    return ev

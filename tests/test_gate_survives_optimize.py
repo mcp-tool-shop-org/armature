@@ -106,6 +106,79 @@ def test_g1_raises_under_optimization(tmp_path, case, flag, env_var, label):
     )
 
 
+STARTFRAME_PROBE = textwrap.dedent(
+    """
+    import json, sys
+    sys.path.insert(0, sys.argv[1])
+    from armature_core import startframe as SF
+
+    OK = dict(void_vs_plate_255=0.4, plate_vs_flat_255=61.0, transparent_fraction=0.296,
+              why="a reason", tol_255=2.0, min_separation_255=4.0)
+    cases = {
+        "alpha_opaque":     lambda: SF.gate_alpha(0.0, (0.0, 0.0, 0.0), "why"),
+        "alpha_all_clear":  lambda: SF.gate_alpha(1.0, (0.0, 0.0, 0.0), "why"),
+        "whole_cut":        lambda: SF.gate_whole(
+                                {"x0": -2.0, "x1": 520.0, "y0": 20.0, "y1": 450.0,
+                                 "n_behind": 0, "n_points": 9}, 832, 480, 8),
+        "backdrop_unwired": lambda: SF.gate_backdrop(**dict(OK, void_vs_plate_255=61.0)),
+        "backdrop_vacuous": lambda: SF.gate_backdrop(**dict(OK, plate_vs_flat_255=0.0)),
+        "backdrop_no_void": lambda: SF.gate_backdrop(**dict(OK, transparent_fraction=0.0)),
+        "backdrop_no_why":  lambda: SF.gate_backdrop(**dict(OK, why=None)),
+        "cover_degenerate": lambda: SF.cover_fit(0, 480, 1024, 576),
+    }
+    out = {"optimize_flag": sys.flags.optimize, "asserts_active": __debug__, "raised": {}}
+    for name, fn in cases.items():
+        try:
+            fn()
+            out["raised"][name] = "NO_RAISE"
+        except SF.GateFailure:
+            out["raised"][name] = "RAISED"
+        except BaseException as exc:
+            out["raised"][name] = f"WRONG_ERROR:{type(exc).__name__}"
+    print("STARTFRAME " + json.dumps(out))
+    """
+)
+
+
+def _run_startframe(tmp_path, *, flag=False, env_var=False):
+    script = tmp_path / f"sf_probe_{int(flag)}_{int(env_var)}.py"
+    script.write_text(STARTFRAME_PROBE, encoding="utf-8")
+    env = dict(os.environ)
+    env.pop("PYTHONOPTIMIZE", None)
+    if env_var:
+        env["PYTHONOPTIMIZE"] = "1"
+    cmd = [sys.executable] + (["-O"] if flag else []) + [str(script), TOOLS]
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=180)
+    assert proc.returncode == 0, proc.stderr
+    line = [l for l in proc.stdout.splitlines() if l.startswith("STARTFRAME ")]
+    assert line, proc.stdout + proc.stderr
+    import json
+
+    return json.loads(line[-1][len("STARTFRAME "):])
+
+
+@pytest.mark.parametrize(
+    "flag,env_var,label",
+    [(False, False, "plain"), (True, False, "-O"), (False, True, "PYTHONOPTIMIZE=1")],
+)
+def test_the_start_frame_andons_all_survive_optimization(tmp_path, flag, env_var, label):
+    """THE ALPHA LAW's andons and E12's Gate BACKDROP, every clause, under every form of
+    optimization. 87 of facet's ANDONs turned out to be removable by an environment
+    variable; each clause below is a way a start frame conditions a whole generation on the
+    wrong picture while every other check passes, so none of them may be an `assert`."""
+    res = _run_startframe(tmp_path, flag=flag, env_var=env_var)
+    for name, outcome in res["raised"].items():
+        assert outcome == "RAISED", f"{label}/{name}: {outcome}"
+
+
+def test_the_startframe_optimization_actually_took_effect(tmp_path):
+    """Same guard as below, for the same reason: a green sweep under an -O that never
+    applied is a check that cannot fail."""
+    assert _run_startframe(tmp_path, flag=False)["asserts_active"] is True
+    assert _run_startframe(tmp_path, flag=True)["asserts_active"] is False
+    assert _run_startframe(tmp_path, env_var=True)["asserts_active"] is False
+
+
 def test_the_optimization_actually_took_effect(tmp_path):
     """Guard against a green result that proves nothing because -O never applied —
     a check that cannot fail is not a check."""

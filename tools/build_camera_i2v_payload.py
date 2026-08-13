@@ -336,6 +336,20 @@ def parse_args(argv=None):
                     help="frame count (argparse eats leading minus signs, so pass flags "
                          "as --flag=value)")
     ap.add_argument("--fps", type=float, default=FPS)
+    ap.add_argument("--cfg", type=float, default=None,
+                    help="move the sampler cfg off wave 1's value. The ledger then REQUIRES "
+                         "it to actually differ, and requires every trajectory field not "
+                         "named here to still match wave 1's")
+    ap.add_argument("--sampler", default=None,
+                    help="move the sampler_name off wave 1's value, same contract as --cfg")
+    ap.add_argument("--trajectory-source", default=None,
+                    help="where the overridden values come from, into the record - a number "
+                         "with no history is indistinguishable from a typo a month later")
+    ap.add_argument("--wave", type=int, default=WAVE,
+                    help="which wave of the experiment this is. Labels the graph and "
+                         "record filenames, the record's own `wave` field and the cloud "
+                         "output prefixes; a baked constant here writes plausible labels "
+                         "pointing at the wrong run the first time the tool is reused")
     return ap.parse_args(argv)
 
 
@@ -446,7 +460,7 @@ DELIBERATE_BREAKS = {
 
 
 def ledger_against_wave1(positive, uploads, length, w1_record_path,
-                         start_frame_sha256=None):
+                         start_frame_sha256=None, trajectory_overrides=None):
     """Gate LEDGER · ANDON — what still holds is checked; what breaks is named in advance.
 
     Wave 2's `pin_against_wave1` asserted that the start frame, frame, length and trajectory
@@ -510,16 +524,42 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
             "resolution under the alpha law — the old 832x480 baked-void frame cannot be "
             "the input to a 1024x576 graph")
 
-    # ---- the one thing that must still hold.
+    # ---- the trajectory: what is HELD must match, what is MOVED must actually have moved.
+    #
+    # This clause asserted flat equality with wave 1's trajectory, because that was the one
+    # property E11 wave 3 held. E12's settings rung is directed to move cfg and sampler_name
+    # and hold everything else, so an unchanged clause would halt an authorised wave — and
+    # deleting it would be the thing the wave-2 postmortem named: quietly dropping a pin is
+    # how a confound becomes invisible. So the andon keeps its shape and changes target,
+    # exactly as it did when wave 3 broke four of wave 2's pins: every field NOT named in an
+    # override must still equal wave 1's, and every field that IS named must actually differ
+    # from it. A break that did not happen fails here.
+    overrides = dict(trajectory_overrides or {})
     w1_traj = w1.get("trajectory") or {}
-    traj = {k: v["value"] for k, v in W1.TRAJECTORY.items()}
+    traj = {k: v["value"] for k, v in effective_trajectory(overrides).items()}
     w1_vals = {k: (v or {}).get("value") for k, v in w1_traj.items()}
-    ev["trajectory"] = {"wave_3": traj, "wave_1": w1_vals, "agrees": traj == w1_vals,
-                        "role": "the only property this wave holds against wave 1"}
-    if traj != w1_vals:
-        problems.append(f"the sampling trajectory differs from wave 1's: {traj} against "
-                        f"{w1_vals} — it is the one thing this wave holds, and nothing "
-                        f"would be comparable if it moved too")
+    held = {k: v for k, v in traj.items() if k not in overrides}
+    w1_held = {k: v for k, v in w1_vals.items() if k not in overrides}
+    ev["trajectory"] = {
+        "this_wave": traj, "wave_1": w1_vals,
+        "moved_on_purpose": sorted(overrides),
+        "held": sorted(held),
+        "held_agrees": held == w1_held,
+        "role": ("the fields not named in an override are what this wave holds against "
+                 "wave 1; the named ones are its lever")}
+    if held != w1_held:
+        problems.append(
+            f"a trajectory field this wave was NOT authorised to move differs from wave "
+            f"1's: {held} against {w1_held}. Only {sorted(overrides) or 'nothing'} may "
+            f"move, and nothing would be comparable if anything else did")
+    for field in overrides:
+        if w1_vals.get(field) is None:
+            problems.append(f"wave 1's record carries no {field!r} to break against")
+        elif traj[field] == w1_vals[field]:
+            problems.append(
+                f"{field} was declared a deliberate break but still equals wave 1's "
+                f"{w1_vals[field]!r} — a report describing a lever that never moved is "
+                f"wave 2's failure one wave later")
 
     # ---- wave 2's inverted clause, unchanged.
     w1_pos = w1.get("positive")
@@ -544,14 +584,62 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
     if problems:
         raise PayloadError("wave 3's payload is not the one the ruling describes: "
                            + "; ".join(problems))
-    ev["verdict"] = (f"{len(DELIBERATE_BREAKS)} deliberate breaks verified as actual; "
-                     f"trajectory held; positive still differs from wave 1's")
+    moved = sorted(overrides)
+    ev["verdict"] = (
+        f"{len(DELIBERATE_BREAKS)} deliberate breaks verified as actual; "
+        + (f"trajectory moved on {', '.join(moved)} and held on {len(held)} other field(s)"
+           if moved else "trajectory held")
+        + "; positive still differs from wave 1's")
     return ev
 
 
+#: Which trajectory fields a wave is allowed to move. Everything else in `W1.TRAJECTORY` is
+#: structural to the two-expert split (steps, split_step, shift, scheduler, fps) and moving
+#: one would make the wave incomparable rather than informative.
+OVERRIDABLE = ("cfg", "sampler_name")
+
+
+def effective_trajectory(overrides=None):
+    """`W1.TRAJECTORY` with named fields replaced, each replacement carrying its own source.
+
+    The trajectory is IMPORTED rather than retyped precisely so that "held constant" is a
+    property of the code. A wave that moves part of it must therefore move it through one
+    named door, with the old value and the reason preserved beside the new one — otherwise
+    the record shows a number with no history and the next reader cannot tell a measured
+    correction from a typo.
+    """
+    out = {k: dict(v) for k, v in W1.TRAJECTORY.items()}
+    for field, spec in (overrides or {}).items():
+        if field not in out:
+            raise PayloadError(
+                f"{field!r} is not a trajectory field; the trajectory is "
+                f"{sorted(out)}")
+        if field not in OVERRIDABLE:
+            raise PayloadError(
+                f"{field!r} is structural to the two-expert split and is not overridable "
+                f"here. Moving it would make the wave incomparable rather than informative; "
+                f"overridable fields are {list(OVERRIDABLE)}")
+        was = out[field]["value"]
+        if spec["value"] == was:
+            raise PayloadError(
+                f"the override for {field!r} sets it to {was!r}, which is what it already "
+                f"was. A break that did not happen is wave 2's failure shape: the report "
+                f"would describe a lever that never moved")
+        out[field] = {"value": spec["value"], "source": spec["source"],
+                      "was": was, "moved_by": "an explicit override on this wave"}
+    return out
+
+
 def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
-          length=LENGTH, fps=FPS):
-    """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists."""
+          length=LENGTH, fps=FPS, wave=WAVE, trajectory_overrides=None):
+    """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists.
+
+    `wave` is a parameter and not the module constant for the reason this repo has now paid
+    for twice: a tool that names an experiment in a literal is a tool that will lie the first
+    time it is reused. Reused at E12, `WAVE = 3` would have written `E12-w3-…` filenames, a
+    `"wave": 3` field, and cloud output prefixes under `E12/w3/` — every one of them a
+    plausible label pointing at the wrong run.
+    """
     gate_s = gates.gate_s_seed_registration(seed, registry, experiment,
                                             seed_was_explicit=seed is not None)
     seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)
@@ -559,12 +647,13 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
     # legality constraints from the camera model's own row. Wave 2 is the argument.
     profile = gates.g1_generator_legality(WIDTH, HEIGHT, length, "wan-fun-camera")
 
-    steps = W1.TRAJECTORY["steps"]["value"]
-    split = W1.TRAJECTORY["split_step"]["value"]
-    shift = W1.TRAJECTORY["shift"]["value"]
-    cfg = W1.TRAJECTORY["cfg"]["value"]
-    sampler = W1.TRAJECTORY["sampler_name"]["value"]
-    scheduler = W1.TRAJECTORY["scheduler"]["value"]
+    traj = effective_trajectory(trajectory_overrides)
+    steps = traj["steps"]["value"]
+    split = traj["split_step"]["value"]
+    shift = traj["shift"]["value"]
+    cfg = traj["cfg"]["value"]
+    sampler = traj["sampler_name"]["value"]
+    scheduler = traj["scheduler"]["value"]
 
     start_name = uploads["start_frame"]
 
@@ -588,7 +677,7 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
         # Gate B probe: the start frame as the conditioning node receives it, saved so it can
         # be compared pixel for pixel against the local render.
         "41": {"class_type": "SaveImage",
-               "inputs": {"filename_prefix": f"{experiment}/w{WAVE}/startprobe",
+               "inputs": {"filename_prefix": f"{experiment}/w{wave}/startprobe",
                           "images": ["40", 0]}},
         # THE CAMERA LEVER. Its width/height/length must equal the generated frame's —
         # route_gates.CAMERA_NODES puts an andon on exactly that, because this node's own
@@ -623,11 +712,11 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
                "inputs": {"samples": ["61", 0], "vae": ["21", 0]}},
         # The lossless tap — every measurement reads these, before any codec.
         "71": {"class_type": "SaveImage", "inputs": {
-            "filename_prefix": f"{experiment}/w{WAVE}/lossless", "images": ["70", 0]}},
+            "filename_prefix": f"{experiment}/w{wave}/lossless", "images": ["70", 0]}},
         "80": {"class_type": "CreateVideo",
                "inputs": {"fps": fps, "bit_depth": 8, "images": ["70", 0]}},
         "81": {"class_type": "SaveVideo", "inputs": {
-            "filename_prefix": f"video/{experiment}_w{WAVE}", "format": "auto",
+            "filename_prefix": f"video/{experiment}_w{wave}", "format": "auto",
             "codec": "auto", "video": ["80", 0]}},
     }
 
@@ -636,7 +725,7 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
     gate_route = route_gates.verify(wf, frame=(WIDTH, HEIGHT, length))
 
     meta = {
-        "experiment": experiment, "wave": WAVE, "tool_version": TOOL_VERSION,
+        "experiment": experiment, "wave": wave, "tool_version": TOOL_VERSION,
         "route": ("the model performs; the camera is held — a start frame from the GLB, a "
                   "prompt, and a Static camera embedding. No signal drives the performer"),
         "route_name_change": {
@@ -656,7 +745,8 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
         "models": {"unet_high_noise": UNET_HIGH, "unet_low_noise": UNET_LOW,
                    "clip": CLIP_NAME, "vae": VAE_NAME, "loras": []},
         "frame_derivation": FRAME_DERIVATION,
-        "trajectory": W1.TRAJECTORY,
+        "trajectory": traj,
+        "trajectory_overrides": dict(trajectory_overrides or {}),
         "trajectory_source": ("IMPORTED from build_i2v_payload, not retyped — the sampling "
                               "trajectory is the one thing this wave holds against waves "
                               "1-2, so it is held by the code rather than by a claim"),
@@ -828,11 +918,21 @@ def main(argv=None):
 
     positive, prompt_log = build_prompt()
     negative, negative_log = build_negative(a.negative_source)
+    overrides = {}
+    if a.cfg is not None:
+        overrides["cfg"] = {"value": a.cfg, "source": a.trajectory_source or
+                            "an explicit --cfg override on this wave"}
+    if a.sampler is not None:
+        overrides["sampler_name"] = {"value": a.sampler, "source": a.trajectory_source or
+                                     "an explicit --sampler override on this wave"}
+
     gate_ledger = ledger_against_wave1(positive, uploads, a.length, a.w1_record,
-                                       start_frame_sha256=a.start_frame_sha256)
+                                       start_frame_sha256=a.start_frame_sha256,
+                                       trajectory_overrides=overrides)
 
     wf, meta = build(uploads, a.seed, negative, positive, registry,
-                     experiment=a.experiment, length=a.length, fps=a.fps)
+                     experiment=a.experiment, length=a.length, fps=a.fps, wave=a.wave,
+                     trajectory_overrides=overrides)
     meta["gate_LEDGER_W3"] = gate_ledger
     meta["prompt_record"] = {
         "surgery": prompt_log,
@@ -842,10 +942,10 @@ def main(argv=None):
                             "same code wave 1 and E08 read them through"),
     }
 
-    gpath = os.path.join(out, f"{a.experiment}-w{WAVE}-camera-i2v.api.json")
+    gpath = os.path.join(out, f"{a.experiment}-w{a.wave}-camera-i2v.api.json")
     with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=2, ensure_ascii=False)
-    mpath = os.path.join(out, f"{a.experiment}-w{WAVE}-payload-record.json")
+    mpath = os.path.join(out, f"{a.experiment}-w{a.wave}-payload-record.json")
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
