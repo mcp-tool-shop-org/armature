@@ -134,6 +134,13 @@ valid on hip-origin motion (survey input: hip translation is a retargeter *setti
 read it from provenance) · the axis-offset second-fixture condition · the builder's
 stale `fit = "authored at 832x480"` string — **owed with a test by the first commit
 that touches `build_camera_i2v_payload`** (fourth stale-label sighting).
+**⭢ E14 SPEC'D + DISPATCH-READY 2026-08-13** (`docs/experiments/E14-lora-scene-lever.md`
+— the LoRA bake-off, the Director's shape pick; consult #10 filed and calibrated): two
+licence-fetched survivors (technically_color, candid_photography) × one seed ×
+strength 1.0 against the E12 record as baseline; zero partner credits; four candidates
+dead at the gate with verbatim rows; the winner's strength sweep is a future spec;
+worktree `E14-run` cut at `a0d264a`.
+
 **Admin:** ~~the Animate-2 licence fetch list~~ **FETCHED 2026-08-13, same day** — all
 rows landed YES (the map's *Added 2026-08-13* section; upstream Wan2.2-Animate-2-14B
 Apache, one repack repo hosts the whole loadout, the Director's export corroborating).
