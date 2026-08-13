@@ -336,6 +336,11 @@ def parse_args(argv=None):
                     help="frame count (argparse eats leading minus signs, so pass flags "
                          "as --flag=value)")
     ap.add_argument("--fps", type=float, default=FPS)
+    ap.add_argument("--wave", type=int, default=WAVE,
+                    help="which wave of the experiment this is. Labels the graph and "
+                         "record filenames, the record's own `wave` field and the cloud "
+                         "output prefixes; a baked constant here writes plausible labels "
+                         "pointing at the wrong run the first time the tool is reused")
     return ap.parse_args(argv)
 
 
@@ -550,8 +555,15 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
 
 
 def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
-          length=LENGTH, fps=FPS):
-    """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists."""
+          length=LENGTH, fps=FPS, wave=WAVE):
+    """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists.
+
+    `wave` is a parameter and not the module constant for the reason this repo has now paid
+    for twice: a tool that names an experiment in a literal is a tool that will lie the first
+    time it is reused. Reused at E12, `WAVE = 3` would have written `E12-w3-…` filenames, a
+    `"wave": 3` field, and cloud output prefixes under `E12/w3/` — every one of them a
+    plausible label pointing at the wrong run.
+    """
     gate_s = gates.gate_s_seed_registration(seed, registry, experiment,
                                             seed_was_explicit=seed is not None)
     seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)
@@ -588,7 +600,7 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
         # Gate B probe: the start frame as the conditioning node receives it, saved so it can
         # be compared pixel for pixel against the local render.
         "41": {"class_type": "SaveImage",
-               "inputs": {"filename_prefix": f"{experiment}/w{WAVE}/startprobe",
+               "inputs": {"filename_prefix": f"{experiment}/w{wave}/startprobe",
                           "images": ["40", 0]}},
         # THE CAMERA LEVER. Its width/height/length must equal the generated frame's —
         # route_gates.CAMERA_NODES puts an andon on exactly that, because this node's own
@@ -623,11 +635,11 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
                "inputs": {"samples": ["61", 0], "vae": ["21", 0]}},
         # The lossless tap — every measurement reads these, before any codec.
         "71": {"class_type": "SaveImage", "inputs": {
-            "filename_prefix": f"{experiment}/w{WAVE}/lossless", "images": ["70", 0]}},
+            "filename_prefix": f"{experiment}/w{wave}/lossless", "images": ["70", 0]}},
         "80": {"class_type": "CreateVideo",
                "inputs": {"fps": fps, "bit_depth": 8, "images": ["70", 0]}},
         "81": {"class_type": "SaveVideo", "inputs": {
-            "filename_prefix": f"video/{experiment}_w{WAVE}", "format": "auto",
+            "filename_prefix": f"video/{experiment}_w{wave}", "format": "auto",
             "codec": "auto", "video": ["80", 0]}},
     }
 
@@ -636,7 +648,7 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
     gate_route = route_gates.verify(wf, frame=(WIDTH, HEIGHT, length))
 
     meta = {
-        "experiment": experiment, "wave": WAVE, "tool_version": TOOL_VERSION,
+        "experiment": experiment, "wave": wave, "tool_version": TOOL_VERSION,
         "route": ("the model performs; the camera is held — a start frame from the GLB, a "
                   "prompt, and a Static camera embedding. No signal drives the performer"),
         "route_name_change": {
@@ -832,7 +844,7 @@ def main(argv=None):
                                        start_frame_sha256=a.start_frame_sha256)
 
     wf, meta = build(uploads, a.seed, negative, positive, registry,
-                     experiment=a.experiment, length=a.length, fps=a.fps)
+                     experiment=a.experiment, length=a.length, fps=a.fps, wave=a.wave)
     meta["gate_LEDGER_W3"] = gate_ledger
     meta["prompt_record"] = {
         "surgery": prompt_log,
@@ -842,10 +854,10 @@ def main(argv=None):
                             "same code wave 1 and E08 read them through"),
     }
 
-    gpath = os.path.join(out, f"{a.experiment}-w{WAVE}-camera-i2v.api.json")
+    gpath = os.path.join(out, f"{a.experiment}-w{a.wave}-camera-i2v.api.json")
     with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=2, ensure_ascii=False)
-    mpath = os.path.join(out, f"{a.experiment}-w{WAVE}-payload-record.json")
+    mpath = os.path.join(out, f"{a.experiment}-w{a.wave}-payload-record.json")
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 

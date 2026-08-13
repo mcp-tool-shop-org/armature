@@ -370,3 +370,34 @@ def test_the_record_names_the_route_change_rather_than_hiding_it():
     rc = meta["route_name_change"]
     assert rc["wave_1"] == "no control of any kind"
     assert "PERFORMER" in rc["wave_2"]
+
+
+# --------------------------------------------------------------------- the wave label
+
+def test_the_wave_label_follows_the_caller_and_is_not_a_baked_constant():
+    """E12 reuses this builder, and `WAVE = 3` was a module literal.
+
+    Left baked, it would have written a `"wave": 3` field and cloud output prefixes under
+    `E12/w3/` for a run that is not wave 3 of anything — plausible labels pointing at the
+    wrong run, which is the defect `make_gate0_sheet` was stripped of on its third stale-label
+    sighting. The prefixes matter most: they name directories on the server that later runs
+    read frames back out of.
+    """
+    _, meta = built(experiment="E12", wave=2)
+    assert meta["wave"] == 2
+    assert meta["experiment"] == "E12"
+
+    wf, _ = built(experiment="E12", wave=2)
+    prefixes = [n["inputs"]["filename_prefix"] for n in wf.values()
+                if isinstance(n, dict) and isinstance(n.get("inputs"), dict)
+                and "filename_prefix" in n["inputs"]]
+    assert prefixes, "the graph writes nothing — the fixture is no longer exercising this"
+    for p in prefixes:
+        assert "w3" not in p, f"a wave-3 literal survived into {p!r}"
+    assert any("E12/w2/" in p for p in prefixes)
+
+
+def test_the_default_wave_is_still_the_one_the_shipped_run_used():
+    """The label is now a parameter; the run that already happened must keep its name."""
+    _, meta = built()
+    assert meta["wave"] == B.WAVE == 3
