@@ -50,6 +50,15 @@ jobs:
         working-directory: site
         run: npm ci
 
+      # The repo's only dependency manifest is site/. There is no Python manifest
+      # here — the test dependencies are the pinned install line below and nothing
+      # resolves a graph — so this is the whole scannable surface, and it is scanned
+      # rather than attested. `high` is the studio's threshold; a build-time low is
+      # not worth a red main.
+      - name: scan site dependencies
+        working-directory: site
+        run: npm audit --audit-level=high
+
       - name: build site
         working-directory: site
         run: npm run build
