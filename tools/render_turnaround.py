@@ -63,12 +63,15 @@ under parallel projection does not depend on distance, so the radius keeps only 
 positional role and is set to a clipping-safe standoff derived from the subject's own
 bounding sphere rather than from a constant in metres.
 
-**Predicted vs measured is recorded per view, and it is a diagnostic, not a gate.** The
-projector's extent and the rendered alpha's bbox are two independent measurements of the
-same silhouette, and their delta is what would expose a wrong ortho aspect convention or a
-flipped row order — neither of which any gate here can see. No calibrated threshold for
-"how many pixels of disagreement is too many" exists on this rig, so the numbers are
-reported and the Director's eye reads them.
+**`predicted_vs_measured` rides each view as a diagnostic and gates nothing.** It sets the
+projector's extent against the rendered alpha's bbox — two independent measurements of one
+silhouette, and the pair that exposes a wrong ortho aspect convention, which no gate here
+can see. It does NOT see a flipped row order, at any aspect: the solve centres the figure,
+and a centred box maps to itself under a vertical flip to within a pixel. Nothing derived
+from the box can see that, so the row order is settled by the orientation calibration and
+by `_measure_alpha_plane`'s own test rather than by a per-view number. No calibrated
+tolerance for the delta exists on this rig, so it is reported and the Director's eye reads
+it.
 
 --------------------------------------------------------------------------------
 Why the radius is solved and not typed in
@@ -195,32 +198,29 @@ def _sha256(path):
     return h.hexdigest()
 
 
-def _alpha_stats(path, width, height):
-    """Alpha extrema, transparent fraction and the subject's pixel bbox, from the file.
+def _measure_alpha_plane(plane_bottom_up):
+    """Extrema, transparent fraction and the subject's TOP-DOWN bbox of an alpha plane.
 
-    Measured off the WRITTEN PNG rather than off the render buffer. The buffer is what the
-    renderer believes it produced; the file is what a route is handed, and the two differ
-    exactly when the file format or the colour-mode setting drops the channel — which is
-    the failure this whole tool is aimed at.
+    Takes the plane as Blender hands it back — **row 0 at the BOTTOM of the picture** —
+    and flips it, because `framing.project` returns y increasing downward and
+    `startframe.mask_bbox` reads its input row-major from the top.
 
-    **Rows are flipped to top-down before the bbox is taken.** `Image.pixels` hands back
-    row 0 at the BOTTOM of the image, while `framing.project` returns y increasing
-    downward and `startframe.mask_bbox` reads its input as row-major from the top. The
-    extrema and the transparent fraction are orientation-invariant and never noticed;
-    a bbox is not, and an unflipped one would make Gate CROP name `top` when the figure
-    was amputated at the `bottom` — a report that fires correctly and lies about where.
-    The manifest's predicted-vs-measured delta is what actually checks this flip.
+    Split out of `_alpha_stats` so the flip is testable without Blender, which is the only
+    way it gets tested at all. It needs to be: the extrema and the transparent fraction are
+    orientation-invariant and would never notice, a bbox is not, and an unflipped one makes
+    Gate CROP name `top` when the figure was amputated at the `bottom` — a gate that fires
+    correctly and lies about where. **Neither the predicted-vs-measured delta nor any
+    crown-position probe can catch this**, and that was measured rather than assumed: the
+    solve centres the figure, so at `height_frac` 0.831 in 1024 rows the flipped box
+    differs from the true one by ONE pixel and every quantity derived from it agrees.
 
-    The subject mask is `alpha >= TRANSPARENT_BELOW`, the module's existing convention,
-    so the bbox and the reported transparent fraction partition the same frame.
+    That leaves the premise "`Image.pixels` is bottom-up" carrying the flip on its own, so
+    it is measured directly by the orientation calibration rather than trusted.
+
+    The subject mask is `alpha >= TRANSPARENT_BELOW`, the module's existing convention, so
+    the bbox and the reported transparent fraction partition the same frame.
     """
-    img = bpy.data.images.load(path)
-    try:
-        buf = np.empty(width * height * 4, dtype=np.float32)
-        img.pixels.foreach_get(buf)
-        a = buf.reshape(height, width, 4)[..., 3][::-1]      # bottom-up -> top-down
-    finally:
-        bpy.data.images.remove(img)
+    a = plane_bottom_up[::-1]
     counts = np.rint(a * 255.0).astype(np.int32)
     mask = a >= TA.TRANSPARENT_BELOW
     return {
@@ -230,6 +230,24 @@ def _alpha_stats(path, width, height):
         "subject_bbox": SF.mask_bbox(mask.tolist()),
         "subject_pixels": int(mask.sum()),
     }
+
+
+def _alpha_stats(path, width, height):
+    """`_measure_alpha_plane` of the WRITTEN PNG's alpha channel.
+
+    Measured off the file rather than off the render buffer. The buffer is what the
+    renderer believes it produced; the file is what a route is handed, and the two differ
+    exactly when the file format or the colour-mode setting drops the channel — which is
+    the failure this whole tool is aimed at.
+    """
+    img = bpy.data.images.load(path)
+    try:
+        buf = np.empty(width * height * 4, dtype=np.float32)
+        img.pixels.foreach_get(buf)
+        plane = buf.reshape(height, width, 4)[..., 3].copy()
+    finally:
+        bpy.data.images.remove(img)
+    return _measure_alpha_plane(plane)
 
 
 def _border_contact(bbox, width, height):
@@ -250,9 +268,10 @@ def _predicted_vs_measured(extent, bbox):
     Two independent measurements of one silhouette: `silhouette_extent` projects a
     decimated point cloud through `framing.project`, and the bbox comes off the written
     PNG's alpha. Nothing else in this tool compares them, and a wrong ortho aspect
-    convention or a flipped row order is invisible to every gate here while showing up in
-    this delta immediately — on a square frame the aspect error is invisible even here,
-    which is what the non-square calibration render is for.
+    convention is invisible to every gate here while showing up in this delta immediately —
+    on a SQUARE frame it is invisible even here, which is what the non-square calibration
+    render is for. A flipped row order is invisible to this delta too, at any aspect, and
+    `_orientation_probe` is what binds it.
 
     No calibrated threshold for acceptable disagreement exists on this rig. Anti-aliasing
     widens the rendered edge, the 0.5 alpha threshold pulls it back, and the decimated

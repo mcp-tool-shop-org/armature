@@ -401,6 +401,59 @@ def test_the_tools_border_measurement_agrees_with_the_gate(rt):
     assert rt._border_contact(None, 1024, 1024)["subject_bbox_px"] is None
 
 
+def test_no_quantity_derived_from_the_bbox_can_see_a_flipped_row_order():
+    """The measurement that decided where the flip check has to live.
+
+    The solve centres the figure, so flipping the rows maps the box to itself: at
+    `height_frac` 0.831 in 1024 rows the two boxes differ by ONE pixel. That kills the
+    obvious candidates — the predicted-vs-measured delta, and any probe that asks where
+    the subject's crown falls WITHIN the measured box, since the box it is measured
+    against flipped too. Anyone reading either as an orientation check is reading a number
+    that looks perfect with the picture upside down.
+    """
+    h, y0, y1 = 1024, 87, 937
+    flipped_y0, flipped_y1 = h - 1 - y1, h - 1 - y0
+    assert abs(flipped_y0 - y0) <= 1 and abs(flipped_y1 - y1) <= 1
+
+    crown_from_top_true = 0.0
+    crown_from_top_flipped = ((h - 1 - y0) - flipped_y0) / float(flipped_y1 - flipped_y0)
+    assert crown_from_top_flipped == pytest.approx(1.0, abs=0.01)
+    assert crown_from_top_true != pytest.approx(crown_from_top_flipped, abs=0.5)
+
+
+def test_the_alpha_measurement_flips_blenders_bottom_up_rows_to_top_down(rt):
+    """THE flip fixture, and the only place in the suite that binds it.
+
+    `Image.pixels` hands row 0 back at the BOTTOM of the picture. A subject occupying the
+    TOP of the image therefore sits in the LAST rows of the array Blender returns. Drop the
+    flip and this bbox comes back as rows 7..9 instead of 0..2 — Gate CROP would then name
+    `bottom` for a figure amputated at the `top`, on evidence that is otherwise entirely
+    correct.
+    """
+    import numpy as np
+
+    plane = np.zeros((10, 6), dtype=np.float32)
+    plane[7:10, 1:4] = 1.0          # bottom-up rows 7..9 == the top three rows of the image
+    m = rt._measure_alpha_plane(plane)
+
+    assert m["subject_bbox"] == (1, 0, 3, 2)
+    assert m["subject_pixels"] == 9
+    assert m["alpha_min"] == 0 and m["alpha_max"] == 255
+    assert m["transparent_fraction"] == pytest.approx(51 / 60)
+
+
+def test_the_alpha_measurement_reports_an_empty_plane_as_no_box(rt):
+    """The render nobody is in. `mask_bbox` returns None and Gate CROP's vacuity clause is
+    what turns that into a halt — this only pins that the measurement does not invent a
+    zero-sized box at the origin."""
+    import numpy as np
+
+    m = rt._measure_alpha_plane(np.zeros((8, 8), dtype=np.float32))
+    assert m["subject_bbox"] is None
+    assert m["subject_pixels"] == 0
+    assert m["transparent_fraction"] == 1.0
+
+
 def test_predicted_versus_measured_is_a_signed_delta_and_survives_an_empty_render(rt):
     ext = {"x0": 10.4, "x1": 200.6, "y0": 5.2, "y1": 300.9}
     d = rt._predicted_vs_measured(ext, (9, 4, 202, 302))["delta_px"]
