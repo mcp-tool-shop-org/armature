@@ -121,7 +121,10 @@ valid on hip-origin motion (survey input: hip translation is a retargeter *setti
 read it from provenance) · the axis-offset second-fixture condition · the builder's
 stale `fit = "authored at 832x480"` string — **owed with a test by the first commit
 that touches `build_camera_i2v_payload`** (fourth stale-label sighting).
-**Admin:** `docs/assets/mark-figure.png` — the Director ruled 2026-08-13 **keep as-is,
+**Admin:** the Animate-2 licence fetch list (consult #9 ruling R1 —
+`wan_animate_2_int8_convrot` · `clip_vision_h` · the two repack-precedent files): rows
+land before the unpark runs anything; UNVERIFIED = NO stands ·
+`docs/assets/mark-figure.png` — the Director ruled 2026-08-13 **keep as-is,
 keep an eye on it**: the 93% transparency is correct for a thin wire figure, not an
 error; the treatment's finding (RGB noise under the transparent pixels) matters only if
 the file ever rides a surface that flattens alpha — it is local-only, never
@@ -138,7 +141,11 @@ optional via the export path.
 ## 7. The consult channel
 
 `docs/comfy-consult-8*` joins 6 and 7 as format precedent — brief, answer, calibration,
-ruling in one file pair. **Calibration is mandatory every round** (anchor + one cheap
+ruling in one file pair. **#9 filed 2026-08-13** (the Animate2 unpark surface): the
+loader inventory delivered exact filename strings — the ruling carries the licence
+fetch list — the pose branch measured detector-free at template level, and the
+chaining mechanism resolved by our own `get_node` where the agent's surface could not
+see it (the channel law's third confirmation). **Calibration is mandatory every round** (anchor + one cheap
 claim; `get_node` existence checks non-negotiable; field-level truth on dynamic-combo
 nodes is OURS to measure). Licences: documents, never verdicts. Standing next-brief
 triggers: the FLF beat wave · video-native scene-plate generation · any new
