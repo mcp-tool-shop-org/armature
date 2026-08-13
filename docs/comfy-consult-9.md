@@ -129,3 +129,11 @@ this round.
 **Standing next-brief triggers unchanged**, plus one earned: the subgraph-291 interior
 and the "Model Links" note, wanted at unpark-spec time if the licence fetch needs URLs
 the filenames alone cannot locate.
+
+**Addendum — 2026-08-13, same day: the fetch pass ran.** Ruling item 1's list is
+resolved — every filename located in one repack repo (`Comfy-Org/Wan-Animate-2`),
+upstream `Wan-AI/Wan2.2-Animate-2-14B` fetched Apache-2.0, the CLIP-vision upstream
+fetched MIT, rows landed in the licence map (*Added 2026-08-13*) with the Director's
+export corroborating. The subgraph-291 / Model-Links trigger was not needed — the
+filename search resolved directly. The unpark is licence-clear; its remaining gates
+are the three measured questions.

@@ -45,6 +45,27 @@ its own sake — it is the publishing plan.
 | **CausVid `Wan21_CausVid…_1_3B`** speed-LoRA | CC-BY-NC (flagged) | **NO — BANNED** | flagged by Comfy consult #1; **not independently retrieved** | Was bypassed inside the VACE graph. **Ruled: delete, not bypass** — see below. |
 | **lightx2v 4-step** speed-LoRAs | Apache-2.0 | YES (but excluded) | [HF](https://huggingface.co/lightx2v/Wan2.2-Lightning) + [HF](https://huggingface.co/lightx2v/Wan2.1-T2V-14B-StepDistill-CfgDistill-Lightx2v) — **retrieved 2026-08-10**, upgraded from consult-sourced | Commercially clean; excluded on *methodology* grounds, not licensing — a 4-step/cfg-1 trajectory confounds a control-strength curve. |
 
+### Added 2026-08-13 (the Animate-2 loadout — consult #9's fetch pass)
+
+Consult #9 delivered the served Animate2 template's loader inventory as exact filename
+strings; this pass fetched the documents behind each. All five files resolve to **one
+repack repo**, `Comfy-Org/Wan-Animate-2`, whose card declares `apache-2.0` and names its
+upstream — a stronger footing than the blank-field umt5 repack, though the upstream
+grant still governs per the standing precedent.
+
+| Model / component | License | Commercial | Source | Note |
+|---|---|---|---|---|
+| **Wan2.2-Animate-2-14B** (the Animate-2 tier's upstream) | Apache-2.0 | **YES** | [HF card](https://huggingface.co/Wan-AI/Wan2.2-Animate-2-14B), fetched 2026-08-13; the Director's export summary (local, sha256 `1541f8f0cd4c72c37bfceeff0a77fefc07c7a4acddab2cd0726a6402132dbf70`) corroborates | "end-to-end character animation framework… preserving character identity." Sibling of the mapped Wan2.2-Animate-14B — separate row per the exact-variant law. ⚠ **This card carries NO output-rights clause** (unlike the T2V family cards' "claim no rights" line) — outputs on Cloud are governed service-side by the Comfy ToS ownership row, the same shape as the Fun-Camera note. |
+| **`wan_animate_2_int8_convrot.safetensors`** (+ bf16 / distill variants) | Apache-2.0 (repack card + upstream) | **YES** | [Comfy-Org/Wan-Animate-2](https://huggingface.co/Comfy-Org/Wan-Animate-2), fetched 2026-08-13 | the exact filename the served template loads (consult #9 Q1). An int8 "convrot" quantization is a *modified* work — Apache permits modification with notice obligations that bind distributors, not runtime users. |
+| **`clip_vision_h.safetensors`** | distributed under the repack repo's apache-2.0; widely-attributed upstream **laion OpenCLIP ViT-H/14: MIT**, fetched 2026-08-13 | **YES** | [laion/CLIP-ViT-H-14-laion2B-s32B-b79K](https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K) | the laion card also says: *"Any deployed use case of the model - whether commercial or not - is currently out of scope"* — an **intended-use statement, not a licence clause**; the MIT grant carries no field-of-use restriction, and it is quoted here so nobody discovers it later and reads concealment. Residual, honestly: the file-to-laion lineage is attributed, not proven — both candidate grants (repack apache-2.0, laion MIT) are commercial-clean, so the residual does not gate. |
+| **`Wan2_1_VAE_bf16.safetensors` · `umt5_xxl_fp8_e4m3fn_scaled.safetensors`** | covered by existing rows | **YES** | the Wan 2.1 and umt5 rows above; redistributed by the Animate-2 repack under its declared apache-2.0 | no new question. The lightx2v distill LoRA in the same repo keeps its existing row: Apache-clean, **methodology-excluded** — the exclusion question re-opens deliberately in the unpark spec, not by template inheritance. |
+
+**Consequence:** the driven route's unpark is no longer licence-blocked — every file the
+served template loads now has a fetched document, and every verdict is YES. What still
+gates the unpark is experimental, not legal: the three measured questions fixed in the
+consult #9 ruling, and a licence-map row for whichever movement library an adoption
+names (100STYLE's fresh fetch happens at adoption, per the survey's boundary).
+
 **Ruling 2026-08-11 (E09 calibration ruling) — the Comfy-Org repack tier.** The served
 `wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors`, `…_low_noise…`, and
 `wan_2.1_vae.safetensors` are Comfy-Org repacks of weights this map already rules Apache
@@ -186,7 +207,7 @@ Recorded honestly rather than assumed. Each blocks the thing that depends on it.
 | **`WanVaceAdvanced` tier** (`VaceStrengthTester`, `VaceAdvancedModelPatch`) | licence not retrieved | any scheduled/advanced VACE control strength |
 | **`FL_WanFirstLastFrameToVideo`** (Fill Nodes) | licence not retrieved | first/last-frame conditioning — use core `WanFirstLastFrameToVideo` instead if ever needed |
 | ~~**Core Wan nodes** `WanAnimateToVideo`, `WanFirstLastFrameToVideo`~~ | ~~ASSUMED-FROM-CATEGORY, not retrieved~~ | **RESOLVED 2026-08-11 by the consult #6 ruling** — the core node code licence is fetched and filed under *Services and tools* (ComfyUI core, GPL-3.0, narrow output clause). Closes the node-code question for the core Wan conditioning tier. |
-| **"Wan Animate 2"** (`video_wan_animate2` template) | model name, weight files and licence unidentified from catalog metadata; ~~the consult's claimed node class `WanAnimate2ToVideo` does not resolve in the node catalog (checked twice, 2026-08-11)~~ **corrected 2026-08-12: the class RESOLVES** — full contract retrieved by `get_node` at the consult #8 ruling (core pack, `model/conditioning/wan/animate`; pose + reference spatial inputs; see `docs/comfy-consult-8.md`), consistent with the runtime changelog's v0.31.0 landing | the Animate-2 route — still treated NO until weights and LICENSE are identified (the checkpoint is chosen at an upstream loader; one template-loader inspection away, owed at the driven route's unpark) |
+| ~~**"Wan Animate 2"** (`video_wan_animate2` template)~~ | ~~model name, weight files and licence unidentified from catalog metadata~~ | **RESOLVED 2026-08-13 in two steps:** consult #8 retrieved the node contract (2026-08-12); consult #9 delivered the loader filenames and the same-day fetch pass landed the rows — see *Added 2026-08-13* above. Upstream `Wan-AI/Wan2.2-Animate-2-14B`, Apache-2.0, verdict YES across the loadout. The Animate-2 route is licence-clear; what remains before it runs is experimental (the three measured questions) |
 | **SCAIL-2** (`video_wan21_scail2_character_replacement`, + `_int8`) | weight files, upstream repo and licence unlocated in catalog metadata; template-level only, no raw node schema; background likely inherited from the driving video (consult #6, marked SPECULATION there) | any SCAIL-2 route — treated NO |
 | **SMPL / SMPL-X body-model licences** | reported research-only with commercial via Meshcapade (E08 study-swarm G2, agent-retrieved URLs) — not yet fetched by this map | any SMPL-dependent lift route (WHAM / TRAM / 4D-Humans at inference; GVHMR and SMPLer-X are additionally NC at the code layer) — treated NO |
 | ~~**MediaPipe Pose Landmarker** (shipped models + repo)~~ | ~~reported Apache-2.0 — not yet fetched~~ | **RESOLVED 2026-08-11** — all three layers fetched (repo LICENSE, PyPI metadata, the models' own card); row filed under *Motion data and motion-capture tier* above. Verdict YES. |

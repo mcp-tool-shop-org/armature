@@ -122,9 +122,11 @@ valid on hip-origin motion (survey input: hip translation is a retargeter *setti
 read it from provenance) · the axis-offset second-fixture condition · the builder's
 stale `fit = "authored at 832x480"` string — **owed with a test by the first commit
 that touches `build_camera_i2v_payload`** (fourth stale-label sighting).
-**Admin:** the Animate-2 licence fetch list (consult #9 ruling R1 —
-`wan_animate_2_int8_convrot` · `clip_vision_h` · the two repack-precedent files): rows
-land before the unpark runs anything; UNVERIFIED = NO stands ·
+**Admin:** ~~the Animate-2 licence fetch list~~ **FETCHED 2026-08-13, same day** — all
+rows landed YES (the map's *Added 2026-08-13* section; upstream Wan2.2-Animate-2-14B
+Apache, one repack repo hosts the whole loadout, the Director's export corroborating).
+**The unpark is licence-clear**; what gates it now is the consult #9 ruling's three
+measured questions + a movement-library adoption row at adoption time ·
 `docs/assets/mark-figure.png` — the Director ruled 2026-08-13 **keep as-is,
 keep an eye on it**: the 93% transparency is correct for a thin wire figure, not an
 error; the treatment's finding (RGB noise under the transparent pixels) matters only if
