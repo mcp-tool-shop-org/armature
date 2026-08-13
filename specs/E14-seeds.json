@@ -1,0 +1,18 @@
+{
+  "experiment": "E14",
+  "stage": "the LoRA scene-lever bake-off — two arms, one seed, the E12 wave-3 record as baseline",
+  "registered_utc": "2026-08-13",
+  "registered_by": "executor seat, on E14-run, BEFORE the first submission of any E14 graph and committed ahead of it",
+  "gate": "S",
+  "seeds": [
+    2026081233
+  ],
+  "how_this_was_chosen": "Not chosen — inherited. 2026081233 is E12 wave 3's seed 1, which is E11 wave 3's seed before that. The spec pins it so the bake-off's only generation-reaching difference from the E12 wave-3 record is the LoRA. A fresh number would make every arm a two-variable read against the baseline it is compared to.",
+  "allocation": {
+    "2026081233": "the ONLY seed, run once per arm. Arm T and arm S each execute this number against the byte-pinned E12 wave-3 graph plus their own LoRA insertions."
+  },
+  "why_one_seed_does_not_violate_the_two_seed_law": "E10's closing ruling R3 binds: a scene observation from ONE seed is an observation, never a route property. This experiment is a bake-off and therefore claims NO property — its outputs are candidates for the Director's eye. Whichever look he picks earns the property-grade follow-on (the strength sweep, two seeds, its own spec). The law is respected by not making the claim, not by evading the count.",
+  "the_inert_second_seed": "The low-noise expert's KSamplerAdvanced carries noise_seed 0 with add_noise=disable. It draws nothing, so it is inert; route_gates.gate_s_registration reports it and does not demand it be registered. Recorded here so a reader of the graph does not find an unregistered 0 and take it for a gap in this list. Carried verbatim from specs/E12-seeds.json, where the same graph made the same note.",
+  "binds_in_both_directions": "An experiment that pre-registered seeds must use one of them, and an experiment that pre-registered none may not vary its seed at all. armature_core/gates.py::gate_s_seed_registration enforces both clauses at build time and armature_core/route_gates.py::gate_s_registration enforces them again against the saved file the cloud actually executes.",
+  "ceiling": "TWO generations, one per arm. No re-runs. A fired gate or a platform rejection ends THAT arm as a finding and the other proceeds; arms are independent. estimate_credits is recorded before each submission and any partner-credit estimate above 0 halts. On an all-OSS graph it returns 0 by construction, so the ceiling is enforced by counting generations. Spent GPU time has no compensator; the bound is the honest treatment."
+}
