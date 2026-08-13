@@ -22,7 +22,7 @@ The previz scene is ground truth. The video model paints life over it.
 
 ## Read this part first
 
-**The founding thesis is no longer untested.** Thirteen experiments have closed since 2026-08-10,
+**The founding thesis is no longer untested.** Fourteen experiments have closed since 2026-08-10,
 and the arc has been through a repo-wide audit — called by the Director, recorded in
 [docs/audit-first-arc.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/audit-first-arc.md) —
 whose finding is stated plainly rather than buried: the first arc bought clean measurements of
@@ -32,8 +32,8 @@ trajectory rule because of it. **v0.1.0 — the first marked state of the record
 
 | | Measured, as of 2026-08-13 |
 |---|---|
-| Experiments closed | **13** (one more withdrawn un-run on a falsified premise) — the control arc · rig repair and skeleton approval · **the first painted shot** · the clean-chain baseline · densified driving · the no-control route's instructive hard fail · **the free route's first held world** · **the composed route's identity verdict** (E13, its whole dispatch–halt–repair–run arc inside one date); **E14, the LoRA bake-off, in flight** |
-| Routes | the **driven route** (rig-rendered pose → Animate; proven at shot level, parked — licence-clear for its unpark) · the **free route** (authored start frame → camera tier at the 6.0 / uni_pc baseline) · the **composed route**, graduated by E13: identity-locked, model-decided cinematography from authored references, worlds steered by what the references carry |
+| Experiments closed | **14** (one more withdrawn un-run on a falsified premise) — the control arc · rig repair and skeleton approval · **the first painted shot** · the clean-chain baseline · densified driving · the no-control route's instructive hard fail · **the free route's first held world** · **the composed route's identity verdict** (E13, its whole dispatch–halt–repair–run arc inside one date) · **the LoRA scene-lever priced live** (E14 — the character holds on `technically_color`, fails on the photo-real pair; zero partner credits) |
+| Routes | the **driven route** (rig-rendered pose → Animate; proven at shot level, parked — licence-clear for its unpark) · the **free route** (authored start frame → camera tier at the 6.0 / uni_pc baseline; LoRA scene-lever measured live — E14) · the **composed route**, graduated by E13: identity-locked, model-decided cinematography from authored references, worlds steered by what the references carry |
 | What a control sequence governs | **where** the figure is, at what scale, **when** it moves, and **authored subject motion** — 85.0° against 0.062° |
 | The division of labour | **control owns the outline; the reference owns surface, material and costume** |
 | Identity | **holds at the Director's eye, three ways** — driven (E08), unanchored (E11 wave 1), and now through a hosted human-trained tier fed nothing but authored references (E13, both arms, both seeds) |

@@ -74,20 +74,20 @@ export const config: DefaultSiteConfig = {
       id: 'where-this-is',
       title: 'Where this is',
       subtitle:
-        'armature was founded on 2026-08-10. The thesis it exists to test — does a CG-rendered control sequence hold a character through a video model — is now measured at product level across twelve closed experiments, judged by the Director’s eye, and a negative result remains a full success here. The counters below are dated; README.md in the repo carries the live ones.',
+        'armature was founded on 2026-08-10. The thesis it exists to test — does a CG-rendered control sequence hold a character through a video model — is now measured at product level across thirteen closed experiments, judged by the Director’s eye, and a negative result remains a full success here. The counters below are dated; README.md in the repo carries the live ones.',
       columns: ['Counter', 'As of 2026-08-13'],
       rows: [
         [
           'Experiments',
-          '13 closed (one more withdrawn un-run on a falsified premise); E13 ran its full arc — dispatch, zero-spend halt, repair, re-arm, four generations, close — inside 2026-08-13; E14, the LoRA scene-lever bake-off, in flight',
+          '14 closed (one more withdrawn un-run on a falsified premise); E13 ran its full arc — dispatch, zero-spend halt, repair, re-arm, four generations, close — inside 2026-08-13, and E14, the LoRA scene-lever bake-off, closed behind it the same date: both style LoRAs bind on the derivative weights, the character holds on technically_color and fails on the photo-real pair, at zero partner credits',
         ],
         [
           'Routes',
-          'Two, plus one under probe: driven (rig-rendered pose → Animate; proven at shot level, parked), free (authored start frame → camera tier at the 6.0 / uni_pc baseline), composed (authored references into a hosted identity-lock tier — E13)',
+          'Three, measured: driven (rig-rendered pose → Animate; proven at shot level, parked, licence-clear for its unpark), free (authored start frame → camera tier at the 6.0 / uni_pc baseline, its LoRA scene-lever priced live by E14), composed (authored references into a hosted identity-lock tier — graduated by E13)',
         ],
         [
           'Spend',
-          'Founding arc: 22 probes at 4 credits each; the E08–E12 arc metered 0 at every submission (GPU-hour billing) under per-experiment ceilings',
+          'Founding arc: 22 probes at 4 credits each; the E08–E12 arc metered 0 at every submission (GPU-hour billing) under per-experiment ceilings; E13’s four generations are the repo’s first partner-credit spend, inside their pre-stated bracket; E14’s two metered 0 partner credits at a ceiling reached exactly',
         ],
         [
           'License map',
@@ -103,7 +103,7 @@ export const config: DefaultSiteConfig = {
         ],
         [
           'What exists today',
-          'v0.1.0 — the first marked state of the record — plus the routes, the instrument shelf, the licence map, the experiment record E01–E13, and this page',
+          'v0.1.0 — the first marked state of the record — plus the routes, the instrument shelf, the licence map, the experiment record E01–E14, and this page',
         ],
       ],
     },

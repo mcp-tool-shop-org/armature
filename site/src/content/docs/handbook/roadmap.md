@@ -64,7 +64,11 @@ momentum, and three routes now stand where the plan imagined one.
 spend, inside its pre-stated bracket — and closed with the identity verdict at the
 Director's eye: **the character survives the hosted tier**, and the reference's own
 ground steers the model-decided world. The composed route graduated from probe to
-measured route; E14, the LoRA scene-lever bake-off, dispatched behind it.
+measured route. E14, the LoRA scene-lever bake-off, closed behind it the same date:
+both T2V-trained style LoRAs bound on the camera tier's derivative weights at zero
+partner credits, **the character held on the grading LoRA and failed on the photo-real
+pair**, and the free route's lever is priced — winner named, its served-file tier
+question and credit obligation recorded beside it.
 
 ## The arc
 
