@@ -80,6 +80,48 @@ Director's word to go · his A2 reference-clip pick (E12 wave-3 seed 1 is the st
 candidate) · the fresh credit re-estimate with exact overrides · the route disclosure
 note riding the spec per the new law.
 
+**Amendment — 2026-08-13, the route disclosure note** (*Per-route disclosure*,
+CLAUDE.md — the law's first application). Written by the advisor seat ahead of the
+Director's word, so the spec the executor branches from is complete; every clause is
+grounded in a fetched document recorded in the [licence map](../license-map.md) (the
+wan2.x partner-tier row; the Services-and-tools rows). The spec is the composed
+route's only document today — if the probe leads to adoption, this note moves to the
+route's standing doc, and to public surfaces if the repo ever has them (it is private
+at write time).
+
+- **What leaves the rig.** The authored references themselves — the canonical
+  turnaround stills (A1) and the authored performance clip (A2) — plus the prompt and
+  the full payload, uploaded to Comfy Cloud and passed to the hosted `wan2.7-r2v`
+  tier. Cloud uploads have **no delete endpoint on this API surface** — they are
+  content-addressed and inert unless a graph names them, and they persist service-side
+  after the run (measured, E12 w2/w3 reports). Staging, rendering, and measurement
+  stay local; no local weights load on this tier.
+- **Data-use / training posture.** Comfy Cloud's ToS (fetched 2026-08-10): the
+  customer retains all right, title, and interest in Output, and Comfy will not use
+  Input or Output to train generative AI. Alibaba's Model Studio FAQ (fetched
+  2026-08-12) publishes that customer data is never used for model training — a vendor
+  FAQ, weaker paper than a contract clause, recorded as such. The wan.video consumer
+  terms (updated 2026-08-06; sha256-pinned export) grant the provider a perpetual,
+  transferable, sub-licensable licence over uploaded User Content, expressly including
+  ML-training use (§III.6, §III.3(e)), deemed non-confidential (§III.3(c)) — **whether
+  that surface's paper governs Comfy-mediated API calls is not established**, and the
+  Comfy↔Alibaba reseller agreement is unseeable: the standing residual of every
+  partner tier. The CONDITIONAL was ruled accepted 2026-08-12 — training use assumed
+  as the industry default, exposure accepted for open-source work. A user of this
+  route inherits exactly that trade, stated here rather than discovered.
+- **Output ownership.** Comfy's ToS retains Output to the customer; the Wan terms
+  assign the provider's interest in Outputs to the user (§III.4). Both papers point
+  the same way; the reseller agreement between them is the link no fetch can close.
+- **AI-content disclosure duty.** Published footage from this tier carries a clear and
+  conspicuous AI-generated disclosure obligation (Wan ToS §III.8(g)) — a
+  credits-line-class obligation on anything from this route that ships, acknowledged
+  at the ruling.
+- **Watermark policy.** Every payload pins `watermark=false` — a request that no mark
+  be applied, which no fetched clause prohibits. Removing an applied label or
+  watermark is banned (§II.1(a)): if a mark appears despite the request (H-E13d checks
+  exactly this), it stays on the artifact, the clip is reported as-is, and the finding
+  surfaces to the Director before any use of that output.
+
 ## Premises
 
 | premise | status |

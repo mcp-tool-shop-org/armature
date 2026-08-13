@@ -43,7 +43,8 @@ challenge only because every claim came with receipts).
   accepted by the Director — proceed via Comfy, disclosure attached as law.** Remaining
   at dispatch: his word to go · his A2 clip pick (E12 wave-3 seed 1 standing candidate)
   · fresh credit re-estimate (bundled estimate 106–211 credits/generation; ceiling four
-  submissions, halt >900) · the route's disclosure note per the new law. **Deliver the
+  submissions, halt >900) · the route's disclosure note per the new law *(written into
+  the spec 2026-08-13 — remaining: his word, his pick, the re-estimate)*. **Deliver the
   executor paste block the moment he says go** (advisor rule 5).
 - **Two routes:** driven — parked for AI-animation buildout (Wan-Animate2's full
   spatial contract is banked in `docs/comfy-consult-8.md` for the unpark). free — the
