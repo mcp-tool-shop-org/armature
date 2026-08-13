@@ -8,15 +8,15 @@ export const config: DefaultSiteConfig = {
   template: 'default',
   title: 'armature — You block the shot. The model shoots it.',
   description:
-    'Stage your character in Blender. Render the control sequence. Let the video model paint the life over it. Day zero: the thesis is untested.',
+    'Stage your character in Blender. Render the control sequence. Let the video model paint the life over it. Twelve experiments in, the thesis is measured at product level.',
   logoBadge: 'AR',
   brandName: 'armature',
   repoUrl: 'https://github.com/mcp-tool-shop-org/armature',
   footerText:
-    'MIT Licensed — built by <a href="https://mcp-tool-shop.github.io/" style="color:var(--color-muted);text-decoration:underline">MCP Tool Shop</a>. Founded 2026-08-10; nothing measured yet.',
+    'MIT Licensed — built by <a href="https://mcp-tool-shop.github.io/" style="color:var(--color-muted);text-decoration:underline">MCP Tool Shop</a>. Founded 2026-08-10; the record is the repo’s docs tree.',
 
   hero: {
-    badge: 'Day zero — 0 experiments, 0 credits spent, thesis untested',
+    badge: 'Twelve experiments closed · E13 dispatched · the thesis is measured at product level',
     headline: 'armature —',
     headlineAccent: 'You block the shot. The model shoots it.',
     description:
@@ -42,7 +42,7 @@ export const config: DefaultSiteConfig = {
         },
         {
           title: 'armature is the handle',
-          desc: 'The previz scene is ground truth. A canonical mesh is staged and animated, and the render becomes a per-frame control sequence the video model works inside. That is the idea. Whether it holds is the thing this repo exists to find out.',
+          desc: 'The previz scene is ground truth. A canonical mesh is staged and animated, and the render becomes a per-frame control sequence the video model works inside. Twelve experiments in, the idea holds at product level — and every claim behind that sentence traces to a numbered experiment in the repo.',
         },
       ],
     },
@@ -74,24 +74,36 @@ export const config: DefaultSiteConfig = {
       id: 'where-this-is',
       title: 'Where this is',
       subtitle:
-        'armature was founded on 2026-08-10. No experiment has run here, and no claim on this page is backed by a measurement taken in this repo. The thesis it exists to test — does a CG-rendered control sequence hold a character through a video model — is untested, and the roadmap treats a negative answer as a full success. The counters below are dated; README.md in the repo carries the live ones.',
-      columns: ['Counter', 'As of 2026-08-10'],
+        'armature was founded on 2026-08-10. The thesis it exists to test — does a CG-rendered control sequence hold a character through a video model — is now measured at product level across twelve closed experiments, judged by the Director’s eye, and a negative result remains a full success here. The counters below are dated; README.md in the repo carries the live ones.',
+      columns: ['Counter', 'As of 2026-08-13'],
       rows: [
-        ['Experiments run', '0'],
-        ['Generation probes', '0'],
-        ['Credits spent', '0'],
+        [
+          'Experiments',
+          '12 closed (one more withdrawn un-run on a falsified premise); E13 — the composed-route probe — dispatched 2026-08-13',
+        ],
+        [
+          'Routes',
+          'Two, plus one under probe: driven (rig-rendered pose → Animate; proven at shot level, parked), free (authored start frame → camera tier at the 6.0 / uni_pc baseline), composed (authored references into a hosted identity-lock tier — E13)',
+        ],
+        [
+          'Spend',
+          'Founding arc: 22 probes at 4 credits each; the E08–E12 arc metered 0 at every submission (GPU-hour billing) under per-experiment ceilings',
+        ],
         [
           'License map',
-          'Populated — 20+ rows from retrieved license documents; 5 recorded UNVERIFIED and therefore treated as NO until retrieved',
+          'Every adopted dependency carries a retrieved licence document; UNVERIFIED is treated as NO; third-party-tier routes carry per-route disclosure (ruled 2026-08-12)',
         ],
         [
           'Research grounding',
           '24 findings; 34 of 34 citations resolved against a retrieval oracle, zero fabricated',
         ],
-        ['The founding thesis', 'UNTESTED'],
+        [
+          'The founding thesis',
+          'MEASURED — identity holds driven (E08) and unanchored (E11); the camera obeys authored control to one pixel (E11); a handed world holds to the last frame on two seeds (E12)',
+        ],
         [
           'What exists today',
-          'The discipline, the roadmap, the license map, the research grounding, and this page',
+          'The routes, the instrument shelf, the licence map, the experiment record E01–E13, and this page',
         ],
       ],
     },

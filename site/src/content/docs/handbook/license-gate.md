@@ -42,7 +42,10 @@ ever touch armature.
 
 **1. OpenPose is non-commercial.** The most widely used pose extractor in the entire ControlNet
 ecosystem is under a CMU academic licence permitting use *for your own noncommercial internal
-research purposes*. It is banned here. DWPose and RTMPose are Apache 2.0 and replace it.
+research purposes*. It is banned here — and the obvious replacements are a trap of their own,
+caught on a second pass (2026-08-10): DWPose's *code* is Apache 2.0, but its **weights are a
+separate grant that has never been fetched**, so no detector cleanly replaces it. The honest
+replacement is no detector at all: armature renders pose from geometry it owns.
 
 **2. The Small/Large split is real.** Depth Anything V2 **Small is Apache 2.0**; Depth Anything
 V2 **Large is CC-BY-NC-4.0**. Same family, same page structure, different licence. Depth Anything
@@ -86,22 +89,40 @@ licences that have not been fetched.
 **Services.** Comfy Cloud's terms state that the customer retains all right, title and interest
 in outputs, and that inputs and outputs will not be used to train generative AI.
 
-## Five items are unverified, and that is recorded rather than assumed
+**The wan2.x partner tier** (wan2.6/2.7 hosted, reference-to-video) was retrieved 2026-08-12 —
+the consumer terms via export where every fetcher got a JavaScript shell — and ruled
+**CONDITIONAL, accepted by the Director**: outputs are assigned to the user; published footage
+carries a clear-and-conspicuous AI-generated disclosure duty; the consumer surface licenses
+everything uploaded broadly (training use included) while both vendor papers on the API chain —
+Comfy's contractual no-training clause and Alibaba's published API-tier posture — commit the
+other way, and *which paper governs API-mediated calls* is recorded as not established. The
+residual no fetch can close is the reseller agreement between the two vendors, a residual every
+partner tier carries permanently.
+
+## Per-route disclosure
+
+The condition attached to that ruling became standing law (Director, 2026-08-12): **any route
+through a third-party tier documents what a user of that route is exposed to** — the providers'
+data-use and training posture, AI-content disclosure duties, and watermark policy, each grounded
+in the licence map's fetched documents. Fully-local routes state that nothing leaves the rig.
+**A route without its disclosure note is not complete.** The first application rides the E13
+spec in the repo.
+
+## What is unverified is recorded rather than assumed
 
 Each blocks the thing that depends on it:
 
 | Item | Why unverified |
 |---|---|
-| Blender's GPL / output statement | blender.org returned HTTP 403 to the fetcher |
 | Kling terms | HTTP 446, Cloudflare block, on two URLs |
 | MiniMax terms | JavaScript-rendered page, no text returned |
 | ByteDance / Seedance output ownership | the master terms contain no AI-output clause; the service-specific agreement was not located |
 | `rembg` bundled weights (u2net / isnet) | individual model licences not fetched |
 
-Blender's is the least consequential in practice — GPL covering software rather than output is
-near-universal — but the primary source was **not retrieved**, so it is written as unverified
-rather than asserted. The others are hard blocks: **Kling, MiniMax and Seedance may not be used
-here until their terms are fetched.**
+Two founding-era rows have since been **resolved by retrieval**: Blender (the installed build
+carries its own licence documents — a better source than the 403ing website, because it is the
+licence of the exact binary that renders here) and the wan2.x partner tier (above). The rest are
+hard blocks: **Kling, MiniMax and Seedance may not be used here until their terms are fetched.**
 
 **Note the shape of those gaps.** Every unverified row is a partner API or a bundled weight;
 every verified-clean row is open weights. Partner-API terms are the harder half of this map to

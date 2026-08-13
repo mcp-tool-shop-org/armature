@@ -1,10 +1,11 @@
 # E13 — the composed-route probe (spec)
 
-**Status:** SPEC — written 2026-08-12 on the Director's word ("make this E13, to run
-when E12 lands"). **QUEUED.** Dispatch requires ALL of: **(1)** E12 has landed
-(reported and ruled); **(2)** the terms gate below is cleared; **(3)** a fresh credit
-re-estimate at dispatch with the exact overrides. The executor paste block is delivered
-at dispatch, not before.
+**Status:** **DISPATCHED 2026-08-13** — the Director's go given; keys recorded in the
+dispatch amendment at the end of this file. *(Originally: SPEC, written 2026-08-12 on the
+Director's word ("make this E13, to run when E12 lands"), QUEUED on three dispatch
+requirements: **(1)** E12 landed and ruled; **(2)** the terms gate cleared; **(3)** a fresh
+credit re-estimate at dispatch with the exact overrides — (1) and (2) turned 2026-08-12,
+(3) is the executor's first act.)*
 **Route:** the composed route — authored references into the Wan 2.7 reference-to-video
 partner tier (`Wan2ReferenceVideoApi`, model `wan2.7-r2v`, hosted).
 **Branch/worktree convention:** `E13-run` at `E:\AI\armature-E13`.
@@ -211,3 +212,28 @@ one pinned prompt.
 | DECOMPOSE_BY_SECRETS | 2 | one variable (reference modality) between arms; seeds pinned across arms; tooling changes ride their own tested commits |
 | UNCERTAINTY_GATED_HUMANS | 3 | two Director checkpoints gate on genuinely his calls: the terms CONDITIONAL and the A2 clip pick — both before spend, both contrastively framed |
 | EXTERNAL_VERIFIER | 2 | no model grades its own output; identity is judged by the Director's eye, the studio's standing verifier; diagnostics gate nothing |
+
+## Amendment — 2026-08-13: DISPATCH
+
+The Director's go was given 2026-08-13. The keys, recorded:
+
+- **A2 reference clip — the Director's pick:** the standing candidate, **E12 wave-3
+  seed 1**, ratified at go (no alternative named; surfaced contrastively at dispatch).
+  Pinned: `E:\AI\armature-E12\outputs\E12\probe\w3-seed1\w3-seed1.mp4`, sha256
+  `b3b43e23f9bc5fb4e173d22815a12eb536e1e456510bf41700fe17e04eb9bd27`, seed `2026081233`,
+  prompt_id `bc390dc6-af02-45d1-9085-0df807430565`, 1024×576 × 81 frames @ 16 fps,
+  generated on the camera tier at 6.0 / uni_pc (E12 w3 report — the seed whose figure
+  held to f80 and whose crowd stayed human; the Director ruled it the route's strongest
+  result). The A2 premise row resolves from PENDING to this pick. The executor verifies
+  the sha256 before upload; the pin above is the clip's provenance and rides the payload
+  record.
+- **The fresh credit re-estimate** is the executor's first act, with the exact overrides
+  (`wan2.7-r2v` · 720P · 16:9 · duration 5), before any submission; a re-estimated total
+  above 900 credits HALTS the run unspent. `estimate_credits` read 0 at every E12
+  submission — a 0 reading is recorded as a meter artifact, the bundled-catalog bracket
+  (424–844) stands as the operative estimate, and the four-submission ceiling binds
+  regardless of what the meter says.
+- **Worktree:** `E13-run` at `E:\AI\armature-E13`, cut from `main` at the dispatch
+  commit. The executor's first check: the branched spec contains this amendment and the
+  2026-08-13 disclosure note — a branch carrying yesterday's spec is the measured
+  failure this law exists for.

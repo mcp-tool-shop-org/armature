@@ -27,21 +27,22 @@ frame.
 
 ---
 
-## State: the thesis is under test, and three things are measured
+## State: the thesis is measured at product level
 
-Founded **2026-08-10**. Eleven experiments closed and the thesis has moved from *under test*
+Founded **2026-08-10**. Twelve experiments closed and the thesis has moved from *under test*
 to **measured at product level**: the character has danced on screen twice — once driven from
-his own rig, once free — judged by the Director's eye both times. The founding-arc audit is at
+his own rig, once free — and a handed world now holds to the last frame on two seeds (E12),
+all judged by the Director's eye. The founding-arc audit is at
 [docs/audit-first-arc.md](docs/audit-first-arc.md); the posture since 2026-08-12 is a learning
 monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 
 | | |
 |---|---|
-| Experiments | **E01–E11 closed** (E05 withdrawn on a falsified premise) — the control arc (E01–E06) · rig repair + skeleton approval (E07) · **the first painted shot** (E08) · the clean-chain baseline (E09) · densified driving adopted (E10) · the no-control route, three waves to an instructive hard fail (E11) |
-| Routes | **two** — the **driven route** (rig-rendered AAPose sticks → Animate; proven at shot level, parked for AI-animation buildout) · the **free route** (GLB-authored start frame → I2V / camera tiers; identity holds unanchored, worlds must be authored or tamed) |
-| Spend | 22 probes in the founding arc at 4 credits each; the E08–E11 arc ran at **0 credits** (GPU-hour billing) under per-experiment ceilings, reserves lapsing unspent |
-| Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; the gate's stated purpose is publishing the studio's art |
-| Tests | **860 passing on the rig** (13 skips), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
+| Experiments | **E01–E12 closed** (E05 withdrawn on a falsified premise) — the control arc (E01–E06) · rig repair + skeleton approval (E07) · **the first painted shot** (E08) · the clean-chain baseline (E09) · densified driving adopted (E10) · the no-control route, three waves to an instructive hard fail (E11) · **the free route gains a world**, and the settings baseline falls to the catalog's 6.0 / uni_pc (E12) · **E13 dispatched 2026-08-13** — the composed-route probe, authored references into the wan2.7 reference-to-video tier |
+| Routes | **two, plus one under probe** — the **driven route** (rig-rendered AAPose sticks → Animate; proven at shot level, parked for AI-animation buildout) · the **free route** (GLB-authored start frame → I2V / camera tiers at the 6.0 / uni_pc baseline; identity holds unanchored, and a handed world holds on two seeds) · the **composed route** (authored references into a hosted identity-lock tier — E13's probe; its disclosure note rides the spec per the per-route disclosure law) |
+| Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** at every submission (GPU-hour billing) under per-experiment ceilings — E12 spent 4 of its 6 bounded submissions, the rest lapsing unspent |
+| Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
+| Tests | **1005 passing on the rig** (13 skips, measured 2026-08-13), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
 | Status | **private by the Director's choice since 2026-08-11** — Pages dark; the record is the docs tree, and it is complete |
 
 ### What is measured (the current arc)
@@ -57,15 +58,25 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
   never loaded it produced 65 frames of noise with every gate green. Gate PAIR now exists.
 - **Scene composition is seed-volatile** (E10 / E11) — identical text re-composed the world
   wholesale across seeds. **A scene claim needs two seeds before it is a property.**
+- **A handed world holds** (E12) — a real room in the start frame survives to the last frame
+  on two seeds on the camera tier, one-variable-attributed to the start image by field diff.
+  The same tier handed a previz void held a void (E11 wave 3): worlds are authored, then kept.
+- **The catalog's 6.0 / uni_pc is the camera tier's baseline** (E12) — the inherited
+  3.5 / euler premise fell to its own rung: at the catalog settings the same seeds that lost a
+  head and grew a limb hold the figure to f80. The cost is named — stronger adherence pushed
+  the **unscoped identity clause** onto the crowd on one seed of two; the subject-scoped
+  prompt is the promoted lever.
 
 ### What is not
 
-- **Arms and hands at speed.** Prompt-side treatment measured insufficient twice; the hand
-  geometry is the promoted lever, and the cfg/sampler premise (catalog says 6.0 / uni_pc for
-  the camera weights; we ran 3.5 / euler) is named and open.
-- **A world worth holding on the camera tier.** It preserves what it is handed — hand it a
-  previz void and it faithfully delivers nothing (E11 wave 3's hard fail). The alpha law's
-  scene-plate composite is the named, undispatched lever.
+- **Arms and hands at speed.** Still failing at f80 on both seeds at both settings (E12).
+  The lever is re-scoped **presentation-first** — wrist and camera staging, from the
+  Director's own diagnosis on the GLB (the claw is a projection artifact, not mesh damage) —
+  with mesh surgery as the fallback, never the first move.
+- **The camera claim on photographic worlds.** 0/81 horizon detections across all four E12
+  clips is a detector wanting a seam this world does not have — registered blind before
+  submission, never converted into a camera result. A **seam-free camera instrument** is owed
+  before any camera number is read on a real room.
 - **The narration shelf** (consult #7): beat endpoints, per-chunk prompts, video-time area
   conditioning, camera embeddings — adopted, licensed where needed, untested.
 
@@ -100,6 +111,12 @@ character is canon, and no metric approximates it. Every generating experiment b
 
 **Cloud credits are bounded before they are spent.** Spent credits have no undo, so every spec
 states its ceiling per arm in advance.
+
+**Routes disclose what rides with them** (the Director's ruling, 2026-08-12). Any route
+through a third-party tier documents its providers' data-use and training posture, its
+AI-content disclosure duties and its watermark policy, grounded in the licence map's fetched
+documents. Fully-local routes state that nothing leaves the rig. A route without its
+disclosure note is not complete — the first application rides E13's spec.
 
 ## License
 

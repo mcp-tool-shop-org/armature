@@ -16,8 +16,8 @@ stack, never an accident of a lucky frame.** The deliverable is footage — film
 character performance, anything image-to-video can make, made from a scene you own. A game is
 one consumer, not the boundary.
 
-**That thesis is now partly measured.** As of 2026-08-11, across 22 generations in five closed
-experiments:
+**That thesis is now measured.** The mechanism first — as of 2026-08-11, across 22 generations
+in five closed experiments:
 
 - a rendered control sequence **governs where the figure is, at what scale, and when it moves**;
 - it **governs authored subject motion** — an 85.0° arm sweep against 0.062° when the same control
@@ -27,10 +27,14 @@ experiments:
 - and inverting the depth control end-to-end **does not break tracking**, so the model is reading
   geometry rather than tone.
 
-**Two things remain open, and one is the whole point.** Whether the figure on screen is the *same
-character* is canon, judged by eye, and unresolved. And a control's silhouette becomes the body —
-so a character that performs needs a **rigged character mesh**, which no asset here currently has.
-Full detail in `docs/experiments/`; every claim above is traceable to a numbered ruling.
+**The two questions that were open then have since been answered at product level.** The rigged
+character mesh exists — E07 rebuilt the rig and the Director approved the skeleton by eye — and
+identity has held through paint at the judging eye three times: driven from the rig (E08),
+unanchored with no reference and no driving signal at all (E11 wave 1), and through the camera
+tier, where a handed world also holds to the last frame on two seeds (E12). What remains open is
+route-shaped, not thesis-shaped: whether identity survives a *hosted* identity-lock tier fed
+only authored references is E13's question, dispatched 2026-08-13. Full detail in
+`docs/experiments/`; every claim above is traceable to a numbered ruling.
 
 What follows is the published evidence that made the thesis worth testing, gathered by a founding
 research swarm on 2026-08-10 and recorded in
