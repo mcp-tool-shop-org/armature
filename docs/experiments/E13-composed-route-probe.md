@@ -36,6 +36,30 @@ E13 dispatches only when either:
 `watermark=false` is pinned in every payload; if any fetched term conditions commercial
 use on watermarking, that is a new CONDITIONAL for the Director before submission.
 
+**Amendment — 2026-08-12, the provider document retrieved.** The Director's export
+delivered the full *Wan Terms of Service* (updated 2026-08-06; pinned in the licence
+map with sha256). The gate's state moves from *unfetched* to **fetched, ruled
+CONDITIONAL — awaiting the Director's ruling on two named conditions:**
+
+1. **AI-disclosure duty:** published Outputs require clear and conspicuous
+   AI-generated disclosure (§III.8(g)). Manageable; must be acknowledged as a
+   publishing obligation.
+2. **Input-licence scope (the heavy one):** on the wan.video surface, everything
+   uploaded — Prompts include reference images and clips — carries a perpetual,
+   transferable, sub-licensable licence to the provider, expressly including
+   ML-training use (§III.6, §III.3(e)), and is deemed non-confidential (§III.3(c)).
+   **E13's references are the twin's canonical renders and an authored performance
+   clip — the studio's identity assets.** Whether these consumer terms even govern
+   Comfy-mediated API calls is not established (the document's own anti-automation
+   clause cannot describe the API tier; Comfy's ToS promises no training on
+   Input/Output). Three shapes for the ruling: proceed via Comfy on Comfy's
+   no-training clause, accepting the governance ambiguity · hold E13 for the
+   Alibaba API-tier paper · proceed with reduced-exposure references.
+
+Dispatch remains blocked until the Director rules. Watermark note: §II.1(a) bans
+removing applied marks; the node's `watermark=false` requests none be applied, which
+the clause does not prohibit.
+
 ## Premises
 
 | premise | status |
