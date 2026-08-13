@@ -19,18 +19,31 @@ beneath both?
 ## Candidates and the licence gate (already run — 2026-08-13 fetch pass)
 
 Six shortlisted; the gate cut four; **two run** (rows in
-[the licence map](../license-map.md), *Added 2026-08-13, E14 pass*):
+[the licence map](../license-map.md), *Added 2026-08-13, E14 pass*). ⚑ **The counts
+survived the amendment; the membership did not** — four-cut/two-run still holds, but C
+left the running pair and S entered it. Do not read the stable count as a stable field.
+
+> ⚑ **SUPERSEDED IN PART by the amendment at the foot of this spec** (2026-08-13, the
+> arms reshuffle). The rows below are kept as written and marked, never deleted. **The
+> arms that RUN are T and S.** This table's original licence column was produced by
+> page-rendering — an instrument the same-day API grant-matrix pass proved weaker, in
+> both directions. Read the amendment before wiring anything.
 
 | arm | LoRA (served filename) | look (per the Director's memo, corrected) | licence |
 |---|---|---|---|
-| T | `wan22-14b-t2v-technically_color.safetensors` | three-strip Technicolor: saturated primaries, deep blacks, high-contrast studio key | Apache-2.0, fetched |
-| C | `wan22-candid_photography.safetensors` | street-photography framing, unposed behavior, natural ambient light | Apache-2.0, fetched |
+| **T** — runs | `wan22-14b-t2v-technically_color.safetensors` | three-strip Technicolor: saturated primaries, deep blacks, high-contrast studio key | ⚑ **corrected — not "Apache-2.0"**: that badge was the base model's. The creator's grant matrix is `["RentCivit","Rent","Image"]` with `allowNoCredit: false` → **YES, and published footage credits renderartist** |
+| ~~**C**~~ — **WITHDRAWN, never ran** | ~~`wan22-candid_photography.safetensors`~~ | ~~street-photography framing, unposed behavior, natural ambient light~~ | ⚑ **the "Apache-2.0, fetched" in this row was this seat's fetch error** — again the base model's badge, not the LoRA's grant. The matrix is `["RentCivit"]` alone: both rights this route needs are withheld. **NO** |
+| **S** — runs (entered by the amendment) | the SmartphoneSnapshot v3 **pair**, tier-matched: `WAN2.2-HighNoise_…_v3_….safetensors.safetensors` → high-noise expert · `WAN2.2-LowNoise_…_v3_….safetensors` → low-noise expert | candid mobile-camera realism | `["Image","RentCivit","Rent","Sell"]`, `allowNoCredit: true` — the most permissive grant in the field |
 
 Dead at the gate, recorded not waved: the instareal pair (the Instara licence bans use
-on any generation service — the route itself is the banned act) · 80s_fantasy_movie
-(no licence displayed; Wan versions are T2I) · SmartphoneSnapshot v3 (origin terms
-unretrieved) · vintage_film_grain (source unlocated) · dark_ghibli (excluded before
-any fetch — the no-anime law). Any revival enters through a fresh document only.
+on any generation service — the route itself is the banned act) · ~~80s_fantasy_movie
+(no licence displayed; Wan versions are T2I)~~ ⚑ **upgraded from an absence to a
+retrieved kill:** the grant matrix withholds `Rent` — third-party generation-service
+use, which is exactly this route. Still dead, now on its own document · ~~SmartphoneSnapshot
+v3 (origin terms unretrieved)~~ ⚑ **REVIVED — the terms were retrieved on the Director's
+ask; it is arm S above** · vintage_film_grain (source unlocated) · dark_ghibli (excluded
+before any fetch — the no-anime law). Any revival enters through a fresh document only —
+as S's did, and as 80s_fantasy's could not.
 
 ## Design — the bake-off, not the sweep
 
@@ -56,10 +69,11 @@ ruled-strongest result) — no baseline re-generation. Two generations total.
 | premise | status |
 |---|---|
 | The E12 wave-3 graph reproduces as pinned (fields, upload, seed registry) | **MEASURED** (E12 record; Gate LEDGER re-verifies at run) |
-| The two LoRA filenames resolve in the served combo list | **MEASURED** — consult #10 calibration, uncapped `get_node`, 2026-08-13 |
+| ~~The two~~ ⚑ **the three** LoRA filenames resolve in the served combo list (T's one file + S's two) | **MEASURED** — consult #10 calibration, uncapped `get_node`, 2026-08-13; S's pair re-confirmed against the served list at the amendment fetch, **including the double `.safetensors` suffix on the HIGH file, which is a provisioning artifact and must be typed verbatim** |
 | Licence rows for both arms | **MEASURED** — fetched 2026-08-13 (the map) |
 | **The transfer premise:** a T2V/T2I-trained style LoRA binds visibly on the Fun-Camera derivative weights | **ASSUMED — the experiment's central measured question.** Nothing served documents it (consult #10 Q3). A null (no visible look change) or a break (degraded output) is a FINDING per arm, not a failure |
-| The served single file's expert-tier identity (both origins publish tier-labeled versions; the Cloud serves one file each) | **NOT VISIBLE** — the both-experts convention is pinned regardless and recorded; a tier-mismatch artifact is a candidate explanation for any oddity, named in advance |
+| ⚑ **SPLIT BY THE AMENDMENT — the two arms no longer share this premise.** **Arm T:** the served single file's expert-tier identity (the origin publishes a tier-labeled HN/LN pair; the Cloud serves one file) | **NOT VISIBLE** — the both-experts convention is pinned regardless and recorded; a tier-mismatch artifact is a candidate explanation for any oddity in T, named in advance |
+| **Arm S:** expert-tier identity of each file in the pair | **VISIBLE AND MEASURED** — the served names carry `HighNoise`/`LowNoise` verbatim, so S's wiring is tier-matched by construction, not by convention. This is what makes a crossed pair a *nameable* error rather than an invisible one: **HIGH→high-noise, LOW→low-noise**, and the ledger records the attachment |
 | `LoraLoaderModelOnly` contract (model + lora_name + strength → MODEL; default 1, ±100) | **MEASURED** — consult #10 calibration |
 
 ## Gates
@@ -101,7 +115,7 @@ the world.
 
 | id | clause | prediction |
 |---|---|---|
-| H-E14a | each arm produces a Director-legible look transform at 1.0 | T: YES, strongly legible; C: YES but subtle — candid-photo is closer to the baseline's look than Technicolor is |
+| H-E14a | each arm produces a Director-legible look transform at 1.0 | T: YES, strongly legible; ~~C~~ **→ S** (transferred by the amendment, still blind — no E14 artifact exists): YES but subtle — candid-phone realism is closer to the baseline's look than Technicolor is |
 | H-E14b | the subject reads as the same character at his eye | holds on **both** arms — but with visible re-styling pressure on at least one (the unscoped-lever lesson, E12 R3); the crowd re-styles before the subject does |
 | H-E14c | the Static camera hold survives | YES, both arms |
 | H-E14d | the transfer premise binds at all (visible LoRA effect on derivative weights) | YES on both — a null on either would be the tier/derivative-mismatch finding, and it is the prediction this seat is least certain of |
