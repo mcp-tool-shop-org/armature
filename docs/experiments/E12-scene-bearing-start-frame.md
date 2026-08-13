@@ -45,6 +45,20 @@ The plate's provenance (source clip prompt_id + frame index, or "Director-suppli
 photograph, <date>") is recorded in `start_frame_provenance.json`. A plate from anywhere
 else does not exist for this experiment.
 
+**Amendment — 2026-08-12, at Gate PLATE (the pick).** The gate fired as designed and
+was answered with a third source class, admitted under the clause's intent
+(ownership): **the Director generated the plate himself** on the studio's
+commercial-safe image stack — Qwen-Edit 2511, `Qwen_Edit_2511_00001.png`, supplied
+2026-08-12. The wave-1 candidates were passed over on the pick sheet's second-figure
+fact (every candidate carries wave 1's own mannequin, head uncovered in the band); a
+found photograph of a real venue was surfaced the same day and **blocked at this
+gate** — rights unverifiable, identifiable real persons in the band — the gate's
+first live firing, answered with a clean generation. The executor copies the file
+into the worktree, sha256s it, and records provenance (generator family ·
+Director-supplied · date · hash); the cover-fit anchor is a deliberate recorded
+composite choice per the alpha law. Wave 2 proceeds per the spec, otherwise
+unchanged.
+
 ## Gate PLATE (human; uncertainty-gated; blocks all spend)
 
 The executor extracts 4–6 sharp candidate stills from E11 w1's clip(s) (frames where the
