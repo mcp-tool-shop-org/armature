@@ -92,3 +92,26 @@ accepted-with observations (the Ruling-2 pattern) · and the E34 tree's disposit
 (standing as the pre-v3 state, or superseded in place). The E14 follow-ons remain on
 the Director's word, unchanged. The hosted-tier revalidation remains priced and
 unspent.
+
+---
+
+**Amendment, 2026-08-14 — the second facet relay retargets the standby and splits the
+dark-artifact class.** facet's E35 arc is mid-flight (register held at the recorded
+recipe; best-of-3-seed selection scored by a new census instrument; a gated despeckler
+cleaning to texture census-0; then the eight-view repaint). The re-survey's target is
+now **the E35 candidate — `facet_E35\out\performer_textured_clean.glb`, hash arriving
+with the relay at that close** — not E34. S07 dispatches on that relay.
+
+The instrument finding S07's spec must carry, from facet's attribution at
+main @ `2ff353d`: **the dark marks are two classes, not one.** The dark-speck flecks
+are texture truth (generator-painted, predating E34 — E35's despeckler targets them).
+The small **pure-black dots are mesh pit shading — they exist in no texel of the atlas
+or the GLB** and are unreachable by any texture work: a texture clean to census-0 will
+still show them under shaded light. **Flat light is the texture-truth discriminator** —
+a dark mark that persists under flat light is texture; one that vanishes is geometry
+shading. S07's panels therefore carry a flat-light pass beside the lit pass, its notes
+read pure-black dots as geometry rather than texture holes, and the mesh-side question
+routes onward at E35's close — it is not a regression in the repair and no finding of
+S07's. The E35 tree joins E33/E34 as manifest-protected read-only on acceptance. The
+kit question (S03 R4 item 1) stays where this seat's record left it: closed,
+Director-passed.
