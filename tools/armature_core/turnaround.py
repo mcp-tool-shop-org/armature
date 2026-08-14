@@ -34,13 +34,35 @@ frame a mannequin should fill exists on this rig, and inventing one here would b
 condition the experiment could move.
 """
 
-from .errors import GateFailure
+import math
+
+from .errors import ArmatureError, GateFailure
 
 
 class TurnaroundGate(GateFailure):
     """A turnaround set is not the whole set of distinct views it claims to be."""
 
     gate = "TURN"
+
+
+class TurnaroundPlanRefusal(ArmatureError):
+    """A projection plan was asked for that cannot be composed. S05.
+
+    **Not an andon, and deliberately not a `GateFailure`.** The four gates in this repo
+    judge a *rendered artifact*; this refuses to compose the plan at all, before a camera
+    exists, so giving it a gate letter would put a fifth andon into the vocabulary the
+    manifests and reports use for measured views. It `raise`s for the same reason they do —
+    an `assert` is deleted by `-O` — and it rides the same optimization probe.
+
+    **Why it exists when the parser already refuses.** `render_turnaround`'s parser bounds
+    callers who come through the command line. Nothing bounds a caller who imports
+    `projection_plan` directly, and that caller is the one this repo keeps commissioning:
+    the plan is the documented branch object, so a future tool asking it for a pinned
+    *perspective* run would get a perspective plan with the pin silently dropped, render a
+    perfectly well-formed turnaround, and record no shared scale at all. Silently ignoring
+    the one number a run was pinned on is the exact disease the pin's manifest clause is
+    written against, and the parser cannot reach that caller.
+    """
 
 
 class TurnaroundAlphaGate(TurnaroundGate):
@@ -100,13 +122,23 @@ def orbit_azimuths(n_views, start_deg, sweep_deg):
 PERSPECTIVE = "PERSP"
 ORTHOGRAPHIC = "ORTHO"
 
+#: Where an ortho run's shared scale came from. S05. A manifest that records the NUMBER
+#: without recording where it came from cannot be read: the same float means "this subject
+#: was fitted to this frame" on one run and "a whole roster stands on this" on the next,
+#: and only the second one may be retyped onto a different character.
+SOLVED = "solved"
+PINNED = "pinned"
 
-def projection_plan(ortho, lens_mm, sensor_mm):
-    """Which camera the run stands on, and what quantity is shared across its views.
+
+def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
+    """Which camera the run stands on, what is shared across its views, and where it
+    came from.
 
     The whole branch between the two projections is this function, so that the claim "the
     perspective path is untouched when the flag is absent" is a property of one testable
-    object rather than of a reader's careful eye over a render loop.
+    object rather than of a reader's careful eye over a render loop. **S05's pin lands in
+    the same place for the same reason**: "the solved path is untouched when no pin is
+    given" is then a property of this object too, not of a second careful reading.
 
     **The shared quantity is the point of the sprite path.** A perspective turnaround
     shares a *radius*, and each view's scale then varies a little with what happens to be
@@ -114,16 +146,55 @@ def projection_plan(ortho, lens_mm, sensor_mm):
     span itself — so a millimetre of character is the same number of pixels in every cell,
     which is what makes the cells a sheet rather than eight photographs.
 
+    **What the pin adds is sharing across RUNS.** The solve shares one scale across the
+    views of one subject, which is what a single character's sheet needs and is exactly
+    wrong for a cast: solved per character, the nine-foot brute and the halfling are each
+    fitted to the same frame height and come out the same size on the sheet, every cell
+    correctly framed and the roster's whole point destroyed. A pinned scale is one recorded
+    number every character in the cast is drawn against, so the relation between them
+    survives into the sheet. Nothing about it is a better fit for any one subject — it is
+    deliberately not fitted at all, which is why it is `used verbatim` and why the direction
+    it does not bound (a pin too tight for its subject) is where Gate CROP already stands.
+
+    **`--height-frac` does not participate in a pinned run**, and the plan says so rather
+    than leaving a caller to infer it. There is no solve for a target height to target, so
+    a manifest recording one would describe a fit that never happened.
+
     **The ortho plan carries no focal length, and that is the assertion, not an omission.**
     Blender keeps a `lens` value on an ORTHO camera and ignores it; a plan that passed one
     along would let a reader believe the lens still composes the shot.
     """
+    pinned = ortho_scale_pin is not None
+    if pinned:
+        if not ortho:
+            raise TurnaroundPlanRefusal(
+                f"an ortho_scale pin ({ortho_scale_pin!r}) was given for a PERSPECTIVE "
+                "plan. There is no shared world span on the perspective path — the "
+                "quantity shared there is the radius — so this plan would be composed with "
+                "the pin dropped, and the run would render a perfectly well-formed "
+                "turnaround that silently ignored the one number it was pinned on. A "
+                "roster rendered that way is eight characters each framed to his own "
+                "height, which is the failure the pin exists to prevent")
+        pin = float(ortho_scale_pin)
+        if not (math.isfinite(pin) and pin > 0.0):
+            raise TurnaroundPlanRefusal(
+                f"an ortho_scale pin of {ortho_scale_pin!r} is not a finite positive world "
+                "span. A non-positive span collapses every point onto the frame centre and "
+                "a non-finite one sends them nowhere at all; either way the render still "
+                "saves as a well-formed, correctly-sized RGBA PNG. `ortho_half_spans` "
+                "refuses <= 0 downstream but takes nan and inf, so this is the check that "
+                "binds those")
+
     if ortho:
         return {
             "projection": ORTHOGRAPHIC,
             "blender_camera_type": "ORTHO",
-            "solved": "ortho_scale",
+            "solved": None if pinned else "ortho_scale",
             "shared_across_views": "ortho_scale",
+            "ortho_scale_source": PINNED if pinned else SOLVED,
+            "ortho_scale_pin": float(ortho_scale_pin) if pinned else None,
+            "shared_across_runs": pinned,
+            "height_frac_participates": not pinned,
             "lens_mm": None,
             "sensor_mm": None,
             "radius_role": ("standoff only — parallel projection makes screen size "
@@ -135,6 +206,10 @@ def projection_plan(ortho, lens_mm, sensor_mm):
         "blender_camera_type": "PERSP",
         "solved": "radius",
         "shared_across_views": "radius",
+        "ortho_scale_source": None,
+        "ortho_scale_pin": None,
+        "shared_across_runs": False,
+        "height_frac_participates": True,
         "lens_mm": float(lens_mm),
         "sensor_mm": float(sensor_mm),
         "radius_role": "composes the shot — it sets how large the subject draws",
