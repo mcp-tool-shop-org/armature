@@ -142,3 +142,93 @@ def test_an_all_grey_figure_reads_as_entirely_unpainted():
     rgb = np.full((30, 30, 3), 200, np.uint8)
     rec = HS.survey_view(rgb, np.ones((30, 30), bool))
     assert rec["low_saturation_fraction"]["0.10"] == 1.0
+
+
+# ------------------------------------------------ the old side's two readings (S06)
+
+
+def _authored_master(h=41, w=41, box=(12, 29)):
+    """An RGBA master shaped like the real ones: an opaque saturated figure standing in a
+    transparent field whose RGB under the transparency is black, which is what Blender's
+    `film_transparent` actually writes."""
+    rgba = np.zeros((h, w, 4), np.uint8)
+    lo, hi = box
+    rgba[lo:hi, lo:hi, :3] = (136, 98, 79)
+    rgba[lo:hi, lo:hi, 3] = 255
+    return rgba
+
+
+def test_an_rgba_master_read_the_flat_alpha_way_swallows_the_whole_frame():
+    """The measured defect the flag exists for, pinned as a test so it cannot come back.
+
+    A transparent-black background is *maximally* far from the baked void grey, so the
+    colour-difference mask marks every pixel as figure. Measured on the real S03 master
+    before the flag was written: 100% of frame marked against a true opaque fraction of
+    0.2255. Here the same arithmetic on a synthetic master, stated as the ratio that makes
+    it unmistakable.
+    """
+    rgba = _authored_master()
+    wrong = HS.figure_mask_old(rgba[..., :3])
+    right = HS.figure_mask_new(rgba)
+    assert wrong.all()                        # every pixel, background included
+    assert right.mean() < 0.35                # the actual figure is a minority of the frame
+    assert wrong.sum() > 2 * right.sum()
+
+
+def test_old_rgba_masks_the_old_side_by_its_alpha_and_not_by_colour_difference():
+    """With the flag, the old side is read the way the new side is."""
+    rgba = _authored_master()
+    _rgb, mask, described = HS.old_side_plan(rgba, old_is_rgba=True)
+    assert (mask == HS.figure_mask_new(rgba)).all()
+    assert "own alpha" in described
+
+
+def test_old_rgba_composites_the_old_side_over_the_same_ground_as_the_new_side():
+    """Without this, the two panels differ in backdrop and every comparison inherits it."""
+    rgba = _authored_master()
+    rgb, _mask, _d = HS.old_side_plan(rgba, old_is_rgba=True)
+    background = rgba[..., 3] == 0
+    assert (rgb[background] == np.array(HS.OLD_VOID_RGB, np.uint8)).all()
+    assert (rgb[~background] == np.array([136, 98, 79], np.uint8)).all()
+
+
+def test_the_default_reading_is_untouched_when_the_flag_is_absent():
+    """The untouched-when-absent property, asserted about the branch object itself rather
+    than about a careful reading of the loop. A flat-alpha view is written to its panel
+    uncomposited and masked by colour difference — exactly S03's behaviour."""
+    flat = np.dstack([np.full((41, 41, 3), HS.OLD_VOID_RGB, np.uint8),
+                      np.full((41, 41), 255, np.uint8)])
+    flat[12:29, 12:29, :3] = (136, 98, 79)
+    rgb, mask, described = HS.old_side_plan(flat, old_is_rgba=False)
+    assert (rgb == flat[..., :3]).all()                     # uncomposited
+    assert (mask == HS.figure_mask_old(flat[..., :3])).all()
+    assert "baked void" in described
+
+
+def test_the_wrong_reading_swallows_the_frame_in_EITHER_direction():
+    """A flag that changed nothing would pass every test above by accident; this is the one
+    that fails if `old_side_plan` ignores its argument.
+
+    Written first with the second half asserting the two readings *agree* on a flat input.
+    That was this seat's wrong expectation and the code was right: on a flat-alpha set the
+    alpha is 255 everywhere, so the alpha mask marks the whole frame — which is the entire
+    reason `figure_mask_old` exists. The true fact is a symmetry, and it is the sharper
+    assertion: **each reading swallows the frame on the input the other was built for**, so
+    the flag has to match the input in both directions, not just the new one.
+    """
+    rgba = _authored_master()
+    a_rgb, a_mask, _ = HS.old_side_plan(rgba, old_is_rgba=True)
+    b_rgb, b_mask, _ = HS.old_side_plan(rgba, old_is_rgba=False)
+    assert not (a_mask == b_mask).all()
+    assert not (a_rgb == b_rgb).all()
+    assert b_mask.all()                       # colour reading swallows an RGBA master
+    assert a_mask.mean() < 0.35
+
+    flat = np.dstack([np.full((41, 41, 3), HS.OLD_VOID_RGB, np.uint8),
+                      np.full((41, 41), 255, np.uint8)])
+    flat[12:29, 12:29, :3] = (136, 98, 79)
+    c_rgb, c_mask, _ = HS.old_side_plan(flat, old_is_rgba=True)
+    d_rgb, d_mask, _ = HS.old_side_plan(flat, old_is_rgba=False)
+    assert (c_rgb == d_rgb).all()             # alpha 255 everywhere: composite is identity
+    assert c_mask.all()                       # alpha reading swallows a flat set
+    assert d_mask.mean() < 0.35               # the colour reading finds the figure

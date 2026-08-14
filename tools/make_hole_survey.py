@@ -44,6 +44,30 @@ Both masks are eroded by the same amount before anything is counted, so what is 
 interior texel against interior texel. The number is a **locator, not a verdict**: it says
 where to look at full size. No threshold here gates anything, and the whole percentile curve
 is reported beside the count so no single cut carries the claim.
+
+--------------------------------------------------------------------------------
+`--old-rgba`: both sides are authored masters (S06)
+
+Absent the flag nothing below applies and the flat-alpha old side described above is what
+runs; the branch is `old_side_plan` and nothing else, so "the default path is untouched when
+the flag is absent" is a property of one testable object rather than of a careful reading of
+this loop.
+
+The flag exists because the survey's *second* use is not its first. S03 compared a flat-alpha
+`turn_final` against a new RGBA master. S06 compares **two RGBA masters** — S03's own E33
+renders against the repaired performer's — and the old-side machinery above is wrong for that
+input in two independent ways, both measured before the flag was written:
+
+* `figure_mask_old` asks how far a pixel sits from the baked void `(154, 154, 157)`. An RGBA
+  master's background is transparent black, which is *maximally* far from that grey, so the
+  mask marks **100% of the frame** as figure against a true opaque fraction of 0.2255. Every
+  interior number would then be computed over the background as well as the figure.
+* the old side is written to its panel uncomposited, so it would sit on near-black while the
+  new side sits on grey — putting a difference of backdrop into every panel, which is the one
+  thing the composite above exists to prevent.
+
+With the flag, the old side is treated exactly as the new one: composited over the same
+`OLD_VOID_RGB` and masked by its own alpha. Same instrument, both sides.
 """
 
 import argparse
@@ -54,7 +78,7 @@ import sys
 import numpy as np
 from PIL import Image, ImageFilter
 
-TOOL_VERSION = "S03.1"
+TOOL_VERSION = "S06.1"
 
 #: `turn_final`'s baked void, measured off its corner pixel. sRGB.
 OLD_VOID_RGB = (154, 154, 157)
@@ -110,6 +134,26 @@ def figure_mask_old(rgb, void_rgb=OLD_VOID_RGB, tol=18):
     return np.abs(rgb.astype(np.int32) - np.asarray(void_rgb, np.int32)).sum(-1) > tol
 
 
+def old_side_plan(old_rgba, old_is_rgba):
+    """How the OLD side is read: the whole `--old-rgba` branch, as one testable object.
+
+    Returns `(panel_rgb, figure_mask, described)` — the RGB written to the panel, the mask
+    the interior is counted over, and the sentence the manifest records about which of the
+    two readings ran. Kept separate from `main` so "the default path is untouched when the
+    flag is absent" is an assertion about a function rather than about a loop body.
+    """
+    if old_is_rgba:
+        rgb = composite_over(old_rgba, OLD_VOID_RGB)
+        return rgb, figure_mask_new(old_rgba), (
+            "authored RGBA master: composited over the same background as the new side and "
+            "masked by its own alpha, so the two sides differ in the figure and not in the "
+            "instrument")
+    rgb = old_rgba[..., :3]
+    return rgb, figure_mask_old(rgb), (
+        "flat-alpha set with a baked void: masked by colour difference from "
+        f"{OLD_VOID_RGB} and written to the panel uncomposited")
+
+
 def survey_view(rgb, mask):
     """Locator numbers for one view: how much of the interior reads as unpainted."""
     interior = erode(mask)
@@ -135,6 +179,16 @@ def main():
     ap.add_argument("--new-prefix", default="turn")
     ap.add_argument("--old-prefix", default="armfinal")
     ap.add_argument("--views", type=int, default=8)
+    ap.add_argument("--old-rgba", action="store_true",
+                    help="the OLD side is an authored RGBA master too — composite and mask "
+                         "it exactly as the new side. Absent, the flat-alpha reading runs "
+                         "unchanged (S06)")
+    ap.add_argument("--tag", default="S03 Task B",
+                    help="the run this survey belongs to, used in the sheet titles")
+    ap.add_argument("--old-label", default=None,
+                    help="panel label for the old side; defaults to the S03 wording")
+    ap.add_argument("--new-label", default=None,
+                    help="panel label for the new side; defaults to the S03 wording")
     a = ap.parse_args()
 
     out = os.path.abspath(a.out)
@@ -151,42 +205,54 @@ def main():
         new_rgb = composite_over(new_rgba, OLD_VOID_RGB)
         comp_path = os.path.join(panels_dir, f"new_{i}.png")
         Image.fromarray(new_rgb).save(comp_path)
+        old_rgb, old_mask, old_reading = old_side_plan(old_rgba, a.old_rgba)
         old_path = os.path.join(panels_dir, f"old_{i}.png")
-        Image.fromarray(old_rgba[..., :3]).save(old_path)
+        Image.fromarray(old_rgb).save(old_path)
 
         records.append({
             "view": i,
             "new": dict(survey_view(new_rgb, figure_mask_new(new_rgba)), source=np_path),
-            "old": dict(survey_view(old_rgba[..., :3],
-                                    figure_mask_old(old_rgba[..., :3])), source=op_path),
+            "old": dict(survey_view(old_rgb, old_mask), source=op_path,
+                        reading=old_reading),
         })
         new_panels.append(comp_path)
         old_panels.append(old_path)
 
+        old_lab = a.old_label or f"OLD armfinal_{i}.png"
+        new_lab = a.new_label or f"NEW turn_{i}.png"
         spec = {
-            "title": f"S03 Task B — the hole survey, view {i}",
-            "subtitle": ("OLD turn_final (flat alpha 255,255, baked grey void) beside NEW "
-                         "turn_rgba (authored RGBA, composited here over the old set's own "
-                         f"{OLD_VOID_RGB} for comparison only). Full size, no resampling."),
+            "title": f"{a.tag} — the hole survey, view {i}",
+            "subtitle": (
+                ("BEFORE beside AFTER — both authored RGBA masters, both composited here "
+                 f"over {OLD_VOID_RGB} and both masked by their own alpha, so the panels "
+                 "differ in the paint and not in the instrument. Full size, no resampling.")
+                if a.old_rgba else
+                ("OLD turn_final (flat alpha 255,255, baked grey void) beside NEW "
+                 "turn_rgba (authored RGBA, composited here over the old set's own "
+                 f"{OLD_VOID_RGB} for comparison only). Full size, no resampling.")),
             "out": out, "filename": f"view_{i}.png",
             "rows": [{"title": f"view {i}", "panels": [
-                {"body": old_path, "label": f"OLD armfinal_{i}.png"},
-                {"body": comp_path, "label": f"NEW turn_{i}.png"}]}],
+                {"body": old_path, "label": old_lab.replace("{i}", str(i))},
+                {"body": comp_path, "label": new_lab.replace("{i}", str(i))}]}],
         }
         with open(os.path.join(out, f"_panels_view_{i}.json"), "w", encoding="utf-8") as fh:
             json.dump(spec, fh, indent=1)
 
     contact = {
-        "title": "S03 Task B — the hole survey, contact sheet",
-        "subtitle": ("Row 1 OLD turn_final; row 2 NEW turn_rgba. Sheets locate; full size "
-                     "decides — the per-view sheets are the ones to read."),
+        "title": f"{a.tag} — the hole survey, contact sheet",
+        "subtitle": (("Row 1 BEFORE; row 2 AFTER. Sheets locate; full size decides — the "
+                      "per-view sheets are the ones to read.") if a.old_rgba else
+                     ("Row 1 OLD turn_final; row 2 NEW turn_rgba. Sheets locate; full size "
+                      "decides — the per-view sheets are the ones to read.")),
         "out": out, "filename": "contact.png",
         "rows": [
-            {"title": "OLD — facet_E33/turn_final (alpha extrema 255,255 on all eight)",
-             "panels": [{"body": p, "label": f"armfinal_{i}"}
+            {"title": (a.old_label.replace("{i}", "0-7") if a.old_label else
+                       "OLD — facet_E33/turn_final (alpha extrema 255,255 on all eight)"),
+             "panels": [{"body": p, "label": f"{a.old_prefix}_{i}"}
                         for i, p in enumerate(old_panels)]},
-            {"title": "NEW — S03/turn_rgba (alpha extrema 0,255 on all eight)",
-             "panels": [{"body": p, "label": f"turn_{i}"}
+            {"title": (a.new_label.replace("{i}", "0-7") if a.new_label else
+                       "NEW — S03/turn_rgba (alpha extrema 0,255 on all eight)"),
+             "panels": [{"body": p, "label": f"{a.new_prefix}_{i}"}
                         for i, p in enumerate(new_panels)]},
         ],
     }
@@ -196,6 +262,10 @@ def main():
     with open(os.path.join(out, "survey.json"), "w", encoding="utf-8") as fh:
         json.dump({
             "tool": "make_hole_survey", "tool_version": TOOL_VERSION,
+            "tag": a.tag,
+            "old_side_is_rgba": bool(a.old_rgba),
+            "old_side_reading": old_side_plan(
+                np.zeros((1, 1, 4), np.uint8), a.old_rgba)[2],
             "composite_rgb_srgb": list(OLD_VOID_RGB),
             "composite_why": ("the old set's own measured background, so the two panels "
                               "differ in the figure and not in the ground. The delivered "
