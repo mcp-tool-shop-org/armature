@@ -115,3 +115,41 @@ routes onward at E35's close — it is not a regression in the repair and no fin
 S07's. The E35 tree joins E33/E34 as manifest-protected read-only on acceptance. The
 kit question (S03 R4 item 1) stays where this seat's record left it: closed,
 Director-passed.
+
+---
+
+**Amendment, 2026-08-15 — the third facet relay: the standby re-targets to the E34
+recorded GLB at the Director's word, because the E35 candidate never came to exist.**
+facet's E35 arc is CLOSED (its `docs/experiments/E35-ruling.md`, Rulings 1–11): 47 of
+60 jobs spent, five directions closed by measurement, and **no repaint candidate
+produced** — the best-measured configuration stands rejected at the Director's eye, so
+`facet_E35\out\performer_textured_clean.glb` was never made. The second relay's target
+is void, and the Director ruled the re-target 2026-08-15.
+
+**S07's target, hashed live at this relay:**
+`E:\AI\training\facet_E34\out\performer_textured_8view.glb` · sha256
+`ce7930643e573b475737eca676d9118b036d5e131c8b7af66a65b3b7ae0113c5` · 22,284,208 bytes
+— matching facet's recorded acceptance to the byte.
+
+What the board asked the relay to carry, honestly stated:
+
+- **The ruling document**: facet `docs/experiments/E34-ruling.md` — accepted at the
+  Director's eye with the suite condition met (Ruling 9). There is no v3 acceptance
+  document because there is no v3; the no-candidate record is the E35 ruling itself.
+- **Accepted-with observations (the Ruling-2 pattern)**: the residual dilation is
+  accepted for this asset at the E34 close; the dark-speck texture class was ruled
+  unacceptable at the Director's zoom 2026-08-14 and is now measured to its floor at
+  E35's close (two signatures; no measured lever moves it while keeping the man).
+  Successor texture work runs as facet's E36 — two route arms and a corrector
+  contract, **texture-side on this same mesh** — which is the reasoning of the
+  re-target: an armature survey of this GLB cannot be invalidated by it. The second
+  relay's mesh-pit split stands unchanged: flat light discriminates, pure-black pits
+  are geometry, none of it is S07's finding, and the mesh-side routing remains with
+  the Director.
+- **The E34 tree's disposition**: `facet_E34` stands manifest-protected read-only
+  (84 files, gate HELD at facet's E36 open, 2026-08-15). The asset is facet's fifth
+  accepted asset, accepted-and-REOPENED at the Director's zoom for the dark-speck
+  class; its formal disposition (accepted-with-known-classes or held reopened)
+  remains the Director's open item and does not gate the survey.
+
+**S07 dispatches on this relay.**
