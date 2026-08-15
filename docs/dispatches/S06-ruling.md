@@ -153,3 +153,13 @@ What the board asked the relay to carry, honestly stated:
   remains the Director's open item and does not gate the survey.
 
 **S07 dispatches on this relay.**
+
+---
+
+**Amendment, 2026-08-15 — the Director redirects: no more repair arcs. The performer
+gets remade from source at facet** — new mesh and new texture, with candidates checked
+for both defect classes (painted specks, mesh pits) *before* anything is accepted or
+painted over. Two days of repair work established that every remaining defect is baked
+in at generation time, so the fix is generation, not repair. The E34 survey target
+above is superseded by this word. **S07 becomes the acceptance survey of the remade
+performer when facet delivers it.** Until then armature stands by.
