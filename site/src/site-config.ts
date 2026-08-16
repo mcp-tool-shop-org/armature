@@ -103,7 +103,7 @@ export const config: DefaultSiteConfig = {
         ],
         [
           'What exists today',
-          'v0.1.1 — the record’s current marked state — plus the routes, the instrument shelf, the licence map, the experiment record E01–E14, and this page',
+          'v0.2.0 — the record’s current marked state, and the first that installs: armature_core on PyPI (armature-previz) and npm (@mcptoolshop/armature), plus the routes, the instrument shelf, the licence map, the experiment record E01–E14, and this page',
         ],
       ],
     },

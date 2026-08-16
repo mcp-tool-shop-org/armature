@@ -34,6 +34,48 @@ over it. Structure comes from geometry you own; life comes from the model; ident
 versioned thing that rides in the prompt and the reference stack — never an accident of a lucky
 frame.
 
+## Install
+
+```bash
+pip install armature-previz
+```
+
+```bash
+npm install -g @mcptoolshop/armature   # the same command, as a launcher
+```
+
+```bash
+armature check
+```
+
+The installable package is **`armature_core`** — the gates, the framing and turnaround solvers,
+the shot-spec contract, the channel maths and the payload builders. Every one of them imports
+under a plain CPython, which is what lets them be tested, and packaged, without Blender present.
+
+```python
+from armature_core import turnaround, framing
+
+plan = turnaround.projection_plan(ortho=True, ortho_scale=1.1235359256161628)
+```
+
+**The rendering scripts are not console entry points, and that is deliberate.**
+`render_turnaround.py`, `stage_render.py` and their siblings run inside **Blender's own
+interpreter** — a console script on your Python could not import `bpy` and would fail on its
+first line, so shipping one would be a promise the package cannot keep:
+
+```bash
+blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --ortho
+```
+
+They stay here in the repository, where the invocation that works is the one written down.
+`armature_core.blender_scene` is the single module that imports `bpy`; `armature check` reports
+it as `needs-blender` rather than as a defect.
+
+The npm package is a **launcher, not a port**: re-implementing a threshold in a second language
+is how a threshold drifts, so it forwards to the Python that holds the truth, and refuses —
+loudly, non-zero, with the one command that fixes it — rather than installing anything on your
+behalf.
+
 ---
 
 ## State: the thesis is measured at product level
@@ -52,8 +94,8 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Routes | **three, measured** — the **driven route** (rig-rendered AAPose sticks → Animate; proven at shot level, parked, and licence-clear for its unpark) · the **free route** (GLB-authored start frame → camera tier at the 6.0 / uni_pc baseline; identity holds unanchored, a handed world holds on two seeds, and the LoRA scene-lever is measured live — E14) · the **composed route** (authored references into a hosted identity-lock tier — graduated by E13: identity-locked, model-decided cinematography with worlds steered by what the references carry; disclosure note in its spec) |
 | Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** (GPU-hour billing) under per-experiment ceilings; **E13's four generations are the repo's first partner-credit spend, inside their pre-stated 424–844 bracket**; E14's two generations metered **0 partner credits** at a two-generation ceiling, reached exactly |
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
-| Tests | **1301 passing on the rig** (13 skips, measured 2026-08-14 at the S06 close-merge), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
-| Status | **v0.1.1 released 2026-08-13** — the record's current marked state, carrying E14's close (v0.1.0, the first marked state, was cut earlier the same day); the record is the docs tree, and it is complete |
+| Tests | **1311 passing on the rig** (13 skips, measured 2026-08-15 at the v0.2.0 cut), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
+| Status | **v0.2.0 released 2026-08-15** — the record becomes an installable toolkit: `armature_core` on PyPI as `armature-previz` and on npm as `@mcptoolshop/armature`, published from a tag by OIDC with no long-lived token anywhere. The record is still the docs tree, and it is still complete |
 
 ### What is measured (the current arc)
 

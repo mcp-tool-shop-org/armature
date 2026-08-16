@@ -11,14 +11,22 @@
        duplicate. A gate implemented as an `assert` is DELETED by the optimizer, and 87
        of facet's andons turned out to be removable by an environment variable. Running
        the suite a second time under `-O` is what proves this repo's gates raise.
-    3. the site build (`npm ci` + `npm run build`), which is what GitHub Pages deploys
+    3. the package build — the wheel and sdist, plus `twine check` on the metadata, and
+       the launcher's own self-test. Added at v0.2.0, when this repo started publishing:
+       a package that fails to build is a release that fails at the registry, and finding
+       that out from a release job is finding it out too late to take back.
+    4. the site build (`npm ci` + `npm run build`), which is what GitHub Pages deploys
 
   Every leg runs even if an earlier one fails, so one invocation reports the whole
   picture rather than the first thing to break. The exit code is 0 only if all legs pass.
 
 .PARAMETER NoSite
-  Skip leg 3. Useful when only Python changed and node_modules is cold; the site leg is
+  Skip leg 4. Useful when only Python changed and node_modules is cold; the site leg is
   the slow one. A run with -NoSite is NOT a full verify and says so in its summary.
+
+.PARAMETER NoPackage
+  Skip leg 3. Useful when nothing packaging-related changed; it shells out to `build` and
+  `twine`, which a bare checkout may not have installed.
 
 .EXAMPLE
   pwsh -NoProfile -File .\verify.ps1
@@ -26,7 +34,8 @@
 #>
 [CmdletBinding()]
 param(
-    [switch]$NoSite
+    [switch]$NoSite,
+    [switch]$NoPackage
 )
 
 $ErrorActionPreference = 'Continue'
@@ -70,6 +79,23 @@ Invoke-Leg -Name 'tests under -O (gates must still raise)' -Body {
     finally { $env:PYTHONOPTIMIZE = $prior }
 }
 
+if ($NoPackage) {
+    Write-Host ''
+    Write-Host '──────── package build — SKIPPED (-NoPackage)' -ForegroundColor Yellow
+} else {
+    Invoke-Leg -Name 'package build (wheel + sdist + twine check + launcher)' -Body {
+        Push-Location $repo
+        try {
+            & $python -m build
+            if ($LASTEXITCODE -ne 0) { return }
+            & $python -m twine check (Join-Path $repo 'dist\*')
+            if ($LASTEXITCODE -ne 0) { return }
+            Push-Location (Join-Path $repo 'npm')
+            try { node bin\armature.mjs --node-selftest } finally { Pop-Location }
+        } finally { Pop-Location }
+    }
+}
+
 if ($NoSite) {
     Write-Host ''
     Write-Host '──────── site build — SKIPPED (-NoSite)' -ForegroundColor Yellow
@@ -99,9 +125,12 @@ if ($failed.Count -gt 0) {
     exit 1
 }
 
-if ($NoSite) {
+if ($NoSite -or $NoPackage) {
+    $skipped = @()
+    if ($NoPackage) { $skipped += 'the package build' }
+    if ($NoSite) { $skipped += 'the site build' }
     Write-Host ''
-    Write-Host 'All run legs passed. NOT a full verify — the site build was skipped.' -ForegroundColor Yellow
+    Write-Host "All run legs passed. NOT a full verify — $($skipped -join ' and ') was skipped." -ForegroundColor Yellow
     exit 0
 }
 

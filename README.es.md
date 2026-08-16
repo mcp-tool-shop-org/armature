@@ -25,33 +25,68 @@ Un modelo de vídeo puede generar movimiento, luz y vida que ningún motor de re
 
 Coloca tu personaje en Blender. Renderiza la secuencia de control. Deja que el modelo de vídeo le dé vida. La estructura proviene de la geometría que posees; la vida proviene del modelo; la identidad es algo con nombre y versión que se incluye en el mensaje y la pila de referencias, nunca un accidente de un fotograma afortunado.
 
+## Instalar
+
+```bash
+pip install armature-previz
+```
+
+```bash
+npm install -g @mcptoolshop/armature   # the same command, as a launcher
+```
+
+```bash
+armature check
+```
+
+El paquete instalable es **`armature_core`**: las puertas, el entramado y los solucionadores de recorrido, el contrato de especificación de la toma, las matemáticas del canal y los generadores de carga útil. Cada uno de ellos importa desde un CPython estándar, lo que permite probarlos y empaquetarlos sin necesidad de tener Blender instalado.
+
+```python
+from armature_core import turnaround, framing
+
+plan = turnaround.projection_plan(ortho=True, ortho_scale=1.1235359256161628)
+```
+
+**Los scripts de renderizado no son puntos de entrada de la consola, y esto es intencional.**
+`render_turnaround.py`, `stage_render.py` y sus derivados se ejecutan dentro del **intérprete propio de Blender**: un script de consola en tu Python no podría importar `bpy` y fallaría en su primera línea, por lo que incluir uno sería una promesa que el paquete no puede cumplir:
+
+```bash
+blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --ortho
+```
+
+Permanecen aquí, en el repositorio, donde la invocación que funciona es la que está escrita.
+`armature_core.blender_scene` es el único módulo que importa `bpy`; `armature check` lo informa como `needs-blender` en lugar de como un defecto.
+
+El paquete npm es un **lanzador, no un puerto**: volver a implementar un umbral en un segundo lenguaje es la forma en que un umbral se desvía, por lo que redirige al Python que contiene la verdad y se niega (de manera sonora, con un valor distinto de cero, mediante el único comando que lo soluciona) en lugar de instalar nada en tu nombre.
+
 ---
 
 ## Estado: la tesis se mide a nivel de producto
 
-Fundada el **10 de agosto de 2026**. Trece experimentos se han completado y la tesis ha pasado de estar *en fase de prueba* a ser **medida a nivel de producto**: el personaje ha "bailado" en la pantalla, controlado por su propio sistema, y libre; un mundo creado manualmente se mantiene hasta el último fotograma en dos semillas (E12), y **la identidad ahora sobrevive a una capa alojada, entrenada por humanos, alimentada únicamente con referencias creadas** (E13); todo ello evaluado por el ojo del director. La auditoría del arco fundacional está disponible en [docs/audit-first-arc.md](docs/audit-first-arc.md); la configuración desde el 12 de agosto de 2026 es un repositorio monolítico de aprendizaje: los experimentos demuestran caminos, pero ninguna ruta es canónica por inercia (CLAUDE.md).
+Fundado el **10 de agosto de 2026**. Trece experimentos cerrados y la tesis ha pasado de estar *en fase de prueba* a ser **medida a nivel de producto**: el personaje ha bailado en la pantalla, controlado por su propio sistema de animación y libre; un mundo creado manualmente se mantiene hasta el último fotograma con dos semillas (E12), y **la identidad ahora sobrevive a una capa alojada, entrenada por humanos, alimentada únicamente con referencias creadas** (E13); todo ello juzgado por la mirada del director. La auditoría del arco fundacional está en
+[docs/audit-first-arc.md](docs/audit-first-arc.md); la postura desde el 12 de agosto de 2026 es un monorepositorio de aprendizaje: los experimentos demuestran caminos, ningún camino es canónico por inercia (CLAUDE.md).
 
 | | |
 |---|---|
-| Experimentos | **E01–E14 completados** (E05 retirado debido a una premisa falsa); el arco de control (E01–E06) · reparación del sistema + aprobación del esqueleto (E07) · **la primera toma renderizada** (E08) · la línea base de cadena limpia (E09) · se adoptó un sistema de control más denso (E10) · la ruta sin control, tres fases que conducen a una falla instructiva (E11) · **la ruta libre gana un mundo** y la línea base 6.0 / uni_pc (E12) · **la ruta compuesta responde a su pregunta** (E13: enviada, detenida con cero gasto, reparada por un arco de soporte, rearmada, ejecutada y completada en una sola fecha: la identidad se mantiene según el criterio del director; las referencias sirven como base para los mundos decididos por el modelo) · **la escena LoRA con precio dinámico** (E14: la prueba final: ambas LoRAs de estilo se unen a los pesos derivados; el personaje se mantiene en `technically_color` y falla en la pareja fotorrealista; el ganador tiene una capa de archivo servido irresoluble y una obligación crediticia, ambos registrados). |
-| Rutas | **tres, medidos** — la **ruta controlada** (los elementos AAPose renderizados por el sistema → Animate; probada a nivel de toma, pausada y con licencia clara para su reanudación) · la **ruta libre** (fotograma inicial creado en GLB → capa de cámara en la línea base 6.0 / uni_pc; la identidad se mantiene sin anclaje, un mundo creado manualmente se mantiene en dos semillas, y la escena LoRA se mide en vivo: E14) · la **ruta compuesta** (referencias creadas que se introducen en una capa de identidad alojada: graduada por E13: cinematografía con identidad bloqueada y mundos decididos por el modelo, guiados por lo que contienen las referencias; nota de divulgación en sus especificaciones). |
-| Gasto | 22 pruebas en el arco fundacional a 4 créditos cada una; el arco E08–E12 registró **0 créditos** (facturación por hora de GPU) según los límites por experimento; **las cuatro generaciones de E13 representan el primer gasto con créditos de socio del repositorio, dentro del rango preestablecido de 424 a 844**; las dos generaciones de E14 registraron **0 créditos de socio** con un límite de dos generaciones, alcanzado exactamente. |
+| Experimentos | **E01–E14 cerrados** (E05 retirado debido a una premisa falsa); el arco de control (E01–E06) · reparación del sistema de animación + aprobación del esqueleto (E07) · **la primera toma renderizada** (E08) · la línea base de cadena limpia (E09) · se adopta un sistema de control más denso (E10) · la ruta sin control, tres fases hacia una falla instructiva (E11) · **la ruta libre gana un mundo** y la línea base 6.0 / uni_pc (E12) · **la ruta compuesta responde a su pregunta** (E13: enviada, detenida con cero gasto, reparada por un arco de soporte, rearmada, ejecutada y cerrada en una sola fecha: la identidad se mantiene según la mirada del director; las referencias sirven como base para los mundos decididos por el modelo) · **la escena LoRA con precio en vivo** (E14: la prueba final: ambos estilos LoRA se unen a los pesos derivados; el personaje se mantiene en `technically_color` y falla en el par fotorrealista; el ganador tiene una capa de archivo servido irresoluble y una obligación crediticia, ambas registradas). |
+| Rutas | **tres, medidos**: la **ruta controlada** (sistemas de animación renderizados AAPose → Animate; probados a nivel de toma, estacionados y con licencia clara para su reactivación) · la **ruta libre** (fotograma inicial creado en GLB → capa de cámara en la línea base 6.0 / uni_pc; la identidad se mantiene sin anclar, un mundo creado manualmente se mantiene con dos semillas, y la escena LoRA se mide en vivo — E14) · la **ruta compuesta** (referencias creadas en una capa de bloqueo de identidad alojada — graduada por E13: cinematografía con identidad bloqueada, mundos decididos por el modelo y guiados por lo que llevan las referencias; nota de divulgación en su especificación). |
+| Gasto | 22 pruebas en el arco fundacional a 4 créditos cada una; el arco E08–E12 midió **0 créditos** (facturación por hora de GPU) bajo límites por experimento; **las cuatro generaciones de E13 son el primer gasto con créditos de socios del repositorio, dentro de su rango preestablecido de 424 a 844**; las dos generaciones de E14 midieron **0 créditos de socios** en un límite de dos generaciones, alcanzado exactamente. |
 | Mapa de licencias | cada dependencia adoptada lleva un **documento de licencia recuperado**; NO VERIFICADO se trata como SI; las rutas a través de capas de terceros también llevan una **divulgación por ruta** (establecida por el director el 12 de agosto de 2026); el propósito declarado de la puerta es publicar el arte del estudio. |
-| Pruebas | **1005 aprobadas en el esquema** (13 omitidas, medidas el 13 de agosto de 2026), bajo `-O` también; las pruebas CI ejercen lo que un ejecutor puede hacer honestamente: los activos locales del esquema **se omiten visiblemente**. |
-| Estado | **v0.1.1 lanzada el 13 de agosto de 2026** — el estado actual registrado, que incluye la finalización de E14 (v0.1.0, el primer estado registrado, se completó antes ese mismo día); el registro es el árbol de documentos y está completo. |
+| Pruebas | **1311 aprobados en el sistema de animación** (13 omisiones, medido el 15 de agosto de 2026 en la versión v0.2.0), también bajo `-O`; CI ejerce lo que un ejecutor puede hacer honestamente: los activos locales del sistema de animación **se omiten visiblemente**. |
+| Estado | **v0.2.0 lanzado el 15 de agosto de 2026**: el registro se convierte en un conjunto de herramientas instalable: `armature_core` en PyPI como `armature-previz` y en npm como `@mcptoolshop/armature`, publicado desde una etiqueta por OIDC sin ninguna ficha de larga duración. El registro sigue siendo el árbol de documentos y sigue estando completo. |
 
 ### Qué se mide (el arco actual)
 
-- **La identidad se mantiene** — controlada (E08: la cara se reconoce como la del gemelo a lo largo de la toma) *y* sin anclaje (fase 1 de E11: cada característica hasta el último fotograma, sin referencia, sin visión de recorte, sin señal de control). El ojo del director es el veredicto definitivo en ambos casos.
-- **La cámara obedece un control explícito a un píxel** en los pesos de la capa de cámara (fase 3 de E11) — y se desplaza sin que se le ordene hacerlo (fase 1 de E11).
-- **La densidad mueve la señal, no el rendimiento** (E10): el remuestreo suaviza los pasos en un 41 %, mientras que el rendimiento mejora en un 8.6 %; aun así, se adoptó visualmente: más fotogramas por segundo se ven mejor.
-- **Una disputa de licencia no es una reclamación de cableado** (fase 2 de E11): un modelo mapeado Apache y un gráfico que nunca lo cargó produjeron 65 fotogramas de ruido con cada puerta en verde. Ahora existe la puerta PAIR.
-- **La composición de la escena es volátil según la semilla** (E10 / E11): el mismo texto recompuso por completo el mundo entre diferentes semillas. **Una reclamación de escena necesita dos semillas antes de que sea una propiedad.**
-- **Un mundo creado manualmente se mantiene** (E12): una habitación real en el fotograma inicial sobrevive hasta el último fotograma en dos semillas en la capa de cámara, con un solo atributo variable atribuido a la imagen inicial mediante la diferencia de campos. La misma capa creó un vacío de previsualización que mantuvo el vacío (fase 3 de E11): los mundos se crean y luego se mantienen.
-- **La línea base 6.0 / uni_pc del catálogo es la línea base de la capa de cámara** (E12): la premisa heredada de 3.5 / euler fracasó en su propio nivel: con la configuración del catálogo, las mismas semillas que perdieron una cabeza y desarrollaron un brazo mantienen la figura hasta f80. El costo se denomina: una mayor adherencia impuso la **cláusula de identidad sin restricciones** a la multitud en una de las dos semillas; el indicador con ámbito de sujeto es el indicador promovido.
-- **La identidad sobrevive a una capa alojada alimentada únicamente con referencias creadas** (E13): en wan2.7, la referencia a video, ambos brazos, ambas semillas, el estilizado intérprete de madera apareció como el mismo personaje según el criterio del director en un modelo entrenado por humanos. Tres predicciones ciegas en dos asientos esperaban que la capa sobrescribiera la estructura no humana; ninguna acertó: el pesimismo unidireccional sobre estos modelos ahora se ha documentado como doctrina de calibración.
-- **Las referencias sirven como base para los mundos decididos por el modelo y dominan el caos de las semillas en esa capa** (E13): las placas grises generaron un estudio gris, un clip de un bar cálido generó un interior cálido, y ambas semillas por brazo coincidieron. La atribución del mecanismo (difusión de la placa frente al valor predeterminado del estudio) está claramente definida en cuatro generaciones; una reclamación de calidad se rige por la ley de las dos semillas en un seguimiento diseñado.
-- **Un VIDEO construido llega a los sockets de VIDEO** (E13): no existe ninguna ruta de carga para los clips, pero 81 fotogramas creados se ensamblaron en el gráfico (`CreateVideo`) y se aceptaron en un socket de video de referencia. En principio, cualquier entrada de tipo VIDEO en la plataforma es accesible desde fotogramas creados.
+- **La identidad se mantiene** — mediante el control (E08: la imagen muestra el rostro del gemelo a lo largo de la secuencia) *y* sin control (E11, fase 1: cada detalle hasta el último fotograma, sin referencias, sin visión basada en clips, sin señal de control). El criterio del director es definitivo en ambos casos.
+- **La cámara obedece al control explícito a nivel de un solo píxel** en los parámetros de la cámara (E11, fase 3) y se desplaza sin que se le ordene hacerlo (E11, fase 1).
+- **La densidad mueve la señal, no el rendimiento** (E10): el remuestreo suaviza las transiciones en un 41 %, mientras que el rendimiento mejora en un 8,6 %; aun así, se adoptó visualmente: más fotogramas por segundo dan como resultado una mejor imagen.
+- **Un problema de licencia no es un problema de cableado** (E11, fase 2): un modelo Apache asignado y un gráfico que nunca lo cargó produjeron 65 fotogramas de ruido con cada puerta en verde. Ahora existe el par de puertas.
+- **La composición de la escena es volátil según la semilla** (E10 / E11): el mismo texto reconstruyó por completo el mundo a través de diferentes semillas. **Una afirmación sobre la escena requiere dos semillas antes de que se convierta en una propiedad.**
+- **Un mundo definido se mantiene** (E12): una habitación real en el fotograma inicial sobrevive hasta el último fotograma con dos semillas en el nivel de la cámara, y un atributo variable asignado a la imagen inicial mediante la diferencia de campo. El mismo nivel que mostró una previsualización vacía mantuvo el vacío (E11, fase 3): los mundos se crean y luego se conservan.
+- **El catálogo 6.0 / uni_pc es la línea base del nivel de la cámara** (E12): la premisa heredada de 3.5 / euler cayó a su propio nivel: en la configuración del catálogo, las mismas semillas que perdieron una cabeza y desarrollaron una extremidad mantienen la figura hasta f80. El costo se denomina: un mayor grado de adherencia impuso la **cláusula de identidad no limitada** al grupo con una de las dos semillas; el indicador con ámbito en el sujeto es la palanca principal.
+- **La identidad sobrevive a un nivel alojado alimentado solo por referencias creadas** (E13): en la referencia a video de wan2.7, ambos brazos, ambas semillas, el estilizado intérprete de madera apareció como el mismo personaje según el criterio del director, a través de un modelo entrenado por humanos. Tres predicciones ciegas en dos asientos diferentes esperaban que el nivel sobrescribiera la estructura no humana; ninguna acertó: el pesimismo unidireccional sobre estos modelos ahora se registra como doctrina de calibración.
+- **Las referencias sirven de guía para los mundos decididos por el modelo y dominan el caos de las semillas en ese nivel** (E13): las placas grises dieron lugar a un estudio gris, un clip de un bar cálido dio lugar a un interior cálido, y ambas semillas por brazo coincidieron. La atribución del mecanismo (difusión de la placa frente al valor predeterminado del estudio) es honestamente evidente en cuatro generaciones; una afirmación de nivel de propiedad se rige por la ley de las dos semillas en una secuencia diseñada.
+- **Un VIDEO construido llega a los conectores de VIDEO** (E13): no existe ninguna ruta de carga para los clips, pero 81 fotogramas creados se ensamblaron en el gráfico (`CreateVideo`) y se aceptaron en un conector de video de referencia. En principio, todos los datos de entrada de tipo VIDEO en la plataforma son accesibles a partir de los fotogramas creados.
 
 ### Qué no
 

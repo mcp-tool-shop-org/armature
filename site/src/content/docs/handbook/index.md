@@ -27,9 +27,32 @@ and the arc has been through a repo-wide audit — called by the Director, recor
 [docs/audit-first-arc.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/audit-first-arc.md) —
 whose finding is stated plainly rather than buried: the first arc bought clean measurements of
 the *mechanism* and zero frames of the *product*, and the work now runs under a binding
-trajectory rule because of it. **v0.1.1 — the record's current marked state — was released
-2026-08-13**, the same day as v0.1.0 before it, hard gates green and translations landed
-before each tag.
+trajectory rule because of it. **v0.2.0 — released 2026-08-15 — makes the toolkit
+installable**: `armature_core` ships to PyPI as `armature-previz` and to npm as
+`@mcptoolshop/armature`, published from a tag by OIDC with no long-lived token anywhere.
+Hard gates green and translations landed before that tag, as before it.
+
+## Install
+
+```bash
+pip install armature-previz
+```
+
+```bash
+npm install -g @mcptoolshop/armature   # the same command, as a launcher
+```
+
+```bash
+armature check
+```
+
+What installs is `armature_core` — the gates, the framing and turnaround solvers, the
+shot-spec contract, the channel maths and the payload builders — every one of which imports
+under a plain CPython. **The rendering scripts are deliberately not console entry points:**
+they run inside Blender's own interpreter (`blender -b -P tools/render_turnaround.py -- …`),
+where a script on your Python could not import `bpy` at all, and shipping one would be a
+promise the package cannot keep. The npm package is a launcher, not a port — a second copy of
+a threshold in a second language is how a threshold drifts.
 
 | | Measured, as of 2026-08-13 |
 |---|---|

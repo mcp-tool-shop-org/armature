@@ -25,6 +25,12 @@ venv/
 .pytest_cache/
 .ruff_cache/
 
+# Build artifacts. The published package is built by CI from a tag, never from a local
+# tree, so a wheel that rode a commit could only ever disagree with the one users get.
+dist/
+build/
+npm/*.tgz
+
 # Site (Astro/Starlight under site/). The lockfile IS committed — CI runs
 # `npm ci`, so the build that runs there is the build verified on the rig.
 site/node_modules/

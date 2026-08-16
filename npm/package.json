@@ -1,0 +1,43 @@
+{
+  "name": "@mcptoolshop/armature",
+  "version": "0.2.0",
+  "description": "You block the shot; the model shoots it — GLB-authored previz, control sequences and gates for video-diffusion generation. Node launcher for the armature-previz Python toolkit.",
+  "keywords": [
+    "previz",
+    "blender",
+    "video-diffusion",
+    "controlnet",
+    "turnaround",
+    "glb",
+    "character",
+    "animation",
+    "comfyui",
+    "sprite"
+  ],
+  "homepage": "https://mcp-tool-shop-org.github.io/armature/",
+  "bugs": "https://github.com/mcp-tool-shop-org/armature/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mcp-tool-shop-org/armature.git",
+    "directory": "npm"
+  },
+  "license": "MIT",
+  "author": "mcp-tool-shop <64996768+mcp-tool-shop@users.noreply.github.com>",
+  "type": "module",
+  "bin": {
+    "armature": "bin/armature.mjs"
+  },
+  "files": [
+    "bin/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node bin/armature.mjs --node-selftest"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

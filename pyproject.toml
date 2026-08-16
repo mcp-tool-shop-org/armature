@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "armature-previz"
+version = "0.2.0"
+description = "Block the shot; the model shoots it — GLB-authored previz, control sequences and gates for video-diffusion generation."
+readme = "README.pypi.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "mcp-tool-shop", email = "64996768+mcp-tool-shop@users.noreply.github.com" }]
+keywords = [
+    "previz", "blender", "video-diffusion", "controlnet", "turnaround",
+    "glb", "character", "animation", "comfyui", "sprite",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: 3D Rendering",
+    "Topic :: Scientific :: Image Processing",
+]
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.urls]
+Homepage = "https://mcp-tool-shop-org.github.io/armature/"
+Repository = "https://github.com/mcp-tool-shop-org/armature"
+Changelog = "https://github.com/mcp-tool-shop-org/armature/blob/main/CHANGELOG.md"
+Issues = "https://github.com/mcp-tool-shop-org/armature/issues"
+
+[project.scripts]
+armature = "armature_core.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "tools" }
+
+[tool.setuptools.packages.find]
+where = ["tools"]
+include = ["armature_core*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -24,6 +24,39 @@ Un modèle vidéo peut produire du mouvement, de la lumière et de la vie que au
 
 Mettez en scène votre personnage dans Blender. Effectuez le rendu de la séquence de contrôle. Laissez le modèle vidéo y ajouter de la vie. La structure provient de la géométrie que vous possédez ; la vie provient du modèle ; l’identité est une entité nommée et versionnée qui se trouve dans l’invite et la pile de références, et non un simple hasard d’une image réussie.
 
+## Installer
+
+```bash
+pip install armature-previz
+```
+
+```bash
+npm install -g @mcptoolshop/armature   # the same command, as a launcher
+```
+
+```bash
+armature check
+```
+
+Le paquet installable est **`armature_core`** : les modules de gestion des plans, le module d’optimisation du cadrage et des rotations, le contrat de spécification des prises de vue, les calculs mathématiques des canaux et les générateurs de données. Chacun d’eux est importé dans un environnement CPython standard, ce qui permet de les tester et de les empaqueter sans avoir besoin de Blender.
+
+```python
+from armature_core import turnaround, framing
+
+plan = turnaround.projection_plan(ortho=True, ortho_scale=1.1235359256161628)
+```
+
+**Les scripts de rendu ne sont pas des points d’entrée pour la console, et c’est intentionnel.**
+`render_turnaround.py`, `stage_render.py` et leurs modules associés s’exécutent dans l’**interpréteur propre à Blender** ; un script de console Python sur votre système ne pourrait pas importer `bpy` et échouerait dès sa première ligne. Par conséquent, inclure un tel script serait une promesse que le paquet ne pourrait pas tenir :
+
+```bash
+blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --ortho
+```
+
+Ils restent ici, dans le dépôt, où l’appel qui fonctionne est celui qui est écrit. `armature_core.blender_scene` est le seul module qui importe `bpy` ; `armature check` signale cela comme `needs-blender` plutôt que comme un défaut.
+
+Le paquet npm est un **lanceur, et non un portage** : réimplémenter un seuil dans un deuxième langage est la façon dont un seuil dérive. Il transmet donc les données au module Python qui contient la vérité et refuse – de manière claire, avec un code d’erreur différent de zéro, en utilisant la seule commande qui le corrige – plutôt que d’installer quoi que ce soit pour vous.
+
 ---
 
 ## État : la thèse est mesurée au niveau du produit
@@ -36,8 +69,8 @@ Fondé le **10 août 2026**. Treize expériences ont été menées à bien et la
 | Voies | **trois, mesurées** : la **voie animée** (squelette AAPose rendu → Animate ; prouvée au niveau de la scène, mise en pause et autorisée pour sa réactivation) ; la **voie libre** (première image créée avec un fichier GLB → couche caméra à la base de référence 6.0 / uni_pc ; l’identité est conservée sans ancrage, un monde créé manuellement reste intact sur deux ensembles de données, et la scène LoRA est mesurée en direct — E14) ; la **voie composée** (références créées dans une couche d’identité hébergée : graduée par E13 ; identité verrouillée, cinématographie décidée par le modèle avec des mondes orientés par ce que les références contiennent ; note de divulgation dans ses spécifications). |
 | Dépenses | 22 tests dans la phase initiale à 4 crédits chacun ; la phase E08 à E12 a entraîné **0 crédit** (facturation horaire du GPU) en vertu des plafonds par expérience ; les **quatre générations de E13 représentent les premières dépenses en crédits partenaires du dépôt, dans la fourchette prédéfinie de 424 à 844** ; les deux générations de E14 ont entraîné **0 crédit partenaire** avec un plafond de deux générations, atteint exactement. |
 | Carte des licences | chaque dépendance adoptée comporte un **document de licence récupéré** ; NON VÉRIFIÉ est traité comme AUCUNE ; les voies à travers les couches tierces comportent également une **divulgation par voie** (règle du réalisateur, 12 août 2026) ; l’objectif déclaré de la porte d’entrée est de publier l’art du studio. |
-| Tests | **1 183 tests réussis sur le squelette** (13 sauts, mesurés le 13 août 2026 lors de la fusion finale de E14), également sous `-O` ; les tests CI simulent ce qu’un moteur peut honnêtement faire : les actifs locaux du squelette **sautent visiblement**. |
-| État | **v0.1.1 publié le 13 août 2026** : l’état actuel marqué de l’enregistrement, comprenant la fin de E14 (v0.1.0, le premier état marqué, a été supprimé plus tôt dans la même journée) ; l’enregistrement est l’arborescence des documents et il est complet. |
+| Tests | **1311 tests réussis sur le modèle** (13 tests ignorés, mesurés le 2026-08-15 lors de la version v0.2.0), également sous `-O` ; les tests CI simulent ce qu’un exécuteur peut réellement faire : les ressources locales du modèle sont **visiblement ignorées**. |
+| État | **v0.2.0 publié le 2026-08-15** : le résultat devient une boîte à outils installable : `armature_core` sur PyPI sous le nom de `armature-previz` et sur npm sous le nom de `@mcptoolshop/armature`, publiée à partir d’une étiquette par OIDC sans jeton à longue durée de vie. Le résultat reste l’arborescence des documents, et il est toujours complet. |
 
 ### Ce qui est mesuré (la phase actuelle)
 

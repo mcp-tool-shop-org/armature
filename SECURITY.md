@@ -24,7 +24,14 @@ exactly what they do.
 
 `main` carries the current state of every instrument and the evidence behind it. There is
 no release channel, no backport policy and no SLA. See [CHANGELOG.md](CHANGELOG.md) for
-what `v0.1.1` marks and what it deliberately does not.
+what `v0.2.0` marks and what it deliberately does not.
+
+**Published packages.** `armature-previz` (PyPI) and `@mcptoolshop/armature` (npm) are built
+and published by GitHub Actions from a tagged release, authenticated by **OIDC Trusted
+Publishing**: no long-lived registry token exists in this repository, in its secrets, or on any
+developer machine. npm carries build provenance. A release is gated on the suite passing —
+including under `-O`, where a check written as `assert` would vanish — and on the git tag,
+`pyproject.toml` and `npm/package.json` agreeing on the version.
 
 ## Reporting a vulnerability
 

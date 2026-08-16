@@ -17,12 +17,24 @@ on:
       - "tools/**"
       - "tests/**"
       - ".github/workflows/**"
+      # The packaging manifests. Added at v0.2.0: without these a change to
+      # pyproject.toml or the launcher could reach a tag having never been built,
+      # and the first place that failure would surface is the release job — after
+      # the tag exists and while a registry is waiting.
+      - "pyproject.toml"
+      - "npm/**"
   pull_request:
     paths:
       - "site/**"
       - "tools/**"
       - "tests/**"
       - ".github/workflows/**"
+      # The packaging manifests. Added at v0.2.0: without these a change to
+      # pyproject.toml or the launcher could reach a tag having never been built,
+      # and the first place that failure would surface is the release job — after
+      # the tag exists and while a registry is waiting.
+      - "pyproject.toml"
+      - "npm/**"
   workflow_dispatch:
 
 concurrency:
@@ -95,3 +107,25 @@ jobs:
         run: python -O -m pytest tests -q
         env:
           PYTHONOPTIMIZE: "1"
+
+      # The package must build and install on every change that could break it, not
+      # first at release time. The install is into a CLEAN venv and the command is run
+      # from THAT install rather than from the checkout — otherwise a module missing
+      # from the wheel still passes, because the source tree is sitting right there.
+      - name: build the package and run it from a clean install
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          python -m twine check dist/*
+          python -m venv /tmp/cleanroom
+          /tmp/cleanroom/bin/python -m pip install --quiet dist/*.whl
+          /tmp/cleanroom/bin/armature check
+          /tmp/cleanroom/bin/armature modules --json > /dev/null
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: launcher self-test
+        working-directory: npm
+        run: npm test

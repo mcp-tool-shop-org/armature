@@ -24,6 +24,39 @@ Um modelo de vídeo pode produzir movimento, luz e vida que nenhum renderizador 
 
 Prepare seu personagem no Blender. Renderize a sequência de controle. Deixe o modelo de vídeo adicionar vida a ela. A estrutura vem da geometria que você possui; a vida vem do modelo; a identidade é algo nomeado e versionado que está presente no prompt e na pilha de referências — nunca um acidente em um quadro sortudo.
 
+## Instalar
+
+```bash
+pip install armature-previz
+```
+
+```bash
+npm install -g @mcptoolshop/armature   # the same command, as a launcher
+```
+
+```bash
+armature check
+```
+
+O pacote instalável é **`armature_core`** — os módulos de definição, os módulos de enquadramento e resolução de inversão, o contrato de especificação de cena, as operações matemáticas dos canais e os criadores de carga. Cada um deles é importado usando CPython padrão, o que permite que sejam testados e empacotados sem a necessidade do Blender.
+
+```python
+from armature_core import turnaround, framing
+
+plan = turnaround.projection_plan(ortho=True, ortho_scale=1.1235359256161628)
+```
+
+**Os scripts de renderização não são pontos de entrada para o console, e isso é intencional.**
+`render_turnaround.py`, `stage_render.py` e seus módulos relacionados são executados dentro do **próprio interpretador do Blender** — um script de console no seu Python não conseguiria importar `bpy` e falharia na primeira linha; portanto, incluir um seria uma promessa que o pacote não poderia cumprir:
+
+```bash
+blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --ortho
+```
+
+Eles permanecem aqui, no repositório, onde a invocação que funciona é aquela que está escrita. `armature_core.blender_scene` é o único módulo que importa `bpy`; `armature check` relata isso como `needs-blender`, em vez de um defeito.
+
+O pacote npm é um **lançador, não uma porta**: reimplementar um limite em uma segunda linguagem é a forma como um limite se desvia, então ele encaminha para o Python que contém a verdade e recusa — de forma clara, com um código de erro diferente de zero, usando o único comando que o corrige — em vez de instalar qualquer coisa em seu nome.
+
 ---
 
 ## Estado: a tese é medida no nível do produto
@@ -37,8 +70,8 @@ Fundada em **10 de agosto de 2026**. Treze experimentos foram concluídos e a te
 | Caminhos | **três, medidos** — o **caminho direcionado** (palitos AAPose renderizados pelo sistema → Animate; comprovado no nível da cena, pausado e com licença liberada para sua retomada) · o **caminho livre** (quadro inicial criado em GLB → camada de câmera na linha de base 6.0 / uni_pc; a identidade mantém-se sem ancoragem, um mundo construído mantém-se em duas amostras, e a cena LoRA é medida dinamicamente — E14) · o **caminho composto** (referências autorais em uma camada de identidade hospedada — graduado por E13: identidade bloqueada, cinematografia decidida pelo modelo com mundos orientados pelo que as referências carregam; nota de divulgação em suas especificações) |
 | Gastos | 22 sondas no arco inicial a 4 créditos cada; o arco E08–E12 mediu **0 créditos** (cobrança por hora de GPU) sob tetos por experimento; **as quatro gerações de E13 são os primeiros gastos com créditos de parceiro do repositório, dentro da faixa pré-definida de 424–844**; as duas gerações de E14 mediram **0 créditos de parceiro** em um teto de duas gerações, atingido exatamente |
 | Mapa de licenças | cada dependência adotada possui um **documento de licença recuperado**; NÃO VERIFICADO é tratado como NÃO; caminhos através de camadas de terceiros também possuem **divulgação por caminho** (regra do Diretor, 12 de agosto de 2026); o propósito declarado da porta de entrada é a publicação da arte do estúdio. |
-| Testes | **1005 aprovados no rig** (13 ignorados, medidos em 13 de agosto de 2026), sob `-O` também; o CI executa o que um executor pode fazer honestamente — os ativos locais do rig **são visivelmente ignorados**. |
-| Status | **v0.1.1 lançado em 13 de agosto de 2026** — o estado atual marcado do registro, contendo a conclusão de E14 (v0.1.0, o primeiro estado marcado, foi interrompido mais cedo no mesmo dia); o registro é a árvore de documentos e está completo |
+| Testes | **1311 testes aprovados no conjunto de animação** (13 saltos, medidos em 2026-08-15 na versão v0.2.0), também sob `-O`; os testes automatizados simulam o que um executor pode fazer honestamente — os recursos locais do conjunto de animação **são ignorados visivelmente**. |
+| Status | **v0.2.0 lançado em 2026-08-15** — o registro se torna um kit de ferramentas instalável: `armature_core` no PyPI como `armature-previz` e no npm como `@mcptoolshop/armature`, publicado a partir de uma tag por OIDC sem nenhum token de longa duração em lugar algum. O registro ainda é a árvore de documentação e continua completo. |
 
 ### O que é medido (o arco atual)
 

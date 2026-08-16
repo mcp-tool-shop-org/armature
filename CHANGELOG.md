@@ -17,6 +17,45 @@ them is — not an artifact anyone installs.
 
 ### Changed
 
+## [0.2.0] — 2026-08-15
+
+**The record becomes an installable toolkit.** Until now a version here marked a state of the
+record and nothing more — `SHIP_GATE.md` said so plainly, because there was no manifest and
+nothing was published. There is now.
+
+### Added
+
+- **`armature-previz` on PyPI** — `armature_core` packaged: the gates (`gates`, `route_gates`,
+  `rig_gates`, `donor_gate`), the framing and turnaround solvers (`framing`, `turnaround`,
+  `startframe`), the control-channel maths (`channels`, `openpose`, `aapose`, `landmarks`,
+  `lift_solve`), the rig and mesh modules, and the contracts. numpy is the only runtime
+  dependency; Python 3.10+.
+- **`@mcptoolshop/armature` on npm** — a **launcher, not a port**. It forwards the `armature`
+  command verbatim to the Python that holds the truth, because re-implementing a threshold in
+  a second language is how a threshold drifts. It will not install Python and will not
+  `pip install` anything on your behalf: it distinguishes *no interpreter* from *an interpreter
+  without the package*, prints the one command that fixes each, and exits non-zero.
+- **The `armature` command** — `check` (imports every module and exits non-zero if any is
+  missing), `modules` (what each is for, `--json` for machines), `where` (the docs, and the
+  Blender invocation that actually works). Ten tests ride it, including the red case where a
+  broken install must not exit 0, and both directions of the module-table check — a name with
+  no file behind it, and a shipped module the table forgets. The second direction failed on
+  first run and caught nine real omissions.
+- **`.github/workflows/publish.yml`** — publishing on `release: published` only, by **OIDC
+  Trusted Publishing**, so no long-lived registry token exists anywhere. Both registries sit
+  behind one gate: the suite, the suite again under `-O`, `twine check`, and a version-agreement
+  check across the git tag, `pyproject.toml` and `npm/package.json`.
+
+### Changed
+
+- The rendering scripts are documented as **deliberately not console entry points**. They run
+  inside Blender's own interpreter; a console script on the user's Python could not import
+  `bpy` and would fail on its first line, so shipping one would be a promise the package cannot
+  keep. `blender_scene` is packaged and reports `needs-blender` rather than counting as a
+  defect.
+- README, handbook and landing surfaces carry install instructions; `SHIP_GATE.md`'s
+  no-manifest skip is retired by the manifest existing.
+
 ## [0.1.1] — 2026-08-13
 
 A patch-scale state of the record, cut the same day as v0.1.0: the fourteenth experiment
