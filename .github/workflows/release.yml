@@ -110,6 +110,18 @@ jobs:
         # honestly, which is the half of it that must work before Python is even looked for.
         run: npm test
         working-directory: npm
+      # A release workflow gets re-run — because a sibling job failed, because a gate
+      # caught something, because a step was fixed. Publishing is the one step that
+      # cannot be repeated: npm refuses a version that already exists, so on the second
+      # run the whole job would fail red for the sound reason that it already succeeded.
+      # This asks the registry first and reports the honest outcome either way.
       - name: Publish
-        run: npm publish --provenance --access public
         working-directory: npm
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "::notice::$NAME@$VER is already on the registry — nothing to publish."
+          else
+            npm publish --provenance --access public
+          fi

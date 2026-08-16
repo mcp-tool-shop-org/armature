@@ -24,7 +24,10 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Graphics :: 3D Rendering",
-    "Topic :: Scientific :: Image Processing",
+    # "Topic :: Scientific :: Image Processing" does not exist. PyPI rejected the first
+    # upload with a 400 on it, and `twine check` had passed — twine validates metadata
+    # structure, not classifier membership. The real one carries "/Engineering".
+    "Topic :: Scientific/Engineering :: Image Processing",
 ]
 dependencies = ["numpy>=1.24"]
 
