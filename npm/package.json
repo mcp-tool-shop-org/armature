@@ -1,7 +1,7 @@
 {
-  "name": "@mcptoolshop/armature",
-  "version": "0.2.0",
-  "description": "You block the shot; the model shoots it — GLB-authored previz, control sequences and gates for video-diffusion generation. Node launcher for the armature-previz Python toolkit.",
+  "name": "@mcptoolshop/armature-studio",
+  "version": "0.2.1",
+  "description": "You block the shot; the model shoots it — GLB-authored previz, control sequences and gates for video-diffusion generation. Node launcher for the armature-studio Python toolkit.",
   "keywords": [
     "previz",
     "blender",

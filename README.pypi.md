@@ -16,7 +16,7 @@ the boundary of the tool.
 ## Install
 
 ```bash
-pip install armature-previz
+pip install armature-studio
 ```
 
 ```bash

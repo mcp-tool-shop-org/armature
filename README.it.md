@@ -28,11 +28,11 @@ Posiziona il tuo personaggio in Blender. Esegui il rendering della sequenza di c
 ## Installa
 
 ```bash
-pip install armature-previz
+pip install armature-studio
 ```
 
 ```bash
-npm install -g @mcptoolshop/armature   # the same command, as a launcher
+npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 ```
 
 ```bash
@@ -72,7 +72,7 @@ Fondato il **10-08-2026**. Tredici esperimenti sono stati completati e la tesi �
 | Spesa | 22 prove nell'arco di fondazione a 4 crediti ciascuna; l'arco E08–E12 ha registrato **0 crediti** (addebito per ora di GPU) entro i limiti per esperimento; **le quattro generazioni di E13 rappresentano la prima spesa in crediti del partner nel repository, all'interno dell'intervallo predefinito di 424–844**; le due generazioni di E14 hanno registrato **0 crediti del partner** con un limite di due generazioni, raggiunto esattamente |
 | Mappa delle licenze | ogni dipendenza adottata include un **documento di licenza recuperato**: NON VERIFICATO viene trattato come NO; i percorsi attraverso gli strati di terze parti includono anche una **divulgazione per ogni percorso** (regolamentata dal direttore il 12-08-2026); lo scopo dichiarato del sistema è la pubblicazione delle opere dello studio |
 | Test | **1311 superati sul sistema di animazione** (13 saltati, misurati il 2026-08-15 alla versione v0.2.0), anche sotto `-O`; CI esegue ciò che un runner può fare onestamente: le risorse locali del sistema di animazione **vengono saltate in modo visibile** |
-| Stato | **v0.2.0 rilasciata il 15-08-2026** — il record diventa una cassetta degli attrezzi installabile: `armature_core` su PyPI come `armature-previz` e su npm come `@mcptoolshop/armature`, pubblicata da un tag tramite OIDC senza token a lunga durata. Il record è ancora l'albero dei documenti ed è ancora completo |
+| Stato | **Versione 0.2.1 rilasciata il 15 agosto 2026** — la risorsa diventa un toolkit installabile: `armature_core` su PyPI come `armature-studio` e su npm come `@mcptoolshop/armature-studio`, pubblicata tramite un tag con OIDC senza token di lunga durata memorizzati in nessuna posizione. La risorsa è ancora l'albero della documentazione ed è ancora completa. |
 
 ### Cosa viene misurato (l'arco corrente)
 

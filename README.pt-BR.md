@@ -27,11 +27,11 @@ Prepare seu personagem no Blender. Renderize a sequência de controle. Deixe o m
 ## Instalar
 
 ```bash
-pip install armature-previz
+pip install armature-studio
 ```
 
 ```bash
-npm install -g @mcptoolshop/armature   # the same command, as a launcher
+npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 ```
 
 ```bash
@@ -71,7 +71,7 @@ Fundada em **10 de agosto de 2026**. Treze experimentos foram concluídos e a te
 | Gastos | 22 sondas no arco inicial a 4 créditos cada; o arco E08–E12 mediu **0 créditos** (cobrança por hora de GPU) sob tetos por experimento; **as quatro gerações de E13 são os primeiros gastos com créditos de parceiro do repositório, dentro da faixa pré-definida de 424–844**; as duas gerações de E14 mediram **0 créditos de parceiro** em um teto de duas gerações, atingido exatamente |
 | Mapa de licenças | cada dependência adotada possui um **documento de licença recuperado**; NÃO VERIFICADO é tratado como NÃO; caminhos através de camadas de terceiros também possuem **divulgação por caminho** (regra do Diretor, 12 de agosto de 2026); o propósito declarado da porta de entrada é a publicação da arte do estúdio. |
 | Testes | **1311 testes aprovados no conjunto de animação** (13 saltos, medidos em 2026-08-15 na versão v0.2.0), também sob `-O`; os testes automatizados simulam o que um executor pode fazer honestamente — os recursos locais do conjunto de animação **são ignorados visivelmente**. |
-| Status | **v0.2.0 lançado em 2026-08-15** — o registro se torna um kit de ferramentas instalável: `armature_core` no PyPI como `armature-previz` e no npm como `@mcptoolshop/armature`, publicado a partir de uma tag por OIDC sem nenhum token de longa duração em lugar algum. O registro ainda é a árvore de documentação e continua completo. |
+| Status | **v0.2.1 lançada em 15 de agosto de 2026** — o ficheiro passa a ser um conjunto de ferramentas instalável: `armature_core` no PyPI como `armature-studio` e no npm como `@mcptoolshop/armature-studio`, publicado a partir de uma etiqueta por OIDC, sem nenhum token de longa duração armazenado em qualquer lugar. O ficheiro continua a ser a árvore da documentação e permanece completo. |
 
 ### O que é medido (o arco atual)
 

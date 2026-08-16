@@ -5,9 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-Nothing here is published to a registry. A version in this repo marks **a state of the
-record** — which experiments are closed, which routes exist, and what the evidence behind
-them is — not an artifact anyone installs.
+A version here marks **a state of the record** — which experiments are closed, which routes
+exist, and what the evidence behind them is. ⚑ **Corrected at 0.2.0:** this line used to read
+"nothing here is published to a registry… not an artifact anyone installs", which stopped
+being true the moment `armature_core` was packaged. The record is still the point; it now also
+installs.
 
 ## [Unreleased]
 
@@ -17,7 +19,23 @@ them is — not an artifact anyone installs.
 
 ### Changed
 
-## [0.2.0] — 2026-08-15
+## [0.2.1] — 2026-08-15
+
+**The registry names, corrected before the first publish.** `v0.2.0` was tagged and pushed
+under the working names `armature-previz` / `@mcptoolshop/armature`; the Director's trusted
+publisher was registered for **`armature-studio`** with workflow **`release.yml`**, and a
+publisher that does not match the manifest and workflow filename byte-for-byte does not
+publish at all. Renamed rather than force-moving a pushed tag: `v0.2.0` stands as a tag that
+was cut and never released, and **nothing was ever published under the old names.**
+
+- PyPI project: **`armature-studio`**, matching the registered pending publisher.
+- npm package: **`@mcptoolshop/armature-studio`**, under the studio's existing scope rather
+  than a new one — the org already exists, so no org has to be created for this package to
+  have a home.
+- `.github/workflows/publish.yml` → **`.github/workflows/release.yml`**, matching the
+  registered publisher's workflow filename exactly.
+
+## [0.2.0] — 2026-08-15 (tagged, never released)
 
 **The record becomes an installable toolkit.** Until now a version here marked a state of the
 record and nothing more — `SHIP_GATE.md` said so plainly, because there was no manifest and
@@ -25,12 +43,12 @@ nothing was published. There is now.
 
 ### Added
 
-- **`armature-previz` on PyPI** — `armature_core` packaged: the gates (`gates`, `route_gates`,
+- **`armature-studio` on PyPI** — `armature_core` packaged: the gates (`gates`, `route_gates`,
   `rig_gates`, `donor_gate`), the framing and turnaround solvers (`framing`, `turnaround`,
   `startframe`), the control-channel maths (`channels`, `openpose`, `aapose`, `landmarks`,
   `lift_solve`), the rig and mesh modules, and the contracts. numpy is the only runtime
   dependency; Python 3.10+.
-- **`@mcptoolshop/armature` on npm** — a **launcher, not a port**. It forwards the `armature`
+- **`@mcptoolshop/armature-studio` on npm** — a **launcher, not a port**. It forwards the `armature`
   command verbatim to the Python that holds the truth, because re-implementing a threshold in
   a second language is how a threshold drifts. It will not install Python and will not
   `pip install` anything on your behalf: it distinguishes *no interpreter* from *an interpreter
@@ -41,7 +59,7 @@ nothing was published. There is now.
   broken install must not exit 0, and both directions of the module-table check — a name with
   no file behind it, and a shipped module the table forgets. The second direction failed on
   first run and caught nine real omissions.
-- **`.github/workflows/publish.yml`** — publishing on `release: published` only, by **OIDC
+- **`.github/workflows/release.yml`** — publishing on `release: published` only, by **OIDC
   Trusted Publishing**, so no long-lived registry token exists anywhere. Both registries sit
   behind one gate: the suite, the suite again under `-O`, `twine check`, and a version-agreement
   check across the git tag, `pyproject.toml` and `npm/package.json`.

@@ -11,10 +11,14 @@
 #
 # ONE-TIME SETUP, on the registries themselves — until both are done this workflow will
 # fail at the publish step by design rather than fall back to a token:
-#   PyPI  → project `armature-previz` → Publishing → add a GitHub publisher:
-#           owner mcp-tool-shop-org · repo armature · workflow publish.yml
-#   npm   → @mcptoolshop/armature → Settings → Trusted publisher → same three values.
-name: publish
+#   PyPI  → pending publisher for project `armature-studio`:
+#           owner mcp-tool-shop-org · repo armature · workflow release.yml   [DONE 2026-08-15]
+#   npm   → trusted publisher for `@mcptoolshop/armature-studio`: same three values.
+#
+# The publisher's project name and workflow FILENAME are both matched byte-for-byte at
+# authentication time. That is why this file is `release.yml` and not `publish.yml`, and
+# why the packages were renamed before the first publish rather than after it.
+name: release
 
 on:
   release:
@@ -91,6 +95,11 @@ jobs:
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+      - name: Upgrade npm for OIDC
+        # Trusted publishing on npm needs npm >= 11.5.1; Node 22 ships npm 10, which would
+        # look for a token that deliberately does not exist here and fail as an auth error
+        # rather than as the version problem it actually is.
+        run: npm install -g npm@latest
       - name: Launcher self-test
         # Runs where Python is irrelevant: it proves the launcher parses and reports
         # honestly, which is the half of it that must work before Python is even looked for.

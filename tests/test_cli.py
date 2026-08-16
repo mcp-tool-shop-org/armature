@@ -98,7 +98,7 @@ def test_version_flag_exits_clean(capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["--version"])
     assert e.value.code == 0
-    assert "armature-previz" in capsys.readouterr().out
+    assert "armature-studio" in capsys.readouterr().out
 
 
 def test_bare_invocation_prints_help_and_exits_zero(capsys):

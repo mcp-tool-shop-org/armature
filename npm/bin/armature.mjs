@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * armature — the Node launcher for the `armature-previz` Python toolkit.
+ * armature — the Node launcher for the `armature-studio` Python toolkit.
  *
  * WHY A LAUNCHER AND NOT A PORT. armature's measured pieces are Python: the gates, the
  * framing solves, the channel maths. Re-implementing any of them in Node would create a
@@ -17,7 +17,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import process from "node:process";
 
-const PYPI = "armature-previz";
+const PYPI = "armature-studio";
 const DOCS = "https://mcp-tool-shop-org.github.io/armature/";
 
 /** Interpreter candidates, in the order worth trying on each platform. */

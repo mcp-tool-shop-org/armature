@@ -27,18 +27,18 @@
 ## 安装
 
 ```bash
-pip install armature-previz
+pip install armature-studio
 ```
 
 ```bash
-npm install -g @mcptoolshop/armature   # the same command, as a launcher
+npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 ```
 
 ```bash
 armature check
 ```
 
-可安装的软件包是 **`armature_core`** ——包括门控、框架和转弯求解器，镜头规格合同、通道数学以及有效载荷构建器。它们中的每一个都以纯 CPython 的形式导入，这使得它们可以在没有 Blender 的情况下进行测试和打包。
+可安装的软件包是 **`armature_core`** ——包括栅栏、框架和转弯求解器，镜头规格合同、通道数学以及有效载荷构建器。它们中的每一个都以纯 CPython 的形式导入，这使得它们可以在没有 Blender 的情况下进行测试和打包。
 
 ```python
 from armature_core import turnaround, framing
@@ -47,16 +47,16 @@ plan = turnaround.projection_plan(ortho=True, ortho_scale=1.1235359256161628)
 ```
 
 **渲染脚本不是控制台入口点，这是有意的。**
-`render_turnaround.py`、`stage_render.py` 及其相关模块在 **Blender 自身的解释器**中运行——如果你的 Python 中的一个控制台脚本尝试导入 `bpy`，它会在第一行就失败，因此提供这样的脚本是不现实的：
+`render_turnaround.py`、`stage_render.py` 及其相关模块在 **Blender 自身的解释器**中运行——如果你的 Python 中的一个控制台脚本尝试导入 `bpy`，它会在第一行就失败，因此提供这样的脚本是不切实际的：
 
 ```bash
 blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --ortho
 ```
 
 它们会保留在此仓库中，其中有效的调用方式是记录的方式。
-`armature_core.blender_scene` 是唯一导入 `bpy` 的模块；`armature check` 将其报告为 `needs-blender`，而不是将其视为缺陷。
+`armature_core.blender_scene` 是唯一导入 `bpy` 的模块；`armature check` 将其报告为 `needs-blender`，而不是作为缺陷。
 
-npm 包是一个**启动器，而不是一个移植版本**：在第二种语言中重新实现阈值会导致阈值发生漂移，因此它会转发到包含真实数据的 Python 代码，并拒绝——以响亮、非零的方式，使用唯一可以修复它的命令——而不是在你不知情的情况下安装任何东西。
+npm 包是一个**启动器，而不是一个移植版本**：用第二种语言重新实现阈值会导致阈值发生漂移，因此它会转发到包含真实数据的 Python 代码，并拒绝——以响亮、非零的方式，使用唯一可以修复它的命令——而不是在你这边安装任何东西。
 
 ---
 
@@ -71,8 +71,8 @@ npm 包是一个**启动器，而不是一个移植版本**：在第二种语言
 | 路线 | **三种，已衡量**——**驱动路线**（渲染骨骼 AAPose 贴纸 → 动画；在镜头层面得到证明，暂停，并且可以用于其重新启动）；**自由路线**（使用 GLB 设计的起始帧 → 相机层位于 6.0 / uni_pc 基线；身份保持未锚定状态，一个手工制作的世界保持两个种子，并且 LoRA 场景杠杆被实时衡量——E14）；**组合路线**（将设计好的参考资料输入到托管的身份锁定层中——由 E13 完成：身份锁定的、模型决定的电影拍摄，世界由参考资料所包含的内容进行指导；其规范中有披露说明）。 |
 | 花费 | 创始阶段有 22 个测试，每个测试花费 4 个积分；E08–E12 阶段的实际花费为 **0 积分**（GPU 小时计费），低于每个实验设定的上限；**E13 的四个生成是该代码仓库中第一个合作伙伴积分支出，并且在他们之前声明的 424-844 范围内**；E14 的两个生成实际花费了 **0 个合作伙伴积分**，达到其两个生成的上限。 |
 | 许可地图 | 每个采用的依赖项都包含一个**检索到的许可文档**；未验证的内容被视为“无”；通过第三方层进行的路线还包含**每条路线的披露说明**（由导演于 2026-08-12 决定）；该门户网站的既定目的是发布工作室的艺术作品。 |
-| 测试 | **1311 个测试通过（在骨架上），跳过 13 个（测量于 2026-08-15，v0.2.0 版本），同样适用于 `-O`；CI 测试了运行器可以真正执行的内容——本地骨架资源会**明显地被跳过**。 |
-| 状态 | **v0.2.0 于 2026-08-15 发布**——记录变成了一个可安装的工具包：`armature_core` 在 PyPI 上作为 `armature-previz`，在 npm 上作为 `@mcptoolshop/armature`，由 OIDC 从一个标签发布，并且没有长期存在的令牌。该记录仍然是文档树，并且它仍然是完整的。 |
+| 测试 | **1311 个测试通过（在骨架上），跳过 13 个（测量于 2026-08-15，v0.2.0 版本）**，同样适用于 `-O`；CI 测试的是运行器真正可以执行的内容——本地骨架资源 **明显地被跳过**。 |
+| 状态 | **v0.2.1 于 2026-08-15 发布** ——记录变成一个可安装的工具包：`armature_core` 在 PyPI 上作为 `armature-studio`，在 npm 上作为 `@mcptoolshop/armature-studio`，由 OIDC 从标签发布，并且没有长期存在的令牌。该记录仍然是文档树，并且它仍然是完整的。 |
 
 ### 正在衡量的内容（当前的阶段）
 

@@ -28,11 +28,11 @@ Coloca tu personaje en Blender. Renderiza la secuencia de control. Deja que el m
 ## Instalar
 
 ```bash
-pip install armature-previz
+pip install armature-studio
 ```
 
 ```bash
-npm install -g @mcptoolshop/armature   # the same command, as a launcher
+npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 ```
 
 ```bash
@@ -73,7 +73,7 @@ Fundado el **10 de agosto de 2026**. Trece experimentos cerrados y la tesis ha p
 | Gasto | 22 pruebas en el arco fundacional a 4 créditos cada una; el arco E08–E12 midió **0 créditos** (facturación por hora de GPU) bajo límites por experimento; **las cuatro generaciones de E13 son el primer gasto con créditos de socios del repositorio, dentro de su rango preestablecido de 424 a 844**; las dos generaciones de E14 midieron **0 créditos de socios** en un límite de dos generaciones, alcanzado exactamente. |
 | Mapa de licencias | cada dependencia adoptada lleva un **documento de licencia recuperado**; NO VERIFICADO se trata como SI; las rutas a través de capas de terceros también llevan una **divulgación por ruta** (establecida por el director el 12 de agosto de 2026); el propósito declarado de la puerta es publicar el arte del estudio. |
 | Pruebas | **1311 aprobados en el sistema de animación** (13 omisiones, medido el 15 de agosto de 2026 en la versión v0.2.0), también bajo `-O`; CI ejerce lo que un ejecutor puede hacer honestamente: los activos locales del sistema de animación **se omiten visiblemente**. |
-| Estado | **v0.2.0 lanzado el 15 de agosto de 2026**: el registro se convierte en un conjunto de herramientas instalable: `armature_core` en PyPI como `armature-previz` y en npm como `@mcptoolshop/armature`, publicado desde una etiqueta por OIDC sin ninguna ficha de larga duración. El registro sigue siendo el árbol de documentos y sigue estando completo. |
+| Estado | **v0.2.1 lanzada el 15 de agosto de 2026** — el registro se convierte en un conjunto de herramientas instalable: `armature_core` en PyPI como `armature-studio` y en npm como `@mcptoolshop/armature-studio`, publicado a partir de una etiqueta mediante OIDC sin ningún token persistente. El registro sigue siendo el árbol de la documentación y sigue estando completo. |
 
 ### Qué se mide (el arco actual)
 

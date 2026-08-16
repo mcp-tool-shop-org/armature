@@ -62,7 +62,7 @@ def _version():
     try:
         from importlib.metadata import version
 
-        return version("armature-previz")
+        return version("armature-studio")
     except Exception:
         return "0.0.0+source"
 
@@ -88,7 +88,7 @@ def main(argv=None):
         "GLB-authored previz for video-diffusion generation.",
         epilog=f"Rendering scripts run inside Blender, from the repo: {REPO}",
     )
-    ap.add_argument("--version", action="version", version=f"armature-previz {_version()}")
+    ap.add_argument("--version", action="version", version=f"armature-studio {_version()}")
     sub = ap.add_subparsers(dest="cmd")
 
     p_mod = sub.add_parser("modules", help="list the installed modules and what each is for")
@@ -118,7 +118,7 @@ def main(argv=None):
                               "modules": {m: s for m, s in rows},
                               "missing": missing}, indent=2))
         else:
-            print(f"armature-previz {_version()}\n")
+            print(f"armature-studio {_version()}\n")
             for m, s in rows:
                 print(f"  {m:<16} {s}")
             print()

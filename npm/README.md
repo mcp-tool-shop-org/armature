@@ -1,8 +1,8 @@
-# @mcptoolshop/armature
+# armature-studio
 
 **You block the shot. The model shoots it.**
 
-Node launcher for [`armature-previz`](https://pypi.org/project/armature-previz/) — GLB-authored
+Node launcher for [`armature-studio`](https://pypi.org/project/armature-studio/) — GLB-authored
 previz, control sequences and gates for video-diffusion generation.
 
 A video model can produce motion, light and life that no renderer can. It cannot be told
@@ -16,13 +16,13 @@ persistent main character whose position and pose are known every frame.
 ## Install
 
 ```bash
-npm install -g @mcptoolshop/armature
+npm install -g @mcptoolshop/armature-studio
 ```
 
 The toolkit itself is Python, so install that too:
 
 ```bash
-pip install armature-previz
+pip install armature-studio
 ```
 
 ```bash

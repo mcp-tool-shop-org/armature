@@ -27,19 +27,18 @@ and the arc has been through a repo-wide audit — called by the Director, recor
 [docs/audit-first-arc.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/audit-first-arc.md) —
 whose finding is stated plainly rather than buried: the first arc bought clean measurements of
 the *mechanism* and zero frames of the *product*, and the work now runs under a binding
-trajectory rule because of it. **v0.2.0 — released 2026-08-15 — makes the toolkit
-installable**: `armature_core` ships to PyPI as `armature-previz` and to npm as
-`@mcptoolshop/armature`, published from a tag by OIDC with no long-lived token anywhere.
+trajectory rule because of it. **v0.2.1 — released 2026-08-15 — makes the toolkit
+installable**: `armature_core` ships to PyPI as `armature-studio` and to npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere.
 Hard gates green and translations landed before that tag, as before it.
 
 ## Install
 
 ```bash
-pip install armature-previz
+pip install armature-studio
 ```
 
 ```bash
-npm install -g @mcptoolshop/armature   # the same command, as a launcher
+npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 ```
 
 ```bash

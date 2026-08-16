@@ -27,11 +27,11 @@
 ## インストール
 
 ```bash
-pip install armature-previz
+pip install armature-studio
 ```
 
 ```bash
-npm install -g @mcptoolshop/armature   # the same command, as a launcher
+npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 ```
 
 ```bash
@@ -71,7 +71,7 @@ npmパッケージは**ランチャーであり、移植ではありません**�
 | 使う、費やす。 | 設立時のアークでは、それぞれ4クレジットで22件のプローブが実行されました。E08〜E12のアークでは、**0クレジット**（GPU時間課金）が、実験ごとの上限の下で使用されました。**E13の4つの世代は、リポジトリの最初のパートナークレジット支出であり、事前に指定された424〜844の範囲内です**。E14の2つの世代では、2世代の上限に達し、正確に**0のパートナークレジット**が使用されました。 |
 | ライセンスマップ | 採用されたすべての依存関係には、**取得済みのライセンス文書**が添付されます。検証されていない場合は「NO」として扱われます。また、サードパーティの層を経由する場合、追加で**ルートごとの情報開示**が行われます（2026年8月12日にディレクターによって決定）。ゲートの目的は、スタジオのアート作品を公開することです。 |
 | テスト | **1311 passing on the rig** (13 skips, measured 2026-08-15 at the v0.2.0 cut), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
-| 状況 | **v0.2.0は2026年8月15日にリリースされました** — レコードはインストール可能なツールキットになります。`armature_core`はPyPIで`armature-previz`として、npmで`@mcptoolshop/armature`として公開され、OIDCによってタグから発行され、どこにも長期間有効なトークンはありません。レコードは依然としてドキュメントツリーであり、それはまだ完全です。 |
+| 状況 | **v0.2.1 released 2026-08-15** — the record becomes an installable toolkit: `armature_core` on PyPI as `armature-studio` and on npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere. The record is still the docs tree, and it is still complete |
 
 ### 何が測定されているのか（電流の弧）
 
