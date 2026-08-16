@@ -43,9 +43,14 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install
+        # The suite's dependency list is ci.yml's, verbatim including the pins — the
+        # release gate runs the SAME suite CI runs, so a shorter list here would mean the
+        # gate is a weaker check than the one that already passed on the same commit.
+        # It was shorter once, and the first release attempt died on a missing Pillow at
+        # collection rather than on anything about the release.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install build twine pytest numpy
+          python -m pip install build twine pytest numpy pillow opencv-python-headless==5.0.0.93 matplotlib==3.11.1
       - name: Suite
         run: python -m pytest -q
       - name: Suite under -O
