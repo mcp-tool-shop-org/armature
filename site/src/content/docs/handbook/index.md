@@ -27,9 +27,14 @@ and the arc has been through a repo-wide audit — called by the Director, recor
 [docs/audit-first-arc.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/audit-first-arc.md) —
 whose finding is stated plainly rather than buried: the first arc bought clean measurements of
 the *mechanism* and zero frames of the *product*, and the work now runs under a binding
-trajectory rule because of it. **v0.2.1 — released 2026-08-15 — makes the toolkit
+trajectory rule because of it. **v0.2.1 — released 2026-08-15 — made the toolkit
 installable**: `armature_core` ships to PyPI as `armature-studio` and to npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere.
 Hard gates green and translations landed before that tag, as before it.
+
+**v0.3.0 puts a gate in front of the money.** Cloud generation costs real credits and spent
+credits have no undo, so the bound used to be a sentence in a spec honoured by whoever read it.
+It is now a check that runs inside the tools that author a spend — see
+[the spend gate](#the-spend-gate-v030) below.
 
 ## Install
 
@@ -53,7 +58,7 @@ where a script on your Python could not import `bpy` at all, and shipping one wo
 promise the package cannot keep. The npm package is a launcher, not a port — a second copy of
 a threshold in a second language is how a threshold drifts.
 
-| | Measured, as of 2026-08-13 |
+| | Measured, as of 2026-08-18 |
 |---|---|
 | Experiments closed | **14** (one more withdrawn un-run on a falsified premise) — the control arc · rig repair and skeleton approval · **the first painted shot** · the clean-chain baseline · densified driving · the no-control route's instructive hard fail · **the free route's first held world** · **the composed route's identity verdict** (E13, its whole dispatch–halt–repair–run arc inside one date) · **the LoRA scene-lever priced live** (E14 — the character holds on `technically_color`, fails on the photo-real pair; zero partner credits) |
 | Routes | the **driven route** (rig-rendered pose → Animate; proven at shot level, parked — licence-clear for its unpark) · the **free route** (authored start frame → camera tier at the 6.0 / uni_pc baseline; LoRA scene-lever measured live — E14) · the **composed route**, graduated by E13: identity-locked, model-decided cinematography from authored references, worlds steered by what the references carry |
@@ -66,6 +71,37 @@ Everything on this site is measured, cited to a numbered experiment, or explicit
 open. A page that implies a capability nobody has measured is the same defect as a report
 with a placeholder shaped like evidence — the repo's method exists to catch that defect, so
 its own public surface has to survive it.
+
+## The spend gate (v0.3.0)
+
+Every generation on a cloud tier costs credits, and **spent credits have no compensator** —
+there is no undo, no refund, no rollback. Until v0.3.0 the bound on that was a line in each
+experiment's spec, honoured by whichever seat read it. That is a document discipline, and this
+repo's whole method exists because document disciplines fail quietly.
+
+**Gate CANON** makes it mechanical. A subject's canon is a machine-readable statement of what
+that character **is**, keyed on surface — and a surface with no occupant is recorded as a
+**hole**, not left absent, because an element list cannot show you what it forgot. Before a
+payload is written, the gate checks it **both ways**: that the submission covers the canon, and
+that everything in the submission *is* canon. The second direction is the one that catches
+things — a prompt naming a garment the character does not own reads perfectly well to a human.
+
+Three details matter more than the feature:
+
+- **It fires before the output directory exists.** Nothing in this repository submits to a cloud
+  tier — the payload builders write files and a session submits them — so the irreversible step
+  this tree owns is *writing a payload*. The gate lives inside the seven builders that author
+  one, and a refusal leaves no directory behind to be mistaken later for work that happened.
+- **It raises; it is not an `assert`.** `assert` is deleted by `-O`, so the suite runs a second
+  time under `-O` in CI to prove the gate still fires.
+- **The escape cannot be worn by a subject that has canon.** `--no-canon` on a character with a
+  ratified canon file is refused as a checkbox; with no subject named at all it is refused as a
+  skip flag; and a canon file whose every occupant is unratified is refused outright — because a
+  check that cannot fail is not a check.
+
+What it does **not** do is judge whether the figure is the right character. That is canon and the
+Director's to rule; no metric here approximates it. The gate checks that a spend can *name* its
+subject, which is a different and answerable question.
 
 ## Where armature sits
 

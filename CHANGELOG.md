@@ -19,7 +19,46 @@ installs.
 
 ### Changed
 
-## [0.2.1] — 2026-08-15
+## [0.3.0] — 2026-08-18
+
+**A spend that cannot name its subject creates nothing, and the index verifies itself.**
+
+### Added
+
+- **Gate CANON** — `armature_core.canon` plus the `canon_gate` tool. A machine-readable
+  statement of what a subject **is**, keyed on surface, where a null occupant is a **hole rather
+  than an absence** — an element list cannot show what it omitted. The router checks **both
+  directions**: that the submission covers the canon, and that everything in the submission *is*
+  canon. The reverse direction is the one that discriminates.
+- **The gate fires before the output directory exists**, inside each of the **seven** payload
+  builders that author a spend. Nothing in this repository submits — the payload builders write
+  files and a session submits them — so the irreversible step this tree owns is *writing a
+  payload*, and that is where the check lives. It `raise`s; it is not an `assert`, and the suite
+  runs again under `-O` to prove it still fires.
+- **A census-backed escape.** `--no-canon` on a subject that *has* canon is refused as a
+  checkbox; with no subject at all it is refused as a skip flag; a canon file whose every
+  occupant is unratified is refused outright, because a check that cannot fail is not a check.
+- **Spatial binding in the schema** — a surface may name a bone, validated against the real
+  sitelist census. Material and region bindings are carried and **labelled unbound** rather than
+  implied.
+- **Eighteen tests over the record index**, ten of them stdlib-only so they run in every CI job
+  rather than skipping where the sibling library is absent. There were none before.
+
+### Fixed
+
+- **`armature_index.py build` never wrote a certificate**, despite the library's own docstring
+  stating no such path existed. It now routes through `build_and_certify` and returns non-zero
+  when its own verify refuses.
+- **`health()` had no verb reaching it.** It computes the early, actionable form of a stale
+  index — the signal that would have caught six dangling pointers days before `verify` failed.
+- The index itself, rebuilt: it was six days old against a corpus that had grown from 45 files
+  to 139. Three of its six dangling rows described **another repository's files** under
+  armature-relative paths.
+
+### Changed
+
+- The front door loses a self-contradiction carried since v0.2.0 — it claimed *no package on any
+  registry* three sections below `pip install armature-studio`.
 
 **The registry names, corrected before the first publish.** `v0.2.0` was tagged and pushed
 under the working names `armature-previz` / `@mcptoolshop/armature`; the Director's trusted

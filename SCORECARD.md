@@ -6,6 +6,12 @@
 **Date:** 2026-08-13 (the v0.1.0 treatment)
 **Type tags:** `[all]` — nothing is published to any registry
 
+> ⚑ **This document is a snapshot of 2026-08-13 and is kept as one.** The type-tag line above
+> stopped being true at v0.2.0, when `armature_core` was packaged and published to PyPI and npm;
+> `[pypi]` and `[npm]` gates apply from that release onward. Current gate state lives in
+> [SHIP_GATE.md](SHIP_GATE.md), which is maintained; this scorecard records what was measured
+> before the remediation and is not re-scored.
+
 The scores below are the actual state of the tree, not estimates. Every "after" number is
 backed by the corresponding evidence line in [SHIP_GATE.md](SHIP_GATE.md).
 

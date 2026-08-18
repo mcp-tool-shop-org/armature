@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "armature-studio"
-version = "0.2.1"
+version = "0.3.0"
 description = "Block the shot; the model shoots it — GLB-authored previz, control sequences and gates for video-diffusion generation."
 readme = "README.pypi.md"
 requires-python = ">=3.10"
