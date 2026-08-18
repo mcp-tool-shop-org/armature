@@ -67,6 +67,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
+from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "E10.1"
@@ -155,6 +156,7 @@ def parse_args(argv=None):
     ap.add_argument("--fps", type=float, default=FPS,
                     help="the CreateVideo rate. Presentation only — it is downstream of "
                          "VAEDecode and cannot change a generated pixel")
+    add_spend_flags(ap)
     return ap.parse_args(argv)
 
 
@@ -365,7 +367,6 @@ def verify_topology(wf):
 def main(argv=None):
     a = parse_args(argv)
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
@@ -383,6 +384,7 @@ def main(argv=None):
     negative = read_negative(neg_path)
     ident, ident_original, drops = identity_clause()
     positive = ident + ". " + SCENE_CLAUSE
+    gate_write(a.subject, a.canon_prompt or positive, no_canon=a.no_canon, out_dir=out)
 
     wf, meta = build(uploads, a.seed, negative, positive, registry, a.reference_fit,
                      experiment=a.experiment, length=a.length, fps=a.fps)
@@ -397,6 +399,7 @@ def main(argv=None):
             open(neg_path, "rb").read()).hexdigest(),
     }
 
+    os.makedirs(out, exist_ok=True)
     gpath = os.path.join(out, f"{a.experiment}-probe-animate.api.json")
     with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=2, ensure_ascii=False)

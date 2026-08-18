@@ -28,6 +28,8 @@ DOCS = "https://mcp-tool-shop-org.github.io/armature/"
 SURFACE = [
     ("gates", "G1..G5 — pure predicates that RAISE; no bpy, no I/O"),
     ("route_gates", "graph-level gates: ROUTE, PAIR, PAIR_TIER, LEDGER"),
+    ("canon", "surface-keyed character statement, both-direction router, fail-closed spend"),
+    ("canon_census", "which subjects have a surfaces file, as data"),
     ("rig_gates", "rig and skeleton gates"),
     ("donor_gate", "Gate DONOR — is this clip fit to be a baseline before anything is lifted"),
     ("shotspec", "the shot-spec contract: schema, load, resolve, hash"),

@@ -62,6 +62,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates  # noqa: E402
+from armature_core.canon import add_spend_flags, gate_write, texts_from_api_graph  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "E14.1"
@@ -378,10 +379,15 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--seeds-registry", required=True)
     ap.add_argument("--seed", type=int, required=True)
+    add_spend_flags(ap)
     args = ap.parse_args(argv)
 
     with open(args.base, encoding="utf-8") as fh:
         base = json.load(fh)
+
+    inherited = texts_from_api_graph(base)
+    prompt = args.canon_prompt or (max(inherited, key=len) if inherited else None)
+    gate_write(args.subject, prompt, no_canon=args.no_canon, out_dir=args.out)
 
     built, inserts = build_arm(base, args.arm)
 

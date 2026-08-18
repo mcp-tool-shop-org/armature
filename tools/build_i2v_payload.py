@@ -89,6 +89,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
+from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 import build_animate_payload as E08  # noqa: E402  - the prompt's source of record
@@ -198,6 +199,7 @@ def parse_args(argv=None):
                     help="frame count (argparse eats leading minus signs, so pass flags "
                          "as --flag=value)")
     ap.add_argument("--fps", type=float, default=FPS)
+    add_spend_flags(ap)
     return ap.parse_args(argv)
 
 
@@ -452,7 +454,6 @@ def verify_topology(wf, start_name):
 def main(argv=None):
     a = parse_args(argv)
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
@@ -471,6 +472,7 @@ def main(argv=None):
     negative = E08.read_negative(a.negative_source)
     ident, ident_original, drops = E08.identity_clause()
     positive = ident + ". " + E08.SCENE_CLAUSE
+    gate_write(a.subject, a.canon_prompt or positive, no_canon=a.no_canon, out_dir=out)
 
     gate_pin = pin_against_e08(positive, negative, a.e08_record)
 
@@ -490,6 +492,7 @@ def main(argv=None):
             open(a.negative_source, "rb").read()).hexdigest(),
     }
 
+    os.makedirs(out, exist_ok=True)
     gpath = os.path.join(out, f"{a.experiment}-probe-i2v.api.json")
     with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=2, ensure_ascii=False)

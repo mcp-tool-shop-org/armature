@@ -293,11 +293,17 @@ def _files(tmp_path, uploads=None):
     return seeds, prompt, refs, up
 
 
+# PERFORMER has identity and no surfaces file. The escape is the only way a
+# spend of that name proceeds; these tests are about r2v topology, not canon.
+_CANON_ESCAPE = ["--subject=PERFORMER", "--no-canon"]
+
+
 def test_a1_end_to_end_writes_the_full_payload_and_the_slot_order(tmp_path):
     seeds, prompt, refs, _ = _files(tmp_path)
     out = tmp_path / "route"
     _, rec = B.main([f"--arm=A1", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
-                     f"--prompt-file={prompt}", f"--refs={refs}", f"--out={out}"])
+                     f"--prompt-file={prompt}", f"--refs={refs}", f"--out={out}",
+                     *_CANON_ESCAPE])
     assert rec["payload"]["model.duration"] == 5
     assert rec["payload"]["watermark"] is False
     assert rec["slot_order"] == [f"model.reference_images.image{i}" for i in range(1, 5)]
@@ -316,7 +322,8 @@ def test_a2_end_to_end_orders_frames_by_local_name(tmp_path):
     seeds, prompt, _, up = _files(tmp_path, uploads=uploads)
     out = tmp_path / "route2"
     wf, rec = B.main([f"--arm=A2", f"--seed={SEEDS[1]}", f"--seeds={seeds}",
-                      f"--prompt-file={prompt}", f"--uploads={up}", f"--out={out}"])
+                      f"--prompt-file={prompt}", f"--uploads={up}", f"--out={out}",
+                      *_CANON_ESCAPE])
     assert rec["reference_video"]["frame_order"] == [f"{i:05d}.png" for i in range(81)]
     assert wf[str(CASCADE.FIRST_IMAGE_ID)]["inputs"]["image"] == uploads["00000.png"]
     assert rec["gates"]["CASCADE_topology"]["verdict"]
@@ -327,7 +334,7 @@ def test_an_unregistered_seed_stops_the_end_to_end_run(tmp_path):
     seeds, prompt, refs, _ = _files(tmp_path)
     with pytest.raises(RG.RouteGate):
         B.main([f"--arm=A1", "--seed=42", f"--seeds={seeds}", f"--prompt-file={prompt}",
-                f"--refs={refs}", f"--out={tmp_path / 'x'}"])
+                f"--refs={refs}", f"--out={tmp_path / 'x'}", *_CANON_ESCAPE])
 
 
 def test_an_illegal_duration_stops_the_end_to_end_run(tmp_path):
@@ -335,6 +342,6 @@ def test_an_illegal_duration_stops_the_end_to_end_run(tmp_path):
     with pytest.raises(RG.RouteGate) as exc:
         B.main([f"--arm=A1", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
                 f"--prompt-file={prompt}", f"--refs={refs}", f"--out={tmp_path / 'y'}",
-                "--duration=30"])
+                "--duration=30", *_CANON_ESCAPE])
     assert "Gate L (hosted tier)" in str(exc.value)
     assert "outside 2..10" in str(exc.value)

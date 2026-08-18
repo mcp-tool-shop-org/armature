@@ -222,6 +222,19 @@ class LandmarkError(ArmatureError):
     """
 
 
+class GateCanon(GateFailure):
+    """The spend has no machine-readable character, or the text disagrees with it.
+
+    The irreversible step in this repo is writing a payload that a session will
+    submit. This gate fires inside that write. Identity diagnostics still gate
+    nothing: the check is whether a named statement exists and whether the
+    submission's text covers it in both directions. Whether the figure on
+    screen is the same character remains the Director's.
+    """
+
+    gate = "CANON"
+
+
 class NotInsideBlender(ArmatureError):
     """The render backend was needed but bpy is not importable.
 

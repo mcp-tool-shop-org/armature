@@ -114,6 +114,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
+from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
@@ -350,6 +351,7 @@ def parse_args(argv=None):
                          "record filenames, the record's own `wave` field and the cloud "
                          "output prefixes; a baked constant here writes plausible labels "
                          "pointing at the wrong run the first time the tool is reused")
+    add_spend_flags(ap)
     return ap.parse_args(argv)
 
 
@@ -899,7 +901,6 @@ def verify_topology(wf, start_name):
 def main(argv=None):
     a = parse_args(argv)
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
@@ -917,6 +918,7 @@ def main(argv=None):
             "config, never retyped. E09's citation check fired on this string")
 
     positive, prompt_log = build_prompt()
+    gate_write(a.subject, a.canon_prompt or positive, no_canon=a.no_canon, out_dir=out)
     negative, negative_log = build_negative(a.negative_source)
     overrides = {}
     if a.cfg is not None:
@@ -942,6 +944,7 @@ def main(argv=None):
                             "same code wave 1 and E08 read them through"),
     }
 
+    os.makedirs(out, exist_ok=True)
     gpath = os.path.join(out, f"{a.experiment}-w{a.wave}-camera-i2v.api.json")
     with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=2, ensure_ascii=False)

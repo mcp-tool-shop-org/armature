@@ -76,6 +76,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
+    # Not a spend: Gate ASSEMBLY_paid requires zero billable nodes. Gate CANON
+    # lives in the builders that author a generation, not in a frames->VIDEO pack.
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     with open(a.uploads, encoding="utf-8") as fh:

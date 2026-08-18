@@ -107,6 +107,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates as RG  # noqa: E402
+from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
 
 TOOL_VERSION = "E09.2"
 
@@ -473,15 +474,18 @@ def main(argv=None):
                     help="reference = A3's documented trajectory; derived = the "
                          "superseded probe's, kept runnable")
     ap.add_argument("--tag", default="A3", help="goes in the written filenames")
+    add_spend_flags(ap)
     a = ap.parse_args(argv)
 
+    prompt = a.canon_prompt or (PROMPT_A3 if a.profile == "reference" else PROBE_PROMPT)
+    gate_write(a.subject, prompt, no_canon=a.no_canon, out_dir=a.out)
     os.makedirs(a.out, exist_ok=True)        # scripts create their own output directories
     with open(a.seeds, encoding="utf-8") as fh:
         reg = json.load(fh)
     registered = reg["seeds"]
     seed = a.seed if a.seed is not None else registered[0]
 
-    graph, split = build_graph(seed, profile=a.profile)
+    graph, split = build_graph(seed, profile=a.profile, prompt=prompt)
 
     # ---- admission, in the order ruling R8 fixed. Each raises in-tool.
     gate_route = RG.verify(graph)                       # 1

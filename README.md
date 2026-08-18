@@ -94,7 +94,7 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Routes | **three, measured** — the **driven route** (rig-rendered AAPose sticks → Animate; proven at shot level, parked, and licence-clear for its unpark) · the **free route** (GLB-authored start frame → camera tier at the 6.0 / uni_pc baseline; identity holds unanchored, a handed world holds on two seeds, and the LoRA scene-lever is measured live — E14) · the **composed route** (authored references into a hosted identity-lock tier — graduated by E13: identity-locked, model-decided cinematography with worlds steered by what the references carry; disclosure note in its spec) |
 | Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** (GPU-hour billing) under per-experiment ceilings; **E13's four generations are the repo's first partner-credit spend, inside their pre-stated 424–844 bracket**; E14's two generations metered **0 partner credits** at a two-generation ceiling, reached exactly |
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
-| Tests | **1311 passing on the rig** (13 skips, measured 2026-08-15 at the v0.2.0 cut), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
+| Tests | **1341 passing on the rig** (13 skips, measured 2026-08-17 at the Gate CANON fold), under `-O` too; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
 | Status | **v0.2.1 released 2026-08-15** — the record becomes an installable toolkit: `armature_core` on PyPI as `armature-studio` and on npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere. The record is still the docs tree, and it is still complete |
 
 ### What is measured (the current arc)
@@ -167,8 +167,9 @@ performs it.
 
 ## Running it
 
-There is nothing to install. This is a repository you clone and run — no package on any
-registry, no service, no daemon. Every instrument is invoked directly:
+`armature_core` installs from PyPI (above); the **experiment record and the rendering
+instruments** are this repository, cloned and run — no service, no daemon. Every instrument is
+invoked directly:
 
 ```
 python tools/<name>.py --help                       # measurement, sheets, payload builders

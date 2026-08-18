@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_cascade_payload as CASCADE  # noqa: E402
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
+from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
 
 TOOL_VERSION = "E13.1"
 
@@ -162,15 +163,20 @@ def main(argv=None):
     ap.add_argument("--duration", type=int, default=5)
     ap.add_argument("--group", type=int, default=AS.GROUP_SIZE)
     ap.add_argument("--prefix", default=None)
+    add_spend_flags(ap)
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     with open(a.seeds, encoding="utf-8") as fh:
         registration = json.load(fh)
     with open(a.prompt_file, encoding="utf-8") as fh:
         prompt_spec = json.load(fh)
+    gate_write(
+        a.subject, a.canon_prompt or prompt_spec["prompt"],
+        no_canon=a.no_canon, out_dir=out,
+    )
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     gate_seed = gate_seed_registered(a.seed, registration["seeds"])
 

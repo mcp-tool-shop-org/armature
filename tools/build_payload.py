@@ -70,6 +70,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
+from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
 WIDTH, HEIGHT, LENGTH, FPS = 480, 832, 33, 16
@@ -541,7 +542,20 @@ def main(argv=None):
     ap.add_argument("--seed", type=int, default=None,
                     help="pre-registered seed; refused by Gate S if not on the "
                          "experiment's committed list")
+    add_spend_flags(ap)
     a = ap.parse_args(argv)
+
+    cfg = EXPERIMENTS[a.experiment]
+    arm_cfg = cfg["arms"][a.arm]
+    positive = a.canon_prompt or (
+        arm_cfg.get("positive", cfg["positive"]) if isinstance(arm_cfg, dict)
+        else cfg["positive"]
+    )
+    # Gate CANON fires before mkdir. A refuse must leave no output directory.
+    gate_write(
+        a.subject, positive, no_canon=a.no_canon,
+        out_dir=os.path.dirname(os.path.abspath(a.out)),
+    )
 
     wf, meta = build(a.arm, a.experiment, seed=a.seed)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)

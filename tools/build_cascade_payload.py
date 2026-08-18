@@ -94,6 +94,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
+    # Not a spend: same frames->VIDEO pack as assembly, batched. Gate CANON
+    # is not armed here because there is no generation to refuse.
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     with open(a.uploads, encoding="utf-8") as fh:

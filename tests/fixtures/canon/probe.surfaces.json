@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "subject": "PROBE",
+  "kind": "humanoid",
+  "note": "Test fixture only. Not a live character. Two ratified prompt occupants, one hole, legal_clauses declared so reverse is armed. torso and head name registered bones; hand_L is a visible hole.",
+  "surfaces": [
+    {
+      "id": "torso",
+      "name": "torso",
+      "spatial": {"kind": "bone", "ref": "chest"},
+      "occupant": {
+        "id": "P1",
+        "phrase": "a wire figure",
+        "kind": "prompt",
+        "ratified": true
+      }
+    },
+    {
+      "id": "head",
+      "name": "head",
+      "spatial": {"kind": "bone", "ref": "head"},
+      "occupant": {
+        "id": "P2",
+        "phrase": "a featureless head",
+        "kind": "prompt",
+        "ratified": true
+      }
+    },
+    {
+      "id": "hand_L",
+      "name": "left hand",
+      "spatial": {"kind": "bone", "ref": "wrist.L"},
+      "occupant": null
+    }
+  ],
+  "legal_clauses": [
+    {"id": "L1", "phrase": "empty studio", "class": "framing"},
+    {"id": "L2", "phrase": "even lighting", "class": "style"}
+  ]
+}
