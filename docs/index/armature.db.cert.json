@@ -1,11 +1,11 @@
 {
   "corpus": {
     "files": 139,
-    "id": "f4b382ccf722f8c84764c293200daf74526cacc8793d348420167e895c748723",
+    "id": "4766fa181fe253a77c8528608aad4a1912e27a50ab7f3d38c7e010d10f572d42",
     "manifest": {
       "CLAUDE.md": "94ca3f2c6424f5027bfccf8b0a90c3f4faf6adabc8315475bbe2662f37b0c5a7",
-      "HANDOFF.md": "a38fa6faabfcee8375ac838d3c398071efcecad7a1896be57528f6da8cbea6f7",
-      "README.md": "308055e096911018a75f91f7f7ad54c8f64d0232b1f06ba7bf58aa285a7cda93",
+      "HANDOFF.md": "cc6d704e525469c34a4f84091d5d72bd37f7b8e429e542c3918903c73f3ae896",
+      "README.md": "0bdc3d0aa81b94f89aa4e903b21268f8cbf5f8ef6e1035a0f768ee0d1f487108",
       "docs/ROADMAP.md": "f0d5c0b462fd07ef8ed9a45f893627b72f8e55934d65025f6e01e48913e91b3e",
       "docs/audit-first-arc.md": "2a1145398ec45fa54cb46494f8ecccb3e0a22cc861da2b39cd65caf8969a9ab9",
       "docs/comfy-consult-10-brief.md": "cb407366653487519c9f2cc29aee517123e11773eca7933e9a8980407872c601",
@@ -147,7 +147,7 @@
   "db": {
     "bytes": 2801664,
     "path": "armature.db",
-    "sha256": "bcc751fddfe59c7a5c6a26cce4c3c3431b79c9dc6fc20534edbaae602852d5c3"
+    "sha256": "85a89a347199bad1f2a4ea3815e331b1729a1488cbbeab63530bf9c07b21808c"
   },
   "repo": "armature",
   "schema": "record-index-certificate/1",
@@ -207,11 +207,11 @@
     "  laws            46 rows   dangling 0",
     "  experiments     14 rows   dangling 0",
     "  handoffs         0 rows   dangling 0",
-    "  artifacts      441 rows   dangling 0",
+    "  artifacts      444 rows   dangling 0",
     "  phenomena        0 rows   dangling 0",
     "  decisions        0 rows   dangling 0",
-    "  fts           1413 rows   dangling 0",
-    "  total checked 548, dangling 0",
+    "  fts           1416 rows   dangling 0",
+    "  total checked 551, dangling 0",
     "",
     "[leg 4] the seeded question set - target within the top 3",
     "  is the character arm admissible    rank 1   docs/experiments/E01-ruling.md · Ruling 1",
@@ -237,7 +237,7 @@
     "",
     "[vocabulary] what each declared vocabulary did not recognise",
     "             REPORT ONLY - this section never fails the run",
-    "  artifact kinds         recognised  1396   unrecognised    0",
+    "  artifact kinds         recognised  1404   unrecognised    0",
     "  law paid_for_by        recognised     6   unrecognised    0",
     "  ruling headers         recognised    90   unrecognised   38",
     "      not recognised: ## 1. CORRECTION — \"lossless by construction\" is withdra, ## 3. Gate C — the observation is the Director's, not th, ## 3. My third falsified premise, and the pattern is now, ## 4. The finding that changes the roadmap: the pose cha, ## 5. Accepted without change, and worth keeping, ## 6. The blindness corroboration — produced by my own e, ## 7. And I did it again — second cross-seat contaminati, ## 8. Awaiting the Director  (+30 more occurrence(s))",
@@ -251,7 +251,7 @@
     ""
   ],
   "verb": "build_and_certify",
-  "verified_utc": "2026-08-18T04:36:14Z",
+  "verified_utc": "2026-08-18T05:58:34Z",
   "verify_exit_code": 0,
   "written_by": "record_index.certificate"
 }
