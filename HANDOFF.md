@@ -1,182 +1,283 @@
-# THE HANDOFF — armature advisor seat, 2026-08-13 (close)
+# THE HANDOFF — armature advisor seat, 2026-08-17 (close)
 
-Supersedes the 2026-08-12 evening handoff (git history holds it, and every dated
-annotation this day accreted onto it). Written at the Director's direction at session
-close. Everything below was measured at write time; **§3 is verified with your own
-commands, not inherited.**
+Supersedes the 2026-08-13 handoff (git history holds it). **Written from facet's advisor
+seat at the Director's direction**, at the close of the session that shipped facet v0.7.0 —
+so §5 is a cross-repo transfer section the previous handoff could not have carried.
+
+**§3 is measured at write time with the commands named. Verify it again; do not inherit it.**
+The last handoff's §3 has three stale rows *because state moved*, which is the argument for
+the rule rather than against it.
 
 ## 1. Read first, in this order
 
-[CLAUDE.md](CLAUDE.md) — rule 0, the scope block, **THE POSTURE**, every non-negotiable
-→ this file → verify §3 with your own commands → the memory store's session-end entries
-(2026-08-11, -12, **-13**; **look-before-describing is permanent law**, and this session
-added its complement: three consecutive arcs of one-directional *pessimism* about what
-these models do with authored material — miscalibration runs both ways).
+[CLAUDE.md](CLAUDE.md) — the scope block, **THE POSTURE**, the non-negotiables (licence
+gate · identity is the product · per-route disclosure · credits are bounded · judging
+artifacts) → this file → **verify §3 with your own commands** → the memory store's
+session-end entries.
 
-## 2. The frame, the posture, and the laws this session added
+The portable core of the law lives in **facet's** `CLAUDE.md` and armature's own file says
+so. That is still true, and §5 below is the first time the *tooling* has been worth
+transferring too.
 
-- **armature is image-to-video with a GLB instead of an image** — footage of every
-  kind; describing it by a use-case is the drift signature.
-- **THE POSTURE:** experiments exist to learn; the monorepo redefines itself as
-  experiments prove paths; **no route is canon by momentum**; dated field checks keep
-  technique fresh.
-- New doctrine, each earned today and recorded where cited: **a premise table naming
-  two inputs carries a row for their coherence** (E13-halt-ruling R3) · **a premise
-  list is marked exhaustive or candidate-only at write time** (S03-ruling R1) · **pin
-  verification uses the recording tool's own formula** (S03-ruling R5) · **fetch the
-  grant, not the badge** — CivitAI page badges can be the base model's; the structured
-  permissions API is the instrument (the map's E14 rows; handbook trap 3) · **the
-  pessimism doctrine** (E13-closing R1).
+## 2. The frame, unchanged
 
-## 3. State at write time — verify, don't inherit
+- **armature is image-to-video with a GLB instead of an image** — block the shot in headless
+  Blender (character, pose, camera), render per-frame control sequences, and the video model
+  paints life over it. Footage of every kind; **describing it by a use-case is the drift
+  signature.**
+- **THE POSTURE:** experiments exist to learn; the monorepo redefines itself as experiments
+  prove paths; **no route is canon by momentum**; dated field checks keep technique fresh.
+- **Identity is the product**, and no metric approximates it. Identity diagnostics ride
+  reports and **gate nothing**. That stance is stronger than facet's, and it is correct —
+  see §5.5, where facet has now measured what happens to a detector that tries.
 
-- **`main` green** (CI run `31744154595` at the close-merge), suite **1147 passed / 13
-  skipped** on the rig at the E13 close. Repo **PUBLIC**; **v0.1.0 released
-  2026-08-13** (tag at `ff9021b`; full treatment ran; translations landed before the
-  tag; `shipcheck audit` exit 0). Origin carries one branch head plus the live
-  experiment branches below.
-- **E01–E13 closed** (E05 withdrawn). The day's rulings, in order:
-  [E13-halt-ruling](docs/experiments/E13-halt-ruling.md) ·
-  [S03-ruling](docs/dispatches/S03-ruling.md) ·
-  [E13-closing-ruling](docs/experiments/E13-closing-ruling.md). The Director's
-  verdicts of record: **the character holds on the hosted tier** (both arms, both
-  seeds) and **both interiors work — reference grounds steer model-decided worlds and
-  dominate seed chaos on that tier** (mechanism attribution honestly open at n=4).
-  `E13-run` and `S03-run` are **fully merged** (close-merge `fb4828c`), worktrees
-  retained as artifact archives.
-- **⚠ IN FLIGHT: the E14 bake-off executor.** Worktree `E:\AI\armature-E14`, branch
-  `E14-run` — predictions committed (`05a27fb`) before any submission; two arms
-  (T = technically_color single, S = the SmartphoneSnapshot v3 tier-matched pair) at
-  strength 1.0 against the byte-pinned E12 wave-3 graph, seed 2026081233, **zero
-  partner credits by spec** (any partner-credit estimate above 0 halts). **Do not
-  touch its worktree.** When its report lands: sheets to the Director's eye, then the
-  ruling. Note for the ruling: the executor's predictions **counter-predict the
-  spec's** — it argues S (photo-realism pair) is the identity risk because it pulls
-  toward photographic skin against the prompt's terracotta, where the spec called S
-  subtle; a genuine two-seat blind disagreement — grade both records honestly.
-  Spec: [E14-lora-scene-lever.md](docs/experiments/E14-lora-scene-lever.md) with its
-  same-day arms-reshuffle amendment.
-- **⚠ STANDING PRIORITY — facet (the Director's word, 2026-08-13):** the performer's
-  texture-projection holes are **the studio's top priority**, set in facet at commit
-  `ea34a45` (known-defects final entry + kickoff banner). E13 watched them propagate
-  into hosted-tier output at the same landmarks — a faithful hole and an identity
-  failure are not separable at the patch. Armature's part: keep it in front of the
-  Director, sequence reference-dependent work behind it, and hand facet's seat the
-  evidence (S03's survey at `E:\AI\armature-S03\outputs\S03\survey\`, E13's sheets at
-  `E:\AI\armature-E13\outputs\E13\sheets\`). Armature never edits facet's tree.
-- **Routes: three, measured.** driven — parked, **licence-clear for its unpark**
-  (consult #9's fetch pass; the Animate-2 loadout all YES); its remaining gates are
-  the three measured questions (pose-convention adherence, chaining limits, root
-  translation) plus a movement-library adoption row at adoption. free — the camera
-  tier at 6.0 / uni_pc; E14 is probing its LoRA lever now. composed — **graduated by
-  E13**: identity-locked, model-decided cinematography from authored references,
-  worlds steered by reference grounds, 106–211 credits/generation, disclosure note in
-  its spec; follow-ons named in E13-closing R8 (steering under the two-seed law, the
-  subject-scoped clause, reference count), each a spec and his word away.
-- **Worktrees:** `armature-E07/-E08/-E08b/-E09/-E10/-E11/-E12/-E13/-E14` +
-  `-S02/-S03`. All merged except `E14-run` (live). Outputs live git-ignored in
-  worktrees, hash-pinned in reports — the worktrees are the artifact archive; deleting
-  one deletes unreproducible evidence.
-- **Credits:** E13 spent the repo's first four partner generations (bracket 424–844
-  held; per-submission records in the run's payload files). Pool anchor **12,962 at
-  2026-08-12 evening** (pre-E13, the Director's screenshot). **The attribution pass is
-  now a real admin item** — actual drawdown exists to reconcile against prompt_ids.
-- Uploads on the cloud (content-addressed, no delete endpoint, all listed in reports):
-  E12's start frame · S03's 81 frames · E13's four A1 plates.
+## 3. State at write time — measured 2026-08-17, verify again
 
-## 4. What this session earned (all on main, each with its record)
-
-1. **v0.1.0** — the full treatment (agent-run under the Director's waiver), shipcheck
-   exit 0, translations-before-tag, the release; README/handbook/landing refreshed
-   three times as the day moved.
-2. **The E13 arc entire**: dispatch (per-route disclosure's first application riding
-   the spec) → zero-spend halt on two structural premise failures → S03's repair kit
-   (the RGBA-true turnaround; the frames→VIDEO chain measured to its slot-cap break)
-   → re-arm with the coherence row verified at three looks → four generations → the
-   verdicts. **Constructed VIDEO reaches VIDEO sockets** — the platform-wide class
-   re-opening (E13-closing R3).
-3. **Consults #9 and #10** filed with calibration both ways — the channel law
-   confirmed three more times (our uncapped `get_node` is the byte-authority; the
-   relay mangles literals; the agent reads interiors our surface caps). New trap:
-   `LoadImage`'s combo renders empty under multi-name `get_node` queries.
-4. **The Animate-2 licence clearance** (one repack repo, upstream Apache, the
-   Director's export corroborating) — the driven unpark is licence-clear.
-5. **The LoRA gate saga**: six candidates fetched, the grant-matrix instrument found,
-   two page-verdicts reversed in one pass (one of them this seat's own error, owned in
-   the map), one revival on the Director's ask by document, one revival refused by the
-   document itself.
-6. **Gates taught**: SEED_NODES and Gate L speak the hosted-API tier (the
-   `control_after_generate` widget-order trap recorded); the INDETERMINATE andon
-   taught, not bypassed; the break-aware LEDGER carried E13's and E14's named breaks.
-7. **facet's top priority** set across the boundary on his word.
-8. Ops: the pages workflow gated on visibility (build stays CI; deploys resume when
-   public) · brand repo's nanoid advisory fixed (94a3eb2; its CI conventional-commit
-   register noted — future brand commits follow it).
-
-## 5. The instrument shelf (adds this session, on main, tested)
-
-`render_turnaround` + the RGBA kit under `armature-S03/outputs/S03/turn_rgba/`
-(Director-passed) · `make_hole_survey` + its sheets · the cascade/assembly builders
-(`build_cascade_payload`, `build_assembly_payload`, `armature_core/assembly.py`) ·
-`build_r2v_payload` · `composite_reference` · `extract_clip_frames` · `clipcompare` ·
-`make_e13_sheet` · the tier-taught route gates · the CivitAI grant-matrix fetch
-pattern (procedural) · the Director's export path (standing, corroborated again).
-
-## 6. The levers
-
-**First: rule on E14 when its report lands** (sheets → his eye → your ruling; then
-the winner's strength sweep as its own two-seed spec on his word).
-**Product:** the composed route's three follow-ons (E13-closing R8) · the driven
-unpark (licence-clear; needs its spec built on consult #9's three measured questions
-+ a movement-library adoption row — 100STYLE is the standing cleanest candidate) ·
-the free route's promoted prompt lever (subject-scoped identity clause, E12 R3).
-**Gated on facet's priority:** anything that needs clean reference textures — the
-hole repair unblocks identity work everywhere.
-**Instruments:** the seam-free camera instrument (E12 R5, still owed) · the
-worktree suite-skew question (35 tests skip only in worktrees; they pass from main —
-half-answered, cause still unlocated) · the foot instrument's hip-origin condition ·
-the builder's stale `fit` string (owed with a test by the first commit touching
-`build_camera_i2v_payload`).
-**Admin:** the credits attribution pass (now with real drawdown) · E12's two unspent
-reserves lapsed at its close · cloud-artifact deletes listed per report (uploads have
-no delete endpoint — standing).
-
-## 7. The consult channel
-
-`docs/comfy-consult-{9,10}*` join 6–8 as precedent. **Calibration is mandatory every
-round** (anchor + one cheap claim; `get_node` existence checks non-negotiable;
-field-level truth on dynamic-combo nodes is OURS; single-name queries for combo
-lists). Literals-in-plain-text still gets mangled by the relay — our re-measurement
-is the byte-authority, planned for, not resented. Licences: documents, never
-verdicts — and now: grant matrices, never badges. Standing next-brief triggers: any
-new conditioning tier · the driven unpark's spec-time questions · video-native
-scene-plate generation · the custom-LoRA path if the studio's own video LoRA becomes
-real (the 2026-06 HF-URL lead is recorded in consult #10's ruling).
-
-## 8. Seat calibration table — this seat's errors, for weighing everything above
-
-| error | correction |
+| | |
 |---|---|
-| Pinned E13's A2 clip at dispatch without checking its subject matched A1's source — nobody's premise row carried the conjunction | falsified by the executor's frame extraction; owned in the halt ruling; **the coherence row is now law** |
-| S03's premise row carried a GLB list that read as an answer key and contained no canonical asset | the executor hash-walked the lineage instead; owned in S03-ruling R1; **premise lists are marked exhaustive or candidate-only** |
-| Took a rendered page's "Apache 2.0" as two LoRAs' grants — the badge was the base model's | the grant-matrix API reversed one YES and one NO in a single pass; corrected in the map within the hour, owned there |
-| H-E13a and H-E13c predicted pessimistically (stills identity ≤1 of 2; worlds seed-differ) | both MISS — identity held 2/2 and reference grounds dominated seed chaos; **the pessimism doctrine, third sighting, now written** |
-| Wrote brand's commit in armature's narrative register (brand is curated conventional-commits); left a task chip standing after fixing its task inline, spawning a duplicate session | future brand commits follow `type(scope):`; taking a flagged task inline means dismissing its chip in the same breath |
+| HEAD | `b14ea58`, `main` clean and **in sync with origin** — `git status -sb` |
+| suite | **1324 collected** — `pytest --collect-only -q`. ⚠ The last handoff and three commit messages say **1311**; it moved and nothing on a surface was re-pinned. facet pins this mechanically (§5.4); armature does not |
+| published | **npm `@mcptoolshop/armature-studio` 0.2.1 AND PyPI `armature-studio` 0.2.1 — BOTH LIVE**, verified by `npm view` and the PyPI JSON API. ⚠ HEAD's own commit message ends *"npm is live at 0.2.1; PyPI is the one still to land"* — **it landed.** The record's last word on the release understates it |
+| CI | green, run `31921018467` (2026-08-16) |
+| arcs | **E14 is CLOSED** (`docs/experiments/E14-closing-ruling.md`) — the last handoff carries it as ⚠ IN FLIGHT. **S04, S05 and S06 have landed since**, each with predictions + report + ruling |
+| worktrees | **14**: `E07`–`E14`, `S02`–`S05`. They are the artifact archive; deleting one deletes unreproducible evidence |
+| credits | pool anchor **12,962 at 2026-08-12 evening**. The attribution pass is still open and now has more drawdown to reconcile |
 
-**What held:** every artifact looked at before describing — sheets, clips, the
-Director's memo, every licence document quoted from its own text · zero unauthorized
-spend (four generations, inside a ruled bracket, behind two human gates and a
-re-estimate) · calibrate-then-rule on both consult rounds · corrections in place all
-day (the halt's Finding 1, the candid row, the changelog gate list, publishing.md,
-the E14 candidate table) · rule 5 held — every dispatch's paste block was on screen
-in the same message as its go.
+**What that table means for you: all three staleness rows point the same way — the repo did
+more than its own record says.** Re-measure before quoting anything.
+
+## 4. What is actually open
+
+1. **The credits attribution pass** — real drawdown against `prompt_id`s, unreconciled.
+2. **The composed route's three follow-ons** (E13-closing R8): steering under the two-seed
+   law, the subject-scoped clause, reference count.
+3. **The driven unpark** — licence-clear (consult #9's fetch pass; the Animate-2 loadout all
+   YES); needs its spec built on the three measured questions plus a movement-library
+   adoption row.
+4. **Owed instruments:** the seam-free camera instrument (E12 R5) · the worktree suite-skew
+   question (35 tests skip only in worktrees — half-answered, cause unlocated) · the foot
+   instrument's hip-origin condition · the builder's stale `fit` string.
+5. **facet's side of the relay** — §6.
+
+---
+
+## 5. ⚑ WHAT TO BORROW FROM FACET, AND WHY EACH ONE APPLIES HERE
+
+facet shipped **v0.7.0** on 2026-08-17. Four things it built are not facet-shaped; they are
+shaped like problems armature has been solving in prose. **Each row names what facet
+measured, and the armature hole it maps onto.** This is not a recommendation to copy code —
+the routes are different. It is a recommendation to steal the *shape*.
+
+### 5.1 The canon router — the strongest transfer, and it is about your product
+
+facet's identity specification named seventeen elements; the prompt that generated its
+reference twins named sixteen; the profile default a fresh run would use named **six**.
+**Nothing connected them**, so four consecutive arcs repaired composition downstream of paint
+that was wrong at the source. The fix: canon became a machine-readable database keyed on
+**surface** — an element list cannot show what is missing, and a nullable occupant makes a
+hole a *row* — and a router refuses a generation whose prompt does not cover it.
+
+**Armature's stated product is one persistent main character across footage.** Identity is
+carried today by reference plates, prompts and the Director's eye, with **no machine-readable
+statement of what the character IS** that anything checks a submission against. Same gap — on
+a repo where the artifact is a *video* and a drifted character costs a paid generation to
+discover.
+
+The two halves worth stealing:
+
+- **The named element is the row, and a hole is a row.** facet found a leather-wrapped grip
+  missing from a seventeen-row element list, and *no reading of that list could ever have
+  revealed it.*
+- **Both directions.** Checking that a prompt *contains* the canon finds a thin prompt.
+  Checking that everything in the prompt *is* canon found a phrase naming something the
+  character does not have — `gold necklace`, already measured as misnaming a different
+  element, *"and the element survives by accident."*
+
+⚠ **Steal the honest limit with it:** facet's canon binds **0.00%** of the figure spatially.
+It knows what material belongs on `torso`; nothing knows which pixels are `torso`. Do not
+promise armature a spatial canon — the **nameable** half is what works today.
+
+### 5.2 Fail-closed in front of the spend — armature's credit bound is currently prose
+
+armature's rule reads: *"Every spec states its credit ceiling before the first submission,
+itemized per arm."* That is a **document** discipline, enforced by an advisor reading a spec.
+
+facet's v0.6.0 gate was a **tool** discipline and was still not enough, because it read:
+
+```python
+if args.canon:        # omit the flag and the gate does not run, silently
+```
+
+The shipped PowerShell driver called the gated tool **without a profile**, so the gate never
+armed and nothing said so. v0.7.0 made it fail-closed: a tool that authors a spend and is
+given no canon **refuses**, and the output directory is never created. The escape for a
+subject that genuinely has no canon is **census-backed and cannot be worn by a subject that
+does** — `--no-canon --subject GALLEON` proceeds and announces itself; `--no-canon --subject
+W3` is refused, because W3 has canon. Wearing the escape means a deliberate edit of the
+census, and you cannot invent a subject with no identity file. **That is what stops an escape
+becoming a checkbox.**
+
+**The armature question this raises is the sharpest one in this handoff: what actually
+refuses a submission here?** A credit ceiling in a spec is honoured by a human reading it.
+Spent credits have no compensator — armature's own words. A gate *inside* the submitting
+tool, refusing before the payload is built, is the shape that survives a seat in a hurry.
+
+### 5.3 The generation record — `recipe_id`, and absent-with-a-reason
+
+facet's `gen_record` **extends** its existing sidecar rather than replacing it, so every
+previously recorded file still reads. It adds an immutable `recipe_id` (content hash after
+NFC and CRLF→LF normalisation — a line-ending drift already broke a lock elsewhere in this
+studio), a **movable `alias` excluded from the hash** so retagging does not mint a new
+recipe, and the canon the gate allowed.
+
+**The part armature needs most:** fields that cannot be reached are recorded **absent with a
+reason** rather than omitted or invented, and validation **refuses a string** in those slots.
+facet cannot get `checkpoint_hash`, `lora_weight_hash`, driver, hardware or library back from
+its cloud transport, so the record says so. *A field that reads as filled when nobody can
+know it is worse than a hole.*
+
+Armature runs **hosted partner tiers**, so it has strictly more unreachable fields than facet
+and strictly more need for that discipline. It already pins graphs byte-for-byte and records
+`prompt_id`s — this is the identity and honesty layer on top.
+
+### 5.4 The count pins, and two mechanical traps facet paid for
+
+facet pins its stated test count on ~14 public surfaces plus a separate experiment-count set,
+mechanically, so a drifted surface fails the suite. **Armature's suite moved 1311 → 1324 and
+three commit messages still say 1311.** That is the drift the pin exists for.
+
+Two traps armature will hit the first time it automates a count bump, both now in facet's law
+book:
+
+- **A bare digit replace corrupts a CI run id.** `31266198261` contains `1266`. facet's first
+  reconciler would have silently falsified a run id sitting inside a gate row.
+- **A locale separator hides a count.** `README.fr.md` writes `1 338` with a **non-breaking
+  space**, so a plain replace half-updates the file and leaves one mention stale. Strip the
+  separator before matching — facet's checker does, which is why the trap surfaced as a clean
+  failure instead of a wrong number on a public page.
+
+### 5.5 One gate-design law, and it is general
+
+facet wrote a gate pair for a detector: *fire on the region the Director named, stay silent on
+one he did not.* **Both legs pass on a detector that is worthless**, because any boundary
+detector satisfies them — named regions contain boundaries.
+
+The fix, and it belongs in armature's law book: **a gate pair a known-bad instrument cannot
+pass is a MARGIN, not a direction.**
+
+```
+min(named) - max(control) >= min_margin
+```
+
+facet's own failing numbers: named 7.56–40.26%, control 0.96–39.90% — **gap negative.** The
+direction pair called that a pass. Armature's identity diagnostics gate nothing by ruling, so
+nothing live is threatened — but the moment any diagnostic is proposed as a gate, this is the
+shape it must clear.
+
+### 5.6 What NOT to borrow
+
+- **Do not borrow a metric for identity.** facet tried twice — high-pass statistics for
+  material identity, silhouette IoU for character identity — and both were the same error: *a
+  measurable proxy is not a conservative substitute for asking; it is a different question
+  with a number attached.* Armature's ruling that identity diagnostics gate nothing is the
+  correct end state, and facet reached it the expensive way.
+- **Do not borrow facet's spatial canon.** It binds 0.00%. The nameable half works; the
+  spatial half is unbuilt and honestly labelled.
+- **Do not borrow the prompt-density readout as a limit.** facet measured that element count
+  over 10 → 17 removed nothing from its images, and that count and identity **cannot be
+  separated** on the plates it has. It is a readout, not a rule.
+
+---
+
+## 6. The facet relay
+
+Unchanged in kind: **armature supports with evidence and sequencing, never edits facet's
+tree**, and the reverse holds. Two facet developments armature should know:
+
+- The performer's texture-projection holes — the long-standing top-priority item — now sit
+  behind a **paint** question rather than a compositing one. Every cheap compositing
+  hypothesis is measured and spent; what remains costs a generation and is the Director's
+  call.
+- facet's accepted performer and its "far from perfect" performer turned out to be **the same
+  file**, which nothing said until a seat halted on it. If armature surveys a facet asset,
+  **carry the date of the ruling, not the word "accepted"** — acceptance there is a ruling on
+  an artifact at a date, not a permanent grade.
+
+---
+
+## 7. ⚑ THE DOGFOOD SWARM — my advice, with the scope I would defend
+
+**Run one.** armature is in unusually good condition for it: `main` green and in sync, both
+registries live at 0.2.1, 1324 tests, a SHIP_GATE, a SCORECARD, seven translations, fourteen
+closed arcs. A swarm on a repo in that state spends its passes on real findings instead of on
+scaffolding.
+
+**Read the `dogfood-swarm` skill and the swarm control plane before dispatching** — the
+control plane is the `testing-os` product in the **dogfood-lab** org, on this rig at
+`E:/AI/testing-os/`, **not** the retired `dogfood-labs` archive. That mis-location cost
+another session a full pass of archaeology.
+
+### Settle this before you dispatch
+
+⚠ **The swarm's documented shape uses Fable clerks, and the Director set a standing rule on
+2026-08-16: never spawn Fable subagents (cost + protocol).** He overrode it once by live word.
+**Get his word on the tier map before the dispatch**, or run the clerk role on Sonnet and say
+so in the receipt. Do not discover this mid-swarm.
+
+### The scope I would give it
+
+**Phase A — health pass, pointed at the three things §3 measured:**
+
+1. **Stale-state sweep.** Three surfaces understate the repo (suite 1311→1324; PyPI "still to
+   land" when it landed). Ask for *every* count, version and status claim on a surface,
+   checked against a live command. Cheap, and exactly what a swarm is good at.
+2. **The worktree suite-skew** — 35 tests skip only in worktrees and pass from main.
+   Half-answered, cause unlocated, and it is *test-infrastructure*, so every number measured
+   in a worktree carries an asterisk nobody is tracking.
+3. **The owed instruments** in §4.4, each with a named owner-shaped gap.
+
+**Phase B — feature pass, spent on §5.1 and §5.2 together.** A machine-readable character
+canon **plus** a gate that refuses a submission before the payload is built. They are one
+feature: a gate with nothing to check is a checkbox, and a canon nothing checks is a
+document. That is the pair facet built across two releases, and armature can have both in one
+pass because the design is already paid for.
+
+**Phase C — the full treatment** as Phase 10, which armature has run before and which will
+want a version bump. Its release ordering is now exercised: OIDC publishing from a tag, both
+registries, translations before the tag.
+
+### Two things to forbid the swarm explicitly
+
+- **No public surface goes to a subagent.** README, translations, handbook, landing page,
+  CHANGELOG and repo metadata are lead-authored. The studio law was earned when a docs
+  subagent was killed mid-run and its work reverted.
+- **No spend.** Armature's credits have no compensator. A swarm phase that submits a paid
+  generation is out of scope unless the Director says otherwise, per arm, with a ceiling.
+
+---
+
+## 8. Seat calibration — the facet seat that wrote this
+
+This handoff was written by facet's advisor, not armature's, and that seat's session carried
+these failures. They bear on how much of §5 to trust:
+
+| error | what it means for you |
+|---|---|
+| Wrote a prohibition onto a public surface from an **unverified** research figure; a citation gate returned *contradicted* and the source's abstract concluded the opposite way | **§5 cites facet's own measurements, reproducible in facet's tree. Nothing in §5 rests on outside literature** — deliberately |
+| Stated a central tension against the **wrong count** — a gate-check number quoted against an element-count measurement | If §5.6's density paragraph matters to you, re-read it in facet's record before acting |
+| Put three wrong premises into one dispatch, including repeating a `DIRECTOR-VERIFIED` label unsupported at source | **Verify §3 and §5 with your own commands.** This seat's readings are not evidence |
+| Shipped a gate pair a worthless instrument passes | That failure *is* §5.5, offered as a law precisely because it was paid for |
+
+**What held:** every chip verified by running it before anything trusted the build; the count
+surfaces reconciled with §5.4's traps caught rather than shipped; and the outside review
+channel cut or refused a brief ten rounds running and was right every time.
 
 ## 9. What to do first
 
-1. Read §1's documents in order; verify §3 with your own commands.
-2. **The E14 report is the likely first event** — rule on it (sheets to the
-   Director's eye first; the two-seat prediction disagreement graded honestly).
-3. **Keep facet's priority in front of the Director** — it gates identity work
-   everywhere; armature supports with evidence and sequencing, never edits.
-4. Nothing else is urgent. Marathon, not a race. Do not end a session the Director
-   has not ended.
+1. Read §1's documents in order; **verify §3 with your own commands** — three rows are known
+   stale, all in the same direction.
+2. **Get the Director's word on the swarm's tier map** (§7) before dispatching anything.
+3. Decide §5.1 + §5.2 as one feature, or park them with a reason. That is the transfer with
+   the most leverage, and armature is the repo where a drifted character costs money.
+4. Nothing else is urgent. **Marathon, not a race. Do not end a session the Director has not
+   ended.**
