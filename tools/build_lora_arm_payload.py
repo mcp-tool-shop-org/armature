@@ -63,7 +63,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
-from armature_core.errors import ArmatureError, GateCanon, GateFailure  # noqa: E402
+from armature_core.errors import (  # noqa: E402
+    ArmatureError, GateCanon, GateFailure, GateSSeedRegistration)
 from canon_gate import canon_line, canon_spend  # noqa: E402
 
 TOOL_VERSION = "E14.2"
@@ -438,19 +439,35 @@ def gate_ledger(base, built, inserts):
 
 
 def gate_s(graph, registry_path, seed):
+    """Gate S · ANDON — the seed is on the committed list and every live sampler carries it.
+
+    Both raises used to construct the BASE `GateFailure` with no second argument, so
+    `evidence` was `{}` and the class attribute `gate` was errors.py's placeholder `"G?"`:
+    the message said "Gate S" while the receipt said `[G?]`, and the halt on the arm that
+    spends E14's two generations carried no machine-readable record of which seed, which
+    registry or which samplers fired it. `GateSSeedRegistration` exists for this clause and
+    is what the other two implementations in this tree already do —
+    `route_gates.gate_s_registration` and `build_r2v_payload.gate_seed_registered` both
+    raise with an evidence dict.
+    """
     with open(registry_path, encoding="utf-8") as fh:
         registry = json.load(fh)
     registered = registry.get("seeds") or []
-    if seed not in registered:
-        raise GateFailure(
-            f"Gate S: seed {seed} is not in {registry_path} ({registered}). A number the "
-            "committed list never pre-registered is a number nobody can hold this run to")
     live = [(nid, n["inputs"].get("noise_seed")) for nid, n in graph.items()
             if isinstance(n, dict) and n.get("class_type") == "KSamplerAdvanced"
             and (n.get("inputs") or {}).get("add_noise") == "enable"]
+    ev = {"gate": "S", "seed": seed, "registry": os.path.abspath(registry_path),
+          "registered": registered, "noise_adding_samplers": live}
+    if seed not in registered:
+        raise GateSSeedRegistration(
+            f"Gate S: seed {seed} is not in {registry_path} ({registered}). A number the "
+            "committed list never pre-registered is a number nobody can hold this run to",
+            ev)
     off = [(nid, s) for nid, s in live if s != seed]
     if off:
-        raise GateFailure(f"Gate S: noise-adding sampler(s) {off} do not carry {seed}")
+        raise GateSSeedRegistration(
+            f"Gate S: noise-adding sampler(s) {off} do not carry {seed}",
+            dict(ev, off_seed_samplers=off))
     return {"gate": "S", "seed": seed, "registry": os.path.abspath(registry_path),
             "registered": registered, "noise_adding_samplers": live,
             "inert_zero_seed_note": ("the low-noise expert carries noise_seed 0 with "
