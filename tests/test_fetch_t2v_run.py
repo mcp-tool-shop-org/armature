@@ -90,36 +90,60 @@ def _jobs(tmp_path, n=2):
             for i in range(n)]
 
 
-def test_the_url_sits_behind_a_terminator_and_errors_are_visible(tmp_path, monkeypatch):
-    """A dump entry whose url begins with a dash is read by curl as an option, and both
-    -o and -K (read a config file) are reachable that way. The sibling fetch_run.py had
-    the terminator; this file did not."""
-    seen = {}
+def _stub_pwsh(monkeypatch, seen, returncode=0, code=0):
+    """A downloader stub that records the command AND writes the per-job exit record.
+
+    Wave 14 (F-a3ba416b): this fetcher no longer builds a command of its own — it calls
+    `fetch_run.download`, whose gate refuses a run with no per-job exit record, because a
+    `foreach` loop's process code reports only the LAST job (measured on this rig). A stub
+    that writes nothing is a downloader that observed nothing, and that is now a halt.
+    """
+    import fetch_run as F
 
     def fake_run(cmd, **kw):
         seen["cmd"] = list(cmd)
-        seen["env"] = kw.get("env")
-        return subprocess.CompletedProcess(cmd, 0, "", "")
+        seen["env"] = kw.get("env") or {}
+        env = seen["env"]
+        with open(env[F.MANIFEST_ENV], encoding="utf-8") as fh:
+            jobs = json.load(fh)
+        target = env.get(F.EXITS_ENV)
+        if target and returncode == 0:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(target, "w", encoding="utf-8") as fh:
+                json.dump([{"out": j["out"], "code": code, "message": ""} for j in jobs], fh)
+        return subprocess.CompletedProcess(cmd, returncode, "", "")
 
     monkeypatch.setattr(T.subprocess, "run", fake_run)
-    T.download(_jobs(tmp_path))
+    return seen
+
+
+def test_the_url_sits_behind_a_terminator_and_errors_are_visible(tmp_path, monkeypatch):
+    """A dump entry whose url begins with a dash is read by curl as an option, and both
+    -o and -K (read a config file) are reachable that way.
+
+    Wave 14 (F-a3ba416b): the terminator is `fetch_run`'s now, because this fetcher calls
+    the sibling's downloader instead of building a second command string. The property is
+    still asserted HERE, on the command this fetcher's `download` actually causes to run —
+    a claim about the sibling checked from this side, not assumed."""
+    seen = _stub_pwsh(monkeypatch, {})
+    T.download(_jobs(tmp_path), out=str(tmp_path))
     script = seen["cmd"][-1]
-    assert "-- $x.url" in script, script
+    assert "-- $_.url" in script, script
     assert "--fail-with-body" in script, script
+    assert "$LASTEXITCODE" in script, (
+        "the per-job exit this fetcher was left without; a foreach loop's process code "
+        "reports only the last job")
 
 
 def test_the_manifest_path_never_reaches_the_command_string(tmp_path, monkeypatch):
     """Same quoting defect as fetch_run.py's: an apostrophe in the path closed the
     single-quoted literal. The path travels in the environment instead."""
-    seen = {}
-    monkeypatch.setattr(T.subprocess, "run",
-                        lambda cmd, **kw: (seen.update(cmd=list(cmd), env=kw.get("env")),
-                                           subprocess.CompletedProcess(cmd, 0, "", ""))[1])
+    seen = _stub_pwsh(monkeypatch, {})
     odd = tmp_path / "it's a run"
     (odd / "lossless").mkdir(parents=True)
     jobs = [{"url": "https://example.invalid/0.png", "cloud_name": "a.png",
              "array_index": 0, "out": str(odd / "lossless" / "00000.png")}]
-    T.download(jobs)
+    T.download(jobs, out=str(odd))
     assert str(odd) not in " ".join(seen["cmd"])
     assert T.MANIFEST_ENV in seen["cmd"][-1]
     assert seen["env"][T.MANIFEST_ENV].endswith("_urls.json")
@@ -164,7 +188,7 @@ def _run_main(tmp_path, monkeypatch, ev):
     dump = tmp_path / "dump.json"
     dump.write_text(json.dumps({"results": results}), encoding="utf-8")
 
-    def fake_download(jobs):
+    def fake_download(jobs, out=None):   # `out` since wave 14 (F-a3ba416b)
         for j in jobs:
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             with open(j["out"], "wb") as fh:
@@ -208,7 +232,7 @@ def test_a_zero_length_frame_still_halts(tmp_path, monkeypatch, capsys):
     dump = tmp_path / "dump.json"
     dump.write_text(json.dumps({"results": results}), encoding="utf-8")
 
-    def fake_download(jobs):
+    def fake_download(jobs, out=None):   # `out` since wave 14 (F-a3ba416b)
         for j in jobs:
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             open(j["out"], "wb").close()
@@ -238,7 +262,7 @@ def _dump_of(tmp_path, n_frames=3, video=False):
 
 
 def _writer(skip=(), monkeypatch=None):
-    def fake_download(jobs):
+    def fake_download(jobs, out=None):   # `out` since wave 14 (F-a3ba416b)
         for j in jobs:
             if os.path.basename(j["out"]) in skip:
                 continue
@@ -325,14 +349,15 @@ def test_both_downloaders_shell_to_the_same_interpreter(tmp_path, monkeypatch):
     and the two tools now share ONE FetchHalt and ONE plan-to-disk andon."""
     import fetch_run as F
 
-    seen = []
-    monkeypatch.setattr(T.subprocess, "run",
-                        lambda cmd, **kw: (seen.append(list(cmd)),
-                                           subprocess.CompletedProcess(cmd, 0, "", ""))[1])
-    T.download(_jobs(tmp_path, 1))
-    assert seen[0][0] == "pwsh"
+    seen = _stub_pwsh(monkeypatch, {})
+    T.download(_jobs(tmp_path, 1), out=str(tmp_path))
+    assert seen["cmd"][0] == "pwsh"
     assert T.FetchHalt is F.FetchHalt, "one FetchHalt, not two"
     assert T.verify_downloads is F.verify_downloads, "one plan-to-disk andon, not two"
+    # Wave 14, F-a3ba416b: one DOWNLOADER as well. The comment this test was written for
+    # claimed sameness while the two shapes differed; there is one shape now, and the
+    # sibling's is it.
+    assert T.fetch_download is F.download, "one downloader, not two"
 
 
 # ---- the sweep reaches the --out ROOT too (wave 8, F-d85dafd9, the sibling's half)
@@ -456,8 +481,10 @@ def test_the_temporary_url_file_is_removed_when_the_downloader_HALTS(tmp_path, m
                         lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "boom"))
     jobs = T.plan([{"source_node_id": 70, "filename": "a.png", "url": "u"}],
                   str(tmp_path / "run"))
-    with pytest.raises(T.FetchHalt, match=r"the downloader exited 1"):
-        T.download(jobs)
+    # wave 14: the wording is the sibling's now ("the downloader process exited 1"), because
+    # this fetcher calls the sibling's downloader (F-a3ba416b).
+    with pytest.raises(T.FetchHalt, match=r"the downloader process exited 1"):
+        T.download(jobs, out=str(tmp_path / "run"))
     strays = [p for p in (tmp_path / "run" / "lossless").iterdir()]
     assert strays == [], (
         f"{[p.name for p in strays]} left behind; _urls.json carries every signed URL the "
@@ -466,13 +493,21 @@ def test_the_temporary_url_file_is_removed_when_the_downloader_HALTS(tmp_path, m
 
 def test_the_temporary_url_file_is_removed_when_the_download_SUCCEEDS(tmp_path, monkeypatch):
     """The direction that already worked, pinned so the `finally` is not mistaken for a
-    behaviour change."""
-    monkeypatch.setattr(T.subprocess, "run",
-                        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "", ""))
+    behaviour change.
+
+    Wave 14 (F-a3ba416b): the per-job exit record IS kept — it is the evidence Gate FETCH
+    decides on — and it lands in the run ROOT, not in the frame directory. It carries no
+    urls: `record_urls=False`, because this fetcher's manifest is deleted on every path
+    precisely to keep signed links off disk, and a record naming the same links would
+    reopen what that fix closed."""
+    _stub_pwsh(monkeypatch, {})
     jobs = T.plan([{"source_node_id": 70, "filename": "a.png", "url": "u"}],
                   str(tmp_path / "run"))
-    T.download(jobs)
+    T.download(jobs, out=str(tmp_path / "run"))
     assert not (tmp_path / "run" / "lossless" / "_urls.json").exists()
+    record = tmp_path / "run" / T.EXITS_NAME
+    assert record.exists()
+    assert "url" not in json.loads(record.read_text(encoding="utf-8"))[0]
 
 
 def test_the_temporary_url_file_is_removed_when_the_downloader_RAISES(tmp_path, monkeypatch):
@@ -486,7 +521,7 @@ def test_the_temporary_url_file_is_removed_when_the_downloader_RAISES(tmp_path, 
     jobs = T.plan([{"source_node_id": 70, "filename": "a.png", "url": "u"}],
                   str(tmp_path / "run"))
     with pytest.raises(OSError):
-        T.download(jobs)
+        T.download(jobs, out=str(tmp_path / "run"))
     assert not (tmp_path / "run" / "lossless" / "_urls.json").exists()
 
 

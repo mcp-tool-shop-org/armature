@@ -460,3 +460,210 @@ def test_the_matching_start_frame_still_builds(tmp_path):
                                 fit=f"native — authored at {W1.WIDTH}x{W1.HEIGHT}")
     assert rec["fit_agrees_with_the_file"] is True
     assert rec["fit_declares_native"] is True
+
+
+# ===========================================================================
+# F-b5db1a40 — "no exit was recorded for this job" is not "this job exited
+#              zero", and a malformed record is a FETCH clause, not a crash.
+# F-a3ba416b — the sibling fetcher gets the SAME per-job exit record, because
+#              its `foreach` shape reports only the LAST job's code.
+# ===========================================================================
+
+import fetch_run as FR  # noqa: E402
+import fetch_t2v_run as FT  # noqa: E402
+
+
+def _fetch_run_dump(tmp_path, n):
+    """A get_output dump for `n` lossless frames, in `fetch_run`'s own shape."""
+    doc = {"results": [{"source_node_id": "302", "filename": f"{i:05d}.png",
+                        "url": f"https://example.invalid/{i}"} for i in range(n)]}
+    p = tmp_path / "dump.json"
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return str(p)
+
+
+def _stub_downloader(monkeypatch, module, rows_for, write=b"", returncode=0,
+                     exits_text=None):
+    """A downloader that writes what a real one would and records what we tell it to.
+
+    It reads the manifest and the exits path out of the ENVIRONMENT the module builds, so
+    the stub cannot drift from the command the tool actually assembles.
+    """
+    def fake_run(cmd, **kw):
+        env = kw.get("env") or {}
+        with open(env[FR.MANIFEST_ENV], encoding="utf-8") as fh:
+            jobs = json.load(fh)
+        for job in jobs:
+            os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
+            with open(job["out"], "wb") as out:
+                out.write(write)
+        target = env.get(FR.EXITS_ENV)
+        if target:
+            with open(target, "w", encoding="utf-8") as fh:
+                if exits_text is not None:
+                    fh.write(exits_text)
+                else:
+                    json.dump(rows_for(jobs), fh)
+        return subprocess.CompletedProcess(cmd, returncode, "", "")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+
+def test_a_job_whose_exit_was_never_recorded_is_refused_by_its_own_clause(
+        tmp_path, monkeypatch):
+    """F-b5db1a40 · operand: the row whose `code` is JSON `null`.
+
+    reverted-red: yes. `failed = [r for r in rows if int(r.get("code") or 0) != 0]` reads a
+    null as 0, the row count matches the plan so `downloader_exits_incomplete` does not fire
+    either, and Gate EXITS returns "2 download(s), each recording its own exit, all zero".
+    Measured on this rig with the module's exact command shape and an unlaunchable
+    downloader: process exit 0 and BOTH rows carrying a null code and an empty message — the
+    CommandNotFound error goes to the runspace's error stream, not into the captured output.
+
+    The case `verify_downloads` does not backstop is a re-fetch into a re-used run directory
+    whose planned frames are already present from a PRIOR run, so the write below is a valid
+    PNG: every planned file present, non-empty and PNG-signed, no stray.
+    """
+    _stub_downloader(
+        monkeypatch, FR,
+        rows_for=lambda jobs: [{"out": j["out"], "url": j["url"], "code": None,
+                                "message": ""} for j in jobs],
+        write=FR.PNG_SIGNATURE + b"IHDR-and-the-rest")
+    dump = _fetch_run_dump(tmp_path, 2)
+    with pytest.raises(FR.FetchHalt) as exc:
+        FR.main(["--dump", dump, "--run", "r", "--root", str(tmp_path / "runs")])
+    ev = exc.value.evidence
+    assert ev["clause"] == "downloader_job_exit_unrecorded"
+    assert len(ev["unrecorded"]) == 2
+    assert ev["unrecorded"][0]["job"].endswith("00000.png"), "the clause names the job"
+
+
+def test_a_code_that_is_not_a_number_is_unrecorded_too(tmp_path, monkeypatch):
+    """F-b5db1a40 · `int()` is kept only for values that are actually present."""
+    _stub_downloader(
+        monkeypatch, FR,
+        rows_for=lambda jobs: [{"out": j["out"], "url": j["url"], "code": "",
+                                "message": ""} for j in jobs],
+        write=FR.PNG_SIGNATURE + b"IHDR")
+    dump = _fetch_run_dump(tmp_path, 1)
+    with pytest.raises(FR.FetchHalt) as exc:
+        FR.main(["--dump", dump, "--run", "r", "--root", str(tmp_path / "runs")])
+    assert exc.value.evidence["clause"] == "downloader_job_exit_unrecorded"
+
+
+def test_a_malformed_exit_record_is_a_FETCH_clause_not_a_crash(tmp_path, monkeypatch):
+    """F-b5db1a40 · the second gap in the same reader.
+
+    reverted-red: yes — `json.load` raised a bare `JSONDecodeError`, which left the halt
+    block printing exit 1 ("this tool crashed") rather than a FETCH clause with the record
+    path a reader could open.
+    """
+    _stub_downloader(monkeypatch, FR, rows_for=lambda jobs: [],
+                     write=FR.PNG_SIGNATURE, exits_text="{not json")
+    dump = _fetch_run_dump(tmp_path, 1)
+    with pytest.raises(FR.FetchHalt) as exc:
+        FR.main(["--dump", dump, "--run", "r", "--root", str(tmp_path / "runs")])
+    ev = exc.value.evidence
+    assert ev["clause"] == "downloader_exits_unreadable"
+    assert ev["exits_record"].endswith(FR.EXITS_NAME)
+
+
+def test_a_record_of_real_zeroes_still_passes(tmp_path, monkeypatch):
+    """F-b5db1a40 · the direction the new clause must NOT fire on."""
+    _stub_downloader(
+        monkeypatch, FR,
+        rows_for=lambda jobs: [{"out": j["out"], "url": j["url"], "code": 0,
+                                "message": ""} for j in jobs],
+        write=FR.PNG_SIGNATURE + b"IHDR")
+    dump = _fetch_run_dump(tmp_path, 2)
+    assert FR.main(["--dump", dump, "--run", "r",
+                    "--root", str(tmp_path / "runs")]) == 0
+
+
+# ---------------------------------------------------------------- the sibling
+
+def _t2v_dump(tmp_path, n):
+    doc = {"results": [{"source_node_id": FT.LOSSLESS_NODE, "filename": f"{i:012x}.png",
+                        "url": f"https://example.invalid/{i}"} for i in range(n)]}
+    p = tmp_path / "dump.json"
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return str(p)
+
+
+def test_the_t2v_fetcher_observes_a_MID_LOOP_download_failure(tmp_path, monkeypatch):
+    """F-a3ba416b · operand: a non-zero exit on a job that is NOT the last one.
+
+    reverted-red: yes. The only downloader gate in this fetcher read the pwsh PROCESS code,
+    and under its `foreach` shape that code reflects only the LAST native command in the
+    loop. Re-measured on this rig 2026-09-04 with a three-element loop: the failure on
+    element 1 leaves the process at exit 0; the same loop with the failure on the LAST
+    element exits 1. So `if proc.returncode != 0` could not fire on any download failure
+    except one in the final job.
+    """
+    def rows(jobs):
+        return [{"out": j["out"], "code": 22 if i == 0 else 0,
+                 "message": "curl: (22) 403"} for i, j in enumerate(jobs)]
+
+    _stub_downloader(monkeypatch, FR, rows_for=rows, write=FR.PNG_SIGNATURE,
+                     returncode=0)
+    with pytest.raises(FR.FetchHalt) as exc:
+        FT.main(["--dump", _t2v_dump(tmp_path, 3), "--out", str(tmp_path / "run")])
+    ev = exc.value.evidence
+    assert ev["clause"] == "downloader_job_exit_nonzero"
+    assert ev["process_returncode"] == 0, (
+        "the halt must say the PROCESS reported nothing wrong")
+
+
+def test_the_t2v_fetcher_records_no_signed_url_on_disk(tmp_path, monkeypatch):
+    """F-a3ba416b · the sibling's record, carried — WITHOUT carrying its urls.
+
+    `fetch_run`'s `urls.json` is durable by design; this fetcher's `_urls.json` is deleted
+    on every path precisely because it holds signed download links (wave 12, F-8ccedf71).
+    Its exit record is the same object with the same exposure, so this fetcher asks the
+    downloader for the rows and not the urls, and the exposure the earlier fix closed is
+    not re-opened by the fix that carries the record.
+    """
+    def rows(jobs):
+        return [{"out": j["out"], "code": 0, "message": ""} for j in jobs]
+
+    _stub_downloader(monkeypatch, FR, rows_for=rows, write=FR.PNG_SIGNATURE + b"IHDR")
+    out = tmp_path / "run"
+    dump = json.loads(open(_t2v_dump(tmp_path, 2), encoding="utf-8").read())
+    jobs = FT.plan(dump["results"], str(out))
+    FT.download(jobs, out=str(out))
+    assert not (out / "lossless" / "_urls.json").exists()
+    record = out / FR.EXITS_NAME
+    assert record.exists(), "the per-job exit record this fetcher was left without"
+    text = record.read_text(encoding="utf-8")
+    assert "url" not in json.loads(text)[0]
+    assert "example.invalid" not in text
+
+
+def test_the_two_fetchers_share_one_downloader_implementation():
+    """F-a3ba416b · "carry the sibling's fix rather than a second shape".
+
+    Keyed on BEHAVIOUR — `fetch_t2v_run.download` reaches the sibling's implementation —
+    rather than on the word `foreach`, which is the spelling that hid the defect.
+    """
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(FT))
+    fn = next(n for n in tree.body
+              if isinstance(n, ast.FunctionDef) and n.name == "download")
+    # The DOCSTRING is excluded on purpose: it records the pwsh measurement that made this
+    # fix necessary, and a census that read it would refuse the very evidence it rests on.
+    # This keys on the CODE — the calls the function makes and the strings it builds.
+    body = [st for st in fn.body if not (isinstance(st, ast.Expr)
+                                         and isinstance(st.value, ast.Constant)
+                                         and isinstance(st.value.value, str))]
+    module = ast.Module(body=body, type_ignores=[])
+    literals = [n.value for n in ast.walk(module)
+                if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+    assert not any("ForEach-Object" in v or "foreach (" in v or "$LASTEXITCODE" in v
+                   for v in literals), "a second downloader shape is back"
+    called = {n.func.id for n in ast.walk(module)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    assert "fetch_download" in called, (
+        "this fetcher builds its own downloader again instead of calling the sibling's")
+    assert FT.fetch_download is FR.download
