@@ -239,7 +239,13 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # 51 + 3 - 1 = 53. Re-pinned with the reason rather than relaxed (wave 3 section 0).
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch added one RouteGate raise site
     # (51 -> 52 on its own branch); merged = 53 + 1 = 54, MEASURED on the merged tree.
-    assert len(RAISE_SITES["RouteGate"]) == 54, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 12 (builders, F-4f72af05's sibling deliverable — the coordinator's CONDITIONAL
+    # licence ruling): `build_lora_arm_payload.conditional_attribution` raises `RouteGate`
+    # when the licence table rules a row CONDITIONAL and the readers that build its credit
+    # entries are absent — an unknown attribution is not something a spend tool completes.
+    # 54 + 1 = 55 on this branch. ⚠ core-gates' branch takes the same count to 57; the
+    # merged number is 58 and the coordinator re-measures it, as at wave 10.
+    assert len(RAISE_SITES["RouteGate"]) == 55, sorted(RAISE_SITES["RouteGate"])
     files = {path for path, _ in RAISE_SITES["RouteGate"]}
     # `build_lora_arm_payload.py` joined at the wave-8 merge: its new `gate_base_licence`
     # raises RouteGate on a banned node class in the operator's baseline graph.
