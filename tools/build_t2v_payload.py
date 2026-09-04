@@ -111,6 +111,8 @@ from armature_core import route_gates as RG  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
+from build_assembly_payload import (  # noqa: E402
+    SeedRegistrationError, read_seed_registration)
 from canon_gate import canon_line, canon_spend  # noqa: E402
 
 TOOL_VERSION = "E09.2"
@@ -491,9 +493,27 @@ def main(argv=None):
     prompt = PROMPT_A3 if a.profile == "reference" else PROBE_PROMPT
     canon_ev = canon_spend(a.subject, prompt, no_canon=a.no_canon, out_dir=a.out,
                            canon_prompt=a.canon_prompt)
-    with open(a.seeds, encoding="utf-8") as fh:
-        reg = json.load(fh)
-    registered = reg["seeds"]
+    # ONE reader, eight callers (wave 16, F-0682bd00). `reg["seeds"]` raised a bare
+    # KeyError on a registration with no key at all.
+    registered = read_seed_registration(a.seeds, flag="--seeds")
+    # ---- ANDON. `registered[0]` indexed the committed registration with no clause on it
+    # being non-empty, and `--seed` defaults to None, so the fallback is the DOCUMENTED
+    # path. Measured 2026-09-04 as a subprocess against `{"seeds": []}`: `BUILD_T2V_HALT
+    # {"error": "IndexError", "message": "list index out of range", "evidence": null}` and
+    # exit 1 — the code this module's own `__main__` block reserves for "this tool crashed"
+    # — for an operator supplying an emptied registration file. The three sibling builders
+    # (`build_animate_payload`, `build_i2v_payload`, `build_camera_i2v_payload`) each
+    # carried this clause before their own `sorted(registry)[0]`; this was the fourth
+    # builder with the same shape and the only one without it.
+    if a.seed is None and not registered:
+        raise SeedRegistrationError(
+            f"no --seed and {a.seeds!r} pre-registers no seeds, so there is no committed "
+            f"number to default to, and Gate S refuses a seed varied without a "
+            f"registration. Pass --seeds with the experiment's committed list, or pass "
+            f"--seed with a number that is on it",
+            {"gate": "PAYLOAD", "andon": "seed_registration",
+             "clause": "no_seed_and_no_registration", "flag": "--seeds",
+             "seeds_file": os.path.abspath(a.seeds), "registered": list(registered)})
     seed = a.seed if a.seed is not None else registered[0]
 
     graph, split = build_graph(seed, profile=a.profile, prompt=prompt)

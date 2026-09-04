@@ -119,7 +119,8 @@ from armature_core import route_gates  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
-from build_assembly_payload import gate_create_video_fps  # noqa: E402
+from build_assembly_payload import (  # noqa: E402
+    gate_create_video_fps, read_seed_registration)
 
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
 import build_i2v_payload as W1  # noqa: E402  - wave 1's trajectory, weights and frame
@@ -324,16 +325,19 @@ class PayloadError(ArmatureError):
     `ledger_against_wave1` built a full evidence dict, wrote it into the payload record on
     the PASSING path, and then raised with a message and nothing else — so the failing
     measurement, the one worth having, reached no record at all. Four modules define this
-    class; all four take the dict now.
+    class; all four take the dict now, through the base's own constructor.
 
-    ⚠ Four identical implementations of three lines is three lines too many: the single one
-    belongs beside `GateFailure` in `armature_core/errors.py`. That file is not this
-    domain's to edit, so the duplication is RECORDED here rather than hidden.
+    **CORRECTION, wave 16 (F-c496fa48, rule 5).** This class used to define its own
+    `__init__` normalising `evidence or {}`, under a note saying the single implementation
+    "belongs beside `GateFailure` in `armature_core/errors.py`. That file is not this
+    domain's to edit". Wave 14 put the constructor on the base and made a deliberate choice
+    the four copies then overrode: `ArmatureError` STORES WHAT IT IS PASSED and normalises
+    nothing, because `"evidence": null` beside `"gate": null` is the honest halt record for
+    a refusal that carries no receipt. `GateFailure` is the one exemption - its clauses
+    index into `ev` while they measure. `PayloadError` is not a gate, so the constructor is
+    DELETED and the base's inherited: `PayloadError("m").evidence is None` and
+    `PayloadError("m", d).evidence is d`, by identity.
     """
-
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
 
 
 def parse_args(argv=None):
@@ -490,36 +494,79 @@ DELIBERATE_BREAKS = {
 
 
 #: PNG colour types, from the format spec. 6 and 4 are the two that carry an alpha
-#: channel; 3 is a palette, which may carry transparency through a tRNS chunk.
+#: CHANNEL; 0, 2 and 3 may carry transparency through a tRNS chunk instead, which
+#: `_has_trns` below reads (wave 16, F-71ffdbfb - until then the comment named a
+#: spelling the line under it could not see).
 _PNG_COLOR_TYPES = {0: "grayscale", 2: "rgb", 3: "palette", 4: "grayscale_alpha",
                     6: "rgba"}
 
 
-def png_header(path):
-    """`{width, height, bit_depth, color_type, alpha}` read from the file's IHDR, or None.
+def _has_trns(fh):
+    """Does this PNG carry a `tRNS` chunk? Walks the chunk list; decodes nothing.
 
-    Stdlib only — 20 bytes of `struct`, no Pillow — because this runs in the CPU builders
-    and the render side already refuses to take a dependency for the same reason
-    (`armature_core.pngio` is a writer with no reader for exactly that trade).
+    Wave 16, F-71ffdbfb. `alpha = color_type in (4, 6)` could not see a tRNS chunk, and
+    `_PNG_COLOR_TYPES` above already said it existed ("3 is a palette, which may carry
+    transparency through a tRNS chunk"). The comment was right and the line below it
+    answered False, so a palette PNG carrying real transparency was recorded as opaque on
+    the one input this route's docstring calls the whole of its conditioning. Colour types
+    0 and 2 may carry one too, so the walk is not palette-only.
+
+    The walk stops at the first `IDAT`: the spec requires `tRNS` before it, so nothing
+    after the image data can change the answer, and no pixel data is ever read.
+    """
+    fh.seek(8)                                   # past the signature
+    while True:
+        head = fh.read(8)
+        if len(head) < 8:
+            return False
+        length, tag = struct.unpack(">I", head[:4])[0], head[4:8]
+        if tag == b"tRNS":
+            return True
+        if tag in (b"IDAT", b"IEND"):
+            return False
+        fh.seek(length + 4, 1)                   # payload + CRC
+
+
+def png_header(path):
+    """`{width, height, bit_depth, color_type, alpha, alpha_source}` from the file, or None.
+
+    Stdlib only - 20 bytes of `struct` and a walk of the chunk headers, no Pillow - because
+    this runs in the CPU builders and the render side already refuses to take a dependency
+    for the same reason (`armature_core.pngio` is a writer with no reader for exactly that
+    trade).
 
     **Why a builder measures this at all** (the Director's alpha ruling, 2026-08-12):
     every reference or start-frame render of the character is authored RGBA with a real
     alpha channel, and the RGB composite each route submits is a deliberate, recorded
-    choice. Until wave 10 this route's record asserted `fit: "native — authored at
+    choice. Until wave 10 this route's record asserted `fit: "native - authored at
     832x480"` about an image the tool never opened, so nothing could contradict it: a
     re-authored, resampled or flattened start frame left the sentence unchanged. The
     numbers here come from the artifact, so `fit` becomes a measurement instead of a claim
-    and the record says whether the authored input carried alpha at all.
+    and the record says whether the submitted input carries alpha at all.
+
+    **CORRECTION, wave 16 (F-71ffdbfb).** `alpha` was `color in (4, 6)` and was wrong in
+    one direction: a palette PNG carrying transparency through a tRNS chunk - and equally a
+    grayscale or truecolour PNG carrying one - reported `alpha: False`. Transparency in
+    this format has two spellings and only one was read. `alpha_source` now names which
+    spelling answered (`"color_type"`, `"tRNS"`, or `None` when the file is opaque), so the
+    clause that reads the boolean can say what it read it off.
     """
     with open(path, "rb") as fh:
         head = fh.read(33)
-    if len(head) < 33 or head[:8] != b"\x89PNG\r\n\x1a\x0a" or head[12:16] != b"IHDR":
-        return None
-    width, height, depth, color = struct.unpack(">IIBB", head[16:26])
+        if (len(head) < 33 or head[:8] != b"\x89PNG\r\n\x1a\x0a"
+                or head[12:16] != b"IHDR"):
+            return None
+        width, height, depth, color = struct.unpack(">IIBB", head[16:26])
+        if color in (4, 6):
+            alpha, source = True, "color_type"
+        elif _has_trns(fh):
+            alpha, source = True, "tRNS"
+        else:
+            alpha, source = False, None
     return {"width": width, "height": height, "bit_depth": depth,
             "color_type": _PNG_COLOR_TYPES.get(color, color),
-            "alpha": color in (4, 6),
-            "read_by": "IHDR, stdlib struct — no image library"}
+            "alpha": alpha, "alpha_source": source,
+            "read_by": "IHDR + the chunk list, stdlib struct - no image library"}
 
 
 def resolve_start_frame(path, declared_sha256):
@@ -979,6 +1026,11 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
         # own IHDR compared against the frame the graph generates.
         "start_image": W1.start_image_record(
             start_frame, start_name, WIDTH, HEIGHT,
+            # DELIBERATE_BREAKS["start_frame_pixels"] states this wave's artifact in words:
+            # "authored RGBA, submitted composite over a named colour recorded in the render
+            # provenance". `--start-frame` names the file that is UPLOADED, so the
+            # declaration is the composite (wave 16, F-71ffdbfb).
+            declares_alpha=False,
             fit=(f"native — authored at {WIDTH}x{HEIGHT}, this wave's own frame; wave 1 "
                  f"ran 832x480 and DELIBERATE_BREAKS['resolution'] is the ruling that "
                  f"moved it"),
@@ -1106,8 +1158,10 @@ def main(argv=None):
 
     registry = None
     if a.seeds_registry:
-        with open(a.seeds_registry, encoding="utf-8") as fh:
-            registry = json.load(fh)["seeds"]
+        # ONE reader, eight callers (wave 16, F-0682bd00). The bare `json.load(fh)["seeds"]`
+        # this replaces raised a stdlib KeyError naming a key and nothing else on a
+        # registration with no `seeds` key.
+        registry = read_seed_registration(a.seeds_registry, flag="--seeds-registry")
 
     if not a.negative_source:
         raise PayloadError(

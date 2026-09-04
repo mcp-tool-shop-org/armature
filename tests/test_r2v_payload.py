@@ -24,6 +24,7 @@ import build_cascade_payload as CASCADE
 import build_r2v_payload as B
 from armature_core import assembly as AS
 from armature_core import route_gates as RG
+from armature_core.errors import GateSSeedRegistration
 
 
 PROMPT = "character1 walks forward a few steps and turns the head over one shoulder."
@@ -153,7 +154,11 @@ def test_a_seed_arriving_over_a_link_is_not_pinned():
 
 
 def test_an_unregistered_seed_raises_before_anything_is_submitted():
-    with pytest.raises(RG.RouteGate) as exc:
+    # Wave 16 (F-f85c37f0): the evidence said `gate: "S"` while the raising class's id was
+    # `ROUTE`, so the record and the printed halt line named two gate ids for one event.
+    # It raises the id's OWNER now - `errors.GateSSeedRegistration`, the class
+    # `build_lora_arm_payload.gate_s` already raises for the same clause.
+    with pytest.raises(GateSSeedRegistration) as exc:
         B.gate_seed_registered(1111111111, SEEDS)
     assert "not on the committed registration" in str(exc.value)
 
@@ -179,7 +184,7 @@ def test_zero_billable_nodes_also_raises():
     wf = _a1()
     del wf["500"]
     with pytest.raises(RG.RouteGate,
-                       match=r"\[ROUTE\] the graph carries 0 `Wan2ReferenceVideoApi`"):
+                       match=r"\[CEILING\] the graph carries 0 `Wan2ReferenceVideoApi`"):
         B.gate_one_paid_node(wf)
 
 
@@ -360,8 +365,8 @@ def test_a2_end_to_end_orders_frames_by_local_name(tmp_path):
 
 def test_an_unregistered_seed_stops_the_end_to_end_run(tmp_path):
     seeds, prompt, refs, _ = _files(tmp_path)
-    with pytest.raises(RG.RouteGate,
-                       match=r"\[ROUTE\] seed 42 is not on the committed registration"):
+    with pytest.raises(GateSSeedRegistration,
+                       match=r"\[S\] seed 42 is not on the committed registration"):
         B.main([f"--arm=A1", "--seed=42", f"--seeds={seeds}", f"--prompt-file={prompt}",
                 f"--refs={refs}", f"--out={tmp_path / 'x'}", *_CANON_ESCAPE])
 
@@ -421,8 +426,8 @@ def test_a_refused_r2v_build_leaves_no_output_directory(tmp_path):
     real ones is read later as a run that happened."""
     seeds, prompt, refs, _ = _files(tmp_path)
     out = tmp_path / "fresh" / "route"
-    with pytest.raises(RG.RouteGate,
-                       match=r"\[ROUTE\] seed 42 is not on the committed registration"):
+    with pytest.raises(GateSSeedRegistration,
+                       match=r"\[S\] seed 42 is not on the committed registration"):
         B.main([f"--arm=A1", "--seed=42", f"--seeds={seeds}", f"--prompt-file={prompt}",
                 f"--refs={refs}", f"--out={out}", *_CANON_ESCAPE])
     assert not out.exists()

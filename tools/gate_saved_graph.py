@@ -33,6 +33,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates as RG  # noqa: E402
+from build_assembly_payload import read_seed_registration  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
@@ -393,6 +394,18 @@ def link_round_trip(api_graph, saved_graph):
     video re-pointed at another node, and a link naming a node the file does not declare
     were all invisible on the last gate before credits are spent.
 
+    **The saved node's own socket table is refused when it is ambiguous, and that is the
+    third correction** (wave 16, F-04fdd395). `saved_slots` was a last-write-wins dict
+    comprehension with no duplicate clause, so a node declaring one input socket name twice
+    kept the LAST entry and the earlier declaration was never visited. Measured 2026-09-04
+    on a `WanImageToVideo` fixture in this repo's own API shape: node 49 declaring
+    `positive` from the NEGATIVE encoder and again from the positive returned
+    `{'n_links': 2, 'links': ['49.negative','49.positive']}` with no halt, beside an
+    all_equal `round_trip` — a clean topology verdict over a file that declares three
+    sockets and was examined for two. `link_table` above refuses a duplicate link id and
+    `fetch_run.parse_node_map` a duplicate node id for the same reason; this table is the
+    third member of that family.
+
     Both arguments are read through THE loader (`_as_api_graph` / `_as_saved_graph`), so a
     wrapped or wrong-way-round doc is refused by a named format clause rather than by a
     stdlib `KeyError` — see `_as_saved_graph`.
@@ -406,7 +419,43 @@ def link_round_trip(api_graph, saved_graph):
         s = saved_by_id.get(str(node_id))
         if s is None:
             continue                                  # `round_trip` already raised on this
-        saved_slots = {slot.get("name"): slot for slot in (s.get("inputs") or [])}
+        # ---- ANDON, wave 16 (F-04fdd395). The THIRD name-keyed table in this domain, and
+        # the one that was not given the clause. This was a last-write-wins dict
+        # comprehension with no duplicate clause, so a saved node declaring the same input
+        # socket name twice kept only the LAST entry and the earlier one was never visited
+        # by `_origin_problems`. Measured 2026-09-04 on a `WanImageToVideo` fixture in this
+        # repo's own API shape (30 = positive encoder, 31 = negative, 49 = the conditioning
+        # node): node 49 declaring `[positive<-7, positive<-6, negative<-7]` against a table
+        # of `[[6,'30',0,49,0],[7,'31',0,49,1]]` returned `{'n_links': 2, 'links':
+        # ['49.negative','49.positive'], 'optional_sockets_empty_in_both': []}` with no halt
+        # and `round_trip` all_equal beside it — a clean topology verdict over a file that
+        # declares three sockets and was examined for two, on the last gate before a paid
+        # submission. `link_table` (:322) already refuses a duplicate LINK ID and
+        # `fetch_run.parse_node_map` (:162) a duplicate NODE ID, both citing the same
+        # reason and each other; this is that family's third member.
+        #
+        # An agreeing repeat is refused too, unlike `link_table`'s clause. A link id
+        # declared twice from one origin resolves to that origin either way; a node input
+        # slot declared twice is a shape no converter emits, and the receipt's own
+        # `n_links` counts fewer sockets than the file declares whatever the links say.
+        saved_slots = {}
+        for slot in (s.get("inputs") or []):
+            slot_name = slot.get("name")
+            if slot_name in saved_slots:
+                raise RG.RouteGate(
+                    f"the saved file's node {node_id} declares the input socket "
+                    f"{slot_name!r} TWICE, carrying link {saved_slots[slot_name].get('link')!r} "
+                    f"and link {slot.get('link')!r}. Which one this comparison resolves is "
+                    f"an accident of array order, the other is never visited, and a file "
+                    f"that is ambiguous about where its conditioning comes from is not a "
+                    f"file this gate can vouch for",
+                    {"gate": "SAVED_ADMISSION", "andon": "duplicate_socket_name",
+                     "clause": "duplicate_socket_name", "node": str(node_id),
+                     "name": slot_name,
+                     "links": [saved_slots[slot_name].get("link"), slot.get("link")],
+                     "n_sockets_declared": len(s.get("inputs") or []),
+                     "declared_names": [x.get("name") for x in (s.get("inputs") or [])]})
+            saved_slots[slot_name] = slot
         names = list(saved_slots) + [n for n in node["inputs"] if n not in saved_slots]
         for name in names:
             ours = node["inputs"].get(name)
@@ -446,20 +495,35 @@ def link_round_trip(api_graph, saved_graph):
 
 #: The two keys `route_gates.verify` writes into its own receipt for the two facts a
 #: builder passes it. A dict carrying BOTH is a `verify` receipt; `gate_base_licence`'s
-#: evidence carries the same `gate`/`andon` pair and neither of these, which is why the
-#: reader below keys on the FACTS and not on the gate id (wave 12's rule: key on
+#: evidence carries the same `gate`/`andon` pair and neither of these, which is why this
+#: reader kept keying on the FACTS and not on the gate id (wave 12's rule: key on
 #: behaviour, not spelling).
 VERIFY_RECEIPT_KEYS = ("attribution", "carries_no_sampler_asserted")
 
+#: The KIND `route_gates.verify` declares about its own receipt, and the value this reader
+#: matches on (wave 16, core-gates' `F-069ae942`; the key landed in `verify`'s opening
+#: evidence literal, before any clause can raise). Keyed on the VALUE, never on the key's
+#: presence — a dict carrying `receipt: "something-else"` is not a verify receipt.
+VERIFY_RECEIPT_KIND = "verify"
+
 
 def verify_receipts(doc):
-    """Every `route_gates.verify` receipt inside a payload record, found by its CONTENT.
+    """Every `route_gates.verify` receipt inside a payload record.
 
     Walks the record rather than indexing a key path, because the builders spell that path
     two different ways — `gates.ROUTE` (the assemblers, `build_lora_arm_payload`,
     `build_r2v_payload`) and `gate_ROUTE_built` (`build_i2v_payload` and its camera
     sibling) — and a reader keyed on one of them would silently find nothing in the others
     and hand the DEFAULT facts to the last gate before a spend.
+
+    **Two readings, wave 16.** A receipt now DECLARES its own kind (`receipt: "verify"`),
+    so the identity of the dict is read off a declared value rather than inferred from the
+    co-presence of two fact keys — the reading that had to be used while nothing declared
+    anything, and one that a third key set could collide with tomorrow. The content check
+    is kept as the second clause rather than replaced: a record written by an older builder
+    carries the facts and no declared kind, and a receipt that answers the two questions is
+    still a receipt this gate can read the facts off. Either reading alone admits; both are
+    recorded in `route_facts` so a reader of the record can see which one found it.
     """
     out = []
     stack = [doc]
@@ -467,7 +531,8 @@ def verify_receipts(doc):
         node = stack.pop()
         if isinstance(node, dict):
             if (node.get("gate") == "ROUTE" and node.get("andon") == "RouteGate"
-                    and all(k in node for k in VERIFY_RECEIPT_KEYS)):
+                    and (node.get("receipt") == VERIFY_RECEIPT_KIND
+                         or all(k in node for k in VERIFY_RECEIPT_KEYS))):
                 out.append(node)
             stack.extend(node.values())
         elif isinstance(node, list):
@@ -521,13 +586,32 @@ def route_facts(record_path):
     if not receipts:
         raise RG.RouteGate(
             f"--record={record_path!r} carries no `route_gates.verify` receipt: no dict in "
-            f"it holds gate=ROUTE, andon=RouteGate and both of "
+            f"it holds gate=ROUTE, andon=RouteGate and either "
+            f"`receipt: {VERIFY_RECEIPT_KIND!r}` or both of "
             f"{list(VERIFY_RECEIPT_KEYS)}. A record that does not say what the builder "
             f"asserted is a record that cannot supply this gate's facts, and defaulting "
             f"them would put an unasserted claim on the last check before a spend",
             {"gate": "ROUTE", "andon": "RouteGate",
              "clause": "record_carries_no_verify_receipt", "record": path,
              "required_keys": list(VERIFY_RECEIPT_KEYS)})
+    # ---- ANDON, wave 16. A receipt admitted on its DECLARED kind must still answer the
+    # two questions this gate reads off it; the fact keys were the identity test before,
+    # so a receipt could not be admitted without them, and adding the declared reading
+    # opens a shape where it can. A missing fact is refused by name rather than reaching
+    # the next line as a `KeyError`.
+    thin = [r for r in receipts
+            if any(k not in r for k in VERIFY_RECEIPT_KEYS)]
+    if thin:
+        raise RG.RouteGate(
+            f"--record={record_path!r} carries a receipt declaring "
+            f"`receipt: {VERIFY_RECEIPT_KIND!r}` that does not answer both of "
+            f"{list(VERIFY_RECEIPT_KEYS)}. A declared kind says what a dict IS; it does "
+            f"not supply what this gate reads off it",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "verify_receipt_missing_its_facts", "record": path,
+             "required_keys": list(VERIFY_RECEIPT_KEYS),
+             "missing": sorted({k for r in thin for k in VERIFY_RECEIPT_KEYS
+                                if k not in r})})
     asserted = sorted({bool(r["carries_no_sampler_asserted"]) for r in receipts})
     if len(asserted) != 1:
         raise RG.RouteGate(
@@ -544,7 +628,14 @@ def route_facts(record_path):
             if key not in seen:
                 seen.add(key)
                 attribution.append(entry)
+    declared = sum(1 for r in receipts if r.get("receipt") == VERIFY_RECEIPT_KIND)
     return {"record": path, "n_verify_receipts": len(receipts),
+            # which reading found them, so a record's reader can see whether the receipts
+            # declared their own kind or were recognised by the facts they carry.
+            "n_declaring_their_kind": declared,
+            "found_by": ("declared receipt kind" if declared == len(receipts) else
+                         "the two facts they carry" if declared == 0 else
+                         "a mix: some declare their kind, some are read by their facts"),
             "carries_no_sampler": asserted[0], "attribution": attribution,
             "source": ("route_gates.verify's own receipt inside the builder's payload "
                        "record; neither fact is typed at this call site")}
@@ -598,15 +689,39 @@ def main(argv=None):
     # `--api` gets the MIRROR of that boundary, which it never had: it was a bare
     # `json.load` with no format check at all, two lines below a `--saved` refused by name.
     api = _as_api_graph(RG.load_graph(a.api), path=a.api)
-    with open(a.seeds, encoding="utf-8") as fh:
-        registered = json.load(fh)["seeds"]
+    # ONE reader, eight callers (wave 16, F-0682bd00): the bare index this replaces
+    # raised a stdlib KeyError on a registration with no `seeds` key, on the last gate
+    # before a paid submission.
+    registered = read_seed_registration(a.seeds, flag="--seeds")
 
     frame = None
-    if a.frame:
-        parts = [int(v) for v in a.frame.split(",")]
-        if len(parts) != 3:
-            raise RG.RouteGate(f"--frame={a.frame!r} is not width,height,length; two out "
-                               f"of three proves nothing", {"supplied": a.frame})
+    if a.frame is not None:
+        # ---- ANDON, wave 16 (F-e6450965). This CONVERTED BEFORE IT COUNTED:
+        # `[int(v) for v in a.frame.split(",")]` ran above the arity clause, so a
+        # non-numeric component raised a bare stdlib `ValueError` with no `evidence`
+        # attribute at all - rendered by the `__main__` block below as
+        # `SAVED_ADMISSION_HALT {"error": "ValueError", ..., "evidence": null}` and exit 1,
+        # "this tool crashed", on the last gate before a paid submission. The arity case
+        # two lines down WAS a named refusal at exit 2, and its evidence was
+        # `{"supplied": a.frame}` alone - none of the gate/andon/clause keys every other
+        # raise in this file carries. Measured 2026-09-04: `--frame=832,480,eighty` ->
+        # `ValueError: invalid literal for int() with base 10: 'eighty'`.
+        #
+        # One clause for both shapes: split, COUNT, then convert. The shape is
+        # `composite_reference.parse_plate`'s, which counts its three components before
+        # reading any of them.
+        raw = [v.strip() for v in a.frame.split(",")]
+        parts = [int(v) for v in raw if v.lstrip("+-").isdigit()]
+        if len(raw) != 3 or len(parts) != 3:
+            raise RG.RouteGate(
+                f"--frame={a.frame!r} is not width,height,length: it reads as "
+                f"{raw!r}, of which {len(parts)} of {len(raw)} are integers. Two out of "
+                f"three proves nothing, and a component this tool cannot read is not a "
+                f"dimension it can hand Gate L (argparse eats leading minus signs: pass "
+                f"as --frame=832,480,81)",
+                {"gate": "SAVED_ADMISSION", "andon": "frame",
+                 "clause": "frame_not_three_integers", "flag": "--frame",
+                 "supplied": a.frame, "parts": raw, "n_integers": len(parts)})
         frame = tuple(parts)
 
     equality = round_trip(api, saved)                       # 0 — is it even our graph

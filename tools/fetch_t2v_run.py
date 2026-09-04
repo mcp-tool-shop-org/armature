@@ -111,7 +111,9 @@ def plan(results, out):
             raise FetchHalt(
                 f"unexpected source node {nid}; this graph emits only "
                 f"{LOSSLESS_NODE} (lossless) and {VIDEO_NODE} (video)",
-                {"unexpected_node": nid, "known": [LOSSLESS_NODE, VIDEO_NODE]})
+                {"gate": "FETCH", "andon": "FetchHalt", "clause": "unexpected_source_node",
+                 "unexpected_node": nid,
+                 "known": [LOSSLESS_NODE, VIDEO_NODE]})
     return jobs
 
 
@@ -190,7 +192,8 @@ def gate_order_evidence(ev):
     array_mean = ev["results_array_order"]["mean"]
     hash_mean = ev["hash_sorted_order"]["mean"]
     ratio = (hash_mean / array_mean) if array_mean else None
-    g = {"gate": "ORDER", "array_order_mean_diff": array_mean,
+    g = {"gate": "ORDER", "andon": "FetchHalt", "clause": "order_unvouched",
+         "array_order_mean_diff": array_mean,
          "hash_sorted_mean_diff": hash_mean, "ratio": ratio,
          "boundary_is": (
              "the sign of the comparison, not a magnitude. No calibrated floor for this "
@@ -327,7 +330,9 @@ def main(argv=None):
     empty = [f for f, m in manifest.items() if m["bytes"] == 0]
     if empty:
         raise FetchHalt(f"FETCH_HALT zero-length frames: {empty}",
-                        {"zero_length": empty, "frames": len(frames)})
+                        {"gate": "FETCH", "andon": "FetchHalt", "clause": "zero_length_frames",
+                         "zero_length": empty,
+                         "frames": len(frames)})
 
     # The evidence file is already on disk above, so a halt here leaves the measurement
     # that fired it behind rather than making the next session re-fetch to see it.

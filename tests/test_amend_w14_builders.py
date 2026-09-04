@@ -416,8 +416,11 @@ def test_a_route_that_declares_its_own_non_native_fit_still_passes(tmp_path):
     why the gate is written against the declaration.
     """
     ev = W1.resolve_start_frame(str(_png(tmp_path, "wide.png", (1024, 576))))
+    # `declares_alpha` is the route's statement of what it submits, required since wave 16
+    # (F-71ffdbfb); `_png` writes colour type 2, the recorded RGB composite.
     rec = W1.start_image_record(ev, "server.png", 832, 480,
-                                fit="letterboxed — 1024x576 padded into 832x480")
+                                fit="letterboxed — 1024x576 padded into 832x480",
+                                declares_alpha=False)
     assert rec["fit_agrees_with_the_file"] is False
     assert rec["fit_declares_native"] is False
 
@@ -457,7 +460,8 @@ def test_the_matching_start_frame_still_builds(tmp_path):
     """F-e17613c2 · the direction the gate must NOT fire on."""
     right = W1.resolve_start_frame(str(_png(tmp_path, "ok.png", (W1.WIDTH, W1.HEIGHT))))
     rec = W1.start_image_record(right, "server.png", W1.WIDTH, W1.HEIGHT,
-                                fit=f"native — authored at {W1.WIDTH}x{W1.HEIGHT}")
+                                fit=f"native — authored at {W1.WIDTH}x{W1.HEIGHT}",
+                                declares_alpha=False)
     assert rec["fit_agrees_with_the_file"] is True
     assert rec["fit_declares_native"] is True
 
