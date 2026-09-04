@@ -718,6 +718,179 @@ def test_the_trigger_census_can_see_a_path_that_is_not_listed(tmp_path):
     assert covered(".github/actions/sheet-fonts/action.yml") is False
 
 
+# -- the build inputs that do NOT live at the repo root (F-5d2c6d28, F-65828040) ----------
+#
+# THE NODE `trigger_population()` keys on is `git ls-files -- :(top)` -- a tracked file at the
+# repo ROOT, an entry with no `/` in it. That is the right node for the population it derives
+# and it can never hold anything the suite reads one directory down. Measured 2026-09-04 by
+# resolving every `docs/` path expression under `tests/`: seven documents are consumed there
+# and TWO matched no filter in either trigger list.
+#
+#   * `docs/research-grounding.md` -- `tests/test_openpose_convention.py:46-49` asserts the
+#     document still carries F20's limbSeq verbatim, so an edit to it turns CI red. It matched
+#     no filter, so the edit ran no CI at all and the red first surfaced on an unrelated push.
+#   * `docs/assets/{logo-wide,mark-figure,E02-identity-sheet}.png` -- `tests/test_packaging.py`
+#     asserts `.gitignore`'s `!docs/assets/**` negation still re-includes them AND that no
+#     negation points at a path the tree does not have. A docs-only commit that removes that
+#     directory kills the negation, and nothing ran.
+#
+# THE SPELLING THAT HIDES. The openpose document is reached as
+# `os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs",
+# "research-grounding.md")` -- the join is rooted at a CALL, not at a module-level path
+# constant, so a walk keyed on "a join off a known root name" resolves nothing here. The
+# derivation below keys on the constants INSIDE the join, from the `"docs"` segment onward,
+# whatever the root expression is.
+
+_DOCS_LITERAL = re.compile(r"""^docs/[^\s*?"']+\.[A-Za-z0-9]+$""")
+
+
+def _trailing_constants(args, start):
+    """`args[start:]` as strings, or None if any of them is not a string constant.
+
+    A join whose tail is computed (`os.path.join(root, "docs", name)`) names no single
+    document, and guessing one would put a path this suite never opens into the requirement.
+    """
+    out = []
+    for arg in args[start:]:
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            out.append(arg.value)
+        else:
+            return None
+    return out
+
+
+def _docs_paths_the_suite_reads(tests_dir=None):
+    """Every repo path under `docs/` that a test resolves, by either spelling.
+
+    Two shapes, because the two findings arrived in two shapes:
+
+    * a join whose arguments carry `"docs"` followed by string constants, ROOTED ANYWHERE --
+      a name, a call, a subscript; the root is not read at all, which is what makes this
+      immune to the Call-rooted form that hides from a root-keyed walk;
+    * a `docs/...`-prefixed literal naming a file, wherever it appears. `tests/test_packaging.py`
+      holds the three committed figures in a module-level list and hands the LIST to
+      `_check_ignore`, so no single constant is ever an argument of a path-consuming call --
+      the repo-root census's `_PATH_CONSUMING_CALLS` rule would see none of them. A literal
+      that spells a repo subdirectory and a file extension is a path claim about this tree.
+    """
+    tests_dir = TESTS_DIR if tests_dir is None else tests_dir
+    found = set()
+    for name in sorted(os.listdir(tests_dir)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        with open(os.path.join(tests_dir, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                fn = node.func
+                fname = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
+                if fname == "join":
+                    for i, arg in enumerate(node.args):
+                        if isinstance(arg, ast.Constant) and arg.value == "docs":
+                            tail = _trailing_constants(node.args, i)
+                            if tail and len(tail) > 1:
+                                found.add("/".join(tail))
+                            break
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if _DOCS_LITERAL.match(node.value):
+                    found.add(node.value)
+    return sorted(found)
+
+
+def _covered(patterns, path):
+    """Does `path` match one of a trigger list's `paths:` entries?"""
+    return any(p == path or (p.endswith("/**") and path.startswith(p[:-3] + "/"))
+               for p in patterns)
+
+
+#: Derived 2026-09-04 (wave 12). Equality, so a test that starts reading an eighth document
+#: under `docs/` joins the trigger requirement on the day it lands rather than being guarded
+#: by a job that never runs on it.
+RECORDED_DOCS_POPULATION = [
+    "docs/assets/E02-identity-sheet.png",
+    "docs/assets/logo-wide.png",
+    "docs/assets/mark-figure.png",
+    "docs/experiments/E04-the-between-generation-floor.md",
+    "docs/index/armature.db",
+    "docs/license-map.md",
+    "docs/research-grounding.md",
+]
+
+
+def test_the_docs_population_is_derived_from_what_the_suite_resolves():
+    """Size and membership before the property, and every member must be a file that exists.
+
+    A resolved path that is not in the tree would be a requirement on a document nobody has,
+    which is how a filter list fills with entries that guard nothing.
+    """
+    pop = _docs_paths_the_suite_reads()
+    assert pop == RECORDED_DOCS_POPULATION, {
+        "appeared": sorted(set(pop) - set(RECORDED_DOCS_POPULATION)),
+        "vanished": sorted(set(RECORDED_DOCS_POPULATION) - set(pop)),
+    }
+    absent = [p for p in pop if not os.path.isfile(os.path.join(REPO, p.replace("/", os.sep)))]
+    assert absent == [], f"the suite resolves these and the tree does not carry them: {absent}"
+
+
+def test_the_docs_census_resolves_a_call_rooted_join(tmp_path):
+    """The hidden spelling, shown unmatched: a join rooted at a CALL, in a scratch tests tree.
+
+    This is the shape `tests/test_openpose_convention.py` uses and the shape a root-keyed walk
+    cannot see. The fixture also carries the list-literal form, which reaches no path-consuming
+    call at all, and a bare `'docs'` constant that names no file and must NOT enter. Both real
+    shapes must be resolved, and both must then be REJECTED by the live filter lists -- a
+    census whose members were all already covered would be a check that cannot fail.
+    """
+    # ASSEMBLED, never written as one literal: this module is itself walked by the census
+    # under test, so a fixture path spelled as a single constant here would enter the REAL
+    # population and demand a CI trigger for a document that does not exist. Neither half
+    # matches on its own -- `docs/assets/` has no extension, `hidden-spelling.md` no prefix.
+    # Neither fixture path may be one a live filter already covers, or the red direction
+    # below is a check that cannot fail: `docs/assets/**` is now listed, so the list-literal
+    # fixture takes a subdirectory nothing names.
+    doc = "docs/" + "hidden-spelling.md"
+    figure = "docs/" + "nested/hidden-figure.png"
+    scratch = tmp_path / "tests"
+    scratch.mkdir()
+    (scratch / "test_call_rooted.py").write_text(
+        "import os\n"
+        "def test_a():\n"
+        "    doc = os.path.join(os.path.dirname(os.path.abspath(__file__)), %r, %r)\n"
+        "    with open(doc) as fh:\n"
+        "        fh.read()\n" % tuple(doc.split("/")),
+        encoding="utf-8",
+    )
+    (scratch / "test_list_literal.py").write_text(
+        "FIGURES = [%r]\ndef test_b():\n    assert FIGURES\n" % figure,
+        encoding="utf-8",
+    )
+    (scratch / "test_not_a_path.py").write_text(
+        "SKIP = 'docs'\n"
+        "def test_c():\n"
+        "    assert SKIP\n",
+        encoding="utf-8",
+    )
+    got = _docs_paths_the_suite_reads(str(scratch))
+    assert got == sorted([figure, doc]), got
+    for trigger in ("push", "pull_request"):
+        uncovered = [p for p in got if not _covered(_paths_under(trigger), p)]
+        assert uncovered == got, (
+            "the requirement below cannot go red: this fixture's documents are already "
+            f"covered by {trigger}'s filters"
+        )
+
+
+@pytest.mark.parametrize("trigger", ["push", "pull_request"])
+def test_ci_runs_on_every_docs_file_the_suite_reads(trigger):
+    """The property. A test reads it, so editing it can turn CI red, so editing it must run CI."""
+    patterns = _paths_under(trigger)
+    missing = [p for p in _docs_paths_the_suite_reads() if not _covered(patterns, p)]
+    assert missing == [], (
+        f"{trigger} builds nothing when these change: {missing}; each is resolved by a test "
+        "in this suite, so the first place a breakage surfaces is an unrelated later push"
+    )
+
+
 def _code_only(script):
     """The script with `#` comment lines dropped -- naming a module in a comment is not
     reaching it, and this test is about what the leg RUNS."""
