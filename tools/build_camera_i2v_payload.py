@@ -3,7 +3,8 @@ r"""build_camera_i2v_payload — E11's camera-held graph, built in this repo.
 
     python tools\build_camera_i2v_payload.py --uploads=<uploads.json> --out=<dir>
            --negative-source=<wan22_shared_config.py> --seeds-registry=specs\E11-seeds.json
-           --w1-record=<E11-probe-payload-record.json> [--seed=2026081233]
+           --w1-record=<E11-probe-payload-record.json> --start-frame=<start.png>
+           [--seed=2026081233 | --seeds-registry=specs\\E12-seeds.json]
 
 The camera-held route. Two levers move together and the record says so throughout: the
 camera moves from the prompt to a **camera embedding**, and the prompt's centre of gravity
@@ -114,7 +115,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
-from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
+from armature_core.canon import add_spend_flags  # noqa: E402
+from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
@@ -329,8 +331,17 @@ def parse_args(argv=None):
                     help="wave 1's committed payload record. The trajectory is pinned "
                          "against it, the four DELIBERATE_BREAKS are required to have "
                          "actually happened, and the positive is required to DIFFER")
+    ap.add_argument("--start-frame", default=None,
+                    help="path to the LOCAL re-authored start frame. Required: this is the "
+                         "single load-bearing control input of an i2v route, and CLAUDE.md "
+                         "requires every generation to record its control-input hashes. "
+                         "The tool hashes the file itself; it does not accept a typed "
+                         "digest as the record")
     ap.add_argument("--start-frame-sha256", default=None,
-                    help="the local sha256 of the re-authored start frame, into the record")
+                    help="OPTIONAL cross-check only. When given it must equal the sha256 "
+                         "the tool computes from --start-frame, or the build halts. It is "
+                         "never the recorded value: a digest nothing checks is worse than "
+                         "an absent one")
     ap.add_argument("--seeds-registry", default=None)
     ap.add_argument("--experiment", default=EXPERIMENT)
     ap.add_argument("--length", type=int, default=LENGTH,
@@ -459,6 +470,45 @@ DELIBERATE_BREAKS = {
                 "resolution change — the frame has to be re-rendered either way"),
         "authority": "E11 w2 ruling R5(4)"},
 }
+
+
+def resolve_start_frame(path, declared_sha256):
+    """The start frame's sha256, COMPUTED from the artifact. Raises rather than accepting.
+
+    Wave 3, F-d342f393. `--start-frame-sha256` defaulted to None and was threaded through
+    `ledger_against_wave1` only to be stored as
+    `ev["start_frame"]["wave_3_local_sha256"]`. It appeared in no comparison and in no
+    `problems.append` condition, so the hash of the re-authored start frame — the single
+    load-bearing control input of an i2v route, and the artifact the Director's alpha
+    ruling governs — was an optional operator-typed string that rode the record unverified
+    and read as `null` when omitted. CLAUDE.md requires every generation to record its
+    control-input hashes, and a value nothing checks is worse than an absent one.
+
+    So the tool reads the file. A declared digest is kept only as a cross-check, and a
+    declared digest that disagrees with the bytes halts the build.
+    """
+    if not path:
+        raise PayloadError(
+            "--start-frame is required: this route's whole conditioning is one image, and "
+            "a record that cannot name that image's bytes is not a recipe. Pass the local "
+            "path to the re-authored start frame; the tool hashes it")
+    if not os.path.isfile(path):
+        raise PayloadError(
+            f"--start-frame {path!r} is not a file, so there is nothing to hash and no "
+            f"control-input hash to record")
+    with open(path, "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()
+    ev = {"path": os.path.abspath(path), "sha256": digest,
+          "bytes": os.path.getsize(path), "source": "hashed_in_tool"}
+    if declared_sha256:
+        if declared_sha256.strip().lower() != digest:
+            raise PayloadError(
+                f"--start-frame-sha256 {declared_sha256!r} does not hash to the file "
+                f"{path!r}, which is {digest!r}. One of the two names a different "
+                f"artifact, and the record may not carry a digest the bytes do not support")
+        ev["declared_sha256"] = declared_sha256.strip().lower()
+        ev["source"] = "hashed_in_tool_and_confirmed_against_the_declared_value"
+    return ev
 
 
 def ledger_against_wave1(positive, uploads, length, w1_record_path,
@@ -642,9 +692,22 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
     `"wave": 3` field, and cloud output prefixes under `E12/w3/` — every one of them a
     plausible label pointing at the wrong run.
     """
-    gate_s = gates.gate_s_seed_registration(seed, registry, experiment,
+    # The default is resolved BEFORE Gate S, not after it. The old order put
+    # `seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)`
+    # BELOW a gate that refuses a non-int first, so the fallback was dead code and the
+    # usage block's optional `--seed` always halted on a message about NoneType — an
+    # operator following the documented invocation got a halt naming the wrong problem.
+    # The `else 0` branch was worse than dead: it read as a working default and would have
+    # shipped an unregistered seed the moment the ordering changed.
+    if seed is None and not registry:
+        raise PayloadError(
+            "no --seed and no --seeds-registry: this experiment pre-registered no seeds, "
+            "so there is no committed number to default to, and Gate S refuses a seed "
+            "varied without a registration. Pass --seeds-registry with the experiment's "
+            "committed list, or pass --seed with a number that is on it")
+    seed_used = seed if seed is not None else sorted(registry)[0]
+    gate_s = gates.gate_s_seed_registration(seed_used, registry, experiment,
                                             seed_was_explicit=seed is not None)
-    seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)
     # `wan-fun-camera`, not `wan-i2v`: the route runs the camera weights, so it reads its
     # legality constraints from the camera model's own row. Wave 2 is the argument.
     profile = gates.g1_generator_legality(WIDTH, HEIGHT, length, "wan-fun-camera")
@@ -918,7 +981,10 @@ def main(argv=None):
             "config, never retyped. E09's citation check fired on this string")
 
     positive, prompt_log = build_prompt()
-    gate_write(a.subject, a.canon_prompt or positive, no_canon=a.no_canon, out_dir=out)
+    # The SHIPPED positive is what the router checks; `--canon-prompt` is compared
+    # against it rather than substituted for it.
+    canon_ev = canon_spend(a.subject, positive, no_canon=a.no_canon, out_dir=out,
+                           canon_prompt=a.canon_prompt)
     negative, negative_log = build_negative(a.negative_source)
     overrides = {}
     if a.cfg is not None:
@@ -928,14 +994,18 @@ def main(argv=None):
         overrides["sampler_name"] = {"value": a.sampler, "source": a.trajectory_source or
                                      "an explicit --sampler override on this wave"}
 
+    # The control input is hashed from the artifact before anything else is built.
+    start_frame = resolve_start_frame(a.start_frame, a.start_frame_sha256)
     gate_ledger = ledger_against_wave1(positive, uploads, a.length, a.w1_record,
-                                       start_frame_sha256=a.start_frame_sha256,
+                                       start_frame_sha256=start_frame["sha256"],
                                        trajectory_overrides=overrides)
+    gate_ledger["start_frame"]["wave_3_local"] = start_frame
 
     wf, meta = build(uploads, a.seed, negative, positive, registry,
                      experiment=a.experiment, length=a.length, fps=a.fps, wave=a.wave,
                      trajectory_overrides=overrides)
     meta["gate_LEDGER_W3"] = gate_ledger
+    meta["gate_CANON"] = canon_ev
     meta["prompt_record"] = {
         "surgery": prompt_log,
         "negative": negative_log,
@@ -952,6 +1022,7 @@ def main(argv=None):
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
+    print(canon_line(canon_ev))
     print("BUILD_CAMERA_I2V_OK " + json.dumps({
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
         "resolution": meta["resolution"], "length": meta["length"], "fps": meta["fps"],

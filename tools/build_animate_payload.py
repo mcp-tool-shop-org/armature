@@ -2,7 +2,7 @@
 """build_animate_payload — E08's `WanAnimateToVideo` graph, built in this repo.
 
     python tools\\build_animate_payload.py --uploads=<uploads.json> --out=<dir>
-           [--seed=2026081201]
+           [--seed=2026081201 | --seeds-registry=specs\\E08-seeds.json]
 
 **Built here, never served.** `docs/license-map.md` trap #3 and CLAUDE.md both record the
 same measurement, taken twice on 2026-08-11: the served `video_wan2_2_14B_animate` template
@@ -67,7 +67,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
-from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
+from armature_core.canon import add_spend_flags  # noqa: E402
+from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "E10.1"
@@ -199,9 +200,22 @@ def identity_clause(path=TWIN_PROMPT_JSON):
 def build(uploads, seed, negative, positive, registry, reference_fit,
           experiment=EXPERIMENT, length=LENGTH, fps=FPS):
     """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists."""
-    gate_s = gates.gate_s_seed_registration(seed, registry, experiment,
+    # The default is resolved BEFORE Gate S, not after it. The old order put
+    # `seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)`
+    # BELOW a gate that refuses a non-int first, so the fallback was dead code and the
+    # usage block's optional `--seed` always halted on a message about NoneType — an
+    # operator following the documented invocation got a halt naming the wrong problem.
+    # The `else 0` branch was worse than dead: it read as a working default and would have
+    # shipped an unregistered seed the moment the ordering changed.
+    if seed is None and not registry:
+        raise PayloadError(
+            "no --seed and no --seeds-registry: this experiment pre-registered no seeds, "
+            "so there is no committed number to default to, and Gate S refuses a seed "
+            "varied without a registration. Pass --seeds-registry with the experiment's "
+            "committed list, or pass --seed with a number that is on it")
+    seed_used = seed if seed is not None else sorted(registry)[0]
+    gate_s = gates.gate_s_seed_registration(seed_used, registry, experiment,
                                             seed_was_explicit=seed is not None)
-    seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)
     profile = gates.g1_generator_legality(WIDTH, HEIGHT, length, "wan-animate")
 
     pose_name = uploads["pose_pack"]
@@ -384,10 +398,14 @@ def main(argv=None):
     negative = read_negative(neg_path)
     ident, ident_original, drops = identity_clause()
     positive = ident + ". " + SCENE_CLAUSE
-    gate_write(a.subject, a.canon_prompt or positive, no_canon=a.no_canon, out_dir=out)
+    # The SHIPPED positive is what the router checks. `--canon-prompt` used to stand in
+    # for it while `build()` was handed `positive` regardless.
+    canon_ev = canon_spend(a.subject, positive, no_canon=a.no_canon, out_dir=out,
+                           canon_prompt=a.canon_prompt)
 
     wf, meta = build(uploads, a.seed, negative, positive, registry, a.reference_fit,
                      experiment=a.experiment, length=a.length, fps=a.fps)
+    meta["gate_CANON"] = canon_ev
     meta["prompt_record"] = {
         "identity_clause_source": TWIN_PROMPT_JSON,
         "identity_clause_original": ident_original,
@@ -407,6 +425,7 @@ def main(argv=None):
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
+    print(canon_line(canon_ev))
     print("BUILD_ANIMATE_OK " + json.dumps({
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
         "length": meta["length"], "fps": meta["fps"],

@@ -323,3 +323,20 @@ def test_the_cited_revision_leaves_clip_vision_unconnected_too():
     assert slot["link"] is None
     start = next(i for i in node["inputs"] if i["name"] == "start_image")
     assert start["link"] is not None
+
+
+# ------------------------------------------------------------------ the seed default
+#
+# Wave 3, F-8898e2da — the same dead fallback, in the same shape, on this tool.
+
+
+def test_omitting_the_seed_builds_on_the_first_registered_seed():
+    wf, meta = built(seed=None)
+    assert meta["seed"] == sorted(E11_SEEDS)[0]
+    assert meta["gate_S"]["seed_was_explicit"] is False
+
+
+def test_omitting_the_seed_with_no_registry_names_the_missing_flag():
+    with pytest.raises(B.PayloadError) as exc:
+        built(seed=None, registry=None)
+    assert "--seed" in str(exc.value)

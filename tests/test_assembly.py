@@ -26,6 +26,61 @@ from armature_core import assembly as AS
 from conftest import TOOLS
 
 
+
+# ---------------------------------------------------------------------------------------
+# P2 / P3 seam adapter (swarm wave 3, health-amend-a) — TEST-LOCAL, never in the tools.
+#
+# The builders call the shared gates in the shape the core-solvers branch ships:
+#
+#     AS.gate_slot_ceiling(graph, group_size=..., cap=...)
+#     AS.gate_batch_topology(graph, n, batch, video, save, *, expected_sources)
+#     AS.gate_cascade_topology(graph, n, groups, final, video, save, consumer_input,
+#                              group_size=..., *, expected_sources)
+#
+# THIS branch's `armature_core.assembly` does not declare those two keywords yet, so
+# without the adapter below every end-to-end fixture here dies on a TypeError that says
+# nothing about the code under test. The adapter reads the real signature and does exactly
+# two things, both of which become no-ops the moment the sibling branch merges:
+#
+#   * drops `group_size` / `expected_sources` when the local gate does not declare them —
+#     so the pre-merge run exercises THIS branch's half of the pair;
+#   * supplies a derived `expected_sources` when the merged gate REQUIRES one and a test
+#     calls the gate directly without it — so this module's older fixtures, which predate
+#     the parameter, keep exercising the clauses they were written for.
+#
+# Owner of its deletion: the coordinator, in the commit that merges the two branches.
+
+
+@pytest.fixture(autouse=True)
+def _pair_seam_adapter(monkeypatch):
+    import inspect
+
+    from armature_core import assembly as _AS
+
+    def adapt(fname, derive=None):
+        fn = getattr(_AS, fname)
+        params = inspect.signature(fn).parameters
+
+        def shim(*a, _fn=fn, _params=params, _derive=derive, **kw):
+            for key in ("group_size", "expected_sources"):
+                if key in kw and key not in _params:
+                    kw.pop(key)
+            need = _params.get("expected_sources")
+            if (need is not None and need.default is inspect.Parameter.empty
+                    and "expected_sources" not in kw and _derive is not None):
+                kw["expected_sources"] = _derive(*a)
+            return _fn(*a, **kw)
+
+        monkeypatch.setattr(_AS, fname, shim)
+
+    def _ids(graph, n_frames, *rest):
+        return [str(200 + i) for i in range(int(n_frames))]
+
+    adapt("gate_slot_ceiling")
+    adapt("gate_batch_topology", _ids)
+    adapt("gate_cascade_topology", _ids)
+
+
 def _names(n):
     return [f"{i:064x}.png" for i in range(n)]
 
@@ -378,3 +433,98 @@ def test_the_round_trip_table_now_carries_the_batch_class():
     assert GS.WIDGET_INDEX.get("BatchImagesNode") == {}
     for cls in AS.ALLOWED_CLASSES:
         assert GS.WIDGET_INDEX.get(cls) is not None, f"{cls} has no widget row"
+
+
+# ------------------------------------------------- the frame order is not a filename sort
+#
+# Wave 3, F-4a64a24e. Both this file and the cascade took the clip's temporal order from
+# `sorted(uploads)` over LOCAL filenames, and no gate downstream related a batch slot index
+# to a frame index. Two ordinary inputs broke it silently, and both were measured on
+# 2026-09-03:
+#
+# (a) unpadded names. An 81-entry map keyed 0.png..80.png built, printed a clean topology
+#     verdict and BUILD_*_OK, while the recorded frame_order ran
+#     ['0.png', '1.png', '10.png', '11.png', ...] and 10.png occupied slot 2.
+# (b) a stray key. A 4-frame map plus one 'reference.png' was absorbed as a fifth frame,
+#     n_frames read 5, and the same green verdict printed.
+
+
+def test_an_unpadded_upload_map_is_refused_rather_than_lexicographically_sorted(tmp_path):
+    uploads = {f"{i}.png": f"{i:064x}.png" for i in range(12)}
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps(uploads), encoding="utf-8")
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.main(["--uploads", str(up), "--out", str(tmp_path / "o")])
+    assert "00000.png" in str(exc.value)
+    assert "0.png" in exc.value.evidence["malformed"]
+
+
+def test_a_stray_non_frame_key_is_not_absorbed_as_an_extra_frame(tmp_path):
+    uploads = {f"{i:05d}.png": f"{i:064x}.png" for i in range(4)}
+    uploads["reference.png"] = "ffff.png"
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps(uploads), encoding="utf-8")
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.main(["--uploads", str(up), "--out", str(tmp_path / "o")])
+    assert exc.value.evidence["malformed"] == ["reference.png"]
+
+
+def test_a_gap_in_the_frame_indices_is_refused(tmp_path):
+    """Every key is well formed and the count reads right; frame 2 is simply absent, so
+    every frame after it is off by one and nothing downstream can see it."""
+    uploads = {"00000.png": "a.png", "00001.png": "b.png", "00003.png": "c.png"}
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps(uploads), encoding="utf-8")
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.main(["--uploads", str(up), "--out", str(tmp_path / "o")])
+    assert exc.value.evidence["missing"] == ["00002.png"]
+
+
+def test_a_zero_padded_contiguous_map_still_builds(tmp_path):
+    """The mutation that must NOT fire the refusal. A gate that refused every map would be
+    a gate nobody could use, and its greenness would prove nothing."""
+    uploads = {f"{i:05d}.png": f"{i:064x}.png" for i in range(5)}
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps(uploads), encoding="utf-8")
+    out = tmp_path / "o"
+    B.main(["--uploads", str(up), "--out", str(out)])
+    rec = json.loads((out / "S03-assembly-payload-record.json").read_text(encoding="utf-8"))
+    assert rec["frame_order"] == [f"{i:05d}.png" for i in range(5)]
+
+
+# ------------------------------------------------- slot k holds frame k
+
+
+def test_the_slot_index_gate_catches_a_permuted_slot_that_topology_calls_clean():
+    """`gate_batch_topology` checks that the slot keys are the right NAMES and that their
+    sources are distinct LoadImages. It never relates slot k to frame k, so swapping two
+    slots leaves every count right and the clip out of sequence."""
+    names = [f"{i:064x}.png" for i in range(6)]
+    wf = B.build(names)
+    assert AS.gate_batch_topology(wf, 6, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)["verdict"]
+    assert B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0)], B.FIRST_IMAGE_ID)["verdict"]
+
+    bi = wf[str(B.BATCH_ID)]["inputs"]
+    bi["images.image0"], bi["images.image1"] = bi["images.image1"], bi["images.image0"]
+    assert AS.gate_batch_topology(wf, 6, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)["verdict"], (
+        "topology alone must still see nothing wrong — that is the point of the new gate")
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0)], B.FIRST_IMAGE_ID)
+    assert "slot 0" in str(exc.value)
+
+
+# ------------------------------------------------- a refuse leaves no output directory
+
+
+def test_a_refused_build_leaves_no_output_directory(tmp_path):
+    """Wave 3, F-451d9008. `os.makedirs` ran before --uploads was even read, so the
+    duplicate-server-name gate fired with the directory already on disk — an empty run
+    directory beside real ones, read later as a run that happened. Measured 2026-09-03."""
+    uploads = {f"{i:05d}.png": "same.png" for i in range(4)}
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps(uploads), encoding="utf-8")
+    out = tmp_path / "fresh" / "run"
+    with pytest.raises(AS.AssemblyGate):
+        B.main(["--uploads", str(up), "--out", str(out)])
+    assert not out.exists()
+    assert not out.parent.exists()

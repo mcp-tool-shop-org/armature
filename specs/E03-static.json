@@ -44,9 +44,6 @@
     "filter_size": 0.01,
     "film_transparent": true
   },
-  "gates": {
-    "g4_tolerance_px": 2
-  },
   "_notes": {
     "what_this_arm_is": "B3, the discriminator. The SAME asset as E03-posearc.json - byte-identical GLB, same pinned camera, same channels, same normalisation - with subject.animation switched to `static`. The scene frame stays pinned at 1, so the figure holds the T-pose for all 33 frames and the control does not move.",
     "why_one_asset_and_not_two": "Two GLBs would differ in vertex order, in file bytes, and in anything else the build happened to do differently on the day. One asset and one changed field means B1 and B3 differ in exactly one thing: whether the timeline advances.",

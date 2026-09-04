@@ -3,7 +3,8 @@ r"""build_i2v_payload — E11's `WanImageToVideo` graph, built in this repo.
 
     python tools\build_i2v_payload.py --uploads=<uploads.json> --out=<dir>
            --negative-source=<wan22_shared_config.py> --seeds-registry=specs\E11-seeds.json
-           --e08-record=<E08-probe-payload-record.json> [--seed=2026081231]
+           --e08-record=<E08-probe-payload-record.json>
+           [--seed=2026081231 | --seeds-registry=specs\\E11-seeds.json]
 
 The no-control route. A render of the performer is the first frame, a prompt describes the
 shot, and **nothing else conditions the generation** — no pose sticks, no reference image,
@@ -89,7 +90,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
-from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
+from armature_core.canon import add_spend_flags  # noqa: E402
+from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 import build_animate_payload as E08  # noqa: E402  - the prompt's source of record
@@ -245,9 +247,22 @@ def pin_against_e08(positive, negative, e08_record_path):
 def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
           length=LENGTH, fps=FPS):
     """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists."""
-    gate_s = gates.gate_s_seed_registration(seed, registry, experiment,
+    # The default is resolved BEFORE Gate S, not after it. The old order put
+    # `seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)`
+    # BELOW a gate that refuses a non-int first, so the fallback was dead code and the
+    # usage block's optional `--seed` always halted on a message about NoneType — an
+    # operator following the documented invocation got a halt naming the wrong problem.
+    # The `else 0` branch was worse than dead: it read as a working default and would have
+    # shipped an unregistered seed the moment the ordering changed.
+    if seed is None and not registry:
+        raise PayloadError(
+            "no --seed and no --seeds-registry: this experiment pre-registered no seeds, "
+            "so there is no committed number to default to, and Gate S refuses a seed "
+            "varied without a registration. Pass --seeds-registry with the experiment's "
+            "committed list, or pass --seed with a number that is on it")
+    seed_used = seed if seed is not None else sorted(registry)[0]
+    gate_s = gates.gate_s_seed_registration(seed_used, registry, experiment,
                                             seed_was_explicit=seed is not None)
-    seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)
     profile = gates.g1_generator_legality(WIDTH, HEIGHT, length, "wan-i2v")
 
     steps = TRAJECTORY["steps"]["value"]
@@ -472,13 +487,17 @@ def main(argv=None):
     negative = E08.read_negative(a.negative_source)
     ident, ident_original, drops = E08.identity_clause()
     positive = ident + ". " + E08.SCENE_CLAUSE
-    gate_write(a.subject, a.canon_prompt or positive, no_canon=a.no_canon, out_dir=out)
+    # The SHIPPED positive is what the router checks; `--canon-prompt` is compared
+    # against it rather than substituted for it.
+    canon_ev = canon_spend(a.subject, positive, no_canon=a.no_canon, out_dir=out,
+                           canon_prompt=a.canon_prompt)
 
     gate_pin = pin_against_e08(positive, negative, a.e08_record)
 
     wf, meta = build(uploads, a.seed, negative, positive, registry,
                      experiment=a.experiment, length=a.length, fps=a.fps)
     meta["gate_PIN"] = gate_pin
+    meta["gate_CANON"] = canon_ev
     meta["prompt_record"] = {
         "identity_clause_source": E08.TWIN_PROMPT_JSON,
         "identity_clause_original": ident_original,
@@ -500,6 +519,7 @@ def main(argv=None):
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
+    print(canon_line(canon_ev))
     print("BUILD_I2V_OK " + json.dumps({
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
         "length": meta["length"], "fps": meta["fps"],

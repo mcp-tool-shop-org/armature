@@ -19,6 +19,24 @@ the server's names are content-addressed and sort into a meaningless order, and 
 them would assemble the clip's 81 frames in an arbitrary sequence while every count in every
 gate still read correctly.
 
+--------------------------------------------------------------------------------
+Why the key SHAPE is now refused rather than sorted, and why a slot knows its frame
+
+"Ordered by their LOCAL name" was true of the maps this pipeline happened to write and
+false of the sort it relied on. Measured 2026-09-03: an 81-entry map keyed `0.png` ..
+`80.png` built cleanly and recorded a frame order running `0.png, 1.png, 10.png, 11.png`
+… `8.png, 80.png, 9.png` — `10.png` in slot 2 — with every gate green; and a 4-frame map
+carrying one extra `reference.png` key absorbed it as a fifth frame, `n_frames: 5`, same
+green verdict. Lexicographic sorting of unpadded names does exactly the shuffle the
+docstring above says sorting by server name would do.
+
+So `frame_order` refuses any key that is not `^[0-9]{5}\\.png$` and any gap in `0..n-1`:
+the map either carries a total order this tool can read or it halts. And because no gate
+downstream related a batch SLOT index to a FRAME index — `gate_batch_topology` checks slot
+names, distinctness and class, never position — `gate_slot_frame_index` closes that: slot
+`k` of a batch node must hold the upload name of frame `k`. Both helpers are used by
+`build_cascade_payload.py` and, through it, by the arm that spends.
+
 Compensator (NAMED_COMPENSATORS): writes JSON under `outputs/`. Compensator: delete the
 directory; owner: the executor session. The uploads it references have **no delete endpoint**
 on this API surface — they are content-addressed and inert unless a graph names them (the
@@ -28,6 +46,7 @@ E12 w2/w3 §7 convention).
 import argparse
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -35,7 +54,103 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
 
-TOOL_VERSION = "S03.1"
+TOOL_VERSION = "S03.2"
+
+#: The only shape a frame key in an upload map may take. Zero padded to five digits, so a
+#: lexicographic sort of the keys IS the numeric order — the property the ordering rule
+#: assumed and never checked.
+FRAME_KEY = re.compile(r"^[0-9]{5}\.png$")
+
+
+def frame_order(uploads):
+    """The clip's local frame names in temporal order, or raise saying which key broke it.
+
+    Two clauses, each for a failure that is silent in the other's presence:
+
+    * a key that is not `NNNNN.png` — unpadded names sort lexicographically, so `10.png`
+      lands in slot 2, and a key that is not a frame at all (`reference.png`) is absorbed
+      as an extra frame and lengthens the clip;
+    * a gap in `0..n-1` — every key well formed, the count reading right, and every frame
+      after the hole off by one.
+
+    Both were measured on this tool on 2026-09-03 producing a clean topology verdict.
+    """
+    keys = list(uploads)
+    malformed = sorted(k for k in keys if not FRAME_KEY.match(str(k)))
+    ev = {"gate": "ASSEMBLY", "n_keys": len(keys), "malformed": malformed}
+    if malformed:
+        raise AS.AssemblyGate(
+            f"the upload map carries {len(malformed)} key(s) that are not a zero-padded "
+            f"frame name — {malformed[:8]}{' …' if len(malformed) > 8 else ''}. Frame "
+            f"order is taken from a sort of these keys, and an unpadded name sorts "
+            f"lexicographically (10.png before 2.png) while a key that is not a frame at "
+            f"all is absorbed as one. Both shuffle or lengthen the clip with every count "
+            f"in every gate still reading right. Keys must match 00000.png..NNNNN.png",
+            ev)
+    ordered = sorted(keys)
+    want = [f"{i:05d}.png" for i in range(len(keys))]
+    missing = [w for w in want if w not in uploads]
+    ev["missing"] = missing
+    if ordered != want:
+        raise AS.AssemblyGate(
+            f"the upload map's frame indices are not 0..{len(keys) - 1} with no gaps: "
+            f"missing {missing[:8]}{' …' if len(missing) > 8 else ''}. A hole leaves every "
+            f"frame after it off by one, and the count still reads right",
+            ev)
+    return ordered
+
+
+def frame_source_ids(names, first_image_id):
+    """The LoadImage node id holding each frame, in frame order.
+
+    P3's other half: the shared topology gate is being taught to take these and compare
+    slot k to frame k. Supplied by every caller here regardless of whether the gate it is
+    handed to declares a parameter for them yet.
+    """
+    return [str(int(first_image_id) + i) for i in range(len(names))]
+
+
+def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
+    """Gate ASSEMBLY · ANDON — batch slot k holds the upload name of the frame at k.
+
+    `slot_plan` is `[(batch_node_id, first_frame_index), …]` in group order; slot `k` of
+    that node must resolve to a `LoadImage` carrying `names[first_frame_index + k]`. The
+    flat chain passes one entry; the cascade passes one per group.
+
+    **The andon is on the direction the invariant does not bound.** `gate_batch_topology`
+    and `gate_cascade_topology` check slot NAMES, source DISTINCTNESS and source CLASS, and
+    (in the cascade) that the GROUP nodes appear in order. None of them relates a slot
+    index to a frame index, so two slots swapped inside a batch leaves every count, every
+    name and every group order correct and the clip out of sequence — the same defect
+    `fetch_t2v_run.py` exists to catch on the way back, with no equivalent on the way out.
+    """
+    ev = {"gate": "ASSEMBLY_slot_frame_index", "n_frames": len(names),
+          "first_image_id": int(first_image_id),
+          "slot_plan": [[str(nid), int(start)] for nid, start in slot_plan]}
+    problems = []
+    for nid, start in slot_plan:
+        node = graph.get(str(nid)) or {}
+        inputs = node.get("inputs") or {}
+        slots = [k for k in inputs if k.startswith("images.image")]
+        for k in range(len(slots)):
+            frame = int(start) + k
+            link = inputs.get(f"images.image{k}")
+            src = str(link[0]) if isinstance(link, list) and len(link) == 2 else None
+            loader = graph.get(src) if src else None
+            got = (loader.get("inputs") or {}).get("image") if loader else None
+            want = names[frame] if frame < len(names) else None
+            if got != want:
+                problems.append(
+                    f"node {nid} slot {k} resolves to {got!r} via {src!r}; frame {frame} "
+                    f"of the clip is {want!r}")
+    if problems:
+        ev["problems"] = problems
+        raise AS.AssemblyGate(
+            "a batch slot does not hold the frame the clip's order puts there: "
+            + "; ".join(problems[:6]) + (" …" if len(problems) > 6 else ""), ev)
+    ev["verdict"] = (f"every slot across {len(slot_plan)} batch node(s) holds the upload "
+                     f"name of its own frame index, {len(names)} frame(s) checked")
+    return ev
 
 #: Node ids. Kept away from 1..99 so the graph reads as its own thing beside E02's, which
 #: used 200+ for its LoadImages and 300/301 for its batch and probe.
@@ -78,11 +193,15 @@ def main(argv=None):
     out = os.path.abspath(a.out)
     # Not a spend: Gate ASSEMBLY_paid requires zero billable nodes. Gate CANON
     # lives in the builders that author a generation, not in a frames->VIDEO pack.
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
+    #
+    # `os.makedirs` used to sit HERE, above --uploads being read and above every gate
+    # below. A refused build therefore left an empty run directory beside real ones, to be
+    # read later as a run that happened. It now sits below the last in-tool gate, matching
+    # the invariant build_payload.py states for Gate CANON.
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
-    order = sorted(uploads)                  # LOCAL names: 00000.png .. 00080.png
+    order = frame_order(uploads)             # LOCAL names: 00000.png .. 00080.png
     names = [uploads[k] for k in order]
     if len(set(names)) != len(names):
         raise AS.AssemblyGate(
@@ -95,7 +214,10 @@ def main(argv=None):
 
     # ---- the gates, in code, before anything is submitted.
     gate_paid = AS.gate_no_paid_nodes(wf)
-    gate_topo = AS.gate_batch_topology(wf, len(names), BATCH_ID, VIDEO_ID, SAVE_ID)
+    ordered_ids = frame_source_ids(names, FIRST_IMAGE_ID)
+    gate_topo = AS.gate_batch_topology(wf, len(names), BATCH_ID, VIDEO_ID, SAVE_ID,
+                                       expected_sources=ordered_ids)
+    gate_index = gate_slot_frame_index(wf, names, [(BATCH_ID, 0)], FIRST_IMAGE_ID)
     # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no
     # noise-bearing node at all, so the seed clause has nothing to decide and saying so is
     # honest where a green "0 seeds, all pinned" would be the vacuous shape the E13
@@ -126,10 +248,13 @@ def main(argv=None):
                           "output_node TRUE"),
             "LoadImage": "image COMBO -> IMAGE, MASK; api_node false",
         },
+        "frame_source_ids": list(ordered_ids),
         "gates": {"ASSEMBLY_paid": gate_paid, "ASSEMBLY_topology": gate_topo,
-                  "ROUTE": gate_route},
+                  "ASSEMBLY_slot_frame_index": gate_index, "ROUTE": gate_route},
     }
 
+    # Below the last in-tool gate: a refuse leaves no output directory.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     graph_path = os.path.join(out, "S03-assembly.api.json")
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=1)
@@ -140,6 +265,7 @@ def main(argv=None):
     print(f"nodes            {len(wf)}")
     print(f"paid-node gate   {gate_paid['verdict']}")
     print(f"topology gate    {gate_topo['verdict']}")
+    print(f"slot->frame gate {gate_index['verdict']}")
     print(f"route components {len(gate_route['components'])}  "
           f"seeds {len(gate_route['seeds'])}  latents {len(gate_route['latents'])}")
     print(f"frame legality   {[f['legal'] for f in gate_route['frame_legality']]}")

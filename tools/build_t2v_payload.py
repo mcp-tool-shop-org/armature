@@ -107,7 +107,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates as RG  # noqa: E402
-from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
+from armature_core.canon import add_spend_flags  # noqa: E402
+from canon_gate import canon_line, canon_spend  # noqa: E402
 
 TOOL_VERSION = "E09.2"
 
@@ -477,8 +478,11 @@ def main(argv=None):
     add_spend_flags(ap)
     a = ap.parse_args(argv)
 
+    # Unlike the other spend builders, `--canon-prompt` here IS the shipped string: it is
+    # handed to `build_graph` below, so the text the router checks and the text the graph
+    # carries are the same object and there is no divergence to refuse.
     prompt = a.canon_prompt or (PROMPT_A3 if a.profile == "reference" else PROBE_PROMPT)
-    gate_write(a.subject, prompt, no_canon=a.no_canon, out_dir=a.out)
+    canon_ev = canon_spend(a.subject, prompt, no_canon=a.no_canon, out_dir=a.out)
     os.makedirs(a.out, exist_ok=True)        # scripts create their own output directories
     with open(a.seeds, encoding="utf-8") as fh:
         reg = json.load(fh)
@@ -574,12 +578,13 @@ def main(argv=None):
         "negative_prompt_verbatim": negative_source(),
         "seed": seed,
         "seed_registration": {"file": os.path.abspath(a.seeds), "registered": registered},
-        "gates": {"ROUTE": gate_route, "S": gate_s, "L": gate_l},
+        "gates": {"ROUTE": gate_route, "S": gate_s, "L": gate_l, "CANON": canon_ev},
     }
     rec_path = os.path.join(a.out, f"E09-B2-{a.tag}-payload-record.json")
     with open(rec_path, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2, ensure_ascii=False)
 
+    print(canon_line(canon_ev))
     print("BUILD_T2V_OK " + json.dumps({
         "profile": a.profile, "graph": graph_path, "sha256": graph_sha,
         "nodes": len(graph), "seed": seed,

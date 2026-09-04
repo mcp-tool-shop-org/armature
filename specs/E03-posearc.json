@@ -44,9 +44,6 @@
     "filter_size": 0.01,
     "film_transparent": true
   },
-  "gates": {
-    "g4_tolerance_px": 2
-  },
   "_notes": {
     "camera_is_static": "azimuth_sweep_deg is 0, so orbit_azimuth returns azimuth_start_deg at every frame and the camera does not move. E02 varied the camera and held the subject; E03 does the reverse, and one variable changes at a time.",
     "why_azimuth_270": "The wire figure is planar at y=0 and the arc rotates about +Y, so the whole performance stays in the y=0 plane. A camera on the Y axis therefore sees it face-on with no foreshortening anywhere. 270 deg places the camera at -Y looking toward +Y; 0 deg would put it on the X axis, where the arm would swing directly at the lens and read as almost no motion at all.",
