@@ -60,6 +60,16 @@ class NoRetopoProduced(GateFailure):
     gate = "RETOPO"
 from make_parts_sheet import light_the_scene, ortho_camera, shoot     # noqa: E402
 
+#: Object types that put marks on the film, so an object of one of them left render-visible
+#: beside a comparison panel's subject IS in the panel. Cameras, lights, empties and
+#: armatures are excluded because they draw nothing; `rig_character.gate_objects_registered`
+#: keeps ARMATURE in its own stray set because that gate is about what rides into an EXPORT,
+#: which is a different question from what reaches a picture. MEASURED as the reason the
+#: wave-14 population is not `o.type == "MESH"`: the old clause read only the list it was
+#: handed, so a render-visible object of ANY other type was outside the question entirely.
+DRAWN_TYPES = frozenset({"MESH", "CURVE", "SURFACE", "META", "FONT", "VOLUME",
+                         "GPENCIL", "GREASEPENCIL"})
+
 #: QuadriFlow target, in faces. Chosen for the features that ARE the character: the mitten
 #: hands, the toes, and the curvature of the sculpted balls. Recorded with its result rather
 #: than defended in the abstract -- the sheet decides whether it was enough.
@@ -270,7 +280,7 @@ def smallest_limb_radius(ob):
     return smallest[0], float(smallest[1]), {k: float(v) for k, v in named.items()}
 
 
-def isolate_subject(objects, subject):
+def isolate_subject(scene, objects, subject):
     """Hide every object but `subject` from the render, and refuse if that did not hold.
 
     MEASURED 2026-09-04: `render_comparison` hid objects by iterating the `variants` list
@@ -286,17 +296,36 @@ def isolate_subject(objects, subject):
     The andon is on the direction the invariant does not bound: not "the listed objects are
     hidden" but "nothing else is visible". Same shape as
     `rig_character.gate_objects_registered`.
+
+    WAVE 14, F-4392a2c1 — THE OPERAND. The clause written above for that direction read
+    `[o for o in OBJECTS if o is not subject and o.hide_render is not True]`: the same list
+    the loop on the line above had just assigned `hide_render` on, so its population was
+    the population the loop bounds and it could only fire on an object whose setter refuses
+    (measured under the stub: three plain objects, three trials, `still` empty every time,
+    the raise never reached). The population that answers "nothing else is visible" is the
+    SCENE's, and visibility is `hide_render` OR any of the object's collections'
+    (`rig_character.gate_objects_registered:600`, the sibling this docstring already names,
+    and the level this one never consulted). `scene` is passed for that reason and for no
+    other.
     """
     for ob in objects:
         ob.hide_render = ob is not subject
-    still = [o.name for o in objects if o is not subject and o.hide_render is not True]
+    still = sorted(
+        o.name for o in scene.objects
+        if o is not subject
+        and o.type in DRAWN_TYPES
+        and not (o.hide_render or any(c.hide_render for c in o.users_collection)))
     if still:
         raise ComparisonNotIsolated(
             f"{len(still)} object(s) are still in the render beside the panel's subject "
             f"{getattr(subject, 'name', subject)!r}: {still}. Every panel would be a "
             f"composite of the variant it names and something else",
             {"gate": "ISOLATE", "subject": getattr(subject, "name", None),
-             "still_visible": still})
+             "still_visible": still,
+             "population": f"scene.objects of type {sorted(DRAWN_TYPES)}",
+             "n_examined": len([o for o in scene.objects if o.type in DRAWN_TYPES]),
+             "n_hidden_by_the_loop": len([o for o in objects if o is not subject]),
+             "visibility": "hide_render OR any users_collection.hide_render"})
     if subject is None or subject.hide_render:
         raise ComparisonNotIsolated(
             f"the panel's own subject {getattr(subject, 'name', subject)!r} is hidden from "
@@ -326,7 +355,7 @@ def render_comparison(scene, variants, out_dir, diagonal, centre):
             # Everything render-visible in the SCENE, not only the objects in `variants`:
             # a failed variant never reaches this list and used to be drawn into every
             # panel, on top of the one being shown.
-            isolate_subject([o for o in bpy.data.objects if o.type == "MESH"], ob)
+            isolate_subject(scene, [o for o in bpy.data.objects if o.type == "MESH"], ob)
             ortho_camera(scene, f"cam_{label}_{region}", Vector(target), oscale,
                          (700, 1150) if region == "figure" else (700, 700), azim)
             path = os.path.join(out_dir, f"{label}_{region}.png".replace(" ", "_"))
