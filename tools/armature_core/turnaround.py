@@ -293,7 +293,7 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
     (`startframe.gate_alpha(nan, ...)` -> AlphaGate), so the two ALPHA gates on the two
     routes disagreed about what a measurement is — the wave-10 sweep that closed
     F-90122505 stayed inside `startframe.py` and this is the turnaround route's other
-    alpha gate. `tools/render_turnaround.py:777` prints the same number to the console as
+    alpha gate. `tools/render_turnaround.py::main` prints the same number to the console as
     the per-view summary an executor reads. Through `parts.require_finite` with
     `positive=False`, because a transparent fraction may legitimately be 0.0 — one
     implementation of the NaN family, never a second `isfinite`.

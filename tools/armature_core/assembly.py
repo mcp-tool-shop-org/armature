@@ -162,7 +162,7 @@ def gate_no_paid_nodes(graph, allowed=None):
     contribute `None` to the class set, and `sorted()` then raised `TypeError: '<' not
     supported between instances of 'str' and 'NoneType'` - so the failure path was broken
     in exactly one class of malformed graph, and the caller got an untyped error with no
-    gate id and no evidence where the andon belonged. `parts.py:155-159` records the
+    gate id and no evidence where the andon belonged. `parts.py::joint_planes` records the
     identical defect being caught by its own test.
 
     **What changed and why** (F-5a810b95, wave 12). `allowed` was a plain keyword with no
@@ -180,8 +180,9 @@ def gate_no_paid_nodes(graph, allowed=None):
     node(s) across 1 class(es), all named by the allowlist and none reading as a partner
     class" — the second opinion silent because the widening it was written to catch does
     not contain its two words. Both production call sites take the default today
-    (`tools/build_assembly_payload.py:474`, `tools/build_cascade_payload.py:170`, measured
-    by grep), so this was the SHAPE and not a live escape.
+    (`tools/build_assembly_payload.py::build_and_write`,
+    `tools/build_cascade_payload.py::build_and_write`, measured by grep 2026-09-04), so this
+    was the SHAPE and not a live escape.
 
     Measured in the same call: `gate_no_paid_nodes({})` returned "PASS — 0 node(s) across 0
     class(es), all named by the allowlist" — no vacuity guard, while its two siblings in

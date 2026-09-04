@@ -131,9 +131,10 @@ def arc_readout(arc, count, start_deg, end_deg):
     midpoint frame is also 16.00 — they agree by construction. 0..180 gives the same
     readout 45.0 at frame 8.00, while the midpoint (90°) is frame 16.00: the record named
     MIDPOINT and reported the QUARTER crossing, off by 8 of 32 frames. The only guard was
-    the "lies outside the arc" clause, which a 0..180 arc satisfies. `rig_character.py:661`
-    uses fixed 0..90 probe angles so the shipped probe agreed by coincidence; the CLI path
-    did not.
+    the "lies outside the arc" clause, which a 0..180 arc satisfies.
+    `rig_character.py::author_probe` uses the fixed 0..90 `PROBE_ARC` so the shipped probe
+    agreed by coincidence; the CLI path did not. (Re-anchored on the symbol 2026-09-04,
+    F-0f035830: `rig_character.py:661` had drifted onto `gate_objects_registered`.)
 
     The registration is kept rather than re-derived — re-deriving would silently change a
     registered prediction, and the "outside the arc" refusal exists only because the

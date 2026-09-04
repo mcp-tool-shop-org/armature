@@ -120,7 +120,7 @@ def _stats(values):
     taking the opposite decision silently.
 
     F-86e9b5b9 — *the empty case returned a DIFFERENT KEY SET.* `{"n": 0}` with no
-    `min`/`median`/`mean`/`p90`/`max`, and `tools/measure_clip.py:131` does
+    `min`/`median`/`mean`/`p90`/`max`, and `tools/measure_clip.py::main` does
     `round(arm["frame_deltas"]["stats"]["median"], 3)` unguarded, so a one-frame clip —
     the natural input for exactly the failure these instruments exist to detect — killed
     the instrument with a bare `KeyError: 'median'` instead of describing the clip.

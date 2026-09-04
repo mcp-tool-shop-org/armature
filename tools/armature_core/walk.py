@@ -113,7 +113,7 @@ class WalkError(ArmatureError):
 
     **It used to subclass `ValueError`, and that made both of this module's andons
     invisible** (F-0d621185, corrected 2026-09-04). The ONE halt contract every tool runs —
-    `author_walk.py:712-725`, `preview_walk.py:239-252` and nineteen siblings —
+    `author_walk.py::__main__`, `preview_walk.py::__main__` and nineteen siblings —
     discriminates three outcomes by `isinstance`: `GateFailure` is "HALTED — a gate fired"
     at exit 2, `ArmatureError` is "REFUSED" at exit 2, and anything else is "FAILED — an
     unhandled error" at exit 1. Measured on the wave-10 base by replaying that expression

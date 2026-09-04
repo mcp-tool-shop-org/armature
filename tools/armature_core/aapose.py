@@ -196,9 +196,9 @@ DEFAULT_THRESHOLD = 0.5
 # tables, and the provenance recorded the comparison it did not make.**
 # `check_convention(keypoint_count, limb_seq, palette)` compared its three arguments
 # element-for-element against `KEYPOINT_COUNT` / `LIMB_SEQ` / `PALETTE` in this same
-# module, and the ONE production call site is
-# `tools/render_pose_sticks.py:165: aapose.check_convention(len(aapose.KEYPOINT_NAMES),
-# aapose.LIMB_SEQ, aapose.PALETTE)` — three parameters with zero degrees of freedom.
+# module, and the ONE production call site is `tools/render_pose_sticks.py::main`, whose
+# call is `aapose.check_convention(len(aapose.KEYPOINT_NAMES), aapose.LIMB_SEQ,
+# aapose.PALETTE)` — three parameters with zero degrees of freedom.
 #
 # Measured 2026-09-04 on the wave-12 base: the tool's exact call returns True; then, with
 # the module's own tables swapped to a ControlNet-18 shape (`KEYPOINT_NAMES[:18]`,

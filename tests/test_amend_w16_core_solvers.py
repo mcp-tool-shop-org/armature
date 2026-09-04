@@ -21,9 +21,10 @@ subset the old check walked —
   citation whose target line is NOT blank — the shape a blank-line walk cannot see.
 """
 
+import glob
 import io
-import json
 import os
+import re
 import sys
 
 import numpy as np
@@ -512,3 +513,272 @@ def test_the_digest_only_diagnostic_path_still_says_it_ruled_on_bytes_only():
     assert ev["n_adjacent_pairs_compared"] == 0
     assert ev["min_adjacent_pixel_distance"] is None
     assert "NOT compared" in ev["verdict"]
+
+
+# ====================================================================== F-0f035830
+#
+# `<file>.py:<line>` in module prose is a placeholder shaped like evidence: it resolves
+# today and rots on the next edit to the file it points at. Measured on `041027c` by
+# opening every one of them in the twenty-one owned modules: THIRTEEN were wrong — four
+# had become blank lines and nine landed on unrelated code, and four of the thirteen were
+# introduced or carried forward by wave-14 fixes. `tests/test_gates.py:860-864` already
+# rules for this repo that `(file, function, class)` is the identity that survives an edit
+# and a line number is not; the prose never adopted it.
+#
+# The population is EVERY citation in `tools/armature_core/*.py`, not the thirteen the
+# finding named. The census below is the seeds-spec citation census
+# (`tests/test_seeds_specs.py`) pointed at this package, with the anchor rule the specs'
+# `test_every_citation_names_the_function_that_holds_it` already uses.
+
+#: The anchor spellings this package's prose is allowed to carry.
+#:
+#: * `<file>.py::<symbol>` — the preferred form. No line number at all, so it cannot rot;
+#:   `<symbol>` is a `def`/`class` in that file, a `Class.method`, a module-level
+#:   assignment target, or `__main__` for the `if __name__ == "__main__":` handler.
+#: * `<file>.py:<line> (<symbol>)` — kept where a test pins the bare `file:line` string
+#:   (`tests/test_lift_solve.py` derives `round_trip_report`'s call sites by AST and asserts
+#:   the docstrings name them). The symbol must hold the line, so a move out of the function
+#:   fires here even though the line is not blank.
+#:
+#: Anything else is a bare citation and fails.
+
+#: The bare anchors this package deliberately KEEPS, because it corrects in place with the
+#: measurement rather than deleting: each is a WRONG anchor quoted inside the sentence that
+#: records it as wrong. Measured 2026-09-04; a citation that is neither qualified nor
+#: recorded here is what a fourteenth stale one would be.
+CORRECTED_ANCHORS = {
+    # blender_scene.unfiltered_world_bounds — the wave-10 anchor, now a blank line
+    ("blender_scene.py", "probe_subject.py", 75),
+    # blender_scene.CompositorWiring — the wave-12 anchor for stage_render's halt handler
+    ("blender_scene.py", "stage_render.py", 508),
+    # posearc.resolve_arc — drifted onto `gate_objects_registered`
+    ("posearc.py", "rig_character.py", 661),
+    # sitelist.SiteListError — the three-caller claim F-69733981 corrected
+    ("sitelist.py", "rig_character.py", 1135),
+    ("sitelist.py", "rig_parts.py", 480),
+    ("sitelist.py", "project_pose_keypoints.py", 229),
+    # startframe.gate_whole — the parser anchor F-dc4cf57e corrected
+    ("startframe.py", "render_start_frame.py", 142),
+}
+
+#: Where a cited basename is looked up, in order. `tools/superseded/` is included because a
+#: recorded failure kept runnable is a legitimate thing to cite.
+CITATION_SEARCH_DIRS = ("tools/armature_core", "tools", "tools/superseded", "tests",
+                        "tests/blender")
+
+_LINE_ANCHOR = re.compile(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)")
+_QUALIFIED = re.compile(r"\b([A-Za-z0-9_]+[.]py):([0-9]+) \(([A-Za-z0-9_.]+)\)")
+_SYMBOL_ANCHOR = re.compile(r"\b([A-Za-z0-9_]+[.]py)::([A-Za-z0-9_.]+)")
+
+
+def _resolve_cited_file(name):
+    for d in CITATION_SEARCH_DIRS:
+        path = os.path.join(REPO, *d.split("/"), name)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def _holder_of(path, lineno):
+    """The innermost `def`/`class` containing `lineno`, or None for module scope."""
+    import ast
+
+    tree = ast.parse(io.open(path, encoding="utf-8").read())
+    best = None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.lineno <= lineno <= (node.end_lineno or node.lineno):
+                if best is None or node.lineno > best.lineno:
+                    best = node
+    return best
+
+
+def _defines_symbol(path, symbol):
+    """Is `symbol` defined in this file? `def`/`class` at any depth, `Class.method`, a
+    module-level assignment target, or `__main__` for the `if __name__ == '__main__':`
+    handler."""
+    import ast
+
+    src = io.open(path, encoding="utf-8").read()
+    if symbol == "__main__":
+        return '__name__ == "__main__"' in src or "__name__ == '__main__'" in src
+    tree = ast.parse(src)
+    if "." in symbol:
+        owner, member = symbol.split(".", 1)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == owner:
+                return any(isinstance(b, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                          ast.ClassDef)) and b.name == member
+                           for b in node.body)
+        return False
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.name == symbol:
+                return True
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == symbol:
+                    return True
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id == symbol:
+                return True
+    return False
+
+
+def bad_line_anchors(src, stem):
+    """`[(cited, why)]` — every `<file>.py:<line>` in `src` that is not a live, qualified
+    anchor and is not a recorded correction."""
+    out = []
+    qualified = {(m.group(1), int(m.group(2))): m.group(3)
+                 for m in _QUALIFIED.finditer(src)}
+    for m in _LINE_ANCHOR.finditer(src):
+        name, lineno = m.group(1), int(m.group(2))
+        if (stem, name, lineno) in CORRECTED_ANCHORS:
+            continue
+        path = _resolve_cited_file(name)
+        if path is None:
+            out.append((f"{name}:{lineno}", "the cited file does not exist"))
+            continue
+        lines = io.open(path, encoding="utf-8").read().splitlines()
+        if not 1 <= lineno <= len(lines):
+            out.append((f"{name}:{lineno}",
+                        f"past the end of a {len(lines)}-line file"))
+            continue
+        if not lines[lineno - 1].strip():
+            out.append((f"{name}:{lineno}", "the cited line is blank"))
+            continue
+        symbol = qualified.get((name, lineno))
+        if symbol is None:
+            out.append((f"{name}:{lineno}",
+                        f"bare `<file>.py:<line>`; the line reads "
+                        f"{lines[lineno - 1].strip()[:60]!r}. Write "
+                        f"`{name}::<symbol>`, or `{name}:{lineno} (<symbol>)` where a test "
+                        f"pins the bare string"))
+            continue
+        holder = _holder_of(path, lineno)
+        got = holder.name if holder is not None else "<module>"
+        if got != symbol.split(".")[-1]:
+            out.append((f"{name}:{lineno} ({symbol})",
+                        f"that line is in {got}, not in {symbol}"))
+    return out
+
+
+def bad_symbol_anchors(src):
+    """`[(cited, why)]` — every `<file>.py::<symbol>` that does not resolve."""
+    out = []
+    for m in _SYMBOL_ANCHOR.finditer(src):
+        name, symbol = m.group(1), m.group(2)
+        path = _resolve_cited_file(name)
+        if path is None:
+            out.append((f"{name}::{symbol}", "the cited file does not exist"))
+            continue
+        if not _defines_symbol(path, symbol):
+            out.append((f"{name}::{symbol}", f"{name} defines no such symbol"))
+    return out
+
+
+@pytest.mark.parametrize("stem", OWNED_MODULES)
+def test_every_citation_in_an_owned_module_is_anchored_on_a_symbol(stem):
+    """The thirteen, and everything that could become the fourteenth.
+
+    A citation here is either `<file>.py::<symbol>` (no line at all), or
+    `<file>.py:<line> (<symbol>)` with the symbol that holds the line, or one of the
+    `CORRECTED_ANCHORS` kept as a record of a wrong anchor. Nothing else.
+    """
+    src = io.open(os.path.join(CORE, stem + ".py"), encoding="utf-8").read()
+    bad = bad_line_anchors(src, stem + ".py") + bad_symbol_anchors(src)
+    assert bad == [], {stem: bad}
+
+
+def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
+    """The population before the property, and a count a reader can check.
+
+    The nine `armature_core` modules this domain does NOT own are core-gates'; their prose
+    is walked for the resolve/blank clause under a measured CEILING, exactly as
+    `tests/test_seeds_specs.STALE_CITATIONS_TODAY` does for the specs it does not own — so
+    a citation that GOES stale over there fails here and a correction merely makes an entry
+    deletable.
+    """
+    owned = {}
+    for stem in OWNED_MODULES:
+        src = io.open(os.path.join(CORE, stem + ".py"), encoding="utf-8").read()
+        owned[stem] = (len(_LINE_ANCHOR.findall(src)), len(_SYMBOL_ANCHOR.findall(src)))
+    n_line = sum(a for a, _b in owned.values())
+    n_symbol = sum(b for _a, b in owned.values())
+    assert n_line + n_symbol >= 40, owned
+    assert n_symbol >= 25, ("the re-anchoring did not happen", owned)
+
+    others = {}
+    for path in sorted(glob.glob(os.path.join(CORE, "*.py"))):
+        stem = os.path.basename(path)[:-3]
+        if stem in OWNED_MODULES:
+            continue
+        src = io.open(path, encoding="utf-8").read()
+        stale = [c for c, _why in bad_line_anchors(src, stem + ".py")
+                 if "blank" in _why or "does not exist" in _why or "past the end" in _why]
+        if stale:
+            others[stem] = len(stale)
+    #: Measured 2026-09-04 across the `armature_core` modules core-gates owns. A CEILING,
+    #: never an equality: a citation that goes stale over there fails here, and a
+    #: correction over there leaves this green and merely makes an entry deletable — the
+    #: same treatment `tests/test_seeds_specs.STALE_CITATIONS_TODAY` gives the specs it
+    #: does not own.
+    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {"rig_gates": 1, "shotspec": 2}
+    over = {k: v for k, v in others.items()
+            if v > STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN.get(k, 0)}
+    assert over == {}, {"stale now": others,
+                        "measured 2026-09-04": STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN}
+
+
+def test_the_census_goes_red_on_a_citation_that_moved_out_of_its_function(tmp_path):
+    """The member outside the walk a blank-line check reaches.
+
+    Nine of the thirteen stale citations landed on a line that is NOT blank — that is the
+    ordinary way a citation rots, because code grows above it. The scratch module below
+    cites a real, non-blank line of a real file, and the symbol says otherwise.
+    """
+    src = ('"""x. `measure_cascade_clip.py:1 (main)` is the live consumer."""\n')
+    lines = io.open(os.path.join(TOOLS, "measure_cascade_clip.py"),
+                    encoding="utf-8").read().splitlines()
+    assert lines[0].strip(), "line 1 must be non-blank for this proof to mean anything"
+    bad = bad_line_anchors(src, "scratch.py")
+    assert len(bad) == 1, bad
+    assert "not in main" in bad[0][1], bad
+
+    #: and the bare form, which is what the thirteen were
+    bare = bad_line_anchors('"""`measure_cascade_clip.py:1` is the live consumer."""\n',
+                            "scratch.py")
+    assert len(bare) == 1 and "bare `<file>.py:<line>`" in bare[0][1], bare
+
+
+def test_the_census_goes_red_on_a_symbol_anchor_that_does_not_resolve():
+    """The other half: `<file>.py::<symbol>` cannot rot on a line move, but it can name a
+    function that was renamed or deleted."""
+    assert bad_symbol_anchors("`measure_cascade_clip.py::main`") == []
+    bad = bad_symbol_anchors("`measure_cascade_clip.py::no_such_function`")
+    assert len(bad) == 1 and "defines no such symbol" in bad[0][1], bad
+    gone = bad_symbol_anchors("`no_such_tool.py::main`")
+    assert len(gone) == 1 and "does not exist" in gone[0][1], gone
+
+
+def test_every_recorded_correction_names_the_live_anchor_beside_the_wrong_one():
+    """`CORRECTED_ANCHORS` is an exemption, so it is checked rather than trusted.
+
+    Without this clause the exemption would forgive exactly the citations it was written
+    for: a module could go on quoting `rig_character.py:1135` as a LIVE anchor and the
+    census would wave it through. The rule that separates the two readings is mechanical —
+    a correction records the wrong anchor and names the right one, so the module that
+    carries a corrected `<file>.py:<line>` must also carry a `<file>.py::<symbol>` anchor
+    for the same file. On `041027c` none of the seven modules did, which is what makes this
+    a clause and not a formality.
+    """
+    for stem, name, lineno in sorted(CORRECTED_ANCHORS):
+        src = io.open(os.path.join(CORE, stem), encoding="utf-8").read()
+        assert f"{name}:{lineno}" in src, (
+            stem, name, lineno, "recorded as corrected and no longer cited — delete it")
+        live = [m.group(0) for m in _SYMBOL_ANCHOR.finditer(src) if m.group(1) == name]
+        assert live, (
+            stem, f"{name}:{lineno}",
+            "is exempted as a CORRECTION and the module names no live "
+            f"`{name}::<symbol>` anchor beside it, so it still reads as a live citation")

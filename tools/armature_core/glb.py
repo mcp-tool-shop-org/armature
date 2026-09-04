@@ -112,8 +112,8 @@ def read_chunks(path):
     Downstream cover was partial rather than absent: for a GLB declaring a bufferView
     image, `_image_blob`'s range clause fires one layer down, and `gate_atlas_untouched`
     refuses a source with no hashable image. That is cover on the production path
-    (`rig_parts.py:514`), not on this public function, and this is where the promise
-    cannot be repaired.
+    (`rig_parts.py::main`, which calls `glb.gate_atlas_untouched`), not on this public
+    function, and this is where the promise cannot be repaired.
     """
     declared_size = os.path.getsize(path)
     with open(path, "rb") as fh:
@@ -187,9 +187,10 @@ def _image_blob(views, binary, image, index, path):
     """The bytes one bufferView-stored image declares, or raise naming the declaration.
 
     **Every read of `views` and `binary` in this module happens here** — that is the point
-    of the helper, and `tests/test_glb.py::test_every_read_of_the_containers_goes_through
-    _the_one_checked_helper` derives the population by walking this module's AST for
-    subscripts of either name and asserts the answer is this function alone. A second
+    of the helper, and
+    `tests/test_glb.py::test_every_read_of_the_containers_goes_through_the_one_checked_helper`
+    derives the population by walking this module's AST for subscripts of either name and
+    asserts the answer is this function alone. A second
     unchecked reader therefore cannot be added quietly.
 
     The three refusals correspond to the three ways the file can lie about itself: a
