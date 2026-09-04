@@ -49,12 +49,14 @@ walk cannot see the shape the new one reports.
 * **Refuses below its first write** — a per-refusal ratchet, no longer a module-wide skip
   and no longer bpy-only. See the comment above `REFUSALS_BELOW_THE_FIRST_WRITE` for the
   direction of the assertion and why it is a ceiling while wave 12's moves land.
-* **Reads back what it wrote** — `pack_pose_pack` encodes the pack, re-decodes the FILE
-  (`read_pack(dst)`) and runs Gate R over the decode, which is the whole point of Gate R;
-  `render_pose_sticks` measures the PNGs it drew; `fetch_t2v_run` gates the order of files
-  it downloaded. Read, not measured: the reason is stated per member below and each is
-  checked to be a real member of the derived population that is NOT a `bpy` tool, so the
-  two classes cannot silently absorb each other.
+* **Reads back what it wrote** — a per-NAME excuse, administered in `READBACK_REASONS`.
+  WAVE 14, F-3a0d4576: it used to be applied MODULE-wide, inside the ratchet's own `derived`
+  expression and at the first branch of `test_no_refusal_sits_below_the_first_write`, which
+  made the file's one asserted property blind to `pack_pose_pack`, `render_pose_sticks` and
+  `fetch_t2v_run` — the three tools with the most refusals under a write. Each reason now
+  NAMES the call that performs the read-back and a test finds that call in the tool's source
+  (F-385f2b60); the names that are not read-backs are a dated backlog, `NOT_YET_MOVED`, with
+  its size on the page.
 * **Out of this domain** — `lift_solve` (core-solvers) is a `bpy` tool and lands in the
   first class anyway; `fetch_t2v_run` (builders) is named in this wave's `skipped[]`.
 """
@@ -277,8 +279,12 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     # WAVE-12 MERGE (coordinator, 2026-09-04): RE-DERIVED on the merged tree with this file's own
     # behavioural walk after the moves landed (instruments moved eleven tools' refusals above
     # `makedirs` — F-244b2ad5; the coordinator moved `render_pose_sticks` and `pack_pose_pack`).
-    # Every entry that remains is a refusal that READS BACK the write it sits below — the
-    # reason is named per name in READBACK_REASONS — so equality is asserted again.
+    # CORRECTED 2026-09-04 (wave 14, F-385f2b60) by re-reading the table this line pointed
+    # at. The claim was "every entry that remains is a refusal that READS BACK the write it
+    # sits below"; measured, 34 of the 47 names carried the placeholder reason
+    # "REVIEW: not a read-back". Twelve names are read-backs (`READBACK_REASONS`, each with
+    # the call token a test finds in the source); thirty-five are a dated BACKLOG
+    # (`NOT_YET_MOVED`) whose size is pinned, not a design decision.
     "author_walk": ["gate_a_arrival", "gate_glb_written", "gate_n_names", "pick_subject"],
     "extract_clip_frames": ["probe", "raise ClipReadError"],
     "fetch_run": ["download", "verify_downloads"],
@@ -311,56 +317,143 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     "rig_retopo": ["gate_glb_written"],
 }
 
-#: Why each name above may sit below the first write: it verifies that write.
+# --------------------------------------------------------------- the read-back table, split
+#
+# WAVE 14, F-385f2b60. The constant below used to hold all 47 names under the comment above
+# `REFUSALS_BELOW_THE_FIRST_WRITE` \u2014 "Every entry that remains is a refusal that READS BACK
+# the write it sits below" \u2014 and 34 of its 47 values were the literal string
+# `"REVIEW: not a read-back \u2014 a strand the coordinator did not move"`. So the file's central
+# exemption documented itself as principled while, for 34 names, self-declaring as
+# unfinished work; and nothing read the table at all (a grep for `READBACK_REASONS` returned
+# the prose and the definition, and no assertion). A reader \u2014 or a later wave \u2014 took 30
+# tools' stranded refusals as accepted by design rather than as a routed backlog, and the
+# moves stopped being made.
+#
+# The two things are now two tables and BOTH are read by
+# `test_the_read_back_table_is_read_and_says_what_it_means`:
+#
+# * `READBACK_REASONS` \u2014 the genuine read-backs. Each value names the CALL that performs the
+#   read-back, and the test asserts that call token appears in the source of every tool that
+#   lists the name. A reason a test can check, not prose.
+# * `NOT_YET_MOVED` \u2014 the backlog, dated, with an owner DERIVED per name (never typed) from
+#   the run's own domain split. Its size is pinned `==`, so the count of unmoved strands is
+#   visible on the page and falls only when a commit moves one and deletes its entry.
+#
+# CORRECTED IN PLACE by the measurement that overturned it (wave 13): `gate_ink` was listed
+# here as "ink fraction measured over the frames just written" and it is not \u2014 it measures
+# the IN-MEMORY canvas, one operand short of the frames on disk. It has moved to the backlog
+# with its route (`render_pose_sticks:202`, instruments-measure F-5f2a7452). The claim was
+# checkable and unchecked for two waves, which is what an unread table is worth.
+
+#: The genuine read-backs: `name -> (read-back call token, why)`. The token must appear in
+#: the source of EVERY tool whose entry in `REFUSALS_BELOW_THE_FIRST_WRITE` names it \u2014 that
+#: is the half a test can check, and it is checked below.
 READBACK_REASONS = {
-    "_refuse_across_elevations": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "build_pass": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "download": "the fetcher's write IS the download; the refusal reads back what arrived",
-    "export_rigged": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_a_arrival": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_alpha": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_any_pivot_matched": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_arrived": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_atlas_untouched": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_backdrop": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_coverage": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_d_determinism": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_glb_written": "reads back the GLB the export just wrote (instruments F-9b2d4106)",
-    "gate_ink": "ink fraction measured over the frames just written",
-    "gate_n_names": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_order_evidence": "reads back the downloaded manifest (fetch_t2v_run)",
-    "gate_part_names": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_previews_written": "reads back the four renders (F-13bd448d)",
-    "gate_r_round_trip": "Gate R re-decodes the pack this tool wrote",
-    "gate_set_distinct": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_view_alpha": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_view_crop": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "gate_whole": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "import_reference": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "load_set": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "order_evidence": "reads back the downloaded manifest (fetch_t2v_run)",
-    "pick_subject": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "probe": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise ArmatureError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise ClipCountError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise ClipReadError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise FetchHalt": "reads back what it downloaded (fetch_t2v_run)",
-    "raise FitReferenceError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise GateMode": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise OverlaySheetError": "the refusal IS the `cv2.imwrite` return",
-    "raise PreviewWalkGate": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise RenderGate": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise RenderTurnaroundGate": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise SheetInputError": "the refusal IS the `cv2.imwrite` return \u2014 it verifies the write it just made",
-    "raise ShotsetSheetError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "raise SticksGate": "the refusals below the first frame read back written frames (`cv2.imwrite` return, ink over written frames)",
-    "raise ZoomSheetError": "the refusal IS the `cv2.imwrite` return / the sidecar of a written sheet",
-    "render_arm": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "shoot": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "subject_box": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "unbound_determinism_record": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
-    "verify_downloads": "reads back what it downloaded (fetch_run)",
+    "download": ("download",
+                 "the fetcher's write IS the download; the refusal reads back what arrived"),
+    "gate_glb_written": ("gate_glb_written",
+                         "reads back the GLB the export just wrote (instruments F-9b2d4106)"),
+    "gate_order_evidence": ("gate_order_evidence",
+                            "reads back the downloaded manifest (fetch_t2v_run)"),
+    "gate_previews_written": ("gate_previews_written",
+                              "reads back the four renders (F-13bd448d)"),
+    "gate_r_round_trip": ("read_pack",
+                          "Gate R re-decodes, with `read_pack(dst)`, the pack this tool wrote"),
+    "order_evidence": ("order_evidence",
+                       "reads back the downloaded manifest (fetch_t2v_run)"),
+    "raise FetchHalt": ("order_evidence",
+                        "raised off the order evidence read back from what it downloaded"),
+    "raise OverlaySheetError": ("imwrite", "the refusal IS the `cv2.imwrite` return"),
+    "raise SheetInputError": ("imwrite",
+                              "the refusal IS the `cv2.imwrite` return \u2014 it verifies the "
+                              "write it just made"),
+    "raise SticksGate": ("imwrite",
+                         "the refusal IS the `cv2.imwrite` return for the frame just drawn"),
+    "raise ZoomSheetError": ("imwrite",
+                             "the refusal IS the `cv2.imwrite` return / the sidecar of a "
+                             "written sheet"),
+    "verify_downloads": ("verify_downloads", "reads back what it downloaded (fetch_run)"),
 }
+
+#: THE BACKLOG, named and dated 2026-09-04 (wave 14, F-385f2b60). Refusals that sit below a
+#: first write and are NOT read-backs: a run refused at one of these leaves an output
+#: directory behind that reads as an attempt that produced nothing. Each is a move somebody
+#: owns; the owner is derived by `owning_domain()` below from the file the name sits in, so
+#: an entry cannot claim a domain that does not own its tool.
+#:
+#: **This set may only SHRINK.** Its size is pinned `==` beside the ratchet, so a move that
+#: lands deletes its entry in the same commit and the number on the page falls with it.
+#: Re-derive with:
+#:     python -c "import sys;sys.path[:0]=['tests','tools'];\
+#:     import test_instrument_write_ordering as M;\
+#:     print(len(M.NOT_YET_MOVED))"
+NOT_YET_MOVED = {
+    "_refuse_across_elevations": "make_shotset_sheet refuses across elevations after `<out>/` exists",
+    "build_pass": "rig_character's build pass refuses below the measure branch's makedirs (wave 13 read this family as an artefact of the walk's mutually-exclusive-branch handling; the walk is the operand, not the reason)",
+    "export_rigged": "rig_character, same family as `build_pass`",
+    "gate_a_arrival": "author_walk stages the walk and refuses after the run directory exists",
+    "gate_alpha": "render_start_frame refuses on alpha after the first frame's directory exists",
+    "gate_any_pivot_matched": "make_skeleton_sheet:333 \u2014 one of the two TRUE strands wave 13 named; routed to instruments",
+    "gate_arrived": "lift_solve, the author_walk shape one domain over",
+    "gate_atlas_untouched": "rig_parts refuses on the atlas after the part GLBs are written",
+    "gate_backdrop": "render_start_frame, same family as `gate_alpha`",
+    "gate_coverage": "render_performer refuses on coverage after the render directory exists",
+    "gate_d_determinism": "rig_character, same family as `build_pass`",
+    "gate_ink": "render_pose_sticks:202 \u2014 measures the IN-MEMORY canvas, not the written frames, so it is not the read-back this table claimed for two waves; routed to instruments-measure (F-5f2a7452)",
+    "gate_n_names": "author_walk / lift_solve / rig_character",
+    "gate_part_names": "rig_parts, same family as `gate_atlas_untouched`",
+    "gate_set_distinct": "render_turnaround refuses on the view set after the out dir exists",
+    "gate_view_alpha": "render_turnaround, same family as `gate_set_distinct`",
+    "gate_view_crop": "render_turnaround, same family as `gate_set_distinct`",
+    "gate_whole": "render_turnaround, same family as `gate_set_distinct`",
+    "import_reference": "make_rig_sheet:205 \u2014 the second TRUE strand wave 13 named; routed to instruments",
+    "load_set": "make_shotset_sheet loads the set after `<out>/` exists",
+    "pick_subject": "author_walk / lift_solve pick the subject after the run directory exists",
+    "probe": "extract_clip_frames probes the clip after the frame directory exists",
+    "raise ArmatureError": "make_plate refuses inline below its first write",
+    "raise ClipCountError": "measure_cascade_clip refuses on the clip count below its first write",
+    "raise ClipReadError": "extract_clip_frames, same family as `probe`",
+    "raise FitReferenceError": "fit_reference refuses inline below its first write",
+    "raise GateMode": "rig_character, same family as `build_pass`",
+    "raise PreviewWalkGate": "preview_walk refuses inline below its first write",
+    "raise RenderGate": "render_performer / render_start_frame",
+    "raise RenderTurnaroundGate": "render_turnaround, same family as `gate_set_distinct`",
+    "raise ShotsetSheetError": "make_shotset_sheet, same family as `load_set`",
+    "render_arm": "make_binding_sheet renders the arm after `<out>/` exists",
+    "shoot": "make_parts_sheet shoots after `<out>/` exists",
+    "subject_box": "make_lift_sheet takes the subject box after `<out>/` exists",
+    "unbound_determinism_record": "rig_character, same family as `build_pass`",
+}
+
+#: The domains this run froze. An owner outside this set is a typo, and the test says so.
+RUN_DOMAINS = {"builders", "ci-packaging", "core-gates", "core-solvers", "docs",
+               "instruments", "instruments-measure", "tests"}
+
+
+def owning_domain(tool):
+    """Which domain owns `tools/<tool>.py`, by the run's OWN frozen split \u2014 derived.
+
+    The run defines `instruments` as "every `tools/*.py` that imports bpy \u2026 re-globbed at
+    the wave-4/5 boundary \u2026 the CPython half moved to instruments-measure", and the payload
+    builders and fetchers are `builders`. So the owner of a stranded refusal is a fact about
+    the file, not a field to be typed beside 35 entries and to rot beside them.
+    """
+    if imports_bpy(tool):
+        return "instruments"
+    if tool.startswith(("build_", "fetch_")) or tool == "gate_saved_graph":
+        return "builders"
+    return "instruments-measure"
+
+
+def tools_naming(refusal):
+    """Every tool whose entry in the ratchet names `refusal`."""
+    return sorted(t for t, names in REFUSALS_BELOW_THE_FIRST_WRITE.items()
+                  if refusal in names)
+
+
+def owners_of(refusal):
+    """The domains that must make the move for `refusal` \u2014 derived, never typed."""
+    return sorted({owning_domain(t) for t in tools_naming(refusal)})
 
 #: The old name, kept as an alias for one wave so a sibling worktree importing it does not
 #: break at merge. It is the same object; the list is no longer bpy-only.
@@ -382,13 +475,54 @@ def refusals_below_the_first_write(name):
     return sorted({gates_at[ln] for ln in gates_at if ln > first_write})
 
 
-def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
-    """Size and membership before the property, in the direction that protects it.
+def stranded_by_tool(members=None, *, source=None):
+    """`{tool: [refusal names below its first write]}` over the WHOLE derived population.
 
-    The ratchet MAY NOT GROW: a stranded refusal that is not on the list fails here, naming
-    the tool and the refusal, whether or not the tool is already listed. It may shrink while
-    wave 12's moves land in sibling worktrees (see the comment above the constant); the
-    entries closed by a move are deleted by the commit that moves them.
+    THE OPERAND (wave 14, rule 1; F-3a0d4576). This expression used to carry
+    `and n not in GATES_READ_BACK_WHAT_THEY_WROTE` — a MODULE-wide filter administering a
+    per-REFUSAL excuse — so the ratchet's one asserted property never looked at
+    `pack_pose_pack`, `render_pose_sticks` or `fetch_t2v_run`: the three tools with the most
+    refusals under a write, and the fetcher and the two writers whose run directories
+    downstream payloads consume. Proven by mutation on this tree: a
+    `gate_a_brand_new_refusal(x)` inserted one line below `pack_pose_pack`'s first write made
+    `refusals_below_the_first_write('pack_pose_pack')` report it, and `grew` still evaluated
+    to `{}`. The read-back excuse is a property of the REFUSAL and is administered per NAME
+    in `READBACK_REASONS`, which is where a name-keyed excuse belongs; re-measured without
+    the module filter, the derived table IS `REFUSALS_BELOW_THE_FIRST_WRITE` exactly, so the
+    three tools' names were already individually listed and compare clean.
+
+    `source` maps a tool name to replacement source text, so the red proof below drives THIS
+    expression over a mutated tool rather than re-implementing it beside it.
+    """
+    source = source or {}
+    members = sorted(derive_population()) if members is None else members
+    out = {}
+    for name in members:
+        gates_at, writes_at = gate_and_write_lines(source.get(name, _source(name)), name)
+        if not gates_at or not writes_at:
+            continue
+        first_write = min(writes_at)
+        below = sorted({gates_at[ln] for ln in gates_at if ln > first_write})
+        if below:
+            out[name] = below
+    return out
+
+
+def stranded_site_count(members=None, *, source=None):
+    """SITES, not names: the same walk, counting every line rather than every spelling."""
+    source = source or {}
+    members = sorted(derive_population()) if members is None else members
+    total = 0
+    for name in members:
+        gates_at, writes_at = gate_and_write_lines(source.get(name, _source(name)), name)
+        if not gates_at or not writes_at:
+            continue
+        total += sum(1 for ln in gates_at if ln > min(writes_at))
+    return total
+
+
+def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
+    """Size and membership before the property, over the FULL derived population.
 
     Every listed tool is checked to be a real member of the derived population, so an entry
     naming a tool that stopped gating-and-writing cannot sit here saying nothing.
@@ -396,40 +530,62 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     members = sorted(derive_population())
     listed = sorted(REFUSALS_BELOW_THE_FIRST_WRITE)
     assert set(listed) <= set(members), sorted(set(listed) - set(members))
-    derived = {n: refusals_below_the_first_write(n) for n in members}
-    derived = {n: v for n, v in derived.items() if v and n not in GATES_READ_BACK_WHAT_THEY_WROTE}
+    derived = stranded_by_tool(members)
     grew = {n: sorted(set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, [])))
             for n, v in derived.items()
             if set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, []))}
     assert grew == {}, {
         "new refusals under a write (move them above it, or add with the reason)": grew}
+    # EQUALITY, both directions (wave 14, rule 4). The growth half above names the tool and
+    # the refusal, which is the failure an author wants; this half catches the other
+    # direction — an entry that has stopped naming a live strand, which is how a ratchet
+    # stops ratcheting. A move that lands DELETES its entry in the same commit; a move
+    # landed in a sibling worktree is reconciled once, at merge, by re-running the
+    # derivation command below.
+    assert derived == REFUSALS_BELOW_THE_FIRST_WRITE, {
+        "stranded and not listed": {n: v for n, v in derived.items()
+                                    if set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, []))},
+        "listed and no longer stranded (delete these in the commit that moved them)": {
+            n: v for n, v in REFUSALS_BELOW_THE_FIRST_WRITE.items()
+            if set(v) - set(derived.get(n, []))},
+    }
     # Two numbers, because they count two different things: distinct refusal NAMES and
     # SITES, the gap being names that appear twice under one tool. The ratchet keys on
-    # names; the site count is asserted beside it so a duplicate appearing is visible
-    # rather than silently collapsed. Both are ceilings, for the reason above.
-    # MEASURED 2026-09-04 under the behavioural predicate: 25 tools, 62 names, 87 sites.
+    # names; the site count is asserted beside it so a duplicate appearing is visible rather
+    # than silently collapsed.
+    #
+    # RE-DERIVED 2026-09-04 (wave 14, F-4f2c2aea) and pinned `==`. They were ceilings reading
+    # `names <= 62` and `sites <= 87` under a comment claiming "MEASURED 2026-09-04 …: 25
+    # tools, 62 names, 87 sites" — three numbers, none of which any expression in this file
+    # produced. Measured under the module filter the ceilings actually used: 27 tools, 51
+    # names, 63 sites; the constant beneath the comment held 30 tools and 58 names. So the
+    # ceilings carried 11 names and 24 sites of headroom and could no longer report that the
+    # population had moved. The measurement that overturned the comment, on the full
+    # population this test now walks: 30 tools, 58 names, 72 sites.
+    #
+    #     python -c "import sys;sys.path[:0]=['tests','tools'];\
+    #     import test_instrument_write_ordering as M;\
+    #     d=M.stranded_by_tool();print(len(d),sum(len(v) for v in d.values()),\
+    #     M.stranded_site_count())"
+    assert len(derived) == 30, sorted(derived)
     names = sum(len(v) for v in derived.values())
-    assert names <= 62, sorted(derived.items())
-    sites = 0
-    for name in members:
-        if name in GATES_READ_BACK_WHAT_THEY_WROTE:
-            continue
-        gates_at, writes_at = gate_and_write_lines(_source(name), name)
-        if not gates_at or not writes_at:
-            continue
-        sites += sum(1 for ln in gates_at if ln > min(writes_at))
-    assert sites <= 87, (
-        f"{sites} refusal SITES below a first write; 87 were measured on 2026-09-04 under "
-        f"the behavioural predicate and the number may only fall")
+    assert names == 58, sorted(derived.items())
+    sites = stranded_site_count(members)
+    assert sites == 72, (
+        f"{sites} refusal SITES below a first write; 72 were measured on 2026-09-04 over "
+        f"the full derived population, and the number falls as the moves land")
 
 
 def test_a_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():
     """The exemption excuses REFUSALS, not modules: a tool whose refusals all sit above its
-    first write must still be asserted, not skipped for reaching Blender."""
+    first write must still be asserted, not skipped for reaching Blender.
+
+    WAVE 14, F-3a0d4576: `and n not in GATES_READ_BACK_WHAT_THEY_WROTE` is gone from here
+    too. It could only ever remove a tool that the first clause had already kept, so it was
+    a module-wide skip standing in front of a per-refusal derivation.
+    """
     members = sorted(derive_population())
-    clean = [n for n in members
-             if not refusals_below_the_first_write(n)
-             and n not in GATES_READ_BACK_WHAT_THEY_WROTE]
+    clean = [n for n in members if not refusals_below_the_first_write(n)]
     assert clean, "no member is clean; the walk is not measuring anything"
     for name in clean:
         gates_at, writes_at = gate_and_write_lines(_source(name), name)
@@ -438,10 +594,9 @@ def test_a_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():
         assert max(gates_at) < min(writes_at), (name, gates_at, writes_at)
 
 
-def test_the_per_refusal_exemption_goes_red_on_a_new_refusal_under_a_write():
-    """Rule 3, on a real member's real source: insert a refusal BELOW the first write in a
-    bpy tool and the derived set must grow, so the ratchet above would fail."""
-    name = "rig_character"
+def _with_a_refusal_below_the_first_write(name):
+    """`name`'s real source with `gate_a_brand_new_refusal(x)` inserted one line under its
+    first write — the mutation the ratchet exists to catch."""
     src = _source(name)
     _, writes_at = gate_and_write_lines(src, name)
     at = min(writes_at)
@@ -449,11 +604,108 @@ def test_the_per_refusal_exemption_goes_red_on_a_new_refusal_under_a_write():
     target = lines[at - 1]
     indent = target[:len(target) - len(target.lstrip())]
     lines.insert(at, f"{indent}gate_a_brand_new_refusal(x)\n")
-    gates_at, mutated_writes = gate_and_write_lines("".join(lines), name)
-    below = sorted({gates_at[ln] for ln in gates_at if ln > min(mutated_writes)})
-    assert "gate_a_brand_new_refusal" in below, below
-    assert set(below) - set(REFUSALS_BELOW_THE_FIRST_WRITE[name]) == {
-        "gate_a_brand_new_refusal"}
+    return "".join(lines)
+
+
+#: The three tools the module filter used to hide from the ratchet (F-3a0d4576). The red
+#: proof runs on THESE, on their real sources, because the hole was exactly here: the proof
+#: this file shipped ran on `rig_character`, which was never module-exempt, so it could not
+#: have caught the defect it was written to guard against. `rig_character` is also the wrong
+#: subject for a second reason instruments measured in wave 13 — its first write sits in a
+#: mutually-exclusive measure branch, so the ordering it probes is an artefact of the walk
+#: rather than a real one.
+FORMERLY_MODULE_EXEMPT = sorted(GATES_READ_BACK_WHAT_THEY_WROTE)
+
+
+@pytest.mark.parametrize("name", FORMERLY_MODULE_EXEMPT)
+def test_the_per_refusal_exemption_goes_red_on_a_new_refusal_under_a_write(name):
+    """Rule 3, on the operand the finding named: insert a refusal BELOW the first write in
+    one of the three read-back tools and the RATCHET'S OWN expression must fail.
+
+    Not a re-implementation of the walk beside the ratchet — `stranded_by_tool` is the
+    function the assertion calls, driven here over the mutated source. With the module
+    filter restored inside it, `grew` evaluates to `{}` on every one of these three and this
+    test goes green over a live hole; that is the reverted-red proof.
+    """
+    mutated = _with_a_refusal_below_the_first_write(name)
+    members = sorted(derive_population())
+    derived = stranded_by_tool(members, source={name: mutated})
+    assert "gate_a_brand_new_refusal" in derived.get(name, []), derived.get(name)
+    grew = {n: sorted(set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, [])))
+            for n, v in derived.items()
+            if set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, []))}
+    assert grew == {name: ["gate_a_brand_new_refusal"]}, grew
+
+
+def test_the_read_back_table_is_read_and_says_what_it_means():
+    """F-385f2b60: the exemption's stated justification, asserted rather than narrated.
+
+    Four things, none of which anything checked before this wave:
+
+    1. the two tables COVER the ratchet's names exactly, and do not overlap — so a name
+       cannot be excused twice or excused by absence;
+    2. every read-back reason NAMES A CALL, and that call is found in the source of every
+       tool whose entry names the refusal — the checkable half of "it verifies that write";
+    3. no reason is empty and none is the `REVIEW:` placeholder that 34 of the 47 entries
+       carried;
+    4. the backlog's size is on the page, and every entry has an owner drawn from the run's
+       own domain set — derived from the file, never typed.
+    """
+    listed = {n for v in REFUSALS_BELOW_THE_FIRST_WRITE.values() for n in v}
+    assert set(READBACK_REASONS) | set(NOT_YET_MOVED) == listed, {
+        "in the ratchet with no reason at all":
+            sorted(listed - set(READBACK_REASONS) - set(NOT_YET_MOVED)),
+        "given a reason and no longer in the ratchet":
+            sorted((set(READBACK_REASONS) | set(NOT_YET_MOVED)) - listed)}
+    assert set(READBACK_REASONS) & set(NOT_YET_MOVED) == set(), sorted(
+        set(READBACK_REASONS) & set(NOT_YET_MOVED))
+
+    for refusal, (call, why) in sorted(READBACK_REASONS.items()):
+        assert call and why and "REVIEW" not in why, (refusal, call, why)
+        for tool in tools_naming(refusal):
+            assert call in _source(tool), (
+                f"{refusal} is excused in {tool} as a read-back performed by {call!r}, and "
+                f"{call!r} does not appear in tools/{tool}.py; the reason names a call the "
+                f"tool does not make")
+
+    for refusal, why in sorted(NOT_YET_MOVED.items()):
+        assert why and "REVIEW" not in why, (refusal, why)
+        owners = owners_of(refusal)
+        assert owners and set(owners) <= RUN_DOMAINS, (refusal, owners)
+
+    # The backlog, on the page. RE-DERIVED 2026-09-04 (wave 14):
+    #     python -c "import sys;sys.path[:0]=['tests','tools'];\
+    #     import test_instrument_write_ordering as M;\
+    #     print(len(M.READBACK_REASONS), len(M.NOT_YET_MOVED))"
+    assert len(READBACK_REASONS) == 12, sorted(READBACK_REASONS)
+    assert len(NOT_YET_MOVED) == 35, (
+        f"{len(NOT_YET_MOVED)} refusals still sit below a first write without reading it "
+        f"back; 35 were measured on 2026-09-04 and the number may only fall — a move "
+        f"deletes its entry in the commit that makes it")
+
+
+def test_the_read_back_table_check_is_red_on_a_placeholder_and_on_a_reason_that_names_nothing():
+    """Rule 3 on the checker above, on the two shapes the real table carried.
+
+    Reverting F-385f2b60 means putting a `REVIEW:` placeholder back, or leaving a reason
+    whose named call the tool never makes. Both are exercised here, so the check is shown to
+    fail on the exact input it was written for rather than on a hypothetical.
+    """
+    real_call, _real_why = READBACK_REASONS["gate_r_round_trip"]
+
+    placeholder = "REVIEW: not a read-back — a strand the coordinator did not move"
+    assert "REVIEW" in placeholder            # the literal 34 entries carried
+    with pytest.raises(AssertionError):
+        for refusal, why in {"gate_ink": placeholder}.items():
+            assert why and "REVIEW" not in why, (refusal, why)
+
+    # …and a reason that names a call the tool does not make.
+    with pytest.raises(AssertionError):
+        for tool in tools_naming("gate_r_round_trip"):
+            assert "read_back_a_call_pack_pose_pack_never_makes" in _source(tool), tool
+    # the real one is found, or the comparison above says nothing
+    for tool in tools_naming("gate_r_round_trip"):
+        assert real_call in _source(tool), tool
 
 
 # ---------------------------------------- THE RED PROOF: the shape that hides from the name
@@ -554,8 +806,13 @@ def test_the_nine_tools_the_name_keyed_walk_could_not_see_are_in_the_population_
 
 @pytest.mark.parametrize("name", sorted(POPULATION_MEASURED_2026_09_04))
 def test_no_refusal_sits_below_the_first_write(name):
-    if name in GATES_READ_BACK_WHAT_THEY_WROTE:
-        pytest.skip(f"exempt: {GATES_READ_BACK_WHAT_THEY_WROTE[name]}")
+    # WAVE 14, F-3a0d4576: the module-wide `if name in GATES_READ_BACK_WHAT_THEY_WROTE:
+    # pytest.skip(...)` that stood here — BEFORE the per-name branch below — is gone. It
+    # excused three whole modules on a per-refusal reason, so a tool that lost every entry in
+    # the ratchet would still have been skipped by the module it lives in. The per-name
+    # branch below now governs: the three read-back tools are listed there today and skip for
+    # the reason that is actually true of them, and the day a move empties one of their
+    # entries this assertion starts running against it.
     if name in REFUSALS_BELOW_THE_FIRST_WRITE:
         pytest.skip(
             "its refusals under the first write are named individually in "
