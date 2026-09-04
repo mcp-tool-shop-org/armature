@@ -412,3 +412,82 @@ def test_no_rig_gate_can_be_widened_by_a_keyword_the_caller_supplies():
                  for name, fn in gates_here.items()
                  if banned & set(inspect.signature(fn).parameters)}
     assert not offenders, offenders
+
+
+# --- W10 amend: every Gate P clause carries the two input guards (F-51235687) ---------
+
+
+def _gate_p_clauses():
+    """The Gate P clause population, DERIVED rather than typed.
+
+    **The node this census keys on is `rig_gates`' own function namespace** — the object a
+    fourth clause is added to — walked with `inspect.isfunction` over `vars(rig_gates)` and
+    filtered on the `gate_p_` prefix the module names its clauses with. It is not
+    `os.listdir`, not a substring in source, and not a tuple in this file: a clause added
+    to the module joins this population on the next collection, which is the direction the
+    finding names ("asserted over all three Gate P clauses together so a fourth clause
+    cannot be added without them").
+    """
+    return {name: fn for name, fn in vars(rig_gates).items()
+            if name.startswith("gate_p_") and inspect.isfunction(fn)}
+
+
+GATE_P_CLAUSES_TODAY = {"gate_p_rest_pose", "gate_p_round_trip_positions",
+                        "gate_p_evaluation_is_live"}
+
+
+def test_the_gate_p_clause_population_is_the_three_measured_today():
+    """Size and membership, so a new clause fails loudly here before the property tests
+    below silently stop covering it."""
+    assert set(_gate_p_clauses()) == GATE_P_CLAUSES_TODAY
+    assert len(_gate_p_clauses()) == 3
+
+
+def test_a_fourth_gate_p_clause_is_seen_by_this_census(monkeypatch):
+    """The census's RED direction: add a member to the node it keys on and the population
+    changes, so the guard tests below cannot go stale by omission."""
+    def gate_p_fourth_clause(a, b, bbox_diagonal):        # no guards at all
+        return {"verdict": "green"}
+
+    monkeypatch.setattr(rig_gates, "gate_p_fourth_clause", gate_p_fourth_clause,
+                        raising=False)
+    assert set(_gate_p_clauses()) == GATE_P_CLAUSES_TODAY | {"gate_p_fourth_clause"}
+    with pytest.raises(GatePRestPose):
+        for fn in _gate_p_clauses().values():
+            fn(np.zeros((0, 3)), np.zeros((0, 3)), 1.0)
+
+
+@pytest.mark.parametrize("clause", sorted(GATE_P_CLAUSES_TODAY))
+def test_every_gate_p_clause_refuses_an_empty_vertex_array_by_name(clause):
+    """Measured 2026-09-04: `gate_p_evaluation_is_live(zeros((0,3)), zeros((0,3)), 1.0)`
+    raised a bare `ValueError: zero-size array to reduction operation maximum which has no
+    identity` out of `float(d.max())`, and `gate_p_round_trip_positions` on the same input
+    returned a green verdict. A ValueError is not an `ArmatureError`, so the halt
+    contract's exit-2 branch and the `GATE_FAILURE` / `GATE_EVIDENCE` receipt lines every
+    census reads are bypassed. `gate_p_rest_pose` — the clause `rig_character.py:666`
+    calls two lines AFTER the liveness clause at :664 — already refused it by name."""
+    empty = np.zeros((0, 3), dtype=np.float64)
+    with pytest.raises(GatePRestPose, match=r"non-empty \(N, 3\) vertex array"):
+        _gate_p_clauses()[clause](empty, empty, 1.0)
+
+
+@pytest.mark.parametrize("clause", sorted(GATE_P_CLAUSES_TODAY))
+def test_every_gate_p_clause_refuses_a_degenerate_bbox_diagonal(clause):
+    """The second guard, and the andon-inverting one: with `bbox_diagonal == 0` the
+    liveness floor is `min_frac * 0.0 == 0.0`, so `d.max() <= threshold` is False for any
+    non-zero float noise and the clause returned 'the deform is live' on a probe that
+    measured nothing — which is what its own docstring says a floor of 0 would do."""
+    a = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float64)
+    b = a + 1e-3
+    with pytest.raises(GatePRestPose, match=r"bbox diagonal is 0"):
+        _gate_p_clauses()[clause](a, b, 0.0)
+
+
+def test_the_liveness_clause_still_reads_a_live_deform_and_still_fires_on_a_dead_one():
+    """The guards are guards, not a new refusal: the clause's own two verdicts are
+    unchanged on well-formed input."""
+    a = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=np.float64)
+    ev = rig_gates.gate_p_evaluation_is_live(a, a + 0.5, DIAGONAL)
+    assert ev["verdict"].startswith("the deform is live")
+    with pytest.raises(GatePRestPose, match=r"did not move when a bone was posed"):
+        rig_gates.gate_p_evaluation_is_live(a, a.copy(), DIAGONAL)

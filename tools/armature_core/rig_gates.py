@@ -181,20 +181,33 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
     number into a threshold slot.
     """
     epsilon_frac = REST_POSE_EPSILON_FRAC
-    a = np.unique(np.ascontiguousarray(np.asarray(source, dtype=np.float32)), axis=0)
-    b = np.unique(np.ascontiguousarray(np.asarray(roundtrip, dtype=np.float32)), axis=0)
+    raw_a = np.asarray(source, dtype=np.float32)
+    raw_b = np.asarray(roundtrip, dtype=np.float32)
     ev = {"gate": "P", "andon": "GatePRestPose",
-          "unique_positions_source": int(len(a)),
-          "unique_positions_roundtrip": int(len(b)),
-          "n_source_vertices": int(len(np.asarray(source))),
-          "n_roundtrip_vertices": int(len(np.asarray(roundtrip))),
+          "shape_source": list(raw_a.shape), "shape_roundtrip": list(raw_b.shape),
           "epsilon_frac": epsilon_frac,
           "epsilon_source": "rig_gates.REST_POSE_EPSILON_FRAC",
           "max_probe": int(max_probe), "bbox_diagonal": float(bbox_diagonal),
           "compared_at": "float32 — glTF's storage precision"}
+    # · ANDON — the two input guards `gate_p_rest_pose` writes, in its order. An empty
+    # array reaches `np.unique` intact and comes back empty, both `setdiff1d` calls are
+    # then empty, and the clause returned "the exported surface is the source surface"
+    # about two meshes nobody read.
+    for label, arr in (("source", raw_a), ("roundtrip", raw_b)):
+        if arr.ndim != 2 or arr.shape[1] != 3 or arr.shape[0] == 0:
+            raise GatePRestPose(
+                f"expected a non-empty (N, 3) vertex array for the {label}, got "
+                f"{arr.shape}", ev)
     if not (bbox_diagonal > 0):
         raise GatePRestPose(f"bbox diagonal is {bbox_diagonal}; no threshold can be derived",
                             ev)
+
+    a = np.unique(np.ascontiguousarray(raw_a), axis=0)
+    b = np.unique(np.ascontiguousarray(raw_b), axis=0)
+    ev.update({"unique_positions_source": int(len(a)),
+               "unique_positions_roundtrip": int(len(b)),
+               "n_source_vertices": int(len(raw_a)),
+               "n_roundtrip_vertices": int(len(raw_b))})
 
     dtype = [("x", np.float32), ("y", np.float32), ("z", np.float32)]
     va, vb = a.view(dtype).ravel(), b.view(dtype).ravel()
@@ -280,13 +293,38 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
     b = np.asarray(probe_world, dtype=np.float64)
     ev = {"gate": "P", "andon": "GatePRestPose",
           "min_frac": min_frac, "min_frac_source": "rig_gates.LIVENESS_MIN_FRAC",
-          "bbox_diagonal": float(bbox_diagonal)}
+          "bbox_diagonal": float(bbox_diagonal),
+          "n_rest": int(a.shape[0]) if a.ndim == 2 else None,
+          "n_probe": int(b.shape[0]) if b.ndim == 2 else None}
     if a.shape != b.shape:
         raise GatePRestPose(
             f"liveness probe returned a different vertex array ({a.shape} vs {b.shape}); "
             f"the probe cannot say whether the deform is live",
             ev,
         )
+    # · ANDON — the two input guards `gate_p_rest_pose` carries at lines 110-117, in its
+    # order, and this is the clause `rig_character.py:664` calls FIRST — two lines before
+    # the rest-pose clause whose refusal would otherwise fire on the same input.
+    #
+    # (a) An empty array reached `float(d.max())` and raised a bare `ValueError: zero-size
+    # array to reduction operation maximum which has no identity`. A ValueError is not an
+    # `ArmatureError`, so the halt contract's exit-2 branch and the `GATE_FAILURE` /
+    # `GATE_EVIDENCE` receipt lines every census reads were bypassed and the run exited 1
+    # with a stdlib traceback naming no gate.
+    #
+    # (b) With `bbox_diagonal == 0` the floor is `min_frac * 0.0 == 0.0`, so
+    # `d.max() <= threshold` is False for any non-zero float noise and this andon reported
+    # "the deform is live" on a probe that measured nothing — the andon inverted, which is
+    # exactly what this function's docstring says a caller-supplied floor of 0 would do.
+    if a.ndim != 2 or a.shape[1] != 3 or a.shape[0] == 0:
+        raise GatePRestPose(f"expected a non-empty (N, 3) vertex array, got {a.shape}", ev)
+    if not (bbox_diagonal > 0):
+        raise GatePRestPose(
+            f"bbox diagonal is {bbox_diagonal}; the liveness floor is a fraction of the "
+            f"mesh's own size and a floor of 0 makes this andon pass on a dead evaluation",
+            ev,
+        )
+
     d = np.linalg.norm(b - a, axis=1)
     threshold = min_frac * float(bbox_diagonal)
     ev.update({"threshold": threshold, "max_displacement": float(d.max()),
