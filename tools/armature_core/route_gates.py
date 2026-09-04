@@ -408,7 +408,8 @@ def pairing(graph):
             if n.get("type") in CONDITIONING_WEIGHT_FAMILY
             or n.get("type") in CONDITIONING_FAMILY_EXEMPT]
 
-    ev = {"gate": "PAIR", "model_weights": loaded, "families_present": present,
+    ev = {"gate": "PAIR", "andon": "PairGate",
+          "model_weights": loaded, "families_present": present,
           "conditioning_nodes": [{"node_id": i, "class": c,
                                   "requires": CONDITIONING_WEIGHT_FAMILY.get(c)}
                                  for i, c in cond]}
@@ -512,7 +513,8 @@ def normalise_graph(graph):
         f"{list(GRAPH_WRAPPER_KEYS)}. A shape that cannot be read is not an empty "
         f"graph, and every clause of this module would otherwise report its "
         f"zero-population verdict as a pass",
-        {"gate": "ROUTE", "type": type(doc).__name__,
+        {"gate": "ROUTE", "andon": "RouteGate", "clause": "unreadable_shape",
+         "type": type(doc).__name__,
          "top_level_keys": sorted(map(str, doc)) if isinstance(doc, dict) else None,
          "wrapper_keys": list(GRAPH_WRAPPER_KEYS)})
 
@@ -841,6 +843,12 @@ def _seed_population_andon(graph, found, ev, carries_no_sampler):
     obeyed: it raises if a seed or an unrecorded seed source turns up under it, which is
     what keeps it from being a skip flag.
     """
+    # The caller's evidence dict is the one that will be raised, and the andon that
+    # raises from here is `RouteGate` whatever clause called in. Written as plain
+    # assignments so the receipt names its own id even when this helper is reached from
+    # a caller that built its dict differently.
+    ev["gate"] = "ROUTE"
+    ev["andon"] = "RouteGate"
     unrecorded = unrecorded_seed_sources(graph)
     ev["unrecorded_seed_sources"] = unrecorded
     ev["carries_no_sampler_asserted"] = bool(carries_no_sampler)
@@ -1035,12 +1043,15 @@ def _frame_triple(frame):
             raise RouteGate(
                 f"the supplied frame is missing {exc.args[0]!r}; Gate L needs all three of "
                 f"width, height and length, and two out of three proves nothing",
-                {"supplied": frame}) from None
+                {"gate": "ROUTE", "andon": "RouteGate", "clause": "frame_triple",
+                 "supplied": frame}) from None
     if isinstance(frame, (list, tuple)) and len(frame) == 3:
         return int(frame[0]), int(frame[1]), int(frame[2])
     raise RouteGate(
         f"the supplied frame {frame!r} is not (width, height, length) or a mapping "
-        f"carrying those three keys", {"supplied": frame})
+        f"carrying those three keys",
+        {"gate": "ROUTE", "andon": "RouteGate", "clause": "frame_triple",
+         "supplied": frame})
 
 
 def _frame_form(rules, family):
@@ -1062,7 +1073,9 @@ def _frame_form(rules, family):
             f"generator family {family!r} declares frame_form {form!r}, which is not of "
             f"the form '<modulus>n+<residue>'. The rule is data and it is read; a family "
             f"whose row cannot be parsed is graded on nobody's rule rather than silently "
-            f"on wan's", {"family": family, "rules": rules}) from None
+            f"on wan's",
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "frame_form",
+             "family": family, "rules": rules}) from None
 
 
 def frame_legality(width, height, length, family="wan"):
@@ -1085,14 +1098,17 @@ def frame_legality(width, height, length, family="wan"):
     if rules is None:
         raise RouteGate(f"no recorded frame rules for generator family {family!r}; the "
                         f"constraint is recorded per model in the spec that first uses it",
-                        {"known": sorted(GENERATOR_RULES)})
+                        {"gate": "ROUTE", "andon": "RouteGate",
+                         "clause": "unknown_generator_family",
+                         "known": sorted(GENERATOR_RULES)})
     for axis, value in (("width", width), ("height", height), ("length", length)):
         if not isinstance(value, int) or isinstance(value, bool):
             raise RouteGate(
                 f"{axis} {value!r} is not an int ({type(value).__name__}); Gate L "
                 f"compares it against a divisibility rule and would otherwise raise a "
                 f"bare TypeError out of the modulo",
-                {"family": family, "width": width, "height": height, "length": length})
+                {"gate": "ROUTE", "andon": "RouteGate", "clause": "frame_type",
+                 "family": family, "width": width, "height": height, "length": length})
     m = rules["dim_multiple"]
     modulus, residue = _frame_form(rules, family)
     problems = []
@@ -1178,7 +1194,8 @@ def hosted_frame_legality(resolution, ratio, duration, tier):
         raise RouteGate(
             f"no recorded tier rules for {tier!r}; a hosted tier's constraints are recorded "
             f"in the spec that first uses it, from that tier's own node contract",
-            {"known": sorted(HOSTED_TIER_RULES)})
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "unknown_hosted_tier",
+             "known": sorted(HOSTED_TIER_RULES)})
     problems = []
     if resolution not in rules["resolutions"]:
         problems.append(f"resolution {resolution!r} is not one of {rules['resolutions']}")
@@ -1316,7 +1333,8 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         raise RouteGate(
             "verify() was given both a hosted tier and a pixel frame; they are two answers "
             "to the same question and one of them would be the number nobody checked",
-            {"hosted_tier": hosted_tier, "frame": frame})
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "two_answers",
+             "hosted_tier": hosted_tier, "frame": frame})
     comp = components(graph)
     sd = seeds(graph)
     lat = latents(graph)
@@ -1328,7 +1346,8 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         w, h, n = _frame_triple(frame)
         supplied = dict(frame_legality(w, h, n, family), source="supplied")
         legality.append(supplied)
-    ev = {"gate": "ROUTE", "components": comp, "seeds": sd, "latents": lat,
+    ev = {"gate": "ROUTE", "andon": "RouteGate",
+          "components": comp, "seeds": sd, "latents": lat,
           "latents_checkable": sum(1 for l in lat if l["checkable"]),
           "frame_legality": legality}
 
@@ -1607,4 +1626,7 @@ def load_graph(path):
     try:
         return normalise_graph(doc)
     except RouteGate as exc:
-        raise RouteGate(f"{path}: {exc}", dict(exc.evidence or {}, path=str(path))) from None
+        raise RouteGate(
+            f"{path}: {exc}",
+            dict(exc.evidence or {}, gate="ROUTE", andon="RouteGate",
+                 path=str(path))) from None

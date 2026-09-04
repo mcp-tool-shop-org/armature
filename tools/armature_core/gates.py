@@ -178,7 +178,8 @@ def resolve_generator(name):
         raise G1GeneratorLegality(
             f"unknown generator profile {name!r}; no legality constraints are known "
             f"for it, so nothing would be checked",
-            {"generator": name, "known": sorted(GENERATOR_PROFILES)},
+            {"gate": "G1", "andon": "G1GeneratorLegality",
+             "generator": name, "known": sorted(GENERATOR_PROFILES)},
         )
     return profile
 
@@ -220,6 +221,8 @@ def g1_generator_legality(width, height, frame_count, generator):
             "frame is not legal for generator "
             f"{profile.name!r}: " + "; ".join(problems),
             {
+                "gate": "G1",
+                "andon": "G1GeneratorLegality",
                 "width": width,
                 "height": height,
                 "frame_count": frame_count,
@@ -269,7 +272,8 @@ def g2_completeness(run_dir, expected, frame_count):
             "completeness verdict: nothing would be examined and the manifest written "
             "after it would report a finished run. The caller built its channel "
             "expectation wrongly — spec.channels cannot be empty",
-            {"run_dir": run_dir, "frame_count": frame_count, "expected_channels": [],
+            {"gate": "G2", "andon": "G2Completeness",
+             "run_dir": run_dir, "frame_count": frame_count, "expected_channels": [],
              "channels": {}},
         )
 
@@ -325,7 +329,8 @@ def g2_completeness(run_dir, expected, frame_count):
     if problems:
         raise G2Completeness(
             "export is incomplete: " + "; ".join(problems),
-            {"run_dir": run_dir, "frame_count": frame_count, "channels": detail},
+            {"gate": "G2", "andon": "G2Completeness",
+             "run_dir": run_dir, "frame_count": frame_count, "channels": detail},
         )
     return detail
 
@@ -463,6 +468,8 @@ def g5_openpose_conformance(keypoint_count, limb_seq, reference_count, reference
             "emitted skeleton does not match the retrieved OpenPose-18 convention: "
             + "; ".join(problems),
             {
+                "gate": "G5",
+                "andon": "G5ConventionConformance",
                 "keypoint_count": keypoint_count,
                 "reference_count": reference_count,
                 "problems": problems,
@@ -643,7 +650,9 @@ def gate_b_batching(expected_frames, observed_batch_images, evidence=None):
     bound twice — and `!=` catches both, where `<` would wave the duplicate through.
     """
     ev = dict(evidence or {})
-    ev.update({"expected_frames": expected_frames, "observed_batch_images": observed_batch_images})
+    ev.update({"gate": "B", "andon": "GateBBatching",
+               "expected_frames": expected_frames,
+               "observed_batch_images": observed_batch_images})
 
     # `bool` is a subclass of `int`, so the guard accepted True: measured 2026-09-03,
     # gate_b_batching(1, True) returned "batch intact" and gate_b_batching(0, False)

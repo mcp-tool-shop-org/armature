@@ -77,7 +77,18 @@ REGISTERED_BONES = frozenset(ALL_NAMES)
 
 
 def _raise(message, evidence=None):
-    raise GateCanon(message, evidence or {})
+    """The module's one andon. Every refusal in this file goes through it.
+
+    The evidence names its own gate and andon here rather than at forty call sites:
+    `stage_render` prints `GATE_FAILURE <exc.gate>` and `GATE_EVIDENCE <json>` as two
+    separate lines, so a reader holding only the JSON half of a halt record had no id at
+    all — and ids are shared across andon families, so the prose half is not enough
+    either. One injection, not forty copies that can drift.
+    """
+    ev = dict(evidence or {})
+    ev["gate"] = GateCanon.gate
+    ev["andon"] = "GateCanon"
+    raise GateCanon(message, ev)
 
 
 def add_spend_flags(parser):

@@ -84,7 +84,8 @@ def frame_paths(frames_dir):
             f"({sorted(bad)[:5]}), so their temporal order is not established by this "
             f"directory. Sorting content-addressed names alphabetically produces a "
             f"shuffled clip that every other check passes",
-            {"unnumbered": sorted(bad)[:20], "n_total": len(names)})
+            {"gate": "DONOR", "andon": "DonorGate",
+             "unnumbered": sorted(bad)[:20], "n_total": len(names)})
     return [os.path.join(frames_dir, n)
             for n in sorted(names, key=lambda n: int(os.path.splitext(n)[0]))]
 
@@ -103,7 +104,8 @@ def mean_consecutive_frame_difference(paths):
 
     if len(paths) < 2:
         raise DonorGate(f"a clip of {len(paths)} frame(s) has no consecutive pair to "
-                        f"difference", {"n_frames": len(paths)})
+                        f"difference", {"gate": "DONOR", "andon": "DonorGate",
+                                        "n_frames": len(paths)})
     per_pair = []
     prev = None
     for p in paths:
@@ -113,7 +115,8 @@ def mean_consecutive_frame_difference(paths):
                 raise DonorGate(
                     f"frame {os.path.basename(p)} is {arr.shape} where the previous frame "
                     f"is {prev.shape}; a clip whose frames change size has no per-pixel "
-                    f"difference", {"frame": os.path.basename(p)})
+                    f"difference", {"gate": "DONOR", "andon": "DonorGate",
+                                    "frame": os.path.basename(p)})
             per_pair.append(float(np.abs(arr - prev).mean()))
         prev = arr
     return {
@@ -159,7 +162,7 @@ def ankle_framing(rows, detect_evidence=None):
     if not fired:
         raise DonorGate("no frame carries image landmarks, so the framing clause cannot "
                         "be evaluated. A gate that cannot compute its own quantity halts "
-                        "rather than passing", {"n_rows": len(rows)})
+                        "rather than passing", {"gate": "DONOR", "andon": "DonorGate", "n_rows": len(rows)})
     per_frame = []
     for r in rows:
         observed = bool(r.get("fired") and r.get("image"))
@@ -210,7 +213,8 @@ def ankle_framing(rows, detect_evidence=None):
         raise DonorGate(
             "the exact both-ankles fraction falls outside the bounds its own per-ankle "
             "rates allow, which means the two were computed off different populations",
-            {k: v for k, v in out.items() if k != "frames"})
+            dict({k: v for k, v in out.items() if k != "frames"},
+                 gate="DONOR", andon="DonorGate"))
     return out
 
 
@@ -236,7 +240,8 @@ def gate_donor(motion, framing):
     f = framing["both_ankles_in_image"]
 
     ev = {
-        "gate": "DONOR", "tool_version": TOOL_VERSION, "thresholds": th,
+        "gate": "DONOR", "andon": "DonorGate",
+        "tool_version": TOOL_VERSION, "thresholds": th,
         "motion": {"measured_mean_over_255": m, "threshold": m_min, "passes": m >= m_min},
         "framing": {"measured_fraction": f, "threshold": f_min, "passes": f >= f_min,
                     "detail": {k: v for k, v in framing.items() if k != "frames"}},
