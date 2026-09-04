@@ -563,3 +563,81 @@ def test_a_seed_of_zero_is_a_recorded_value_and_survives(tmp_path):
     assert run["seed"] == 0, run
     assert run["length"] == 0, run
     assert run["seed"] != MPS.MISSING
+
+
+# ===========================================================================
+# F-9297b54f — the `--ref-frames` listing was indexed without being checked
+# ===========================================================================
+
+
+def _e13_inputs(tmp_path, n_out=5):
+    """The two records `make_e13_sheet.main` reads before it reaches `--ref-frames`."""
+    frames = tmp_path / "frames"
+    frames.mkdir(parents=True, exist_ok=True)
+    for i in range(n_out):
+        Image.new("RGB", (32, 18), (30, 30, 34)).save(frames / f"{i:05d}.png")
+    (frames / "frames.json").write_text(json.dumps({
+        "stream": {"width": 32, "height": 18, "fps": 16, "line": "Video: h264 32x18"},
+        "n_frames": n_out, "distinct_frames": n_out, "clip_bytes": 1234,
+        "clip_sha256": "c" * 64}), encoding="utf-8")
+    payload = tmp_path / "payload.json"
+    payload.write_text(json.dumps({
+        "experiment": "E13", "arm": "A2", "tier": "wan2.7-t2v", "seed": 1,
+        "payload": {}, "slot_order": [], "gates": {}}), encoding="utf-8")
+    return str(frames), str(payload)
+
+
+def test_an_empty_ref_frames_directory_is_refused_by_name_and_leaves_no_sheet(tmp_path):
+    """THE OPERAND: `--ref-frames` at a directory holding no PNGs.
+
+    Measured on the base tree: `paths = sorted(glob(...*.png))` then
+    `picks = [0, len//3, 2*len//3, len-1]`, indexed with no emptiness check — so `paths[0]`
+    raised a bare `IndexError` naming nothing, AFTER `os.makedirs` at the top of `main` had
+    already created the sheet's directory. On the tool whose product is the
+    `control | output | reference | provenance` panel a spend is judged from.
+    """
+    import make_e13_sheet as S
+
+    frames, payload = _e13_inputs(tmp_path)
+    refs = tmp_path / "refclip"
+    refs.mkdir()
+    (refs / "notes.txt").write_text("not a frame", encoding="utf-8")
+    out = tmp_path / "sheets" / "e13.png"
+    with pytest.raises(S.E13SheetError, match=r"--ref-frames") as exc:
+        S.main(["--arm=A2", "--seed=1", f"--frames={frames}", f"--payload={payload}",
+                f"--ref-frames={refs}", f"--out={out}"])
+    ev = exc.value.evidence
+    assert ev is not None, "the refusal carries no receipt"
+    assert ev["clause"] == "reference_clip_has_no_frames", ev
+    assert ev["ref_frames"] == os.path.abspath(str(refs)), ev
+    assert ev["png_files"] == [], ev
+    assert not out.exists()
+    assert not out.parent.exists(), (
+        "a refused run left its output directory behind; `os.makedirs` must sit below "
+        "the last pre-write refusal")
+
+
+@pytest.mark.parametrize("n_ref,expected", [(1, 1), (2, 2), (3, 3), (4, 4), (9, 4)])
+def test_the_reference_band_shows_one_panel_per_distinct_sample(tmp_path, n_ref, expected):
+    """The POPULATION is every short reference clip, not the empty one.
+
+    Measured on the base tree: for `len(paths)` of 1, 2 and 3 the picks are `[0,0,0,0]`,
+    `[0,0,1,1]` and `[0,1,2,2]`, so the REFERENCES band showed 4, 2 and 3 distinct panels
+    under four headings — four slots that are not four samples. Red on 1, 2 and 3, each a
+    member outside the emptiness check the finding's first half asks for.
+    """
+    import make_e13_sheet as S
+
+    frames, payload = _e13_inputs(tmp_path)
+    refs = tmp_path / f"refclip{n_ref}"
+    refs.mkdir()
+    for i in range(n_ref):
+        Image.new("RGB", (16, 9), (i * 20 % 255, 40, 50)).save(refs / f"{i:05d}.png")
+    out = tmp_path / "sheets" / f"e13_{n_ref}.png"
+    assert S.main(["--arm=A2", "--seed=1", f"--frames={frames}", f"--payload={payload}",
+                   f"--ref-frames={refs}", f"--out={out}", "--sample=0,1"]) == str(out)
+    assert out.exists()
+    picks = S.reference_picks(n_ref)
+    assert len(picks) == expected, picks
+    assert len(set(picks)) == len(picks), picks
+    assert picks == sorted(picks) and picks[0] == 0 and picks[-1] == n_ref - 1, picks
