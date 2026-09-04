@@ -230,3 +230,176 @@ def test_gate_canon_is_not_an_assertionerror():
         C.resolve(None)
     except Exception as err:
         assert not isinstance(err, AssertionError)
+
+
+# =====================================================================================
+# W3 amend — four clauses in canon.py that a plural, a wrapper, an empty string or a
+# field name could walk past.
+# =====================================================================================
+
+
+# --- an empty prompt is no prompt (F-60553de0) ------------------------------------
+
+def test_cover_refuses_an_empty_prompt():
+    """`cover` rejected None and nothing else. Measured: on a doc whose only ratified
+    occupant carries no phrase, `cover(doc, '')` returned COVERED with missing=[] and
+    residue=[] — both directions green having examined zero characters of prompt.
+    `residue('')` is [] for ANY doc, so the reverse direction alone is vacuous on empty
+    text whatever the occupants look like. An empty prompt is no prompt, which is the
+    argument the None clause already makes."""
+    with pytest.raises(GateCanon) as exc:
+        C.cover(load_probe(), "")
+    assert exc.value.evidence["clause"] == "empty_prompt"
+    with pytest.raises(GateCanon) as exc:
+        C.cover(load_probe(), "   \n\t ")
+    assert exc.value.evidence["clause"] == "empty_prompt"
+
+
+def test_a_bare_only_ratified_doc_cannot_arm(tmp_path):
+    """`require_canon`'s tripwire is "zero ratified prompt occupants: a check that
+    cannot fail is not a check". `is_named` returns True for kind='bare', so a doc whose
+    ratified occupants were all bare satisfied the tripwire while carrying nothing the
+    router could check."""
+    src = load_probe()
+    for s in src["surfaces"]:
+        if s.get("occupant"):
+            s["occupant"].pop("phrase", None)
+            s["occupant"]["kind"] = "bare"
+    path = tmp_path / "bare.json"
+    path.write_text(json.dumps(src), encoding="utf-8")
+    census = {"BARE": {"surfaces": "bare.json"}}
+    with pytest.raises(GateCanon) as exc:
+        C.require_canon("BARE", COVERED, census=census, search_roots=[str(tmp_path)])
+    assert exc.value.evidence["clause"] == "unratified_only"
+
+
+def test_coverage_counts_bare_occupants_separately_rather_than_losing_them(tmp_path):
+    src = load_probe()
+    src["surfaces"][1]["occupant"] = {"id": "P2", "kind": "bare", "ratified": True}
+    ev = C.coverage(src)
+    assert ev["ratified"] == 1
+    assert ev["ratified_bare"] == 1
+    assert ev["named"] == 2
+
+
+# --- the reverse direction reads the shape it was handed (F-85d2b7a3) -------------
+
+_API_TEXT = "a black plate warrior"
+
+
+def _text_graph():
+    return {"6": {"class_type": "CLIPTextEncode",
+                  "inputs": {"text": _API_TEXT, "clip": ["5", 0]}}}
+
+
+def test_texts_are_found_through_the_standard_prompt_wrapper():
+    """`nodes = graph.values() if all(isinstance(v, dict) ...) else []` — ONE non-dict
+    top-level key empties the result. Measured: the bare graph returned the text; the
+    same graph under {'prompt': ...} returned []; the same graph plus last_node_id=12
+    returned []. A caller cannot tell "this graph carries no text" from "this shape was
+    not recognised", and the prompt it hands Gate CANON is what the check is about."""
+    assert C.texts_from_api_graph({"prompt": _text_graph()}) == [_API_TEXT]
+    assert C.texts_from_api_graph({"workflow": _text_graph()}) == [_API_TEXT]
+
+
+def test_a_scalar_sibling_key_does_not_abandon_the_walk():
+    g = dict(_text_graph(), last_node_id=12)
+    assert C.texts_from_api_graph(g) == [_API_TEXT]
+
+
+def test_a_shape_with_no_nodes_at_all_raises_rather_than_returning_empty():
+    with pytest.raises(GateCanon) as exc:
+        C.texts_from_api_graph({"last_node_id": 12, "version": 0.4})
+    assert exc.value.evidence["clause"] == "unrecognised_graph"
+    with pytest.raises(GateCanon):
+        C.texts_from_api_graph(["not", "a", "graph"])
+
+
+def test_a_recognised_graph_carrying_no_text_still_returns_empty():
+    """The other direction: "no text here" is a real answer and must not raise."""
+    g = {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": "x.safetensors"}}}
+    assert C.texts_from_api_graph(g) == []
+
+
+# --- blocked_additions means blocked (F-98d851e3) ---------------------------------
+
+def _blocked_doc():
+    doc = load_probe()
+    doc["blocked_additions"] = [{"id": "B1", "phrase": "glowing red halo"}]
+    return doc
+
+
+def test_a_blocked_addition_is_refused_not_licensed():
+    """The field's only behaviour was to PERMIT exactly the text its name says is
+    blocked: `licensed_phrases` collected every blocked phrase and `residue` stripped it
+    before the reverse direction looked for leftovers. Measured: cover(doc, 'black plate
+    glowing red halo') returned COVERED with residue []."""
+    doc = _blocked_doc()
+    assert "glowing red halo" not in C.licensed_phrases(doc)
+    with pytest.raises(GateCanon) as exc:
+        C.cover(doc, COVERED + ", glowing red halo")
+    assert exc.value.evidence["clause"] == "blocked_addition"
+    assert exc.value.evidence["blocked"][0]["phrase"] == "glowing red halo"
+
+
+def test_a_blocked_phrase_absent_from_the_prompt_changes_nothing():
+    assert C.cover(_blocked_doc(), COVERED)["verdict"] == "COVERED"
+
+
+def test_a_blocked_phrase_is_not_quietly_turned_into_residue():
+    """If the field had merely been dropped from `licensed_phrases`, the phrase would
+    surface as unlicensed residue and the message would say "unlicensed" about text the
+    doc names explicitly. The clause names it."""
+    with pytest.raises(GateCanon) as exc:
+        C.cover(_blocked_doc(), COVERED + ", glowing red halo")
+    assert "blocked" in str(exc.value).lower()
+
+
+# --- forbidden words are forbidden in the plural too (F-eb8508e1) -----------------
+#
+# The forbidden clause raises BEFORE the residue clause, so these fixtures license the
+# word under a legal clause too. That keeps each case testing the one thing it names:
+# without the licence, "sleeveless" would raise as unlicensed residue and the negative
+# case would prove nothing about the forbidden matcher.
+
+
+def _forbidden_doc(*words, licensed=()):
+    doc = load_probe()
+    doc["surfaces"][0]["occupant"]["forbidden"] = list(words)
+    for i, phrase in enumerate(licensed):
+        doc["legal_clauses"].append({"id": f"LX{i}", "phrase": phrase, "class": "style"})
+    return doc
+
+
+def test_a_forbidden_word_fires_in_the_plural():
+    """`\b + word + \b` fires on 'gauntlet' and not on 'gauntlets', so a canon that
+    forbids a garment feature passed any prompt naming it in the plural and Gate CANON
+    reported COVERED."""
+    doc = _forbidden_doc("gauntlet", licensed=("gauntlets",))
+    with pytest.raises(GateCanon) as exc:
+        C.cover(doc, COVERED + ", gauntlets")
+    assert exc.value.evidence["forbidden"][0]["word"] == "gauntlet"
+
+
+def test_sleeve_fires_on_sleeves_and_not_on_sleeveless():
+    """The hand-written SLEEVE special case was inert — the trailing \b already
+    prevented a match inside 'sleeveless', so (?!less) changed nothing — and it kept a
+    hard-coded single word inside a general mechanism. Both readings are now one rule."""
+    with pytest.raises(GateCanon):
+        C.cover(_forbidden_doc("sleeve", licensed=("long sleeves",)),
+                COVERED + ", long sleeves")
+    ok = C.cover(_forbidden_doc("sleeve", licensed=("sleeveless",)),
+                 COVERED + ", sleeveless")
+    assert ok["verdict"] == "COVERED"
+    assert not hasattr(C, "SLEEVE")
+
+
+def test_the_singular_still_fires():
+    with pytest.raises(GateCanon):
+        C.cover(_forbidden_doc("sleeve", licensed=("a sleeve",)), COVERED + ", a sleeve")
+
+
+def test_a_forbidden_word_does_not_fire_inside_a_longer_word():
+    """The direction the plural stem must not break: 'light' is not 'lighting', and
+    'even lighting' is a licensed clause of the probe fixture."""
+    assert C.cover(_forbidden_doc("light"), COVERED)["verdict"] == "COVERED"

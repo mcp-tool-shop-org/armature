@@ -272,3 +272,100 @@ def test_the_lift_tool_calls_the_gate_before_it_solves_anything():
     assert src.index("DG.gate_donor(") > src.index("gate = gate_detection(rows)")
     assert src.index("DG.gate_donor(") < src.index("LS.solve_frame(")
     assert "skip" not in src[src.index("DG.gate_donor("):src.index("DG.gate_donor(") + 400]
+
+
+# =====================================================================================
+# W3 amend — the door in the andon, and the denominator that was not the clip.
+# =====================================================================================
+
+
+def test_gate_donor_takes_no_thresholds_argument():
+    """The module's own docstring rules that the thresholds "are not tuned here and they
+    are not tunable here". The signature said otherwise: `gate_donor(motion, framing,
+    thresholds=None)` used the caller's dict verbatim, so
+    `thresholds={'min_mean_consecutive_frame_difference_over_255': 0,
+    'min_fraction_of_frames_with_ankles_in_image': 0}` returned a green verdict on a
+    dead-still, ankles-never-in-frame clip — a skip flag inside an andon, which
+    CLAUDE.md forbids outright. A test that needs a different number monkeypatches
+    `DG.THRESHOLDS`; a different experiment writes a different module constant with its
+    own amendment reference."""
+    import inspect
+
+    params = list(inspect.signature(DG.gate_donor).parameters)
+    assert params == ["motion", "framing"]
+
+
+def test_the_2026_08_11_failure_cannot_be_argued_past_by_a_caller():
+    """The exact call the old signature admitted, on the exact clip the gate exists for."""
+    still = {"unit": "test", "n_frames": 6, "n_pairs": 5, "mean": 0.0, "max": 0.0,
+             "min": 0.0, "per_pair": [0.0] * 5}
+    cropped = DG.ankle_framing(_rows((0.5, 1.4)))
+    with pytest.raises(DG.DonorGate):
+        DG.gate_donor(still, cropped)
+    with pytest.raises(TypeError):
+        DG.gate_donor(still, cropped,
+                      {"min_mean_consecutive_frame_difference_over_255": 0.0,
+                       "min_fraction_of_frames_with_ankles_in_image": 0.0})
+
+
+def test_a_monkeypatched_constant_is_how_a_fixture_moves_a_threshold(monkeypatch):
+    """The replacement door, and it is the module's own constant rather than a
+    parameter: it cannot be reached from a production call site."""
+    monkeypatch.setattr(DG, "THRESHOLDS", dict(DG.THRESHOLDS,
+                                               min_mean_consecutive_frame_difference_over_255=0.0))
+    ev = DG.gate_donor({"unit": "test", "n_frames": 6, "n_pairs": 5, "mean": 0.0,
+                        "max": 0.0, "min": 0.0, "per_pair": [0.0] * 5},
+                       DG.ankle_framing(_rows((0.5, 0.9))))
+    assert ev["thresholds"]["min_mean_consecutive_frame_difference_over_255"] == 0.0
+
+
+# --- the framing denominator is the clip, not the frames the detector liked ---------
+
+
+def _mostly_unfired(n=65, n_fired=3):
+    """A 65-frame clip the detector fired on 3 times, perfectly framed on those 3."""
+    rows = _rows((0.5, 0.5), n=n)
+    for i, r in enumerate(rows):
+        r["fired"] = i < n_fired
+        if not r["fired"]:
+            r["image"] = None
+    return rows
+
+
+def test_a_clip_observed_on_three_of_sixty_five_frames_fails_the_framing_clause():
+    """The amendment's clause is "ankle landmarks inside the image on >= 80 % of
+    frames" — a population of CLIP frames. Every fraction was computed over
+    `[r for r in rows if r.get('fired') and r.get('image')]`, so 3 perfect frames out of
+    65 read 1.0 and the clause passed; `n_frames_considered=3` was honest and gated
+    nothing. A donor whose ankles were observed on a small minority of frames was
+    admitted as a baseline and the lift numbers were quoted against it."""
+    f = DG.ankle_framing(_mostly_unfired())
+    assert f["n_frames_considered"] == 65
+    assert f["n_frames_detector_fired"] == 3
+    assert f["both_ankles_in_image"] == pytest.approx(3 / 65)
+    with pytest.raises(DG.DonorGate) as exc:
+        DG.gate_donor(_clip_free_motion(), f)
+    assert "framing" in str(exc.value)
+
+
+def test_the_fired_only_fraction_is_kept_beside_it_as_a_diagnostic():
+    f = DG.ankle_framing(_mostly_unfired())
+    assert f["both_ankles_in_image_over_fired_frames_only"] == 1.0
+    assert "diagnostic" in f["why_the_fired_only_fraction_is_not_the_gate"].lower()
+
+
+def test_the_cross_check_still_holds_on_the_new_population():
+    """The per-ankle rates and the exact both-ankles fraction must be computed off the
+    SAME population or the bounds check raises — which is what it is for."""
+    f = DG.ankle_framing(_mostly_unfired())
+    assert f["per_ankle_fraction_of_frames_in_image"] == {
+        "left_ankle": pytest.approx(3 / 65), "right_ankle": pytest.approx(3 / 65)}
+    assert f["arithmetic_bounds_as_a_cross_check"]["exact_lies_between"]
+
+
+def test_a_fully_fired_clip_is_unchanged():
+    """The other direction: on a clip the detector fired on everywhere, the two
+    denominators are the same number and no reading moves."""
+    f = DG.ankle_framing(_rows((0.5, 0.9), n=10))
+    assert f["n_frames_considered"] == f["n_frames_detector_fired"] == 10
+    assert f["both_ankles_in_image"] == 1.0

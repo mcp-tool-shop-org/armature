@@ -720,3 +720,198 @@ def test_gate_pair_walks_into_subgraph_definitions():
     with pytest.raises(RG.PairGate) as exc:
         RG.pairing(g)
     assert exc.value.evidence["model_weights"][0]["where"] != "top"
+
+
+# =====================================================================================
+# W3 amend — seven clauses that could not fire in the direction that mattered.
+# =====================================================================================
+
+
+# --- the walk stops one level too shallow (F-2b29d1ff) ----------------------------
+
+def _nested(deep_file):
+    """A subgraph definition that itself carries a definitions block.
+
+    The docstring on `_iter_nodes` argues "4 nodes visible, 30 hidden". This is the same
+    argument one level further down: a walker that reads `definitions.subgraphs[*].nodes`
+    and stops there cannot see a blueprint nested inside a blueprint.
+    """
+    return {
+        "nodes": [latent(3, 832, 480, 65), sampler(2, 1, "fixed"),
+                  loader(1, "base.safetensors")],
+        "definitions": {"subgraphs": [{
+            "id": "sg-1", "name": "outer",
+            "nodes": [loader(80, "clean.safetensors", cls="LoraLoaderModelOnly")],
+            "definitions": {"subgraphs": [{
+                "id": "sg-2", "name": "inner",
+                "nodes": [loader(90, deep_file, cls="LoraLoaderModelOnly")],
+            }]},
+        }]},
+    }
+
+
+def test_a_banned_weight_two_levels_down_is_seen():
+    files = {c["file"] for c in RG.components(_nested("causvid_x.safetensors"))}
+    assert "causvid_x.safetensors" in files
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_nested("causvid_x.safetensors"))
+    assert "causvid" in str(exc.value)
+
+
+def test_the_nested_walk_terminates_on_a_cycle():
+    """A visited set, not a recursion limit. A blueprint that references itself must
+    report its nodes once rather than hang the gate that stands before a spend."""
+    inner = {"id": "sg-1", "name": "loop",
+             "nodes": [loader(90, "clean.safetensors", cls="LoraLoaderModelOnly")]}
+    inner["definitions"] = {"subgraphs": [inner]}
+    g = {"nodes": [latent(3, 832, 480, 65), sampler(2, 1, "fixed")],
+         "definitions": {"subgraphs": [inner]}}
+    assert [c["file"] for c in RG.components(g)] == ["clean.safetensors"]
+
+
+# --- an API seed that is not there at all (F-20ba67ae) ----------------------------
+
+def test_an_api_sampler_with_no_seed_input_is_not_pinned():
+    """`literal = not isinstance(value, list)` reads a MISSING key as a pinned literal
+    None. Gate S's registration clause does fail closed on it, but `verify`'s pinned
+    clause reported "all pinned" on a graph with no seed at all."""
+    g = api_graph()
+    del g["3"]["inputs"]["noise_seed"]
+    found = [s for s in RG.seeds(g) if s["node_id"] == "3"]
+    assert found and found[0]["pinned"] is False
+    assert found[0]["seed_is_literal"] is False
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert "Gate S" in str(exc.value)
+
+
+# --- the verdict must describe what actually ran (F-59f86a72, pair P10) -----------
+
+def test_skipping_the_seed_clause_is_said_in_the_verdict_not_hidden_by_it():
+    """`require_pinned_seeds=False` skipped the clause and still returned "N seed(s) all
+    pinned" — the string builders store in the spend meta and sheets print. A record may
+    not assert a property nobody checked."""
+    g = graph(top=[loader(1, "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"),
+                   sampler(2, 999, "randomize"), latent(3, 832, 480, 65)])
+    ev = RG.verify(g, require_pinned_seeds=False)
+    assert ev["seeds"][0]["pinned"] is False
+    assert "all pinned" not in ev["verdict"]
+    assert "NOT CHECKED" in ev["verdict"]
+    assert ev["seed_clause_verdict"] == "NOT CHECKED (require_pinned_seeds=False)"
+
+
+def test_a_checked_seed_clause_still_says_so():
+    ev = RG.verify(graph(top=CLEAN_TOP))
+    assert "all pinned" in ev["verdict"]
+    assert ev["seed_clause_verdict"].startswith("CHECKED")
+
+
+# --- `allow` may wave a methodology ruling, never a licence one (F-9602ad65) ------
+
+def test_allow_cannot_wave_a_non_commercial_weight():
+    """CLAUDE.md's non-negotiable: no non-commercially-licensed weight anywhere in the
+    pipeline, including experiments. One keyword argument used to move causvid (CC-BY-NC)
+    through with a verdict that said nothing about it."""
+    g = graph(top=CLEAN_TOP + [loader(9, "Wan21_CausVid_14B_T2V_lora_rank32.safetensors",
+                                      cls="LoraLoaderModelOnly")])
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g, allow=("causvid",))
+    assert "causvid" in str(exc.value)
+    assert "BANNED" in str(exc.value)
+
+
+def test_allowing_a_banned_key_is_refused_even_on_a_graph_that_does_not_load_it():
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(graph(top=CLEAN_TOP), allow=("openpose",))
+    assert "openpose" in str(exc.value)
+
+
+def test_a_waived_component_is_named_in_the_verdict_not_only_in_the_evidence():
+    """The receipt is the verdict string. A waiver absent from it is a waiver the
+    record does not carry."""
+    g = graph(top=CLEAN_TOP,
+              sub=[loader(83, "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
+                          cls="LoraLoaderModelOnly")])
+    ev = RG.verify(g, allow=("lightx2v",))
+    assert ev["waived"] == ["lightx2v"]
+    assert "lightx2v" in ev["verdict"]
+
+
+# --- Gate PAIR's fail-closed clause is disarmed by a prefix (F-aa3a50b4) ----------
+
+def test_a_non_wan_conditioning_class_still_halts_gate_pair():
+    """The clause only looked at classes starting with "Wan", so a graph loading a t2v
+    model and wiring `HunyuanImageToVideo` reported "0 conditioning node(s) paired" —
+    green, having checked nothing. The class this gate was built for passed every other
+    check in the file."""
+    g = graph(top=[loader(1, "wan2.2_t2v_high_noise.safetensors"),
+                   {"id": 5, "type": "HunyuanImageToVideo", "widgets_values": [832, 480, 65]},
+                   sampler(2, 1, "fixed"), latent(3, 832, 480, 65)])
+    with pytest.raises(RG.PairGate) as exc:
+        RG.pairing(g)
+    assert "HunyuanImageToVideo" in str(exc.value)
+    assert exc.value.evidence["verdict"] == "INDETERMINATE"
+
+
+def test_a_latent_suffixed_conditioning_class_halts_too():
+    g = graph(top=[loader(1, "wan2.2_t2v_high_noise.safetensors"),
+                   {"id": 5, "type": "SomeVendorImageToVideoLatent", "widgets_values": []},
+                   sampler(2, 1, "fixed"), latent(3, 832, 480, 65)])
+    with pytest.raises(RG.PairGate):
+        RG.pairing(g)
+
+
+def test_the_known_classes_are_still_not_reported_as_unknown():
+    """The other direction: broadening the detector must not make every mapped class
+    look new."""
+    g = graph(top=[loader(1, "wan2.2_i2v_high_noise.safetensors"),
+                   {"id": 5, "type": "WanImageToVideo",
+                    "widgets_values": [832, 480, 65, 1]},
+                   sampler(2, 1, "fixed")])
+    ev = RG.pairing(g)
+    assert ev["verdict"].startswith("1 conditioning node(s) paired")
+
+
+# --- Gate L reads its own rules, and refuses a frame that is not one (F-f77fd337) --
+
+def test_a_zero_or_negative_frame_is_not_legal():
+    """Measured: frame_legality(0, 0, 1) and (-16, -16, 1) both returned legal=True with
+    no problems, because 0 % 16 == 0 and (1 - 1) % 4 == 0."""
+    assert RG.frame_legality(0, 0, 1)["legal"] is False
+    assert RG.frame_legality(-16, -16, 1)["legal"] is False
+    assert RG.frame_legality(832, 480, 0)["legal"] is False
+
+
+def test_a_non_integer_dimension_raises_the_gates_own_error():
+    """It used to be a bare TypeError from the modulo — an exception no caller of a gate
+    is catching."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.frame_legality("832", 480, 65)
+    assert "832" in str(exc.value)
+    with pytest.raises(RG.RouteGate):
+        RG.frame_legality(832, 480, True)
+
+
+def test_the_declared_frame_form_is_the_one_enforced(monkeypatch):
+    """`GENERATOR_RULES` declares `frame_form: '4n+1'` as data and the code tested
+    `(length - 1) % 4` against a literal 4. A second family would have been graded on
+    wan's temporal rule while its own row said otherwise."""
+    rules = dict(RG.GENERATOR_RULES)
+    rules["eightly"] = {"dim_multiple": 16, "frame_form": "8n+1", "max_frames": 81}
+    monkeypatch.setattr(RG, "GENERATOR_RULES", rules)
+    assert RG.frame_legality(832, 480, 65, family="eightly")["legal"] is True
+    illegal = RG.frame_legality(832, 480, 61, family="eightly")
+    assert illegal["legal"] is False
+    assert "8n+1" in " ".join(illegal["problems"])
+    # and wan is unmoved by the neighbour's row
+    assert RG.frame_legality(832, 480, 61)["legal"] is True
+
+
+def test_an_unparseable_frame_form_raises_rather_than_defaulting_to_wans(monkeypatch):
+    rules = dict(RG.GENERATOR_RULES)
+    rules["nonsense"] = {"dim_multiple": 16, "frame_form": "every other one",
+                         "max_frames": 81}
+    monkeypatch.setattr(RG, "GENERATOR_RULES", rules)
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.frame_legality(832, 480, 65, family="nonsense")
+    assert "frame_form" in str(exc.value)

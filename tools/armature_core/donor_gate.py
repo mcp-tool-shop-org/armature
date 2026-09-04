@@ -28,6 +28,12 @@ once; both are reported, and the gate is on both-at-once. Choosing the stricter 
 only honest if it is chosen before the numbers exist, which is why it is written here rather
 than argued in the report.
 
+**"of frames" means of the CLIP's frames.** Corrected 2026-09-03: every fraction was
+computed over the frames the detector fired on, so 3 perfect frames out of 65 read 1.0 and
+the clause passed on a clip whose ankles were observed on 5 % of it. A frame nothing
+observed is not a frame the ankles were seen inside. The fired-only fraction rides the
+evidence beside the gating one, as a diagnostic.
+
 **What this gate deliberately does NOT do.** It does not fold landmark *visibility* into the
 verdict. A landmark can be placed inside the image by extrapolation onto a body whose feet
 are cropped — the probe's own heels sat at 0.22 visibility while 100 % out of frame — so
@@ -135,6 +141,18 @@ def ankle_framing(rows, detect_evidence=None):
     rather than on the clip. So the per-frame landmarks are read directly and the
     co-occurrence is exact. The bounds are still reported, as a cross-check on the exact
     number rather than as a substitute for it.
+
+    **The denominator is the CLIP.** Amendment A3's clause is "ankle landmarks inside the
+    image on >= 80 % of frames", and *frames* there means the clip's frames. Every
+    fraction here used to be computed over `[r for r in rows if r['fired'] and
+    r['image']]`, so on a 65-frame clip the detector fired on 3 times, with both ankles
+    inside on all 3, `both_ankles_in_image` was 1.0 and the clause passed —
+    `n_frames_considered = 3` was honest and gated nothing. That is the repo's
+    unit/population class: a donor whose ankles were *observed* on a small minority of
+    frames was admitted as a baseline and the lift numbers were quoted against it. A
+    frame the detector did not fire on is a frame whose ankles were not inside the image,
+    because nothing observed them there. The fired-only fraction is kept beside the
+    gating one as a diagnostic, so the two readings are visible rather than swapped.
     """
     idx = {a: LS.POSE_LANDMARKS.index(a) for a in ANKLES}
     fired = [r for r in rows if r.get("fired") and r.get("image")]
@@ -143,20 +161,32 @@ def ankle_framing(rows, detect_evidence=None):
                         "be evaluated. A gate that cannot compute its own quantity halts "
                         "rather than passing", {"n_rows": len(rows)})
     per_frame = []
-    for r in fired:
-        flags = {a: _inside(r["image"][idx[a]]) for a in ANKLES}
-        per_frame.append({"frame": r["frame"], **flags,
+    for r in rows:
+        observed = bool(r.get("fired") and r.get("image"))
+        flags = {a: (observed and _inside(r["image"][idx[a]])) for a in ANKLES}
+        per_frame.append({"frame": r.get("frame"), **flags, "observed": observed,
                           "both": all(flags.values()), "either": any(flags.values())})
     n = len(per_frame)
+    n_fired = len(fired)
     per_ankle = {a: sum(1 for f in per_frame if f[a]) / n for a in ANKLES}
     both = sum(1 for f in per_frame if f["both"]) / n
     either = sum(1 for f in per_frame if f["either"]) / n
+    observed_frames = [f for f in per_frame if f["observed"]]
     out = {
         "n_frames_considered": n,
+        "n_frames_detector_fired": n_fired,
         "per_ankle_fraction_of_frames_in_image": per_ankle,
         "both_ankles_in_image": both,
         "either_ankle_in_image": either,
-        "reading_that_gates": "both ankles in image, counted per frame",
+        "both_ankles_in_image_over_fired_frames_only": (
+            sum(1 for f in observed_frames if f["both"]) / n_fired),
+        "why_the_fired_only_fraction_is_not_the_gate": (
+            "it is a diagnostic. A3's clause counts CLIP frames, and a frame the "
+            "detector did not fire on is not a frame whose ankles were seen inside the "
+            "image. Gating on the fired-only fraction let 3 perfect frames out of 65 "
+            "read 1.0"),
+        "reading_that_gates": ("both ankles in image, counted per frame over every frame "
+                               "of the clip"),
         "why_the_stricter_reading": (
             "'ankle landmarks inside the image on >= 80% of frames' can be read per ankle "
             "or per frame; the per-frame reading is stricter and was chosen here BEFORE "
@@ -184,9 +214,22 @@ def ankle_framing(rows, detect_evidence=None):
     return out
 
 
-def gate_donor(motion, framing, thresholds=None):
-    """ANDON. Raises unless BOTH of A3's clauses hold. Returns the evidence when they do."""
-    th = dict(THRESHOLDS if thresholds is None else thresholds)
+def gate_donor(motion, framing):
+    """ANDON. Raises unless BOTH of A3's clauses hold. Returns the evidence when they do.
+
+    **There is no `thresholds` argument and there will not be one.** The signature used to
+    read `gate_donor(motion, framing, thresholds=None)` and line 189 used the caller's
+    dict verbatim, so `thresholds={'min_mean_consecutive_frame_difference_over_255': 0.0,
+    'min_fraction_of_frames_with_ankles_in_image': 0.0}` returned the verdict "mean
+    consecutive-frame difference 0.0000/255 (>= 0.0) and ankles in image on at least 0.0%
+    of frames (>= 0%)" on a dead-still, ankles-never-in-frame clip — measured 2026-09-03.
+    That is a skip flag inside an andon, which CLAUDE.md forbids outright, and it
+    contradicted this module's own docstring two screens above it: the thresholds "are
+    not tuned here and they are not tunable here". A fixture that needs a different
+    number monkeypatches `THRESHOLDS`; a different experiment writes a different module
+    constant with its own amendment reference.
+    """
+    th = dict(THRESHOLDS)
     m_min = th["min_mean_consecutive_frame_difference_over_255"]
     f_min = th["min_fraction_of_frames_with_ankles_in_image"]
     m = motion["mean"]

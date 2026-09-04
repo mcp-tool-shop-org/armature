@@ -234,10 +234,24 @@ def g2_completeness(run_dir, expected, frame_count):
     """G2 · ANDON — completeness. Raises before the manifest is written.
 
     `expected` maps a channel directory name to the list of file names that channel
-    must contain. Every directory must hold exactly `frame_count` files, each of
-    them non-empty. A partial export must never look like a finished one, so this
-    runs *before* the manifest — the manifest is the thing that makes a run look
-    finished.
+    must contain. Every directory must hold exactly those files, each of them
+    non-empty. A partial export must never look like a finished one, so this runs
+    *before* the manifest — the manifest is the thing that makes a run look finished.
+
+    **The population is the DIRECTORY, not the expectation.** Iterating `expected`
+    can only ever discover absence: a stale frame left behind by a longer previous
+    run into an uncleaned `run_dir` is present, correctly named and out of range, and
+    a count built from the expectation cannot see it. The extra file is reachable —
+    `encode_control.load_frames` and `gate_b_frames.frame_paths` both build their
+    populations with `os.listdir` over the channel directory — so the encoder would
+    carry a frame count G1 never declared legal, on a green G2. `gate_b_batching`
+    already makes this argument for its own quantity ("a batch larger than submitted
+    is as wrong as a smaller one"); the andon is on the direction the invariant does
+    not bound, and here that direction is *surplus*.
+
+    Only files whose extension one of the expected names carries are counted: a
+    channel's population is its frames, and a sidecar of another extension beside them
+    is not a frame. When `expected` names no files at all, every entry counts.
     """
     problems = []
     detail = {}
@@ -246,7 +260,8 @@ def g2_completeness(run_dir, expected, frame_count):
         cdir = os.path.join(run_dir, channel)
         if not os.path.isdir(cdir):
             problems.append(f"{channel}: directory missing")
-            detail[channel] = {"present": 0, "expected": frame_count, "empty": []}
+            detail[channel] = {"present": 0, "expected": frame_count,
+                               "missing": [], "empty": [], "unexpected": []}
             continue
 
         present, empty, missing = [], [], []
@@ -259,16 +274,30 @@ def g2_completeness(run_dir, expected, frame_count):
             if os.path.getsize(path) == 0:
                 empty.append(fname)
 
+        exts = {os.path.splitext(f)[1].lower() for f in filenames}
+        on_disk = [f for f in sorted(os.listdir(cdir))
+                   if os.path.isfile(os.path.join(cdir, f))
+                   and (not exts or os.path.splitext(f)[1].lower() in exts)]
+        unexpected = [f for f in on_disk if f not in set(filenames)]
+
         detail[channel] = {
             "present": len(present),
             "expected": frame_count,
             "missing": missing[:8],
             "empty": empty[:8],
+            "unexpected": unexpected[:8],
+            "on_disk": len(on_disk),
         }
         if len(present) != frame_count:
             problems.append(
                 f"{channel}: {len(present)} frames present, expected {frame_count}"
                 + (f" (missing e.g. {missing[:3]})" if missing else "")
+            )
+        if unexpected:
+            problems.append(
+                f"{channel}: {len(unexpected)} unexpected file(s) in the directory, "
+                f"e.g. {unexpected[:3]} — a frame nobody declared is a frame the "
+                f"encoder would still pick up"
             )
         if empty:
             problems.append(f"{channel}: {len(empty)} zero-length file(s), e.g. {empty[:3]}")
@@ -281,7 +310,31 @@ def g2_completeness(run_dir, expected, frame_count):
     return detail
 
 
-def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, tolerance_px, width, height):
+#: G4's tolerance, in pixels. A module constant for the same reason the generator
+#: profiles are: a spec-supplied number is a skip flag wearing a schema's clothes, and
+#: a caller-supplied one is the same flag wearing an argument's. It used to arrive
+#: through `spec.gates.g4_tolerance_px`, which `normalise_spec` validated in no way at
+#: all — measured 2026-09-03, the values 1000000000, -5, 'off' and None were every one
+#: accepted, and `g4_bbox_sanity(0, (0,0,10,10), (5000,5000,5010,5010), 10**9, ...)`
+#: returned deltas of 5000 px without raising. A mask that is not the subject would then
+#: be rendered, submitted and receipted with G4 green. The spec now refuses the key.
+G4_TOLERANCE_PX = 2
+
+#: Why this number is global where CLAUDE.md warns against a global constant governing a
+#: local feature: the quantity it bounds is not a property of the structure. The
+#: projected bbox is every mesh vertex pushed through the camera matrix and clipped to
+#: the frame, so for a polygonal mesh it IS the expected silhouette bbox exactly, and the
+#: only slack the gate owes is rasterisation — half a pixel per edge, independent of how
+#: large the subject is. Scaling it with the bbox would loosen the gate precisely on the
+#: subjects that fill the frame. The evidence reports the projected bbox's own size
+#: beside the deltas so a reader can see what the operation changed per structure.
+G4_TOLERANCE_SOURCE = (
+    "gates.G4_TOLERANCE_PX — rasterisation slack, not a per-shot parameter; the spec "
+    "may not carry it (see normalise_spec) and no caller may widen it"
+)
+
+
+def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, width, height):
     """G4 · Bbox sanity — the check that catches a channel rendering the wrong thing.
 
     `mask_bbox` and `projected_bbox` are (x0, y0, x1, y1) inclusive pixel bounds, or
@@ -290,12 +343,17 @@ def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, tolerance_px, width, 
     the exact expected silhouette bbox, so the tolerance is tight and the check
     binds in **both** directions: a mask far larger than the mesh (facet's 751-px
     mask around a 388-px mesh) and a mask that has collapsed to nothing.
+
+    The tolerance is `G4_TOLERANCE_PX` and there is no argument for it. See that
+    constant for what a settable one cost.
     """
+    tolerance_px = G4_TOLERANCE_PX
     ev = {
         "frame": frame_index,
         "mask_bbox": mask_bbox,
         "projected_bbox": projected_bbox,
         "tolerance_px": tolerance_px,
+        "tolerance_source": G4_TOLERANCE_SOURCE,
         "resolution": [width, height],
     }
 
@@ -314,6 +372,10 @@ def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, tolerance_px, width, 
 
     deltas = [abs(a - b) for a, b in zip(mask_bbox, projected_bbox)]
     ev["deltas_px"] = deltas
+    # Per-structure, so a reader sees what the operation changed on THIS bbox rather
+    # than only a global number: the projected silhouette's own width and height.
+    ev["projected_bbox_size_px"] = [projected_bbox[2] - projected_bbox[0],
+                                    projected_bbox[3] - projected_bbox[1]]
     if max(deltas) > tolerance_px:
         raise G4BboxSanity(
             f"frame {frame_index}: mask bbox {tuple(mask_bbox)} disagrees with the "
@@ -434,6 +496,14 @@ def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label
     Frame count is checked first and separately: a decode that returns fewer frames
     than went in is the single most likely bridge failure (a frame-count form the
     muxer rounds), and it would otherwise surface as a confusing shape error.
+
+    **The dtype is checked, and it is not paperwork.** The comparison is
+    `astype(np.int16)`, which truncates: measured 2026-09-03, a float32 source of 0.4
+    against a float32 decode of 0.6 both truncate to 0 and the gate returned
+    `identical` on a 50 % per-pixel error, while uint8 200 against 201 correctly
+    raised. A round trip over an array that is not 8 bits proves nothing about the
+    8-bit bridge, so the wrong dtype halts here rather than answering the question it
+    was not asked.
     """
     import numpy as np
 
@@ -452,6 +522,24 @@ def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label
         )
     if not source:
         raise GateRRoundTrip("no frames to compare; the round trip proves nothing", ev)
+
+    wrong_dtype = []
+    for label, seq in ((source_label, source), (decoded_label, decoded)):
+        for i, f in enumerate(seq):
+            dt = np.asarray(f).dtype
+            if dt != np.uint8:
+                wrong_dtype.append({"side": label, "frame": i, "dtype": str(dt)})
+    if wrong_dtype:
+        ev["dtypes"] = wrong_dtype[:8]
+        seen = sorted({d["dtype"] for d in wrong_dtype})
+        raise GateRRoundTrip(
+            f"the round trip was handed {', '.join(seen)} arrays where it documents "
+            f"uint8: {len(wrong_dtype)} frame(s), e.g. {wrong_dtype[0]}. The "
+            f"comparison truncates to int16, so a float pair differing by half a "
+            f"level reads as identical — a green verdict about an 8-bit bridge that "
+            f"was never crossed",
+            ev,
+        )
 
     problems, per_frame = [], []
     for i, (a, b) in enumerate(zip(source, decoded)):

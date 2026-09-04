@@ -26,7 +26,11 @@ def test_defaults_are_filled(tmp_path):
     spec = shotspec.normalise_spec(_minimal(tmp_path))
     assert spec["camera"]["type"] == "orbit"
     assert spec["render"]["engine"] == "BLENDER_EEVEE"
-    assert spec["gates"]["g4_tolerance_px"] == 2
+    # `gates.g4_tolerance_px` used to be defaulted here. It is not a default any more
+    # and not a spec field at all — a number G4 compares against may not arrive
+    # through the spec, so the assertion moved to `gates.G4_TOLERANCE_PX` and to
+    # `test_a_spec_supplied_g4_tolerance_is_refused` below.
+    assert "gates" not in spec
 
 
 def test_overrides_survive_the_merge(tmp_path):
@@ -92,7 +96,12 @@ def test_unimplemented_camera_type_is_refused(tmp_path):
 
 
 def test_asset_hash_is_resolved(tmp_path):
-    spec = shotspec.normalise_spec(_minimal(tmp_path))
+    raw = _minimal(tmp_path)
+    # The pin is now required, so this fixture states one. It is measured from the
+    # file the fixture just wrote rather than hard-coded, so the test still fails if
+    # `resolve_asset` starts returning a digest of something else.
+    raw["asset"]["sha256"] = shotspec.sha256_file(raw["asset"]["path"])
+    spec = shotspec.normalise_spec(raw)
     path, digest = shotspec.resolve_asset(spec)
     assert len(digest) == 64
     assert shotspec.sha256_file(path) == digest
@@ -134,3 +143,62 @@ def test_frame_names_sort_temporally():
     names = shotspec.frame_names(12, "png")
     assert names == sorted(names)
     assert names[0] == "00000.png" and names[-1] == "00011.png"
+
+
+# --- W3 amend: the spec may not carry a gate's numbers ----------------------------
+
+
+@pytest.mark.parametrize("value", [10**9, -5, "off", None, 2])
+def test_a_spec_supplied_g4_tolerance_is_refused(tmp_path, value):
+    """`gates.py` already rules that a spec-supplied `dim_divisor` is a skip flag
+    wearing a schema's clothes. `gates.g4_tolerance_px` was exactly that and was
+    validated in no way at all: measured 2026-09-03, 1000000000, -5, 'off' and None
+    were every one accepted, and a tolerance of 10**9 passes a mask 5000 px away from
+    the subject with G4 green. The number now lives in `gates.G4_TOLERANCE_PX`, so a
+    spec that names it is refused rather than obeyed — including one that names the
+    same value, because the next edit of that row is the one that matters.
+    """
+    raw = _minimal(tmp_path)
+    raw["gates"] = {"g4_tolerance_px": value}
+    with pytest.raises(SpecError) as exc:
+        shotspec.normalise_spec(raw)
+    assert "g4_tolerance_px" in str(exc.value)
+    assert "G4_TOLERANCE_PX" in str(exc.value)
+
+
+def test_an_unknown_key_under_gates_is_refused_too(tmp_path):
+    """The family, not the instance: `spec.gates` is not a place to put numbers."""
+    raw = _minimal(tmp_path)
+    raw["gates"] = {"g1_dim_divisor": 1}
+    with pytest.raises(SpecError):
+        shotspec.normalise_spec(raw)
+
+
+def test_the_defaults_no_longer_offer_a_gate_number():
+    assert "gates" not in shotspec.DEFAULTS
+
+
+# --- W3 amend: a spec that pins no hash asserts nothing about its bytes ------------
+
+
+def test_an_unpinned_asset_is_refused_and_the_error_carries_the_digest(tmp_path):
+    """"A run that cannot be reproduced from its spec is a failed run" is this
+    module's opening line. Without the pin, the GLB behind the path may change between
+    the spec being written and the shot being rendered and nothing in the spec
+    contradicts the run. The refusal carries the measured digest so an author pastes
+    it rather than computing it."""
+    raw = _minimal(tmp_path)
+    raw["asset"].pop("sha256", None)
+    spec = shotspec.normalise_spec(raw)
+    with pytest.raises(SpecError) as exc:
+        shotspec.resolve_asset(spec)
+    assert "sha256" in str(exc.value)
+    assert shotspec.sha256_file(spec["asset"]["path"]) in str(exc.value)
+
+
+def test_an_empty_pin_is_not_a_pin(tmp_path):
+    raw = _minimal(tmp_path)
+    raw["asset"]["sha256"] = ""
+    spec = shotspec.normalise_spec(raw)
+    with pytest.raises(SpecError):
+        shotspec.resolve_asset(spec)

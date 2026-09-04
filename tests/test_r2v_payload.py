@@ -290,11 +290,12 @@ def test_hosted_enums_read_the_same_values_in_both_formats():
     """API format reads them by field name; SAVE format has no field names at all and must
     read them positionally. Disagreement here is the off-by-one the whole table exists for."""
     api = _a1()
-    _, res_a, ratio_a, dur_a = RG.hosted_enums(api)
+    # `hosted_enums` returns one entry per hosted node; these graphs carry exactly one.
+    (_, res_a, ratio_a, dur_a), = RG.hosted_enums(api)
     saved = {"nodes": [{"id": 500, "type": "Wan2ReferenceVideoApi",
                         "widgets_values": ["wan2.7-r2v", PROMPT, NEG, "720P", "16:9", 5,
                                            SEEDS[0], "fixed", False]}]}
-    _, res_s, ratio_s, dur_s = RG.hosted_enums(saved)
+    (_, res_s, ratio_s, dur_s), = RG.hosted_enums(saved)
     assert (res_a, ratio_a, dur_a) == (res_s, ratio_s, dur_s) == ("720P", "16:9", 5)
 
 
@@ -453,3 +454,60 @@ def test_a_refused_r2v_build_leaves_no_output_directory(tmp_path):
                 f"--refs={refs}", f"--out={out}", *_CANON_ESCAPE])
     assert not out.exists()
     assert not out.parent.exists()
+
+# --- W3 amend: the second hosted node (F-02e9bf56) --------------------------------
+#
+# `hosted_enums` returned on the FIRST matching node in either format and `verify`'s
+# hosted branch checked only that one tuple. Measured on a save-format graph with two
+# `Wan2ReferenceVideoApi` nodes — the first at ('720P', '16:9', 5) and the second at
+# ('4K', '99:1', 900) — it returned the first and verify reported "hosted tier
+# wan2.7-r2v at 720P 16:9 5s — enum-legal". The illegal second node appeared nowhere in
+# the evidence, so a two-shot hosted graph could submit an out-of-contract resolution,
+# ratio or duration under a green Gate L receipt.
+
+
+def _hosted_node(node_id, res, ratio, dur, seed=SEEDS[0]):
+    return {"id": node_id, "type": "Wan2ReferenceVideoApi",
+            "widgets_values": ["wan2.7-r2v", PROMPT, NEG, res, ratio, dur,
+                               seed, "fixed", False]}
+
+
+def test_hosted_enums_returns_every_node_not_the_first():
+    saved = {"nodes": [_hosted_node(500, "720P", "16:9", 5),
+                       _hosted_node(501, "4K", "99:1", 900)]}
+    found = RG.hosted_enums(saved)
+    assert [f[0] for f in found] == [500, 501]
+    assert found[1][1:] == ("4K", "99:1", 900)
+
+
+def test_an_illegal_second_hosted_node_raises_and_is_named():
+    saved = {"nodes": [_hosted_node(500, "720P", "16:9", 5),
+                       _hosted_node(501, "4K", "99:1", 900)]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(saved, hosted_tier="wan2.7-r2v")
+    assert "501" in str(exc.value)
+    assert "4K" in str(exc.value)
+    rows = exc.value.evidence["hosted_frame_legality_nodes"]
+    assert [r["node_id"] for r in rows] == [500, 501]
+    assert [r["legal"] for r in rows] == [True, False]
+
+
+def test_two_legal_hosted_nodes_still_halt_rather_than_reporting_the_first():
+    """Both legal is not the same as one checked. This tier bills per node, so a graph
+    with two of them is one submission and two charges, and a single tier verdict would
+    be the number nobody checked — the argument `verify` already makes for `frame` and
+    `hosted_tier` together."""
+    saved = {"nodes": [_hosted_node(500, "720P", "16:9", 5),
+                       _hosted_node(501, "1080P", "9:16", 4)]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(saved, hosted_tier="wan2.7-r2v")
+    assert "2" in str(exc.value)
+    rows = exc.value.evidence["hosted_frame_legality_nodes"]
+    assert [r["legal"] for r in rows] == [True, True]
+
+
+def test_the_single_node_evidence_shape_is_unchanged():
+    ev = RG.verify(_a1(), hosted_tier="wan2.7-r2v")
+    assert ev["hosted_frame_legality"]["legal"] is True
+    assert ev["hosted_frame_legality"]["resolution"] == "720P"
+    assert len(ev["hosted_frame_legality_nodes"]) == 1
