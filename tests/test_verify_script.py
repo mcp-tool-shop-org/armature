@@ -350,3 +350,42 @@ def test_the_halt_is_armed_by_the_legs_that_were_selected(tmp_path):
     got = _run_verify(root, "-NoSite", path=STRIPPED_PATH)
     assert got.returncode == 2, f"exit {got.returncode}\n{got.stdout}\n{got.stderr}"
     assert "node" in got.stdout, got.stdout
+
+
+# -- the local site leg scans before it installs, the way CI does (F-a495cc98) -------------
+#
+# `npm ci` runs every lifecycle script in the resolved tree, so a scan that follows it
+# reports a compromised dependency that has already had a shell — on the rig, in this leg.
+# The DESCRIPTION equates a green local run with a green CI run, so the ORDER is part of the
+# claim, not only the presence of the command.
+
+
+def _site_leg():
+    """The body of the `site build` leg, sliced out of the real script, comments dropped.
+
+    The steps explain each other, so both commands appear in the prose above them; an
+    ordering read off a comment would be an ordering read off an explanation.
+    """
+    head = VERIFY.index("Invoke-Leg -Name 'site build")
+    start = VERIFY.index("-Body {", head)  # the leg NAME names both commands too
+    kept = [line for line in VERIFY[start:].splitlines()
+            if not line.lstrip().startswith("#")]
+    return chr(10).join(kept)
+
+
+def test_the_local_site_leg_scans_before_it_installs():
+    leg = _site_leg()
+    install, scan = leg.find("npm ci"), leg.find("npm audit")
+    assert scan != -1, "the site leg no longer scans site/'s lockfile at all"
+    assert scan < install, (
+        f"verify.ps1 runs `npm ci` at offset {install} and `npm audit` at {scan} inside the "
+        "site leg; the scan reports after every lifecycle script in the tree has run")
+
+
+def test_the_local_scan_is_the_lockfile_only_form_ci_uses():
+    """Read out of ci.yml so the two cannot drift: same command, same order, same claim."""
+    scan = run_script(step_containing(CI, "scan site dependencies")).strip()
+    assert "--package-lock-only" in scan, f"ci.yml's scan step changed shape: {scan!r}"
+    assert scan in VERIFY, (
+        f"ci.yml runs {scan!r} and verify.ps1 does not; a green local run is then a weaker "
+        "claim than the green CI run its DESCRIPTION equates it to")

@@ -40,21 +40,23 @@ jobs:
         with:
           node-version: 22
 
+      # ci.yml's dependency scan, the same command verify.ps1 runs locally, and BEFORE the
+      # install for the same reason it is first there: `npm ci` runs every lifecycle script
+      # in the resolved tree, and this job ran them under `pages: write` and `id-token:
+      # write` until those scopes moved onto the deploy job. This job had `npm ci` and `npm
+      # run build` and nothing else, while ci.yml's site-build — the job that DOES scan —
+      # was skipped on every push, so a push to main that bumped site/package-lock.json
+      # built and DEPLOYED it with no scan having run anywhere. site/ is the repo's only
+      # dependency manifest, so this is the whole scannable surface.
+      - name: scan site dependencies
+        working-directory: site
+        run: npm audit --package-lock-only --audit-level=high
+
       # `npm ci`, not `npm install`: the lockfile is committed, so the build
       # that runs here is the build verified on the rig.
       - name: install site dependencies
         working-directory: site
         run: npm ci
-
-      # ci.yml's dependency scan, the same command verify.ps1 runs locally. This job had
-      # `npm ci` and `npm run build` and nothing else, while ci.yml's site-build — the job
-      # that DOES scan — was skipped on every push. So a push to main that bumped
-      # site/package-lock.json built and DEPLOYED it with no scan having run anywhere, under a
-      # comment in ci.yml claiming the two builds were equivalent. site/ is the repo's only
-      # dependency manifest, so this is the whole scannable surface.
-      - name: scan site dependencies
-        working-directory: site
-        run: npm audit --audit-level=high
 
       - name: build site
         working-directory: site

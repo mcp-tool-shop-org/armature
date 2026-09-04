@@ -132,21 +132,24 @@ jobs:
         with:
           node-version: 22
 
+      # BEFORE the install, not after it. The repo's only dependency manifest is site/ —
+      # there is no Python manifest here, the test dependencies are the pinned install line
+      # below and nothing resolves a graph — so this is the whole scannable surface. It ran
+      # third, after `npm ci`, and `npm ci` runs every lifecycle script in the resolved tree
+      # by default: the gate could name a compromised dependency but not stop it from having
+      # had a shell on the runner. `--package-lock-only` reads the committed lockfile and
+      # needs no node_modules, so the scan is the first thing that touches site/.
+      # `high` is the studio's threshold; a build-time low is not worth a red main.
+      - name: scan site dependencies
+        working-directory: site
+        run: npm audit --package-lock-only --audit-level=high
+
       # `npm ci` and not `npm install`: the lockfile is committed, and a build
       # that resolves fresh dependencies is not the build that was verified on
       # the rig. If this step fails on a lockfile mismatch, that IS the signal.
       - name: install site dependencies
         working-directory: site
         run: npm ci
-
-      # The repo's only dependency manifest is site/. There is no Python manifest
-      # here — the test dependencies are the pinned install line below and nothing
-      # resolves a graph — so this is the whole scannable surface, and it is scanned
-      # rather than attested. `high` is the studio's threshold; a build-time low is
-      # not worth a red main.
-      - name: scan site dependencies
-        working-directory: site
-        run: npm audit --audit-level=high
 
       - name: build site
         working-directory: site

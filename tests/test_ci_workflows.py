@@ -901,7 +901,9 @@ def test_a_third_party_action_is_pinned_to_a_commit_and_says_which_version(sourc
 # exactly one step, and that step is the repo's only dependency scan — ci.yml says so itself:
 # "The repo's only dependency manifest is site/ ... this is the whole scannable surface."
 
-SCAN = "npm audit --audit-level=high"
+#: ci.yml's own scan command, read rather than typed: the two must not drift, and the shape
+#: changed when the scan moved ahead of the install it scans.
+SCAN = run_script(step_containing(CI, "scan site dependencies")).strip()
 CHANGED = "site/package-lock.json"
 
 
@@ -1021,3 +1023,68 @@ def test_a_lockfile_change_is_scanned_however_it_arrives(arrival, ctx):
         f"{[f'{w}:{j}' for w, j, _ in running]} and none of them runs `{SCAN}`; a lockfile "
         "bump carrying a high-severity advisory reaches main with no scan having run on it"
     )
+
+
+# -- the scan runs BEFORE the install it scans (F-a495cc98) --------------------------------
+#
+# `npm ci` runs every lifecycle script in the resolved tree by default, so a scan that runs
+# after it reports a compromised dependency that has already had a shell on the runner —
+# in pages.yml's case with `pages: write` and `id-token: write` in the environment until the
+# permissions were narrowed. ci.yml calls site/ "the whole scannable surface" and the scan
+# "scanned rather than attested", which is true of the report and not of the ordering: the
+# gate could name the finding but not stop it from having run.
+#
+# `npm audit --package-lock-only` reads the lockfile and needs no node_modules, so the scan
+# can be the first thing that touches site/ instead of the third.
+
+#: Every place site/'s lockfile is installed, as measured 2026-09-04 by `site_jobs()` plus
+#: the local script. A fourth installer fails the census before it fails the ordering.
+LOCKFILE_INSTALLERS_TODAY = [("ci.yml", "site-build"), ("pages.yml", "build")]
+
+
+def test_the_lockfile_installer_census_is_the_jobs_in_the_files():
+    """Walked out of the workflows, never listed: `npm ci` in a job body is an installer."""
+    assert site_jobs() == LOCKFILE_INSTALLERS_TODAY, (
+        f"the jobs that install site/'s lockfile are {site_jobs()}; this file was written "
+        f"against {LOCKFILE_INSTALLERS_TODAY}")
+
+
+def _order_in(body, first, second):
+    """(index of `first`, index of `second`) inside a text, -1 where absent.
+
+    Comment lines are dropped first: the steps explain each other, so both commands appear
+    in the prose above them and a raw `find` would read the ordering off an explanation
+    rather than off what the job RUNS.
+    """
+    body = _code_only(body)
+    return body.find(first), body.find(second)
+
+
+@pytest.mark.parametrize("workflow,job", site_jobs())
+def test_the_dependency_scan_runs_before_the_install_that_executes_the_tree(workflow, job):
+    """The one control this repo has over its only dependency graph must precede the shell.
+
+    What this looks like if wrong: the audit step sits below `npm ci`, reports a
+    high-severity advisory, and every preinstall/install/postinstall in the resolved tree has
+    already run on the runner under whatever token that job holds.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    install, scan = _order_in(body, "npm ci", "npm audit")
+    assert scan != -1, f"{workflow}:{job} installs site/'s lockfile and never scans it"
+    assert scan < install, (
+        f"{workflow}:{job} runs `npm ci` at character {install} and `npm audit` at {scan}; "
+        "by the time the scan reports, every lifecycle script in the resolved tree has run")
+    assert "--package-lock-only" in body, (
+        f"{workflow}:{job} scans without `--package-lock-only`, so the scan needs the "
+        "node_modules the install creates and cannot precede it")
+
+
+def test_the_ordering_check_goes_red_on_a_body_that_scans_after_installing():
+    """The mutation: the shape the fix replaced must still fail this check.
+
+    A census that only ever sees corrected inputs proves nothing about the direction it
+    guards, so the pre-fix ordering is fed to the same comparison here.
+    """
+    before = "      - run: npm ci\n      - run: npm audit --audit-level=high\n"
+    install, scan = _order_in(before, "npm ci", "npm audit")
+    assert not (scan < install), "the ordering comparison cannot fail on the pre-fix shape"

@@ -20,9 +20,10 @@
        catching a wheel that does not work, and it probes the function-local dependencies
        (`draw_body`, `draw_hand`, `mean_consecutive_frame_difference`) because `armature
        check` executes no function body and was green on a wheel that could not run.
-    4. the site build: `npm ci`, then `npm audit --audit-level=high` — the dependency scan,
-       also missing until it was enumerated — then `npm run build`, which is what GitHub
-       Pages deploys.
+    4. the site build: `npm audit --package-lock-only --audit-level=high` — the dependency
+       scan, also missing until it was enumerated, and running BEFORE the install because
+       `npm ci` executes every lifecycle script in the tree it resolves — then `npm ci`,
+       then `npm run build`, which is what GitHub Pages deploys.
 
   Every leg runs even if an earlier one fails, so one invocation reports the whole
   picture rather than the first thing to break. The exit code is 0 only if all legs pass,
@@ -233,16 +234,20 @@ if ($NoSite) {
     Write-Host ''
     Write-Host '──────── site build — SKIPPED (-NoSite)' -ForegroundColor Yellow
 } else {
-    Invoke-Leg -Name 'site build (npm ci + audit + build)' -Body {
+    Invoke-Leg -Name 'site build (audit + npm ci + build)' -Body {
         Push-Location (Join-Path $repo 'site')
         try {
-            npm ci
+            # ci.yml's dependency scan, verbatim, and in ci.yml's order: BEFORE the
+            # install. `npm ci` runs every lifecycle script in the resolved tree, so a scan
+            # that follows it reports a compromised dependency that has already run — here,
+            # on the rig. `--package-lock-only` reads the committed lockfile and needs no
+            # node_modules. site/ is the repo's only dependency manifest, so this is the
+            # whole scannable surface; `high` is the studio's threshold. Missing locally
+            # until the legs were enumerated against ci.yml, which meant a green local run
+            # could still be a lockfile CI then rejected.
+            npm audit --package-lock-only --audit-level=high
             if ($LASTEXITCODE -ne 0) { return }
-            # ci.yml's dependency scan, verbatim. site/ is the repo's only dependency
-            # manifest, so this is the whole scannable surface; `high` is the studio's
-            # threshold. Missing locally until the legs were enumerated against ci.yml, which
-            # meant a green local run could still be a lockfile CI then rejected.
-            npm audit --audit-level=high
+            npm ci
             if ($LASTEXITCODE -ne 0) { return }
             npm run build
         } finally { Pop-Location }
