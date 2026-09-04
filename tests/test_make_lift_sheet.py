@@ -52,7 +52,11 @@ def test_end_to_end_the_sidecar_records_what_the_cameras_were_or_says_so(
             im.paste(Image.new("RGB", (12, 20), (200, 180, 60)), (26, 14))
             im.save(d / n)
     base.save(lif / "empty_plate.png")
-    det = {"rows": [{"fired": False, "image": [], "visibility": []} for _ in range(2)]}
+    # The rows name the frames they describe: `make_lift_sheet` pairs its three columns
+    # by frame NUMBER through `measure_lift.gate_pairing`, and a row naming neither its
+    # file nor its frame cannot be paired with anything.
+    det = {"rows": [{"frame": i, "file": f"{i:03d}.png", "fired": False,
+                     "image": [], "visibility": []} for i in range(2)]}
     (tmp_path / "det.json").write_text(json.dumps(det), encoding="utf-8")
     out = tmp_path / "sheet.png"
 

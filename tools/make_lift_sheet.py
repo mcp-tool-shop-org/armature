@@ -30,15 +30,37 @@ the render and not from the detector whose work is on trial. Every tile uses the
 Sheets locate; full size decides. The crop is recorded in the sidecar, and the uncropped
 frames stay on disk at 1920x1080 for the Director's zoom.
 
+**The three columns are PAIRED, not zipped (measured 2026-09-03).** The source listing,
+the lifted listing and the detection rows were three independent populations indexed by the
+same `i` from `--frames`, with no check that any two of them named the same frames and no
+bounds check at all. A source numbered 00000..00004 beside a lifted directory holding the
+SAME five renders numbered 00001..00005 composed a sheet whose row `f000` showed source
+`00000.png` next to lifted `00001.png`, printed `MAKE_LIFT_SHEET_OK`, and wrote a sidecar
+recording only the requested indices — no file name anywhere in it. Exit 0. That is the
+off-by-one `measure_lift.gate_pairing` exists for, and the reason its docstring compares
+file NAMES: `detect()` sets each row's `frame` to the enumeration index, so
+`[r['frame'] for r in rows]` is `range(n)` however the directory is numbered.
+
+So `gate_listing_pairing` (the same gate, one implementation) runs before a tile is cut,
+`require_frames` refuses a requested index past any population instead of raising
+`IndexError` from a list subscript, and the sidecar records the file each column actually
+loaded rather than the index that was asked for.
+
 This tool computes nothing and judges nothing.
 """
 
 import argparse
 import json
 import os
+import sys
 
 import numpy as np
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from measure_lift import gate_listing_pairing  # noqa: E402
+from sheet_compose import require_frames  # noqa: E402
 
 MARGIN = 12
 LABEL_H = 20
@@ -168,6 +190,13 @@ def main():
     with open(a.detection, encoding="utf-8") as fh:
         det = json.load(fh)["rows"]
 
+    # ---- ANDON, before a tile is cut: the three columns name the SAME frames.
+    pairing = gate_listing_pairing({"source": src, "lifted": lif, "detection": det})
+    # ---- and every requested index exists in each of them.
+    require_frames(idx, src, what="numbered source frame(s)", where=a.source)
+    require_frames(idx, lif, what="numbered lifted frame(s)", where=a.lifted)
+    require_frames(idx, det, what="detection row(s)", where=a.detection)
+
     src_paths = [os.path.join(a.source, src[i]) for i in idx]
     lif_paths = [os.path.join(a.lifted, lif[i]) for i in idx]
     full_size = _rgb(src_paths[0]).size
@@ -231,6 +260,13 @@ def main():
 
     with open(os.path.splitext(a.out)[0] + ".json", "w", encoding="utf-8") as fh:
         json.dump({"tool": "make_lift_sheet", "frames": idx,
+                   # The FILE each column loaded, not the index that was asked for: the
+                   # sidecar of the mis-paired run named [0,1,2] and nothing else.
+                   "rows": [{"frame": i,
+                             "source": os.path.abspath(os.path.join(a.source, src[i])),
+                             "lifted": os.path.abspath(os.path.join(a.lifted, lif[i])),
+                             "detection_row": i} for i in idx],
+                   "gate_PAIRING": {k: v.get("verdict") for k, v in pairing.items()},
                    "crop_box_source": list(box_s), "crop_box_lifted": list(box_l),
                    "source_camera": a.source_camera or MISSING,
                    "lifted_camera": a.lifted_camera or MISSING,

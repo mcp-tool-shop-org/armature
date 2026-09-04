@@ -15,6 +15,18 @@ melted hand in every frame, so this emits both from the SAME lossless source:
   frame centre when it is not; the crop box is written into the sidecar either way, because
   a still whose provenance is unrecorded is a picture, not evidence.
 
+**Two silences, both measured 2026-09-03.** `if i >= len(ims): continue` dropped a
+requested still index with nothing saying so — the default `--stills=0,16,32,48,64` against
+a 33-frame clip cut stills for 0/16/32 and printed `"stills": 12`, a count with no
+denominator — while nine lines above, this file states the opposite principle about a
+landmark outside the image. And `det[i]` indexed the detection rows by the still index with
+no check of `len(det)` against `len(ims)` and none that the row describes frame `i`, which
+is the positional pairing `measure_lift.gate_pairing` exists to refuse over rows whose
+`frame` is an enumeration index. A detection record made over a differently-numbered render
+paired each crop's landmark centre with another frame's detection, and `centre_px` then
+recorded a centre never measured on that frame — on the hands-and-feet crops, which exist
+precisely because that is where a video model's structure fails first.
+
 Nothing here resamples the source: the clip is written at the frames' own resolution and
 the stills are cut at 1:1. Sheets locate; full size decides.
 """
@@ -22,8 +34,14 @@ the stills are cut at 1:1. Sheets locate; full size decides.
 import argparse
 import json
 import os
+import sys
 
 from PIL import Image
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from measure_lift import gate_listing_pairing  # noqa: E402
+from sheet_compose import require_frames  # noqa: E402
 
 
 def clip_name(fps, source_fps):
@@ -37,7 +55,7 @@ def clip_name(fps, source_fps):
     return f"review_{fps / float(source_fps):.2f}x_{fps}fps.webp"
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", required=True)
     ap.add_argument("--out", required=True)
@@ -47,7 +65,7 @@ def main():
     ap.add_argument("--source-fps", type=int, default=16)
     ap.add_argument("--stills", default="0,16,32,48,64")
     ap.add_argument("--crop", type=int, default=224, help="still crop size, native pixels")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     os.makedirs(a.out, exist_ok=True)     # scripts create their own output directories
     names = sorted(f for f in os.listdir(a.frames)
@@ -64,6 +82,8 @@ def main():
     if a.detection:
         with open(a.detection, encoding="utf-8") as fh:
             det = json.load(fh)["rows"]
+        # ---- ANDON. The rows describe THESE frames, by frame number — not by position.
+        gate_listing_pairing({"frames": names, "detection": det})
 
     W, H = ims[0].size
     half = a.crop // 2
@@ -73,10 +93,10 @@ def main():
     # sidecar records that it was outside, which is the finding rather than a missing file.
     targets = {"hand_L": 15, "hand_R": 16, "foot_L": 27, "foot_R": 28}
     idx = [int(v) for v in a.stills.split(",") if v.strip() != ""]
+    # ---- every requested still index exists. The count had no denominator.
+    require_frames(idx, ims, what="clip frame(s)", where=a.frames)
     cuts = []
     for i in idx:
-        if i >= len(ims):
-            continue
         for label, li in targets.items():
             if det and det[i].get("fired"):
                 x, y = det[i]["image"][li]
@@ -100,10 +120,13 @@ def main():
                    "clip": os.path.abspath(clip), "clip_fps": a.fps,
                    "source_fps": a.source_fps,
                    "playback_rate": f"{a.fps / float(a.source_fps):.2f}x",
-                   "clip_lossless": True, "stills": cuts}, fh, indent=2)
+                   "clip_lossless": True,
+                   "stills_requested": idx, "n_stills_requested": len(idx),
+                   "stills": cuts}, fh, indent=2)
     print("MAKE_REVIEW_CLIP_OK " + json.dumps({
         "clip": clip, "frames": len(ims), "fps": a.fps,
-        "rate": f"{a.fps / float(a.source_fps):.2f}x", "stills": len(cuts),
+        "rate": f"{a.fps / float(a.source_fps):.2f}x",
+        "stills": len(cuts), "stills_requested": idx,
         "manifest": side}))
 
 

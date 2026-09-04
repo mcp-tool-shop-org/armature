@@ -53,6 +53,47 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
 
+class SheetPopulationError(ArmatureError):
+    """A panel cannot show what it was asked to show, and would not have said so.
+
+    `if fi >= len(names): continue` dropped every requested index past the end of a
+    listing. Measured 2026-09-03 on `make_gate0_sheet`: a 3-frame control and a 3-frame
+    output asked for `--frames=0,8,16,24` saved a ONE-column sheet, exit 0, with nothing
+    on the panel or in the record saying three of the four requested frames were absent —
+    and when EVERY requested index was dropped it died instead at `cols[0][1].width` with
+    a bare `IndexError` naming nothing.
+
+    `make_identity_sheet` was given this refusal in wave 3, because dropping one silently
+    shows the Director fewer angles than were asked for on the panel where identity is
+    judged. Four siblings kept the `continue`; `require_frames` is that one refusal, in
+    one place, for all of them.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+def require_frames(requested, population, *, what, where, exc=SheetPopulationError):
+    """Every requested index EXISTS in `population`, or raise naming the shortfall.
+
+    Returns the evidence dict when it holds — a gate whose passing verdict is never
+    written down is a gate nobody can read.
+    """
+    requested = list(requested)
+    n = len(population)
+    missing = [i for i in requested if i < 0 or i >= n]
+    ev = {"gate": "FRAMES", "what": what, "where": str(where), "n_frames": n,
+          "requested": requested, "missing_indices": missing}
+    if missing or not n or not requested:
+        raise exc(
+            f"{where} holds {n} {what} and frame(s) {missing} of the requested "
+            f"{requested} are not among them; a panel built from whichever of them happen "
+            f"to exist shows fewer than were asked for and says nothing about it", ev)
+    ev["verdict"] = f"all {len(requested)} requested indices exist in {n} {what}"
+    return ev
+
+
 BG, INK, SUB = (22, 22, 24), (238, 238, 240), (166, 166, 172)
 PAD, LABEL_H, ROW_TITLE_H, TITLE_H = 26, 54, 46, 150
 

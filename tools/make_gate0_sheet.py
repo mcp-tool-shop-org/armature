@@ -32,9 +32,15 @@ was born separate.
 import argparse
 import json
 import os
+import sys
 import textwrap
 
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from measure_lift import gate_listing_pairing  # noqa: E402
+from sheet_compose import require_frames  # noqa: E402
 
 MARGIN = 10
 LABEL_H = 18
@@ -154,6 +160,13 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
     """
     cnames = sorted(n for n in os.listdir(control_dir) if n.endswith(".png"))
     onames = sorted(n for n in os.listdir(frames_dir) if n.endswith(".png"))
+    # ---- ANDON. The control and output listings were two populations indexed by the same
+    #      `fi`, with nothing checking they name the same frames; and a requested index
+    #      past either was dropped in SILENCE (`continue`), on the panel the whole judging
+    #      discipline rests on. `make_identity_sheet` was given this refusal in wave 3.
+    gate_listing_pairing({"control": cnames, "output": onames})
+    require_frames(frame_idx, cnames, what="control frame(s)", where=control_dir)
+    require_frames(frame_idx, onames, what="output frame(s)", where=frames_dir)
     ref = _rgb(reference) if reference else None
 
     def fit(im):
@@ -162,8 +175,6 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
 
     cols = []
     for fi in frame_idx:
-        if fi >= len(cnames) or fi >= len(onames):
-            continue
         c = fit(_rgb(os.path.join(control_dir, cnames[fi])))
         o = fit(_rgb(os.path.join(frames_dir, onames[fi])))
         cols.append((frame_caption(fi, captions), c, o))

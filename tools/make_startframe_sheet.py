@@ -34,6 +34,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PIL import Image, ImageDraw  # noqa: E402
 
+from sheet_compose import require_frames  # noqa: E402
+
 MARGIN = 10
 LABEL_H = 18
 HDR_H = 24
@@ -124,14 +126,12 @@ def provenance_lines(meta, prompt_id=None, measurements=None):
 def build(start_path, frame_paths, indices, meta, prompt_id=None, measurements=None,
           captions=None, scale=0.5):
     start = _rgb(start_path)
-    tiles = []
-    for fi in indices:
-        if fi >= len(frame_paths):
-            continue
-        tiles.append((fi, _rgb(frame_paths[fi])))
-    if not tiles:
-        raise SystemExit("no output frames at the requested indices; the sheet would be "
-                         "a picture of the start frame beside nothing")
+    # ---- the family refusal (`sheet_compose.require_frames`): a requested index past the
+    #      population was DROPPED, and only a total wipeout raised. A partial drop showed
+    #      the Director fewer frames than were asked for and said nothing.
+    require_frames(indices, frame_paths, what="output frame(s)",
+                   where="the output frame listing")
+    tiles = [(fi, _rgb(frame_paths[fi])) for fi in indices]
 
     def fit(im):
         return im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))),
