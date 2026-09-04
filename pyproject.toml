@@ -29,7 +29,32 @@ classifiers = [
     # structure, not classifier membership. The real one carries "/Engineering".
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
-dependencies = ["numpy>=1.24"]
+# Every third-party module `armature_core` imports, declared. Three of them are imported
+# inside function bodies — `cv2` and `matplotlib.colors` in `aapose`, `PIL.Image` in
+# `donor_gate` — which is why `import armature_core.aapose` succeeded on an install that
+# could not run it: the wheel was built, installed into a fresh venv with numpy alone, and
+# `aapose.draw_body(...)` raised `ModuleNotFoundError: No module named 'cv2'` while
+# `armature check` on that same install printed `all modules resolved` and exited 0. A
+# function-local import is still a dependency; only the moment of failure moved.
+#
+# Declared rather than made an extra: the AAPose drawing path is how this repo produces a
+# control sequence and `donor_gate` is Gate DONOR, so neither is optional to what the
+# package is for, and an extra a user has to know about reproduces the same "no error
+# naming the fix" failure one step later.
+#
+# The floors are the versions this rig and CI have actually run, not the oldest that would
+# resolve: cv2 is the rasterizer the aapose golden frames were measured against, and a
+# raster that disagrees with the goldens is a recipe that does not reproduce its output.
+# The exact byte-stable pins stay in ci.yml, where the golden-frame suite runs.
+# `opencv-python-headless` and not `opencv-python`: nothing here opens a window, and the
+# GUI build pulls a desktop stack onto servers and runners that have none.
+# `tests/test_packaging.py` fails if a new third-party import is added without a row here.
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python-headless>=5.0",
+    "pillow>=10.0",
+    "matplotlib>=3.7",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]

@@ -12,9 +12,24 @@ scratch/
 *.exr
 *.npy
 
-# Renders and sheets live under outputs/; anything that escapes is still ignored by extension
-# EXCEPT documentation figures, which are committed deliberately under docs/figures/.
-!docs/figures/**
+# Raster images. This list did not have them until it was measured: every control sequence,
+# start frame and comparison sheet this repo produces is a PNG (`armature_core.pngio` is a
+# dependency-free PNG writer), and `git check-ignore` reported `sheets/control_0001.png`,
+# `renders/frame.png` and `tools/out/plate.jpg` all NOT IGNORED. The stated backstop covered
+# every artifact type except the dominant one.
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.tif
+*.tiff
+
+# The committed figures, re-included by name. These are the two directories that actually
+# hold committed images — the previous negation pointed at `docs/figures/`, which does not
+# exist in this tree, so it re-included nothing. `tests/test_packaging.py` fails on a
+# negation whose path is absent, and on a committed figure the rules above swallow.
+!docs/assets/**
+!site/public/**
 
 # Python
 __pycache__/
@@ -29,7 +44,9 @@ venv/
 # tree, so a wheel that rode a commit could only ever disagree with the one users get.
 dist/
 build/
-npm/*.tgz
+# `npm/*.tgz` only covered a pack run from inside npm/; `npm pack npm` from the root drops
+# `armature-studio-0.3.0.tgz` here, and that was NOT IGNORED.
+*.tgz
 
 # Site (Astro/Starlight under site/). The lockfile IS committed — CI runs
 # `npm ci`, so the build that runs there is the build verified on the rig.
@@ -42,9 +59,21 @@ site/.astro/
 # when a number changes, so it never rides a commit.
 .polyglot-cache.json
 
-# Secrets — API keys for cloud generation never enter the repo
+# Secrets — API keys for cloud generation never enter the repo, and neither do the two
+# files a maintainer creates while debugging a publish by hand. SECURITY.md asserts that no
+# long-lived registry token exists in this repository; this block is the mechanical backstop
+# for that assertion, and `git check-ignore` reported `.npmrc`, `npm/.npmrc`, `.pypirc`,
+# `.env.local` and `secrets.pem` all NOT IGNORED — this repo publishes to BOTH registries,
+# so `.npmrc` and `.pypirc` are exactly the likely carriers. `.env` matched the exact name
+# only, so every `.env.<anything>` walked past it.
 .env
+.env.*
+.npmrc
+.pypirc
 *.key
+*.pem
+*.p12
+*.pfx
 credentials.json
 
 # OS / editor
