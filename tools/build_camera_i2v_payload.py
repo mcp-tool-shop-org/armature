@@ -109,6 +109,7 @@ import hashlib
 import json
 import os
 import re
+import struct
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -488,6 +489,39 @@ DELIBERATE_BREAKS = {
 }
 
 
+#: PNG colour types, from the format spec. 6 and 4 are the two that carry an alpha
+#: channel; 3 is a palette, which may carry transparency through a tRNS chunk.
+_PNG_COLOR_TYPES = {0: "grayscale", 2: "rgb", 3: "palette", 4: "grayscale_alpha",
+                    6: "rgba"}
+
+
+def png_header(path):
+    """`{width, height, bit_depth, color_type, alpha}` read from the file's IHDR, or None.
+
+    Stdlib only — 20 bytes of `struct`, no Pillow — because this runs in the CPU builders
+    and the render side already refuses to take a dependency for the same reason
+    (`armature_core.pngio` is a writer with no reader for exactly that trade).
+
+    **Why a builder measures this at all** (the Director's alpha ruling, 2026-08-12):
+    every reference or start-frame render of the character is authored RGBA with a real
+    alpha channel, and the RGB composite each route submits is a deliberate, recorded
+    choice. Until wave 10 this route's record asserted `fit: "native — authored at
+    832x480"` about an image the tool never opened, so nothing could contradict it: a
+    re-authored, resampled or flattened start frame left the sentence unchanged. The
+    numbers here come from the artifact, so `fit` becomes a measurement instead of a claim
+    and the record says whether the authored input carried alpha at all.
+    """
+    with open(path, "rb") as fh:
+        head = fh.read(33)
+    if len(head) < 33 or head[:8] != b"\x89PNG\r\n\x1a\x0a" or head[12:16] != b"IHDR":
+        return None
+    width, height, depth, color = struct.unpack(">IIBB", head[16:26])
+    return {"width": width, "height": height, "bit_depth": depth,
+            "color_type": _PNG_COLOR_TYPES.get(color, color),
+            "alpha": color in (4, 6),
+            "read_by": "IHDR, stdlib struct — no image library"}
+
+
 def resolve_start_frame(path, declared_sha256):
     """The start frame's sha256, COMPUTED from the artifact. Raises rather than accepting.
 
@@ -515,7 +549,12 @@ def resolve_start_frame(path, declared_sha256):
     with open(path, "rb") as fh:
         digest = hashlib.sha256(fh.read()).hexdigest()
     ev = {"path": os.path.abspath(path), "sha256": digest,
-          "bytes": os.path.getsize(path), "source": "hashed_in_tool"}
+          "bytes": os.path.getsize(path), "source": "hashed_in_tool",
+          # The alpha ruling's half: what the authored artifact actually IS, measured,
+          # beside whatever the record asserts about how it was fitted. `None` when the
+          # file is not a PNG, which is itself a fact worth recording on a route whose
+          # entire conditioning is this one image.
+          "image": png_header(path)}
     if declared_sha256:
         if declared_sha256.strip().lower() != digest:
             raise PayloadError(

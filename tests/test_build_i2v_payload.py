@@ -28,8 +28,25 @@ POS, NEG = "a jointed clay mannequin dancing in a bar", "blurry, low quality"
 E11_SEEDS = [2026081231, 2026081232, 2026081233]
 
 
+#: A resolved start frame, so every fixture below carries the control-input hash wave 10
+#: made mandatory (F-531c5f1f). The digest is over a real 2-byte file rather than a typed
+#: constant, because the whole point of the clause is that the tool hashes the artifact.
+_START_FRAME_BYTES = b"not-a-real-png-just-bytes-to-hash"
+
+
+def _resolved_start_frame(tmp_factory=None):
+    import hashlib, tempfile
+    d = tempfile.mkdtemp()
+    path = os.path.join(d, "start.png")
+    with open(path, "wb") as fh:
+        fh.write(_START_FRAME_BYTES)
+    return {"path": path, "sha256": hashlib.sha256(_START_FRAME_BYTES).hexdigest(),
+            "bytes": len(_START_FRAME_BYTES), "source": "hashed_in_tool", "image": None}
+
+
 def built(**kw):
     kw.setdefault("registry", E11_SEEDS)
+    kw.setdefault("start_frame", _resolved_start_frame())
     return B.build(UPLOADS, kw.pop("seed", E11_SEEDS[0]), kw.pop("negative", NEG),
                    kw.pop("positive", POS), kw.pop("registry"), **kw)
 
@@ -347,3 +364,147 @@ def test_omitting_the_seed_with_no_registry_names_the_missing_flag():
     with pytest.raises(B.PayloadError) as exc:
         built(seed=None, registry=None)
     assert "--seed" in str(exc.value)
+
+
+# =======================================================================================
+# wave 10, F-531c5f1f — the one image this route conditions on is now IN the record
+# =======================================================================================
+#
+# On E11's route the start frame IS the entire image conditioning (this module's own
+# docstring: "nothing else conditions the generation"), and the payload record named no
+# local artifact for it. Measured by walking both siblings' argparse trees on 2026-09-04:
+# `build_camera_i2v_payload` declares `--start-frame` and `--start-frame-sha256` and hashes
+# the file in `resolve_start_frame`; `build_i2v_payload` declared NEITHER. Its only image
+# input was `--uploads`, and `meta['start_image']` carried a server-side content-addressed
+# `server_name`, a prose `fit` string ("native — authored at 832x480") and a `why`
+# paragraph. Every `sha256` in the module was over a STRING or the graph. So an E11 record
+# could not be re-run from, and a re-authored or re-composited start frame left no trace
+# that would show a run was not comparable to the previous one.
+
+
+def _authored_start_frame(tmp_path, name="start.png", size=(832, 480)):
+    """A real PNG on disk, written by the repo's own dependency-free writer."""
+    import numpy as np
+
+    from armature_core import pngio
+
+    path = tmp_path / name
+    pngio.write_png(str(path), np.zeros((size[1], size[0], 3), dtype="uint8"))
+    return path
+
+
+def test_omitting_the_start_frame_flag_RAISES(tmp_path):
+    """The sibling's clause, carried: a record that cannot name the bytes of the one image
+    the generation is conditioned on is not a recipe."""
+    with pytest.raises(B.PayloadError, match="--start-frame is required"):
+        B.resolve_start_frame(None)
+
+
+def test_a_start_frame_path_that_is_not_a_file_RAISES(tmp_path):
+    with pytest.raises(B.PayloadError, match="is not a file"):
+        B.resolve_start_frame(str(tmp_path / "never-authored.png"))
+
+
+def test_a_declared_digest_that_disagrees_with_the_bytes_HALTS(tmp_path):
+    """A declared digest is a cross-check, never the record's source. One of the two names
+    a different artifact and the record may not carry a digest the bytes do not support."""
+    path = _authored_start_frame(tmp_path)
+    with pytest.raises(B.PayloadError, match="does not hash to the file"):
+        B.resolve_start_frame(str(path), "0" * 64)
+
+
+def test_the_carried_refusal_names_the_sibling_it_came_from(tmp_path):
+    """One implementation, imported. The receipt says where the clause lives."""
+    with pytest.raises(B.PayloadError) as exc:
+        B.resolve_start_frame(None)
+    assert exc.value.evidence["carried_from"] == (
+        "build_camera_i2v_payload.resolve_start_frame")
+    assert exc.value.evidence["flag"] == "--start-frame"
+
+
+def test_a_declared_digest_that_AGREES_is_recorded_as_confirmed(tmp_path):
+    """The mutation that must not fire it."""
+    import hashlib
+
+    path = _authored_start_frame(tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    ev = B.resolve_start_frame(str(path), digest.upper())
+    assert ev["sha256"] == digest
+    assert ev["source"].endswith("confirmed_against_the_declared_value")
+
+
+def test_build_refuses_to_emit_a_payload_with_no_resolved_start_frame():
+    """The gate lives inside `build`, not in `main`, so an in-process caller cannot route
+    around it."""
+    with pytest.raises(B.PayloadError, match="needs the resolved start frame"):
+        B.build(UPLOADS, E11_SEEDS[0], NEG, POS, E11_SEEDS, start_frame=None)
+
+
+def test_the_record_carries_the_local_path_hash_and_size(tmp_path):
+    path = _authored_start_frame(tmp_path)
+    ev = B.resolve_start_frame(str(path))
+    _wf, meta = built(start_frame=ev)
+    start = meta["start_image"]
+    assert start["sha256"] == ev["sha256"] and len(start["sha256"]) == 64
+    assert start["path"] == os.path.abspath(str(path))
+    assert start["bytes"] == os.path.getsize(str(path))
+    assert start["server_name"] == UPLOADS["start_frame"], "the server name still rides"
+
+
+def test_the_asserted_fit_is_now_checkable_against_the_file(tmp_path):
+    """`fit: "native — authored at 832x480"` was an assertion about an image the tool never
+    opened, so nothing could contradict it. It sits beside a measurement now."""
+    ev = B.resolve_start_frame(str(_authored_start_frame(tmp_path)))
+    start = built(start_frame=ev)[1]["start_image"]
+    assert start["measured"]["width"] == B.WIDTH
+    assert start["measured"]["height"] == B.HEIGHT
+    assert start["fit_agrees_with_the_file"] is True
+
+    # …and it goes False on the input it exists to catch: a start frame authored at the
+    # wrong size, which used to leave the `fit` sentence entirely unchanged.
+    wrong = B.resolve_start_frame(str(_authored_start_frame(
+        tmp_path, name="wrong.png", size=(1024, 576))))
+    assert built(start_frame=wrong)[1]["start_image"]["fit_agrees_with_the_file"] is False
+
+
+def test_the_record_says_whether_the_authored_input_carried_ALPHA(tmp_path):
+    """The Director's 2026-08-12 ruling, made machine-readable: an authored input carries
+    alpha and the RGB composite a route submits is a recorded choice. The colour type comes
+    from the file's own IHDR, so a flattened re-author is visible in the record."""
+    ev = B.resolve_start_frame(str(_authored_start_frame(tmp_path)))
+    measured = built(start_frame=ev)[1]["start_image"]["measured"]
+    assert measured["color_type"] == "rgb"
+    assert measured["alpha"] is False
+    assert "no image library" in measured["read_by"]
+
+
+def test_the_png_header_reader_refuses_to_guess_at_a_non_png(tmp_path):
+    """A file that is not a PNG returns None rather than a plausible dict — an absent
+    measurement, not an invented one. On a route whose whole conditioning is this image,
+    that is itself worth recording."""
+    import build_camera_i2v_payload as CAM
+
+    junk = tmp_path / "not.png"
+    junk.write_bytes(b"this is not a png" * 4)
+    assert CAM.png_header(str(junk)) is None
+    ev = B.resolve_start_frame(str(junk))
+    assert ev["image"] is None
+    assert built(start_frame=ev)[1]["start_image"]["fit_agrees_with_the_file"] is None
+
+
+def test_both_i2v_builders_declare_the_same_two_start_frame_flags():
+    """The family, derived from the parsers rather than from the docstrings: every builder
+    whose graph conditions on ONE uploaded start image declares `--start-frame` and
+    `--start-frame-sha256`. `build_i2v_payload` declared neither until wave 10."""
+    import ast
+
+    family = []
+    for name in ("build_i2v_payload.py", "build_camera_i2v_payload.py"):
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        flags = {n.args[0].value for n in ast.walk(tree)
+                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                 and n.func.attr == "add_argument" and n.args
+                 and isinstance(n.args[0], ast.Constant)}
+        family.append((name, {"--start-frame", "--start-frame-sha256"} <= flags))
+    assert family == [("build_i2v_payload.py", True),
+                      ("build_camera_i2v_payload.py", True)], family

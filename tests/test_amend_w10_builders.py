@@ -300,15 +300,19 @@ def _run(tool, *args, cwd=None):
                           capture_output=True, text=True, env=env, cwd=cwd or REPO)
 
 
-@pytest.mark.parametrize("tool,prefix", [
-    ("build_assembly_payload.py", "BUILD_ASSEMBLY"),
-    ("build_cascade_payload.py", "BUILD_CASCADE"),
+@pytest.mark.parametrize("tool,prefix,frames", [
+    # 5 for the flat builder: it is bounded at MEASURED_FLAT_SLOT_MAX = 8 (the routed seed
+    # below) and Gate L's wan rules require a 4n+1 frame count, so 5 is the largest legal
+    # flat clip. 81 for the cascade, which is what batching the batches is for.
+    ("build_assembly_payload.py", "BUILD_ASSEMBLY", 5),
+    ("build_cascade_payload.py", "BUILD_CASCADE", 81),
 ])
-def test_a_successful_build_exits_0_with_its_OK_line_and_no_HALT(tmp_path, tool, prefix):
+def test_a_successful_build_exits_0_with_its_OK_line_and_no_HALT(tmp_path, tool, prefix,
+                                                                 frames):
     """The direction no census pinned. Measured before the fix on an 81-entry padded map:
     both printed every gate line green and their `_OK` line on stdout, dumped ~9 KB of the
     graph dict to stderr, and exited **1**."""
-    up = _padded_map(tmp_path / "uploads.json", 81)
+    up = _padded_map(tmp_path / "uploads.json", frames)
     proc = _run(tool, f"--uploads={up}", f"--out={tmp_path / 'out'}")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert len([ln for ln in proc.stdout.splitlines()
@@ -342,7 +346,7 @@ def _refs_record(tmp_path):
 def test_the_in_process_callers_still_get_the_artifact(tmp_path):
     """`main()` returns an int; the graph is handed back through `build_and_write`, so the
     tests that read it did not have to be weakened to make the exit code right."""
-    up = _padded_map(tmp_path / "u.json", 9)
+    up = _padded_map(tmp_path / "u.json", 5)
     wf = ASSEMBLY.build_and_write([f"--uploads={up}", f"--out={tmp_path / 'a'}"])
     assert wf["401"]["class_type"] == "CreateVideo"
     assert ASSEMBLY.main([f"--uploads={up}", f"--out={tmp_path / 'a2'}"]) == 0
@@ -399,7 +403,7 @@ def test_a_contract_legal_fps_passes_and_records_the_contract(ok):
 def test_the_cascade_builder_refuses_an_illegal_fps_before_it_builds(tmp_path, bad):
     """Measured as subprocesses before the fix: each of these built the graph, passed all
     five gates including Gate ROUTE, and printed BUILD_CASCADE_OK."""
-    up = _padded_map(tmp_path / "u.json", 9)
+    up = _padded_map(tmp_path / "u.json", 5)
     with pytest.raises(RG.RouteGate, match="fps"):
         CASCADE.build_and_write([f"--uploads={up}", f"--out={tmp_path / 'o'}",
                                  f"--fps={bad}"])
@@ -409,7 +413,7 @@ def test_the_cascade_builder_refuses_an_illegal_fps_before_it_builds(tmp_path, b
 @pytest.mark.parametrize("bad", ["0", "-5", "999"])
 def test_the_assembly_builder_carries_the_same_clause(tmp_path, bad):
     """The sibling site named in the finding, fixed from the SAME function — not a copy."""
-    up = _padded_map(tmp_path / "u.json", 9)
+    up = _padded_map(tmp_path / "u.json", 5)
     with pytest.raises(RG.RouteGate, match="fps"):
         ASSEMBLY.build_and_write([f"--uploads={up}", f"--out={tmp_path / 'o'}",
                                   f"--fps={bad}"])
@@ -428,7 +432,7 @@ def test_the_fps_clause_is_reached_through_build_not_only_through_main(tmp_path)
 def test_a_legal_fps_still_builds_and_the_record_says_what_was_checked(tmp_path):
     """The mutation that must not fire it, plus the receipt: the record already claimed the
     1-120 contract in `node_contracts_measured` while nothing read it."""
-    up = _padded_map(tmp_path / "u.json", 9)
+    up = _padded_map(tmp_path / "u.json", 5)
     CASCADE.build_and_write([f"--uploads={up}", f"--out={tmp_path / 'o'}", "--fps=120"])
     rec = json.loads((tmp_path / "o" / "E13-cascade-payload-record.json")
                      .read_text(encoding="utf-8"))
@@ -439,6 +443,89 @@ def test_a_legal_fps_still_builds_and_the_record_says_what_was_checked(tmp_path)
 def test_the_group_clause_still_binds_so_the_fps_clause_did_not_replace_it(tmp_path):
     """`--group` was the bounded flag the finding contrasted `--fps` against. It stays
     bounded."""
-    up = _padded_map(tmp_path / "u.json", 9)
+    up = _padded_map(tmp_path / "u.json", 5)
     with pytest.raises(AS.AssemblyGate, match="group size must be at least"):
         CASCADE.build_and_write([f"--uploads={up}", f"--out={tmp_path / 'o'}", "--group=0"])
+
+
+# =======================================================================================
+# wave 10, routed seed — the flat chain's own slot ceiling
+# =======================================================================================
+#
+# Both cascade builders call `assembly.gate_slot_ceiling`; the flat path called no ceiling
+# clause at all, so the ONE builder whose shape is a single batch node — the shape S03
+# watched pass the round trip, Gate ROUTE and pre-flight with zero warnings and then die at
+# execution with `images.image50` unexpected — was the one with nothing bounding its width.
+#
+# The bound is `MEASURED_FLAT_SLOT_MAX = 8`, which is a measurement (S03 executed the chain
+# at 8) and not the cascade's `MAX_SLOTS_PER_NODE` (27, a group size chosen for a different
+# structure) nor `INFERRED_SLOT_CAP` (50, read off one error string). The boundary between
+# 8 and 81 has never been located and every verdict says so.
+
+
+def test_a_flat_batch_wider_than_anyone_has_run_is_REFUSED():
+    graph = {"400": {"class_type": "BatchImagesNode",
+                     "inputs": {f"images.image{i}": [str(200 + i), 0] for i in range(9)}}}
+    with pytest.raises(AS.AssemblyGate, match="largest flat batch anyone has SEEN EXECUTE"):
+        ASSEMBLY.gate_flat_slot_ceiling(graph, 400)
+
+
+def test_the_bound_itself_passes_and_the_verdict_says_the_boundary_is_unlocated():
+    """8 is the measurement, so 8 passes; 9 is one past the only number anyone has run."""
+    graph = {"400": {"class_type": "BatchImagesNode",
+                     "inputs": {f"images.image{i}": [str(200 + i), 0] for i in range(8)}}}
+    ev = ASSEMBLY.gate_flat_slot_ceiling(graph, 400)
+    assert ev["slots"] == 8 and ev["measured_max"] == 8
+    assert ev["boundary_located"] is False
+    assert ev["measured_by"] == "S03"
+    assert "NOT located" in ev["verdict"]
+
+
+def test_the_refusals_evidence_names_every_number_and_which_are_measured():
+    graph = {"400": {"class_type": "BatchImagesNode",
+                     "inputs": {f"images.image{i}": [str(200 + i), 0] for i in range(81)}}}
+    with pytest.raises(AS.AssemblyGate) as exc:
+        ASSEMBLY.gate_flat_slot_ceiling(graph, 400)
+    ev = exc.value.evidence
+    assert ev["gate"] == "FLAT_SLOT_CEILING"
+    assert (ev["slots"], ev["measured_max"], ev["inferred_cap"]) == (81, 8, 50)
+    assert ev["boundary_located"] is False, (
+        "a gate that quotes an unlocated boundary as located is the placeholder-shaped-"
+        "like-evidence class")
+
+
+def test_the_bound_is_NOT_the_cascades_group_size_or_the_inferred_cap():
+    """A global constant must not govern a local feature. 27 is the cascade's group size and
+    50 is read off a single error message; neither is what this route was measured at."""
+    assert ASSEMBLY.MEASURED_FLAT_SLOT_MAX == 8
+    assert ASSEMBLY.MEASURED_FLAT_SLOT_MAX != AS.MAX_SLOTS_PER_NODE
+    assert ASSEMBLY.MEASURED_FLAT_SLOT_MAX != AS.INFERRED_SLOT_CAP
+
+
+def test_a_bare_images_list_is_counted_at_its_real_arity():
+    """The shape that made `gate_slot_ceiling` count zero in wave 8. A batch carrying a bare
+    list of 20 links is 20 slots, not 0."""
+    graph = {"400": {"class_type": "BatchImagesNode",
+                     "inputs": {"images": [[str(200 + i), 0] for i in range(20)]}}}
+    with pytest.raises(AS.AssemblyGate, match="carries 20 slot") as exc:
+        ASSEMBLY.gate_flat_slot_ceiling(graph, 400)
+    assert exc.value.evidence["slots"] == 20
+
+
+def test_the_flat_builder_refuses_a_clip_wider_than_the_measurement(tmp_path):
+    """End to end, through the tool. Before this landed an 81-frame flat build printed every
+    gate line green and BUILD_ASSEMBLY_OK."""
+    up = _padded_map(tmp_path / "u.json", 81)
+    with pytest.raises(AS.AssemblyGate, match="build_cascade_payload"):
+        ASSEMBLY.build_and_write([f"--uploads={up}", f"--out={tmp_path / 'o'}"])
+    assert not (tmp_path / "o").exists(), "a refused build leaves no run directory"
+
+
+def test_the_cascade_builder_is_NOT_bounded_by_the_flat_measurement(tmp_path):
+    """The mutation that must not fire: the cascade batches the batches, which is why it is
+    the supported route, and 81 frames through it is exactly what it is for."""
+    up = _padded_map(tmp_path / "u.json", 81)
+    CASCADE.build_and_write([f"--uploads={up}", f"--out={tmp_path / 'c'}"])
+    rec = json.loads((tmp_path / "c" / "E13-cascade-payload-record.json")
+                     .read_text(encoding="utf-8"))
+    assert rec["n_frames"] == 81

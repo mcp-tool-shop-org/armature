@@ -498,11 +498,33 @@ def main(argv=None):
     graph, split = build_graph(seed, profile=a.profile, prompt=prompt)
 
     # ---- admission, in the order ruling R8 fixed. Each raises in-tool.
-    gate_route = RG.verify(graph)                       # 1
-    gate_s = RG.gate_s_registration(graph, registered)  # 2
-    gate_l = RG.frame_legality(WIDTH, HEIGHT, LENGTH)   # 3
-    if not gate_l["legal"]:
-        raise RG.RouteGate(f"Gate L on the actual graph: {gate_l['problems']}", gate_l)
+    #
+    # ⚠ **The third call used to be a check that could not fail** (wave 10, F-45bc4fbb).
+    # It was `gate_l = RG.frame_legality(WIDTH, HEIGHT, LENGTH)` followed by a raise on
+    # `not gate_l["legal"]` — a re-reading of the same three module constants that build
+    # the graph's ONLY latent (node 40), two lines below a `RG.verify(graph)` that already
+    # reads that latent and raises on any illegal frame. Measured in a worktree by
+    # rebinding WIDTH/HEIGHT/LENGTH to 833/481/64 and rebuilding: node 40 carried
+    # {'width': 833, 'height': 481, 'length': 64} and `RG.verify(graph)` raised FIRST with
+    # "Gate L: width 833 is not a multiple of 16 …; length 64 is not of the form 4n+1";
+    # the standalone call then evaluated `legal=False` on a line that is never reached.
+    # There was no input to this tool that made that branch run, and the record's
+    # `gates.L` entry asserted a verdict from a check with no failing input.
+    #
+    # The frame is SUPPLIED to `verify` instead. It is not a second reading of the same
+    # constants: `verify` compares a supplied frame against every frame the GRAPH pins and
+    # raises `CONTRADICTED` when they disagree — the one clause here that a graph this tool
+    # built can actually fail, and the one that catches a latent edited out from under the
+    # constants. Gate L's record entry is now the graph-read verdict `verify` produced.
+    gate_route = RG.verify(graph, frame=(WIDTH, HEIGHT, LENGTH))   # 1
+    gate_s = RG.gate_s_registration(graph, registered)             # 2
+    gate_l = {"gate": "L",
+              "source": ("read off Gate ROUTE's frame_legality, not re-derived from the "
+                         "module constants: a re-derivation of the numbers that built the "
+                         "latent has no failing input and is not a check"),
+              "frame_legality": gate_route["frame_legality"],
+              "frame_legality_verdict": gate_route.get("frame_legality_verdict"),
+              "legal": all(f["legal"] for f in gate_route["frame_legality"])}
 
     # Below the last in-tool gate. `os.makedirs` used to sit directly under `canon_spend`
     # and ABOVE Gates ROUTE, S and L, so a build refused by Gate S left an empty run

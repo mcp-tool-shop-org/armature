@@ -200,16 +200,22 @@ def test_frames_are_ordered_by_local_name_not_by_server_name(tmp_path):
     length whose motion is noise. This test pins that the builder reads the LOCAL frame
     name as the ordering key.
     """
-    uploads = {f"{i:05d}.png": f"{(80 - i):064x}.png" for i in range(81)}
+    # FIVE frames, not 81: wave 10 bounded this builder at MEASURED_FLAT_SLOT_MAX = 8 (the
+    # largest flat batch S03 saw execute) and Gate L wants a 4n+1 count, so 5 is the largest
+    # legal flat clip. The property under test is the ORDERING KEY and is independent of
+    # width — the server names below still sort in reverse of the local ones, which is the
+    # only thing that makes this test able to fail.
+    n = 5
+    uploads = {f"{i:05d}.png": f"{(n - 1 - i):064x}.png" for i in range(n)}
     up = tmp_path / "uploads.json"
     up.write_text(json.dumps(uploads), encoding="utf-8")
     out = tmp_path / "out"
     B.main(["--uploads", str(up), "--out", str(out)])
     rec = json.loads((out / "S03-assembly-payload-record.json").read_text(encoding="utf-8"))
-    assert rec["frame_order"] == [f"{i:05d}.png" for i in range(81)]
+    assert rec["frame_order"] == [f"{i:05d}.png" for i in range(n)]
     wf = json.loads((out / "S03-assembly.api.json").read_text(encoding="utf-8"))
     assert wf[str(B.FIRST_IMAGE_ID)]["inputs"]["image"] == uploads["00000.png"]
-    assert wf[str(B.FIRST_IMAGE_ID + 80)]["inputs"]["image"] == uploads["00080.png"]
+    assert wf[str(B.FIRST_IMAGE_ID + n - 1)]["inputs"]["image"] == uploads[f"{n - 1:05d}.png"]
 
 
 def test_two_local_frames_uploading_to_one_object_raises(tmp_path):

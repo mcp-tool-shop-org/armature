@@ -308,3 +308,75 @@ def test_a_refused_gate_below_canon_leaves_no_output_directory(tmp_path, capsys)
     assert "999999" in str(exc.value)
     assert not out.exists(), "a refused spend left an output directory behind"
     assert "BUILD_T2V_OK" not in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------------------
+# wave 10, F-45bc4fbb — Gate L's raise had no failing input
+
+
+def _skewed_latent(monkeypatch, **inputs):
+    """Build the real A3 graph, then move node 40's latent out from under the constants."""
+    real = B.build_graph
+
+    def skew(*a, **k):
+        graph, split = real(*a, **k)
+        graph["40"]["inputs"].update(inputs)
+        return graph, split
+
+    monkeypatch.setattr(B, "build_graph", skew)
+
+
+def test_the_standalone_gate_L_call_that_could_not_fail_is_gone():
+    """`gate_l = RG.frame_legality(WIDTH, HEIGHT, LENGTH)` re-read the three module
+    constants that also build the graph's only latent, two lines under a `RG.verify(graph)`
+    that already reads that latent and raises on any illegal frame. Measured by rebinding
+    the constants to 833/481/64: `verify` raised first and the standalone call evaluated
+    `legal=False` on a line that is never reached. A check with no failing input is not a
+    check, and the record's `gates.L` asserted its verdict anyway."""
+    import ast
+    import inspect
+
+    src = inspect.getsource(B.main)
+    calls = [n for n in ast.walk(ast.parse(src.lstrip()))
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "frame_legality"]
+    assert calls == [], "the unreachable standalone Gate L call is back"
+    verify = [n for n in ast.walk(ast.parse(src.lstrip()))
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+              and n.func.attr == "verify"]
+    assert len(verify) == 1
+    assert any(kw.arg == "frame" for kw in verify[0].keywords), (
+        "verify must be given the frame this tool believes it is generating, or the "
+        "graph-vs-supplied contradiction clause has nothing to compare")
+
+
+def test_a_graph_whose_latent_disagrees_with_the_module_constants_RAISES(
+        tmp_path, monkeypatch):
+    """The clause that binds now, and the input the old one could not have. 832x480x33 is
+    perfectly LEGAL — a multiple of 16 and of the form 4n+1 — so no legality clause on
+    either side fires. It simply is not the frame this tool says it generates, and one of
+    the two numbers is the one the report would quote."""
+    _skewed_latent(monkeypatch, length=33)
+    with pytest.raises(RG.RouteGate, match="the graph's"):
+        B.main(_t2v_args(tmp_path))
+    assert not (tmp_path / "fresh").exists()
+
+
+def test_an_illegal_latent_still_raises_through_the_same_call(tmp_path, monkeypatch):
+    """The other direction: a latent that is illegal on the generator's own rules."""
+    _skewed_latent(monkeypatch, length=64, width=833)
+    with pytest.raises(RG.RouteGate, match="not of the form|multiple of 16"):
+        B.main(_t2v_args(tmp_path))
+
+
+def test_the_record_says_where_its_gate_L_verdict_came_from(tmp_path):
+    """The record may not assert a Gate L verdict computed by a check with no failing
+    input. It now names its source and carries the graph-read rows."""
+    B.main(_t2v_args(tmp_path))
+    rec = json.loads(next(iter(sorted((tmp_path / "fresh").glob("*payload-record.json"))))
+                     .read_text(encoding="utf-8"))
+    gate_l = rec["gates"]["L"]
+    assert gate_l["legal"] is True
+    assert "not re-derived from the module constants" in gate_l["source"]
+    sources = sorted(f["source"] for f in gate_l["frame_legality"])
+    assert sources == ["graph", "supplied"], sources

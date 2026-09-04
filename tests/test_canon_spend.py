@@ -563,8 +563,13 @@ def test_build_i2v_records_the_canon_verdict(tmp_path, monkeypatch):
         "negative": E08.read_negative(str(neg))}), encoding="utf-8")
     out = tmp_path / "e11"
     registry = os.path.join(os.path.dirname(TOOLS), "specs", "E11-seeds.json")
+    # Wave 10 (F-531c5f1f): the start frame is this route's whole image conditioning, and
+    # the tool hashes it, so the fixture supplies a real file rather than a typed digest.
+    start = tmp_path / "start.png"
+    start.write_bytes(b"authored-start-frame-bytes")
     _, printed = _capture(bi.main, [f"--uploads={up}", f"--out={out}",
                                     f"--negative-source={neg}", f"--e08-record={e08}",
+                                    f"--start-frame={start}",
                                     f"--seeds-registry={registry}", *ESCAPE])
     rec = json.loads((out / f"{bi.EXPERIMENT}-probe-payload-record.json")
                      .read_text(encoding="utf-8"))
@@ -758,8 +763,19 @@ def test_a_textless_assembler_carries_no_text_for_a_canon_router_to_check(name, 
     """
     mod = importlib.import_module(name)
     out = tmp_path / "assembled"
-    mod.main(["--uploads", upload_record("outputs/E02/uploads_depth_pershot.json"),
-              "--out", str(out)])
+    # The flat assembler is bounded at MEASURED_FLAT_SLOT_MAX = 8 since wave 10 (the
+    # largest flat batch S03 saw execute; the boundary between 8 and 81 is unlocated), and
+    # Gate L wants a 4n+1 count — so it gets a 5-frame map. The cascade batches the batches
+    # and keeps E02's real 33-frame record. The property under test is that the emitted
+    # graph carries no text at all, which is independent of clip length.
+    if name == "build_assembly_payload":
+        small = tmp_path / "uploads_small.json"
+        small.write_text(json.dumps({f"{i:05d}": f"srv_{i:05d}.png" for i in range(5)}),
+                         encoding="utf-8")
+        uploads = str(small)
+    else:
+        uploads = upload_record("outputs/E02/uploads_depth_pershot.json")
+    mod.main(["--uploads", uploads, "--out", str(out)])
 
     graphs = sorted(p for p in os.listdir(out) if p.endswith(".api.json"))
     assert graphs, sorted(os.listdir(out))

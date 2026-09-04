@@ -9,6 +9,13 @@ unreachable video slot:
 
     81 x LoadImage -> BatchImagesNode -> CreateVideo(fps=16) -> SaveVideo
 
+**That 81-slot chain is the shape S03 FALSIFIED**, and it is kept above as the historical
+description rather than as a route. S03 executed this chain at 8 slots and it failed at 81
+with `BatchImagesNode.execute() got an unexpected keyword argument 'images.image50'`, after
+passing the round trip, Gate ROUTE and pre-flight with zero warnings. `build_cascade_payload`
+is the supported route for a clip of any length; this builder is bounded at
+`MEASURED_FLAT_SLOT_MAX` (8) until someone measures where the boundary actually is.
+
 **A served template is a reference, never a route** — so this graph is built here, from the
 node contracts re-measured with `get_node` on 2026-08-13, and it passes Gate ROUTE and both
 Gate ASSEMBLY clauses in code before anything is submitted. Nothing here submits anything.
@@ -58,6 +65,21 @@ from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
 TOOL_VERSION = "S03.2"
+
+#: The largest flat batch anyone has SEEN EXECUTE, and the andon's bound.
+#:
+#: S03 executed this chain at **8 slots** and it failed at **81** with
+#: `BatchImagesNode.execute() got an unexpected keyword argument 'images.image50'`. Those
+#: are the two measurements that exist. **The boundary between 8 and 81 has never been
+#: located**: no submission was made at 49, 50 or 51 slots, so `assembly.INFERRED_SLOT_CAP`
+#: (50) is an inference from one error message and not a number this gate may refuse
+#: against — a threshold read off a single error string is a placeholder shaped like
+#: evidence. The cascade's `MAX_SLOTS_PER_NODE` (27) is not it either: that is the group
+#: size the cascade chose, and a global constant must not govern a local feature.
+#:
+#: So the bound is the measurement, and the evidence dict says the boundary is unlocated,
+#: so the day someone measures it this number moves WITH that measurement.
+MEASURED_FLAT_SLOT_MAX = 8
 
 #: `CreateVideo`'s measured input contract, re-measured with `get_node` on 2026-08-13 and
 #: recorded verbatim in this tool's own payload record under `node_contracts_measured`.
@@ -130,6 +152,49 @@ def gate_create_video_fps(fps):
             f"after the upload round trip, or accepted at a rate this record then names "
             f"as fact", ev)
     ev["verdict"] = f"fps {value} is inside CreateVideo's measured contract {lo}-{hi}"
+    return ev
+
+
+def gate_flat_slot_ceiling(graph, batch_id):
+    """Gate FLAT_SLOT_CEILING - ANDON - the flat batch is no wider than anyone has run.
+
+    Wave 10 (routed seed). Both cascade builders call `assembly.gate_slot_ceiling`; the
+    flat path called no ceiling clause at all, so the one builder whose shape is a SINGLE
+    batch node - the shape S03 watched pass pre-flight and die at execution - was the one
+    with nothing bounding its width. Pre-flight cannot see this; it is checked here, in the
+    tool that authors the graph, before any submission.
+
+    It does NOT read the cascade's `MAX_SLOTS_PER_NODE`: that constant is the cascade's
+    group size, and a global constant must not govern a local feature. It reads
+    `MEASURED_FLAT_SLOT_MAX`, whose docstring names the run that measured it and states
+    that the boundary between 8 and 81 is unlocated. `boundary_located: false` rides every
+    verdict for the same reason.
+    """
+    node = (graph or {}).get(str(batch_id)) or {}
+    inputs = node.get("inputs") or {}
+    slots = len([k for k in inputs if k.startswith("images.image")])
+    if not slots and isinstance(inputs.get("images"), list):
+        slots = len(inputs["images"])
+    ev = {"gate": "FLAT_SLOT_CEILING", "andon": "AssemblyGate",
+          "batch_node": str(batch_id), "slots": slots,
+          "measured_max": int(MEASURED_FLAT_SLOT_MAX), "measured_by": "S03",
+          "inferred_cap": int(AS.INFERRED_SLOT_CAP), "boundary_located": False}
+    if slots > MEASURED_FLAT_SLOT_MAX:
+        raise AS.AssemblyGate(
+            f"the flat chain's batch node {batch_id} carries {slots} slot(s) and the "
+            f"largest flat batch anyone has SEEN EXECUTE is "
+            f"{MEASURED_FLAT_SLOT_MAX} (S03). The same chain failed at execution at 81 "
+            f"with `images.image50` unexpected, AFTER passing the round trip, Gate ROUTE "
+            f"and pre-flight with zero warnings - so nothing downstream would refuse this "
+            f"graph and the credits would be spent. The boundary between the two "
+            f"measurements has never been located (INFERRED_SLOT_CAP={AS.INFERRED_SLOT_CAP} "
+            f"is read off one error message, not measured). Use "
+            f"`build_cascade_payload.py`, which batches the batches and is the supported "
+            f"route for a clip of any length",
+            ev)
+    ev["verdict"] = (f"the flat batch carries {slots} slot(s), within the "
+                     f"{MEASURED_FLAT_SLOT_MAX} anyone has seen execute (S03); the "
+                     f"boundary above it is NOT located")
     return ev
 
 
@@ -407,6 +472,7 @@ def build_and_write(argv=None):
 
     # ---- the gates, in code, before anything is submitted.
     gate_paid = AS.gate_no_paid_nodes(wf)
+    gate_flat = gate_flat_slot_ceiling(wf, BATCH_ID)
     # Re-run for the RECORD. `build` already raised on an illegal rate; this is the
     # evidence dict, so the receipt states the contract that was checked rather than
     # asserting a number nothing read.
@@ -447,7 +513,8 @@ def build_and_write(argv=None):
             "LoadImage": "image COMBO -> IMAGE, MASK; api_node false",
         },
         "frame_source_ids": list(ordered_ids),
-        "gates": {"ASSEMBLY_paid": gate_paid, "CREATE_VIDEO_fps": gate_fps,
+        "gates": {"ASSEMBLY_paid": gate_paid, "FLAT_SLOT_CEILING": gate_flat,
+                  "CREATE_VIDEO_fps": gate_fps,
                   "ASSEMBLY_topology": gate_topo,
                   "ASSEMBLY_slot_frame_index": gate_index, "ROUTE": gate_route},
     }
@@ -463,6 +530,7 @@ def build_and_write(argv=None):
 
     print(f"nodes            {len(wf)}")
     print(f"paid-node gate   {gate_paid['verdict']}")
+    print(f"flat slot gate   {gate_flat['verdict']}")
     print(f"topology gate    {gate_topo['verdict']}")
     print(f"slot->frame gate {gate_index['verdict']}")
     print(f"route components {len(gate_route['components'])}  "
