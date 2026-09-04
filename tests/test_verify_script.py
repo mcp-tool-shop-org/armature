@@ -122,6 +122,48 @@ def test_a_first_leg_whose_command_is_absent_is_recorded_as_a_failure(tmp_path):
 
 
 @needs_pwsh
+def test_a_command_that_vanishes_MID_leg_is_not_recorded_as_the_previous_command_s_pass(tmp_path):
+    """The outcome is per LEG, and a leg is many commands. Leg 3 is the exposed one.
+
+    `$global:LASTEXITCODE = $null` is set once per leg, so `Established` answers only "did
+    anything in this whole leg set an exit code". Measured on the real function before the
+    fix: a leg whose body ran an interpreter that exits 0 and THEN an absent binary recorded
+    ExitCode 0 / PASS / Established True, while a leg whose only statement was the absent
+    binary recorded 253 / FAIL / Established False. The two existing fixtures cover the
+    across-leg and first-command cases and neither reaches this one.
+
+    Where it bites: after `& $python -m build` every remaining command in leg 3 runs on a
+    CONSTRUCTED path (`$cleanPython`, `$cleanArmature`), and those paths being absent IS the
+    defect that leg exists to catch — a wheel that installs but creates no console script
+    makes `& $cleanArmature check` raise, and the catch then reads pip's zero.
+    """
+    recorded = _run_legs(tmp_path, [("ok-then-absent", f"{OK}; {ABSENT}")])
+    assert _is_recorded_failure(recorded["ok-then-absent"]), (
+        "a command that raised mid-leg was recorded as the PREVIOUS command's exit code; "
+        f"the leg reports a pass on work that never ran: {recorded}"
+    )
+
+
+@needs_pwsh
+def test_a_leg_that_raises_after_a_failing_command_still_reports_a_failure(tmp_path):
+    """The other direction: the fix must not turn a recorded non-zero into something else.
+
+    A leg that ran a command exiting 7 and then hit an absent binary is still a failure; what
+    it may not be is a PASS. This pins that the mid-leg rule fires in the direction the
+    invariant is not bounded and nowhere else.
+    """
+    recorded = _run_legs(tmp_path, [("seven-then-absent", f"{SEVEN}; {ABSENT}")])
+    assert _is_recorded_failure(recorded["seven-then-absent"]), recorded
+
+
+@needs_pwsh
+def test_a_leg_of_several_commands_that_all_run_is_still_a_pass(tmp_path):
+    """A gate that cannot pass is not a gate. Three real commands, one leg, one PASS."""
+    recorded = _run_legs(tmp_path, [("all-ran", f"{OK}; {OK}; {OK}")])
+    assert recorded["all-ran"] == "0", recorded
+
+
+@needs_pwsh
 def test_a_leg_that_runs_and_succeeds_is_still_a_pass(tmp_path):
     """The gate must fire on the absent binary without turning every green leg red."""
     recorded = _run_legs(tmp_path, [("ok", OK), ("seven", SEVEN), ("ok-again", OK)])
