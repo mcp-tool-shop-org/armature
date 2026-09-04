@@ -506,7 +506,9 @@ def test_an_evidence_free_gate_is_what_assert_gate_exists_to_refuse():
     assert assert_gate(carried, "G1", width=1020) == {"width": 1020}
     with pytest.raises(AssertionError, match="no 'height'"):
         assert_gate(carried, "G1", height=768)
-    with pytest.raises(AssertionError, match="with gate 'G1'"):
+    # the class name is the phrase; the quoted id is anchored by the newline that follows
+    # it, so `'G1'` cannot be satisfied by a message reading `'G1x'` (F-02683edb)
+    with pytest.raises(AssertionError, match=r"raised G1GeneratorLegality with gate 'G1'\n"):
         assert_gate(carried, "G4")
 
 

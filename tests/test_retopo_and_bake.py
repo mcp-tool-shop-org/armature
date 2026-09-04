@@ -267,9 +267,17 @@ def test_no_tool_writes_a_quoted_director_sentence_into_an_artifact():
 def test_the_ruling_is_still_recorded_as_a_ruling():
     """The correction is a restatement, not a deletion: the date, the subject and the
     verdict all survive."""
-    src = read_source("rig_retopo.py")
-    assert "QuadRemesher" in src
-    assert "2026-08-11" in src
+    # `assert "2026-08-11" in src` stood here: a date ANYWHERE in the file, satisfied by
+    # any of the three unrelated 2026-08-11 mentions the module carries (its licence
+    # header at :8 and the QuadriFlow scale measurement at :70) whether or not the ruling
+    # survives (F-18061bcb). The ruling is now located as one emitted string that carries
+    # the date, the subject and the verdict together.
+    ruling = [t for t in _emitted_strings("rig_retopo.py")
+              if "2026-08-11" in t and "QuadRemesher" in t]
+    assert ruling, (
+        "no emitted string in rig_retopo.py carries the date and the subject together; "
+        "the ruling has stopped being recorded as a ruling")
+    assert any("struck" in t or "not fit" in t for t in ruling), ruling
 
 
 # ------------------------------------------------------ F-cb986eb3: the import in rig_bake

@@ -165,8 +165,13 @@ def test_short_directory_raises_when_a_count_is_declared(src, tmp_path):
     """A short control directory becomes a short batch, and Gate B only sees it after a spend."""
     for i in range(4):
         _write_gray(str(src / f"{i:05d}.png"), np.zeros((4, 4), dtype=np.uint8))
-    with pytest.raises(InvertError, match="expected 33"):
+    # `match="expected 33"` also matches "expected 330". The clause phrase is pinned, the
+    # number anchored, and the counts read off the structured evidence (F-02683edb).
+    with pytest.raises(InvertError,
+                       match=r"holds \b4 frames, expected \b33 named as the spec") as e:
         invert_dir(str(src), str(tmp_path / "dst"), expect=33)
+    assert len(e.value.evidence["found"]) == 4
+    assert len(e.value.evidence["expected"]) == 33
     # ...and passes when the count is right
     assert invert_dir(str(src), str(tmp_path / "ok"), expect=4)["n_frames"] == 4
 
