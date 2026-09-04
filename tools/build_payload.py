@@ -424,12 +424,49 @@ def _load_uploads(arm="A1a", experiment="E02"):
     return keys, names, ref, control_check
 
 
-def build(arm, experiment="E02", seed=None):
+def gate_experiment_arm(experiment, arm):
+    """The (experiment, arm) pairing is one this table actually carries. Returns the cfg.
+
+    ⚠ **Wave 14, F-bf18bca8.** `--arm`'s argparse `choices` are the UNION of every
+    experiment's arms, so the CLI advertises 10 arms for every experiment while each
+    experiment has 2-3: measured in this worktree, EXPERIMENTS is E02 ['A1a','A1b','A2'],
+    E03 ['B1','B2','B3'], E04 ['C-bright','C-dark'], E06 ['D1','D2'] — 30 of the 40
+    (experiment, arm) pairs argparse accepts are invalid. `main` then indexed
+    `cfg["arms"][a.arm]` directly, and measured as a subprocess
+    `--experiment=E02 --arm=B1` exited 1 having printed
+    `BUILD_PAYLOAD_HALT {"error": "KeyError", "message": "'B1'", "evidence": null}` — a
+    stdlib key name standing in for a sentence, with a null evidence dict, under the code
+    this file's own `__main__` block reserves for "this tool crashed". Bounded (the
+    KeyError landed above `gate_out_paths` so nothing was written), but a wrapper keying on
+    the documented 1-vs-2 convention recorded an operator typo as a tool crash. Same family
+    as the closed `fetch_t2v_run` (F-4421d98f) and `gate_saved_graph` (F-4c5f67de) clauses.
+
+    ONE implementation: `build` and `main` both come through here, so an in-process caller
+    gets the same refusal the CLI does.
+    """
     if experiment not in EXPERIMENTS:
-        raise PayloadError(f"unknown experiment {experiment!r}; known: {sorted(EXPERIMENTS)}")
+        raise PayloadError(
+            f"unknown experiment {experiment!r}; known: {sorted(EXPERIMENTS)}",
+            {"gate": "PAYLOAD", "andon": "PayloadError", "clause": "unknown_experiment",
+             "experiment": experiment, "known": sorted(EXPERIMENTS)})
     cfg = EXPERIMENTS[experiment]
     if arm not in cfg["arms"]:
-        raise PayloadError(f"unknown arm {arm!r} for {experiment}; known: {sorted(cfg['arms'])}")
+        raise PayloadError(
+            f"unknown arm {arm!r} for {experiment}; known: {sorted(cfg['arms'])}. "
+            f"`--arm`'s choices are the UNION across every experiment "
+            f"({sorted({a for e in EXPERIMENTS.values() for a in e['arms']})}), so argparse "
+            f"accepts an arm that belongs to a different experiment; this is the check that "
+            f"says which experiment it belongs to",
+            {"gate": "PAYLOAD", "andon": "PayloadError", "clause": "arm_not_in_experiment",
+             "experiment": experiment, "arm": arm, "arms_for_experiment": sorted(cfg["arms"]),
+             "arms_across_experiments": sorted(
+                 {a for e in EXPERIMENTS.values() for a in e["arms"]}),
+             "arms_by_experiment": {k: sorted(v["arms"]) for k, v in EXPERIMENTS.items()}})
+    return cfg
+
+
+def build(arm, experiment="E02", seed=None):
+    cfg = gate_experiment_arm(experiment, arm)
 
     # ---- Gate S · ANDON — the seed was pre-registered. Deliberately the FIRST gate in
     # this function: it is the only one guarding a defect that leaves no trace in the
@@ -775,7 +812,12 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--experiment", default="E02", choices=sorted(EXPERIMENTS))
     ap.add_argument("--arm", required=True,
-                    choices=sorted({a for e in EXPERIMENTS.values() for a in e["arms"]}))
+                    choices=sorted({a for e in EXPERIMENTS.values() for a in e["arms"]}),
+                    help="⚠ these choices are the UNION across every experiment, not the "
+                         "arms of the one you chose: argparse cannot narrow a choice list "
+                         "against another flag. 30 of the 40 pairs it accepts are invalid, "
+                         "and `gate_experiment_arm` refuses them by name, listing the arms "
+                         "that experiment actually carries")
     ap.add_argument("--out", required=True)
     # Gate S is what makes this flag safe to exist. Any seed given here is checked against
     # the experiment's committed list before a payload is built, and an experiment that
@@ -786,11 +828,17 @@ def main(argv=None):
     add_spend_flags(ap)
     a = ap.parse_args(argv)
 
+    # ---- ANDON on the INVOCATION, before any other gate reads a path (wave 14,
+    # F-bf18bca8). `--arm`'s choices are the union across experiments, so an arm that
+    # belongs to another experiment reaches here; it used to reach `cfg["arms"][a.arm]` as
+    # a bare KeyError.
+    gate_experiment_arm(a.experiment, a.arm)
+
     # ---- Gate OUT · ANDON, before Gate CANON's own "leaves no output directory" clause
     # and before anything is created. The two artifacts of one build are two paths.
     gpath, mpath, gate_out = gate_out_paths(a.out)
 
-    cfg = EXPERIMENTS[a.experiment]
+    cfg = gate_experiment_arm(a.experiment, a.arm)
     arm_cfg = cfg["arms"][a.arm]
     # The SHIPPED positive, derived exactly as `build()` derives it. `--canon-prompt`
     # used to stand in for it here while `build()` re-derived the payload's positive from

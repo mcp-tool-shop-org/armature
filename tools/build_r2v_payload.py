@@ -107,11 +107,16 @@ def build(*, arm, seed, prompt, negative, refs=None, upload_names=None,
     else:
         raise RG.RouteGate(f"unknown arm {arm!r}; the spec names A1 and A2", {"arm": arm})
 
-    wf[str(R2V_ID)] = {"class_type": "Wan2ReferenceVideoApi", "inputs": inputs}
+    wf[str(R2V_ID)] = {"class_type": R2V_CLASS, "inputs": inputs}
     wf[str(SAVE_ID)] = {"class_type": SAVE_CLASS, "inputs": {
         "filename_prefix": prefix, "format": "auto", "codec": "auto",
         "video": [str(R2V_ID), 0]}}
     return wf, cascade_ids
+
+
+#: The hosted generator this route submits. Named once so Gate CEILING's "expected
+#: identity" half and the builder cannot drift apart (wave 14, F-eec3f145).
+R2V_CLASS = "Wan2ReferenceVideoApi"
 
 
 def gate_seed_registered(seed, registered):
@@ -132,6 +137,20 @@ def gate_seed_registered(seed, registered):
     return ev
 
 
+def hosted_api_nodes(graph):
+    """Every node in this graph that draws its own charge, keyed on BEHAVIOUR.
+
+    `route_gates.HOSTED_API_CLASS_SUFFIXES` is the census core-gates already exports for
+    exactly this question — a class whose name ends in `Api`/`API` is a partner tier that
+    bills and draws its own seed (route_gates.py:983). Reading it here rather than naming
+    one class means a second partner tier wired into this graph tomorrow is counted by the
+    gate that bounds the spend, without an edit in this file.
+    """
+    suffixes = tuple(getattr(RG, "HOSTED_API_CLASS_SUFFIXES", ("Api", "API")))
+    return sorted(nid for nid, n in graph.items()
+                  if str((n or {}).get("class_type") or "").endswith(suffixes))
+
+
 def gate_one_paid_node(graph):
     """Gate CEILING · ANDON — exactly one billable node, so one submission is one charge.
 
@@ -139,16 +158,52 @@ def gate_one_paid_node(graph):
     is only true if a submission bills once. A graph carrying two partner nodes would run,
     would look correct in every other gate, and would silently double the spend against a
     ceiling computed per submission.
+
+    ⚠ **Wave 14, F-eec3f145.** The count was `n.get("class_type") == "Wan2ReferenceVideoApi"`
+    — one hard-coded class SPELLING — on the gate whose whole justification is that the
+    arithmetic holds only if a submission bills once. Measured 2026-09-04 on
+    `{'1': Wan2ReferenceVideoApi, '2': KlingVideoApi}`: this gate returned `n_paid: 1`,
+    `paid_nodes: ['1']` and the full green verdict "one billable node (1); one submission is
+    one charge", while `route_gates.HOSTED_API_CLASS_SUFFIXES` matches BOTH nodes. The graph
+    is built entirely from this tool's own constants today, so that was the SHAPE and not a
+    live escape — but a verdict stating a fact about a population it did not measure is the
+    class wave 12 closed everywhere else, and this is the one gate standing in front of the
+    repo's single unrecoverable resource.
+
+    Two numbers now, and both are in the evidence: the hosted/partner population counted by
+    behaviour, and the expected identity counted by name. They must be the same set.
     """
-    paid = sorted(nid for nid, n in graph.items()
-                  if n.get("class_type") == "Wan2ReferenceVideoApi")
-    ev = {"gate": "CEILING", "paid_nodes": paid, "n_paid": len(paid)}
-    if len(paid) != 1:
+    hosted = hosted_api_nodes(graph)
+    expected = sorted(nid for nid, n in graph.items()
+                      if (n or {}).get("class_type") == R2V_CLASS)
+    ev = {"gate": "CEILING", "andon": "RouteGate",
+          "paid_nodes": expected, "n_paid": len(expected),
+          "hosted_nodes": hosted, "n_hosted": len(hosted),
+          "hosted_classes": sorted({str((graph[n] or {}).get("class_type"))
+                                    for n in hosted}),
+          "expected_class": R2V_CLASS,
+          "counted_by": (
+              "route_gates.HOSTED_API_CLASS_SUFFIXES "
+              f"{list(getattr(RG, 'HOSTED_API_CLASS_SUFFIXES', ('Api', 'API')))} — a class "
+              f"whose name ends in one of these is a partner tier that bills, whatever it "
+              f"is spelled")}
+    if hosted != expected:
         raise RG.RouteGate(
-            f"the graph carries {len(paid)} `Wan2ReferenceVideoApi` node(s); the spec's "
+            f"the graph's billable population is {hosted} "
+            f"({ev['hosted_classes']}) and the node this route expects to be charged for "
+            f"is {expected} ({R2V_CLASS}). A partner tier this tool did not put in the "
+            f"graph still draws its own charge, and the spec's ceiling is counted in "
+            f"submissions at one charge each — so the two populations must be the same set "
+            f"before that arithmetic means anything",
+            dict(ev, clause="hosted_population_is_not_the_expected_node"))
+    if len(expected) != 1:
+        raise RG.RouteGate(
+            f"the graph carries {len(expected)} `{R2V_CLASS}` node(s); the spec's "
             f"credit ceiling counts one charge per submission, and that arithmetic is only "
-            f"true at exactly one", ev)
-    ev["verdict"] = f"one billable node ({paid[0]}); one submission is one charge"
+            f"true at exactly one", dict(ev, clause="not_exactly_one_billable_node"))
+    ev["verdict"] = (
+        f"one billable node ({expected[0]}, {R2V_CLASS}); {len(hosted)} node(s) in the "
+        f"graph draw a partner charge and it is that same one; one submission is one charge")
     return ev
 
 

@@ -468,8 +468,24 @@ def derived_root_artifacts(run):
     artifacts this pipeline itself produced. An andon whose documented workaround is
     "delete a legitimate derived file" is how an operator learns to work around an andon.
 
-    Bound to the run name, so another run's clip left in this directory still raises: that
-    is a file about a generation this fetch is not retrieving.
+    ⚠ **CORRECTION, wave 14 (F-ec454582).** This paragraph used to close: "Bound to the run
+    name, so another run's clip left in this directory still raises: that is a file about a
+    generation this fetch is not retrieving." That holds for the FIRST pattern and not the
+    second. Measured in this worktree with `derived_root_artifacts('A2')`:
+    `A2_review_8fps.mp4` matches pattern 0; `A0r1_review_8fps.mp4` matches neither (correct
+    — another run's clip does raise); and `review_0.50x_8fps.mp4` matches pattern 1, a name
+    carrying no run identity at all, so ANY run's review clip is exempted by it.
+
+    It cannot be otherwise from here: `make_review_clip.clip_name` returns
+    `review_{rate:.2f}x_{fps}fps.<ext>` with no run token, and that tool is not this one's
+    to change. Today the live consequence is nil — the canonical suffix is `.webp` and
+    `VIDEO_SUFFIXES` is (.mp4, .webm, .mkv), so the name never reaches the sweep — but the
+    pattern exists precisely to survive a change of suffix, and on the day that change
+    happens a PREVIOUS run's review clip in a re-used run root is exempted rather than
+    raised: the exact stray class the sweep was added for. Binding the second pattern to the
+    run needs `clip_name` to carry the run token first (instruments-measure owns it); until
+    then the honest sentence is the one above, and `tests/test_amend_w14_builders.py` pins
+    the three measurements so the claim cannot drift back.
     """
     return (re.compile(r"^" + re.escape(str(run)) + r"_review[_.].*$", re.IGNORECASE),
             re.compile(r"^review_[0-9.]+x_[0-9]+fps\.[a-z0-9]+$", re.IGNORECASE))

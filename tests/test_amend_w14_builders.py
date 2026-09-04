@@ -667,3 +667,138 @@ def test_the_two_fetchers_share_one_downloader_implementation():
     assert "fetch_download" in called, (
         "this fetcher builds its own downloader again instead of calling the sibling's")
     assert FT.fetch_download is FR.download
+
+
+# ===========================================================================
+# F-eec3f145 — Gate CEILING counts billable nodes by BEHAVIOUR, not by one
+#              hard-coded class spelling.
+# ===========================================================================
+
+import build_r2v_payload as R2V  # noqa: E402
+
+
+def test_gate_ceiling_sees_a_partner_node_it_was_not_spelled_for():
+    """F-eec3f145 · operand: the hosted population, on the graph the auditor measured.
+
+    reverted-red: yes. `paid = [... if n.get("class_type") == "Wan2ReferenceVideoApi"]`
+    returned `n_paid: 1`, `paid_nodes: ['1']` and the full green verdict "one billable node
+    (1); one submission is one charge" on this exact graph, while
+    `route_gates.HOSTED_API_CLASS_SUFFIXES` — written to catch "a partner tier that draws
+    its own seed" — matches BOTH nodes. The verdict stated a fact about a population it did
+    not measure, on the gate standing in front of the repo's one unrecoverable resource.
+    """
+    graph = {"1": {"class_type": "Wan2ReferenceVideoApi", "inputs": {}},
+             "2": {"class_type": "KlingVideoApi", "inputs": {}}}
+    with pytest.raises(RG.RouteGate) as exc:
+        R2V.gate_one_paid_node(graph)
+    ev = exc.value.evidence
+    assert ev["clause"] == "hosted_population_is_not_the_expected_node"
+    assert ev["n_hosted"] == 2 and ev["n_paid"] == 1
+    assert ev["hosted_nodes"] == ["1", "2"]
+    assert "KlingVideoApi" in ev["hosted_classes"]
+
+
+def test_gate_ceiling_quotes_both_numbers_on_the_graph_this_tool_builds():
+    """F-eec3f145 · the direction it must not fire on, and the verdict says what it counted."""
+    ev = R2V.gate_one_paid_node({"1": {"class_type": R2V.R2V_CLASS, "inputs": {}},
+                                 "2": {"class_type": "SaveVideo", "inputs": {}}})
+    assert ev["n_paid"] == 1 and ev["n_hosted"] == 1
+    assert "HOSTED_API_CLASS_SUFFIXES" in ev["counted_by"]
+    assert "one submission is one charge" in ev["verdict"]
+
+
+def test_gate_ceiling_still_refuses_two_of_the_expected_class():
+    """F-eec3f145 · the clause the gate already had, unchanged in behaviour."""
+    with pytest.raises(RG.RouteGate) as exc:
+        R2V.gate_one_paid_node({"1": {"class_type": R2V.R2V_CLASS, "inputs": {}},
+                                "2": {"class_type": R2V.R2V_CLASS, "inputs": {}}})
+    assert exc.value.evidence["clause"] == "not_exactly_one_billable_node"
+
+
+# ===========================================================================
+# F-bf18bca8 — an arm that belongs to another experiment is refused by name,
+#              not by a KeyError wearing a halt record.
+# ===========================================================================
+
+import build_payload as BP  # noqa: E402
+
+
+def test_an_arm_from_another_experiment_is_refused_by_name(tmp_path):
+    """F-bf18bca8 · operand: the (experiment, arm) pairing argparse cannot narrow.
+
+    reverted-red: yes. Measured as a subprocess on the reverted tree:
+    `--experiment=E02 --arm=B1` exits 1 having printed
+    `BUILD_PAYLOAD_HALT {"error": "KeyError", "message": "'B1'", "evidence": null}` — a
+    stdlib key name standing in for a sentence, under the code this file's own `__main__`
+    block reserves for "this tool crashed".
+    """
+    with pytest.raises(BP.PayloadError) as exc:
+        BP.main([f"--out={tmp_path / 'p.json'}", "--experiment=E02", "--arm=B1",
+                 "--subject", "BLACKGUARD", "--no-canon"])
+    ev = exc.value.evidence
+    assert ev["clause"] == "arm_not_in_experiment"
+    assert ev["experiment"] == "E02" and ev["arm"] == "B1"
+    assert ev["arms_for_experiment"] == sorted(BP.EXPERIMENTS["E02"]["arms"])
+    assert "B1" in ev["arms_across_experiments"], "the union argparse advertises"
+    assert not (tmp_path / "p.json").exists()
+
+
+def test_the_pairing_gate_is_the_same_one_an_in_process_caller_meets():
+    """F-bf18bca8 · ONE implementation: `build` and `main` come through the same check."""
+    with pytest.raises(BP.PayloadError) as exc:
+        BP.build("B1", experiment="E02")
+    assert exc.value.evidence["clause"] == "arm_not_in_experiment"
+
+
+def test_the_arm_flags_help_says_its_choices_are_the_union(capsys):
+    """F-bf18bca8 · `--help` named arms that are not runnable with the chosen experiment.
+
+    Measured in this worktree: EXPERIMENTS carries 4 experiments with 10 arms between
+    them, so 30 of the 40 (experiment, arm) pairs argparse accepts are invalid. The
+    numbers are derived here, not typed, so the sentence stays true as the table grows.
+    """
+    pairs = sum(len(e["arms"]) for e in BP.EXPERIMENTS.values())
+    union = len({a for e in BP.EXPERIMENTS.values() for a in e["arms"]})
+    assert pairs < union * len(BP.EXPERIMENTS), (
+        "if every experiment carried every arm there would be nothing to refuse")
+    with pytest.raises(SystemExit):
+        BP.main(["--help"])
+    out = capsys.readouterr().out
+    assert "UNION" in out and "gate_experiment_arm" in out
+
+
+# ===========================================================================
+# F-ec454582 — the docstring's closing claim, measured.
+# ===========================================================================
+
+def test_only_ONE_of_the_two_root_exemptions_is_bound_to_the_run():
+    """F-ec454582 · operand: pattern 1, which carries no run token at all.
+
+    reverted-red: yes on the docstring half — the function's closing sentence read "Bound to
+    the run name, so another run's clip left in this directory still raises", and this
+    measurement contradicts it for the second pattern. The behaviour is unchanged and
+    deliberately so: binding pattern 1 to the run needs `make_review_clip.clip_name` to
+    carry a run token, and that tool belongs to instruments-measure.
+    """
+    run_bound, unbound = FR.derived_root_artifacts("A2")
+    assert run_bound.match("A2_review_8fps.mp4"), "pattern 0 IS bound to the run"
+    assert not run_bound.match("A0r1_review_8fps.mp4"), "another run's clip is not exempt"
+    assert not unbound.match("A0r1_review_8fps.mp4")
+    # …and the second pattern exempts a name carrying no run identity whatever, so ANY
+    # run's review clip matches it.
+    assert unbound.match("review_0.50x_8fps.mp4")
+    assert unbound.match("review_1.00x_24fps.webp")
+    assert FR.derived_root_artifacts("SOME-OTHER-RUN")[1].match("review_0.50x_8fps.mp4"), (
+        "the second pattern is identical for every run, which is the whole finding")
+
+
+def test_the_docstring_no_longer_claims_both_patterns_are_run_bound():
+    """F-ec454582 · the claim is corrected IN PLACE, with the measurement that overturned it.
+
+    A report may not contain a placeholder shaped like evidence, and a docstring may not
+    contain a claim the code contradicts; this reads the sentence back.
+    """
+    doc = FR.derived_root_artifacts.__doc__
+    assert "CORRECTION" in doc
+    assert "review_0.50x_8fps.mp4" in doc, "the measurement, not a summary of it"
+    assert "make_review_clip.clip_name" in doc, "and the reason it cannot be otherwise here"
