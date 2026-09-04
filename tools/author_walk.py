@@ -57,7 +57,7 @@ import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 import rig_character  # noqa: E402  (the OBJ gate lives there; enumerated, not rebuilt)
-from armature_core import blender_scene, rig_gates, sitelist, walk  # noqa: E402
+from armature_core import blender_scene, parts, rig_gates, sitelist, walk  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "E08.1"
@@ -81,6 +81,10 @@ GATE_A_TOL_FRAC = 1e-4
 #: floor because ONE of them is the rest pose, and a comparison that only ever sees the
 #: rest pose cannot fail in the direction this clause exists for.
 GATE_A_MESH_FRAMES_MIN = 2
+#: Gate SPACE's bound, as a module constant rather than an inline keyword default.
+#: Wave 12 (F-196c4257): the module owns the bound and a caller may only tighten it,
+#: through `armature_core.parts.tightened`, which reads `None` as "use the module's".
+GATE_SPACE_TOL = 1e-9
 
 
 class WalkGate(GateFailure):
@@ -344,7 +348,7 @@ def gate_d_determinism(snap_a, snap_b):
     return ev
 
 
-def gate_space_is_identity(arm_obj, tol=1e-9):
+def gate_space_is_identity(arm_obj, tol=None):
     """ANDON — the armature sits at the world origin, unrotated.
 
     The gait's every sign is stated in WORLD axes ("positive about +X carries a hanging
@@ -352,12 +356,28 @@ def gate_space_is_identity(arm_obj, tol=1e-9):
     space. Those are the same axes only while this matrix is identity. MEASURED identity
     on the E07 GLB — but measured once is not measured always, and a rotated armature
     would put the whole walk in the wrong plane while every other gate passed.
+
+    **Two wave-12 clauses.** `tol` was a keyword defaulting to `1e-9` with no tightening
+    guard and now runs through `parts.tightened` against `GATE_SPACE_TOL` (F-196c4257);
+    and `max(...)` over a matrix carrying a NaN element returns whatever the comparison
+    chain happens to hold, after which `worst > tol` is False in both directions — so a
+    rotated armature with one unreadable element read as a PASS. Every element goes
+    through `parts.require_finite` first (F-524f0a25, wave 10's rule 4, one
+    implementation).
     """
     M = arm_obj.matrix_world
     ident = Matrix.Identity(4)
-    worst = max(abs(M[i][j] - ident[i][j]) for i in range(4) for j in range(4))
-    ev = {"gate": "SPACE", "matrix_world": [list(r) for r in M], "max_abs_delta": worst,
-          "tolerance": tol}
+    ev = {"gate": "SPACE", "andon": "WalkGate", "module_tol": GATE_SPACE_TOL,
+          "tol_requested": tol, "matrix_world": [list(r) for r in M]}
+    tol = parts.tightened("tol", tol, GATE_SPACE_TOL, WalkGate, ev)
+    deltas = []
+    for i in range(4):
+        for j in range(4):
+            deltas.append(parts.require_finite(
+                f"matrix_world[{i}][{j}]_abs_delta", abs(M[i][j] - ident[i][j]),
+                WalkGate, ev, positive=False))
+    worst = max(deltas)
+    ev.update({"max_abs_delta": worst, "tolerance": tol})
     if worst > tol:
         raise WalkGate(
             f"the armature object's world matrix is not identity (max |delta| {worst:.3e}); "
@@ -367,8 +387,7 @@ def gate_space_is_identity(arm_obj, tol=1e-9):
     return ev
 
 
-def gate_f_fk_agreement(fk, heads, performer, arm_obj, diagonal,
-                        tol_frac=GATE_F_TOL_FRAC):
+def gate_f_fk_agreement(fk, heads, performer, arm_obj, diagonal, tol_frac=None):
     """Gate F · ANDON — the pure-Python ground truth is the pose Blender actually holds.
 
     The ground truth is what every later number in this experiment is quoted against — the
@@ -388,32 +407,57 @@ def gate_f_fk_agreement(fk, heads, performer, arm_obj, diagonal,
     The gate reports its own noise floor beside its reading — the rest-head disagreement
     between the manifest's float64 landmarks and the GLB's float32 bone matrices, which is
     the precision of its inputs and the number below which it could never be set.
+
+    **Two wave-12 clauses, both measured.** `tol_frac` was a keyword defaulting to
+    `GATE_F_TOL_FRAC` with no tightening guard (F-196c4257) and now runs through
+    `parts.tightened`. And both loops carried the sentinel-plus-strict-greater shape that
+    a NaN walks straight through — `nan > 0.0` is False, so a disagreement that is not a
+    number left `worst['d']` at 0.0 and reached the verdict line as the strongest
+    statement this gate can make (F-524f0a25). Every distance, in the floor loop as well
+    as the reading loop, goes through `parts.require_finite`.
     """
+    ev = {"gate": "F", "andon": "WalkGate", "module_tol_frac": GATE_F_TOL_FRAC,
+          "tol_frac_requested": tol_frac, "bbox_diagonal": diagonal}
+    parts.require_finite("bbox_diagonal", diagonal, WalkGate, ev)
+    tol_frac = parts.tightened("tol_frac", tol_frac, GATE_F_TOL_FRAC, WalkGate, ev)
     tol = tol_frac * diagonal
     floor = {"bone": None, "d": 0.0}
     for bone in walk.GAIT_BONES:
-        d = math.dist(list(arm_obj.data.bones[bone].matrix_local.to_translation()),
-                      performer.landmarks[walk.HEAD_LANDMARK[bone]])
+        d = parts.require_finite(
+            f"input_floor[{bone}]",
+            math.dist(list(arm_obj.data.bones[bone].matrix_local.to_translation()),
+                      performer.landmarks[walk.HEAD_LANDMARK[bone]]),
+            WalkGate, ev, positive=False)
         if d > floor["d"]:
             floor = {"bone": bone, "d": d}
 
     worst = {"bone": None, "frame": None, "d": 0.0}
+    n_compared = 0
     for i, (row, frame_heads) in enumerate(zip(fk, heads)):
         for bone in walk.GAIT_BONES:
             want = row.get("_heads", {}).get(bone)
             if want is None:
                 continue
-            d = math.dist(want, frame_heads[bone])
+            d = parts.require_finite(f"disagreement[{bone}]@frame{i}",
+                                     math.dist(want, frame_heads[bone]),
+                                     WalkGate, ev, positive=False)
+            n_compared += 1
             if d > worst["d"]:
                 worst = {"bone": bone, "frame": i, "d": d}
-    ev = {"gate": "F", "tolerance_frac_of_diagonal": tol_frac, "tolerance": tol,
-          "bbox_diagonal": diagonal, "worst": worst, "n_frames": len(heads),
-          "input_precision_floor": floor,
-          "floor_note": ("max |manifest landmark - GLB bone rest head|; the FK reads the "
-                         "first and Blender the second, so no tolerance below this could "
-                         "ever pass"),
-          "does_not_catch": ("a wrong axis in the gait itself - both sides read the same "
-                             "pose dict; held by tests/test_walk.py and the eye")}
+    ev.update({"tolerance_frac_of_diagonal": tol_frac, "tolerance": tol,
+               "worst": worst, "n_frames": len(heads), "n_compared": n_compared,
+               "input_precision_floor": floor})
+    ev.update({
+        "floor_note": ("max |manifest landmark - GLB bone rest head|; the FK reads the "
+                       "first and Blender the second, so no tolerance below this could "
+                       "ever pass"),
+        "does_not_catch": ("a wrong axis in the gait itself - both sides read the same "
+                           "pose dict; held by tests/test_walk.py and the eye")})
+    if heads and n_compared == 0:
+        raise WalkGate(
+            f"Gate F compared 0 disagreements over {len(heads)} frame(s); the sentinel "
+            f"'max 0.000e+00' and a perfect agreement are the same number, and this gate "
+            f"may not publish one as the other", ev)
     if worst["d"] > tol:
         raise WalkGate(
             f"the authored ground truth and Blender's evaluated pose disagree by "
@@ -427,17 +471,28 @@ def gate_f_fk_agreement(fk, heads, performer, arm_obj, diagonal,
 
 
 def gate_a_arrival(authored_heads, reimported_heads, authored_verts, reimported_verts,
-                   diagonal, tol_frac=GATE_A_TOL_FRAC):
+                   diagonal, tol_frac=None):
     """Gate A · ANDON — the authored performance survived the glTF round trip.
 
     E03's law: *where ground truth is authored, gate on the ground truth, not on
     distinctness*. G6 counts distinct frames and passes happily on an action that landed
     on the wrong frames at the wrong magnitude — that is precisely what happened, and only
     the authored truth caught it. This compares pose to pose, frame by frame.
+
+    **Two wave-12 clauses.** `tol_frac` runs through `parts.tightened` so a caller may only
+    NARROW the module's own bound (F-196c4257); and every distance the gate takes — the
+    skeleton clause AND the symmetric Hausdorff of the skin clause — goes through
+    `parts.require_finite`, because `nan > worst['d']` is False in both directions and a
+    performance made entirely of NaN otherwise reached the verdict line as a full PASS
+    reading "max 0.000e+00" (F-524f0a25, wave 10's rule 4, one implementation).
     """
+    ev = {"gate": "A", "andon": "WalkGate", "module_tol_frac": GATE_A_TOL_FRAC,
+          "tol_frac_requested": tol_frac, "bbox_diagonal": diagonal,
+          "n_frames": len(authored_heads)}
+    parts.require_finite("bbox_diagonal", diagonal, WalkGate, ev)
+    tol_frac = parts.tightened("tol_frac", tol_frac, GATE_A_TOL_FRAC, WalkGate, ev)
     tol = tol_frac * diagonal
-    ev = {"gate": "A", "tolerance_frac_of_diagonal": tol_frac, "tolerance": tol,
-          "bbox_diagonal": diagonal, "n_frames": len(authored_heads)}
+    ev.update({"tolerance_frac_of_diagonal": tol_frac, "tolerance": tol})
 
     if len(authored_heads) != len(reimported_heads):
         raise WalkGate(
@@ -446,12 +501,21 @@ def gate_a_arrival(authored_heads, reimported_heads, authored_verts, reimported_
             f"signature", ev)
 
     worst = {"bone": None, "frame": None, "d": 0.0}
+    n_compared = 0
     for i, (a, b) in enumerate(zip(authored_heads, reimported_heads)):
         for bone in walk.GAIT_BONES:
-            d = math.dist(a[bone], b[bone])
+            d = parts.require_finite(f"skeleton_delta[{bone}]@frame{i}",
+                                     math.dist(a[bone], b[bone]), WalkGate, ev,
+                                     positive=False)
+            n_compared += 1
             if d > worst["d"]:
                 worst = {"bone": bone, "frame": i, "d": d}
     ev["worst_bone"] = worst
+    ev["n_compared"] = n_compared
+    if authored_heads and n_compared == 0:
+        raise WalkGate(
+            f"Gate A compared 0 bone positions over {len(authored_heads)} authored "
+            f"frame(s); 'max 0.000e+00' would then be the sentinel, not a measurement", ev)
     if worst["d"] > tol:
         raise WalkGate(
             f"the re-imported skeleton is {worst['d']:.9f} from the authored one at bone "
@@ -474,24 +538,40 @@ def gate_a_arrival(authored_heads, reimported_heads, authored_verts, reimported_
     # instrument for a set comparison whose members do not match exactly.
     from mathutils import kdtree  # local: only this clause needs it
 
-    def hausdorff(src, dst):
+    def hausdorff(src, dst, label):
+        # Wave 12, F-524f0a25: this loop carries the same sentinel-plus-strict-greater
+        # shape as the two gates above — `nan > worst_d` is False, so a NaN vertex was
+        # skipped here and the clause returned 0.0, the number that means "identical".
+        # The refusal has to live at the point the distance is READ, not on the value that
+        # escapes: by then the NaN is already gone.
         tree = kdtree.KDTree(len(dst))
         for i, p in enumerate(dst):
             tree.insert(Vector((float(p[0]), float(p[1]), float(p[2]))), i)
         tree.balance()
         worst_d, worst_i = 0.0, None
+        n_probed = 0
         for i, p in enumerate(src):
             _, _, d = tree.find(Vector((float(p[0]), float(p[1]), float(p[2]))))
+            d = parts.require_finite(f"{label}[vertex {i}]", d, WalkGate, ev,
+                                     positive=False)
+            n_probed += 1
             if d > worst_d:
                 worst_d, worst_i = d, i
+        if src is not None and len(src) and n_probed == 0:
+            raise WalkGate(
+                f"Gate A's skin clause probed 0 of {len(src)} vertices for {label}; a "
+                f"Hausdorff distance of 0.0 over no probe is the sentinel, not a "
+                f"measurement", ev)
         return worst_d, worst_i
 
     mesh_clause = {}
     worst_mesh = {"frame": None, "d": 0.0}
     for i in sorted(authored_verts):
         a, b = authored_verts[i], reimported_verts[i]
-        d_ab, i_ab = hausdorff(a, b)
-        d_ba, i_ba = hausdorff(b, a)
+        # Wave 12, F-524f0a25: the per-probe refusal lives inside `hausdorff` (see there);
+        # both directions are labelled so the evidence names which one could not be read.
+        d_ab, i_ab = hausdorff(a, b, f"skin_authored_to_reimported@frame{i}")
+        d_ba, i_ba = hausdorff(b, a, f"skin_reimported_to_authored@frame{i}")
         rec = {"n_authored": int(len(a)), "n_reimported": int(len(b)),
                "authored_to_reimported": d_ab, "reimported_to_authored": d_ba,
                "worst_vertex": {"authored_index": i_ab, "reimported_index": i_ba}}

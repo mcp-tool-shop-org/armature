@@ -60,7 +60,7 @@ import bpy  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 import rig_character  # noqa: E402  (the OBJ gate lives there; enumerated, not rebuilt)
-from armature_core import blender_scene, rig_gates, sitelist  # noqa: E402
+from armature_core import blender_scene, parts, rig_gates, sitelist  # noqa: E402
 from armature_core import lift_solve as LS  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
@@ -71,6 +71,12 @@ TOOL_VERSION = "E09.1"
 #: about 17x above the float32 arithmetic of a glTF round trip and four orders of magnitude
 #: below any real compositional defect.
 GATE_ARRIVED_TOL_FRAC = 1e-4
+
+#: Gate SPACE's bound, as a module constant rather than an inline keyword default. Wave 12
+#: (F-196c4257): a tolerance a caller can pass is a tolerance a caller can LOOSEN, and the
+#: repo settled that shape in `armature_core.parts` — the module owns the bound and a
+#: caller may only tighten it. `parts.tightened` reads `None` as "use the module's own".
+GATE_SPACE_TOL = 1e-9
 
 
 class LiftGate(GateFailure):
@@ -143,19 +149,37 @@ def pick_subject(scene):
     return visible[0], arms[0]
 
 
-def gate_space_is_identity(arm_obj, tol=1e-9):
+def gate_space_is_identity(arm_obj, tol=None):
     """ANDON — armature space and world space coincide.
 
     Every rotation in the motion record is expressed in world axes; `matrix_basis` lives
     in armature space. A rotated armature would put the whole performance in the wrong
     plane with every other gate still green. Measured identity on the E07 GLB — but
     measured once is not measured always.
+
+    **Two wave-12 clauses, both from the same family.** (1) `tol` was a keyword defaulting
+    to `1e-9` with no tightening guard; it now runs through `parts.tightened` against
+    `GATE_SPACE_TOL`, so a caller may only NARROW it — the shape `armature_core.lift_solve.
+    gate_round_trip` already carries (F-196c4257). (2) `max(...)` over a matrix carrying a
+    NaN element returns whatever the comparison chain happens to hold, and `worst > tol` is
+    False for a NaN in BOTH directions, so a rotated-out-of-plane armature with one
+    unreadable element read as a PASS. Every element goes through `parts.require_finite`
+    before the maximum is taken (F-524f0a25); it is the one implementation of wave 10's
+    rule 4 and it raises THIS gate's andon into THIS gate's evidence dict.
     """
     M = arm_obj.matrix_world
     ident = Matrix.Identity(4)
-    worst = max(abs(M[i][j] - ident[i][j]) for i in range(4) for j in range(4))
-    ev = {"gate": "SPACE", "max_abs_delta": worst, "tolerance": tol,
-          "matrix_world": [list(r) for r in M]}
+    ev = {"gate": "SPACE", "andon": "LiftGate", "module_tol": GATE_SPACE_TOL,
+          "tol_requested": tol, "matrix_world": [list(r) for r in M]}
+    tol = parts.tightened("tol", tol, GATE_SPACE_TOL, LiftGate, ev)
+    deltas = []
+    for i in range(4):
+        for j in range(4):
+            deltas.append(parts.require_finite(
+                f"matrix_world[{i}][{j}]_abs_delta", abs(M[i][j] - ident[i][j]),
+                LiftGate, ev, positive=False))
+    worst = max(deltas)
+    ev.update({"max_abs_delta": worst, "tolerance": tol})
     if worst > tol:
         raise LiftGate(
             f"the armature object's world matrix is not identity (max |delta| {worst:.3e}); "
@@ -263,22 +287,64 @@ def posed_heads(arm_obj, scene, n_frames):
     return out
 
 
-def gate_arrived(keyed, reimported, diagonal, tol_frac=GATE_ARRIVED_TOL_FRAC):
-    """Gate ARRIVED · ANDON — the performance that ships is the one that was keyed."""
-    tol = tol_frac * diagonal
-    ev = {"gate": "ARRIVED", "tolerance": tol, "tolerance_frac_of_diagonal": tol_frac,
+def gate_arrived(keyed, reimported, diagonal, tol_frac=None):
+    """Gate ARRIVED · ANDON — the performance that ships is the one that was keyed.
+
+    **Wave 12, F-524f0a25 — measured, not reasoned.** `worst` was seeded `{'d': 0.0}` and
+    updated only when `d > worst['d']`. `math.dist` over a NaN coordinate returns NaN and
+    `nan > 0.0` is False, so every frame was skipped, `worst['d']` stayed 0.0, and
+    `0.0 > tol` was False: a performance in which EVERY site was `(nan, nan, nan)` returned
+    the strongest statement this gate can make — `"verdict": "max 0.000e+00 over 1 frames"`
+    — about a comparison in which no number was compared. Each distance now goes through
+    `armature_core.parts.require_finite`, the repo's one implementation of wave 10's rule 4
+    (a verdict on a non-finite number is a refusal, never a PASS); it raises this gate's
+    own andon with the NaN in this gate's own evidence.
+
+    The sentinel is unreadable in the other direction too: `worst['d'] == 0.0` means either
+    "every site arrived exactly" or "nothing was compared", and those are different claims.
+    `n_compared` counts the comparisons the gate actually made and a non-empty population
+    that produced none is refused — the honest form of the `worst['bone'] is None` clause,
+    which would otherwise fire on a perfect arrival.
+
+    **The tolerance is this module's** (F-196c4257): `tol_frac` was a plain keyword
+    defaulting to `GATE_ARRIVED_TOL_FRAC`, so `gate_arrived(..., tol_frac=1e30)` on a
+    9e9-unit displacement returned "max 9.000e+09 over 1 frames" and the manifest recorded
+    that Gate ARRIVED ran and passed. It runs through `parts.tightened` now — the shape
+    `armature_core.lift_solve.gate_round_trip` already carries — so a caller may only
+    NARROW it, and the NaN clause comes with it since `tightened` refuses a non-finite
+    request.
+    """
+    ev = {"gate": "ARRIVED", "andon": "LiftGate",
+          "module_tol_frac": GATE_ARRIVED_TOL_FRAC, "tol_frac_requested": tol_frac,
           "bbox_diagonal": diagonal, "n_frames": len(keyed)}
+    parts.require_finite("bbox_diagonal", diagonal, LiftGate, ev)
+    tol_frac = parts.tightened("tol_frac", tol_frac, GATE_ARRIVED_TOL_FRAC, LiftGate, ev)
+    tol = tol_frac * diagonal
+    ev.update({"tolerance": tol, "tolerance_frac_of_diagonal": tol_frac})
     if len(keyed) != len(reimported):
         raise LiftGate(
             f"the export carries {len(reimported)} frames and {len(keyed)} were keyed; a "
             f"frame-count change through glTF is the fps defect's signature", ev)
     worst = {"bone": None, "frame": None, "d": 0.0}
+    n_compared = 0
     for i, (a, b) in enumerate(zip(keyed, reimported)):
         for name in sitelist.ALL_NAMES:
-            d = math.dist(a[name], b[name])
+            if name not in a or name not in b:
+                continue
+            d = parts.require_finite(f"distance[{name}]@frame{i}",
+                                     math.dist(a[name], b[name]), LiftGate, ev,
+                                     positive=False)
+            n_compared += 1
             if d > worst["d"]:
                 worst = {"bone": name, "frame": i, "d": d}
     ev["worst"] = worst
+    ev["n_compared"] = n_compared
+    if keyed and n_compared == 0:
+        raise LiftGate(
+            f"Gate ARRIVED compared 0 distances over {len(keyed)} keyed frame(s), so a "
+            f"PASS would report 'max 0.000e+00' about a comparison that never happened; "
+            f"the sentinel 0.0 and a perfect arrival are the same number and this gate may "
+            f"not publish one as the other", ev)
     if worst["d"] > tol:
         raise LiftGate(
             f"the re-imported skeleton is {worst['d']:.9f} from the keyed one at bone "

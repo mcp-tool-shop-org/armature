@@ -411,12 +411,25 @@ def gate_p_bind_pose(part_objs, at_bind, diagonal):
     `at_bind` maps part name -> world positions at frame 1; the comparison is against each
     part's own LOCAL coordinates, which are what it was built with. Bounded as a fraction
     of the subject's own bbox diagonal, not in metres.
+
+    Wave 12, F-524f0a25: `worst = max(worst, d)` returns `worst` when `d` is NaN — the
+    same sentinel-plus-comparison shape that let `lift_solve.gate_arrived` publish "max
+    0.000e+00" over a performance made entirely of NaN. A part whose bind-pose positions
+    are not numbers (a degenerate parent inverse, a division by a zero-length segment)
+    therefore passed Gate P with a verdict saying bone parenting left every part where it
+    was built. Each per-part displacement goes through `armature_core.parts.require_finite`
+    — the one implementation of wave 10's rule 4 — which raises THIS gate's andon with the
+    offending part named in THIS gate's evidence.
     """
-    ev = {"gate": "P", "per_part": {}, "verdict": None}
+    ev = {"gate": "P", "andon": "GatePRestPose", "per_part": {}, "verdict": None}
+    parts.require_finite("bbox_diagonal", diagonal, GatePRestPose, ev)
     worst = 0.0
     for name, ob in part_objs.items():
         local = np.array([list(v.co) for v in ob.data.vertices], dtype=np.float64)
-        d = float(np.linalg.norm(at_bind[name] - local, axis=1).max())
+        d = parts.require_finite(
+            f"displacement[{name}]",
+            float(np.linalg.norm(at_bind[name] - local, axis=1).max()),
+            GatePRestPose, ev, positive=False)
         ev["per_part"][name] = d
         worst = max(worst, d)
     threshold = rig_gates.REST_POSE_EPSILON_FRAC * diagonal
