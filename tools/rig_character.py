@@ -1161,69 +1161,104 @@ def main():
                                   "manifest": path}))
 
 
+def halt_outcome(exc):
+    """Which of the three things happened — the wave-8 halt contract's vocabulary.
+
+    MEASURED 2026-09-04 (F-c3f86abc): `_write_halt` hard-coded `"outcome": "HALTED — a
+    gate fired"` with no branch, and every refusal in this 1229-line file raised a bare
+    `ArmatureError`, so `getattr(exc, "gate", "?")` wrote `"?"` for every halt this tool
+    could produce. Driving the file's own `__main__` block with `ValueError("a bug, not a
+    gate")` and with `ArmatureError("the export would carry 1 object(s) nobody
+    registered")` produced records differing only in `"exception"`: both said an andon
+    fired, both exited 1. A crash in the rigging code wrote a record asserting a gate
+    stopped the run, beside a note explaining that gates after the one that fired are NOT
+    YET RUN — about a run in which no gate fired at all.
+
+    Three states, because there are three. A typed `GateFailure` is an andon that names
+    itself; a bare `ArmatureError` is a deliberate refusal with no andon behind it (an
+    unknown flag, an unknown `--mode=`); anything else is a crash.
+    """
+    if isinstance(exc, GateFailure):
+        return "HALTED — a gate fired"
+    if isinstance(exc, ArmatureError):
+        return "REFUSED — the tool declined to proceed"
+    return "FAILED — an unhandled error"
+
+
 def _write_halt(out_dir, exc, source_sha, glb):
-    """Record a fired andon where the run can be read back, then re-raise.
+    """Record what stopped the run where it can be read back.
 
     A gate that halts and leaves nothing behind makes the executor the only witness. The
     evidence dict each gate carries is the measurement that stopped the run, so it is
     written beside the outputs the run did not produce — and the process still exits
     non-zero, because a halt that returns success is not a halt.
     """
+    outcome = halt_outcome(exc)
+    gate = getattr(exc, "gate", None)
     rec = {
         "tool": "rig_character", "tool_version": TOOL_VERSION,
-        "outcome": "HALTED — a gate fired",
-        "gate": getattr(exc, "gate", "?"),
+        "outcome": outcome,
+        "gate": gate,
         "exception": type(exc).__name__,
         "message": str(exc),
-        "evidence": getattr(exc, "evidence", {}),
+        "evidence": getattr(exc, "evidence", None),
         "blender": bpy.app.version_string,
         "source": {"path": glb, "sha256": source_sha},
         "outputs_not_produced": ["<name>_rigged.glb", "rig_manifest.json"],
-        "note": ("Nothing downstream of the gate ran. No rigged GLB exists, no manifest "
-                 "was written, and no export was attempted. Gates after the one that "
-                 "fired are NOT YET RUN, not passed."),
+        "note": (("Nothing downstream of the gate ran. No rigged GLB exists, no manifest "
+                  "was written, and no export was attempted. Gates after the one that "
+                  "fired are NOT YET RUN, not passed.") if gate is not None else
+                 ("The run stopped here. No rigged GLB exists, no manifest was written, "
+                  "and no export was attempted. No gate is named because none fired: "
+                  "every gate is NOT YET RUN, not passed and not failed.")),
     }
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "halt.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(rec, fh, indent=2, default=str)
-    print("HALT " + json.dumps({"gate": rec["gate"], "record": path}))
     return path
 
 
 if __name__ == "__main__":
+    # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
+    # `tests/test_instruments_amend_w8.py`). `blender -b -P` exits **0** when the script's
+    # exception propagates (E07, measured three times: rig_character.py, rig_parts.py,
+    # author_walk.py), so a halt that does not exit deliberately is reported as a success.
+    #
+    # THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    # itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (an
+    # unknown flag, an unknown `--mode=`); anything else is a crash. Recording a crash as
+    # "a gate fired" is a false record — F-c3f86abc measured `rig_character` writing one.
+    # A deliberate refusal exits 2; a crash exits 1.
+    #
+    # `_write_halt` carries the same three-state vocabulary onto disk. The exit code is
+    # computed BEFORE anything that can fail and delivered from a `finally`: `parse_args`
+    # raises on an unknown flag and `sha256_file` on a mistyped path, and that second
+    # exception used to leave the whole `try` statement with `sys.exit` never reached.
     try:
         main()
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
         traceback.print_exc()
-        # MEASURED AGAIN 2026-08-11: this clause caught only GateFailure, so an ordinary
-        # AttributeError propagated out and Blender exited **0** -- the very hazard the
-        # comment below describes, in the file that describes it. Every exit is non-zero.
-        #
-        # MEASURED AGAIN 2026-09-04, and it was the same hazard one layer in: the halt
-        # record below re-parses `sys.argv` and re-hashes the GLB INSIDE this `except`
-        # block. `parse_args` raises ArmatureError on an unknown flag or a missing
-        # `--glb`/`--out`, and `sha256_file` raises FileNotFoundError on a mistyped path --
-        # both ordinary mistakes, and `main()` parses argv first, so the failing re-parse
-        # is GUARANTEED for a bad flag. That second exception left the whole `try`
-        # statement and `sys.exit` never ran. The exit code is now computed BEFORE anything
-        # that can fail and delivered from a `finally`, which is the shape rig_bake.py:292,
-        # rig_parts.py:576, rig_repair.py:236 and rig_retopo.py:428 already use.
-        _code = 2 if isinstance(exc, GateFailure) else 1
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _detail = getattr(exc, "evidence", None)
+        _sentinel = {
+            "tool": "rig_character", "outcome": halt_outcome(exc),
+            "gate": getattr(exc, "gate", None),
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": _detail if isinstance(_detail, dict) else None}
         try:
             _args = parse_args()
-            _write_halt(os.path.abspath(_args["out"]), exc,
-                        sha256_file(_args["glb"]), _args["glb"])
+            try:
+                # A mistyped `--glb` is an ordinary mistake and used to delete the whole
+                # halt record with a FileNotFoundError raised inside this block.
+                _sha = sha256_file(_args["glb"])
+            except BaseException:                                     # noqa: BLE001
+                _sha = None
+            _write_halt(os.path.abspath(_args["out"]), exc, _sha, _args["glb"])
         except BaseException:                                         # noqa: BLE001
-            # The halt record is a courtesy; the exit code is the contract.
+            # The halt record is a courtesy; the sentinel and the exit code are the contract.
             traceback.print_exc()
-            print("RIG_CHARACTER_HALT_RECORD_NOT_WRITTEN " + json.dumps(
-                {"error": type(exc).__name__, "message": str(exc),
-                 "gate": getattr(exc, "gate", None)}, default=str))
         finally:
-            # MEASURED 2026-08-11: letting the exception propagate out of a `-b -P` script
-            # prints the traceback and Blender still exits **0**. A caller reading the exit
-            # code — a shell chain, a CI step, a later session's `if ($LASTEXITCODE -eq 0)` —
-            # would see the halt as a success. A halt that returns success is not a halt.
+            print("RIG_CHARACTER_HALT " + json.dumps(_sentinel, default=str))
             sys.exit(_code)

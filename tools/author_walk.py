@@ -695,18 +695,31 @@ def _fk_heads(performer, gait):
 
 
 if __name__ == "__main__":
+    # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
+    # `tests/test_instruments_amend_w8.py`). `blender -b -P` exits **0** when the script's
+    # exception propagates (E07, measured three times: rig_character.py, rig_parts.py,
+    # author_walk.py), so a halt that does not exit deliberately is reported as a success.
+    #
+    # THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    # itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (an
+    # unknown flag, an unknown `--mode=`); anything else is a crash. Recording a crash as
+    # "a gate fired" is a false record — F-c3f86abc measured `rig_character` writing one.
+    # A deliberate refusal exits 2; a crash exits 1.
     try:
         raise SystemExit(main())
     except SystemExit:
         raise
     except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        # A crashed `blender -b -P` exits 0 (E07, measured three times). The sentinel is
-        # the contract; this prints the negative one so a reader sees a halt rather than
-        # an absence, and still exits non-zero for anything that does check.
         import traceback
         traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
+        _detail = getattr(exc, "evidence", None)
         print("AUTHOR_WALK_HALT " + json.dumps({
+            "tool": "author_walk",
+            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                        else "REFUSED — the tool declined to proceed"
+                        if isinstance(exc, ArmatureError)
+                        else "FAILED — an unhandled error"),
+            "gate": getattr(exc, "gate", None),
             "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
         sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
