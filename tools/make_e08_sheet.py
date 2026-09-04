@@ -207,7 +207,15 @@ def main(argv=None):
 
     sheet = np.concatenate([body, panel], axis=0)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    cv2.imwrite(a.out, sheet)
+    # `cv2.imwrite` returns a BOOL on failure and raises NOTHING; the sentinel below
+    # carries an absolute path and is the receipt a later session cites. Same shape as
+    # fit_reference.py:216 and make_plate.py:224.
+    if not cv2.imwrite(a.out, sheet):
+        raise SheetInputError(
+            f"cv2 refused to write {os.path.abspath(a.out)}; E08_SHEET_OK would name a "
+            f"file that is not there",
+            {"gate": "WRITE", "out": os.path.abspath(a.out),
+             "size": [int(sheet.shape[1]), int(sheet.shape[0])], "frames": idx})
     print("E08_SHEET_OK " + json.dumps({"out": os.path.abspath(a.out),
                                         "size": [sheet.shape[1], sheet.shape[0]],
                                         "frames": idx}))

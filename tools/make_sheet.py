@@ -23,7 +23,58 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from armature_core.errors import ArmatureError  # noqa: E402
 from sheet_compose import SHEET_PLATE, load_rgb_over_plate  # noqa: E402
+
+
+class MakeSheetError(ArmatureError):
+    """This panel cannot be built as asked. One typed refusal for this tool.
+
+    It used to answer a missing required flag with a bare `KeyError: 'run'` out of
+    `args["run"]` — a traceback ending in one word, naming neither the flag it wanted nor
+    the token it got, on the panel tool. Every argparse instrument in this domain answers
+    `error: the following arguments are required: --run`, and `stage_render._parse_argv` is
+    the counter-example in the same hand-rolled shape: `missing --{required}=<path>`.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+def parse_argv(argv, *, required, optional=(), tool="make_sheet", exc=None):
+    """`--key=value` tokens into a dict, refusing by NAME rather than by KeyError.
+
+    ONE implementation for the two hand-rolled parsers in this domain (`make_sheet` and
+    `analyze_p3`), in the shape `stage_render._parse_argv` already carries: a token that
+    is not `--key=value` names itself, and a missing required flag names the flag.
+    """
+    exc = exc or MakeSheetError
+    known = set(required) | set(optional)
+    args = {}
+    for token in argv:
+        if not token.startswith("--") or "=" not in token:
+            raise exc(
+                f"{tool}: expected --key=value, got {token!r}; a token that lost its "
+                f"leading dashes registers a key nobody asked for and the refusal below "
+                f"then names the wrong thing",
+                {"gate": "ARGV", "tool": tool, "token": token, "argv": list(argv),
+                 "known_flags": sorted(known)})
+        key, _, value = token[2:].partition("=")
+        if key not in known:
+            raise exc(
+                f"{tool}: unknown flag --{key}; this tool takes "
+                f"{', '.join('--' + k for k in sorted(known))}",
+                {"gate": "ARGV", "tool": tool, "flag": f"--{key}",
+                 "known_flags": sorted(known)})
+        args[key] = value
+    for name in required:
+        if name not in args:
+            raise exc(
+                f"{tool}: missing --{name}=<value>",
+                {"gate": "ARGV", "tool": tool, "missing": f"--{name}",
+                 "given": sorted(args), "known_flags": sorted(known)})
+    return args
 
 MARGIN = 8
 LABEL_H = 18
@@ -107,10 +158,7 @@ def build_sheet(run_dir, frames=None, channels=None):
 
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
-    args = {}
-    for token in argv:
-        key, _, value = token[2:].partition("=")
-        args[key] = value
+    args = parse_argv(argv, required=("run", "out"), optional=("frames", "channels"))
     frames = [int(v) for v in args["frames"].split(",")] if args.get("frames") else None
     channels = args["channels"].split(",") if args.get("channels") else None
     sheet = build_sheet(args["run"], frames=frames, channels=channels)

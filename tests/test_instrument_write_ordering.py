@@ -228,6 +228,13 @@ POPULATION_MEASURED_2026_09_04 = {
     # by `tests/test_instruments_amend_w12.py`'s window census, which measures the reason
     # rather than the `imports_bpy` proxy.
     "make_test_armature", "rig_bake", "rig_repair", "rig_retopo",
+    # JOINED 2026-09-04 by the instruments-measure wave-12 amend (F-c397574b):
+    # `measure_cascade_clip.main` now calls `gate_clip_rate` -- `--expect-fps` was parsed,
+    # recorded and printed beside the rate read off the stream with nothing comparing them
+    # -- so it gates-and-writes where before it only wrote. Its `os.makedirs` moved BELOW
+    # the shape and rate clauses in the same commit; it stays above the COUNT clause, which
+    # deliberately writes its `COUNT MISMATCH` record before raising.
+    "measure_cascade_clip",
     "make_thesis_sheet", "measure_floor", "measure_lift",
     "pack_pose_pack", "project_pose_keypoints", "render_performer", "render_pose_sticks",
     "render_start_frame", "render_turnaround", "rig_character", "rig_parts",

@@ -32,6 +32,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np  # noqa: E402
 
 from armature_core import aapose  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
+
+
+class OverlaySheetError(ArmatureError):
+    """This overlay sheet cannot be produced as asked. One typed refusal for this tool.
+
+    The three bare `FileNotFoundError` / `RuntimeError` / `ValueError` raises above it are
+    a separate family (wave 8's typed-refusal sweep did not reach this file) and are left
+    where they are; what this class exists for is the WRITE, which had no refusal at all.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 def parse_args(argv=None):
@@ -91,7 +105,16 @@ def main(argv=None):
 
     sheet = np.concatenate(tiles, axis=1)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    cv2.imwrite(a.out, sheet)
+    # `cv2.imwrite` returns a BOOL on failure and raises NOTHING -- measured 2026-09-04
+    # with this venv's OpenCV 5.0.0: an --out naming an existing DIRECTORY returned False,
+    # wrote nothing and printed only a WARN on stderr, while the sentinel below carried
+    # that path as though the sheet were there. The shape is fit_reference.py:216's.
+    if not cv2.imwrite(a.out, sheet):
+        raise OverlaySheetError(
+            f"cv2 refused to write {os.path.abspath(a.out)}; the sentinel line would name "
+            f"a file that is not there, and that line is the receipt a later session cites",
+            {"gate": "WRITE", "out": os.path.abspath(a.out),
+             "size": [int(sheet.shape[1]), int(sheet.shape[0])], "frames": idx})
     print("OVERLAY_SHEET_OK " + json.dumps({
         "out": os.path.abspath(a.out), "frames": idx,
         "tile": [int(width * a.scale), int(height * a.scale)],

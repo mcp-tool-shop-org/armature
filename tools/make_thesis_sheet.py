@@ -33,11 +33,19 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from composite_reference import parse_plate  # noqa: E402
+# The sibling panel's provenance block, CALLED rather than copied: `make_gate0_sheet`
+# derives every line from the run's own record and prints `NOT RECORDED` where the record
+# does not carry it (the `make_startframe_sheet` convention). One implementation, so the
+# thesis panel says the same things about a run that the Gate 0 panel does.
+from make_gate0_sheet import provenance_lines  # noqa: E402
 from measure_lift import gate_listing_pairing  # noqa: E402
 from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
-                           load_rgb_over_plate, require_frames)
+                           frames_by_number, load_rgb_over_plate, require_frames)
 
 MARGIN = 10
+#: Width reserved for the provenance column when `--meta` is given. The Gate 0 panel's own
+#: reservation is 430; this matches it, because the lines are the same lines.
+PROV_W = 430
 LABEL_H = 17
 HDR = 24
 BG = (18, 18, 20)
@@ -59,7 +67,18 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--frames", default="0,8,16,24,32")
     ap.add_argument("--tile-height", type=int, default=300)
-    ap.add_argument("--meta", default=None)
+    # DECLARED **and READ**. Measured 2026-09-04: `--meta` was parsed here and grep for
+    # `meta` across the whole module returned this one line -- the value reached nothing,
+    # and a path that does not exist was accepted in silence
+    # (`--meta=E:/no/such/meta.json` returned 0, printed THESIS_SHEET and left the sheet on
+    # disk). Its two siblings read the same flag and draw the run's provenance from it
+    # (`make_gate0_sheet.py:251`, `make_startframe_sheet.py:206`). A flag DECLARED and not
+    # READ is the mirror of the `--sheet-plate` regression `tests/test_sheet_argv_smoke.py`
+    # exists for, and that census walks only the other direction.
+    ap.add_argument("--meta", default=None,
+                    help="a payload/run record; its provenance is drawn as a fourth "
+                         "column, every line from the record and NOT RECORDED where the "
+                         "record does not carry it")
     ap.add_argument("--title", default=None)
     ap.add_argument("--control-label", default="CONTROL   depth, per-shot, near-bright")
     ap.add_argument("--captions", default=None,
@@ -129,14 +148,35 @@ def main(argv=None):
     # ---- ANDON, before a tile is cut: every row names the same frames as the control,
     #      and every requested index exists in every row.
     gate_listing_pairing({title: names for title, _d, names in rows})
+    # ---- and the bound is the frames' own NUMBERS, not their POSITION in the listing
+    #      (wave 12): a run numbered 00001..00003 accepted `--frames=0,1,2` and captioned
+    #      its three files f000/f001/f002 — frame numbers the run does not hold — while
+    #      refusing the numbers it does.
+    by_number = {}
     for title, ddir, names in rows:
-        require_frames(idx, names, what=f"frame(s) of {title}", where=ddir)
+        by_number[title] = frames_by_number(names, where=ddir,
+                                            what=f"frame(s) of {title}")
+        require_frames(idx, names, what=f"frame(s) of {title}", where=ddir,
+                       numbers=sorted(by_number[title]))
 
-    tw = fit(_rgb(os.path.join(a.control, cn[0]), plate)).width
+    # ---- the provenance column. Read BEFORE any tile is cut, so a --meta that is not
+    #      there refuses rather than being discovered after the panel is composed.
+    meta = None
+    if a.meta:
+        with open(a.meta, encoding="utf-8") as fh:
+            meta = json.load(fh)
+    prov = provenance_lines(meta) if meta is not None else []
+
+    ctl_by_number = by_number[rows[0][0]]
+    tw = fit(_rgb(os.path.join(a.control, ctl_by_number[min(ctl_by_number)]),
+                  plate)).width
     # `none` is a real value: E03's arms deliberately carry no reference image.
     ref = None if a.reference.lower() == "none" else fit(_rgb(a.reference, plate))
     ref_w = ref.width if ref is not None else 260
-    width = MARGIN + len(idx) * (tw + MARGIN) + ref_w + MARGIN * 2
+    # The provenance column is only as wide as it is present: a run given no `--meta`
+    # composes the sheet it always composed, at the same size.
+    prov_w = (PROV_W + MARGIN) if prov else 0
+    width = MARGIN + len(idx) * (tw + MARGIN) + ref_w + MARGIN * 2 + prov_w
     height = HDR + len(rows) * (LABEL_H + th + LABEL_H + MARGIN) + MARGIN
 
     sheet = Image.new("RGB", (width, height), BG)
@@ -150,7 +190,8 @@ def main(argv=None):
         d.text((MARGIN, y), title, fill=FG)
         x = MARGIN
         for fi in idx:
-            t = fit(_rgb(os.path.join(ddir, names[fi]), plate))
+            # Indexed by NUMBER, not by position in the listing.
+            t = fit(_rgb(os.path.join(ddir, by_number[title][fi]), plate))
             sheet.paste(t, (x, y + LABEL_H))
             if captions is not None:
                 cap = f"f{fi:03d}  {captions.get(fi, '')}"
@@ -173,13 +214,24 @@ def main(argv=None):
                 for i, ln in enumerate(
                         (a.no_reference_note or "REFERENCE: NONE.").split("|")):
                     d.text((x, y + LABEL_H + 4 + i * 15), ln, fill=DIM)
+            if prov:
+                px = x + ref_w + MARGIN
+                d.text((px, y), "PROVENANCE", fill=DIM)
+                yy = y + LABEL_H
+                for ln in prov:
+                    d.text((px, yy), ln,
+                           fill=FG if ln.startswith("Gate") else DIM)
+                    yy += 15
         y += LABEL_H + th + LABEL_H + MARGIN
 
     # scripts create their own output directories — matching make_lift_sheet.py
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     sheet.save(a.out)
+    # The flag's effect is on the OK line, not only in the pixels: a reader keying on this
+    # line can tell whether the panel carries provenance or does not.
     print(f"THESIS_SHEET {a.out} {sheet.width}x{sheet.height} "
-          f"plate={tuple(int(v) for v in plate)}")
+          f"plate={tuple(int(v) for v in plate)} "
+          f"provenance={os.path.abspath(a.meta) if a.meta else 'NONE (--meta not given)'}")
     # The SUCCESS direction of the exit convention, stated: 0, beside the sentinel. It
     # returned None, which `SystemExit(None)` happens to render as 0 — a convention no
     # census could read off the function.

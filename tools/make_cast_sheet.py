@@ -89,7 +89,11 @@ def main(argv=None):
     out_dir = os.path.dirname(os.path.abspath(args.out))
     os.makedirs(out_dir, exist_ok=True)  # scripts create their own output directories
     sheet.save(args.out)
-    print("SHEET_OK", args.out, sheet.size, f"font={font_r.path}")
+    # Its OWN token. `SHEET_OK` was printed by four tools -- this one, make_e13_sheet,
+    # rig_sheet_compose and sheet_compose -- and it was the only shared success sentinel in
+    # the tree, so a caller grepping a log for it could not say which panel was produced.
+    # E07-the-skeleton.md:202-205 names SHEET_OK in the list of tokens the pipeline keys on.
+    print("CAST_SHEET_OK", args.out, sheet.size, f"font={font_r.path}")
     return args.out
 
 

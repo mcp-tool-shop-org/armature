@@ -41,8 +41,9 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from measure_lift import as_pairing_rows as ML_as_pairing_rows  # noqa: E402
 from measure_lift import gate_listing_pairing  # noqa: E402
-from sheet_compose import require_frames  # noqa: E402
+from sheet_compose import frames_by_number, require_frames  # noqa: E402
 
 
 class ReviewClipError(ArmatureError):
@@ -135,6 +136,12 @@ def main(argv=None):
              "png_files": sorted(n for n in os.listdir(a.frames)
                                  if n.lower().endswith(".png"))[:16]})
     ims = [Image.open(os.path.join(a.frames, n)).convert("RGB") for n in names]
+    # `{frame NUMBER: position in the listing}` — the stills are asked for by number and
+    # were cut by position (wave 12): on a run numbered 00001..00003, `--stills=0` cut
+    # `still_f000_*` out of `00001.png` and recorded `"frame": 0`, a frame the run does
+    # not hold, while `--stills=3` was refused.
+    by_number = frames_by_number(names, where=a.frames, what="clip frame(s)")
+    at = {n: names.index(name) for n, name in by_number.items()}
 
     det = None
     if a.detection:
@@ -142,10 +149,17 @@ def main(argv=None):
             det = json.load(fh)["rows"]
         # ---- ANDON. The rows describe THESE frames, by frame number — not by position.
         gate_listing_pairing({"frames": names, "detection": det})
+        det_by_number = {}
+        for _row, _pr in zip(det, ML_as_pairing_rows(det)):
+            _stem = os.path.splitext(str(_pr["file"]))[0]
+            if _stem.isdigit():
+                det_by_number[int(_stem)] = _row
 
     idx = [int(v) for v in a.stills.split(",") if v.strip() != ""]
-    # ---- every requested still index exists. The count had no denominator.
-    require_frames(idx, ims, what="clip frame(s)", where=a.frames)
+    # ---- every requested still NUMBER exists. The count had no denominator, and the
+    #      bound was positional.
+    require_frames(idx, ims, what="clip frame(s)", where=a.frames,
+                   numbers=sorted(by_number))
 
     # ---- the output directory is created only once every in-tool andon above has
     #      fired. A refused run that has already made its directory leaves an empty
@@ -168,8 +182,8 @@ def main(argv=None):
     cuts = []
     for i in idx:
         for label, li in targets.items():
-            if det and det[i].get("fired"):
-                x, y = det[i]["image"][li]
+            if det and det_by_number[i].get("fired"):
+                x, y = det_by_number[i]["image"][li]
                 outside = not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0)
                 cx, cy = int(x * W), int(y * H)
             else:
@@ -177,7 +191,8 @@ def main(argv=None):
             x0 = max(0, min(W - a.crop, cx - half))
             y0 = max(0, min(H - a.crop, cy - half))
             name = f"still_f{i:03d}_{label}.png"
-            ims[i].crop((x0, y0, x0 + a.crop, y0 + a.crop)).save(os.path.join(a.out, name))
+            ims[at[i]].crop(
+                (x0, y0, x0 + a.crop, y0 + a.crop)).save(os.path.join(a.out, name))
             cuts.append({"file": name, "frame": i, "target": label,
                          "landmark_index": li, "centre_px": [cx, cy],
                          "crop_box": [x0, y0, x0 + a.crop, y0 + a.crop],
@@ -191,6 +206,7 @@ def main(argv=None):
                    "source_fps": a.source_fps,
                    "playback_rate": f"{a.fps / float(a.source_fps):.2f}x",
                    "clip_lossless": True,
+                   "source_frame_files": list(names),
                    "stills_requested": idx, "n_stills_requested": len(idx),
                    "gate_OUT": gate_out,
                    "stills": cuts}, fh, indent=2)

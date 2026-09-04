@@ -214,7 +214,15 @@ def main(argv=None):
         tiles = [cv2.imread(paths[i]) for i in idx]
         strip = np.concatenate(tiles, axis=1)
         strip_path = os.path.join(out, f"strip_every{a.strip}.png")
-        cv2.imwrite(strip_path, strip)
+        # The per-frame write above already checks its return (SticksGate on a False);
+        # this one did not. `cv2.imwrite` returns a BOOL on failure and raises nothing, so
+        # the manifest recorded a contact strip that is not on disk.
+        if not cv2.imwrite(strip_path, strip):
+            raise SticksGate(
+                f"cv2 refused to write {strip_path}; the manifest would record a contact "
+                f"strip that is not there",
+                {"gate": "WRITE", "strip": os.path.abspath(strip_path),
+                 "every": a.strip, "n_tiles": len(idx)})
 
     manifest = {
         "tool": "render_pose_sticks",

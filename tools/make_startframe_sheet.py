@@ -36,7 +36,7 @@ from PIL import Image, ImageDraw  # noqa: E402
 
 from composite_reference import parse_plate  # noqa: E402
 from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
-                           load_rgb_over_plate, require_frames)
+                           frames_by_number, load_rgb_over_plate, require_frames)
 
 MARGIN = 10
 LABEL_H = 18
@@ -127,9 +127,19 @@ def build(start_path, frame_paths, indices, meta, prompt_id=None, measurements=N
     # ---- the family refusal (`sheet_compose.require_frames`): a requested index past the
     #      population was DROPPED, and only a total wipeout raised. A partial drop showed
     #      the Director fewer frames than were asked for and said nothing.
+    #      Bounded by the frames' own NUMBERS (wave 12): the positional bound admitted
+    #      `--at=0` on a run numbered from 1 and drew that run's FIRST file under the
+    #      caption `f000`, a frame the run does not hold, while refusing the number it
+    #      does hold. The numbers come off the paths' own basenames, so the signature is
+    #      unchanged for every caller that already hands over a numbered listing.
+    by_number = frames_by_number([os.path.basename(p) for p in frame_paths],
+                                 where="the output frame listing",
+                                 what="output frame(s)")
+    path_of = {n: frame_paths[[os.path.basename(p) for p in frame_paths].index(name)]
+               for n, name in by_number.items()}
     require_frames(indices, frame_paths, what="output frame(s)",
-                   where="the output frame listing")
-    tiles = [(fi, _rgb(frame_paths[fi], plate)) for fi in indices]
+                   where="the output frame listing", numbers=sorted(by_number))
+    tiles = [(fi, _rgb(path_of[fi], plate)) for fi in indices]
 
     def fit(im):
         return im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))),

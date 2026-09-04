@@ -205,7 +205,8 @@ def main(argv=None):
              f"(diagnostics only; the Director's eye is the verdict)")
     sheet = build(a.arm, ref_images, ref_labels, frame_paths, frame_labels, prov, title)
     sheet.save(a.out)
-    print(f"SHEET_OK {a.out}  {sheet.size[0]}x{sheet.size[1]}")
+    # Its OWN token -- see make_cast_sheet for the four-way collision this retires.
+    print(f"E13_SHEET_OK {a.out}  {sheet.size[0]}x{sheet.size[1]}")
     return a.out
 
 

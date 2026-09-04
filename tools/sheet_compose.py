@@ -31,7 +31,8 @@ directory nor the file.
 `resolve_font_path` replaces both outcomes with an explicit ordered search — the
 `ARMATURE_FONT_DIR` override, then the platform's own font directories, walked — and a
 `FontError` naming every directory and every face tried when none resolves. The resolved
-path is printed on the sheet's own `SHEET_OK` line, so a substituted typeface is stated
+path is printed on the sheet's own `SHEET_COMPOSE_OK` line, so a substituted typeface is
+stated
 rather than silent.
 
 **Which faces, and their licences.** The requested face first (a system font already on
@@ -111,6 +112,34 @@ def load_rgb_over_plate(path, plate=SHEET_PLATE):
         "plate_rgb_srgb": None,
         "alpha_disposition": "no alpha channel in the source",
     }
+
+
+def frames_by_number(names, *, where, what="frame(s)", exc=SheetPopulationError,
+                     evidence=None):
+    """`{frame NUMBER: name}` off a listing, or raise naming the stray.
+
+    The `make_crop_strip.frames_by_number` shape, lifted here as ONE implementation for
+    the six `require_frames` callers rather than a seventh copy — wave 12, F-e96ed69b.
+    `make_crop_strip`'s own version takes a DIRECTORY and returns paths; the sheets hold a
+    listing they have already read (and already paired with `gate_listing_pairing`), so
+    this takes the names and returns names.
+
+    Why it raises on a stray rather than filtering: the file it would drop — or draw — is
+    shown to the Director as a frame of this run. `make_identity_sheet._numbered_population`
+    carried this refusal alone; it now delegates here.
+    """
+    names = list(names)
+    numbered = [n for n in names if os.path.splitext(str(n))[0].isdigit()]
+    unexpected = [n for n in names if n not in set(numbered)]
+    if unexpected:
+        raise exc(
+            f"{where} holds {len(unexpected)} PNG(s) that are not numbered {what} "
+            f"({', '.join(str(u) for u in unexpected[:8])}); a stray sorts into the "
+            f"population and is drawn as a tile of the run under a caption naming a frame",
+            dict(evidence or {}, gate="FRAMES", where=str(where),
+                 unexpected=[str(u) for u in unexpected],
+                 frames=sorted(str(n) for n in numbered)))
+    return {int(os.path.splitext(str(n))[0]): n for n in numbered}
 
 
 def require_frames(requested, population, *, what, where, exc=SheetPopulationError,
@@ -310,7 +339,7 @@ def main():
     # A ROW is as tall as its tallest panel, not as its first. Panels are pasted at their
     # rendered size and never resampled (the rule this module exists for), so a row whose
     # later panels are taller than its first used to overflow into the next row and off the
-    # bottom of the sheet — cropped in silence, with SHEET_OK printed.
+    # bottom of the sheet — cropped in silence, with the success sentinel printed.
     row_heights = [max(im.height for im, _ in panels) for _, panels in rows]
     height = TITLE_H + sum(ROW_TITLE_H + rh + LABEL_H + PAD for rh in row_heights) + PAD
     sheet = Image.new("RGB", (width, height), BG)
@@ -338,7 +367,8 @@ def main():
         os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, spec.get("filename", "sheet.png"))
     sheet.save(path)
-    print(f"SHEET_OK {path} font={f_lab.path}")
+    # Its OWN token -- see make_cast_sheet for the four-way collision this retires.
+    print(f"SHEET_COMPOSE_OK {path} font={f_lab.path}")
 
 
 if __name__ == "__main__":

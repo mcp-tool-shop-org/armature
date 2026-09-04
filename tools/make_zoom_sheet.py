@@ -123,7 +123,17 @@ def main(argv=None):
 
     sheet = np.concatenate(tiles, axis=1)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    cv2.imwrite(a.out, sheet)
+    # Checked BEFORE the sidecar is written: the `_crops.json` describing the crops used
+    # to survive a sheet that does not exist, because the image write was discarded and
+    # the sidecar came after it. `cv2.imwrite` returns a BOOL on failure and raises
+    # nothing -- measured 2026-09-04 with this venv's OpenCV on an --out naming an
+    # existing directory.
+    if not cv2.imwrite(a.out, sheet):
+        raise ZoomSheetError(
+            f"cv2 refused to write {os.path.abspath(a.out)}; the sidecar below would "
+            f"describe the crops of a sheet that is not there",
+            {"gate": "WRITE", "out": os.path.abspath(a.out), "site": a.site,
+             "frames": idx})
     side = os.path.splitext(a.out)[0] + "_crops.json"
     with open(side, "w", encoding="utf-8") as fh:
         json.dump({"tool": "make_zoom_sheet", "frames_dir": os.path.abspath(a.frames),
