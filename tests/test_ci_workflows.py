@@ -468,9 +468,13 @@ def trigger_population():
     """
     project = PYPROJECT["project"]
     inputs = {"pyproject.toml", project["readme"]}
-    licence = project.get("license")
-    if isinstance(licence, dict) and licence.get("file"):
-        inputs.add(licence["file"])
+    # Read through `declared_licence_files()`, which understands PEP 639's `license-files`
+    # as well as the deprecated `license = { file = ... }` table. This line WAS
+    # `project["license"]["file"]`, keyed on the table's own key: moving to the PEP 639 form
+    # would have made it return nothing and dropped the LICENSE trigger requirement in
+    # silence, with the census still green because `_repo_root_files_the_suite_reads()`
+    # finds `LICENSE` by an unrelated route (F-77a1c1b9).
+    inputs.update(declared_licence_files())
     inputs.update(_local_action_files())
     inputs.update(_repo_root_files_the_suite_reads())
     return sorted(inputs)
@@ -2179,3 +2183,95 @@ def test_the_ceiling_check_goes_red_on_the_requires_this_repo_had():
     assert _has_a_ceiling("build>=1.5,<2")
     assert _has_a_ceiling("npm@^11.5.1")
     assert _has_a_ceiling("matplotlib==3.11.1")
+
+
+# -- the licence declaration, and the reader that moves with it (wave 10, F-77a1c1b9) -----
+#
+# The build emitted two SetuptoolsDeprecationWarnings with a stated removal date, on every
+# wheel and every sdist, and nothing recorded or gated them. Measured on this tree
+# 2026-09-04 from one `python -m build`: `project.license` as a TOML table is deprecated —
+# "By 2027-Feb-18, you need to update your project and remove deprecated calls"
+# (`setuptools/config/_apply_pyprojecttoml.py:82`) — and `License classifiers are deprecated`
+# (`_apply_pyprojecttoml.py:61` and `dist.py:765`), both fired twice, once per artifact.
+# With the backend now bounded the removal cannot arrive by surprise, but the honest fix is
+# to stop making the deprecated declaration: `license = "MIT"` plus `license-files`, and no
+# `License :: OSI Approved ::` classifier. Re-measured after the change: zero
+# SetuptoolsDeprecationWarnings in the whole build, and `twine check dist/*` PASSED on both.
+#
+# THE NODE THE TRIGGER DERIVATION KEYS ON: the licence FILES pyproject declares, in either
+# form it can declare them. `trigger_population()` read `project['license']['file']` — the
+# table's own key — so moving to PEP 639 would have made that reader return nothing and
+# dropped the LICENSE trigger requirement silently, with the census still green because
+# `_repo_root_files_the_suite_reads()` happens to find `LICENSE` by a different route.
+
+
+def declared_licence_files(project=None):
+    """Every licence file pyproject names, in either form it may be written in.
+
+    PEP 639's `license-files` (glob patterns) is the form setuptools will still read after
+    2027-Feb-18; `license = { file = "..." }` is the TOML table it deprecated. Both are read,
+    so this derivation survives the move instead of silently returning nothing.
+    """
+    import glob as _glob
+
+    project = PYPROJECT["project"] if project is None else project
+    out = set()
+    patterns = project.get("license-files")
+    if isinstance(patterns, list):
+        for pattern in patterns:
+            for match in _glob.glob(pattern, root_dir=REPO):
+                out.add(match.replace(os.sep, "/"))
+    licence = project.get("license")
+    if isinstance(licence, dict) and licence.get("file"):
+        out.add(licence["file"])
+    return sorted(out)
+
+
+def test_the_licence_is_declared_in_the_form_setuptools_will_still_read():
+    """The deprecated declaration is the thing removed, not the warning about it.
+
+    What this looks like if wrong: on whichever release day CI resolves a setuptools that has
+    dropped the deprecated form, the build fails inside release.yml's `verify` job — after
+    `release: published` has fired, on a tag that is already cut and public, recoverable only
+    by fixing forward and re-dispatching at the tag.
+    """
+    project = PYPROJECT["project"]
+    licence = project.get("license")
+    assert isinstance(licence, str), (
+        f"`project.license` is {type(licence).__name__} ({licence!r}); the TOML table form is "
+        "deprecated with a removal date of 2027-Feb-18")
+    assert licence == "MIT", licence
+    assert declared_licence_files(), (
+        "`license` is an SPDX expression and no `license-files` names the text; the wheel "
+        "METADATA would carry no licence file at all")
+    deprecated = [row for row in project["classifiers"] if row.startswith("License ::")]
+    assert deprecated == [], (
+        f"licence classifiers are deprecated and these remain: {deprecated}; the SPDX "
+        "expression in `license` is the replacement")
+
+
+def test_the_licence_form_matches_the_backend_floor_the_build_resolves():
+    """`license` as a string and `license-files` are PEP 639, which setuptools reads from 77.
+
+    A declaration the pinned backend interval cannot parse is a build that fails everywhere
+    at once, so the two are asserted together rather than left to agree by luck.
+    """
+    floor = re.search(r"setuptools>=\s*(\d+)", " ".join(build_backend_requirements()))
+    assert floor, f"no setuptools floor in {build_backend_requirements()}"
+    assert int(floor.group(1)) >= 77, (
+        f"`license = {PYPROJECT['project']['license']!r}` and `license-files` are PEP 639, "
+        f"which setuptools reads from 77; the pinned floor is {floor.group(1)}")
+
+
+def test_the_trigger_derivation_reads_the_licence_file_whichever_form_declares_it():
+    """The reader moved with the key, and the move is pinned in both directions.
+
+    The third case is the silent drop this test exists for: the PEP 639 form WITHOUT
+    `license-files` names no file at all, and the old reader would have returned the same
+    empty answer on the correct declaration.
+    """
+    assert declared_licence_files({"license": {"file": "LICENSE"}}) == ["LICENSE"]
+    assert declared_licence_files({"license": "MIT", "license-files": ["LICENSE"]}) == ["LICENSE"]
+    assert declared_licence_files({"license": "MIT"}) == []
+    assert declared_licence_files() == ["LICENSE"]
+    assert "LICENSE" in trigger_population()

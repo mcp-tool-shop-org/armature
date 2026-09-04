@@ -17,9 +17,10 @@
 # used — dead weight that was still fetched fresh on release day. Re-measured after the
 # change: `python -m build` produces the same wheel and sdist, and `twine check` passes.
 #
-# The floor is 70.1 and not 68 for that reason: below it the entry was load-bearing.
+# The floor was 70.1 for that reason (below it the `wheel` entry was load-bearing) and is
+# now 77, where PEP 639's `license` expression and `license-files` below became readable.
 [build-system]
-requires = ["setuptools>=70.1,<85"]
+requires = ["setuptools>=77,<85"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -34,7 +35,23 @@ readme = "README.pypi.md"
 # this repo does not make. tests/test_ci_workflows.py reads the interval out of these two
 # fields, so changing either moves the matrix with it.
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
+# PEP 639, and not the `{ file = "LICENSE" }` table this carried until 2026-09-04. Measured
+# from one `python -m build` on this tree: the table raised
+# `SetuptoolsDeprecationWarning: 'project.license' as a TOML table is deprecated ... By
+# 2027-Feb-18, you need to update your project and remove deprecated calls`, on the wheel and
+# on the sdist both. The removal would land on whichever release day CI resolved a setuptools
+# that had dropped it — inside release.yml's `verify` job, after `release: published` has
+# fired, on a tag already cut and public. `verify.ps1` says why the packaging leg exists at
+# all: finding that out from a release job is finding it out too late to take back.
+#
+# `license` is now the SPDX expression and `license-files` names the text. The
+# `License :: OSI Approved :: MIT License` classifier is GONE for the same reason — it raised
+# the second deprecation, from `_apply_pyprojecttoml.py:61` and `dist.py:765` — and the
+# expression above replaces it. `tests/test_ci_workflows.py`'s trigger derivation reads BOTH
+# forms, so the LICENSE trigger requirement moved with the key instead of silently dropping
+# out. Re-measured after the change: zero SetuptoolsDeprecationWarnings in the build.
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "mcp-tool-shop", email = "64996768+mcp-tool-shop@users.noreply.github.com" }]
 keywords = [
     "previz", "blender", "video-diffusion", "controlnet", "turnaround",
@@ -43,7 +60,8 @@ keywords = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    # No `License ::` row: licence classifiers are deprecated with the same 2027-Feb-18
+    # removal date, and `license = "MIT"` above is what replaces them.
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
