@@ -25,6 +25,7 @@ What each group is here to catch, measured on this tree before the fix:
   which executes a function body, so it was green on a wheel whose drawing path could not run.
 """
 
+import ast
 import os
 import re
 import shutil
@@ -39,6 +40,7 @@ from conftest import REPO
 from test_packaging import lazy_import_call_sites, lazy_third_party_roots
 
 WORKFLOWS = os.path.join(REPO, ".github", "workflows")
+TESTS_DIR = os.path.join(REPO, "tests")
 
 
 # -- a small indentation reader (no PyYAML in this repo's install line) -------------------
@@ -402,28 +404,143 @@ def _paths_under(trigger):
     return out
 
 
-@pytest.mark.parametrize("trigger", ["push", "pull_request"])
-def test_ci_runs_on_every_file_the_package_is_built_from(trigger):
-    """pyproject names its own build inputs; every one of them must trigger a build.
+def _local_action_files():
+    """Every composite action a workflow calls with `uses: ./...`, as repo-relative paths.
 
-    Read from pyproject rather than listed here, so renaming README.pypi.md moves the
-    requirement with it instead of leaving this test asserting a filename nobody uses.
+    Derived from the workflows themselves. `.github/actions/sheet-fonts/action.yml` is
+    called by BOTH `ci.yml` and `release.yml`; editing it changes what two workflows do.
+    """
+    found = set()
+    for name in sorted(os.listdir(WORKFLOWS)):
+        if not name.endswith((".yml", ".yaml")):
+            continue
+        with open(os.path.join(WORKFLOWS, name), encoding="utf-8") as fh:
+            for line in fh:
+                m = re.search(r"uses:\s*\./(\S+)", line)
+                if m:
+                    found.add(m.group(1).rstrip("/"))
+    out = set()
+    for rel in found:
+        base = os.path.join(REPO, rel.replace("/", os.sep))
+        if os.path.isdir(base):
+            for entry in sorted(os.listdir(base)):
+                if entry in ("action.yml", "action.yaml"):
+                    out.add(f"{rel}/{entry}")
+        elif os.path.isfile(base):
+            out.add(rel)
+    return sorted(out)
+
+
+def _repo_root_files_the_suite_reads():
+    """Every repo-ROOT file named as a string literal by a test under `tests/`.
+
+    The derivation is "every file the suite guards": if a test reads a file, editing that
+    file can turn CI red, so editing it has to RUN CI. Matched against the real directory
+    listing rather than `os.path.isfile`, because Windows would otherwise match `LICENSE`
+    through the literal `license` and put a filename in the population that does not exist.
+    """
+    entries = {e for e in os.listdir(REPO) if os.path.isfile(os.path.join(REPO, e))}
+    found = set()
+    for name in sorted(os.listdir(TESTS_DIR)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if node.value in entries:
+                    found.add(node.value)
+    return sorted(found)
+
+
+def trigger_population():
+    """THE DERIVATION (wave 8, F-0fac6017): every path the workflows and the suite consume.
+
+    Until this wave the requirement was `{"pyproject.toml", project["readme"]}` plus the
+    licence file — three paths, all of them already listed, so the test could not fail.
+    Enumerated on 2026-09-04, three classes of file were consumed by CI and triggered
+    nothing: the composite action BOTH workflows call, `verify.ps1` (whose behaviour
+    `tests/test_verify_script.py` pins by lifting `Invoke-Leg` out of it), and `.gitignore`
+    (whose content `tests/test_packaging.py` pins). A commit touching only one of those
+    runs no CI at all, and the first surface where a breakage appears is the release job,
+    after the tag exists.
     """
     project = PYPROJECT["project"]
     inputs = {"pyproject.toml", project["readme"]}
     licence = project.get("license")
     if isinstance(licence, dict) and licence.get("file"):
         inputs.add(licence["file"])
+    inputs.update(_local_action_files())
+    inputs.update(_repo_root_files_the_suite_reads())
+    return sorted(inputs)
+
+
+#: Derived on 2026-09-04. Equality, so a new composite action or a new repo-root file the
+#: suite starts reading joins the requirement on the day it lands.
+RECORDED_TRIGGER_POPULATION = [
+    ".github/actions/sheet-fonts/action.yml", ".gitignore", "HANDOFF.md", "LICENSE",
+    "README.md", "README.pypi.md", "pyproject.toml", "verify.ps1",
+]
+
+
+def test_the_trigger_population_is_derived_from_what_ci_and_the_suite_actually_consume():
+    """Size and membership before the property. The old population was three paths read
+    out of pyproject, every one of them already listed under both triggers — a test that
+    could not fail."""
+    pop = trigger_population()
+    assert pop == RECORDED_TRIGGER_POPULATION, {
+        "appeared": sorted(set(pop) - set(RECORDED_TRIGGER_POPULATION)),
+        "vanished": sorted(set(RECORDED_TRIGGER_POPULATION) - set(pop)),
+    }
+    assert _local_action_files() == [".github/actions/sheet-fonts/action.yml"]
+    assert {"verify.ps1", ".gitignore"} <= set(_repo_root_files_the_suite_reads())
+    #: the two enumerators must agree: `action_files()` walks `.github/actions/` off the
+    #: disk, `_local_action_files()` reads what the workflows CALL. An action on disk that
+    #: nothing calls is dead weight nobody would notice; one called but absent is a red
+    #: workflow. Either way the disagreement is worth a name.
+    on_disk = sorted(os.path.relpath(p, REPO).replace("\\", "/") for p in action_files())
+    assert _local_action_files() == on_disk, {
+        "called but not on disk": sorted(set(_local_action_files()) - set(on_disk)),
+        "on disk but never called": sorted(set(on_disk) - set(_local_action_files())),
+    }
+
+
+@pytest.mark.parametrize("trigger", ["push", "pull_request"])
+def test_ci_runs_on_every_file_the_package_is_built_from(trigger):
+    """Every derived path must match a trigger path, not merely the three pyproject names.
+
+    Read from the tree rather than listed here, so renaming README.pypi.md or adding a
+    second composite action moves the requirement with it instead of leaving this test
+    asserting a filename nobody uses.
+    """
     patterns = _paths_under(trigger)
     missing = [
         f
-        for f in sorted(inputs)
+        for f in trigger_population()
         if not any(p == f or (p.endswith("/**") and f.startswith(p[:-3] + "/")) for p in patterns)
     ]
     assert missing == [], (
-        f"{trigger} builds nothing when these build inputs change: {missing}; the first "
-        "place that surfaces is the release job, after the tag exists"
+        f"{trigger} builds nothing when these files change: {missing}; each is consumed "
+        f"by a workflow or pinned by a test, and the first place a breakage surfaces is "
+        f"the release job, after the tag exists"
     )
+
+
+def test_the_trigger_census_can_see_a_path_that_is_not_listed(tmp_path):
+    """The red direction: the matcher must actually reject an unlisted path, or the
+    assertion above is a check that cannot fail. `.github/actions/**` covers the composite
+    action; `.github/workflows/**` does not, which is the exact gap measured today."""
+    patterns = [".github/workflows/**", "pyproject.toml"]
+
+    def covered(f):
+        return any(p == f or (p.endswith("/**") and f.startswith(p[:-3] + "/"))
+                   for p in patterns)
+
+    assert covered("pyproject.toml")
+    assert covered(".github/workflows/ci.yml")
+    assert not covered(".github/actions/sheet-fonts/action.yml")
+    assert not covered("verify.ps1")
+    assert covered(".github/actions/sheet-fonts/action.yml") is False
 
 
 def _code_only(script):
@@ -701,24 +818,55 @@ def test_no_action_is_resolved_from_a_branch_ref(source, action, ref, line):
     )
 
 
-THIRD_PARTY = [row for row in uses_refs() if not row[1].startswith("actions/")]
+#: WAVE 8, F-7331baff — the pin used to be applied to
+#: `[row for row in uses_refs() if not row[1].startswith("actions/")]`, an UNCOMMENTED
+#: exemption the file's own reasoning does not support. Enumerated 2026-09-04: 16 `uses:`
+#: refs across the three workflows, 15 of them `actions/*` on mutable TAGS (checkout@v4,
+#: setup-python@v5, setup-node@v4, upload-artifact@v4, download-artifact@v4,
+#: upload-pages-artifact@v3, deploy-pages@v4), leaving exactly ONE subject for the law.
+#: Two of the exempted refs sit inside `release.yml`'s npm job — the job that performs the
+#: publish, the step this file itself calls "the one step with no compensator". A tag is
+#: mutable, so the sibling test's own rationale ("a branch ref resolves at run time, so
+#: the code that runs is not the code reviewed") applies to them word for word. The
+#: exemption is gone: the law covers every `uses:` ref, and this branch is red on the 15
+#: `actions/*` rows until the ci-packaging amend pins them (its brief: "every `uses:`
+#: pinned by SHA, including `actions/*`, comment the version").
+ALL_USES = uses_refs()
+THIRD_PARTY = [row for row in ALL_USES if not row[1].startswith("actions/")]
 
 
-def test_the_repo_still_has_a_third_party_action_to_hold_to_the_pin():
-    """The population may not empty itself silently.
+def test_the_repo_still_has_an_action_to_hold_to_the_pin():
+    """The population may not empty itself silently, and may not shrink to the one row an
+    uncommented exemption happened to leave behind.
 
     A test parametrized over an empty list reports green, and a pinning law with no subject
     is the shape four prior gates in this repo took: passing N/N because N was zero.
     """
-    assert THIRD_PARTY, (
-        "no third-party action is used anywhere under .github/ any more; if that is "
-        "deliberate this test and its sibling have no subject and should be retired "
-        "deliberately, not left reporting green"
+    assert ALL_USES, (
+        "no action is used anywhere under .github/ any more; if that is deliberate this "
+        "test and its siblings have no subject and should be retired deliberately, not "
+        "left reporting green"
     )
+    assert len(ALL_USES) == 16, [(r[0], r[1]) for r in ALL_USES]
+    assert len(THIRD_PARTY) == 1, [(r[0], r[1]) for r in THIRD_PARTY]
+    assert THIRD_PARTY[0][1] == "pypa/gh-action-pypi-publish", THIRD_PARTY
 
 
-@pytest.mark.parametrize("source,action,ref,line", THIRD_PARTY)
-def test_a_third_party_action_is_pinned_to_a_commit_and_says_which_version(source, action, ref, line):
+def test_a_fourth_party_action_cannot_hide_under_an_actions_shaped_name():
+    """The reason the `actions/`-prefix split was never a safe exemption: the prefix is a
+    GitHub ORG name, and any account may be called that on another host. Nothing in a
+    `uses:` line proves who owns the repository behind it, which is why the law now reads
+    every row rather than every row that does not look official."""
+    for source, action, ref, line in ALL_USES:
+        assert "/" in action, f"{source}: `{line}` names no owner at all"
+        if action.startswith("actions/"):
+            assert action.count("/") == 1, (
+                f"{source}: {action!r} is not an `actions/<repo>` action despite the "
+                f"prefix; the prefix is not provenance")
+
+
+@pytest.mark.parametrize("source,action,ref,line", ALL_USES)
+def test_an_action_is_pinned_to_a_commit_and_says_which_version(source, action, ref, line):
     """The npm half of this law is pinned by a test; the PyPI half was pinned by a comment.
 
     `npm install -g npm@^11.5.1` is held to a constraint by
