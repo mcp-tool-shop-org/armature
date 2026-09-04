@@ -41,7 +41,7 @@ def test_the_population_is_the_whole_blender_side_of_the_repo():
 
 
 @pytest.mark.parametrize("filename", WITH_MAIN)
-def test_a_gate_failure_exits_non_zero(filename):
+def test_a_gate_failure_exits_non_zero(filename, tmp_path):
     """The andon path: a typed gate fires inside `main`."""
     from armature_core.errors import GateFailure
 
@@ -53,13 +53,13 @@ def test_a_gate_failure_exits_non_zero(filename):
 
     code, escaped = exit_code_of_main_block(
         filename, raiser=raiser,
-        argv=["blender", "-b", "-P", filename, "--", "--glb=nope.glb", "--out=nope_out"])
+        argv=["blender", "-b", "-P", filename, "--", "--glb=nope.glb", "--out=" + str(tmp_path / "out")])
     assert escaped is None, f"{filename}: {escaped!r} escaped the handler; blender exits 0"
     assert code not in (0, None), f"{filename}: exit code {code!r}"
 
 
 @pytest.mark.parametrize("filename", WITH_MAIN)
-def test_an_ordinary_error_exits_non_zero(filename):
+def test_an_ordinary_error_exits_non_zero(filename, tmp_path):
     """The un-typed path. `rig_parts.py:556` records this one biting the file that
     documents it: the handler caught only `GateFailure`, so a plain `ValueError` walked
     out and Blender reported success."""
@@ -68,13 +68,13 @@ def test_an_ordinary_error_exits_non_zero(filename):
 
     code, escaped = exit_code_of_main_block(
         filename, raiser=raiser,
-        argv=["blender", "-b", "-P", filename, "--", "--glb=nope.glb", "--out=nope_out"])
+        argv=["blender", "-b", "-P", filename, "--", "--glb=nope.glb", "--out=" + str(tmp_path / "out")])
     assert escaped is None, f"{filename}: {escaped!r} escaped the handler; blender exits 0"
     assert code not in (0, None), f"{filename}: exit code {code!r}"
 
 
 @pytest.mark.parametrize("filename", WITH_MAIN)
-def test_an_unparseable_argv_still_exits_non_zero(filename):
+def test_an_unparseable_argv_still_exits_non_zero(filename, tmp_path):
     """F-f5530688's exact shape. `main` fails on a bad flag; the handler then re-parses the
     SAME argv to find out where to write `halt.json`, and fails again. Whatever the handler
     does about that, it may not let the second failure delete the exit code."""
@@ -93,7 +93,7 @@ def test_an_unparseable_argv_still_exits_non_zero(filename):
 
 
 @pytest.mark.parametrize("filename", WITH_MAIN)
-def test_a_missing_glb_does_not_delete_the_exit_code(filename):
+def test_a_missing_glb_does_not_delete_the_exit_code(filename, tmp_path):
     """The other half of F-f5530688: `sha256_file(_args['glb'])` inside the `except` block
     raises `FileNotFoundError` on a mistyped path."""
     def raiser():
@@ -102,6 +102,7 @@ def test_a_missing_glb_does_not_delete_the_exit_code(filename):
     code, escaped = exit_code_of_main_block(
         filename, raiser=raiser,
         argv=["blender", "-b", "-P", filename, "--",
-              "--glb=E:/no/such/file/at/all.glb", "--out=nope_out"])
+              "--glb=E:/no/such/file/at/all.glb",
+              "--out=" + str(tmp_path / "out")])
     assert escaped is None, f"{filename}: {escaped!r} escaped the handler; blender exits 0"
     assert code not in (0, None), f"{filename}: exit code {code!r}"
