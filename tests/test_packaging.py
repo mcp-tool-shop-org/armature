@@ -479,118 +479,6 @@ def test_every_negation_points_at_a_path_that_exists():
     assert dead == [], f"negations pointing at nothing: {dead}"
 
 
-# -- 3b. the two ignore populations, DERIVED from the tree (F-0162b2ce) -------------------
-#
-# Both lists above are typed. A typed list is a population that stops growing the day
-# someone forgets it, and the measured defect here was exactly that shape: the ignore rule
-# read `site/node_modules/`, written for the one npm tree that existed when it was written,
-# while `npm/package.json` has carried its own `scripts.test` since v0.2.0 — run by ci.yml,
-# by release.yml and by verify.ps1 — so an `npm install` there is an ordinary local act
-# whose output was untracked AND unignored. Measured from this worktree before the fix:
-# `site/node_modules/x.js` IGNORED (.gitignore:53), `npm/node_modules/x.js` NOT IGNORED,
-# `node_modules/x.js` NOT IGNORED.
-#
-# So both populations below are read out of the tree instead: where npm can install, and
-# which registries this repository actually publishes to.
-
-
-def npm_install_roots():
-    """Every directory an `npm install` can leave a `node_modules/` in, walked from the tree.
-
-    The package manifests are enumerated (`package.json`, skipping vendored trees), plus the
-    repository root — `npm install <pkg>` in a directory with no manifest at all still
-    creates `node_modules/` there, and the root is where a maintainer types it by mistake.
-    """
-    skip = {".git", "node_modules", ".venv", ".swarm", "dist", "outputs", "__pycache__",
-            ".astro", ".pytest_cache", ".ruff_cache"}
-    roots = {""}
-    for dirpath, dirnames, filenames in os.walk(REPO):
-        dirnames[:] = [d for d in dirnames if d not in skip]
-        if "package.json" in filenames:
-            rel = os.path.relpath(dirpath, REPO).replace("\\", "/")
-            roots.add("" if rel == "." else rel)
-    return sorted(roots)
-
-
-#: Measured 2026-09-04 by the walk above. A third npm tree fails this before it fails the
-#: ignore check, so the reader learns the population changed rather than the rule.
-NPM_ROOTS_TODAY = ["", "npm", "site"]
-
-
-def test_the_npm_root_census_is_the_manifests_in_the_tree():
-    assert npm_install_roots() == NPM_ROOTS_TODAY, (
-        f"npm can install into {npm_install_roots()}; this file was written against "
-        f"{NPM_ROOTS_TODAY}")
-
-
-@requires_git
-@pytest.mark.parametrize("root", NPM_ROOTS_TODAY, ids=lambda r: r or "<repo root>")
-def test_a_dependency_tree_is_ignored_wherever_npm_can_create_one(root):
-    """A `git add -A` after a local install must not commit a dependency tree."""
-    path = (root + "/" if root else "") + "node_modules/left-pad/index.js"
-    verdict = _check_ignore([path])[path]
-    assert verdict, (
-        f"{path} is not ignored; `npm install` in {root or 'the repository root'} leaves a "
-        "dependency tree a `git add -A` would commit")
-
-
-#: The credential file each registry's own client reads, with the document that says so.
-#: The mapping is knowledge; WHICH rows apply is derived from release.yml below, and a
-#: registry with no row here fails rather than passing on an empty lookup.
-#:   npm  — https://docs.npmjs.com/cli/v11/configuring-npm/npmrc  (.npmrc)
-#:   pip/twine — https://packaging.python.org/specifications/pypirc/  (.pypirc)
-#:   both — .netrc, read by npm (`npm config` follows curl/netrc conventions for registry
-#:   auth) and by pip/twine through requests' trust_env; it is the third file a maintainer
-#:   debugging a publish by hand creates, and it was not on the list.
-REGISTRY_CARRIERS = {
-    "pypi": (".pypirc", ".netrc"),
-    "npm": (".npmrc", ".netrc"),
-}
-
-#: How each registry is recognised in the workflow that publishes to it.
-REGISTRY_MARKERS = {
-    "pypi": "gh-action-pypi-publish",
-    "npm": "npm publish",
-}
-
-
-def registries_published_to():
-    """Which registries `.github/workflows/` actually reaches, read out of the files."""
-    workflows = os.path.join(REPO, ".github", "workflows")
-    text = ""
-    for name in sorted(os.listdir(workflows)):
-        if name.endswith((".yml", ".yaml")):
-            with open(os.path.join(workflows, name), encoding="utf-8") as fh:
-                text += fh.read()
-    return sorted(r for r, marker in REGISTRY_MARKERS.items() if marker in text)
-
-
-def test_every_registry_this_repo_publishes_to_has_a_credential_row():
-    """Fail-closed: a third registry arrives with no carrier list rather than silently none."""
-    found = registries_published_to()
-    assert found, (
-        "no publish step is recognised in .github/workflows/ any more; this check and the "
-        "one below have no subject and must be retired deliberately, not left green")
-    assert set(found) <= set(REGISTRY_CARRIERS), (
-        f"{sorted(set(found) - set(REGISTRY_CARRIERS))} is published to and has no row in "
-        "REGISTRY_CARRIERS, so its credential file is covered by nothing here")
-
-
-@requires_git
-def test_the_credential_file_of_every_registry_this_repo_publishes_to_is_ignored():
-    """SECURITY.md asserts no long-lived registry token exists here; this is the backstop.
-
-    Derived, not typed: the carriers checked are the ones belonging to the registries the
-    workflows reach, so adding a third registry brings its credential file with it.
-    """
-    carriers = sorted({c for r in registries_published_to() for c in REGISTRY_CARRIERS[r]})
-    verdicts = _check_ignore(carriers)
-    missing = [p for p, pattern in verdicts.items() if not pattern]
-    assert missing == [], (
-        f"a registry credential could ride a `git add -A` in: {missing}; the registries "
-        f"published to are {registries_published_to()}")
-
-
 # -- 4. one import scan, not two that disagree (F-3a6dd108) -----------------------------
 
 CLASS_BODY = "class Thing:\n    import cv2\n"
@@ -775,3 +663,115 @@ def test_every_stub_installing_fixture_restores_what_it_imported():
             assert "armature_core" in body, (
                 f"{filename}:{fn.name}'s teardown does not name the package whose modules the "
                 f"stub makes importable")
+
+
+# -- 3b. the two ignore populations, DERIVED from the tree (F-0162b2ce) -------------------
+#
+# Both lists above are typed. A typed list is a population that stops growing the day
+# someone forgets it, and the measured defect here was exactly that shape: the ignore rule
+# read `site/node_modules/`, written for the one npm tree that existed when it was written,
+# while `npm/package.json` has carried its own `scripts.test` since v0.2.0 — run by ci.yml,
+# by release.yml and by verify.ps1 — so an `npm install` there is an ordinary local act
+# whose output was untracked AND unignored. Measured from this worktree before the fix:
+# `site/node_modules/x.js` IGNORED (.gitignore:53), `npm/node_modules/x.js` NOT IGNORED,
+# `node_modules/x.js` NOT IGNORED.
+#
+# So both populations below are read out of the tree instead: where npm can install, and
+# which registries this repository actually publishes to.
+
+
+def npm_install_roots():
+    """Every directory an `npm install` can leave a `node_modules/` in, walked from the tree.
+
+    The package manifests are enumerated (`package.json`, skipping vendored trees), plus the
+    repository root — `npm install <pkg>` in a directory with no manifest at all still
+    creates `node_modules/` there, and the root is where a maintainer types it by mistake.
+    """
+    skip = {".git", "node_modules", ".venv", ".swarm", "dist", "outputs", "__pycache__",
+            ".astro", ".pytest_cache", ".ruff_cache"}
+    roots = {""}
+    for dirpath, dirnames, filenames in os.walk(REPO):
+        dirnames[:] = [d for d in dirnames if d not in skip]
+        if "package.json" in filenames:
+            rel = os.path.relpath(dirpath, REPO).replace("\\", "/")
+            roots.add("" if rel == "." else rel)
+    return sorted(roots)
+
+
+#: Measured 2026-09-04 by the walk above. A third npm tree fails this before it fails the
+#: ignore check, so the reader learns the population changed rather than the rule.
+NPM_ROOTS_TODAY = ["", "npm", "site"]
+
+
+def test_the_npm_root_census_is_the_manifests_in_the_tree():
+    assert npm_install_roots() == NPM_ROOTS_TODAY, (
+        f"npm can install into {npm_install_roots()}; this file was written against "
+        f"{NPM_ROOTS_TODAY}")
+
+
+@requires_git
+@pytest.mark.parametrize("root", NPM_ROOTS_TODAY, ids=lambda r: r or "<repo root>")
+def test_a_dependency_tree_is_ignored_wherever_npm_can_create_one(root):
+    """A `git add -A` after a local install must not commit a dependency tree."""
+    path = (root + "/" if root else "") + "node_modules/left-pad/index.js"
+    verdict = _check_ignore([path])[path]
+    assert verdict, (
+        f"{path} is not ignored; `npm install` in {root or 'the repository root'} leaves a "
+        "dependency tree a `git add -A` would commit")
+
+
+#: The credential file each registry's own client reads, with the document that says so.
+#: The mapping is knowledge; WHICH rows apply is derived from release.yml below, and a
+#: registry with no row here fails rather than passing on an empty lookup.
+#:   npm  — https://docs.npmjs.com/cli/v11/configuring-npm/npmrc  (.npmrc)
+#:   pip/twine — https://packaging.python.org/specifications/pypirc/  (.pypirc)
+#:   both — .netrc, read by npm (`npm config` follows curl/netrc conventions for registry
+#:   auth) and by pip/twine through requests' trust_env; it is the third file a maintainer
+#:   debugging a publish by hand creates, and it was not on the list.
+REGISTRY_CARRIERS = {
+    "pypi": (".pypirc", ".netrc"),
+    "npm": (".npmrc", ".netrc"),
+}
+
+#: How each registry is recognised in the workflow that publishes to it.
+REGISTRY_MARKERS = {
+    "pypi": "gh-action-pypi-publish",
+    "npm": "npm publish",
+}
+
+
+def registries_published_to():
+    """Which registries `.github/workflows/` actually reaches, read out of the files."""
+    workflows = os.path.join(REPO, ".github", "workflows")
+    text = ""
+    for name in sorted(os.listdir(workflows)):
+        if name.endswith((".yml", ".yaml")):
+            with open(os.path.join(workflows, name), encoding="utf-8") as fh:
+                text += fh.read()
+    return sorted(r for r, marker in REGISTRY_MARKERS.items() if marker in text)
+
+
+def test_every_registry_this_repo_publishes_to_has_a_credential_row():
+    """Fail-closed: a third registry arrives with no carrier list rather than silently none."""
+    found = registries_published_to()
+    assert found, (
+        "no publish step is recognised in .github/workflows/ any more; this check and the "
+        "one below have no subject and must be retired deliberately, not left green")
+    assert set(found) <= set(REGISTRY_CARRIERS), (
+        f"{sorted(set(found) - set(REGISTRY_CARRIERS))} is published to and has no row in "
+        "REGISTRY_CARRIERS, so its credential file is covered by nothing here")
+
+
+@requires_git
+def test_the_credential_file_of_every_registry_this_repo_publishes_to_is_ignored():
+    """SECURITY.md asserts no long-lived registry token exists here; this is the backstop.
+
+    Derived, not typed: the carriers checked are the ones belonging to the registries the
+    workflows reach, so adding a third registry brings its credential file with it.
+    """
+    carriers = sorted({c for r in registries_published_to() for c in REGISTRY_CARRIERS[r]})
+    verdicts = _check_ignore(carriers)
+    missing = [p for p, pattern in verdicts.items() if not pattern]
+    assert missing == [], (
+        f"a registry credential could ride a `git add -A` in: {missing}; the registries "
+        f"published to are {registries_published_to()}")
