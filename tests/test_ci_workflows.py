@@ -718,6 +718,179 @@ def test_the_trigger_census_can_see_a_path_that_is_not_listed(tmp_path):
     assert covered(".github/actions/sheet-fonts/action.yml") is False
 
 
+# -- the build inputs that do NOT live at the repo root (F-5d2c6d28, F-65828040) ----------
+#
+# THE NODE `trigger_population()` keys on is `git ls-files -- :(top)` -- a tracked file at the
+# repo ROOT, an entry with no `/` in it. That is the right node for the population it derives
+# and it can never hold anything the suite reads one directory down. Measured 2026-09-04 by
+# resolving every `docs/` path expression under `tests/`: seven documents are consumed there
+# and TWO matched no filter in either trigger list.
+#
+#   * `docs/research-grounding.md` -- `tests/test_openpose_convention.py:46-49` asserts the
+#     document still carries F20's limbSeq verbatim, so an edit to it turns CI red. It matched
+#     no filter, so the edit ran no CI at all and the red first surfaced on an unrelated push.
+#   * `docs/assets/{logo-wide,mark-figure,E02-identity-sheet}.png` -- `tests/test_packaging.py`
+#     asserts `.gitignore`'s `!docs/assets/**` negation still re-includes them AND that no
+#     negation points at a path the tree does not have. A docs-only commit that removes that
+#     directory kills the negation, and nothing ran.
+#
+# THE SPELLING THAT HIDES. The openpose document is reached as
+# `os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs",
+# "research-grounding.md")` -- the join is rooted at a CALL, not at a module-level path
+# constant, so a walk keyed on "a join off a known root name" resolves nothing here. The
+# derivation below keys on the constants INSIDE the join, from the `"docs"` segment onward,
+# whatever the root expression is.
+
+_DOCS_LITERAL = re.compile(r"""^docs/[^\s*?"']+\.[A-Za-z0-9]+$""")
+
+
+def _trailing_constants(args, start):
+    """`args[start:]` as strings, or None if any of them is not a string constant.
+
+    A join whose tail is computed (`os.path.join(root, "docs", name)`) names no single
+    document, and guessing one would put a path this suite never opens into the requirement.
+    """
+    out = []
+    for arg in args[start:]:
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            out.append(arg.value)
+        else:
+            return None
+    return out
+
+
+def _docs_paths_the_suite_reads(tests_dir=None):
+    """Every repo path under `docs/` that a test resolves, by either spelling.
+
+    Two shapes, because the two findings arrived in two shapes:
+
+    * a join whose arguments carry `"docs"` followed by string constants, ROOTED ANYWHERE --
+      a name, a call, a subscript; the root is not read at all, which is what makes this
+      immune to the Call-rooted form that hides from a root-keyed walk;
+    * a `docs/...`-prefixed literal naming a file, wherever it appears. `tests/test_packaging.py`
+      holds the three committed figures in a module-level list and hands the LIST to
+      `_check_ignore`, so no single constant is ever an argument of a path-consuming call --
+      the repo-root census's `_PATH_CONSUMING_CALLS` rule would see none of them. A literal
+      that spells a repo subdirectory and a file extension is a path claim about this tree.
+    """
+    tests_dir = TESTS_DIR if tests_dir is None else tests_dir
+    found = set()
+    for name in sorted(os.listdir(tests_dir)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        with open(os.path.join(tests_dir, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                fn = node.func
+                fname = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
+                if fname == "join":
+                    for i, arg in enumerate(node.args):
+                        if isinstance(arg, ast.Constant) and arg.value == "docs":
+                            tail = _trailing_constants(node.args, i)
+                            if tail and len(tail) > 1:
+                                found.add("/".join(tail))
+                            break
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if _DOCS_LITERAL.match(node.value):
+                    found.add(node.value)
+    return sorted(found)
+
+
+def _covered(patterns, path):
+    """Does `path` match one of a trigger list's `paths:` entries?"""
+    return any(p == path or (p.endswith("/**") and path.startswith(p[:-3] + "/"))
+               for p in patterns)
+
+
+#: Derived 2026-09-04 (wave 12). Equality, so a test that starts reading an eighth document
+#: under `docs/` joins the trigger requirement on the day it lands rather than being guarded
+#: by a job that never runs on it.
+RECORDED_DOCS_POPULATION = [
+    "docs/assets/E02-identity-sheet.png",
+    "docs/assets/logo-wide.png",
+    "docs/assets/mark-figure.png",
+    "docs/experiments/E04-the-between-generation-floor.md",
+    "docs/index/armature.db",
+    "docs/license-map.md",
+    "docs/research-grounding.md",
+]
+
+
+def test_the_docs_population_is_derived_from_what_the_suite_resolves():
+    """Size and membership before the property, and every member must be a file that exists.
+
+    A resolved path that is not in the tree would be a requirement on a document nobody has,
+    which is how a filter list fills with entries that guard nothing.
+    """
+    pop = _docs_paths_the_suite_reads()
+    assert pop == RECORDED_DOCS_POPULATION, {
+        "appeared": sorted(set(pop) - set(RECORDED_DOCS_POPULATION)),
+        "vanished": sorted(set(RECORDED_DOCS_POPULATION) - set(pop)),
+    }
+    absent = [p for p in pop if not os.path.isfile(os.path.join(REPO, p.replace("/", os.sep)))]
+    assert absent == [], f"the suite resolves these and the tree does not carry them: {absent}"
+
+
+def test_the_docs_census_resolves_a_call_rooted_join(tmp_path):
+    """The hidden spelling, shown unmatched: a join rooted at a CALL, in a scratch tests tree.
+
+    This is the shape `tests/test_openpose_convention.py` uses and the shape a root-keyed walk
+    cannot see. The fixture also carries the list-literal form, which reaches no path-consuming
+    call at all, and a bare `'docs'` constant that names no file and must NOT enter. Both real
+    shapes must be resolved, and both must then be REJECTED by the live filter lists -- a
+    census whose members were all already covered would be a check that cannot fail.
+    """
+    # ASSEMBLED, never written as one literal: this module is itself walked by the census
+    # under test, so a fixture path spelled as a single constant here would enter the REAL
+    # population and demand a CI trigger for a document that does not exist. Neither half
+    # matches on its own -- `docs/assets/` has no extension, `hidden-spelling.md` no prefix.
+    # Neither fixture path may be one a live filter already covers, or the red direction
+    # below is a check that cannot fail: `docs/assets/**` is now listed, so the list-literal
+    # fixture takes a subdirectory nothing names.
+    doc = "docs/" + "hidden-spelling.md"
+    figure = "docs/" + "nested/hidden-figure.png"
+    scratch = tmp_path / "tests"
+    scratch.mkdir()
+    (scratch / "test_call_rooted.py").write_text(
+        "import os\n"
+        "def test_a():\n"
+        "    doc = os.path.join(os.path.dirname(os.path.abspath(__file__)), %r, %r)\n"
+        "    with open(doc) as fh:\n"
+        "        fh.read()\n" % tuple(doc.split("/")),
+        encoding="utf-8",
+    )
+    (scratch / "test_list_literal.py").write_text(
+        "FIGURES = [%r]\ndef test_b():\n    assert FIGURES\n" % figure,
+        encoding="utf-8",
+    )
+    (scratch / "test_not_a_path.py").write_text(
+        "SKIP = 'docs'\n"
+        "def test_c():\n"
+        "    assert SKIP\n",
+        encoding="utf-8",
+    )
+    got = _docs_paths_the_suite_reads(str(scratch))
+    assert got == sorted([figure, doc]), got
+    for trigger in ("push", "pull_request"):
+        uncovered = [p for p in got if not _covered(_paths_under(trigger), p)]
+        assert uncovered == got, (
+            "the requirement below cannot go red: this fixture's documents are already "
+            f"covered by {trigger}'s filters"
+        )
+
+
+@pytest.mark.parametrize("trigger", ["push", "pull_request"])
+def test_ci_runs_on_every_docs_file_the_suite_reads(trigger):
+    """The property. A test reads it, so editing it can turn CI red, so editing it must run CI."""
+    patterns = _paths_under(trigger)
+    missing = [p for p in _docs_paths_the_suite_reads() if not _covered(patterns, p)]
+    assert missing == [], (
+        f"{trigger} builds nothing when these change: {missing}; each is resolved by a test "
+        "in this suite, so the first place a breakage surfaces is an unrelated later push"
+    )
+
+
 def _code_only(script):
     """The script with `#` comment lines dropped -- naming a module in a comment is not
     reaching it, and this test is about what the leg RUNS."""
@@ -2609,3 +2782,430 @@ def test_ci_runs_on_the_licence_map(trigger):
     assert _pattern_hits(_paths_under(trigger), licence_map), (
         f"{trigger} builds nothing when {licence_map} changes, and the suite reads it by "
         f"path; the filters are {_paths_under(trigger)}")
+
+
+# -- the suite's dependency list, and the manifest's third copy of it (F-968c4c54) --------
+#
+# `[project.optional-dependencies] dev = ["pytest>=8.0"]` was the manifest's only published
+# statement of how to set up to run this suite. Nothing installed it -- measured 2026-09-04
+# by grepping `.github/**` and `verify.ps1` for a `pip install` of `.[dev]`: none -- and
+# nothing checked it. Measured from a wheel built in this worktree, `METADATA` carried
+# `Requires-Dist: pytest>=8.0; extra == "dev"` and nothing else for the extra, so an
+# installer of `armature-studio[dev]` got pytest plus the four runtime deps at their FLOORS
+# and no `build`. A contributor following the manifest then gets an opencv that is not the
+# version the aapose golden frames were measured against and reads the resulting red as a
+# code regression rather than a toolchain one; or `build` is absent and the two tests that
+# pin what the published sdist carries SKIP -- the silent-skip the repo already paid to close
+# in CI. The repo's own law is stated in `.github/actions/sheet-fonts/action.yml:9-12`: two
+# copies of one dependency list is how the font dependency forked.
+#
+# THE NODE THIS CENSUS KEYS ON: the distributions installed into the RUNNER's interpreter
+# BEFORE the step that runs pytest, in every job that runs the suite. Not "the install line
+# in ci.yml" (that is one file), and not "the four names we know about" (a census that knows
+# the answer cannot notice a fifth). Ordering is what separates the suite's environment from
+# the clean room's: `.github/actions/clean-room` installs `build` and `twine` for the leg
+# that runs AFTER the suite, and twine is an artifact-moving tool the suite never imports --
+# it is held to a version by the toolchain census above, which is its own home.
+
+
+def _suite_install_tokens(workflow, job):
+    """Distributions installed into the runner's interpreter before this job runs pytest."""
+    body = "\n".join(_job_lines(_text(workflow), job))
+    tokens = []
+    for script in _run_scripts_in(_code_only(body)):
+        # The step that RUNS the suite ends the collection. Keyed on the script's own verb
+        # and not on the token `pytest`: the install line NAMES pytest, so a search for the
+        # word alone truncates the list in the middle of the line it exists to read.
+        if "pytest" in script and "install" not in script:
+            break
+        tokens.extend(_install_tokens(script))
+    return tokens
+
+
+#: The installer itself, never a dependency of anything. Everything else on an install line
+#: that precedes the suite is a distribution the suite runs against.
+INSTALLER = {"pip"}
+
+_REQUIREMENT = re.compile(r"^([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)(.*)$")
+
+
+def _split_requirement(token):
+    """`opencv-python-headless==5.0.0.93` -> ('opencv-python-headless', '==5.0.0.93')."""
+    match = _REQUIREMENT.match(token)
+    assert match, token
+    return match.group(1).lower().replace("_", "-"), match.group(2).strip()
+
+
+def manifest_requirements():
+    """name -> set of specifiers, over the runtime deps and every extra pyproject declares."""
+    project = PYPROJECT["project"]
+    groups = [project.get("dependencies", [])]
+    groups.extend(project.get("optional-dependencies", {}).values())
+    out = {}
+    for group in groups:
+        for spec in group:
+            name, clause = _split_requirement(spec.split(";")[0].strip())
+            out.setdefault(name, set()).add(clause)
+    return out
+
+
+def test_the_suite_dependency_census_is_the_jobs_that_run_it():
+    """Size and membership before the property, and the two lists must BE one list.
+
+    Two jobs run the suite; both install before it; and the whole point of the finding is
+    that a list with two copies forks. Comparing them here is what makes "one list" a
+    mechanical claim rather than a comment in release.yml.
+    """
+    jobs = jobs_that_run_the_suite()
+    assert sorted(jobs) == [("ci.yml", "python-tests"), ("release.yml", "verify")], jobs
+    lists = {f"{w}:{j}": _suite_install_tokens(w, j) for w, j in jobs}
+    assert all(lists.values()), lists
+    # Sorted: the claim is the distributions and their specifiers, not the order pip is
+    # handed them. Measured 2026-09-04, the two lines differ only in where `pytest` sits,
+    # and asserting on that would be asserting something that is not load-bearing.
+    distinct = {tuple(sorted(v)) for v in lists.values()}
+    assert len(distinct) == 1, (
+        f"the two jobs that run the suite install different things: {lists}; two copies of "
+        "one dependency list is how the font dependency forked"
+    )
+
+
+def test_the_manifest_states_the_dependency_list_the_suite_runs_against():
+    """Every distribution CI installs for the suite is required by the package, at CI's pin.
+
+    The direction that costs: a contributor or a downstream packager follows the manifest,
+    gets an opencv that is not the version the golden frames were measured against, and reads
+    the red as a code regression. The extra is not installed by CI -- CI's line is the one
+    that runs -- so this test is what stops the two from drifting, exactly as the `build`
+    specifier is already held to one string across three files.
+    """
+    declared = manifest_requirements()
+    problems = []
+    for workflow, job in jobs_that_run_the_suite():
+        for token in _suite_install_tokens(workflow, job):
+            name, clause = _split_requirement(token)
+            if name in INSTALLER:
+                continue
+            if name not in declared:
+                problems.append(f"{workflow}:{job} installs {token!r}; pyproject requires no {name!r}")
+            elif clause and clause not in declared[name]:
+                problems.append(
+                    f"{workflow}:{job} installs {token!r}; pyproject requires {name!r} at "
+                    f"{sorted(declared[name])} -- the pin CI runs is not the one the manifest publishes"
+                )
+    assert problems == [], "; ".join(problems)
+
+
+def test_the_dependency_census_goes_red_on_a_forked_pin_and_on_a_name_it_never_heard_of():
+    """The two hidden spellings, both driven through the real comparison.
+
+    A pin that MOVED in CI and a distribution CI installs that the manifest never names are
+    different failures, and a census keyed on the four names it was written against would see
+    neither. Driven on synthetic install lines rather than on the tree, because the tree is
+    the state this test exists to keep green.
+    """
+    declared = manifest_requirements()
+
+    def unstated(line):
+        out = []
+        for token in _install_tokens(line):
+            name, clause = _split_requirement(token)
+            if name in INSTALLER:
+                continue
+            if name not in declared or (clause and clause not in declared[name]):
+                out.append(token)
+        return out
+
+    assert unstated("python -m pip install --upgrade pip\n") == []
+    assert unstated("python -m pip install matplotlib==3.12.0\n") == ["matplotlib==3.12.0"]
+    assert unstated("python -m pip install scipy==1.0\n") == ["scipy==1.0"]
+    assert unstated("python -m pip install numpy pillow pytest\n") == []
+
+
+# -- no CI step decides an answer with a pipeline that can be signalled (F-00cc7a26) ------
+#
+# `.github/actions/sheet-fonts/action.yml:38-39` already refuses to write one, and says why:
+# "No pipelines: `shell: bash` runs with `-o pipefail`, and `find` over a directory that does
+# not exist on this image would then decide the answer instead of the face." The npm clean
+# room carried the one pipeline in the three composite actions --
+# `TARBALL="$PWD/$(ls -1 ./*.tgz | head -1)"` -- under `shell: bash` (GitHub runs
+# `bash --noprofile --norc -eo pipefail {0}`) plus its own `set -eu`.
+#
+# `head -1` closes the pipe after the first line, so `ls` can be signalled (141); under
+# pipefail the command substitution then fails and `set -e` aborts the step with nothing said
+# about tarballs. The window is small -- one short line usually clears the pipe buffer before
+# `head` exits -- which is exactly what makes it the bad kind of failure: a rare red on the
+# gate that stands between the npm package and an irreversible publish, indistinguishable
+# from a real packaging break, green on the retry. WITHOUT pipefail the same shape is the
+# other defect: the pipeline reports the READER's status and a failing writer is swallowed.
+# Both directions are why the rule is "no short-circuiting reader at the end of a pipeline"
+# rather than "no pipeline when pipefail is set".
+#
+# THE NODE THIS CENSUS KEYS ON: the LAST stage of every pipeline in every `run:` script under
+# `.github/` -- workflows and composite actions both, enumerated by `_all_run_scripts()`, so
+# a step added to a fourth workflow or a second action is held the day it lands. Not the
+# token `head -1`: `head -n 1`, `grep -q`, `read` and `sed`'s `q` end a pipe the same way,
+# and a census that recognised one spelling would have passed on the other three.
+
+#: Readers that can close the pipe while the writer is still producing. Each ends the
+#: pipeline early BY DESIGN -- that is what they are for -- so each can leave the writer with
+#: SIGPIPE and the pipeline with a status that describes the plumbing rather than the work.
+SHORT_CIRCUITING_READERS = frozenset({"head", "grep", "read", "sed", "first", "q"})
+
+
+def _pipeline_last_stages(script):
+    """(line, last stage) for every pipeline in a script, comment lines dropped.
+
+    `||` is not a pipe and is not split on. A pipeline continued over a line break (a line
+    ending in `|`) is joined first, because a census that read one physical line at a time
+    would see the writer and never the reader.
+    """
+    joined, buffer = [], ""
+    for raw in _code_only(script).splitlines():
+        line = buffer + raw
+        buffer = ""
+        stripped = line.rstrip()
+        if stripped.endswith("|") and not stripped.endswith("||"):
+            buffer = stripped + " "
+            continue
+        joined.append(line)
+    if buffer:
+        joined.append(buffer)
+
+    out = []
+    for line in joined:
+        stages, current, i = [], "", 0
+        while i < len(line):
+            if line[i] == "|":
+                if i + 1 < len(line) and line[i + 1] == "|":
+                    current += "||"
+                    i += 2
+                    continue
+                stages.append(current)
+                current = ""
+                i += 1
+                continue
+            current += line[i]
+            i += 1
+        stages.append(current)
+        if len(stages) > 1:
+            out.append((line.strip(), stages[-1].strip()))
+    return out
+
+
+def _reader_word(stage):
+    """The command word of a pipeline's last stage, unwrapped from `$( ... )` and quotes."""
+    text = stage.strip().strip(")").strip('"').strip("'").strip()
+    for token in text.split():
+        word = token.strip("$(){}\"';").split("/")[-1]
+        if word and not word.startswith("-"):
+            return word
+    return ""
+
+
+def _signalling_pipelines(script):
+    """Every pipeline in a script whose last stage is a short-circuiting reader."""
+    return [line for line, last in _pipeline_last_stages(script)
+            if _reader_word(last) in SHORT_CIRCUITING_READERS]
+
+
+def test_the_pipeline_census_is_every_run_script_under_dot_github():
+    """Size and membership before the property: the walk must see the actions, not just the
+    workflows -- the one pipeline this finding named lived in a composite action."""
+    sources = {source for source, _ in _all_run_scripts()}
+    assert sources >= {
+        "ci.yml", "release.yml",
+        ".github/actions/npm-clean-room/action.yml",
+        ".github/actions/sheet-fonts/action.yml",
+    }, sorted(sources)
+    assert len(_all_run_scripts()) >= 10, len(_all_run_scripts())
+
+
+_RUN_SCRIPTS = _all_run_scripts()
+
+
+@pytest.mark.parametrize(
+    "source,script", _RUN_SCRIPTS,
+    ids=[f"{source}#{i}" for i, (source, _) in enumerate(_RUN_SCRIPTS)],
+)
+def test_no_ci_step_reads_an_answer_off_a_pipeline_that_can_be_signalled(source, script):
+    """The property, over every run script in the tree."""
+    offenders = _signalling_pipelines(script)
+    assert offenders == [], (
+        f"{source} decides something with a pipeline whose reader can close the pipe: "
+        f"{offenders}; under pipefail the writer's SIGPIPE aborts the step with nothing said "
+        "about what it was doing, and without pipefail the writer's failure is swallowed"
+    )
+
+
+def test_the_pipeline_census_sees_the_spellings_it_was_not_written_against():
+    """The hidden spellings, shown red; and the shapes that must NOT be flagged.
+
+    `head -1` is the one the finding named. `head -n 1`, `grep -q`, a `read` at the end of a
+    pipe and `sed` are the same behaviour under other spellings, and a pipeline continued
+    across a line break hides the reader from any line-at-a-time walk. `||` is not a pipe,
+    and a last stage that consumes its whole input (`sort`, `wc`) ends nothing early.
+    """
+    red = [
+        'TARBALL="$PWD/$(ls -1 ./*.tgz | head -1)"',
+        'X=$(ls | head -n 1)',
+        'ls | grep -q armature',
+        'printf x | read v',
+        'cat f | sed -n 1p',
+        'ls \\\n  | head -1',
+        'ls |\n  head -1',
+    ]
+    for script in red:
+        assert _signalling_pipelines(script), f"not seen as a signalling pipeline: {script!r}"
+    green = [
+        'ls -la "$PREFIX/node_modules/.bin" || echo "(no node_modules/.bin at all)"',
+        'find /usr/share/fonts -iname "$1" -print -quit 2>/dev/null || true',
+        'ls | sort',
+        'npm pack',
+        'set -- ./*.tgz',
+        '# a comment naming ls | head -1',
+    ]
+    for script in green:
+        assert _signalling_pipelines(script) == [], f"flagged wrongly: {script!r}"
+
+
+# -- a workflow does not cancel a step it cannot take back (F-d43de3e8) -------------------
+#
+# `concurrency.cancel-in-progress` is WORKFLOW-level: a second push cancels the first run
+# wherever it is, including inside the step that performs the act. pages.yml carried `true`
+# over a job whose one step is `actions/deploy-pages` -- the step this file's own header
+# calls "the step that replaces what the public sees" -- so two quick site pushes could leave
+# a Pages deployment cancelled part-way, the live site on the older build, and the cancelled
+# run GREY rather than red: a deploy that did not happen with nothing reporting a failure.
+# release.yml already sets `false` on the workflow whose steps cannot be taken back, and no
+# comment in pages.yml recorded a decision either way.
+#
+# A job-level `concurrency:` block does NOT close this: workflow-level cancellation cancels
+# the whole run regardless, which is why the setting has to be decided where it is written.
+#
+# This is a deliberate-deviation question, not a rule violation. The studio Actions rule
+# mandates the concurrency block with `cancel-in-progress: true`, and GitHub's own Pages
+# guidance is the documented exception. So the rule below is the studio's, with the exception
+# stated in terms of the ACT rather than the filename: a workflow that performs something
+# irreversible queues, everything else cancels.
+#
+# THE NODE THIS CENSUS KEYS ON: the STEP that performs the act, in either spelling. A
+# published npm package is `run: npm publish` (a script), a PyPI upload and a Pages deploy
+# are `uses:` a third-party action. A census that recognised only `uses:` would pass on
+# release.yml's npm job, and one that read only `run:` would pass on both of the others.
+
+#: Acts with no compensator, by what they DO. `git push` is here for the tag half: a pushed
+#: tag is what release.yml's whole gate ordering exists to protect.
+IRREVERSIBLE_RUN_TOKENS = (
+    "npm publish", "twine upload", "gh release create", "git push", "docker push",
+)
+IRREVERSIBLE_ACTIONS = ("actions/deploy-pages", "gh-action-pypi-publish")
+
+
+def irreversible_steps(text):
+    """Every step in a workflow that performs an act with no compensator, both spellings."""
+    found = []
+    for source in _run_scripts_in(text):
+        for token in IRREVERSIBLE_RUN_TOKENS:
+            if token in _code_only(source):
+                found.append(token)
+    for line in text.splitlines():
+        match = re.search(r"uses:\s*(\S+)", line)
+        if not match:
+            continue
+        for action in IRREVERSIBLE_ACTIONS:
+            if action in match.group(1):
+                found.append(action)
+    return sorted(set(found))
+
+
+def cancel_in_progress(text):
+    """The workflow-level `cancel-in-progress` value, or None if the block does not set one."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.rstrip() != "concurrency:":
+            continue
+        for entry in block_at(lines, i):
+            match = re.match(r"\s*cancel-in-progress:\s*(\S+)", entry)
+            if match:
+                return match.group(1).strip().lower() == "true"
+        return None
+    return None
+
+
+#: Re-derived 2026-09-04 (wave 12). Equality, so a workflow that starts publishing something
+#: joins the requirement on the day the step lands.
+RECORDED_IRREVERSIBLE_WORKFLOWS = {
+    "ci.yml": [],
+    "pages.yml": ["actions/deploy-pages"],
+    "release.yml": ["gh-action-pypi-publish", "npm publish"],
+}
+
+
+def test_the_irreversible_step_census_is_the_acts_in_the_files():
+    """Size and membership before the property, in both spellings.
+
+    release.yml is the proof that both halves of the walk are live: its PyPI upload is a
+    `uses:` and its npm publish is a `run:`, and a census that read one of the two would
+    still have looked green here.
+    """
+    got = {name: irreversible_steps(_text(name)) for name in workflow_files()}
+    assert got == RECORDED_IRREVERSIBLE_WORKFLOWS, got
+
+
+@pytest.mark.parametrize("workflow", workflow_files())
+def test_every_workflow_states_a_concurrency_decision(workflow):
+    """The studio rule's block is mandatory, and a missing value is not a decision."""
+    assert cancel_in_progress(_text(workflow)) is not None, (
+        f"{workflow} has no workflow-level `cancel-in-progress`; the studio Actions rule "
+        "requires the concurrency block, and an unset value is whatever GitHub defaults to"
+    )
+
+
+@pytest.mark.parametrize("workflow", workflow_files())
+def test_a_workflow_that_cannot_take_a_step_back_queues_rather_than_cancels(workflow):
+    """The property: irreversible work queues; everything else cancels, per the studio rule."""
+    text = _text(workflow)
+    acts = irreversible_steps(text)
+    cancels = cancel_in_progress(text)
+    if acts:
+        assert cancels is False, (
+            f"{workflow} performs {acts} and cancels itself in progress; a second push "
+            "cancels the first run wherever it is, and a cancelled run is grey rather than "
+            "red -- the act did not happen and nothing reports a failure"
+        )
+    else:
+        assert cancels is True, (
+            f"{workflow} takes nothing back and does not cancel in progress; the studio "
+            "Actions rule mandates `cancel-in-progress: true` where it is safe, and CI "
+            "minutes spent on a superseded commit are minutes"
+        )
+
+
+def test_the_concurrency_census_reads_both_spellings_and_the_setting_itself():
+    """The hidden spellings, driven through the real functions on synthetic workflows."""
+    as_action = (
+        "name: x\nconcurrency:\n  group: g\n  cancel-in-progress: true\njobs:\n"
+        "  deploy:\n    steps:\n      - uses: actions/deploy-pages@abc123 # v4.0.5\n"
+    )
+    as_script = (
+        "name: x\nconcurrency:\n  group: g\n  cancel-in-progress: true\njobs:\n"
+        "  publish:\n    steps:\n      - name: publish\n        run: |\n"
+        "          npm publish --provenance\n"
+    )
+    commented = (
+        "name: x\nconcurrency:\n  group: g\n  cancel-in-progress: true\njobs:\n"
+        "  safe:\n    steps:\n      - name: safe\n        run: |\n"
+        "          # npm publish is what release.yml does\n"
+        "          echo nothing\n"
+    )
+    no_block = (
+        "name: x\njobs:\n  safe:\n    steps:\n      - name: s\n        run: echo nothing\n"
+    )
+    assert irreversible_steps(as_action) == ["actions/deploy-pages"]
+    assert irreversible_steps(as_script) == ["npm publish"]
+    assert irreversible_steps(commented) == [], (
+        "naming an act in a comment is not performing it")
+    assert cancel_in_progress(as_action) is True
+    assert cancel_in_progress(as_script.replace("true", "false")) is False
+    assert cancel_in_progress(no_block) is None

@@ -413,7 +413,15 @@ def test_the_halt_is_armed_by_the_legs_that_were_selected(tmp_path):
     root = _scratch_verify(tmp_path)
     got = _run_verify(root, "-NoSite", path=STRIPPED_PATH)
     assert got.returncode == 2, f"exit {got.returncode}\n{got.stdout}\n{got.stderr}"
-    assert "node" in got.stdout, got.stdout
+    # BOTH, and the second half is the one that was never written. Leg 3 gained the npm clean
+    # room in wave 10 -- `npm pack --silent` and `npm install --prefix` -- and `$needed` did
+    # not move with it, so this guard stayed green while `-NoSite` on a box with node and no
+    # npm ran both pytest legs and the whole build / twine / clean-venv / wheel-probe sequence
+    # before dying at `npm pack`. The requirement is derived rather than typed by
+    # `test_the_preflight_requires_every_tool_the_selected_legs_shell_out_to` below; this
+    # test is the end-to-end half, run against the real script with node and npm off PATH.
+    for name in ("node", "npm"):
+        assert name in got.stdout, f"the halt did not name {name}:\n{got.stdout}"
 
 
 # -- the local site leg scans before it installs, the way CI does (F-a495cc98) -------------
@@ -571,3 +579,355 @@ def test_the_local_npm_clean_room_check_goes_red_on_the_leg_this_script_had():
         "npm pack --silent\nnpm install --prefix $npmroom $tarball.FullName"), (
         "installing without invoking the shim reads as a clean install; that is the exact "
         "state where npm reported `added 1 package` and made no bin directory")
+
+
+# -- the pre-flight requires what the SELECTED legs shell out to (F-329a630d) --------------
+#
+# The halt's own comment says the legs that shell out to node and npm "halt up front rather
+# than discovering it mid-run", and that "Only the tools the SELECTED legs need are required".
+# Both clauses were held by a hand-written pair of lines and by one assertion that named
+# `node`. Leg 3 gained the npm clean room in wave 10 -- `npm pack --silent` at verify.ps1:275
+# and `npm install --prefix $npmroom` at :287 -- and the requirement list did not move with
+# it. Measured by lifting the construction verbatim into pwsh and evaluating all four flag
+# combinations: `(no flags)` -> node, npm; `-NoSite` -> node ONLY; `-NoPackage` -> node, npm;
+# `-NoSite -NoPackage` -> (none).
+#
+# THE NODE THIS CENSUS KEYS ON: the external commands a leg's BODY invokes, read out of
+# PowerShell's own parser -- every `CommandAst` under the leg's script block whose command
+# name does not resolve to a cmdlet, function or alias. Not the two names `node` and `npm`:
+# a leg that starts shelling out to a third tool has to move the requirement with it, and a
+# census that knows the answer in advance cannot notice that. `& $python` resolves to no
+# command name at all (the interpreter is a variable, and it has its own halt above).
+#
+# MEASURED AND NOT CHANGED (2026-09-04): the requirement is a SUPERSET under `-NoPackage`.
+# Leg 4 invokes `npm` three times and `node` never, and line 150 asks for both. Requiring
+# `node` for a leg that never names it is the mirror defect, but npm IS node -- no box has
+# one without the other -- so the over-requirement cannot halt a run that would have worked,
+# and this census asserts the direction that can: every tool a selected leg needs is
+# required. The other direction is bounded by the two clauses below it.
+
+import json
+
+
+def _pwsh_json(script):
+    """Run a PowerShell script and read the JSON on its stdout."""
+    got = subprocess.run(
+        [PWSH, "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    assert got.returncode == 0, f"pwsh exited {got.returncode}\n{got.stdout}\n{got.stderr}"
+    return json.loads(got.stdout)
+
+
+_LEG_AST_SCRIPT = r"""
+$ErrorActionPreference = 'Stop'
+$path = '%s'
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+$legs = $ast.FindAll({
+    param($n)
+    $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Invoke-Leg'
+}, $true)
+$out = New-Object System.Collections.ArrayList
+foreach ($leg in $legs) {
+    $elems = $leg.CommandElements
+    $name = $null
+    for ($i = 0; $i -lt $elems.Count; $i++) {
+        if ($elems[$i] -is [System.Management.Automation.Language.CommandParameterAst] -and
+            $elems[$i].ParameterName -eq 'Name' -and ($i + 1) -lt $elems.Count) {
+            $name = $elems[$i + 1].Value
+        }
+    }
+    $body = $elems | Where-Object {
+        $_ -is [System.Management.Automation.Language.ScriptBlockExpressionAst]
+    } | Select-Object -First 1
+    $cmds = New-Object System.Collections.ArrayList
+    if ($body) {
+        foreach ($c in $body.FindAll({
+            param($n) $n -is [System.Management.Automation.Language.CommandAst]
+        }, $true)) {
+            $cn = $c.GetCommandName()
+            if (-not $cn) { continue }
+            # An external is anything PowerShell does not provide ITSELF. Keyed that way and
+            # not on `-eq 'Application'`: `Get-Command npm` resolves to `npm.ps1` on this rig
+            # (CommandType ExternalScript), so an Application-only test read the site leg as
+            # shelling out to nothing at all. A name that resolves to nothing is external too
+            # -- that is precisely the state the halt exists for.
+            $resolved = Get-Command $cn -ErrorAction SilentlyContinue
+            $internal = @('Cmdlet', 'Function', 'Alias', 'Filter', 'Configuration')
+            if ($resolved -and $internal -contains [string]$resolved.CommandType) { continue }
+            [void]$cmds.Add($cn)
+        }
+    }
+    $guard = $null
+    $inElse = $false
+    $node = $leg.Parent
+    while ($null -ne $node) {
+        if ($node -is [System.Management.Automation.Language.IfStatementAst]) {
+            if ($node.Clauses[0].Item1.Extent.Text -match '\$(No\w+)') { $guard = $Matches[1] }
+            if ($node.ElseClause -and
+                $node.ElseClause.Extent.StartOffset -le $leg.Extent.StartOffset -and
+                $node.ElseClause.Extent.EndOffset -ge $leg.Extent.EndOffset) { $inElse = $true }
+            break
+        }
+        $node = $node.Parent
+    }
+    [void]$out.Add([pscustomobject]@{
+        name = $name
+        commands = @($cmds | Sort-Object -Unique)
+        guard = $guard
+        skipped_by_the_flag = $inElse
+    })
+}
+ConvertTo-Json -InputObject @($out) -Depth 6
+"""
+
+
+def leg_externals(script_path=None):
+    """(leg name -> {commands, guard, skipped_by_the_flag}) read out of PowerShell's parser."""
+    script_path = VERIFY_PATH if script_path is None else script_path
+    rows = _pwsh_json(_LEG_AST_SCRIPT % str(script_path).replace("'", "''"))
+    return {row["name"]: row for row in rows}
+
+
+def preflight_source(text=None):
+    """The `$needed` construction, lifted verbatim between its two anchors.
+
+    Lifted rather than re-typed for the same reason `Invoke-Leg` is: a requirement list
+    written here would prove something about the copy. The end anchor is `$absent`, the
+    statement that CONSUMES the list.
+    """
+    text = VERIFY if text is None else text
+    start = text.index("$needed = @()")
+    end = text.index("$absent = @(", start)
+    return text[start:end]
+
+
+def preflight_requirements(no_site, no_package, text=None):
+    """What the real pre-flight would demand under one flag combination."""
+    body = preflight_source(text).replace("'", "''")
+    script = (
+        f"$NoSite = ${str(bool(no_site)).lower()}; "
+        f"$NoPackage = ${str(bool(no_package)).lower()}\n"
+        f"{preflight_source(text)}\n"
+        "ConvertTo-Json -InputObject @(@($needed) | Sort-Object -Unique) -Depth 3\n"
+    )
+    assert body  # the lift found something
+    return set(_pwsh_json(script))
+
+
+def _selected_legs(no_site, no_package, script_path=None):
+    """The legs that RUN under one flag combination, by the guard each sits under."""
+    flags = {"NoSite": bool(no_site), "NoPackage": bool(no_package)}
+    out = {}
+    for name, row in leg_externals(script_path).items():
+        guard = row["guard"]
+        if guard is None:
+            out[name] = row
+            continue
+        held = flags.get(guard)
+        assert held is not None, f"leg {name!r} is guarded by an unknown switch ${guard}"
+        if row["skipped_by_the_flag"] != held:
+            out[name] = row
+    return out
+
+
+COMBINATIONS = [(False, False), (True, False), (False, True), (True, True)]
+
+
+@needs_pwsh
+def test_the_leg_census_reads_the_real_script_and_finds_the_shell_outs():
+    """Size and membership before the property: four legs, and the two that shell out.
+
+    An empty command list on leg 3 or leg 4 would make every assertion below vacuous, which
+    is the shape a census fails in without going red.
+    """
+    legs = leg_externals()
+    assert len(legs) == 4, sorted(legs)
+    package = [row for name, row in legs.items() if row["guard"] == "NoPackage"]
+    site = [row for name, row in legs.items() if row["guard"] == "NoSite"]
+    assert len(package) == 1 and len(site) == 1, sorted(
+        (name, row["guard"]) for name, row in legs.items())
+    assert set(package[0]["commands"]) == {"node", "npm"}, package[0]
+    assert set(site[0]["commands"]) == {"npm"}, site[0]
+    # The two pytest legs shell out to nothing: `& $python` is a variable, and the missing
+    # interpreter has its own halt above this one.
+    unguarded = [row for row in legs.values() if row["guard"] is None]
+    assert len(unguarded) == 2 and all(row["commands"] == [] for row in unguarded), unguarded
+
+
+@needs_pwsh
+@pytest.mark.parametrize("no_site,no_package", COMBINATIONS)
+def test_the_preflight_requires_every_tool_the_selected_legs_shell_out_to(no_site, no_package):
+    """The invariant the halt claims, over all four flag combinations.
+
+    The direction that costs: a tool a selected leg needs and the pre-flight does not require
+    is a run that pays for both pytest legs and the whole build sequence before dying at the
+    command, recorded honestly as `FAIL (the leg established no outcome)` -- after paying the
+    cost the up-front halt exists to avoid, on a run the operator has to read backwards.
+    """
+    needed = preflight_requirements(no_site, no_package)
+    selected = _selected_legs(no_site, no_package)
+    for name, row in sorted(selected.items()):
+        missing = sorted(set(row["commands"]) - needed)
+        assert missing == [], (
+            f"leg {name!r} runs under (-NoSite={no_site}, -NoPackage={no_package}) and shells "
+            f"out to {missing}, which the pre-flight does not require: {sorted(needed)}"
+        )
+
+
+@needs_pwsh
+def test_the_preflight_requires_nothing_no_leg_anywhere_shells_out_to():
+    """The other direction, bounded: a required tool must be one SOME leg actually invokes.
+
+    `$needed += 'git'` would otherwise halt a legitimate run on a tool this script never runs.
+    """
+    everything = set()
+    for row in leg_externals().values():
+        everything.update(row["commands"])
+    for no_site, no_package in COMBINATIONS:
+        stray = sorted(preflight_requirements(no_site, no_package) - everything)
+        assert stray == [], (
+            f"(-NoSite={no_site}, -NoPackage={no_package}) requires {stray}; no leg in this "
+            f"script invokes them, and the legs invoke {sorted(everything)}"
+        )
+
+
+@needs_pwsh
+def test_the_requirement_census_goes_red_on_a_third_tool_under_a_name_it_was_not_told(tmp_path):
+    """The hidden spelling: a leg that starts shelling out to something not called node or npm.
+
+    A census keyed on the two names in the list can only ever re-confirm the list. This drives
+    the real derivation over a scratch copy of verify.ps1 whose package leg gains a `git`
+    invocation, and asserts BOTH halves: the walk sees the new command, and the comparison
+    goes red on it. Written with `git` because it is a real external the parser will classify
+    as an Application on this rig and no line of verify.ps1 names.
+    """
+    mutated = VERIFY.replace(
+        "            & $python -m pip install --quiet 'build>=1.5,<2' 'twine>=7,<8'",
+        "            git rev-parse HEAD\n"
+        "            & $python -m pip install --quiet 'build>=1.5,<2' 'twine>=7,<8'",
+        1,
+    )
+    assert mutated != VERIFY, "the package leg no longer has the line this mutation hangs on"
+    scratch = tmp_path / "verify.ps1"
+    scratch.write_text(mutated, encoding="utf-8")
+
+    legs = leg_externals(str(scratch))
+    package = [row for row in legs.values() if row["guard"] == "NoPackage"]
+    assert len(package) == 1 and "git" in package[0]["commands"], package
+
+    selected = _selected_legs(False, False, str(scratch))
+    needed = preflight_requirements(False, False, mutated)
+    missing = sorted(
+        {c for row in selected.values() for c in row["commands"]} - needed)
+    assert missing == ["git"], (
+        f"the derivation did not go red on a leg's new shell-out; missing={missing}, "
+        f"needed={sorted(needed)}"
+    )
+
+
+# -- the interpreter the local claim is made on (F-857aa2fa) ------------------------------
+#
+# The DESCRIPTION's equivalence sentence -- "The legs are the same ones
+# `.github/workflows/ci.yml` runs, in the same order and with the same meaning, so a green
+# local run and a green CI run are the same claim" -- is true of the LEGS and false on the
+# interpreter axis, and that axis moved in wave 10. verify.ps1 runs every Python leg on
+# `$repo\.venv\Scripts\python.exe`; measured on this rig 2026-09-04 that interpreter is
+# Python 3.14.5. ci.yml's `python-tests` job runs a two-entry matrix of ["3.11", "3.13"] and
+# release.yml's release gate runs "3.13" -- so the interpreter the local claim is made on is
+# one no CI job runs, and is above the top classifier pyproject declares. The rest of the
+# equivalence is machine-held (the build/twine specifiers are read out of the clean-room
+# action by this file), which is what makes the remaining gap worth naming.
+#
+# Two halves, because the finding has two: the prose must not sell an equivalence it does not
+# have, and the RUN must state which interpreter it was made on. The second is the one a
+# reader can act on -- a summary that names the interpreter turns "CI will be green" into a
+# checkable claim.
+
+DESCRIPTION = VERIFY[VERIFY.index(".DESCRIPTION"):VERIFY.index(".PARAMETER")]
+
+
+def _paragraphs(text):
+    """Blank-line-separated paragraphs, whitespace collapsed."""
+    out, current = [], []
+    for line in text.splitlines():
+        if line.strip():
+            current.append(line.strip())
+        elif current:
+            out.append(" ".join(current))
+            current = []
+    if current:
+        out.append(" ".join(current))
+    return out
+
+
+def test_the_equivalence_claim_names_the_axis_it_does_not_hold_on():
+    """The paragraph that sells the equivalence must name the interpreter.
+
+    Keyed on the paragraph rather than on a sentence: the qualification is a clause about a
+    different subject and reads as its own sentence, and a check that demanded both words in
+    one sentence would be a check on punctuation.
+    """
+    claiming = [p for p in _paragraphs(DESCRIPTION) if "same claim" in p]
+    assert len(claiming) == 1, [p[:80] for p in _paragraphs(DESCRIPTION)]
+    assert "interpreter" in claiming[0].lower(), (
+        "the DESCRIPTION equates a green local run with a green CI run and says nothing "
+        "about the interpreter, which is the axis on which they are NOT the same claim: "
+        f"{claiming[0]}"
+    )
+
+
+@needs_pwsh
+def test_the_summary_states_which_interpreter_the_claim_was_made_on(tmp_path):
+    """The run itself must say which interpreter it ran, honestly when it cannot read one.
+
+    Driven on the scratch fixture, whose `.venv\\Scripts\\python.exe` is an empty file: the
+    legs fail, which is the point -- the summary block prints for a failing run too, and the
+    interpreter line has to be there for the operator reading a red run backwards. A version
+    that cannot be read is reported as unreadable and never guessed at.
+    """
+    root = _scratch_verify(tmp_path)
+    got = _run_verify(root, "-NoSite", "-NoPackage")
+    out = got.stdout or ""
+    assert "interpreter:" in out, (
+        f"the summary does not say which interpreter the legs ran on:\n{out}"
+    )
+    line = [ln for ln in out.splitlines() if "interpreter:" in ln][0]
+    assert ".venv" in line, f"the interpreter line does not name the interpreter: {line!r}"
+    assert "unreadable" in line, (
+        "the fixture's interpreter is an empty file, so no version can be read from it; the "
+        f"line must say so rather than print something: {line!r}"
+    )
+
+
+@needs_pwsh
+def test_the_interpreter_line_reports_a_version_it_can_read(tmp_path):
+    """The other direction: given a real interpreter, the line carries its version.
+
+    A line that always said "unreadable" would be a check that cannot fail, and this is the
+    half the operator actually reads.
+    """
+    root = _scratch_verify(tmp_path, interpreter=False)
+    if os.name == "nt":
+        # A COPIED venv `python.exe` is not a working interpreter -- it resolves its prefix
+        # from its own location and finds no `pyvenv.cfg`, so it reports nothing and this
+        # test would have asserted "unreadable" in both directions. `venv --without-pip` is
+        # a real interpreter at the path the script looks for, built from this one, and
+        # needs no index.
+        made = subprocess.run(
+            [sys.executable, "-m", "venv", "--without-pip", str(root / ".venv")],
+            capture_output=True, text=True,
+        )
+        assert made.returncode == 0, made.stdout + made.stderr
+    else:
+        # `Join-Path` leaves the backslashes alone on a POSIX host, so the script looks for a
+        # file whose NAME contains them (the same shape `_scratch_verify` writes).
+        os.symlink(sys.executable, root / r".venv\Scripts\python.exe")
+    got = _run_verify(root, "-NoSite", "-NoPackage")
+    out = got.stdout or ""
+    line = [ln for ln in out.splitlines() if "interpreter:" in ln]
+    assert line, f"no interpreter line at all:\n{out}"
+    expected = "%d.%d.%d" % sys.version_info[:3]
+    assert expected in line[0], (
+        f"the summary reports no readable version for a real interpreter: {line[0]!r}"
+    )

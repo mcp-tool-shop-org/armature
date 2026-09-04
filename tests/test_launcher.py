@@ -203,3 +203,129 @@ def test_the_not_found_message_still_fires_when_nothing_was_found(tmp_path):
     assert got.returncode == 127, got.stdout + got.stderr
     assert "could not run" in got.stderr or "not importable" in got.stderr, got.stderr
     assert str(tmp_path / "no-such-interpreter") in got.stderr, got.stderr
+
+
+# -- a killed child is not a crash (F-46fe7537) -------------------------------------------
+#
+# `child.on("exit", (code, signal) => process.exit(signal ? 1 : code ?? 0))` collapsed every
+# signal death of the Python child into exit 1. The comment on the line above states the
+# contract it keeps -- "inherit the child's exit code, so a gate that raises in Python still
+# fails the shell that called this launcher" -- and that half worked. What was lost is the
+# distinction the rest of this repo spends effort on: 2 is a refusal, 1 is a crash
+# (`tests/test_packaging.py` pins that convention on the CPU tools), and a child killed by
+# SIGKILL -- the realistic case being the OOM killer during a frame or GLB pass -- arrived at
+# the caller as 1, byte-identical to an ordinary Python traceback. A wrapper that retries a
+# crash and halts on a kill cannot tell them apart, so an OOM-killed run is retried into the
+# same wall and nothing on the caller's side names the signal.
+#
+# 128 + N is the shell convention, and it is what a caller already knows how to read.
+
+SIGNAL_MAP_MARKER = "function exitCodeFor("
+
+
+@requires_node
+def test_a_signal_death_is_reported_as_the_shell_convention_and_not_as_a_crash(tmp_path):
+    """The mapping, driven through the launcher's own function rather than a copy of it."""
+    got = _drive_head(
+        tmp_path,
+        'const out = {};\n'
+        'for (const s of ["SIGKILL", "SIGTERM", "SIGINT"]) out[s] = exitCodeFor(null, s);\n'
+        'out.clean = exitCodeFor(0, null);\n'
+        'out.refusal = exitCodeFor(2, null);\n'
+        'out.crash = exitCodeFor(1, null);\n'
+        'out.no_code_at_all = exitCodeFor(null, null);\n'
+        'process.stdout.write(JSON.stringify(out));\n',
+    )
+    assert got.returncode == 0, f"stdout: {got.stdout}\nstderr: {got.stderr}"
+    payload = json.loads(got.stdout)
+    assert payload["SIGKILL"] == 137, payload
+    assert payload["SIGTERM"] == 143, payload
+    assert payload["SIGINT"] == 130, payload
+    # The half that must NOT move: the launcher's stated contract is that the child's exit
+    # code reaches the caller, and 2-is-a-refusal is what the CPU tools' convention rests on.
+    assert payload["clean"] == 0 and payload["refusal"] == 2 and payload["crash"] == 1, payload
+    assert payload["no_code_at_all"] == 0, payload
+    assert payload["SIGKILL"] != payload["crash"], (
+        "a killed child and a crashed one still arrive at the caller as the same number"
+    )
+
+
+@requires_node
+def test_the_selftest_pins_the_signal_mapping_without_a_child():
+    """`npm test` is the launcher's only coverage in CI, and it has no Python to kill.
+
+    So the mapping is asserted there, the same way the ARMATURE_PYTHON pin is: a run that
+    honours the convention and a run that collapses every signal into 1 are indistinguishable
+    from outside unless something asserts the mapping itself.
+    """
+    got = _launch(["--node-selftest"])
+    assert got.returncode == 0, got.stderr
+    assert "SIGKILL=137" in got.stdout, (
+        f"the selftest does not report the signal mapping it checks:\n{got.stdout}"
+    )
+
+
+@requires_node
+def test_the_selftest_goes_red_on_the_collapsing_handler_this_launcher_had(tmp_path):
+    """The mutation: the pre-fix expression, run through the real selftest.
+
+    A selftest that passed on both shapes would be a check that cannot fail, and this is the
+    only coverage the launcher has in CI.
+    """
+    with open(LAUNCHER, encoding="utf-8") as fh:
+        source = fh.read()
+    assert SIGNAL_MAP_MARKER in source, "the launcher no longer has the function this mutates"
+    mutated = source.replace(
+        "  const number = signal ? constants.signals[signal] : undefined;\n"
+        "  if (signal) return number ? 128 + number : 1;\n",
+        "  if (signal) return 1;\n",
+        1,
+    )
+    assert mutated != source, "the mutation did not apply; the mapping was rewritten"
+    scratch = tmp_path / "collapsed.mjs"
+    scratch.write_text(mutated, encoding="utf-8")
+    got = subprocess.run(
+        [NODE, str(scratch), "--node-selftest"],
+        cwd=REPO, capture_output=True, text=True, env={**os.environ},
+    )
+    assert got.returncode != 0, (
+        "the selftest passed on a launcher that collapses every signal death into exit 1:\n"
+        f"{got.stdout}\n{got.stderr}"
+    )
+
+
+needs_posix_signals = pytest.mark.skipif(
+    os.name == "nt",
+    reason="a process cannot terminate itself BY SIGNAL on Windows, so no child of this "
+           "launcher can be made to die by one here; CI runs this leg on ubuntu",
+)
+
+
+@requires_node
+@needs_posix_signals
+def test_a_child_killed_by_a_signal_reaches_the_caller_as_that_signal(tmp_path):
+    """End to end, through the real handler: a child that dies by SIGKILL, and the caller.
+
+    The mapping test above drives the function; this drives the `child.on("exit")` path the
+    function exists for, on a real spawned interpreter. The fake toolkit is what makes the
+    probe succeed and gives `-m armature_core.cli` something to run.
+    """
+    fake = tmp_path / "site"
+    package = fake / "armature_core"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "cli.py").write_text(
+        "import os, signal\nos.kill(os.getpid(), signal.SIGKILL)\n", encoding="utf-8"
+    )
+    got = _launch(
+        ["anything"],
+        ARMATURE_PYTHON=sys.executable,
+        PYTHONPATH=str(fake),
+    )
+    assert got.returncode == 137, (
+        "a child killed by SIGKILL did not reach the caller as 128+9; a wrapper cannot tell "
+        f"it from an ordinary traceback: exit {got.returncode}\n{got.stdout}\n{got.stderr}"
+    )
+    assert "SIGKILL" in got.stderr, (
+        f"nothing on the caller's side names the signal that ended the run:\n{got.stderr}"
+    )

@@ -26,9 +26,25 @@ on:
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
+# DECIDED, and written down, which is the half that was missing. `cancel-in-progress` is
+# WORKFLOW-level: a second push to main touching site/** cancels the first run wherever it
+# is, INCLUDING inside `actions/deploy-pages` below — the step this file's header calls the
+# one that replaces what the public sees. Two quick site pushes could therefore leave a Pages
+# deployment cancelled part-way, the live site on the older build, and the cancelled run GREY
+# rather than red: a deploy that did not happen with nothing reporting a failure. A job-level
+# concurrency block does not close this, because workflow-level cancellation cancels the
+# whole run regardless.
+#
+# So this queues rather than cancels, the way release.yml already does for the same reason —
+# its steps cannot be taken back either. This is a deliberate deviation from the studio
+# Actions rule, which mandates `cancel-in-progress: true`; GitHub's own Pages guidance is the
+# documented exception, and the cost is a superseded build finishing before the next one
+# starts. `tests/test_ci_workflows.py` now states the rule in terms of the ACT rather than
+# the filename: a workflow that performs something irreversible queues, everything else
+# cancels, with both step spellings (`uses:` an action, `run:` a script) in the census.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # `contents: read` is the whole workflow-level grant, and the two scopes that can change
 # what the public sees live on the ONE job that uses them. Both jobs used to carry all three:

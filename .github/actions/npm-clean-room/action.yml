@@ -39,7 +39,25 @@ runs:
         set -eu
         rm -f ./*.tgz
         npm pack
-        TARBALL="$PWD/$(ls -1 ./*.tgz | head -1)"
+        # NO PIPELINE. `shell: bash` runs with `-o pipefail` and this script adds `set -eu`,
+        # so `$(ls -1 ./*.tgz | head -1)` -- what this line was until 2026-09-04 -- could
+        # abort the whole step with nothing said about tarballs: `head -1` closes the pipe
+        # after the first line, `ls` is signalled (141), pipefail makes the substitution fail
+        # and `set -e` exits. The window is small, which is what makes it the bad kind: a rare
+        # red on the gate standing between the npm package and an irreversible publish,
+        # indistinguishable from a real packaging break, green on the retry. The sibling
+        # action says the same thing in its own words at sheet-fonts/action.yml:38-39.
+        #
+        # `rm -f ./*.tgz` above guarantees the glob has exactly one match, so the positional
+        # is the answer with no plumbing between. The existence check is verify.ps1's
+        # `npm pack produced no tarball` clause, carried: an unmatched glob leaves `$1` as the
+        # literal pattern, and this refuses by name rather than handing it to `npm install`.
+        set -- ./*.tgz
+        if [ ! -f "$1" ]; then
+          echo "::error::npm pack produced no tarball in $PWD"
+          exit 1
+        fi
+        TARBALL="$PWD/${1#./}"
         PREFIX="${RUNNER_TEMP:-/tmp}/npm-cleanroom"
         rm -rf "$PREFIX"
         mkdir -p "$PREFIX"

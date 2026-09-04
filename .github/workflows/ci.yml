@@ -79,6 +79,24 @@ on:
       # must run on — the licence gate is a CLAUDE.md non-negotiable, and a guard that does
       # not run on the change it guards is the shape this filter list exists to close.
       - "docs/license-map.md"
+      # The two documents the suite reads that live one directory DOWN. The census above
+      # keys on `git ls-files -- :(top)` -- repo-ROOT tracked files -- so nothing under a
+      # subdirectory could ever enter it, and these two were consumed and triggered nothing.
+      #
+      # `docs/research-grounding.md`: `tests/test_openpose_convention.py` asserts the document
+      # still carries F20's limbSeq verbatim, so editing it turns CI red. It matched no filter
+      # in either list, so the edit ran no CI at all and the red first surfaced on somebody
+      # else's unrelated push. `tests/test_ci_workflows.py` derives this requirement by
+      # resolving every `docs/` path expression under `tests/` -- including the Call-rooted
+      # `os.path.join(<call>, "docs", "research-grounding.md")` form this file uses, which a
+      # walk keyed on a path CONSTANT root resolves nothing for.
+      #
+      # `docs/assets/**`: the three committed figures `tests/test_packaging.py` holds
+      # `.gitignore`'s `!docs/assets/**` negation to, plus the rule that no negation may point
+      # at a path the tree does not have. A docs-only commit that removes that directory kills
+      # the negation and turns the suite red, and until this line ran nothing.
+      - "docs/research-grounding.md"
+      - "docs/assets/**"
   pull_request:
     paths:
       - "site/**"
@@ -133,6 +151,24 @@ on:
       # must run on — the licence gate is a CLAUDE.md non-negotiable, and a guard that does
       # not run on the change it guards is the shape this filter list exists to close.
       - "docs/license-map.md"
+      # The two documents the suite reads that live one directory DOWN. The census above
+      # keys on `git ls-files -- :(top)` -- repo-ROOT tracked files -- so nothing under a
+      # subdirectory could ever enter it, and these two were consumed and triggered nothing.
+      #
+      # `docs/research-grounding.md`: `tests/test_openpose_convention.py` asserts the document
+      # still carries F20's limbSeq verbatim, so editing it turns CI red. It matched no filter
+      # in either list, so the edit ran no CI at all and the red first surfaced on somebody
+      # else's unrelated push. `tests/test_ci_workflows.py` derives this requirement by
+      # resolving every `docs/` path expression under `tests/` -- including the Call-rooted
+      # `os.path.join(<call>, "docs", "research-grounding.md")` form this file uses, which a
+      # walk keyed on a path CONSTANT root resolves nothing for.
+      #
+      # `docs/assets/**`: the three committed figures `tests/test_packaging.py` holds
+      # `.gitignore`'s `!docs/assets/**` negation to, plus the rule that no negation may point
+      # at a path the tree does not have. A docs-only commit that removes that directory kills
+      # the negation and turns the suite red, and until this line ran nothing.
+      - "docs/research-grounding.md"
+      - "docs/assets/**"
   workflow_dispatch:
 
 concurrency:
