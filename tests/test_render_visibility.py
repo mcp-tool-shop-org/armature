@@ -408,6 +408,163 @@ def test_no_file_under_tools_reaches_into_the_private_vertex_primitive():
         f"deliberately unfiltered, blender_scene.unfiltered_world_bounds(objects)")
 
 
+# -------------------------- the same ban, keyed on the BEHAVIOUR rather than one spelling
+#
+# THE NODE THIS KEYS ON (wave 10, F-bd6a03e8): a CALL that reaches unfiltered geometry.
+# The census above keys on the identifier `_evaluated_world_vertices` appearing in source
+# text, which polices one spelling and reports `offenders == []` while two other doors
+# stand open:
+#
+#   Door one — `blender_scene.world_bounds(objects, scene=None)` routes through
+#   `_points_to_measure`, which calls the private primitive VERBATIM when `scene is None`
+#   (blender_scene.py:305). Measured 2026-09-04, four production sites pass no scene:
+#   probe_subject.py:63, probe_subject.py:75, preview_walk.py:159, stage_render.py:155.
+#   probe_subject.py:75 is the exact site wave 8 introduced `unfiltered_world_bounds` to
+#   carry — its own docstring names `probe_subject` as its consumer — and it was never
+#   re-pointed, so the naive row is still taken through the public two-arg form.
+#
+#   Door two — `tools/make_parts_sheet.py:200` defines its OWN `world_bounds(objs)`, a
+#   fourth hand-rolled world-space bounds over `ob.data.vertices` with no depsgraph
+#   evaluation and no visibility filter. The substring ban sees nothing there at all.
+#
+# So the ban is now: outside `blender_scene.py`, no call to a member of the bounds family
+# may omit `scene`, and no module may define its own `world_bounds`. The one sanctioned
+# unfiltered measurement has a public name — `unfiltered_world_bounds` — and using it is
+# how a site says out loud that it means the naive row.
+#
+# Owners: core-solvers (`blender_scene.world_bounds`'s refusal/routing), instruments
+# (probe_subject, preview_walk), instruments-measure (stage_render, make_parts_sheet).
+
+#: The family: every public reader whose first argument is an object list and whose filter
+#: depends on being handed a scene. `unfiltered_world_bounds` is deliberately absent — it is
+#: the sanctioned way to ASK for the naive measurement.
+BOUNDS_FAMILY = ("world_bounds",)
+
+#: Named and dated 2026-09-04. `tools/superseded/` is not a pipeline path: CLAUDE.md keeps
+#: falsified approaches in the tree, runnable, as the record of why they were falsified, and
+#: re-pointing one at a filtered reader would edit a record. Asserted to be a real directory
+#: below, so the exemption cannot outlive what it names.
+UNFILTERED_BAN_EXEMPT_DIRS = ("superseded/",)
+
+
+def _bounds_call_sites():
+    """`{path: [(line, source)]}` for every `<family>(...)` call that omits a scene.
+
+    `world_bounds(objects, scene=None)`: a scene reaches it as the second POSITIONAL
+    argument or as `scene=`. Anything else is the naive measurement, whatever it is spelled
+    through — `blender_scene.world_bounds(x)`, `bs.world_bounds(x)` or a bare
+    `world_bounds(x)` after a `from ... import`.
+    """
+    out = {}
+    for rel, src in sorted(_all_tool_sources().items()):
+        if rel == "armature_core/blender_scene.py":
+            continue
+        if any(rel.startswith(d) for d in UNFILTERED_BAN_EXEMPT_DIRS):
+            continue
+        for node in ast.walk(ast.parse(src)):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
+            if name not in BOUNDS_FAMILY:
+                continue
+            has_scene = len(node.args) >= 2 or any(kw.arg == "scene" for kw in node.keywords)
+            if not has_scene:
+                out.setdefault(rel, []).append((node.lineno, ast.unparse(node)))
+    return out
+
+
+def _module_local_bounds_definitions():
+    """`{path: [(line, name)]}` for any module OUTSIDE blender_scene.py defining the name."""
+    out = {}
+    for rel, src in sorted(_all_tool_sources().items()):
+        if rel == "armature_core/blender_scene.py":
+            continue
+        if any(rel.startswith(d) for d in UNFILTERED_BAN_EXEMPT_DIRS):
+            continue
+        for node in ast.walk(ast.parse(src)):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                    and node.name in BOUNDS_FAMILY:
+                out.setdefault(rel, []).append((node.lineno, node.name))
+    return out
+
+
+def test_the_exempt_paths_and_the_family_are_the_ones_this_ban_claims():
+    """Exemptions are named, dated and RE-DERIVED — and so is the family itself."""
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+    for rel in UNFILTERED_BAN_EXEMPT_DIRS:
+        assert os.path.isdir(os.path.join(root, rel.rstrip("/"))), rel
+    sources = _all_tool_sources()
+    defining = sources["armature_core/blender_scene.py"]
+    tree = ast.parse(defining)
+    defined = {n.name for n in ast.walk(tree)
+               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    for name in BOUNDS_FAMILY:
+        assert name in defined, f"{name} is not defined by blender_scene.py any more"
+    assert "unfiltered_world_bounds" in defined, (
+        "the sanctioned naive reader is gone; a site that means the naive measurement has "
+        "no way left to say so")
+    # the premise the whole ban rests on, read off the defining module rather than assumed
+    fn = next(n for n in tree.body
+              if isinstance(n, ast.FunctionDef) and n.name == "_points_to_measure")
+    assert any(isinstance(n, ast.Call) and getattr(n.func, "id", None)
+               == "_evaluated_world_vertices" for n in ast.walk(fn)), (
+        "`_points_to_measure` no longer reaches the private primitive; re-derive this ban")
+
+
+def test_no_tool_takes_a_bounds_measurement_with_the_scene_omitted():
+    """The behavioural ban. `world_bounds(meshes)` IS the unfiltered primitive, one frame
+    deeper — geometry that never renders defining a camera fit or a framing measurement."""
+    offenders = _bounds_call_sites()
+    assert offenders == {}, (
+        "these call the bounds family with no scene, so `_points_to_measure` takes the "
+        "objects AS GIVEN: " + json.dumps(offenders, indent=2) + "\n  Pass `scene=` for the "
+        "filtered measurement, or call `blender_scene.unfiltered_world_bounds(objects)` "
+        "where the naive row is the point.")
+
+
+def test_no_module_reimplements_the_bounds_reader_under_its_own_roof():
+    """A module-local `def world_bounds` is a fourth hand-rolled measurement that the
+    call-site ban cannot see, because the call it makes is legal against its own def."""
+    local = _module_local_bounds_definitions()
+    assert local == {}, (
+        "these define their own bounds reader instead of calling blender_scene's: "
+        + json.dumps(local, indent=2))
+
+
+def test_the_behavioural_ban_goes_red_on_both_doors(tmp_path, monkeypatch):
+    """Rule 3: driven against synthetic modules carrying each door, and against the two
+    shapes that must NOT be flagged."""
+    files = {
+        "door_one.py": ("from armature_core import blender_scene\n"
+                        "def run(meshes):\n"
+                        "    return blender_scene.world_bounds(meshes)\n"),
+        "door_two.py": ("def world_bounds(objs):\n"
+                        "    return min(o.x for o in objs), max(o.x for o in objs)\n"),
+        "filtered_kw.py": ("from armature_core import blender_scene\n"
+                           "def run(scene, meshes):\n"
+                           "    return blender_scene.world_bounds(meshes, scene=scene)\n"),
+        "filtered_pos.py": ("from armature_core import blender_scene\n"
+                            "def run(scene, meshes):\n"
+                            "    return blender_scene.world_bounds(meshes, scene)\n"),
+        "sanctioned.py": ("from armature_core import blender_scene\n"
+                          "def run(meshes):\n"
+                          "    return blender_scene.unfiltered_world_bounds(meshes)\n"),
+    }
+    fake = {"armature_core/blender_scene.py":
+            _all_tool_sources()["armature_core/blender_scene.py"]}
+    fake.update(files)
+    monkeypatch.setitem(globals(), "_all_tool_sources", lambda: fake)
+
+    calls = _bounds_call_sites()
+    assert sorted(calls) == ["door_one.py"], calls
+    assert sorted(_module_local_bounds_definitions()) == ["door_two.py"]
+
+    # and the exempt directory really is exempt rather than merely absent
+    fake["superseded/old.py"] = files["door_one.py"]
+    assert sorted(_bounds_call_sites()) == ["door_one.py"]
+
+
 def test_the_widened_ban_goes_red_on_a_tool_that_does_not_import_a_glb(tmp_path):
     """Prove the census can fail on a member the OLD population could not see: a file with
     no `import_glb(` in it at all, which the substring filter would never have enumerated.

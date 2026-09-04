@@ -416,21 +416,26 @@ def test_the_andon_the_enumerator_used_to_skip_is_asked_the_class_wide_invariant
     assert cls.gate == "COMPOSITOR" and cls.gate != GF.gate
     assert str(cls("something happened")).startswith("[COMPOSITOR] ")
 
-    # the falsified premise, measured rather than asserted: the module resolves under the
-    # suite's stub and does NOT resolve without it.
-    import importlib
+    # The falsified premise, MEASURED rather than asserted — in a subprocess, because
+    # observing it in this one would mean writing into `sys.modules`, which is the thing
+    # `test_packaging.sys_modules_writers` exists to forbid outside the three installers.
+    import subprocess
     import sys as _sys
 
-    saved = _sys.modules.pop("armature_core.blender_scene", None)
-    try:
-        _sys.modules.pop("bpy", None)
-        with pytest.raises(BaseException):
-            importlib.import_module("armature_core.blender_scene")
-    finally:
-        if saved is not None:
-            _sys.modules["armature_core.blender_scene"] = saved
-    # …and the population is unchanged by that round trip: the enumerator holds a strong
-    # reference, so popping sys.modules does not unregister the class or duplicate it.
+    from conftest import TOOLS
+
+    proc = subprocess.run(
+        [_sys.executable, "-c",
+         "import sys; sys.path.insert(0, sys.argv[1]); "
+         "import armature_core.blender_scene", TOOLS],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert proc.returncode != 0, (
+        "blender_scene now imports under a plain CPython; re-derive this exclusion")
+    assert "bpy" in proc.stderr, proc.stderr[-800:]
+
+    # …and calling the enumerator twice returns the same population: the module is imported
+    # exactly once and held by a strong reference, so the stub teardown neither unregisters
+    # the class nor lets a second import register a duplicate.
     assert sorted(c.__name__ for c in gate_failure_subclasses()) == RECORDED_ANDON_CLASSES
 
 

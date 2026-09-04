@@ -621,7 +621,38 @@ def test_a_stub_using_module_does_not_change_what_the_next_one_can_import(first,
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def _writes_into_sys_modules(fn):
+def sys_modules_aliases(tree):
+    """Local names bound to `sys.modules` in this module.
+
+    `from sys import modules` / `from sys import modules as M` / `M = sys.modules`. Without
+    this the census reads ONE spelling: measured 2026-09-04 (F-d00912a4), a scratch file
+    doing `from sys import modules` and then `modules['bpy'] = ...` inside a function was
+    INVISIBLE to the walk.
+    """
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "sys":
+            for alias in node.names:
+                if alias.name == "modules":
+                    names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Attribute) \
+                and node.value.attr == "modules" \
+                and isinstance(node.value.value, ast.Name) \
+                and node.value.value.id == "sys":
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    names.add(target.id)
+    return names
+
+
+def _is_modules_ref(node, aliases):
+    """`sys.modules`, or a local name bound to it."""
+    if isinstance(node, ast.Attribute) and node.attr == "modules":
+        return True
+    return isinstance(node, ast.Name) and node.id in aliases
+
+
+def _writes_into_sys_modules(fn, aliases=()):
     """Every line at which `fn` puts something INTO `sys.modules`.
 
     Four shapes, because a census that reads one of them polices one of them:
@@ -629,38 +660,53 @@ def _writes_into_sys_modules(fn):
     and `monkeypatch.setitem(sys.modules, ...)`. Removals (`pop`, `del`,
     `monkeypatch.delitem`) are not installs and are deliberately not counted — pytest
     undoes its own `delitem`, and `tests/test_cli.py` relies on that.
+
+    Each shape is matched through `_is_modules_ref`, so `from sys import modules` reaches
+    the census the same way `sys.modules` does (wave 10, F-d00912a4).
     """
+    aliases = set(aliases)
     hits = []
     for node in ast.walk(fn):
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if (isinstance(target, ast.Subscript)
-                        and isinstance(target.value, ast.Attribute)
-                        and target.value.attr == "modules"):
+                        and _is_modules_ref(target.value, aliases)):
                     hits.append(node.lineno)
         elif isinstance(node, ast.Call):
             func = node.func
             if not isinstance(func, ast.Attribute):
                 continue
             if (func.attr in ("update", "setdefault")
-                    and isinstance(func.value, ast.Attribute)
-                    and func.value.attr == "modules"):
+                    and _is_modules_ref(func.value, aliases)):
                 hits.append(node.lineno)
             if (func.attr == "setitem" and node.args
-                    and isinstance(node.args[0], ast.Attribute)
-                    and node.args[0].attr == "modules"):
+                    and _is_modules_ref(node.args[0], aliases)):
                 hits.append(node.lineno)
     return sorted(hits)
 
 
+#: The name a module-LEVEL installer is recorded under. It is not a function, so there is
+#: nothing to drive and no teardown to observe: the install happens at import time and lives
+#: for the rest of the session.
+MODULE_SCOPE = "<module>"
+
+
 def sys_modules_writers(tests_dir=None):
-    """THE DERIVATION: `(filename, function)` for every stub installer under `tests/`.
+    """THE DERIVATION: `(filename, scope)` for every stub installer under `tests/`.
 
     Walked out of every `.py` in the suite, helpers and test modules alike — the wave-6
     version iterated a hard-coded `expected` dict of three filenames, so a fourth writer
     in a NEW file was never opened. Measured in a scratch copy of `tests/` on 2026-09-04:
     adding a fourth file containing a real installer that wrote `sys.modules['bpy']`,
     imported `armature_core.blender_scene` and never cleared it left the census GREEN.
+
+    WAVE 10, F-d00912a4 — the walk kept `fn` only when it was an `ast.FunctionDef`, so the
+    WORST shape was invisible: a module-level `sys.modules['bpy'] = types.ModuleType('bpy')`
+    followed by `from armature_core import blender_scene`, which is the form that CANNOT
+    have a teardown. Measured against a scratch tree of three files, the census returned
+    `[('test_seen.py', 'install')]` and missed both the module-level installer and a
+    `from sys import modules` alias. Module scope is now walked and recorded as
+    `<module>`, and `test_no_stub_installer_sits_at_module_level` refuses it outright.
     """
     tests_dir = TESTS_DIR if tests_dir is None else tests_dir
     out = []
@@ -669,10 +715,16 @@ def sys_modules_writers(tests_dir=None):
             continue
         with open(os.path.join(tests_dir, name), encoding="utf-8") as fh:
             tree = ast.parse(fh.read())
+        aliases = sys_modules_aliases(tree)
         for fn in ast.walk(tree):
             if (isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    and _writes_into_sys_modules(fn)):
+                    and _writes_into_sys_modules(fn, aliases)):
                 out.append((name, fn.name))
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue
+            if _writes_into_sys_modules(node, aliases):
+                out.append((name, MODULE_SCOPE))
     return sorted(set(out))
 
 
@@ -743,6 +795,52 @@ def test_the_stub_installer_population_is_derived_and_has_not_grown_silently():
     assert sorted(INSTALLER_MODULE) == sorted(writers), (
         "a stub installer has no line in INSTALLER_MODULE saying how to drive it, so its "
         "teardown is asserted by nothing that runs")
+
+
+def test_no_stub_installer_sits_at_module_level():
+    """The shape that cannot be given a teardown, and so cannot be given one later."""
+    at_import = [w for w in sys_modules_writers() if w[1] == MODULE_SCOPE]
+    assert at_import == [], (
+        f"{at_import} install into sys.modules at IMPORT time: there is no teardown to "
+        f"drive, the stub survives collection, and every later test in the session reads a "
+        f"module imported under a fake `bpy` as importable")
+
+
+def test_the_stub_census_sees_the_two_shapes_it_used_to_miss(tmp_path):
+    """Rule 3, on the scratch tree the finding measured.
+
+    Three files, one shape each: a module-level installer, an aliased in-function installer
+    (`from sys import modules`), and the plain in-function control. Before this wave the
+    walk returned only the third.
+    """
+    scratch = tmp_path / "tests"
+    scratch.mkdir()
+    (scratch / "test_module_level.py").write_text(
+        "import sys, types\n"
+        "sys.modules['bpy'] = types.ModuleType('bpy')\n"
+        "from armature_core import blender_scene\n", encoding="utf-8")
+    (scratch / "test_aliased.py").write_text(
+        "import types\n"
+        "from sys import modules\n"
+        "def install():\n"
+        "    modules['bpy'] = types.ModuleType('bpy')\n", encoding="utf-8")
+    (scratch / "test_seen.py").write_text(
+        "import sys, types\n"
+        "def install():\n"
+        "    sys.modules['bpy'] = types.ModuleType('bpy')\n", encoding="utf-8")
+
+    writers = sys_modules_writers(str(scratch))
+    assert writers == [
+        ("test_aliased.py", "install"),
+        ("test_module_level.py", MODULE_SCOPE),
+        ("test_seen.py", "install"),
+    ], writers
+
+    # …and the old walk's two blind spots, stated as the difference rather than asserted
+    old = [w for w in writers if w[1] != MODULE_SCOPE and w[0] != "test_aliased.py"]
+    assert old == [("test_seen.py", "install")], (
+        "the pre-wave-10 walk saw exactly this one; the other two are what it could not "
+        "reach, and the module-level one is the form with no teardown at all")
 
 
 @pytest.mark.parametrize("filename,func", RECORDED_STUB_INSTALLERS,
