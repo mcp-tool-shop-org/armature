@@ -74,8 +74,27 @@ jobs:
       - uses: ./.github/actions/sheet-fonts
       - name: Suite
         run: python -m pytest -q
+      # THE ENV VAR IS THE HALF THAT REACHES A CHILD, and this leg had only the flag.
+      # ci.yml's twin sets `PYTHONOPTIMIZE: "1"` beside its `-O` (ci.yml:297-300) and
+      # verify.ps1's leg 2 exports it around the call (verify.ps1:184-189); this step set
+      # neither, so three copies of one leg read identically in a log and were not the same
+      # check -- on the exact axis the leg exists for.
+      #
+      # Measured on the rig with the repo venv: a parent run as `python -O` spawning
+      # `subprocess.run([sys.executable, "-c", ...])` gives a child with `__debug__` True and
+      # `PYTHONOPTIMIZE` unset; the same parent with `PYTHONOPTIMIZE=1` in the environment
+      # gives a child with `__debug__` False. `-O` governs the pytest process alone. An AST
+      # walk over tests/** counts 57 subprocess calls, 17 of which inherit the environment and
+      # pass no `-O` of their own -- those ran optimised under ci.yml's step and unoptimised
+      # under this one.
+      #
+      # This is the workflow whose Install comment above says a shorter list here would make
+      # the gate a weaker check than the one that already passed on the same commit. It was a
+      # weaker check. By the time it runs, `release: published` has fired.
       - name: Suite under -O
         run: python -O -m pytest -q
+        env:
+          PYTHONOPTIMIZE: "1"
       # ci.yml's packaging leg, from the same implementation. This job built both artifacts
       # and ran `twine check` on the METADATA, and nothing in this workflow installed either
       # one — so the artifact handed to the publish step, the one step here with no
