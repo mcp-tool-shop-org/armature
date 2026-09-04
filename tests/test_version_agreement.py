@@ -1,5 +1,9 @@
 """The two version manifests must agree at every commit, not first at release time.
 
+Named `test_version_agreement` rather than `test_packaging` because the ci-packaging
+half of P8 lands its own `tests/test_packaging.py`; this is the standalone sibling that
+answers the question without parsing a workflow file.
+
 WHY THIS RIDES THE SUITE. The agreement between `pyproject.toml` and `npm/package.json`
 is asserted in exactly one place — `.github/workflows/release.yml:72` — so it is checked
 only when the release workflow runs. `ci.yml`, which runs on push and on pull request,
