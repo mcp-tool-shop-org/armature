@@ -53,6 +53,7 @@ discover in a sheet.
 """
 
 import argparse
+import inspect
 import copy
 import hashlib
 import json
@@ -92,10 +93,17 @@ STRENGTH = 1.0
 ARMS = {
     "T": {"high": TECHNICALLY_COLOR, "low": TECHNICALLY_COLOR, "tier_checkable": False,
           "lora": "technically_color",
+          # The licence-map row this arm's weights are ruled by. The record's credit line is
+          # READ FROM IT (see `credit_obligation`) rather than retyped here: the coordinator's
+          # 2026-09-04 ruling accepts the CivitAI grant's credit condition and makes it
+          # load-bearing in code, and a builder that types the obligation is a builder whose
+          # record can disagree with the map it claims to follow.
+          "row": "technically_color",
           "credit": "renderartist — allowNoCredit: false; published footage from this arm "
                     "carries a credits line"},
     "S": {"high": SMARTPHONE_HIGH, "low": SMARTPHONE_LOW, "tier_checkable": True,
           "lora": "SmartphoneSnapshotPhotoReality v3 (pair)",
+          "row": None,
           "credit": "none required — allowNoCredit: true"},
 }
 
@@ -600,6 +608,64 @@ def gate_base_licence(graph, path=None):
     return ev
 
 
+def credit_obligation(arm):
+    """This arm's credit obligation, READ FROM the licence table's own row.
+
+    The coordinator's ruling (2026-09-04, delegated by the Director) accepts the CivitAI
+    grant's credit condition on `wan22-14b-t2v-technically_color.safetensors` and makes it
+    load-bearing in code: `route_gates.RULED_COMPONENTS`' row carries a structured
+    `condition`, and the submitting record's credit line comes FROM that row, never from a
+    literal typed in this builder — a builder that retypes an obligation is a builder whose
+    record can drift from the map it claims to follow.
+
+    Where this tree's table carries no `condition` on the row (the state before core-gates'
+    CONDITIONAL tier lands), the builder's own prose is recorded WITH its source named, so a
+    reader of the record can see which of the two it is looking at.
+    """
+    key = ARMS[arm].get("row")
+    row = route_gates.RULED_COMPONENTS.get(key) or {}
+    cond = row.get("condition")
+    if cond:
+        return dict(cond, component=key,
+                    source_of_this_line=f"route_gates.RULED_COMPONENTS[{key!r}]['condition']")
+    return {"component": key, "text": ARMS[arm]["credit"],
+            "source_of_this_line": ("this builder's ARMS table; the licence row carries no "
+                                    "structured `condition` in this tree")}
+
+
+def conditional_attribution(graph):
+    """The `attribution` entries the submitting record must carry, built FROM the rows.
+
+    `route_gates.conditional_component_keys(graph)` walks the graph and returns the row key
+    of every CONDITIONAL component it loads; `route_gates.attribution_entry_for(key)` builds
+    the entry from that row. Both are the licence table's own code — this builder asks, it
+    does not decide, so a future conditional row is credited without editing this file.
+
+    ⚠ The two helpers arrive with core-gates' CONDITIONAL tier. On a tree that does not yet
+    carry them the answer is `[]` — and that is CHECKED, not assumed: a table that rules some
+    row CONDITIONAL while the helpers are absent would mean the answer is unknown, and an
+    unknown answer here is a refusal, not an empty list. The branch deletes itself the moment
+    both trees are one.
+    """
+    keys = getattr(route_gates, "conditional_component_keys", None)
+    entry = getattr(route_gates, "attribution_entry_for", None)
+    if keys is None or entry is None:
+        conditional = sorted(k for k, r in route_gates.RULED_COMPONENTS.items()
+                             if isinstance(r, dict) and r.get("verdict") == "CONDITIONAL")
+        if conditional:
+            raise route_gates.RouteGate(
+                f"the licence table rules {conditional} CONDITIONAL and carries no "
+                f"`conditional_component_keys` / `attribution_entry_for` to build the "
+                f"credit entries from. This builder may not decide which components a "
+                f"record credits, and a spend whose attribution is unknown is not one this "
+                f"tool completes",
+                {"gate": "ROUTE", "andon": "RouteGate",
+                 "clause": "conditional_tier_without_its_readers",
+                 "conditional_rows": conditional})
+        return []
+    return [entry(k) for k in keys(graph)]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True,
@@ -628,7 +694,16 @@ def main(argv=None):
     ledger = gate_ledger(base, built, inserts)
     tier = gate_pair_tier(inserts, args.arm)
     seed_ev = gate_s(built, args.seeds_registry, args.seed)
-    route = route_gates.verify(built, frame=(1024, 576, 81))
+    # The attribution the record carries is handed to the gate that checks it: a graph
+    # loading a CONDITIONAL component whose record does not credit it refuses at Gate ROUTE,
+    # before `os.makedirs`. `attribution=` is core-gates' keyword-only parameter; it is passed
+    # only where `verify` declares it, so this builder runs against either side of that
+    # change rather than crashing on the older one.
+    attribution = conditional_attribution(built)
+    verify_kwargs = {"frame": (1024, 576, 81)}
+    if "attribution" in inspect.signature(route_gates.verify).parameters:
+        verify_kwargs["attribution"] = attribution
+    route = route_gates.verify(built, **verify_kwargs)
 
     os.makedirs(args.out, exist_ok=True)
     graph_path = os.path.join(args.out, f"E14-{args.arm}-camera-i2v.api.json")
@@ -638,7 +713,10 @@ def main(argv=None):
     record = {
         "experiment": EXPERIMENT, "arm": args.arm, "tool_version": TOOL_VERSION,
         "lora": ARMS[args.arm]["lora"],
-        "credit_obligation": ARMS[args.arm]["credit"],
+        "credit_obligation": credit_obligation(args.arm),
+        # The credit line as the submitting record must carry it, built from the licence
+        # table's rows and checked by Gate ROUTE against the components the graph loads.
+        "attribution": attribution,
         "strength_model": STRENGTH,
         "seed": args.seed,
         "baseline": {"path": os.path.abspath(args.base), "sha256": sha256_file(args.base),

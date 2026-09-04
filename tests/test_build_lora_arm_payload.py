@@ -557,3 +557,98 @@ def test_every_builder_puts_its_graph_through_the_licence_census():
     # And the builder that reads a graph off disk checks BEFORE it builds anything.
     src = open(os.path.join(TOOLS, "build_lora_arm_payload.py"), encoding="utf-8").read()
     assert src.index("gate_base_licence(base") < src.index("canon_spend(")
+
+
+# ================================ wave 12: the CONDITIONAL licence row, credited from the ROW
+# The coordinator's ruling of 2026-09-04 (delegated by the Director): `docs/license-map.md:77`
+# rules `wan22-14b-t2v-technically_color.safetensors` "YES — credit required" (CivitAI grant
+# `allowCommercialUse [RentCivit, Rent, Image]`, `allowNoCredit: false`, creator renderartist,
+# fetched 2026-08-13), while `route_gates.RULED_COMPONENTS` mirrored it as an unconditional
+# ALLOWED. The condition is ACCEPTED as the map already records it, and becomes load-bearing
+# in code: core-gates adds the CONDITIONAL tier and `verify(attribution=…)`; this builder
+# writes the credit entry into the payload record and the provenance, BUILT FROM THE ROW and
+# never typed here, and hands it to the gate that checks it.
+#
+# family: keyed on the RECORD FIELD a licence condition obliges — `credit_obligation` /
+# `attribution` — over the builders that load a ruled component, via `ARMS[*]["row"]` naming
+# the licence-map row rather than a prose sentence -> 1 arm carries a condition today (T),
+# and the derivation picks up any future CONDITIONAL row without editing this file.
+
+
+def test_the_credit_line_is_read_from_the_licence_row_not_typed_in_the_builder():
+    """The ruling's mechanism: the record's obligation names where it came from, so a reader
+    can tell a line derived from the map from a line a builder retyped."""
+    ob = B.credit_obligation("T")
+    assert ob["component"] == "technically_color"
+    assert "route_gates.RULED_COMPONENTS" in ob["source_of_this_line"] or (
+        "ARMS table" in ob["source_of_this_line"])
+    if "route_gates.RULED_COMPONENTS" in ob["source_of_this_line"]:
+        row = route_gates.RULED_COMPONENTS["technically_color"]
+        assert ob["creditor"] == row["condition"]["creditor"]
+        assert ob["text"] == row["condition"]["text"]
+
+
+def test_arm_S_carries_no_licence_row_and_no_credit_condition():
+    """The mutation that must not fire it. `allowNoCredit: true` on the smartphone pair, so
+    the arm names no row and the record's obligation is not a condition."""
+    assert B.ARMS["S"]["row"] is None
+    assert "creditor" not in B.credit_obligation("S")
+
+
+def test_the_attribution_entries_come_from_the_table_and_are_HANDED_to_the_gate(monkeypatch):
+    """`conditional_attribution` asks `route_gates` which components the graph loads that
+    carry a condition, and builds each entry from that row. This builder does not decide."""
+    asked = {}
+
+    def fake_keys(graph):
+        asked["graph"] = graph
+        return ["technically_color"]
+
+    def fake_entry(key):
+        return {"component": key, "creditor": "renderartist",
+                "source": "CivitAI 2106471",
+                "text": "Technically Color LoRA by renderartist (CivitAI)"}
+
+    monkeypatch.setattr(route_gates, "conditional_component_keys", fake_keys,
+                        raising=False)
+    monkeypatch.setattr(route_gates, "attribution_entry_for", fake_entry, raising=False)
+    graph = {"1": {"class_type": "LoraLoaderModelOnly", "inputs": {}}}
+    entries = B.conditional_attribution(graph)
+    assert asked["graph"] is graph
+    assert entries == [fake_entry("technically_color")]
+
+
+def test_a_CONDITIONAL_row_with_no_reader_for_it_is_a_REFUSAL_not_an_empty_list(monkeypatch):
+    """The andon on the direction the pre-merge branch does not bound. `[]` is the right
+    answer only while the table rules nothing CONDITIONAL — and that premise is CHECKED. A
+    table that rules a row CONDITIONAL while the helpers that read it are absent means the
+    answer is UNKNOWN, and an unknown attribution is not something this tool completes."""
+    monkeypatch.delattr(route_gates, "conditional_component_keys", raising=False)
+    monkeypatch.delattr(route_gates, "attribution_entry_for", raising=False)
+    monkeypatch.setitem(route_gates.RULED_COMPONENTS, "a_conditional_row",
+                        {"verdict": "CONDITIONAL", "licence": "x", "reason": "y"})
+    with pytest.raises(route_gates.RouteGate,
+                       match=r"CONDITIONAL and carries no `conditional_component_keys`") as e:
+        B.conditional_attribution({})
+    assert e.value.evidence["clause"] == "conditional_tier_without_its_readers"
+    assert "a_conditional_row" in e.value.evidence["conditional_rows"]
+
+
+def test_the_builder_types_no_creditor_name_of_its_own():
+    """The ruling's words: `never a literal typed in the builder`. The census keys on the
+    creditor STRING — if it appears anywhere in this module outside the ARMS prose fallback
+    and the docstrings, the record can drift from the map."""
+    import ast
+
+    from conftest import TOOLS
+
+    src = open(os.path.join(TOOLS, "build_lora_arm_payload.py"), encoding="utf-8").read()
+
+    literals = []
+    for node in ast.walk(ast.parse(src)):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and "renderartist" in node.value):
+            literals.append(node.lineno)
+    assert len(literals) <= 1, (
+        f"`renderartist` is typed at lines {literals}; the credit line comes from "
+        f"route_gates.RULED_COMPONENTS' own row")
