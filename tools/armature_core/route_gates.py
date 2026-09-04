@@ -733,8 +733,7 @@ SEED_CLASS_SUFFIXES = ("Sampler", "Noise")
 #: Class-name suffixes that mark a HOSTED / partner node, whose save-format
 #: `widgets_values` this repo cannot interpret without a recorded widget-index row.
 #:
-#: ⚠ Used by `unrecorded_seed_sources` in SAVE FORMAT ONLY. In API format inputs are
-#: keyed by name and the input-name clause already answers; in save format the values are
+#: ⚠ Used by `unrecorded_seed_sources` in BOTH FORMATS. In save format the values are
 #: positional and nothing names them, so a vendor node's widget list is exactly the
 #: direction no other clause bounds — and save format is the format the cloud hands back
 #: and the one `load_graph` / `gate_saved_graph` read before submission. Measured
@@ -744,6 +743,20 @@ SEED_CLASS_SUFFIXES = ("Sampler", "Noise")
 #: 1", and node 4's 999999999 was never examined. `Wan2ReferenceVideoApi` carries a
 #: `SEED_NODES` row and so is read rather than flagged — which is what the andon asks
 #: for: a row, in the spec that arms the tier.
+#:
+#: ⚠ **It ran in save format ONLY until 2026-09-04, and API is the format every builder
+#: submits.** The clause was written `if why is None and not api and cls.endswith(...)`,
+#: on the stated ground that "in API format inputs are keyed by name and the input-name
+#: clause already answers". That ground holds only while a vendor spells its seed input
+#: exactly seed/noise_seed/rand_seed — and this repo's own hosted node namespaces every
+#: other input under `model.` (`build_r2v_payload.py:79-83` writes model.prompt /
+#: model.resolution / model.ratio / model.duration). Measured on ONE graph written in both
+#: formats — UNETLoader + WanImageToVideo + KSampler(seed 7, "fixed") + a `KlingVideoApi`
+#: with no SEED_NODES row: SAVE raised on both readers; the SAME graph in API returned
+#: `unrecorded_seed_sources() == []` and `seed_clause_verdict = "CHECKED — 1 seed(s) all
+#: pinned"`, repeated with an explicit `model.seed` of 999999999 that was never examined.
+#: In API format the reading needs no widget indices to state: a class whose name ends in
+#: Api/API with no `SEED_NODES` row.
 HOSTED_API_CLASS_SUFFIXES = ("Api", "API")
 
 
@@ -806,9 +819,21 @@ def unrecorded_seed_sources(graph):
 
     Save format names inputs too — as a list of slot dicts, converted widgets included —
     so the input-name clause now runs in both, reading each format's own spelling
-    (`_save_format_input_names`). The second save-format clause is
-    `HOSTED_API_CLASS_SUFFIXES`: a partner node whose positional widget list this repo
-    has no recorded row for, which is the KlingVideoApi shape above.
+    (`_save_format_input_names`). The third clause is `HOSTED_API_CLASS_SUFFIXES`: a
+    partner node this repo has no recorded row for, which is the KlingVideoApi shape
+    above.
+
+    ⚠ **The hosted clause ran in save format only, and API is the format every builder
+    submits.** Measured 2026-09-04 on ONE graph written in both formats — UNETLoader +
+    WanImageToVideo(832,480,81) + KSampler(seed 7, "fixed") + `KlingVideoApi` with no
+    `SEED_NODES` row: SAVE gave one row here and both `gate_s_registration(g, [7])` and
+    `verify(g, frame=(832,480,81))` raised; the SAME graph in API gave [] here, "1
+    noise-bearing seed(s), all pinned and all drawn from the committed list of 1", and
+    `seed_clause_verdict = "CHECKED — 1 seed(s) all pinned"`. Repeated with an explicit
+    `model.seed` of 999999999: API still green, that seed never examined. It now runs in
+    both, stating the reading each format supports — and the input-name clause reads a
+    key's LAST DOTTED SEGMENT, because this repo's own hosted node namespaces every input
+    under `model.`.
     """
     graph = normalise_graph(graph)
     api = is_api_format(graph)
@@ -820,16 +845,27 @@ def unrecorded_seed_sources(graph):
         names = (list(n.get("inputs") or {}) if api
                  else _save_format_input_names(n))
         why = None
-        hit = sorted({k for k in names if k in SEED_INPUT_NAMES})
+        # The LAST DOTTED SEGMENT, not the whole key: a hosted node namespaces its inputs
+        # (`model.seed`), and reading only the bare spelling made the input-name clause
+        # blind to exactly the tier the hosted clause below exists for.
+        hit = sorted({k for k in names
+                      if str(k).rsplit(".", 1)[-1] in SEED_INPUT_NAMES})
         if hit:
             why = f"carries seed-shaped input(s) {', '.join(hit)}"
         if why is None and cls.endswith(SEED_CLASS_SUFFIXES):
             why = "the class name declares a sampling or noise role"
-        if why is None and not api and cls.endswith(HOSTED_API_CLASS_SUFFIXES):
-            why = (f"it is a hosted/partner node whose save-format widgets are "
-                   f"positional and this module has no recorded widget row for "
-                   f"{cls!r}, so a seed among its {len(n.get('widgets_values') or [])} "
-                   f"widget value(s) cannot be read at all")
+        if why is None and cls.endswith(HOSTED_API_CLASS_SUFFIXES):
+            why = (
+                (f"it is a hosted/partner node with no SEED_NODES row: {cls!r} ends in "
+                 f"{HOSTED_API_CLASS_SUFFIXES}, and a partner tier that draws its own "
+                 f"noise is one this module can say nothing about — `seeds()` returns "
+                 f"nothing for it and every reader then reports green")
+                if api else
+                (f"it is a hosted/partner node whose save-format widgets are "
+                 f"positional and this module has no recorded widget row for "
+                 f"{cls!r}, so a seed among its {len(n.get('widgets_values') or [])} "
+                 f"widget value(s) cannot be read at all")
+            )
         if why:
             out.append({"node_id": n.get("id"), "class": cls, "where": where, "why": why})
     return out

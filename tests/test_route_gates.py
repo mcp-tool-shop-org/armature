@@ -1506,3 +1506,113 @@ def test_load_graph_still_reads_a_good_file(tmp_path):
     good.write_text('{"prompt": {"3": {"class_type": "KSampler", "inputs": {"seed": 7}}}}',
                     encoding="utf-8")
     assert RG.is_api_format(RG.load_graph(str(good)))
+
+
+# --- W10 amend: the hosted clause runs in BOTH formats (F-e1a36cfc) -------------------
+#
+# Wave 8 closed the save-format half of the hosted-seed andon and left the API half open,
+# and API is the format every builder submits.
+
+
+def _hosted_seed_pair(seed_input=None):
+    """ONE graph, written in both formats: UNETLoader + WanImageToVideo + a recorded
+    KSampler + a `KlingVideoApi` node that has no `SEED_NODES` row.
+
+    `seed_input` optionally namespaces the hosted node's seed the way this repo's own
+    hosted node namespaces every other input (`build_r2v_payload.py:79-83` writes
+    `model.prompt` / `model.resolution` / `model.ratio` / `model.duration`).
+    """
+    hosted_inputs = {"model": "kling-v2", "model.resolution": "720P",
+                     "model.ratio": "16:9", "model.duration": 5}
+    if seed_input:
+        hosted_inputs[seed_input] = 999999999
+    api = {
+        "3": {"class_type": "KSampler",
+              "inputs": {"seed": 7, "control_after_generate": "fixed",
+                         "model": ["10", 0]}},
+        "4": {"class_type": "KlingVideoApi", "inputs": dict(hosted_inputs)},
+        "10": {"class_type": "UNETLoader",
+               "inputs": {"unet_name":
+                          "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"}},
+        "49": {"class_type": "WanImageToVideo",
+               "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1}},
+    }
+    save = {"nodes": [
+        {"id": 3, "type": "KSampler", "inputs": [],
+         "widgets_values": [7, "fixed", 20, 6.0, "euler", "simple", 1.0]},
+        {"id": 4, "type": "KlingVideoApi", "inputs": [],
+         "widgets_values": ["kling-v2", "720P", "16:9", 5]
+                           + ([999999999] if seed_input else [])},
+        {"id": 10, "type": "UNETLoader",
+         "widgets_values": ["wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"]},
+        {"id": 49, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]},
+    ]}
+    return {"api": api, "save": save}
+
+
+@pytest.mark.parametrize("seed_input", [None, "model.seed", "seed"])
+def test_one_graph_two_formats_gets_one_verdict_on_an_unrecorded_hosted_node(seed_input):
+    """The finding's own fixture, asserted AS A PAIR rather than as two independent
+    cases — the defect was that the two formats disagreed about one graph.
+
+    Measured 2026-09-04 before the fix, with no seed input at all: save format gave
+    `unrecorded_seed_sources` one row and both `gate_s_registration(g, [7])` and
+    `verify(g, frame=(832,480,81))` raised; the SAME graph in API format gave
+    `unrecorded_seed_sources() == []`, "1 noise-bearing seed(s), all pinned and all drawn
+    from the committed list of 1", and `seed_clause_verdict = 'CHECKED - 1 seed(s) all
+    pinned'`. Repeated with an explicit `model.seed` of 999999999: API still green, that
+    seed never examined.
+    """
+    pair = _hosted_seed_pair(seed_input)
+    verdicts = {}
+    for fmt, g in pair.items():
+        rows = RG.unrecorded_seed_sources(g)
+        assert [u["class"] for u in rows] == ["KlingVideoApi"], fmt
+        assert str(rows[0]["node_id"]) == "4", fmt
+
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.gate_s_registration(g, [7])
+        assert "KlingVideoApi" in str(exc.value), fmt
+        assert exc.value.evidence["seed_clause_verdict"] == "INDETERMINATE", fmt
+
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(g, frame=(832, 480, 81))
+        assert "KlingVideoApi" in str(exc.value), fmt
+        verdicts[fmt] = rows[0]["why"]
+
+    assert RG.is_api_format(pair["api"]) and not RG.is_api_format(pair["save"])
+    assert set(verdicts) == {"api", "save"}
+
+
+def test_a_namespaced_seed_input_is_read_by_its_last_dotted_segment():
+    """The docstring's stated ground for gating the hosted clause on `not api` was that
+    "in API format inputs are keyed by name and the input-name clause already answers".
+    That holds only while a vendor spells its seed input exactly seed/noise_seed/rand_seed
+    — and this repo's own hosted node namespaces every other input under `model.`."""
+    g = {"5": {"class_type": "SomeVendorThing",
+               "inputs": {"model.noise_seed": 12345, "model.prompt": "x"}}}
+    rows = RG.unrecorded_seed_sources(g)
+    assert [u["class"] for u in rows] == ["SomeVendorThing"]
+    assert "model.noise_seed" in rows[0]["why"]
+
+
+def test_the_hosted_clause_does_not_fire_on_a_class_that_has_a_row():
+    """The red-adjacent direction: an andon that fires on a correct graph is not one
+    anybody keeps. `Wan2ReferenceVideoApi` — the hosted node this repo actually submits —
+    ends in `Api` and carries a `SEED_NODES` row, so it is READ rather than flagged, in
+    both formats."""
+    api = {"6": {"class_type": "Wan2ReferenceVideoApi",
+                 "inputs": {"model": "wan2.7-r2v", "model.prompt": "p", "seed": 7,
+                            "model.resolution": "720P"}}}
+    save = {"nodes": [{"id": 6, "type": "Wan2ReferenceVideoApi", "inputs": [],
+                       "widgets_values": ["wan2.7-r2v", "p", "n", "720P", "16:9", 5,
+                                          7, "fixed"]}]}
+    assert RG.unrecorded_seed_sources(api) == []
+    assert RG.unrecorded_seed_sources(save) == []
+
+
+def test_no_graph_this_repo_builds_is_caught_by_the_widened_api_clause():
+    """The population that must stay green: the clean fixture at the top of this file and
+    the detector-free API graph, in both readings."""
+    assert RG.unrecorded_seed_sources(graph(top=CLEAN_TOP)) == []
+    assert RG.verify(graph(top=CLEAN_TOP))["frame_legality"][0]["legal"] is True
