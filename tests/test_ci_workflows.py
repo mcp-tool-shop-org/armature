@@ -26,6 +26,7 @@ What each group is here to catch, measured on this tree before the fix:
 """
 
 import ast
+import json
 import os
 import re
 import shutil
@@ -280,7 +281,7 @@ def _job_lines(text, name):
 #: asserted against this table, so a job that starts or stops checking out is a failure here
 #: rather than a silent change in what the check below covers.
 CHECKOUT_JOBS = {
-    "ci.yml": ["python-tests", "site-build"],
+    "ci.yml": ["launcher", "python-tests", "site-build"],
     "pages.yml": ["build"],
     "release.yml": ["npm", "verify"],
 }
@@ -1472,3 +1473,124 @@ def test_the_constraint_check_goes_red_on_a_bare_build_tool():
     bare = [t for t in _install_tokens(before)
             if not re.search(r"[=<>~^@]", t) and t not in UNCONSTRAINED_BY_DESIGN]
     assert bare == ["build", "twine"], bare
+
+
+# -- the runtimes this package promises, and the ones it runs (F-e110bcf6) ----------------
+#
+# Six runtime configurations were declared and one was exercised. pyproject declared
+# `requires-python = ">=3.10"` and classifiers for 3.10 through 3.13; npm/package.json
+# declared `"node": ">=18"`. Enumerated across all three workflows: ci.yml pinned python
+# "3.13" and node 22, release.yml pinned "3.13" and "22", and there was no matrix anywhere.
+# So 3.10, 3.11, 3.12 and Node 18 were public promises nothing ran.
+#
+# The floor is the end that matters. A version BETWEEN two exercised versions is an
+# interpolation; a version BELOW the exercised floor is an extrapolation, and the failure
+# it hides is a user installing a package whose metadata promised support and hitting an
+# error the repo has never run. So the rule here is: the declared floor runs, the declared
+# ceiling runs, and nothing is claimed outside that interval.
+#
+# What moved rather than being covered: the Python floor came UP to 3.11, because two files
+# in this suite (`tests/test_ci_workflows.py` and `tests/test_packaging.py`) import
+# `tomllib`, which landed in 3.11 — the suite that would prove 3.10 cannot collect on it.
+# Narrowing a promise to what is run is the honest half of this finding's fix.
+
+with open(os.path.join(REPO, "npm", "package.json"), encoding="utf-8") as _fh:
+    NPM_PACKAGE = json.load(_fh)
+
+
+def _version_tuple(text):
+    return tuple(int(part) for part in text.strip().split(".") if part.isdigit())
+
+
+def declared_python_floor():
+    """The `requires-python` floor, e.g. `>=3.11` -> (3, 11)."""
+    spec = PYPROJECT["project"]["requires-python"]
+    match = re.search(r">=\s*(\d+\.\d+)", spec)
+    assert match, f"requires-python is {spec!r} and states no floor this check can read"
+    return _version_tuple(match.group(1))
+
+
+def classifier_pythons():
+    """Every `Programming Language :: Python :: X.Y` version claimed, as tuples."""
+    out = set()
+    for row in PYPROJECT["project"]["classifiers"]:
+        match = re.fullmatch(r"Programming Language :: Python :: (\d+\.\d+)", row)
+        if match:
+            out.add(_version_tuple(match.group(1)))
+    return out
+
+
+def declared_node_floor():
+    """The npm launcher's `engines.node` floor, e.g. `>=18` -> (18,)."""
+    spec = NPM_PACKAGE["engines"]["node"]
+    match = re.search(r">=\s*(\d+(?:\.\d+)*)", spec)
+    assert match, f"engines.node is {spec!r} and states no floor this check can read"
+    return _version_tuple(match.group(1))
+
+
+def _versions_declared_for(key):
+    """Every literal value of `<key>-version:` anywhere in the workflows.
+
+    Both forms are read: a scalar (`python-version: "3.13"`) and an inline matrix list
+    (`python-version: ["3.11", "3.13"]`). A `${{ matrix.* }}` reference is a pointer, not a
+    version, and is skipped — the list it points at is read where it is written.
+    """
+    out = set()
+    for name in workflow_files():
+        for line in _text(name).splitlines():
+            match = re.search(key + r"-version:\s*(.+?)\s*$", line)
+            if not match:
+                continue
+            value = match.group(1)
+            if "${{" in value:
+                continue
+            for piece in value.strip("[]").split(","):
+                piece = piece.strip().strip('"').strip("'")
+                if re.fullmatch(r"\d+(\.\d+)*", piece):
+                    out.add(_version_tuple(piece))
+    return out
+
+
+def test_the_declared_python_interval_is_the_one_ci_runs():
+    """Floor and ceiling both exercised, and no classifier outside them.
+
+    What this looks like if wrong: `requires-python = ">=3.10"` with a single 3.13 job — a
+    promise about four interpreters, one of which has ever been run.
+    """
+    exercised = {v for v in _versions_declared_for("python") if v[0] == 3}
+    assert exercised, "no workflow pins a python version this check can read"
+    floor, ceiling = declared_python_floor(), max(classifier_pythons())
+    assert floor in exercised, (
+        f"requires-python declares a floor of {floor} and no job runs it; the versions run "
+        f"are {sorted(exercised)}")
+    assert ceiling in exercised, (
+        f"the classifiers claim up to {ceiling} and no job runs it; the versions run are "
+        f"{sorted(exercised)}")
+    outside = sorted(v for v in classifier_pythons() if v < floor or v > ceiling)
+    assert outside == [], (
+        f"these classifiers claim versions outside the interval CI exercises: {outside}")
+    below = sorted(v for v in classifier_pythons() if v < min(exercised))
+    assert below == [], (
+        f"these classifiers are BELOW the lowest version any job runs: {below}; a version "
+        "under the exercised floor is an extrapolation, not an interpolation")
+
+
+def test_the_launchers_declared_node_floor_is_the_one_ci_runs():
+    """`engines.node` is what npm enforces at install time on a user's machine."""
+    exercised = {v for v in _versions_declared_for("node")}
+    assert exercised, "no workflow pins a node version this check can read"
+    floor = declared_node_floor()
+    assert floor in exercised, (
+        f"npm/package.json declares engines.node {NPM_PACKAGE['engines']['node']!r} and no "
+        f"job runs {floor[0]}; the versions run are {sorted(exercised)}")
+
+
+def test_the_runtime_check_goes_red_on_a_floor_nothing_runs():
+    """The mutation: the declaration this repo carried until today.
+
+    A promise of 3.10 with only a 3.13 job must fail the same comparison, or the check is
+    reporting green on the shape it was written to catch.
+    """
+    exercised = {(3, 13)}
+    assert (3, 10) not in exercised, "the floor comparison cannot fail"
+    assert sorted(v for v in {(3, 10), (3, 11)} if v < min(exercised)) == [(3, 10), (3, 11)]

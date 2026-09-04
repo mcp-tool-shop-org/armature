@@ -7,7 +7,13 @@ name = "armature-studio"
 version = "0.3.0"
 description = "Block the shot; the model shoots it — GLB-authored previz, control sequences and gates for video-diffusion generation."
 readme = "README.pypi.md"
-requires-python = ">=3.10"
+# `>=3.11`, narrowed from `>=3.10` and now EXERCISED: ci.yml runs a 2-entry matrix at this
+# floor and at the top classifier below. The floor moved up rather than being covered
+# because two files in this repo's suite import `tomllib`, which landed in 3.11 — the suite
+# that would prove 3.10 cannot collect on it, and a promise nothing can run is a promise
+# this repo does not make. tests/test_ci_workflows.py reads the interval out of these two
+# fields, so changing either moves the matrix with it.
+requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "mcp-tool-shop", email = "64996768+mcp-tool-shop@users.noreply.github.com" }]
 keywords = [
@@ -19,7 +25,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",

@@ -176,12 +176,25 @@ jobs:
   # Blender-side coverage is the rig's job, not CI's.
   python-tests:
     runs-on: ubuntu-latest
+    strategy:
+      # The two ENDS of the interval pyproject promises: 3.11 is `requires-python`'s floor
+      # and 3.13 is the highest classifier. Until v0.3.2 there was no matrix at all and the
+      # single job ran 3.13, so every version below it was a public promise nothing ran —
+      # and the end that matters is the floor, because a version below the exercised one is
+      # an extrapolation rather than an interpolation. The floor came UP to 3.11 in the same
+      # change: two files in the suite import `tomllib`, which landed in 3.11, so the suite
+      # that would prove 3.10 cannot collect on it. Two entries, inside the studio rule's
+      # 2-3 Python versions and 6-job cap. tests/test_ci_workflows.py reads the interval out
+      # of pyproject, so narrowing or widening the promise moves this matrix with it.
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
 
       # opencv is pinned to the rig's verified version: the aapose golden-frame
       # tests assert byte-stable rasterization, and the rasterizer's version is
@@ -221,10 +234,27 @@ jobs:
       # `armature check` alone was not enough, is written in the action.
       - uses: ./.github/actions/clean-room
 
+  # The launcher is Node, not Python, and it ran as a step of the Python job on one version.
+  # `npm/package.json` declares `"node": ">=18"` — a promise npm enforces on a user's machine
+  # at install time — and nothing ran 18. Its own job with a 2-entry matrix costs less than
+  # a second axis on python-tests and keeps the file inside the studio 6-job cap: site-build,
+  # python-tests x2, launcher x2.
+  launcher:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 22]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
+          node-version: ${{ matrix.node-version }}
 
+      # `npm test` is `node bin/armature.mjs --node-selftest`: it proves the launcher parses
+      # and reports honestly, which is the half of it that must work before Python is even
+      # looked for. release.yml runs the same command in its publish job.
       - name: launcher self-test
         working-directory: npm
         run: npm test
