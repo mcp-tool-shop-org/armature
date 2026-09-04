@@ -130,6 +130,60 @@ class RenderGate(GateFailure):
     gate = "STARTFRAME"
 
 
+#: The generator's frame rule for this model family. Both dimensions of `WIDTH, HEIGHT`
+#: above are divisible by 16, and CLAUDE.md's environment block states the constraint as a
+#: standing one: "Every video model constrains resolution and frame count (divisibility
+#: rules, fixed buckets, frame-count forms) ... record the constraint per model in the spec
+#: that first uses it." This is that constraint, in the tool whose output IS the
+#: conditioning image a paid generation is submitted with.
+FRAME_DIVISOR = 16
+
+
+def require_frame_size(width, height):
+    """`(width, height)` if a generator would accept them, else raise `RenderGate`.
+
+    F-34a858f5, wave 12. `--width` / `--height` were bare `type=int` with no bound and
+    reached `SF.silhouette_extent` and `SF.gate_whole` unvalidated. MEASURED over the real
+    `armature_core.startframe` functions with a three-point cloud: (832, 480) PASSes with a
+    smallest margin of 54.2 px; (-832, 480) and (1, 1) both raise the typed `StartFrameGate`
+    naming the failing sides -- so Gate WHOLE is NOT walked past and the false-PASS half of
+    the routed question is REFUTED, because an integer flag cannot deliver a NaN. The
+    residue this closes is the zero case: (0, 480) and (832, 0) both raise a bare, untyped
+    `ZeroDivisionError` from inside `silhouette_extent`, which the halt contract records as
+    "FAILED -- an unhandled error" at exit 1 -- and it happens AFTER
+    `scene.render.resolution_x = 0` has already been assigned. An operator typo on the one
+    tool whose output conditions a paid I2V submission got a stack trace naming a
+    projection helper instead of a refusal naming the flag.
+
+    The divisibility clause rides here rather than being left to Gate L downstream for the
+    reason the finding gives: this refusal is the natural place to state the generator-legal
+    constraint, instead of letting an arbitrary size reach the render and be caught (or
+    not) by a graph check much later.
+    """
+    ev = {"gate": "STARTFRAME", "andon": "RenderGate", "width": width, "height": height,
+          "divisor": FRAME_DIVISOR, "module_frame": [WIDTH, HEIGHT]}
+    bad = [name for name, v in (("width", width), ("height", height))
+           if not isinstance(v, int) or isinstance(v, bool) or v <= 0]
+    if bad:
+        ev["non_positive"] = bad
+        raise RenderGate(
+            f"--width={width!r} --height={height!r}: {' and '.join(bad)} must be a "
+            f"positive integer. A zero dimension divides by zero inside the silhouette "
+            f"solve and reaches the halt line as an unhandled error naming a projection "
+            f"helper, after the scene resolution has already been set to it", ev)
+    off = [name for name, v in (("width", width), ("height", height))
+           if v % FRAME_DIVISOR]
+    if off:
+        ev["not_divisible"] = off
+        raise RenderGate(
+            f"--width={width} --height={height}: {' and '.join(off)} is not divisible by "
+            f"{FRAME_DIVISOR}. This tool's output is the conditioning image a generation "
+            f"is submitted with, and the model family's frame buckets are multiples of "
+            f"{FRAME_DIVISOR} (this module's own frame is {WIDTH}x{HEIGHT}); a frame it "
+            f"will not accept is better refused here than after the render", ev)
+    return int(width), int(height)
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser()
@@ -384,7 +438,9 @@ def main():
     started = time.time()
     a = parse_args()
     out = os.path.abspath(a.out)
-    width, height = int(a.width), int(a.height)
+    # F-34a858f5: refused BEFORE `scene.render.resolution_x` is assigned, and before the
+    # silhouette solve divides by it.
+    width, height = require_frame_size(int(a.width), int(a.height))
 
     # ---- fps FIRST, on an empty scene, before the import. glTF key times are seconds.
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -665,8 +721,17 @@ def main():
         "source": {"glb": os.path.abspath(a.glb), "sha256": _sha256(a.glb),
                    "frame_index": a.frame, "scene_frame": scene.frame_current,
                    "action_frame_range": list(span) if span else None,
+                   # F-33fb7947: `subject` is already `render_visible_meshes(scene,
+                   # meshes)` (bound at :434), so this measured the filtered population
+                   # before the change too - but the correctness lived in a variable
+                   # binding two hundred lines up rather than in the call, and the record
+                   # published a digest with no field saying which population produced it.
+                   # `scene=` is idempotent here and states which of the two measurements
+                   # this is, exactly as `probe_subject.py:67` already does for
+                   # `world_bounds` (F-328aaea2); `selection` says it in the record.
                    "pose_signature":
-                       blender_scene.evaluated_geometry_signature(subject)},
+                       blender_scene.evaluated_geometry_signature(subject, scene=scene),
+                   "pose_signature_selection": "render_visible_meshes"},
         "resolution": [width, height], "fps": a.fps, "floor_drawn": bool(a.floor),
         "floor_material": floor_material,
         "staging": {

@@ -578,3 +578,196 @@ def test_the_behaviour_keyed_walk_sees_what_the_name_keyed_one_cannot(tmp_path,
         "the name-keyed predicate is supposed to be blind to these two spellings; if it "
         "now sees them, this fixture no longer proves what it exists to prove")
     assert [line for line, _ in _module_refusals("probe_behaviour.py")] == [9, 10]
+
+
+# =================================================================== F-4d9161df (HIGH)
+#
+# The stale-pin gate's window is a COUNT and the sampler's origin is a CONSTANT, so the
+# frames compared are not the frames the gate certified. `keyed_window` collapsed the span
+# to `hi - lo + 1` and threw `lo` away; `signatures` sampled control frames 0..n-1, which
+# `blender_scene.set_scene_frame` maps to SCENE frames 1..n whatever the action keys.
+
+
+def _relift():
+    return load_tool("check_relift.py")
+
+
+def test_the_window_keeps_both_ends_of_the_keyed_span_not_only_its_length():
+    mod = _relift()
+    w = mod.keyed_window("a.glb", (10.0, 74.0), 65)
+    assert w["keyed_frames"] == 65
+    assert w["first_keyed_scene_frame"] == 10
+    assert w["last_keyed_scene_frame"] == 74
+    assert w["sampled_scene_frames"] == [10, 74]
+
+
+def test_an_offset_action_is_sampled_over_its_own_keys_not_from_scene_frame_one():
+    """The measurement that opened the finding: both GLBs key (10.0, 74.0) and `--frames=65`
+    passed with the verdict "both GLBs key [10.0, 74.0] and the requested 65 frames sit
+    inside it", while the sampler read scene frames 1..65 — of which 1..9 are BEFORE the
+    first key and 66..74 were never read at all."""
+    mod = _relift()
+    w = mod.keyed_window("a.glb", (10.0, 74.0), 65)
+    assert mod.scene_frames_to_sample(w) == list(range(10, 75))
+    assert mod.scene_frames_to_sample(w)[0] != 1
+
+
+@pytest.mark.parametrize("span", [(10.0, 74.0), (0.0, 64.0), (-5.0, 59.0), (1.0, 65.0)])
+def test_the_sampled_frames_lie_inside_the_keyed_span_for_every_origin(span):
+    mod = _relift()
+    w = mod.keyed_window("a.glb", span, 65)
+    sampled = mod.scene_frames_to_sample(w)
+    assert len(sampled) == 65
+    assert sampled[0] == int(span[0]) and sampled[-1] == int(span[1])
+
+
+def test_the_gate_states_the_absolute_window_it_certified():
+    mod = _relift()
+    w = mod.keyed_window("a.glb", (10.0, 74.0), 65)
+    ev = mod.gate_relift_window(w, dict(w, glb="b.glb"), 65)
+    assert ev["clause"] is None
+    assert ev["sampled_scene_frames"] == [10, 74]
+    assert "10" in ev["verdict"] and "74" in ev["verdict"]
+
+
+def test_a_request_that_would_run_off_the_end_of_an_offset_action_refuses():
+    """Carried from `render_start_frame.py:441`, which checks BOTH ends of the span for
+    exactly this reason: "Blender holds the nearest pose and renders it with no error"."""
+    mod = _relift()
+    w = mod.keyed_window("a.glb", (10.0, 40.0), 65)
+    with pytest.raises(mod.ReliftWindow) as caught:
+        mod.gate_relift_window(w, dict(w, glb="b.glb"), 65)
+    assert caught.value.evidence["clause"] == "request_overruns_the_performance"
+
+
+def test_the_gate_refuses_a_window_whose_ends_do_not_lie_inside_the_keyed_span():
+    """The clause the count could not state: a window may be short enough and still sit
+    outside the keys. Driven by handing the gate a window whose recorded sample range was
+    not derived from its own span — the shape any future caller of `keyed_window`'s record
+    could produce."""
+    mod = _relift()
+    w = mod.keyed_window("a.glb", (10.0, 74.0), 65)
+    off = dict(w, sampled_scene_frames=[1, 65])
+    with pytest.raises(mod.ReliftWindow) as caught:
+        mod.gate_relift_window(off, dict(off, glb="b.glb"), 65)
+    ev = caught.value.evidence
+    assert ev["clause"] == "sampled_window_outside_the_keys"
+
+
+def test_the_sampler_reads_the_frames_the_gate_certified(monkeypatch):
+    """The two halves are the same object or the census proves nothing: `signatures` asks
+    `scene_frames_to_sample` for its frames rather than `range(window['sampled'])`."""
+    src = read_source("check_relift.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "signatures")
+    calls = [ast.unparse(n.func) for n in ast.walk(fn) if isinstance(n, ast.Call)]
+    assert "scene_frames_to_sample" in calls, calls
+    assert not [n for n in ast.walk(fn)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "range"], (
+        "the sampler still derives its frames from a COUNT; the origin is what the finding "
+        "is about, and `range(n)` cannot carry one")
+
+
+# =================================================================== F-33fb7947 (MEDIUM)
+#
+# Both `evaluated_geometry_signature` sites measured the FILTERED shape already — the
+# correctness lived in a variable binding several lines up rather than in the call — and
+# neither published record said which population produced the digest.
+
+
+@pytest.mark.parametrize("filename,func", [("check_relift.py", "signatures"),
+                                           ("render_start_frame.py", "main")])
+def test_every_signature_call_names_its_selection_at_the_call(filename, func):
+    """The census keys on the CALL that reaches the measuring function, whatever it is
+    named — the wave-12 rule — and asks that it state its population rather than leave that
+    to a reader of the argument. `probe_subject.py:67` is the precedent, one function over
+    (F-328aaea2)."""
+    tree = ast.parse(read_source(filename))
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == func)
+    calls = [n for n in ast.walk(fn)
+             if isinstance(n, ast.Call)
+             and ast.unparse(n.func).endswith("evaluated_geometry_signature")]
+    assert calls, f"{filename}:{func} no longer takes a geometry signature"
+    for call in calls:
+        assert any(kw.arg == "scene" for kw in call.keywords), (
+            f"{filename}:{func} line {call.lineno} takes a signature without saying which "
+            f"population it is over; `scene=` is idempotent on an already-filtered list "
+            f"and is what states the measurement")
+
+
+def test_the_relift_record_names_the_population_its_digests_are_over():
+    mod = _relift()
+    w = mod.keyed_window("a.glb", (1.0, 8.0), 8)
+    ev = mod.gate_relift_window(w, dict(w, glb="b.glb"), 8)
+    assert ev["clause"] is None
+    src = read_source("check_relift.py")
+    assert '"signature_selection"' in src
+    assert 'window["selection"] = "render_visible_meshes"' in src
+
+
+def test_the_start_frame_provenance_names_the_population_of_its_pose_signature():
+    src = read_source("render_start_frame.py")
+    assert '"pose_signature_selection": "render_visible_meshes"' in src
+
+
+# =================================================================== F-34a858f5 (MEDIUM)
+#
+# `--width` / `--height` are bare `type=int` with no bound and reach `SF.silhouette_extent`
+# and `SF.gate_whole` unvalidated. Gate WHOLE is not walked past — the false-PASS half of
+# the routed question is REFUTED, measured — but `--width=0` produces a bare untyped
+# `ZeroDivisionError` from inside a shared solver module, AFTER `scene.render.resolution_x`
+# has already been assigned 0.
+
+
+@pytest.mark.parametrize("width,height", [(0, 480), (832, 0), (-832, 480), (0, 0)])
+def test_a_non_positive_frame_size_is_refused_by_name_before_anything_is_staged(
+        width, height):
+    rsf = load_tool("render_start_frame.py")
+    with pytest.raises(rsf.RenderGate) as exc:
+        rsf.require_frame_size(width, height)
+    ev = exc.value.evidence
+    assert ev["gate"] == "STARTFRAME"
+    assert ev["width"] == width and ev["height"] == height
+    assert "positive" in str(exc.value)
+
+
+def test_the_refusal_states_the_generator_legal_constraint_the_module_pins():
+    """This tool's output is the conditioning image a paid generation consumes, so the
+    refusal is the natural place to state the constraint rather than let an arbitrary size
+    reach the render."""
+    rsf = load_tool("render_start_frame.py")
+    with pytest.raises(rsf.RenderGate) as exc:
+        rsf.require_frame_size(831, 479)
+    ev = exc.value.evidence
+    assert ev["divisor"] == 16
+    assert ev["module_frame"] == [rsf.WIDTH, rsf.HEIGHT]
+    assert "divisible" in str(exc.value)
+
+
+def test_the_module_frame_and_other_legal_sizes_are_accepted():
+    """A gate that refuses everything is not a gate — 832x480 is the model family's
+    documented bucket and 1280x720 is legal by the same rule."""
+    rsf = load_tool("render_start_frame.py")
+    assert rsf.require_frame_size(rsf.WIDTH, rsf.HEIGHT) == (rsf.WIDTH, rsf.HEIGHT)
+    assert rsf.require_frame_size(1280, 720) == (1280, 720)
+
+
+def test_the_refusal_fires_before_the_scene_resolution_is_assigned():
+    """The residue the finding names: the ZeroDivisionError happened AFTER
+    `scene.render.resolution_x = 0` was already set."""
+    src = read_source("render_start_frame.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    checks = [n.lineno for n in ast.walk(fn)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+              and n.func.id == "require_frame_size"]
+    assigns = [n.lineno for n in ast.walk(fn)
+               if isinstance(n, ast.Assign)
+               and "resolution_x" in ast.unparse(n)]
+    assert checks, "main no longer refuses its frame size"
+    assert assigns, "main no longer assigns a render resolution"
+    assert min(checks) < min(assigns), (checks, assigns)
