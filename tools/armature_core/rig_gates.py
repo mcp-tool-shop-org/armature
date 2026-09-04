@@ -72,18 +72,30 @@ def gate_n_names(observed, registered, where):
     return ev
 
 
-def gate_p_rest_pose(source_world, bound_world, bbox_diagonal,
-                     epsilon_frac=REST_POSE_EPSILON_FRAC):
+def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
     """Gate P · ANDON — binding the mesh did not move it.
 
     `source_world` and `bound_world` are (N, 3) world-space vertex arrays: the mesh as
     imported, and the same mesh evaluated with the armature modifier live at the rest
-    pose. Max displacement must be within `epsilon_frac` of the mesh's own bbox diagonal.
+    pose. Max displacement must be within `REST_POSE_EPSILON_FRAC` of the mesh's own
+    bbox diagonal.
+
+    ⚠ **The epsilon used to arrive from the caller.** Measured 2026-09-04:
+    `gate_p_rest_pose(a, collapsed, 1.0)` raised, and the same call with
+    `epsilon_frac=1e9` returned verdict 'rest pose preserved' on that same collapsed
+    mesh. `gates.g4_bbox_sanity` and `donor_gate.gate_donor` both had this argument
+    removed already, for the reason this module's own page states: a number a gate
+    compares against is a skip flag wearing an argument's clothes. No caller in `tools/`
+    passed it (measured by grep, 2026-09-04), so it was a latent skip flag rather than a
+    live one. The constant is read here.
     """
+    epsilon_frac = REST_POSE_EPSILON_FRAC
     a = np.asarray(source_world, dtype=np.float64)
     b = np.asarray(bound_world, dtype=np.float64)
     ev = {"gate": "P", "andon": "GatePRestPose",
-          "epsilon_frac": epsilon_frac, "bbox_diagonal": float(bbox_diagonal),
+          "epsilon_frac": epsilon_frac,
+          "epsilon_source": "rig_gates.REST_POSE_EPSILON_FRAC",
+          "bbox_diagonal": float(bbox_diagonal),
           "n_source": int(a.shape[0]) if a.ndim == 2 else None,
           "n_bound": int(b.shape[0]) if b.ndim == 2 else None}
 
@@ -134,8 +146,7 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal,
     return ev
 
 
-def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal,
-                                epsilon_frac=REST_POSE_EPSILON_FRAC, max_probe=20000):
+def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=20000):
     """Gate P, round-trip clause — the exported surface is the surface that went in.
 
     **Why this is a point-set comparison where the bind clause is index-wise.** The armature
@@ -151,7 +162,25 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal,
 
     Compared at float32 because that is glTF's storage precision. Demanding float64 would be
     asking for a precision the format does not carry, and would fire on a correct export.
+
+    ⚠ **A probe that could not finish now REFUSES; it used to report a pass.** Until
+    2026-09-04, when the odd-position population exceeded `max_probe` the probe was
+    truncated to the first `max_probe` entries and the gate reported "positions agree
+    within <threshold>" computed over that prefix. Nothing in the return value
+    distinguished "every differing position was measured" from "the first N were".
+    Measured: ten source positions, all ten differing, the last in the gate's own sort
+    order moved 50.0 units — with `max_probe=3` the gate returned `verdict='positions
+    agree within 0.000100000'`, `max_deviation=9.99e-07`, `probe_truncated_at=3`. A glTF
+    export that moved the surface would ship with Gate P green, which is the silent
+    collapse `GatePRestPose` exists to catch, and `tools/rig_character.py:881` runs this
+    clause on a subject whose own record is 149,643 unique positions.
+
+    `epsilon_frac` went with it, for the reason `gate_p_rest_pose` records. `max_probe`
+    stays because it no longer decides a verdict — exceeding it raises — and it is
+    keyword-only so a caller that sets it is stating a choice rather than dropping a
+    number into a threshold slot.
     """
+    epsilon_frac = REST_POSE_EPSILON_FRAC
     a = np.unique(np.ascontiguousarray(np.asarray(source, dtype=np.float32)), axis=0)
     b = np.unique(np.ascontiguousarray(np.asarray(roundtrip, dtype=np.float32)), axis=0)
     ev = {"gate": "P", "andon": "GatePRestPose",
@@ -159,7 +188,9 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal,
           "unique_positions_roundtrip": int(len(b)),
           "n_source_vertices": int(len(np.asarray(source))),
           "n_roundtrip_vertices": int(len(np.asarray(roundtrip))),
-          "epsilon_frac": epsilon_frac, "bbox_diagonal": float(bbox_diagonal),
+          "epsilon_frac": epsilon_frac,
+          "epsilon_source": "rig_gates.REST_POSE_EPSILON_FRAC",
+          "max_probe": int(max_probe), "bbox_diagonal": float(bbox_diagonal),
           "compared_at": "float32 — glTF's storage precision"}
     if not (bbox_diagonal > 0):
         raise GatePRestPose(f"bbox diagonal is {bbox_diagonal}; no threshold can be derived",
@@ -186,8 +217,23 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal,
             continue
         pts = np.stack([odd["x"], odd["y"], odd["z"]], axis=1).astype(np.float64)
         if len(pts) > max_probe:
-            ev["probe_truncated_at"] = max_probe
-            pts = pts[:max_probe]
+            # · ANDON — on the direction the rest of this clause does not bound. A
+            # prefix measured is not a population measured, and the verdict below would
+            # say "positions agree" about the entries nobody read.
+            ev["probe_truncated_at"] = int(max_probe)
+            ev["probe_population"] = int(len(pts))
+            ev["probe_unexamined"] = int(len(pts) - max_probe)
+            raise GatePRestPose(
+                f"the round-trip probe cannot examine this population: {len(pts)} "
+                f"position(s) are present on only one side and the probe window is "
+                f"{max_probe}, so {len(pts) - max_probe} of them would never be "
+                f"measured. A deviation computed over the first {max_probe} would "
+                f"state that the surface is unchanged on the strength of a prefix, and "
+                f"a check that cannot fail is not a check. Raise max_probe as a stated "
+                f"choice, or fix the export that produced {len(only_source)} "
+                f"source-only and {len(only_roundtrip)} export-only positions",
+                ev,
+            )
         ref = against.astype(np.float64)
         for chunk in np.array_split(pts, max(1, len(pts) // 256 + 1)):
             d = np.linalg.norm(chunk[:, None, :] - ref[None, :, :], axis=2).min(axis=1)
@@ -206,7 +252,12 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal,
     return ev
 
 
-def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal, min_frac=1e-4):
+#: Gate P's liveness floor, as a fraction of the mesh's own bbox diagonal. A module
+#: constant, not an argument — see `gate_p_rest_pose`.
+LIVENESS_MIN_FRAC = 1e-4
+
+
+def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
     """Gate P, second clause · ANDON — the identity reading was not vacuous.
 
     **A check that cannot fail is not a check, and Gate P's first clause is one step from
@@ -219,11 +270,17 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal, min_frac=1
 
     So the tool poses a bone, re-evaluates, and hands the result here. If the mesh does not
     move when a bone moves, the evaluation path is dead and the 0.0 measured nothing.
+
+    The floor is `LIVENESS_MIN_FRAC`, read here rather than taken from the caller: a
+    caller-supplied floor of 0 would make this andon pass on a dead evaluation, which is
+    the andon inverted. See `gate_p_rest_pose`.
     """
+    min_frac = LIVENESS_MIN_FRAC
     a = np.asarray(rest_world, dtype=np.float64)
     b = np.asarray(probe_world, dtype=np.float64)
     ev = {"gate": "P", "andon": "GatePRestPose",
-          "min_frac": min_frac, "bbox_diagonal": float(bbox_diagonal)}
+          "min_frac": min_frac, "min_frac_source": "rig_gates.LIVENESS_MIN_FRAC",
+          "bbox_diagonal": float(bbox_diagonal)}
     if a.shape != b.shape:
         raise GatePRestPose(
             f"liveness probe returned a different vertex array ({a.shape} vs {b.shape}); "
@@ -269,10 +326,7 @@ def rig_fingerprint(bones, weights, n_verts):
     }
 
 
-def gate_d_determinism(a, b, bbox_diagonal,
-                       length_frac=DETERMINISM_LENGTH_FRAC,
-                       weight_tol=DETERMINISM_WEIGHT_TOL,
-                       angle_tol=DETERMINISM_ANGLE_TOL):
+def gate_d_determinism(a, b, bbox_diagonal):
     """Gate D · ANDON — a second build from identical inputs produced the same rig.
 
     Compared as parsed objects. Lengths are toleranced as a fraction of the subject's own
@@ -295,11 +349,23 @@ def gate_d_determinism(a, b, bbox_diagonal,
       examines nothing, while the receipt asserts weights agree. The bone half DOES bind
       there, so the gate is not wholly vacuous — the false half is the one the receipt
       asserted, and the verdict now names it as NOT COMPARED.
+
+    ⚠ **The three tolerances used to arrive from the caller.** Measured 2026-09-04:
+    this gate raised on a rig whose bone tail had moved 4.0 and whose weights went
+    0 -> 1, and the same call with `length_frac=1e9, weight_tol=1e9, angle_tol=1e9`
+    returned "two builds agree on bones, hierarchy and weights". The constants are read
+    here now, for the reason `gate_p_rest_pose` records.
     """
+    length_frac = DETERMINISM_LENGTH_FRAC
+    weight_tol = DETERMINISM_WEIGHT_TOL
+    angle_tol = DETERMINISM_ANGLE_TOL
     tol = length_frac * float(bbox_diagonal)
     ev = {"gate": "D", "andon": "GateDDeterminism",
           "length_tolerance": tol, "weight_tolerance": weight_tol,
-          "angle_tolerance": angle_tol, "bbox_diagonal": float(bbox_diagonal),
+          "angle_tolerance": angle_tol,
+          "tolerance_source": ("rig_gates.DETERMINISM_LENGTH_FRAC / "
+                               "DETERMINISM_WEIGHT_TOL / DETERMINISM_ANGLE_TOL"),
+          "bbox_diagonal": float(bbox_diagonal),
           "n_bones_a": len(a["bones"]), "n_bones_b": len(b["bones"]),
           "n_weight_groups_a": len(a["weights"]), "n_weight_groups_b": len(b["weights"])}
     problems = []

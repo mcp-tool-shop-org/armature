@@ -1163,3 +1163,221 @@ def test_a_scheduler_picker_is_not_mistaken_for_an_unrecorded_seed_source():
                 "inputs": {"width": 832, "height": 480, "length": 81}}}
     assert RG.unrecorded_seed_sources(g) == []
     assert RG.verify(g)["seed_clause_verdict"] == "CHECKED — 1 seed(s) all pinned"
+
+
+# --- W8 amend ----------------------------------------------------------------------
+#
+# Four findings and one routed CRITICAL, all in this module. Each fixture answers the
+# repo's question of a fixture: what would this look like if the code were wrong in the
+# specific way this check exists to catch?
+
+
+def _unrecorded_sampler_save():
+    """The save-format twin of `_unrecorded_sampler_api()`, and the shape the finding
+    measured: a recorded KSampler beside a hosted partner node whose positional widget
+    list carries a seed nobody registered."""
+    return {"nodes": [
+        {"id": 3, "type": "KSampler", "inputs": [],
+         "widgets_values": [7, "fixed", 20, 6.0, "euler", "simple", 1.0]},
+        {"id": 4, "type": "KlingVideoApi", "inputs": [],
+         "widgets_values": ["kling-v2", "720P", "16:9", 5, 999999999]},
+        {"id": 10, "type": "UNETLoader",
+         "widgets_values": ["wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"]},
+        {"id": 49, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]},
+    ]}
+
+
+def test_the_seed_population_andon_runs_in_save_format_too():
+    """Measured 2026-09-04 before the fix: on this graph `unrecorded_seed_sources`
+    returned [], `seeds()` returned only the KSampler, `gate_s_registration(g, [7])`
+    returned "1 noise-bearing seed(s), all pinned and all drawn from the committed list
+    of 1", and `verify(g, frame=(832,480,81))` returned "CHECKED - 1 seed(s) all pinned"
+    - while node 4's seed 999999999 was never examined. The SAME node in API format was
+    caught, so the two formats gave opposite answers about one graph, and save format is
+    the one the cloud hands back and `load_graph` reads before submission."""
+    g = _unrecorded_sampler_save()
+    found = RG.unrecorded_seed_sources(g)
+    assert [u["class"] for u in found] == ["KlingVideoApi"]
+    assert found[0]["node_id"] == 4
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(g, [7])
+    assert "KlingVideoApi" in str(exc.value)
+    assert exc.value.evidence["seed_clause_verdict"] == "INDETERMINATE"
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g, frame=(832, 480, 81))
+    assert "KlingVideoApi" in str(exc.value)
+
+
+def test_a_save_format_converted_widget_named_seed_is_read_by_name():
+    """Save format names inputs too - as a list of slot dicts, a converted widget
+    carrying `{"widget": {"name": "seed"}}`. The input-name clause reads each format's
+    own spelling rather than running in one of them."""
+    g = {"nodes": [
+        {"id": 7, "type": "SomeVendorSampl3r",
+         "inputs": [{"name": "model", "type": "MODEL", "link": 1},
+                    {"name": "seed", "type": "INT", "link": 2,
+                     "widget": {"name": "seed"}}],
+         "widgets_values": [42]},
+    ]}
+    found = RG.unrecorded_seed_sources(g)
+    assert [u["class"] for u in found] == ["SomeVendorSampl3r"]
+    assert "seed" in found[0]["why"]
+
+
+def test_the_save_format_clause_does_not_fire_on_a_graph_it_can_read():
+    """The other direction: an andon that fires on a correct graph is not one anybody
+    keeps. A recorded sampler and a recorded hosted node both have SEED_NODES rows."""
+    g = {"nodes": [
+        {"id": 3, "type": "KSampler", "inputs": [],
+         "widgets_values": [7, "fixed", 20, 6.0, "euler", "simple", 1.0]},
+        {"id": 10, "type": "UNETLoader",
+         "widgets_values": ["wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"]},
+        {"id": 49, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]},
+    ]}
+    assert RG.unrecorded_seed_sources(g) == []
+    assert RG.gate_s_registration(g, [7])["verdict"].startswith("1 noise-bearing")
+
+
+# --- the class-level licence clause (builders' unanimous CRITICAL, routed here) ------
+
+
+def _detector_graph_api(cls="DWPreprocessor"):
+    """A graph wiring the banned detector tier. It brings NO weight filename with it -
+    the preprocessor fetches its own weights at run time - so every clause that read
+    `widgets_values` for a weight suffix saw nothing at all."""
+    return {
+        "10": {"class_type": "UNETLoader",
+               "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}},
+        "11": {"class_type": cls, "inputs": {"image": ["12", 0], "resolution": 512}},
+        "3": {"class_type": "KSamplerAdvanced",
+              "inputs": {"add_noise": "enable", "noise_seed": 7, "model": ["10", 0]}},
+        "40": {"class_type": "EmptyHunyuanLatentVideo",
+               "inputs": {"width": 832, "height": 480, "length": 81}},
+    }
+
+
+def test_a_banned_node_class_is_visible_to_the_licence_clause():
+    """Measured 2026-09-04 before the fix: `components()` on this graph returned one row
+    (the UNET file) and `verify(g)` returned green, while node 11 is the `dwpose` row's
+    tier - BANNED, "weights not fetched", UNVERIFIED-treated-as-NO. A licence row is not
+    a wiring claim, and a wiring claim is not always a filename."""
+    g = _detector_graph_api()
+    rows = RG.ruled_node_classes(g)
+    assert [r["class_type"] for r in rows] == ["DWPreprocessor"]
+    assert rows[0]["verdict"] == "BANNED"
+    assert rows[0]["matched_on"] == "dwpose"
+    assert rows[0]["licence"] and rows[0]["reason"]
+
+    banned = [c for c in RG.components(g) if c["verdict"] == "BANNED"]
+    assert [c["class_type"] for c in banned] == ["DWPreprocessor"]
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert "DWPreprocessor" in str(exc.value)
+    assert "BANNED" in str(exc.value)
+
+
+def test_the_openpose_row_catches_its_own_preprocessor_class_too():
+    g = _detector_graph_api("OpenposePreprocessor")
+    rows = RG.ruled_node_classes(g)
+    assert rows[0]["matched_on"] == "openpose"
+    with pytest.raises(RG.RouteGate, match=r"BANNED"):
+        RG.verify(g)
+
+
+def test_the_class_clause_reads_save_format_and_subgraphs_like_every_other_clause():
+    g = graph([{"id": 1, "type": "UNETLoader",
+                "widgets_values": ["wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"]}],
+              [{"id": 2, "type": "DWPreprocessor", "widgets_values": [512]}])
+    rows = RG.ruled_node_classes(g)
+    assert [r["class_type"] for r in rows] == ["DWPreprocessor"]
+    assert rows[0]["where"] != "top"
+
+
+def test_an_unruled_node_class_is_not_invented_into_a_ruling():
+    """The red direction of the matcher: a class whose name matches no row contributes
+    nothing, and the ordinary graphs this repo builds stay clean."""
+    g = {"10": {"class_type": "UNETLoader",
+                "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}},
+         "3": {"class_type": "KSamplerAdvanced",
+               "inputs": {"add_noise": "enable", "noise_seed": 7, "model": ["10", 0]}},
+         "40": {"class_type": "EmptyHunyuanLatentVideo",
+                "inputs": {"width": 832, "height": 480, "length": 81}}}
+    assert RG.ruled_node_classes(g) == []
+    assert all(c["kind"] == "weight" for c in RG.components(g))
+
+
+def test_every_ruled_row_is_matched_on_its_own_key_even_with_no_alias():
+    """`RULED_COMPONENT_CLASSES` only ADDS aliases: a row absent from it is still
+    matched on its own name, so no row is silently exempt from the class clause.
+    Derived over the whole table rather than typed."""
+    for key in RG.RULED_COMPONENTS:
+        pats = RG.class_patterns_for(key)
+        assert key.lower() in pats, key
+        hits = RG.rulings_for_class(f"Some{key}Node")
+        assert [h["matched_on"] for h in hits][:1] == [key], key
+
+
+# --- the evidence names the andon that raises (F-1844be26) ---------------------------
+
+
+def test_gate_s_registrations_evidence_names_the_andon_that_actually_raises():
+    """`gate_s_registration` built `ev = {"gate": "S", ...}` and every failure path
+    raises `RouteGate`, whose class attribute is `gate = "ROUTE"`. `stage_render`
+    prints GATE_FAILURE <exc.gate> and GATE_EVIDENCE <json> as two lines, so a receipt
+    said ROUTE on one and S on the other - and "S" is already the id of
+    `errors.GateSSeedRegistration`, a different andon with different evidence keys."""
+    g = {"nodes": [{"id": 3, "type": "KSampler", "inputs": [],
+                    "widgets_values": [7, "fixed", 20, 6.0, "euler", "simple", 1.0]}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(g, [99])
+    assert exc.value.gate == exc.value.evidence["gate"] == "ROUTE"
+    assert exc.value.evidence["clause"] == "gate_s_registration"
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(g, [])
+    assert exc.value.gate == exc.value.evidence["gate"] == "ROUTE"
+
+    ev = RG.gate_s_registration(g, [7])
+    assert ev["gate"] == "ROUTE" and ev["clause"] == "gate_s_registration"
+
+
+# --- load_graph refuses a file it cannot parse, by name (F-c55e4571) -----------------
+
+
+def test_load_graph_names_the_file_it_could_not_parse(tmp_path):
+    """The parse sat OUTSIDE the try that prefixes the path. Measured 2026-09-04: a file
+    containing `{ not json at all }` raised json.JSONDecodeError with the path nowhere in
+    the message, and neither error is an ArmatureError, so a caller catching GateFailure
+    around a submission step did not catch it."""
+    bad = tmp_path / "broken.api.json"
+    bad.write_text("{ not json at all }", encoding="utf-8")
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.load_graph(str(bad))
+    assert "broken.api.json" in str(exc.value)
+    assert exc.value.evidence["clause"] == "unparseable_file"
+
+
+def test_load_graph_refuses_an_empty_file_by_name_rather_than_parsing_nothing(tmp_path):
+    """`find` and `rfind` both return -1 on an empty file and the slice is '', so
+    json.loads was handed the empty string."""
+    empty = tmp_path / "empty.api.json"
+    empty.write_text("", encoding="utf-8")
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.load_graph(str(empty))
+    assert "empty.api.json" in str(exc.value)
+    assert exc.value.evidence["n_chars"] == 0
+
+    braceless = tmp_path / "braceless.json"
+    braceless.write_text("not a graph, just prose\n", encoding="utf-8")
+    with pytest.raises(RG.RouteGate, match=r"contains no JSON object at all"):
+        RG.load_graph(str(braceless))
+
+
+def test_load_graph_still_reads_a_good_file(tmp_path):
+    good = tmp_path / "ok.api.json"
+    good.write_text('{"prompt": {"3": {"class_type": "KSampler", "inputs": {"seed": 7}}}}',
+                    encoding="utf-8")
+    assert RG.is_api_format(RG.load_graph(str(good)))

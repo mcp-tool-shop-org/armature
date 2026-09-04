@@ -486,3 +486,183 @@ def test_a_phrase_on_an_unratified_occupant_is_still_NOT_demanded():
     hole = next(s for s in doc["surfaces"] if s["id"] == "hand_L")
     hole["occupant"] = {"kind": "prompt", "phrase": "a brass ring", "ratified": False}
     assert C.cover(doc, COVERED)["verdict"] == "COVERED"
+
+
+# --- W8 amend: a phrase is matched on word boundaries, both directions (F-138c009c) ---
+#
+# `_find_phrase` was `haystack.find(phrase.lower())` - a bare substring test - and it
+# decided BOTH the forward direction (does this ratified phrase occur in the prompt) and
+# the reverse one (strip licensed spans before looking for residue). The sibling refusal
+# clause `_forbidden_hit` on the same page argues at length that a claim about text needs
+# `\b` boundaries; the phrase clause did not get that discipline. Short single-word
+# phrases - cape, helm, arm, hood, mask - are exactly the form a surfaces file names an
+# occupant with.
+
+
+def _short_phrase_doc(phrase="cape", licensed=()):
+    """One ratified occupant carrying a single short word, and nothing else ratified."""
+    doc = load_probe()
+    doc["surfaces"][0]["occupant"]["phrase"] = phrase
+    doc["surfaces"][1]["occupant"] = None
+    doc["legal_clauses"] = [{"id": f"LS{i}", "phrase": t, "class": "style"}
+                            for i, t in enumerate(licensed)]
+    return doc
+
+
+def test_a_ratified_phrase_is_not_satisfied_by_a_longer_word_containing_it():
+    """The forward half. Measured 2026-09-04 before the fix: a doc whose only ratified
+    occupant phrase is 'cape', with legal_clause 'wide landscape shot', returned
+    cover(doc, 'wide landscape shot') -> verdict COVERED, missing []. The surface is
+    named nowhere in that prompt; Gate CANON would report ARMED on a payload whose text
+    does not carry the ratified statement, and the credit is spent."""
+    doc = _short_phrase_doc("cape", licensed=("wide landscape shot",))
+    with pytest.raises(GateCanon) as exc:
+        C.cover(doc, "wide landscape shot")
+    assert exc.value.evidence["missing"] == [{"surface": "torso", "phrase": "cape"}]
+    assert "ratified phrases absent" in str(exc.value)
+
+
+def test_the_same_phrase_still_matches_when_it_is_actually_a_word():
+    """The other direction of the same matcher: the boundary must not have broken the
+    ordinary case, including a phrase sitting against punctuation."""
+    doc = _short_phrase_doc("cape", licensed=("a torn",))
+    assert C.cover(doc, "a torn cape")["verdict"] == "COVERED"
+    assert C.cover(doc, "a torn cape.")["verdict"] == "COVERED"
+
+
+def test_a_licensed_phrase_does_not_fragment_a_longer_word_into_residue():
+    """The reverse half, and the mirror defect. Measured 2026-09-04 before the fix: with
+    'cape' the only licensed phrase, `residue('a landscape')` returned ['lands'] and
+    `cover(doc, 'a landscape')` raised "reverse cover failed: unlicensed residue
+    ['lands']" - a refusal quoting a token that is not a word."""
+    doc = _short_phrase_doc("cape")
+    assert C.residue("a landscape", doc) == ["landscape"]
+    with pytest.raises(GateCanon) as exc:
+        C.cover(doc, "a landscape")
+    assert "lands" not in exc.value.evidence["residue"]
+
+
+def test_one_matcher_serves_both_directions():
+    """The finding's remedy was one mechanism, not two that can drift: the forward
+    clause and the residue strip are asserted to agree about the same haystack."""
+    doc = _short_phrase_doc("cape")
+    hay = "wide landscape shot"
+    assert C._find_phrase(hay, "cape") < 0
+    assert "landscape" in C.residue(hay, doc)
+    assert C._find_phrase("a torn cape here", "cape") == 7
+
+
+# --- W8 amend: an UNRATIFIED phrase does not license the reverse direction (F-5cba860d)
+
+
+def _unratified_phrase_doc():
+    """A ratified torso occupant and an UNRATIFIED occupant carrying a phrase."""
+    doc = load_probe()
+    hole = next(s for s in doc["surfaces"] if s["id"] == "hand_L")
+    hole["occupant"] = {"id": "P3", "phrase": "glowing red halo", "kind": "prompt",
+                        "ratified": False}
+    return doc
+
+
+def test_an_unratified_phrase_is_not_a_licence():
+    """`licensed_phrases` walked every surface's occupant phrase with no ratification
+    test, while the forward direction deliberately keeps phrase clauses behind
+    ratification - the same claim honoured on one side of the router and ignored on the
+    other. Measured 2026-09-04 before the fix: a doc with a ratified torso and an
+    UNRATIFIED 'glowing red halo' surface returned cover(doc, '... glowing red halo') ->
+    COVERED, residue []."""
+    doc = _unratified_phrase_doc()
+    assert "glowing red halo" not in C.licensed_phrases(doc)
+    with pytest.raises(GateCanon) as exc:
+        C.cover(doc, COVERED + ", glowing red halo")
+    assert exc.value.evidence["residue"] == ["glowing", "red", "halo"]
+
+
+def test_ratifying_that_same_surface_makes_it_a_licence():
+    """The red direction of the clause above: the ONLY difference between the two docs
+    is the ratified flag, so this asserts the ratification test is what decided it."""
+    doc = _unratified_phrase_doc()
+    next(s for s in doc["surfaces"] if s["id"] == "hand_L")["occupant"]["ratified"] = True
+    assert "glowing red halo" in C.licensed_phrases(doc)
+    with pytest.raises(GateCanon) as exc:
+        C.cover(doc, COVERED)
+    # Now ratified, the phrase is also OBLIGED by the forward direction - which is the
+    # asymmetry this finding was about, resolved in the direction the forward clause
+    # already took.
+    assert exc.value.evidence["missing"] == [
+        {"surface": "hand_L", "phrase": "glowing red halo"}]
+
+
+def test_a_legal_clause_phrase_still_licenses_without_any_ratification_flag():
+    """`legal_clauses` rows carry no `ratified` key at all and are a different object
+    from an occupant phrase - the ratification test must not have swallowed them."""
+    doc = load_probe()
+    assert "empty studio" in C.licensed_phrases(doc)
+    assert C.cover(doc, COVERED)["verdict"] == "COVERED"
+
+
+# --- W8 amend: one loader, not two unwrap rules (F-3dfbb3dd) ----------------------
+#
+# `texts_from_api_graph` unwrapped `GRAPH_WRAPPER_KEYS` itself rather than reading
+# through `route_gates.normalise_graph`, which the route module's docstring calls "THE
+# loader" and which wave 6 made one implementation precisely so the two could not drift.
+# They disagreed: this copy unwrapped exactly one level, only when the inner mapping
+# already carried node-shaped values, and did not recognise save format at all.
+
+
+def _both_loaders_agree(shape):
+    """Does each loader accept or refuse `shape`? Returns (canon_ok, route_ok)."""
+    from armature_core import route_gates as RG
+
+    try:
+        C.texts_from_api_graph(shape)
+        canon_ok = True
+    except GateCanon:
+        canon_ok = False
+    try:
+        RG.normalise_graph(shape)
+        route_ok = True
+    except RG.RouteGate:
+        route_ok = False
+    return canon_ok, route_ok
+
+
+def test_the_two_loaders_agree_on_the_three_shapes_that_used_to_split_them():
+    """Measured 2026-09-04 before the fix: a doubly-wrapped API graph and a save-format
+    graph were accepted by `normalise_graph` and refused by this module with clause
+    `unrecognised_graph`. They now come from the same unwrap; the save-format refusal
+    that remains is this reader's own API-only clause, named as such."""
+    doubly = {"prompt": {"prompt": _text_graph()}}
+    save = {"nodes": [{"id": 1, "type": "CLIPTextEncode", "widgets_values": [_API_TEXT]}]}
+    junk = {"last_node_id": 12, "version": 0.4}
+
+    assert _both_loaders_agree(doubly) == (True, True)
+    assert C.texts_from_api_graph(doubly) == [_API_TEXT]
+    assert _both_loaders_agree(junk) == (False, False)
+
+    # Save format: the LOADER recognises it; this READER does not walk it, and says so
+    # under its own clause rather than calling the shape unrecognised.
+    canon_ok, route_ok = _both_loaders_agree(save)
+    assert (canon_ok, route_ok) == (False, True)
+    with pytest.raises(GateCanon) as exc:
+        C.texts_from_api_graph(save)
+    assert exc.value.evidence["clause"] == "not_api_format"
+
+
+def test_the_wrapper_key_tuple_is_one_object_not_two():
+    """The structural half: `route_gates.WRAPPER_KEYS` is `canon.GRAPH_WRAPPER_KEYS`
+    itself, so a key added to one is added to both."""
+    from armature_core import route_gates as RG
+
+    assert RG.WRAPPER_KEYS is C.GRAPH_WRAPPER_KEYS
+
+
+def test_canon_does_not_carry_its_own_unwrap_loop_any_more():
+    """Read as text, because the defect was a second implementation rather than a wrong
+    answer: any reintroduction of a local walk over the wrapper keys puts it back."""
+    import inspect
+
+    src = inspect.getsource(C.texts_from_api_graph)
+    body = src.split('"""', 2)[-1]
+    assert "for key in GRAPH_WRAPPER_KEYS" not in body
+    assert "normalise_graph" in body
