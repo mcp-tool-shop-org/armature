@@ -157,12 +157,33 @@ def test_p3_reports_both_normalizations_and_chooses_neither(tmp_path):
     assert not (out / "depth").exists(), "a canonical `depth/` would be choosing"
 
 
+# ------------------------------------------------------------------ the compensator pair
+#
+# Wave 6, F-c0f49504. This is the repo's only NAMED_COMPENSATORS pair, and both halves were
+# pinned by outcome alone: a bare `pytest.raises(ArmatureError)` on one side and
+# `delete_output_dir(...) is True` on the other. Measured: replacing the whole
+# `.armature_run` marker clause in `stage_render.delete_output_dir` with an unrelated raise
+# (`if len(os.path.basename(run_dir)) > 3: raise ArmatureError(...)`) left BOTH tests green
+# — the foreign directory's name is long so the substitute fired, and the run directory is
+# named `run`, three characters, so it did not and rmtree proceeded. The marker mechanism
+# could be deleted outright with 2 passed, and the compensator that keeps this tool from
+# removing a directory it did not make would have lost its only check.
+#
+# What decides is the MARKER, so that is what the fixtures below vary: the refusal has to
+# name it, and a directory carrying the marker is deleted whoever wrote it.
+
+MARKER = ".armature_run"
+
+
 def test_compensator_refuses_a_directory_it_did_not_create(tmp_path):
     foreign = tmp_path / "not_ours"
     foreign.mkdir()
     (foreign / "precious.txt").write_text("hi")
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError) as exc:
         stage_render.delete_output_dir(str(foreign))
+    assert MARKER in str(exc.value), (
+        "the refusal does not name the marker it refused on; any ArmatureError raised "
+        "anywhere inside the call would satisfy this test")
     assert (foreign / "precious.txt").exists()
 
 
@@ -170,8 +191,55 @@ def test_compensator_removes_a_run_it_did_create(tmp_path):
     spec = make_spec(tmp_path)
     out = tmp_path / "run"
     stage_render.run_export(spec, str(out), backend=FakeBackend(64, 96))
+    assert (out / MARKER).is_file(), "run_export left no marker for the compensator to read"
     assert stage_render.delete_output_dir(str(out)) is True
     assert not out.exists()
+
+
+def test_the_marker_is_what_decides_not_the_name_or_the_contents(tmp_path):
+    """The positive half of the same clause: a directory this tool did not build, carrying
+    the marker, IS deleted. Paired with the refusal above, the two fixtures differ in the
+    marker and in nothing else, so a substitute clause reading the name, the depth or the
+    contents cannot satisfy both."""
+    adopted = tmp_path / "not_ours"
+    adopted.mkdir()
+    (adopted / "precious.txt").write_text("hi")
+    (adopted / MARKER).write_text("{}", encoding="utf-8")
+    assert stage_render.delete_output_dir(str(adopted)) is True
+    assert not adopted.exists()
+
+
+def test_removing_the_marker_from_a_real_run_makes_the_compensator_refuse_it(tmp_path):
+    """And the negative of the same pair, on a directory the tool really did create: with
+    the marker deleted the compensator refuses its own run, so what it reads is the marker
+    and not authorship it has no other record of."""
+    spec = make_spec(tmp_path)
+    out = tmp_path / "run"
+    stage_render.run_export(spec, str(out), backend=FakeBackend(64, 96))
+    (out / MARKER).unlink()
+    with pytest.raises(ArmatureError) as exc:
+        stage_render.delete_output_dir(str(out))
+    assert MARKER in str(exc.value)
+    assert out.exists()
+
+
+def test_a_missing_directory_is_reported_not_raised(tmp_path):
+    """The third branch, never pinned: nothing to compensate is `False`, not a refusal.
+    A compensator that raised here would turn a clean rollback into a halt."""
+    assert stage_render.delete_output_dir(str(tmp_path / "never_existed")) is False
+
+
+def test_the_marker_name_is_the_one_the_tool_writes():
+    """The two constants are the same object of the same name, asserted rather than
+    assumed: the fixtures above are only about the marker if this holds."""
+    import ast
+
+    src = open(stage_render.__file__, encoding="utf-8").read()
+    literals = {n.value for n in ast.walk(ast.parse(src))
+                if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                and n.value.startswith(".armature")}
+    assert literals == {MARKER}, (
+        f"stage_render names {sorted(literals)} where these fixtures pin {MARKER!r}")
 
 
 # ---------------------------------- the fake's contract against the real backend's
