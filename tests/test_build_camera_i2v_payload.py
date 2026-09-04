@@ -750,7 +750,11 @@ def test_every_payload_error_in_this_tree_can_carry_its_evidence():
         mod = importlib.import_module(name[:-3])
         err = mod.PayloadError("a message", {"gate": "X", "measured": 1})
         assert err.evidence == {"gate": "X", "measured": 1}, name
-        assert mod.PayloadError("a message").evidence == {}, name
+        # Wave 16, rule 5: the four `PayloadError.__init__`s are DELETED and the base's
+        # inherited, so a bare-message refusal carries `None` where it carried `{}` -
+        # `"evidence": null` beside `"gate": null` is the honest halt record for a refusal
+        # that passed no receipt (`armature_core/errors.py`, the base's own docstring).
+        assert mod.PayloadError("a message").evidence is None, name
         assert str(err) == "a message", name
 
 

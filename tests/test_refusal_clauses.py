@@ -133,6 +133,13 @@ RECORDED_POPULATION = frozenset({
     # WAVE-14 MERGE (coordinator, 2026-09-04): `aapose.ConventionError` (core-solvers, F-d0de0c2d) — the class landed, the
     # name did not; measured `POLICED - RECORDED_POPULATION == ["ConventionError"]` on the merged tree.
     "ConventionError",
+    # WAVE 16 (builders): the two classes this wave adds with two or more raise sites.
+    # `SeedRegistrationError` (F-0682bd00) is the ONE reader for a committed seed
+    # registration - five clauses, replacing a bare `["seeds"]` index at seven sites.
+    # `SpendCeiling` (F-f85c37f0) is Gate CEILING raised under its own id; its sibling half
+    # raises `errors.GateSSeedRegistration`, the id `S`'s existing owner, so no second
+    # andon takes an id another andon already uses.
+    "SeedRegistrationError", "SpendCeiling",
     # WAVE-14 MERGE (coordinator, 2026-09-04, after #159/#160 and receipt #287): `make_rig_sheet.ReferenceFileError` — two raise sites, a plain refusal.
     "ReferenceFileError",
     "CadenceGate", "PinnedCameraGate",
@@ -290,7 +297,16 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # WAVE-14 MERGE (coordinator, 2026-09-04): 91 → 92 on core-gates (`SubjectExtentError`) AND 91 → 92 on core-solvers
     # (`ConventionError`) — two classes, one number twice; the merged tree measures 93 (SEAM 8 §2).
     # WAVE-14 MERGE (coordinator, 2026-09-04, after #159/#160 and receipt #287): 93 → 94 (`ReferenceFileError`), measured.
-    assert len(POLICED) == 94, sorted(POLICED)
+    # WAVE 16 (builders, F-0682bd00 + F-f85c37f0): 94 -> 96 on this branch, MEASURED.
+    #   +1 `build_assembly_payload.SeedRegistrationError` — the ONE reader for a committed
+    #      seed registration, five raise sites, replacing the bare `json.load(fh)["seeds"]`
+    #      index at seven sites across five builders and `gate_saved_graph`.
+    #   +1 `build_r2v_payload.SpendCeiling` — Gate CEILING raised under its own id, two
+    #      raise sites. Its sibling half raises the id `S`'s EXISTING owner
+    #      (`errors.GateSSeedRegistration`) rather than defining a second class on that id,
+    #      so it adds nothing here. ⚠ Sibling branches move this too; the coordinator
+    #      re-measures the merged number, as at waves 10, 12 and 14.
+    assert len(POLICED) == 96, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -360,7 +376,14 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # into `_readable_node`, shared with `_iter_definitions`' recursion — one raise site
     # before, one after, so it moves this count by nothing.
     # WAVE-14 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(RAISE_SITES["RouteGate"]) == 63, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 16 (builders): 63 -> 61 on this branch, MEASURED — the first time this number
+    # has gone DOWN. +1 `gate_saved_graph.link_round_trip`'s `duplicate_socket_name`
+    # (F-04fdd395); -3 in `build_r2v_payload`, where three raises moved off the bare
+    # `RouteGate` onto the classes whose own id the evidence names (F-f85c37f0): one to
+    # `errors.GateSSeedRegistration` and two to the new `SpendCeiling`. A raise that leaves
+    # this count because it became MORE specific is the fix working, not the census
+    # shrinking.
+    assert len(RAISE_SITES["RouteGate"]) == 61, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside

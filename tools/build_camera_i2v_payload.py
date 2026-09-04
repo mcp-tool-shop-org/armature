@@ -325,16 +325,19 @@ class PayloadError(ArmatureError):
     `ledger_against_wave1` built a full evidence dict, wrote it into the payload record on
     the PASSING path, and then raised with a message and nothing else — so the failing
     measurement, the one worth having, reached no record at all. Four modules define this
-    class; all four take the dict now.
+    class; all four take the dict now, through the base's own constructor.
 
-    ⚠ Four identical implementations of three lines is three lines too many: the single one
-    belongs beside `GateFailure` in `armature_core/errors.py`. That file is not this
-    domain's to edit, so the duplication is RECORDED here rather than hidden.
+    **CORRECTION, wave 16 (F-c496fa48, rule 5).** This class used to define its own
+    `__init__` normalising `evidence or {}`, under a note saying the single implementation
+    "belongs beside `GateFailure` in `armature_core/errors.py`. That file is not this
+    domain's to edit". Wave 14 put the constructor on the base and made a deliberate choice
+    the four copies then overrode: `ArmatureError` STORES WHAT IT IS PASSED and normalises
+    nothing, because `"evidence": null` beside `"gate": null` is the honest halt record for
+    a refusal that carries no receipt. `GateFailure` is the one exemption - its clauses
+    index into `ev` while they measure. `PayloadError` is not a gate, so the constructor is
+    DELETED and the base's inherited: `PayloadError("m").evidence is None` and
+    `PayloadError("m", d).evidence is d`, by identity.
     """
-
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
 
 
 def parse_args(argv=None):

@@ -49,7 +49,7 @@ from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
-    ArmatureError, GateFailure)
+    ArmatureError, GateFailure, GateSSeedRegistration)
 from canon_gate import canon_line, canon_spend  # noqa: E402
 
 TOOL_VERSION = "E13.2"
@@ -64,6 +64,24 @@ SAVE_ID = 501
 #: `Wan2ReferenceVideoApi` is `output_node: false` (get_node, 2026-08-13) — it emits a
 #: VIDEO and saves nothing, so the graph supplies its own save class.
 SAVE_CLASS = "SaveVideo"
+
+
+class SpendCeiling(RG.RouteGate):
+    """Gate CEILING, raised under its own id.
+
+    Wave 16, F-f85c37f0. `gate_one_paid_node` built `ev = {"gate": "CEILING", ...}` and
+    raised it as a bare `RouteGate`, whose class attribute is `gate = "ROUTE"`, so the
+    record's `gates.CEILING` entry and the printed `[ROUTE] …` halt line named two
+    different gate ids for one event. `gate_seed_registered` had the same shape with `S`
+    and no `andon`/`clause` keys at all; that one is fixed by raising the id's EXISTING
+    owner (`errors.GateSSeedRegistration`, the class `build_lora_arm_payload.gate_s`
+    already raises), because `tests/test_gates.py` forbids a second andon on an id another
+    andon already uses. No class owned `CEILING`, so this one is defined.
+
+    It is a `RouteGate`, so every caller that catches `RG.RouteGate` still catches it.
+    """
+
+    gate = "CEILING"
 
 
 def build(*, arm, seed, prompt, negative, refs=None, upload_names=None,
@@ -89,14 +107,20 @@ def build(*, arm, seed, prompt, negative, refs=None, upload_names=None,
 
     if arm == "A1":
         if not refs:
-            raise RG.RouteGate("arm A1 needs reference images", {"arm": arm})
+            raise RG.RouteGate(
+                "arm A1 needs reference images",
+                {"gate": "ROUTE", "andon": "RouteGate", "clause": "arm_input_missing",
+                 "arm": arm, "flag": "--refs"})
         for i, name in enumerate(refs):
             nid = str(FIRST_IMAGE_ID + i)
             wf[nid] = {"class_type": "LoadImage", "inputs": {"image": name}}
             inputs[f"model.reference_images.image{i + 1}"] = [nid, 0]
     elif arm == "A2":
         if not upload_names:
-            raise RG.RouteGate("arm A2 needs the cascade's frame uploads", {"arm": arm})
+            raise RG.RouteGate(
+                "arm A2 needs the cascade's frame uploads",
+                {"gate": "ROUTE", "andon": "RouteGate", "clause": "arm_input_missing",
+                 "arm": arm, "flag": "--uploads"})
         cascade, group_ids = CASCADE.build(upload_names, fps=16.0, group_size=group_size)
         # Everything the cascade builds EXCEPT its own SaveVideo: here the constructed
         # VIDEO goes into the reference slot instead of to disk.
@@ -106,7 +130,10 @@ def build(*, arm, seed, prompt, negative, refs=None, upload_names=None,
                        "create_video": str(CASCADE.VIDEO_ID)}
         inputs["model.reference_videos.video1"] = [str(CASCADE.VIDEO_ID), 0]
     else:
-        raise RG.RouteGate(f"unknown arm {arm!r}; the spec names A1 and A2", {"arm": arm})
+        raise RG.RouteGate(
+            f"unknown arm {arm!r}; the spec names A1 and A2",
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "unknown_arm",
+             "arm": arm, "known": ["A1", "A2"]})
 
     wf[str(R2V_ID)] = {"class_type": R2V_CLASS, "inputs": inputs}
     wf[str(SAVE_ID)] = {"class_type": SAVE_CLASS, "inputs": {
@@ -128,9 +155,19 @@ def gate_seed_registered(seed, registered):
     cheapest place to refuse an unregistered seed is before anything has been submitted
     for it.
     """
-    ev = {"gate": "S", "seed": int(seed), "registered": list(registered)}
+    # ONE andon per receipt (wave 16, F-f85c37f0). This built `{"gate": "S", …}` and
+    # raised it as a bare `RouteGate`, whose class id is `ROUTE`: measured 2026-09-04,
+    # `gate_seed_registered(999, [1, 2])` rendered `[ROUTE] seed 999 is not on the
+    # committed registration [1, 2]` while `exc.evidence["gate"]` said `S`, with `andon`
+    # and `clause` both absent. The id's owner already exists - `GateSSeedRegistration`,
+    # which `build_lora_arm_payload.gate_s` raises for this same clause - so it is raised
+    # here rather than a second class being defined on the same id, which
+    # `tests/test_gates.py` forbids.
+    ev = {"gate": GateSSeedRegistration.gate, "andon": "GateSSeedRegistration",
+          "clause": "seed_not_registered",
+          "seed": int(seed), "registered": list(registered)}
     if int(seed) not in [int(s) for s in registered]:
-        raise RG.RouteGate(
+        raise GateSSeedRegistration(
             f"seed {seed} is not on the committed registration {sorted(registered)}. A rule "
             f"forbids; a list removes the possibility, and git timestamps the list ahead of "
             f"the artifacts it governs", ev)
@@ -177,7 +214,7 @@ def gate_one_paid_node(graph):
     hosted = hosted_api_nodes(graph)
     expected = sorted(nid for nid, n in graph.items()
                       if (n or {}).get("class_type") == R2V_CLASS)
-    ev = {"gate": "CEILING", "andon": "RouteGate",
+    ev = {"gate": SpendCeiling.gate, "andon": "SpendCeiling",
           "paid_nodes": expected, "n_paid": len(expected),
           "hosted_nodes": hosted, "n_hosted": len(hosted),
           "hosted_classes": sorted({str((graph[n] or {}).get("class_type"))
@@ -189,7 +226,7 @@ def gate_one_paid_node(graph):
               f"whose name ends in one of these is a partner tier that bills, whatever it "
               f"is spelled")}
     if hosted != expected:
-        raise RG.RouteGate(
+        raise SpendCeiling(
             f"the graph's billable population is {hosted} "
             f"({ev['hosted_classes']}) and the node this route expects to be charged for "
             f"is {expected} ({R2V_CLASS}). A partner tier this tool did not put in the "
@@ -198,7 +235,7 @@ def gate_one_paid_node(graph):
             f"before that arithmetic means anything",
             dict(ev, clause="hosted_population_is_not_the_expected_node"))
     if len(expected) != 1:
-        raise RG.RouteGate(
+        raise SpendCeiling(
             f"the graph carries {len(expected)} `{R2V_CLASS}` node(s); the spec's "
             f"credit ceiling counts one charge per submission, and that arithmetic is only "
             f"true at exactly one", dict(ev, clause="not_exactly_one_billable_node"))
@@ -255,7 +292,8 @@ def build_and_write(argv=None):
             f"arm {a.arm} needs {flag}: it is {what}, and this arm cannot be built "
             f"without it. The omission used to surface as a NoneType traceback from "
             f"`open`, two gates later",
-            {"arm": a.arm, "flag": flag, "clause": "missing_arm_input"})
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "missing_arm_input",
+             "arm": a.arm, "flag": flag})
 
     out = os.path.abspath(a.out)
 
