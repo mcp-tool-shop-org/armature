@@ -552,3 +552,81 @@ def test_every_apt_install_refreshes_the_index_first(source, script):
     assert update != -1 and update < install, (
         f"{source} installs an apt package without refreshing the index first:\n{script}"
     )
+
+
+def uses_refs():
+    """(source, owner/name, ref, whole line) for every `uses:` under `.github/`.
+
+    Enumerated from the directory, workflows and composite actions alike. A fourth workflow,
+    or a step added to an existing one, is held to the pinning law the day it lands rather
+    than the day someone remembers to extend a list.
+    """
+    out = []
+    sources = [(n, _text(n)) for n in workflow_files()]
+    for path in action_files():
+        with open(path, encoding="utf-8") as fh:
+            sources.append((os.path.relpath(path, REPO).replace("\\", "/"), fh.read()))
+    for name, text in sources:
+        for line in text.splitlines():
+            match = re.match(r"\s*-?\s*uses:\s*(\S+)", line)
+            if not match:
+                continue
+            spec = match.group(1)
+            if spec.startswith("./"):
+                continue  # a path into this repo, resolved by the checkout it rides on
+            action, _, ref = spec.partition("@")
+            out.append((name, action, ref, line.strip()))
+    return out
+
+
+@pytest.mark.parametrize("source,action,ref,line", uses_refs())
+def test_no_action_is_resolved_from_a_branch_ref(source, action, ref, line):
+    """A branch ref resolves at run time, so the code that runs is not the code reviewed.
+
+    `pypa/gh-action-pypi-publish@release/v1` was exactly this until 2026-09-04 — in the job
+    that performs the one step with no compensator.
+    """
+    assert ref, f"{source}: `{line}` names no ref at all, so it resolves to the default branch"
+    assert not re.match(r"^(main|master|develop|release/.*|.*-branch)$", ref), (
+        f"{source} resolves {action} from the branch ref {ref!r}; the code performing the "
+        f"step is whatever that branch holds on the day it runs:\n{line}"
+    )
+
+
+THIRD_PARTY = [row for row in uses_refs() if not row[1].startswith("actions/")]
+
+
+def test_the_repo_still_has_a_third_party_action_to_hold_to_the_pin():
+    """The population may not empty itself silently.
+
+    A test parametrized over an empty list reports green, and a pinning law with no subject
+    is the shape four prior gates in this repo took: passing N/N because N was zero.
+    """
+    assert THIRD_PARTY, (
+        "no third-party action is used anywhere under .github/ any more; if that is "
+        "deliberate this test and its sibling have no subject and should be retired "
+        "deliberately, not left reporting green"
+    )
+
+
+@pytest.mark.parametrize("source,action,ref,line", THIRD_PARTY)
+def test_a_third_party_action_is_pinned_to_a_commit_and_says_which_version(source, action, ref, line):
+    """The npm half of this law is pinned by a test; the PyPI half was pinned by a comment.
+
+    `npm install -g npm@^11.5.1` is held to a constraint by
+    `test_the_publish_toolchain_is_not_resolved_on_release_day`. The action beside it — which
+    performs the upload itself, the step with no compensator — carried a 40-hex SHA and a
+    comment ending "Bump deliberately, by re-resolving", and nothing anywhere asserted it:
+    substituting the branch ref it held until 2026-09-04 left both guarding tests green.
+
+    The trailing `# vX.Y.Z` is part of the requirement, not decoration: a bare hash is
+    unreadable, and a bump is reviewed by comparing the version a human can read.
+    """
+    assert re.fullmatch(r"[0-9a-f]{40}", ref), (
+        f"{source} pins {action} to {ref!r}, which is not a full commit SHA; a tag or branch "
+        f"is re-resolved on the day the step runs:\n{line}"
+    )
+    assert re.search(r"#\s*v?\d+\.\d+(\.\d+)?", line), (
+        f"{source} pins {action} to a bare hash with no version beside it; nobody can review "
+        f"a bump they cannot read:\n{line}"
+    )
