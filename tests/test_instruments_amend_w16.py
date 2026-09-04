@@ -29,6 +29,7 @@ import json
 import math
 import os
 import sys
+import types
 
 import numpy as np
 import pytest
@@ -905,3 +906,268 @@ def test_neither_visibility_andon_carries_its_own_one_level_predicate():
             assert "hide_render" not in text or "users_collection" not in text, (
                 f"{filename}:{node.lineno} answers render visibility one level deep "
                 f"again: {text}")
+
+
+# ================================== F-26ee2b03 — the flag that shapes the ground truth
+#
+# THE POPULATION: every argument of `make_test_armature` that shapes the synthetic subject
+# — `--frames`, `--fps`, `--segments`, `--thickness`, `--joint-scale`. Not `--frames`
+# alone: the finding names the other four in the same breath, and a fix that bounds one
+# number of five is the wave-14 shape this wave exists to stop.
+#
+# The member OUTSIDE the old walk: `posearc.arc_readout`, the ONE refusal that ran before
+# geometry, does not examine the frame count at all — measured, `arc_readout(arc, 0, ...)`
+# and `arc_readout(arc, -5, ...)` both return normally. So every clause upstream of the
+# export was blind to it, and the first thing that noticed was `side["frames"][0]`, an
+# IndexError at exit 1, AFTER the GLB and the `.joints.json` were both on disk.
+
+
+@pytest.fixture(scope="module")
+def mta16():
+    return load_tool("make_test_armature.py")
+
+
+def _args(**over):
+    ns = types.SimpleNamespace(
+        thickness=0.030, joint_scale=1.55, segments=16, pose_arc="probe_arm",
+        frames=33, fps=16, arc_start_deg=0.0, arc_end_deg=90.0, out="x.glb")
+    for k, v in over.items():
+        setattr(ns, k, v)
+    return ns
+
+
+@pytest.mark.parametrize("frames", [0, -5, 1])
+def test_a_frame_count_that_cannot_carry_a_performance_is_refused_by_name(mta16, frames):
+    """RED on the operand the finding named.
+
+    Reverted-red: yes. On the base tree nothing above the export examined `--frames`:
+    `build`'s keying loop is `for i in range(frames)` so no keyframe is inserted, the
+    LINEAR pass is skipped, `scene.frame_end` is set to 0 or a negative, the GLB is
+    exported and PASSES Gate GLB, the `.joints.json` is written with `frames: []`, and only
+    then does `side["frames"][0]` raise IndexError — recorded as
+    `MAKE_TEST_ARMATURE_HALT {"outcome": "FAILED - an unhandled error"}` at exit 1, naming
+    a dict index rather than the flag.
+    """
+    with pytest.raises(mta16.SubjectArgError) as exc:
+        mta16.require_subject_args(_args(frames=frames))
+    ev = exc.value.evidence
+    assert ev["clause"] == "subject_args"
+    assert ev["frames"] == frames
+    assert any("--frames" in line for line in ev["offending"]), ev["offending"]
+
+
+def test_the_frame_count_is_only_bounded_where_it_is_read(mta16):
+    """Grade the clause only on what it governs. Without `--pose-arc` this tool builds the
+    static bind pose, `scene.frame_end` is pinned to 1 and `--frames` is never read — so
+    refusing it there would refuse a flag the run does not use."""
+    assert mta16.require_subject_args(_args(pose_arc=None, frames=0)) is not None
+
+
+@pytest.mark.parametrize("flag,value", [
+    ("fps", 0), ("fps", -16),
+    ("segments", 2), ("segments", 0),
+    ("thickness", 0.0), ("thickness", -0.03), ("thickness", float("nan")),
+    ("joint_scale", 0.0), ("joint_scale", float("inf")),
+])
+def test_the_other_four_shaping_flags_are_bounded_too(mta16, flag, value):
+    """THE POPULATION, not the one flag the title of the finding names. `--fps` divides
+    into seconds in the glTF key times; `--segments` under three gives a limb no
+    cross-section; the two radii are lengths.
+
+    Reverted-red: yes — every one of these returned normally from `parse_args` and reached
+    geometry on the base tree.
+    """
+    with pytest.raises(mta16.SubjectArgError) as exc:
+        mta16.require_subject_args(_args(**{flag: value}))
+    assert any(flag.replace("_", "-") in line for line in exc.value.evidence["offending"])
+
+
+def test_a_well_formed_invocation_is_not_refused(mta16):
+    """A gate that refuses everything is not a gate."""
+    ok = _args()
+    assert mta16.require_subject_args(ok) is ok
+    assert mta16.require_subject_args(_args(frames=2)) is not None
+
+
+def test_the_refusal_runs_above_resolve_arc_and_above_every_write():
+    """The ORDER is the property: nothing exists when it fires — no geometry, no output
+    directory, no GLB, no sidecar. Read off `main`'s own statement order.
+
+    Reverted-red: yes, trivially — the call did not exist.
+    """
+    tree = ast.parse(read_source("make_test_armature.py"))
+    main = next(n for n in tree.body
+                if isinstance(n, ast.FunctionDef) and n.name == "main")
+    lines = {}
+    for node in ast.walk(main):
+        if isinstance(node, ast.Call):
+            name = (node.func.attr if isinstance(node.func, ast.Attribute)
+                    else getattr(node.func, "id", None))
+            if name in ("require_subject_args", "resolve_arc", "arc_readout", "build",
+                        "makedirs"):
+                lines.setdefault(name, node.lineno)
+    for later in ("resolve_arc", "arc_readout", "build", "makedirs"):
+        assert lines["require_subject_args"] < lines[later], (later, lines)
+
+
+def test_the_subject_arg_refusal_is_in_the_family_so_the_halt_is_refused_not_failed(mta16):
+    """Exit 2 and REFUSED, where the IndexError was exit 1 and "FAILED - an unhandled
+    error". `SpecError` is an `ArmatureError`; it is deliberately NOT a `GateFailure`,
+    because no gate ran — this is an argument that never should have reached geometry."""
+    from armature_core.errors import ArmatureError, GateFailure
+
+    assert issubclass(mta16.SubjectArgError, ArmatureError)
+    assert not issubclass(mta16.SubjectArgError, GateFailure)
+
+    def raiser():
+        raise mta16.SubjectArgError("bad --frames", {"clause": "subject_args"})
+
+    code, escaped = blender_stub.exit_code_of_main_block("make_test_armature.py",
+                                                         raiser=raiser)
+    assert escaped is None, escaped
+    assert code == 2, code
+
+
+# ============================ F-39381793 — the copy the family was carried FROM drifted
+#
+# THE POPULATION: every definition of `select_engine` under `tools/` and
+# `tools/superseded/` — seven today, derived by AST rather than typed. `_render_status` is
+# held identical across its nine copies by a census (`test_instruments_amend_w14.py:468`);
+# this function had none, and the copy every other one was carried FROM is the copy that
+# lost the `"clause": "engine"` key the halt line is told apart by.
+#
+# The census normalises the docstring, the gate CLASS and the MESSAGE — a bake is not a
+# render and `preview_glb` draws a preview, so the sentence each tool prints is properly
+# its own — and then requires one structure and one set of evidence keys. That is the
+# property that drifted; byte identity would force `rig_bake` to say it renders.
+
+
+def _select_engine_defs(sources):
+    """`{where: the ast.FunctionDef}` for every `select_engine` in `sources`.
+
+    `sources` is `(where, source text)` pairs so the census can be pointed at a SCRATCH
+    tree carrying a defective member — rule 2's shape.
+    """
+    out = {}
+    for where, src in sources:
+        for node in ast.walk(ast.parse(src)):
+            if isinstance(node, ast.FunctionDef) and node.name == "select_engine":
+                out[where] = node
+    return out
+
+
+def _normalised(fn):
+    """The body with the docstring, the gate class and the message string replaced.
+
+    What is left is the loop, the return, and the evidence dict — the structure that must
+    not differ between copies.
+    """
+    body = list(fn.body)
+    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+        body = body[1:]
+    module = ast.Module(body=body, type_ignores=[])
+
+    class _Blank(ast.NodeTransformer):
+        def visit_Raise(self, node):
+            self.generic_visit(node)
+            if isinstance(node.exc, ast.Call):
+                node.exc.func = ast.Name(id="GATE", ctx=ast.Load())
+                if node.exc.args:
+                    node.exc.args[0] = ast.Constant(value="MESSAGE")
+            return node
+
+    module = _Blank().visit(module)
+    ast.fix_missing_locations(module)
+    return ast.unparse(module)
+
+
+def _engine_evidence_keys(fn):
+    """The keys of the evidence dict this copy raises with, in order."""
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
+            for arg in node.exc.args:
+                if isinstance(arg, ast.Dict):
+                    return [k.value for k in arg.keys if isinstance(k, ast.Constant)]
+    return None
+
+
+def _all_tool_sources():
+    out = [(fn, read_source(fn)) for fn in sorted(os.listdir(TOOLS)) if fn.endswith(".py")]
+    sup = os.path.join(TOOLS, "superseded")
+    for fn in sorted(os.listdir(sup)):
+        if fn.endswith(".py"):
+            with open(os.path.join(sup, fn), encoding="utf-8") as fh:
+                out.append((f"superseded/{fn}", fh.read()))
+    return out
+
+
+def test_every_copy_of_select_engine_has_one_structure():
+    """The census `_render_status` has and this function did not.
+
+    Reverted-red: yes — on the base tree `preview_glb.py`'s copy normalises to a body whose
+    evidence dict is `{'candidates': ..., 'blender': ...}` while the other six normalise to
+    one carrying `'clause'` first, so this returns two distinct bodies.
+    """
+    defs = _select_engine_defs(_all_tool_sources())
+    assert len(defs) >= 6, sorted(defs)
+    shapes = {}
+    for where, fn in defs.items():
+        shapes.setdefault(_normalised(fn), []).append(where)
+    assert len(shapes) == 1, {k[:120]: v for k, v in shapes.items()}
+
+
+def test_every_copy_of_select_engine_names_the_engine_clause():
+    """The FIELD the halt line is told apart by, over the whole population.
+
+    Reverted-red: yes — `preview_glb.py` returned `['candidates', 'blender']`.
+    """
+    for where, fn in _select_engine_defs(_all_tool_sources()).items():
+        keys = _engine_evidence_keys(fn)
+        assert keys == ["clause", "candidates", "blender"], (where, keys)
+        raises = [n for n in ast.walk(fn) if isinstance(n, ast.Raise)]
+        assert len(raises) == 1, where
+        assert '"clause": "engine"' in ast.unparse(raises[0]) or \
+               "'clause': 'engine'" in ast.unparse(raises[0]), where
+
+
+def test_the_select_engine_census_reaches_a_member_outside_the_tree_it_walks():
+    """RULE 2 — proven RED on a member outside the subset it walks: a scratch copy that
+    drops the clause key, which is exactly the drift measured on `preview_glb`."""
+    good = read_source("preview_walk.py")
+    drifted = good.replace('{"clause": "engine", "candidates": list(candidates),\n'
+                           '         "blender": bpy.app.version_string})',
+                           '{"candidates": list(candidates),\n'
+                           '         "blender": bpy.app.version_string})', 1)
+    assert drifted != good, "the mutation did not apply; this fixture proves nothing"
+    sources = _all_tool_sources() + [("scratch_drifted.py", drifted)]
+    defs = _select_engine_defs(sources)
+    shapes = {}
+    for where, fn in defs.items():
+        shapes.setdefault(_normalised(fn), []).append(where)
+    assert len(shapes) == 2, sorted(shapes.values())
+    assert _engine_evidence_keys(defs["scratch_drifted.py"]) == ["candidates", "blender"]
+
+
+def test_every_preview_glb_refusal_names_a_clause():
+    """The other half of the finding: `preview_glb` had four `PreviewGlbGate` raise sites
+    and one clause between them, so a `PREVIEW_GLB_HALT` line could not be told from its
+    siblings by the field every other refusal in this family uses for exactly that.
+
+    Reverted-red: yes — three of the four carried no `clause` key.
+    """
+    tree = ast.parse(read_source("preview_glb.py"))
+    sites = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
+             and getattr(n.exc.func, "id", None) == "PreviewGlbGate"]
+    assert len(sites) == 4, len(sites)
+    clauses = []
+    for node in sites:
+        ev = next((a for a in node.exc.args if isinstance(a, ast.Dict)), None)
+        assert ev is not None, ast.unparse(node)
+        found = [v.value for k, v in zip(ev.keys, ev.values)
+                 if isinstance(k, ast.Constant) and k.value == "clause"
+                 and isinstance(v, ast.Constant)]
+        assert found, ast.unparse(node)
+        clauses.append(found[0])
+    assert sorted(clauses) == ["engine", "missing_or_empty", "no_render_visible_mesh",
+                               "operator_status"], sorted(clauses)

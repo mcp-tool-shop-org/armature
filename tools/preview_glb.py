@@ -90,6 +90,21 @@ def select_engine(scene, candidates=ENGINE_CANDIDATES):
     set, and the preview would render on whatever engine the factory settings left in
     place — with no field anywhere in the record able to reveal it. Returns the engine
     actually set, so the record can state it.
+
+    WAVE 16, F-39381793 -- THE COPY THE FAMILY WAS CARRIED FROM IS THE COPY THAT DRIFTED.
+    `_render_status` is held identical across its nine copies by a census
+    (`test_instruments_amend_w14.py:468`); `select_engine` had none, and one of its seven
+    definitions had drifted in the field the halt line reads. Measured by AST over
+    `tools/*.py` and `tools/superseded/`: seven definitions, and THIS one raised with no
+    `"clause": "engine"` key, where `preview_walk`, `render_performer`,
+    `render_start_frame`, `render_turnaround`, `rig_bake` and `superseded/render_reference`
+    all carried it. `preview_glb` has four `PreviewGlbGate` raise sites and only one of
+    them named a clause at all, so a `PREVIEW_GLB_HALT` line could not be told from its
+    siblings by the field every other refusal in this family uses for exactly that. All
+    four name a clause now, and `test_instruments_amend_w16.py` carries the census that
+    holds every copy of this function to one shape -- its MESSAGE stays each tool's own
+    (a bake is not a render, and this file is a preview), its structure and its evidence
+    KEYS do not.
     """
     for eng in candidates:
         try:
@@ -100,7 +115,8 @@ def select_engine(scene, candidates=ENGINE_CANDIDATES):
     raise PreviewGlbGate(
         "none of the candidate render engines is valid on this Blender, so the preview "
         "would be drawn by whatever the factory settings left in place",
-        {"candidates": list(candidates), "blender": bpy.app.version_string})
+        {"clause": "engine", "candidates": list(candidates),
+         "blender": bpy.app.version_string})
 
 
 def add_camera_render(name_suffix, center, radius, azim_deg, elev_deg, res, out_dir, args):
@@ -174,7 +190,7 @@ def gate_previews_written(written):
             f"the preview is not complete: {len(missing)} of {len(paths)} views were never "
             f"written {[os.path.basename(p) for p in missing[:8]]} and {len(empty)} are "
             f"zero bytes {[os.path.basename(p) for p in empty[:8]]}",
-            {"planned": len(paths),
+            {"clause": "missing_or_empty", "planned": len(paths),
              "paths": [os.path.abspath(p) for p in paths],
              "missing": [os.path.abspath(p) for p in missing],
              "empty": [os.path.abspath(p) for p in empty]})
@@ -202,7 +218,8 @@ def main():
         raise PreviewGlbGate(
             f"{args.glb} imported {len(all_meshes)} mesh object(s) and none of them is "
             f"render-visible; there is nothing to preview",
-            {"glb": args.glb, "mesh_objects_all": [o.name for o in all_meshes]})
+            {"clause": "no_render_visible_mesh", "glb": args.glb,
+             "mesh_objects_all": [o.name for o in all_meshes]})
 
     arms = [o for o in bpy.data.objects if o.type == "ARMATURE"]
     empties = [o for o in bpy.data.objects if o.type == "EMPTY"]
