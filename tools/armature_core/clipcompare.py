@@ -131,7 +131,9 @@ def order_check(sources, decoded, step=8):
     place in a clip where source and decode are the same bytes. `min_margin` did read 0.0
     and the note below explains that as weak separation, but `order_preserved` and
     `displaced` are what a report quotes and both invented a fault.
-    `tools/measure_cascade_clip.py:185` is the live consumer, on the cascade path where a
+    `tools/measure_cascade_clip.py:258` is the live consumer (the wave-12 entry cited
+    `:185`; re-derived by grep 2026-09-04 — the call is
+    `record["order"] = CC.order_check(sources, decoded, step=a.step)`), on the cascade path where a
     real group displacement is what the check exists for — so the false alarm arrived
     beside the true positive it would be confused with, and either reading is expensive:
     credits re-spent on a clip that round-tripped perfectly, or a real displacement

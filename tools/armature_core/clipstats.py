@@ -63,6 +63,15 @@ class ClipStatsError(ArmatureError):
 #: number computed from them.
 LUMA_WEIGHTS = (0.2126, 0.7152, 0.0722)
 
+#: The relative tolerance `horizon_row` uses to ask whether a column's PEAK gradient and
+#: its MEDIAN gradient are the same float. Not a threshold on picture content: an
+#: edgeless column is one whose gradient never rises above its own middle, and in float64
+#: "never rises above" is a comparison with a rounding budget. 1e-9 is fifteen thousand
+#: times the double-precision epsilon and fifteen orders below any real edge measured on
+#: this rig (a step edge reads a peak/median ratio of ~1e17; a linspace ramp reads
+#: 1 + 5e-15).
+EDGE_RTOL = 1e-9
+
 
 def _as_float(frame):
     return np.asarray(frame, dtype=np.float64)
@@ -211,6 +220,38 @@ def horizon_row(frame, band=None, tolerance=3, min_agreement=0.5):
     the room has been repainted into something without one horizontal edge. Reporting a
     number there would be a measurement of nothing, and the whole reason this function
     exists is to be the one quantity in the clip that a moving subject cannot move.
+
+    **A column with nothing to say does not vote** (F-eb8689f1, wave 14). `rows =
+    np.argmax(grad, axis=0)` over an all-EQUAL column returns index 0, and nothing
+    bounded the strength from below, so the agreement statistic read its MAXIMUM
+    precisely where there is no information. Measured 2026-09-04: a uniform 64x64x3 plate
+    of value 30 returned `{'row': 1.0, 'agreement': 1.0, 'edge_strength': 0.0, 'verdict':
+    'found'}` — every column's gradient identically zero, every argmax resolved to the
+    top of the band — and a smooth vertical ramp, also edgeless, returned `agreement:
+    1.0` on the same mechanism. This is the argmin tie-breaking defect F-2ceefec7 closed
+    in `clipcompare.order_check` recurring in the sibling instrument of the same pair,
+    which was not checked at the time.
+
+    So a column carries an edge only when its own peak gradient EXCEEDS its own median
+    gradient — a comparison inside one column, with no absolute number in it and nothing
+    to tune. A flat column (peak == median == 0) and a constant-gradient ramp column
+    (peak == median > 0) both decline to vote; a step edge (peak 170 against a median
+    near 0) votes. `agreement` is then read over the voting columns only, and
+    `n_columns_with_an_edge` rides the dict beside it so the vacuous case is legible even
+    to a reader who quotes only `row` and `verdict` — which is what a report quotes.
+
+    `EDGE_RTOL` is a FLOAT-EQUALITY tolerance, not an image threshold, and the difference
+    matters because this repo does not invent pass conditions. A `np.linspace` ramp's
+    per-column gradients are equal in exact arithmetic and differ by 3.4e-14 on a
+    magnitude of 6.35 — 5e-15 relative — in float64, so a bare `peak > median` reads that
+    rounding as an edge and hands back a row. The comparison asked is "are these two
+    numbers the same number", answered the way float comparisons are answered
+    everywhere; it is scale-free, and no value of it can be tuned toward a picture.
+
+    Worst case this closes: a generation that collapses to a flat or near-flat plate in
+    its late frames — the failure video judging exists to catch — reported `horizon_row`
+    locked at row 1.0 with agreement 1.0 across exactly those frames, so the instrument
+    read the scene as perfectly stable at the moment the scene had been destroyed.
     """
     lum = luma(frame)
     h, w = lum.shape
@@ -222,16 +263,33 @@ def horizon_row(frame, band=None, tolerance=3, min_agreement=0.5):
             {"gate": None, "andon": "ClipStatsError", "clause": "band_too_narrow",
              "band": [lo, hi], "frame_height": int(h)})
     grad = np.abs(lum[lo + 1:hi + 1, :] - lum[lo - 1:hi - 1, :])
-    rows = np.argmax(grad, axis=0) + lo
+    peak = grad.max(axis=0)
+    # Per COLUMN, against that column's own middle: no global constant governs a local
+    # feature, and a column whose gradient never rises above its own median has no
+    # discontinuity for `argmax` to locate — only a tie for `argmax` to break. The
+    # `EDGE_RTOL` term is float equality, not a picture threshold; see the docstring.
+    mid = np.median(grad, axis=0)
+    has_edge = (peak - mid) > EDGE_RTOL * np.maximum(np.abs(peak), np.abs(mid))
+    n_edge = int(has_edge.sum())
+    out = {"tolerance": tolerance, "min_agreement": min_agreement,
+           "n_columns": int(w), "n_columns_with_an_edge": n_edge}
+    if not n_edge:
+        out.update({"row": None, "agreement": 0.0, "edge_strength": 0.0,
+                    "verdict": ("NOT FOUND — no column carries a horizontal edge; every "
+                                "column's gradient is flat, so every argmax is a tie "
+                                "resolved at the top of the band")})
+        return out
+    rows = (np.argmax(grad, axis=0) + lo)[has_edge]
     med = float(np.median(rows))
     agreement = float(np.mean(np.abs(rows - med) <= tolerance))
-    strength = float(np.median(grad.max(axis=0)))
+    strength = float(np.median(peak[has_edge]))
     found = agreement >= min_agreement
-    return {"row": med if found else None, "agreement": agreement,
-            "edge_strength": strength, "tolerance": tolerance,
-            "min_agreement": min_agreement, "n_columns": int(w),
-            "verdict": ("found" if found else
-                        "NOT FOUND — the columns do not agree on one horizontal edge")}
+    out.update({"row": med if found else None, "agreement": agreement,
+                "edge_strength": strength,
+                "verdict": ("found" if found else
+                            "NOT FOUND — the columns do not agree on one horizontal "
+                            "edge")})
+    return out
 
 
 def distinct_frames(frames):

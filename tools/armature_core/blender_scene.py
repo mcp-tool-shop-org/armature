@@ -670,7 +670,9 @@ class CompositorWiring(GateFailure):
     evidence (F-ac989919), while their own comment named them as the andon: "a dry_run PASS
     does not prove link sanity — check the topology in code". `ArmatureError` subclasses
     `RuntimeError`, so this was not merely untyped: `stage_render.py:508` catches only
-    `GateFailure` and prints GATE_FAILURE / GATE_EVIDENCE before returning 2, so a
+    `GateFailure` and writes the halt contract's `<PREFIX>_HALT` line before returning
+    2 (the `GATE_FAILURE` / `GATE_EVIDENCE` prints this used to name were deleted in wave
+    12; corrected in passing), so a
     compositor mis-wiring escaped that handler entirely and surfaced as an unhandled
     traceback with no receipt lines for an orchestrator or a later reader to key on. The
     Depth pass wired to the Alpha socket is the case: the run stops, correctly, and leaves

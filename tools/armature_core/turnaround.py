@@ -331,42 +331,142 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
     return ev
 
 
+#: Every `step`-th pixel in both axes before the comparison — `clipcompare.downsample`'s
+#: stride, and the same reason: it preserves gross layout at a fraction of the cost, and
+#: gross layout is exactly what a camera that did not move fails to change.
+PIXEL_COMPARE_STRIDE = 8
+
+
+def _pixel_pairs(view_records):
+    """`(n_compared, identical_adjacent_pairs, adjacent_mean_abs_distances)`.
+
+    Adjacent pairs, because a turnaround is an ordered orbit and a camera that stopped
+    moving stops between neighbours; the full N-squared comparison would cost eight times
+    as much to answer the same question. `numpy` is imported lazily so this module keeps
+    its "no bpy, no hard numeric dependency at import" shape for callers that only want
+    `orbit_azimuths`.
+    """
+    planes = []
+    for rec in view_records:
+        px = rec.get("pixels")
+        if px is None:
+            planes.append(None)
+            continue
+        try:
+            import numpy as np
+        except ImportError:                     # pragma: no cover - numpy is a hard dep
+            return 0, [], []
+        a = np.asarray(px, dtype=np.float64)
+        planes.append(a[::PIXEL_COMPARE_STRIDE, ::PIXEL_COMPARE_STRIDE, ...]
+                      if a.ndim >= 2 else a)
+    compared = sum(1 for p in planes if p is not None)
+    identical, distances = [], []
+    for i in range(1, len(planes)):
+        a, b = planes[i - 1], planes[i]
+        if a is None or b is None or getattr(a, "shape", None) != getattr(b, "shape", None):
+            continue
+        import numpy as np
+        d = float(np.abs(a - b).mean())
+        distances.append(d)
+        if d == 0.0:
+            identical.append([i - 1, i])
+    return compared, identical, distances
+
+
 def gate_set_distinct(view_records, expected):
     """Gate TURN · ANDON — the set is the whole turnaround, and every view is distinct.
 
     Runs after the views and **before the manifest**, because the manifest is what makes a
     run look finished (`stage_render`'s own doctrine, and the reason its G2 sits there).
 
-    Two clauses, both silent elsewhere. A short set is the obvious one. The second is
+    Three clauses, all silent elsewhere. A short set is the obvious one. The second is
     **duplicate content**: if the camera failed to move — an orbit helper handed the same
     azimuth every time, a scene frame that never advanced, a camera matrix assigned once
     outside the loop — the run writes `expected` well-formed RGBA files, every per-view
     alpha gate passes on every one of them, the count is right, and the set is eight copies
     of the front view. Nothing else here looks at whether the views differ from each other.
+
+    **The third is that clause read in PIXELS** (F-c4cf355d, wave 14). The duplicate
+    clause was a byte-hash equality test, and only the third of the three failures the
+    paragraph above names produces byte-identical files. An orbit helper that advances by
+    a rounding error rather than by zero — a `sweep_deg` computed as 0.0001 rather than
+    360, an int/float division that collapses the step — or a camera that moves a
+    hundredth of a degree per view, writes eight files with eight DIFFERENT digests, and
+    the gate returned its strongest verdict, "8 distinct views, as many as were asked
+    for", on a set that is visually one view eight times. CLAUDE.md rules on exactly this
+    direction: "A file-hash mismatch is not evidence a render changed. Compare pixels;
+    reserve byte-hashes for artifacts whose bytes are the contract." Here the bytes are
+    not the contract — the pictures are.
+
+    So a record that carries `pixels` (an `(H, W, C)` array, or anything `numpy` will read
+    as one) is compared in pixel space against every other view that carries one, and a
+    pair whose mean absolute difference is 0.0 while their digests differ is refused by
+    its own clause. Zero is a STRUCTURAL reading, not a tuned floor: two renders whose
+    every pixel agrees are the same picture whatever their PNG bytes say, and this repo
+    does not invent a threshold for "different enough" where no calibrated one exists —
+    the measured `min_adjacent_pixel_distance` rides the evidence and the verdict so the
+    Director's eye reads a magnitude rather than the word "distinct".
+
+    **And where the clause cannot run, the verdict says so.** A caller that hands digest-
+    only records gets `n_views_compared_in_pixels: 0` and a verdict that states the pixel
+    comparison did not happen, rather than a sentence that reads as though it did. A
+    verdict names only clauses that ran against a population that could fail them.
+    `render_turnaround.py` builds the records and does not yet attach `pixels`; that
+    caller is another domain's and the seam is posted.
     """
     ev = {"gate": "TURN", "andon": "TurnaroundGate",
           "expected": int(expected), "observed": len(view_records)}
     if not int(expected) or not view_records:
+        ev["clause"] = "empty_set"
         raise TurnaroundGate(
             f"the set was gated over {len(view_records)} view(s) against an expected "
             f"{int(expected)}: the count clause compares 0 to 0, the digest loop never "
             f"runs and the duplicate clause compares two empty sets, so the gate would be "
             f"a check that cannot fail", ev)
     if len(view_records) != int(expected):
+        ev["clause"] = "set_short"
         raise TurnaroundGate(
             f"the set carries {len(view_records)} view(s), not {expected}", ev)
     digests = [r.get("sha256") for r in view_records]
     if any(d is None for d in digests):
+        ev["clause"] = "view_without_a_digest"
         raise TurnaroundGate(
             "a view record carries no sha256, so the set can be checked neither for "
             "duplicates nor for pinning", ev)
     ev["distinct_sha256"] = len(set(digests))
     if len(set(digests)) != len(digests):
         dupes = sorted({d for d in digests if digests.count(d) > 1})
+        ev["clause"] = "views_byte_identical"
         raise TurnaroundGate(
             f"{len(digests) - len(set(digests))} of {len(digests)} views are "
             f"byte-identical to another view ({', '.join(d[:12] for d in dupes)}): the "
             "camera did not move between them. Every per-view check passes on this set — "
             "the files are RGBA, the count is right, the figure is in all of them", ev)
-    ev["verdict"] = f"{len(digests)} distinct views, as many as were asked for"
+
+    compared, identical, distances = _pixel_pairs(view_records)
+    ev["n_views_compared_in_pixels"] = compared
+    ev["n_pairs_identical_in_pixels"] = len(identical)
+    ev["pairs_identical_in_pixels"] = identical[:12]
+    ev["adjacent_pixel_distances"] = [round(d, 9) for d in distances]
+    ev["min_adjacent_pixel_distance"] = min(distances) if distances else None
+    if identical:
+        ev["clause"] = "views_identical_in_pixels"
+        raise TurnaroundGate(
+            f"{len(identical)} adjacent view pair(s) are identical in PIXELS while their "
+            f"sha256 digests differ ({identical[:6]}): the camera did not move between "
+            f"them, and the byte-hash clause cannot see it because the files are not "
+            f"byte-identical — an orbit helper that advanced by a rounding error rather "
+            f"than by zero writes {len(digests)} different digests over one picture. "
+            f"Every per-view check passes on this set", ev)
+
+    if compared:
+        ev["verdict"] = (
+            f"{len(digests)} distinct views by sha256, as many as were asked for, and "
+            f"distinct in PIXELS over {compared} of {len(digests)} view(s): closest "
+            f"adjacent pair {min(distances):.6g} mean absolute difference")
+    else:
+        ev["verdict"] = (
+            f"{len(digests)} distinct views by sha256, as many as were asked for; pixel "
+            f"content was NOT compared (no view record carried pixels), so this verdict "
+            f"rules on the bytes only")
     return ev

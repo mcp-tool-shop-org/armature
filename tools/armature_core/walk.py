@@ -44,6 +44,7 @@ double support) is then a *measurement*, reported by `foot_slip`, not a hope.
 import math
 
 from .errors import ArmatureError, GateFailure
+from .parts import require_finite
 
 #: Bones the gait writes. The five facial markers (`nose`, `eye.*`, `ear.*`) are
 #: registered non-deforming and are deliberately NOT keyed — they deform nothing, so a
@@ -189,6 +190,26 @@ class CadenceGate(WalkError, GateFailure):
 STANCE_FRAC_MODELLED = 0.5
 
 
+def require_at_least_one_step(steps, where="GaitParams"):
+    """Refuse a step count a walk cannot be authored from. One implementation, two callers.
+
+    `GaitParams.__init__` refused `steps < 1` inline and `build_gait` re-validated only
+    `stance_frac` — whose own re-call carries the comment "so mutating the attribute
+    after construction does not get past it" (F-bed000c4, wave 14). The identical
+    post-construction mutation on `steps` walked straight through: measured 2026-09-04,
+    `p.steps = -12` on a constructed `GaitParams` makes `_phase_schedule` solve a
+    NEGATIVE omega, and `build_gait` authored the ground truth from it. So the refusal
+    lives in a function both callers use, the way `gate_stance_frac_is_modelled` already
+    does for its own attribute, and `where` says which door it fired at.
+    """
+    if int(steps) < 1:
+        raise WalkError(
+            f"a walk needs at least one step ({where}); {steps} was asked for",
+            {"gate": None, "andon": "WalkError", "clause": "no_steps",
+             "where": where, "steps": steps})
+    return int(steps)
+
+
 def gate_stance_frac_is_modelled(stance_frac, where="GaitParams"):
     """ANDON - refuse a stance fraction this gait model does not represent.
 
@@ -255,6 +276,27 @@ def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
     input.
 
     The exchange count rides the evidence as a diagnostic, never as a condition.
+
+    **The comparison is on the MAGNITUDE, and every interval is a number first**
+    (F-bed000c4, wave 14). The clause was `du[i-1] > MAX_CYCLES_PER_FRAME` on a SIGNED
+    per-interval advance and the evidence reported `max(du)`, so both escapes were
+    reachable and the receipt printed the number that hid each of them.
+
+    * REVERSE. Measured 2026-09-04: `GaitParams(n_walk=4, n_decel=2, n_gesture=1,
+      n_hold=1, steps=5)` with `steps` mutated to -12 solves omega = -8.0285, giving five
+      consecutive intervals each advancing -1.278 cycles per frame — 2.56x the limit —
+      and this function RETURNED with `max_cycles_per_frame: 0.0` and the verdict "7
+      frame interval(s), the largest advancing 0.000 of a cycle against a limit of 0.5".
+      `max()` over the signed list had picked the 0.0 hold interval. The same magnitude
+      forwards refuses, so which way the gait ran decided whether the andon existed —
+      and the refusal message already says the invariant "is about the sampling rate",
+      which is symmetric in sign. `abs()` is the whole correction; the signed extreme
+      rides the evidence beside it so a reader can still see the direction.
+    * NaN. `nan > 0.5` is False in both directions and `max()` skips it, so a phase
+      carrying one NaN RETURNED `max_cycles_per_frame: 0.3` over a population two of
+      whose four intervals were not numbers. `parts.require_finite` — the package's one
+      implementation of that refusal — was written for exactly this and was not called
+      here.
     """
     n = len(phase)
     if n < 2:
@@ -266,18 +308,29 @@ def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
              "n_phase_samples": n})
 
     du = [(phase[i] - phase[i - 1]) / (2.0 * math.pi) for i in range(1, n)]
+    base = {"gate": "CADENCE", "andon": "CadenceGate", "where": where,
+            "limit_cycles_per_frame": MAX_CYCLES_PER_FRAME, "n_intervals": len(du)}
+    # Every interval is a number before any bound is asked of any of them. The helper is
+    # `parts.require_finite`, the package's one implementation — not a second copy of
+    # `math.isfinite` with a different message — and it raises this module's own andon
+    # into this module's own evidence dict.
+    for _i, _d in enumerate(du, start=1):
+        require_finite(f"interval_{_i}_cycles_per_frame", _d, CadenceGate, base,
+                       positive=False)
+
     stance = [_leg_state((ph / (2.0 * math.pi)) % 1.0, stance_frac)[2] for ph in phase]
     exchanges = sum(1 for i in range(1, n) if stance[i] != stance[i - 1])
-    over = [(i, du[i - 1]) for i in range(1, n) if du[i - 1] > MAX_CYCLES_PER_FRAME]
-    worst = max(du)
-    ev = {"gate": "CADENCE", "andon": "CadenceGate", "where": where,
-          "max_cycles_per_frame": worst,
-          "limit_cycles_per_frame": MAX_CYCLES_PER_FRAME,
-          "n_intervals": len(du),
-          "n_intervals_over_half_a_cycle": len(over),
-          "n_stance_exchanges_detected": exchanges,
-          "first_offending_interval": over[0][0] if over else None,
-          "offending_intervals": [[i, d] for i, d in over[:12]]}
+    over = [(i, du[i - 1]) for i in range(1, n)
+            if abs(du[i - 1]) > MAX_CYCLES_PER_FRAME]
+    worst = max(abs(d) for d in du)
+    signed_extreme = max(du, key=abs)
+    ev = dict(base)
+    ev.update({"max_cycles_per_frame": worst,
+               "signed_extreme_cycles_per_frame": signed_extreme,
+               "n_intervals_over_half_a_cycle": len(over),
+               "n_stance_exchanges_detected": exchanges,
+               "first_offending_interval": over[0][0] if over else None,
+               "offending_intervals": [[i, d] for i, d in over[:12]]})
 
     if over:
         i, d = over[0]
@@ -285,13 +338,16 @@ def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
             f"frame {i}: the gait advances {d:.3f} of a cycle in one frame, so more than "
             f"one stance exchange falls between two samples; the walk cannot be "
             f"represented at this frame rate. {len(over)} of {len(du)} frame interval(s) "
-            f"exceed {MAX_CYCLES_PER_FRAME} of a cycle, the worst {worst:.3f}, with "
-            f"{exchanges} stance exchange(s) actually observed - the invariant is about "
-            f"the sampling rate, not about whether an exchange was seen",
+            f"exceed {MAX_CYCLES_PER_FRAME} of a cycle in MAGNITUDE, the worst "
+            f"{worst:.3f} (signed {signed_extreme:.3f}), with {exchanges} stance "
+            f"exchange(s) actually observed - the invariant is about the sampling rate, "
+            f"not about whether an exchange was seen and not about which way the gait "
+            f"runs",
             ev)
 
     ev["verdict"] = (f"{len(du)} frame interval(s), the largest advancing {worst:.3f} of "
-                     f"a cycle against a limit of {MAX_CYCLES_PER_FRAME}")
+                     f"a cycle in magnitude (signed extreme {signed_extreme:.3f}) "
+                     f"against a limit of {MAX_CYCLES_PER_FRAME}")
     return ev
 
 
@@ -387,11 +443,7 @@ class GaitParams:
                 {"gate": None, "andon": "WalkError", "clause": "phase_shorter_than_a_frame",
                  "n_walk": self.n_walk, "n_decel": self.n_decel,
                  "n_gesture": self.n_gesture, "n_hold": self.n_hold})
-        if self.steps < 1:
-            raise WalkError(
-                "a walk needs at least one step",
-                {"gate": None, "andon": "WalkError", "clause": "no_steps",
-                 "steps": self.steps})
+        require_at_least_one_step(self.steps)
         if not 0.0 < self.stance_frac < 1.0:
             raise WalkError(
                 f"stance_frac={self.stance_frac}; a leg must spend part of the cycle on "
@@ -610,6 +662,10 @@ def build_gait(performer, params):
     # check, and CLAUDE.md puts the andon inside the tool that performs the step.
     gate_stance_frac_is_modelled(getattr(p, "stance_frac", STANCE_FRAC_MODELLED),
                                  where="build_gait")
+    # The same argument for the other mutable attribute the schedule is solved from
+    # (F-bed000c4). `steps` reaches `_phase_schedule` as omega's numerator, so a value
+    # mutated after construction sets the cadence of the authored ground truth.
+    require_at_least_one_step(getattr(p, "steps", 1), where="build_gait")
     fy = performer.facing_y_sign
     lx = performer.left_x_sign
     L = performer.leg_length

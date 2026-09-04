@@ -719,6 +719,17 @@ def gate_round_trip(rest, obs, solved, diagonal, tol_frac=None):
     them on the tolerance; it follows them now, through `parts.tightened`, so the rule has
     one implementation rather than a fifth copy. `round_trip_report` keeps its plain
     keyword: it is the diagnostic, and its `within_tolerance` is a reading, not a verdict.
+
+    **The RESIDUALS are checked too, and here that matters more than in the sibling**
+    (F-5733588e, wave 14). `require_finite` sat on `diagonal` and `tightened` on
+    `tol_frac` — both BOUNDS — and nothing at all on the per-site distances the clause
+    below compares. A NaN residual is worse in this function than in
+    `parts.gate_rigid_arrival`: `round_trip_report`'s worst-tracking is `if d >
+    worst["d"]`, which is False for a NaN, so the bad site is silently DROPPED from
+    `worst` and the verdict quotes a healthy maximum — `max 1.799e-16 over 19 sites` —
+    over a population one of whose members is not a number. Every per-site distance is
+    swept, not only `worst["d"]`, because `worst` is exactly where the bad one does not
+    appear.
     """
     guard = {"gate": "SOLVE", "andon": "SolveGate",
              "module_tol_frac": ROUND_TRIP_TOL_FRAC, "tol_frac_requested": tol_frac,
@@ -735,6 +746,10 @@ def gate_round_trip(rest, obs, solved, diagonal, tol_frac=None):
             f"observed: {ev['sites_not_observed'] or 'none'}. The gate exists to prove an "
             f"inversion is exact, and exactness over part of the population is a "
             f"different claim", ev)
+    for _site in sorted(ev["per_site"]):
+        require_finite(f"residual.{_site}", ev["per_site"][_site], SolveGate, ev,
+                       positive=False)
+    require_finite("worst_residual", ev["worst"]["d"], SolveGate, ev, positive=False)
     if ev["worst"]["d"] > ev["tolerance"]:
         raise SolveGate(
             f"the solve does not reproduce the positions it was solved from: "

@@ -465,9 +465,25 @@ def silhouette_extent(points, target, radius, azimuth_deg, elevation_deg,
         xs.append(fx * width)
         ys.append(fy * height)
     if not xs:
+        # Two causes, two clauses (F-3bc3659d, wave 14). `xs` is also empty when `points`
+        # is empty, and the one message then read "every one of 0 points is behind the
+        # camera" beside `n_behind: 0` — a refusal naming a cause it had just measured as
+        # not having happened. An empty cloud is the ordinary shape of a scene where the
+        # subject selection returned nothing (a renamed collection, a filter that matched
+        # no mesh, a `render_visible_meshes` result whose only member was the importer's
+        # decoy), which is a different defect from a camera pointed the wrong way and
+        # wants a different fix. Both are refused; only the sentence was wrong.
+        if not len(points):
+            raise StartFrameGate(
+                "no points were given, so there is no silhouette to measure. This is the "
+                "subject selection returning nothing, not a camera pointed the wrong way",
+                {"gate": "WHOLE", "andon": "StartFrameGate",
+                 "clause": "no_points_given",
+                 "n_points": 0, "n_behind": behind})
         raise StartFrameGate(
             f"every one of {len(points)} points is behind the camera; there is no "
             f"silhouette to measure", {"gate": "WHOLE", "andon": "StartFrameGate",
+             "clause": "every_point_behind_the_camera",
              "n_points": len(points), "n_behind": behind})
     return {"x0": min(xs), "x1": max(xs), "y0": min(ys), "y1": max(ys),
             "n_behind": behind, "n_points": len(points)}
@@ -538,7 +554,19 @@ def gate_whole(extent, width, height, margin_px):
         "height_frac": (extent["y1"] - extent["y0"]) / float(height),
         "width_frac": (extent["x1"] - extent["x0"]) / float(width),
     })
+    # `n_points` rode the evidence and gated nothing (F-3bc3659d): the clause below reads
+    # `n_behind` and an extent dict built with zero points would have reached a PASS —
+    # bounds over an empty cloud, certified as a whole silhouette. `silhouette_extent`
+    # cannot produce one today, which is exactly why the andon goes here: the direction
+    # the invariant does not bound.
+    if not extent.get("n_points"):
+        ev["clause"] = "extent_over_zero_points"
+        raise StartFrameGate(
+            f"the extent reports {extent.get('n_points')!r} silhouette point(s), so its "
+            f"bounds describe nothing and a PASS would certify that nothing is whole and "
+            f"inside the frame", ev)
     if extent.get("n_behind"):
+        ev["clause"] = "points_behind_the_camera"
         raise StartFrameGate(
             f"{extent['n_behind']} of {extent['n_points']} silhouette points are behind "
             f"the camera; the perspective divide mirrors those into frame, so any bounds "
@@ -546,6 +574,7 @@ def gate_whole(extent, width, height, margin_px):
 
     short = {side: m for side, m in ev["margins_px"].items() if m < margin_px}
     if short:
+        ev["clause"] = "silhouette_does_not_clear_the_border"
         raise StartFrameGate(
             "the performer's silhouette does not clear the frame border by "
             f"{margin_px} px on: "

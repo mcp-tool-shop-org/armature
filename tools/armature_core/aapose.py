@@ -83,6 +83,30 @@ import numpy as np
 
 from .errors import ArmatureError
 
+
+class ConventionError(ArmatureError):
+    """Gate CONV refused: the drawing convention is not the one that was recorded.
+
+    A named andon, so the receipt can say which one pulled — the way `ClipStatsError`,
+    `ClipCompareError` and `SiteListError` were re-classed in wave 12 (F-d0de0c2d, wave
+    14). Both of Gate CONV's refusals were `raise ArmatureError(<message>)` with ONE
+    argument, and `errors.py`'s base has no `__init__`, so the halt line recorded an
+    empty evidence dict with no `gate`, no `andon` and no `clause`. `check_convention` is
+    a named ANDON on the control image and its receipt is what a run's provenance quotes;
+    the reason the record exists at all is that a previous provenance line named a
+    comparison no code performed, and a refusal from it produced the inverse — a halt
+    whose receipt named nothing.
+
+    A plain refusal writes `gate: None` + `andon` + `clause`: Gate CONV's id lives in the
+    provenance key the tool writes, and this class is the andon, so the honest answer is
+    written down rather than left absent.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
 # --------------------------------------------------------------------------- the pin
 
 SOURCE = {
@@ -241,12 +265,21 @@ RECORDED_CONVENTION = {
     ],
     "hand_keypoint_count": 21,
     "limb_brightness": 0.6,
+    "hand_joint_color": [0, 0, 255],
+    "default_threshold": 0.5,
 }
 
 #: sha256 over `json.dumps(RECORDED_CONVENTION, sort_keys=True, separators=(",", ":"))`.
 #: Recomputed only in a commit that deliberately re-records the convention.
+#:
+#: Recomputed 2026-09-04 (F-d59fab92, wave 14) in the commit that added
+#: `hand_joint_color` and `default_threshold` to the record — the deliberate, visible act
+#: the block above says a re-record has to be. Previous value
+#: 0967b4a45e34abc99d85a36fb58f6ead399a37fbbfdc2424738c1b746339d79c, over the eleven-field
+#: record; the two new fields transcribe `draw_handpose_new`'s joint colour and
+#: `draw_aapose_by_meta_new`'s default threshold from the same banked source as the rest.
 RECORDED_CONVENTION_SHA256 = (
-    "0967b4a45e34abc99d85a36fb58f6ead399a37fbbfdc2424738c1b746339d79c")
+    "90489445a74fe61343136677d99515256e663290c5ae49a27d5c06748eff84f5")
 
 #: Where the fetched source is banked when a session has fetched it. Git-ignored by design.
 BANKED_SOURCE = os.path.join(
@@ -268,13 +301,21 @@ def banked_source_state():
     ordinary state of a fresh checkout and refusing on it would take every render down.
     What the gate refuses is a MISMATCH, which is the only reading that means the pin and
     the file disagree.
+
+    **Read against the RECORD's hash, not `SOURCE`'s** (F-d59fab92, wave 14). This
+    compared the file against `SOURCE["sha256"]`, which sits OUTSIDE
+    `RECORDED_CONVENTION_SHA256`, rather than against `RECORDED_CONVENTION
+    ["source_sha256"]`, which sits inside it. The two are equal today and were never
+    compared to each other, so the one hash the digest protects was not the one the file
+    was checked against. `check_convention` now asserts the two agree as its own clause,
+    which is the check that keeps them equal.
     """
     try:
         with open(BANKED_SOURCE, "rb") as fh:
             got = hashlib.sha256(fh.read()).hexdigest()
     except OSError:
         return "absent", None
-    if got != SOURCE["sha256"]:
+    if got != RECORDED_CONVENTION["source_sha256"]:
         return "MISMATCH", got
     return "verified", got
 
@@ -296,8 +337,10 @@ def stickwidth(height, width, stickwidth_type="v2"):
         return max(int(m / 200) - 1, 1)
     raise ArmatureError(
         f"unknown stickwidth_type {stickwidth_type!r}; the source defines only 'v1' and "
-        f"'v2' and takes the else branch to a bare raise"
-    )
+        f"'v2' and takes the else branch to a bare raise",
+        {"gate": None, "andon": "ArmatureError", "clause": "unknown_stickwidth_type",
+         "stickwidth_type": stickwidth_type, "defined": ["v1", "v2"],
+         "where": "stickwidth"})
 
 
 def hand_stickwidth(height, width, stickwidth_type="v2"):
@@ -307,7 +350,11 @@ def hand_stickwidth(height, width, stickwidth_type="v2"):
         return max(int(m / 200), 1)
     if stickwidth_type == "v2":
         return max(max(int(m / 200) - 1, 1) // 2, 1)
-    raise ArmatureError(f"unknown stickwidth_type {stickwidth_type!r}")
+    raise ArmatureError(
+        f"unknown stickwidth_type {stickwidth_type!r}",
+        {"gate": None, "andon": "ArmatureError", "clause": "unknown_stickwidth_type",
+         "stickwidth_type": stickwidth_type, "defined": ["v1", "v2"],
+         "where": "hand_stickwidth"})
 
 
 # --------------------------------------------------------------------- the rig map
@@ -372,8 +419,10 @@ def require_rig_map(available_sites):
             f"the AAPose-20 map names rig landmark(s) that are not available: {missing}. "
             f"A keypoint with nothing behind it would be written as a zero and drawn as a "
             f"limb running off the frame, with nothing erroring. Available: "
-            f"{sorted(have)}"
-        )
+            f"{sorted(have)}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "required_landmark_missing",
+             "missing": missing, "available": sorted(have)})
     return True
 
 
@@ -399,8 +448,10 @@ def hand_frame(wrist, hand_end, elbow):
     length = float(np.linalg.norm(v))
     if length <= 0.0:
         raise ArmatureError(
-            "wrist and hand end are the same point; this hand has no length and no direction"
-        )
+            "wrist and hand end are the same point; this hand has no length and no "
+            "direction",
+            {"gate": None, "andon": "ArmatureError", "clause": "hand_has_no_length",
+             "length": length})
     d = v / length
 
     for ref in (w - e, np.array([0.0, 0.0, 1.0]), np.array([1.0, 0.0, 0.0])):
@@ -409,7 +460,10 @@ def hand_frame(wrist, hand_end, elbow):
             n = n / np.linalg.norm(n)
             s = np.cross(n, d)
             return d, s / np.linalg.norm(s), length
-    raise ArmatureError("could not build a palm plane; every reference was collinear")
+    raise ArmatureError(
+        "could not build a palm plane; every reference was collinear",
+        {"gate": None, "andon": "ArmatureError", "clause": "palm_plane_degenerate",
+         "hand_length": length, "references_tried": 3})
 
 
 def _compare_against_record(label, keypoint_count, limb_seq, palette, record):
@@ -445,6 +499,63 @@ def _compare_against_record(label, keypoint_count, limb_seq, palette, record):
     return problems
 
 
+#: Which `RECORDED_CONVENTION` fields `check_convention` actually compares, written down
+#: so the coverage is a quantity a provenance record carries rather than a claim in a
+#: docstring (F-d59fab92). `source_path`, `source_commit` and `recorded` are provenance
+#: strings the message quotes and are the record's remaining three fields.
+RECORD_FIELDS_COMPARED = (
+    "keypoint_names", "limb_seq", "palette", "hand_edges", "hand_keypoint_count",
+    "limb_brightness", "hand_joint_color", "default_threshold", "source_sha256",
+)
+
+
+def _compare_drawing_constants(record):
+    """The four module constants that decide what pixels are drawn, against the record.
+
+    F-d59fab92, wave 14. `RECORDED_CONVENTION` carried nine fields and
+    `check_convention` compared five of them; `hand_keypoint_count` and `limb_brightness`
+    were pinned by the digest and compared against nothing, and `HAND_JOINT_COLOR` and
+    `DEFAULT_THRESHOLD` were in neither the record nor the comparison. Measured
+    2026-09-04 with `LIMB_BRIGHTNESS` set to 1.0, `HAND_KEYPOINT_COUNT` to 18,
+    `HAND_JOINT_COLOR` to (255, 0, 0) and `DEFAULT_THRESHOLD` to 0.0:
+    `check_convention(len(KEYPOINT_NAMES), LIMB_SEQ, PALETTE)` returned verdict PASS with
+    the unchanged detail line "20 keypoints / 19 pairs / 20 palette entries, module
+    tables and caller both equal to RECORDED_CONVENTION".
+
+    None of the four is inert. `LIMB_BRIGHTNESS` is the literal that fills every limb
+    polygon (`draw_body`) and `tools/render_pose_sticks.py` writes it into the run's
+    provenance as a conformance fact; `HAND_KEYPOINT_COUNT` is the shape both
+    `mitten_hand` and `draw_hand` enforce; `HAND_JOINT_COLOR` is every hand joint dot;
+    `DEFAULT_THRESHOLD` is the point-skipping threshold, also written to provenance. A
+    limb-brightness or threshold edit reached the frames the model obeys with Gate CONV
+    green and the provenance quoting the edited value beside a PASS.
+    """
+    problems = []
+    if int(HAND_KEYPOINT_COUNT) != int(record["hand_keypoint_count"]):
+        problems.append(
+            f"module tables: hand_keypoint_count {HAND_KEYPOINT_COUNT} != recorded "
+            f"{record['hand_keypoint_count']}")
+    if float(LIMB_BRIGHTNESS) != float(record["limb_brightness"]):
+        problems.append(
+            f"module tables: limb_brightness {LIMB_BRIGHTNESS} != recorded "
+            f"{record['limb_brightness']} — this is the literal every limb polygon is "
+            f"filled with")
+    if [int(c) for c in HAND_JOINT_COLOR] != [int(c) for c in record["hand_joint_color"]]:
+        problems.append(
+            f"module tables: hand_joint_color {tuple(HAND_JOINT_COLOR)} != recorded "
+            f"{tuple(record['hand_joint_color'])}")
+    if float(DEFAULT_THRESHOLD) != float(record["default_threshold"]):
+        problems.append(
+            f"module tables: default_threshold {DEFAULT_THRESHOLD} != recorded "
+            f"{record['default_threshold']} — points below it are skipped entirely")
+    if SOURCE["sha256"] != record["source_sha256"]:
+        problems.append(
+            f"the module's SOURCE hash {SOURCE['sha256'][:16]} is not the record's "
+            f"source_sha256 {record['source_sha256'][:16]}; the digest pins the second, "
+            f"so the banked file must be checked against it")
+    return problems
+
+
 def check_convention(keypoint_count, limb_seq, palette):
     """Gate CONV · ANDON — conformance against the RECORDED reference. Raises `ArmatureError`.
 
@@ -473,17 +584,44 @@ def check_convention(keypoint_count, limb_seq, palette):
     `recorded_sha256`, `banked_source`, `source_commit` and a `detail` line that names the
     fetched file ONLY when the fetched file was hashed. The dict is truthy, so an existing
     `if check_convention(...)` still reads the same.
+
+    **The comparison now covers the record, not five of its fields** (F-d59fab92, wave
+    14). Wave 12 closed the "does the record match itself" half; what was left open was
+    COVERAGE. `RECORDED_CONVENTION` carried nine fields and this function compared five
+    — `keypoint_names`, `limb_seq`, `palette`, `hand_edges`, and the `source_commit` /
+    `recorded` strings as prose in the message. `hand_keypoint_count` and
+    `limb_brightness` were pinned by the digest and compared against nothing;
+    `HAND_JOINT_COLOR` and `DEFAULT_THRESHOLD` were in neither. All four decide what
+    pixels are drawn and two of them are written into the run's provenance as
+    conformance facts. `_compare_drawing_constants` closes all four, the record grew the
+    two missing fields (and its digest was recomputed in that same deliberate commit),
+    and `fields_compared` rides the returned dict so the coverage is a quantity a
+    provenance record carries rather than a claim in a docstring.
+
+    Also closed there: the banked-source clause compared against `SOURCE['sha256']`,
+    which is outside the digest, rather than against `record['source_sha256']`, which is
+    inside it. `banked_source_state` reads the record's hash now, and their equality is
+    itself one of the compared clauses — so the value the digest pins is the value the
+    file is checked against.
+
+    **It raises `ConventionError`, and both refusals carry a receipt** (F-d0de0c2d).
     """
     record = RECORDED_CONVENTION
     digest = recorded_convention_digest(record)
     if digest != RECORDED_CONVENTION_SHA256:
-        raise ArmatureError(
+        raise ConventionError(
             "the recorded AAPose-20 reference does not match its own pinned digest "
             f"(computed {digest[:16]}, pinned {RECORDED_CONVENTION_SHA256[:16]}). The "
             "record is what Gate CONV compares the module's tables against, so a record "
             "that has drifted turns the gate back into the module checking itself. "
             "Re-record the convention from the banked source and update the pin in the "
-            "same commit")
+            "same commit",
+            {"gate": None, "andon": "ConventionError",
+             "clause": "recorded_convention_digest_drift",
+             "computed_sha256": digest, "pinned_sha256": RECORDED_CONVENTION_SHA256,
+             "recorded_on": record.get("recorded"),
+             "source_path": record.get("source_path"),
+             "source_commit": record.get("source_commit")})
 
     problems = _compare_against_record(
         "module tables", KEYPOINT_COUNT, LIMB_SEQ, PALETTE, record)
@@ -495,20 +633,28 @@ def check_convention(keypoint_count, limb_seq, palette):
             f"{record['keypoint_names']}")
     if [tuple(e) for e in HAND_EDGES] != [tuple(e) for e in record["hand_edges"]]:
         problems.append("module tables: hand edges differ from the recorded reference")
+    problems += _compare_drawing_constants(record)
 
     banked, banked_sha = banked_source_state()
     if banked == "MISMATCH":
         problems.append(
-            f"the banked source at {BANKED_SOURCE} hashes {banked_sha[:16]} and the pin "
-            f"records {SOURCE['sha256'][:16]}")
+            f"the banked source at {BANKED_SOURCE} hashes {banked_sha[:16]} and the "
+            f"record's source_sha256 — the hash the digest pins — is "
+            f"{record['source_sha256'][:16]}")
 
     if problems:
-        raise ArmatureError(
+        raise ConventionError(
             "the emitted skeleton does not match the recorded reference for the Wan "
             f"AAPose-20 convention ({record['source_path']} @ "
             f"{record['source_commit'][:12]}, recorded {record['recorded']}): "
-            + "; ".join(problems)
-        )
+            + "; ".join(problems),
+            {"gate": None, "andon": "ConventionError",
+             "clause": "convention_nonconformance",
+             "problems": problems,
+             "computed_sha256": digest, "pinned_sha256": RECORDED_CONVENTION_SHA256,
+             "banked_source": banked, "banked_source_sha256": banked_sha,
+             "source_path": record.get("source_path"),
+             "source_commit": record.get("source_commit")})
 
     if banked == "verified":
         detail = (f"{len(record['keypoint_names'])} keypoints / "
@@ -536,6 +682,9 @@ def check_convention(keypoint_count, limb_seq, palette):
         "keypoint_count": len(record["keypoint_names"]),
         "limb_pairs": len(record["limb_seq"]),
         "palette_entries": len(record["palette"]),
+        "fields_compared": sorted(RECORD_FIELDS_COMPARED),
+        "n_fields_compared": len(RECORD_FIELDS_COMPARED),
+        "n_fields_in_record": len(record),
         "detail": detail,
     }
 
@@ -567,7 +716,10 @@ def mitten_hand(wrist, palm_dir, palm_side, hand_length):
     s = np.asarray(palm_side, dtype=np.float64)
     L = float(hand_length)
     if L <= 0:
-        raise ArmatureError("a hand needs a positive length to lay finger points along")
+        raise ArmatureError(
+            "a hand needs a positive length to lay finger points along",
+            {"gate": None, "andon": "ArmatureError", "clause": "hand_length_not_positive",
+             "hand_length": L})
 
     pts = [w]
     # Thumb: off to the side of the palm, shorter, at a shallow angle.
@@ -583,8 +735,10 @@ def mitten_hand(wrist, palm_dir, palm_side, hand_length):
     if len(out) != HAND_KEYPOINT_COUNT:
         raise ArmatureError(
             f"mitten hand built {len(out)} points, the convention wants "
-            f"{HAND_KEYPOINT_COUNT}"
-        )
+            f"{HAND_KEYPOINT_COUNT}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "mitten_hand_wrong_point_count",
+             "built": len(out), "recorded": HAND_KEYPOINT_COUNT})
     return out
 
 
@@ -609,8 +763,9 @@ def draw_body(canvas, kp2ds, threshold=DEFAULT_THRESHOLD, stickwidth_type="v2",
     if kp.shape != (KEYPOINT_COUNT, 3):
         raise ArmatureError(
             f"body keypoints must be ({KEYPOINT_COUNT}, 3) — x, y, confidence — got "
-            f"{kp.shape}"
-        )
+            f"{kp.shape}",
+            {"gate": None, "andon": "ArmatureError", "clause": "body_keypoints_wrong_shape",
+             "shape": list(kp.shape), "expected": [KEYPOINT_COUNT, 3]})
     if not draw_head:
         kp[[0, 14, 15, 16, 17], 2] = 0
 
@@ -647,8 +802,9 @@ def draw_hand(canvas, keypoints, threshold=DEFAULT_THRESHOLD, stickwidth_type="v
     kp = np.asarray(keypoints, dtype=np.float64)
     if kp.shape != (HAND_KEYPOINT_COUNT, 3):
         raise ArmatureError(
-            f"hand keypoints must be ({HAND_KEYPOINT_COUNT}, 3), got {kp.shape}"
-        )
+            f"hand keypoints must be ({HAND_KEYPOINT_COUNT}, 3), got {kp.shape}",
+            {"gate": None, "andon": "ArmatureError", "clause": "hand_keypoints_wrong_shape",
+             "shape": list(kp.shape), "expected": [HAND_KEYPOINT_COUNT, 3]})
     H, W = canvas.shape[:2]
     sw = hand_stickwidth(H, W, stickwidth_type)
 
