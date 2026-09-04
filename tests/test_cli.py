@@ -141,8 +141,14 @@ def block(monkeypatch):
     consulted. monkeypatch restores both maps at teardown.
     """
     def _block(*roots):
+        # `armature_core` itself goes too. Deleting only the submodules leaves the
+        # ORIGINAL package object in sys.modules while the re-import rebinds its
+        # attributes to fresh copies, so a later `from armature_core import gates`
+        # elsewhere in the session gets a class that is not the one its module-level
+        # import bound — and `pytest.raises(SomeGate)` stops matching.
         stale = [k for k in sys.modules
-                 if k.split(".")[0] in roots or k.startswith("armature_core.")]
+                 if k.split(".")[0] in roots or k == "armature_core"
+                 or k.startswith("armature_core.")]
         for key in stale:
             monkeypatch.delitem(sys.modules, key, raising=False)
         monkeypatch.setattr(sys, "meta_path", [_Blocker(*roots)] + list(sys.meta_path))
