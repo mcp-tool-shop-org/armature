@@ -46,9 +46,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_cascade_payload as CASCADE  # noqa: E402
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
-from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
+from armature_core.canon import add_spend_flags  # noqa: E402
+from canon_gate import canon_line, canon_spend  # noqa: E402
 
-TOOL_VERSION = "E13.1"
+TOOL_VERSION = "E13.2"
 
 TIER = "wan2.7-r2v"
 #: Kept clear of the cascade's own 200..280 / 400..410 / 420 range, so an A2 graph reads as
@@ -172,11 +173,12 @@ def main(argv=None):
         registration = json.load(fh)
     with open(a.prompt_file, encoding="utf-8") as fh:
         prompt_spec = json.load(fh)
-    gate_write(
-        a.subject, a.canon_prompt or prompt_spec["prompt"],
-        no_canon=a.no_canon, out_dir=out,
-    )
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
+    # The SHIPPED prompt is what is gated. `--canon-prompt` used to be gated in its place
+    # while `build()` always sent `prompt_spec["prompt"]`, so an operator who hit a canon
+    # refusal could paste the ratified phrases into the flag and send the very text the
+    # gate had just refused. See `gate_canon_ships_what_it_gated` below.
+    canon_ev = canon_spend(a.subject, prompt_spec["prompt"], no_canon=a.no_canon,
+                           out_dir=out, canon_prompt=a.canon_prompt)
 
     gate_seed = gate_seed_registered(a.seed, registration["seeds"])
 
@@ -188,7 +190,11 @@ def main(argv=None):
     else:
         with open(a.uploads, encoding="utf-8") as fh:
             uploads = json.load(fh)
-        frame_order = sorted(uploads)          # LOCAL names carry the frame order
+        # LOCAL names carry the frame order, and the shape that makes that true is now
+        # checked rather than assumed: an unpadded key sorts lexicographically and a
+        # non-frame key is absorbed as an extra frame, both into the reference slot of a
+        # tier that bills per submission.
+        frame_order = CASCADE.frame_order(uploads)
         upload_names = [uploads[k] for k in frame_order]
 
     prefix = a.prefix or f"video/E13_{a.arm}_seed{a.seed}"
@@ -209,13 +215,34 @@ def main(argv=None):
     gate_ceiling = gate_one_paid_node(wf)
 
     gates = {"S_build_time": gate_seed, "ROUTE": gate_route, "L_hosted": gate_l,
-             "CEILING_one_paid_node": gate_ceiling}
+             "CEILING_one_paid_node": gate_ceiling, "CANON": canon_ev}
+    shared_params = None
     if a.arm == "A2":
-        gates["CASCADE_ceiling"] = AS.gate_slot_ceiling(wf, cap=max(a.group, 1))
+        # The gate owns the ceiling; `cap=max(--group, 1)` made it check a direction the
+        # construction already bounds, on the arm that spends.
+        ceiling_kw, ceiling_param = CASCADE._accepted(
+            AS.gate_slot_ceiling, ("group_size",), int(a.group))
+        gates["CASCADE_ceiling"] = AS.gate_slot_ceiling(wf, **ceiling_kw)
+        ordered_ids = CASCADE.frame_source_ids(upload_names, CASCADE.FIRST_IMAGE_ID)
+        topo_kw, topo_param = CASCADE._accepted(
+            AS.gate_cascade_topology, CASCADE.ORDERED_ID_PARAMS, list(ordered_ids))
         gates["CASCADE_topology"] = AS.gate_cascade_topology(
             wf, len(upload_names), cascade_ids["groups"], CASCADE.FINAL_BATCH_ID,
             CASCADE.VIDEO_ID, R2V_ID, "model.reference_videos.video1",
-            group_size=a.group)
+            group_size=a.group, **topo_kw)
+        slot_plan = [(gid, start) for (start, _), gid
+                     in zip(AS.cascade_plan(len(upload_names), a.group),
+                            cascade_ids["groups"])]
+        gates["CASCADE_slot_frame_index"] = CASCADE.gate_slot_frame_index(
+            wf, upload_names, slot_plan, CASCADE.FIRST_IMAGE_ID)
+        shared_params = {
+            "gate_slot_ceiling_group_size_param": ceiling_param,
+            "gate_cascade_topology_ordered_ids_param": topo_param,
+            "what_null_means": (
+                "the shared gate in armature_core.assembly does not declare that "
+                "parameter on this tree, so it did NOT receive the value and the clause "
+                "it would arm did not run there. CASCADE_slot_frame_index ran regardless"),
+        }
 
     node_inputs = wf[str(R2V_ID)]["inputs"]
     record = {
@@ -245,6 +272,7 @@ def main(argv=None):
         "node_ids": {"first_image": FIRST_IMAGE_ID, "r2v": R2V_ID, "save": SAVE_ID,
                      "cascade": cascade_ids},
         "gates": gates,
+        "shared_gate_parameters": shared_params,
         "gate_pair_note": (
             "Gate PAIR is n/a on this tier and is RECORDED as n/a, not skipped: the graph "
             "loads no local weights, so no conditioning class can be unpaired from a "
@@ -256,6 +284,10 @@ def main(argv=None):
             "constraints instead, which is the clause that binds and can fail."),
     }
 
+    # Below the last in-tool gate. `os.makedirs` used to sit above Gate S, so a refused
+    # spend left an empty run directory beside real ones — the invariant build_payload.py
+    # states for Gate CANON, applied to every gate in this tool.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     graph_path = os.path.join(out, f"E13-{a.arm}-seed{a.seed}.api.json")
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=1)
@@ -263,6 +295,7 @@ def main(argv=None):
               encoding="utf-8") as fh:
         json.dump(record, fh, indent=1)
 
+    print(canon_line(canon_ev))
     print(f"arm              {a.arm}")
     print(f"nodes            {len(wf)}")
     print(f"seed gate        {gate_seed['verdict']}")

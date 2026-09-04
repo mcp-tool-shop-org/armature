@@ -22,6 +22,7 @@ import pytest
 
 import build_cascade_payload as CASCADE
 import build_r2v_payload as B
+from armature_core import assembly as AS
 from armature_core import route_gates as RG
 
 
@@ -345,3 +346,53 @@ def test_an_illegal_duration_stops_the_end_to_end_run(tmp_path):
                 "--duration=30", *_CANON_ESCAPE])
     assert "Gate L (hosted tier)" in str(exc.value)
     assert "outside 2..10" in str(exc.value)
+
+
+# ------------------------------------------------- wave 3: the same three defects, on the
+# arm that actually spends. A2 builds the cascade inside the paid graph, so an unpadded
+# map, a group edited above the module ceiling, or a refused build that leaves a directory
+# behind all reach the tier that bills 106-211 credits per submission.
+
+
+def test_a2_refuses_an_unpadded_upload_map(tmp_path):
+    uploads = {f"{i}.png": f"{i:064x}.png" for i in range(81)}
+    seeds, prompt, _, up = _files(tmp_path, uploads=uploads)
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.main([f"--arm=A2", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
+                f"--prompt-file={prompt}", f"--uploads={up}",
+                f"--out={tmp_path / 'route'}", *_CANON_ESCAPE])
+    assert "10.png" in exc.value.evidence["malformed"]
+
+
+def test_a2_refuses_a_group_above_the_module_ceiling(tmp_path):
+    """The same CLI-defeats-the-gate call sat at build_r2v_payload.py:214, on the arm that
+    spends. A submission built above the runtime cap is refused at execution, after the
+    credit is committed."""
+    seeds, prompt, _, up = _files(tmp_path)
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.main([f"--arm=A2", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
+                f"--prompt-file={prompt}", f"--uploads={up}",
+                f"--out={tmp_path / 'route'}", "--group=81", *_CANON_ESCAPE])
+    assert f"more than {AS.MAX_SLOTS_PER_NODE}" in str(exc.value)
+
+
+def test_a2_records_the_slot_to_frame_index_gate(tmp_path):
+    seeds, prompt, _, up = _files(tmp_path)
+    out = tmp_path / "route"
+    _, rec = B.main([f"--arm=A2", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
+                     f"--prompt-file={prompt}", f"--uploads={up}", f"--out={out}",
+                     *_CANON_ESCAPE])
+    assert rec["gates"]["CASCADE_slot_frame_index"]["verdict"]
+    assert rec["gates"]["CASCADE_ceiling"]["cap"] == AS.MAX_SLOTS_PER_NODE
+
+
+def test_a_refused_r2v_build_leaves_no_output_directory(tmp_path):
+    """The seed gate fires after the directory was created. An empty run directory beside
+    real ones is read later as a run that happened."""
+    seeds, prompt, refs, _ = _files(tmp_path)
+    out = tmp_path / "fresh" / "route"
+    with pytest.raises(RG.RouteGate):
+        B.main([f"--arm=A1", "--seed=42", f"--seeds={seeds}", f"--prompt-file={prompt}",
+                f"--refs={refs}", f"--out={out}", *_CANON_ESCAPE])
+    assert not out.exists()
+    assert not out.parent.exists()

@@ -355,3 +355,93 @@ def test_the_cascade_introduces_no_class_the_table_does_not_carry():
     wf, _ = _graph(4, group_size=2)
     for cls in sorted({n["class_type"] for n in wf.values()}):
         assert GS.WIDGET_INDEX.get(cls) is not None, f"{cls} has no widget row"
+
+
+# ------------------------------------------------- the frame order is not a filename sort
+#
+# Wave 3, F-4a64a24e / F-53ee3299 / F-451d9008. Measured 2026-09-03, all three on this
+# tool: an 81-entry map keyed 0.png..80.png printed "81 distinct LoadImage nodes -> 3 group
+# batch(es) ... groups in frame order, every link resolved", "slot ceiling ... ceiling 27",
+# a clean paid-node verdict and BUILD_CASCADE_OK, while the recorded frame_order ran
+# ['0.png', '1.png', '10.png', ...] and 10.png sat in slot 2; --group=81 built ONE
+# BatchImagesNode carrying 81 auto-grow slots and the ceiling gate reported "ceiling 81",
+# because the cap was the same --group value that produced the node; and a refused build
+# left its output directory on disk.
+
+
+def test_an_unpadded_upload_map_is_refused_rather_than_lexicographically_sorted(tmp_path):
+    uploads = {f"{i}.png": f"{i:064x}.png" for i in range(81)}
+    p = tmp_path / "uploads.json"
+    p.write_text(json.dumps(uploads), encoding="utf-8")
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.main([f"--uploads={p}", f"--out={tmp_path / 'route'}"])
+    assert "10.png" in exc.value.evidence["malformed"]
+
+
+def test_a_stray_non_frame_key_is_not_absorbed_as_a_fifth_frame(tmp_path):
+    uploads = {f"{i:05d}.png": f"{i:064x}.png" for i in range(4)}
+    uploads["reference.png"] = "ffff.png"
+    p = tmp_path / "uploads.json"
+    p.write_text(json.dumps(uploads), encoding="utf-8")
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.main([f"--uploads={p}", f"--out={tmp_path / 'route'}"])
+    assert exc.value.evidence["malformed"] == ["reference.png"]
+
+
+def test_a_within_group_slot_swap_is_caught_by_the_index_gate():
+    """The clause `gate_cascade_topology` does not carry: it checks that the GROUP nodes
+    appear in order and that every link resolves, over whatever list `names` happens to be.
+    Two slots swapped INSIDE a group keeps every count and every group order right."""
+    names = _names(81)
+    wf, gids = B.build(names)
+    plan = [(gid, start) for (start, _), gid in zip(AS.cascade_plan(81, AS.GROUP_SIZE),
+                                                    gids)]
+    assert B.gate_slot_frame_index(wf, names, plan, B.FIRST_IMAGE_ID)["verdict"]
+
+    gi = wf[gids[1]]["inputs"]
+    gi["images.image0"], gi["images.image1"] = gi["images.image1"], gi["images.image0"]
+    assert _gates(wf, gids)["verdict"], "the topology gate must still see nothing wrong"
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.gate_slot_frame_index(wf, names, plan, B.FIRST_IMAGE_ID)
+    assert "slot 0" in str(exc.value)
+
+
+# ------------------------------------------------- the ceiling is the module's, not the CLI's
+
+
+def test_a_group_above_the_module_ceiling_is_refused_end_to_end(tmp_path):
+    """`assembly.py` states the contract: MAX_SLOTS_PER_NODE is equal to GROUP_SIZE so any
+    widening of the group is a deliberate diff in both places. The CLI defeated it at
+    runtime by passing cap=max(--group, 1), so the gate checked a direction the
+    construction already bounds and 81 flat slots printed "ceiling 81"."""
+    uploads = {f"{i:05d}.png": f"{i:064x}.png" for i in range(81)}
+    p = tmp_path / "uploads.json"
+    p.write_text(json.dumps(uploads), encoding="utf-8")
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.main([f"--uploads={p}", f"--out={tmp_path / 'route'}", "--group=81"])
+    assert f"more than {AS.MAX_SLOTS_PER_NODE}" in str(exc.value)
+
+
+def test_a_group_at_the_module_ceiling_still_builds(tmp_path):
+    """The mutation that must NOT fire it."""
+    uploads = {f"{i:05d}.png": f"{i:064x}.png" for i in range(81)}
+    p = tmp_path / "uploads.json"
+    p.write_text(json.dumps(uploads), encoding="utf-8")
+    out = tmp_path / "route"
+    B.main([f"--uploads={p}", f"--out={out}", f"--group={AS.MAX_SLOTS_PER_NODE}"])
+    rec = json.loads((out / "E13-cascade-payload-record.json").read_text(encoding="utf-8"))
+    assert rec["gates"]["CASCADE_ceiling"]["cap"] == AS.MAX_SLOTS_PER_NODE
+
+
+# ------------------------------------------------- a refuse leaves no output directory
+
+
+def test_a_refused_build_leaves_no_output_directory(tmp_path):
+    uploads = {f"{i:05d}.png": "same.png" for i in range(81)}
+    p = tmp_path / "uploads.json"
+    p.write_text(json.dumps(uploads), encoding="utf-8")
+    out = tmp_path / "fresh" / "route"
+    with pytest.raises(AS.AssemblyGate):
+        B.main([f"--uploads={p}", f"--out={out}"])
+    assert not out.exists()
+    assert not out.parent.exists()

@@ -25,6 +25,28 @@ the server's names are content-addressed and sort into a meaningless order. Sort
 would assemble the clip in an arbitrary sequence while every count in every gate still read
 correctly — the reason `gate_cascade_topology` checks group ORDER and not only group counts.
 
+--------------------------------------------------------------------------------
+Three corrections, 2026-09-03, all measured on this tool
+
+* **The local sort was not a frame order.** An 81-entry map keyed `0.png` .. `80.png`
+  built, printed "81 distinct LoadImage nodes -> 3 group batch(es) … groups in frame
+  order, every link resolved" and BUILD_CASCADE_OK, while the recorded frame order ran
+  `0.png, 1.png, 10.png, …` with `10.png` in slot 2; a 4-frame map plus one
+  `reference.png` key was absorbed as a fifth frame. `frame_order` (in
+  `build_assembly_payload`) now refuses any key that is not `NNNNN.png` and any gap.
+* **No gate related a slot index to a frame index.** `gate_cascade_topology` checks that
+  the GROUP nodes appear in order over whatever list `names` happens to be; two slots
+  swapped INSIDE a group keeps every count right. `gate_slot_frame_index` is the clause
+  that fires on it, and the ordered per-frame source ids go to the shared gate as well.
+* **The slot ceiling was the CLI's number, not the module's.** `gate_slot_ceiling` was
+  called with `cap=max(--group, 1)`, i.e. the same value that produced the group nodes, so
+  for group nodes it checked a direction the construction already bounds: `--group=81`
+  built ONE `BatchImagesNode` with 81 auto-grow slots and the gate printed "ceiling 81".
+  `assembly.py` states the intended contract — `MAX_SLOTS_PER_NODE` equals `GROUP_SIZE`
+  so a widening is a deliberate diff in both places — and the CLI defeated it at runtime
+  with no diff. The gate now owns its ceiling; `--group` is passed for it to check
+  against that constant, never as the ceiling itself.
+
 Compensator (NAMED_COMPENSATORS): writes JSON under `outputs/`. Compensator: delete the
 directory; owner: the executor session. The uploads it references have **no delete
 endpoint** on this API surface — they are content-addressed and inert unless a graph names
@@ -32,6 +54,7 @@ them, and they persist service-side (the E12 w2/w3 §7 convention).
 """
 
 import argparse
+import inspect
 import json
 import os
 import sys
@@ -40,8 +63,34 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
+from build_assembly_payload import (  # noqa: E402
+    FRAME_KEY, frame_order, frame_source_ids, gate_slot_frame_index)
 
-TOOL_VERSION = "E13.1"
+TOOL_VERSION = "E13.2"
+
+__all__ = ["FRAME_KEY", "frame_order", "frame_source_ids", "gate_slot_frame_index",
+           "build", "main"]
+
+#: P3 / P2 seam (swarm wave 3, health-amend-a). The shared gates in
+#: `armature_core.assembly` are being taught, on a sibling branch, to take the expected
+#: per-frame source ids (`gate_cascade_topology`) and the caller's group size
+#: (`gate_slot_ceiling`, whose `cap` may then only TIGHTEN below `MAX_SLOTS_PER_NODE`).
+#: That branch is not visible from here, so the values are offered under the names the pair
+#: brief uses and filtered against the callee's real signature: whichever the gate declares
+#: it receives, and the payload record states which — never a green tick for a clause that
+#: did not run. `gate_slot_frame_index` above runs either way, so the invariant is enforced
+#: in this tool regardless of what the shared gate ends up declaring.
+ORDERED_ID_PARAMS = ("frame_source_ids", "expected_sources", "expected_frame_sources",
+                     "expected_source_ids", "source_ids", "frame_ids")
+
+
+def _accepted(fn, candidates, value):
+    """`({param: value}, param)` for the first candidate `fn` actually declares."""
+    params = inspect.signature(fn).parameters
+    for name in candidates:
+        if name in params:
+            return {name: value}, name
+    return {}, None
 
 #: Node ids. LoadImages from 200 as S03's flat chain used; the cascade's own nodes are
 #: numbered so a group, the final batch and the tail are distinguishable at a glance in a
@@ -96,11 +145,14 @@ def main(argv=None):
     out = os.path.abspath(a.out)
     # Not a spend: same frames->VIDEO pack as assembly, batched. Gate CANON
     # is not armed here because there is no generation to refuse.
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
+    #
+    # `os.makedirs` used to sit HERE, above --uploads being read and above every gate. A
+    # refused build therefore left an empty run directory beside real ones. It now sits
+    # below the last in-tool gate.
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
-    order = sorted(uploads)                  # LOCAL names: 00000.png .. 00080.png
+    order = frame_order(uploads)             # LOCAL names: 00000.png .. 00080.png
     names = [uploads[k] for k in order]
     if len(set(names)) != len(names):
         raise AS.AssemblyGate(
@@ -113,9 +165,21 @@ def main(argv=None):
 
     # ---- the gates, in code, before anything is submitted.
     gate_paid = AS.gate_no_paid_nodes(wf)
-    gate_ceiling = AS.gate_slot_ceiling(wf, cap=max(a.group, 1))
+    # The gate owns the ceiling. `cap` is NOT passed: handing it the same --group value
+    # that produced the group nodes made it check a direction the construction already
+    # bounds. `group_size` is offered for the gate to check against its own constant.
+    ceiling_kw, ceiling_param = _accepted(AS.gate_slot_ceiling, ("group_size",),
+                                          int(a.group))
+    gate_ceiling = AS.gate_slot_ceiling(wf, **ceiling_kw)
+    ordered_ids = frame_source_ids(names, FIRST_IMAGE_ID)
+    topo_kw, topo_param = _accepted(AS.gate_cascade_topology, ORDERED_ID_PARAMS,
+                                    list(ordered_ids))
     gate_topo = AS.gate_cascade_topology(wf, len(names), group_ids, FINAL_BATCH_ID,
-                                         VIDEO_ID, SAVE_ID, "video", group_size=a.group)
+                                         VIDEO_ID, SAVE_ID, "video", group_size=a.group,
+                                         **topo_kw)
+    slot_plan = [(gid, start) for (start, _), gid
+                 in zip(AS.cascade_plan(len(names), a.group), group_ids)]
+    gate_index = gate_slot_frame_index(wf, names, slot_plan, FIRST_IMAGE_ID)
     # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no
     # noise-bearing node at all, so the seed clause has nothing to decide, and a green
     # "0 seeds, all pinned" here would be the vacuous shape CLAUDE.md names. The clauses
@@ -154,10 +218,24 @@ def main(argv=None):
                           "output_node TRUE"),
             "LoadImage": "image COMBO -> IMAGE, MASK; api_node false",
         },
+        "frame_source_ids": list(ordered_ids),
         "gates": {"ASSEMBLY_paid": gate_paid, "CASCADE_ceiling": gate_ceiling,
-                  "CASCADE_topology": gate_topo, "ROUTE": gate_route},
+                  "CASCADE_topology": gate_topo,
+                  "CASCADE_slot_frame_index": gate_index, "ROUTE": gate_route},
+        "shared_gate_parameters": {
+            "gate_slot_ceiling_group_size_param": ceiling_param,
+            "gate_cascade_topology_ordered_ids_param": topo_param,
+            "what_null_means": (
+                "the shared gate in armature_core.assembly does not declare that "
+                "parameter on this tree, so it did NOT receive the value and the clause "
+                "it would arm did not run there. The builder's own "
+                "CASCADE_slot_frame_index ran regardless; this row exists so the record "
+                "says which checks actually executed rather than implying both did"),
+        },
     }
 
+    # Below the last in-tool gate: a refuse leaves no output directory.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     graph_path = os.path.join(out, "E13-cascade.api.json")
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=1)
@@ -170,6 +248,7 @@ def main(argv=None):
     print(f"paid-node gate   {gate_paid['verdict']}")
     print(f"slot ceiling     {gate_ceiling['verdict']}")
     print(f"topology gate    {gate_topo['verdict']}")
+    print(f"slot->frame gate {gate_index['verdict']}")
     print(f"route components {len(gate_route['components'])}  "
           f"seeds {len(gate_route['seeds'])}  latents {len(gate_route['latents'])}")
     print(f"frame legality   {[f['legal'] for f in gate_route['frame_legality']]}")
