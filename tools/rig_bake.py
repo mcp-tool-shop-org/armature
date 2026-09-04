@@ -196,9 +196,36 @@ def arm_bake_target(ob):
     return armed
 
 
+#: The bake needs a ray-tracer, so the candidate list is one long -- but it goes through
+#: the same guarded selection as every other engine assignment in this tree (F-0bf74152):
+#: an invalid enum name RAISES a bare `TypeError`, which the halt contract records as
+#: "FAILED - an unhandled error" naming a bpy property assignment rather than the engine.
+ENGINE_CANDIDATES = ("CYCLES",)
+
+
+def select_engine(scene, candidates=ENGINE_CANDIDATES):
+    """Set the render engine and RETURN the one actually set, else raise.
+
+    Carried from `preview_glb.select_engine` (F-bba38f1c). `armature_core.blender_scene` is
+    where the one implementation belongs and is outside this domain's globs, so the lift is
+    FILED, not done.
+    """
+    for eng in candidates:
+        try:
+            scene.render.engine = eng
+        except TypeError:
+            continue
+        return eng
+    raise BakeEmpty(
+        "none of the candidate render engines is valid on this Blender, so the bake "
+        "would run on whatever the factory settings left in place",
+        {"clause": "engine", "candidates": list(candidates),
+         "blender": bpy.app.version_string})
+
+
 def bake(source, target, cage, margin, atlas):
     scene = bpy.context.scene
-    scene.render.engine = "CYCLES"
+    engine = select_engine(scene)
     try:
         scene.cycles.device = "GPU"
         prefs = bpy.context.preferences.addons["cycles"].preferences
@@ -301,7 +328,11 @@ def main():
                    "source_sha256": rc.sha256_file(args["source"]),
                    "retopo_sha256": rc.sha256_file(args["retopo"])},
         "unwrap": uv_rec,
-        "bake": {"engine": "CYCLES", "device": bpy.context.scene.cycles.device,
+        # the engine ACTUALLY in effect (F-0bf74152), read off the scene rather than
+        # written as a literal -- `select_engine` set it and would have refused by name if
+        # no candidate were valid on this Blender.
+        "bake": {"engine": bpy.context.scene.render.engine,
+                 "device": bpy.context.scene.cycles.device,
                  "samples": bpy.context.scene.cycles.samples,
                  "type": "DIFFUSE", "pass_filter": ["COLOR"],
                  "use_selected_to_active": True,

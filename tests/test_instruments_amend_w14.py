@@ -528,3 +528,182 @@ def test_gate_scale_still_refuses_a_non_finite_subject(rigchar):
     with pytest.raises(rigchar.GateSubjectDegenerate) as exc:
         rigchar.subject_scale(bad, "fixture")
     assert exc.value.gate == "SCALE"
+
+
+# ================================== F-0bf74152 — the guarded engine selection, everywhere
+#
+# THE OPERAND. The guarded loop F-bba38f1c earned existed on the four SHEET tools and on
+# none of the four RENDERERS: `preview_walk`, `render_performer`, `render_start_frame` and
+# `render_turnaround` each pinned the single literal `'BLENDER_EEVEE'`. The candidate list
+# exists precisely because that identifier is not stable across Blender versions, and the
+# sheets' `except TypeError: continue` is this repo's own evidence that an invalid enum
+# name RAISES. The census below keys on the ASSIGNMENT to `<scene>.render.engine` — the
+# node the property lives on — not on the presence of a candidate list, which is what the
+# wave-8 census counted and is why it could not see the four bare assignments.
+
+
+def _engine_assignments(directory):
+    """Every `<expr>.render.engine = ...` assignment under `directory`, with its function.
+
+    Returns `[(filename, funcname, lineno, guarded)]`. `guarded` is True when the enclosing
+    function iterates candidates, wraps the assignment in `try/except TypeError` and
+    carries a `raise` for the exhausted case — the `preview_glb.select_engine` shape.
+    """
+    out = []
+    for root in (directory, os.path.join(directory, "superseded")):
+        if not os.path.isdir(root):
+            continue
+        for fn in sorted(os.listdir(root)):
+            if not fn.endswith(".py"):
+                continue
+            with open(os.path.join(root, fn), encoding="utf-8") as fh:
+                src = fh.read()
+            tree = ast.parse(src)
+            parents = {}
+            for func in [n for n in ast.walk(tree)
+                         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+                for node in ast.walk(func):
+                    parents[id(node)] = func
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Assign):
+                    continue
+                for t in node.targets:
+                    if not (isinstance(t, ast.Attribute) and t.attr == "engine"
+                            and isinstance(t.value, ast.Attribute)
+                            and t.value.attr == "render"):
+                        continue
+                    func = parents.get(id(node))
+                    if func is None:
+                        out.append((fn, "<module>", node.lineno, False))
+                        continue
+                    body = ast.unparse(func)
+                    guarded = ("for " in body and "except TypeError" in body
+                               and any(isinstance(n, ast.Raise) for n in ast.walk(func)))
+                    out.append((fn, func.name, node.lineno, guarded))
+    return out
+
+
+def test_every_render_engine_assignment_is_guarded():
+    """SIZE, MEMBERSHIP, then the property — measured on this tree 2026-09-04.
+
+    Nine assignments to `<scene>.render.engine` across `tools/` (the four sheet tools'
+    `light_the_scene`, `preview_glb.select_engine`, and — new this wave — the four
+    renderers' and `rig_bake`'s own `select_engine`). Every one sits inside a candidate
+    loop with a `TypeError` handler and a refusal for the exhausted case; before this wave
+    five of them were bare literal assignments.
+    """
+    sites = _engine_assignments(TOOLS)
+    bare = [(fn, func, ln) for fn, func, ln, guarded in sites if not guarded]
+    assert bare == [], bare
+    assert len(sites) == 10, sites
+
+
+def test_no_renderer_pins_a_single_engine_identifier():
+    """The shape the finding named: the literal, with nothing around it."""
+    offenders = []
+    for fn in ("preview_walk.py", "render_performer.py", "render_start_frame.py",
+               "render_turnaround.py"):
+        with open(os.path.join(TOOLS, fn), encoding="utf-8") as fh:
+            src = fh.read()
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign):
+                continue
+            for t in node.targets:
+                if (isinstance(t, ast.Attribute) and t.attr == "engine"
+                        and isinstance(node.value, ast.Constant)):
+                    offenders.append((fn, node.lineno, node.value.value))
+    assert offenders == [], offenders
+
+
+@pytest.mark.parametrize("filename,gate_name", [
+    ("preview_walk.py", "PreviewWalkGate"),
+    ("render_performer.py", "RenderGate"),
+    ("render_start_frame.py", "RenderGate"),
+    ("render_turnaround.py", "RenderTurnaroundGate"),
+    ("rig_bake.py", "BakeEmpty"),
+])
+def test_select_engine_refuses_when_no_candidate_is_valid(filename, gate_name):
+    """RED on the operand: a Blender that accepts NEITHER identifier.
+
+    The scene's `render.engine` setter raises `TypeError` on an invalid enum name — the
+    behaviour the sheets' `except TypeError` records — so a scene that refuses every
+    candidate must halt with a named refusal rather than render on whatever the factory
+    settings left in place. Reverted-red: yes; on the base tree these four modules have no
+    `select_engine` at all and the bare assignment raises an untyped `TypeError`.
+    """
+    mod = load_tool(filename)
+    gate = getattr(mod, gate_name)
+
+    class _RefusesEveryEngine:
+        class render:                              # noqa: N801 - mirrors bpy's shape
+            @staticmethod
+            def __setattr__(name, value):          # pragma: no cover - unreachable
+                raise TypeError(name)
+
+    class _Render:
+        def __setattr__(self, name, value):
+            raise TypeError(f"bpy_struct: item.attr = val: enum {value!r} not found")
+
+    class _Scene:
+        def __init__(self):
+            object.__setattr__(self, "render", _Render())
+
+    with pytest.raises(gate) as exc:
+        mod.select_engine(_Scene())
+    assert exc.value.evidence["clause"] == "engine"
+    assert exc.value.evidence["candidates"] == list(mod.ENGINE_CANDIDATES)
+
+
+@pytest.mark.parametrize("filename", [
+    "preview_walk.py", "render_performer.py", "render_start_frame.py",
+    "render_turnaround.py", "rig_bake.py",
+])
+def test_select_engine_returns_the_first_candidate_that_takes(filename):
+    """The other direction, and the reason the return value exists: the record states the
+    engine that was SET, not the one that was asked for."""
+    mod = load_tool(filename)
+    accepted = mod.ENGINE_CANDIDATES[-1]
+
+    class _Render:
+        def __init__(self):
+            object.__setattr__(self, "engine", None)
+
+        def __setattr__(self, name, value):
+            if value != accepted:
+                raise TypeError(f"enum {value!r} not found")
+            object.__setattr__(self, name, value)
+
+    class _Scene:
+        def __init__(self):
+            object.__setattr__(self, "render", _Render())
+
+    scene = _Scene()
+    assert mod.select_engine(scene) == accepted
+    assert scene.render.engine == accepted
+
+
+def test_the_four_renderers_record_the_engine_they_actually_set():
+    """A literal in a provenance record is an assertion, not a measurement. Two of the four
+    published `"engine": "BLENDER_EEVEE"` as a literal beside an unguarded assignment."""
+    offenders = []
+    for fn in ("preview_walk.py", "render_performer.py", "render_start_frame.py",
+               "render_turnaround.py", "rig_bake.py"):
+        with open(os.path.join(TOOLS, fn), encoding="utf-8") as fh:
+            src = fh.read()
+        tree = ast.parse(src)
+        found = False
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            for k, v in zip(node.keys, node.values):
+                if not (isinstance(k, ast.Constant) and k.value == "engine"):
+                    continue
+                text = ast.unparse(v)
+                if isinstance(v, ast.Constant):
+                    offenders.append((fn, node.lineno, text))
+                else:
+                    found = True
+        if not found:
+            offenders.append((fn, None, "no engine field in any record"))
+    assert offenders == [], offenders

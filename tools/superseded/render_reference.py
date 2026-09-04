@@ -62,6 +62,29 @@ CENTRE_X, CENTRE_Y = 0.50, 0.50
 MIN_SUBJECT_FRACTION = 0.08
 
 
+#: The engine identifiers this tool will accept, in the order it tries them (F-0bf74152).
+#: This is a SUPERSEDED route and it stays runnable, so it gets the same guard as the live
+#: renderers: the EEVEE identifier is not stable across Blender versions and an invalid
+#: enum name raises a bare `TypeError`.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+def select_engine(scene, candidates=ENGINE_CANDIDATES):
+    """Set the render engine and RETURN the one actually set, else raise."""
+    for eng in candidates:
+        try:
+            scene.render.engine = eng
+        except TypeError:
+            continue
+        return eng
+    raise ReferenceGate(
+        "none of the candidate render engines is valid on this Blender, so the reference "
+        "would be drawn by whatever the factory settings left in place",
+        {"clause": "engine", "candidates": list(candidates),
+         "blender": bpy.app.version_string})
+
+
+
 def _render_status(result):
     """The render operator's status set as a sorted list of strings, `[]` if unreadable.
 
@@ -213,7 +236,7 @@ def main():
 
     studio(scene, lo, hi)
 
-    scene.render.engine = "BLENDER_EEVEE"
+    engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = w, h
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = False
@@ -301,6 +324,8 @@ def main():
         "source": {"glb": os.path.abspath(a.glb), "sha256": source_sha},
         "output": {"png": path, "sha256": sha, "bytes": os.path.getsize(path),
                    "resolution": [w, h]},
+        # the engine ACTUALLY set (F-0bf74152), from `select_engine`'s return.
+        "engine": engine,
         "framed_like": {"plate": "E:/AI/training/facet_E33/twins/twin_r3_v0.png",
                         "plate_size": list(TWIN_SIZE), "scale": a.scale},
         "camera": {"azimuth_deg": AZIMUTH_DEG, "elevation_deg": ELEVATION_DEG,

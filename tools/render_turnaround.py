@@ -183,6 +183,42 @@ MARGIN_PX = 2.0
 ORTHO_STANDOFF_SPHERES = 4.0
 
 
+#: The engine identifiers this tool will accept, in the order it tries them.
+#:
+#: WAVE 14, F-0bf74152. This module pinned the single literal `'BLENDER_EEVEE'`. The
+#: candidate list exists in the four SHEET tools precisely because that identifier is not
+#: stable across Blender versions, and their `except TypeError: continue` is this repo's own
+#: recorded evidence that an invalid enum name RAISES rather than being ignored -- so on a
+#: Blender where the other spelling is the live one, the diagnostic sheets kept working and
+#: the four tools whose pixels become control sequences and reference stacks died with an
+#: untyped `TypeError`, recorded by the halt contract as "FAILED - an unhandled error" at
+#: exit 1 naming a bpy property assignment. The order is the sheets' order, so a sheet and
+#: a render made beside each other cannot be drawn by different engines.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+def select_engine(scene, candidates=ENGINE_CANDIDATES):
+    """Set the render engine and RETURN the one actually set, else raise.
+
+    Carried from `preview_glb.select_engine` (F-bba38f1c) rather than reinvented: the loop
+    has an `else` branch, because a loop that completes without setting anything leaves the
+    render on whatever the factory settings put there with no field in any record able to
+    say so. `armature_core.blender_scene` is where the one implementation belongs and is
+    outside this domain's globs, so the lift is FILED, not done.
+    """
+    for eng in candidates:
+        try:
+            scene.render.engine = eng
+        except TypeError:
+            continue
+        return eng
+    raise RenderTurnaroundGate(
+        "none of the candidate render engines is valid on this Blender, so the render "
+        "would be drawn by whatever the factory settings left in place",
+        {"clause": "engine", "candidates": list(candidates),
+         "blender": bpy.app.version_string})
+
+
 def _render_status(result):
     """The render operator's status set as a sorted list of strings, `[]` if unreadable.
 
@@ -564,7 +600,7 @@ def main():
             {"clause": "import", "glb": a.glb, "mesh_objects": [],
              "armatures": [o.name for o in arms]})
 
-    scene.render.engine = "BLENDER_EEVEE"
+    engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
@@ -789,7 +825,8 @@ def main():
                                "same world, EEVEE, Standard view transform"),
             "world_linear_rgb": list(WORLD_LINEAR),
             "key_sun_energy": KEY_ENERGY, "fill_sun_energy": FILL_ENERGY,
-            "engine": "BLENDER_EEVEE", "view_transform": "Standard",
+            # the engine ACTUALLY set (F-0bf74152), never the literal.
+            "engine": engine, "view_transform": "Standard",
             "floor_drawn": False,
             "floor_why": ("a ground plane is opaque geometry and would bake a non-"
                           "transparent backdrop into the lower frame, which is the defect "

@@ -30,6 +30,42 @@ from armature_core import blender_scene, framing, shotspec  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 
+#: The engine identifiers this tool will accept, in the order it tries them.
+#:
+#: WAVE 14, F-0bf74152. This module pinned the single literal `'BLENDER_EEVEE'`. The
+#: candidate list exists in the four SHEET tools precisely because that identifier is not
+#: stable across Blender versions, and their `except TypeError: continue` is this repo's own
+#: recorded evidence that an invalid enum name RAISES rather than being ignored -- so on a
+#: Blender where the other spelling is the live one, the diagnostic sheets kept working and
+#: the four tools whose pixels become control sequences and reference stacks died with an
+#: untyped `TypeError`, recorded by the halt contract as "FAILED - an unhandled error" at
+#: exit 1 naming a bpy property assignment. The order is the sheets' order, so a sheet and
+#: a render made beside each other cannot be drawn by different engines.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+def select_engine(scene, candidates=ENGINE_CANDIDATES):
+    """Set the render engine and RETURN the one actually set, else raise.
+
+    Carried from `preview_glb.select_engine` (F-bba38f1c) rather than reinvented: the loop
+    has an `else` branch, because a loop that completes without setting anything leaves the
+    render on whatever the factory settings put there with no field in any record able to
+    say so. `armature_core.blender_scene` is where the one implementation belongs and is
+    outside this domain's globs, so the lift is FILED, not done.
+    """
+    for eng in candidates:
+        try:
+            scene.render.engine = eng
+        except TypeError:
+            continue
+        return eng
+    raise PreviewWalkGate(
+        "none of the candidate render engines is valid on this Blender, so the render "
+        "would be drawn by whatever the factory settings left in place",
+        {"clause": "engine", "candidates": list(candidates),
+         "blender": bpy.app.version_string})
+
+
 def _render_status(result):
     """The render operator's status set as a sorted list of strings, `[]` if unreadable.
 
@@ -131,7 +167,7 @@ def main():
     asset, sha = shotspec.resolve_asset(spec)
     meshes, arms, info = blender_scene.import_glb(asset, expected_fps=fps)
 
-    scene.render.engine = "BLENDER_EEVEE"
+    engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = w, h
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = False
@@ -251,6 +287,10 @@ def main():
     print("PREVIEW_WALK_OK " + json.dumps({
         "tool": "preview_walk", "blender": blender_scene.blender_provenance(),
         "out": os.path.abspath(a.out), "frames": len(planned), "resolution": [w, h],
+        # the engine ACTUALLY set, from `select_engine`'s return (F-0bf74152) -- never a
+        # literal, because the identifier this tool used to pin is not stable across
+        # Blender versions and no field in this record could have revealed a substitution.
+        "engine": engine,
         "unexpected_files_in_out_dir": strays,
         "unexpected_files_rule": (
             "every file in --out whose name ends in .png, compared case-INSENSITIVELY, "

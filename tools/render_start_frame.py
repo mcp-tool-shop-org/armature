@@ -124,6 +124,42 @@ PLATE_MIN_SEPARATION_255 = 4.0
 FRAMING_CLOUD_CAP = 1500
 
 
+#: The engine identifiers this tool will accept, in the order it tries them.
+#:
+#: WAVE 14, F-0bf74152. This module pinned the single literal `'BLENDER_EEVEE'`. The
+#: candidate list exists in the four SHEET tools precisely because that identifier is not
+#: stable across Blender versions, and their `except TypeError: continue` is this repo's own
+#: recorded evidence that an invalid enum name RAISES rather than being ignored -- so on a
+#: Blender where the other spelling is the live one, the diagnostic sheets kept working and
+#: the four tools whose pixels become control sequences and reference stacks died with an
+#: untyped `TypeError`, recorded by the halt contract as "FAILED - an unhandled error" at
+#: exit 1 naming a bpy property assignment. The order is the sheets' order, so a sheet and
+#: a render made beside each other cannot be drawn by different engines.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+def select_engine(scene, candidates=ENGINE_CANDIDATES):
+    """Set the render engine and RETURN the one actually set, else raise.
+
+    Carried from `preview_glb.select_engine` (F-bba38f1c) rather than reinvented: the loop
+    has an `else` branch, because a loop that completes without setting anything leaves the
+    render on whatever the factory settings put there with no field in any record able to
+    say so. `armature_core.blender_scene` is where the one implementation belongs and is
+    outside this domain's globs, so the lift is FILED, not done.
+    """
+    for eng in candidates:
+        try:
+            scene.render.engine = eng
+        except TypeError:
+            continue
+        return eng
+    raise RenderGate(
+        "none of the candidate render engines is valid on this Blender, so the render "
+        "would be drawn by whatever the factory settings left in place",
+        {"clause": "engine", "candidates": list(candidates),
+         "blender": bpy.app.version_string})
+
+
 def _render_status(result):
     """The render operator's status set as a sorted list of strings, `[]` if unreadable.
 
@@ -472,7 +508,7 @@ def main():
     blender_scene.set_frame_rate(scene, a.fps)
     meshes, arms, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
 
-    scene.render.engine = "BLENDER_EEVEE"
+    engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
@@ -835,7 +871,10 @@ def main():
                                "the world background is NO LONGER inherited — see alpha"),
             "world_background": list(composite_rgb) + [1.0],
             "key_sun_energy": 3.2, "fill_sun_energy": 1.1,
-            "engine": "BLENDER_EEVEE", "view_transform": "Standard",
+            # the engine ACTUALLY set (F-0bf74152), never the literal: this field used to
+            # assert an identifier the tool pinned without a guard, so on a Blender where
+            # the other spelling is live the record would have named an engine that raised.
+            "engine": engine, "view_transform": "Standard",
             "consequence": ("on the no-control route this frame is the model's only "
                             "picture of the world, so whatever it shows is what the prompt "
                             "must either keep or replace. What it shows is now a recorded "
