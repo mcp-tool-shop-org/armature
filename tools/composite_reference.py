@@ -200,11 +200,20 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
-    plate = tuple(int(v) for v in a.plate.split(","))
-    if len(plate) != 3:
-        raise ReferenceGate(f"--plate={a.plate!r} is not r,g,b", {"supplied": a.plate})
+    # ---- ONE parser, the module's own, rather than a third variant of it. `main`'s
+    #      inline `tuple(int(v) for v in a.plate.split(","))` checked only the LENGTH:
+    #      measured 2026-09-04, `--plate=999,-5,0` passed it, `composite_over` clipped the
+    #      channels to [255, 0, 0], and the record below wrote `"plate_rgb_srgb": [999,
+    #      -5, 0]` -- naming a colour that is not the colour composited, in the artefact
+    #      that says what the model was actually shown. `--plate=a,b,c` raised a bare
+    #      `ValueError` rather than this tool's own error with its evidence dict.
+    plate = parse_plate(a.plate, ReferenceGate, flag="--plate")
+    if plate is None:
+        raise ReferenceGate(
+            "--plate is empty; the plate is a deliberate, recorded choice under the "
+            "authored-RGBA law and an unnamed one cannot be recorded",
+            {"supplied": a.plate})
 
     with open(os.path.join(a.kit, "turnaround_manifest.json"), encoding="utf-8") as fh:
         manifest = json.load(fh)
@@ -214,7 +223,13 @@ def main(argv=None):
         by_stem[stem] = dict(v, index=i)
 
     stems = [s.strip() for s in a.views.split(",") if s.strip()]
-    entries = []
+
+    # ---- PASS ONE: every andon, for every view, before a byte is written. The module
+    #      docstring above says "all before a byte is written" and that was true only of
+    #      the FIRST view: the gates ran inside the write loop, so a kit whose third view
+    #      failed Gate ALPHA left two composited plates and an output directory behind,
+    #      and `os.makedirs` sat above all three andons besides.
+    gated = []
     for slot, stem in enumerate(stems, start=1):
         entry = by_stem.get(stem)
         if entry is None:
@@ -229,7 +244,13 @@ def main(argv=None):
         alpha = gate_alpha(rgba, stem)
         rgb = composite_over(rgba, plate)
         flat = gate_flat(rgb, plate, stem)
+        gated.append((slot, stem, entry, src, rgba, rgb, pin, alpha, flat))
 
+    # ---- PASS TWO: the writes. The output directory is created only now, so a refused
+    #      kit leaves nothing behind rather than an empty directory that reads as a run.
+    os.makedirs(out, exist_ok=True)
+    entries = []
+    for slot, stem, entry, src, rgba, rgb, pin, alpha, flat in gated:
         dst = os.path.join(out, f"A1_slot{slot}_{stem}.png")
         Image.fromarray(rgb, mode="RGB").save(dst)
         entries.append({

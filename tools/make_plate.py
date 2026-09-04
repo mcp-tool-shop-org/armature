@@ -196,7 +196,6 @@ def main(argv=None):
 
     src_path, origin = resolve_source(a.src, a.frames, a.index)
     out_dir = os.path.abspath(a.out)
-    os.makedirs(out_dir, exist_ok=True)          # scripts create their own output directories
 
     # UNCHANGED, not COLOR: a 4th channel must reach the law below rather than being
     # dropped by the decoder before anything can refuse it.
@@ -216,6 +215,11 @@ def main(argv=None):
 
     anchor = parse_anchor(a.anchor)
     fitted, geom = cover(img, a.width, a.height, anchor=anchor)
+    # ---- the output directory is created only once every in-tool andon above has
+    #      fired. A refused run that has already made its directory leaves an empty
+    #      one behind, which a later reader -- or a re-run into the same --out --
+    #      reads as an attempt that produced nothing rather than one that was refused.
+    os.makedirs(out_dir, exist_ok=True)
     dst = os.path.join(out_dir, "plate.png")
     if not cv2.imwrite(dst, fitted):
         raise ArmatureError(f"cv2 refused to write {dst}")

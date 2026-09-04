@@ -261,3 +261,70 @@ def test_no_sheet_still_carries_the_silent_continue(tmp_path):
                     and "continue" in "".join(lines[i:i + 2])):
                 offenders.append(f"{mod}:{i + 1} {stripped}")
     assert offenders == [], offenders
+
+
+# ------------------------------------------- two empty populations are not a passing gate
+#
+# `gate_pairing`'s passing verdict was built as `f"...numbered {rendered[0]}..{rendered[-1]}"`,
+# indexing a list that may be empty. Two empty populations satisfy every earlier clause —
+# no unnumbered files, equal lengths, no first disagreement — and the function then died on
+# the verdict line. Measured 2026-09-04:
+# `gate_listing_pairing({'control': [], 'output': []})` raised `IndexError: list index out
+# of range`, not `PairingGate`; and because `gate_listing_pairing`'s re-wrap catches only
+# `PairingGate`, the `IndexError` propagated raw out of the four sheets that call it. The
+# repo's rule for this case is written three doors down in `gate_b_frames.frame_paths`: a
+# comparison over zero frames proves nothing and would report a passing gate.
+
+
+def test_two_empty_populations_raise_the_pairing_gate_not_an_indexerror():
+    with pytest.raises(ML.PairingGate) as e:
+        ML.gate_listing_pairing({"a": [], "b": []})
+    ev = e.value.evidence
+    assert ev["gate"] == "PAIRING"
+    assert ev["n_rendered"] == 0 and ev["n_authored"] == 0
+
+
+def test_an_empty_rendered_population_against_an_authored_one_still_names_the_gate():
+    with pytest.raises(ML.PairingGate) as e:
+        ML.gate_pairing([], [{"frame": 0}])
+    assert e.value.evidence["gate"] == "PAIRING"
+
+
+def test_a_non_empty_pair_still_returns_its_verdict():
+    """The guard the other way: the refusal must not make a real pairing unreachable."""
+    ev = ML.gate_pairing([{"file": "00000.png"}, {"file": "00001.png"}],
+                         [{"frame": 0}, {"frame": 1}])
+    assert "0..1" in ev["verdict"]
+
+
+def test_a_sheet_pointed_at_two_empty_directories_reports_the_gate(tmp_path, monkeypatch):
+    """End to end, through `make_lift_sheet`: the operator gets the andon's evidence
+    dict naming the columns, not a bare `IndexError` naming neither directory."""
+    src = _plate(_clip(str(tmp_path / "src"), []))
+    lif = _plate(_clip(str(tmp_path / "lif"), []))
+    det = _detection(str(tmp_path / "det.json"), [])
+    out = str(tmp_path / "sheet.png")
+    monkeypatch.setattr(sys, "argv", [
+        "make_lift_sheet.py", f"--source={src}", f"--detection={det}",
+        f"--lifted={lif}", f"--out={out}", "--frames=0", "--tile-h=24",
+        "--source-uncropped"])
+    with pytest.raises(ML.PairingGate) as e:
+        LS.main()
+    assert e.value.evidence["gate"] == "PAIRING"
+    assert not os.path.exists(out)
+
+
+def test_the_empty_population_refusal_survives_python_optimize(tmp_path):
+    import subprocess
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = (
+        "import sys; sys.path.insert(0, r'%s')\n"
+        "import measure_lift as ML\n"
+        "try:\n"
+        "    ML.gate_listing_pairing({'a': [], 'b': []})\n"
+        "except ML.PairingGate:\n"
+        "    print('RAISED')\n"
+    ) % (os.path.join(root, "tools"),)
+    res = subprocess.run([sys.executable, "-O", "-c", code], capture_output=True, text=True)
+    assert "RAISED" in res.stdout, res.stderr

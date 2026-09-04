@@ -225,7 +225,6 @@ def main(argv=None):
     started = time.time()
     a = parse_args(argv)
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     sitelist.validate()
     with open(a.manifest, encoding="utf-8") as fh:
@@ -334,6 +333,11 @@ def main(argv=None):
         "elapsed_s": time.time() - started,
     }
 
+    # ---- the output directory is created only once every in-tool andon above has
+    #      fired. A refused run that has already made its directory leaves an empty
+    #      one behind, which a later reader -- or a re-run into the same --out --
+    #      reads as an attempt that produced nothing rather than one that was refused.
+    os.makedirs(out, exist_ok=True)
     path = os.path.join(out, "keypoints.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)

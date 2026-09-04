@@ -183,10 +183,11 @@ def main():
     a = ap.parse_args()
 
     idx = [int(v) for v in a.frames.split(",") if v.strip() != ""]
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
 
-    src = sorted(n for n in os.listdir(a.source) if n.endswith(".png") and n[0].isdigit())
-    lif = sorted(n for n in os.listdir(a.lifted) if n.endswith(".png") and n[0].isdigit())
+    src = sorted(n for n in os.listdir(a.source)
+                 if n.lower().endswith(".png") and n[0].isdigit())
+    lif = sorted(n for n in os.listdir(a.lifted)
+                 if n.lower().endswith(".png") and n[0].isdigit())
     with open(a.detection, encoding="utf-8") as fh:
         det = json.load(fh)["rows"]
 
@@ -196,6 +197,12 @@ def main():
     require_frames(idx, src, what="numbered source frame(s)", where=a.source)
     require_frames(idx, lif, what="numbered lifted frame(s)", where=a.lifted)
     require_frames(idx, det, what="detection row(s)", where=a.detection)
+
+    # ---- the output directory is created only once every in-tool andon above has
+    #      fired. A refused run that has already made its directory leaves an empty
+    #      one behind, which a later reader -- or a re-run into the same --out --
+    #      reads as an attempt that produced nothing rather than one that was refused.
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
 
     src_paths = [os.path.join(a.source, src[i]) for i in idx]
     lif_paths = [os.path.join(a.lifted, lif[i]) for i in idx]
