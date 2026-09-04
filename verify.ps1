@@ -5,12 +5,19 @@
 .DESCRIPTION
   The legs are the same ones `.github/workflows/ci.yml` runs, in the same order and with
   the same meaning, so a green local run and a green CI run are the same claim ABOUT WHAT
-  RAN. They are not the same claim about the interpreter it ran on: every Python leg here
-  uses `$repo\.venv\Scripts\python.exe`, whatever version the rig happens to hold, while
-  ci.yml's `python-tests` job runs its own matrix and release.yml's gate runs one version --
-  none of them necessarily this one. The summary block prints the resolved interpreter, so
-  each run states which one its claim was made on; a version-specific behaviour can still
-  pass here and fail on a runner, and that line is where to look first. The legs themselves:
+  RAN. They are not the same claim about the two RUNTIMES those legs run on. The Python
+  axis: every Python leg here uses `$repo\.venv\Scripts\python.exe`, whatever version the
+  rig happens to hold, while ci.yml's `python-tests` job runs its own matrix and
+  release.yml's gate runs one version -- none of them necessarily this one. The node axis,
+  which moved into ci.yml in wave 12 and did not move here: leg 3's launcher self-test,
+  `npm pack` and the clean install of the tarball run on whatever single node the rig has on
+  PATH, while ci.yml's `launcher` job runs them across a 2-entry matrix -- node 18, the floor
+  `npm/package.json` declares in `engines.node`, and node 22 -- for the stated reason that
+  nothing ran 18. So an npm-9 install layout or an API level `bin/armature.mjs` uses can pass
+  here and fail there. The summary block prints the resolved interpreter AND the resolved
+  node and npm, so each run states which runtimes its claim was made on; a
+  version-specific behaviour can still pass here and fail on a runner, and those lines are
+  where to look first. The legs themselves:
 
     1. the test suite on the repo venv
     2. the test suite again under `-O` with PYTHONOPTIMIZE=1 — this leg is not a
@@ -371,7 +378,38 @@ try {
     if ($reported -match '^Python\s+\S+') { $interpreter = "$python -- $reported" }
 } catch { }
 Write-Host ("  interpreter: {0}" -f $interpreter)
-Write-Host '  (the legs and their order are ci.yml''s; the interpreter is this rig''s venv)'
+
+# WHICH NODE THE CLAIM WAS MADE ON -- the SECOND runtime axis, and the one that moved without
+# this block. Leg 3 runs `node bin\armature.mjs --node-selftest`, `npm pack --silent`,
+# `npm install --prefix` and the installed shim; leg 4 runs `npm audit`, `npm ci` and
+# `npm run build`. All of them use whatever single node is on PATH. ci.yml's `launcher` job
+# runs the same two commands across `node-version: [18, 22]` BECAUSE `npm/package.json`
+# declares `"node": ">=18"` and nothing ran 18 -- so a green run here is a claim about one
+# node out of the two CI exercises, and the DESCRIPTION named only the Python axis. That is
+# the reading error one tool over: "all legs passed" read as "CI will pass", the operator
+# then debugging the change instead of the runtime.
+#
+# Read the same defensive way as the interpreter above: matched against the shape a version
+# has, never echoed raw, because a line quoting an error message under the word "node" would
+# be a placeholder shaped like evidence. When BOTH node-using legs were skipped, this says
+# that rather than reporting a runtime nothing ran on.
+$nodeReport = 'not exercised (-NoPackage and -NoSite)'
+$npmReport = 'not exercised (-NoPackage and -NoSite)'
+if (-not ($NoPackage -and $NoSite)) {
+    $nodeReport = '(version unreadable)'
+    try {
+        $said = (& node --version 2>&1 | Out-String).Trim()
+        if ($said -match '^v\d+\.\d+\.\d+') { $nodeReport = $Matches[0] }
+    } catch { }
+    $npmReport = '(version unreadable)'
+    try {
+        $said = (& npm --version 2>&1 | Out-String).Trim()
+        if ($said -match '^\d+\.\d+\.\d+') { $npmReport = $Matches[0] }
+    } catch { }
+}
+Write-Host ("  node:        {0}" -f $nodeReport)
+Write-Host ("  npm:         {0}" -f $npmReport)
+Write-Host '  (the legs and their order are ci.yml''s; the runtimes are this rig''s venv and PATH)'
 Write-Host ''
 
 foreach ($r in $results) {

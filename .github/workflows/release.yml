@@ -74,8 +74,27 @@ jobs:
       - uses: ./.github/actions/sheet-fonts
       - name: Suite
         run: python -m pytest -q
+      # THE ENV VAR IS THE HALF THAT REACHES A CHILD, and this leg had only the flag.
+      # ci.yml's twin sets `PYTHONOPTIMIZE: "1"` beside its `-O` (ci.yml:297-300) and
+      # verify.ps1's leg 2 exports it around the call (verify.ps1:184-189); this step set
+      # neither, so three copies of one leg read identically in a log and were not the same
+      # check -- on the exact axis the leg exists for.
+      #
+      # Measured on the rig with the repo venv: a parent run as `python -O` spawning
+      # `subprocess.run([sys.executable, "-c", ...])` gives a child with `__debug__` True and
+      # `PYTHONOPTIMIZE` unset; the same parent with `PYTHONOPTIMIZE=1` in the environment
+      # gives a child with `__debug__` False. `-O` governs the pytest process alone. An AST
+      # walk over tests/** counts 57 subprocess calls, 17 of which inherit the environment and
+      # pass no `-O` of their own -- those ran optimised under ci.yml's step and unoptimised
+      # under this one.
+      #
+      # This is the workflow whose Install comment above says a shorter list here would make
+      # the gate a weaker check than the one that already passed on the same commit. It was a
+      # weaker check. By the time it runs, `release: published` has fired.
       - name: Suite under -O
         run: python -O -m pytest -q
+        env:
+          PYTHONOPTIMIZE: "1"
       # ci.yml's packaging leg, from the same implementation. This job built both artifacts
       # and ran `twine check` on the METADATA, and nothing in this workflow installed either
       # one — so the artifact handed to the publish step, the one step here with no
@@ -125,6 +144,51 @@ jobs:
           echo "tag=$TAG pyproject=$PKG npm=$NPM"
           [ "$TAG" = "$PKG" ] || { echo "::error::tag $TAG != pyproject $PKG"; exit 1; }
           [ "$PKG" = "$NPM" ] || { echo "::error::pyproject $PKG != npm $NPM"; exit 1; }
+      - name: The two workflows must read the same visibility
+        # ONE DERIVED FACT, READ IN BOTH FILES. pages.yml treats the repository's visibility
+        # as a live state -- its deploy job is fenced
+        # `if: github.event.repository.private == false` and its comment records the
+        # measurement that put it there (Pages went dark with the repo on 2026-08-11;
+        # deploy-pages 404s against a Pages that does not exist, run 31726592984). release.yml
+        # published with `npm publish --provenance --access public` unconditionally, with no
+        # equivalent clause and no comment recording a decision either way -- so the two files
+        # held different beliefs about one fact, and the disagreement sat on the step with no
+        # compensator.
+        #
+        # PREMISE, MARKED ASSUMED AND NOT FETCHED IN THE SEAT THAT WROTE THIS (no network):
+        # npm is understood to generate provenance attestations only for packages published
+        # from a PUBLIC source repository, so `--provenance` from a private repo fails AT the
+        # publish rather than degrading. The npm documentation was not retrieved to confirm the
+        # clause or its current wording. Re-fetch before relying on the reasoning; the
+        # BEHAVIOUR below is chosen so that it is correct either way -- public still attests,
+        # private still publishes, and neither reading makes the flag the thing that decides
+        # whether a release completes.
+        #
+        # This step reads the value and REFUSES anything that is not `true` or `false`. It runs
+        # in `verify`, upstream of both publish jobs, because `pypi` and `npm` are siblings on
+        # `needs: verify` and run in parallel: a refusal down in the npm job would leave PyPI
+        # having taken the version, the tag cut, the release object public, and one registry
+        # ahead of the other with a number that npm can only match by a fix-forward release.
+        #
+        # No `${{ }}` inside the script, the same discipline as the tag gate above: the
+        # expression rides `env:` so tests/test_ci_workflows.py can extract this script and
+        # drive it on every value.
+        env:
+          REPOSITORY_IS_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          case "$REPOSITORY_IS_PRIVATE" in
+            true)
+              echo "::notice::repository is PRIVATE; the npm job publishes without provenance."
+              ;;
+            false)
+              echo "::notice::repository is PUBLIC; the npm job publishes with provenance."
+              ;;
+            *)
+              echo "::error::github.event.repository.private read as '${REPOSITORY_IS_PRIVATE:-<empty>}', which is neither true nor false."
+              echo "::error::Both publish jobs branch on this fact; refusing before either registry is reached."
+              exit 1
+              ;;
+          esac
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
@@ -200,12 +264,33 @@ jobs:
       # run the whole job would fail red for the sound reason that it already succeeded.
       # This asks the registry first and reports the honest outcome either way.
       - name: Publish
+        # THE FLAG IS GATED ON THE FACT pages.yml ALREADY READS. It was unconditional here,
+        # and `npm/package.json` declared `publishConfig.provenance: true` beside it -- two
+        # places asserting one thing, neither of which could be false while the repository is
+        # private (see the visibility gate in `verify`, which states the premise and refuses an
+        # unreadable value before either registry is reached). The `publishConfig` entry is
+        # gone: the decision has one site, and it is this one, so a run cannot attest by a
+        # route the branch below did not choose. `access: public` stays in the manifest --
+        # that fact does not vary.
+        #
+        # Both branches still publish, and the notice says which form ran. Whichever way the
+        # provenance premise resolves, a private release no longer fails at the one step with
+        # no compensator while its PyPI sibling succeeds.
         working-directory: npm
+        env:
+          REPOSITORY_IS_PRIVATE: ${{ github.event.repository.private }}
         run: |
           NAME=$(node -p "require('./package.json').name")
           VER=$(node -p "require('./package.json').version")
           if npm view "$NAME@$VER" version >/dev/null 2>&1; then
             echo "::notice::$NAME@$VER is already on the registry — nothing to publish."
-          else
+          elif [ "$REPOSITORY_IS_PRIVATE" = "false" ]; then
+            echo "::notice::$NAME@$VER: repository is public — publishing WITH provenance."
             npm publish --provenance --access public
+          elif [ "$REPOSITORY_IS_PRIVATE" = "true" ]; then
+            echo "::notice::$NAME@$VER: repository is private — publishing WITHOUT provenance."
+            npm publish --access public
+          else
+            echo "::error::github.event.repository.private read as '${REPOSITORY_IS_PRIVATE:-<empty>}'; refusing to publish on a visibility this job could not read."
+            exit 1
           fi
