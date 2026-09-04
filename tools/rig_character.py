@@ -44,7 +44,7 @@ import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 from armature_core import (  # noqa: E402
-    binding, blender_scene, joints, landmarks, posearc, rig_gates, sitelist)
+    binding, blender_scene, joints, landmarks, parts, posearc, rig_gates, sitelist)
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "1.1.0"
@@ -104,6 +104,73 @@ class GateMode(GateFailure):
     """A named route this tool does not have."""
 
     gate = "MODE"
+
+
+class GateSubjectDegenerate(GateFailure):
+    """Gate SCALE - the subject's own bbox diagonal is not a number to divide by.
+
+    MEASURED 2026-09-04 (F-940b0800). `build_pass` derived the tolerance SCALE for the
+    whole build as `float(np.linalg.norm(hi - lo))` over the raw imported mesh, with no
+    finiteness clause anywhere on the path: `grep` for `isfinite`/`isnan`/`isinf`/
+    `require_finite` across this file, `rig_gates.py`, `landmarks.py` and `joints.py`
+    returned ZERO hits. One NaN vertex gives a NaN diagonal, hence a NaN tolerance, and
+    `rig_gates.gate_d_determinism` then returns "two builds agree on bones and hierarchy"
+    with a 4.0-unit `worst_bone_delta` in the same evidence dict, because `nan > x` is
+    False in both directions. One `+inf` vertex does the same.
+
+    It matters most on the SKELETON route: `run_skeleton` calls `build_pass(..., bind=False)`
+    twice, `gate_p` is left None when nothing is bound, and `gate_n_names` runs after Gate D
+    and compares names only — so Gate D is the FIRST gate that sees geometry, and nothing
+    between `blender_scene.import_glb` and it examines a coordinate. The artifact that
+    reaches the Director is `<name>_skeleton.glb` beside a manifest recording
+    `bbox.diagonal: NaN` and `gates.D_determinism: PASS`.
+
+    The refusal belongs at the SOURCE rather than at the gate: `measure_joint_balls` divides
+    by this diagonal, `landmarks.derive` consumes the same array, and both run before Gate D.
+    Its own id ("SCALE") rather than GateSubject's, because a subject that cannot be
+    identified and a subject whose coordinates are not numbers send a session to two
+    different places — and `tests/test_gates.py::test_no_new_andon_takes_an_id_another_andon
+    _already_uses` is the standing check that two andons never share one.
+    """
+
+    gate = "SCALE"
+
+
+def subject_scale(source, where):
+    """`(diagonal, lo, hi)` for a subject whose coordinates are numbers, else raise.
+
+    The one place in this module a bbox diagonal is derived. `require_finite`'s default
+    refuses zero and negatives in the same clause, which also catches the all-coincident
+    and single-vertex subjects before `measure_joint_balls(mesh_obj, diagonal)` divides by
+    it. The per-vertex clause is the stronger form and names WHICH vertex, because "the
+    subject carries a NaN" is not an actionable sentence and "vertex 41,207 axis 1" is.
+    """
+    n = int(source.shape[0])
+    ev = {"gate": "SCALE", "andon": "GateSubjectDegenerate", "where": where,
+          "n_vertices": n}
+    if not n:
+        raise GateSubjectDegenerate(
+            f"the subject carries no vertices at all, so it has no scale of its own for "
+            f"any tolerance in this build to be a fraction of", ev)
+    bad = np.argwhere(~np.isfinite(source))
+    if bad.size:
+        i, axis = int(bad[0][0]), int(bad[0][1])
+        ev["first_non_finite_vertex"] = {
+            "index": i, "axis": axis, "value": repr(float(source[i][axis])),
+            "n_non_finite_components": int(bad.shape[0])}
+        raise GateSubjectDegenerate(
+            f"the subject carries {bad.shape[0]} non-finite coordinate component(s); the "
+            f"first is vertex {i} axis {axis} = {float(source[i][axis])!r}. Every "
+            f"tolerance in this build is a fraction of this subject's own bbox diagonal, "
+            f"and a NaN diagonal makes every one of them NaN — which fires no bound at "
+            f"all, because `nan > x` and `nan < x` are both False. A rig built on it "
+            f"passes Gate D with an agreement verdict about a build that did not agree",
+            ev)
+    lo, hi = source.min(axis=0), source.max(axis=0)
+    ev.update({"bbox_lo": lo.tolist(), "bbox_hi": hi.tolist()})
+    diagonal = parts.require_finite(
+        "bbox_diagonal", float(np.linalg.norm(hi - lo)), GateSubjectDegenerate, ev)
+    return diagonal, lo, hi
 
 
 def sha256_file(path):
@@ -619,8 +686,11 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
     premise6, shell_id, shell_sizes = measure_subject(mesh_obj)
 
     source = world_verts(mesh_obj)
-    lo, hi = source.min(axis=0), source.max(axis=0)
-    diagonal = float(np.linalg.norm(hi - lo))
+    # F-940b0800: the refusal sits HERE, above `landmarks.derive` and
+    # `measure_joint_balls`, because both consume this array and Gate D — the first gate
+    # that sees geometry on the `bind=False` skeleton route — reads a tolerance scaled by
+    # this number. See `subject_scale`.
+    diagonal, lo, hi = subject_scale(source, label)
 
     t0 = time.time()
     lm = landmarks.derive(source, n_bands=bands)

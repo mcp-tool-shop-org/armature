@@ -290,3 +290,94 @@ def test_a_loosening_request_is_refused_at_every_one_of_the_five_gates(
             verts = {i: [(0.0, 0.0, 0.0)] for i in mod.mesh_sample_frames(4)}
             with blender_stubbed():
                 fn(heads, heads, verts, verts, 1.0, **{kw: 1e30})
+
+
+# =============================================================== F-940b0800 (CRITICAL)
+#
+# `build_pass` derived the tolerance SCALE as `float(np.linalg.norm(hi - lo))` over the raw
+# imported mesh with no finiteness clause anywhere on the path, and on the skeleton route
+# (`bind=False`) Gate D is the FIRST gate that sees geometry. One NaN vertex gives a NaN
+# diagonal, a NaN tolerance, and a Gate D PASS whose evidence carries a 4.0-unit
+# disagreement in the same dict.
+
+
+def _rig_character():
+    return load_tool("rig_character.py")
+
+
+def test_a_subject_carrying_a_nan_vertex_is_refused_and_the_vertex_is_named():
+    rc = _rig_character()
+    source = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0],
+                       [float("nan"), 0.0, 0.0]], dtype=np.float64)
+    with pytest.raises(rc.GateSubjectDegenerate) as exc:
+        rc.subject_scale(source, "skeleton")
+    ev = exc.value.evidence
+    assert ev["gate"] == "SCALE"
+    assert ev["n_vertices"] == 3
+    assert ev["first_non_finite_vertex"]["index"] == 2
+    assert ev["first_non_finite_vertex"]["axis"] == 0
+    assert ev["where"] == "skeleton"
+
+
+def test_a_subject_carrying_an_infinite_vertex_is_refused_too():
+    rc = _rig_character()
+    source = np.array([[0.0, 0.0, 0.0], [float("inf"), 1.0, 1.0]], dtype=np.float64)
+    with pytest.raises(rc.GateSubjectDegenerate):
+        rc.subject_scale(source, "full")
+
+
+def test_an_all_coincident_subject_is_refused_because_its_diagonal_is_zero():
+    """A zero diagonal is the divisor `measure_joint_balls` uses; `require_finite`'s
+    default refuses zero and negatives in the same clause."""
+    rc = _rig_character()
+    source = np.array([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]], dtype=np.float64)
+    with pytest.raises(rc.GateSubjectDegenerate, match="not a finite positive number"):
+        rc.subject_scale(source, "skeleton")
+
+
+def test_a_healthy_subject_still_yields_its_own_diagonal():
+    """A gate that refuses everything is not a gate."""
+    rc = _rig_character()
+    source = np.array([[0.0, 0.0, 0.0], [1.0, 2.0, 2.0]], dtype=np.float64)
+    diagonal, lo, hi = rc.subject_scale(source, "skeleton")
+    assert diagonal == pytest.approx(3.0)
+    assert list(lo) == [0.0, 0.0, 0.0]
+    assert list(hi) == [1.0, 2.0, 2.0]
+
+
+def test_no_path_in_rig_character_still_derives_a_bbox_diagonal_without_the_refusal():
+    """The census keys on BEHAVIOUR — any expression in this module that takes the norm of
+    a bbox span — not on the name `subject_scale`. A second, unguarded derivation is the
+    defect coming back under a different spelling."""
+    tree = ast.parse(read_source("rig_character.py"))
+    unguarded = []
+    for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+        for node in ast.walk(fn):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "norm"):
+                continue
+            seg = ast.get_source_segment(read_source("rig_character.py"), node) or ""
+            if "hi - lo" in seg.replace("  ", " ") and fn.name != "subject_scale":
+                unguarded.append((fn.name, node.lineno, seg))
+    assert not unguarded, (
+        f"a bbox diagonal is derived outside `subject_scale`, which is the only place the "
+        f"finiteness refusal lives: {unguarded}")
+
+
+def test_the_skeleton_route_reaches_the_refusal_before_gate_d():
+    """Gate D is the first gate that sees geometry on `bind=False`, so the refusal has to
+    sit in `build_pass` itself, above the landmark derivation that consumes the same
+    array."""
+    src = read_source("rig_character.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "build_pass")
+    scale_at = [n.lineno for n in ast.walk(fn)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "subject_scale"]
+    consumers = [n.lineno for n in ast.walk(fn)
+                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                 and n.func.attr in ("derive", "snap_sites_to_balls")]
+    assert scale_at, "build_pass no longer routes its diagonal through subject_scale"
+    assert min(scale_at) < min(consumers), (scale_at, consumers)

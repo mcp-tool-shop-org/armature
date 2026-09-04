@@ -334,8 +334,11 @@ def build_pass(args, label):
                else "UVMap")
 
     source = rig_character.world_verts(mesh_obj)
-    lo, hi = source.min(axis=0), source.max(axis=0)
-    diagonal = float(np.linalg.norm(hi - lo))
+    # F-940b0800, family carry: the second site in this domain that derives the tolerance
+    # scale for a whole build from a raw imported mesh, and it divides by it eleven lines
+    # down (`measure_joint_balls`). One implementation, in the file that owns the andon —
+    # never a second finiteness clause here.
+    diagonal, lo, hi = rig_character.subject_scale(source, "parts")
 
     lm = landmarks.derive(source, n_bands=args["bands"])
     balls, _ = rig_character.measure_joint_balls(mesh_obj, diagonal)
