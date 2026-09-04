@@ -878,3 +878,169 @@ def test_the_start_frame_parser_bound_exists_and_the_docstring_says_so():
     assert "F-34a858f5" in flat, "the correction does not name what closed it"
     assert "this gate refuses regardless of who calls it" in flat, (
         "the part of the paragraph that is still true was deleted with the part that was not")
+
+
+# ============================================================== the -O leg, per refusal
+#
+# CLAUDE.md: gates raise, never `assert` — an `assert` is deleted by `-O` or
+# `PYTHONOPTIMIZE=1`, and 87 of facet's andons turned out to be removable by an environment
+# variable. Every refusal this amend ADDED mutates the protected thing here and must still
+# fire, under the same class name, with assertions gone. The probe runs in a subprocess so
+# the flag is real rather than simulated, and the assertions in THIS file are deleted under
+# `-O` — which is exactly why the check cannot be one of them.
+
+import json as _json          # noqa: E402
+import subprocess as _sub     # noqa: E402
+import textwrap as _tw        # noqa: E402
+
+PROBE16 = _tw.dedent(
+    """
+    import json, sys, types
+    sys.path.insert(0, sys.argv[1])
+
+    import numpy as np
+    from armature_core import aapose, assembly as AS, turnaround as TA
+
+    asserts_active = False
+    try:
+        assert False
+    except AssertionError:
+        asserts_active = True
+
+    KLING = "KlingVideoNode"
+    RECEIPT_PAID = {"api_node": True, "measured_with": "get_node",
+                    "measured_on": "2026-08-13"}
+    RECEIPT_UNDATED = {"api_node": False, "measured_with": "get_node",
+                       "measured_on": "yesterday"}
+
+    def _widen(receipt):
+        AS.ALLOWED_CLASSES = tuple(AS.ALLOWED_CLASSES) + (KLING,)
+        AS.MEASURED_FREE_CLASSES = dict(AS.MEASURED_FREE_CLASSES, **{KLING: receipt})
+
+    def _restore():
+        AS.ALLOWED_CLASSES = tuple(c for c in AS.ALLOWED_CLASSES if c != KLING)
+        AS.MEASURED_FREE_CLASSES = {k: v for k, v in AS.MEASURED_FREE_CLASSES.items()
+                                    if k != KLING}
+
+    def receipt_records_a_paid_node():
+        _widen(RECEIPT_PAID)
+        try:
+            AS.gate_no_paid_nodes({"1": {"class_type": KLING}})
+        finally:
+            _restore()
+
+    def receipt_date_unreadable():
+        _widen(RECEIPT_UNDATED)
+        try:
+            AS.gate_no_paid_nodes({"1": {"class_type": KLING}})
+        finally:
+            _restore()
+
+    def hand_eps_moved():
+        original = aapose.HAND_EPS
+        try:
+            aapose.HAND_EPS = 0.9
+            aapose.check_convention(aapose.KEYPOINT_COUNT, aapose.LIMB_SEQ,
+                                    aapose.PALETTE)
+        finally:
+            aapose.HAND_EPS = original
+
+    def drawing_constant_outside_the_record():
+        original = aapose.PIXEL_WRITERS
+        try:
+            aapose.PIXEL_WRITERS = tuple(original) + ("banked_source_state",)
+            aapose.check_convention(aapose.KEYPOINT_COUNT, aapose.LIMB_SEQ,
+                                    aapose.PALETTE)
+        finally:
+            aapose.PIXEL_WRITERS = original
+
+    def _views(planes):
+        return [{"view": i, "sha256": "%064x" % i,
+                 **({"pixels": p} if p is not None else {})}
+                for i, p in enumerate(planes)]
+
+    def _distinct(n, shape=(64, 64, 4)):
+        rng = np.random.default_rng(11)
+        return [rng.normal(128.0, 40.0, shape) for _ in range(n)]
+
+    def turn_pair_shapes_differ():
+        planes = _distinct(8)
+        planes[3] = np.random.default_rng(4).normal(128.0, 40.0, (72, 64, 4))
+        TA.gate_set_distinct(_views(planes), 8)
+
+    def turn_partly_attached():
+        planes = _distinct(8)
+        TA.gate_set_distinct(
+            _views([p if i % 2 == 0 else None for i, p in enumerate(planes)]), 8)
+
+    def turn_pixels_unreadable():
+        planes = _distinct(8)
+        recs = _views(planes)
+        recs[5]["pixels"] = "not an array"
+        TA.gate_set_distinct(recs, 8)
+
+    def turn_pixels_not_a_plane():
+        planes = _distinct(8)
+        recs = _views(planes)
+        recs[5]["pixels"] = np.zeros(16)
+        TA.gate_set_distinct(recs, 8)
+
+    CASES = {
+        "receipt_records_a_paid_node": (receipt_records_a_paid_node, "AssemblyGate"),
+        "receipt_date_unreadable": (receipt_date_unreadable, "AssemblyGate"),
+        "hand_eps_moved": (hand_eps_moved, "ConventionError"),
+        "drawing_constant_outside_the_record": (drawing_constant_outside_the_record,
+                                                "ConventionError"),
+        "turn_pair_shapes_differ": (turn_pair_shapes_differ, "TurnaroundGate"),
+        "turn_partly_attached": (turn_partly_attached, "TurnaroundGate"),
+        "turn_pixels_unreadable": (turn_pixels_unreadable, "TurnaroundGate"),
+        "turn_pixels_not_a_plane": (turn_pixels_not_a_plane, "TurnaroundGate"),
+    }
+
+    out = {"asserts_active": asserts_active, "raised": {}}
+    for name, (fn, want) in CASES.items():
+        try:
+            fn()
+            out["raised"][name] = "NO_RAISE"
+        except BaseException as exc:
+            got = type(exc).__name__
+            out["raised"][name] = "RAISED" if got == want else "WRONG_ERROR:" + got
+    print("AMEND16 " + json.dumps(out))
+    """
+)
+
+
+def _run_probe16(tmp_path, *, flag=False, env_var=False):
+    script = tmp_path / f"w16_probe_{int(flag)}_{int(env_var)}.py"
+    script.write_text(PROBE16, encoding="utf-8")
+    env = dict(os.environ)
+    env.pop("PYTHONOPTIMIZE", None)
+    if env_var:
+        env["PYTHONOPTIMIZE"] = "1"
+    cmd = ([sys.executable] + (["-O"] if flag else []) + [str(script), TOOLS])
+    proc = _sub.run(cmd, capture_output=True, text=True, env=env, timeout=300)
+    if proc.returncode != 0:
+        raise AssertionError(proc.stderr)
+    line = [ln for ln in proc.stdout.splitlines() if ln.startswith("AMEND16 ")]
+    if not line:
+        raise AssertionError(proc.stdout + proc.stderr)
+    return _json.loads(line[-1][len("AMEND16 "):])
+
+
+@pytest.mark.parametrize(
+    "flag,env_var,label",
+    [(False, False, "plain"), (True, False, "-O"), (False, True, "PYTHONOPTIMIZE=1")],
+)
+def test_every_refusal_this_amend_added_survives_optimization(tmp_path, flag, env_var,
+                                                              label):
+    res = _run_probe16(tmp_path, flag=flag, env_var=env_var)
+    assert len(res["raised"]) == 8, res["raised"]
+    for name, outcome in res["raised"].items():
+        assert outcome == "RAISED", f"{label}/{name}: {outcome}"
+
+
+def test_the_optimization_actually_took_effect_for_the_wave_16_probe(tmp_path):
+    """Otherwise the parametrisation above is three copies of the same run."""
+    assert _run_probe16(tmp_path, flag=False)["asserts_active"] is True
+    assert _run_probe16(tmp_path, flag=True)["asserts_active"] is False
+    assert _run_probe16(tmp_path, env_var=True)["asserts_active"] is False
