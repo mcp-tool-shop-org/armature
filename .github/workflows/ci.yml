@@ -130,11 +130,15 @@ jobs:
 
       # The sheet composers resolve a real font (Arial → Liberation Sans → Noto Sans, all
       # licence-verified) or refuse by name; nothing is bundled, because a font is a binary
-      # and the licence gate applies to fonts too. Liberation is installed explicitly here
-      # rather than inherited from whatever the runner image happens to carry, so the 23
-      # sheet tests that used to skip on CI run against a font the repo chose.
-      - name: install a licence-verified font for the sheet composers
-        run: sudo apt-get install -y --no-install-recommends fonts-liberation
+      # and the licence gate applies to fonts too. Liberation is installed explicitly rather
+      # than inherited from whatever the runner image happens to carry, so the 23 sheet tests
+      # that used to skip on CI run against a font the repo chose.
+      #
+      # The step lives in a composite action because release.yml's verify job runs the SAME
+      # suite and needs the SAME face: two copies of one dependency list is how that job came
+      # to run the suite with no font at all. tests/test_ci_workflows.py holds every job that
+      # runs pytest to calling this action.
+      - uses: ./.github/actions/sheet-fonts
 
       - name: run tests
         run: python -m pytest tests -q

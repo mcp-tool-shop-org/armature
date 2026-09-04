@@ -418,3 +418,137 @@ def test_every_checkout_job_runs_on_a_declared_token_scope(workflow):
             f"{workflow} job {name!r} checks out under a permissions block that grants no "
             f"contents scope:\n{effective}"
         )
+
+
+ACTIONS = os.path.join(REPO, ".github", "actions")
+SHEET_FONTS = "./.github/actions/sheet-fonts"
+
+
+def action_files():
+    """Every composite action in `.github/actions/`."""
+    out = []
+    for root, _dirs, files in os.walk(ACTIONS):
+        for f in files:
+            if f in ("action.yml", "action.yaml"):
+                out.append(os.path.join(root, f))
+    return sorted(out)
+
+
+def _all_run_scripts():
+    """(source, script) for every `run:` in `.github/` — workflows and composite actions.
+
+    Enumerated rather than listed: a step added to a fourth workflow, or to a second action,
+    is held to the same rules the day it lands.
+    """
+    out = []
+    sources = [(n, _text(n)) for n in workflow_files()]
+    for path in action_files():
+        with open(path, encoding="utf-8") as fh:
+            sources.append((os.path.relpath(path, REPO).replace("\\", "/"), fh.read()))
+    for name, text in sources:
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            if not line.strip().startswith("run:"):
+                continue
+            if line.strip() in ("run: |", "run: |-"):
+                body = block_at(lines, i)
+                pad = min((_indent(x) for x in body if x.strip()), default=0)
+                out.append((name, "\n".join(x[pad:] for x in body)))
+            else:
+                out.append((name, line.strip()[len("run: ") :]))
+    return out
+
+
+def jobs_that_run_the_suite():
+    """(workflow, job) for every job whose steps run pytest — read, never listed."""
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if re.search(r"(?m)^\s*(-\s*(name|run):.*)?$", body) and "pytest" in _code_only(body):
+                out.append((name, job))
+    return out
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_run_the_suite())
+def test_every_job_that_runs_the_suite_installs_the_sheet_fonts(workflow, job):
+    """ci.yml refused to inherit the runner image's fonts; release.yml's gate did inherit them.
+
+    Two tests hard-require a resolvable permitted face and FAIL rather than skip without one
+    (measured: `tests/test_sheet_compose.py` 29 passed -> 2 failed, 27 passed with the
+    resolver pointed at dead directories). release.yml's Install step says in its own comment
+    that the release gate runs the SAME suite CI runs, "so a shorter list here would mean the
+    gate is a weaker check than the one that already passed on the same commit" — and the font
+    was in one list and not the other. By then `release: published` has fired: the tag and the
+    release object exist and both registries are waiting.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    assert SHEET_FONTS in body, (
+        f"{workflow} job {job!r} runs the suite without {SHEET_FONTS}; the two sheet tests "
+        "that FAIL rather than skip without a permitted face depend on whatever the runner "
+        f"image happens to carry:\n{body}"
+    )
+
+
+def test_the_font_dependency_has_one_implementation():
+    """A copied step is a second implementation of one dependency, and lists that are copied fork.
+
+    The package name may appear only inside the shared action; a workflow that installs it
+    directly has started the fork again.
+    """
+    offenders = [name for name in workflow_files() if "fonts-liberation" in _text(name)]
+    assert offenders == [], (
+        f"these workflows install the font themselves instead of calling {SHEET_FONTS}: "
+        f"{offenders}; two copies of one dependency list is how release.yml came to run the "
+        "suite without a font in the first place"
+    )
+
+
+def sheet_font_action_faces():
+    """The faces the action's own andon checks for, read out of its `FACES=` line.
+
+    Not "somewhere in the file": the header comment quotes a FontError that names
+    `arialbd.ttf`, and a check that reads the whole text passes on the strength of a comment.
+    What the step VERIFIES is the list it loops over, so that is what is read.
+    """
+    with open(os.path.join(ACTIONS, "sheet-fonts", "action.yml"), encoding="utf-8") as fh:
+        action = fh.read()
+    match = re.search(r'(?m)^\s*FACES="([^"]+)"\s*$', action)
+    assert match, "the sheet-fonts action no longer declares a FACES list to check"
+    return match.group(1).split()
+
+
+@pytest.mark.parametrize("alias", sorted(__import__("sheet_compose").FONT_ALIASES))
+def test_the_font_action_supplies_a_face_for_every_alias_the_composers_need(alias):
+    """Read out of `sheet_compose.FONT_ALIASES`, not written here.
+
+    Adding a third alias to the composers, or renaming a fallback face, moves this
+    requirement with it instead of leaving the action installing a face nobody resolves.
+    """
+    import sheet_compose
+
+    installed = sheet_font_action_faces()
+    faces = sheet_compose.FONT_ALIASES[alias]
+    assert any(face in installed for face in faces), (
+        f"the sheet-fonts action installs {installed} and none of them is one of "
+        f"{list(faces)}, so `{alias}` resolves on a Linux runner only if the image happened "
+        "to carry a face the repo never asked for"
+    )
+
+
+@pytest.mark.parametrize("source,script", [(s, c) for s, c in _all_run_scripts() if "apt-get install" in c])
+def test_every_apt_install_refreshes_the_index_first(source, script):
+    """A cached Packages entry can name a .deb the mirror has already superseded.
+
+    The hosted images are rebuilt on a slower cadence than the archive rotates versions, so
+    `apt-get install` against a stale index 404s — and with no `update`, no retry and no
+    `|| true` that turns the whole job red for a reason that has nothing to do with the
+    commit. The refresh must be in the SAME script: a shell chain can walk past a failing
+    exit code, and a step somewhere else in the file is not one this step's failure implicates.
+    """
+    install = script.index("apt-get install")
+    update = script.find("apt-get update")
+    assert update != -1 and update < install, (
+        f"{source} installs an apt package without refreshing the index first:\n{script}"
+    )

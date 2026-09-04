@@ -1,0 +1,67 @@
+# The one font step, called by every job that runs the suite.
+#
+# WHY IT IS AN ACTION AND NOT A STEP IN EACH WORKFLOW. ci.yml grew an explicit
+# `fonts-liberation` install whose own comment said the face is installed "rather than
+# inherited from whatever the runner image happens to carry". release.yml's `verify` job runs
+# the SAME suite and had no such step, so the release gate depended on exactly what CI refuses
+# to depend on. That is not cosmetic: two tests HARD-REQUIRE a resolvable face and FAIL rather
+# than skip without one — measured 2026-09-04 by redirecting the resolver at dead directories,
+# `tests/test_sheet_compose.py` went from 29 passed to 2 failed, 27 passed, both
+# `sheet_compose.FontError: no permitted typeface for 'arialbd.ttf'`. Copying the step into the
+# second workflow would be a second implementation of one dependency; one action called by both
+# is the only shape in which the two lists cannot fork again.
+#
+# WHY THE INDEX IS REFRESHED. `apt-get install` with no preceding `apt-get update` resolves
+# against the image's pre-seeded Packages list. The hosted images are rebuilt on a slower
+# cadence than the archive rotates versions, so a cached entry can name a .deb the mirror has
+# already superseded and the fetch 404s — turning the whole job red for a reason that has
+# nothing to do with the commit, and teaching the retry-until-green habit.
+#
+# WHY THERE IS AN ANDON AT THE END. An install that reports success while leaving no face
+# where the resolver looks is this repository's headline defect class. The step therefore
+# checks for the faces themselves, by name, and refuses here — where the message says "font"
+# — rather than 23 tests later where it says FontError.
+#
+# LICENCE. Liberation is SIL OFL 1.1 (docs/license-map.md). Nothing is committed to the repo:
+# a font is a binary and the licence gate applies to fonts too.
+name: sheet fonts
+description: Install a licence-verified typeface (Liberation, SIL OFL 1.1) for the sheet composers.
+
+runs:
+  using: composite
+  steps:
+    - name: install a licence-verified font for the sheet composers
+      shell: bash
+      run: |
+        set -eu
+
+        # No pipelines: `shell: bash` runs with `-o pipefail`, and `find` over a directory
+        # that does not exist on this image would then decide the answer instead of the face.
+        locate_face() {
+          find /usr/share/fonts /usr/local/share/fonts -iname "$1" -print -quit 2>/dev/null || true
+        }
+
+        # The faces tools/sheet_compose.py FONT_ALIASES falls back to off Windows.
+        FACES="LiberationSans-Regular.ttf LiberationSans-Bold.ttf"
+
+        need_install=""
+        for face in $FACES; do
+          if [ -z "$(locate_face "$face")" ]; then need_install="yes"; fi
+        done
+
+        if [ -n "$need_install" ]; then
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-liberation
+        else
+          echo "a Liberation face is already on this image; nothing to install"
+        fi
+
+        missing=""
+        for face in $FACES; do
+          found="$(locate_face "$face")"
+          if [ -z "$found" ]; then missing="$missing $face"; else echo "$face -> $found"; fi
+        done
+        if [ -n "$missing" ]; then
+          echo "::error::fonts-liberation reported success but these faces are not where the composers look:$missing"
+          exit 1
+        fi
