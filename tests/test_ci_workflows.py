@@ -1920,3 +1920,169 @@ def test_the_npm_clean_room_check_goes_red_on_the_coverage_this_repo_had():
     assert not _runs_the_installed_shim(
         '# npm pack\n# npm install --prefix x\n# node_modules/.bin/armature --node-selftest'), (
         "a commented-out leg reads as a leg that runs")
+
+
+# -- the sdist assertions must RUN where they gate (wave 10, F-3abdf3a5) ------------------
+#
+# `tests/test_packaging.py` holds the two tests that pin what the published sdist carries —
+# the whole point of the wave-8 MANIFEST.in fix-up — and neither could run in CI or in the
+# release gate, because the tool they need was installed AFTER the suite. `_build_sdist`
+# shells `[sys.executable, "-m", "build", "--sdist", ...]`; ci.yml installed
+# `pip numpy pillow pytest opencv-python-headless matplotlib` and ran the suite twice, and
+# only THEN reached `./.github/actions/clean-room`, whose script installs `build>=1.5,<2`.
+# release.yml had the same order and the same gap.
+#
+# Measured both directions on this tree with the repo venv: with `build` shadowed by a module
+# that exits non-zero, `pytest tests/test_packaging.py -k sdist -rs` reported `2 skipped`; with
+# the real build 1.5.0 present, `2 passed`. The narrow half that held is that the first sdist
+# test asserts MANIFEST.in exists BEFORE the skip, so DELETING the file was caught. Removing
+# `prune tests` from it was not, and `twine check dist/*` reads metadata, never the archive.
+#
+# THE NODE THIS CENSUS KEYS ON: the ORDER of the run scripts written directly in a job body.
+# Composite-action scripts are deliberately excluded — `job_scripts()` appends them after the
+# body whatever line the `uses:` sits on, which is right for "does this job run X" and wrong
+# for "does X run before Y", and getting that backwards is how the tool came to be installed
+# after the suite that needs it.
+
+
+def _body_scripts(workflow, job):
+    """Every `run:` script written DIRECTLY in a job body, in file order."""
+    return _run_scripts_in("\n".join(_job_lines(_text(workflow), job)))
+
+
+def suite_modules_that_build_a_distribution():
+    """Every test module that shells out to `python -m build` — walked over `tests/**`.
+
+    Keyed on the argv LIST the module hands `subprocess`, not on the word `build` appearing
+    in a file: `build` is also a directory, a `.gitignore` line and half the workflow
+    vocabulary, and a census keyed on the word would be green on a file that only mentions it.
+    """
+    out = []
+    for name in sorted(os.listdir(TESTS_DIR)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.List):
+                continue
+            consts = [e.value for e in node.elts if isinstance(e, ast.Constant)]
+            if "-m" in consts and "build" in consts:
+                out.append(name)
+                break
+    return sorted(out)
+
+
+#: Measured 2026-09-04. `test_packaging.py`'s `_build_sdist` is the only caller, and both
+#: sdist tests go through it.
+SUITE_MODULES_THAT_BUILD_TODAY = ["test_packaging.py"]
+
+#: Every job whose steps run pytest, measured the same day. The suite is the same one in both
+#: — release.yml's Install step says so in its own comment — so the toolchain must be too.
+SUITE_JOBS_TODAY = [("ci.yml", "python-tests"), ("release.yml", "verify")]
+
+
+def test_the_suite_build_censuses_are_what_the_tree_holds():
+    assert suite_modules_that_build_a_distribution() == SUITE_MODULES_THAT_BUILD_TODAY, (
+        f"the suite modules that shell out to `python -m build` are "
+        f"{suite_modules_that_build_a_distribution()}; this file was written against "
+        f"{SUITE_MODULES_THAT_BUILD_TODAY}")
+    assert jobs_that_run_the_suite() == SUITE_JOBS_TODAY, (
+        f"the jobs that run the suite are {jobs_that_run_the_suite()}; this file was written "
+        f"against {SUITE_JOBS_TODAY}")
+
+
+def _installs_the_build_tool(script):
+    """True when a script installs the `build` frontend from an index (constrained or not)."""
+    return any(re.fullmatch(r"build[<>=!~,.\d]*", token) for token in _install_tokens(script))
+
+
+def _runs_pytest(script):
+    """True when a script INVOKES pytest — not merely names it in an install line.
+
+    Measured while writing this: `"pytest" in script` matched the dependency install step,
+    so the ordering comparison was `0 < 0` and the check read the install as the run. The
+    distinction between naming a tool and running it is the whole property here.
+    """
+    for line in _code_only(script).splitlines():
+        stripped = line.strip()
+        if "pip install" in stripped or "npm install" in stripped:
+            continue
+        if re.search(r"-m\s+pytest\b", stripped) or re.match(r"pytest\b", stripped):
+            return True
+    return False
+
+
+def build_tool_specifiers():
+    """{specifier: [sources]} for every `build` install token anywhere under `.github/`.
+
+    One string, or the constraint has forked — which is the failure mode the clean-room
+    action's own header names about the font step, one directory over.
+    """
+    found = {}
+    for source, script in _all_run_scripts():
+        for token in _install_tokens(script):
+            if re.fullmatch(r"build[<>=!~,.\d]*", token):
+                found.setdefault(token, []).append(source)
+    return found
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_run_the_suite())
+def test_every_job_that_runs_the_suite_installs_build_before_it(workflow, job):
+    """A test that skips itself is not a gate, and this one guards the published sdist.
+
+    What this looks like if wrong: the sdist regresses to the F-4c607d79 shape — 112 test
+    files that cannot collect — CI stays green because the check skipped, and the artifact
+    reaches `release: published` and PyPI, where the version is taken forever.
+    """
+    scripts = _body_scripts(workflow, job)
+    runs = [i for i, s in enumerate(scripts) if _runs_pytest(s)]
+    assert runs, f"{workflow}:{job} is in the suite census and runs no pytest in its body"
+    installs = [i for i, s in enumerate(scripts) if _installs_the_build_tool(s)]
+    assert installs, (
+        f"{workflow}:{job} runs the suite and installs no `build`; "
+        f"{SUITE_MODULES_THAT_BUILD_TODAY} shells out to `python -m build` and converts its "
+        "absence into a skip, so the two sdist assertions do not execute here")
+    assert min(installs) < min(runs), (
+        f"{workflow}:{job} installs `build` at step {min(installs)} and runs the suite at "
+        f"step {min(runs)}; the clean-room action installs it AFTER the suite, which is the "
+        "measured order that left the sdist unchecked")
+
+
+def test_the_build_tool_has_one_constraint_wherever_it_is_installed():
+    """Two copies of one version constraint is how the font dependency forked."""
+    specs = build_tool_specifiers()
+    listed = {spec: sorted(set(sources)) for spec, sources in specs.items()}
+    assert len(specs) == 1, (
+        f"`build` is installed under {len(specs)} different specifiers under .github/: {listed}")
+    (spec, sources), = specs.items()
+    assert re.search(r"[<>=~]", spec), (
+        f"`build` is installed as {spec!r}, resolved fresh on the day the step runs")
+    assert ".github/actions/clean-room/action.yml" in sources, (
+        "the clean-room action no longer installs `build`; it is the constraint's home and "
+        f"the sources today are {sorted(set(sources))}")
+
+
+def test_the_build_ordering_check_goes_red_on_the_order_this_repo_had():
+    """The mutation: ci.yml's own install line and step order, as they stood this morning.
+
+    A census that cannot fail is the class this wave exists to close, so the pre-fix shape is
+    fed to the same two predicates the jobs are judged by.
+    """
+    before = [
+        "python -m pip install --upgrade pip numpy pillow pytest "
+        "opencv-python-headless==5.0.0.93 matplotlib==3.11.1",
+        "python -m pytest tests -q",
+    ]
+    assert [i for i, s in enumerate(before) if _installs_the_build_tool(s)] == [], (
+        "the pre-fix install line reads as installing `build`; the check cannot fail")
+    after_the_suite = ["python -m pytest tests -q", 'python -m pip install "build>=1.5,<2"']
+    installs = [i for i, s in enumerate(after_the_suite) if _installs_the_build_tool(s)]
+    runs = [i for i, s in enumerate(after_the_suite) if _runs_pytest(s)]
+    assert not min(installs) < min(runs), (
+        "installing the tool after the suite reads as installing it before")
+    # And the third direction, the one that made this check compare a step with itself: an
+    # install line that NAMES pytest is not a step that runs it.
+    assert not _runs_pytest(before[0]), (
+        "a `pip install ... pytest ...` line reads as a step that runs the suite")
+    assert _runs_pytest(before[1])
