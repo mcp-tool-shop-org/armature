@@ -22,16 +22,36 @@ parser**. So this file keys on two nodes and says so:
 
 The refusal direction is pinned beside it: a malformed `--sheet-plate` raises the sheet's
 own typed error and leaves nothing on disk.
+
+WAVE 12 — the parser node now covers all 36 command-line tools, and the walk is ONE walk.
+
+* **F-1c9d39e2** — this file carried a SECOND implementation of "a flag that is read and
+  never declared" which resolved no cross-module helper, no `set_defaults` and no
+  `add_subparsers(dest=)`. Measured over every `tools/*.py`, it reported six correct
+  modules as offenders while the sibling walk reported none, and nothing pinned the two
+  against each other. Both are now `tests/_census_nodes`, and
+  `test_the_two_walks_are_literally_the_same_function` asserts identity rather than
+  agreement.
+* **F-fae3fad4** — the undeclared-flag property was parametrized over the five plate sheets
+  while `_parser_census()` had always walked the whole tree, so 31 command-line tools were
+  policed by nothing here. It now runs over all of them. The end-to-end SUCCESS leg still
+  covers 5; that gap is a counted category (`NO_SUCCESS_FIXTURE`) with a size that may only
+  fall, and every CPython member gets the cheapest real-process argv exercise there is —
+  `--help`, which constructs the parser for real and would die on a module that cannot be
+  imported or a parser that cannot be built.
 """
 
 import ast
 import glob
 import json
 import os
+import subprocess
 import sys
 
 import pytest
 from PIL import Image
+
+import _census_nodes as CN
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 "tools"))
@@ -52,79 +72,29 @@ SIZE = (32, 24)
 # ------------------------------------------------- node 1: the parser, not the tile loader
 
 
-def _dests_declared(tree):
-    """Every argparse DEST this module's `add_argument` calls declare.
-
-    The dest, not the spelling: `--frames-dir` is read as `a.frames_dir`, and an explicit
-    `dest=` overrides both. Keyed on the PARSER, which is the node the defect lives on.
-    """
-    out = set()
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "add_argument"):
-            continue
-        dest = None
-        for kw in node.keywords:
-            if kw.arg == "dest" and isinstance(kw.value, ast.Constant):
-                dest = kw.value.value
-        if dest is None:
-            for arg in node.args:
-                if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str)):
-                    continue
-                name = arg.value
-                if name.startswith("--"):
-                    dest = name[2:].replace("-", "_")
-                    break
-                if not name.startswith("-"):
-                    dest = name.replace("-", "_")
-                    break
-        if dest:
-            out.add(dest)
-    return out
-
-
-def _namespace_attrs_read(tree):
-    """Every attribute read off an argparse namespace, per function.
-
-    Scoped to the function that called `parse_args`, because a module-wide walk for
-    `<name>.<attr>` also collects `a.shape` off a numpy array called `a` two functions
-    away — a census keyed on the wrong node, which is the class this wave exists to close.
-    """
-    def scope_nodes(scope):
-        """Every node of one scope, NOT descending into a nested function.
-
-        Descending is what made the first draft read `a.shape` off a numpy array in a
-        helper whose own `a` is a parameter, while the namespace binding lives in `main`.
-        """
-        stack, out = list(ast.iter_child_nodes(scope)), []
-        while stack:
-            node = stack.pop()
-            out.append(node)
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
-                                     ast.ClassDef, ast.Lambda)):
-                stack.extend(ast.iter_child_nodes(node))
-        return out
-
-    scopes = [tree] + [n for n in ast.walk(tree)
-                       if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
-    reads = set()
-    for scope in scopes:
-        nodes = scope_nodes(scope)
-        namespaces = set()
-        for node in nodes:
-            if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
-                    and isinstance(node.value.func, ast.Attribute)
-                    and node.value.func.attr == "parse_args"):
-                for tgt in node.targets:
-                    if isinstance(tgt, ast.Name):
-                        namespaces.add(tgt.id)
-        if not namespaces:
-            continue
-        for node in nodes:
-            if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-                    and node.value.id in namespaces):
-                reads.add(node.attr)
-    return reads
+# WAVE 12, F-1c9d39e2 — the second walk is DELETED.
+#
+# This file used to carry its own `_dests_declared` + `_namespace_attrs_read` pair. Two
+# independent implementations of "a flag that is read and never declared" lived in the
+# suite, they disagreed by construction, and nothing pinned them against each other: this
+# one resolved no cross-module helper, no `set_defaults` and no `add_subparsers(dest=)`,
+# while `tests/test_sheet_pairing.py`'s resolved all three. Measured over all 78
+# `tools/*.py` with both walks, this one reported undeclared flags on SIX modules that are
+# correct — `build_payload`, `build_t2v_payload`, `build_r2v_payload` and
+# `build_lora_arm_payload` (`subject`, `no_canon`, `canon_prompt`, declared by the shared
+# `add_spend_flags` at tools/armature_core/canon.py:94), `canon_gate` (`cmd`, `func`, from
+# `add_subparsers(dest=)` / `set_defaults(func=)`) and `render_turnaround`
+# (`ortho_scale_text`, which the tool ASSIGNS onto the namespace itself). The only thing
+# keeping those six off the board was that the property was parametrized over the five
+# plate sheets while this file's docstring framed it as the general property — so the
+# obvious next step, widening it, would have turned six correct modules red and invited an
+# exemption list, converting a derived census into a typed one.
+#
+# There is now ONE walk, in `tests/_census_nodes.py`, and this file keeps only its own
+# contribution: the end-to-end `main(argv)` leg. `test_the_two_walks_are_literally_the_same_
+# function` below is the assertion that would have caught the divergence.
+_dests_declared = CN.argparse_dests
+_namespace_attrs_read = CN.namespace_reads
 
 
 def _success_tokens(path):
@@ -168,18 +138,34 @@ def _success_tokens(path):
     return tokens
 
 
+#: Every module tree in `tools/` (plus `armature_core/`, whose `add_spend_flags` declares
+#: three of the flags four builders read), and the helper table resolved once.
+TREES = CN.module_trees()
+HELPERS = CN.flag_helpers(TREES)
+
+
 def _parser_census():
-    """`{module: (path, declared dests, namespace attrs read)}` over every `tools/*.py`."""
+    """`{module: (path, declared dests, namespace attrs read)}` over every `tools/*.py`.
+
+    ONE walk (F-1c9d39e2): `declared` resolves module-local AND imported flag helpers,
+    `add_subparsers(dest=)` and `set_defaults(**)`; `read` is keyed on the tool's CLI BODY,
+    so a builder whose argv parsing moved into `build_and_write(argv)` is still read
+    (F-0e0709b2).
+    """
     out = {}
     for path in sorted(glob.glob(os.path.join(REPO, "tools", "*.py"))):
-        with open(path, encoding="utf-8") as fh:
-            tree = ast.parse(fh.read())
-        out[os.path.basename(path)[:-3]] = (path, _dests_declared(tree),
-                                            _namespace_attrs_read(tree))
+        mod = os.path.basename(path)[:-3]
+        out[mod] = (path, CN.declared_flags(TREES[mod], mod, HELPERS),
+                    set(CN.namespace_reads(TREES[mod])))
     return out
 
 
 PARSERS = _parser_census()
+
+#: Every `tools/*.py` with a command line — the census's OWN population, 36 on 2026-09-04,
+#: derived and asserted in `tests/test_sheet_pairing.py`. The undeclared-flag property below
+#: runs over all of it; until wave 12 it ran over the five plate sheets only.
+CLI_TOOLS = CN.parser_population(TREES)
 
 #: Derived population: every module that READS `sheet_plate` off its own argparse
 #: namespace. The read is the node — `make_gate0_sheet` had the read and not the flag.
@@ -194,18 +180,127 @@ def test_the_plate_parsing_population_is_the_one_this_file_claims():
     assert len(PLATE_SHEETS) == 5
 
 
-@pytest.mark.parametrize("module", sorted(PLATE_SHEETS))
-def test_every_flag_a_sheet_reads_is_a_flag_its_parser_declares(module):
-    """The gate-0 regression, stated as a property of the parser.
+def test_the_two_walks_are_literally_the_same_function():
+    """F-1c9d39e2's own fix, asserted rather than trusted.
+
+    The shape `tests/test_packaging.py:1367` already uses for the two import scanners: not
+    "these two walks agree today", but "there is one walk". A second implementation of a
+    law drifts, and this pair had drifted into disagreeing about six modules.
+    """
+    import test_sheet_pairing as SP
+
+    assert _dests_declared is CN.argparse_dests
+    assert _namespace_attrs_read is CN.namespace_reads
+    assert SP._argparse_dests is CN.argparse_dests
+    assert SP.namespace_reads is CN.namespace_reads
+    assert SP.declared_flags is CN.declared_flags
+
+
+def test_the_deleted_walk_is_the_one_that_reported_six_correct_modules():
+    """The measurement that justified the deletion, kept runnable.
+
+    The old walk is reconstructed here — `add_argument` only, no helper resolution, no
+    `set_defaults`, no `add_subparsers` — and shown to report exactly the six modules the
+    finding names, none of which has a defect. A deletion nobody can re-derive is a claim.
+    """
+    def old_declared(tree):
+        out = set()
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "add_argument"):
+                continue
+            dest = None
+            for kw in node.keywords:
+                if kw.arg == "dest" and isinstance(kw.value, ast.Constant):
+                    dest = kw.value.value
+            if dest is None:
+                for arg in node.args:
+                    if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str)):
+                        continue
+                    if arg.value.startswith("--"):
+                        dest = arg.value[2:].replace("-", "_")
+                        break
+                    if not arg.value.startswith("-"):
+                        dest = arg.value.replace("-", "_")
+                        break
+            if dest:
+                out.add(dest)
+        return out
+
+    def old_read(tree):
+        """The deleted READ walk, verbatim: every function scope that calls `parse_args`."""
+        def scope_nodes(scope):
+            stack, out = list(ast.iter_child_nodes(scope)), []
+            while stack:
+                node = stack.pop()
+                out.append(node)
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                         ast.ClassDef, ast.Lambda)):
+                    stack.extend(ast.iter_child_nodes(node))
+            return out
+
+        scopes = [tree] + [n for n in ast.walk(tree)
+                           if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        reads = set()
+        for scope in scopes:
+            nodes = scope_nodes(scope)
+            namespaces = set()
+            for node in nodes:
+                if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
+                        and isinstance(node.value.func, ast.Attribute)
+                        and node.value.func.attr == "parse_args"):
+                    for tgt in node.targets:
+                        if isinstance(tgt, ast.Name):
+                            namespaces.add(tgt.id)
+            if not namespaces:
+                continue
+            for node in nodes:
+                if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                        and node.value.id in namespaces):
+                    reads.add(node.attr)
+        return reads
+
+    disagree = {}
+    for mod, (_path, _dec, _read) in sorted(PARSERS.items()):
+        tree = TREES[mod]
+        old = sorted(old_read(tree) - old_declared(tree))
+        new = sorted(CN.undeclared_flags(tree, mod, HELPERS))
+        if old != new:
+            disagree[mod] = (old, new)
+    assert disagree == {
+        "build_lora_arm_payload": (["canon_prompt", "no_canon", "subject"], []),
+        "build_payload": (["canon_prompt", "no_canon", "subject"], []),
+        "build_r2v_payload": (["canon_prompt", "no_canon", "subject"], []),
+        "build_t2v_payload": (["canon_prompt", "no_canon", "subject"], []),
+        "canon_gate": (["cmd", "func"], []),
+        "render_turnaround": (["ortho_scale_text"], []),
+    }, disagree
+
+
+@pytest.mark.parametrize("module", sorted(CLI_TOOLS))
+def test_every_flag_a_tool_reads_is_a_flag_its_parser_declares(module):
+    """The gate-0 regression, stated as a property of the parser — over ALL 36 tools.
 
     `--sheet-plate` was READ and never DECLARED, so every invocation died in `main` with
     an `AttributeError` naming no flag. Any other undeclared read is the same defect.
+
+    WAVE 12, F-fae3fad4: this property was parametrized over `PLATE_SHEETS` — the five
+    modules that read `sheet_plate` — while `_parser_census()` had always walked every
+    `tools/*.py`. The 31 other command-line tools were policed by nothing here. It could not
+    be widened until the two walks became one (F-1c9d39e2), because the walk this file
+    carried reported six correct modules as offenders.
     """
     _path, declared, read = PARSERS[module]
     undeclared = sorted(f for f in read if f not in declared)
     assert undeclared == [], (
         f"{module} reads {undeclared} off its own argparse namespace and its parser "
         f"declares no such argument; every invocation dies in main()")
+
+
+@pytest.mark.parametrize("module", sorted(PLATE_SHEETS))
+def test_every_plate_sheet_declares_the_plate_flag(module):
+    """The narrower half that IS about the five: the flag itself."""
+    _path, declared, _read = PARSERS[module]
     assert "sheet_plate" in declared, module
 
 
@@ -226,7 +321,7 @@ def test_the_parser_census_goes_red_on_a_call_site_with_no_flag(tmp_path):
         "    a = ap.parse_args(argv)\n"
         "    return parse_plate(a.sheet_plate, Exc, flag='--sheet-plate'), a.frames_dir\n")
     tree = ast.parse(src)
-    declared, read = _dests_declared(tree), _namespace_attrs_read(tree)
+    declared, read = _dests_declared(tree), set(_namespace_attrs_read(tree))
     assert declared == {"out", "frames_dir"}
     assert read == {"sheet_plate", "frames_dir"}, read
     assert sorted(f for f in read if f not in declared) == ["sheet_plate"]
@@ -330,6 +425,73 @@ SHEETS = {
 def test_the_argv_smoke_population_is_the_plate_parsing_population():
     """The two nodes describe the same five tools; neither may drift from the other."""
     assert set(SHEETS) == set(PLATE_SHEETS)
+
+
+# ------------------------------------ the 31 with no success fixture, COUNTED not ignored
+#
+# WAVE 12, F-fae3fad4, rule 3. The end-to-end `main(argv)` leg covers 5 of the 36 tools with
+# a command line. That gap was invisible: the file's docstring frames `main(argv)` as one of
+# its two nodes and says nothing about which tools it reaches. It is now a category with a
+# size and a membership, so it can only shrink deliberately — and every member still gets
+# the cheapest end-to-end argv exercise there is, `--help`, which builds the real parser in
+# a real process and would have died on a parser that cannot be constructed at all.
+
+
+NO_SUCCESS_FIXTURE = sorted(set(CLI_TOOLS) - set(SHEETS))
+
+#: The members of `CLI_TOOLS` that cannot be driven from a CPython process at all, keyed on
+#: the BEHAVIOUR "runs under Blender" (`blender_stub.blender_reach`, wave 12 F-6b3040d1) and
+#: not on a typed list: `make_test_armature` imports `bpy` at module scope, so `--help`
+#: raises `ModuleNotFoundError` before argparse is reached. Their exit contract is asserted
+#: in `tests/test_instrument_exits.py`, which drives their `__main__` handlers under the
+#: Blender stub.
+def _cpython_cli_tools():
+    from blender_stub import blender_reach
+
+    return sorted(m for m in CLI_TOOLS if not blender_reach(m + ".py"))
+
+
+CPYTHON_CLI_TOOLS = _cpython_cli_tools()
+
+
+def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
+    """31 of 36 on 2026-09-04. A fixture added moves a tool out of this set and into the
+    parametrized success leg above; nothing may move the other way."""
+    assert set(NO_SUCCESS_FIXTURE) | set(SHEETS) == set(CLI_TOOLS)
+    assert set(SHEETS) <= set(CLI_TOOLS), sorted(set(SHEETS) - set(CLI_TOOLS))
+    assert len(NO_SUCCESS_FIXTURE) <= 31, (
+        f"{len(NO_SUCCESS_FIXTURE)} command-line tools have no end-to-end success fixture; "
+        f"31 was the count on 2026-09-04 and it may only fall: {NO_SUCCESS_FIXTURE}")
+
+
+def test_the_blender_side_of_the_cli_population_is_the_one_that_cannot_be_driven_here():
+    """The exemption, keyed on its REASON and re-derived — never a typed list."""
+    from blender_stub import blender_reach
+
+    excluded = sorted(set(CLI_TOOLS) - set(CPYTHON_CLI_TOOLS))
+    assert excluded == ["make_test_armature"], excluded
+    for module in excluded:
+        assert blender_reach(module + ".py"), module
+
+
+@pytest.mark.parametrize("module", CPYTHON_CLI_TOOLS)
+def test_every_command_line_tool_builds_its_parser_in_a_real_process(module):
+    """The weakest END-TO-END direction, run over all 36 rather than over five.
+
+    `--help` is argparse's own path: the module is imported as `__main__`, the parser is
+    constructed, every `add_argument` runs, and the process exits 0. It cannot see a flag
+    that is read and never declared — the static property above is what sees that — but it
+    does see a parser that cannot be built, a module-scope failure, and a tool whose
+    `--help` exits non-zero, none of which any test reached for 31 of these tools.
+    """
+    proc = subprocess.run(
+        [sys.executable, os.path.join(REPO, "tools", module + ".py"), "--help"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        env=dict(os.environ, PYTHONPATH=os.path.join(REPO, "tools")),
+        cwd=os.path.join(REPO, "tools"))
+    assert proc.returncode == 0, (
+        f"tools/{module}.py --help exited {proc.returncode}:\n{proc.stdout}\n{proc.stderr}")
+    assert "usage" in proc.stdout.lower(), proc.stdout[:400]
 
 
 def test_each_sheet_prints_exactly_one_success_token_and_they_are_all_distinct():
