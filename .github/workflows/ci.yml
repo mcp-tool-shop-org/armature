@@ -75,11 +75,19 @@ permissions:
   contents: read
 
 jobs:
-  # Pull-request only, deliberately. On a push to main, pages.yml already builds
-  # site/ before deploying it, so running this job there would burn a second
-  # build of identical bytes for no coverage.
+  # Skipped only where another job already covers the same bytes: on a push to MAIN,
+  # pages.yml builds site/ before deploying it, and it now runs the dependency scan too.
+  #
+  # The condition used to be the bare `github.event_name != 'push'`, and the comment claimed
+  # the skip cost "no coverage". Enumerated, that was false by exactly one step: pages.yml ran
+  # `npm ci` and `npm run build` and nothing else, while this job also runs the repo's only
+  # dependency scan. Two holes followed, both on the direct-push path this repo actually uses
+  # — a push to main bumping site/package-lock.json was scanned nowhere, and a push to any
+  # OTHER branch matched neither pages.yml's `branches: [main]` nor this job, so site/ was
+  # built nowhere at all until a PR was opened. tests/test_ci_workflows.py now evaluates this
+  # very expression against each way a lockfile change can arrive.
   site-build:
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' || github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

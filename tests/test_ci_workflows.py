@@ -630,3 +630,134 @@ def test_a_third_party_action_is_pinned_to_a_commit_and_says_which_version(sourc
         f"{source} pins {action} to a bare hash with no version beside it; nobody can review "
         f"a bump they cannot read:\n{line}"
     )
+
+
+# -- the dependency scan: does it run on every event a lockfile change can arrive on? -------
+#
+# `if: github.event_name != 'push'` skipped ci.yml's site-build on EVERY push, and the comment
+# above it justified that as "pages.yml already builds site/ ... for no coverage." Enumerated:
+# ci.yml's site-build runs `npm ci`, `npm audit --audit-level=high` and `npm run build`;
+# pages.yml's build runs `npm ci` and `npm run build` and nothing else. The claim was false by
+# exactly one step, and that step is the repo's only dependency scan — ci.yml says so itself:
+# "The repo's only dependency manifest is site/ ... this is the whole scannable surface."
+
+SCAN = "npm audit --audit-level=high"
+CHANGED = "site/package-lock.json"
+
+
+def _on_block(text):
+    """{event: {'branches': [...], 'paths': [...]}} read out of the `on:` key."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.rstrip() == "on:")
+    events, event, key = {}, None, None
+    for line in block_at(lines, start):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if _indent(line) == 2 and stripped.endswith(":"):
+            event, key = stripped[:-1], None
+            events[event] = {}
+            continue
+        if _indent(line) == 4 and event is not None:
+            if stripped.endswith(":"):
+                key = stripped[:-1]
+                events[event][key] = []
+            elif ":" in stripped:  # `branches: [main]` on one line
+                k, _, v = stripped.partition(":")
+                events[event][k.strip()] = [
+                    x.strip().strip("[]").strip("\"'") for x in v.split(",") if x.strip().strip("[]")
+                ]
+                key = None
+            continue
+        if _indent(line) >= 6 and stripped.startswith("- ") and key is not None:
+            events[event][key].append(stripped[2:].strip().strip("\"'"))
+    return events
+
+
+def _pattern_hits(patterns, path):
+    return any(p == path or (p.endswith("/**") and path.startswith(p[:-3] + "/")) for p in patterns)
+
+
+def _eval_if(expr, ctx):
+    """Evaluate a workflow `if:` expression for one context.
+
+    Only the operators these workflows actually use, and an unmodelled `github.*` reference
+    raises rather than quietly deciding the answer — a truth table built on a silently
+    mis-evaluated condition would be worse than no truth table.
+    """
+    body = expr.strip()
+    if body.startswith("${{") and body.endswith("}}"):
+        body = body[3:-2].strip()
+    for name in sorted(ctx, key=len, reverse=True):
+        body = body.replace(name, repr(ctx[name]))
+    body = body.replace("||", " or ").replace("&&", " and ")
+    assert "github." not in body, f"unmodelled context in an if-expression: {expr!r}"
+    return bool(eval(body, {"__builtins__": {}}, {}))  # noqa: S307 - the input is this repo's own YAML
+
+
+def _job_if(text, job):
+    for line in _job_lines(text, job):
+        if line.strip().startswith("if:"):
+            return line.strip()[len("if:") :].strip()
+    return None
+
+
+def site_jobs():
+    """(workflow, job) for every job anywhere that installs site/'s lockfile."""
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if "npm ci" in body:
+                out.append((name, job))
+    return out
+
+
+ARRIVALS = [
+    ("a push to main", {"github.event_name": "push", "github.ref": "refs/heads/main"}),
+    ("a push to a branch", {"github.event_name": "push", "github.ref": "refs/heads/topic"}),
+    ("a pull request", {"github.event_name": "pull_request", "github.ref": "refs/pull/7/merge"}),
+]
+
+
+def _jobs_that_run(ctx):
+    """Which site jobs actually run for one arrival of a change to site/package-lock.json."""
+    running = []
+    for workflow, job in site_jobs():
+        text = _text(workflow)
+        triggers = _on_block(text)
+        event = triggers.get(ctx["github.event_name"])
+        if event is None:
+            continue
+        branches = event.get("branches")
+        if branches and ctx["github.ref"] not in [f"refs/heads/{b}" for b in branches]:
+            continue
+        paths = event.get("paths")
+        if paths and not _pattern_hits(paths, CHANGED):
+            continue
+        condition = _job_if(text, job)
+        if condition is not None and not _eval_if(condition, ctx):
+            continue
+        running.append((workflow, job, "\n".join(_job_lines(text, job))))
+    return running
+
+
+@pytest.mark.parametrize("arrival,ctx", ARRIVALS)
+def test_a_lockfile_change_is_scanned_however_it_arrives(arrival, ctx):
+    """site/ is the repo's whole scannable surface; the scan must run on every way in.
+
+    Two measured holes, both on the direct-push path this repo actually uses: a push to main
+    changing the lockfile ran pages.yml (build and deploy, no audit) and ci.yml with
+    site-build skipped, so nothing scanned it; and a push to a non-main branch matched neither
+    pages.yml's `branches: [main]` nor ci.yml's skipped job, so site/ was built nowhere at all
+    until a PR was opened.
+    """
+    running = _jobs_that_run(ctx)
+    assert running, f"on {arrival}, a change to {CHANGED} builds site/ in no job at all"
+    scanned = [f"{w}:{j}" for w, j, body in running if SCAN in body]
+    assert scanned, (
+        f"on {arrival} the jobs that build site/ are "
+        f"{[f'{w}:{j}' for w, j, _ in running]} and none of them runs `{SCAN}`; a lockfile "
+        "bump carrying a high-severity advisory reaches main with no scan having run on it"
+    )
