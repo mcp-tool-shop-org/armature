@@ -457,3 +457,92 @@ def test_every_negation_points_at_a_path_that_exists():
             if not os.path.exists(os.path.join(REPO, head)):
                 dead.append(line)
     assert dead == [], f"negations pointing at nothing: {dead}"
+
+
+# ------------------------------------------- the stub that outlived the fixture that set it
+#
+# Wave 6, routed from core-solvers and measured here. `conftest.rt` stubs `bpy` and
+# `mathutils`, imports `render_turnaround.py` — which imports `armature_core.blender_scene`,
+# which imports `bpy` — and on teardown restored only the two stub entries. The
+# blender_scene module stayed in `sys.modules`, importable for the rest of the session on a
+# machine with no Blender, so `tests/test_cli.py`'s three `needs-blender` readings turned
+# `ok` for a reason that has nothing to do with the install.
+#
+# Measured before the fix: `pytest tests/test_turnaround_ortho.py tests/test_cli.py` -> 3
+# failed; `pytest tests/test_cli.py` alone -> 0. A full run collects alphabetically, so
+# `test_cli.py` ran first and the suite reported green on an order-dependent pass — the
+# same class as the two import scans above, one directory over.
+#
+# This is checked in a subprocess because the leak is a property of a session's teardown and
+# cannot be observed from inside the module whose fixture is doing the leaking.
+
+ORDER_DEPENDENT_PAIRS = [
+    ("test_turnaround_ortho.py", "test_cli.py"),
+    ("test_turnaround_pin.py", "test_cli.py"),
+]
+
+
+@pytest.mark.parametrize("first,second", ORDER_DEPENDENT_PAIRS,
+                         ids=lambda v: v.replace(".py", ""))
+def test_a_stub_using_module_does_not_change_what_the_next_one_can_import(first, second,
+                                                                          tmp_path):
+    """The order the suite does NOT run in, run on purpose.
+
+    What this looks like if the teardown is wrong: `armature check` reports `ok` for a
+    module whose import needs Blender, because a fixture two files ago faked it.
+    """
+    tests_dir = os.path.dirname(os.path.abspath(__file__))
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        p for p in (env.get("PYTHONPATH", ""), CORE, REPO) if p)
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+         "--basetemp", str(tmp_path / "bt"),
+         os.path.join(tests_dir, first), os.path.join(tests_dir, second)],
+        cwd=REPO, env=env, capture_output=True, text=True)
+    assert proc.returncode == 0, (
+        f"{first} before {second} is not the same suite as {second} alone; a fixture in "
+        f"{first} left a module in sys.modules that {second} then read as importable:\n"
+        + proc.stdout[-3000:] + proc.stderr[-2000:])
+
+
+def test_every_stub_installing_fixture_restores_what_it_imported():
+    """The family, asserted rather than left to the two pairs above.
+
+    `conftest.rt` is the only fixture in this suite that writes into `sys.modules`
+    (`tests/test_cli.py` does it too, through `monkeypatch.delitem`, which pytest undoes
+    itself). Any second one must clear what was imported under its stub, so the census is
+    the check: a new stub-installing fixture fails here until it is paired with a teardown
+    and added to the pairs above.
+    """
+    conftest_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conftest.py")
+    with open(conftest_path, encoding="utf-8") as fh:
+        src = fh.read()
+    tree = ast.parse(src)
+
+    installers = []
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        writes_stub = any(
+            isinstance(n, ast.Assign)
+            and any(isinstance(t, ast.Subscript)
+                    and isinstance(t.value, ast.Attribute) and t.value.attr == "modules"
+                    for t in n.targets)
+            for n in ast.walk(fn))
+        if writes_stub:
+            installers.append(fn)
+
+    assert [fn.name for fn in installers] == ["rt"], (
+        f"conftest installs stub modules in {[fn.name for fn in installers]}; each one "
+        f"needs a teardown that clears what was imported under it, and a pair in "
+        f"ORDER_DEPENDENT_PAIRS that runs it before a module reading those imports")
+
+    for fn in installers:
+        body = ast.get_source_segment(src, fn) or ""
+        assert "set(sys.modules) - before" in body or "- before" in body, (
+            f"conftest.{fn.name} installs a stub and never clears the modules imported "
+            f"under it; restoring the stub entries alone leaves those importable")
+        assert "armature_core" in body, (
+            f"conftest.{fn.name}'s teardown does not name the package whose modules the "
+            f"stub makes importable")

@@ -29,8 +29,21 @@ def rt():
     reach. Stubbing the two modules Blender owns and importing the real file covers
     `parse_args`, both solves, the manifest's scale record and the module constants at
     once, and it fails loudly if the import surface changes.
+
+    Wave 6, routed from core-solvers and measured here. Restoring `bpy` and `mathutils`
+    is not the whole teardown. `render_turnaround` imports `armature_core.blender_scene`,
+    which imports `bpy`, so under the stub that module lands in `sys.modules` and STAYS
+    there — importable, for the rest of the session, on a machine with no Blender.
+    `tests/test_cli.py` then reads `_probe("blender_scene")` as `ok` where the honest
+    answer is `needs-blender`. Measured on this branch:
+    `pytest tests/test_turnaround_ortho.py tests/test_cli.py` -> 3 failed;
+    `pytest tests/test_cli.py` alone -> 0. Alphabetical collection puts `test_cli.py`
+    first in a full run, so the suite hid an order-dependent pass rather than a broken
+    one. `tests/test_cli.py:139-153` already carries this idea for its own stubbing; the
+    fix here is the same one, in the fixture that installs the stubs.
     """
     saved = {k: sys.modules.get(k) for k in ("bpy", "mathutils")}
+    before = set(sys.modules)
     sys.modules["bpy"] = mock.MagicMock(name="bpy")
     mathutils = types.ModuleType("mathutils")
     mathutils.Vector = lambda v: v
@@ -48,6 +61,12 @@ def rt():
                 sys.modules.pop(k, None)
             else:
                 sys.modules[k] = v
+        # Everything that was first imported UNDER the stub goes with it. Anything else
+        # would leave a module the next test can import only because Blender was faked
+        # for it — the reading `armature check` exists to make honestly.
+        for name in sorted(set(sys.modules) - before):
+            if name == "armature_core" or name.startswith("armature_core."):
+                sys.modules.pop(name, None)
 
 
 # --------------------------------------------------------------- repo-anchored resources
