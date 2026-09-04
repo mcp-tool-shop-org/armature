@@ -310,7 +310,7 @@ def main():
     path = os.path.join(out, "panels.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
-    print("PANELS_OK " + json.dumps({"panels": path, "max_displacement": moved,
+    print("MAKE_PARTS_SHEET_OK " + json.dumps({"panels": path, "max_displacement": moved,
                                      "parts_rendered": len(visible)}))
 
 

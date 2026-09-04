@@ -782,7 +782,13 @@ def main():
           + ("" if ortho_scale is None else
              f"   ortho_scale {ortho_scale!r} ({plan['ortho_scale_source']}, shared)")
           + f"   {gate_turn['verdict']}")
-    print("RENDER_TURNAROUND_OK")
+    # The success sentinel carries a payload like its twenty siblings: the rule every
+    # Blender invocation is bound to is "verify a success sentinel in the output, never
+    # the exit code alone", and a bare token tells the caller nothing about what it
+    # succeeded at (F-161b09fc).
+    print("RENDER_TURNAROUND_OK " + json.dumps({
+        "out": os.path.abspath(out), "views": [v["view"] for v in views],
+        "projection": plan["projection"], "radius": round(radius, 6)}))
 
 
 if __name__ == "__main__":

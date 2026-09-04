@@ -569,7 +569,7 @@ def main():
     path = os.path.join(out_dir, "parts_manifest.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2, default=str)
-    print("PARTS_OK " + json.dumps({"glb": out_glb, "sha256": manifest["output"]["sha256"],
+    print("RIG_PARTS_OK " + json.dumps({"glb": out_glb, "sha256": manifest["output"]["sha256"],
                                     "manifest": path, "parts": len(ctx["parts"])}))
 
 

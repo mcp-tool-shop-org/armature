@@ -1112,8 +1112,9 @@ def run_skeleton(args, out_dir, source_sha, started):
     path = os.path.join(out_dir, "skeleton_manifest.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2)
-    print("SKELETON_OK " + json.dumps(
-        {"glb": out_glb, "sha256": manifest["output"]["sha256"], "manifest": path}))
+    print("RIG_CHARACTER_OK " + json.dumps(
+        {"mode": "skeleton", "glb": out_glb,
+         "sha256": manifest["output"]["sha256"], "manifest": path}))
 
 
 def _tool_hashes():
@@ -1169,7 +1170,7 @@ def main():
         path = os.path.join(out_dir, "measure.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(rec, fh, indent=2)
-        print("MEASURE_OK " + path)
+        print("RIG_CHARACTER_OK " + json.dumps({"mode": "measure", "record": path}))
         return
 
     if args["mode"] == "skeleton":
@@ -1254,8 +1255,9 @@ def main():
     path = os.path.join(out_dir, f"rig_manifest_{tag}.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2)
-    print("RIG_OK " + json.dumps({"binding": tag, "glb": out_glb, "sha256": out_sha,
-                                  "manifest": path}))
+    print("RIG_CHARACTER_OK " + json.dumps({"mode": "full", "binding": tag,
+                                            "glb": out_glb, "sha256": out_sha,
+                                            "manifest": path}))
 
 
 def halt_outcome(exc):

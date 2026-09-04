@@ -35,7 +35,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig_character as rc                                            # noqa: E402
 from armature_core import blender_scene                               # noqa: E402
 import rig_parts as rp                                                # noqa: E402
-from armature_core.errors import GateFailure                          # noqa: E402
+# `ArmatureError` as well as `GateFailure`: line 159's ambiguous-subject refusal raised
+# a name this module never bound, so the branch the comment there describes produced
+# `NameError: name 'ArmatureError' is not defined` -- a crash (exit 1) where the tool
+# meant to decline (exit 2), with the halt record naming Python instead of naming the
+# ambiguous subject. Measured 2026-09-04 (F-3bf15648); pinned by
+# `tests/test_instruments_amend_w10.py::test_every_raise_names_something_the_module_actually_binds`.
+from armature_core.errors import ArmatureError, GateFailure           # noqa: E402
 
 #: How many repair passes before giving up. One is enough on this figure; the loop exists so
 #: a mesh needing two does not silently ship at 1.
@@ -221,7 +227,7 @@ def main():
     }
     with open(os.path.join(out_dir, "repair_manifest.json"), "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2, default=str)
-    print("REPAIR_OK " + json.dumps({"glb": out_glb, "faces": final["faces"],
+    print("RIG_REPAIR_OK " + json.dumps({"glb": out_glb, "faces": final["faces"],
                                      "closed_manifold": final["closed_manifold"],
                                      "faces_removed": removed,
                                      "passes": len(passes)}))

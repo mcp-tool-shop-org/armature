@@ -314,7 +314,7 @@ def main():
     path = os.path.join(out_dir, "p2_armatures.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
-    print("PROBE_GLB " + json.dumps({"summary": summary, "json": path}))
+    print("PROBE_GLB_OK " + json.dumps({"summary": summary, "json": path}))
 
 
 if __name__ == "__main__":

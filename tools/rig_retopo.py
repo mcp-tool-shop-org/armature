@@ -281,7 +281,7 @@ def isolate_subject(objects, subject):
     result and continues, so a failed B -- a duplicate of the outer shell at the identical
     transform -- stayed render-visible and was drawn into every panel of every region, on
     top of the variant each panel claims to show. The tool then wrote `panels.json`,
-    printed `RETOPO_OK` and exited 0.
+    printed `RIG_RETOPO_OK` and exited 0.
 
     The andon is on the direction the invariant does not bound: not "the listed objects are
     hidden" but "nothing else is visible". Same shape as
@@ -476,7 +476,7 @@ def main():
                                "balls, the mitten hands and the toes are what decide it",
                    "out": out_dir, "filename": "E07-retopo.png",
                    "rows": rows}, fh, indent=2)
-    print("RETOPO_OK " + json.dumps({k: {"faces": v.get("faces"), "quads": v.get("quads"),
+    print("RIG_RETOPO_OK " + json.dumps({k: {"faces": v.get("faces"), "quads": v.get("quads"),
                                          "manifold": v.get("is_closed_manifold"),
                                          "max_dev": v.get("deviation", {}).get("max")}
                                      for k, v in results.items()}))

@@ -239,7 +239,7 @@ def main():
     path = os.path.join(out, "bone_heat_diagnosis.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
-    print("DIAGNOSIS_OK " + path)
+    print("DIAGNOSE_BONE_HEAT_OK " + path)
     for name, rec in arms.items():
         print(f"  {name:<26} weighted {rec['weighted_vertices']:>7}/{rec['vertices']:<7} "
               f"({100 * rec['weighted_fraction']:6.2f}%)  empty_groups="

@@ -187,7 +187,7 @@ def main():
 
     with open(os.path.join(args.out, f"{args.name}_stats.json"), "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)
-    print("PREVIEW_OK " + json.dumps({"name": args.name, "engine": stats["engine"],
+    print("PREVIEW_GLB_OK " + json.dumps({"name": args.name, "engine": stats["engine"],
                                       "triangles": tris}))
     return 0
 

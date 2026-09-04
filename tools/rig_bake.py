@@ -303,7 +303,7 @@ def main():
     }
     with open(os.path.join(out_dir, "bake_manifest.json"), "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2, default=str)
-    print("BAKE_OK " + json.dumps({"glb": out_glb, "atlas": atlas_path,
+    print("RIG_BAKE_OK " + json.dumps({"glb": out_glb, "atlas": atlas_path,
                                    "non_black": round(health["non_black_fraction"], 4),
                                    "seconds": round(secs, 1)}))
 

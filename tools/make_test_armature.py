@@ -371,6 +371,19 @@ def main():
         print(f"  wrist_r f000={[round(v, 4) for v in wrist0]} -> "
               f"f{args.frames - 1:03d}={[round(v, 4) for v in wristN]}")
 
+    # THE SUCCESS SENTINEL (F-161b09fc). Everything above is human prose; this file
+    # printed no uppercase token at all, so a caller following the repo's own rule --
+    # "verify a success sentinel in the output, never the exit code alone"
+    # (docs/experiments/E07-the-skeleton.md:202-205) -- had nothing to match on the one
+    # tool that builds the synthetic subject GLB and the `.joints.json` authored ground
+    # truth every arc comparison is measured against.
+    print("MAKE_TEST_ARMATURE_OK " + json.dumps({
+        "glb": os.path.abspath(args.out),
+        "joints": os.path.abspath(os.path.splitext(args.out)[0] + ".joints.json"),
+        "verts": verts, "tris": tris, "dims": list(dims),
+        "pose_arc": args.pose_arc if arc is not None else None,
+        "frames": args.frames if arc is not None else None}))
+
 
 if __name__ == "__main__":
     # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by

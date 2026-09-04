@@ -348,7 +348,7 @@ def main():
     path = os.path.join(out, "panels.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
-    print("PANELS_OK " + path)
+    print("MAKE_SKELETON_SHEET_OK " + path)
 
 
 if __name__ == "__main__":

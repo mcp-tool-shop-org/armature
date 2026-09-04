@@ -149,7 +149,7 @@ def main():
     out_path = os.path.join(out_dir, "subject_extents.json")
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
-    print("PROBE_SUBJECT " + json.dumps({"json": out_path, "n": len(records)}))
+    print("PROBE_SUBJECT_OK " + json.dumps({"json": out_path, "n": len(records)}))
 
 
 if __name__ == "__main__":
