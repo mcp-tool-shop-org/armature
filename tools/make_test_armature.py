@@ -261,8 +261,6 @@ def main():
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
 
-    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-
     arc = posearc.resolve_arc(args.pose_arc) if args.pose_arc else None
     readout = None
     if arc is not None:
@@ -272,6 +270,12 @@ def main():
     fig, arm = build(args.thickness, args.joint_scale, args.segments, arc=arc,
                      frames=args.frames, start_deg=args.arc_start_deg,
                      end_deg=args.arc_end_deg)
+
+    # F-244b2ad5: `build` raises through its own helpers, and `posearc.resolve_arc` /
+    # `arc_readout` above it raise on a zero-span arc — none of them needs a directory. It
+    # is created HERE, below the last of them. Corrected shape carried from
+    # `render_performer.py:319`.
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
 
     # The frame rate and range are properties of the EXPORT, not of the scene we happened
     # to build in: glTF writes key times in seconds, so an action authored at 33 keys and

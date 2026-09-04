@@ -133,6 +133,11 @@ RECORDED_POPULATION = frozenset({
     "CadenceGate", "PinnedCameraGate",
     "CropStripError", "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate",
     "PreviewWalkGate",
+    # JOINED 2026-09-04 (wave 12, instruments F-940b0800): `rig_character.
+    # GateSubjectDegenerate` refuses a subject whose coordinates are not numbers, from two
+    # sites in `subject_scale` — the empty-population clause and the non-finite-coordinate
+    # clause — so its NAME stops being its clause and its `pytest.raises` sites need one.
+    "GateSubjectDegenerate",
     # JOINED 2026-09-04, exactly as this comment anticipated: the instruments wave-10
     # amend (F-51c5e0ef) gives `make_binding_sheet.shoot` and `make_parts_sheet.shoot`
     # the render-completeness refusal their siblings carry, so `BindingSheetGate` and
@@ -196,7 +201,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # 71 + 2 + 3 = 76; instruments-measure's branch added `ReviewClipError`, `ShotsetSheetError`,
     # `ZoomSheetError` (new classes) and `SheetPopulationError` (crossed to two sites):
     # 76 + 4 = 80, MEASURED on the merged tree.
-    assert len(POLICED) == 80, sorted(POLICED)
+    assert len(POLICED) == 81, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

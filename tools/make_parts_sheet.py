@@ -251,7 +251,6 @@ def main():
     args = parse_args()
     out = os.path.abspath(args.out)
     frames_dir = os.path.join(out, "frames")
-    os.makedirs(frames_dir, exist_ok=True)
 
     scene = rig_character.fresh_scene(rig_character.PROBE_FPS)
     bpy.ops.import_scene.gltf(filepath=args.glb)
@@ -286,6 +285,13 @@ def main():
     targets = {label: tuple(arm_obj.matrix_world
                             @ arm_obj.pose.bones[f"{joint}.{side}"].head)
                for label, joint in INSET_JOINTS}
+
+    # F-244b2ad5: five refusals sit above this line — three inline `raise`s plus
+    # `light_the_scene` and `articulated_side`, which raise through helpers — and none of
+    # them needs a directory. It is created HERE so a halt leaves nothing behind. Corrected
+    # shape carried from `render_performer.py:319`; the wave-10 census could not see any of
+    # the five because it recognised a refusal by the callee's NAME.
+    os.makedirs(frames_dir, exist_ok=True)
 
     full_scale = height * 1.10
     panels = {}

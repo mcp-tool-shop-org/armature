@@ -94,9 +94,7 @@ def import_reference(path, scene, skinned):
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
     panel_dir = os.path.join(out_dir, "panels")
-    os.makedirs(panel_dir, exist_ok=True)
 
     scene = rc.fresh_scene(16)
     bpy.ops.import_scene.gltf(filepath=args["glb"])
@@ -141,6 +139,16 @@ def main():
             f"{rc.PROBE_FRAMES} "
             f"(max {moved:.3e}). The authored arc did not survive the round trip, and a "
             f"sheet built from this would read as 'this route does not move'")
+
+    # Every refusal above this line can fire before a single pixel exists — three of them
+    # are inline `raise`s, which is precisely why the wave-10 census could not see that
+    # they were stranded below the directory (F-244b2ad5; the corrected shape is carried
+    # from `render_performer.py` and `preview_glb.py`). The directory is created HERE so a
+    # halt does not leave an empty one behind for a later run, or a reader scanning
+    # `outputs/`, to read as an attempt that produced nothing. Nothing between the old site
+    # and this one writes.
+    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(panel_dir, exist_ok=True)
 
     # Inset targets read from the POSED armature, so each crop lands on its own joint.
     scene.frame_set(rc.PROBE_FRAMES)

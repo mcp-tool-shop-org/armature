@@ -302,7 +302,10 @@ REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL = {
     "render_start_frame": ["gate_alpha", "gate_backdrop"],
     "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop",
                           "gate_whole"],
-    "rig_character": ["gate_d_determinism", "gate_n_names"],
+    # WAVE-12 (instruments, F-244b2ad5): `rig_character` CLOSED both of its entries in the
+    # commit that moved them. `os.makedirs` left the top of `main` and is now created per
+    # branch below the last refusal, so Gate D and Gate N both sit ABOVE the first write on
+    # every route. Deleted here, as this ratchet's own rule requires, rather than relaxed.
     "rig_parts": ["gate_atlas_untouched", "gate_part_names"],
 }
 
@@ -350,15 +353,19 @@ def test_the_bpy_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip()
     # appearing or vanishing is visible rather than silently collapsed.
     # WAVE-10 MERGE (coordinator, 2026-09-04): 26 names / 29 sites -> re-measured on the merged tree after instruments moved
     # thirteen refusals above the first write (F-d47095fa); both numbers below are the measurement.
-    assert sum(len(v) for v in derived.values()) == 17, sorted(derived.items())
+    # WAVE 12 (instruments, F-244b2ad5): 17 names / 17 sites -> 15 / 15. `rig_character`'s
+    # `gate_d_determinism` and `gate_n_names` both moved above the first write when
+    # `os.makedirs` left the top of `main`; re-measured, not relaxed.
+    assert sum(len(v) for v in derived.values()) == 15, sorted(derived.items())
     sites = 0
     for name in bpy_members:
         gates_at, writes_at = gate_and_write_lines(_source(name), name)
         if not gates_at or not writes_at:
             continue
         sites += sum(1 for ln in gates_at if ln > min(writes_at))
-    assert sites == 17, (
-        f"{sites} refusal SITES below a first write; 17 were measured on 2026-09-04 (merged tree)")
+    assert sites == 15, (
+        f"{sites} refusal SITES below a first write; 15 were measured on 2026-09-04 "
+        f"(wave 12, after rig_character's two moved above its first write)")
 
 
 def test_a_bpy_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():
@@ -387,7 +394,8 @@ def test_the_per_refusal_exemption_goes_red_on_a_new_refusal_under_a_write():
     gates_at, mutated_writes = gate_and_write_lines("".join(lines), name)
     below = sorted({gates_at[ln] for ln in gates_at if ln > min(mutated_writes)})
     assert "gate_a_brand_new_refusal" in below, below
-    assert set(below) - set(REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL[name]) == {
+    assert set(below) - set(
+        REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL.get(name, [])) == {
         "gate_a_brand_new_refusal"}
 
 

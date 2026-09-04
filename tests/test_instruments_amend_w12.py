@@ -264,7 +264,7 @@ def test_the_nine_e_nine_displacement_that_measured_the_defect_can_no_longer_pas
     """The finding's own measurement: `tol_frac=1e30` on a 9e9-unit displacement returned
     a PASS verdict and the manifest recorded that Gate ARRIVED ran."""
     ls = load_tool("lift_solve.py")
-    with pytest.raises(ls.LiftGate):
+    with pytest.raises(ls.LiftGate, match="may only TIGHTEN"):
         ls.gate_arrived(_heads((9e9, 0.0, 0.0)), _heads(ORIGIN), 1.0, tol_frac=1e30)
 
 
@@ -322,7 +322,8 @@ def test_a_subject_carrying_a_nan_vertex_is_refused_and_the_vertex_is_named():
 def test_a_subject_carrying_an_infinite_vertex_is_refused_too():
     rc = _rig_character()
     source = np.array([[0.0, 0.0, 0.0], [float("inf"), 1.0, 1.0]], dtype=np.float64)
-    with pytest.raises(rc.GateSubjectDegenerate):
+    with pytest.raises(rc.GateSubjectDegenerate,
+                       match=r"non-finite coordinate component"):
         rc.subject_scale(source, "full")
 
 
@@ -381,3 +382,199 @@ def test_the_skeleton_route_reaches_the_refusal_before_gate_d():
                  and n.func.attr in ("derive", "snap_sites_to_balls")]
     assert scale_at, "build_pass no longer routes its diagonal through subject_scale"
     assert min(scale_at) < min(consumers), (scale_at, consumers)
+
+
+# =================================================================== F-244b2ad5 (HIGH)
+#
+# Wave 10 closed "no refusal sits between the output directory and the first byte" with a
+# census whose refusal predicate keys on the callee's NAME (`gate_`/`require_` plus a typed
+# list). An inline `raise` inside `main()` and a call to a module-level helper that raises
+# are both invisible to it, so `stranded_refusals` returned `[]` for all 21 while ELEVEN
+# tools carried refusals in exactly that window. The walk below keys on BEHAVIOUR instead.
+
+
+def _module_refusals(filename):
+    """Every refusal REACHED from the tool's `main()`, by behaviour, with its line.
+
+    A refusal is an `ast.Raise` anywhere in `main`'s own body, OR a call to a module-level
+    function of the same module whose body raises (resolved one hop — the shape
+    `light_the_scene`, `import_subject`, `_import`, `build`, `load`, `render_arm`,
+    `quadriflow`, `articulated_side` and `build_pass` all wear, and the shape the name-keyed
+    predicate cannot see). The `gate_`/`require_` names the sibling census recognises are
+    kept, so this walk is a SUPERSET of it and cannot report fewer refusals than it does.
+    """
+    src = read_source(filename)
+    tree = ast.parse(src)
+    module_fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    raisers = {name for name, node in module_fns.items()
+               if any(isinstance(x, ast.Raise) for x in ast.walk(node))}
+    main = module_fns.get("main")
+    if main is None:
+        return []
+    found = set()
+    for node in ast.walk(main):
+        if isinstance(node, ast.Raise):
+            found.add((node.lineno, "inline raise"))
+        elif isinstance(node, ast.Call):
+            if (isinstance(node.func, ast.Name) and node.func.id in raisers
+                    and node.func.id != "main"):
+                found.add((node.lineno, node.func.id))
+            else:
+                tail = ast.unparse(node.func).split(".")[-1]
+                if tail.startswith("gate_") or tail.startswith("require_"):
+                    found.add((node.lineno, tail))
+    return sorted(found)
+
+
+#: Measured on `89269f1` with the walk above: the eleven Blender tools whose `main()`
+#: stranded a refusal between `os.makedirs` and the first byte, and what each stranded.
+#: Recorded so a tool that starts stranding one fails here loudly rather than quietly.
+STRANDED_ON_THE_WAVE_12_BASE = {
+    "diagnose_bone_heat.py": 6, "make_binding_sheet.py": 2, "make_parts_sheet.py": 5,
+    "make_rig_sheet.py": 3, "make_skeleton_sheet.py": 2, "make_test_armature.py": 1,
+    "render_turnaround.py": 2, "rig_bake.py": 6, "rig_character.py": 1,
+    "rig_repair.py": 3, "rig_retopo.py": 4,
+}
+
+WRITE_ORDERED_TOOLS = sorted(
+    f for f in blender_stub.blender_tools()
+    if os.path.isfile(os.path.join(TOOLS, f)))
+
+
+#: Calls that put bytes on disk, carried verbatim from
+#: `test_instruments_amend_w10.BYTE_PRODUCING_CALLS` so the two files cannot disagree.
+def _is_byte_producer(node):
+    import test_instruments_amend_w10 as W10
+    return W10._is_byte_producer(node)
+
+
+def _writes(filename, seen=None):
+    """Module-level function names in `filename` whose bodies put bytes on disk.
+
+    Resolved by BEHAVIOUR and across module boundaries: `from make_parts_sheet import
+    (articulated_side, light_the_scene, ortho_camera, shoot)` brings four names in and only
+    `shoot` writes. `test_instruments_amend_w10.write_window` treats every name imported
+    from that module as a writer, which puts the "first byte" of `make_rig_sheet` on
+    `articulated_side` — a function that reads an armature and returns a dict. That is the
+    same defect one level up: a population keyed on where a name CAME FROM rather than on
+    what it does.
+    """
+    seen = seen if seen is not None else set()
+    if filename in seen:
+        return set()
+    seen.add(filename)
+    tree = ast.parse(read_source(filename))
+    module_fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    out = {name for name, node in module_fns.items()
+           if any(_is_byte_producer(x) for x in ast.walk(node))}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        mod = (node.module or "") + ".py"
+        if not os.path.isfile(os.path.join(TOOLS, mod)):
+            continue
+        theirs = _writes(mod, seen)
+        for alias in node.names:
+            if alias.name in theirs:
+                out.add(alias.asname or alias.name)
+    # A local function that CALLS a writer writes too (`shoot` reached through a wrapper).
+    for _ in range(3):
+        grew = False
+        for name, node in module_fns.items():
+            if name in out:
+                continue
+            for c in ast.walk(node):
+                if (isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                        and c.func.id in out):
+                    out.add(name)
+                    grew = True
+                    break
+        if not grew:
+            break
+    return out
+
+
+def _window(filename):
+    """`(first os.makedirs line, first byte-producing line)` in the tool's `main()`."""
+    tree = ast.parse(read_source(filename))
+    module_fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    main = module_fns.get("main")
+    if main is None:
+        return None, None
+    writers = _writes(filename)
+    byte_lines, dir_lines = [], []
+    for node in ast.walk(main):
+        if _is_byte_producer(node):
+            byte_lines.append(node.lineno)
+        elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+              and node.func.id in writers and node.func.id != "main"):
+            byte_lines.append(node.lineno)
+        if isinstance(node, ast.Call) and ast.unparse(node.func) == "os.makedirs":
+            dir_lines.append(node.lineno)
+    return (min(dir_lines) if dir_lines else None,
+            min(byte_lines) if byte_lines else None)
+
+
+@pytest.mark.parametrize("filename", sorted(STRANDED_ON_THE_WAVE_12_BASE))
+def test_no_refusal_is_stranded_below_the_output_directory_in_any_of_the_eleven(filename):
+    makedirs, first_byte = _window(filename)
+    assert makedirs and first_byte, (filename, makedirs, first_byte)
+    assert makedirs < first_byte, (
+        f"{filename}: the output directory is created at line {makedirs}, BELOW the first "
+        f"byte at {first_byte}. An inverted window makes the invariant vacuous — moving "
+        f"`makedirs` past the first write is not the fix, it is the check's blind spot")
+    stranded = [r for r in _module_refusals(filename) if makedirs < r[0] < first_byte]
+    assert stranded == [], (
+        f"{filename}: makedirs at {makedirs}, first byte at {first_byte}, refusals at "
+        f"{stranded} in between — a run refused by one of those leaves an EMPTY output "
+        f"directory behind, which a reader scanning `outputs/` reads as an attempt that "
+        f"produced nothing rather than one that was refused")
+
+
+def test_the_same_property_holds_for_every_blender_tool_not_only_the_eleven():
+    """The property is the population's, not a recorded list's."""
+    offenders = {}
+    for filename in WRITE_ORDERED_TOOLS:
+        makedirs, first_byte = _window(filename)
+        if not makedirs or not first_byte:
+            continue
+        stranded = [r for r in _module_refusals(filename) if makedirs < r[0] < first_byte]
+        if stranded:
+            offenders[filename] = stranded
+    assert offenders == {}, offenders
+
+
+def test_the_behaviour_keyed_walk_sees_what_the_name_keyed_one_cannot(tmp_path,
+                                                                     monkeypatch):
+    """Rule 2 — the census is proven red on the spelling that hides from the NAME.
+
+    `test_instrument_write_ordering._is_gate_call` recognises `gate_*`/`require_*` and a
+    typed list; the probe below refuses in two ways it cannot see (an inline `raise` and a
+    call to a module-level helper that raises), which is exactly the shape that left the
+    eleven tools invisible to the wave-10 census.
+    """
+    probe = tmp_path / "probe_behaviour.py"
+    probe.write_text(
+        "import bpy\n"
+        "import json\n"
+        "import os\n"
+        "def sanity(x):\n"
+        "    raise ValueError('nope')\n"
+        "def main():\n"
+        "    os.makedirs(out, exist_ok=True)\n"
+        "    if bad:\n"
+        "        raise RuntimeError('inline')\n"
+        "    sanity(x)\n"
+        "    with open(path, 'w') as fh:\n"
+        "        json.dump({}, fh)\n", encoding="utf-8")
+    monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
+    import test_instrument_write_ordering as WO
+    import test_instruments_amend_w10 as W10
+    monkeypatch.setattr(W10, "read_source", blender_stub.read_source, raising=False)
+
+    src = probe.read_text(encoding="utf-8")
+    named_gates, _ = WO.gate_and_write_lines(src, "probe_behaviour")
+    assert named_gates == {}, (
+        "the name-keyed predicate is supposed to be blind to these two spellings; if it "
+        "now sees them, this fixture no longer proves what it exists to prove")
+    assert [line for line, _ in _module_refusals("probe_behaviour.py")] == [9, 10]

@@ -266,7 +266,6 @@ def main():
     args = parse_args()
     out = os.path.abspath(args.out)
     frames = os.path.join(out, "frames")
-    os.makedirs(frames, exist_ok=True)
 
     scene = rig_character.fresh_scene(rig_character.PROBE_FPS)
     bpy.ops.import_scene.gltf(filepath=args.glb)
@@ -298,6 +297,13 @@ def main():
     after_marks, table = joints.snap_sites_to_balls(lm, balls)
 
     engine = light_the_scene(scene)
+    # F-244b2ad5: the subject-ambiguity `raise` above and `light_the_scene` (which raises
+    # through a helper) both fire before any pixel exists. The directory is created HERE so
+    # a halt does not leave an empty one behind — this is the sheet the Director approves
+    # the skeleton on, and an empty `frames/` beside no sheet is the most misreadable
+    # residue of the eleven. Corrected shape carried from `render_performer.py:319`.
+    os.makedirs(frames, exist_ok=True)
+
     ov_before = overlay_from_marks(before_marks, height, BEFORE_RGB, "before")
     ov_after = overlay_from_marks(after_marks, height, AFTER_RGB, "after")
 

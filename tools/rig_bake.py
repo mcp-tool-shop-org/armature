@@ -243,7 +243,6 @@ def atlas_health(img):
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
 
     rc.fresh_scene(16)
@@ -265,6 +264,13 @@ def main():
     if health["non_black_fraction"] < 0.20:
         raise BakeEmpty("the baked atlas is mostly empty", {"health": health, "cage": cage,
                                                             "returned": result})
+
+    # F-244b2ad5: six refusals sit above this line — two `_import` calls, `unwrap`, `bake`
+    # and two inline `raise`s — and not one of them needs a directory. It is created HERE
+    # so a halt leaves nothing behind. Corrected shape carried from
+    # `render_performer.py:319`; the wave-10 census saw none of the six, because four of
+    # them refuse through a helper and two are inline `raise`s.
+    os.makedirs(out_dir, exist_ok=True)
 
     atlas_path = os.path.join(out_dir, "terracotta_retopo_4096.png")
     img.filepath_raw = atlas_path

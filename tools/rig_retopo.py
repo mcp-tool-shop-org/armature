@@ -341,7 +341,6 @@ def render_comparison(scene, variants, out_dir, diagonal, centre):
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
 
     scene, ob = import_subject(args["glb"])
@@ -395,6 +394,13 @@ def main():
     if not live:
         raise NoRetopoProduced("both stock-Blender routes failed to produce a mesh",
                                {"results": results})
+
+    # F-244b2ad5: `import_subject` refuses an ambiguous import, `quadriflow` refuses a
+    # declined operator (twice), and the `NoRetopoProduced` inline `raise` above says both
+    # routes produced nothing — four refusals, none of which needs a directory. It is
+    # created HERE, below the last of them. Corrected shape carried from
+    # `render_performer.py:319`.
+    os.makedirs(out_dir, exist_ok=True)
 
     for name, obj in (("A_quadriflow_direct", variant_a),
                       ("B_voxel_then_quadriflow", variant_b)):

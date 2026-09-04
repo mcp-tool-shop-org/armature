@@ -593,11 +593,6 @@ def main():
              "mesh_objects_all": [o.name for o in meshes],
              "mesh_objects_render_visible": []})
 
-    # Every refusal above this line can fire before a single pixel exists; the output
-    # directory is created HERE so a halt does not leave an empty one behind for a
-    # later run to read as a used one (F-8d2b9d7d). Nothing between the old site and
-    # this one writes.
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     verts = blender_scene.evaluated_world_vertices(scene, subject)
     lo = verts.min(axis=0)
     hi = verts.max(axis=0)
@@ -628,6 +623,18 @@ def main():
         sphere_radius, ortho_scale = None, None
         radius = solve_radius_for_height(cloud, target, azimuths, a.elevation, a.lens,
                                          a.sensor, width, height, a.height_frac)
+
+    # Every refusal above this line can fire before a single pixel exists; the output
+    # directory is created HERE so a halt does not leave an empty one behind for a
+    # later run to read as a used one (F-8d2b9d7d). Nothing between the old site and
+    # this one writes.
+    #
+    # WAVE 12, F-244b2ad5: the line was ABOVE the projection branch, and BOTH solvers in
+    # it raise — `solve_ortho_scale_for_height` and `solve_radius_for_height` refuse a
+    # subject they cannot frame. Neither needs a directory. The wave-10 census reported
+    # this file clean because it recognised a refusal by the callee's NAME, and neither
+    # solver is called `gate_*`.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     cam_data = bpy.data.cameras.new("turn_cam")
     cam_data.type = plan["blender_camera_type"]

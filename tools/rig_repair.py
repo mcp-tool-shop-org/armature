@@ -149,7 +149,6 @@ def repair(ob, diagonal):
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
 
     scene = rc.fresh_scene(16)
@@ -194,6 +193,13 @@ def main():
     else:
         validated = "mesh.validate() CORRECTED problems — recorded, not hidden"
     ob.data.update()
+
+    # F-244b2ad5: three inline `raise`s sit above this line — an ambiguous subject, a
+    # shell still not manifold after repair, and a repair that removed more of the
+    # character than the budget allows — and none of them needs a directory. It is created
+    # HERE. The wave-10 census reported this file clean because all three are inline
+    # `raise`s and its predicate keyed on the callee's NAME.
+    os.makedirs(out_dir, exist_ok=True)
 
     bpy.ops.object.select_all(action="DESELECT")
     ob.select_set(True)

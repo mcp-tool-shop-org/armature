@@ -1124,6 +1124,11 @@ def run_skeleton(args, out_dir, source_sha, started):
         [b.name for b in ctx["armature"].data.bones], sitelist.ALL_NAMES,
         "the built armature, before export")
 
+    # F-244b2ad5: both `build_pass` calls above refuse an ambiguous or non-finite subject
+    # and neither needs a directory; this is the route whose only artefact the Director
+    # approves the skeleton on. Created here, below the last refusal.
+    os.makedirs(out_dir, exist_ok=True)
+
     out_glb = os.path.join(out_dir, f"{args['name']}_skeleton.glb")
     export = export_rigged(ctx, None, out_glb, animated=False)
 
@@ -1201,7 +1206,6 @@ def _tool_hashes():
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
     sitelist.validate()
 
     started = time.time()
@@ -1237,6 +1241,15 @@ def main():
                            "displacement for Gate P to be about")},
             "timings": ctx["timings"],
         }
+        # F-244b2ad5: the output directory used to be created at the top of `main`, above
+        # every `build_pass` in every branch — and `build_pass` refuses an ambiguous subject,
+        # a non-finite one (`subject_scale`) and an unknown binding mode, none of which needs
+        # a directory. It is created per branch, below the last refusal and above the first
+        # byte. A halt still leaves a record: `_write_halt` makes the directory itself and
+        # writes `halt.json` into it, so what a reader finds is a refusal, never an empty
+        # directory. Corrected shape carried from `render_performer.py:319`.
+        os.makedirs(out_dir, exist_ok=True)
+
         path = os.path.join(out_dir, "measure.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(rec, fh, indent=2)
@@ -1270,6 +1283,15 @@ def main():
 
     probe = author_probe(ctx)
     diagnostics = deformation_diagnostics(ctx, probe)
+
+    # F-244b2ad5: the output directory used to be created at the top of `main`, above
+    # every `build_pass` in every branch — and `build_pass` refuses an ambiguous subject,
+    # a non-finite one (`subject_scale`) and an unknown binding mode, none of which needs
+    # a directory. It is created per branch, below the last refusal and above the first
+    # byte. A halt still leaves a record: `_write_halt` makes the directory itself and
+    # writes `halt.json` into it, so what a reader finds is a refusal, never an empty
+    # directory. Corrected shape carried from `render_performer.py:319`.
+    os.makedirs(out_dir, exist_ok=True)
 
     tag = mode if mode != "envelope" else f"envelope_{args['envelope_radii']}"
     out_glb = os.path.join(out_dir, f"{args['name']}_{tag}.glb")

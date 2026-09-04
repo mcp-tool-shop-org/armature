@@ -180,7 +180,6 @@ def build_and_bind(scene, ob, bands, mode="ARMATURE_AUTO", only=None):
 def main():
     args = parse_args()
     out = os.path.abspath(args.out)
-    os.makedirs(out, exist_ok=True)
     arms = {}
 
     scene, ob = load(args.glb)
@@ -227,6 +226,15 @@ def main():
         ob.scale = (s, s, s)
         bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
         arms[f"F_scale_{s:g}x"] = build_and_bind(scene, ob, args.bands)
+
+    # F-244b2ad5: `load` raises when the GLB contributes no single render-visible mesh,
+    # and it is called SIX times above this line. Every one of those refusals can fire
+    # before a byte exists, so the output directory is created HERE rather than at the top
+    # of `main` — a halt must not leave an empty `outputs/<run>/` for a reader, or a re-run
+    # into the same `--out`, to read as an attempt that produced nothing. Corrected shape
+    # carried from `render_performer.py:319` and `preview_glb.py:218`. The wave-10 census
+    # could not see these six because it recognised a refusal by the callee's NAME.
+    os.makedirs(out, exist_ok=True)
 
     payload = {
         "tool": "diagnose_bone_heat",
