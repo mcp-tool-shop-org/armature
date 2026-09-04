@@ -361,3 +361,67 @@ def test_a_zero_length_phase_raises():
         walk.GaitParams(n_decel=0)
     with pytest.raises(walk.WalkError):
         walk.GaitParams(steps=0)
+
+
+# ------------------------------------------- the stance fraction the model can represent
+#
+# F-39789a9e, fixed as the family. `_integrate_forward` injected psi = -1 (outgoing) and
+# psi = +1 (incoming) at every leg swap, `build_gait` offset the right leg by a literal
+# 0.5 of a cycle, and `hip_z` rode a single boolean stance leg - three expressions of one
+# unstated invariant, none derived from `stance_frac`, while `GaitParams` validated the
+# whole open interval. The honest repair is to refuse the values the model cannot
+# represent; a general gait derives the offset, a per-frame planted SET, double-support
+# blending and `hip_z` together, and does not exist yet.
+
+
+@pytest.mark.parametrize("sf", [0.35, 0.4, 0.45, 0.55, 0.6, 0.65])
+def test_a_stance_frac_the_model_cannot_represent_is_refused(sf):
+    with pytest.raises(walk.WalkError) as exc:
+        walk.GaitParams(stance_frac=sf)
+    assert "this gait model represents" in str(exc.value)
+    ev = exc.value.evidence
+    assert ev["flight_fraction_of_cycle"] == pytest.approx(2.0 * max(0.0, 0.5 - sf))
+    assert ev["double_support_fraction_of_cycle"] == pytest.approx(2.0 * max(0.0, sf - 0.5))
+
+
+def test_the_modelled_value_is_the_one_that_still_builds(performer):
+    assert walk.GaitParams(stance_frac=walk.STANCE_FRAC_MODELLED).stance_frac == 0.5
+    assert walk.build_gait(performer, walk.GaitParams())["frames"]
+
+
+def test_build_gait_refuses_a_stance_frac_mutated_after_construction(performer):
+    """The constructor is where the value enters; `build_gait` is the tool that performs
+    the step - it authors the ground truth every downstream measurement is graded against.
+    CLAUDE.md puts the andon inside that tool, so mutating the attribute afterwards does
+    not walk past the refusal."""
+    p = walk.GaitParams()
+    p.stance_frac = 0.4
+    with pytest.raises(walk.WalkError) as exc:
+        walk.build_gait(performer, p)
+    assert "build_gait" in str(exc.value)
+
+
+def _planted(u, sf):
+    """(L planted, R planted) at cycle position u, straight off the model's own rule."""
+    return (u < sf), (((u + 0.5) % 1.0) < sf)
+
+
+def test_exactly_one_leg_is_planted_at_every_sample_of_the_modelled_gait():
+    """The invariant the whole integrator rests on, and nothing stated it until now."""
+    sf = walk.STANCE_FRAC_MODELLED
+    for k in range(10000):                       # u in [0, 1), the model's own domain
+        u = k / 10000.0
+        assert sum(_planted(u, sf)) == 1, (u, _planted(u, sf))
+
+
+@pytest.mark.parametrize("sf", [0.35, 0.4, 0.45, 0.55, 0.6, 0.65])
+def test_the_refused_values_are_exactly_the_ones_that_break_that_invariant(sf):
+    """The refusal is a measurement, not a preference: at every refused value some sample
+    has two planted legs or none, which is the state `build_gait`'s single boolean
+    `stance_L` and `_integrate_forward`'s +/-1 endpoints cannot describe."""
+    counts = {sum(_planted(k / 10000.0, sf)) for k in range(10000)}
+    assert counts != {1}, sf
+    if sf < walk.STANCE_FRAC_MODELLED:
+        assert 0 in counts, "below 0.5 the model has flight frames with no planted foot"
+    else:
+        assert 2 in counts, "above 0.5 the model has double support it cannot attribute"

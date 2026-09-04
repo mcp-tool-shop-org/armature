@@ -77,7 +77,80 @@ HEAD_LANDMARK = {
 
 
 class WalkError(ValueError):
-    """The gait could not be built as specified."""
+    """The gait could not be built as specified.
+
+    Carries an `evidence` dict like `armature_core.errors.GateFailure` does, so a refusal
+    reports the measurement that fired it rather than only a sentence. It stays a
+    `ValueError` subclass because every existing caller and test catches it by that name.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+#: The ONLY stance fraction this gait model is written for, and the reason is structural
+#: rather than a preference. Three quantities in this module are three expressions of one
+#: unstated invariant, and none of them is derived from `stance_frac`:
+#:
+#: * `_leg_state`'s stance interval runs psi = +1 -> -1, and `_integrate_forward` splits
+#:   the exchange at the literal endpoints psi = -1 (outgoing) and psi = +1 (incoming).
+#:   Those are the true endpoints of a stance interval only when the exchange happens at
+#:   the instant one leg's stance ends and the other's begins.
+#: * `build_gait` offsets the right leg by a hard `+ 0.5` of a cycle.
+#: * `build_gait` derives the stance leg from a single boolean, and `hip_z` rides that
+#:   one leg's `cos(theta)`.
+#:
+#: Measured 2026-09-03 over 100,000 samples per cycle (L planted iff u < sf, R planted iff
+#: (u+0.5)%1 < sf): flight = 2*max(0, 0.5-sf) and double support = 2*max(0, sf-0.5). So
+#: exactly one foot is planted at every u ONLY at sf = 0.5. At sf = 0.4 the model spends
+#: 20.0% of the cycle with NO planted foot while `_integrate_forward` still credits the
+#: body's travel to an airborne leg (measured on a real build: 6 of 40 walk frames with no
+#: planted foot, first at frame 7, u = 0.443); at sf = 0.6 there is 10-20% double support
+#: whose attribution is arbitrary and L is always chosen. The visible symptom is in the
+#: authored ground truth itself: walk-phase d(hip_y) max/min was 1.019 at sf = 0.5, 2.593
+#: at sf = 0.6, and at sf = 0.4 the hips travel BACKWARD for one frame while the character
+#: walks forward.
+#:
+#: `_integrate_forward` CANNOT be repaired on its own - at sf = 0.4 the psi endpoint it
+#: would need does not exist, because at the exchange the incoming leg is not in stance at
+#: all. A general gait needs the contralateral offset, a per-frame planted SET, blending
+#: through double support, a refusal to integrate through flight, and `hip_z` taken from a
+#: planted leg - derived together or not at all. Until that model exists this module
+#: refuses the values it cannot represent, rather than silently baking a per-exchange
+#: lurch (or a reversal) into the ground truth with every gate green.
+STANCE_FRAC_MODELLED = 0.5
+
+
+def gate_stance_frac_is_modelled(stance_frac, where="GaitParams"):
+    """ANDON - refuse a stance fraction this gait model does not represent.
+
+    Raises `WalkError`; there is no flag, no environment escape and no `assert`. It is
+    called from `GaitParams.__init__` (where the value enters) and again from `build_gait`
+    (the tool that authors the ground truth), so mutating the attribute after construction
+    does not get past it.
+    """
+    sf = float(stance_frac)
+    if sf == STANCE_FRAC_MODELLED:
+        return {"gate": "GAIT", "stance_frac": sf, "where": where,
+                "verdict": f"stance_frac {sf} is the modelled gait"}
+    flight = 2.0 * max(0.0, STANCE_FRAC_MODELLED - sf)
+    double = 2.0 * max(0.0, sf - STANCE_FRAC_MODELLED)
+    raise WalkError(
+        f"stance_frac={sf} ({where}); this gait model represents "
+        f"stance_frac={STANCE_FRAC_MODELLED} and nothing else. At {sf} the cycle carries "
+        f"{flight * 100:.1f}% flight (no foot planted) and {double * 100:.1f}% double "
+        f"support, while the contralateral offset is pinned at half a cycle, the stance "
+        f"exchange is split at the literal psi endpoints -1/+1, the integrator picks its "
+        f"stance leg from a single boolean and hip_z rides that leg alone. None of those "
+        f"four is derived from stance_frac, so the value would be accepted and a "
+        f"per-exchange lurch - or, below 0.5, a frame of BACKWARD hip travel - would be "
+        f"baked into the authored ground truth every downstream measurement is graded "
+        f"against, with every gate green. A general gait derives all four together; until "
+        f"it exists this refuses rather than pretending",
+        {"gate": "GAIT", "stance_frac": sf, "modelled": STANCE_FRAC_MODELLED,
+         "flight_fraction_of_cycle": flight, "double_support_fraction_of_cycle": double,
+         "where": where})
 
 
 # ------------------------------------------------------------------ small numerics
@@ -171,8 +244,10 @@ class GaitParams:
         if not 0.0 < self.stance_frac < 1.0:
             raise WalkError(
                 f"stance_frac={self.stance_frac}; a leg must spend part of the cycle on "
-                f"the ground and part of it in the air"
+                f"the ground and part of it in the air",
+                {"stance_frac": self.stance_frac},
             )
+        gate_stance_frac_is_modelled(self.stance_frac, where="GaitParams")
 
     @property
     def n_frames(self):
@@ -335,6 +410,10 @@ def _integrate_forward(performer, p, phase, speed, legs):
             amp_mid = 0.5 * (amp_a + amp_b)
             out_key = "psi_L" if a["stance_L"] else "psi_R"
             in_key = "psi_L" if b["stance_L"] else "psi_R"
+            # FAMILY SITE 1 of STANCE_FRAC_MODELLED: -1 and +1 are the endpoints of a
+            # stance interval only when the exchange is the instant one leg's stance ends
+            # and the other's begins. This site cannot be repaired alone - see the
+            # constant's note.
             y += -L * (s_of(-1.0, amp_mid) - s_of(a[out_key], amp_a))
             y += -L * (s_of(b[in_key], amp_b) - s_of(1.0, amp_mid))
         ys.append(y)
@@ -349,6 +428,13 @@ def build_gait(performer, params):
     the same floats, which is what `tests/test_walk.py::test_determinism` pins.
     """
     p = params
+    # The refusal below is the same one GaitParams' constructor makes, repeated here
+    # because THIS is the tool that performs the step - authoring the ground truth every
+    # downstream measurement is graded against. A params object whose `stance_frac` was
+    # mutated after construction would otherwise walk straight past the constructor's
+    # check, and CLAUDE.md puts the andon inside the tool that performs the step.
+    gate_stance_frac_is_modelled(getattr(p, "stance_frac", STANCE_FRAC_MODELLED),
+                                 where="build_gait")
     fy = performer.facing_y_sign
     lx = performer.left_x_sign
     L = performer.leg_length
@@ -363,6 +449,8 @@ def build_gait(performer, params):
     for i in range(n):
         u_L = (phase[i] / (2.0 * math.pi)) % 1.0
         psi_L, kn_L, stance_L = _leg_state(u_L, p.stance_frac)
+        # FAMILY SITE 2 of STANCE_FRAC_MODELLED: the contralateral offset is the literal
+        # 0.5, not a quantity derived from `stance_frac`.
         psi_R, kn_R, _ = _leg_state((u_L + 0.5) % 1.0, p.stance_frac)
         legs.append({"u_L": u_L, "psi_L": psi_L, "psi_R": psi_R,
                      "kn_L": kn_L, "kn_R": kn_R, "stance_L": stance_L})
@@ -395,6 +483,8 @@ def build_gait(performer, params):
 
         # ---- vertical bob and lateral sway, both from the character's own geometry.
         # The hip rides the stance leg: it is highest when that leg is vertical.
+        # FAMILY SITE 3 of STANCE_FRAC_MODELLED: one boolean, so `th_stance` is a single
+        # leg's angle. Correct only while exactly one leg is planted at every u.
         th_stance = th_hip_L if stance_L else th_hip_R
         hip_z = L * (math.cos(math.radians(th_stance)) - 1.0)
         hip_x = (p.sway_frac * performer.hip_half_separation * lx * amp
