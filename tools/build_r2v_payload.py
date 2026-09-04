@@ -250,9 +250,12 @@ def main(argv=None):
             wf, len(upload_names), cascade_ids["groups"], CASCADE.FINAL_BATCH_ID,
             CASCADE.VIDEO_ID, R2V_ID, "model.reference_videos.video1",
             group_size=a.group, expected_sources=list(ordered_ids))
+        # `strict=True` — see the same pairing in `build_cascade_payload` (wave 8,
+        # F-ad45bc42): an un-strict zip truncates to the shorter of the two and hands the
+        # gate a plan that does not cover the clip. This is the arm that spends.
         slot_plan = [(gid, start, stop) for (start, stop), gid
                      in zip(AS.cascade_plan(len(upload_names), a.group),
-                            cascade_ids["groups"])]
+                            cascade_ids["groups"], strict=True)]
         gates["CASCADE_slot_frame_index"] = CASCADE.gate_slot_frame_index(
             wf, upload_names, slot_plan, CASCADE.FIRST_IMAGE_ID)
         shared_params = {"expected_sources_first_image_id": CASCADE.FIRST_IMAGE_ID,

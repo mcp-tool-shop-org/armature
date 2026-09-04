@@ -159,8 +159,12 @@ def main(argv=None):
     gate_topo = AS.gate_cascade_topology(wf, len(names), group_ids, FINAL_BATCH_ID,
                                          VIDEO_ID, SAVE_ID, "video", group_size=a.group,
                                          expected_sources=list(ordered_ids))
+    # `strict=True`: an un-strict zip truncates to the shorter of the two, so a plan one
+    # group short is silently produced and `gate_slot_frame_index` used to return its green
+    # sentence having inspected 54 of 81 slots (wave 8, F-ad45bc42). The gate carries its
+    # own coverage clause now; this is the pairing refusing to build the short plan at all.
     slot_plan = [(gid, start, stop) for (start, stop), gid
-                 in zip(AS.cascade_plan(len(names), a.group), group_ids)]
+                 in zip(AS.cascade_plan(len(names), a.group), group_ids, strict=True)]
     gate_index = gate_slot_frame_index(wf, names, slot_plan, FIRST_IMAGE_ID)
     # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no
     # noise-bearing node at all, so the seed clause has nothing to decide, and a green

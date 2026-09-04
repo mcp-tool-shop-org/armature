@@ -154,9 +154,56 @@ def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
     today — but this gate is exported for standalone use, and a verdict naming a property
     no code checked is this repo's named worst class.
     """
-    ev = {"gate": "ASSEMBLY_slot_frame_index", "n_frames": len(names),
-          "first_image_id": int(first_image_id),
+    ev = {"gate": "ASSEMBLY_slot_frame_index", "andon": "slot_frame_index",
+          "n_frames": len(names), "first_image_id": int(first_image_id),
           "slot_plan": [[str(nid), int(start), int(stop)] for nid, start, stop in slot_plan]}
+
+    # ---- COVERAGE, wave 8 (F-ad45bc42). The population came from the CALLER's plan and no
+    # clause required that plan to cover the clip, so the gate returned a PASS verdict
+    # having inspected any number of slots INCLUDING ZERO — and the verdict string printed
+    # both numbers side by side with nothing comparing them. Measured 2026-09-04 on the
+    # real 81-frame cascade graph from `build_cascade_payload.build(names, fps=16.0,
+    # group_size=AS.GROUP_SIZE)` (3 group nodes): the full plan returned "…81 slot(s)
+    # inspected against a clip of 81 frame(s)"; `slot_plan=[]` returned "every slot across
+    # 0 batch node(s) holds the upload name of its own frame index, 0 slot(s) inspected
+    # against a clip of 81 frame(s)"; a ONE-GROUP plan returned the same green sentence at
+    # 27 of 81; and a plan ONE GROUP SHORT — the shape an un-strict `zip` produces —
+    # returned it at 54 of 81. No clause fired in any of the three. Both production call
+    # sites build the plan through a `zip` (`build_cascade_payload.py:163`,
+    # `build_r2v_payload.py:254`), which truncates to the shorter of `cascade_plan(...)` and
+    # the group-id list rather than raising; both pass `strict=True` now, and this clause is
+    # the andon that does not depend on them doing so.
+    covered, overlapping, gaps = set(), set(), []
+    cursor = 0
+    for nid, start, stop in slot_plan:
+        start, stop = int(start), int(stop)
+        if stop <= start:
+            gaps.append(f"node {nid} is planned an empty or reversed span [{start}, {stop})")
+        if start != cursor:
+            gaps.append(f"node {nid}'s span starts at {start}, and the plan's previous "
+                        f"span ended at {cursor}; the plan is not contiguous")
+        for frame in range(start, stop):
+            (overlapping if frame in covered else covered).add(frame)
+        cursor = max(cursor, stop)
+    missing = sorted(set(range(len(names))) - covered)
+    outside = sorted(f for f in covered if f >= len(names))
+    if gaps or missing or overlapping or outside:
+        ev.update({"frames_planned": len(covered), "frames_in_clip": len(names),
+                   "frames_never_planned": missing[:12],
+                   "frames_planned_twice": sorted(overlapping)[:12],
+                   "frames_planned_past_the_clip": outside[:12],
+                   "coverage_problems": gaps})
+        raise AS.AssemblyGate(
+            f"the slot plan does not cover the clip: {len(covered)} of {len(names)} "
+            f"frame(s) are planned onto a batch node"
+            + (f", {len(missing)} never ({missing[:6]}…)" if missing else "")
+            + (f", {len(overlapping)} twice" if overlapping else "")
+            + (f", {len(outside)} past the end of the clip" if outside else "")
+            + ("; " + "; ".join(gaps[:4]) if gaps else "")
+            + ". A gate whose population is the caller's plan reports what it inspected, "
+              "not what the clip needed, and a swap inside an unplanned group ships as an "
+              "out-of-order clip", ev)
+
     problems, inspected = [], 0
     for nid, start, stop in slot_plan:
         span = int(stop) - int(start)
@@ -192,6 +239,11 @@ def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
                     f"node {nid} slot {k} resolves to {got!r} via {src!r}; frame {frame} "
                     f"of the clip is {want!r}")
     ev["slots_inspected"] = inspected
+    ev["frames_in_clip"] = len(names)
+    if inspected != len(names):
+        problems.append(f"{inspected} slot(s) were inspected against a clip of "
+                        f"{len(names)} frame(s); the two numbers are the gate's whole "
+                        f"claim and they must be the same number")
     if problems:
         ev["problems"] = problems
         raise AS.AssemblyGate(

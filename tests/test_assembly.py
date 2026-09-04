@@ -567,3 +567,122 @@ def test_the_verdict_reports_what_was_inspected_not_the_length_of_the_clip():
     ev = B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0, 6)], B.FIRST_IMAGE_ID)
     assert ev["slots_inspected"] == 6
     assert "6 slot(s) inspected" in ev["verdict"]
+
+
+# ------------- the plan must COVER the clip (wave 8, F-ad45bc42)
+
+
+def _cascade81():
+    """The real 81-frame cascade graph and its full, correct slot plan.
+
+    `build_cascade_payload.build` is the production constructor; `AS.cascade_plan` is what
+    both production call sites pair with the group ids. Deriving the fixture from them
+    rather than typing spans keeps this test measuring the shipped shapes.
+    """
+    import build_cascade_payload as C
+
+    names = [f"{i:064x}.png" for i in range(81)]
+    wf, gids = C.build(names, fps=16.0, group_size=AS.GROUP_SIZE)
+    plan = [(gid, start, stop) for (start, stop), gid
+            in zip(AS.cascade_plan(len(names), AS.GROUP_SIZE), gids, strict=True)]
+    return C, names, wf, plan
+
+
+def test_the_full_plan_still_passes_and_says_what_it_inspected():
+    """The mutation that must NOT fire the coverage clause: the plan the production call
+    sites actually build."""
+    C, names, wf, plan = _cascade81()
+    ev = C.gate_slot_frame_index(wf, names, plan, C.FIRST_IMAGE_ID)
+    assert ev["slots_inspected"] == 81
+    assert ev["frames_in_clip"] == 81
+    assert "81 slot(s) inspected against a clip of 81 frame(s)" in ev["verdict"]
+
+
+@pytest.mark.parametrize("keep,inspected", [(0, 0), (1, 27), (2, 54)])
+def test_a_plan_that_does_not_cover_the_clip_is_refused(keep, inspected):
+    """The finding. The gate took its population from the caller's `slot_plan` and imposed
+    no clause requiring that plan to cover the clip, so it returned a PASS verdict having
+    inspected any number of slots INCLUDING ZERO — while the verdict string printed both
+    numbers side by side ("{inspected} slot(s) inspected against a clip of {len(names)}
+    frame(s)") with nothing comparing them.
+
+    Measured 2026-09-04 on this exact 81-frame graph before the clause: `slot_plan=[]`
+    returned "every slot across 0 batch node(s) holds the upload name of its own frame
+    index, 0 slot(s) inspected against a clip of 81 frame(s)"; a one-group plan returned
+    the same green sentence at 27 of 81; and a plan ONE GROUP SHORT — the shape an
+    un-strict `zip` produces — returned it at 54 of 81.
+
+    The two-group case is the reachable one: both production call sites build the plan
+    through a `zip` of `cascade_plan(...)` against the group-id list, and `build_r2v_payload`
+    is the arm that spends.
+    """
+    C, names, wf, plan = _cascade81()
+    with pytest.raises(AS.AssemblyGate) as exc:
+        C.gate_slot_frame_index(wf, names, plan[:keep], C.FIRST_IMAGE_ID)
+    ev = exc.value.evidence
+    assert ev["frames_planned"] == inspected
+    assert ev["frames_in_clip"] == 81
+    assert len(ev["frames_never_planned"]) > 0
+    assert "does not cover the clip" in str(exc.value)
+
+
+def test_a_plan_with_a_hole_in_the_middle_is_refused():
+    """A gap between two spans: every slot the plan names holds its own frame, and 27
+    frames of the clip were never looked at."""
+    C, names, wf, plan = _cascade81()
+    holed = [plan[0], plan[2]]
+    with pytest.raises(AS.AssemblyGate) as exc:
+        C.gate_slot_frame_index(wf, names, holed, C.FIRST_IMAGE_ID)
+    assert exc.value.evidence["frames_never_planned"][0] == 27
+    assert any("not contiguous" in p for p in exc.value.evidence["coverage_problems"])
+
+
+def test_a_plan_that_covers_a_frame_twice_is_refused():
+    """The other direction. Two spans over the same frames is not a clip this gate can
+    vouch for either, and it used to inspect 108 slots against a clip of 81 and pass."""
+    C, names, wf, plan = _cascade81()
+    doubled = list(plan) + [plan[0]]
+    with pytest.raises(AS.AssemblyGate) as exc:
+        C.gate_slot_frame_index(wf, names, doubled, C.FIRST_IMAGE_ID)
+    assert exc.value.evidence["frames_planned_twice"]
+
+
+def test_a_plan_that_runs_past_the_end_of_the_clip_is_refused():
+    C, names, wf, plan = _cascade81()
+    over = list(plan[:-1]) + [(plan[-1][0], plan[-1][1], 200)]
+    with pytest.raises(AS.AssemblyGate) as exc:
+        C.gate_slot_frame_index(wf, names, over, C.FIRST_IMAGE_ID)
+    assert exc.value.evidence["frames_planned_past_the_clip"]
+
+
+def test_both_production_call_sites_pair_the_plan_STRICTLY():
+    """The un-strict `zip` is what silently produced a short plan. Both call sites pass
+    `strict=True` now, so the pairing raises rather than truncating.
+
+    family: derived by AST over every `tools/*.py` call to `AS.cascade_plan` paired with a
+    group-id list under `zip` -> 2 sites — tools/build_cascade_payload.py,
+    tools/build_r2v_payload.py (the third reader, tools/build_assembly_payload.py, does not
+    zip: it plans one batch node).
+    """
+    import ast
+
+    sites = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name) and node.func.id == "zip"):
+                continue
+            if "cascade_plan" not in ast.get_source_segment(src, node):
+                continue
+            sites.append((name, [kw.arg for kw in node.keywords]))
+    assert [s[0] for s in sites] == ["build_cascade_payload.py", "build_r2v_payload.py"], sites
+    for name, kwargs in sites:
+        assert "strict" in kwargs, f"{name} pairs cascade_plan with an un-strict zip"
+
+    # And the pairing really does raise on a mismatched length, rather than truncating.
+    with pytest.raises(ValueError):
+        list(zip(AS.cascade_plan(81, AS.GROUP_SIZE), ["400", "401"], strict=True))
