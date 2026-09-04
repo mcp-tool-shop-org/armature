@@ -671,7 +671,8 @@ def test_the_two_artifacts_never_share_a_path_and_the_gate_says_so(tmp_path):
     BEFORE either write and before `os.makedirs`, so a refusal leaves no run directory —
     the invariant `build_payload` already states for Gate CANON."""
     out = tmp_path / "fresh" / "payload.json"
-    with pytest.raises(bp.PayloadOutHalt) as exc:
+    with pytest.raises(bp.PayloadOutHalt,
+                       match=r"the graph and its record would both be written to") as exc:
         bp.gate_out_paths(str(out), meta_suffix=".json")
     assert exc.value.evidence["out"] == exc.value.evidence["meta"]
     assert exc.value.evidence["clause"] == "meta_path_equals_graph_path"
@@ -682,7 +683,8 @@ def test_the_gate_is_reachable_from_main_and_leaves_no_directory(tmp_path, monke
     """The gate lives inside the tool that performs the write, not beside it."""
     monkeypatch.setattr(bp, "META_SUFFIX", ".json")
     out = tmp_path / "fresh" / "payload.json"
-    with pytest.raises(bp.PayloadOutHalt):
+    with pytest.raises(bp.PayloadOutHalt,
+                       match=r"the graph and its record would both be written to"):
         bp.main(_e03_argv(out))
     assert not out.parent.exists()
 

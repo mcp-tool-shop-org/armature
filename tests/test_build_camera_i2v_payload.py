@@ -27,8 +27,40 @@ POS, NEG = "a jointed clay mannequin. He is dancing. Behind him, a bar.", "blurr
 E11_SEEDS = [2026081231, 2026081232, 2026081233]
 
 
+def authored_start_frame(directory, name="w3_start.png", size=(B.WIDTH, B.HEIGHT)):
+    """A real PNG on disk, written by the repo's own dependency-free writer.
+
+    Carried from `tests/test_build_i2v_payload._authored_start_frame` — the sibling that
+    already needed one. `resolve_start_frame` REFUSES a file whose IHDR it cannot read
+    (wave 12, F-08853dfb), so a fixture standing in for the route's whole conditioning has
+    to be an actual image rather than a handful of bytes beginning with the signature.
+    """
+    import numpy as np
+
+    from armature_core import pngio
+
+    path = os.path.join(str(directory), name)
+    pngio.write_png(path, np.zeros((size[1], size[0], 3), dtype="uint8"))
+    return path
+
+
+_RESOLVED = {}
+
+
+def resolved_start_frame(size=(B.WIDTH, B.HEIGHT)):
+    """A resolved start frame at a given authored size, built once per size."""
+    import tempfile
+
+    if size not in _RESOLVED:
+        d = tempfile.mkdtemp()
+        _RESOLVED[size] = B.resolve_start_frame(
+            authored_start_frame(d, f"start_{size[0]}x{size[1]}.png", size), None)
+    return _RESOLVED[size]
+
+
 def built(**kw):
     kw.setdefault("registry", E11_SEEDS)
+    kw.setdefault("start_frame", resolved_start_frame())
     return B.build(UPLOADS, kw.pop("seed", E11_SEEDS[2]), kw.pop("negative", NEG),
                    kw.pop("positive", POS), kw.pop("registry"), **kw)
 
@@ -603,7 +635,7 @@ def test_omitting_the_seed_with_no_registry_names_the_missing_flag():
 
 def test_the_start_frame_hash_is_computed_from_the_file_not_typed(tmp_path):
     f = tmp_path / "start.png"
-    f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"pixels")
+    authored_start_frame(tmp_path, "start.png")
     ev = B.resolve_start_frame(str(f), None)
     assert ev["sha256"] == hashlib.sha256(f.read_bytes()).hexdigest()
     assert ev["source"] == "hashed_in_tool"
@@ -621,7 +653,7 @@ def test_a_declared_hash_that_disagrees_with_the_file_raises(tmp_path):
     """The mutation that proves the cross-check can fire: an operator-typed sha that is not
     the file's. Before this, a typed value was simply stored."""
     f = tmp_path / "start.png"
-    f.write_bytes(b"pixels")
+    authored_start_frame(tmp_path, "start.png")
     with pytest.raises(B.PayloadError) as exc:
         B.resolve_start_frame(str(f), "0" * 64)
     assert "does not hash to" in str(exc.value)
@@ -629,8 +661,8 @@ def test_a_declared_hash_that_disagrees_with_the_file_raises(tmp_path):
 
 def test_a_declared_hash_that_agrees_is_recorded_as_confirmed(tmp_path):
     f = tmp_path / "start.png"
-    f.write_bytes(b"pixels")
-    digest = hashlib.sha256(b"pixels").hexdigest()
+    authored_start_frame(tmp_path, "start.png")
+    digest = hashlib.sha256(f.read_bytes()).hexdigest()
     ev = B.resolve_start_frame(str(f), digest)
     assert ev["source"] == "hashed_in_tool_and_confirmed_against_the_declared_value"
 
@@ -720,3 +752,149 @@ def test_every_payload_error_in_this_tree_can_carry_its_evidence():
         assert err.evidence == {"gate": "X", "measured": 1}, name
         assert mod.PayloadError("a message").evidence == {}, name
         assert str(err) == "a message", name
+
+
+# ------------------------------------------------- wave 12: the `start_image` block is MEASURED
+# F-d979ec52. The payload record for E11 wave 3 — the provenance of a paid generation —
+# stated in `start_image.fit` that the conditioning frame was "native — authored at 832x480,
+# the same upload wave 1 ran", while the SAME record carried
+# `DELIBERATE_BREAKS["resolution"] = wave_1 [832,480] -> wave_3 [1024,576]` and
+# `DELIBERATE_BREAKS["start_frame_pixels"] = "1024x576, authored RGBA"`. Two fields of one
+# record disagreed about the load-bearing conditioning input, and a reader who took the
+# `fit` line would conclude the resolution correction did not happen — the exact failure
+# `ledger_against_wave1` says it exists to refuse.
+#
+# The measurement that settles it already existed here (`png_header` / `resolve_start_frame`)
+# and reached only `gate_ledger["start_frame"]["wave_3_local"]`. Measured by grep on
+# 2026-09-04: `fit_agrees_with_the_file` occurred at build_i2v_payload.py:449 and NOWHERE in
+# this module — the sibling that IMPORTS this module's `resolve_start_frame` carried the
+# comparison and the module that owns the function did not.
+#
+# family: keyed on the RECORD FIELD (`meta["start_image"]`) of every builder whose graph
+# conditions on one uploaded start image, via the two-module family
+# `test_both_i2v_builders_declare_the_same_two_start_frame_flags` already derives from the
+# parsers -> 2 sites: build_i2v_payload.py (had the comparison), build_camera_i2v_payload.py
+# (asserted prose). One implementation now: `build_i2v_payload.start_image_record`, called by
+# both. It lives in the sibling because this module imports that one at module scope
+# (`import build_i2v_payload as W1`) and the reverse direction is a cycle.
+
+
+def test_the_start_image_block_carries_the_files_own_measurement():
+    start = built()[1]["start_image"]
+    assert start["measured"]["width"] == B.WIDTH
+    assert start["measured"]["height"] == B.HEIGHT
+    assert start["sha256"] == resolved_start_frame()["sha256"]
+    assert start["path"] == resolved_start_frame()["path"]
+    assert start["fit_agrees_with_the_file"] is True
+
+
+def test_a_start_frame_authored_at_wave_ones_resolution_reads_FALSE():
+    """The mutation the block exists to catch, and the one that actually happened: wave 1's
+    832x480 frame handed to a wave that generates at 1024x576. The prose `fit` line was
+    unchanged by it."""
+    wrong = resolved_start_frame(size=(832, 480))
+    start = built(start_frame=wrong)[1]["start_image"]
+    assert start["fit_agrees_with_the_file"] is False
+    assert start["measured"]["width"] == 832
+
+
+def test_the_fit_sentence_names_THIS_waves_resolution_not_wave_ones():
+    """The `fit` line said 832x480 in a record whose own `DELIBERATE_BREAKS` says the
+    resolution moved to 1024x576."""
+    meta = built()[1]
+    fit = meta["start_image"]["fit"]
+    assert f"{B.WIDTH}x{B.HEIGHT}" in fit
+    assert "the same upload wave 1 ran" not in fit
+    assert meta["resolution"] == [B.WIDTH, B.HEIGHT]
+
+
+def test_build_refuses_to_emit_a_payload_with_no_resolved_start_frame():
+    """The sibling's andon, carried: on a route whose start image is the whole of the
+    conditioning, a record that cannot name its bytes is not a recipe. The clause lives
+    inside `build`, not in `main`, so an in-process caller cannot route around it."""
+    with pytest.raises(B.PayloadError, match="needs the resolved start frame"):
+        B.build(UPLOADS, E11_SEEDS[2], NEG, POS, E11_SEEDS, start_frame=None)
+
+
+def test_build_refuses_a_start_frame_whose_pixels_were_never_read():
+    """The `None if not start_frame.get("image")` degradation, closed at both ends: the
+    resolver refuses a file it could not open, and `build` refuses an evidence dict that
+    carries no measurement, so `fit_agrees_with_the_file` can never be a null on the one
+    input that most needs it."""
+    unmeasured = dict(resolved_start_frame(), image=None)
+    with pytest.raises(B.PayloadError, match="carries no measurement") as exc:
+        B.build(UPLOADS, E11_SEEDS[2], NEG, POS, E11_SEEDS, start_frame=unmeasured)
+    assert exc.value.evidence["andon"] == "start_frame"
+
+
+def test_both_i2v_builders_read_the_start_image_block_through_ONE_implementation():
+    """One implementation, named. Four copies of a three-line record shape is how the
+    comparison came to exist in one of the two modules and not the other."""
+    import ast
+
+    from conftest import TOOLS
+
+    callers = []
+    for name in ("build_i2v_payload.py", "build_camera_i2v_payload.py"):
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        for node in ast.walk(tree):
+            fn = node.func if isinstance(node, ast.Call) else None
+            attr = getattr(fn, "attr", None) or getattr(fn, "id", None)
+            if attr == "start_image_record":
+                callers.append(name)
+                break
+    assert callers == ["build_i2v_payload.py", "build_camera_i2v_payload.py"], callers
+
+
+# ------------------------------------ wave 12: a start frame that is not a PNG is REFUSED
+# F-08853dfb. `png_header` returns None for anything without an IHDR, `resolve_start_frame`
+# stored that as `image: None` with no clause, and `build`'s only start-frame requirement
+# was `start_frame.get("sha256")` — so a 403-byte file with a JPEG header was ACCEPTED as
+# the entire conditioning of an i2v route, `BUILD_I2V_OK` was printed, and the record's
+# `fit` sentence stood unchallenged beside `fit_agrees_with_the_file: null`. Wave 10's
+# stated purpose for opening the file was that `fit` "becomes a measurement instead of a
+# claim"; on that input the measurement was absent and the claim survived.
+#
+# family: keyed on the RESOLVER both routes reach (this module's `resolve_start_frame`,
+# which `build_i2v_payload.resolve_start_frame` carries) -> 1 implementation, 2 routes.
+
+
+def test_a_start_frame_whose_IHDR_cannot_be_read_is_REFUSED(tmp_path):
+    junk = tmp_path / "start.png"
+    junk.write_bytes(bytes.fromhex("ffd8ffe0") + b"0123456789" * 40)   # a JPEG header
+    with pytest.raises(B.PayloadError, match="is not a PNG this tool can read") as exc:
+        B.resolve_start_frame(str(junk), None)
+    ev = exc.value.evidence
+    assert ev["path"] == os.path.abspath(str(junk))
+    assert ev["first_8_bytes"] == junk.read_bytes()[:8].hex()
+    assert ev["clause"] == "start_frame_not_a_png"
+
+
+def test_a_file_too_short_to_hold_an_IHDR_is_REFUSED(tmp_path):
+    """The shape wave 10's own fixtures used: the 8-byte signature and nothing else. The
+    reader returns None for it, and returning None used to be the end of the matter."""
+    stub = tmp_path / "start.png"
+    stub.write_bytes(bytes.fromhex("89504e470d0a1a0a") + b"pixels")
+    assert B.png_header(str(stub)) is None
+    with pytest.raises(B.PayloadError, match="is not a PNG this tool can read"):
+        B.resolve_start_frame(str(stub), None)
+
+
+def test_the_refusal_reaches_the_OTHER_route_through_the_carried_resolver(tmp_path):
+    """`build_i2v_payload` re-raises the sibling's refusal in its own family with the
+    sibling named. The clause is one implementation and both routes are behind it."""
+    junk = tmp_path / "start.png"
+    junk.write_bytes(bytes.fromhex("ffd8ffe0") + b"not a png at all" * 8)
+    with pytest.raises(W1.PayloadError, match="is not a PNG this tool can read") as exc:
+        W1.resolve_start_frame(str(junk))
+    assert exc.value.evidence["carried_from"] == (
+        "build_camera_i2v_payload.resolve_start_frame")
+
+
+def test_the_reader_still_declines_to_GUESS_and_the_RESOLVER_is_what_refuses(tmp_path):
+    """The two jobs stay separate: `png_header` reports an absent measurement (None) rather
+    than an invented one, and the refusal lives in the resolver, which is the function a
+    route's conditioning actually passes through."""
+    junk = tmp_path / "x.png"
+    junk.write_bytes(b"this is not a png" * 4)
+    assert B.png_header(str(junk)) is None

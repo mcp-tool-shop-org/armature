@@ -302,6 +302,56 @@ def resolve_start_frame(path, declared_sha256=None):
              "carried_from": "build_camera_i2v_payload.resolve_start_frame"}) from exc
 
 
+
+def start_image_record(start_frame, server_name, width, height, fit, why=None):
+    """The `start_image` block of an i2v payload record — ONE implementation, two routes.
+
+    Wave 12, F-d979ec52. This shape existed twice and only one copy carried the comparison.
+    `build_camera_i2v_payload`, the module that OWNS `png_header` and `resolve_start_frame`,
+    wrote `{"server_name": …, "fit": "native — authored at 832x480, the same upload wave 1
+    ran"}` — an assertion about wave 1's resolution in a record whose own
+    `DELIBERATE_BREAKS["resolution"]` says the wave generates at 1024x576. Two fields of one
+    provenance record disagreed about the load-bearing conditioning input, and the
+    measurement that settles it was already in the tool, reaching only the ledger's evidence
+    dict. Measured by grep 2026-09-04: `fit_agrees_with_the_file` occurred in this module and
+    nowhere in the sibling that imports this module's resolver.
+
+    It lives HERE rather than in the module that owns the resolver because that module
+    imports this one at module scope (`import build_i2v_payload as W1`); the reverse
+    direction is a cycle, which is why its resolver is imported lazily inside
+    `resolve_start_frame` above.
+
+    `fit` is the route's own sentence about how the frame meets the generation's frame.
+    `fit_agrees_with_the_file` is the CHECK on it, and it is a boolean rather than a
+    tri-state: `resolve_start_frame` refuses a file whose IHDR it could not read
+    (F-08853dfb) and both builders refuse an evidence dict with no measurement, so the
+    `None if not start_frame.get("image")` degradation — a null on exactly the input that
+    most needs the comparison — has no input left to happen on.
+    """
+    measured = start_frame["image"]
+    rec = {
+        "server_name": server_name,
+        # ---- the LOCAL artifact, which these records could not name until wave 10.
+        "path": start_frame["path"],
+        "sha256": start_frame["sha256"],
+        "bytes": start_frame["bytes"],
+        "sha256_source": start_frame["source"],
+        "declared_sha256": start_frame.get("declared_sha256"),
+        # ---- and what it actually IS, read from the file's own header, so the `fit` line
+        # is checkable instead of asserted. The alpha field is the Director's 2026-08-12
+        # ruling made machine-readable: an authored input carries alpha, and the RGB
+        # composite the route submits is a recorded choice, never an accident.
+        "measured": measured,
+        "fit": fit,
+        "fit_agrees_with_the_file": (
+            [measured["width"], measured["height"]] == [width, height]),
+        "generation_frame": [width, height],
+    }
+    if why:
+        rec["why"] = why
+    return rec
+
+
 def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
           length=LENGTH, fps=FPS, start_frame=None):
     """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists."""
@@ -316,6 +366,20 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
             "`resolve_start_frame(path, declared)` and pass its evidence",
             {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
              "start_frame": start_frame})
+    # ---- and the measurement, not only the digest (wave 12, F-08853dfb). A record whose
+    # `fit` line is a sentence about an image nothing opened is the claim wave 10 set out to
+    # replace with a measurement; `resolve_start_frame` refuses a file it cannot read, and
+    # this refuses an evidence dict that reached here without one, so the comparison below
+    # cannot degrade to a null on the input that most needs it.
+    if not start_frame.get("image"):
+        raise PayloadError(
+            "the resolved start frame carries no measurement of its own pixels: this "
+            "route's whole conditioning is that one image, and `fit_agrees_with_the_file` "
+            "would be null on exactly the input the comparison exists for. Resolve it "
+            "through `resolve_start_frame`, which reads the file's IHDR and refuses a file "
+            "it cannot read",
+            {"gate": "PAYLOAD", "andon": "start_frame", "clause": "start_frame_unmeasured",
+             "flag": "--start-frame", "start_frame": start_frame})
     # ---- Gate ROUTE - ANDON on `CreateVideo.fps` (wave 10, F-29693a0e, family carry).
     # `--fps` reached the node with no clause in all five builders that take the flag,
     # while every one of their records states the node's measured contract as
@@ -432,29 +496,13 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
             "origin": "READ OFF the documented reference workflow, not solved"},
         "positive": positive,
         "negative": negative,
-        "start_image": {
-            "server_name": start_name,
-            # ---- the LOCAL artifact, which this record could not name until wave 10.
-            "path": start_frame["path"],
-            "sha256": start_frame["sha256"],
-            "bytes": start_frame["bytes"],
-            "sha256_source": start_frame["source"],
-            "declared_sha256": start_frame.get("declared_sha256"),
-            # ---- and what it actually IS, read from the file's own header, so the `fit`
-            # line below is checkable instead of asserted. The alpha field is the Director's
-            # 2026-08-12 ruling made machine-readable: an authored input carries alpha, and
-            # the RGB composite the route submits is a recorded choice, never an accident.
-            "measured": start_frame.get("image"),
-            "fit": "native — authored at 832x480",
-            "fit_agrees_with_the_file": (
-                None if not start_frame.get("image")
-                else [start_frame["image"]["width"],
-                      start_frame["image"]["height"]] == [WIDTH, HEIGHT]),
-            "why": ("no letterbox and no centre-crop: the frame is rendered at "
-                    "the generation's own size, so nothing resamples it. E08 "
-                    "measured what a mismatched aspect costs on the other "
-                    "route — WanAnimateToVideo kept 204 of its reference's "
-                    "1024 rows")},
+        "start_image": start_image_record(
+            start_frame, start_name, WIDTH, HEIGHT,
+            fit=f"native — authored at {WIDTH}x{HEIGHT}",
+            why=("no letterbox and no centre-crop: the frame is rendered at the "
+                 "generation's own size, so nothing resamples it. E08 measured what a "
+                 "mismatched aspect costs on the other route — WanAnimateToVideo kept 204 "
+                 "of its reference's 1024 rows")),
         "unconnected_inputs": {
             "clip_vision_output": ("unconnected in the documented reference workflow and "
                                    "unconnected here; a second image-conditioning channel "

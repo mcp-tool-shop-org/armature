@@ -29,19 +29,36 @@ E11_SEEDS = [2026081231, 2026081232, 2026081233]
 
 
 #: A resolved start frame, so every fixture below carries the control-input hash wave 10
-#: made mandatory (F-531c5f1f). The digest is over a real 2-byte file rather than a typed
-#: constant, because the whole point of the clause is that the tool hashes the artifact.
-_START_FRAME_BYTES = b"not-a-real-png-just-bytes-to-hash"
+#: made mandatory (F-531c5f1f). The digest is over a real file rather than a typed constant,
+#: because the whole point of the clause is that the tool hashes the artifact.
+#:
+#: Wave 12, F-08853dfb: the file is a real PNG now, resolved through the tool's own
+#: resolver. It used to be 33 bytes of ASCII with `image: None` typed beside it — a fixture
+#: standing in for the entire conditioning of an i2v route, shaped exactly like the input
+#: the resolver now refuses, and the reason every `built()` record in this module carried
+#: `fit_agrees_with_the_file: null` without a single test noticing.
+_RESOLVED = {}
 
 
-def _resolved_start_frame(tmp_factory=None):
-    import hashlib, tempfile
-    d = tempfile.mkdtemp()
-    path = os.path.join(d, "start.png")
-    with open(path, "wb") as fh:
-        fh.write(_START_FRAME_BYTES)
-    return {"path": path, "sha256": hashlib.sha256(_START_FRAME_BYTES).hexdigest(),
-            "bytes": len(_START_FRAME_BYTES), "source": "hashed_in_tool", "image": None}
+def _authored_start_frame(tmp_path, name="start.png", size=(832, 480)):
+    """A real PNG on disk, written by the repo's own dependency-free writer."""
+    import numpy as np
+
+    from armature_core import pngio
+
+    path = os.path.join(str(tmp_path), name)
+    pngio.write_png(path, np.zeros((size[1], size[0], 3), dtype="uint8"))
+    return path
+
+
+def _resolved_start_frame(size=(B.WIDTH, B.HEIGHT)):
+    import tempfile
+
+    if size not in _RESOLVED:
+        d = tempfile.mkdtemp()
+        _RESOLVED[size] = B.resolve_start_frame(
+            _authored_start_frame(d, f"start_{size[0]}x{size[1]}.png", size))
+    return _RESOLVED[size]
 
 
 def built(**kw):
@@ -382,17 +399,6 @@ def test_omitting_the_seed_with_no_registry_names_the_missing_flag():
 # that would show a run was not comparable to the previous one.
 
 
-def _authored_start_frame(tmp_path, name="start.png", size=(832, 480)):
-    """A real PNG on disk, written by the repo's own dependency-free writer."""
-    import numpy as np
-
-    from armature_core import pngio
-
-    path = tmp_path / name
-    pngio.write_png(str(path), np.zeros((size[1], size[0], 3), dtype="uint8"))
-    return path
-
-
 def test_omitting_the_start_frame_flag_RAISES(tmp_path):
     """The sibling's clause, carried: a record that cannot name the bytes of the one image
     the generation is conditioned on is not a recipe."""
@@ -427,7 +433,8 @@ def test_a_declared_digest_that_AGREES_is_recorded_as_confirmed(tmp_path):
     import hashlib
 
     path = _authored_start_frame(tmp_path)
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    with open(path, "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()
     ev = B.resolve_start_frame(str(path), digest.upper())
     assert ev["sha256"] == digest
     assert ev["source"].endswith("confirmed_against_the_declared_value")
@@ -480,16 +487,48 @@ def test_the_record_says_whether_the_authored_input_carried_ALPHA(tmp_path):
 
 def test_the_png_header_reader_refuses_to_guess_at_a_non_png(tmp_path):
     """A file that is not a PNG returns None rather than a plausible dict — an absent
-    measurement, not an invented one. On a route whose whole conditioning is this image,
-    that is itself worth recording."""
+    measurement, not an invented one.
+
+    **Wave 12, F-08853dfb — the second half of this test used to be the defect.** It read
+    `assert built(start_frame=ev)[1]["start_image"]["fit_agrees_with_the_file"] is None`:
+    the reader declined to guess, the resolver stored the None with no clause, and the build
+    PROCEEDED, so a file with a JPEG header rode this route as the whole of its conditioning
+    under a printed BUILD_I2V_OK while the record's asserted `fit` sentence stood beside a
+    null comparison. The reader's job is unchanged; the RESOLVER refuses now."""
     import build_camera_i2v_payload as CAM
 
     junk = tmp_path / "not.png"
     junk.write_bytes(b"this is not a png" * 4)
     assert CAM.png_header(str(junk)) is None
-    ev = B.resolve_start_frame(str(junk))
-    assert ev["image"] is None
-    assert built(start_frame=ev)[1]["start_image"]["fit_agrees_with_the_file"] is None
+    with pytest.raises(B.PayloadError, match="is not a PNG this tool can read") as exc:
+        B.resolve_start_frame(str(junk))
+    assert exc.value.evidence["carried_from"] == (
+        "build_camera_i2v_payload.resolve_start_frame")
+
+
+def test_a_start_frame_the_tool_could_not_open_never_reaches_a_RECORD(tmp_path):
+    """The whole chain, on the input the finding measured: a 403-byte file whose first
+    bytes are a JPEG header. It used to be ACCEPTED, with `image: None` in the evidence and
+    a null in the record."""
+    junk = tmp_path / "start.png"
+    junk.write_bytes(bytes.fromhex("ffd8ffe0") + b"0123456789" * 40)
+    with pytest.raises(B.PayloadError, match="is not a PNG this tool can read"):
+        B.resolve_start_frame(str(junk))
+
+
+def test_build_refuses_an_evidence_dict_that_carries_no_measurement():
+    """The in-process door the resolver's refusal does not cover. `build`'s only start-frame
+    requirement was `start_frame.get("sha256")`."""
+    unmeasured = dict(_resolved_start_frame(), image=None)
+    with pytest.raises(B.PayloadError, match="carries no measurement") as exc:
+        built(start_frame=unmeasured)
+    assert exc.value.evidence["clause"] == "start_frame_unmeasured"
+
+
+def test_the_record_never_carries_a_NULL_agreement_flag(tmp_path):
+    """`None if not start_frame.get("image") else [...]` degraded the one comparison on
+    exactly the input that most needed it. With both doors closed the flag is a boolean."""
+    assert built()[1]["start_image"]["fit_agrees_with_the_file"] in (True, False)
 
 
 def test_both_i2v_builders_declare_the_same_two_start_frame_flags():

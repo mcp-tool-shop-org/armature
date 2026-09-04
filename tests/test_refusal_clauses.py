@@ -164,6 +164,11 @@ RECORDED_POPULATION = frozenset({
     # (`ABClipError` is raised from exactly one site, so its name IS its clause and the
     # derivation deliberately leaves it out.)
     "ReviewClipError", "SheetPopulationError", "ShotsetSheetError", "ZoomSheetError",
+    # Joined 2026-09-04 (wave 12, builders, F-4f72af05). `build_payload.PayloadOutHalt` is
+    # the andon on the direction the sidecar-path derivation does not bound: the graph and
+    # its record colliding on one path. Two raise sites in `gate_out_paths`, so its name is
+    # not its clause and each site needs a distinguishing phrase.
+    "PayloadOutHalt",
 })
 
 #: Re-derived 2026-09-04 and EMPTY. There is no class this census excuses: a class raised
@@ -196,7 +201,11 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # 71 + 2 + 3 = 76; instruments-measure's branch added `ReviewClipError`, `ShotsetSheetError`,
     # `ZoomSheetError` (new classes) and `SheetPopulationError` (crossed to two sites):
     # 76 + 4 = 80, MEASURED on the merged tree.
-    assert len(POLICED) == 80, sorted(POLICED)
+    # WAVE 12 (builders, F-4f72af05): `build_payload.PayloadOutHalt` — the andon on the
+    # direction the sidecar-path derivation does not bound, raised from 2 sites in
+    # `gate_out_paths`. 80 + 1 = 81. ⚠ This number moves once per domain that adds a typed
+    # refusal in a wave; the coordinator re-measures it at the merge, as it did at wave 10.
+    assert len(POLICED) == 81, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
