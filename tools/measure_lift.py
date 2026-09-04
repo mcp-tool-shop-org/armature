@@ -161,6 +161,67 @@ def gate_pairing(rows, truth):
     return ev
 
 
+def as_pairing_rows(population):
+    """`gate_pairing`'s `rows` shape, from a listing of file names or of detection rows.
+
+    A name contributes its own numeric stem. A dict contributes its `file` when it has one
+    — the number that carries the information — and otherwise its `frame` key wrapped as a
+    file name, so a detection record that names its frames and not its files is still
+    compared by NUMBER and not by position. A row naming neither arrives unnumbered, and
+    the gate says which one.
+    """
+    rows = []
+    for entry in population:
+        if isinstance(entry, dict):
+            name = entry.get("file")
+            if name is None and isinstance(entry.get("frame"), int):
+                name = f"{int(entry['frame']):05d}.png"
+            if name is None:
+                name = f"<row naming neither file nor frame: keys {sorted(entry)}>"
+        else:
+            name = entry
+        rows.append({"file": name})
+    return rows
+
+
+def gate_listing_pairing(populations):
+    """ANDON — several populations of ONE run name the same frames, by frame NUMBER.
+
+    `gate_pairing` in the shape a SHEET needs, delegating to it rather than reimplementing
+    it: the sheets index a source listing, a lifted listing and a detection record with
+    the same `i` and never check that any two of them describe the same moment. Measured
+    2026-09-03, `make_lift_sheet`: a source numbered 00000..00004 beside the SAME five
+    renders numbered 00001..00005 composed a sheet whose row `f000` showed source
+    `00000.png` next to lifted `00001.png`, and exited 0.
+
+    `populations` maps a column label to its listing; the FIRST is the authority every
+    other is compared against. Returns `{label: evidence}`; raises `PairingGate`.
+    """
+    labels = list(populations)
+    if not labels:
+        raise PairingGate("no populations were handed to the pairing gate",
+                          {"gate": "PAIRING", "populations": {}})
+    base = labels[0]
+    truth = []
+    for r in as_pairing_rows(populations[base]):
+        stem = os.path.splitext(str(r["file"]))[0]
+        truth.append({"frame": int(stem) if stem.isdigit() else None})
+    named = {k: [str(r["file"]) for r in as_pairing_rows(v)][:12]
+             for k, v in populations.items()}
+    out = {}
+    for label in labels:
+        try:
+            out[label] = gate_pairing(as_pairing_rows(populations[label]), truth)
+        except PairingGate as e:
+            raise PairingGate(
+                f"the {label!r} and {base!r} columns of this panel do not name the same "
+                f"frames, so every row would put two different moments of the "
+                f"performance side by side — {e}",
+                dict(e.evidence, compared=label, against=base, populations=named),
+            ) from None
+    return out
+
+
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--render", required=True)

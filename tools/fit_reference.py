@@ -30,6 +30,23 @@ photographed against instead of introducing a colour the model has to interpret.
 would read as scene content; a colour picked by eye would be a global constant governing a
 local feature.
 
+**The authored-RGBA law, carried at last (measured 2026-09-03).** The source was read with
+`cv2.IMREAD_COLOR`, which returns 3-channel BGR and DROPS a 4th channel with no refusal and
+no record — and `--pad=auto` then derived the letterbox pad from the median of the source's
+outer border, which on an authored RGBA master is the RGB sitting UNDER alpha=0. Measured: a
+128x256 RGBA master with alpha extrema (0, 255) over a hidden RGB of (128, 128, 128)
+produced an RGB fit whose pad pixel was (128, 128, 128), recorded as
+`"pad_source": "median of the source's own outer 4% border"` with the word `alpha` nowhere
+in the provenance. `fit_reference` output is the reference image E08 and E10 both submitted,
+and CLAUDE.md already names these pads as the standing suspect for E08's washed bands.
+
+So the read is `IMREAD_UNCHANGED`, a 4-channel source refuses unless `--alpha-over=R,G,B`
+names the plate (`composite_reference.compose_over_named_plate` — the one implementation,
+shared with `encode_control`, `make_plate` and `pack_pose_pack`), and on such a source the
+pad IS that plate: `--pad=auto`'s border sample is never taken from behind transparency. The
+source's channel count, alpha extrema and composite choice ride the provenance beside
+`pad_bgr`.
+
 Compensator (NAMED_COMPENSATORS): writes a PNG and a JSON under `outputs/`. Compensator:
 delete them; owner: the executor session. The source is opened read-only.
 """
@@ -45,8 +62,18 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from composite_reference import (  # noqa: E402
+    compose_over_named_plate, parse_plate)
 
-TOOL_VERSION = "E08.1"
+TOOL_VERSION = "E08.2"
+
+
+class FitReferenceError(ArmatureError):
+    """The fit cannot be made honestly — the alpha law, or a degenerate source."""
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 #: How wide a border strip `--pad=auto` reads, as a fraction of the shorter side. A fraction
 #: of the image's own size rather than a pixel count, so it does not encode this one asset.
@@ -62,7 +89,12 @@ def parse_args(argv=None):
     ap.add_argument("--mode", default="letterbox", choices=("letterbox",))
     ap.add_argument("--pad", default="auto",
                     help="'auto' samples the source's own border; or R,G,B (argparse eats "
-                         "leading minus signs, so pass flags as --flag=value)")
+                         "leading minus signs, so pass flags as --flag=value). On an RGBA "
+                         "source 'auto' resolves to the --alpha-over plate, never to the "
+                         "border behind the alpha")
+    ap.add_argument("--alpha-over", default=None,
+                    help="R,G,B of the plate an RGBA source is composited over. Without "
+                         "it an alpha channel is a refusal, not a silent drop")
     return ap.parse_args(argv)
 
 
@@ -138,18 +170,39 @@ def main(argv=None):
     out_dir = os.path.abspath(a.out)
     os.makedirs(out_dir, exist_ok=True)
 
-    img = cv2.imread(a.src, cv2.IMREAD_COLOR)
-    if img is None:
-        raise ArmatureError(f"cv2 could not read {a.src}")
+    # UNCHANGED, not COLOR: a 4th channel must reach the law below rather than being
+    # dropped by the decoder before anything can refuse it.
+    raw = cv2.imread(a.src, cv2.IMREAD_UNCHANGED)
+    if raw is None:
+        raise FitReferenceError(f"cv2 could not read {a.src}", {"src": a.src})
+    if raw.ndim == 2:
+        raw = cv2.cvtColor(raw, cv2.COLOR_GRAY2BGR)
+    plate_bgr = None
+    plate_rgb = parse_plate(a.alpha_over, FitReferenceError)
+    if plate_rgb is not None:
+        plate_bgr = tuple(plate_rgb[::-1])       # the caller says RGB; cv2 arrays are BGR
+    # ---- ANDON. One implementation of the authored-RGBA law, shared with encode_control,
+    #      make_plate and pack_pose_pack.
+    img, alpha_record = compose_over_named_plate(
+        raw, plate_bgr, label=os.path.abspath(a.src), exc=FitReferenceError,
+        extra_evidence={"src": os.path.abspath(a.src), "tool": "fit_reference"},
+        channel_order="BGR")
     h, w = img.shape[:2]
 
-    if a.pad == "auto":
+    if a.pad == "auto" and alpha_record["alpha_present"]:
+        # The border `auto` would sample is, on an authored master, precisely the part the
+        # author made invisible. The pad is the plate the composite was already made over.
+        pad = plate_bgr
+        pad_source = (f"the named plate --alpha-over={','.join(str(v) for v in plate_rgb)}; "
+                      f"the source is RGBA and its border is what alpha hides")
+    elif a.pad == "auto":
         pad = border_colour(img)
         pad_source = f"median of the source's own outer {BORDER_FRAC:.0%} border"
     else:
         parts = [int(v) for v in a.pad.split(",")]
         if len(parts) != 3:
-            raise ArmatureError(f"--pad must be 'auto' or R,G,B; got {a.pad!r}")
+            raise FitReferenceError(f"--pad must be 'auto' or R,G,B; got {a.pad!r}",
+                                    {"pad": a.pad})
         pad = tuple(parts[::-1])          # the caller says RGB; cv2 arrays are BGR
         pad_source = f"caller-supplied RGB {parts}"
 
@@ -157,15 +210,16 @@ def main(argv=None):
     stem = os.path.splitext(os.path.basename(a.src))[0]
     dst = os.path.join(out_dir, f"{stem}_fit_{a.width}x{a.height}.png")
     if not cv2.imwrite(dst, fitted):
-        raise ArmatureError(f"cv2 refused to write {dst}")
+        raise FitReferenceError(f"cv2 refused to write {dst}", {"dst": dst})
 
     rec = {
         "tool": "fit_reference", "tool_version": TOOL_VERSION, "mode": a.mode,
-        "source": {"path": os.path.abspath(a.src), "sha256": _sha256(a.src),
-                   "size": [w, h], "aspect": w / h},
+        "source": dict({"path": os.path.abspath(a.src), "sha256": _sha256(a.src),
+                        "size": [w, h], "aspect": w / h}, **alpha_record),
         "derived": {"path": dst, "sha256": _sha256(dst), "size": [a.width, a.height],
                     "aspect": a.width / a.height},
         "transform": dict(placement, pad_bgr=[int(v) for v in pad], pad_source=pad_source,
+                          alpha_disposition=alpha_record["alpha_disposition"],
                           note=("contain-fit: scale = min(width/w, height/h); nothing is "
                                 "cropped, every source pixel survives")),
         "what_the_node_would_have_done_instead": node_crop_that_this_avoids(

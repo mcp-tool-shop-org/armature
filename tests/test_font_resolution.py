@@ -163,8 +163,19 @@ def test_all_three_composers_resolve_through_the_one_implementation():
     import make_cast_sheet
     import rig_sheet_compose
 
-    assert rig_sheet_compose._font is SC.font
-    assert make_cast_sheet._font is SC.font
+    # Identity was the wrong assertion, and wave 5 found the reason: `from sheet_compose
+    # import font as _font` binds the function OBJECT at import, so a substitution
+    # installed on `sheet_compose` reached `sheet_compose` and NEITHER composer. Each now
+    # delegates at CALL time, which is what "the one implementation" has to mean.
+    seen = []
+    saved = SC._font
+    SC._font = lambda name, size: seen.append((name, size)) or saved(name, size)
+    try:
+        rig_sheet_compose._font("arial.ttf", 26)
+        make_cast_sheet._font("arial.ttf", 26)
+    finally:
+        SC._font = saved
+    assert seen == [("arial.ttf", 26), ("arial.ttf", 26)], seen
     for mod in (rig_sheet_compose, make_cast_sheet):
         src = open(mod.__file__, encoding="utf-8").read()
         body = src.split('"""', 2)[-1]

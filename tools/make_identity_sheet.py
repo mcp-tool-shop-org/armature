@@ -31,6 +31,7 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from sheet_compose import SheetPopulationError, require_frames  # noqa: E402
 
 MARGIN = 10
 LABEL_H = 20
@@ -39,7 +40,7 @@ FG = (235, 235, 235)
 DIM = (140, 140, 150)
 
 
-class IdentitySheetError(ArmatureError):
+class IdentitySheetError(SheetPopulationError):
     """The sheet cannot show what it was asked to show, and would not have said so.
 
     `if fi >= len(names): continue` dropped every requested index past the end of the
@@ -92,15 +93,11 @@ def rows_for(run_dir, plates, frames, tile_h=360, channel="normal"):
             f"written", {"run_dir": run_dir, "channel": channel, "channel_dir": cdir})
     names = sorted(n for n in os.listdir(cdir) if n.endswith(".png"))
     # ---- every requested index must EXIST. Dropping one silently shows the Director
-    #      fewer angles than were asked for, on the panel where identity is judged.
-    missing = [fi for fi in frames if fi >= len(names) or fi < 0]
-    if missing or not names:
-        raise IdentitySheetError(
-            f"{cdir} holds {len(names)} frame(s) and frame(s) {missing} were requested; "
-            f"a sheet built from whichever of them happen to exist shows fewer angles "
-            f"than were asked for and says nothing about it",
-            {"channel_dir": cdir, "n_frames": len(names),
-             "requested": list(frames), "missing_indices": missing})
+    #      fewer angles than were asked for, on the panel where identity is judged. The
+    #      refusal written here in wave 3 now lives in `sheet_compose.require_frames`,
+    #      because four sibling sheets needed the same one and had none.
+    require_frames(frames, names, what=f"{channel!r} frame(s)", where=cdir,
+                   exc=IdentitySheetError)
 
     mesh_tiles = []
     for fi in frames:

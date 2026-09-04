@@ -10,6 +10,15 @@ produce a turning armored figure from the prompt and the reference alone. A2 is 
 prompt, the same reference, and no `control_video`. Putting the two output rows under the
 same control row is what turns a demonstration into evidence.
 
+**The rows are PAIRED and the request is BOUNDED (measured 2026-09-03).** Every row was a
+listing indexed by the same `fi`, with nothing checking that the control and the arms name
+the same frames, and `if fi >= len(names): continue` dropped a requested index in silence —
+the same two defects `make_gate0_sheet` and `make_lift_sheet` carried. And `sheet.save`
+had no `os.makedirs` anywhere in the file, the only writer among this domain's sheets
+without one: `--out=outputs/E02/sheets/thesis.png` against a tree where that directory did
+not yet exist died with `FileNotFoundError` out of PIL, on the panel assembled after the
+arms had been generated and paid for.
+
 Computes nothing, decides nothing, quotes no metric. Whether the figure is in the same
 place at the same time is P3, and P3 is judged by eye on this panel at full size.
 """
@@ -17,8 +26,14 @@ place at the same time is P3, and P3 is judged by eye on this panel at full size
 import argparse
 import json
 import os
+import sys
 
 from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from measure_lift import gate_listing_pairing  # noqa: E402
+from sheet_compose import require_frames  # noqa: E402
 
 MARGIN = 10
 LABEL_H = 17
@@ -37,7 +52,7 @@ def _rgb(p):
     return im.convert("RGB")
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--control", required=True)
     ap.add_argument("--arms", required=True, help="LABEL:dir,LABEL:dir")
@@ -60,7 +75,7 @@ def main():
                     help="label frames as turnaround azimuth (only true for a turnaround)")
     ap.add_argument("--no-reference-note", default=None,
                     help="pipe-separated lines drawn when --reference=none")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     captions = None
     if a.captions:
@@ -89,6 +104,12 @@ def main():
     for lab, d in arms:
         rows.append((f"OUTPUT  {lab}", d, listing(d)))
 
+    # ---- ANDON, before a tile is cut: every row names the same frames as the control,
+    #      and every requested index exists in every row.
+    gate_listing_pairing({title: names for title, _d, names in rows})
+    for title, ddir, names in rows:
+        require_frames(idx, names, what=f"frame(s) of {title}", where=ddir)
+
     tw = fit(_rgb(os.path.join(a.control, cn[0]))).width
     # `none` is a real value: E03's arms deliberately carry no reference image.
     ref = None if a.reference.lower() == "none" else fit(_rgb(a.reference))
@@ -107,8 +128,6 @@ def main():
         d.text((MARGIN, y), title, fill=FG)
         x = MARGIN
         for fi in idx:
-            if fi >= len(names):
-                continue
             t = fit(_rgb(os.path.join(ddir, names[fi])))
             sheet.paste(t, (x, y + LABEL_H))
             if captions is not None:
@@ -134,6 +153,8 @@ def main():
                     d.text((x, y + LABEL_H + 4 + i * 15), ln, fill=DIM)
         y += LABEL_H + th + LABEL_H + MARGIN
 
+    # scripts create their own output directories — matching make_lift_sheet.py
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     sheet.save(a.out)
     print(f"THESIS_SHEET {a.out} {sheet.width}x{sheet.height}")
 
