@@ -40,14 +40,30 @@ def BS():
             sys.modules[name] = stub
             installed.append(name)
     cached = sys.modules.pop("armature_core.blender_scene", None)
+    before = set(sys.modules)
     try:
         yield importlib.import_module("armature_core.blender_scene")
     finally:
-        sys.modules.pop("armature_core.blender_scene", None)
+        # The registry entry is not the only binding. Importing `armature_core.blender_scene`
+        # also sets `blender_scene` as an attribute of the package, and
+        # `from armature_core import blender_scene` (stage_render's Blender backend) reads
+        # that attribute BEFORE consulting sys.modules — so a registry-only teardown left
+        # test_run_export reading Blender as importable through this fixture's stub.
+        # Measured by the wave-6 serial verify: this file then test_run_export.py → 1 failed.
+        # Same rule as conftest.rt and blender_stub.blender_stubbed: everything first
+        # imported under the stub goes, registry and attribute both.
+        for name in sorted(set(sys.modules) - before):
+            if name == "armature_core" or name.startswith("armature_core."):
+                gone = sys.modules.pop(name, None)
+                parent_name, _, child = name.rpartition(".")
+                parent = sys.modules.get(parent_name) if parent_name else None
+                if parent is not None and getattr(parent, child, None) is gone:
+                    delattr(parent, child)
         for name in installed:
             sys.modules.pop(name, None)
         if cached is not None:
             sys.modules["armature_core.blender_scene"] = cached
+            setattr(sys.modules["armature_core"], "blender_scene", cached)
 
 
 def test_this_module_does_not_stub_bpy_at_import_time():

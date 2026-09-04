@@ -586,6 +586,9 @@ ORDER_DEPENDENT_PAIRS = [
     # so test_run_export's NotInsideBlender path read Blender as importable. Measured red before
     # the teardown fix: 1 failed, 45 passed on this pair alone.
     ("test_retopo_and_bake.py", "test_run_export.py"),
+    # test_blender_scene_pure.BS — the third installer, same attribute gap; measured red on
+    # this pair before its teardown carried the rule (1 failed, 29 passed).
+    ("test_blender_scene_pure.py", "test_run_export.py"),
 ]
 
 
@@ -616,14 +619,18 @@ def test_a_stub_using_module_does_not_change_what_the_next_one_can_import(first,
 def test_every_stub_installing_fixture_restores_what_it_imported():
     """The family, asserted rather than left to the pairs above.
 
-    Two helpers in this suite write into `sys.modules`: `conftest.rt` and
-    `blender_stub.blender_stubbed` (`tests/test_cli.py` does it too, through
+    Three helpers in this suite write into `sys.modules`: `conftest.rt`,
+    `blender_stub.blender_stubbed` and `test_blender_scene_pure.BS` (`tests/test_cli.py` does it too, through
     `monkeypatch.delitem`, which pytest undoes itself). Each must clear what was imported
     under its stub, so the census is the check: a new stub-installing helper fails here until
     it is paired with a teardown and added to the pairs above.
     """
     tests_dir = os.path.dirname(os.path.abspath(__file__))
-    expected = {"conftest.py": ["rt"], "blender_stub.py": ["blender_stubbed"]}
+    expected = {
+        "conftest.py": ["rt"],
+        "blender_stub.py": ["blender_stubbed"],
+        "test_blender_scene_pure.py": ["BS"],
+    }
 
     for filename, expected_names in expected.items():
         with open(os.path.join(tests_dir, filename), encoding="utf-8") as fh:
