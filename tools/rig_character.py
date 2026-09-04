@@ -536,8 +536,15 @@ def weld_seam_splits(mesh_obj):
     return rec
 
 
-def build_pass(glb_path, name, bands, label, bind=True, envelope_radii="measured"):
+def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
     """One complete build, from a fresh scene to a rig.
+
+    `bind` is REQUIRED and has no default. MEASURED 2026-09-04: it defaulted to `True`,
+    and `True` is the one value `apply_binding` cannot accept -- its third positional
+    parameter is `mode`, dispatched on "auto" / "envelope" / "rigid", with an `else` that
+    raises `ArmatureError("unknown binding True; ...")`. The `--measure-only` path was the
+    only caller that let the default through, so the documented invocation could not run
+    at all and halted naming a binding mode the executor never asked for.
 
     With `bind=False` the mesh is never parented to the armature: the skeleton is placed and
     exported, and nothing is attached to it. That is the **skeleton-approval** mode the
@@ -886,6 +893,51 @@ def export_rigged(ctx, probe, out_path, animated=True):
     }
 
 
+def unbound_determinism_record(gate_d, fp_a, fp_b, expect_weights=None):
+    """Gate D's evidence, with its weights clause written NOT YET RUN when there are none.
+
+    MEASURED 2026-09-04. On the skeleton-only route both `build_pass` calls pass
+    `bind=False`, so `weights` keeps the `{}` it starts as and `rig_gates.rig_fingerprint`
+    stores an empty weight map in BOTH fingerprints. `gate_d_determinism` then walks its
+    weight clause over nothing -- `set(wa) != set(wb)` is `set() != set()`, the loop never
+    executes, and `worst_weight_delta` is written `{group: null, max_abs: 0.0,
+    n_differing: 0}`: a zero indistinguishable from the zero a perfect agreement produces.
+    The gate returned "two builds agree on bones, hierarchy and weights" and `run_skeleton`
+    wrote that string into `skeleton_manifest.json` under `gates.D_determinism`.
+
+    The gate is NOT vacuous here -- its bones clause compares heads, tails, rolls, parents
+    and deform flags across all 22 bones, which is the whole content of a skeleton build.
+    Only the weights clause and the verdict string over-claim. The same manifest already
+    writes `P_evaluation_liveness`, `probe_action` and `deformation_diagnostics` as NOT YET
+    RUN / NOT AUTHORED with a reason; this is that convention applied to the one clause
+    that reported agreement instead.
+
+    `expect_weights=False` is the caller DECLARING that nothing was bound. Declaring it
+    over a pair that carries weights raises, because that would erase a real comparison.
+    """
+    has_weights = bool(fp_a.get("weights")) or bool(fp_b.get("weights"))
+    if expect_weights is False and has_weights:
+        raise ArmatureError(
+            f"the caller declared this build unbound, but the fingerprints carry weight "
+            f"groups ({sorted(set(fp_a.get('weights', {})) | set(fp_b.get('weights', {})))[:8]}). "
+            f"Rewriting the weights clause as NOT YET RUN would delete a comparison that "
+            f"actually ran")
+    if has_weights:
+        return gate_d
+
+    rec = dict(gate_d)
+    rec["verdict"] = "two builds agree on bones and hierarchy"
+    rec["weights_clause"] = {
+        "verdict": "NOT YET RUN",
+        "reason": ("nothing is bound in skeleton mode, so both fingerprints carry an empty "
+                   "weight map and the clause compared nothing. The zero in "
+                   "worst_weight_delta is an absence, not an agreement."),
+        "worst_weight_delta_as_reported": gate_d.get("worst_weight_delta"),
+    }
+    rec["worst_weight_delta"] = None
+    return rec
+
+
 def run_skeleton(args, out_dir, source_sha, started):
     """Skeleton-approval mode. Places the pivots, gates the names, exports, and stops.
 
@@ -899,7 +951,9 @@ def run_skeleton(args, out_dir, source_sha, started):
     del first
 
     ctx = build_pass(args["glb"], args["name"], args["bands"], "kept", bind=False)
-    gate_d = rig_gates.gate_d_determinism(fp_first, ctx["fingerprint"], ctx["diagonal"])
+    gate_d = unbound_determinism_record(
+        rig_gates.gate_d_determinism(fp_first, ctx["fingerprint"], ctx["diagonal"]),
+        fp_first, ctx["fingerprint"], expect_weights=False)
     gate_n_pre = rig_gates.gate_n_names(
         [b.name for b in ctx["armature"].data.bones], sitelist.ALL_NAMES,
         "the built armature, before export")
@@ -987,7 +1041,11 @@ def main():
     source_sha = sha256_file(args["glb"])
 
     if args["measure_only"]:
-        ctx = build_pass(args["glb"], args["name"], args["bands"], "measure")
+        # The binding the CLI declares (`--binding`, default "rigid"), stated rather than
+        # left to a default. This call used to pass four positional arguments and let
+        # `bind` fall through to `True`, which `apply_binding` refuses by design.
+        ctx = build_pass(args["glb"], args["name"], args["bands"], "measure",
+                         bind=args["binding"], envelope_radii=args["envelope_radii"])
         rec = {
             "tool": "rig_character", "tool_version": TOOL_VERSION, "mode": "measure-only",
             "blender": bpy.app.version_string, "source": args["glb"],
@@ -1001,7 +1059,15 @@ def main():
             "facing": ctx["landmarks"]["facing"],
             "regions": ctx["landmarks"]["regions"],
             "bone_lengths": ctx["bone_lengths"],
-            "gate_p": ctx["gate_p"],
+            "binding": args["binding"],
+            "envelope_radii": args["envelope_radii"],
+            # A bare `null` beside a gate name is a placeholder shaped like evidence. When
+            # the pass really did bind, this is the gate's own record; when it did not, the
+            # record says so in the manifest's own NOT YET RUN convention.
+            "gate_p": ctx["gate_p"] if ctx["gate_p"] is not None else {
+                "verdict": "NOT YET RUN",
+                "reason": ("this measure pass bound nothing, so there is no bind-pose "
+                           "displacement for Gate P to be about")},
             "timings": ctx["timings"],
         }
         path = os.path.join(out_dir, "measure.json")
@@ -1026,7 +1092,9 @@ def main():
 
     ctx = build_pass(args["glb"], args["name"], args["bands"], "kept", bind=mode,
                      envelope_radii=args["envelope_radii"])
-    gate_d = rig_gates.gate_d_determinism(fp_first, ctx["fingerprint"], ctx["diagonal"])
+    gate_d = unbound_determinism_record(
+        rig_gates.gate_d_determinism(fp_first, ctx["fingerprint"], ctx["diagonal"]),
+        fp_first, ctx["fingerprint"], expect_weights=False)
 
     gate_n_pre = rig_gates.gate_n_names(
         [b.name for b in ctx["armature"].data.bones], sitelist.ALL_NAMES,
