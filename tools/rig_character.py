@@ -202,11 +202,16 @@ class SiteListInvalid(ArmatureError):
     and the change is in flight there (SEAM 1, core-solvers). `validate_sitelist` below
     re-types only what is NOT already in the `ArmatureError` family, so their class reaches
     the halt line as itself the moment it lands.
-    """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+    WAVE 16, RULE 5 (SEAM 1). This class held the family's one tool-local normalising
+    constructor - `self.evidence = evidence or {}` - and it is DELETED. The base
+    `ArmatureError.__init__` stores what it is passed; `GateFailure` is the single
+    exemption that normalises, because its clauses index into `ev` while they measure; a
+    subclass outside that subtree defines no `__init__` at all, since inheritance already
+    gives it the two-argument shape. Both raise sites in this file pass a dict, so no halt
+    line changes today; a future bare-message raise now records `"evidence": null`
+    honestly instead of an empty dict that claims a receipt was built.
+    """
 
 
 class GateGlbWritten(GateFailure):
@@ -272,6 +277,22 @@ def gate_glb_written(path, *, result, before, what="the exported GLB"):
     `result` is the export operator's status set and `before` is
     `export_target_snapshot(path)` taken before it ran. Both are required: see the class
     docstring above for why neither has a default.
+
+    WAVE 16, F-8548f859 — THE DEFAULT THAT DISARMED THE CLAUSE. Wave 14 removed the
+    keyword DEFAULTS and stopped there; the fourth clause was still guarded by
+    `if (before and before.get("existed") and ...)`, so a falsy `before` skipped it
+    without a word. MEASURED under the stub: 4,004 bytes written to `<tmp>/hero.glb` with
+    plain Python, then this gate called with `before=export_target_snapshot(p)` REFUSES
+    (`stale_target`), while `before=None`, `before={}` and `before={"existed": False}`
+    each returned a PASS record carrying `bytes: 4004` and a sha256 for a file the process
+    never wrote — the exact record F-6a9a0f72 was filed to stop. `result` is not disarmable
+    the same way (an unreadable value becomes `status=None` and fails clause 1), so the
+    asymmetry was in `before` alone; an optional-shaped argument IS a skip flag
+    (F-abcb06a8), and the two wave-14 censuses read only the SIGNATURE and the export
+    call's return value, never the `before=` argument at any of the nine call sites. So
+    the falsy snapshot is now clause 0, `no_pre_export_snapshot`, and it KEYS ON THE VALUE
+    — a mapping carrying an `existed` key whose value is a bool — never on the presence of
+    the argument.
     """
     p = os.path.abspath(path)
     try:
@@ -280,6 +301,20 @@ def gate_glb_written(path, *, result, before, what="the exported GLB"):
         status = None
     ev = {"gate": "GLB", "andon": "GateGlbWritten", "what": what, "path": p,
           "status": status, "before": before}
+    # CLAUSE 0 - the snapshot itself. It runs FIRST, above the status clause, because a
+    # caller that hands no snapshot has not measured the thing clause 4 rules on, and a
+    # gate that answers anything at all in that state is answering about a run it cannot
+    # see. `existed` must be a bool: `{"existed": None}` is a snapshot that was not taken.
+    if (not isinstance(before, dict) or "existed" not in before
+            or not isinstance(before.get("existed"), bool)):
+        ev["clause"] = "no_pre_export_snapshot"
+        raise GateGlbWritten(
+            f"no pre-export snapshot was taken for {what} at {p}: `before` is "
+            f"{before!r}, not an `export_target_snapshot()` record carrying a boolean "
+            f"`existed`. The stale-target clause is the only one that can tell this "
+            f"run's GLB from the PREVIOUS run's file at the same path, and every other "
+            f"clause here passes on that file, so a falsy `before` would hand back a "
+            f"byte count and a sha256 for a file this process never wrote", ev)
     # CLAUSE 1 - the operator's own verdict, which this gate named and never read. The
     # shape is `rig_bake.py`'s `if 'FINISHED' not in result` on `bpy.ops.object.bake`.
     if status is None or "FINISHED" not in status:
@@ -304,8 +339,11 @@ def gate_glb_written(path, *, result, before, what="the exported GLB"):
     # mtime are both what they were before the export is the file that was already there.
     after_mtime_ns = os.stat(p).st_mtime_ns
     ev["after"] = {"bytes": n, "mtime_ns": after_mtime_ns}
-    if (before and before.get("existed")
+    # `before` is a validated snapshot by the time execution reaches here (clause 0), so
+    # this reads the VALUE of `existed` and nothing about whether the caller passed one.
+    if (before["existed"]
             and before.get("bytes") == n and before.get("mtime_ns") == after_mtime_ns):
+        ev["clause"] = "stale_target"
         raise GateGlbWritten(
             f"{what} at {p} is byte-for-byte the file that was already there before this "
             f"export ran (same size, same mtime to the nanosecond). A manifest naming its "
