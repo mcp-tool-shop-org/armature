@@ -50,29 +50,83 @@ function argsFor(exe) {
 }
 
 /**
+ * A program only a Python can run, and a token only a Python running it can print.
+ *
+ * WHY A SENTINEL AND NOT `--version`. This string decides which sentence the user is told, so
+ * it has to be a fact this launcher established rather than one it recognised. A `-V` banner
+ * is text an unrelated program can also emit; a token this file chose, printed with the
+ * running interpreter's own `sys.version_info`, is not. The version rides along because the
+ * answer to "is this a Python" is worth reporting as "which Python".
+ */
+const IDENT = "armature-python";
+const IDENT_PROGRAM =
+  'import sys;sys.stdout.write("' + IDENT + ' %d.%d.%d" % sys.version_info[:3])';
+const IDENT_SHAPE = new RegExp("(?:^|\\n)" + IDENT + " (\\d+\\.\\d+\\.\\d+)");
+
+/**
+ * QUESTION ONE: is this candidate a Python at all? Returns its version, or null.
+ *
+ * WHAT THIS REPLACES. `locate()` set `sawInterpreter = true` for any candidate whose spawn did
+ * not `error` — `if (probe.error) continue; sawInterpreter = true;` — so "this thing is a
+ * Python" was decided by "this thing could be started". Measured on a Windows rig with the
+ * file as shipped: a copy of `where.exe` renamed `python.exe`, alone on PATH beside node, made
+ * `armature --version` print "Python is installed, but the armature-studio toolkit is not
+ * importable from it." and tell the user to `pip install armature-studio` — on a machine with
+ * no Python and no pip anywhere. `ARMATURE_PYTHON` pointed at the same file said the same
+ * thing about the pin.
+ *
+ * That shape is not hypothetical, and the comment on `candidates()` above already names it:
+ * the Windows Store App Execution Alias IS an executable called `python.exe` that starts,
+ * prints an install notice and exits non-zero. It is the most common state a Windows machine
+ * with no Python is in, and it is exactly the state this check exists to report correctly.
+ *
+ * A non-zero exit is "not an interpreter", not "a broken interpreter": nothing that can run
+ * Python fails to run a `write`. The stdout is matched against the sentinel as well, because
+ * an exit code of 0 is also something an unrelated program can produce.
+ */
+function pythonVersion(exe, pre) {
+  const probe = spawnSync(exe, [...pre, "-c", IDENT_PROGRAM], {
+    encoding: "utf8",
+    shell: false,
+  });
+  if (probe.error) return null; // not on PATH at all
+  if (probe.status !== 0) return null; // it started, and it is not a Python
+  const match = `${probe.stdout ?? ""}`.match(IDENT_SHAPE);
+  return match ? match[1] : null; // it exited 0 without being a Python
+}
+
+/**
  * Find an interpreter that can actually import the toolkit.
  *
  * Deliberately two questions, not one: an interpreter that exists but lacks the package
  * is a DIFFERENT problem from no interpreter at all, and telling them apart is the whole
  * value of this check. Reporting "python not found" to someone who has three Pythons and
  * no package would send them fixing the wrong thing.
+ *
+ * The two questions are now asked with two probes, in that order, because a single
+ * `import armature_core` spawn could only ever answer the second one — see `pythonVersion`
+ * above for what it was reading as "Python is installed".
  */
 function locate() {
   let sawInterpreter = false;
   for (const exe of candidates()) {
     const pre = argsFor(exe);
+    // QUESTION ONE. A candidate that is not a Python leaves `sawInterpreter` alone, so the
+    // refusal below stays "no interpreter was found" rather than becoming a claim about a
+    // toolkit missing from something that could never have imported it.
+    if (pythonVersion(exe, pre) === null) continue;
+    sawInterpreter = true;
+    // QUESTION TWO.
     const probe = spawnSync(exe, [...pre, "-c", "import armature_core"], {
       stdio: "ignore",
       shell: false,
     });
-    if (probe.error) continue; // this candidate is not on PATH at all
-    sawInterpreter = true;
     // `sawInterpreter` rides the SUCCESS shape too. It used to be on the failure shape only,
     // and `fail()` branches on it: handed a success object, `found.sawInterpreter` was
     // undefined and the launcher reported "No Python interpreter was found on PATH" about an
     // interpreter it had just imported the toolkit with. A caller cannot read a fact off a
     // shape that only carries it when the answer is no.
-    if (probe.status === 0) return { exe, pre, sawInterpreter: true };
+    if (!probe.error && probe.status === 0) return { exe, pre, sawInterpreter: true };
   }
   return { exe: null, pre: null, sawInterpreter };
 }
@@ -188,6 +242,30 @@ if (argv[0] === "--node-selftest") {
   } finally {
     if (saved === undefined) delete process.env.ARMATURE_PYTHON;
     else process.env.ARMATURE_PYTHON = saved;
+  }
+  // THE TWO-QUESTION PROBE, exercised where there is no Python to exercise it with. `node`
+  // itself is an executable that starts and exits non-zero for the sentinel program (`-c` is
+  // `--check` and wants a file), which is precisely the shape that used to be read as "Python
+  // is installed": the Store stub, a `where.exe` renamed `python.exe`, anything on PATH under
+  // that name. Driven through `locate()` rather than through the probe alone, because
+  // `sawInterpreter` is the operand `fail()` branches on, and the pin substitutes for the
+  // whole candidate list — so this asks the real question of the real function.
+  const pinSaved = process.env.ARMATURE_PYTHON;
+  try {
+    process.env.ARMATURE_PYTHON = process.execPath;
+    const probed = locate();
+    if (probed.exe !== null || probed.sawInterpreter !== false) {
+      process.stderr.write(
+        `selftest: a non-Python executable (${process.execPath}) was read as an interpreter ` +
+          `— exe=${probed.exe}, sawInterpreter=${probed.sawInterpreter}.\n` +
+          `  Someone with no Python at all would be told to pip install the toolkit, with no\n` +
+          `  pip to run it with.\n`
+      );
+      process.exit(1);
+    }
+  } finally {
+    if (pinSaved === undefined) delete process.env.ARMATURE_PYTHON;
+    else process.env.ARMATURE_PYTHON = pinSaved;
   }
   // The signal mapping, checked here because `npm test` is the launcher's only coverage in
   // CI and there is no Python to kill on a runner. A launcher that honours the convention
