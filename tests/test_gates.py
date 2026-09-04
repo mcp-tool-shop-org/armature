@@ -119,7 +119,7 @@ def test_g2_red_on_a_missing_directory(tmp_path):
 # ------------------------------------------------------------------ G4 goes red
 
 def test_g4_passes_when_the_boxes_agree():
-    deltas = gates.g4_bbox_sanity(0, (10, 20, 60, 90), (10, 20, 61, 90), 2, 128, 128)
+    deltas = gates.g4_bbox_sanity(0, (10, 20, 60, 90), (10, 20, 61, 90), 128, 128)
     assert max(deltas) == 1
 
 
@@ -127,7 +127,7 @@ def test_g4_red_on_facets_actual_failure():
     """facet's version caught a mask 751 px wide in a 752 px frame when the mesh was
     388. That is this case."""
     with pytest.raises(G4BboxSanity) as exc:
-        gates.g4_bbox_sanity(7, (0, 0, 750, 700), (180, 60, 568, 700), 2, 752, 752)
+        gates.g4_bbox_sanity(7, (0, 0, 750, 700), (180, 60, 568, 700), 752, 752)
     assert exc.value.gate == "G4"
     assert "disagrees" in str(exc.value)
 
@@ -135,13 +135,13 @@ def test_g4_red_on_facets_actual_failure():
 def test_g4_red_on_an_empty_mask():
     """The direction the superset check does not bound: a collapsed mask."""
     with pytest.raises(G4BboxSanity) as exc:
-        gates.g4_bbox_sanity(3, None, (10, 10, 100, 100), 2, 128, 128)
+        gates.g4_bbox_sanity(3, None, (10, 10, 100, 100), 128, 128)
     assert "mask is empty" in str(exc.value)
 
 
 def test_g4_red_when_nothing_projects():
     with pytest.raises(G4BboxSanity):
-        gates.g4_bbox_sanity(0, (10, 10, 20, 20), None, 2, 128, 128)
+        gates.g4_bbox_sanity(0, (10, 10, 20, 20), None, 128, 128)
 
 
 # ------------------------------------------------------------------ G5 goes red
@@ -210,3 +210,66 @@ def test_wan_fun_control_rejects_the_same_near_misses_as_vace():
         for gen in ("wan-vace", "wan-fun-control"):
             with pytest.raises(G1GeneratorLegality):
                 g1_generator_legality(w, h, n, gen)
+
+
+# --- W3 amend: the G2 population is the directory, not the expectation ------------
+#
+# What would this look like if the code were wrong in the way the check exists to
+# catch? The loop that iterates `filenames` can only ever discover *absence*. A stale
+# frame left by a longer previous run is present, correctly named, and out of range —
+# and `len(present) != frame_count` cannot see it, because `present` is built from the
+# expectation. The consumers build their populations with `os.listdir` (encode_control,
+# gate_b_frames), so the extra frame reaches the encoder that G2 declared complete.
+
+
+def test_g2_red_on_a_stale_out_of_range_frame(tmp_path):
+    """The direction `len(present) != frame_count` does not bound.
+
+    Gate B's own docstring already argues this shape: "a batch larger than submitted is
+    as wrong as a smaller one". G2 must say the same about a directory.
+    """
+    names = [f"{i:05d}.png" for i in range(2)]
+    _make_channel(tmp_path, "depth", names + ["99999.png"])
+    with pytest.raises(G2Completeness) as exc:
+        gates.g2_completeness(str(tmp_path), {"depth": names}, 2)
+    assert "unexpected" in str(exc.value)
+    assert "99999.png" in str(exc.value)
+    assert exc.value.evidence["channels"]["depth"]["unexpected"] == ["99999.png"]
+
+
+def test_g2_reports_unexpected_beside_missing_and_empty(tmp_path):
+    """The refusal shape the encoder side of the pair reads (P1)."""
+    names = [f"{i:05d}.png" for i in range(3)]
+    _make_channel(tmp_path, "mask", names)
+    detail = gates.g2_completeness(str(tmp_path), {"mask": names}, 3)
+    assert detail["mask"]["unexpected"] == []
+    assert detail["mask"]["missing"] == [] and detail["mask"]["empty"] == []
+
+
+def test_g2_ignores_a_sidecar_of_another_extension(tmp_path):
+    """The channel's population is its frames. A note beside them is not a frame."""
+    names = [f"{i:05d}.png" for i in range(2)]
+    _make_channel(tmp_path, "mask", names + ["notes.json"])
+    detail = gates.g2_completeness(str(tmp_path), {"mask": names}, 2)
+    assert detail["mask"]["unexpected"] == []
+
+
+# --- W3 amend: G4's tolerance is the gate's, not the spec's -----------------------
+
+
+def test_g4_tolerance_is_a_module_constant_no_caller_supplies():
+    """`gates.py`'s own docstring rules that a spec-supplied number is a skip flag
+    wearing a schema's clothes. The same argument binds for G4: if the tolerance is a
+    parameter, one extra zero passes a mask that is not the subject."""
+    import inspect
+
+    assert gates.G4_TOLERANCE_PX == 2
+    params = list(inspect.signature(gates.g4_bbox_sanity).parameters)
+    assert params == ["frame_index", "mask_bbox", "projected_bbox", "width", "height"]
+
+
+def test_g4_still_goes_red_on_facets_failure_without_a_tolerance_argument():
+    with pytest.raises(G4BboxSanity) as exc:
+        gates.g4_bbox_sanity(7, (0, 0, 750, 700), (180, 60, 568, 700), 752, 752)
+    assert exc.value.evidence["tolerance_px"] == gates.G4_TOLERANCE_PX
+    assert "gates.G4_TOLERANCE_PX" in exc.value.evidence["tolerance_source"]

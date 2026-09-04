@@ -147,3 +147,43 @@ def test_it_is_a_gate_failure_and_not_an_assertion():
     assert issubclass(GateRRoundTrip, GateFailure)
     assert not issubclass(GateRRoundTrip, AssertionError)
     assert GateRRoundTrip.gate == "R"
+
+
+# --- W3 amend: the 8-bit bridge is only proven over 8-bit arrays ------------------
+
+
+def test_a_float_pair_that_differs_by_half_a_level_does_not_read_as_identical():
+    """The gate documents "sequences of uint8 arrays" and never checked.
+
+    `astype(np.int16)` truncates, so float32 0.4 against float32 0.6 differences to
+    zero and the round trip that exists to prove the encode/decode bridge lossless
+    returns "identical" on a 50 % per-pixel error. A gate that answers a question about
+    an 8-bit bridge over arrays that are not 8-bit is answering about nothing.
+    """
+    src = [np.full((4, 4, 3), 0.4, dtype=np.float32)]
+    got = [np.full((4, 4, 3), 0.6, dtype=np.float32)]
+    with pytest.raises(GateRRoundTrip) as exc:
+        gate_r_round_trip(src, got)
+    assert "float32" in str(exc.value)
+    assert exc.value.evidence["dtypes"]
+
+
+def test_a_uint16_source_is_refused_rather_than_silently_narrowed():
+    src = [np.zeros((4, 4), dtype=np.uint16)]
+    got = [np.zeros((4, 4), dtype=np.uint16)]
+    with pytest.raises(GateRRoundTrip) as exc:
+        gate_r_round_trip(src, got)
+    assert "uint16" in str(exc.value)
+
+
+def test_the_decoded_side_is_checked_too():
+    """Both directions: a decoder that hands back floats is the realistic shape."""
+    src = _frames(n=1)
+    got = [f.astype(np.float64) for f in src]
+    with pytest.raises(GateRRoundTrip):
+        gate_r_round_trip(src, got)
+
+
+def test_uint8_frames_still_pass():
+    src = _frames(n=2)
+    assert gate_r_round_trip(src, [f.copy() for f in src])["verdict"] == "identical"

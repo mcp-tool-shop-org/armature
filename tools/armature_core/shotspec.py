@@ -7,8 +7,18 @@ whose legality rules apply. The manifest written beside a run records the *resol
 values (e.g. an `auto` orbit radius resolved to a number) plus the Blender version, so
 a replay is exact rather than merely similar.
 
-What the spec may NOT carry: the numeric legality constraints themselves. Those live
-in `gates.GENERATOR_PROFILES`. See the note at the top of gates.py.
+What the spec may NOT carry: the numeric legality constraints themselves, nor any
+other number a gate compares against. Those live in `gates` — `GENERATOR_PROFILES`
+and `G4_TOLERANCE_PX`. See the note at the top of gates.py.
+
+`gates.g4_tolerance_px` was the exception that proved the rule and it is gone. It
+shipped as a plain spec field that `normalise_spec` validated in no way: measured
+2026-09-03, the values 1000000000, -5, 'off' and None were every one accepted, and
+`stage_render` handed whatever arrived straight to G4 — so a spec with one extra zero
+rendered and submitted a control sequence whose mask was not the subject, with the
+gate green. A spec that still names the key is now REFUSED, with the constant's new
+home in the message; the five committed specs under `specs/` carry the row and want
+it deleted.
 """
 
 import copy
@@ -59,7 +69,13 @@ DEFAULTS = {
         "filter_size": 0.01,
         "film_transparent": True,
     },
-    "gates": {"g4_tolerance_px": 2},
+}
+
+#: Keys that used to live under `spec.gates` and now do not. A spec naming one is
+#: refused rather than obeyed — see `normalise_spec`. Kept as data so the refusal can
+#: name where the number went.
+RETIRED_GATE_KEYS = {
+    "g4_tolerance_px": "gates.G4_TOLERANCE_PX",
 }
 
 
@@ -119,6 +135,26 @@ def normalise_spec(raw, spec_path=None):
 
     _require(spec, "name", str, "spec")
     _require(spec, "generator", str, "spec")
+
+    # A number a gate compares against may not arrive through the spec. gates.py makes
+    # this argument for `dim_divisor` in its own opening lines; `g4_tolerance_px` was
+    # the same flag wearing a schema's clothes, and unlike `dim_divisor` it was actually
+    # wired — `stage_render` read it and handed it to G4 unvalidated.
+    gate_fields = spec.get("gates")
+    if gate_fields is not None:
+        if not isinstance(gate_fields, dict):
+            raise SpecError("spec.gates must be an object")
+        for key in sorted(gate_fields):
+            home = RETIRED_GATE_KEYS.get(key)
+            raise SpecError(
+                f"spec.gates.{key} is refused: a number a gate compares against is a "
+                f"skip flag wearing a schema's clothes"
+                + (f". It now lives in {home}" if home
+                   else f". Known retired keys: {sorted(RETIRED_GATE_KEYS)}")
+                + " — delete the row from the spec. (spec.gates.g4_tolerance_px used to "
+                  "be read by stage_render and handed to G4 unvalidated; the constant is "
+                  "gates.G4_TOLERANCE_PX)"
+            )
 
     asset = _require(spec, "asset", dict, "spec")
     _require(asset, "path", str, "spec.asset")
@@ -205,16 +241,29 @@ def normalise_spec(raw, spec_path=None):
 def resolve_asset(spec):
     """Resolve the asset path and its sha256, raising if the file is absent.
 
-    If the spec pins a sha256, a mismatch raises: a spec that pins a hash is asserting
-    which bytes it was written against, and silently rendering different bytes would
-    make the run unreproducible in the one field the spec exists to fix.
+    The spec MUST pin a sha256, and a mismatch raises. A spec that pins a hash is
+    asserting which bytes it was written against; a spec that pins none asserts
+    nothing, and the GLB behind the path may change between the spec being written
+    and the shot being rendered with nothing in the spec to contradict the run. The
+    manifest would still record the digest actually used — what an unpinned spec
+    loses is not the run record's honesty but the spec's ability to say which bytes
+    it meant. That is the one field this module exists to fix.
+
+    The refusal carries the measured digest so an author pastes it instead of
+    computing it.
     """
     path = os.path.abspath(spec["asset"]["path"])
     if not os.path.isfile(path):
         raise SpecError(f"spec.asset.path does not exist: {path}")
     digest = sha256_file(path)
     pinned = spec["asset"].get("sha256")
-    if pinned and pinned != digest:
+    if not pinned:
+        raise SpecError(
+            f"spec.asset.sha256 is absent, so this spec asserts nothing about the "
+            f"bytes it was written against. {path} hashes to {digest} — paste that "
+            f"into spec.asset.sha256"
+        )
+    if pinned != digest:
         raise SpecError(
             f"spec.asset.sha256 pins {pinned} but {path} hashes to {digest}"
         )

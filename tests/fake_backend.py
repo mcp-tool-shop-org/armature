@@ -8,6 +8,8 @@ The synthetic subject is a filled rectangle at a known place in the frame with a
 depth ramp, so the expected mask bbox is exact and G4 can be pushed red on purpose.
 """
 
+import hashlib
+
 import numpy as np
 
 
@@ -81,7 +83,12 @@ def make_spec(tmp_path, width=64, height=96, count=9, channels=("depth", "normal
         "spec_version": 1,
         "name": "unit",
         "generator": "wan-vace",
-        "asset": {"path": str(asset)},
+        # The pin is required: `resolve_asset` refuses a spec that asserts nothing
+        # about the bytes it was written against. Measured from the file this helper
+        # just wrote rather than hard-coded, so changing the fixture bytes cannot
+        # silently un-pin it.
+        "asset": {"path": str(asset),
+                  "sha256": hashlib.sha256(asset.read_bytes()).hexdigest()},
         "resolution": {"width": width, "height": height},
         "frames": {"count": count, "fps": 16},
         "channels": list(channels),
