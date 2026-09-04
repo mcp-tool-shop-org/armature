@@ -175,18 +175,42 @@ def main(argv=None):
     sw = aapose.stickwidth(height, width, a.stickwidth_type)
     hsw = aapose.hand_stickwidth(height, width, a.stickwidth_type)
 
-    # WAVE-12 MERGE (coordinator, 2026-09-04): the output directory is created below the last refusal that needs
-    # no file (the record's self-consistency, Gate CONV, the convention pin, Gate CANVAS), so a run
-    # refused there leaves nothing on disk; the refusals below this line read back what was written.
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
-    paths, fracs, digests = [], [], {}
-    for i in range(n):
-        canvas = aapose.draw_frame(
+    def _draw(i):
+        return aapose.draw_frame(
             height, width, body[i],
             left_hand=lh[i] if a.hands else None,
             right_hand=rh[i] if a.hands else None,
             stickwidth_type=a.stickwidth_type, draw_hands=bool(a.hands))
-        fracs.append(float((canvas.any(axis=2)).mean()))
+
+    # The ink floor, derived from this drawing rather than typed: one limb ellipse of the
+    # solved stick width spanning a tenth of the frame, as a fraction of the frame.
+    min_frac = (sw * 2.0 * (0.1 * min(width, height))) / float(width * height)
+
+    # ---- Gate INK, BEFORE the first byte (F-5f2a7452, wave 14).
+    #      `fracs` was appended inside the WRITE loop, as
+    #      `float((canvas.any(axis=2)).mean())` over the in-memory canvas, and `gate_ink`
+    #      ran after the loop had written all n frames — so when Gate INK fired, the whole
+    #      refused control sequence was already on disk in `--out`, in exactly the shape
+    #      the consumers of this directory pick up from a bare listing. It was also the
+    #      only refusal in the loop that could have run before any byte was written, and
+    #      `tests/test_instrument_write_ordering.py::READBACK_REASONS` excused it with
+    #      "ink fraction measured over the frames just written", which it never was: it
+    #      opened no file. The measurement is unchanged (the same canvas, the same
+    #      predicate); only its POSITION moves. The draw is repeated rather than kept,
+    #      because holding n canvases costs `n * height * width * 3` bytes and a long
+    #      sequence is exactly when this tool is used; `draw_frame` is pure, so the second
+    #      pass draws the same pixels.
+    #      SEAM: `gate_ink` is no longer a read-back and leaves READBACK_REASONS (tests).
+    fracs = [float((_draw(i).any(axis=2)).mean()) for i in range(n)]
+    gate_i = gate_ink(fracs, min_frac)
+
+    # WAVE-12 MERGE (coordinator, 2026-09-04): the output directory is created below the last refusal that needs
+    # no file (the record's self-consistency, Gate CONV, the convention pin, Gate CANVAS), so a run
+    # refused there leaves nothing on disk; the refusals below this line read back what was written.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
+    paths, digests = [], {}
+    for i in range(n):
+        canvas = _draw(i)
         p = os.path.join(out, f"{i:05d}.png")
         # The source's own __main__ reverses channels into cv2.imwrite; the canvas is RGB.
         ok = cv2.imwrite(p, canvas[..., ::-1])
@@ -195,11 +219,6 @@ def main(argv=None):
         paths.append(p)
         with open(p, "rb") as fh:
             digests[os.path.basename(p)] = _sha256_bytes(fh.read())
-
-    # The ink floor, derived from this drawing rather than typed: one limb ellipse of the
-    # solved stick width spanning a tenth of the frame, as a fraction of the frame.
-    min_frac = (sw * 2.0 * (0.1 * min(width, height))) / float(width * height)
-    gate_i = gate_ink(fracs, min_frac)
 
     # Gate COUNT — over the population every CONSUMER of this directory derives.
     written = _written_frames(out)

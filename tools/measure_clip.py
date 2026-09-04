@@ -68,6 +68,25 @@ def load(directory):
             for p in frame_paths(directory)]
 
 
+def round_or_none(value, ndigits):
+    """`round(value, ndigits)`, or `None` when there is no value to round.
+
+    F-cd036a86, wave 14. `clipstats._stats` was fixed in wave 12 so that its EMPTY case
+    returns the same key set as its full one (`{"n": 0, ..., "median": None, ...}`) rather
+    than a short dict, and the finding that drove it named `tools/measure_clip.py:131` as
+    the consumer it was protecting: `round(arm["frame_deltas"]["stats"]["median"], 3)` on a
+    one-frame clip. The key resolves now, to `None`, and the same line died on
+    `TypeError: type NoneType doesn't define __round__ method` instead of `KeyError`.
+
+    A one-frame clip is the natural input for exactly the failure these instruments exist
+    to detect (`clipstats` says so in its own docstring), so the summary records `null`
+    deliberately rather than refusing: this record is a DIAGNOSTIC and gates nothing. ONE
+    implementation for the two consumers of the same two fields — this module's own summary
+    and `make_startframe_sheet`'s `--measurements` panel, which imports it from here.
+    """
+    return None if value is None else round(value, ndigits)
+
+
 def measure(frames, label, band=None):
     horizon = [CS.horizon_row(f, band=band) for f in frames]
     found = [h for h in horizon if h["row"] is not None]
@@ -120,22 +139,29 @@ def main(argv=None):
         record["source"]["compare"] = os.path.abspath(a.compare)
         record["arms"].append(measure(load(a.compare), a.compare_label, band))
 
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    with open(a.out, "w", encoding="utf-8") as fh:
-        json.dump(record, fh, indent=2)
-
+    # ---- the summary is built BEFORE the record is written. It used to be built after,
+    #      so a one-frame clip left a complete, well-formed measurements JSON on disk with
+    #      no `MEASURE_CLIP_OK` line ever printed — a later session (or a re-run into the
+    #      same `--out`) reading the record alone found a finished measurement file for a
+    #      run the instrument had died summarising (F-cd036a86).
     summary = {}
     for arm in record["arms"]:
         summary[arm["label"]] = {
             "frames": arm["n_frames"], "distinct": arm["distinct"]["n_distinct"],
-            "frame_delta_median": round(arm["frame_deltas"]["stats"]["median"], 3),
-            "abs_delta_luma_median": round(arm["luma"]["stats"]["median"], 3),
-            "similarity_mean_abs_last": round(
+            "frame_delta_median": round_or_none(
+                arm["frame_deltas"]["stats"]["median"], 3),
+            "abs_delta_luma_median": round_or_none(arm["luma"]["stats"]["median"], 3),
+            "similarity_mean_abs_last": round_or_none(
                 arm["similarity_to_first"]["per_frame_mean_abs"][-1], 3),
-            "correlation_last": round(
+            "correlation_last": round_or_none(
                 arm["similarity_to_first"]["per_frame_correlation"][-1], 4),
             "horizon_found_on": f"{arm['horizon']['n_found']}/{arm['n_frames']}",
         }
+
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+    with open(a.out, "w", encoding="utf-8") as fh:
+        json.dump(record, fh, indent=2)
+
     print("MEASURE_CLIP_OK " + json.dumps({"out": os.path.abspath(a.out),
                                            "summary": summary}))
     return 0

@@ -58,6 +58,11 @@ from armature_core.errors import ArmatureError  # noqa: E402
 
 TOOL_VERSION = "E10.1"
 
+#: `second_differences` reads `p[i]`, `p[i+1]` and `p[i+2]`, so a record with fewer than
+#: three frames has no second difference at all — not a small one, none. Named here rather
+#: than left implicit in a `range(len(series) - 2)` that silently yields nothing.
+MIN_FRAMES_FOR_SECOND_DIFFERENCE = 3
+
 
 class SmoothnessInputError(ArmatureError):
     """The two records do not describe the same population, so no ratio between them means
@@ -115,6 +120,31 @@ def check_records(ra, rb, label_a="A", label_b="B"):
             f"{[nb[i] for i in differing[:8]]}); the per-keypoint table labels BOTH arms "
             f"with the first record's names, so the ratios would compare different joints "
             f"under one joint name", {**ev, "differing_indices": differing})
+
+    # ---- the axis the three refusals above leave open: how many FRAMES each record has.
+    #      `second_differences` needs three, so a record with two or fewer makes every
+    #      pooled second-difference statistic `None` (`stats([])` returns `None`), and the
+    #      success line then dereferenced `.items()` on it. Measured on this branch with
+    #      two 2-frame records that pass every refusal above (matching resolution, camera,
+    #      keypoint names and counts): `AttributeError: 'NoneType' object has no attribute
+    #      'items'`, with the diagnostic payload ALREADY written to `--out` — a complete
+    #      record on disk, no `MEASURE_SMOOTHNESS_OK` line, and a bare AttributeError
+    #      naming neither the input nor the frame count that caused it (F-1fb7ba1c). The
+    #      honest answer is a refusal by name: a second difference over fewer than three
+    #      samples is undefined, not zero.
+    for label, rec, path_key in ((label_a, ra, "a"), (label_b, rb, "b")):
+        n_frames = len(rec.get("body") or ())
+        if n_frames < MIN_FRAMES_FOR_SECOND_DIFFERENCE:
+            raise SmoothnessInputError(
+                f"record {label} carries {n_frames} frame(s); a second difference is "
+                f"|p[i+2] - 2p[i+1] + p[i]| and is undefined below "
+                f"{MIN_FRAMES_FOR_SECOND_DIFFERENCE}, so every pooled statistic this tool "
+                f"reports would be null and the ratio between them would be null over null",
+                {**ev, "gate": "FRAMES", "andon": "SmoothnessInputError",
+                 "clause": "too_few_frames_for_a_second_difference",
+                 "record": path_key, "label": label, "frames": n_frames,
+                 "frames_declared": rec.get("frames"),
+                 "minimum": MIN_FRAMES_FOR_SECOND_DIFFERENCE})
     return list(na)
 
 
@@ -194,6 +224,30 @@ def ratios(a, b):
             for k in ("min", "median", "mean", "p90", "max")}
 
 
+def _summarisable(block, what, label, record, path):
+    """`block`, or refuse by name because `stats`/`ratios` had nothing to compute over.
+
+    `stats([])` is `None` and `ratios(a, b)` is `None` when either side is falsy — both
+    documented, both reachable, and the success line dereferenced `.items()` on them
+    anyway. The frame refusal in `check_records` closes the case that produced this in
+    practice (a record with fewer than three frames); this is the andon on the direction
+    that check does not bound — any other route to an empty distribution, a record whose
+    `body` frames carry zero keypoints among them. A refusal names the block and the
+    record; an `AttributeError` names neither.
+    """
+    if block is None:
+        raise SmoothnessInputError(
+            f"{what} came back with nothing to summarise for {label}; `stats`/`ratios` "
+            f"return None over an empty distribution, and the success line would report a "
+            f"measurement that was never computed",
+            {"gate": "SUMMARY", "andon": "SmoothnessInputError",
+             "clause": "no_distribution_to_summarise", "block": what, "label": label,
+             "path": os.path.abspath(path),
+             "frames": len(record.get("body") or ()),
+             "keypoints": len((record.get("body") or [[]])[0])})
+    return block
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--a", required=True, help="the baseline keypoints.json")
@@ -270,23 +324,36 @@ def main(argv=None):
         "per_keypoint": per_kp,
         "keypoints_whose_per_frame_median_ROSE": rose,
     }
+    # ---- the success line is BUILT before the record is written, and it refuses rather
+    #      than dereferencing a `None`. Every `.items()` below is on a value `stats` or
+    #      `ratios` may legitimately return `None` for; building the line first means a
+    #      refusal here leaves no payload on disk to be mistaken for a finished run
+    #      (F-1fb7ba1c).
+    ok_line = {
+        "out": os.path.abspath(a.out),
+        "pooled_second_px_per_frame2": {
+            a.label_a: {k: round(v, 4) for k, v in _summarisable(
+                pa["second_px_per_frame2"], "pooled second_px_per_frame2",
+                a.label_a, ra, a.a).items() if k != "n"},
+            a.label_b: {k: round(v, 4) for k, v in _summarisable(
+                pb["second_px_per_frame2"], "pooled second_px_per_frame2",
+                a.label_b, rb, a.b).items() if k != "n"},
+            "ratio": {k: (round(v, 4) if v else v) for k, v in _summarisable(
+                payload["pooled"]["ratio_second_px_per_frame2"],
+                "pooled ratio_second_px_per_frame2", f"{a.label_a}/{a.label_b}",
+                ra, a.a).items()}},
+        "pooled_second_px_per_s2_ratio": {
+            k: (round(v, 4) if v else v) for k, v in _summarisable(
+                payload["pooled"]["ratio_second_px_per_s2"],
+                "pooled ratio_second_px_per_s2", f"{a.label_a}/{a.label_b}",
+                ra, a.a).items()},
+        "keypoints_that_rose": rose}
+
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
 
-    print("MEASURE_SMOOTHNESS_OK " + json.dumps({
-        "out": os.path.abspath(a.out),
-        "pooled_second_px_per_frame2": {
-            a.label_a: {k: round(v, 4) for k, v in pa["second_px_per_frame2"].items()
-                        if k != "n"},
-            a.label_b: {k: round(v, 4) for k, v in pb["second_px_per_frame2"].items()
-                        if k != "n"},
-            "ratio": {k: (round(v, 4) if v else v) for k, v in
-                      payload["pooled"]["ratio_second_px_per_frame2"].items()}},
-        "pooled_second_px_per_s2_ratio": {
-            k: (round(v, 4) if v else v) for k, v in
-            payload["pooled"]["ratio_second_px_per_s2"].items()},
-        "keypoints_that_rose": rose}))
+    print("MEASURE_SMOOTHNESS_OK " + json.dumps(ok_line))
     return 0
 
 

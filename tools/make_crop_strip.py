@@ -113,19 +113,55 @@ def frames_by_number(directory):
     this module exists: provenance a later reader can re-cut from. A listing indexed by
     POSITION cannot be re-cut, because the position depends on what else happens to be in
     the directory and on where the run's numbering starts.
+
+    **The non-numbered PNGs it drops are reported, not swallowed** (F-90c26d7b, wave 14) —
+    see `strays_beside` below, and `numbered_and_strays`, which is what `main` calls.
     """
     if not os.path.isdir(directory):
         raise CropStripError(f"{directory} is not a directory of frames",
                              {"frames_dir": directory})
-    names = [n for n in os.listdir(directory)
+    names = [n for n in sorted(os.listdir(directory))
              if n.lower().endswith(".png") and os.path.splitext(n)[0].isdigit()]
     if not names:
         raise CropStripError(
             f"{directory} carries no NNNNN.png frames; there is nothing to cut a strip "
             f"from", {"frames_dir": directory,
                       "png_files": sorted(n for n in os.listdir(directory)
-                                          if n.lower().endswith(".png"))[:16]})
+                                          if n.lower().endswith(".png"))[:16],
+                      "strays": strays_beside(directory)})
     return {int(os.path.splitext(n)[0]): os.path.join(directory, n) for n in names}
+
+
+def strays_beside(directory):
+    """The PNGs in `directory` that `frames_by_number` leaves out — its exact complement.
+
+    F-90c26d7b, wave 14. `sheet_compose.frames_by_number`'s docstring called itself "the
+    `make_crop_strip.frames_by_number` shape ... as ONE implementation" and named the only
+    difference as directory-versus-listing. The real difference is the one its next
+    paragraph calls load-bearing: the sheet version RAISES on a stray, this one FILTERS it.
+
+    Both are right for their caller. A stray pasted into a sheet is shown to the Director
+    as a frame of the run; a stray in a crop-strip's frames directory is the ordinary case,
+    because this repo's own tools write contact strips there (`render_pose_sticks` writes
+    `strip_every<N>.png` beside its frames) and refusing would refuse a normal input. What
+    was wrong was doing it in SILENCE: a copy or a contact sheet dropped beside the frames
+    narrowed the population of a tool whose whole product is provenance a later reader can
+    re-cut from, and left no trace of it anywhere.
+
+    `tests/test_instruments_measure_amend_w14.py` asserts the two predicates partition the
+    PNG listing, so this cannot drift into being something other than the complement.
+    """
+    if not os.path.isdir(directory):
+        raise CropStripError(f"{directory} is not a directory of frames",
+                             {"frames_dir": directory})
+    return [n for n in sorted(os.listdir(directory))
+            if n.lower().endswith(".png") and not os.path.splitext(n)[0].isdigit()]
+
+
+def numbered_and_strays(directory):
+    """`(frames_by_number(directory), strays_beside(directory))` — what was cut from, and
+    what was left out of it, so `main` can record both."""
+    return frames_by_number(directory), strays_beside(directory)
 
 
 def frame_paths(directory):
@@ -237,15 +273,25 @@ def main(argv=None):
             f"by an integer factor with NEAREST, so the factor must be at least 1",
             {"gate": "SCALE", "scale": a.scale})
 
-    by_number = frames_by_number(a.frames)
+    by_number, strays = numbered_and_strays(a.frames)
     strip, record = build(by_number, parse_boxes(a.boxes), a.scale, a.title)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     strip.save(a.out)
     side = os.path.splitext(a.out)[0] + ".json"
     with open(side, "w", encoding="utf-8") as fh:
         json.dump({"tool": "make_crop_strip", "frames": os.path.abspath(a.frames),
-                   "title": a.title, "scale": a.scale, "crops": record}, fh, indent=2)
-    print(f"CROP_STRIP {a.out} {strip.width}x{strip.height} sidecar={side}")
+                   "title": a.title, "scale": a.scale, "crops": record,
+                   # The PNGs in `--frames` that are NOT numbered frames, and were
+                   # therefore not part of the population this strip was cut from. Recorded
+                   # rather than dropped in silence (F-90c26d7b).
+                   "excluded_png": strays,
+                   "excluded_png_note": ("non-numbered PNGs in the frames directory: this "
+                                         "tool cuts from NNNNN.png only, and a contact "
+                                         "strip or a copy left beside the frames is "
+                                         "excluded from the population here")},
+                  fh, indent=2)
+    print(f"CROP_STRIP {a.out} {strip.width}x{strip.height} sidecar={side}"
+          + (f" excluded={strays}" if strays else ""))
     return 0
 
 

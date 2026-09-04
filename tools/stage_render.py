@@ -7,9 +7,16 @@ channels with a manifest that makes the run reproducible.
 Run it headless, through PowerShell (Git Bash mangles the paths):
 
     blender -b -P tools\\stage_render.py -- --spec=<spec.json> --out=<run dir>
+                                            [--asset=<subject.glb>]
 
-Note the `--key=value` form: argparse eats leading minus signs, and `--views=-30,0,30`
-is the shape that survives.
+`--asset` overrides the GLB named in the spec, and it is the whole of the optional
+surface: `KNOWN_FLAGS` below is the tool's flag set and `_parse_argv` refuses anything
+else BY NAME. `--views=-30,0,30` used to sit on this line as the example of the
+`--key=value` form; this tool has no `--views`, and the parser it was illustrating
+accepted it in silence and rendered the spec's own asset.
+
+Note the `--key=value` form: argparse eats leading minus signs, so a value that begins
+with one (`--asset=-oddly-named.glb`) still survives.
 
 --------------------------------------------------------------------------------
 Where the gates live, and why here
@@ -502,16 +509,65 @@ def run_export(spec, out_dir, backend=None):
 # ---------------------------------------------------------------------------- cli
 
 
-def _parse_argv(argv):
+#: The flags `main` reads, split by whether the tool refuses without them. ONE literal:
+#: `_parse_argv` refuses anything outside `KNOWN_FLAGS` and `main` subscripts `args` with
+#: nothing else, so a flag cannot be accepted by the parser and read by nobody
+#: (`tests/test_instruments_measure_amend_w14.py` derives `main`'s subscripts from the AST
+#: and asserts the two sets are the same object).
+REQUIRED_FLAGS = ("spec", "out")
+OPTIONAL_FLAGS = ("asset",)
+KNOWN_FLAGS = REQUIRED_FLAGS + OPTIONAL_FLAGS
+
+
+def _parse_argv(argv, known=KNOWN_FLAGS, required=REQUIRED_FLAGS):
+    """`--key=value` tokens into a dict, refusing an unknown key BY NAME.
+
+    F-a254bbd3, wave 14. This parser accepted ANY `--key=value` token and checked only
+    that `spec` and `out` were present, so `--assset=WRONG.glb` (three s's) registered
+    under its typo, `main`'s `if "asset" in args` never fired, and a headless Blender
+    render was spent writing a per-frame control sequence for the SPEC's subject — with
+    exit 0, a `STAGE_RENDER_OK` line and a manifest that looks finished. The substitution
+    was recoverable only by reading `manifest['asset']['path']`, which nothing prompts an
+    operator to do. `--views=-30,0,30`, advertised on line 11 of this module's own
+    docstring for a flag this tool does not have, went the same way.
+
+    The refusal is `make_sheet.parse_argv`'s, whose docstring already cites this function
+    as its model — the citation is now true in this direction too. It is CARRIED rather
+    than imported: `make_sheet` imports `sheet_compose`, which imports PIL, and this
+    module runs under `blender -b -P` where Blender's bundled Python has no PIL (that
+    absence is why `sheet_compose` exists as a separate step at all). An import here would
+    turn every export into an `ImportError` at module load.
+
+    **Why these three refusals carry no evidence dict.** `SpecError` descends from
+    `ArmatureError`, which has no `__init__` at all, so a second positional argument is
+    swallowed into `args[1]`, never becomes `.evidence`, and turns `str(exc)` into a
+    2-tuple repr — that is F-8393e66c, measured on this same module's OSError branch this
+    wave. Until `ArmatureError` gains the `(message, evidence=None)` constructor
+    `GateFailure` already has (core-gates owns it, wave 14), the honest place for the
+    flag, the token and the known set is the MESSAGE, where a reader and the halt line
+    both see it. `_UnreadablePath` below carries the constructor itself and shows the
+    shape a subclass needs today.
+    """
+    known = tuple(known)
     args = {}
     for token in argv:
         if not token.startswith("--") or "=" not in token:
-            raise SpecError(f"expected --key=value, got {token!r}")
+            raise SpecError(
+                f"expected --key=value, got {token!r}; stage_render takes "
+                f"{', '.join('--' + k for k in known)}")
         key, _, value = token[2:].partition("=")
+        if key not in known:
+            raise SpecError(
+                f"unknown flag --{key}; stage_render takes "
+                f"{', '.join('--' + k for k in known)}. A flag registered under a typo is "
+                f"read by nobody, and the render is then spent on the spec's own values "
+                f"with a success line and a finished-looking manifest")
         args[key] = value
-    for required in ("spec", "out"):
-        if required not in args:
-            raise SpecError(f"missing --{required}=<path>")
+    for name in required:
+        if name not in args:
+            raise SpecError(
+                f"missing --{name}=<path>; stage_render takes "
+                f"{', '.join('--' + k for k in known)}")
     return args
 
 
@@ -544,8 +600,42 @@ def _halt_keysafe(value, _seen=None):
     return value
 
 
+class _UnreadablePath(ArmatureError):
+    """A path this tool was pointed at could not be opened. Carries its own evidence.
+
+    F-8393e66c, wave 14. The OSError branch below used to raise the BASE `ArmatureError`
+    with a second positional argument, and `armature_core/errors.py` gives that class no
+    `__init__` — only `GateFailure` accepts `(message, evidence)`. Measured on this branch
+    before the fix: `tools/stage_render.py --spec=nope.json --out=<tmp>` exited 2 and
+    printed a `STAGE_RENDER_HALT` line whose `evidence` was `null` and whose `message` was
+    the Python 2-tuple repr of (the FileNotFoundError text, the evidence dict) — the
+    receipt the comment beside it promised was delivered by no code. An AST census that
+    keys on "the raise passes a literal dict" scores that site compliant while the runtime
+    discards it, which is why the fix is a class and not a census.
+
+    It is NOT a `GateFailure`: no gate ran. `gate: None` in the evidence is the receipt for
+    that, exactly as the comment at the raise site says, and the `__main__` handler reads
+    `getattr(exc, "gate", None)` — which is `None` here — to classify the halt as REFUSED
+    rather than HALTED.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
 def main(argv=None):
-    """Export one shot spec. Returns 0 on success and 2 on any deliberate refusal.
+    """Export one shot spec. Returns 0 on success; every deliberate refusal RAISES.
+
+    The refusal is an `ArmatureError`-family exception and the `__main__` handler below
+    turns it into exit 2 and the one `STAGE_RENDER_HALT` line — there is no path that
+    returns 2. This sentence used to say "returns 0 on success and 2 on any deliberate
+    refusal", which stopped being true at the wave-12 merge when the `except ArmatureError`
+    branch began re-raising so the single handler could deliver the line; measured on this
+    branch, `main(['--out=x'])`, `main(['--spec=nope.json','--out=x'])` and
+    `main(['-spec=x'])` all raise and none returns anything but 0. An in-process caller —
+    which is how this suite drives the tool — writing `if stage_render.main(argv) == 2:`
+    got an uncaught exception instead of a code.
 
     **The handler covers the whole body, not `run_export` alone.** It used to wrap
     `run_export` in `except GateFailure` and nothing else: `_parse_argv`,
@@ -579,9 +669,17 @@ def main(argv=None):
     except OSError as exc:
         # A spec path that is not there is a refusal, not a crash: the operator mistyped a
         # flag. It reached no gate, so it carries no gate id (`gate: None` is the receipt).
-        raise ArmatureError(
+        # WAVE 14 (F-8393e66c): the class is `_UnreadablePath`, not the bare base — the base
+        # has no `__init__`, so this dict used to land in `args[1]` and the halt line
+        # printed `"evidence": null` beside a message that was a 2-tuple repr.
+        raise _UnreadablePath(
             f"{type(exc).__name__}: {exc}",
-            {"gate": None, "andon": "ArmatureError", "clause": "spec_or_asset_path_unreadable"},
+            {"gate": None, "andon": "_UnreadablePath",
+             "clause": "spec_or_asset_path_unreadable",
+             # `args` is bound on every path that can reach an OSError: `_parse_argv`
+             # raises only `SpecError`, which the branch above catches.
+             "spec": args.get("spec"), "asset": args.get("asset"),
+             "out": args.get("out")},
         ) from exc
     # WAVE-12 MERGE (coordinator, 2026-09-04): `STAGE_RENDER_OK` pairs with `STAGE_RENDER_HALT` (was `EXPORT_OK`).
     print("STAGE_RENDER_OK " + json.dumps({

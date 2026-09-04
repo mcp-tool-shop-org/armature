@@ -88,11 +88,28 @@ ANCHOR_TOLERANCE = 0.0005  # published to 3 decimals; this is half a unit in the
 ANCHOR_ABSENT_EXIT = 3
 
 
-class TrackingError(ArmatureError):
+class _CarriesEvidence(ArmatureError):
+    """`(message, evidence=None)`, stored on `.evidence` — the shape `GateFailure` has.
+
+    F-734951dc, wave 14. A constructor probe over every `ArmatureError` subclass defined in
+    the 42 files of this domain found exactly three classes that declare or want a gate id
+    and define no `__init__`: `extract_clip_frames.ClipReadError` and the two below.
+    `ArmatureError` defines none, so a second positional argument lands in `args[1]`, never
+    becomes `.evidence`, and turns `str(exc)` into a 2-tuple repr. The two classes below
+    raise with ONE argument today and so lose nothing yet — and carry no receipt either,
+    which is why the constructor lands before a caller reaches for it rather than after.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+class TrackingError(_CarriesEvidence):
     """The statistic could not be computed on what was handed to it."""
 
 
-class AnchorMismatch(ArmatureError):
+class AnchorMismatch(_CarriesEvidence):
     """The instrument does not reproduce E02's published figures.
 
     Not cosmetic. E04 exists to put a floor under two numbers E02 published; an
