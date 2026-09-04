@@ -303,8 +303,10 @@ def test_accounting_refuses_a_mesh_with_no_faces_and_no_registered_parts():
 
 
 def test_every_parts_gate_carries_its_own_id_in_the_evidence_it_raises_with():
-    """F-f2f42e4a. `stage_render` prints `GATE_FAILURE <exc.gate>` and `GATE_EVIDENCE
-    <json of exc.evidence>`; measured, none of parts.py's three gates put a "gate" key in
+    """F-f2f42e4a. `stage_render` records the halt as one `STAGE_RENDER_HALT <json>` line
+    carrying `gate` and `evidence` as separate keys (CORRECTED wave 14: the two-line
+    `GATE_FAILURE` / `GATE_EVIDENCE` receipt this named was deleted with the old
+    handler); measured, none of parts.py's three gates put a "gate" key in
     the evidence, while every gate in assembly.py, turnaround.py, startframe.py,
     resample.py, glb.py and lift_solve.py does. Gate id "D" is carried by two andons
     (`errors.GateDDeterminism`, `parts.GatePartsDeterminism`), so the JSON beside the

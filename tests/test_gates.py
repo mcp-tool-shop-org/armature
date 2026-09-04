@@ -604,9 +604,12 @@ def test_no_new_gate_raise_ships_without_its_evidence():
 #: function, or the base of a `dict(ev, ...)` update. The population is every raise of a
 #: class in the `ArmatureError` hierarchy, derived from the tree.
 #:
-#: WHY THE KEY MATTERS: `stage_render.py:509` prints `GATE_FAILURE <exc.gate>` and
-#: `GATE_EVIDENCE <json of exc.evidence>` as two separate lines, so a reader holding only
-#: the JSON has no id at all — and ids are shared across andon families ("D" by
+#: WHY THE KEY MATTERS: `stage_render.py` records a halt as one six-key
+#: `STAGE_RENDER_HALT <json>` line whose `gate` and `evidence` are separate keys, so a
+#: reader holding only the evidence dict has no id at all — and ids are shared across
+#: andon families ("D" by
+#: (CORRECTED wave 14: this sentence named `GATE_FAILURE` / `GATE_EVIDENCE`, two lines
+#: the handler no longer prints. The property it argues for is unchanged.)
 #: `GateDDeterminism` and `GatePartsDeterminism`, "ALPHA" by `AlphaGate` and
 #: `TurnaroundAlphaGate`), so the prose beside it is not enough either.
 
@@ -1381,7 +1384,9 @@ def _named_evidence_assignments(root=None):
 
 
 def test_every_named_evidence_dict_in_the_core_names_its_gate_and_its_andon():
-    """`stage_render.py` prints `GATE_FAILURE <exc.gate>` beside the evidence dict, so a
+    """`stage_render.py` records the gate id beside the evidence dict in one
+    `STAGE_RENDER_HALT <json>` line (CORRECTED wave 14: `GATE_FAILURE` / `GATE_EVIDENCE`
+    were deleted with the old handler), so a
     receipt whose `ev["gate"]` is absent — or whose `ev["andon"]` is, on an id two andon
     families share — cannot be read back to the andon that produced it. Shared ids stay
     shared: the three Gate P clauses all report "P". The requirement is agreement, not

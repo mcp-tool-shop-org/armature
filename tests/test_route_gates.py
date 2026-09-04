@@ -1454,8 +1454,9 @@ def test_every_ruled_row_is_matched_on_its_own_key_even_with_no_alias():
 def test_gate_s_registrations_evidence_names_the_andon_that_actually_raises():
     """`gate_s_registration` built `ev = {"gate": "S", ...}` and every failure path
     raises `RouteGate`, whose class attribute is `gate = "ROUTE"`. `stage_render`
-    prints GATE_FAILURE <exc.gate> and GATE_EVIDENCE <json> as two lines, so a receipt
-    said ROUTE on one and S on the other - and "S" is already the id of
+    records `gate` and `evidence` as two keys of one `STAGE_RENDER_HALT <json>` line
+    (CORRECTED wave 14: the two-line GATE_FAILURE / GATE_EVIDENCE receipt this named was
+    deleted with the old handler), so a receipt said ROUTE on one and S on the other - and "S" is already the id of
     `errors.GateSSeedRegistration`, a different andon with different evidence keys."""
     g = {"nodes": [{"id": 3, "type": "KSampler", "inputs": [],
                     "widgets_values": [7, "fixed", 20, 6.0, "euler", "simple", 1.0]}]}
