@@ -301,7 +301,7 @@ def test_the_atlas_gate_halts_on_a_truncating_container_instead_of_certifying_it
     doc = _one_view_doc(0, 4096, 0)
     a = _glb_raw(str(tmp_path / "src.glb"), doc, b"\x00" * 16)
     b = _glb_raw(str(tmp_path / "out.glb"), doc, b"\x00" * 16)
-    with pytest.raises(glb.MalformedGLB):
+    with pytest.raises(glb.MalformedGLB, match=r"the BIN chunk does not contain"):
         glb.gate_atlas_untouched(a, b)
 
 
