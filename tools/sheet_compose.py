@@ -113,6 +113,34 @@ def load_rgb_over_plate(path, plate=SHEET_PLATE):
     }
 
 
+def frames_by_number(names, *, where, what="frame(s)", exc=SheetPopulationError,
+                     evidence=None):
+    """`{frame NUMBER: name}` off a listing, or raise naming the stray.
+
+    The `make_crop_strip.frames_by_number` shape, lifted here as ONE implementation for
+    the six `require_frames` callers rather than a seventh copy — wave 12, F-e96ed69b.
+    `make_crop_strip`'s own version takes a DIRECTORY and returns paths; the sheets hold a
+    listing they have already read (and already paired with `gate_listing_pairing`), so
+    this takes the names and returns names.
+
+    Why it raises on a stray rather than filtering: the file it would drop — or draw — is
+    shown to the Director as a frame of this run. `make_identity_sheet._numbered_population`
+    carried this refusal alone; it now delegates here.
+    """
+    names = list(names)
+    numbered = [n for n in names if os.path.splitext(str(n))[0].isdigit()]
+    unexpected = [n for n in names if n not in set(numbered)]
+    if unexpected:
+        raise exc(
+            f"{where} holds {len(unexpected)} PNG(s) that are not numbered {what} "
+            f"({', '.join(str(u) for u in unexpected[:8])}); a stray sorts into the "
+            f"population and is drawn as a tile of the run under a caption naming a frame",
+            dict(evidence or {}, gate="FRAMES", where=str(where),
+                 unexpected=[str(u) for u in unexpected],
+                 frames=sorted(str(n) for n in numbered)))
+    return {int(os.path.splitext(str(n))[0]): n for n in numbered}
+
+
 def require_frames(requested, population, *, what, where, exc=SheetPopulationError,
                    numbers=None):
     """Every requested index EXISTS in `population`, or raise naming the shortfall.

@@ -42,7 +42,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from composite_reference import parse_plate  # noqa: E402
 from measure_lift import gate_listing_pairing  # noqa: E402
 from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
-                           load_rgb_over_plate, require_frames)
+                           frames_by_number, load_rgb_over_plate, require_frames)
 
 MARGIN = 10
 LABEL_H = 18
@@ -164,8 +164,20 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
     #      past either was dropped in SILENCE (`continue`), on the panel the whole judging
     #      discipline rests on. `make_identity_sheet` was given this refusal in wave 3.
     gate_listing_pairing({"control": cnames, "output": onames})
-    require_frames(frame_idx, cnames, what="control frame(s)", where=control_dir)
-    require_frames(frame_idx, onames, what="output frame(s)", where=frames_dir)
+    # ---- and the bound is the frames' own NUMBERS, not their POSITION in the listing.
+    #      Measured 2026-09-04 on a control and output both numbered 00001..00003 with
+    #      `--frames=0,1,2`: exit 0, a sheet written, tiles captioned f000/f001/f002 cut
+    #      from 00001/00002/00003 — on a run that holds no frame 0 — while `--frames=3`,
+    #      the frame the run DOES hold, was refused. The flag read backwards from what its
+    #      own caption promises. `sheet_compose.require_frames`'s `numbers=` mode was built
+    #      in wave 10 for exactly this and landed in one of six callers
+    #      (`make_identity_sheet`); this is the panel the whole judging discipline rests on.
+    cby = frames_by_number(cnames, where=control_dir, what="control frame(s)")
+    oby = frames_by_number(onames, where=frames_dir, what="output frame(s)")
+    require_frames(frame_idx, cnames, what="control frame(s)", where=control_dir,
+                   numbers=sorted(cby))
+    require_frames(frame_idx, onames, what="output frame(s)", where=frames_dir,
+                   numbers=sorted(oby))
     ref = _rgb(reference, plate) if reference else None
 
     def fit(im):
@@ -174,8 +186,10 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
 
     cols = []
     for fi in frame_idx:
-        c = fit(_rgb(os.path.join(control_dir, cnames[fi]), plate))
-        o = fit(_rgb(os.path.join(frames_dir, onames[fi]), plate))
+        # Indexed by NUMBER, not by position: `cnames[fi]` depends on where the run's
+        # numbering starts and on what else happens to be in the directory.
+        c = fit(_rgb(os.path.join(control_dir, cby[fi]), plate))
+        o = fit(_rgb(os.path.join(frames_dir, oby[fi]), plate))
         cols.append((frame_caption(fi, captions), c, o))
 
     rtile = fit(ref) if ref is not None else None

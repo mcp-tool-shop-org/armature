@@ -60,9 +60,9 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from composite_reference import parse_plate  # noqa: E402
-from measure_lift import gate_listing_pairing  # noqa: E402
+from measure_lift import as_pairing_rows, gate_listing_pairing  # noqa: E402
 from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
-                           load_rgb_over_plate, require_frames)
+                           frames_by_number, load_rgb_over_plate, require_frames)
 
 MARGIN = 12
 LABEL_H = 20
@@ -208,10 +208,29 @@ def main(argv=None):
 
     # ---- ANDON, before a tile is cut: the three columns name the SAME frames.
     pairing = gate_listing_pairing({"source": src, "lifted": lif, "detection": det})
-    # ---- and every requested index exists in each of them.
-    require_frames(idx, src, what="numbered source frame(s)", where=a.source)
-    require_frames(idx, lif, what="numbered lifted frame(s)", where=a.lifted)
-    require_frames(idx, det, what="detection row(s)", where=a.detection)
+    # ---- and every requested frame NUMBER exists in each of them. By NUMBER, not by
+    #      position: a run numbered 00001..00003 accepted `--frames=0,1,2` and drew
+    #      00001/00002/00003 under the captions f000/f001/f002, while refusing
+    #      `--frames=3`, the frame it does hold. `sheet_compose.require_frames`'s
+    #      `numbers=` mode was built in wave 10 and landed in one of six callers.
+    sby = frames_by_number(src, where=a.source, what="source frame(s)",
+                           exc=SheetPopulationError)
+    lby = frames_by_number(lif, where=a.lifted, what="lifted frame(s)",
+                           exc=SheetPopulationError)
+    # The detection rows keyed by the NUMBER they name, through `measure_lift`'s own
+    # reader — a row may name its `file` and not its `frame`, and the pairing gate above
+    # has already compared the three populations through that same reader.
+    dby = {}
+    for _row, _pr in zip(det, as_pairing_rows(det)):
+        _stem = os.path.splitext(str(_pr["file"]))[0]
+        if _stem.isdigit():
+            dby[int(_stem)] = _row
+    require_frames(idx, src, what="numbered source frame(s)", where=a.source,
+                   numbers=sorted(sby))
+    require_frames(idx, lif, what="numbered lifted frame(s)", where=a.lifted,
+                   numbers=sorted(lby))
+    require_frames(idx, det, what="detection row(s)", where=a.detection,
+                   numbers=sorted(dby))
 
     # ---- the output directory is created only once every in-tool andon above has
     #      fired. A refused run that has already made its directory leaves an empty
@@ -219,8 +238,8 @@ def main(argv=None):
     #      reads as an attempt that produced nothing rather than one that was refused.
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
 
-    src_paths = [os.path.join(a.source, src[i]) for i in idx]
-    lif_paths = [os.path.join(a.lifted, lif[i]) for i in idx]
+    src_paths = [os.path.join(a.source, sby[i]) for i in idx]
+    lif_paths = [os.path.join(a.lifted, lby[i]) for i in idx]
     full_size = _rgb(src_paths[0], plate).size
     box_l = subject_box(lif_paths, os.path.join(a.lifted, "empty_plate.png"))
 
@@ -242,11 +261,11 @@ def main(argv=None):
 
     rows = []
     for i in idx:
-        row = [tile(os.path.join(a.source, src[i]), box_s),
-               tile(os.path.join(a.source, src[i]), box_s,
-                    overlay=(det[i]["image"], det[i]["visibility"])
-                    if det[i]["fired"] else None),
-               tile(os.path.join(a.lifted, lif[i]), box_l)]
+        row = [tile(os.path.join(a.source, sby[i]), box_s),
+               tile(os.path.join(a.source, sby[i]), box_s,
+                    overlay=(dby[i]["image"], dby[i]["visibility"])
+                    if dby[i]["fired"] else None),
+               tile(os.path.join(a.lifted, lby[i]), box_l)]
         rows.append((i, row))
 
     widths = [max(r[1][c].width for r in rows) for c in range(3)]
@@ -288,8 +307,8 @@ def main(argv=None):
                    # The FILE each column loaded, not the index that was asked for: the
                    # sidecar of the mis-paired run named [0,1,2] and nothing else.
                    "rows": [{"frame": i,
-                             "source": os.path.abspath(os.path.join(a.source, src[i])),
-                             "lifted": os.path.abspath(os.path.join(a.lifted, lif[i])),
+                             "source": os.path.abspath(os.path.join(a.source, sby[i])),
+                             "lifted": os.path.abspath(os.path.join(a.lifted, lby[i])),
                              "detection_row": i} for i in idx],
                    "gate_PAIRING": {k: v.get("verdict") for k, v in pairing.items()},
                    "crop_box_source": list(box_s), "crop_box_lifted": list(box_l),
