@@ -567,8 +567,41 @@ def _iter_definitions(container, visited):
         yield from _iter_definitions(d, visited)
 
 
+#: Verdict precedence, strictest first. A filename that matches more than one row in
+#: `RULED_COMPONENTS` is governed by the STRICTEST match, never by whichever row happens
+#: to have been typed into the dict first.
+VERDICT_RANK = {"BANNED": 3, "EXCLUDED": 2, "ALLOWED": 1, "NOT IN THIS TABLE": 0}
+
+
+def rulings_for(filename):
+    """EVERY `RULED_COMPONENTS` row this weight filename matches, strictest first.
+
+    ⚠ **`components()` used to take the FIRST match in dict-insertion order and record
+    no other.** `families_of()` on the same page deliberately does the opposite and its
+    table's comment says why: "A file may match more than one and every match is
+    recorded." The licence clause — the one CLAUDE.md calls a non-negotiable — got the
+    weaker rule. Measured 2026-09-03: `technically_color_instagirl_v2.safetensors`
+    matches `technically_color` (ALLOWED, typed in at index 4) and `instagirl` (BANNED,
+    Instara Fair Use — "prohibits use on any image/video generation service", index 9),
+    and `components()` returned verdict ALLOWED, matched_on technically_color, with the
+    BANNED row named nowhere in the evidence; `verify()` on a graph loading it returned
+    green. The precedence was an accident of typing order. Stacked and merged LoRA names
+    are concatenations, and the served style field this table mirrors is exactly where
+    those names come from.
+    """
+    low = str(filename).lower()
+    hits = [dict(rec, matched_on=key) for key, rec in RULED_COMPONENTS.items()
+            if key in low]
+    hits.sort(key=lambda r: -VERDICT_RANK.get(r["verdict"], 0))
+    return hits
+
+
 def components(graph):
-    """Every weight file the graph loads, with the repo's ruling on each."""
+    """Every weight file the graph loads, with the repo's ruling on each.
+
+    The ruling is the STRICTEST row the filename matches, and `ruling["matches"]` names
+    every row it matched — see `rulings_for`.
+    """
     graph = normalise_graph(graph)
     out = []
     for where, n in _iter_nodes(graph):
@@ -577,15 +610,13 @@ def components(graph):
                 continue
             if not v.lower().endswith(WEIGHT_SUFFIXES):
                 continue
-            ruling = None
-            for key, rec in RULED_COMPONENTS.items():
-                if key in v.lower():
-                    ruling = dict(rec, matched_on=key)
-                    break
+            hits = rulings_for(v)
+            ruling = dict(hits[0]) if hits else {"verdict": "NOT IN THIS TABLE",
+                                                 "reason": "check docs/license-map.md"}
+            ruling["matches"] = [{"matched_on": h["matched_on"], "verdict": h["verdict"],
+                                  "licence": h.get("licence")} for h in hits]
             out.append({"file": v, "node_id": n.get("id"), "class": n.get("type"),
-                        "where": where,
-                        "ruling": ruling or {"verdict": "NOT IN THIS TABLE",
-                                             "reason": "check docs/license-map.md"}})
+                        "where": where, "ruling": ruling})
     return out
 
 
@@ -1063,6 +1094,10 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         raise RouteGate(
             "the graph loads " + ", ".join(
                 f"{c['file']!r} ({c['ruling']['verdict']}: {c['ruling']['reason']})"
+                + (" [this filename also matches "
+                   + ", ".join(f"{m['matched_on']}={m['verdict']}"
+                               for m in c["ruling"]["matches"][1:]) + "]"
+                   if len(c["ruling"].get("matches") or []) > 1 else "")
                 for c in bad) +
             ". The licence map's ruling is that presence is presence — a bypassed node "
             "still counts, and these are not even bypassed", ev)

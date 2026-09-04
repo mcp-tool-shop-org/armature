@@ -1003,3 +1003,60 @@ def test_load_graph_unwraps_the_submission_envelope_and_refuses_by_name(tmp_path
         RG.load_graph(str(bad))
     assert "bad.json" in str(exc.value)
     assert exc.value.evidence["path"].endswith("bad.json")
+
+
+# --- the licence clause took the FIRST matching row (F-ebef0135) ----------------------
+
+
+def _loads(filename):
+    return {"10": {"class_type": "UNETLoader",
+                   "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}},
+            "12": {"class_type": "LoraLoaderModelOnly",
+                   "inputs": {"lora_name": filename, "model": ["10", 0]}},
+            "3": {"class_type": "KSamplerAdvanced",
+                  "inputs": {"add_noise": "enable", "noise_seed": 7, "model": ["12", 0]}}}
+
+
+@pytest.mark.parametrize("filename,strictest,also", [
+    ("technically_color_instagirl_v2.safetensors", "BANNED", "technically_color"),
+    ("smartphonesnapshot_vintage_film_grain.safetensors", "BANNED", "smartphonesnapshot"),
+    ("causvid_lightx2v_merge.safetensors", "BANNED", "lightx2v"),
+])
+def test_a_filename_matching_two_rows_is_governed_by_the_strictest(filename, strictest, also):
+    """Measured 2026-09-03: `technically_color_instagirl_v2.safetensors` matches
+    technically_color (ALLOWED, typed in at index 4) and instagirl (BANNED, index 9), and
+    components() returned ALLOWED with the BANNED row named nowhere in the evidence."""
+    rec = RG.components(_loads(filename))[1]
+    assert rec["ruling"]["verdict"] == strictest
+    assert also in [m["matched_on"] for m in rec["ruling"]["matches"]]
+    assert len(rec["ruling"]["matches"]) >= 2
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_loads(filename), frame=(832, 480, 81))
+    assert "also matches" in str(exc.value)
+    named = {m["matched_on"] for c in exc.value.evidence["components"]
+             for m in c["ruling"]["matches"]}
+    assert also in named
+
+
+def test_the_strictest_match_governs_and_allow_still_cannot_wave_a_licence_row():
+    """`allow` waves a METHODOLOGY ruling; a concatenated name that also carries a BANNED
+    row is still refused, and the refusal names the row that governs."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_loads("causvid_lightx2v_merge.safetensors"),
+                  frame=(832, 480, 81), allow=("lightx2v",))
+    assert "causvid" in str(exc.value)
+
+
+def test_the_licence_clause_records_every_match_the_way_families_of_already_does():
+    """The sibling that carries the rule: `families_of` records every family a filename
+    matches and its table's comment says why. The licence clause got the weaker rule."""
+    assert RG.families_of("wan2.2_fun_camera_i2v.safetensors") == ["fun_camera", "i2v"]
+    hits = RG.rulings_for("technically_color_instagirl_v2.safetensors")
+    assert [h["matched_on"] for h in hits] == ["instagirl", "technically_color"]
+
+
+def test_a_filename_matching_nothing_is_still_reported_as_not_in_this_table():
+    rec = RG.components(_loads("some_unruled_style.safetensors"))[1]
+    assert rec["ruling"]["verdict"] == "NOT IN THIS TABLE"
+    assert rec["ruling"]["matches"] == []
