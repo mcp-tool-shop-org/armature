@@ -14,21 +14,30 @@ Pure stdlib. No bpy, no numpy, no image decoding — it never has to understand 
 
 import hashlib
 import json
+import os
 import struct
 from collections import Counter
 
-from .errors import GateFailure
+from .errors import ArmatureError, GateFailure
 
 GLB_MAGIC = 0x46546C67
 CHUNK_JSON = 0x4E4F534A
 CHUNK_BIN = 0x004E4942
 
 
-class MalformedGLB(ValueError):
+class MalformedGLB(ArmatureError):
     """The container declares something the file does not contain.
 
-    A `ValueError` subclass because `read_chunks` already refused unreadable containers
-    that way and `tests/test_glb.py` pins it; naming the class is what was missing.
+    **It subclassed `ValueError` and no longer does** (F-ba21426c's family, corrected
+    2026-09-04). The old docstring's reason was "`read_chunks` already refused unreadable
+    containers that way" — which was the defect, not the justification: a `ValueError`
+    sits outside `ArmatureError`, so the ONE halt contract every tool runs recorded all
+    six of these refusals as "FAILED — an unhandled error" at exit 1 rather than as
+    "REFUSED" at exit 2, and `evidence_dicts_missing` examined none of them. The family
+    was derived by an AST walk of the class hierarchy under `tools/` (three members:
+    `walk.WalkError`, `framing.FramingError` and this one) and all three were rebased in
+    one commit. It carries an optional `evidence` dict for the same reason
+    `FramingError` now does.
 
     Why the module needs it (F-edbd890a). Every value this reader indexes with comes out
     of the same file it is reading, and two of those reads were unchecked. `views[ref]`
@@ -42,7 +51,23 @@ class MalformedGLB(ValueError):
     through the route" over bytes that neither file actually contains. The promise the
     gate exists for is about the bytes, so a reader that can invent them is the one place
     the promise cannot be repaired downstream.
+
+    **Every refusal in `read_chunks` is one of these now** (F-b725f541). Three of them were
+    bare `ValueError`s — shorter than a header, wrong magic, no JSON chunk — which is the
+    same "this container cannot be read" refusal wearing no name at all.
+
+    **A refusal's evidence names `gate` explicitly as `None`.** Now that this class is in
+    the family, `tests/test_gates.evidence_dicts_missing` examines every raise here that
+    carries a dict, and it asks for `gate` and `andon`. A refusal is not an andon and has
+    no gate id, so the honest answer is written down rather than left absent: the receipt
+    line reads "REFUSED" with `gate` null and the class name under `andon`, which is a
+    different fact from the crash line it used to read (outcome "FAILED", `gate` null
+    because nothing knew what had happened).
     """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 class GateAtlasUntouched(GateFailure):
@@ -60,32 +85,95 @@ class GateAtlasUntouched(GateFailure):
 
 
 def read_chunks(path):
-    """(json_dict, bin_bytes) from a GLB, or raise on a container this cannot read."""
+    """(json_dict, bin_bytes) from a GLB, or raise on a container this cannot read.
+
+    **The same truncation used to raise on one side of an `if` and be silent on the
+    other** (F-b725f541). A chunk whose BODY was short raised; a chunk whose 8-byte
+    HEADER was short took a bare `break` and this function returned whatever had been read
+    so far. Measured on the wave-10 base, on a synthetic GLB carrying a 4-byte BIN chunk:
+    intact, `embedded_images` hashed the blob; with the final 12 bytes removed (the BIN
+    header and its payload) `read_chunks` returned NORMALLY with `binary = b""` and no
+    raise, while removing only the last 2 bytes raised. An empty BIN chunk is
+    indistinguishable from a GLB that genuinely embeds nothing, which is the one thing a
+    reader whose output is a byte-for-byte promise may not invent.
+
+    Two further values came out of the same header and were never checked: the declared
+    `total` was never compared with the file's real size (measured: a GLB whose `total`
+    stopped just after the JSON chunk returned `binary = b""` from a 100-byte file with no
+    raise), and `version` was unpacked and never compared to 2, so a glTF-1.0-era binary —
+    a different chunk layout — was accepted and misread.
+
+    Downstream cover was partial rather than absent: for a GLB declaring a bufferView
+    image, `_image_blob`'s range clause fires one layer down, and `gate_atlas_untouched`
+    refuses a source with no hashable image. That is cover on the production path
+    (`rig_parts.py:514`), not on this public function, and this is where the promise
+    cannot be repaired.
+    """
+    declared_size = os.path.getsize(path)
     with open(path, "rb") as fh:
         header = fh.read(12)
         if len(header) < 12:
-            raise ValueError(f"{path}: shorter than a GLB header")
+            raise MalformedGLB(
+                f"{path}: shorter than a GLB header - it holds {len(header)} of the 12 "
+                f"bytes every GLB begins with",
+                {"gate": None, "andon": "MalformedGLB", "clause": "short_header",
+                 "bytes_read": len(header), "bytes_required": 12, "file_size": declared_size})
         magic, version, total = struct.unpack("<III", header)
         if magic != GLB_MAGIC:
-            raise ValueError(f"{path}: not a GLB (magic {magic:#x})")
+            raise MalformedGLB(
+                f"{path}: not a GLB (magic {magic:#x}, expected {GLB_MAGIC:#x})",
+                {"gate": None, "andon": "MalformedGLB", "clause": "bad_magic",
+                 "magic": magic, "expected_magic": GLB_MAGIC})
+        if version != 2:
+            raise MalformedGLB(
+                f"{path}: the container declares glTF binary version {version} and this "
+                f"reader understands 2. Version 1 lays its chunks out differently, so "
+                f"reading it as a version-2 container does not fail - it produces a "
+                f"plausible wrong answer, which is the only kind this module must not give",
+                {"gate": None, "andon": "MalformedGLB", "clause": "unsupported_version",
+                 "version": version, "supported_version": 2})
+        if total != declared_size:
+            raise MalformedGLB(
+                f"{path}: the header declares a total length of {total} bytes and the file "
+                f"holds {declared_size}. Under-declaring stops the chunk loop early and "
+                f"returns a partial document with no raise; over-declaring runs it off the "
+                f"end. Either way the container and the file disagree about what this file "
+                f"is",
+                {"gate": None, "andon": "MalformedGLB", "clause": "declared_total_disagrees",
+                 "declared_total": total, "file_size": declared_size})
         js, binary = None, b""
         while fh.tell() < total:
+            at = fh.tell()
             head = fh.read(8)
             if len(head) < 8:
-                break
+                raise MalformedGLB(
+                    f"{path}: the file ends mid-chunk-header at offset {at} - it holds "
+                    f"{len(head)} of the 8 bytes a chunk header needs, while the container "
+                    f"declares {total} bytes in total. This branch used to `break` and "
+                    f"return what had been read so far, which is a partial document "
+                    f"indistinguishable from a complete one",
+                    {"gate": None, "andon": "MalformedGLB", "clause": "short_chunk_header",
+                     "offset": at, "bytes_read": len(head), "bytes_required": 8,
+                     "declared_total": total, "file_size": declared_size})
             length, kind = struct.unpack("<II", head)
             data = fh.read(length)
             if len(data) < length:
                 raise MalformedGLB(
                     f"{path}: chunk {kind:#x} declares {length} bytes and the file holds "
                     f"{len(data)} - the container is truncated, and every read off a "
-                    f"short chunk is short without saying so")
+                    f"short chunk is short without saying so",
+                    {"gate": None, "andon": "MalformedGLB", "clause": "short_chunk_body",
+                     "chunk_kind": kind, "declared_length": length,
+                     "bytes_read": len(data), "offset": at})
             if kind == CHUNK_JSON:
                 js = json.loads(data.decode("utf-8"))
             elif kind == CHUNK_BIN:
                 binary = data
         if js is None:
-            raise ValueError(f"{path}: no JSON chunk")
+            raise MalformedGLB(
+                f"{path}: no JSON chunk - a GLB without one declares nothing at all",
+                {"gate": None, "andon": "MalformedGLB", "clause": "no_json_chunk",
+                 "declared_total": total, "file_size": declared_size})
         return js, binary
 
 

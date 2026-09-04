@@ -675,7 +675,7 @@ def test_require_finite_writes_the_offending_value_into_the_caller_s_own_evidenc
     assert exc.value.evidence["x"] != exc.value.evidence["x"]      # NaN is not itself
     assert parts.require_finite("x", 0.0, parts.GateRigidArrival, ev,
                                 positive=False) == 0.0
-    with pytest.raises(parts.GateRigidArrival):
+    with pytest.raises(parts.GateRigidArrival, match=r"not a finite positive number"):
         parts.require_finite("x", 0.0, parts.GateRigidArrival, ev)
-    with pytest.raises(parts.GateRigidArrival):
+    with pytest.raises(parts.GateRigidArrival, match=r"not a finite number"):
         parts.require_finite("x", float("inf"), parts.GateRigidArrival, ev, positive=False)

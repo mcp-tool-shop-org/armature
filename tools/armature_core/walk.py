@@ -43,6 +43,8 @@ double support) is then a *measurement*, reported by `foot_slip`, not a hope.
 
 import math
 
+from .errors import ArmatureError, GateFailure
+
 #: Bones the gait writes. The five facial markers (`nose`, `eye.*`, `ear.*`) are
 #: registered non-deforming and are deliberately NOT keyed — they deform nothing, so a
 #: key on them would be a channel that cannot change a rendered pixel.
@@ -102,17 +104,56 @@ REQUIRED_LANDMARKS = frozenset(HEAD_LANDMARK.values()) | {
     landmark for _bone, landmark in FK_SITES.values()}
 
 
-class WalkError(ValueError):
+class WalkError(ArmatureError):
     """The gait could not be built as specified.
 
     Carries an `evidence` dict like `armature_core.errors.GateFailure` does, so a refusal
-    reports the measurement that fired it rather than only a sentence. It stays a
-    `ValueError` subclass because every existing caller and test catches it by that name.
+    reports the measurement that fired it rather than only a sentence.
+
+    **It used to subclass `ValueError`, and that made both of this module's andons
+    invisible** (F-0d621185, corrected 2026-09-04). The ONE halt contract every tool runs —
+    `author_walk.py:712-725`, `preview_walk.py:239-252` and nineteen siblings —
+    discriminates three outcomes by `isinstance`: `GateFailure` is "HALTED — a gate fired"
+    at exit 2, `ArmatureError` is "REFUSED" at exit 2, and anything else is "FAILED — an
+    unhandled error" at exit 1. Measured on the wave-10 base by replaying that expression
+    over `gate_stance_frac_is_modelled(0.4)`: outcome "FAILED — an unhandled error", gate
+    null, error "WalkError", exit code 1 — while the evidence dict it carried said gate
+    "GAIT". `author_walk.py`'s own comment at that handler reads "Recording a crash as a
+    gate fired is a false record"; this was the inverse, on the tool that authors the
+    ground truth every downstream lift is graded against. `test_core_solver_evidence.
+    evidence_dicts_missing` filters on family membership and examined 0 of this module's
+    12 raises, and `_gate_raises`'s population pin had no `walk` row at all.
+
+    The two named ANDONs are the subclasses below, which are `GateFailure`s as well, so
+    they carry a gate id into `str(exc)` and into every receipt. Everything else here is a
+    plain refusal and stays on this class. Both keep `WalkError` in their bases so
+    `except WalkError` — and every `pytest.raises(walk.WalkError)` in the suite — still
+    catches them.
+
+    **A refusal's evidence names `gate` explicitly as `None`.** Now that this class is in
+    the family, `tests/test_gates.evidence_dicts_missing` examines every raise here that
+    carries a dict, and it asks for `gate` and `andon`. A refusal is not an andon and has
+    no gate id, so the honest answer is written down rather than left absent: the receipt
+    line reads "REFUSED" with `gate` null and the class name under `andon`, which is a
+    different fact from the crash line it used to read (outcome "FAILED", `gate` null
+    because nothing knew what had happened).
     """
 
     def __init__(self, message, evidence=None):
         super().__init__(message)
         self.evidence = evidence or {}
+
+
+class GaitGate(WalkError, GateFailure):
+    """Gate GAIT · ANDON — a stance fraction this gait model does not represent."""
+
+    gate = "GAIT"
+
+
+class CadenceGate(WalkError, GateFailure):
+    """Gate CADENCE · ANDON — a cadence that outruns the frame rate."""
+
+    gate = "CADENCE"
 
 
 #: The ONLY stance fraction this gait model is written for, and the reason is structural
@@ -151,18 +192,23 @@ STANCE_FRAC_MODELLED = 0.5
 def gate_stance_frac_is_modelled(stance_frac, where="GaitParams"):
     """ANDON - refuse a stance fraction this gait model does not represent.
 
-    Raises `WalkError`; there is no flag, no environment escape and no `assert`. It is
-    called from `GaitParams.__init__` (where the value enters) and again from `build_gait`
-    (the tool that authors the ground truth), so mutating the attribute after construction
-    does not get past it.
+    Raises `GaitGate` — a `GateFailure` AND a `WalkError`, so the halt contract records it
+    as a gate firing rather than as a crash (F-0d621185). There is no flag, no environment
+    escape and no `assert`. It is called from `GaitParams.__init__` (where the value
+    enters) and again from `build_gait` (the tool that authors the ground truth), so
+    mutating the attribute after construction does not get past it.
+
+    The evidence carries `andon` beside `gate`. It did not: with no census asking, this
+    andon and `gate_cadence_is_representable` had already drifted apart on exactly that
+    key, which is what an unwatched pair does.
     """
     sf = float(stance_frac)
     if sf == STANCE_FRAC_MODELLED:
-        return {"gate": "GAIT", "stance_frac": sf, "where": where,
+        return {"gate": "GAIT", "andon": "GaitGate", "stance_frac": sf, "where": where,
                 "verdict": f"stance_frac {sf} is the modelled gait"}
     flight = 2.0 * max(0.0, STANCE_FRAC_MODELLED - sf)
     double = 2.0 * max(0.0, sf - STANCE_FRAC_MODELLED)
-    raise WalkError(
+    raise GaitGate(
         f"stance_frac={sf} ({where}); this gait model represents "
         f"stance_frac={STANCE_FRAC_MODELLED} and nothing else. At {sf} the cycle carries "
         f"{flight * 100:.1f}% flight (no foot planted) and {double * 100:.1f}% double "
@@ -174,7 +220,8 @@ def gate_stance_frac_is_modelled(stance_frac, where="GaitParams"):
         f"baked into the authored ground truth every downstream measurement is graded "
         f"against, with every gate green. A general gait derives all four together; until "
         f"it exists this refuses rather than pretending",
-        {"gate": "GAIT", "stance_frac": sf, "modelled": STANCE_FRAC_MODELLED,
+        {"gate": "GAIT", "andon": "GaitGate", "stance_frac": sf,
+         "modelled": STANCE_FRAC_MODELLED,
          "flight_fraction_of_cycle": flight, "double_support_fraction_of_cycle": double,
          "where": where})
 
@@ -190,7 +237,8 @@ def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
                                   where="build_gait"):
     """ANDON - refuse a cadence that outruns the frame rate, over EVERY frame interval.
 
-    Raises `WalkError`; no flag, no environment escape, no `assert`.
+    Raises `CadenceGate` — a `GateFailure` AND a `WalkError` (F-0d621185); no flag, no
+    environment escape, no `assert`.
 
     **Why it is not inside the exchange branch** (F-84f8fd3b). The refusal used to live in
     `_integrate_forward`'s `else`, which runs only when two sampled frames DISAGREE about
@@ -210,18 +258,19 @@ def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
     """
     n = len(phase)
     if n < 2:
-        raise WalkError(
+        raise CadenceGate(
             f"the cadence was gated over {n} phase sample(s) ({where}); a walk cannot be "
             f"checked for representability on fewer than two frames, and a gate that "
             f"compares no interval is a check that cannot fail",
-            {"gate": "CADENCE", "where": where, "n_phase_samples": n})
+            {"gate": "CADENCE", "andon": "CadenceGate", "where": where,
+             "n_phase_samples": n})
 
     du = [(phase[i] - phase[i - 1]) / (2.0 * math.pi) for i in range(1, n)]
     stance = [_leg_state((ph / (2.0 * math.pi)) % 1.0, stance_frac)[2] for ph in phase]
     exchanges = sum(1 for i in range(1, n) if stance[i] != stance[i - 1])
     over = [(i, du[i - 1]) for i in range(1, n) if du[i - 1] > MAX_CYCLES_PER_FRAME]
     worst = max(du)
-    ev = {"gate": "CADENCE", "andon": "WalkError", "where": where,
+    ev = {"gate": "CADENCE", "andon": "CadenceGate", "where": where,
           "max_cycles_per_frame": worst,
           "limit_cycles_per_frame": MAX_CYCLES_PER_FRAME,
           "n_intervals": len(du),
@@ -232,7 +281,7 @@ def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
 
     if over:
         i, d = over[0]
-        raise WalkError(
+        raise CadenceGate(
             f"frame {i}: the gait advances {d:.3f} of a cycle in one frame, so more than "
             f"one stance exchange falls between two samples; the walk cannot be "
             f"represented at this frame rate. {len(over)} of {len(du)} frame interval(s) "
@@ -338,7 +387,9 @@ class GaitParams:
             raise WalkError(
                 f"stance_frac={self.stance_frac}; a leg must spend part of the cycle on "
                 f"the ground and part of it in the air",
-                {"stance_frac": self.stance_frac},
+                {"gate": None, "andon": "WalkError",
+                 "clause": "stance_frac_outside_0_1",
+                 "stance_frac": self.stance_frac},
             )
         gate_stance_frac_is_modelled(self.stance_frac, where="GaitParams")
 

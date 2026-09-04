@@ -826,3 +826,78 @@ def test_the_schedule_reaches_gate_a_evidence():
     assert ev["mesh_frames_checked"] == frames
     assert ev["mesh_frame_schedule"]["n_frames"] == 9
     assert ev["mesh_frame_schedule"]["frames"] == frames
+
+
+# ------------------- wave 10: the two andons are gates, and the receipt can say so
+
+
+def test_the_two_named_andons_are_gate_failures_carrying_their_own_id():
+    """F-0d621185. `WalkError` derived from `ValueError`, so BOTH of this module's andons
+    were recorded by the ONE halt contract as crashes and no census in the suite could see
+    them. Measured on the wave-10 base by replaying `author_walk.py:712-725` over
+    `gate_stance_frac_is_modelled(0.4)`: outcome "FAILED - an unhandled error", gate null,
+    error "WalkError", exit 1 — while the evidence dict it carried said gate "GAIT".
+
+    The three facts a receipt needs, asserted here rather than read off the source: the
+    class reaches `GateFailure`, `str(exc)` carries the `[ID]` prefix, and the evidence
+    names both the gate and the andon.
+    """
+    from armature_core.errors import ArmatureError, GateFailure
+
+    with pytest.raises(walk.GaitGate) as exc:
+        walk.gate_stance_frac_is_modelled(0.4)
+    assert isinstance(exc.value, GateFailure) and isinstance(exc.value, ArmatureError)
+    assert isinstance(exc.value, walk.WalkError)         # every existing catcher still works
+    assert exc.value.gate == "GAIT"
+    assert str(exc.value).startswith("[GAIT] ")
+    ev = exc.value.evidence
+    assert ev["gate"] == "GAIT" and ev["andon"] == "GaitGate"
+
+    with pytest.raises(walk.CadenceGate) as exc:
+        walk.gate_cadence_is_representable([0.0, 40.0])
+    assert isinstance(exc.value, GateFailure) and isinstance(exc.value, walk.WalkError)
+    assert exc.value.gate == "CADENCE"
+    assert str(exc.value).startswith("[CADENCE] ")
+    assert exc.value.evidence["andon"] == "CadenceGate"
+
+
+def test_the_gait_andon_s_passing_record_names_its_andon_too():
+    """The pair had already drifted with no census asking: `gate_cadence_is_representable`
+    carried `andon` and `gate_stance_frac_is_modelled` did not."""
+    ok = walk.gate_stance_frac_is_modelled(walk.STANCE_FRAC_MODELLED)
+    assert ok["gate"] == "GAIT" and ok["andon"] == "GaitGate"
+
+
+def test_the_halt_contract_reads_both_andons_as_gates_rather_than_as_crashes():
+    """The contract itself, replayed — the three-way `isinstance` chain every one of the
+    21 tools runs. This is the fact the fix exists for, so it is asserted behaviourally
+    rather than by reading the class statement."""
+    from armature_core.errors import ArmatureError, GateFailure
+
+    def outcome(exc):
+        if isinstance(exc, GateFailure):
+            return ("HALTED - a gate fired", getattr(exc, "gate", None), 2)
+        if isinstance(exc, ArmatureError):
+            return ("REFUSED", None, 2)
+        return ("FAILED - an unhandled error", None, 1)
+
+    try:
+        walk.gate_stance_frac_is_modelled(0.4)
+    except Exception as exc:                                    # noqa: BLE001
+        assert outcome(exc) == ("HALTED - a gate fired", "GAIT", 2)
+
+    try:
+        walk.GaitParams(n_walk=0)
+    except Exception as exc:                                    # noqa: BLE001
+        assert outcome(exc) == ("REFUSED", None, 2)
+
+
+def test_a_plain_refusal_records_its_class_and_names_gate_as_null():
+    """A refusal is not an andon and has no gate id; the evidence says so rather than
+    leaving the key absent, so a receipt reading `gate: null` beside outcome REFUSED is a
+    different fact from the crash line it used to read."""
+    with pytest.raises(walk.WalkError) as exc:
+        walk.GaitParams(stance_frac=1.5)
+    ev = exc.value.evidence
+    assert ev["gate"] is None and ev["andon"] == "WalkError"
+    assert ev["clause"] == "stance_frac_outside_0_1"
