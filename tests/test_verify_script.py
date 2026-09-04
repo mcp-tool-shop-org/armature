@@ -33,7 +33,7 @@ import pytest
 
 from conftest import REPO
 
-from test_ci_workflows import CI, run_script, step_containing
+from test_ci_workflows import CI, clean_room_script, run_script, step_containing
 
 VERIFY_PATH = os.path.join(REPO, "verify.ps1")
 with open(VERIFY_PATH, encoding="utf-8") as _fh:
@@ -194,8 +194,10 @@ def test_verify_runs_cis_dependency_scan():
 
 def test_verify_runs_the_package_from_a_clean_install_the_way_ci_does():
     """The leg whose whole point is catching a wheel that does not work."""
-    clean = run_script(step_containing(CI, "run it from a clean install"))
-    assert "-m venv" in clean, f"ci.yml's clean-room leg changed shape:\n{clean}"
+    # Read from wherever the leg lives: it moved into `.github/actions/clean-room` so
+    # the release gate could run the SAME leg on the artifact it publishes.
+    clean = clean_room_script()
+    assert "-m venv" in clean, f"the clean-room leg changed shape:\n{clean}"
     assert "-m venv" in VERIFY, (
         "verify.ps1 never installs the wheel it just built into a clean environment, so a "
         "wheel that cannot run passes locally and fails in CI"

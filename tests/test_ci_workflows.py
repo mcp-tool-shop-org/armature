@@ -591,7 +591,7 @@ def test_the_clean_room_leg_reaches_every_lazily_imported_dependency():
     third-party import, the leg must CALL one of the functions that performs it. A new lazy
     dependency fails this test until the clean-room leg calls through to it.
     """
-    script = _code_only(run_script(step_containing(CI, "run it from a clean install")))
+    script = _code_only(clean_room_script())
     sites = lazy_import_call_sites()
     assert set(sites) == set(lazy_third_party_roots()), (
         f"a lazy dependency has no located call site: {sorted(set(lazy_third_party_roots()) - set(sites))}"
@@ -1259,3 +1259,216 @@ def test_the_pinning_check_goes_red_on_a_moving_major_tag():
     assert not re.fullmatch(r"[0-9a-f]{40}", "v4"), "a major tag reads as a pinned commit"
     assert not re.search(r"#\s*v?\d+\.\d+(\.\d+)?", "      - uses: actions/checkout@v4"), (
         "an unpinned line reads as carrying a reviewable version comment")
+
+
+# -- the clean-room leg, and the toolchain that builds it (F-60ab1bd7, F-7fa3017c) --------
+#
+# release.yml's verify job ran `python -m build` and `twine check dist/*` and nothing
+# installed either artifact. ci.yml's python-tests ran the same build AND a clean venv
+# install plus a probe that calls through to every function-local dependency; ci.yml's own
+# comment records why the weaker form is not enough -- `armature check` printed "all modules
+# resolved" and exited 0 on a wheel whose drawing and donor paths raised ModuleNotFoundError
+# on first call. So the artifact handed to `pypa/gh-action-pypi-publish`, the one step in
+# this repository with no compensator, was the one artifact never installed anywhere in the
+# workflow that publishes it.
+#
+# The leg now lives in `.github/actions/clean-room` and both jobs call it. The population
+# below is therefore every job that PRODUCES a distribution, walked out of the tree with
+# local composite actions expanded -- not ci.yml alone, and not a list.
+
+
+def _run_scripts_in(text):
+    """Every `run:` script in a YAML text, dedented."""
+    out, lines = [], text.splitlines()
+    for i, line in enumerate(lines):
+        if not line.strip().startswith("run:"):
+            continue
+        if line.strip() in ("run: |", "run: |-"):
+            body = block_at(lines, i)
+            pad = min((_indent(x) for x in body if x.strip()), default=0)
+            out.append("\n".join(x[pad:] for x in body))
+        else:
+            out.append(line.strip()[len("run: ") :])
+    return out
+
+
+def _local_action_scripts(ref):
+    """The run scripts of a `uses: ./path` composite action in this repository."""
+    base = os.path.join(REPO, ref[2:].replace("/", os.sep))
+    for candidate in ("action.yml", "action.yaml"):
+        path = os.path.join(base, candidate)
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fh:
+                return _run_scripts_in(fh.read())
+    raise AssertionError(f"{ref} is used but no action file exists at {base}")
+
+
+def job_scripts(workflow, job):
+    """Every script a job RUNS, including the ones inside the local actions it calls.
+
+    A step that moved into a composite action is still a step of the job; a check that reads
+    only the job body would go quiet the day a leg was lifted, which is how the trigger-path
+    hole opened one directory over.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    scripts = _run_scripts_in(body)
+    for line in body.splitlines():
+        match = re.match(r"\s*-?\s*uses:\s*(\./\S+)", line)
+        if match:
+            scripts.extend(_local_action_scripts(match.group(1)))
+    return scripts
+
+
+def clean_room_script():
+    """The one script anywhere under `.github/` that builds a clean venv.
+
+    Derived, so lifting the leg into an action (or back out of one) moves every check that
+    reads it. Exactly one is required: two would be two implementations of one gate.
+    """
+    hits = [(source, script) for source, script in _all_run_scripts() if "-m venv" in script]
+    assert len(hits) == 1, (
+        f"{len(hits)} scripts under .github/ build a clean venv; the leg that catches a "
+        f"wheel that cannot run must have one implementation: {[s for s, _ in hits]}")
+    return hits[0][1]
+
+
+def jobs_that_produce_a_distribution():
+    """(workflow, job) for every job that builds a wheel or an sdist -- walked, not listed."""
+    out = []
+    for name in workflow_files():
+        for job in job_names(_text(name)):
+            if any("-m build" in _code_only(s) for s in job_scripts(name, job)):
+                out.append((name, job))
+    return out
+
+
+#: Measured 2026-09-04. The release gate built a distribution and installed nothing.
+DISTRIBUTION_JOBS_TODAY = [("ci.yml", "python-tests"), ("release.yml", "verify")]
+
+
+def test_the_distribution_job_census_is_the_jobs_that_build_one():
+    assert jobs_that_produce_a_distribution() == DISTRIBUTION_JOBS_TODAY, (
+        f"the jobs that build a distribution are {jobs_that_produce_a_distribution()}; this "
+        f"file was written against {DISTRIBUTION_JOBS_TODAY}")
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_produce_a_distribution())
+def test_every_job_that_builds_a_distribution_runs_it_from_a_clean_install(workflow, job):
+    """A build and a metadata check are not a claim that the artifact works.
+
+    What this looks like if wrong: a wheel whose console script is missing, or whose lazy
+    imports are unsatisfiable, passes `twine check` and reaches a registry -- from the job
+    whose whole purpose is to be the last gate before that happens.
+    """
+    scripts = "\n".join(job_scripts(workflow, job))
+    assert "-m venv" in scripts, (
+        f"{workflow}:{job} builds a distribution and never installs one; `twine check` reads "
+        "the METADATA and no more")
+    assert "site-packages" in scripts, (
+        f"{workflow}:{job} installs into a clean venv without checking it imported the WHEEL; "
+        "the checkout is sitting one directory up")
+
+
+def test_the_clean_room_is_one_implementation_called_by_both():
+    """A copied leg is a second implementation of one gate, and copies fork.
+
+    `.github/actions/sheet-fonts` exists because the release gate ran the suite with no
+    font: the dependency was in one list and not the other. The packaging leg was the same
+    shape one step later -- present in ci.yml, absent from the job that publishes.
+    """
+    callers = sorted(
+        (workflow, job)
+        for workflow in workflow_files()
+        for job in job_names(_text(workflow))
+        if "./.github/actions/clean-room" in "\n".join(_job_lines(_text(workflow), job))
+    )
+    assert callers == DISTRIBUTION_JOBS_TODAY, (
+        f"the clean-room action is called by {callers}; every job that builds a distribution "
+        f"must call it, and today those are {DISTRIBUTION_JOBS_TODAY}")
+
+
+# The toolchain that produces the artifact, held to a version the way npm already is.
+
+def _install_tokens(script):
+    """Package tokens of every `pip install` / `npm install -g` line in a script."""
+    tokens = []
+    for line in _code_only(script).splitlines():
+        stripped = line.strip()
+        if "pip install" not in stripped and "npm install" not in stripped:
+            continue
+        after = stripped.split("install", 1)[1]
+        for raw in after.split():
+            token = raw.strip("'").strip('"')
+            if token.startswith("-"):
+                continue
+            # A local artifact path is not a registry resolution: `dist/*.whl` IS the thing
+            # the constraint exists to protect, and pinning a filename would be nonsense.
+            if "/" in token or token.endswith((".whl", ".tar.gz")):
+                continue
+            tokens.append(token)
+    return tokens
+
+
+def toolchain_tokens():
+    """Every package installed by a job that produces or publishes a distribution.
+
+    The population is the jobs, walked: the ones that build (above) plus the ones that hand
+    an artifact to a registry. What is installed inside them is what runs on release day.
+    """
+    jobs = set(jobs_that_produce_a_distribution())
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if "npm publish" in body or "gh-action-pypi-publish" in body:
+                jobs.add((name, job))
+    tokens = {}
+    for workflow, job in sorted(jobs):
+        for script in job_scripts(workflow, job):
+            for token in _install_tokens(script):
+                tokens.setdefault(token, []).append(f"{workflow}:{job}")
+    return tokens
+
+
+#: Installed without a version constraint, deliberately, as of 2026-09-04. None of these
+#: PRODUCES or UPLOADS the artifact: `pip` is the installer itself, and numpy/pillow/pytest
+#: are the suite's own dependencies, whose byte-stable pins (opencv, matplotlib) carry `==`
+#: where the golden frames need them. `build`, `twine` and `npm` are the three tools that
+#: make or move the artifact, and all three are constrained.
+UNCONSTRAINED_BY_DESIGN = {"pip", "numpy", "pillow", "pytest"}
+
+
+def test_the_toolchain_exemptions_are_still_installed_somewhere():
+    """An exemption for a package nobody installs is a row that stopped meaning anything."""
+    stale = sorted(UNCONSTRAINED_BY_DESIGN - set(toolchain_tokens()))
+    assert stale == [], (
+        f"{stale} is exempt from the constraint rule and is installed by no job that "
+        "produces or publishes a distribution")
+
+
+def test_every_tool_that_makes_or_moves_the_artifact_is_held_to_a_version():
+    """A tool resolved on the day is not the tool that was verified.
+
+    release.yml already says this about npm -- a breaking major lands in the publish job
+    with no local reproduction of the version that ran -- and `build` and `twine` sat in the
+    same job under the same reasoning with nothing asserting a version. A `build` release
+    that changed sdist file selection would change the published artifact between two runs
+    of the same tag.
+    """
+    tokens = toolchain_tokens()
+    unconstrained = sorted(
+        token + " (" + ", ".join(sorted(set(where))) + ")"
+        for token, where in tokens.items()
+        if not re.search(r"[=<>~^@]", token) and token not in UNCONSTRAINED_BY_DESIGN
+    )
+    assert unconstrained == [], (
+        f"these are resolved fresh in a job that produces or publishes the artifact: "
+        f"{unconstrained}")
+
+
+def test_the_constraint_check_goes_red_on_a_bare_build_tool():
+    """The mutation: the pre-fix install line, fed to the same comparison."""
+    before = "python -m pip install --upgrade build twine\n"
+    bare = [t for t in _install_tokens(before)
+            if not re.search(r"[=<>~^@]", t) and t not in UNCONSTRAINED_BY_DESIGN]
+    assert bare == ["build", "twine"], bare

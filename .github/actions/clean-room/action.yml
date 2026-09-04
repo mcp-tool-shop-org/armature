@@ -1,0 +1,70 @@
+# The one packaging leg: build the wheel and the sdist, check the metadata, install the
+# wheel into a CLEAN venv and RUN it from that install.
+#
+# WHY IT IS AN ACTION AND NOT A STEP IN EACH WORKFLOW. release.yml's verify job built both
+# artifacts and ran `twine check` on the METADATA, and nothing anywhere in that workflow
+# installed either one. So the artifact handed to `pypa/gh-action-pypi-publish` — the one
+# step in this repository with no compensator — was the one artifact never installed in the
+# workflow that publishes it. ci.yml had the leg in full; copying it into the second
+# workflow would be a second implementation of one gate, which is exactly how the font
+# dependency forked (see .github/actions/sheet-fonts/action.yml). One action, called by both.
+#
+# WHY THE PROBE CALLS FUNCTIONS. `armature check` and `armature modules` execute no function
+# body: `check` imports each surface module and `modules` prints a table, so no lazy import
+# is ever reached. Measured in this exact clean room — armature-studio and numpy only —
+# `armature check` printed `all modules resolved` and exited 0 while cv2, matplotlib and PIL
+# were absent and both the drawing path and Gate DONOR raised ModuleNotFoundError on first
+# call. The leg was green on precisely the wheel defect it exists to catch.
+# tests/test_ci_workflows.py derives the required call sites from the source, so a new lazy
+# dependency fails until this probe reaches it.
+#
+# WHY build AND twine ARE CONSTRAINED. These are the two tools that PRODUCE the artifact
+# published irreversibly, and they were resolved fresh on release day. The repo already
+# holds the sibling toolchain to a version for exactly this reason — `npm install -g
+# npm@^11.5.1`, whose comment says `@latest` means the code running on release day is not
+# the code that was verified. A `build` release that changed sdist file selection would
+# change the published artifact between two runs of the SAME tag. The floors are the
+# versions this rig has run (build 1.5.0, twine 7.0.0, measured 2026-09-04); the ceilings
+# keep a new major out of the publish path until someone runs it deliberately.
+name: clean room
+description: Build the wheel and sdist, check the metadata, and run the package from a clean install.
+
+runs:
+  using: composite
+  steps:
+    - name: build the package and run it from a clean install
+      shell: bash
+      run: |
+        set -eu
+        python -m pip install "build>=1.5,<2" "twine>=7,<8"
+        python -m build
+        python -m twine check dist/*
+        python -m venv /tmp/cleanroom
+        /tmp/cleanroom/bin/python -m pip install --quiet dist/*.whl
+        /tmp/cleanroom/bin/armature check
+        /tmp/cleanroom/bin/armature modules --json > /dev/null
+        /tmp/cleanroom/bin/python - <<'PROBE'
+        import os, tempfile
+        import numpy as np
+        from armature_core import aapose, donor_gate, pngio
+
+        # The leg's own premise, checked rather than assumed: this must be the wheel, not
+        # the checkout sitting one directory up.
+        if "site-packages" not in aapose.__file__.replace("\\", "/"):
+            raise SystemExit("clean-room probe imported the source tree: " + aapose.__file__)
+
+        canvas = aapose.blank_canvas(64, 64)
+        body = np.zeros((aapose.KEYPOINT_COUNT, 3)); body[:, :2] = 32.0; body[:, 2] = 1.0
+        aapose.draw_body(canvas, body)
+        hand = np.zeros((aapose.HAND_KEYPOINT_COUNT, 3)); hand[:, :2] = 32.0; hand[:, 2] = 1.0
+        aapose.draw_hand(canvas, hand)
+
+        frames = tempfile.mkdtemp()
+        paths = []
+        for i in range(2):
+            p = os.path.join(frames, "%05d.png" % i)
+            pngio.write_png(p, np.full((8, 8, 3), i * 40, dtype=np.uint8))
+            paths.append(p)
+        donor_gate.mean_consecutive_frame_difference(paths)
+        print("clean room: draw_body, draw_hand and mean_consecutive_frame_difference all ran")
+        PROBE

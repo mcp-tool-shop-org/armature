@@ -214,54 +214,12 @@ jobs:
         env:
           PYTHONOPTIMIZE: "1"
 
-      # The package must build and install on every change that could break it, not
-      # first at release time. The install is into a CLEAN venv and the command is run
-      # from THAT install rather than from the checkout — otherwise a module missing
-      # from the wheel still passes, because the source tree is sitting right there.
-      #
-      # `armature check` and `armature modules` were the whole leg, and they execute no
-      # function body: `check` imports each surface module and `modules` prints a table, so
-      # no lazy import is ever reached. Measured in this exact clean room — armature-studio
-      # and numpy only — `armature check` printed `all modules resolved` and exited 0 while
-      # cv2, matplotlib and PIL were absent and both the drawing path and Gate DONOR raised
-      # ModuleNotFoundError on first call. The leg was green on precisely the wheel defect it
-      # exists to catch. The probe below CALLS through to each function-local dependency, and
-      # tests/test_ci_workflows.py derives the required call sites from the source, so a new
-      # lazy dependency fails until this probe reaches it.
-      - name: build the package and run it from a clean install
-        run: |
-          python -m pip install --upgrade build twine
-          python -m build
-          python -m twine check dist/*
-          python -m venv /tmp/cleanroom
-          /tmp/cleanroom/bin/python -m pip install --quiet dist/*.whl
-          /tmp/cleanroom/bin/armature check
-          /tmp/cleanroom/bin/armature modules --json > /dev/null
-          /tmp/cleanroom/bin/python - <<'PROBE'
-          import os, tempfile
-          import numpy as np
-          from armature_core import aapose, donor_gate, pngio
-
-          # The leg's own premise, checked rather than assumed: this must be the wheel, not
-          # the checkout sitting one directory up.
-          if "site-packages" not in aapose.__file__.replace("\\", "/"):
-              raise SystemExit("clean-room probe imported the source tree: " + aapose.__file__)
-
-          canvas = aapose.blank_canvas(64, 64)
-          body = np.zeros((aapose.KEYPOINT_COUNT, 3)); body[:, :2] = 32.0; body[:, 2] = 1.0
-          aapose.draw_body(canvas, body)
-          hand = np.zeros((aapose.HAND_KEYPOINT_COUNT, 3)); hand[:, :2] = 32.0; hand[:, 2] = 1.0
-          aapose.draw_hand(canvas, hand)
-
-          frames = tempfile.mkdtemp()
-          paths = []
-          for i in range(2):
-              p = os.path.join(frames, "%05d.png" % i)
-              pngio.write_png(p, np.full((8, 8, 3), i * 40, dtype=np.uint8))
-              paths.append(p)
-          donor_gate.mean_consecutive_frame_difference(paths)
-          print("clean room: draw_body, draw_hand and mean_consecutive_frame_difference all ran")
-          PROBE
+      # The package must build and install on every change that could break it, not first
+      # at release time. The leg lives in a composite action because release.yml's verify
+      # job must run the SAME leg on the SAME artifact it is about to publish, and two
+      # copies of one gate is how the font dependency forked. What the leg does, and why
+      # `armature check` alone was not enough, is written in the action.
+      - uses: ./.github/actions/clean-room
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
