@@ -729,3 +729,129 @@ def test_the_front_gates_point_count_is_derived_and_not_the_literal_sixty_two():
     other = PPK.front_gate_detail(_body(5), [[[0.0, 0.0]] * 21 for _ in range(5)],
                                   [[[0.0, 0.0]] * 21 for _ in range(5)])
     assert str(5 * 62) in other, other
+
+
+# ===========================================================================
+# make_review_clip — the rate bound above `makedirs`, and the run token
+# ===========================================================================
+
+
+def _review_frames(tmp, n=5, run="A2", sub="lossless"):
+    """The canonical `<run>/lossless/` layout the review pass is pointed at."""
+    d = tmp / run / sub
+    d.mkdir(parents=True, exist_ok=True)
+    for i in range(n):
+        Image.new("RGB", (16, 16), (10 + i, 20, 30)).save(d / f"{i:05d}.png")
+    return str(d)
+
+
+# ---- F-e924157e: `--fps` / `--source-fps` bounded ABOVE `makedirs` --------
+
+
+@pytest.mark.parametrize("flag,value", [
+    ("--fps", "0"), ("--fps", "-8"), ("--source-fps", "0"), ("--source-fps", "-16"),
+])
+def test_a_playback_rate_that_is_not_positive_is_refused_above_makedirs(tmp_path, flag,
+                                                                        value):
+    """THE OPERAND: `--fps=0` on `make_review_clip`, ABOVE `os.makedirs`.
+
+    Measured on the base tree: `--fps=0` reached `duration=int(round(1000.0 / a.fps))`
+    inside `ims[0].save(...)` and died with a bare `ZeroDivisionError` — untyped, and AFTER
+    `os.makedirs(a.out)` had created the review directory, so a refused run left an empty
+    directory a later reader takes for an attempt that produced nothing.
+    `--source-fps=0` dies one line later, in the manifest's `a.fps / float(a.source_fps)`
+    and in `clip_name`, which is the FILENAME the Director opens.
+
+    Both are the same clause as `resample_motion`'s `--fps-src`, one tool over.
+    """
+    import make_review_clip as MRC
+
+    frames = _review_frames(tmp_path)
+    out = tmp_path / "review"
+    with pytest.raises(MRC.ReviewClipError, match=r"--fps|--source-fps") as exc:
+        MRC.main([f"--frames={frames}", f"--out={out}", "--stills=0,4", "--crop=8",
+                  f"{flag}={value}"])
+    ev = exc.value.evidence
+    assert ev is not None, "the refusal carries no receipt"
+    assert ev["clause"] == "playback_rate_not_positive", ev
+    assert ev["gate"] == "ARGS" and ev["andon"] == "ReviewClipError", ev
+    assert ev["flag"] == flag and ev["value"] == int(value), ev
+    assert not out.exists(), (
+        "a refused run left its output directory behind; the bound must sit above "
+        "`os.makedirs`")
+
+
+# ---- F-78f49c7c: the review clip's name carries the run token -------------
+
+
+def test_the_clip_name_carries_the_run_token_when_one_is_known():
+    """THE OPERAND: `clip_name`, which returned `review_{rate:.2f}x_{fps}fps.webp` with no
+    run token at all.
+
+    `fetch_run.derived_root_artifacts(run)` returns two patterns and the second —
+    `^review_[0-9.]+x_[0-9]+fps\.[a-z0-9]+$` — cannot be bound to the run, because the name
+    carries no identity. That module's own CORRECTION block measures it and names
+    instruments-measure as the owner of the fix. Today the live consequence is nil (the
+    canonical suffix is `.webp` and `VIDEO_SUFFIXES` is .mp4/.webm/.mkv), but the pattern
+    exists to survive a change of suffix, and on that day a PREVIOUS run's review clip left
+    in a re-used run root is EXEMPTED rather than raised — the exact stray class the sweep
+    was added for.
+    """
+    import make_review_clip as MRC
+
+    assert MRC.clip_name(8, 16) == "review_0.50x_8fps.webp"
+    assert MRC.clip_name(8, 16, run="A2") == "A2_review_0.50x_8fps.webp"
+    assert MRC.clip_name(8, 20, run="A0r1") == "A0r1_review_0.40x_8fps.webp"
+    # a token that is not a run name is not silently pasted on
+    assert MRC.clip_name(8, 16, run="") == "review_0.50x_8fps.webp"
+    assert MRC.clip_name(8, 16, run=None) == "review_0.50x_8fps.webp"
+
+
+def test_the_run_token_is_derived_from_the_frames_run_root(tmp_path, capsys):
+    """The canonical layout is `<run>/lossless/`, so the run is the frames directory's
+    parent. `--out` cannot supply it: `gate_out_directory` REFUSES an `--out` that is the
+    frames directory or that holds a numbered frame population, so `--out` is by
+    construction a review directory and its parent is not run-shaped."""
+    import make_review_clip as MRC
+
+    frames = _review_frames(tmp_path, run="A2")
+    out = tmp_path / "E09" / "review"
+    assert MRC.main([f"--frames={frames}", f"--out={out}", "--stills=0,4",
+                     "--crop=8"]) == 0
+    names = sorted(os.listdir(out))
+    assert "A2_review_0.50x_8fps.webp" in names, names
+    rec = json.loads((out / "review_manifest.json").read_text(encoding="utf-8"))
+    assert rec["run_token"] == "A2", rec
+    assert rec["run_token_source"] == "frames_parent", rec
+    assert "A2_review" in capsys.readouterr().out
+
+
+def test_an_explicit_run_flag_overrides_the_derivation(tmp_path):
+    import make_review_clip as MRC
+
+    frames = _review_frames(tmp_path, run="A2")
+    out = tmp_path / "r2"
+    assert MRC.main([f"--frames={frames}", f"--out={out}", "--stills=0", "--crop=8",
+                     "--run=A1b"]) == 0
+    assert "A1b_review_0.50x_8fps.webp" in os.listdir(out)
+    rec = json.loads((out / "review_manifest.json").read_text(encoding="utf-8"))
+    assert rec["run_token"] == "A1b" and rec["run_token_source"] == "--run"
+
+
+def test_a_frames_directory_with_no_run_root_records_that_it_derived_nothing(tmp_path):
+    """The direction the derivation does NOT bound: a frames directory whose parent is not
+    a run (here, the pytest tmp root). The record says `NOT DERIVED` rather than pasting a
+    plausible token onto the filename — a label on an artifact the Director opens is
+    evidence, and it may not be a placeholder."""
+    import make_review_clip as MRC
+
+    d = tmp_path / "00000frames"
+    d.mkdir()
+    for i in range(2):
+        Image.new("RGB", (16, 16), (9, 9, 9)).save(d / f"{i:05d}.png")
+    out = tmp_path / "r3"
+    assert MRC.main([f"--frames={d}", f"--out={out}", "--stills=0", "--crop=8"]) == 0
+    rec = json.loads((out / "review_manifest.json").read_text(encoding="utf-8"))
+    assert rec["run_token"] == MRC.NO_RUN_TOKEN, rec
+    assert rec["run_token_source"] == "NOT DERIVED", rec
+    assert "review_0.50x_8fps.webp" in os.listdir(out)
