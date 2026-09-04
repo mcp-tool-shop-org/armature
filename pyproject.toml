@@ -99,8 +99,32 @@ dependencies = [
     "matplotlib>=3.7",
 ]
 
+# THE LIST THE SUITE ACTUALLY RUNS AGAINST, not a third copy that agrees with nothing.
+# `dev = ["pytest>=8.0"]` was the manifest's only published statement of how to set up to run
+# this suite, nothing installed it and nothing checked it: measured 2026-09-04, no `pip
+# install` of `.[dev]` exists anywhere under `.github/**` or in `verify.ps1`, and a wheel
+# built from this tree carried `Requires-Dist: pytest>=8.0; extra == "dev"` and nothing else
+# for the extra. So an installer of `armature-studio[dev]` got pytest plus the four runtime
+# deps at their FLOORS: an opencv that is not the version the aapose golden frames were
+# measured against, reading as a code regression rather than a toolchain one — and no
+# `build`, which is what makes the two tests that pin the published sdist's contents SKIP,
+# the silent-skip this repo already paid to close in CI.
+#
+# The specifiers below are the ones ci.yml:239 and release.yml:69 install, character for
+# character. `numpy` and `pillow` are not repeated here: CI installs them bare and they are
+# runtime dependencies above, which is where the requirement already lives. `twine` is not
+# here either — it moves the artifact and never runs the suite, and the toolchain census
+# holds its constraint where it is installed.
+# `tests/test_ci_workflows.py::test_the_manifest_states_the_dependency_list_the_suite_runs_against`
+# derives CI's list from the jobs that run pytest and holds this block to it, so the two
+# cannot fork the way the font dependency did.
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = [
+    "pytest>=8.0",
+    "opencv-python-headless==5.0.0.93",
+    "matplotlib==3.11.1",
+    "build>=1.5,<2",
+]
 
 [project.urls]
 Homepage = "https://mcp-tool-shop-org.github.io/armature/"

@@ -2776,3 +2776,288 @@ def test_ci_runs_on_the_licence_map(trigger):
     assert _pattern_hits(_paths_under(trigger), licence_map), (
         f"{trigger} builds nothing when {licence_map} changes, and the suite reads it by "
         f"path; the filters are {_paths_under(trigger)}")
+
+
+# -- the suite's dependency list, and the manifest's third copy of it (F-968c4c54) --------
+#
+# `[project.optional-dependencies] dev = ["pytest>=8.0"]` was the manifest's only published
+# statement of how to set up to run this suite. Nothing installed it -- measured 2026-09-04
+# by grepping `.github/**` and `verify.ps1` for a `pip install` of `.[dev]`: none -- and
+# nothing checked it. Measured from a wheel built in this worktree, `METADATA` carried
+# `Requires-Dist: pytest>=8.0; extra == "dev"` and nothing else for the extra, so an
+# installer of `armature-studio[dev]` got pytest plus the four runtime deps at their FLOORS
+# and no `build`. A contributor following the manifest then gets an opencv that is not the
+# version the aapose golden frames were measured against and reads the resulting red as a
+# code regression rather than a toolchain one; or `build` is absent and the two tests that
+# pin what the published sdist carries SKIP -- the silent-skip the repo already paid to close
+# in CI. The repo's own law is stated in `.github/actions/sheet-fonts/action.yml:9-12`: two
+# copies of one dependency list is how the font dependency forked.
+#
+# THE NODE THIS CENSUS KEYS ON: the distributions installed into the RUNNER's interpreter
+# BEFORE the step that runs pytest, in every job that runs the suite. Not "the install line
+# in ci.yml" (that is one file), and not "the four names we know about" (a census that knows
+# the answer cannot notice a fifth). Ordering is what separates the suite's environment from
+# the clean room's: `.github/actions/clean-room` installs `build` and `twine` for the leg
+# that runs AFTER the suite, and twine is an artifact-moving tool the suite never imports --
+# it is held to a version by the toolchain census above, which is its own home.
+
+
+def _suite_install_tokens(workflow, job):
+    """Distributions installed into the runner's interpreter before this job runs pytest."""
+    body = "\n".join(_job_lines(_text(workflow), job))
+    tokens = []
+    for script in _run_scripts_in(_code_only(body)):
+        # The step that RUNS the suite ends the collection. Keyed on the script's own verb
+        # and not on the token `pytest`: the install line NAMES pytest, so a search for the
+        # word alone truncates the list in the middle of the line it exists to read.
+        if "pytest" in script and "install" not in script:
+            break
+        tokens.extend(_install_tokens(script))
+    return tokens
+
+
+#: The installer itself, never a dependency of anything. Everything else on an install line
+#: that precedes the suite is a distribution the suite runs against.
+INSTALLER = {"pip"}
+
+_REQUIREMENT = re.compile(r"^([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)(.*)$")
+
+
+def _split_requirement(token):
+    """`opencv-python-headless==5.0.0.93` -> ('opencv-python-headless', '==5.0.0.93')."""
+    match = _REQUIREMENT.match(token)
+    assert match, token
+    return match.group(1).lower().replace("_", "-"), match.group(2).strip()
+
+
+def manifest_requirements():
+    """name -> set of specifiers, over the runtime deps and every extra pyproject declares."""
+    project = PYPROJECT["project"]
+    groups = [project.get("dependencies", [])]
+    groups.extend(project.get("optional-dependencies", {}).values())
+    out = {}
+    for group in groups:
+        for spec in group:
+            name, clause = _split_requirement(spec.split(";")[0].strip())
+            out.setdefault(name, set()).add(clause)
+    return out
+
+
+def test_the_suite_dependency_census_is_the_jobs_that_run_it():
+    """Size and membership before the property, and the two lists must BE one list.
+
+    Two jobs run the suite; both install before it; and the whole point of the finding is
+    that a list with two copies forks. Comparing them here is what makes "one list" a
+    mechanical claim rather than a comment in release.yml.
+    """
+    jobs = jobs_that_run_the_suite()
+    assert sorted(jobs) == [("ci.yml", "python-tests"), ("release.yml", "verify")], jobs
+    lists = {f"{w}:{j}": _suite_install_tokens(w, j) for w, j in jobs}
+    assert all(lists.values()), lists
+    # Sorted: the claim is the distributions and their specifiers, not the order pip is
+    # handed them. Measured 2026-09-04, the two lines differ only in where `pytest` sits,
+    # and asserting on that would be asserting something that is not load-bearing.
+    distinct = {tuple(sorted(v)) for v in lists.values()}
+    assert len(distinct) == 1, (
+        f"the two jobs that run the suite install different things: {lists}; two copies of "
+        "one dependency list is how the font dependency forked"
+    )
+
+
+def test_the_manifest_states_the_dependency_list_the_suite_runs_against():
+    """Every distribution CI installs for the suite is required by the package, at CI's pin.
+
+    The direction that costs: a contributor or a downstream packager follows the manifest,
+    gets an opencv that is not the version the golden frames were measured against, and reads
+    the red as a code regression. The extra is not installed by CI -- CI's line is the one
+    that runs -- so this test is what stops the two from drifting, exactly as the `build`
+    specifier is already held to one string across three files.
+    """
+    declared = manifest_requirements()
+    problems = []
+    for workflow, job in jobs_that_run_the_suite():
+        for token in _suite_install_tokens(workflow, job):
+            name, clause = _split_requirement(token)
+            if name in INSTALLER:
+                continue
+            if name not in declared:
+                problems.append(f"{workflow}:{job} installs {token!r}; pyproject requires no {name!r}")
+            elif clause and clause not in declared[name]:
+                problems.append(
+                    f"{workflow}:{job} installs {token!r}; pyproject requires {name!r} at "
+                    f"{sorted(declared[name])} -- the pin CI runs is not the one the manifest publishes"
+                )
+    assert problems == [], "; ".join(problems)
+
+
+def test_the_dependency_census_goes_red_on_a_forked_pin_and_on_a_name_it_never_heard_of():
+    """The two hidden spellings, both driven through the real comparison.
+
+    A pin that MOVED in CI and a distribution CI installs that the manifest never names are
+    different failures, and a census keyed on the four names it was written against would see
+    neither. Driven on synthetic install lines rather than on the tree, because the tree is
+    the state this test exists to keep green.
+    """
+    declared = manifest_requirements()
+
+    def unstated(line):
+        out = []
+        for token in _install_tokens(line):
+            name, clause = _split_requirement(token)
+            if name in INSTALLER:
+                continue
+            if name not in declared or (clause and clause not in declared[name]):
+                out.append(token)
+        return out
+
+    assert unstated("python -m pip install --upgrade pip\n") == []
+    assert unstated("python -m pip install matplotlib==3.12.0\n") == ["matplotlib==3.12.0"]
+    assert unstated("python -m pip install scipy==1.0\n") == ["scipy==1.0"]
+    assert unstated("python -m pip install numpy pillow pytest\n") == []
+
+
+# -- no CI step decides an answer with a pipeline that can be signalled (F-00cc7a26) ------
+#
+# `.github/actions/sheet-fonts/action.yml:38-39` already refuses to write one, and says why:
+# "No pipelines: `shell: bash` runs with `-o pipefail`, and `find` over a directory that does
+# not exist on this image would then decide the answer instead of the face." The npm clean
+# room carried the one pipeline in the three composite actions --
+# `TARBALL="$PWD/$(ls -1 ./*.tgz | head -1)"` -- under `shell: bash` (GitHub runs
+# `bash --noprofile --norc -eo pipefail {0}`) plus its own `set -eu`.
+#
+# `head -1` closes the pipe after the first line, so `ls` can be signalled (141); under
+# pipefail the command substitution then fails and `set -e` aborts the step with nothing said
+# about tarballs. The window is small -- one short line usually clears the pipe buffer before
+# `head` exits -- which is exactly what makes it the bad kind of failure: a rare red on the
+# gate that stands between the npm package and an irreversible publish, indistinguishable
+# from a real packaging break, green on the retry. WITHOUT pipefail the same shape is the
+# other defect: the pipeline reports the READER's status and a failing writer is swallowed.
+# Both directions are why the rule is "no short-circuiting reader at the end of a pipeline"
+# rather than "no pipeline when pipefail is set".
+#
+# THE NODE THIS CENSUS KEYS ON: the LAST stage of every pipeline in every `run:` script under
+# `.github/` -- workflows and composite actions both, enumerated by `_all_run_scripts()`, so
+# a step added to a fourth workflow or a second action is held the day it lands. Not the
+# token `head -1`: `head -n 1`, `grep -q`, `read` and `sed`'s `q` end a pipe the same way,
+# and a census that recognised one spelling would have passed on the other three.
+
+#: Readers that can close the pipe while the writer is still producing. Each ends the
+#: pipeline early BY DESIGN -- that is what they are for -- so each can leave the writer with
+#: SIGPIPE and the pipeline with a status that describes the plumbing rather than the work.
+SHORT_CIRCUITING_READERS = frozenset({"head", "grep", "read", "sed", "first", "q"})
+
+
+def _pipeline_last_stages(script):
+    """(line, last stage) for every pipeline in a script, comment lines dropped.
+
+    `||` is not a pipe and is not split on. A pipeline continued over a line break (a line
+    ending in `|`) is joined first, because a census that read one physical line at a time
+    would see the writer and never the reader.
+    """
+    joined, buffer = [], ""
+    for raw in _code_only(script).splitlines():
+        line = buffer + raw
+        buffer = ""
+        stripped = line.rstrip()
+        if stripped.endswith("|") and not stripped.endswith("||"):
+            buffer = stripped + " "
+            continue
+        joined.append(line)
+    if buffer:
+        joined.append(buffer)
+
+    out = []
+    for line in joined:
+        stages, current, i = [], "", 0
+        while i < len(line):
+            if line[i] == "|":
+                if i + 1 < len(line) and line[i + 1] == "|":
+                    current += "||"
+                    i += 2
+                    continue
+                stages.append(current)
+                current = ""
+                i += 1
+                continue
+            current += line[i]
+            i += 1
+        stages.append(current)
+        if len(stages) > 1:
+            out.append((line.strip(), stages[-1].strip()))
+    return out
+
+
+def _reader_word(stage):
+    """The command word of a pipeline's last stage, unwrapped from `$( ... )` and quotes."""
+    text = stage.strip().strip(")").strip('"').strip("'").strip()
+    for token in text.split():
+        word = token.strip("$(){}\"';").split("/")[-1]
+        if word and not word.startswith("-"):
+            return word
+    return ""
+
+
+def _signalling_pipelines(script):
+    """Every pipeline in a script whose last stage is a short-circuiting reader."""
+    return [line for line, last in _pipeline_last_stages(script)
+            if _reader_word(last) in SHORT_CIRCUITING_READERS]
+
+
+def test_the_pipeline_census_is_every_run_script_under_dot_github():
+    """Size and membership before the property: the walk must see the actions, not just the
+    workflows -- the one pipeline this finding named lived in a composite action."""
+    sources = {source for source, _ in _all_run_scripts()}
+    assert sources >= {
+        "ci.yml", "release.yml",
+        ".github/actions/npm-clean-room/action.yml",
+        ".github/actions/sheet-fonts/action.yml",
+    }, sorted(sources)
+    assert len(_all_run_scripts()) >= 10, len(_all_run_scripts())
+
+
+_RUN_SCRIPTS = _all_run_scripts()
+
+
+@pytest.mark.parametrize(
+    "source,script", _RUN_SCRIPTS,
+    ids=[f"{source}#{i}" for i, (source, _) in enumerate(_RUN_SCRIPTS)],
+)
+def test_no_ci_step_reads_an_answer_off_a_pipeline_that_can_be_signalled(source, script):
+    """The property, over every run script in the tree."""
+    offenders = _signalling_pipelines(script)
+    assert offenders == [], (
+        f"{source} decides something with a pipeline whose reader can close the pipe: "
+        f"{offenders}; under pipefail the writer's SIGPIPE aborts the step with nothing said "
+        "about what it was doing, and without pipefail the writer's failure is swallowed"
+    )
+
+
+def test_the_pipeline_census_sees_the_spellings_it_was_not_written_against():
+    """The hidden spellings, shown red; and the shapes that must NOT be flagged.
+
+    `head -1` is the one the finding named. `head -n 1`, `grep -q`, a `read` at the end of a
+    pipe and `sed` are the same behaviour under other spellings, and a pipeline continued
+    across a line break hides the reader from any line-at-a-time walk. `||` is not a pipe,
+    and a last stage that consumes its whole input (`sort`, `wc`) ends nothing early.
+    """
+    red = [
+        'TARBALL="$PWD/$(ls -1 ./*.tgz | head -1)"',
+        'X=$(ls | head -n 1)',
+        'ls | grep -q armature',
+        'printf x | read v',
+        'cat f | sed -n 1p',
+        'ls \\\n  | head -1',
+        'ls |\n  head -1',
+    ]
+    for script in red:
+        assert _signalling_pipelines(script), f"not seen as a signalling pipeline: {script!r}"
+    green = [
+        'ls -la "$PREFIX/node_modules/.bin" || echo "(no node_modules/.bin at all)"',
+        'find /usr/share/fonts -iname "$1" -print -quit 2>/dev/null || true',
+        'ls | sort',
+        'npm pack',
+        'set -- ./*.tgz',
+        '# a comment naming ls | head -1',
+    ]
+    for script in green:
+        assert _signalling_pipelines(script) == [], f"flagged wrongly: {script!r}"
