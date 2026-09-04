@@ -45,10 +45,6 @@ class InvertError(ArmatureError):
     that fired it is the useful half.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def frame_population(src, expect=None):
     """The NUMBERED frames of `src`, in index order, and a refusal for anything else.

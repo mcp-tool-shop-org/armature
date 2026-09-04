@@ -75,14 +75,13 @@ MIN_DST_FRAMES = 2
 class ResampleArgError(ArmatureError):
     """A flag this tool was given is not a value it can resample with.
 
-    Carries its own `(message, evidence)` constructor: `ArmatureError` has none, so a
-    second positional argument would be swallowed into `args[1]` and never become
-    `.evidence` — the shape F-8393e66c measured on `stage_render`'s halt line this wave.
+    It defines no constructor. The wave-14 note here read "carries its own
+    `(message, evidence)` constructor: `ArmatureError` has none" — measured false on this
+    tree, where `armature_core/errors.py:40-42` defines exactly that shape and stores the
+    dict as passed. What the local copy added was `evidence or {}`, which normalises a bare
+    refusal's null receipt into an empty dict and so contradicts the base's own rule
+    (`errors.py:27-33`). Deleted wave 16; the two raises below reach the base unchanged.
     """
-
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
 
 
 def parse_args(argv=None):

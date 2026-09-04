@@ -58,10 +58,6 @@ MISSING = "NOT RECORDED"
 class SheetInputError(ArmatureError):
     """A tile could not be read. Names the path, which an AttributeError did not."""
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def _get(meta, *path, default=MISSING):
     """Walk a path through the record, or return `NOT RECORDED`."""

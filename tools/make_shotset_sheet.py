@@ -69,10 +69,6 @@ class ShotsetSheetError(ArmatureError):
     refusals are typed.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 TOOL_VERSION = "S05.1"
 

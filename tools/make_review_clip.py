@@ -53,10 +53,6 @@ class ReviewClipError(ArmatureError):
     `SystemExit` string the frame check used to raise.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def gate_out_directory(out, frames_dir):
     """ANDON — `--out` is a review directory, not the run it is reading.

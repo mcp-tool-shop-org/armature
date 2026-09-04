@@ -52,10 +52,6 @@ class IdentitySheetError(SheetPopulationError):
     fewer angles than were requested.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def _load_rgb(path, plate=SHEET_PLATE):
     """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""

@@ -34,10 +34,6 @@ class AnalyzeP3Error(ArmatureError):
     it got.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def _arr(path):
     img = Image.open(path)

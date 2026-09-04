@@ -88,28 +88,32 @@ ANCHOR_TOLERANCE = 0.0005  # published to 3 decimals; this is half a unit in the
 ANCHOR_ABSENT_EXIT = 3
 
 
-class _CarriesEvidence(ArmatureError):
-    """`(message, evidence=None)`, stored on `.evidence` — the shape `GateFailure` has.
+# ---- `_CarriesEvidence` was here, and is DELETED (wave 16, F-13333ef4).
+#
+# It was introduced in wave 14 as a private base giving the two classes below the
+# `(message, evidence=None)` shape, on the stated premise that "`ArmatureError` defines
+# none". Measured in this worktree on 2026-09-04, that premise is FALSE: the wave-14 merge
+# put `__init__(self, message, evidence=None)` on the base itself
+# (`armature_core/errors.py:40-42`), storing the dict AS PASSED.
+#
+# What survived the premise was a behaviour CHANGE the base rules against. Measured:
+# `ArmatureError('m').evidence is None` while `TrackingError('m').evidence == {}` -- and
+# `errors.py:27-33` states that the null is the honest record for a plain refusal
+# ("`evidence: null` beside `gate: null` ... The defect was never the null"). An AST walk
+# over `tools/*.py` for `raise _CarriesEvidence(` found ZERO sites, so the class's only
+# remaining effect was that contradiction, in a domain where all thirty plain-refusal
+# classes had made the same one.
+#
+# Both classes below now derive `ArmatureError` directly and define no `__init__`:
+# inheritance already gives them the two-argument shape, and a bare-message refusal from
+# either of them prints `"evidence": null` in its halt record, as the contract says it must.
 
-    F-734951dc, wave 14. A constructor probe over every `ArmatureError` subclass defined in
-    the 42 files of this domain found exactly three classes that declare or want a gate id
-    and define no `__init__`: `extract_clip_frames.ClipReadError` and the two below.
-    `ArmatureError` defines none, so a second positional argument lands in `args[1]`, never
-    becomes `.evidence`, and turns `str(exc)` into a 2-tuple repr. The two classes below
-    raise with ONE argument today and so lose nothing yet — and carry no receipt either,
-    which is why the constructor lands before a caller reaches for it rather than after.
-    """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
-
-class TrackingError(_CarriesEvidence):
+class TrackingError(ArmatureError):
     """The statistic could not be computed on what was handed to it."""
 
 
-class AnchorMismatch(_CarriesEvidence):
+class AnchorMismatch(ArmatureError):
     """The instrument does not reproduce E02's published figures.
 
     Not cosmetic. E04 exists to put a floor under two numbers E02 published; an

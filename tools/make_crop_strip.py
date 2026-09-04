@@ -42,10 +42,6 @@ class CropStripError(ArmatureError):
     is the useful half, and a caller catching this tool's own error catches all of them.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def _is_int(text):
     """An integer token, leading sign allowed. `str.isdigit()` refuses `-4`, which is a

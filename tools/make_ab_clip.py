@@ -58,10 +58,6 @@ class ABClipError(ArmatureError):
     refusals are typed.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 
 def frame_paths(directory):

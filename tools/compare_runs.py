@@ -77,10 +77,6 @@ from armature_core.errors import ArmatureError  # noqa: E402
 class CompareError(ArmatureError):
     """The comparison could not be made — not "the runs differ", but "nothing was opened"."""
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def _sha256(path):
     h = hashlib.sha256()

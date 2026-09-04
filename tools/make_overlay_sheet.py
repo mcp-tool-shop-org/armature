@@ -43,10 +43,6 @@ class OverlaySheetError(ArmatureError):
     where they are; what this class exists for is the WRITE, which had no refusal at all.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser()

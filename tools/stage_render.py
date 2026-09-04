@@ -538,15 +538,23 @@ def _parse_argv(argv, known=KNOWN_FLAGS, required=REQUIRED_FLAGS):
     absence is why `sheet_compose` exists as a separate step at all). An import here would
     turn every export into an `ImportError` at module load.
 
-    **Why these three refusals carry no evidence dict.** `SpecError` descends from
-    `ArmatureError`, which has no `__init__` at all, so a second positional argument is
-    swallowed into `args[1]`, never becomes `.evidence`, and turns `str(exc)` into a
-    2-tuple repr — that is F-8393e66c, measured on this same module's OSError branch this
-    wave. Until `ArmatureError` gains the `(message, evidence=None)` constructor
-    `GateFailure` already has (core-gates owns it, wave 14), the honest place for the
-    flag, the token and the known set is the MESSAGE, where a reader and the halt line
-    both see it. `_UnreadablePath` below carries the constructor itself and shows the
-    shape a subclass needs today.
+    **The three refusals carry an evidence dict, and the blocker that stopped them is
+    gone.** This paragraph used to close: "Until `ArmatureError` gains the
+    `(message, evidence=None)` constructor `GateFailure` already has (core-gates owns it,
+    wave 14), the honest place for the flag, the token and the known set is the MESSAGE."
+    That condition was SATISFIED at the wave-14 merge and the sentence outlived it.
+    Measured in this worktree 2026-09-04: `armature_core/errors.py:40-42` defines
+    `ArmatureError.__init__(self, message, evidence=None)`, and
+    `SpecError("m", {"gate": None, "flag": "--nope"}).evidence` returns the dict with
+    `str(exc) == "m"` — no 2-tuple repr. Measured on the live path before the fix,
+    `main(["--sepc=x", "--out=y"])` printed `STAGE_RENDER_HALT` with `"evidence": null`
+    for a mistyped flag on a spend-adjacent tool, so a CI or PowerShell chain parsing the
+    line to route a failure had to regex the prose to learn which flag was rejected and
+    what the known set was.
+
+    The message keeps saying all of it — a human reads the line too — and the receipt is
+    beside it now: `{gate, andon, clause, token, key, known}`, with `clause` one of
+    `not_a_flag`, `unknown_flag`, `missing_required`.
     """
     known = tuple(known)
     args = {}
@@ -554,20 +562,27 @@ def _parse_argv(argv, known=KNOWN_FLAGS, required=REQUIRED_FLAGS):
         if not token.startswith("--") or "=" not in token:
             raise SpecError(
                 f"expected --key=value, got {token!r}; stage_render takes "
-                f"{', '.join('--' + k for k in known)}")
+                f"{', '.join('--' + k for k in known)}",
+                {"gate": None, "andon": "SpecError", "clause": "not_a_flag",
+                 "token": token, "key": None, "known": list(known)})
         key, _, value = token[2:].partition("=")
         if key not in known:
             raise SpecError(
                 f"unknown flag --{key}; stage_render takes "
                 f"{', '.join('--' + k for k in known)}. A flag registered under a typo is "
                 f"read by nobody, and the render is then spent on the spec's own values "
-                f"with a success line and a finished-looking manifest")
+                f"with a success line and a finished-looking manifest",
+                {"gate": None, "andon": "SpecError", "clause": "unknown_flag",
+                 "token": token, "key": key, "known": list(known)})
         args[key] = value
     for name in required:
         if name not in args:
             raise SpecError(
                 f"missing --{name}=<path>; stage_render takes "
-                f"{', '.join('--' + k for k in known)}")
+                f"{', '.join('--' + k for k in known)}",
+                {"gate": None, "andon": "SpecError", "clause": "missing_required",
+                 "token": None, "key": name, "known": list(known),
+                 "given": sorted(args)})
     return args
 
 
@@ -604,24 +619,26 @@ class _UnreadablePath(ArmatureError):
     """A path this tool was pointed at could not be opened. Carries its own evidence.
 
     F-8393e66c, wave 14. The OSError branch below used to raise the BASE `ArmatureError`
-    with a second positional argument, and `armature_core/errors.py` gives that class no
-    `__init__` — only `GateFailure` accepts `(message, evidence)`. Measured on this branch
-    before the fix: `tools/stage_render.py --spec=nope.json --out=<tmp>` exited 2 and
-    printed a `STAGE_RENDER_HALT` line whose `evidence` was `null` and whose `message` was
-    the Python 2-tuple repr of (the FileNotFoundError text, the evidence dict) — the
+    with a second positional argument, which that class then had no `__init__` to receive.
+    Measured on that branch: `tools/stage_render.py --spec=nope.json --out=<tmp>` exited 2
+    and printed a `STAGE_RENDER_HALT` line whose `evidence` was `null` and whose `message`
+    was the Python 2-tuple repr of (the FileNotFoundError text, the evidence dict) — the
     receipt the comment beside it promised was delivered by no code. An AST census that
     keys on "the raise passes a literal dict" scores that site compliant while the runtime
     discards it, which is why the fix is a class and not a census.
+
+    **WAVE 16 (F-13333ef4): its own constructor is DELETED.** The base gained
+    `__init__(self, message, evidence=None)` at the wave-14 merge and stores what it is
+    passed, so the local copy added exactly one thing — `evidence or {}` — which turns a
+    bare-message refusal's honest `null` receipt into an empty dict. The class remains,
+    because the CLASS is what makes the halt legible (a named andon rather than the family
+    base); only the redundant constructor goes.
 
     It is NOT a `GateFailure`: no gate ran. `gate: None` in the evidence is the receipt for
     that, exactly as the comment at the raise site says, and the `__main__` handler reads
     `getattr(exc, "gate", None)` — which is `None` here — to classify the halt as REFUSED
     rather than HALTED.
     """
-
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
 
 
 def main(argv=None):
@@ -669,9 +686,11 @@ def main(argv=None):
     except OSError as exc:
         # A spec path that is not there is a refusal, not a crash: the operator mistyped a
         # flag. It reached no gate, so it carries no gate id (`gate: None` is the receipt).
-        # WAVE 14 (F-8393e66c): the class is `_UnreadablePath`, not the bare base — the base
-        # has no `__init__`, so this dict used to land in `args[1]` and the halt line
-        # printed `"evidence": null` beside a message that was a 2-tuple repr.
+        # WAVE 14 (F-8393e66c): the class is `_UnreadablePath`, not the bare base. On that
+        # branch the base had no `__init__`, so this dict landed in `args[1]` and the halt
+        # line printed `"evidence": null` beside a message that was a 2-tuple repr. The base
+        # carries the constructor now (wave-14 merge, `errors.py:40-42`); the named class
+        # stays because a halt record names the andon that pulled, never the family.
         raise _UnreadablePath(
             f"{type(exc).__name__}: {exc}",
             {"gate": None, "andon": "_UnreadablePath",

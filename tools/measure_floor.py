@@ -102,10 +102,6 @@ WINDOW_FRACTION = 5.0 / 33.0
 class FloorError(ArmatureError):
     """The floor could not be measured over the population that was asked for."""
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def check_runs(runs):
     """Distinct, and at least two of them. Raises before any stack is loaded."""
