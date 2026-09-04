@@ -1409,16 +1409,35 @@ def test_the_credential_file_of_every_registry_this_repo_publishes_to_is_ignored
 
 
 def _build_sdist(tmp_path):
-    """Build the sdist from the repo into tmp_path and return the unpacked root."""
+    """Build the sdist from the repo into tmp_path and return the unpacked root.
+
+    WAVE 10, F-b54f91aa — the two conditions this collapsed into one. Until now ANY
+    non-zero exit from `python -m build --sdist` became `pytest.skip("python -m build is
+    not available or failed here")`, so a broken MANIFEST.in, a setuptools error or a
+    pyproject the backend refuses reported ABSENCE, in the same message as a missing
+    dependency — and both tests that assert what the sdist carries go through here.
+    Measured 2026-09-04: pointing this module's `REPO` at a scratch directory holding a
+    deliberately malformed `pyproject.toml` raised `Skipped`, not an assertion.
+
+    The absence check is now `importlib.util.find_spec("build")`, which asks the question
+    the skip was claiming to ask; a `build` that is PRESENT and exits non-zero fails, with
+    its stderr. ci-packaging installs `build` before the suite in both jobs that run it
+    (SEAM 7), so the release path exercises these two tests rather than skipping them.
+    """
+    import importlib.util
     import tarfile
+
+    if importlib.util.find_spec("build") is None:
+        pytest.skip("the `build` module is not installed in this interpreter")
 
     out = tmp_path / "dist"
     proc = subprocess.run(
         [sys.executable, "-m", "build", "--sdist", "--outdir", str(out), REPO],
         capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=REPO,
     )
-    if proc.returncode != 0:
-        pytest.skip(f"python -m build is not available or failed here:\n{proc.stderr[-1500:]}")
+    assert proc.returncode == 0, (
+        f"`python -m build --sdist` is installed and exited {proc.returncode}; that is a "
+        f"packaging regression, not an absent dependency:\n{proc.stderr[-2000:]}")
     archives = sorted(out.glob("*.tar.gz"))
     assert len(archives) == 1, [a.name for a in archives]
     with tarfile.open(archives[0]) as tf:
@@ -1457,3 +1476,49 @@ def test_the_sdist_still_carries_the_package_the_wheel_installs(tmp_path):
                                f"in the sdist but not on disk: {sorted(shipped - on_disk)}")
     for doc in ("pyproject.toml", "README.pypi.md", "LICENSE"):
         assert (root / doc).exists(), f"{doc} is named by pyproject and must ship"
+
+
+def test_a_build_that_is_installed_and_fails_is_a_failure_not_an_absence(tmp_path,
+                                                                        monkeypatch):
+    """The red proof for F-b54f91aa: the ONLY enforcement of the sdist decision used to
+    convert its own failure into a skip.
+
+    Driven the way the finding measured it — this module's `REPO` pointed at a scratch tree
+    whose `pyproject.toml` the build backend refuses. Before the fix `_build_sdist` raised
+    `Skipped`; it must now raise `AssertionError` and carry the backend's stderr.
+    """
+    import importlib.util
+
+    if importlib.util.find_spec("build") is None:
+        pytest.skip("the `build` module is not installed in this interpreter")
+
+    broken = tmp_path / "broken"
+    broken.mkdir()
+    (broken / "pyproject.toml").write_text(
+        "[build-system]\nrequires = [\nbroken = not toml\n", encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "REPO", str(broken))
+
+    with pytest.raises(AssertionError) as exc:
+        _build_sdist(tmp_path / "work")
+    assert "packaging regression, not an absent dependency" in str(exc.value)
+
+
+def test_the_sdist_skip_asks_the_question_it_claims_to_ask(tmp_path, monkeypatch):
+    """The absence branch, driven: with `build` reported absent the helper skips; that is
+    the one case a skip is honest about. Behavioural, not a substring over source."""
+    import importlib.util
+
+    assert importlib.util.find_spec("build") is not None, (
+        "measured on this rig with build 1.5.0 present")
+
+    real = importlib.util.find_spec
+
+    def absent(name, *a, **kw):
+        return None if name == "build" else real(name, *a, **kw)
+
+    monkeypatch.setattr(importlib.util, "find_spec", absent)
+    # `Skipped` derives from BaseException, not Exception — catching the wrong root is how
+    # this test skipped itself the first time it was written.
+    with pytest.raises(pytest.skip.Exception) as exc:
+        _build_sdist(tmp_path / "work")
+    assert "not installed" in str(exc.value)
