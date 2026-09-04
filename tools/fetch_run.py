@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 """fetch_run — turn a get_output dump into a run directory on disk.
 
-    python tools/fetch_run.py --dump=<get_output.txt> --run=<name> [--arm=A1a]
+    python tools/fetch_run.py --dump=<get_output.txt> --run=<name> [--node-map=41=a,71=b]
+
+(`[--arm=A1a]` stood here until wave 12, F-4150910d. No parser in this file declares
+`--arm`; the documented line exited 2 on argparse's "unrecognized arguments", which
+is the code this module reserves for a gate refusal, with no FETCH_RUN_HALT line for
+a wrapper to key on. The optional flag this tool actually takes is `--node-map`.)
 
 `get_output` returns one record per file, and a run with the lossless tap emits 67 of
 them (33 batch-probe + 33 lossless + 1 video). That is far past what belongs in a

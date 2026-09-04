@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 r"""build_camera_i2v_payload — E11's camera-held graph, built in this repo.
 
-    python tools\build_camera_i2v_payload.py --uploads=<uploads.json> --out=<dir>
+    python tools\build_camera_i2v_payload.py --uploads=<uploads.json> --out=<dir> --subject=PERFORMER --no-canon
            --negative-source=<wan22_shared_config.py> --seeds-registry=specs\E11-seeds.json
            --w1-record=<E11-probe-payload-record.json> --start-frame=<start.png>
            [--seed=2026081233 | --seeds-registry=specs\\E12-seeds.json]

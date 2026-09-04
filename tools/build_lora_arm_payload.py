@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 r"""build_lora_arm_payload — E14's bake-off arms, built in this repo from E12's pinned graph.
 
-    python tools\build_lora_arm_payload.py --base=<E12-w3-camera-i2v.api.json> --arm=T
+    python tools\build_lora_arm_payload.py --base=<E12-w3-camera-i2v.api.json> --arm=T --subject=PERFORMER --no-canon
            --out=<dir> --seeds-registry=specs\E14-seeds.json --seed=2026081233
 
 E14 asks one question per arm: what does ONE style LoRA at its trained strength do to the

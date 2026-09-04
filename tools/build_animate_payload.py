@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """build_animate_payload — E08's `WanAnimateToVideo` graph, built in this repo.
 
-    python tools\\build_animate_payload.py --uploads=<uploads.json> --out=<dir>
+    python tools\\build_animate_payload.py --uploads=<uploads.json> --out=<dir> \
+        --subject=PERFORMER --no-canon
            [--seed=2026081201 | --seeds-registry=specs\\E08-seeds.json]
 
 **Built here, never served.** `docs/license-map.md` trap #3 and CLAUDE.md both record the

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 r"""build_i2v_payload — E11's `WanImageToVideo` graph, built in this repo.
 
-    python tools\build_i2v_payload.py --uploads=<uploads.json> --out=<dir>
+    python tools\build_i2v_payload.py --uploads=<uploads.json> --out=<dir> --subject=PERFORMER --no-canon
            --negative-source=<wan22_shared_config.py> --seeds-registry=specs\E11-seeds.json
            --e08-record=<E08-probe-payload-record.json>
            [--seed=2026081231 | --seeds-registry=specs\\E11-seeds.json]

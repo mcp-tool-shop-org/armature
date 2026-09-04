@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """build_t2v_payload — E09 B2's graph, built in-repo from pieces the licence map covers.
 
-    python tools/build_t2v_payload.py --seeds=specs/E09-A3-seeds.json --out=outputs/E09/route2
+    python tools/build_t2v_payload.py --seeds=specs/E09-A3-seeds.json --out=outputs/E09/route2 \
+        --subject=PERFORMER --no-canon
 
 Commissioned by ruling R8 after Gate ROUTE refused the served `video_wan2_2_14B_t2v`
 template. **A served template is a reference, never a route** (CLAUDE.md, measured twice on
