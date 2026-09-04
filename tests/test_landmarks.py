@@ -220,3 +220,75 @@ def test_an_arm_that_never_separates_from_the_body_raises():
         ]
     with pytest.raises(LandmarkError):
         landmarks.derive(np.concatenate(parts, axis=0), n_bands=100)
+
+
+# ------------------------------- the facing cross-check is compared to something now
+
+
+def _facing_verts(foot_ys, head_ys, shin_ys=(0.0,)):
+    """Vertices shaped for `facing(verts, z_ankle=0.06, height=1.0, z_ground=0.0)`.
+
+    Slabs, not a figure: the foot slab is z < 0.03, the shin slab 0.06 <= z < 0.11, the
+    head slab z > 0.88. Building them directly is what lets each clause be driven on its
+    own — a whole synthetic figure moves several of these at once.
+    """
+    pts = [(0.0, y, 0.01) for y in foot_ys]
+    pts += [(0.0, y, 0.08) for y in shin_ys]
+    pts += [(0.0, y, 0.95) for y in head_ys]
+    return np.array(pts, dtype=np.float64)
+
+
+def _facing(foot_ys, head_ys, **kw):
+    return landmarks.facing(_facing_verts(foot_ys, head_ys, **kw), 0.06, 1.0, 0.0)
+
+
+def test_a_foot_that_does_not_separate_forward_from_back_is_refused():
+    """F-d876df3f. `sign = 1.0 if fwd > back else -1.0` had NO separation requirement, so
+    on an exact tie the sign was taken from the `else` branch — an arbitrary -1 — and
+    `left_x_sign = -sign` mirrored the whole downstream chain from it: the gait's forward
+    direction and handedness (walk.py reads fy and lx on every bone) and the AAPose-20 L/R
+    map, whose own docstring warns that a mirrored reading would produce a solve that
+    round-trips perfectly and is wrong. `foot_margin` measured exactly this separation and
+    was read by nothing."""
+    with pytest.raises(landmarks.FacingGate) as exc:
+        _facing(foot_ys=(-0.05, 0.05), head_ys=(-0.08, 0.08))
+    assert exc.value.evidence["foot_margin"] == pytest.approx(0.0)
+    assert "arbitrary" in str(exc.value) or "tie" in str(exc.value)
+
+
+def test_the_head_cross_check_is_refused_when_it_separates_better_than_the_feet():
+    """`cross_check_agrees` was computed and compared to nothing — a repo-wide grep found
+    it in exactly two places, this line and one assertion in this file. The head stays
+    ADVISORY (a clay mannequin may have no nose, and a face-derived answer would be noise),
+    so the comparison is between the two instruments in their own units: each margin as a
+    fraction of its own structure's y-extent. A head that disagrees while separating its
+    own front from its own back at least as well as the feet do is not noise."""
+    with pytest.raises(landmarks.FacingGate) as exc:
+        _facing(foot_ys=(-0.011, 0.010), head_ys=(-0.02, -0.02, 0.20))
+    ev = exc.value.evidence
+    assert ev["cross_check_agrees"] is False
+    assert ev["head_margin_fraction"] >= ev["foot_margin_fraction"]
+
+
+def test_a_noisy_head_that_disagrees_with_decisive_feet_is_reported_not_refused():
+    """The other side, and the reason this is not a raise on `cross_check_agrees` alone:
+    the module's own docstring says the head is a cross-check and not a tiebreaker."""
+    # A head whose mean sits below its own midpoint by a hair: it reads +1 against the
+    # feet's -1, and separates its own front from its own back on 0.3292 of its y-extent
+    # against the feet's 0.5385 - measured, both.
+    f = _facing(foot_ys=(-0.10, 0.03), head_ys=(-0.08, -0.079, 0.08))
+    assert f["facing_y_sign"] == -1.0
+    assert f["cross_check_agrees"] is False
+    assert f["head_margin_fraction"] < f["foot_margin_fraction"]
+    assert "advisory" in f["instrument"]
+
+
+def test_the_two_margins_ride_the_record_as_fractions_of_their_own_structures():
+    """Per-structure, never a length in metres — a global constant must not govern a local
+    feature, and a margin in metres would mean different things on a 0.3 m foot and a
+    1.8 m one."""
+    f = _facing(foot_ys=(-0.10, 0.03), head_ys=(-0.02, -0.02, 0.20))
+    assert 0.0 <= f["foot_margin_fraction"] <= 1.0
+    assert f["foot_margin_fraction"] == pytest.approx(
+        abs(f["foot_forward_extent"] - f["foot_backward_extent"])
+        / (f["foot_forward_extent"] + f["foot_backward_extent"]))
