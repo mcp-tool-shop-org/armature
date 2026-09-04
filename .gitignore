@@ -48,9 +48,17 @@ build/
 # `armature-studio-0.3.0.tgz` here, and that was NOT IGNORED.
 *.tgz
 
+# npm dependency trees, at ANY depth. The rule was written `site/node_modules/` for the one
+# npm tree that existed then; `npm/package.json` has carried its own `scripts.test` since
+# v0.2.0 — run by ci.yml, by release.yml and by verify.ps1 — so an `npm install` there is an
+# ordinary local act, and `git check-ignore` reported both `npm/node_modules/x.js` and a
+# root-level `node_modules/x.js` NOT IGNORED. A bare `node_modules/` matches at every depth,
+# and `tests/test_packaging.py` derives the directories npm can install into by walking for
+# `package.json` rather than reading a list written here.
+node_modules/
+
 # Site (Astro/Starlight under site/). The lockfile IS committed — CI runs
 # `npm ci`, so the build that runs there is the build verified on the rig.
-site/node_modules/
 site/dist/
 site/.astro/
 
@@ -70,6 +78,12 @@ site/.astro/
 .env.*
 .npmrc
 .pypirc
+# The third file both clients read. npm follows the netrc convention for registry auth and
+# pip/twine reach it through requests' trust_env, so `.netrc` carries exactly the same
+# long-lived token `.npmrc` and `.pypirc` do — and it was not on this list.
+# `tests/test_packaging.py` derives the carriers from the registries the workflows actually
+# publish to, so a third registry brings its credential file with it.
+.netrc
 *.key
 *.pem
 *.p12
