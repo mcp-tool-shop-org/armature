@@ -8,12 +8,14 @@ import os
 
 import pytest
 
+from conftest import assert_gate, gate_failure_subclasses
 from armature_core import gates
 from armature_core.errors import (
     G1GeneratorLegality,
     G2Completeness,
     G4BboxSanity,
     G5ConventionConformance,
+    GateFailure,
 )
 
 
@@ -30,7 +32,9 @@ def test_g1_red_on_width_not_divisible_by_16():
     with pytest.raises(G1GeneratorLegality) as exc:
         gates.g1_generator_legality(1020, 768, 33, "wan-vace")
     assert "width=1020" in str(exc.value)
-    assert exc.value.gate == "G1"
+    # Through `assert_gate` rather than on the message alone: a gate whose evidence dict
+    # went empty on a refactor would keep this message and stop carrying the numbers.
+    assert_gate(exc, "G1", width=1020, height=768, frame_count=33, problems=...)
 
 
 def test_g1_red_on_height_not_divisible_by_16():
@@ -43,6 +47,7 @@ def test_g1_red_on_frame_count_not_4n_plus_1():
     with pytest.raises(G1GeneratorLegality) as exc:
         gates.g1_generator_legality(512, 768, 80, "wan-vace")
     assert "4n+1" in str(exc.value)
+    assert_gate(exc, "G1", frame_count=80, problems=...)
 
 
 # The sweep's own population. `81 + 1` sat here and evaluated to 82, whose residue is 2 —
@@ -77,6 +82,7 @@ def test_g1_red_on_unknown_generator():
     with pytest.raises(G1GeneratorLegality) as exc:
         gates.g1_generator_legality(512, 768, 33, "some-model-nobody-filed")
     assert "unknown generator profile" in str(exc.value)
+    assert_gate(exc, "G1", generator="some-model-nobody-filed", known=...)
 
 
 def test_g1_red_on_bool_masquerading_as_int():
@@ -116,6 +122,7 @@ def test_g2_red_on_a_truncated_directory(tmp_path):
     with pytest.raises(G2Completeness) as exc:
         gates.g2_completeness(str(tmp_path), {"mask": names}, 5)
     assert "4 frames present, expected 5" in str(exc.value)
+    assert_gate(exc, "G2", frame_count=5, run_dir=..., channels=...)
 
 
 def test_g2_red_on_a_zero_length_frame(tmp_path):
@@ -125,6 +132,7 @@ def test_g2_red_on_a_zero_length_frame(tmp_path):
     with pytest.raises(G2Completeness) as exc:
         gates.g2_completeness(str(tmp_path), {"mask": names}, 5)
     assert "zero-length" in str(exc.value)
+    assert_gate(exc, "G2", frame_count=5, channels=...)
 
 
 def test_g2_red_on_a_missing_directory(tmp_path):
@@ -145,8 +153,9 @@ def test_g4_red_on_facets_actual_failure():
     388. That is this case."""
     with pytest.raises(G4BboxSanity) as exc:
         gates.g4_bbox_sanity(7, (0, 0, 750, 700), (180, 60, 568, 700), 2, 752, 752)
-    assert exc.value.gate == "G4"
     assert "disagrees" in str(exc.value)
+    assert_gate(exc, "G4", frame=7, tolerance_px=2, mask_bbox=..., projected_bbox=...,
+                deltas_px=...)
 
 
 def test_g4_red_on_an_empty_mask():
@@ -154,6 +163,7 @@ def test_g4_red_on_an_empty_mask():
     with pytest.raises(G4BboxSanity) as exc:
         gates.g4_bbox_sanity(3, None, (10, 10, 100, 100), 2, 128, 128)
     assert "mask is empty" in str(exc.value)
+    assert_gate(exc, "G4", frame=3, mask_bbox=None, projected_bbox=...)
 
 
 def test_g4_red_when_nothing_projects():
@@ -178,6 +188,7 @@ def test_g5_red_on_coco17():
     with pytest.raises(G5ConventionConformance) as exc:
         gates.g5_openpose_conformance(17, openpose.LIMB_SEQ, 18, openpose.LIMB_SEQ)
     assert "keypoint count 17 != 18" in str(exc.value)
+    assert_gate(exc, "G5", keypoint_count=17, reference_count=18, problems=...)
 
 
 def test_g5_red_on_zero_indexing():
@@ -227,3 +238,131 @@ def test_wan_fun_control_rejects_the_same_near_misses_as_vace():
         for gen in ("wan-vace", "wan-fun-control"):
             with pytest.raises(G1GeneratorLegality):
                 g1_generator_legality(w, h, n, gen)
+
+
+# ------------------------------------------------- the class-wide invariant on the andons
+
+def test_every_gate_failure_subclass_declares_its_own_id():
+    """`GateFailure.gate` defaults to `"G?"`. A subclass that forgets to override it
+    raises an andon that no report can name, and every message-string assertion in the
+    suite stays green through it. Enumerated, so a gate added later cannot opt out."""
+    subs = gate_failure_subclasses()
+    assert subs, "no GateFailure subclasses found; the enumeration is broken, not clean"
+    anonymous = [c.__name__ for c in subs if c.gate == GateFailure.gate]
+    assert not anonymous, f"these carry the default gate id {GateFailure.gate!r}: {anonymous}"
+    blank = [c.__name__ for c in subs if not isinstance(c.gate, str) or not c.gate.strip()]
+    assert not blank, blank
+
+
+def test_gate_ids_are_unique_across_the_andons():
+    """Two andons sharing an id makes a report ambiguous about which one pulled."""
+    ids = [c.gate for c in gate_failure_subclasses()]
+    dupes = sorted({i for i in ids if ids.count(i) > 1})
+    assert not dupes, f"gate ids used by more than one class: {dupes}"
+
+
+def test_the_enumeration_would_catch_a_new_andon_that_forgot_its_id():
+    """The red direction. A check that only ever runs on a clean population is unproven,
+    so an andon that forgets is defined here and the same enumeration must find it."""
+
+    class _AndonThatForgot(GateFailure):
+        pass
+
+    try:
+        subs = gate_failure_subclasses()
+        assert _AndonThatForgot in subs, "the walk does not reach a locally defined subclass"
+        anonymous = [c.__name__ for c in subs if c.gate == GateFailure.gate]
+        assert anonymous == ["_AndonThatForgot"], anonymous
+    finally:
+        # Subclass registration is process-global and weakly held; drop the only
+        # references so a later run of the two tests above does not see this decoy.
+        import gc
+
+        del _AndonThatForgot, subs, anonymous
+        gc.collect()
+        assert not [c for c in gate_failure_subclasses() if c.gate == GateFailure.gate]
+
+
+def test_the_gate_id_prefixes_the_message_a_report_prints():
+    """`__str__` is what reaches a log. The id has to be in it or the andon is anonymous
+    at exactly the moment somebody is reading."""
+    for cls in gate_failure_subclasses():
+        assert str(cls("something happened")).startswith(f"[{cls.gate}] ")
+
+
+def test_an_evidence_free_gate_is_what_assert_gate_exists_to_refuse():
+    """The defect this helper closes: `self.evidence = evidence or {}` makes a gate raised
+    with no measurement well-formed and silent."""
+    bare = G1GeneratorLegality("something is wrong")
+    assert bare.evidence == {}
+    with pytest.raises(AssertionError, match="EMPTY evidence dict"):
+        assert_gate(bare, "G1")
+
+    carried = G1GeneratorLegality("something is wrong", {"width": 1020})
+    assert assert_gate(carried, "G1", width=1020) == {"width": 1020}
+    with pytest.raises(AssertionError, match="no 'height'"):
+        assert_gate(carried, "G1", height=768)
+    with pytest.raises(AssertionError, match="with gate 'G1'"):
+        assert_gate(carried, "G4")
+
+
+#: Gate raises in `tools/` that pass a message and no evidence. All three raise the BASE
+#: `GateFailure`, whose `gate` is the default `"G?"`, so the andon they pull is anonymous
+#: as well as evidence-free. Recorded rather than fixed here: `tools/` is another domain's
+#: territory, and the point of the assertion below is that this population may not GROW.
+EVIDENCE_FREE_GATE_RAISES = {
+    ("tools/build_lora_arm_payload.py", "GateFailure"),
+    ("tools/rig_bake.py", "GateFailure"),
+}
+
+
+def _gate_raises_without_evidence():
+    """Every `raise <a GateFailure type>(msg)` under `tools/` with no evidence argument."""
+    import ast
+    import warnings
+
+    names = {c.__name__ for c in gate_failure_subclasses()} | {"GateFailure"}
+    tools = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+    found, total = set(), 0
+    for root, dirs, files in os.walk(tools):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for fn in sorted(files):
+            if not fn.endswith(".py"):
+                continue
+            path = os.path.join(root, fn)
+            with open(path, encoding="utf-8") as fh:
+                source = fh.read()
+            with warnings.catch_warnings():
+                # `tools/make_e08_sheet.py:4` carries an invalid escape (`"\m"` in a
+                # Windows path inside its docstring) and every parse of it warns. That is
+                # a defect in another domain's file, routed rather than silenced at the
+                # source; this walk is not the place it should surface.
+                warnings.simplefilter("ignore", SyntaxWarning)
+                tree = ast.parse(source)
+            rel = "tools/" + os.path.relpath(path, tools).replace(os.sep, "/")
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
+                    continue
+                func = node.exc.func
+                cls = (func.id if isinstance(func, ast.Name)
+                       else func.attr if isinstance(func, ast.Attribute) else None)
+                if cls not in names:
+                    continue
+                total += 1
+                if len(node.exc.args) < 2 and not any(
+                        kw.arg == "evidence" for kw in node.exc.keywords):
+                    found.add((rel, cls))
+    return found, total
+
+
+def test_no_new_gate_raise_ships_without_its_evidence():
+    """A ratchet, not a clean bill. Measured 2026-09-03: 33 gate raises under `tools/`,
+    of which 3 (in 2 files) pass a message alone. The invariant to hold going forward is
+    that no FOURTH joins them — every andon a spend or a render halts on must carry the
+    measurement that fired it, or the report names a gate with nothing behind it."""
+    found, total = _gate_raises_without_evidence()
+    assert total >= 30, f"only {total} gate raises found; the walk is not reaching tools/"
+    new = sorted(found - EVIDENCE_FREE_GATE_RAISES)
+    assert not new, (
+        f"these gate raises carry no evidence dict: {new}. Pass the measurement that "
+        f"fired the gate as the second argument.")

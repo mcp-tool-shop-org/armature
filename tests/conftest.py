@@ -138,3 +138,58 @@ def _upload_records_are_resolved():
         bp.UPLOAD_MAP.update(saved_map)
         bp.EXPERIMENTS.clear()
         bp.EXPERIMENTS.update(saved_experiments)
+
+
+# ------------------------------------------------------------------- gate assertions
+
+def gate_failure_subclasses():
+    """Every concrete `GateFailure` subclass, however deeply nested.
+
+    Enumerated rather than listed, so a gate added later joins the checks automatically —
+    the whole point of the class-wide invariant is that no new andon can opt out of it.
+    """
+    from armature_core.errors import GateFailure
+
+    seen, out = set(), []
+    stack = [GateFailure]
+    while stack:
+        for sub in stack.pop().__subclasses__():
+            if sub in seen:
+                continue
+            seen.add(sub)
+            out.append(sub)
+            stack.append(sub)
+    return sorted(out, key=lambda c: c.__name__)
+
+
+def assert_gate(exc, gate_id, **expected_evidence):
+    """A raised gate names its andon AND carries the measurement that fired it.
+
+    `armature_core.errors.GateFailure.__init__` is `self.evidence = evidence or {}`, so a
+    gate raised with no evidence at all is a well-formed, silent object: the report the
+    Director reads names an andon with nothing behind it, and a test asserting on the
+    message string stays green through it. Across `tests/` there are hundreds of
+    `pytest.raises` sites on gate types and only a handful assert on `.evidence`; this is
+    the shared shape that makes emptiness fail loudly.
+
+    Accepts pytest's `ExceptionInfo` or the exception itself. `expected_evidence` is
+    checked by containment, never by equality — a gate is free to report MORE than a
+    caller asked about (P1 adds `unexpected` beside G2's `missing`), and a test that
+    demanded an exact key set would fail on a gate that got better.
+    """
+    err = getattr(exc, "value", exc)
+    assert isinstance(err, Exception), err
+    assert err.gate == gate_id, f"raised {type(err).__name__} with gate {err.gate!r}"
+    assert isinstance(err.evidence, dict), type(err.evidence)
+    assert err.evidence, (
+        f"[{gate_id}] {err} carries an EMPTY evidence dict. A gate that reaches a report "
+        f"with nothing behind it names an andon and proves nothing; the measurement that "
+        f"fired it is the payload."
+    )
+    for key, want in expected_evidence.items():
+        assert key in err.evidence, (
+            f"[{gate_id}] evidence has {sorted(err.evidence)}, no {key!r}")
+        if want is not ...:
+            assert err.evidence[key] == want, (
+                f"[{gate_id}] evidence[{key!r}] is {err.evidence[key]!r}, expected {want!r}")
+    return err.evidence
