@@ -118,7 +118,7 @@ def test_the_banked_main_revision_is_the_excluded_one_and_gate_route_says_so():
     excluded = [c for c in RG.components(doc) if "lightx2v" in c["file"]]
     assert excluded, "main was expected to carry the lightx2v LoRAs"
     assert all(c["ruling"]["verdict"] == "EXCLUDED" for c in excluded)
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate, match=r"the graph loads .*lightx2v.*EXCLUDED"):
         RG.verify(doc)
 
 
@@ -211,7 +211,8 @@ def test_the_old_seed_list_no_longer_admits_the_a3_graph():
     """Gate S binds in both directions. An A3 graph running against the probe's list is a
     seed no committed list pre-registered FOR THIS RUN."""
     graph, _ = B.build_graph(A3_SEEDS["seeds"][0], profile="reference")
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] Gate S: node 50 would run seed 2026081201, which"):
         RG.gate_s_registration(graph, SEEDS["seeds"])
 
 
@@ -220,7 +221,7 @@ def test_the_a3_seed_list_is_disjoint_from_the_probes():
 
 
 def test_an_unknown_profile_raises_rather_than_silently_picking_one():
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate, match=r"\[ROUTE\] unknown profile 'whatever'"):
         B.trajectory("whatever")
 
 

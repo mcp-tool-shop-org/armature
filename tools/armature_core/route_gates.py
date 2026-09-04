@@ -1007,7 +1007,11 @@ def camera_widget_order_evidence(graph, expect):
     confirm and the honest answer there is `not_applicable`, not `PASS`.
     """
     graph = normalise_graph(graph)
-    ev = {"check": "camera widget order (empirical second reading)", "expect": dict(expect),
+    # `gate`/`andon` ride the report because a caller raises RouteGate with it as the evidence
+    # (found by the tests domain's evidence walk at the wave-8 merge; core-gates' own census
+    # keyed on raise sites and could not see a dict returned to one).
+    ev = {"gate": "ROUTE", "andon": "RouteGate", "clause": "camera_widget_order",
+          "check": "camera widget order (empirical second reading)", "expect": dict(expect),
           "nodes": []}
     if is_api_format(graph):
         ev["verdict"] = "not_applicable — API format keys inputs by name, nothing positional"

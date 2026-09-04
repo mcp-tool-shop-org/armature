@@ -150,7 +150,8 @@ def test_the_motion_threshold_bites_at_the_stated_number(tmp_path):
     its documented number is a gate nobody can predict."""
     below = _clip(tmp_path / "a", n=6, step=1)      # 1.0/255 per pair
     (tmp_path / "a").mkdir(exist_ok=True)
-    with pytest.raises(DG.DonorGate):
+    with pytest.raises(DG.DonorGate,
+                       match=r"\[DONOR\] motion: mean consecutive-frame difference"):
         DG.gate_donor(DG.mean_consecutive_frame_difference(DG.frame_paths(below)),
                       DG.ankle_framing(_rows((0.5, 0.9))))
     above = _clip(tmp_path / "b", n=6, step=3)      # 3.0/255 per pair
@@ -168,7 +169,7 @@ def test_the_framing_threshold_bites_at_the_stated_number():
         return rows
     good = _clip_free_motion()
     DG.gate_donor(good, DG.ankle_framing(rows_with(8)))
-    with pytest.raises(DG.DonorGate):
+    with pytest.raises(DG.DonorGate, match=r"\[DONOR\] framing: ankles inside the image on at most 70\.0%"):
         DG.gate_donor(good, DG.ankle_framing(rows_with(7)))
 
 
@@ -192,7 +193,7 @@ def test_one_ankle_in_frame_is_not_enough():
     assert f["per_ankle_fraction_of_frames_in_image"]["right_ankle"] == 0.0
     assert f["both_ankles_in_image"] == 0.0
     assert f["either_ankle_in_image"] == 1.0
-    with pytest.raises(DG.DonorGate):
+    with pytest.raises(DG.DonorGate, match=r"\[DONOR\] framing: ankles inside the image on at most 0\.0%"):
         DG.gate_donor(_clip_free_motion(), f)
 
 
@@ -236,7 +237,7 @@ def test_frames_that_are_not_numerically_named_halt(tmp_path):
 
 def test_a_single_frame_has_no_pair_to_difference(tmp_path):
     frames = _clip(tmp_path, n=1, step=0)
-    with pytest.raises(DG.DonorGate):
+    with pytest.raises(DG.DonorGate, match=r"\[DONOR\] a clip of 1 frame\(s\) has no consecutive pair to"):
         DG.mean_consecutive_frame_difference(DG.frame_paths(frames))
 
 
@@ -246,12 +247,13 @@ def test_frames_of_different_sizes_halt(tmp_path):
     from PIL import Image
     Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(d / "00000.png")
     Image.fromarray(np.zeros((9, 9, 3), dtype=np.uint8)).save(d / "00001.png")
-    with pytest.raises(DG.DonorGate):
+    with pytest.raises(DG.DonorGate, match=r"\[DONOR\] frame 00001\.png is \(9, 9, 3\) where the previous"):
         DG.mean_consecutive_frame_difference(DG.frame_paths(str(d)))
 
 
 def test_no_fired_frames_halts_rather_than_passing():
-    with pytest.raises(DG.DonorGate):
+    with pytest.raises(DG.DonorGate,
+                       match=r"\[DONOR\] no frame carries image landmarks, so the framing"):
         DG.ankle_framing(_rows((0.5, 0.9), fired=False))
 
 
@@ -300,7 +302,8 @@ def test_the_2026_08_11_failure_cannot_be_argued_past_by_a_caller():
     still = {"unit": "test", "n_frames": 6, "n_pairs": 5, "mean": 0.0, "max": 0.0,
              "min": 0.0, "per_pair": [0.0] * 5}
     cropped = DG.ankle_framing(_rows((0.5, 1.4)))
-    with pytest.raises(DG.DonorGate):
+    with pytest.raises(DG.DonorGate,
+                       match=r"\[DONOR\] motion: mean consecutive-frame difference"):
         DG.gate_donor(still, cropped)
     with pytest.raises(TypeError):
         DG.gate_donor(still, cropped,

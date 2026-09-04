@@ -41,7 +41,8 @@ def test_g1_fires_before_the_backend_is_touched(tmp_path):
     """The backend must never be prepared for an illegal frame."""
     spec = make_spec(tmp_path, width=1020)
     backend = FakeBackend(1020, 96)
-    with pytest.raises(G1GeneratorLegality):
+    with pytest.raises(G1GeneratorLegality,
+                       match=r"\[G1\] frame is not legal for generator 'wan-vace'"):
         stage_render.run_export(spec, str(tmp_path / "run"), backend=backend)
     assert backend.prepared is False
     assert not (tmp_path / "run").exists()
@@ -51,7 +52,8 @@ def test_g1_fires_before_blender_is_needed(tmp_path):
     """Outside Blender a legal spec raises NotInsideBlender, an illegal one raises G1.
     The two outcomes are distinguishable, which is what proves the ordering."""
     illegal = make_spec(tmp_path, count=80)
-    with pytest.raises(G1GeneratorLegality):
+    with pytest.raises(G1GeneratorLegality,
+                       match=r"\[G1\] frame is not legal for generator 'wan-vace': frame"):
         stage_render.run_export(illegal, str(tmp_path / "a"))
 
     legal = make_spec(tmp_path)

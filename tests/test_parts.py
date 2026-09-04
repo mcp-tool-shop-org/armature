@@ -91,12 +91,14 @@ def test_accounting_fires_when_a_registered_part_would_be_empty():
 
 
 def test_accounting_fires_when_the_label_count_does_not_match_the_face_count():
-    with pytest.raises(parts.GatePartsAccounting):
+    with pytest.raises(parts.GatePartsAccounting,
+                       match=r"\[PARTS\] the mesh was not partitioned cleanly into the"):
         parts.gate_parts_accounting(np.array([0, 1, 2]), 99, NAMES)
 
 
 def test_accounting_fires_on_a_label_outside_the_registered_list():
-    with pytest.raises(parts.GatePartsAccounting):
+    with pytest.raises(parts.GatePartsAccounting,
+                       match=r"\[PARTS\] the mesh was not partitioned cleanly into the"):
         parts.gate_parts_accounting(np.array([0, 1, 2, 7]), 4, NAMES)
 
 
@@ -199,7 +201,8 @@ def test_rigid_fires_when_nothing_arrived_at_all():
 
 
 def test_rigid_fires_on_no_observations_rather_than_passing_vacuously():
-    with pytest.raises(parts.GateRigidArrival):
+    with pytest.raises(parts.GateRigidArrival,
+                       match=r"\[RIGID\] no parts were observed under the pose; the gate"):
         parts.gate_rigid_arrival([], 1.069)
 
 
@@ -220,12 +223,13 @@ def test_determinism_passes_on_two_identical_builds():
 def test_determinism_fires_on_a_moved_vertex_and_on_a_changed_count():
     a, b = _fp(), _fp()
     b["neck"]["positions"][3, 1] += 1e-3
-    with pytest.raises(parts.GatePartsDeterminism):
+    with pytest.raises(parts.GatePartsDeterminism,
+                       match=r"\[D\] two builds produced different parts: neck: vertices"):
         parts.gate_parts_determinism(a, b, 1.069)
 
     a, c = _fp(), _fp()
     c["head"]["n_faces"] += 1
-    with pytest.raises(parts.GatePartsDeterminism):
+    with pytest.raises(parts.GatePartsDeterminism, match=r"\[D\] two builds produced different parts: head: 50v/25f vs"):
         parts.gate_parts_determinism(a, c, 1.069)
 
 
@@ -413,7 +417,8 @@ def test_the_threshold_is_a_fraction_of_the_subjects_own_diagonal():
 
     d = 4.0 * rig_gates.REST_POSE_EPSILON_FRAC
     nudged = np.array(CUBE, dtype=np.float64) + np.array([0.0, 0.0, d])
-    with pytest.raises(GatePRestPose):
+    with pytest.raises(GatePRestPose,
+                       match=r"\[P\] bone parenting moved the parts at the bind pose: max"):
         rp.gate_p_bind_pose({"chest": part}, {"chest": nudged}, 1.0)
     ev = rp.gate_p_bind_pose({"chest": part}, {"chest": nudged}, 100.0)
     assert ev["verdict"]

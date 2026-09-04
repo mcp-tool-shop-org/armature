@@ -120,7 +120,8 @@ def test_a_master_only_pair_is_not_a_comparison(tmp_path):
     """`master` is excluded by design, so two runs sharing only `master` share nothing."""
     a = _run(tmp_path, "a", chan="master")
     b = _run(tmp_path, "b", chan="master")
-    with pytest.raises(CR.CompareError):
+    with pytest.raises(CR.CompareError,
+                       match=r"share no comparable channel directory \(master is excluded"):
         CR.compare_runs(a, b)
 
 

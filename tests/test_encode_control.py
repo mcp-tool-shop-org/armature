@@ -181,7 +181,8 @@ def test_a_stray_png_never_reaches_the_receipts_frame_names(tmp_path, monkeypatc
     _gray(str(d / "strip_every8.png"), np.zeros((8, 6), dtype=np.uint8))
     out = tmp_path / "out" / "control.mkv"
 
-    with pytest.raises(EC.EncodeFailure):
+    with pytest.raises(EC.EncodeFailure,
+                       match=r"holds 1 PNG\(s\) that are not numbered frames"):
         EC.build(str(d), str(out), "ffv1-gbrp")
     assert not os.path.exists(str(out) + ".receipt.json")
 

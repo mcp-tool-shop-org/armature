@@ -284,7 +284,8 @@ def test_a_refused_admission_leaves_no_output_directory(tmp_path):
     seeds_path.write_text(json.dumps({"seeds": [1]}), encoding="utf-8")
 
     out = tmp_path / "fresh" / "admission.json"
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] the saved file is not the graph this repo built"):
         GSG.main([f"--saved={saved_path}", f"--api={api_path}",
                   f"--seeds={seeds_path}", f"--out={out}"])
     assert not out.exists()
@@ -430,7 +431,8 @@ def test_a_wrapped_saved_file_is_refused_by_a_gate_not_by_a_stdlib_key(tmp_path,
     both must keep: a RouteGate, and no output directory."""
     d = _wrapped_case(tmp_path, wrapper)
     out = tmp_path / "fresh" / "admission.json"
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] this is not a graph this module can read: a dict"):
         GSG.main([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
                   f"--seeds={d / 'seeds.json'}", f"--out={out}"])
     assert not out.parent.exists(), "a refused admission created its output directory"

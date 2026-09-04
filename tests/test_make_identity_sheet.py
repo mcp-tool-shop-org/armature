@@ -90,7 +90,8 @@ def test_an_empty_mesh_row_is_not_a_legal_sheet(tmp_path):
     described an orbit."""
     d = tmp_path / "run" / "normal"
     d.mkdir(parents=True)
-    with pytest.raises(MIS.IdentitySheetError):
+    with pytest.raises(MIS.IdentitySheetError,
+                       match=r"holds 0 'normal' frame\(s\) and frame\(s\) \[0\] of the"):
         MIS.build(str(tmp_path / "run"), [_plate(tmp_path)], [0], tile_h=16)
 
 

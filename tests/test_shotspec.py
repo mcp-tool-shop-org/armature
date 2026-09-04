@@ -63,35 +63,37 @@ def test_unknown_channel_is_refused(tmp_path):
 def test_duplicate_channel_is_refused(tmp_path):
     raw = _minimal(tmp_path)
     raw["channels"] = ["depth", "depth"]
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError,
+                       match=r"spec\.channels contains duplicates: \['depth', 'depth'\]"):
         shotspec.normalise_spec(raw)
 
 
 def test_empty_channels_is_refused(tmp_path):
     raw = _minimal(tmp_path)
     raw["channels"] = []
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError,
+                       match=r"spec\.channels is empty; there is nothing to export"):
         shotspec.normalise_spec(raw)
 
 
 def test_bool_is_not_an_int(tmp_path):
     raw = _minimal(tmp_path)
     raw["resolution"]["width"] = True
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError, match=r"spec\.resolution\.width: expected int, got bool"):
         shotspec.normalise_spec(raw)
 
 
 def test_wrong_spec_version_is_refused(tmp_path):
     raw = _minimal(tmp_path)
     raw["spec_version"] = 2
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError, match=r"spec_version 2 is not supported \(want 1\)"):
         shotspec.normalise_spec(raw)
 
 
 def test_unimplemented_camera_type_is_refused(tmp_path):
     raw = _minimal(tmp_path)
     raw["camera"] = {"type": "dolly"}
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError, match=r"spec\.camera\.type 'dolly' is not implemented \(only 'orbit'\)"):
         shotspec.normalise_spec(raw)
 
 
@@ -120,7 +122,7 @@ def test_missing_asset_is_refused(tmp_path):
     raw = _minimal(tmp_path)
     raw["asset"]["path"] = str(tmp_path / "nope.glb")
     spec = shotspec.normalise_spec(raw)
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError, match=r"spec\.asset\.path does not exist"):
         shotspec.resolve_asset(spec)
 
 
@@ -135,7 +137,8 @@ def test_the_spec_cannot_weaken_a_gate(tmp_path):
     raw["dim_divisor"] = 1
     raw["generator_profile"] = {"dim_divisor": 1, "frame_modulus": 1, "frame_residue": 0}
     spec = shotspec.normalise_spec(raw)
-    with pytest.raises(G1GeneratorLegality):
+    with pytest.raises(G1GeneratorLegality,
+                       match=r"\[G1\] frame is not legal for generator 'wan-vace'"):
         gates.g1_generator_legality(1020, 768, 80, spec["generator"])
 
 
@@ -170,7 +173,7 @@ def test_an_unknown_key_under_gates_is_refused_too(tmp_path):
     """The family, not the instance: `spec.gates` is not a place to put numbers."""
     raw = _minimal(tmp_path)
     raw["gates"] = {"g1_dim_divisor": 1}
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError, match=r"delete the row from the spec\. \(spec\.gates\.g4_tolerance_px"):
         shotspec.normalise_spec(raw)
 
 
@@ -200,7 +203,7 @@ def test_an_empty_pin_is_not_a_pin(tmp_path):
     raw = _minimal(tmp_path)
     raw["asset"]["sha256"] = ""
     spec = shotspec.normalise_spec(raw)
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError, match=r"spec\.asset\.sha256 is absent, so this spec asserts nothing"):
         shotspec.resolve_asset(spec)
 
 
@@ -232,7 +235,8 @@ def test_a_populated_block_still_names_the_retired_keys_new_home(tmp_path):
 def test_a_gates_key_that_is_not_an_object_is_refused_too(tmp_path):
     raw = _minimal(tmp_path)
     raw["gates"] = []
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError,
+                       match=r"and it is refused whatever it contains; delete the key"):
         shotspec.normalise_spec(raw)
 
 
@@ -298,5 +302,5 @@ def test_frame_names_is_never_asked_for_a_negative_count_through_the_contract(tm
     assert shotspec.frame_names(-33, "png") == []
     raw = _minimal(tmp_path)
     raw.setdefault("frames", {})["count"] = -33
-    with pytest.raises(SpecError):
+    with pytest.raises(SpecError, match=r"frames\.count is -33; it must be positive"):
         shotspec.normalise_spec(raw)

@@ -224,7 +224,8 @@ def test_production_escape_on_performer_ungates():
 
 def test_gate_canon_is_not_an_assertionerror():
     """-O deletes assert. A gate that became an AssertionError would vanish."""
-    with pytest.raises(GateCanon):
+    with pytest.raises(GateCanon,
+                       match=r"\[CANON\] no subject: a spend with no census id has no"):
         C.resolve(None)
     try:
         C.resolve(None)
@@ -311,7 +312,8 @@ def test_a_shape_with_no_nodes_at_all_raises_rather_than_returning_empty():
     with pytest.raises(GateCanon) as exc:
         C.texts_from_api_graph({"last_node_id": 12, "version": 0.4})
     assert exc.value.evidence["clause"] == "unrecognised_graph"
-    with pytest.raises(GateCanon):
+    with pytest.raises(GateCanon,
+                       match=r"\[CANON\] a graph must be an object, got list; an"):
         C.texts_from_api_graph(["not", "a", "graph"])
 
 
@@ -385,7 +387,8 @@ def test_sleeve_fires_on_sleeves_and_not_on_sleeveless():
     """The hand-written SLEEVE special case was inert — the trailing \b already
     prevented a match inside 'sleeveless', so (?!less) changed nothing — and it kept a
     hard-coded single word inside a general mechanism. Both readings are now one rule."""
-    with pytest.raises(GateCanon):
+    with pytest.raises(GateCanon,
+                       match=r"\[CANON\] forward cover failed: forbidden words present"):
         C.cover(_forbidden_doc("sleeve", licensed=("long sleeves",)),
                 COVERED + ", long sleeves")
     ok = C.cover(_forbidden_doc("sleeve", licensed=("sleeveless",)),
@@ -395,7 +398,8 @@ def test_sleeve_fires_on_sleeves_and_not_on_sleeveless():
 
 
 def test_the_singular_still_fires():
-    with pytest.raises(GateCanon):
+    with pytest.raises(GateCanon,
+                       match=r"\[CANON\] forward cover failed: forbidden words present"):
         C.cover(_forbidden_doc("sleeve", licensed=("a sleeve",)), COVERED + ", a sleeve")
 
 
@@ -443,7 +447,8 @@ def test_the_stem_normalisation_does_not_reach_inside_a_longer_word(canon_word, 
 def test_a_word_that_genuinely_ends_in_s_keeps_its_plural():
     """Normalising the canon side must not cost the prompt side: 'dress' -> 'dresses'."""
     doc = _forbidden_doc("dress", licensed=("two dresses",))
-    with pytest.raises(GateCanon):
+    with pytest.raises(GateCanon,
+                       match=r"\[CANON\] forward cover failed: forbidden words present"):
         C.cover(doc, COVERED + ", two dresses")
 
 

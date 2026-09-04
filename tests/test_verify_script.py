@@ -179,6 +179,60 @@ def test_a_leg_that_throws_before_running_anything_is_a_failure(tmp_path):
     assert _is_recorded_failure(recorded["throws"]), recorded
 
 
+# -- WAVE 8, F-b359d73d: the case verify.ps1's own comment names FIRST --------------------
+#
+# Both fixtures above place the missing binary as the ENTIRE body of a leg. verify.ps1's
+# real legs are nothing like that: :137 builds, twine-checks, installs into a clean venv
+# and runs the launcher self-test in ONE body; :217 runs npm ci, npm audit and npm run
+# build in another. The shape the comment at verify.ps1:64-71 names first — a body that
+# runs a command SUCCESSFULLY and then reaches an absent one — was driven by nothing.
+#
+# Measured 2026-09-04 with this file's own `_run_legs` and pwsh on this rig:
+#   {'prior-ok': '0', 'absent': '253'}   the shape the old fixtures drive — caught
+#   {'within': '0'}                      OK + '; ' + ABSENT inside one body — a PASS
+#   {'within2': '0'}                     the same with a newline separator — a PASS
+#   {'within3': '0'}                     SEVEN + '; ' + OK — a PASS over a failed command
+#
+# So with node or npm absent, the launcher self-test or the site build never runs, the leg
+# records 0, and the script prints that all legs passed: the headline defect class living
+# inside the script written to prevent it. `Invoke-Leg` recording per COMMAND rather than
+# per LEG is the ci-packaging half of this; these are the fixtures that say so.
+
+
+@needs_pwsh
+@pytest.mark.parametrize("sep", ["; ", "\n"], ids=["semicolon", "newline"])
+def test_an_absent_command_after_a_successful_one_still_fails_its_leg(tmp_path, sep):
+    """The within-leg case. `$LASTEXITCODE` is left standing at the earlier command's 0
+    because a `CommandNotFoundException` never sets it, and the leg reports the outcome of
+    the half that ran rather than the half that did not."""
+    recorded = _run_legs(tmp_path, [("within", OK + sep + ABSENT)])
+    assert _is_recorded_failure(recorded["within"]), (
+        "a leg whose SECOND command does not exist recorded the FIRST command's success: "
+        f"{recorded}. verify.ps1:137 and :217 are multi-command bodies, so this is the "
+        f"shape that actually ships"
+    )
+
+
+@needs_pwsh
+def test_a_failed_command_is_not_erased_by_a_successful_one_after_it(tmp_path):
+    """The other direction of the same defect, and the one no absent binary is needed for:
+    a command that exits 7 followed by one that exits 0. The leg's recorded code is the
+    LAST command's, so a real failure inside a body is overwritten by whatever tidying
+    runs after it."""
+    recorded = _run_legs(tmp_path, [("within3", SEVEN + "; " + OK)])
+    assert _is_recorded_failure(recorded["within3"]), (
+        f"a command that exited 7 was erased by the command after it: {recorded}"
+    )
+
+
+@needs_pwsh
+def test_a_multi_command_leg_that_wholly_succeeds_is_still_a_pass(tmp_path):
+    """The direction the fix must not break: three commands, all zero, one PASS. Without
+    this, `Invoke-Leg` could satisfy the two tests above by failing every leg."""
+    recorded = _run_legs(tmp_path, [("all-ok", "; ".join([OK, OK, OK]))])
+    assert recorded["all-ok"] == "0", recorded
+
+
 # -- the parity claim ---------------------------------------------------------------------
 
 

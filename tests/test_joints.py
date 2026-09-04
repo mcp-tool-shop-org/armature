@@ -52,7 +52,8 @@ def test_sphere_fit_reports_a_large_residual_for_something_that_is_not_a_sphere(
 
 
 def test_sphere_fit_refuses_too_few_points():
-    with pytest.raises(LandmarkError):
+    with pytest.raises(LandmarkError,
+                       match=r"a sphere fit needs at least 4 points in 3D, got \(3, 3\)"):
         joints.sphere_fit(np.zeros((3, 3)))
 
 

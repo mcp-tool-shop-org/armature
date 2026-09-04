@@ -292,6 +292,21 @@ def test_81_frames_is_legal_and_is_the_cards_trained_horizon():
 
 
 def test_the_ledger_passes_when_the_breaks_broke_and_the_trajectory_held(w1_path):
+    """WAVE 8, F-e552e4e6 — two assertions were removed from here, not weakened.
+
+    `ev["positive"]["differs"] is True` and `ev["trajectory"]["held_agrees"] is True`
+    cannot be False in a RETURNED record: `ledger_against_wave1` appends to `problems`
+    when `held != w1_held` (build_camera_i2v_payload.py:602-606) and when the positive
+    does not differ (:628-634), and raises `PayloadError` if `problems` is non-empty
+    (:636) BEFORE it returns `ev`. So both lines took the same value when the ledger
+    worked and when it did nothing at all. The clause they appeared to cover is pinned by
+    the two refusal tests below, and `test_the_agreement_clauses_are_tautologies_on_the_
+    returning_path` states the tautology as a fact about the function.
+
+    What a returned record CAN still lose is the recorded quantities themselves — two
+    hashes computed from the same string would leave `differs` True and the record
+    useless — so those are what is asserted here.
+    """
     ev = B.ledger_against_wave1("a different positive entirely", UPLOADS, 81, w1_path())
     # Wave 8, F-bc806f79: `positive.differs` and `trajectory.held_agrees` were assertions on
     # fields that could only ever read True in a record that reaches disk — replaced with
@@ -314,6 +329,57 @@ def test_the_ledger_lets_an_authorised_trajectory_break_through(w1_path):
     assert ev["trajectory"]["held_this_wave"] == ev["trajectory"]["held_wave_1"]
     assert "cfg" not in ev["trajectory"]["held_this_wave"]
     assert "moved on cfg, sampler_name" in ev["verdict"]
+
+
+def test_a_byte_identical_positive_halts_the_wave(w1_path):
+    """The clause `ev["positive"]["differs"] is True` appeared to cover, driven from the
+    only direction that can fail it: hand the ledger wave 1's positive verbatim.
+
+    The prompt surgery is one of two levers this wave claims to have moved. If the
+    positive is byte-identical, the run measures the weight swap alone while the report
+    describes two levers — which is wave 2's failure, one wave later.
+    """
+    with pytest.raises(B.PayloadError) as exc:
+        B.ledger_against_wave1(w1_record()["positive"], UPLOADS, 81, w1_path())
+    assert "byte-identical to wave 1's" in str(exc.value)
+    assert "the prompt surgery did not happen" in str(exc.value).replace("\n", " ")
+
+
+def test_a_wave_1_record_with_no_positive_at_all_halts_rather_than_comparing_nothing(
+        w1_path):
+    """The third state, and the one a `differs` boolean flattens: nothing to compare
+    against is not the same answer as "these two differ"."""
+    with pytest.raises(B.PayloadError,
+                       match=r"wave 1's record carries no positive string to check"):
+        B.ledger_against_wave1("a different positive entirely", UPLOADS, 81,
+                               w1_path(positive=None))
+
+
+def test_the_record_no_longer_carries_a_field_that_can_only_read_true(w1_path):
+    """What F-e552e4e6 measured, resolved from BOTH sides at the wave-8 merge.
+
+    The tests side (F-d945b60c) first pinned the two flags as tautologies — whenever
+    `ledger_against_wave1` RETURNS, `positive.differs` and `trajectory.held_agrees` were True
+    by construction, because the refusal happens first. The builders side (F-bc806f79) then
+    DELETED both fields from the record, so the pin has no subject. What survives is the
+    stronger claim: the record carries no field that can only read one way, and both paths
+    that could have made either flag False still raise instead of returning.
+    """
+    ev = B.ledger_against_wave1("a different positive entirely", UPLOADS, 81, w1_path())
+    assert "differs" not in ev["positive"], sorted(ev["positive"])
+    assert "held_agrees" not in ev["trajectory"], sorted(ev["trajectory"])
+    #: the two paths that could have made either flag False raise instead of returning
+    with pytest.raises(B.PayloadError, match=r"byte-identical to wave 1"):
+        B.ledger_against_wave1(w1_record()["positive"], UPLOADS, 81, w1_path())
+    with pytest.raises(B.PayloadError,
+                       match=r"a trajectory field this wave was NOT authorised to move"):
+        B.ledger_against_wave1(
+            "a different positive entirely", UPLOADS, 81,
+            w1_path(trajectory={k: {"value": (v["value"] + 1
+                                              if isinstance(v["value"], (int, float))
+                                              and not isinstance(v["value"], bool)
+                                              else v["value"])}
+                                for k, v in W1.TRAJECTORY.items()}))
 
 
 def test_an_unauthorised_trajectory_field_still_halts_the_wave(w1_path):

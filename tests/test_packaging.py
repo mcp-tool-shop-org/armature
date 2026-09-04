@@ -23,6 +23,7 @@ rather than a reading:
 """
 
 import ast
+import json
 import os
 import subprocess
 import sys
@@ -616,53 +617,228 @@ def test_a_stub_using_module_does_not_change_what_the_next_one_can_import(first,
         + proc.stdout[-3000:] + proc.stderr[-2000:])
 
 
-def test_every_stub_installing_fixture_restores_what_it_imported():
-    """The family, asserted rather than left to the pairs above.
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    Three helpers in this suite write into `sys.modules`: `conftest.rt`,
-    `blender_stub.blender_stubbed` and `test_blender_scene_pure.BS` (`tests/test_cli.py` does it too, through
-    `monkeypatch.delitem`, which pytest undoes itself). Each must clear what was imported
-    under its stub, so the census is the check: a new stub-installing helper fails here until
-    it is paired with a teardown and added to the pairs above.
+
+def _writes_into_sys_modules(fn):
+    """Every line at which `fn` puts something INTO `sys.modules`.
+
+    Four shapes, because a census that reads one of them polices one of them:
+    `sys.modules[name] = stub`, `sys.modules.update(...)`, `sys.modules.setdefault(...)`
+    and `monkeypatch.setitem(sys.modules, ...)`. Removals (`pop`, `del`,
+    `monkeypatch.delitem`) are not installs and are deliberately not counted — pytest
+    undoes its own `delitem`, and `tests/test_cli.py` relies on that.
     """
-    tests_dir = os.path.dirname(os.path.abspath(__file__))
-    expected = {
-        "conftest.py": ["rt"],
-        "blender_stub.py": ["blender_stubbed"],
-        "test_blender_scene_pure.py": ["BS"],
-    }
-
-    for filename, expected_names in expected.items():
-        with open(os.path.join(tests_dir, filename), encoding="utf-8") as fh:
-            src = fh.read()
-        tree = ast.parse(src)
-
-        installers = []
-        for fn in ast.walk(tree):
-            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    hits = []
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if (isinstance(target, ast.Subscript)
+                        and isinstance(target.value, ast.Attribute)
+                        and target.value.attr == "modules"):
+                    hits.append(node.lineno)
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if not isinstance(func, ast.Attribute):
                 continue
-            writes_stub = any(
-                isinstance(n, ast.Assign)
-                and any(isinstance(t, ast.Subscript)
-                        and isinstance(t.value, ast.Attribute) and t.value.attr == "modules"
-                        for t in n.targets)
-                for n in ast.walk(fn))
-            if writes_stub:
-                installers.append(fn)
+            if (func.attr in ("update", "setdefault")
+                    and isinstance(func.value, ast.Attribute)
+                    and func.value.attr == "modules"):
+                hits.append(node.lineno)
+            if (func.attr == "setitem" and node.args
+                    and isinstance(node.args[0], ast.Attribute)
+                    and node.args[0].attr == "modules"):
+                hits.append(node.lineno)
+    return sorted(hits)
 
-        assert [fn.name for fn in installers] == expected_names, (
-            f"{filename} installs stub modules in {[fn.name for fn in installers]}; each one "
-            f"needs a teardown that clears what was imported under it, and a pair in "
-            f"ORDER_DEPENDENT_PAIRS that runs it before a module reading those imports")
 
-        for fn in installers:
-            body = ast.get_source_segment(src, fn) or ""
-            assert "set(sys.modules) - before" in body or "- before" in body, (
-                f"{filename}:{fn.name} installs a stub and never clears the modules imported "
-                f"under it; restoring the stub entries alone leaves those importable")
-            assert "armature_core" in body, (
-                f"{filename}:{fn.name}'s teardown does not name the package whose modules the "
-                f"stub makes importable")
+def sys_modules_writers(tests_dir=None):
+    """THE DERIVATION: `(filename, function)` for every stub installer under `tests/`.
+
+    Walked out of every `.py` in the suite, helpers and test modules alike — the wave-6
+    version iterated a hard-coded `expected` dict of three filenames, so a fourth writer
+    in a NEW file was never opened. Measured in a scratch copy of `tests/` on 2026-09-04:
+    adding a fourth file containing a real installer that wrote `sys.modules['bpy']`,
+    imported `armature_core.blender_scene` and never cleared it left the census GREEN.
+    """
+    tests_dir = TESTS_DIR if tests_dir is None else tests_dir
+    out = []
+    for name in sorted(os.listdir(tests_dir)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(tests_dir, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        for fn in ast.walk(tree):
+            if (isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and _writes_into_sys_modules(fn)):
+                out.append((name, fn.name))
+    return sorted(set(out))
+
+
+#: Derived 2026-09-04. Equality, so a fourth installer fails HERE, in the census, rather
+#: than silently in whatever order the next session happens to run the suite in.
+RECORDED_STUB_INSTALLERS = [
+    ("blender_stub.py", "blender_stubbed"),
+    ("conftest.py", "rt"),
+    ("test_blender_scene_pure.py", "BS"),
+]
+
+#: A new installer needs a line here saying how to DRIVE it, because the teardown is only
+#: observable by running it. Every one of the three is a generator — two pytest fixtures
+#: and one `contextlib.contextmanager` — so `__wrapped__` reaches the raw function and
+#: `next()` twice runs setup then teardown.
+INSTALLER_MODULE = {
+    ("blender_stub.py", "blender_stubbed"): "blender_stub",
+    ("conftest.py", "rt"): "conftest",
+    ("test_blender_scene_pure.py", "BS"): "test_blender_scene_pure",
+}
+
+_DRIVE_ONE = """
+import importlib, json, os, sys
+sys.path.insert(0, {tests!r})
+sys.path.insert(0, os.path.join(os.path.dirname({tests!r}), "tools"))
+mod = importlib.import_module({module!r})
+fn = getattr(mod, {func!r})
+raw = getattr(fn, "__wrapped__", fn)
+before = set(sys.modules)
+gen = raw()
+next(gen)
+try:
+    next(gen)
+except StopIteration:
+    pass
+after = set(sys.modules)
+new = sorted(after - before)
+tools = os.path.join(os.path.dirname({tests!r}), "tools")
+
+
+def _from_this_repo(name):
+    path = getattr(sys.modules.get(name), "__file__", None) or ""
+    return path.startswith(tools)
+
+
+# Stdlib a stub happened to pull in (`hashlib`, `_blake2`) is not the invariant: it does
+# not depend on Blender and nothing reads it as evidence that Blender is present. What
+# may not survive is anything from THIS repo's tree, or a Blender name itself.
+relevant = [n for n in new
+            if n.split(".")[0] in ("bpy", "mathutils", "bmesh") or _from_this_repo(n)]
+print("ALL " + json.dumps(new))
+print("LEAKED " + json.dumps(relevant))
+"""
+
+
+def test_the_stub_installer_population_is_derived_and_has_not_grown_silently():
+    """Size and membership before the property (wave 8, F-391c9d0f). The old census could
+    not open a file it had not been told about, and both of its per-installer checks were
+    substring searches over the function's source: `'- before' in body` and
+    `'armature_core' in body`, each satisfiable by a comment. Measured in a scratch copy:
+    replacing `conftest.rt`'s entire teardown with a stub whose docstring contained the
+    words `- before` and `armature_core` left the census GREEN."""
+    writers = sys_modules_writers()
+    assert writers == RECORDED_STUB_INSTALLERS, {
+        "appeared": sorted(set(writers) - set(RECORDED_STUB_INSTALLERS)),
+        "vanished": sorted(set(RECORDED_STUB_INSTALLERS) - set(writers)),
+    }
+    assert sorted(INSTALLER_MODULE) == sorted(writers), (
+        "a stub installer has no line in INSTALLER_MODULE saying how to drive it, so its "
+        "teardown is asserted by nothing that runs")
+
+
+@pytest.mark.parametrize("filename,func", RECORDED_STUB_INSTALLERS,
+                         ids=lambda v: v.replace(".py", ""))
+def test_every_stub_installing_fixture_restores_what_it_imported(filename, func, tmp_path):
+    """BEHAVIOURAL, not textual. The installer is driven in a subprocess — setup, then
+    teardown — and `sys.modules` is compared across it. What this looks like if the
+    teardown is wrong: a module imported under a fake `bpy` stays importable for the rest
+    of the session, and `tests/test_cli.py` reads `needs-blender` as `ok`.
+
+    A subprocess because the leak is a property of the teardown and cannot be observed
+    from inside the session doing the leaking — and because observing it in THIS process
+    would leave the very cache the test exists to forbid.
+    """
+    script = _DRIVE_ONE.format(tests=TESTS_DIR, module=INSTALLER_MODULE[(filename, func)],
+                               func=func)
+    path = tmp_path / "drive.py"
+    path.write_text(script, encoding="utf-8")
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        p for p in (env.get("PYTHONPATH", ""), CORE, REPO) if p)
+    proc = subprocess.run([sys.executable, str(path)], cwd=REPO, env=env,
+                          capture_output=True, text=True)
+    assert proc.returncode == 0, (
+        f"{filename}:{func} could not be driven:\n{proc.stdout}\n{proc.stderr}")
+    line = [l for l in proc.stdout.splitlines() if l.startswith("LEAKED ")]
+    assert line, f"the driver printed nothing:\n{proc.stdout}\n{proc.stderr}"
+    leaked = json.loads(line[-1][len("LEAKED "):])
+    assert leaked == [], (
+        f"{filename}:{func} installs a stub and leaves {leaked} in sys.modules after its "
+        f"teardown; restoring the stub entries alone leaves everything imported under "
+        f"them importable, on a machine that has no Blender")
+
+
+def test_the_behavioural_check_can_see_a_teardown_that_does_nothing(tmp_path):
+    """Rule 3: prove the census fails on a member without the property. A synthetic tests
+    directory with one installer whose teardown restores the stub entry and nothing else —
+    which is exactly the shape all three of the real ones had before wave 6."""
+    fake = tmp_path / "tests"
+    fake.mkdir()
+    (fake / "leaky_stub.py").write_text(
+        "import sys, types\n"
+        "def leaky():\n"
+        "    saved = sys.modules.get('bpy')\n"
+        "    sys.modules['bpy'] = types.ModuleType('bpy')\n"
+        "    sys.modules['bmesh'] = types.ModuleType('bmesh')\n"
+        "    try:\n"
+        "        yield\n"
+        "    finally:\n"
+        "        if saved is None:\n"
+        "            del sys.modules['bpy']\n"
+        "        else:\n"
+        "            sys.modules['bpy'] = saved\n", encoding="utf-8")
+
+    #: the derivation sees it
+    assert sys_modules_writers(str(fake)) == [("leaky_stub.py", "leaky")]
+
+    #: and driving it names what it left behind
+    script = _DRIVE_ONE.format(tests=str(fake), module="leaky_stub", func="leaky")
+    path = tmp_path / "drive.py"
+    path.write_text(script, encoding="utf-8")
+    proc = subprocess.run([sys.executable, str(path)], cwd=str(tmp_path),
+                          capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    leaked = json.loads(
+        [l for l in proc.stdout.splitlines() if l.startswith("LEAKED ")][-1][len("LEAKED "):])
+    assert leaked == ["bmesh"], (leaked, proc.stdout)
+
+
+def test_every_derived_installer_is_driven_by_a_pair_that_runs_it_before_a_reader():
+    """The third half of F-391c9d0f: the derived population and `ORDER_DEPENDENT_PAIRS`
+    must be the same family. An installer with a teardown and no pair is a teardown whose
+    ORDERING nothing exercises — and the ordering is what the defect was made of."""
+    firsts = {first for first, _second in ORDER_DEPENDENT_PAIRS}
+    for filename, func in sys_modules_writers():
+        if filename.startswith("test_"):
+            consumers = {filename}
+        else:
+            consumers = set()
+            for name in sorted(os.listdir(TESTS_DIR)):
+                if not (name.startswith("test_") and name.endswith(".py")):
+                    continue
+                with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+                    tree = ast.parse(fh.read())
+                used = any(
+                    (isinstance(n, ast.Name) and n.id == func)
+                    or (isinstance(n, ast.Attribute) and n.attr == func)
+                    or (isinstance(n, ast.arg) and n.arg == func)
+                    for n in ast.walk(tree))
+                if used:
+                    consumers.add(name)
+        assert consumers & firsts, (
+            f"{filename}:{func} installs stub modules and no pair in "
+            f"ORDER_DEPENDENT_PAIRS runs one of its users ({sorted(consumers)}) before a "
+            f"module that reads what it made importable")
+
+
 
 
 # -- 4. the exit convention on the CPU-side spend and fetch tools (wave 8, F-3f642bd9) ----

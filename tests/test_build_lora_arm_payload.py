@@ -160,7 +160,8 @@ def test_ledger_raises_when_a_named_break_did_not_happen(base):
 def test_ledger_raises_if_a_baseline_node_is_dropped(base):
     built, inserts = B.build_arm(base, "T")
     del built["41"]
-    with pytest.raises(B.LedgerGate):
+    with pytest.raises(B.LedgerGate,
+                       match=r"nothing authorises a deletion from a byte-pinned graph"):
         B.gate_ledger(base, built, inserts)
 
 

@@ -120,7 +120,7 @@ def test_the_plan_refuses_a_pin_on_the_perspective_path(rt):
 
 @pytest.mark.parametrize("bad", [0.0, -1.0, float("nan"), float("inf")])
 def test_the_plan_refuses_a_pin_that_is_not_a_finite_positive_span(bad):
-    with pytest.raises(TA.TurnaroundPlanRefusal):
+    with pytest.raises(TA.TurnaroundPlanRefusal, match=r"an ortho_scale pin of"):
         TA.projection_plan(True, 50.0, 36.0, ortho_scale_pin=bad)
 
 
@@ -314,5 +314,6 @@ def test_math_isfinite_is_what_rejects_inf_since_the_downstream_check_does_not()
 
     assert framing.ortho_half_spans(float("inf"), 1024, 1024)      # does not raise
     assert not math.isfinite(float("inf"))
-    with pytest.raises(framing.FramingError):
+    with pytest.raises(framing.FramingError,
+                       match=r"ortho_scale is 0\.0, which spans no world at all; a"):
         framing.ortho_half_spans(0.0, 1024, 1024)

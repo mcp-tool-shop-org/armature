@@ -91,13 +91,27 @@ function Invoke-Leg {
     #
     # So a RAISED body establishes no outcome, whatever $LASTEXITCODE currently holds. The
     # commands after the one that raised did not run, and a leg is a claim about all of them.
+    #
+    # AND A NON-ZERO EXIT MID-LEG IS NOT A RAISE. Measured at the wave-8 merge on this exact
+    # function: a body running a command that exits 7 and THEN one that exits 0 recorded 0 /
+    # PASS, because `$LASTEXITCODE` is whatever the LAST command left. The absent-binary
+    # case above raises; a plain non-zero exit does not. So, inside the body, a native
+    # command's non-zero exit is promoted to a terminating error (PowerShell 7.4+:
+    # `$PSNativeCommandUseErrorActionPreference` with `$ErrorActionPreference = 'Stop'`),
+    # caught here, and RECORDED as that command's own code — the leg stops at the first
+    # command that failed, which is the claim a leg makes about all of its commands.
     $NO_OUTCOME = 253
     $global:LASTEXITCODE = $null
     $code = $null
     $raised = $false
+    $ErrorActionPreference = 'Stop'
+    $PSNativeCommandUseErrorActionPreference = $true
     try {
         & $Body
         $code = $global:LASTEXITCODE
+    } catch [System.Management.Automation.NativeCommandExitException] {
+        $code = $_.Exception.ExitCode
+        Write-Host "  command exited $code : $($_.Exception.Message)" -ForegroundColor Red
     } catch {
         Write-Host "  leg raised: $($_.Exception.Message)" -ForegroundColor Red
         $raised = $true

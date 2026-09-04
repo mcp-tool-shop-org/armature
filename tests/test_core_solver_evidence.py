@@ -43,7 +43,11 @@ CORE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 #: rather than quietly widening. Routed to core-gates (`gates.py`, `rig_gates.py`,
 #: `route_gates.py`, `canon.py`, `donor_gate.py`) in wave 8 of run
 #: `swarm-1788481819-3690`, 2026-09-04.
-EXEMPT = {"canon", "donor_gate", "gates", "rig_gates", "route_gates"}
+#: EMPTIED at the wave-8 merge (coordinator): core-gates carried `gate` + `andon` across all five
+#: of these modules on its own branch (commit da80e59), so an exemption that named them would
+#: be the stale kind this file's own docstring warns about. The set stays as a mechanism so a
+#: module that regresses can be named here with a date and a reason, never silently.
+EXEMPT = set()
 
 #: The 21 modules this domain owns, from the wave-8 frozen domain map. Used ONLY to check
 #: the exemptions above are outside it — never as the census population.
@@ -178,11 +182,13 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     mods = _module_names()
     with_gates = {m: len(_gate_raises(m)) for m in mods if _gate_raises(m)}
     assert with_gates == {
+        # rig_gates 11 → 12 and route_gates 32 → 34 at the wave-8 merge: core-gates' branch
+        # added Gate P's truncation refusal and the class-level licence refusals.
         "assembly": 18, "blender_scene": 4, "canon": 1, "donor_gate": 6, "gates": 20,
         "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 7, "resample": 4,
-        "rig_gates": 11, "route_gates": 32, "startframe": 19, "turnaround": 9,
+        "rig_gates": 12, "route_gates": 34, "startframe": 19, "turnaround": 9,
     }, with_gates
-    assert sum(with_gates.values()) == 142
+    assert sum(with_gates.values()) == 145
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():
@@ -199,17 +205,26 @@ def test_the_exemptions_are_real_members_and_outside_this_domain():
 
 
 def test_every_gate_raise_carries_both_its_id_and_its_andon():
-    offenders = []
-    for mod in _module_names():
-        if mod in EXEMPT:
-            continue
-        for lineno, cname, _gate_id, keys, _g, _a in _gate_raises(mod):
-            has = keys or set()
-            if not ({"gate", "andon"} <= has):
-                offenders.append((f"{mod}.py:{lineno}", cname,
-                                  sorted({"gate", "andon"} - has)))
-    assert offenders == [], (
-        "gate raises whose evidence cannot name the andon that pulled: " + repr(offenders))
+    """The property, through the suite's ONE evidence walk.
+
+    Coordinator consolidation at the wave-8 merge: this file's own `_gate_raises` walk reads
+    the dict LITERAL at an evidence name's last assignment and cannot see a key added by
+    subscript afterwards (`ev["andon"] = "GateCanon"` at canon.py:91) or a dict built and
+    mutated earlier in the function (gates.py:668, route_gates.py:857) — six false
+    positives on the merged tree. `tests/test_gates.py::evidence_dicts_missing` resolves
+    those shapes, so it is the walk this property is judged by; `_gate_raises` stays as the
+    POPULATION pin above (per-module raise counts), which is a different question.
+    """
+    from test_gates import evidence_dicts_missing
+
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "tools", "armature_core")
+    for key in ("gate", "andon"):
+        offenders, examined = evidence_dicts_missing(key, root=root)
+        assert examined > 0, "the walk examined no raise; a census over nothing is not a clean tree"
+        offenders = [o for o in offenders
+                     if not any(str(o[0]).replace("\\", "/").endswith(f"{x}.py") for x in EXEMPT)]
+        assert offenders == [], f"gate raises whose evidence cannot name its {key!r}: {offenders}"
 
 
 def test_the_evidence_agrees_with_the_raising_class_wherever_both_are_literal():

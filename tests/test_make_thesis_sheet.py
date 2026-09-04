@@ -178,7 +178,7 @@ def test_the_same_two_arms_under_distinct_labels_still_reach_the_pairing_gate(tm
     ctl = _numbered(str(tmp_path / "ctl"), [0, 1, 2])
     bad = _numbered(str(tmp_path / "bad"), [7, 8, 9])
     good = _numbered(str(tmp_path / "good"), [0, 1, 2])
-    with pytest.raises(ML.PairingGate):
+    with pytest.raises(ML.PairingGate, match="do not name the same frames"):
         MTS.main([f"--control={ctl}", f"--arms=A1:{bad},A2:{good}", "--reference=none",
                   f"--out={tmp_path / 'thesis.png'}", "--frames=0,1", "--tile-height=24"])
 

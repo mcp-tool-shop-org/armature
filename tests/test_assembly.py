@@ -481,7 +481,8 @@ def test_the_slot_index_gate_catches_a_permuted_slot_that_topology_calls_clean()
     # core-solvers branch (P3 side A) while this builder grew `gate_slot_frame_index` (side B),
     # so BOTH now refuse the permutation. One clause in two gates is a Stage B consolidation
     # item; until then the test states the merged truth rather than the pre-merge one.
-    with pytest.raises(AS.AssemblyGate):
+    with pytest.raises(AS.AssemblyGate,
+                       match=r"\[ASSEMBLY\] batch slot images\.image0 is bound to \['201'"):
         AS.gate_batch_topology(wf, 6, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
                                expected_sources=expected)
     with pytest.raises(AS.AssemblyGate) as exc:
@@ -500,7 +501,8 @@ def test_a_refused_build_leaves_no_output_directory(tmp_path):
     up = tmp_path / "uploads.json"
     up.write_text(json.dumps(uploads), encoding="utf-8")
     out = tmp_path / "fresh" / "run"
-    with pytest.raises(AS.AssemblyGate):
+    with pytest.raises(AS.AssemblyGate,
+                       match=r"\[ASSEMBLY\] the upload map carries 4 frames but only 1"):
         B.main(["--uploads", str(up), "--out", str(out)])
     assert not out.exists()
     assert not out.parent.exists()

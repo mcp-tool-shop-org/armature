@@ -137,7 +137,7 @@ def test_gate_s_is_not_vacuous_on_this_tier():
     nothing. It must now FIND the seed, and must refuse one that is not registered."""
     wf = _a1()
     assert RG.gate_s_registration(wf, SEEDS)["seeds"], "Gate S found no seed to check"
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate, match=r"\[ROUTE\] Gate S: node 500 would run seed 2026081351, which"):
         RG.gate_s_registration(wf, [1234567890])
 
 
@@ -178,7 +178,8 @@ def test_zero_billable_nodes_also_raises():
     nothing useful, and read as a completed submission in the ledger."""
     wf = _a1()
     del wf["500"]
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] the graph carries 0 `Wan2ReferenceVideoApi`"):
         B.gate_one_paid_node(wf)
 
 
@@ -209,7 +210,8 @@ def test_each_illegal_enum_value_is_named(res, ratio, dur, needle):
 
 
 def test_an_unknown_tier_raises_rather_than_passing_vacuously():
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] no recorded tier rules for 'wan9\.9-nonexistent'"):
         RG.hosted_frame_legality("720P", "16:9", 5, "wan9.9-nonexistent")
 
 
@@ -288,7 +290,7 @@ def test_a_randomising_seed_in_save_format_is_refused_however_concrete_it_looks(
                                            SEEDS[0], "randomize", False]}]}
     found = RG.seeds(saved)
     assert found[0]["pinned"] is False
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate, match=r"\[ROUTE\] Gate S: node 500 \(Wan2ReferenceVideoApi\) is not"):
         RG.gate_s_registration(saved, SEEDS)
 
 
@@ -358,7 +360,8 @@ def test_a2_end_to_end_orders_frames_by_local_name(tmp_path):
 
 def test_an_unregistered_seed_stops_the_end_to_end_run(tmp_path):
     seeds, prompt, refs, _ = _files(tmp_path)
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] seed 42 is not on the committed registration"):
         B.main([f"--arm=A1", "--seed=42", f"--seeds={seeds}", f"--prompt-file={prompt}",
                 f"--refs={refs}", f"--out={tmp_path / 'x'}", *_CANON_ESCAPE])
 
@@ -418,7 +421,8 @@ def test_a_refused_r2v_build_leaves_no_output_directory(tmp_path):
     real ones is read later as a run that happened."""
     seeds, prompt, refs, _ = _files(tmp_path)
     out = tmp_path / "fresh" / "route"
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] seed 42 is not on the committed registration"):
         B.main([f"--arm=A1", "--seed=42", f"--seeds={seeds}", f"--prompt-file={prompt}",
                 f"--refs={refs}", f"--out={out}", *_CANON_ESCAPE])
     assert not out.exists()
@@ -517,7 +521,7 @@ def test_an_arm_run_without_its_input_flag_names_the_flag(tmp_path, arm, flag):
 @pytest.mark.parametrize("arm,flag", [("A1", "--uploads"), ("A2", "--refs")])
 def test_the_other_arms_flag_does_not_satisfy_the_requirement(tmp_path, arm, flag):
     """The mutation that must not make it green: supplying the wrong arm's flag."""
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate, match=r"\[ROUTE\] arm A"):
         B.main(_r2v_args(tmp_path, arm, flag, str(tmp_path / "whatever.json")))
 
 

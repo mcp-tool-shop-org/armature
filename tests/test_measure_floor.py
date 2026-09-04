@@ -68,7 +68,8 @@ def test_the_cli_halts_on_a_ragged_set_and_writes_no_floor(tmp_path):
     for name, n in (("r1", 5), ("r2", 9)):
         _run(tmp_path, name, n)
     out = tmp_path / "floor.json"
-    with pytest.raises(MF.FloorError):
+    with pytest.raises(MF.FloorError,
+                       match=r"the runs do not carry the same number of frames \(r1=5"):
         MF.main([f"--runs=r1,r2", f"--root={tmp_path}", "--early=0-1", "--late=2-3",
                  f"--out={out}"])
     assert not out.exists()

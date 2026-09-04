@@ -117,25 +117,92 @@ def test_render_comparison_isolates_through_the_one_function(retopo):
 
 # ------------------------------------------------------- F-b73739c1: recorded provenance
 
-#: Every Blender-side tool that writes a `"tool":`-keyed JSON record. Read off the files so
-#: a new one joins the census the day it lands.
+# WAVE 8, F-9af57508 — the population was the literal predicate `'"tool":' in src` over
+# the 21 Blender tools, giving 13, and the assertion below was a `>= 13` FLOOR. Both are
+# now derived. The invariant is about the WRITING, not about a key a writer may simply not
+# use: a tool that serialises a JSON record and does not say which Blender produced it
+# leaves a measurement that moved because the interpreter moved reading as a measurement
+# that moved because the subject did. Derived on 2026-09-04: 21 of 21 Blender tools write
+# JSON, and 8 of them were outside the old predicate.
+
+
 def _record_writing_blender_tools():
+    """THE DERIVATION: every Blender-side tool that SERIALISES a record.
+
+    `json.dump` or `json.dumps` as an `ast.Call`, over the tools that `import bpy` —
+    read off the tree, so a writer that keys its record differently is still a writer.
+    """
     from blender_stub import blender_tools
 
-    return [fn for fn in blender_tools() if '"tool":' in read_source(fn)]
+    out = []
+    for filename in blender_tools():
+        tree = ast.parse(read_source(filename))
+        serialises = any(
+            isinstance(node, ast.Call)
+            and (getattr(node.func, "attr", "") in ("dump", "dumps")
+                 or getattr(node.func, "id", "") in ("dump", "dumps"))
+            for node in ast.walk(tree))
+        if serialises:
+            out.append(filename)
+    return out
 
 
 RECORD_WRITERS = _record_writing_blender_tools()
 
+#: Derived 2026-09-04. Equality, not a floor: a floor cannot tell you a writer has stopped
+#: being counted, and `>= 13` was green over a population of 13 that should have been 21.
+RECORDED_RECORD_WRITERS = [
+    "author_walk.py", "check_relift.py", "diagnose_bone_heat.py", "lift_solve.py",
+    "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
+    "make_skeleton_sheet.py", "make_test_armature.py", "preview_glb.py",
+    "preview_walk.py", "probe_glb.py", "probe_subject.py", "render_performer.py",
+    "render_start_frame.py", "render_turnaround.py", "rig_bake.py", "rig_character.py",
+    "rig_parts.py", "rig_repair.py", "rig_retopo.py",
+]
 
-def test_the_record_writing_population_is_what_it_was_measured_to_be():
-    assert len(RECORD_WRITERS) >= 13, RECORD_WRITERS
-    for expected in ("rig_retopo.py", "rig_bake.py", "rig_character.py",
-                     "render_turnaround.py"):
-        assert expected in RECORD_WRITERS, (expected, RECORD_WRITERS)
+#: The writers that state no Blender version, measured 2026-09-04 with the derived walk
+#: above — every one of them a `tools/` file in the instruments domain, none of them
+#: reachable by the old `'"tool":' in src` predicate, which is why they were never filed.
+#: SIX of them, from the eight the old predicate could not see (`make_test_armature` and
+#: `probe_glb` were outside it too and do state a version). A RATCHET, the same shape
+#: `EVIDENCE_FREE_GATE_RAISES` uses: the six are written down so the domain that owns them
+#: can close them, and a SEVENTH fails here immediately.
+#: SUBSET assertion, so this set can only shrink.
+NO_BLENDER_VERSION_ROUTED = {
+    "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
+    "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py",
+}
 
 
-@pytest.mark.parametrize("filename", RECORD_WRITERS)
+def test_the_record_writing_population_is_derived_and_has_not_grown_silently():
+    assert RECORD_WRITERS == RECORDED_RECORD_WRITERS, {
+        "appeared": sorted(set(RECORD_WRITERS) - set(RECORDED_RECORD_WRITERS)),
+        "vanished": sorted(set(RECORDED_RECORD_WRITERS) - set(RECORD_WRITERS)),
+    }
+    assert len(RECORD_WRITERS) == 21, RECORD_WRITERS
+    assert NO_BLENDER_VERSION_ROUTED <= set(RECORD_WRITERS)
+    #: the eight the old `'"tool":' in src` predicate could not see
+    assert {"make_binding_sheet.py", "preview_glb.py", "probe_glb.py"} <= set(RECORD_WRITERS)
+
+
+def test_no_new_record_writer_omits_the_blender_it_ran_on():
+    """QUADRIFLOW_SCALE, `extract_outer_shell`'s pinned API return and ISLAND_MARGIN are
+    each a measurement of ONE build's behaviour; a recipe that does not reproduce its
+    output is not a recipe. A sheet or probe record quoted later with no Blender beside it
+    is a measurement whose interpreter is unknown."""
+    silent = set()
+    for filename in RECORD_WRITERS:
+        src = read_source(filename)
+        if not ("blender_provenance()" in src or "bpy.app.version_string" in src):
+            silent.add(filename)
+    new = sorted(silent - NO_BLENDER_VERSION_ROUTED)
+    assert not new, (
+        f"these tools write a record and never state which Blender produced it: {new}")
+    assert silent <= NO_BLENDER_VERSION_ROUTED, sorted(silent)
+
+
+@pytest.mark.parametrize("filename", sorted(set(RECORD_WRITERS) - NO_BLENDER_VERSION_ROUTED),
+                         ids=lambda v: v.replace(".py", ""))
 def test_every_tool_that_writes_a_record_records_the_blender_it_ran_on(filename):
     src = read_source(filename)
     assert ("blender_provenance()" in src or "bpy.app.version_string" in src), (

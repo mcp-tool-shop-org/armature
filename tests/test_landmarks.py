@@ -195,12 +195,14 @@ def test_a_subject_that_is_not_a_standing_figure_raises_instead_of_guessing():
 
 
 def test_a_vertex_array_too_sparse_to_band_raises():
-    with pytest.raises(LandmarkError):
+    with pytest.raises(LandmarkError,
+                       match=r"50 vertices cannot be resolved into 100 bands; the"):
         landmarks.derive(np.random.default_rng(0).uniform(0, 1, size=(50, 3)), n_bands=100)
 
 
 def test_a_malformed_vertex_array_raises():
-    with pytest.raises(LandmarkError):
+    with pytest.raises(LandmarkError,
+                       match=r"expected an \(N, 3\) vertex array, got shape \(100, 2\)"):
         landmarks.band_profile(np.zeros((100, 2)), n_bands=10)
 
 
@@ -218,7 +220,8 @@ def test_an_arm_that_never_separates_from_the_body_raises():
             _ecyl(s * LEG_X, 0.0, LEG_R, LEG_R, ANKLE_Z, CROTCH_Z),
             _ecyl(s * LEG_X, FOOT_Y, FOOT_RX, FOOT_RY, GROUND, ANKLE_Z),
         ]
-    with pytest.raises(LandmarkError):
+    with pytest.raises(LandmarkError,
+                       match=r"the silhouette does not resolve into the expected"):
         landmarks.derive(np.concatenate(parts, axis=0), n_bands=100)
 
 

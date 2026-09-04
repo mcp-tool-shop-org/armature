@@ -38,9 +38,11 @@ SEMVER = re.compile(r"^\d+\.\d+\.\d+([-+].+)?$")
 def pyproject_version(path=PYPROJECT):
     """`project.version`, via tomllib where it exists and a scanner where it does not.
 
-    `requires-python` is `>=3.10` and `tomllib` landed in 3.11, so the fallback is not
-    decoration — it is the difference between this check running on the oldest supported
-    interpreter and skipping there.
+    `tomllib` landed in 3.11, so whether this fallback is load-bearing or dead code is a
+    question about `requires-python` — which this docstring used to answer by writing
+    `>=3.10` down. It is derived instead, by
+    `test_the_tomllib_fallbacks_premise_is_the_floor_pyproject_declares`, because a floor
+    that moves leaves a typed one asserting a version nobody supports.
     """
     try:
         import tomllib
@@ -63,6 +65,35 @@ def pyproject_version(path=PYPROJECT):
     if version is None:  # pragma: no cover - 3.10 only
         raise AssertionError(f"{path} declares no [project] version")
     return version
+
+
+def requires_python_floor(path=PYPROJECT):
+    """The minor version `requires-python` admits, read off pyproject rather than typed."""
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    match = re.search(r'requires-python\s*=\s*["\']>=\s*3\.(\d+)', text)
+    assert match, "pyproject declares no `requires-python` floor of the form >=3.N"
+    return int(match.group(1))
+
+
+def test_the_tomllib_fallbacks_premise_is_the_floor_pyproject_declares():
+    """The fallback above is either load-bearing or dead, and pyproject decides which.
+
+    The docstring used to state the floor as `>=3.10`. A typed version number in a
+    docstring is a claim nobody re-measures: it survived the floor moving, and a reader
+    would have taken the fallback for coverage of an interpreter the project no longer
+    admits. Stated as a derivation, both answers stay true as the floor moves.
+    """
+    floor = requires_python_floor()
+    import importlib.util
+
+    has_tomllib = importlib.util.find_spec("tomllib") is not None
+    if floor >= 11:
+        assert has_tomllib, (
+            "requires-python admits only 3.11+, where tomllib is stdlib, yet this "
+            "interpreter has none — the fallback below is the only path and is not dead")
+    else:
+        assert floor == 10, floor  # a floor below 3.10 is a change nobody has recorded
 
 
 def npm_version(path=NPM_PACKAGE):

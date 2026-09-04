@@ -124,14 +124,16 @@ def test_a_grayscale_sequence_cannot_demonstrate_chroma_safety():
     # makes the pass above evidence about grayscale rather than about the simulation
     # being a no-op.
     colour = _frames(n=2, h=16, w=16, seed=11)
-    with pytest.raises(GateRRoundTrip):
+    with pytest.raises(GateRRoundTrip,
+                       match=r"\[R\] the encode/decode round trip is not lossless: frame"):
         gate_r_round_trip(colour, [_yuv420_round_trip(f) for f in colour])
 
 
 def test_shape_change_raises():
     src = _frames(n=2, h=8, w=6)
     bad = [f[:, :4].copy() for f in src]
-    with pytest.raises(GateRRoundTrip):
+    with pytest.raises(GateRRoundTrip,
+                       match=r"\[R\] the encode/decode round trip is not lossless: frame"):
         gate_r_round_trip(src, bad)
 
 
@@ -180,7 +182,8 @@ def test_the_decoded_side_is_checked_too():
     """Both directions: a decoder that hands back floats is the realistic shape."""
     src = _frames(n=1)
     got = [f.astype(np.float64) for f in src]
-    with pytest.raises(GateRRoundTrip):
+    with pytest.raises(GateRRoundTrip,
+                       match=r"\[R\] the round trip was handed float64 arrays where it"):
         gate_r_round_trip(src, got)
 
 

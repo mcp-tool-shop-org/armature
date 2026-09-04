@@ -161,7 +161,8 @@ def test_the_cli_halts_on_permuted_names_before_writing_anything(tmp_path):
     a, b = _pair()
     b["keypoint_names"] = [b["keypoint_names"][i] for i in (1, 0, 2)]
     out = tmp_path / "smooth.json"
-    with pytest.raises(MS.SmoothnessInputError):
+    with pytest.raises(MS.SmoothnessInputError,
+                       match=r"the two records name their keypoints differently at index"):
         MS.main([f"--a={_write(tmp_path, 'a.json', a)}", f"--b={_write(tmp_path, 'b.json', b)}",
                  f"--out={out}"])
     assert not out.exists()

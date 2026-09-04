@@ -130,7 +130,7 @@ def test_gate_p_fires_on_a_degenerate_diagonal():
     """The threshold is a fraction of the subject's own size; with no size there is no
     threshold, and defaulting to one would be a global constant sneaking back in."""
     a = _cloud()
-    with pytest.raises(GatePRestPose):
+    with pytest.raises(GatePRestPose, match=r"\[P\] bbox diagonal is 0\.0; the threshold is a fraction of"):
         rig_gates.gate_p_rest_pose(a, a.copy(), 0.0)
 
 
@@ -205,12 +205,14 @@ def test_gate_d_fires_on_a_weight_difference_of_one_vertex():
 def test_gate_d_fires_on_a_changed_parent_and_on_a_changed_deform_flag():
     a, b = _fp(), _fp()
     b["bones"]["wrist.R"]["parent"] = "chest"
-    with pytest.raises(GateDDeterminism):
+    with pytest.raises(GateDDeterminism,
+                       match=r"\[D\] two builds from identical inputs produced different"):
         rig_gates.gate_d_determinism(a, b, DIAGONAL)
 
     a, c = _fp(), _fp()
     c["bones"]["nose"]["use_deform"] = True
-    with pytest.raises(GateDDeterminism):
+    with pytest.raises(GateDDeterminism,
+                       match=r"\[D\] two builds from identical inputs produced different"):
         rig_gates.gate_d_determinism(a, c, DIAGONAL)
 
 
@@ -228,7 +230,8 @@ def test_gate_d_tolerance_scales_with_the_subject_not_with_metres():
     wobble = 1e-5
     a, b = _fp(), _fp()
     b["bones"]["hips"]["head"][2] += wobble
-    with pytest.raises(GateDDeterminism):
+    with pytest.raises(GateDDeterminism,
+                       match=r"\[D\] two builds from identical inputs produced different"):
         rig_gates.gate_d_determinism(a, b, bbox_diagonal=1.0)
     rig_gates.gate_d_determinism(a, b, bbox_diagonal=1000.0)
 
@@ -275,7 +278,8 @@ def test_round_trip_tolerates_a_last_bit_difference_the_format_is_entitled_to():
 
 def test_round_trip_fires_on_a_degenerate_diagonal():
     a = np.zeros((10, 3), dtype=np.float32)
-    with pytest.raises(GatePRestPose):
+    with pytest.raises(GatePRestPose,
+                       match=r"\[P\] bbox diagonal is 0\.0; no threshold can be derived"):
         rig_gates.gate_p_round_trip_positions(a, a, 0.0)
 
 
