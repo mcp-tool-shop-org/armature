@@ -110,7 +110,8 @@ def gate_atlas_untouched(source_path, export_path):
     """
     before = embedded_images(source_path)
     after = embedded_images(export_path)
-    ev = {"source": source_path, "export": export_path,
+    ev = {"gate": "ATLAS", "andon": "GateAtlasUntouched",
+          "source": source_path, "export": export_path,
           "images_in_source": [{k: v for k, v in i.items() if k != "index"} for i in before],
           "images_in_export": [{k: v for k, v in i.items() if k != "index"} for i in after]}
     problems = []

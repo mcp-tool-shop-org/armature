@@ -282,7 +282,8 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
     """
     lo, hi = int(alpha_min), int(alpha_max)
     ev = {
-        "gate": "ALPHA", "view": int(view_index), "path": path,
+        "gate": "ALPHA", "andon": "TurnaroundAlphaGate",
+        "view": int(view_index), "path": path,
         "alpha_extrema": [lo, hi],
         "transparent_fraction": float(transparent_fraction),
         "opaque_fraction": 1.0 - float(transparent_fraction),
@@ -321,7 +322,14 @@ def gate_set_distinct(view_records, expected):
     alpha gate passes on every one of them, the count is right, and the set is eight copies
     of the front view. Nothing else here looks at whether the views differ from each other.
     """
-    ev = {"gate": "TURN", "expected": int(expected), "observed": len(view_records)}
+    ev = {"gate": "TURN", "andon": "TurnaroundGate",
+          "expected": int(expected), "observed": len(view_records)}
+    if not int(expected) or not view_records:
+        raise TurnaroundGate(
+            f"the set was gated over {len(view_records)} view(s) against an expected "
+            f"{int(expected)}: the count clause compares 0 to 0, the digest loop never "
+            f"runs and the duplicate clause compares two empty sets, so the gate would be "
+            f"a check that cannot fail", ev)
     if len(view_records) != int(expected):
         raise TurnaroundGate(
             f"the set carries {len(view_records)} view(s), not {expected}", ev)

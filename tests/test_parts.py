@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from armature_core import parts
-from armature_core.errors import ArmatureError
+from armature_core.errors import ArmatureError, GateFailure
 
 # A short thin bone between two fat ones — the neck, reduced to its essentials.
 BONES = [
@@ -247,3 +247,81 @@ def test_the_collar_is_a_disc_around_the_joint_not_a_slab_across_the_figure():
     assert 1 not in borrowed["neck"], (
         "a face 0.6 from the joint axis was borrowed: the collar is still a slab")
     assert detail[0]["collar_radius"] > 0
+
+
+# ------------------------------------- the vacuity family, and the receipt's own id
+
+
+def test_determinism_refuses_two_empty_fingerprints_rather_than_agreeing_about_nothing():
+    """F-1dd37d93. Measured: `gate_parts_determinism({}, {}, 1.0)` returned with the
+    verdict "0 parts identical across two builds" and worst {"part": None, "delta": 0.0}
+    — `set(a) != set(b)` is False over two empty dicts and the intersection loop never
+    runs. Two functions above, `gate_rigid_arrival` refuses the identical shape and says
+    why; Gate D was saved only by Gate PARTS firing earlier in a different function on a
+    different pass, and `turnaround.gate_view_crop`'s docstring rules that out: a gate
+    whose andon is load-bearing only in another gate's presence is not an andon."""
+    with pytest.raises(parts.GatePartsDeterminism) as exc:
+        parts.gate_parts_determinism({}, {}, 1.069)
+    assert "check that cannot fail" in str(exc.value)
+    assert exc.value.evidence["n_parts_a"] == 0
+    assert exc.value.evidence["n_parts_b"] == 0
+
+
+def test_determinism_refuses_one_empty_side_too():
+    with pytest.raises(parts.GatePartsDeterminism) as exc:
+        parts.gate_parts_determinism(_fp(), {}, 1.069)
+    assert exc.value.evidence["n_parts_a"] == 3
+    assert exc.value.evidence["n_parts_b"] == 0
+
+
+def test_determinism_refuses_two_non_empty_builds_that_share_no_part():
+    """Both sides carry parts, the set clause reports the difference — and then the
+    intersection loop compares nothing, so the geometry half of this gate ran over an
+    empty population. It is a raise either way today, but the evidence must say the
+    comparison covered zero parts rather than leaving the reader to infer it."""
+    a = _fp()
+    b = {f"other_{k}": v for k, v in _fp().items()}
+    with pytest.raises(parts.GatePartsDeterminism) as exc:
+        parts.gate_parts_determinism(a, b, 1.069)
+    assert exc.value.evidence["n_parts_compared"] == 0
+
+
+def test_accounting_refuses_a_mesh_with_no_faces_and_no_registered_parts():
+    """The same family as Gate D's blind spot, one function up: measured,
+    `gate_parts_accounting([], 0, [])` returned green with the verdict "0 faces
+    partitioned across 0 parts, each face exactly once"."""
+    with pytest.raises(parts.GatePartsAccounting) as exc:
+        parts.gate_parts_accounting(np.array([], dtype=int), 0, [])
+    assert "check that cannot fail" in str(exc.value)
+
+
+def test_every_parts_gate_carries_its_own_id_in_the_evidence_it_raises_with():
+    """F-f2f42e4a. `stage_render` prints `GATE_FAILURE <exc.gate>` and `GATE_EVIDENCE
+    <json of exc.evidence>`; measured, none of parts.py's three gates put a "gate" key in
+    the evidence, while every gate in assembly.py, turnaround.py, startframe.py,
+    resample.py, glb.py and lift_solve.py does. Gate id "D" is carried by two andons
+    (`errors.GateDDeterminism`, `parts.GatePartsDeterminism`), so the JSON beside the
+    receipt line is the only thing that can tell them apart."""
+    calls = [
+        ("PARTS", "GatePartsAccounting",
+         lambda: parts.gate_parts_accounting(np.array([0, -1]), 2, NAMES)),
+        ("RIGID", "GateRigidArrival", lambda: parts.gate_rigid_arrival([], 1.069)),
+        ("D", "GatePartsDeterminism",
+         lambda: parts.gate_parts_determinism({}, {}, 1.069)),
+    ]
+    for gate_id, cls_name, call in calls:
+        with pytest.raises(GateFailure) as exc:
+            call()
+        ev = exc.value.evidence
+        assert ev["gate"] == gate_id == exc.value.gate, f"{cls_name}: {ev.get('gate')!r}"
+        assert ev["andon"] == cls_name, (
+            f"{cls_name}: the id {gate_id!r} is not unique across andons, so the evidence "
+            f"must name the class; got {ev.get('andon')!r}")
+
+
+def test_the_parts_gates_name_their_andon_on_the_passing_path_too():
+    """A receipt is written on a PASS as well, and Gate D's id is shared there too."""
+    ev = parts.gate_parts_determinism(_fp(), _fp(), 1.069)
+    assert ev["gate"] == "D" and ev["andon"] == "GatePartsDeterminism"
+    ok = parts.gate_parts_accounting(np.array([0, 0, 1, 2, 2]), 5, NAMES)
+    assert ok["gate"] == "PARTS" and ok["andon"] == "GatePartsAccounting"

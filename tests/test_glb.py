@@ -209,3 +209,17 @@ def test_a_source_image_embedded_twice_passes_when_both_copies_arrive(tmp_path):
     src = _glb_blobs(str(tmp_path / "src.glb"), [A, A, B])
     out = _glb_blobs(str(tmp_path / "out.glb"), [B, A, A])
     assert glb.gate_atlas_untouched(src, out)["verdict"].startswith("3 of 3 embedded")
+
+
+def test_the_atlas_gate_carries_its_own_id_in_the_evidence(tmp_path):
+    """F-f2f42e4a's family: `stage_render` prints `GATE_FAILURE <exc.gate>` and
+    `GATE_EVIDENCE <json>` as two lines, and a reader that keeps only the JSON had no id
+    at all. Every other gate in assembly.py, turnaround.py, startframe.py, resample.py
+    and lift_solve.py puts "gate" in the evidence; this one did not."""
+    a = _glb(str(tmp_path / "src.glb"), ATLAS)
+    b = _glb(str(tmp_path / "out.glb"), ATLAS)
+    assert glb.gate_atlas_untouched(a, b)["gate"] == "ATLAS"
+    c = _glb(str(tmp_path / "bad.glb"), ATLAS, images=0)
+    with pytest.raises(glb.GateAtlasUntouched) as exc:
+        glb.gate_atlas_untouched(a, c)
+    assert exc.value.evidence["gate"] == exc.value.gate == "ATLAS"

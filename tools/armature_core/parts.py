@@ -90,11 +90,30 @@ def assign_faces(centroids, bones, radii, normalise=False):
 
 
 def gate_parts_accounting(labels, n_faces, bone_names):
-    """Gate PARTS · ANDON — the partition is total, exclusive, and over the registered list."""
+    """Gate PARTS · ANDON — the partition is total, exclusive, and over the registered list.
+
+    **The empty population is refused** (F-1dd37d93's family, measured 2026-09-04):
+    `gate_parts_accounting([], 0, [])` returned green with the verdict "0 faces
+    partitioned across 0 parts, each face exactly once". Every clause here compares a
+    count to another count, and over an empty mesh with an empty registered list they all
+    compare 0 to 0.
+
+    The evidence carries `gate` and `andon` (F-f2f42e4a): `stage_render` prints
+    `GATE_FAILURE <exc.gate>` beside `GATE_EVIDENCE <json>`, and gate ids are shared
+    across andon families, so the JSON has to name which andon pulled.
+    """
     labels = np.asarray(labels)
-    ev = {"n_faces": int(n_faces), "n_labels": int(len(labels)),
+    ev = {"gate": "PARTS", "andon": "GatePartsAccounting",
+          "n_faces": int(n_faces), "n_labels": int(len(labels)),
           "n_parts_registered": len(bone_names)}
     problems = []
+
+    if not len(bone_names) or not int(n_faces):
+        raise GatePartsAccounting(
+            f"the partition was gated over {int(n_faces)} face(s) across "
+            f"{len(bone_names)} registered part(s): every clause below compares 0 to 0 "
+            f"and the gate would be a check that cannot fail. A comparison over nothing "
+            f"must not report agreement", ev)
 
     if len(labels) != n_faces:
         problems.append(f"{len(labels)} assignments for {n_faces} faces")
@@ -275,10 +294,13 @@ def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=1e-4, rigidity_
     `max_pair_distance_change` (largest change in any sampled intra-part vertex distance),
     and `max_displacement`. `authored_max` is the largest bone-level displacement the action
     calls for, computed from the armature rather than from the mesh.
+
+    The evidence carries `gate` and `andon` (F-f2f42e4a) — see `gate_parts_accounting`.
     """
     tol = epsilon_frac * float(bbox_diagonal)
     rig_tol = rigidity_frac * float(bbox_diagonal)
-    ev = {"transform_tolerance": tol, "rigidity_tolerance": rig_tol,
+    ev = {"gate": "RIGID", "andon": "GateRigidArrival",
+          "transform_tolerance": tol, "rigidity_tolerance": rig_tol,
           "bbox_diagonal": float(bbox_diagonal), "parts": observations}
     problems = []
 
@@ -326,15 +348,47 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=1e-6):
     geometry in a different order and that is not a difference in the rig; compared as arrays
     because a file hash would fire on exporter noise and, worse, a hash MATCH would be quoted
     as proof of a property it never tested.
+
+    **This gate had no vacuity guard** (F-1dd37d93). Measured 2026-09-04:
+    `gate_parts_determinism({}, {}, 1.0)` returned with the verdict "0 parts identical
+    across two builds" and `worst {"part": None, "delta": 0.0}` — `set(a) != set(b)` is
+    False over two empty dicts, the intersection loop never runs, and `problems` stays
+    empty. Two functions above, `gate_rigid_arrival` refuses the identical shape and says
+    why; this one was saved only by Gate PARTS firing earlier in `rig_parts.build_pass`,
+    a different function on a different pass, and `turnaround.gate_view_crop`'s docstring
+    already rules that out: a gate whose andon is load-bearing only in another gate's
+    presence is not an andon. An empty side, and a non-empty pair sharing no part name,
+    both raise; `n_parts_compared` states what the geometry clause actually covered.
+
+    The evidence carries `gate` and `andon` (F-f2f42e4a). Gate id "D" is carried by two
+    andons — `errors.GateDDeterminism` (E07's rig determinism) and this one — so a
+    receipt line reading "[D] two builds produced different parts" is ambiguous by id and
+    the evidence is what disambiguates it.
     """
     tol = length_frac * float(bbox_diagonal)
-    ev = {"tolerance": tol, "n_parts_a": len(a), "n_parts_b": len(b)}
+    shared = sorted(set(a) & set(b))
+    ev = {"gate": "D", "andon": "GatePartsDeterminism", "tolerance": tol,
+          "n_parts_a": len(a), "n_parts_b": len(b), "n_parts_compared": len(shared)}
     problems = []
+
+    if not a or not b:
+        raise GatePartsDeterminism(
+            f"two builds were compared with {len(a)} and {len(b)} part(s): the set clause "
+            f"reads False over an empty pair, the intersection loop never runs, and the "
+            f"gate would be a check that cannot fail. A determinism andon that returns "
+            f"'0 parts identical across two builds' certifies nothing", ev)
+    if not shared:
+        raise GatePartsDeterminism(
+            f"the two builds share no part name at all ({len(a)} and {len(b)} part(s)), "
+            f"so the geometry comparison this gate exists for ran over nothing: only in "
+            f"first {sorted(set(a) - set(b))[:8]}, only in second "
+            f"{sorted(set(b) - set(a))[:8]}", ev)
+
     if set(a) != set(b):
         problems.append(f"part sets differ: only in first {sorted(set(a) - set(b))[:8]}, "
                         f"only in second {sorted(set(b) - set(a))[:8]}")
     worst = {"part": None, "delta": 0.0}
-    for name in sorted(set(a) & set(b)):
+    for name in shared:
         pa, pb = a[name], b[name]
         if pa["n_verts"] != pb["n_verts"] or pa["n_faces"] != pb["n_faces"]:
             problems.append(f"{name}: {pa['n_verts']}v/{pa['n_faces']}f vs "
