@@ -223,3 +223,118 @@ def test_the_specs_correction_agrees_with_the_tree_it_describes():
         assert "seeds" in lines[int(lineno) - 1], (
             f"{name}:{lineno} is cited as a `seeds` reader and reads "
             f"{lines[int(lineno) - 1].strip()!r}")
+
+
+# ============================================================ wave 12, F-5e7fe9dc
+# Seven of the eight `specs/*seeds.json` carried the wave-8 correction paragraph with four of
+# its seven `<file>.py:<line>` citations pointing at unrelated code. Measured in this worktree
+# on 2026-09-04 by resolving every citation: **28 stale anchors, four per file** —
+# `build_animate_payload.py:475` read `uploads = json.load(fh)`,
+# `build_camera_i2v_payload.py:1004` read an f-string inside a topology error message,
+# `build_i2v_payload.py:496` read `if "clip_vision_output" in inp:`,
+# `build_r2v_payload.py:207` read `registration = json.load(fh)`. `specs/E08-seeds.json` alone
+# was clean, having been re-anchored at the wave-10 merge while the other seven were not.
+# CLAUDE.md forbids a report carrying a placeholder shaped like evidence, and
+# `<file>.py:<line>` beside a verdict is exactly that shape: a session re-deriving the census
+# from the specs' own citations opens the cited line, finds unrelated code, and concludes the
+# reader was deleted — or copies the stale block forward into a ninth spec, which is how seven
+# identical copies came to exist.
+#
+# **Why the existing census did not see it.** `test_only_seeds_is_read_by_a_tool` above reads
+# `SEED_SPECS[0]` — the one file that is clean — and never the seven that are not. This is the
+# same census, keyed on the same node, over the DERIVED population instead of its first
+# member; it is proven red on the hidden spelling by parametrising, which is the shape that
+# hid from the original.
+#
+# **And the citations now carry the enclosing function**, so a code move that shifts the line
+# leaves something recoverable in the record rather than only a number that is wrong.
+#
+# family: keyed on the CITATION (`<file>.py:<line>` inside `ceiling.why_machine_readable`) via
+# `glob("specs/*seeds.json")` -> 8 files x 7 citations = 56 anchors, all resolved on every run.
+
+
+@pytest.mark.parametrize("spec", SEED_SPECS, ids=lambda p: os.path.basename(p))
+def test_every_citation_in_every_seeds_spec_resolves(spec):
+    """Each cited line must exist AND be the line that reads the key it is cited for."""
+    import re
+
+    why = _load(spec)["ceiling"]["why_machine_readable"]
+    cited = re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)", why)
+    assert len(cited) == 7, cited
+    for name, lineno in cited:
+        path = os.path.join(TOOLS, name)
+        assert os.path.isfile(path), f"{name} is cited and does not exist"
+        lines = open(path, encoding="utf-8").read().splitlines()
+        assert 1 <= int(lineno) <= len(lines), (
+            f"{os.path.basename(spec)} cites {name}:{lineno}, past the end of a "
+            f"{len(lines)}-line file")
+        assert "seeds" in lines[int(lineno) - 1], (
+            f"{os.path.basename(spec)} cites {name}:{lineno} as a `seeds` reader and that "
+            f"line reads {lines[int(lineno) - 1].strip()!r}")
+
+
+@pytest.mark.parametrize("spec", SEED_SPECS, ids=lambda p: os.path.basename(p))
+def test_every_citation_names_the_function_that_holds_it(spec):
+    """The second anchor, added in wave 12: a line number alone goes stale silently on any
+    code move, and the record is then a placeholder shaped like evidence. The function name
+    survives the move, and this check makes the pair agree."""
+    import ast
+    import re
+
+    why = _load(spec)["ceiling"]["why_machine_readable"]
+    cited = re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+) \(([A-Za-z0-9_<>]+)\)", why)
+    assert len(cited) == 7, f"{os.path.basename(spec)} carries {len(cited)} qualified citations"
+    for name, lineno, fn in cited:
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        holder = None
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.lineno <= int(lineno) <= (node.end_lineno or node.lineno):
+                    if holder is None or node.lineno > holder.lineno:
+                        holder = node
+        assert holder is not None and holder.name == fn, (
+            f"{os.path.basename(spec)} cites {name}:{lineno} as being in {fn}(); it is in "
+            f"{holder.name + '()' if holder else 'module scope'}")
+
+
+def test_the_eight_specs_carry_the_SAME_citations_as_each_other():
+    """They are eight copies of one paragraph. A re-anchoring that fixes some and not others
+    is how seven files came to disagree with the eighth for a whole wave."""
+    import re
+
+    seen = {}
+    for spec in SEED_SPECS:
+        why = _load(spec).get("ceiling", {}).get("why_machine_readable")
+        if not isinstance(why, str):
+            continue
+        seen[os.path.basename(spec)] = sorted(
+            f"{n}:{l}" for n, l in re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)", why))
+    assert len(seen) == 8, sorted(seen)
+    distinct = {tuple(v) for v in seen.values()}
+    assert len(distinct) == 1, {k: v for k, v in seen.items()}
+
+
+def test_the_census_goes_red_on_a_spec_whose_citation_has_drifted(tmp_path):
+    """The proof that this walk can fail on the shape that hid from the original: a SECOND
+    spec — not `SEED_SPECS[0]` — whose citation points at a line that reads something else.
+    The original census returned green over exactly this."""
+    import re
+    import shutil
+
+    assert len(SEED_SPECS) >= 2
+    victim = SEED_SPECS[1]
+    doc = _load(victim)
+    why = doc["ceiling"]["why_machine_readable"]
+    drifted = re.sub(r"\b(build_animate_payload[.]py):([0-9]+)", r"\1:1", why, count=1)
+    assert drifted != why
+
+    copy = tmp_path / os.path.basename(victim)
+    doc["ceiling"]["why_machine_readable"] = drifted
+    copy.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    cited = re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)", drifted)
+    bad = [f"{n}:{l}" for n, l in cited
+           if "seeds" not in open(os.path.join(TOOLS, n), encoding="utf-8")
+           .read().splitlines()[int(l) - 1]]
+    assert bad == ["build_animate_payload.py:1"], bad
+    shutil.rmtree(tmp_path, ignore_errors=True)
