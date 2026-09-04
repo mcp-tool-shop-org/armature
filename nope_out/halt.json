@@ -5,5 +5,5 @@
   "exception": "RuntimeError",
   "message": "something went wrong after the args parsed",
   "evidence": {},
-  "traceback": "Traceback (most recent call last):\n  File \"E:\\AI\\armature\\.swarm\\worktrees\\w6-instruments-8481819-3690\\tools\\rig_retopo.py\", line 474, in <module>\n    main()\n    ~~~~^^\n  File \"E:\\AI\\armature\\.swarm\\worktrees\\w6-instruments-8481819-3690\\tests\\test_instrument_exits.py\", line 100, in raiser\n    raise RuntimeError(\"something went wrong after the args parsed\")\nRuntimeError: something went wrong after the args parsed\n"
+  "traceback": "Traceback (most recent call last):\n  File \"E:\\AI\\armature\\.swarm\\worktrees\\w6-instruments-8481819-3690\\tools\\rig_retopo.py\", line 487, in <module>\n    main()\n    ~~~~^^\n  File \"E:\\AI\\armature\\.swarm\\worktrees\\w6-instruments-8481819-3690\\tests\\test_instrument_exits.py\", line 100, in raiser\n    raise RuntimeError(\"something went wrong after the args parsed\")\nRuntimeError: something went wrong after the args parsed\n"
 }

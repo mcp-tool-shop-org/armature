@@ -29,6 +29,7 @@ from mathutils import Vector  # noqa: E402
 
 import rig_character  # noqa: E402
 from armature_core import joints, landmarks, sitelist  # noqa: E402
+from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import GateFailure  # noqa: E402
 
 FULL_W, FULL_H = 900, 1360
@@ -230,7 +231,21 @@ def main():
 
     scene = rig_character.fresh_scene(rig_character.PROBE_FPS)
     bpy.ops.import_scene.gltf(filepath=args.glb)
-    mesh_obj = [o for o in bpy.data.objects if o.type == "MESH"][0]
+    # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
+    # object index 0 is depends on file order, and the glTF importer routinely adds a
+    # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
+    # comment records picking once. Selection is render visibility and an ambiguous
+    # result RAISES, the shape rig_character.build_pass and rig_bake._import use.
+    meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    visible = blender_scene.render_visible_meshes(scene, meshes)
+    if len(visible) != 1:
+        raise SkeletonSheetGate(
+            f"{args.glb} presents {len(visible)} render-visible mesh object(s); the sheet "
+            f"cannot decide which one is the character",
+            {"gate": "SKELETON_SHEET", "glb": args.glb,
+             "render_visible": [o.name for o in visible],
+             "all_meshes": [o.name for o in meshes]})
+    mesh_obj = visible[0]
 
     source = rig_character.world_verts(mesh_obj)
     lo, hi = source.min(axis=0), source.max(axis=0)

@@ -38,6 +38,8 @@ import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 
 from armature_core import landmarks, sitelist  # noqa: E402
+from armature_core import blender_scene  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
 
 
 def parse_args():
@@ -54,7 +56,20 @@ def load(glb):
     scene = bpy.context.scene
     scene.render.fps, scene.render.fps_base = 16, 1.0
     bpy.ops.import_scene.gltf(filepath=glb)
-    return scene, [o for o in bpy.data.objects if o.type == "MESH"][0]
+    # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
+    # object index 0 is depends on file order, and the glTF importer routinely adds a
+    # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
+    # comment records picking once. Selection is render visibility and an ambiguous
+    # result RAISES, the shape rig_character.build_pass and rig_bake._import use.
+    meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    visible = blender_scene.render_visible_meshes(scene, meshes)
+    if len(visible) != 1:
+        raise ArmatureError(
+            f"{glb} presents {len(visible)} render-visible mesh object(s) "
+            f"{[o.name for o in visible]} (all meshes {[o.name for o in meshes]}); "
+            f"which one carries the character is not a question this tool answers by "
+            f"taking index 0")
+    return scene, visible[0]
 
 
 def world_verts(ob):

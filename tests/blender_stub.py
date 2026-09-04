@@ -180,3 +180,71 @@ def exit_code_of_main_block(filename, *, raiser=None, argv=("blender", "-b", "-P
             ns["__name__"] = saved_name
             sys.argv = saved_argv
     return None, None
+
+
+# ------------------------------------------------------ a fake scene for subject selection
+#
+# `blender_scene.render_visible_meshes` reads `scene.view_layers[0].layer_collection` and
+# each object's `users_collection`, and nothing else. That is little enough to stand up in
+# plain CPython, which is what lets the subject-selection andons in `rig_bake._import` and
+# `make_rig_sheet.import_reference` be driven with a hidden decoy present -- the scenario
+# the real defect needed and no Blender-free test could otherwise reach.
+#
+# ONE implementation, here, rather than a copy per test module.
+
+
+class FakeCollection:
+    def __init__(self, name="Scene Collection", hide_render=False, exclude=False):
+        self.name = name
+        self.collection = self
+        self.hide_render = hide_render
+        self.exclude = exclude
+        self.children = []
+
+
+class FakeObject:
+    def __init__(self, name, kind="MESH", hide_render=False, collection=None):
+        self.name = name
+        self.type = kind
+        self.hide_render = hide_render
+        self.data = self
+        self.users_collection = [collection or FakeCollection()]
+
+
+class _FakeOps:
+    def __init__(self, outer):
+        self._outer = outer
+        self.import_scene = self
+        self.object = self
+
+    def gltf(self, filepath=None, **kwargs):
+        self._outer.data.objects.extend(self._outer.adds)
+
+    def select_all(self, action=None):
+        pass
+
+
+class _FakeData:
+    def __init__(self, objects):
+        self.objects = list(objects)
+
+    def remove(self, ob, do_unlink=False):
+        self.objects = [o for o in self.objects if o is not ob]
+
+
+class FakeBpy:
+    """Enough of `bpy` for an import-and-select code path.
+
+    `adds` are the objects the next `import_scene.gltf` call appends, in the order the
+    scene would hold them -- which is what makes "the same command selects the same object
+    twice" a testable claim.
+    """
+
+    def __init__(self, present=(), adds=()):
+        self.data = _FakeData(present)
+        self.adds = list(adds)
+        self.ops = _FakeOps(self)
+        self.context = self
+        self.scene = self
+        self.view_layers = [self]
+        self.layer_collection = FakeCollection()

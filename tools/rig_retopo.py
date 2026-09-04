@@ -96,8 +96,21 @@ def parse_args():
 def import_subject(glb):
     scene = rc.fresh_scene(16)
     bpy.ops.import_scene.gltf(filepath=glb)
-    ob = [o for o in bpy.data.objects if o.type == "MESH"][0]
-    return scene, ob
+    # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
+    # object index 0 is depends on file order, and the glTF importer routinely adds a
+    # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
+    # comment records picking once. Selection is render visibility and an ambiguous
+    # result RAISES, the shape rig_character.build_pass and rig_bake._import use.
+    meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    visible = blender_scene.render_visible_meshes(scene, meshes)
+    if len(visible) != 1:
+        raise NoRetopoProduced(
+            f"{glb} presents {len(visible)} render-visible mesh object(s); exactly one "
+            f"is the subject to retopologise",
+            {"gate": "RETOPO", "glb": glb,
+             "render_visible": [o.name for o in visible],
+             "all_meshes": [o.name for o in meshes]})
+    return scene, visible[0]
 
 
 def extract_outer_shell(ob, diagonal):

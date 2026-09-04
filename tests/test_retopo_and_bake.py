@@ -27,23 +27,15 @@ import ast
 
 import pytest
 
-from blender_stub import blender_stubbed, load_tool, read_source
+from blender_stub import (FakeBpy, FakeObject, blender_stubbed, load_tool,
+                          read_source)
 
 
 # --------------------------------------------------------------- fakes for the isolation
 
 
-class _Collection:
-    name = "Scene Collection"
-
-
-class _Ob:
-    def __init__(self, name, kind="MESH", hide_render=False):
-        self.name = name
-        self.type = kind
-        self.hide_render = hide_render
-        self.data = self
-        self.users_collection = [_Collection()]
+#: The fakes live in `blender_stub` so `test_make_rig_sheet.py` uses the same ones.
+_Ob = FakeObject
 
 
 @pytest.fixture(scope="module")
@@ -225,9 +217,8 @@ def test_the_import_gate_is_typed_and_carries_evidence(bake):
 
 
 def test_an_import_that_brings_in_no_mesh_raises_the_typed_gate(bake, monkeypatch):
-    scene = _FakeData([_Ob("Camera", kind="CAMERA")])
     with blender_stubbed():
-        monkeypatch.setattr(bake, "bpy", _FakeBpy(scene, adds=[]))
+        monkeypatch.setattr(bake, "bpy", FakeBpy(present=[FakeObject("Camera", kind="CAMERA")], adds=[]))
         with pytest.raises(bake.ImportEmpty) as exc:
             bake._import("nothing.glb", "target")
     assert exc.value.gate == "IMPORT"
@@ -242,7 +233,7 @@ def test_an_ambiguous_import_refuses_rather_than_taking_index_zero(bake, monkeyp
     recorded inputs, and neither the manifest nor the BAKE andon named it."""
     subject, decoy = _Ob("geometry_0"), _Ob("Icosphere")
     with blender_stubbed():
-        monkeypatch.setattr(bake, "bpy", _FakeBpy(_FakeData([]), adds=[subject, decoy]))
+        monkeypatch.setattr(bake, "bpy", FakeBpy(adds=[subject, decoy]))
         with pytest.raises(bake.ImportEmpty) as exc:
             bake._import("two.glb", "target")
     assert exc.value.gate == "IMPORT"
@@ -256,7 +247,7 @@ def test_a_hidden_decoy_does_not_change_which_mesh_is_baked(bake, monkeypatch):
     for order in ([_Ob("geometry_0"), _Ob("Icosphere", hide_render=True)],
                   [_Ob("Icosphere", hide_render=True), _Ob("geometry_0")]):
         with blender_stubbed():
-            monkeypatch.setattr(bake, "bpy", _FakeBpy(_FakeData([]), adds=order))
+            monkeypatch.setattr(bake, "bpy", FakeBpy(adds=order))
             ob = bake._import("one.glb", "target")
         chosen.append(ob is [o for o in order if not o.hide_render][0])
         assert ob.name == "target"
@@ -268,44 +259,3 @@ def test_the_chosen_mesh_is_recorded_in_the_manifest():
     src = read_source("rig_bake.py")
     assert "subject_selection" in src, (
         "the manifest still does not name which object was baked")
-
-
-# ---------------------------------------------------------------- the fake Blender scene
-
-
-class _FakeData:
-    def __init__(self, objects):
-        self.objects = list(objects)
-
-
-class _FakeOps:
-    def __init__(self, outer):
-        self._outer = outer
-        self.import_scene = self
-        self.object = self
-
-    def gltf(self, filepath=None):
-        self._outer.data.objects.extend(self._outer._adds)
-
-    def select_all(self, action=None):
-        pass
-
-
-class _FakeBpy:
-    def __init__(self, data, adds):
-        self.data = data
-        self._adds = adds
-        self.ops = _FakeOps(self)
-        self.context = self
-        self.scene = self
-        self.view_layers = [self]
-        self.layer_collection = _FakeLayer()
-
-
-class _FakeLayer:
-    def __init__(self):
-        self.collection = self
-        self.name = "Scene Collection"
-        self.exclude = False
-        self.hide_render = False
-        self.children = []
