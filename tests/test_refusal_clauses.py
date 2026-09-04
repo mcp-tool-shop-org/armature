@@ -194,13 +194,28 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # 45 on the tests branch; 51 on the merged wave-8 tree, where core-gates added the
     # class-level licence refusals, Gate P's truncation refusal and the save-format seed
     # clauses (all RouteGate). Recorded as measured at the merge.
-    assert len(RAISE_SITES["RouteGate"]) == 51, sorted(RAISE_SITES["RouteGate"])
+    #
+    # 53 on the wave-10 builders branch, and it moved in BOTH directions, which is why the
+    # arithmetic is written out rather than the number replaced:
+    #   +3  `build_assembly_payload.gate_create_video_fps` (F-29693a0e) — a non-numeric fps,
+    #       a non-finite fps, and an fps outside `CreateVideo`'s measured 1-120 contract.
+    #       One function with five importers (every builder that takes a `--fps` flag and
+    #       writes it into a `CreateVideo` node), so +3 and not +15.
+    #   -1  `build_t2v_payload`'s standalone Gate L raise (F-45bc4fbb) — DELETED because it
+    #       could not fire: it re-read the three module constants that build the graph's
+    #       only latent, two lines under a `verify(graph)` that already reads that latent
+    #       and raises first. A refusal site disappearing is as much a finding as one
+    #       appearing, and this census is where it shows.
+    # 51 + 3 - 1 = 53. Re-pinned with the reason rather than relaxed (wave 3 section 0).
+    assert len(RAISE_SITES["RouteGate"]) == 53, sorted(RAISE_SITES["RouteGate"])
     files = {path for path, _ in RAISE_SITES["RouteGate"]}
     # `build_lora_arm_payload.py` joined at the wave-8 merge: its new `gate_base_licence`
     # raises RouteGate on a banned node class in the operator's baseline graph.
+    # `build_assembly_payload.py` joined in wave 10: `gate_create_video_fps` lives there and
+    # the other four `--fps` builders import it rather than carrying a copy.
     assert files == {"armature_core/route_gates.py", "gate_saved_graph.py",
                      "build_t2v_payload.py", "build_r2v_payload.py",
-                     "build_lora_arm_payload.py"}, sorted(files)
+                     "build_lora_arm_payload.py", "build_assembly_payload.py"}, sorted(files)
 
 
 def test_the_exemption_set_is_empty_and_sits_inside_the_population():

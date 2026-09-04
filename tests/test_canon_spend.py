@@ -109,22 +109,84 @@ def test_build_payload_checkbox_on_probe_writes_nothing(tmp_path, monkeypatch):
     assert not out.exists()
 
 
-def test_canon_gate_cli_spend_refuse_creates_nothing(tmp_path):
-    import canon_gate as cli
-
+def _probe_census(tmp_path):
     census_path = tmp_path / "census.json"
     census_path.write_text(
         '{"PROBE": {"surfaces": "probe.surfaces.json"}}', encoding="utf-8"
     )
+    return census_path
+
+
+def test_canon_gate_cli_spend_refuse_creates_nothing(tmp_path):
+    """Wave 10 (F-55e6d1cb): the refusal is now the typed `GateCanon` in process, not a
+    bare `return 2`. `main` used to swallow it, print `CANON_REFUSE …` to stderr and return
+    2 — which `raise SystemExit(2)` then carried straight past the `__main__` handler, so
+    the `CANON_GATE_HALT` line that block exists to print never ran on this tool's PRIMARY
+    refusal. The subprocess leg below is the half that could not be asserted before."""
+    import canon_gate as cli
+
     out = tmp_path / "cli-spend"
-    rc = cli.main([
-        "--roots", FIXTURES, "--census", str(census_path),
-        "spend", "--subject", "PROBE",
-        "--prompt", "a wire figure in an empty studio, even lighting",
-        "--out", str(out),
-    ])
-    assert rc == 2
+    with pytest.raises(GateCanon) as exc:
+        cli.main([
+            "--roots", FIXTURES, "--census", str(_probe_census(tmp_path)),
+            "spend", "--subject", "PROBE",
+            "--prompt", "a wire figure in an empty studio, even lighting",
+            "--out", str(out),
+        ])
+    assert exc.value.evidence, "a refusal without its measurement is not a receipt"
     assert not out.exists()
+
+
+def test_a_canon_refusal_exits_2_with_exactly_one_CANON_GATE_HALT_line(tmp_path):
+    """The tool's own `__main__` comment instructs a wrapper to key on the sentinel and
+    never on the code alone, because argparse's usage errors also exit 2. Measured before
+    the fix: a canon refusal printed `CANON_REFUSE …` on STDERR and exited 2 with no
+    sentinel anywhere, while `--census <missing file>` — a plain FileNotFoundError, not a
+    gate at all — DID print `CANON_GATE_HALT` and exit 1. Crashes got the machine-readable
+    line; gate refusals did not."""
+    import subprocess
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = dict(os.environ, PYTHONPATH=os.path.join(repo, "tools"))
+    proc = subprocess.run(
+        [sys.executable, os.path.join(repo, "tools", "canon_gate.py"),
+         "--roots", FIXTURES, "--census", str(_probe_census(tmp_path)),
+         "spend", "--subject", "PROBE",
+         "--prompt", "a wire figure in an empty studio, even lighting",
+         "--out", str(tmp_path / "cli-spend-sub")],
+        capture_output=True, text=True, env=env, cwd=repo)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    halts = [ln for ln in proc.stdout.splitlines() if ln.startswith("CANON_GATE_HALT ")]
+    assert len(halts) == 1, proc.stdout
+    payload = json.loads(halts[0][len("CANON_GATE_HALT "):])
+    assert payload["error"] == "GateCanon"
+    assert payload["evidence"], "the evidence dict rides the sentinel, on stdout"
+    assert "CANON_GATE_OK" not in proc.stdout
+    assert not (tmp_path / "cli-spend-sub").exists()
+
+
+def test_an_unknown_subject_refuses_through_the_same_door(tmp_path):
+    """`cmd_resolve` returned 2 for an unknown subject the same silent way. A refusal and a
+    mistyped flag were the same observation to a wrapper."""
+    import canon_gate as cli
+
+    with pytest.raises(GateCanon) as exc:
+        cli.main(["--roots", FIXTURES, "--census", str(_probe_census(tmp_path)),
+                  "resolve", "--subject", "NOBODY"])
+    assert exc.value.evidence["clause"] == "unknown_subject"
+
+
+def test_a_canon_gate_success_prints_the_OK_sentinel(tmp_path, capsys):
+    """The success half of the convention. This tool printed no success line at all."""
+    import canon_gate as cli
+
+    rc = cli.main(["--roots", FIXTURES, "--census", str(_probe_census(tmp_path)),
+                   "spend", "--subject", "PROBE", "--prompt", COVERED,
+                   "--out", str(tmp_path / "ok")])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert len([ln for ln in out.splitlines()
+                if ln.startswith("CANON_GATE_OK ")]) == 1, out
 
 
 # ---------------------------------------------------------------------------------------
@@ -224,11 +286,45 @@ def _is_gate_call(called):
     return called.startswith("gate_") or called in CANON_CALLS or called in OTHER_GATE_CALLS
 
 
+def _cli_body(tree):
+    """The module-level function that IS the tool's command line — derived, not named.
+
+    The census used to key on the function literally called `main`. That was the right node
+    only while every tool's `main` held its own body: wave 10 split three builders'
+    (`build_assembly_payload`, `build_cascade_payload`, `build_r2v_payload`) into
+    `build_and_write(argv)` — which builds, gates and writes — plus a `main(argv)` that
+    returns the process exit code and nothing else, because `main` used to `return wf`
+    under `raise SystemExit(main())` and exited 1 on a fully gated success. Keyed on the
+    NAME, this census reported "runs no in-tool refusal at all" for three tools whose
+    refusals had not moved an inch.
+
+    The derivation follows ONE delegation, and only out of a `main` that is a wrapper and
+    nothing else: at most three statements (its docstring aside) and exactly one call to a
+    module-level function of its own module. That function is then the body. Every other
+    `main` — including the eight builders that never split — is read exactly as before.
+    (An earlier draft keyed on "which function calls `parse_args`". Three builders define a
+    module-level helper literally named `parse_args`, so it picked the helper and reported
+    the same false emptiness one level down. Measured 2026-09-04.)
+    """
+    named = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    fn = named.get("main")
+    if fn is None:
+        return None
+    body = [st for st in fn.body
+            if not (isinstance(st, ast.Expr) and isinstance(st.value, ast.Constant))]
+    if len(body) > 3:
+        return fn
+    called = {c.func.id for c in ast.walk(fn)
+              if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+              and c.func.id in named}
+    if len(called) == 1:
+        return named[next(iter(called))]
+    return fn
+
+
 def _main_of(src, what):
-    tree = ast.parse(src)
-    fn = next((n for n in tree.body
-               if isinstance(n, ast.FunctionDef) and n.name == "main"), None)
-    assert fn is not None, f"{what} has no module-level main()"
+    fn = _cli_body(ast.parse(src))
+    assert fn is not None, f"{what} has no module-level command-line function"
     return fn
 
 
@@ -467,8 +563,13 @@ def test_build_i2v_records_the_canon_verdict(tmp_path, monkeypatch):
         "negative": E08.read_negative(str(neg))}), encoding="utf-8")
     out = tmp_path / "e11"
     registry = os.path.join(os.path.dirname(TOOLS), "specs", "E11-seeds.json")
+    # Wave 10 (F-531c5f1f): the start frame is this route's whole image conditioning, and
+    # the tool hashes it, so the fixture supplies a real file rather than a typed digest.
+    start = tmp_path / "start.png"
+    start.write_bytes(b"authored-start-frame-bytes")
     _, printed = _capture(bi.main, [f"--uploads={up}", f"--out={out}",
                                     f"--negative-source={neg}", f"--e08-record={e08}",
+                                    f"--start-frame={start}",
                                     f"--seeds-registry={registry}", *ESCAPE])
     rec = json.loads((out / f"{bi.EXPERIMENT}-probe-payload-record.json")
                      .read_text(encoding="utf-8"))
@@ -662,8 +763,19 @@ def test_a_textless_assembler_carries_no_text_for_a_canon_router_to_check(name, 
     """
     mod = importlib.import_module(name)
     out = tmp_path / "assembled"
-    mod.main(["--uploads", upload_record("outputs/E02/uploads_depth_pershot.json"),
-              "--out", str(out)])
+    # The flat assembler is bounded at MEASURED_FLAT_SLOT_MAX = 8 since wave 10 (the
+    # largest flat batch S03 saw execute; the boundary between 8 and 81 is unlocated), and
+    # Gate L wants a 4n+1 count — so it gets a 5-frame map. The cascade batches the batches
+    # and keeps E02's real 33-frame record. The property under test is that the emitted
+    # graph carries no text at all, which is independent of clip length.
+    if name == "build_assembly_payload":
+        small = tmp_path / "uploads_small.json"
+        small.write_text(json.dumps({f"{i:05d}": f"srv_{i:05d}.png" for i in range(5)}),
+                         encoding="utf-8")
+        uploads = str(small)
+    else:
+        uploads = upload_record("outputs/E02/uploads_depth_pershot.json")
+    mod.main(["--uploads", uploads, "--out", str(out)])
 
     graphs = sorted(p for p in os.listdir(out) if p.endswith(".api.json"))
     assert graphs, sorted(os.listdir(out))

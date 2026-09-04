@@ -93,6 +93,7 @@ from armature_core import route_gates  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+from build_assembly_payload import gate_create_video_fps  # noqa: E402
 
 import build_animate_payload as E08  # noqa: E402  - the prompt's source of record
 
@@ -201,6 +202,23 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--uploads", required=True,
                     help="JSON: {start_frame: <server name>}")
+    # Wave 10, F-531c5f1f. On this route the start frame IS the entire image conditioning
+    # (see the module docstring: "nothing else conditions the generation"), and the record
+    # named no local artifact for it at all — only `server_name`, a server-side
+    # content-addressed name living in a separate uploads file, plus a prose `fit` string
+    # about an image this tool never opened. Every `sha256` in this module was over a
+    # STRING or the graph. CLAUDE.md: "Every generation records model id + version, the
+    # full payload, the seed, and control-input hashes." The sibling
+    # `build_camera_i2v_payload` grew these two flags in wave 8 (F-d342f393) for the same
+    # artifact on the same class of route; they are CARRIED here, and so is its
+    # `resolve_start_frame`, which hashes the file rather than trusting a typed digest.
+    ap.add_argument("--start-frame", default=None,
+                    help="the local re-authored start frame. REQUIRED: this route's whole "
+                         "conditioning is this one image, and the tool hashes it so the "
+                         "run can be reproduced from the record")
+    ap.add_argument("--start-frame-sha256", default=None,
+                    help="optional cross-check. It is compared against the digest the "
+                         "tool computes from --start-frame, or the build halts")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--negative-source", default=None,
@@ -259,9 +277,50 @@ def pin_against_e08(positive, negative, e08_record_path):
     return ev
 
 
+def resolve_start_frame(path, declared_sha256=None):
+    """The start frame's sha256, COMPUTED from the artifact — the sibling's clause, carried.
+
+    `build_camera_i2v_payload.resolve_start_frame` is the implementation; it is imported
+    HERE rather than at module scope because that module imports this one at module scope
+    (`import build_i2v_payload as W1`, and it reads `W1.CLIP_NAME` while executing), so a
+    top-level import in this direction is a cycle. The deferred import is the price of not
+    writing a second copy of a gate.
+
+    Its `PayloadError` is a different class from this module's, and every refusal this
+    module makes is this module's `PayloadError`, so it is re-raised in this family with
+    the sibling named in the evidence — the same carry shape `build_payload._carry` uses.
+    """
+    import build_camera_i2v_payload as CAM  # noqa: PLC0415 - deferred: see the docstring
+
+    try:
+        return CAM.resolve_start_frame(path, declared_sha256)
+    except CAM.PayloadError as exc:
+        raise PayloadError(
+            str(exc),
+            {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
+             "path": path, "declared_sha256": declared_sha256,
+             "carried_from": "build_camera_i2v_payload.resolve_start_frame"}) from exc
+
+
 def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
-          length=LENGTH, fps=FPS):
+          length=LENGTH, fps=FPS, start_frame=None):
     """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists."""
+    # ---- ANDON, wave 10 (F-531c5f1f). The start frame is this route's ENTIRE image
+    # conditioning, and a record that cannot name its bytes is not a recipe. The clause
+    # lives here rather than in `main` so an in-process caller cannot route around it.
+    if not start_frame or not start_frame.get("sha256"):
+        raise PayloadError(
+            "build() needs the resolved start frame: on this route the start image is the "
+            "whole of the conditioning, and `meta['start_image']` used to identify it only "
+            "by a server-side content-addressed name in a separate uploads file. Call "
+            "`resolve_start_frame(path, declared)` and pass its evidence",
+            {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
+             "start_frame": start_frame})
+    # ---- Gate ROUTE - ANDON on `CreateVideo.fps` (wave 10, F-29693a0e, family carry).
+    # `--fps` reached the node with no clause in all five builders that take the flag,
+    # while every one of their records states the node's measured contract as
+    # "fps FLOAT (1-120)". One implementation, in `build_assembly_payload`, imported here.
+    gate_create_video_fps(fps)
     # The default is resolved BEFORE Gate S, not after it. The old order put
     # `seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)`
     # BELOW a gate that refuses a non-int first, so the fallback was dead code and the
@@ -373,12 +432,29 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
             "origin": "READ OFF the documented reference workflow, not solved"},
         "positive": positive,
         "negative": negative,
-        "start_image": {"server_name": start_name, "fit": "native — authored at 832x480",
-                        "why": ("no letterbox and no centre-crop: the frame is rendered at "
-                                "the generation's own size, so nothing resamples it. E08 "
-                                "measured what a mismatched aspect costs on the other "
-                                "route — WanAnimateToVideo kept 204 of its reference's "
-                                "1024 rows")},
+        "start_image": {
+            "server_name": start_name,
+            # ---- the LOCAL artifact, which this record could not name until wave 10.
+            "path": start_frame["path"],
+            "sha256": start_frame["sha256"],
+            "bytes": start_frame["bytes"],
+            "sha256_source": start_frame["source"],
+            "declared_sha256": start_frame.get("declared_sha256"),
+            # ---- and what it actually IS, read from the file's own header, so the `fit`
+            # line below is checkable instead of asserted. The alpha field is the Director's
+            # 2026-08-12 ruling made machine-readable: an authored input carries alpha, and
+            # the RGB composite the route submits is a recorded choice, never an accident.
+            "measured": start_frame.get("image"),
+            "fit": "native — authored at 832x480",
+            "fit_agrees_with_the_file": (
+                None if not start_frame.get("image")
+                else [start_frame["image"]["width"],
+                      start_frame["image"]["height"]] == [WIDTH, HEIGHT]),
+            "why": ("no letterbox and no centre-crop: the frame is rendered at "
+                    "the generation's own size, so nothing resamples it. E08 "
+                    "measured what a mismatched aspect costs on the other "
+                    "route — WanAnimateToVideo kept 204 of its reference's "
+                    "1024 rows")},
         "unconnected_inputs": {
             "clip_vision_output": ("unconnected in the documented reference workflow and "
                                    "unconnected here; a second image-conditioning channel "
@@ -509,8 +585,10 @@ def main(argv=None):
 
     gate_pin = pin_against_e08(positive, negative, a.e08_record)
 
+    start_frame = resolve_start_frame(a.start_frame, a.start_frame_sha256)
     wf, meta = build(uploads, a.seed, negative, positive, registry,
-                     experiment=a.experiment, length=a.length, fps=a.fps)
+                     experiment=a.experiment, length=a.length, fps=a.fps,
+                     start_frame=start_frame)
     meta["gate_PIN"] = gate_pin
     meta["gate_CANON"] = canon_ev
     meta["prompt_record"] = {
@@ -540,6 +618,7 @@ def main(argv=None):
         "length": meta["length"], "fps": meta["fps"],
         "split_step": meta["two_expert_split"]["split_step"],
         "payload_sha256": meta["payload_sha256"][:32],
+        "start_frame_sha256": meta["start_image"]["sha256"][:32],
         "gate_PIN": gate_pin["verdict"],
         "gate_L": meta["gate_L"]["verdict"], "gate_S": meta["gate_S"].get("verdict"),
         "gate_ROUTE_built": meta["gate_ROUTE_built"]["verdict"]}, ensure_ascii=False))

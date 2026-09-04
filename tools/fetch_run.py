@@ -57,6 +57,7 @@ only `urls.json`.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -96,6 +97,17 @@ def parse_node_map(text):
     A malformed map must not fall back to the default: the caller would get E02's mapping
     applied to somebody else's graph, every frame would land in the video branch, and the
     only symptom would be a directory of files with the wrong names.
+
+    WARNING These were `raise SystemExit(<str>)` until wave 10 (F-af78df0f). CPython
+    renders that as a bare stderr line and exit code **1** - the code this module's own
+    comment reserves for "this tool crashed" - and `except SystemExit: raise` in the
+    `__main__` block carries it straight past the handler, so no `FETCH_RUN_HALT` line and
+    no evidence dict was produced for what the docstring above calls a halt. Measured
+    2026-09-04: `fetch_run.py --dump=nonexistent.json --run=r --node-map=bogus` printed the
+    sentence and exited 1; `--video-nodes=,` did the same. The typed path one screen down -
+    `plan`'s unmapped-node clause - raises `FetchHalt` with an evidence dict and reaches
+    the operator as exit 2 plus the sentinel. Wave 8 closed this class in the sibling
+    (`fetch_t2v_run.plan`, F-e3af7342); these four were left behind.
     """
     if not text:
         return dict(NODE_DIR)
@@ -105,28 +117,38 @@ def parse_node_map(text):
         if not part:
             continue
         if part.count("=") != 1:
-            raise SystemExit(
+            raise FetchHalt(
                 f"--node-map entry {part!r} is not `<node id>=<directory>`; a map that "
                 f"cannot be read must halt rather than quietly leave E02's default in "
-                f"place over another experiment's graph")
+                f"place over another experiment's graph",
+                {"clause": "node_map_entry_shape", "entry": part, "text": text})
         nid, sub = (s.strip() for s in part.split("="))
         if not nid or not sub:
-            raise SystemExit(f"--node-map entry {part!r} has an empty side")
+            raise FetchHalt(
+                f"--node-map entry {part!r} has an empty side",
+                {"clause": "node_map_entry_empty_side", "entry": part, "text": text,
+                 "node_id": nid, "directory": sub})
         out[nid] = sub
     if not out:
-        raise SystemExit("--node-map parsed to nothing")
+        raise FetchHalt(
+            "--node-map parsed to nothing",
+            {"clause": "node_map_empty", "entry": None, "text": text})
     return out
 
 
 def parse_video_nodes(text):
-    """`"114,115"` -> `("114", "115")`. Same halt-rather-than-default rule as the map."""
+    """`"114,115"` -> `("114", "115")`. Same halt-rather-than-default rule as the map.
+
+    Typed for the same reason as `parse_node_map` above (wave 10, F-af78df0f).
+    """
     if text is None:
         return tuple(VIDEO_NODES)
     ids = tuple(s.strip() for s in text.split(",") if s.strip())
     if not ids:
-        raise SystemExit(
+        raise FetchHalt(
             "--video-nodes parsed to nothing; a graph with no video tap is written as "
-            "--video-nodes=none rather than as an empty string")
+            "--video-nodes=none rather than as an empty string",
+            {"clause": "video_nodes_empty", "entry": None, "text": text})
     if ids == ("none",):
         return ()
     return ids
@@ -210,8 +232,40 @@ def download(manifest_path):
 VIDEO_SUFFIXES = (".mp4", ".webm", ".mkv")
 
 
+def derived_root_artifacts(run):
+    """The names THIS pipeline's own downstream tools write into a run root.
+
+    Named, dated exemption (wave 10, F-eff94830, 2026-09-04), and re-derived rather than
+    asserted: the two spellings below are the review clip's, and each is checked against
+    the tool that writes it by `tests/test_fetch_run.py`.
+
+    * `review_<rate>x_<fps>fps.webp` - `make_review_clip.clip_name`'s CURRENT output. It is
+      a `.webp` and `VIDEO_SUFFIXES` is (.mp4, .webm, .mkv), so the canonical name never
+      reaches the root sweep at all; it is listed so the exemption survives a change of
+      suffix rather than depending on one.
+    * `<run>_review_*.mp4` - a SUPERSEDED generation's name, and the only spelling that
+      actually fires today. Measured read-only against the rig's real run directories by
+      replaying each committed `urls.json` plan back through `verify_downloads`: 17 of the
+      20 non-recovered runs PASS, and three raise with missing=0, empty=0 and
+      extra=['A0r1_review_8fps.mp4'] / ['A1b_review_8fps.mp4'] / ['A2_review_8fps.mp4'] -
+      outputs/E02/runs/A0r1, .../A1b and .../A2.
+
+    Why an exemption and not a narrower sweep: the misreporting the root sweep was added to
+    prevent is separately closed one screen below - `vids` is derived from the PLAN, not
+    from a listdir, so a stray root video can no longer be printed as this run's `video`.
+    What the sweep adds on top of that is a REFUSAL, and its first three real inputs were
+    artifacts this pipeline itself produced. An andon whose documented workaround is
+    "delete a legitimate derived file" is how an operator learns to work around an andon.
+
+    Bound to the run name, so another run's clip left in this directory still raises: that
+    is a file about a generation this fetch is not retrieving.
+    """
+    return (re.compile(r"^" + re.escape(str(run)) + r"_review[_.].*$", re.IGNORECASE),
+            re.compile(r"^review_[0-9.]+x_[0-9]+fps\.[a-z0-9]+$", re.IGNORECASE))
+
+
 def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
-                     root_suffixes=VIDEO_SUFFIXES):
+                     root_suffixes=VIDEO_SUFFIXES, root_exempt=()):
     """Gate FETCH · ANDON — the files on disk are the planned files, and nothing else.
 
     Three directions, and the third is wave 6's addition. Missing and zero-length bound
@@ -261,7 +315,8 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
     swept = [(d, tuple(s.lower() for s in suffixes)) for d in directories]
     if root:
         swept.append((root, tuple(s.lower() for s in root_suffixes)))
-    extra = []
+    extra, exempted = [], []
+    root_abs = os.path.abspath(root) if root else None
     for d, want in swept:
         if not os.path.isdir(d):
             continue
@@ -269,9 +324,18 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
             p = os.path.join(d, name)
             if not os.path.isfile(p) or os.path.splitext(name)[1].lower() not in want:
                 continue
-            if os.path.abspath(p) not in planned:
-                extra.append(p)
+            if os.path.abspath(p) in planned:
+                continue
+            # The exemption applies to the run ROOT only, and it is RECORDED, never silent:
+            # a reader of this evidence sees which files were tolerated and by which rule.
+            if (root_abs is not None and os.path.abspath(d) == root_abs
+                    and any(rx.match(name) for rx in root_exempt)):
+                exempted.append(p)
+                continue
+            extra.append(p)
     ev = {"planned": len(outs), "missing": missing, "empty": empty, "extra": extra,
+          "root_exempt_matched": exempted,
+          "root_exempt_patterns": [rx.pattern for rx in root_exempt],
           "landed": len(outs) - len(missing),
           "swept_directories": [os.path.abspath(d) for d, _ in swept],
           "swept_suffixes": {os.path.abspath(d): list(w) for d, w in swept}}
@@ -284,7 +348,10 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
             f"that is not this run",
             ev)
     ev["verdict"] = (f"{len(outs)} planned file(s), all present and non-empty, and no "
-                     f"unplanned file in {len(ev['swept_directories'])} swept directory(s)")
+                     f"unplanned file in {len(ev['swept_directories'])} swept directory(s)"
+                     + (f"; {len(exempted)} derived artifact(s) of this run's own were "
+                        f"tolerated by name: "
+                        f"{[os.path.basename(x) for x in exempted]}" if exempted else ""))
     return ev
 
 
@@ -323,7 +390,8 @@ def main(argv=None):
 
     download(manifest)
     mapped = sorted({os.path.join(base, sub) for sub in node_dir.values()})
-    landed = verify_downloads(jobs, directories=mapped, root=base)
+    landed = verify_downloads(jobs, directories=mapped, root=base,
+                              root_exempt=derived_root_artifacts(a.run))
 
     # Counted from the PLAN, never from the directory. The two numbers used to be computed
     # from different populations and printed beside each other, so a re-fetch into a
@@ -340,7 +408,10 @@ def main(argv=None):
     # ones the plan writes to the run root itself rather than into a mapped subdirectory.
     vids = sorted(os.path.basename(o) for _, o in jobs
                   if os.path.dirname(os.path.abspath(o)) == os.path.abspath(base))
-    print("FETCH_RUN " + json.dumps({
+    # The SUCCESS half of the exit convention (wave 10). `<PREFIX>_OK ` uses the SAME
+    # prefix this file's `__main__` block prints on a halt, so one AST read of that block
+    # derives both directions of the census. The tree spelled this four ways before.
+    print("FETCH_RUN_OK " + json.dumps({
         "run": a.run, "dir": base, "by_node": counts, "downloaded": got, "video": vids,
         "gate_FETCH": landed["verdict"]}))
     return 0

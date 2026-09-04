@@ -109,6 +109,7 @@ import hashlib
 import json
 import os
 import re
+import struct
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -118,6 +119,7 @@ from armature_core import route_gates  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+from build_assembly_payload import gate_create_video_fps  # noqa: E402
 
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
 import build_i2v_payload as W1  # noqa: E402  - wave 1's trajectory, weights and frame
@@ -487,6 +489,39 @@ DELIBERATE_BREAKS = {
 }
 
 
+#: PNG colour types, from the format spec. 6 and 4 are the two that carry an alpha
+#: channel; 3 is a palette, which may carry transparency through a tRNS chunk.
+_PNG_COLOR_TYPES = {0: "grayscale", 2: "rgb", 3: "palette", 4: "grayscale_alpha",
+                    6: "rgba"}
+
+
+def png_header(path):
+    """`{width, height, bit_depth, color_type, alpha}` read from the file's IHDR, or None.
+
+    Stdlib only — 20 bytes of `struct`, no Pillow — because this runs in the CPU builders
+    and the render side already refuses to take a dependency for the same reason
+    (`armature_core.pngio` is a writer with no reader for exactly that trade).
+
+    **Why a builder measures this at all** (the Director's alpha ruling, 2026-08-12):
+    every reference or start-frame render of the character is authored RGBA with a real
+    alpha channel, and the RGB composite each route submits is a deliberate, recorded
+    choice. Until wave 10 this route's record asserted `fit: "native — authored at
+    832x480"` about an image the tool never opened, so nothing could contradict it: a
+    re-authored, resampled or flattened start frame left the sentence unchanged. The
+    numbers here come from the artifact, so `fit` becomes a measurement instead of a claim
+    and the record says whether the authored input carried alpha at all.
+    """
+    with open(path, "rb") as fh:
+        head = fh.read(33)
+    if len(head) < 33 or head[:8] != b"\x89PNG\r\n\x1a\x0a" or head[12:16] != b"IHDR":
+        return None
+    width, height, depth, color = struct.unpack(">IIBB", head[16:26])
+    return {"width": width, "height": height, "bit_depth": depth,
+            "color_type": _PNG_COLOR_TYPES.get(color, color),
+            "alpha": color in (4, 6),
+            "read_by": "IHDR, stdlib struct — no image library"}
+
+
 def resolve_start_frame(path, declared_sha256):
     """The start frame's sha256, COMPUTED from the artifact. Raises rather than accepting.
 
@@ -514,7 +549,12 @@ def resolve_start_frame(path, declared_sha256):
     with open(path, "rb") as fh:
         digest = hashlib.sha256(fh.read()).hexdigest()
     ev = {"path": os.path.abspath(path), "sha256": digest,
-          "bytes": os.path.getsize(path), "source": "hashed_in_tool"}
+          "bytes": os.path.getsize(path), "source": "hashed_in_tool",
+          # The alpha ruling's half: what the authored artifact actually IS, measured,
+          # beside whatever the record asserts about how it was fitted. `None` when the
+          # file is not a PNG, which is itself a fact worth recording on a route whose
+          # entire conditioning is this one image.
+          "image": png_header(path)}
     if declared_sha256:
         if declared_sha256.strip().lower() != digest:
             raise PayloadError(
@@ -720,6 +760,11 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
     `"wave": 3` field, and cloud output prefixes under `E12/w3/` — every one of them a
     plausible label pointing at the wrong run.
     """
+    # ---- Gate ROUTE - ANDON on `CreateVideo.fps` (wave 10, F-29693a0e, family carry).
+    # `--fps` reached the node with no clause in all five builders that take the flag,
+    # while every one of their records states the node's measured contract as
+    # "fps FLOAT (1-120)". One implementation, in `build_assembly_payload`, imported here.
+    gate_create_video_fps(fps)
     # The default is resolved BEFORE Gate S, not after it. The old order put
     # `seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)`
     # BELOW a gate that refuses a non-int first, so the fallback was dead code and the

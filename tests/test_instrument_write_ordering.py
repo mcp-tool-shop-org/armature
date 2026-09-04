@@ -92,6 +92,42 @@ def _returning_branch_spans(fn):
     return spans
 
 
+def _cli_body(tree):
+    """The module-level function that IS the tool's command line — derived, not named.
+
+    The census used to key on the function literally called `main`. That was the right node
+    only while every tool's `main` held its own body: wave 10 split three builders'
+    (`build_assembly_payload`, `build_cascade_payload`, `build_r2v_payload`) into
+    `build_and_write(argv)` — which builds, gates and writes — plus a `main(argv)` that
+    returns the process exit code and nothing else, because `main` used to `return wf`
+    under `raise SystemExit(main())` and exited 1 on a fully gated success. Keyed on the
+    NAME, this census reported "runs no in-tool refusal at all" for three tools whose
+    refusals had not moved an inch.
+
+    The derivation follows ONE delegation, and only out of a `main` that is a wrapper and
+    nothing else: at most three statements (its docstring aside) and exactly one call to a
+    module-level function of its own module. That function is then the body. Every other
+    `main` — including the eight builders that never split — is read exactly as before.
+    (An earlier draft keyed on "which function calls `parse_args`". Three builders define a
+    module-level helper literally named `parse_args`, so it picked the helper and reported
+    the same false emptiness one level down. Measured 2026-09-04.)
+    """
+    named = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    fn = named.get("main")
+    if fn is None:
+        return None
+    body = [st for st in fn.body
+            if not (isinstance(st, ast.Expr) and isinstance(st.value, ast.Constant))]
+    if len(body) > 3:
+        return fn
+    called = {c.func.id for c in ast.walk(fn)
+              if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+              and c.func.id in named}
+    if len(called) == 1:
+        return named[next(iter(called))]
+    return fn
+
+
 def gate_and_write_lines(src, what):
     """`({line: gate name}, {line: write kind})` for `main()`, or `(None, None)`.
 
@@ -99,9 +135,7 @@ def gate_and_write_lines(src, what):
     lifted here so the instruments are read by the same rule rather than a second one —
     plus the mutually-exclusive-branch correction above.
     """
-    tree = ast.parse(src)
-    fn = next((n for n in tree.body
-               if isinstance(n, ast.FunctionDef) and n.name == "main"), None)
+    fn = _cli_body(ast.parse(src))
     if fn is None:
         return None, None
     gates_at, writes_at = {}, {}

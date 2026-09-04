@@ -9,6 +9,13 @@ unreachable video slot:
 
     81 x LoadImage -> BatchImagesNode -> CreateVideo(fps=16) -> SaveVideo
 
+**That 81-slot chain is the shape S03 FALSIFIED**, and it is kept above as the historical
+description rather than as a route. S03 executed this chain at 8 slots and it failed at 81
+with `BatchImagesNode.execute() got an unexpected keyword argument 'images.image50'`, after
+passing the round trip, Gate ROUTE and pre-flight with zero warnings. `build_cascade_payload`
+is the supported route for a clip of any length; this builder is bounded at
+`MEASURED_FLAT_SLOT_MAX` (8) until someone measures where the boundary actually is.
+
 **A served template is a reference, never a route** — so this graph is built here, from the
 node contracts re-measured with `get_node` on 2026-08-13, and it passes Gate ROUTE and both
 Gate ASSEMBLY clauses in code before anything is submitted. Nothing here submits anything.
@@ -45,6 +52,7 @@ E12 w2/w3 §7 convention).
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -57,6 +65,26 @@ from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
 TOOL_VERSION = "S03.2"
+
+#: The largest flat batch anyone has SEEN EXECUTE, and the andon's bound.
+#:
+#: S03 executed this chain at **8 slots** and it failed at **81** with
+#: `BatchImagesNode.execute() got an unexpected keyword argument 'images.image50'`. Those
+#: are the two measurements that exist. **The boundary between 8 and 81 has never been
+#: located**: no submission was made at 49, 50 or 51 slots, so `assembly.INFERRED_SLOT_CAP`
+#: (50) is an inference from one error message and not a number this gate may refuse
+#: against — a threshold read off a single error string is a placeholder shaped like
+#: evidence. The cascade's `MAX_SLOTS_PER_NODE` (27) is not it either: that is the group
+#: size the cascade chose, and a global constant must not govern a local feature.
+#:
+#: So the bound is the measurement, and the evidence dict says the boundary is unlocated,
+#: so the day someone measures it this number moves WITH that measurement.
+MEASURED_FLAT_SLOT_MAX = 8
+
+#: `CreateVideo`'s measured input contract, re-measured with `get_node` on 2026-08-13 and
+#: recorded verbatim in this tool's own payload record under `node_contracts_measured`.
+#: The record stated it; nothing read it. See `gate_create_video_fps`.
+CREATE_VIDEO_FPS_RANGE = (1.0, 120.0)
 
 #: The only shape a frame key in an upload map may take. Zero padded to five digits, so a
 #: lexicographic sort of the keys IS the numeric order — the property the ordering rule
@@ -72,6 +100,102 @@ TOOL_VERSION = "S03.2"
 #: same frames (`encode_control.py:126`, `invert_frames.py:70`) and both fetchers'
 #: EXTRA andon (`fetch_run.verify_downloads`, carried here) read `.PNG` as a frame.
 FRAME_KEY = re.compile(r"^[0-9]{5}(\.png)?$", re.IGNORECASE)
+
+
+def gate_create_video_fps(fps):
+    """Gate ROUTE - ANDON: `CreateVideo.fps` is inside the contract the record states.
+
+    `CreateVideo` takes `fps` as a FLOAT bounded 1..120 (measured with `get_node`,
+    2026-08-13, and written into every record this family emits as
+    `node_contracts_measured.CreateVideo`). Until wave 10 the flag was written straight
+    into the node with no clause. Measured 2026-09-04 as subprocesses on an 81-entry padded
+    map: `--fps=0`, `--fps=-5` and `--fps=999` each built the graph, passed all five gates
+    including Gate ROUTE, and printed `BUILD_CASCADE_OK`. Contrast `--group` in the same
+    file, which IS bounded in both directions, and `build_r2v_payload`'s hosted enums,
+    where `--duration=99` raises. A tool that records a generator constraint and does not
+    enforce it is exactly what CLAUDE.md's "generation frames must be generator-legal" rule
+    exists to prevent: the clip is either rejected at submission after the upload round
+    trip, or accepted at a rate the record then names as fact.
+
+    **Non-finite first.** `nan > 120` and `nan < 1` are both False, so a range test written
+    the obvious way admits NaN in both directions and the andon would report a legal rate
+    for a number that is not one. It is refused by name, with the value in the evidence.
+
+    One implementation, five callers: `build_animate_payload`, `build_assembly_payload`,
+    `build_camera_i2v_payload`, `build_cascade_payload` and `build_i2v_payload` are every
+    builder in the tree that takes a `--fps` flag and writes it into a `CreateVideo` node.
+    They import this function; none of them carries a copy.
+    """
+    lo, hi = CREATE_VIDEO_FPS_RANGE
+    ev = {"gate": "ROUTE", "andon": "CreateVideoFps", "clause": "create_video_fps",
+          "fps": None, "range": [lo, hi],
+          "contract": ("CreateVideo: images IMAGE + fps FLOAT (1-120, default 30), "
+                       "optional audio and bit_depth INT (8-10) -> VIDEO; measured with "
+                       "get_node 2026-08-13")}
+    try:
+        value = float(fps)
+    except (TypeError, ValueError):
+        raise RG.RouteGate(
+            f"CreateVideo.fps {fps!r} is not a number; the node declares fps as a FLOAT "
+            f"bounded {lo}-{hi} and this tool's own record states that contract",
+            dict(ev, fps=repr(fps))) from None
+    ev["fps"] = value
+    if not math.isfinite(value):
+        raise RG.RouteGate(
+            f"CreateVideo.fps is {value}, which is not a finite number. A range test "
+            f"admits it in BOTH directions ({value} > {hi} and {value} < {lo} are both "
+            f"False), so the verdict would have been PASS on a rate that is not one", ev)
+    if not (lo <= value <= hi):
+        raise RG.RouteGate(
+            f"CreateVideo.fps {value} is outside the node's measured contract {lo}-{hi}. "
+            f"A clip assembled at an illegal frame rate is either rejected at submission "
+            f"after the upload round trip, or accepted at a rate this record then names "
+            f"as fact", ev)
+    ev["verdict"] = f"fps {value} is inside CreateVideo's measured contract {lo}-{hi}"
+    return ev
+
+
+def gate_flat_slot_ceiling(graph, batch_id):
+    """Gate FLAT_SLOT_CEILING - ANDON - the flat batch is no wider than anyone has run.
+
+    Wave 10 (routed seed). Both cascade builders call `assembly.gate_slot_ceiling`; the
+    flat path called no ceiling clause at all, so the one builder whose shape is a SINGLE
+    batch node - the shape S03 watched pass pre-flight and die at execution - was the one
+    with nothing bounding its width. Pre-flight cannot see this; it is checked here, in the
+    tool that authors the graph, before any submission.
+
+    It does NOT read the cascade's `MAX_SLOTS_PER_NODE`: that constant is the cascade's
+    group size, and a global constant must not govern a local feature. It reads
+    `MEASURED_FLAT_SLOT_MAX`, whose docstring names the run that measured it and states
+    that the boundary between 8 and 81 is unlocated. `boundary_located: false` rides every
+    verdict for the same reason.
+    """
+    node = (graph or {}).get(str(batch_id)) or {}
+    inputs = node.get("inputs") or {}
+    slots = len([k for k in inputs if k.startswith("images.image")])
+    if not slots and isinstance(inputs.get("images"), list):
+        slots = len(inputs["images"])
+    ev = {"gate": "FLAT_SLOT_CEILING", "andon": "AssemblyGate",
+          "batch_node": str(batch_id), "slots": slots,
+          "measured_max": int(MEASURED_FLAT_SLOT_MAX), "measured_by": "S03",
+          "inferred_cap": int(AS.INFERRED_SLOT_CAP), "boundary_located": False}
+    if slots > MEASURED_FLAT_SLOT_MAX:
+        raise AS.AssemblyGate(
+            f"the flat chain's batch node {batch_id} carries {slots} slot(s) and the "
+            f"largest flat batch anyone has SEEN EXECUTE is "
+            f"{MEASURED_FLAT_SLOT_MAX} (S03). The same chain failed at execution at 81 "
+            f"with `images.image50` unexpected, AFTER passing the round trip, Gate ROUTE "
+            f"and pre-flight with zero warnings - so nothing downstream would refuse this "
+            f"graph and the credits would be spent. The boundary between the two "
+            f"measurements has never been located (INFERRED_SLOT_CAP={AS.INFERRED_SLOT_CAP} "
+            f"is read off one error message, not measured). Use "
+            f"`build_cascade_payload.py`, which batches the batches and is the supported "
+            f"route for a clip of any length",
+            ev)
+    ev["verdict"] = (f"the flat batch carries {slots} slot(s), within the "
+                     f"{MEASURED_FLAT_SLOT_MAX} anyone has seen execute (S03); the "
+                     f"boundary above it is NOT located")
+    return ev
 
 
 def frame_order(uploads):
@@ -288,6 +412,9 @@ WIDTH, HEIGHT = 1024, 576
 
 def build(names, fps=16.0, prefix="video/S03_assembly"):
     """The API-format graph. `names` is the server-side upload name per frame, IN ORDER."""
+    # The gate lives inside the function that emits the node, so an in-process caller
+    # cannot route around it the way a check in `main` would allow.
+    gate_create_video_fps(fps)
     wf = {}
     batch_inputs = {}
     for i, name in enumerate(names):
@@ -303,7 +430,17 @@ def build(names, fps=16.0, prefix="video/S03_assembly"):
     return wf
 
 
-def main(argv=None):
+def build_and_write(argv=None):
+    """Build, gate, write — and hand the GRAPH back to an in-process caller.
+
+    Split out of `main` in wave 10 (F-aa92660a). `main` used to end `return wf` under
+    `raise SystemExit(main())`, so CPython printed the graph dict to stderr and exited 1
+    on a fully gated success: measured as a subprocess on an 81-entry padded map, stdout
+    ended `BUILD_ASSEMBLY_OK <path>` with all five gate lines green, stderr received 9,445
+    bytes of the graph, and the exit code was 1 — the code this module's own comment calls
+    "this tool crashed". The exit convention and the tests' need for the artifact are two
+    different jobs and they get two functions.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--uploads", required=True)
     ap.add_argument("--out", required=True)
@@ -335,6 +472,11 @@ def main(argv=None):
 
     # ---- the gates, in code, before anything is submitted.
     gate_paid = AS.gate_no_paid_nodes(wf)
+    gate_flat = gate_flat_slot_ceiling(wf, BATCH_ID)
+    # Re-run for the RECORD. `build` already raised on an illegal rate; this is the
+    # evidence dict, so the receipt states the contract that was checked rather than
+    # asserting a number nothing read.
+    gate_fps = gate_create_video_fps(a.fps)
     ordered_ids = frame_source_ids(names, FIRST_IMAGE_ID)
     gate_topo = AS.gate_batch_topology(wf, len(names), BATCH_ID, VIDEO_ID, SAVE_ID,
                                        expected_sources=ordered_ids)
@@ -371,7 +513,9 @@ def main(argv=None):
             "LoadImage": "image COMBO -> IMAGE, MASK; api_node false",
         },
         "frame_source_ids": list(ordered_ids),
-        "gates": {"ASSEMBLY_paid": gate_paid, "ASSEMBLY_topology": gate_topo,
+        "gates": {"ASSEMBLY_paid": gate_paid, "FLAT_SLOT_CEILING": gate_flat,
+                  "CREATE_VIDEO_fps": gate_fps,
+                  "ASSEMBLY_topology": gate_topo,
                   "ASSEMBLY_slot_frame_index": gate_index, "ROUTE": gate_route},
     }
 
@@ -386,6 +530,7 @@ def main(argv=None):
 
     print(f"nodes            {len(wf)}")
     print(f"paid-node gate   {gate_paid['verdict']}")
+    print(f"flat slot gate   {gate_flat['verdict']}")
     print(f"topology gate    {gate_topo['verdict']}")
     print(f"slot->frame gate {gate_index['verdict']}")
     print(f"route components {len(gate_route['components'])}  "
@@ -393,6 +538,12 @@ def main(argv=None):
     print(f"frame legality   {[f['legal'] for f in gate_route['frame_legality']]}")
     print(f"BUILD_ASSEMBLY_OK {graph_path}")
     return wf
+
+
+def main(argv=None):
+    """The process exit code, and nothing else. 0 = built; a gate raises."""
+    build_and_write(argv)
+    return 0
 
 
 if __name__ == "__main__":

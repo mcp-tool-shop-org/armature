@@ -554,13 +554,24 @@ def gate_base_licence(graph, path=None):
     `GetVideoComponents`, `SAM2`, and the two LoRA loader classes on the camera/i2v rows)
     carry no licence row at all and are ROUTE claims about the graph the spec describes.
     """
-    banned = [r for r in route_gates.components(graph) if _verdict_of(r) == "BANNED"]
+    # **The verdict SET is `verify`'s, not a narrower one** (wave 10, routed seed). This
+    # filtered BANNED only, while `route_gates.verify` refuses `("BANNED", "EXCLUDED")` —
+    # so an operator base loading an EXCLUDED component passed this gate and was refused
+    # two gates later by `verify`, or, on the path where `verify` is handed `allow=`, not
+    # at all. `lightx2v` is the live example: EXCLUDED on METHODOLOGY grounds (a 4-step /
+    # cfg-1 distilled trajectory is not the trajectory every other arm is measured on), and
+    # a base carrying it would have been admitted here. One verdict set, named once.
+    REFUSED_VERDICTS = ("BANNED", "EXCLUDED")
+    banned = [r for r in route_gates.components(graph)
+              if _verdict_of(r) in REFUSED_VERDICTS]
     # `gate` is the raising class's id and `andon` its name (the evidence contract every
     # census reads); the clause names this check. Aligned at the wave-8 merge — the first
     # draft put the clause under `andon` and its test expected a gate id no class carries.
     ev = {"gate": "ROUTE", "andon": "RouteGate", "clause": "banned_component_in_base",
           "path": os.path.abspath(path) if path else None,
+          "refused_verdicts": list(REFUSED_VERDICTS),
           "banned": [{"kind": r.get("kind"), "file": r.get("file"),
+                      "verdict": _verdict_of(r),
                       "class_type": r.get("class_type") or r.get("class"),
                       "node_id": r.get("node_id"), "where": r.get("where"),
                       "matched_on": r.get("matched_on")
@@ -571,19 +582,21 @@ def gate_base_licence(graph, path=None):
           "n_components_examined": len(route_gates.components(graph))}
     if banned:
         named = "; ".join(
-            f"{b['class_type'] or b['file']!r} (matched the licence map's "
-            f"{b['matched_on']!r} row — {b['licence']}: {b['reason']})"
+            f"{b['class_type'] or b['file']!r} ({b['verdict']}; matched the licence "
+            f"map's {b['matched_on']!r} row — {b['licence']}: {b['reason']})"
             for b in ev["banned"])
         raise route_gates.RouteGate(
             f"the baseline graph {path or ''} carries {len(banned)} component(s) the "
-            f"licence map rules BANNED: {named}. No non-commercially-licensed model, "
+            f"licence map rules BANNED or EXCLUDED: {named}. No non-commercially-licensed "
+            f"model, "
             f"weight, LoRA, preprocessor or code dependency goes anywhere in this "
             f"pipeline, experiments included, and an experiment concluded on a banned "
             f"component is a conclusion that has to be thrown away — so it never starts. "
             f"Nothing is built and no output directory is created",
             dict(ev, clause="banned_component_in_base"))
     ev["verdict"] = (f"{ev['n_components_examined']} ruled component(s) read off the "
-                     f"baseline, none BANNED")
+                     f"baseline, none BANNED and none EXCLUDED (route_gates.verify's own "
+                     f"verdict set)")
     return ev
 
 
@@ -656,6 +669,10 @@ def main(argv=None):
     print(f"  PAIR_TIER: {tier.get('verdict')}")
     print(f"  graph   {graph_path}")
     print(f"  record  {record_path}")
+    # The SUCCESS half of the exit convention (wave 10). `<PREFIX>_OK ` uses the SAME
+    # prefix this file's `__main__` block prints on a halt; this tool printed no success
+    # sentinel at all, so a wrapper could not tell a completed build from a silent one.
+    print(f"BUILD_LORA_ARM_OK {graph_path}")
     return 0
 
 

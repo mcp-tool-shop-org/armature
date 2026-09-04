@@ -106,8 +106,15 @@ def _census(args):
 def cmd_resolve(args):
     rec = canon_census.row(args.subject, census=_census(args))
     if rec is None:
-        print(f"UNKNOWN {args.subject}")
-        return 2
+        # A REFUSAL, raised (wave 10, F-55e6d1cb). This used to `print("UNKNOWN …")` and
+        # `return 2` — the code this CLI's own convention reserves for "a gate refused" —
+        # with no `CANON_GATE_HALT` line and no evidence, so a wrapper obeying the module's
+        # documented rule read it as one of argparse's usage errors, which also exit 2.
+        raise GateCanon(
+            f"unknown subject {args.subject!r}: it is in no canon census this invocation "
+            f"can see, so nothing can be resolved for it",
+            {"gate": "CANON", "andon": "GateCanon", "clause": "unknown_subject",
+             "subject": args.subject, "census": args.census, "roots": args.roots})
     if rec.get("surfaces") is None:
         print(f"IDENTITY_ONLY {args.subject}")
         if rec.get("reason"):
@@ -185,13 +192,27 @@ def main(argv=None):
     # deleted rather than the requirement relaxed: --prompt is the string this CLI checks,
     # and `--canon-prompt` is now compared against it by `canon_spend` instead of quietly
     # standing in for it.
-    try:
-        return args.func(args)
-    except GateCanon as err:
-        print(f"CANON_REFUSE {err}", file=sys.stderr)
-        if err.evidence:
-            print(json.dumps(err.evidence, indent=2, default=str), file=sys.stderr)
-        return 2
+    # ⚠ There used to be an `except GateCanon` here that printed `CANON_REFUSE …` plus the
+    # evidence to STDERR and returned 2. `raise SystemExit(2)` is then re-raised by the
+    # `except SystemExit: raise` in the `__main__` block below, so the
+    # `print("CANON_GATE_HALT " + …)` line that block exists to emit NEVER RAN on this
+    # tool's PRIMARY refusal. Measured 2026-09-04: `canon_gate.py --roots … spend
+    # --subject PROBE --prompt hello` printed `CANON_REFUSE [CANON] unknown subject 'PROBE'`
+    # on stderr and exited 2 with no `CANON_GATE_HALT` anywhere, while `--census <missing
+    # file>` — a plain FileNotFoundError, not a gate at all — DID print the sentinel and
+    # exit 1. The convention was inverted: crashes got the machine-readable line, gate
+    # refusals did not, and this module's own comment tells callers to key on the sentinel.
+    #
+    # The gate now reaches the `__main__` handler, which prints `CANON_GATE_HALT` with the
+    # evidence dict on STDOUT — where the other twelve tools put it — and picks 2 for any
+    # ArmatureError. In-process callers get the typed `GateCanon` instead of a bare 2.
+    code = args.func(args)
+    if code == 0:
+        # The SUCCESS half of the exit convention (wave 10): `<PREFIX>_OK `, the same
+        # prefix the `__main__` block prints on a halt. This tool printed no success
+        # sentinel at all.
+        print("CANON_GATE_OK " + json.dumps({"cmd": args.cmd, "code": code}))
+    return code
 
 
 if __name__ == "__main__":

@@ -39,9 +39,14 @@ def test_whitespace_and_trailing_commas_are_tolerated():
 def test_a_malformed_map_halts_rather_than_falling_back_to_the_default(bad):
     """The dangerous outcome is not a crash. It is E02's mapping applied silently to
     another experiment's graph: every frame lands in the video branch, the files are
-    named after the run, and the printed count looks entirely reasonable."""
-    with pytest.raises(SystemExit):
+    named after the run, and the printed count looks entirely reasonable.
+
+    Typed as `FetchHalt` in wave 10 (F-af78df0f). It was `SystemExit(<str>)`, which is
+    exit code 1 with no sentinel and no evidence dict - the shape this tool reserves for a
+    crash - while the identical class of refusal in `plan` raised a typed halt."""
+    with pytest.raises(F.FetchHalt) as exc:
         F.parse_node_map(bad)
+    assert exc.value.evidence["clause"].startswith("node_map")
 
 
 # ------------------------------------------------------------------ the fallback branch
@@ -126,7 +131,7 @@ def test_the_video_tap_is_indexed_so_two_videos_cannot_overwrite(tmp_path, stub_
 def test_a_downloader_that_fails_halts_instead_of_printing_fetch_run(tmp_path, monkeypatch,
                                                                     capsys):
     """Measured on today's tree with subprocess.run stubbed to returncode 1: the tool
-    printed FETCH_RUN {"by_node": {...}, "downloaded": {"lossless": 0}} and returned None,
+    printed FETCH_RUN_OK {"by_node": {...}, "downloaded": {"lossless": 0}} and returned None,
     i.e. exit 0. The planned count was never compared to what landed."""
     monkeypatch.setattr(F.subprocess, "run",
                         lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "boom"))
@@ -195,7 +200,7 @@ def test_a_stale_frame_in_a_mapped_directory_halts_rather_than_being_counted(
     """`got[sub] = len(os.listdir(d))` counted the DIRECTORY while `counts` counted the
     PLAN, and nothing compared them. Measured on today's tree: a 3-frame dump fetched into
     a run directory whose `lossless/` already held one stale `00099.png` printed
-    FETCH_RUN {"by_node": {"302": 3}, "downloaded": {"lossless": 4}, "gate_FETCH": "3
+    FETCH_RUN_OK {"by_node": {"302": 3}, "downloaded": {"lossless": 4}, "gate_FETCH": "3
     planned file(s), all present and non-empty"} — two counts that disagree, side by side,
     in a green receipt. `encode_control` and `invert_frames` build their frame populations
     with a bare listdir over exactly this directory."""
@@ -217,7 +222,7 @@ def test_the_printed_download_counts_come_from_the_plan_not_from_the_directory(
     dump = _dump(tmp_path, [_result("302", i) for i in range(3)]
                  + [_result("301", i) for i in range(2)])
     F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
-    line = json.loads(capsys.readouterr().out.split("FETCH_RUN ", 1)[1])
+    line = json.loads(capsys.readouterr().out.split("FETCH_RUN_OK ", 1)[1])
     assert line["by_node"] == {"302": 3, "301": 2}
     assert line["downloaded"] == {"lossless": 3, "batchprobe": 2}
 
@@ -278,7 +283,7 @@ def test_the_printed_video_list_comes_from_the_plan_not_from_a_listdir(
     dump = _dump(tmp_path, [_result("302", i) for i in range(2)]
                  + [_result("114", 0, ext=".mp4")])
     F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
-    line = json.loads(capsys.readouterr().out.split("FETCH_RUN ", 1)[1])
+    line = json.loads(capsys.readouterr().out.split("FETCH_RUN_OK ", 1)[1])
     assert line["video"] == ["r_00000.mp4"]
 
 
@@ -300,3 +305,195 @@ def test_the_extension_match_is_case_insensitive_at_the_function_level(tmp_path)
     with pytest.raises(F.FetchHalt) as exc:
         F.verify_downloads([("u", str(planned))], directories=[str(d)])
     assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00099.PNG"]
+
+
+# =======================================================================================
+# wave 10 — the four bare SystemExits (F-af78df0f) and the root sweep's first real inputs
+# (F-eff94830)
+# =======================================================================================
+
+import subprocess as _subprocess  # noqa: E402
+import sys as _sys  # noqa: E402
+
+
+def _bare_systemexit_sites(path):
+    """Every `raise SystemExit(<something that is not a call to main>)` in one module.
+
+    The node this census keys on is the RAISE, not a name pattern: a deliberate refusal
+    spelled `SystemExit` is rendered by CPython as a stderr line and exit code 1, which is
+    this tool's code for "crashed", and `except SystemExit: raise` in the `__main__` block
+    carries it past the handler so no `FETCH_RUN_HALT` line is printed at all.
+    `raise SystemExit(main())` is the convention itself and is not a refusal.
+    """
+    import ast
+
+    out = []
+    for node in ast.walk(ast.parse(open(path, encoding="utf-8").read())):
+        if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
+                and isinstance(node.exc.func, ast.Name)
+                and node.exc.func.id == "SystemExit"):
+            continue
+        arg = node.exc.args[0] if node.exc.args else None
+        if (isinstance(arg, ast.Call) and isinstance(arg.func, ast.Name)
+                and arg.func.id == "main"):
+            continue
+        out.append(node.lineno)
+    return sorted(out)
+
+
+def test_this_tool_raises_no_bare_SystemExit_as_a_refusal():
+    """Four sites (`parse_node_map` x3, `parse_video_nodes` x1) were deliberate halts that
+    reached the operator as exit 1 with no sentinel and no evidence, while `plan`'s
+    unmapped-node clause in the same file raised `FetchHalt` and reached them as exit 2
+    plus `FETCH_RUN_HALT`. The docstrings called all of them halts."""
+    assert _bare_systemexit_sites(os.path.join(TOOLS, "fetch_run.py")) == []
+
+
+def test_the_bare_SystemExit_census_goes_RED_on_a_module_that_has_one(tmp_path):
+    fake = tmp_path / "f.py"
+    fake.write_text('def g():\n    raise SystemExit("no")\n'
+                    'if __name__ == "__main__":\n    raise SystemExit(main())\n',
+                    encoding="utf-8")
+    assert _bare_systemexit_sites(str(fake)) == [2]
+
+
+@pytest.mark.parametrize("text,clause", [
+    ("bogus", "node_map_entry_shape"),
+    ("41=a=b", "node_map_entry_shape"),
+    ("=lossless", "node_map_entry_empty_side"),
+    (",,", "node_map_empty"),
+])
+def test_a_malformed_node_map_raises_FetchHalt_with_the_entry_that_broke_it(text, clause):
+    with pytest.raises(F.FetchHalt) as exc:
+        F.parse_node_map(text)
+    assert exc.value.evidence["clause"] == clause
+    assert exc.value.evidence["text"] == text
+    assert exc.value.evidence, "a refusal with no evidence dict is not a receipt"
+
+
+def test_an_empty_video_node_list_raises_FetchHalt_with_evidence():
+    with pytest.raises(F.FetchHalt) as exc:
+        F.parse_video_nodes(",")
+    assert exc.value.evidence["clause"] == "video_nodes_empty"
+
+
+def test_a_wellformed_map_and_node_list_still_parse():
+    """The mutation that must NOT fire the clauses."""
+    assert F.parse_node_map("41=startprobe,71=lossless") == {
+        "41": "startprobe", "71": "lossless"}
+    assert F.parse_video_nodes("114,115") == ("114", "115")
+    assert F.parse_video_nodes("none") == ()
+
+
+def test_a_malformed_map_exits_2_with_exactly_one_FETCH_RUN_HALT_line(tmp_path):
+    """The behavioural half. Measured before the fix: `--node-map=bogus` printed the
+    refusal sentence on stderr and exited **1**, with no sentinel anywhere."""
+    repo = os.path.dirname(TOOLS)
+    env = dict(os.environ, PYTHONPATH=TOOLS)
+    proc = _subprocess.run(
+        [_sys.executable, os.path.join(TOOLS, "fetch_run.py"),
+         f"--dump={tmp_path / 'nothing.json'}", "--run=r", "--node-map=bogus",
+         f"--root={tmp_path / 'runs'}"],
+        capture_output=True, text=True, env=env, cwd=repo)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    halts = [ln for ln in proc.stdout.splitlines() if ln.startswith("FETCH_RUN_HALT ")]
+    assert len(halts) == 1, proc.stdout
+    payload = json.loads(halts[0][len("FETCH_RUN_HALT "):])
+    assert payload["error"] == "FetchHalt"
+    assert payload["evidence"]["clause"] == "node_map_entry_shape"
+    assert not (tmp_path / "runs").exists()
+
+
+# ---- the root sweep's exemption (F-eff94830)
+
+
+def _landed_run(tmp_path, run="A0r1", extra_root_files=()):
+    """A run directory holding exactly what a two-frame plan planned, plus strays."""
+    base = tmp_path / run
+    (base / "lossless").mkdir(parents=True)
+    jobs = []
+    for i in range(2):
+        out = base / "lossless" / f"{i:05d}.png"
+        out.write_bytes(b"png")
+        jobs.append((f"http://x/{i}", str(out)))
+    vid = base / f"{run}_00000.mp4"
+    vid.write_bytes(b"mp4")
+    jobs.append((f"http://x/v", str(vid)))
+    for name in extra_root_files:
+        (base / name).write_bytes(b"stray")
+    return base, jobs
+
+
+def test_a_derived_review_clip_of_THIS_run_does_not_halt_the_root_sweep(tmp_path):
+    """Wave 8's root sweep refuses runs whose only unplanned root file is an artifact this
+    pipeline itself produced. Measured read-only against the rig's real run directories by
+    replaying each committed `urls.json` plan: 17 of 20 non-recovered runs PASS and three
+    raise with missing=0, empty=0 and extra=['<run>_review_8fps.mp4']. The documented way
+    past that andon is deleting a derived file, which is how an operator learns to work
+    around an andon."""
+    base, jobs = _landed_run(tmp_path, extra_root_files=("A0r1_review_8fps.mp4",))
+    ev = F.verify_downloads(
+        jobs, directories=[str(base / "lossless")], root=str(base),
+        root_exempt=F.derived_root_artifacts("A0r1"))
+    assert ev["extra"] == []
+    assert [os.path.basename(p) for p in ev["root_exempt_matched"]] == [
+        "A0r1_review_8fps.mp4"], ev["root_exempt_matched"]
+    assert "tolerated by name" in ev["verdict"], ev["verdict"]
+
+
+def test_the_current_canonical_review_clip_name_is_also_tolerated(tmp_path):
+    """`make_review_clip.clip_name` writes `review_<rate>x_<fps>fps.webp`. It is a `.webp`
+    and so never reaches a sweep for VIDEO_SUFFIXES today — the pattern is carried so the
+    exemption survives a change of suffix rather than depending on one."""
+    import make_review_clip
+
+    name = make_review_clip.clip_name(8, 16)
+    assert name == "review_0.50x_8fps.webp"
+    patterns = F.derived_root_artifacts("A0r1")
+    assert any(rx.match(name) for rx in patterns), name
+
+
+def test_a_FOREIGN_video_in_the_run_root_still_halts(tmp_path):
+    """The mutation that must NOT be tolerated: a file about a generation this fetch is not
+    retrieving. The exemption is bound to the run name for exactly this."""
+    base, jobs = _landed_run(tmp_path, extra_root_files=("other_run.mp4",))
+    with pytest.raises(F.FetchHalt) as exc:
+        F.verify_downloads(
+            jobs, directories=[str(base / "lossless")], root=str(base),
+            root_exempt=F.derived_root_artifacts("A0r1"))
+    assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["other_run.mp4"]
+
+
+def test_ANOTHER_runs_review_clip_still_halts(tmp_path):
+    """`A2_review_8fps.mp4` sitting in A0r1's directory is not A0r1's derived artifact."""
+    base, jobs = _landed_run(tmp_path, extra_root_files=("A2_review_8fps.mp4",))
+    with pytest.raises(F.FetchHalt, match="planned by no job") as exc:
+        F.verify_downloads(
+            jobs, directories=[str(base / "lossless")], root=str(base),
+            root_exempt=F.derived_root_artifacts("A0r1"))
+    assert [os.path.basename(x) for x in exc.value.evidence["extra"]] == [
+        "A2_review_8fps.mp4"]
+
+
+def test_the_exemption_does_not_reach_the_mapped_frame_directories(tmp_path):
+    """It is a ROOT exemption. A stray in `lossless/` named like a review clip is still a
+    stray, because that directory is the population `encode_control` and `invert_frames`
+    read with a bare listdir."""
+    base, jobs = _landed_run(tmp_path)
+    (base / "lossless" / "A0r1_review_8fps.png").write_bytes(b"stray")
+    with pytest.raises(F.FetchHalt, match="planned by no job") as exc:
+        F.verify_downloads(
+            jobs, directories=[str(base / "lossless")], root=str(base),
+            root_exempt=F.derived_root_artifacts("A0r1"))
+    assert [os.path.basename(x) for x in exc.value.evidence["extra"]] == [
+        "A0r1_review_8fps.png"]
+
+
+def test_the_exemption_is_empty_by_default_so_a_caller_opts_in(tmp_path):
+    """`root_exempt` defaults to (), so a caller that does not name the artifacts it
+    tolerates gets the wave-8 behaviour unchanged."""
+    base, jobs = _landed_run(tmp_path, extra_root_files=("A0r1_review_8fps.mp4",))
+    with pytest.raises(F.FetchHalt, match="planned by no job") as exc:
+        F.verify_downloads(jobs, directories=[str(base / "lossless")], root=str(base))
+    assert [os.path.basename(x) for x in exc.value.evidence["extra"]] == [
+        "A0r1_review_8fps.mp4"]

@@ -69,12 +69,21 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from armature_core import assembly as AS  # noqa: E402
 from armature_core import gates  # noqa: E402
+from armature_core import route_gates as RG  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import (  # noqa: E402
     canon_line, canon_spend, gate_canon_ships_what_it_gated)
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
+# The control-order clauses, CARRIED from the sibling that already owns them rather than
+# reimplemented (wave 10, F-6cbb7b35). `build_assembly_payload` grew `frame_order` and
+# `gate_slot_frame_index` in wave 8 for exactly the two defects measured here, and
+# `build_cascade_payload` already imports them from that module; this is the third caller,
+# not a third implementation.
+from build_assembly_payload import (  # noqa: E402
+    frame_order, gate_slot_frame_index)
 
 WIDTH, HEIGHT, LENGTH, FPS = 480, 832, 33, 16
 SEED = 654654950714624  # pinned from the saved graph, so A0's three repeats are identical
@@ -106,6 +115,25 @@ class PayloadError(ArmatureError):
     def __init__(self, message, evidence=None):
         super().__init__(message)
         self.evidence = evidence or {}
+
+
+def _carry(gate, *args, **kwargs):
+    """Run a gate carried from `build_assembly_payload` and re-raise in THIS tool's family.
+
+    The clause is the sibling's — one implementation, imported, per the family rule — but
+    every refusal `_load_uploads` and `verify_topology` have ever raised is a
+    `PayloadError`, and a caller that catches this module's error type must keep catching
+    every refusal this module makes. The original is preserved as `__cause__` and its
+    evidence is carried verbatim with `carried_from` naming the sibling, so the receipt
+    still says which gate fired and where the code lives.
+    """
+    try:
+        return gate(*args, **kwargs)
+    except AS.AssemblyGate as exc:
+        raise PayloadError(
+            str(exc),
+            dict(exc.evidence or {},
+                 carried_from=f"build_assembly_payload.{gate.__name__}")) from exc
 
 
 # A1b is the polarity arm. Its control is a full-image `255-x` of A1a's, which is ALSO the
@@ -319,7 +347,22 @@ def _load_uploads(arm="A1a", experiment="E02"):
         with open(path, encoding="utf-8") as fh:
             ref = json.load(fh)[key]
 
-    keys = sorted(control)
+    # ---- the CONTROL ORDER, wave 10 (F-6cbb7b35). This was `keys = sorted(control)` with
+    # no clause on the key SHAPE and no clause on gaps — the defect `build_assembly_payload`
+    # and `build_cascade_payload` were given `frame_order` for in wave 8 (F-4a64a24e), and
+    # this was the one spend builder in the tree that had neither. Measured 2026-09-04 by
+    # pointing E03/B1 at two synthetic maps: an UNPADDED 33-entry map keyed `0.png..32.png`
+    # was ACCEPTED and ordered `['0.png', '1.png', '10.png', '11.png', …]` — `10.png` in
+    # slot 2 — and a map of 32 padded frames plus one `reference.png` key was ACCEPTED as
+    # 33 frames with the non-frame key sorting last and becoming frame 32. Both pass the
+    # count clause below (33 == 33) and both pass `verify_topology`, which checks the
+    # dotted slot NAMES, their count and double-binding, and never relates a slot index to
+    # a frame index. The control batch for E02/E03/E04/E06 would have assembled shuffled or
+    # lengthened while every count in every gate still read right.
+    #
+    # The clause is the sibling's, imported. Its two halves are the key shape
+    # (`^[0-9]{5}(\.png)?$`, one spelling per map) and the gap check over `0..n-1`.
+    keys = _carry(frame_order, control)
     if len(keys) != LENGTH:
         raise PayloadError(f"expected {LENGTH} uploaded control frames, have {len(keys)}")
     names = [control[k] for k in keys]
@@ -478,7 +521,32 @@ def build(arm, experiment="E02", seed=None):
     wf["302"] = {"class_type": "SaveImage", "inputs": {
         "filename_prefix": f"{experiment}/{run_tag}/lossless", "images": ["8", 0]}}
 
-    verify_topology(wf, arm, use_control, expects_reference=cfg["reference"] is not None)
+    verify_topology(wf, arm, use_control, expects_reference=cfg["reference"] is not None,
+                    control_names=control_names)
+    # ---- Gate ROUTE · ANDON, wave 10 (F-9ee7536d). This was the ONLY one of the nine
+    # builders that never called `route_gates.verify`, so no licence clause of any kind
+    # examined the graph it emits — neither the weight-file rows nor wave 8's node-CLASS
+    # rows — and `verify_topology` carries no banned-class tuple, unlike the three siblings
+    # that do (build_animate_payload, build_camera_i2v_payload, build_i2v_payload).
+    # Measured 2026-09-04 in this worktree: `route_gates.components(build('B2','E03')[0])`
+    # returned three rows (wan2.1_vace_14B_fp16, wan_2.1_vae, umt5_xxl_fp16), each
+    # 'NOT IN THIS TABLE', and splicing a `DWPreprocessor` node into the emitted graph was
+    # accepted by `verify_topology` without comment while `route_gates.ruled_node_classes`
+    # reads that same class as BANNED. Four experiments (E02/E03/E04/E06) carry no licence
+    # evidence in their payload records at all as a result.
+    #
+    # `family="wan"`, not "wan-vace": `GENERATOR_RULES` has no `wan-vace` row, and
+    # `frame_legality` raises `unknown_generator_family` on one. The VACE route's frame
+    # rules ARE wan's — `gates.g1_generator_legality(…, "wan-vace")` above grades the same
+    # three numbers — and adding a row to `GENERATOR_RULES` is core-gates' file, not this
+    # domain's. Recorded here rather than hidden, and named in the evidence.
+    gate_route = RG.verify(wf, family="wan", frame=(WIDTH, HEIGHT, LENGTH))
+    gate_route["generator_family_note"] = (
+        "verify() was called with family='wan'. This route is wan-vace; "
+        "route_gates.GENERATOR_RULES carries no 'wan-vace' row and frame_legality raises "
+        "on an unknown family, while gates.g1_generator_legality does carry one and grades "
+        "the identical 16/4n+1/81 rules. The two names are one rule set here; a "
+        "'wan-vace' row in GENERATOR_RULES belongs to core-gates.")
     meta = {
         "experiment": experiment,
         "arm": arm,
@@ -489,6 +557,7 @@ def build(arm, experiment="E02", seed=None):
         "run_tag": run_tag,
         "gate_S": gate_s,
         "gate_L": {"verdict": "PASS", "profile": profile.as_dict()},
+        "gate_ROUTE_built": gate_route,
         "control": "none (the null — no control_video)" if not use_control else {
             "bridge": "33 x LoadImage -> BatchImagesNode",
             "source_dir": arm_cfg["source_dir"],
@@ -518,7 +587,7 @@ def build(arm, experiment="E02", seed=None):
     return wf, meta
 
 
-def verify_topology(wf, arm, use_control, expects_reference=None):
+def verify_topology(wf, arm, use_control, expects_reference=None, control_names=None):
     """Check every link resolves, and that the arm is actually the arm it claims to be.
 
     `expects_reference` binds the reference image in BOTH directions, which matters now
@@ -527,7 +596,30 @@ def verify_topology(wf, arm, use_control, expects_reference=None):
     reference that silently appeared or vanished between arms of one experiment cannot get
     past here. An arm whose reference differs from its siblings' is not the arm it claims
     to be, and that is exactly the kind of difference a report would never notice.
+
+    `control_names` is the clip's server-side upload names **in frame order**, and it is
+    REQUIRED on a control arm (wave 10, F-6cbb7b35). The clauses below check the dotted
+    slot NAMES, that there are `LENGTH` of them, and that no source node is bound twice —
+    none of which relates a batch SLOT index to a FRAME index, so a permutation of the 33
+    links leaves every name, every count and every link resolvable and ships the control
+    out of sequence. `gate_slot_frame_index` (carried from `build_assembly_payload`, where
+    wave 8 wrote it) is the clause that fires on it, and it needs the frame order, which
+    lives in the upload map and not in the graph. It is not optional on a control arm: a
+    caller allowed to omit it holds a skip flag for the andon, and an omitted population is
+    how the same gate returned green having inspected zero slots in wave 6.
     """
+    # A malformed QUESTION, refused before any answer is collected: a control arm with no
+    # frame order cannot be checked for slot->frame agreement, and a caller allowed to omit
+    # it holds a skip flag for the andon below.
+    if use_control and control_names is None:
+        raise PayloadError(
+            f"[{arm}] verify_topology was called on a control arm without "
+            f"`control_names`. Slot k of node 300 must hold frame k of the clip, and the "
+            f"frame order lives in the upload map, not in the graph - with no names the "
+            f"slot->frame andon inspects nothing and returns green",
+            {"gate": "PAYLOAD", "andon": "slot_frame_index_population",
+             "arm": arm, "use_control": True, "control_names": None})
+
     problems = []
     for nid, node in wf.items():
         for k, v in node["inputs"].items():
@@ -591,6 +683,16 @@ def verify_topology(wf, arm, use_control, expects_reference=None):
 
     if problems:
         raise PayloadError(f"[{arm}] link topology is wrong: " + "; ".join(problems))
+
+    # ---- ANDON, on the direction none of the clauses above bounds: slot k of the batch
+    # node holds the upload name of frame k. Everything above reads names, counts and
+    # distinctness, all of which a permutation preserves. Carried from
+    # `build_assembly_payload.gate_slot_frame_index`, which `build_cascade_payload` and
+    # `build_r2v_payload` already call; the flat chain passes ONE span, the whole clip on
+    # node 300 starting at LoadImage id 200.
+    if use_control:
+        _carry(gate_slot_frame_index, wf, list(control_names),
+               [("300", 0, len(control_names))], 200)
     return True
 
 
@@ -637,7 +739,12 @@ def main(argv=None):
     with open(a.out.replace(".json", ".meta.json"), "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2)
     print(canon_line(canon_ev))
-    print("BUILD_PAYLOAD " + json.dumps({
+    # The SUCCESS half of the exit convention (wave 10). The failure half already agrees
+    # across all 13 CPU tools — `<PREFIX>_HALT` and 2-vs-1 — while the success line was
+    # spelled four different ways. It is `<PREFIX>_OK ` now, with the SAME prefix this
+    # file's `__main__` block prints on a halt, so one AST read of that block derives both
+    # directions of the census.
+    print("BUILD_PAYLOAD_OK " + json.dumps({
         "experiment": a.experiment, "arm": a.arm, "nodes": len(wf), "gate_L": "PASS",
         "reference": meta["reference_image"],
         "control_distinct_images": (

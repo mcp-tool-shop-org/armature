@@ -24,9 +24,9 @@ says so about rather than one it silently blesses.
 What the discriminator DOES, recorded because for one arc it did nothing
 
 Until 2026-09-03 the ratio was computed, written to `frame_order_evidence.json`, printed
-inside the FETCH_OK line — and compared to nothing. No threshold, no raise. The
+inside the FETCH_T2V_OK line — and compared to nothing. No threshold, no raise. The
 zero-length-frame check three lines below it raises, so the file already knew the
-difference between reporting and gating; a shuffled clip would have been written, FETCH_OK
+difference between reporting and gating; a shuffled clip would have been written, FETCH_T2V_OK
 printed, and the ratio near 1.0 noticed only if a human opened the JSON.
 
 **The choice made, and the one deliberately not made.** A numeric floor was refused: no
@@ -36,7 +36,7 @@ rule claims is DIRECTIONAL — if the array order is the temporal order, differe
 gives a SMALLER number than differencing a hash-sorted permutation of the same frames. So
 the boundary is the sign of that comparison and nothing else: `ratio > 1` is the claim,
 `ratio <= 1` contradicts it, and an undefined ratio (all frames identical) decides
-nothing. Anything but the first raises `FETCH_ORDER_UNVOUCHED` and FETCH_OK is not
+nothing. Anything but the first raises `FETCH_ORDER_UNVOUCHED` and FETCH_T2V_OK is not
 printed. E09's measured 0.703 vs 5.314 is reported as a magnitude, never graded.
 """
 
@@ -135,7 +135,7 @@ def gate_order_evidence(ev):
 
     The boundary is the SIGN of the comparison and not a magnitude: see the module
     docstring for why no floor is invented here. Raises `FETCH_ORDER_UNVOUCHED` rather
-    than letting `main` print FETCH_OK over an order this tool cannot vouch for.
+    than letting `main` print FETCH_T2V_OK over an order this tool cannot vouch for.
     """
     array_mean = ev["results_array_order"]["mean"]
     hash_mean = ev["hash_sorted_order"]["mean"]
@@ -154,7 +154,7 @@ def gate_order_evidence(ev):
             "FETCH_ORDER_UNVOUCHED: differencing the results-array order gives "
             f"{array_mean!r} and differencing a hash-sorted permutation of the same "
             f"frames gives {hash_mean!r}. The array order is not the tighter one, so "
-            f"this run’s temporal order has no evidence behind it and FETCH_OK is "
+            f"this run’s temporal order has no evidence behind it and FETCH_T2V_OK is "
             f"not printed. The frames and the evidence file are left on disk",
             g)
     g["verdict"] = (f"the results-array order differences {ratio:.3g}x tighter than a "
@@ -219,9 +219,9 @@ def main(argv=None):
     # second time. This tool had NO plan-to-disk check: the frame population came from
     # `os.listdir`, nothing compared it to `plan()` in either direction, and the VIDEO job
     # was never checked at all. Measured 2026-09-04 with `download` stubbed: a 4-frame dump
-    # fetched into an --out whose lossless/ held one stale 00009.png printed FETCH_OK
+    # fetched into an --out whose lossless/ held one stale 00009.png printed FETCH_T2V_OK
     # {"frames": 5} with the stale frame in the sha256 manifest and inside both arms of
-    # Gate ORDER; a dump whose frame 3 and video never landed printed FETCH_OK
+    # Gate ORDER; a dump whose frame 3 and video never landed printed FETCH_T2V_OK
     # {"frames": 4} with 00000,00001,00002,00004 differenced as if consecutive.
     #
     # Wave 8, F-d85dafd9: `root=a.out` as well. This tool passed the single lossless
@@ -255,7 +255,10 @@ def main(argv=None):
     # that fired it behind rather than making the next session re-fetch to see it.
     order = gate_order_evidence(ev)
 
-    print("FETCH_OK " + json.dumps({
+        # The SUCCESS half of the exit convention (wave 10). `<PREFIX>_OK ` uses the SAME
+    # prefix this file's `__main__` block prints on a halt, so one AST read of that block
+    # derives both directions of the census. The tree spelled this four ways before.
+    print("FETCH_T2V_OK " + json.dumps({
         "frames": len(frames), "out": a.out,
         "array_order_mean_diff": order["array_order_mean_diff"],
         "hash_sorted_mean_diff": order["hash_sorted_mean_diff"],
