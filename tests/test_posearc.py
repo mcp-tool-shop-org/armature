@@ -141,3 +141,46 @@ def test_the_arc_declares_moving_parts_that_match_its_moving_joints():
     assert "joint_elbow_r" in parts, "the elbow ball must travel with the limb it joins"
     # The pivot's own ball must NOT move: it is the centre of rotation.
     assert f"joint_{ARC['pivot']}" not in parts
+
+
+# --- F-314c4a79: the record may not name a property no code checked -------------------
+
+
+def test_over_a_full_span_the_record_does_not_call_the_readout_the_midpoint():
+    """Measured at count=33: 0..180 puts the registered readout 45.0deg at
+    `crossing_frame_exact` 8.00 while the true midpoint (90deg) is frame 16.00 — off by 8
+    of 32 frames, under a note that read "The readout is the MIDPOINT crossing". The only
+    guard was the "lies outside the arc" clause, which a 0..180 arc satisfies. This is the
+    class this repo pays for most often: a verdict naming a property no code checked, and
+    it sat in the timing quantity the experiment is read by.
+    """
+    r = posearc.arc_readout(ARC, 33, 0.0, 180.0)
+    assert r["readout_deg"] == 45.0
+    assert r["crossing_frame_exact"] == pytest.approx(8.0, abs=1e-12)
+    assert r["midpoint_deg"] == pytest.approx(90.0)
+    assert r["midpoint_frame_exact"] == pytest.approx(16.0, abs=1e-12)
+    assert r["is_the_midpoint"] is False
+    # Either the crossing frame IS the midpoint frame, or the record does not claim it is.
+    assert (r["crossing_frame_exact"] == pytest.approx(r["midpoint_frame_exact"])
+            or "is NOT the midpoint" in r["note"])
+    assert "MIDPOINT crossing" not in r["note"]
+
+
+def test_on_the_shipped_probe_span_the_two_coincide_and_the_record_says_so():
+    """0..90 is what `rig_character.py:661` uses, and there the registered readout and the
+    midpoint are the same frame — by coincidence of the numbers, which is exactly why the
+    record has to state it rather than assume it."""
+    r = posearc.arc_readout(ARC, 33, 0.0, 90.0)
+    assert r["is_the_midpoint"] is True
+    assert r["crossing_frame_exact"] == pytest.approx(r["midpoint_frame_exact"])
+    assert "IS the midpoint" in r["note"]
+
+
+def test_the_midpoint_is_derived_from_the_span_it_is_given():
+    """A property computed from the arc, not a constant: it moves with both ends."""
+    for start, end in ((0.0, 90.0), (0.0, 180.0), (30.0, 60.0), (-90.0, 90.0)):
+        r = posearc.arc_readout(dict(ARC, readout_deg=0.5 * (start + end)),
+                                33, start, end)
+        assert r["midpoint_deg"] == pytest.approx(0.5 * (start + end))
+        assert r["is_the_midpoint"] is True
+        assert r["midpoint_frame_exact"] == pytest.approx(16.0, abs=1e-9)
