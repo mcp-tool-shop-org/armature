@@ -58,7 +58,8 @@ CANON_CALLS = ("gate_write", "canon_spend", "require_canon")
 #: cannot name, and each of these raises a typed error with an evidence dict.
 OTHER_GATE_CALLS = (
     "verify", "frame_legality", "parse_plate", "parse_boxes", "frame_paths",
-    "frame_population", "check_runs", "common_frame_count", "bound_windows",
+    "frame_population", "frames_by_number", "check_runs", "common_frame_count",
+    "bound_windows",
 )
 
 
