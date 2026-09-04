@@ -59,6 +59,21 @@ So the runs must be distinct and at least two (`check_runs`, before any stack is
 and every run must carry the same frame count (`common_frame_count`, before any pair is
 compared). Neither is a judgement about the pixels; both are refusals to describe a
 population nobody measured.
+
+**And a third, 2026-09-03: the EARLY and LATE windows were literals.** `--early` and
+`--late` defaulted to `0-4` and `29-32` -- E02's 33-frame clip typed into the tool, a global
+constant governing a local feature. Two directions, both measured. Two 31-frame runs printed
+`EARLY (frames 0-4) vs LATE (frames 29-32)` with the late row computed over TWO frames and
+`"late_window": [29,30,31,32]` recorded beside it: the window named four frames and the
+number under it was measured over two, in the instrument that is the denominator every later
+number is read against. Two 17-frame runs (a generator-legal 4n+1 bucket) died at
+`min() iterable argument is empty` after every PNG had been loaded, writing no floor.json.
+
+`bound_windows` derives both ends from the run's OWN frame count (`WINDOW_FRACTION` of it at
+each end) when nothing is asked for, and refuses an explicit window naming a frame the run
+does not carry -- naming the request, `n`, and the out-of-range indices. `early_window` and
+`late_window` in the record are the REALISED lists, and `window_source` says of each whether
+it was derived or requested.
 """
 
 import argparse
@@ -74,6 +89,13 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+
+
+#: How much of a run each end-window covers, as a fraction of that run's OWN frame count.
+#: E02's defaults were the literals `0-4` and `29-32` -- five frames at one end of a
+#: 33-frame clip and four at the other. 5/33 keeps that size where it came from and makes
+#: it mean the same thing on a run of any length.
+WINDOW_FRACTION = 5.0 / 33.0
 
 
 class FloorError(ArmatureError):
@@ -139,6 +161,60 @@ def _span(text):
     return list(range(int(a), int(b) + 1))
 
 
+def derive_window(n, fraction=WINDOW_FRACTION):
+    """The EARLY and LATE index lists for a run of `n` frames, from `n` alone.
+
+    A fraction of the structure's own size rather than a frame-count constant: the same
+    fraction means the same thing on a 17-frame bucket and on a 121-frame one, where
+    `0-4` / `29-32` meant one experiment's clip and nothing else. Both ends are the SAME
+    size, which the literals were not (five frames early against four late) -- two windows
+    of different sizes are not comparable rows.
+    """
+    k = max(1, min(n, int(round(n * fraction))))
+    return list(range(k)), list(range(n - k, n))
+
+
+def bound_windows(n, early_text=None, late_text=None, fraction=WINDOW_FRACTION):
+    """The realised EARLY and LATE windows for a run of `n` frames, or raise naming why.
+
+    Returns `(early, late, source)`, where `source` says of each window whether it was
+    derived from `n` or requested. Raises before any pair is read: a window naming frames
+    the run does not carry produces a row of numbers under a heading that describes a
+    different population, which is exactly what was measured on the 31-frame pair.
+    """
+    derived_early, derived_late = derive_window(n, fraction)
+    windows, source = {}, {}
+    for name, text, derived in (("early", early_text, derived_early),
+                                ("late", late_text, derived_late)):
+        if text is None:
+            windows[name] = derived
+            source[name] = (f"derived from this run's own {n} frames at "
+                            f"{fraction:.1%} of it per end")
+            continue
+        idx = _span(text)
+        bad = [i for i in idx if i < 0 or i >= n]
+        if not idx or bad:
+            raise FloorError(
+                f"--{name}={text} names frame(s) {bad} on a run of {n}; the row under "
+                f"that heading would be computed over "
+                f"{len([i for i in idx if 0 <= i < n])} of the {len(idx)} frames the "
+                f"record names beside it",
+                {"window": name, "requested_text": text, "requested": idx,
+                 "n_frames": n, "out_of_range": bad,
+                 "realised": [i for i in idx if 0 <= i < n]})
+        windows[name] = idx
+        source[name] = f"requested as --{name}={text}"
+    both = sorted(set(windows["early"]) & set(windows["late"]))
+    if both:
+        raise FloorError(
+            f"the early and late windows overlap on frame(s) {both} of a {n}-frame run; "
+            f"EARLY and LATE would print two rows of the same numbers under two headings "
+            f"that claim to be the two ends of the clip",
+            {"n_frames": n, "early": windows["early"], "late": windows["late"],
+             "overlap": both, "window_source": source})
+    return windows["early"], windows["late"], source
+
+
 def pair_stats(A, B, big=8):
     """Per-frame stats for one pair of runs.
 
@@ -169,8 +245,13 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", required=True)
     ap.add_argument("--root", default="outputs/E02/runs")
-    ap.add_argument("--early", default="0-4")
-    ap.add_argument("--late", default="29-32")
+    ap.add_argument("--early", default=None,
+                    help="a-b, inclusive. Omitted, the window is derived from the run's "
+                         "own frame count (argparse eats leading minus signs, so pass "
+                         "--early=0-4)")
+    ap.add_argument("--late", default=None,
+                    help="a-b, inclusive. Omitted, the window is derived from the run's "
+                         "own frame count")
     ap.add_argument("--big", type=int, default=8)
     ap.add_argument("--out", default="outputs/E02/floor.json")
     a = ap.parse_args(argv)
@@ -180,7 +261,8 @@ def main(argv=None):
     stacks = {r: _stack(os.path.join(a.root, r)) for r in runs}
     # ---- ANDON, before a single pair is compared: one verified frame count, not run[0]'s.
     n = common_frame_count(stacks)
-    early, late = _span(a.early), _span(a.late)
+    # ---- ANDON, before a single pair is compared: the windows are bounded by THIS run.
+    early, late, window_source = bound_windows(n, a.early, a.late)
 
     pairs = {}
     for x, y in itertools.combinations(runs, 2):
@@ -205,11 +287,17 @@ def main(argv=None):
     print()
 
     def window(ps, idx):
-        m = [ps[i]["max"] for i in idx if i < len(ps)]
-        g = [ps[i]["pct_gt"] for i in idx if i < len(ps)]
-        return m, g
+        # No `if i < len(ps)` filter: every index here was bounded against n by
+        # `bound_windows` before a pair was compared. That filter is what let a window
+        # report over fewer frames than the heading above it named.
+        return [ps[i]["max"] for i in idx], [ps[i]["pct_gt"] for i in idx]
 
-    print(f"EARLY (frames {a.early}) vs LATE (frames {a.late}) — reported separately, always")
+    def heading(name, idx):
+        return f"{name} (frames {idx[0]}-{idx[-1]}, {len(idx)} of {n})"
+
+    print(f"{heading('EARLY', early)} vs {heading('LATE', late)} - reported separately, "
+          f"always")
+    print(f"  windows: early {window_source['early']}; late {window_source['late']}")
     rows = []
     for k, ps in pairs.items():
         em, eg = window(ps, early)
@@ -234,7 +322,10 @@ def main(argv=None):
     payload = {
         "runs": runs, "n_frames": n, "big_threshold": a.big,
         "frames_per_run": {r: len(s) for r, s in stacks.items()},
-        "early_window": early, "late_window": late,
+        # The REALISED index lists, which `bound_windows` has already proved are frames
+        # this run carries -- never the requested text.
+        "early_window": early, "late_window": late, "window_source": window_source,
+        "window_fraction": WINDOW_FRACTION,
         "pairs": pairs,
         "whole_clip": {
             "frames_differing": ndiff, "of": n * len(pairs),
