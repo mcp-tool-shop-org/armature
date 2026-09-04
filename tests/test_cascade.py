@@ -40,9 +40,16 @@ def _graph(n=81, **kw):
     return B.build(_names(n), **kw)
 
 
-def _gates(wf, gids, n=81, group=AS.GROUP_SIZE):
+def _srcs(n=81):
+    """The builder's own per-frame LoadImage node ids, in frame order (P3)."""
+    return [str(B.FIRST_IMAGE_ID + i) for i in range(n)]
+
+
+def _gates(wf, gids, n=81, group=AS.GROUP_SIZE, expected=None):
     return AS.gate_cascade_topology(wf, n, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                                    "video", group_size=group)
+                                    "video", group_size=group,
+                                    expected_sources=_srcs(n) if expected is None
+                                    else expected)
 
 
 # ------------------------------------------------------------------ the plan itself
@@ -94,13 +101,45 @@ def test_the_flat_81_slot_graph_s03_measured_failing_is_refused_by_the_ceiling()
     assert "INFERRED" in str(exc.value)
 
 
-def test_a_group_size_edited_up_past_the_ceiling_raises():
+@pytest.mark.parametrize("group", [50, 81])
+def test_a_group_size_edited_up_past_the_ceiling_raises(group):
     """The upward direction is the one the invariant does not bound, so it is the one gated:
-    a group of 50 builds cleanly, wires cleanly, and is exactly the shape that dies."""
-    wf, gids = _graph(81, group_size=50)
-    assert _gates(wf, gids, group=50)["verdict"], "topology alone sees nothing wrong"
+    a group of 50 builds cleanly, wires cleanly, and is exactly the shape that dies.
+
+    Exercised through THE BUILDERS' OWN CALL SHAPE as well as the default. `cap` was the
+    gate's only bound and both production builders passed `cap=max(--group, 1)`, so the
+    number that widened the graph widened the ceiling with it: at group=81 this is the
+    byte-for-byte graph S03 watched pass the round trip, Gate ROUTE and pre-flight and then
+    die at execution, and it PASSED with the verdict "largest carries 81 slot(s), ceiling
+    81". `cap` may now only tighten, and `group_size` is checked against the module's own
+    constant (F-248a732a).
+    """
+    wf, gids = _graph(81, group_size=group)
+    assert _gates(wf, gids, group=group)["verdict"], "topology alone sees nothing wrong"
     with pytest.raises(AS.AssemblyGate):
         AS.gate_slot_ceiling(wf)
+    with pytest.raises(AS.AssemblyGate) as exc:                 # the builders' shape
+        AS.gate_slot_ceiling(wf, cap=max(group, 1))
+    assert "may only TIGHTEN" in str(exc.value)
+    with pytest.raises(AS.AssemblyGate) as exc:                 # the shape they move to
+        AS.gate_slot_ceiling(wf, group_size=group)
+    assert "above the ceiling" in str(exc.value)
+
+
+def test_a_cap_below_the_module_ceiling_still_tightens():
+    """Tightening is the one thing a caller may do, and it must still bind."""
+    wf, _ = _graph(4, group_size=2)
+    assert AS.gate_slot_ceiling(wf, cap=2)["ceiling"] == 2
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_slot_ceiling(wf, cap=1)
+    assert "more than 1" in str(exc.value)
+
+
+def test_the_verdict_names_the_module_constant_not_a_caller_number():
+    wf, _ = _graph(81)
+    ev = AS.gate_slot_ceiling(wf, group_size=AS.GROUP_SIZE)
+    assert ev["module_ceiling"] == AS.MAX_SLOTS_PER_NODE
+    assert "never a number the caller supplied" in ev["verdict"]
 
 
 def test_the_ceiling_ignores_non_batch_nodes():
@@ -253,6 +292,47 @@ def test_the_record_names_the_cap_as_inferred_rather_than_measured(tmp_path):
 # ------------------------------------------------- the andons survive optimization
 
 
+
+# ------------------------------------------------- frame ORDER inside a group (P3)
+
+
+def test_two_frames_transposed_inside_one_group_raises():
+    """Measured 2026-09-03 on the builders' own 81-frame, 27-per-group shape: swapping the
+    LoadImage bound to `images.image0` with the one bound to `images.image20` inside group
+    0 passed with the verdict unchanged — "81 distinct LoadImage nodes -> 3 group batch(es)
+    ... groups in frame order, every link resolved". Only the FINAL batch's order was ever
+    compared; no slot was related to any frame."""
+    wf, gids = _graph()
+    gi = wf["400"]["inputs"]
+    gi["images.image0"], gi["images.image20"] = gi["images.image20"], gi["images.image0"]
+    with pytest.raises(AS.AssemblyGate) as exc:
+        _gates(wf, gids)
+    assert "out of sequence" in str(exc.value)
+
+
+def test_a_frame_moved_between_two_groups_raises():
+    """Cross-group displacement keeps every per-group count AND the distinct-source count."""
+    wf, gids = _graph()
+    a = wf["400"]["inputs"]["images.image0"]
+    b = wf["402"]["inputs"]["images.image0"]
+    wf["400"]["inputs"]["images.image0"], wf["402"]["inputs"]["images.image0"] = b, a
+    with pytest.raises(AS.AssemblyGate) as exc:
+        _gates(wf, gids)
+    assert "out of sequence" in str(exc.value)
+
+
+def test_the_cascade_gate_refuses_an_empty_frame_set():
+    """`cascade_plan(0)` is `[]`, the group loop never runs, and every count clause compared
+    0 to 0 — so the gate returned its full success verdict. `build_r2v_payload` wires this
+    cascade into the paid `Wan2ReferenceVideoApi`, so a run whose frame set came back empty
+    carried a green CASCADE_topology receipt into its spend record."""
+    wf, gids = _graph(4, group_size=2)
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_cascade_topology(wf, 0, [], B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                                 "video", group_size=2, expected_sources=[])
+    assert "must not report agreement" in str(exc.value)
+    assert exc.value.evidence["n_frames"] == 0
+
 PROBE = textwrap.dedent(
     """
     import json, sys
@@ -267,6 +347,7 @@ PROBE = textwrap.dedent(
         asserts_active = True
 
     names = ["%064x.png" % i for i in range(81)]
+    EXP = [str(B.FIRST_IMAGE_ID + i) for i in range(81)]
 
     def ceiling():
         wf, _ = B.build(names, group_size=50)
@@ -277,28 +358,50 @@ PROBE = textwrap.dedent(
         fi = wf[str(B.FINAL_BATCH_ID)]["inputs"]
         fi["images.image0"], fi["images.image1"] = fi["images.image1"], fi["images.image0"]
         AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                                 "video")
+                                 "video", expected_sources=EXP)
 
     def dropped():
         wf, gids = B.build(names)
         del wf[str(B.FINAL_BATCH_ID)]["inputs"]["images.image2"]
         AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                                 "video")
+                                 "video", expected_sources=EXP)
 
     def duplicated():
         wf, gids = B.build(names)
         wf["401"]["inputs"]["images.image0"] = wf["400"]["inputs"]["images.image0"]
         AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                                 "video")
+                                 "video", expected_sources=EXP)
 
     def paid():
         wf, _ = B.build(names)
         wf["500"] = {"class_type": "Wan2ReferenceVideoApi", "inputs": {}}
         AS.gate_no_paid_nodes(wf)
 
+    def capraise():
+        wf, _ = B.build(names, group_size=50)
+        AS.gate_slot_ceiling(wf, cap=81)
+
+    def groupsize():
+        wf, _ = B.build(names, group_size=50)
+        AS.gate_slot_ceiling(wf, group_size=50)
+
+    def slotorder():
+        wf, gids = B.build(names)
+        gi = wf["400"]["inputs"]
+        gi["images.image0"], gi["images.image20"] = gi["images.image20"], gi["images.image0"]
+        AS.gate_cascade_topology(wf, 81, gids, B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                                 "video", expected_sources=EXP)
+
+    def emptyframes():
+        wf, _ = B.build(names)
+        AS.gate_cascade_topology(wf, 0, [], B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                                 "video", expected_sources=[])
+
     out = {"asserts_active": asserts_active, "raised": {}}
     for name, fn in {"ceiling": ceiling, "order": order, "dropped": dropped,
-                     "duplicated": duplicated, "paid": paid}.items():
+                     "duplicated": duplicated, "paid": paid, "capraise": capraise,
+                     "groupsize": groupsize, "slotorder": slotorder,
+                     "emptyframes": emptyframes}.items():
         try:
             fn()
             out["raised"][name] = "NO_RAISE"

@@ -34,6 +34,16 @@ def _graph(n=81, **kw):
     return B.build(_names(n), **kw)
 
 
+def _srcs(n=81):
+    """The builder's own per-frame LoadImage node ids, in frame order.
+
+    `gate_batch_topology` requires these: without them it could relate no slot to any
+    frame, so its "every frame reaches the batch" verdict was a sentence rather than a
+    check (F-6d125eb8).
+    """
+    return [str(B.FIRST_IMAGE_ID + i) for i in range(n)]
+
+
 # ------------------------------------------------------------------ the free-chain andon
 
 
@@ -42,7 +52,8 @@ def test_the_built_chain_passes_both_clauses():
     ev = AS.gate_no_paid_nodes(wf)
     assert set(ev["classes"]) == set(AS.ALLOWED_CLASSES)
     assert ev["name_pattern_flagged"] == []
-    assert AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)["verdict"]
+    assert AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(81))["verdict"]
 
 
 def test_a_partner_node_in_the_graph_raises():
@@ -102,7 +113,8 @@ def test_the_bare_images_list_dry_run_validated():
     wf[str(B.BATCH_ID)]["inputs"] = {"images": [[str(B.FIRST_IMAGE_ID + i), 0]
                                                 for i in range(4)]}
     with pytest.raises(AS.AssemblyGate) as exc:
-        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(4))
     assert "bare `images` list" in str(exc.value)
     assert "dry_run does NOT catch this" in str(exc.value)
 
@@ -114,7 +126,8 @@ def test_a_short_batch_raises():
     for i in range(40, 81):
         del bi[f"images.image{i}"]
     with pytest.raises(AS.AssemblyGate) as exc:
-        AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(81))
     assert "40 key(s), expected 81" in str(exc.value)
 
 
@@ -125,7 +138,8 @@ def test_a_link_bound_twice_raises_even_though_the_count_is_right():
     wf = _graph(81)
     wf[str(B.BATCH_ID)]["inputs"]["images.image80"] = [str(B.FIRST_IMAGE_ID), 0]
     with pytest.raises(AS.AssemblyGate) as exc:
-        AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(81))
     assert "distinct LoadImage node(s)" in str(exc.value)
     assert exc.value.evidence["distinct_sources"] == 80
 
@@ -134,7 +148,8 @@ def test_create_video_fed_from_somewhere_other_than_the_batch_raises():
     wf = _graph(4)
     wf[str(B.VIDEO_ID)]["inputs"]["images"] = [str(B.FIRST_IMAGE_ID), 0]
     with pytest.raises(AS.AssemblyGate) as exc:
-        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(4))
     assert "not the batch node's output" in str(exc.value)
 
 
@@ -144,7 +159,8 @@ def test_an_unwired_save_raises_because_create_video_saves_nothing_itself():
     wf = _graph(4)
     wf[str(B.SAVE_ID)]["inputs"]["video"] = [str(B.BATCH_ID), 0]
     with pytest.raises(AS.AssemblyGate) as exc:
-        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(4))
     assert "CreateVideo is `output_node: false`" in str(exc.value)
 
 
@@ -187,6 +203,67 @@ def test_two_local_frames_uploading_to_one_object_raises(tmp_path):
 
 # ------------------------------------------------- and none of them is an `assert`
 
+
+# ------------------------------------------------- frame ORDER inside the batch (P3)
+
+
+def test_a_transposed_slot_raises_even_though_every_count_is_right():
+    """The defect this gate claimed to cover and did not.
+
+    Its docstring's clause list named shuffling, but it collected sources in slot order and
+    then only tested length and distinctness — so permuting two slots kept the count, kept
+    every source distinct, and passed with a full verdict. The clip plays its frames in an
+    order nobody chose and `clipcompare.order_check` (post-spend) is the next thing that
+    could notice.
+    """
+    wf = _graph(8)
+    bi = wf[str(B.BATCH_ID)]["inputs"]
+    bi["images.image2"], bi["images.image6"] = bi["images.image6"], bi["images.image2"]
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_batch_topology(wf, 8, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(8))
+    assert "out of sequence" in str(exc.value)
+    assert exc.value.evidence["n_expected_sources"] == 8
+
+
+def test_an_expectation_that_is_not_the_frame_list_raises():
+    """A short or duplicated expectation would let the ordering clause index off the end
+    or compare a frame to itself, so the gate refuses the expectation first."""
+    wf = _graph(4)
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(3))
+    assert "not the frame list" in str(exc.value)
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=["200", "200", "202", "203"])
+    assert "not distinct" in str(exc.value)
+
+
+def test_the_batch_gate_refuses_an_empty_frame_set():
+    """`glb.compare_signatures` already refuses an empty pair because "a comparison over
+    nothing must not report agreement". This gate did not: at n_frames=0 every count clause
+    compared 0 to 0 and it returned a full success verdict over an empty clip."""
+    wf = _graph(4)
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_batch_topology(wf, 0, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=[])
+    assert "must not report agreement" in str(exc.value)
+    assert exc.value.evidence["n_frames"] == 0
+
+
+def test_a_node_without_a_class_type_raises_the_gate_not_a_typeerror():
+    """`sorted()` over a set containing None raised `TypeError: '<' not supported between
+    instances of 'str' and 'NoneType'`, so the failure path was broken in exactly one class
+    of malformed graph — the caller got an untyped error with no gate id and no evidence
+    where the andon belonged. `parts.py:155-159` records the identical defect."""
+    wf = _graph(4)
+    wf["500"] = {"inputs": {}}
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_no_paid_nodes(wf)
+    assert "no `class_type`" in str(exc.value)
+    assert exc.value.evidence["nodes_without_class_type"] == ["500"]
+
 PROBE = textwrap.dedent(
     """
     import json, sys
@@ -197,6 +274,9 @@ PROBE = textwrap.dedent(
     def _g(n=4):
         return B.build(["%064x.png" % i for i in range(n)])
 
+    def _s(n=4):
+        return [str(B.FIRST_IMAGE_ID + i) for i in range(n)]
+
     def paid():
         wf = _g(); wf["500"] = {"class_type": "Wan2ReferenceVideoApi", "inputs": {}}
         AS.gate_no_paid_nodes(wf)
@@ -204,26 +284,46 @@ PROBE = textwrap.dedent(
     def bare():
         wf = _g()
         wf[str(B.BATCH_ID)]["inputs"] = {"images": [[str(B.FIRST_IMAGE_ID), 0]]}
-        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_s(4))
 
     def short():
         wf = _g()
         del wf[str(B.BATCH_ID)]["inputs"]["images.image3"]
-        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_s(4))
 
     def twice():
         wf = _g()
         wf[str(B.BATCH_ID)]["inputs"]["images.image3"] = [str(B.FIRST_IMAGE_ID), 0]
-        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_s(4))
 
     def unwired():
         wf = _g()
         wf[str(B.SAVE_ID)]["inputs"]["video"] = [str(B.BATCH_ID), 0]
-        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)
+        AS.gate_batch_topology(wf, 4, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_s(4))
+
+    def transposed():
+        wf = _g(8)
+        bi = wf[str(B.BATCH_ID)]["inputs"]
+        bi["images.image2"], bi["images.image6"] = bi["images.image6"], bi["images.image2"]
+        AS.gate_batch_topology(wf, 8, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_s(8))
+
+    def empty():
+        AS.gate_batch_topology(_g(), 0, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=[])
+
+    def noclass():
+        wf = _g(); wf["500"] = {"inputs": {}}
+        AS.gate_no_paid_nodes(wf)
 
     out = {"optimize_flag": sys.flags.optimize, "asserts_active": __debug__, "raised": {}}
     for name, fn in {"paid": paid, "bare": bare, "short": short, "twice": twice,
-                     "unwired": unwired}.items():
+                     "unwired": unwired, "transposed": transposed, "empty": empty,
+                     "noclass": noclass}.items():
         try:
             fn()
             out["raised"][name] = "NO_RAISE"
