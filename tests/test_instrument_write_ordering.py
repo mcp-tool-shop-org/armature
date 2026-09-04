@@ -164,6 +164,14 @@ def imports_bpy(name):
 #: `make_rig_sheet` is the pointed one: it creates `<out>/` and `<out>/panels/` and then
 #: raises `ArmatureError` inline at three lines below them.
 POPULATION_MEASURED_2026_09_04 = {
+    # WAVE 16 (instruments-measure, SEAM 14 §1): `make_e13_sheet` JOINS. It had NO typed
+    # refusal at all — it only wrote — and now refuses (`E13SheetError`, their `F-9297b54f`,
+    # the listing checked before it is indexed), so `derive_population()` reaches it. It
+    # strands NOTHING: its `os.makedirs` moved from the top of `main` to immediately above
+    # `sheet.save`, so the new refusal sits above the first write and the 27 / 51 / 69
+    # ratchet is unchanged in all three numbers. RED ON THE tests BRANCH ALONE — the tool
+    # is unchanged in this worktree, so `derive_population()` does not return it here.
+    "make_e13_sheet",
     # WAVE-12 MERGE (coordinator, 2026-09-04): `make_overlay_sheet` JOINED — its `cv2.imwrite` return is a typed
     # refusal now (instruments-measure), so it gates-and-writes.
     "make_overlay_sheet",
@@ -969,6 +977,17 @@ def test_no_refusal_sits_below_the_first_write(name):
             "REFUSALS_BELOW_THE_FIRST_WRITE and ratcheted there; this module-level "
             "assertion would say nothing the ratchet does not")
     gates_at, writes_at = gate_and_write_lines(_source(name), name)
+    # WAVE 16: a NAMED refusal rather than a `max() iterable argument is empty` ValueError.
+    # Every member of `derive_population()` gates AND writes by construction, so a member of
+    # the recorded population that does neither means the two have drifted apart — which is
+    # a defect in the population, not a crash in this comparison. (Measured: with
+    # `make_e13_sheet` recorded ahead of instruments-measure's refusal landing, this line
+    # raised `ValueError` and named nothing.)
+    assert gates_at and writes_at, (
+        f"{name} is in POPULATION_MEASURED_2026_09_04 and `gate_and_write_lines` finds "
+        f"{len(gates_at)} refusal(s) and {len(writes_at)} write(s) in its CLI body; a "
+        f"member of the derived population has both. Either the tool changed or the "
+        f"recorded population is ahead of the tree")
     last_gate, first_write = max(gates_at), min(writes_at)
     assert last_gate < first_write, (
         f"{name}.main writes at line {first_write} ({writes_at[first_write]}) but is "

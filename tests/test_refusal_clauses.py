@@ -234,7 +234,8 @@ RECORDED_POPULATION = frozenset({
     #     `build_t2v_payload.py`). Builders posted the raise deltas, not a POLICED delta;
     #     six sites is unambiguously more than one, so it is recorded here and the seam asks
     #     them to confirm. If it does not land, this assertion names it by name.
-    "ABClipError", "ResampleArgError", "SeedRegistrationError",
+    "ABClipError", "ResampleArgError", "SeedRegistrationError", "SpendCeiling",
+    "ArcDidNotSurvive",
     # WAVE-14 MERGE (coordinator, 2026-09-04): `aapose.ConventionError` (core-solvers, F-d0de0c2d) — the class landed, the
     # name did not; measured `POLICED - RECORDED_POPULATION == ["ConventionError"]` on the merged tree.
     "ConventionError",
@@ -401,11 +402,16 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     #      python -c "import sys;sys.path[:0]=['tests','tools'];import test_refusal_clauses as M;print(len(M.POLICED))"
     #      reads 96 in this worktree.
     #   +2 CARRIED from instruments-measure's SEAM 5 (`ABClipError`, `ResampleArgError`).
-    #   +1 CARRIED from builders' SEAM 4 (`SeedRegistrationError`, 6 raise sites).
+    #   +2 CARRIED from builders' SEAM 10 (`SeedRegistrationError`, 5 raise sites;
+    #      `SpendCeiling`, 2 sites under its own gate id — builders measured POLICED 96 on
+    #      their branch, i.e. base + these two).
+    #   +1 CARRIED from instruments' SEAM 13 (`make_parts_sheet.ArcDidNotSurvive`, three
+    #      literal raise sites across `make_parts_sheet:413`, `make_binding_sheet:241` and
+    #      `make_rig_sheet:192`, each carrying `clause == "arc_did_not_survive"`).
     # So this assertion is RED on this branch (96) and expected green on the merged tree.
     # The coordinator re-measures at merge; the SET assertion beneath names any member that
     # did not arrive, which is why the pin is a set and not only a count.
-    assert len(POLICED) == 99, sorted(POLICED)
+    assert len(POLICED) == 100, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -475,6 +481,17 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # into `_readable_node`, shared with `_iter_definitions`' recursion — one raise site
     # before, one after, so it moves this count by nothing.
     # WAVE-14 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    # WAVE 16: 63 → 63, and the zero hides three moves in both directions, so it is
+    # itemised rather than left as "unchanged" (SEAM 5 §4 + SEAM 10 §2):
+    #   +2 core-gates in `armature_core/route_gates.py` (`_unreadable_level`, Gate S's
+    #      all-`add_noise=disable` andon);
+    #   +1 builders in `gate_saved_graph.py` (`duplicate_socket_name`);
+    #   −3 builders in `build_r2v_payload.py`, where three raises moved off the bare
+    #      `RouteGate` onto `SpendCeiling`, the class whose own gate id the evidence names.
+    # This is the first wave this count has gone DOWN. ⚠ The `files` assertion below still
+    # names `build_r2v_payload.py`; builders' SEAM 10 does not say whether any `RouteGate`
+    # raise remains there. If none does, that set loses a member at merge — flagged in the
+    # inbox rather than guessed at here.
     assert len(RAISE_SITES["RouteGate"]) == 63, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch

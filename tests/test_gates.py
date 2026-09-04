@@ -1091,9 +1091,24 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # raise from `parts.require_finite`, which this count already carries.
     # WAVE-14 MERGE (coordinator, 2026-09-04): 303 (core-gates alone) → 307 on the merged tree — core-solvers' +4 (`assembly`,
     # `startframe` ×2, `turnaround`) land here too. Re-measured, never summed (SEAM 8 §1 is the worked example).
-    assert total == 307, (
-        f"{total} family raises in armature_core; 307 were measured on 2026-09-04 (wave-14 merge). This is "
-        f"the denominator every ratio below is quoted against — re-measure it deliberately")
+    # WAVE 16: 307 → 315. This number cannot be measured on one branch, so its composition
+    # is written out and the coordinator re-measures at merge (this assertion is RED on the
+    # tests branch, which reads 307 — no domain added a raise in `armature_core` here):
+    #   +3 core-gates (SEAM 5 §4): `route_gates._unreadable_level` (one raise, called from
+    #      three container levels), Gate S's all-`add_noise=disable` andon, and `subject`'s
+    #      `float()` coercion re-classed from a bare TypeError/ValueError.
+    #   +5 core-solvers (SEAM 11 §1): `aapose.check_convention`'s
+    #      `drawing_constant_outside_the_record`, `assembly.gate_no_paid_nodes`'s
+    #      `class_with_an_unreadable_measurement_date`, and three in
+    #      `turnaround.gate_set_distinct` (the unreadable-plane refusal,
+    #      `views_without_pixels`, `adjacent_pair_shapes_differ`).
+    # instruments, instruments-measure and builders add ZERO here — every raise they added
+    # is in `tools/*.py`, which this walk does not reach (both confirmed it in the inbox).
+    assert total == 315, (
+        f"{total} family raises in armature_core; this pin asserts 315, composed from the "
+        f"branch measurements in the wave-16 seams inbox and NOT re-measured on a merged "
+        f"tree. This is the denominator every ratio below is quoted against — re-measure it "
+        f"deliberately")
 
 
 def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():
@@ -1159,6 +1174,10 @@ def test_every_family_class_stores_the_evidence_it_is_passed():
 
     WAVE 14, the seam from instruments-measure (`F-8393e66c`). `stage_render.py:582` raised
     the BASE `ArmatureError(msg, {...})`; the base had no `__init__`, so the second argument
+    (WAVE 16: that line is `stage_render.py:597` on the merged tree — instruments-measure
+    measured the move with `difflib.SequenceMatcher` against `git show 041027c:` and posted
+    it in SEAM 15; it is still :582 in this worktree. The citation names a HISTORICAL site
+    either way, which is why it is prose and not an assertion.)
     went to `RuntimeError.args` and `.evidence` did not exist — the halt line printed
     `"evidence": null` for a refusal whose raise site looked, to the AST census above,
     perfectly compliant. A census that reads only the CALL cannot see that, which is why the

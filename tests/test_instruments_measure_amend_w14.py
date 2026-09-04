@@ -208,6 +208,7 @@ def test_no_tool_in_this_domain_raises_the_bare_base_with_an_evidence_argument()
     `raise ArmatureError(msg, {...})` is the shape that silently discards its evidence
     until `ArmatureError` gains a constructor; an AST census over `tools/**` measured
     `stage_render.py:582` as the only one in the tree, and this holds that at zero for the
+    (WAVE 16: `:597` on the merged tree, `:582` here — SEAM 15's measured table.)
     42 modules of this domain.
     """
     offenders = []
