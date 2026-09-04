@@ -223,20 +223,61 @@ def test_every_gate_raise_carries_both_its_id_and_its_andon():
     the dict LITERAL at an evidence name's last assignment and cannot see a key added by
     subscript afterwards (`ev["andon"] = "GateCanon"` at canon.py:91) or a dict built and
     mutated earlier in the function (gates.py:668, route_gates.py:857) — six false
-    positives on the merged tree. `tests/test_gates.py::evidence_dicts_missing` resolves
-    those shapes, so it is the walk this property is judged by; `_gate_raises` stays as the
-    POPULATION pin above (per-module raise counts), which is a different question.
+    positives on the merged tree. `tests/test_gates.py::evidence_dicts_missing` was named
+    the walk this property is judged by; `_gate_raises` stays as the POPULATION pin above
+    (per-module raise counts), which is a different question.
+
+    WAVE 10, F-b01840fc — the consolidation's premise, CORRECTED IN PLACE with the
+    measurement that overturned it. The walk did not resolve those shapes; it DROPPED
+    them. Replicating its per-site classification on 2026-09-04 it examined 135 sites and
+    returned `UNRESOLVED` — never an offender, never counted in `examined` — for
+    canon.py:91, gates.py:668, gates.py:675, route_gates.py:857/867/875, route_gates.py:1634,
+    donor_gate.py:213, lift_solve.py:693 and lift_solve.py:702. Intersected with
+    `_gate_raises`'s derived 145, exactly 10 `GateFailure` raise sites were invisible to
+    this property test, six of them the very six the consolidation was written for. All ten
+    carried gate+andon at runtime, so it was a blind spot rather than a live defect — and
+    it is precisely the spelling a new raise would take to be invisible.
+
+    `evidence_dicts_missing` now reads those shapes (a parameter mutated by
+    `ev["k"] = ...`, `dict(x or {})`, `ev.update({...})`, `dict(base, gate=…)`, and one hop
+    into a module-local builder) and returns an `unreadable` list for anything it still
+    cannot decide, so a raise it cannot read fails loudly instead of leaving the census.
+    `examined` is 145 on this tree, which is the number the population pin above derives.
     """
     from test_gates import evidence_dicts_missing
 
     root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         "tools", "armature_core")
     for key in ("gate", "andon"):
-        offenders, examined = evidence_dicts_missing(key, root=root)
+        offenders, examined, unreadable = evidence_dicts_missing(key, root=root)
         assert examined > 0, "the walk examined no raise; a census over nothing is not a clean tree"
+        assert unreadable == [], (
+            f"the judge cannot decide these raises' {key!r} key, so they are policed by "
+            f"nothing: {unreadable}")
         offenders = [o for o in offenders
-                     if not any(str(o[0]).replace("\\", "/").endswith(f"{x}.py") for x in EXEMPT)]
+                     if not any(str(o).replace("\\", "/").startswith(f"{x}.py:") for x in EXEMPT)]
         assert offenders == [], f"gate raises whose evidence cannot name its {key!r}: {offenders}"
+
+
+def test_the_population_pin_and_the_one_evidence_judge_count_the_same_sites():
+    """The two walks in this repo that enumerate gate raises must agree, or "the ONE judge"
+    is a claim rather than a fact.
+
+    `_gate_raises` (this file) derives per-module counts of `GateFailure` raises;
+    `test_gates.evidence_dicts_missing` derives, over the whole `ArmatureError` family,
+    every raise it can say anything about. They coincided at 145 on 2026-09-04 and the
+    difference — if one appears — is the interesting number, so it is printed per module.
+    """
+    from test_gates import evidence_dicts_missing
+
+    _, examined, unreadable = evidence_dicts_missing("gate", root=CORE)
+    with_gates = {m: len(_gate_raises(m)) for m in _module_names() if _gate_raises(m)}
+    assert unreadable == [], unreadable
+    assert examined == sum(with_gates.values()), {
+        "the judge examined": examined,
+        "the population pin derives": sum(with_gates.values()),
+        "per module": with_gates,
+    }
 
 
 def test_the_evidence_agrees_with_the_raising_class_wherever_both_are_literal():

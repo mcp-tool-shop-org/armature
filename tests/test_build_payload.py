@@ -290,6 +290,18 @@ def _arm_pointed_at(monkeypatch, experiment, arm, *, uploads, source_dir):
     monkeypatch.setitem(bp.EXPERIMENTS, experiment, dict(cfg, arms=arms))
 
 
+
+def _collapse_message(*, server_names, local_images):
+    """The collapse clause's message with both counts pinned in their own ROLE.
+
+    `\b` on the leading digit so `1 distinct server name` cannot match `31`, and the two
+    numbers are on opposite sides of the clause so neither direction's pin can be satisfied
+    by the other direction's message.
+    """
+    return (rf"map to \b{server_names} distinct server name\(s\), but .* holds "
+            rf"\b{local_images} distinct image\(s\)")
+
+
 def test_the_distinct_name_check_binds_in_BOTH_directions(tmp_path, monkeypatch):
     """A moving control that collapsed on upload must raise, and so must a static arm that
     did not collapse. E02's version only caught the first.
@@ -305,7 +317,15 @@ def test_the_distinct_name_check_binds_in_BOTH_directions(tmp_path, monkeypatch)
     collapsed.write_text(json.dumps({f"{i:05d}": "same.png" for i in range(33)}))
     _arm_pointed_at(monkeypatch, "E03", "B1", uploads=str(collapsed),
                     source_dir=_control_dir(tmp_path, "moving", 33))
-    with pytest.raises(bp.PayloadError, match="1 distinct server name"):
+    # Both directions raise from ONE clause (build_payload.py:361-365), so the only thing
+    # distinguishing them is the pair of numbers — and `pytest.raises(match=)` is
+    # `re.search`, so a bare `"1 distinct server name"` also matches a message reading
+    # "31 distinct server name" and would silently accept direction 2's message
+    # (F-02683edb). The regex below pins each number IN ITS ROLE, and both roles are
+    # derived from the fixture above rather than typed, so a fixture change moves the pin
+    # with it instead of leaving one direction unpinned.
+    with pytest.raises(bp.PayloadError,
+                       match=_collapse_message(server_names=1, local_images=33)):
         bp.build("B1", "E03")
 
     # Direction 2 — a STATIC arm (1 distinct local image) whose uploads did NOT collapse.
@@ -314,7 +334,8 @@ def test_the_distinct_name_check_binds_in_BOTH_directions(tmp_path, monkeypatch)
     fake.write_text(json.dumps({f"{i:05d}": f"name{i}.png" for i in range(33)}))
     _arm_pointed_at(monkeypatch, "E03", "B3", uploads=str(fake),
                     source_dir=_control_dir(tmp_path, "static", 1))
-    with pytest.raises(bp.PayloadError, match="33 distinct server name"):
+    with pytest.raises(bp.PayloadError,
+                       match=_collapse_message(server_names=33, local_images=1)):
         bp.build("B3", "E03")
 
 

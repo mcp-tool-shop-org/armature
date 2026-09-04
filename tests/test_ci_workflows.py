@@ -432,26 +432,98 @@ def _local_action_files():
     return sorted(out)
 
 
-def _repo_root_files_the_suite_reads():
-    """Every repo-ROOT file named as a string literal by a test under `tests/`.
+#: The calls that CONSUME a path. A repo-root filename mentioned anywhere in `tests/` is a
+#: string; a filename handed to one of these is a file the suite reads, and editing it can
+#: turn CI red. The distinction is the whole of F-3a455e7d's second half: `".git"` appears at
+#: `tests/test_packaging.py:1013` as a directory-walk SKIP token — a name the suite EXCLUDES,
+#: never a path it opens — and the old constant-only walk could not tell the two apart.
+_PATH_CONSUMING_CALLS = frozenset({
+    "open", "join", "isfile", "isdir", "exists", "getsize", "relpath", "abspath",
+    "Path", "read_text", "read_bytes", "samefile", "realpath",
+})
 
-    The derivation is "every file the suite guards": if a test reads a file, editing that
-    file can turn CI red, so editing it has to RUN CI. Matched against the real directory
-    listing rather than `os.path.isfile`, because Windows would otherwise match `LICENSE`
-    through the literal `license` and put a filename in the population that does not exist.
+
+def repo_root_tracked_files(root=None):
+    """Repo-root files as GIT TRACKS them — the node a workflow `paths:` entry can name.
+
+    THE NODE THIS KEYS ON (F-3a455e7d): a path under version control at the repo root.
+    That is the node the property "a workflow can trigger on it" lives on. The old
+    derivation keyed on the CHECKOUT — `os.listdir(REPO)` filtered by `os.path.isfile` —
+    which is a different node and disagrees with itself between checkouts: in a linked
+    `git worktree` `.git` is a 60-byte gitdir POINTER FILE, so it passed `os.path.isfile`,
+    entered the population, and three tests in this file demanded CI trigger on `.git`, a
+    path no workflow can ever list. Measured 2026-09-04 in
+    `.swarm/worktrees/w10-tests-8481819-3690`: `3 failed, 3070 passed` off the main
+    checkout, green on it. `git ls-files` gives the same answer from either, because a
+    worktree and its main checkout share one index.
+
+    `root` is a parameter so the derivation can be driven against a scratch tree (see
+    `test_the_root_population_ignores_a_git_pointer_file`).
     """
-    entries = {e for e in os.listdir(REPO) if os.path.isfile(os.path.join(REPO, e))}
+    root = REPO if root is None else root
+    try:
+        proc = subprocess.run(["git", "-C", root, "ls-files", "-z", "--", ":(top)"],
+                              capture_output=True)
+    except OSError:  # pragma: no cover - git absent from PATH
+        proc = None
+    if proc is not None and proc.returncode == 0:
+        return {e for e in proc.stdout.decode("utf-8").split(chr(0)) if e and "/" not in e}
+    # git is unavailable (an unpacked sdist, a release tarball). Fall back to the listing
+    # with VCS metadata excluded BY NAME, because `.git` is a directory on a normal
+    # checkout and a FILE in a linked worktree — the exact asymmetry above.
+    return {e for e in os.listdir(root)
+            if e != ".git" and os.path.isfile(os.path.join(root, e))}
+
+
+def _literals_used_as_paths(tests_dir=None):
+    """Every string literal under `tests/` that is handed to a path-consuming call.
+
+    Keys on the CALL, not on the constant: `ast.Constant` nodes reached as an argument of
+    a call in `_PATH_CONSUMING_CALLS`, or as the right operand of a `/` against a name
+    (the `tmp_path / "x"` form). A bare constant in a list, a message, or a skip set is
+    not a path the suite reads.
+    """
+    tests_dir = TESTS_DIR if tests_dir is None else tests_dir
     found = set()
-    for name in sorted(os.listdir(TESTS_DIR)):
+
+    def _consume(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            found.add(node.value)
+
+    for name in sorted(os.listdir(tests_dir)):
         if not (name.startswith("test_") and name.endswith(".py")):
             continue
-        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+        with open(os.path.join(tests_dir, name), encoding="utf-8") as fh:
             tree = ast.parse(fh.read())
         for node in ast.walk(tree):
-            if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                if node.value in entries:
-                    found.add(node.value)
-    return sorted(found)
+            if isinstance(node, ast.Call):
+                fn = node.func
+                fname = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
+                if fname in _PATH_CONSUMING_CALLS:
+                    for arg in node.args:
+                        _consume(arg)
+            elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+                _consume(node.right)
+    return found
+
+
+def _repo_root_files_the_suite_reads(root=None, tests_dir=None):
+    """Every repo-ROOT TRACKED file the suite hands to a path-consuming call.
+
+    The derivation is "every file the suite guards": if a test reads a file, editing that
+    file can turn CI red, so editing it has to RUN CI. Both halves changed in wave 10
+    (F-3a455e7d): the population comes from `git ls-files` rather than the checkout's
+    directory listing, and the literal must be USED as a path rather than merely present
+    as a constant.
+
+    Measured 2026-09-04, what the second half removed: `HANDOFF.md` and `README.md` were
+    in the old population through `tests/test_record_index_binding.py:105/119`, where they
+    are payload strings inside a FAKE record — no test opens either file. `README.md` also
+    reaches the workflows' paths filters on its own; nothing about this shrink removes a
+    trigger, it removes two false claims about what the suite reads.
+    """
+    entries = repo_root_tracked_files(root)
+    return sorted(entries & _literals_used_as_paths(tests_dir))
 
 
 def trigger_population():
@@ -480,24 +552,37 @@ def trigger_population():
     return sorted(inputs)
 
 
-#: Derived on 2026-09-04. Equality, so a new composite action or a new repo-root file the
-#: suite starts reading joins the requirement on the day it lands.
+#: Re-derived on 2026-09-04 (wave 10, F-3a455e7d). Equality, so a new composite action or a
+#: new repo-root file the suite starts READING joins the requirement on the day it lands.
+#: `HANDOFF.md` and `README.md` left at this re-derivation: both were admitted by the old
+#: constant-only walk through `tests/test_record_index_binding.py:105/119`, where they are
+#: payload strings inside a FAKE record — no test opens either file, so neither is a file
+#: "the suite guards". `README.md` still matches both workflows' path filters on its own.
+#: MERGE NOTE (wave 10): ci-packaging's branch adds
+#: `.github/actions/npm-clean-room/action.yml` to this list and to the
+#: `_local_action_files()` pin below, by the existing rule (a composite action both
+#: workflows call). Both halves survive the merge — this derivation and that member.
 RECORDED_TRIGGER_POPULATION = [
     # `clean-room` joined at the wave-8 merge: ci-packaging lifted the clean-install leg into a
     # composite action called by ci.yml and release.yml (F-60ab1bd7); this census saw it
     # appear, which is the direction it exists for. `npm-clean-room` joined at wave 10 the
     # same way (F-3729edd4) — the npm package's half of that leg — and the census saw it too.
+    # WAVE-10 MERGE (coordinator, 2026-09-04): tests' derivation dropped HANDOFF.md and README.md
+    # (they entered through a fake record's payload strings, not a path-consuming call).
     ".github/actions/clean-room/action.yml", ".github/actions/npm-clean-room/action.yml",
     ".github/actions/sheet-fonts/action.yml",
-    ".gitignore", "HANDOFF.md", "LICENSE", "MANIFEST.in", "README.md", "README.pypi.md",
+    ".gitignore", "LICENSE", "MANIFEST.in", "README.pypi.md",
     "pyproject.toml", "verify.ps1",
 ]
 
 
 def test_the_trigger_population_is_derived_from_what_ci_and_the_suite_actually_consume():
-    """Size and membership before the property. The old population was three paths read
-    out of pyproject, every one of them already listed under both triggers — a test that
-    could not fail."""
+    """Size and membership before the property.
+
+    THE NODE: a repo-root path under version control that a test hands to a path-consuming
+    call. Not `os.listdir(REPO)` (that is the checkout, and `.git` is a FILE in a linked
+    worktree), and not "a constant that happens to equal a filename" (that is a string, and
+    `".git"` is a directory-walk SKIP token at `tests/test_packaging.py:1013`)."""
     pop = trigger_population()
     assert pop == RECORDED_TRIGGER_POPULATION, {
         "appeared": sorted(set(pop) - set(RECORDED_TRIGGER_POPULATION)),
@@ -519,6 +604,80 @@ def test_the_trigger_population_is_derived_from_what_ci_and_the_suite_actually_c
         "called but not on disk": sorted(set(_local_action_files()) - set(on_disk)),
         "on disk but never called": sorted(set(on_disk) - set(_local_action_files())),
     }
+
+
+def test_the_root_population_ignores_a_git_pointer_file(tmp_path):
+    """The red proof for the FIRST half of F-3a455e7d, driven on a scratch tree.
+
+    A linked `git worktree` writes `.git` as a 60-byte gitdir POINTER FILE. The old
+    derivation was `{e for e in os.listdir(REPO) if os.path.isfile(...)}`, which admits it;
+    this test builds that shape and shows the two rules disagree, so the new one cannot
+    quietly revert to the old.
+    """
+    # every path below is built from a NAME, never from a literal handed to a path call:
+    # `_literals_used_as_paths` walks this file too, and a literal `".git"` on the right of
+    # a `/` here would put VCS metadata back into the population through this very test.
+    vcs, proj, leg, pkg = ".git", "pyproject.toml", "verify.ps1", "tools"
+    scratch = tmp_path / "worktree"
+    scratch.mkdir()
+    (scratch / vcs).write_text("gitdir: <the main checkout>/.git/worktrees/w10\n", encoding="utf-8")
+    (scratch / proj).write_text("[project]\n", encoding="utf-8")
+    (scratch / leg).write_text("# leg\n", encoding="utf-8")
+    (scratch / pkg).mkdir()
+
+    naive = {e for e in os.listdir(scratch) if os.path.isfile(os.path.join(scratch, e))}
+    assert ".git" in naive, "the shape this test exists to catch is a .git FILE at the root"
+
+    derived = repo_root_tracked_files(str(scratch))
+    assert ".git" not in derived, f"VCS metadata entered the population: {sorted(derived)}"
+    assert {"pyproject.toml", "verify.ps1"} <= derived
+
+    # and on the tree this run is reading, whichever shape it has here
+    assert ".git" not in repo_root_tracked_files(), (
+        "`.git` is not a path any workflow `paths:` entry can list, and requiring CI to "
+        "trigger on it is red in every linked worktree and green on the main checkout")
+
+
+def test_a_root_filename_that_is_only_a_skip_token_is_not_a_file_the_suite_reads(tmp_path):
+    """The red proof for the SECOND half: the walk keys on the CALL, not on the constant.
+
+    `".git"` is present under `tests/` exactly once — `tests/test_packaging.py:1013`, in a
+    directory-walk skip set. A name a test EXCLUDES is not a file a test READS, and the
+    old constant-only walk could not tell them apart. The scratch tree below carries one
+    of each; adding `dropped.txt` to the population is the mutation that must NOT happen.
+    """
+    scratch = tmp_path / "tests"
+    scratch.mkdir()
+    (scratch / "test_reads.py").write_text(
+        "import os\n"
+        "def test_a():\n"
+        "    with open(os.path.join('/repo', 'kept.txt')) as fh:\n"
+        "        assert fh.read()\n",
+        encoding="utf-8")
+    (scratch / "test_excludes.py").write_text(
+        "def test_b():\n"
+        "    skip = {'dropped.txt', 'node_modules'}\n"
+        "    assert 'dropped.txt' in skip\n",
+        encoding="utf-8")
+
+    used = _literals_used_as_paths(str(scratch))
+    assert "kept.txt" in used
+    assert "dropped.txt" not in used, (
+        "a bare constant is not a path use; that is how `.git` entered the trigger census")
+
+    # The real tree: the skip token is present as a constant and absent from the population.
+    # The suite files are opened by a LOOP variable, not by a literal, so this check does not
+    # itself add a member to `paths_the_suite_guards()`.
+    literals = set()
+    for name in sorted(os.listdir(TESTS_DIR)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+            for node in ast.walk(ast.parse(fh.read())):
+                if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    literals.add(node.value)
+    assert ".git" in literals, "the directory-walk skip set in test_packaging.py names `.git`"
+    assert ".git" not in _literals_used_as_paths()
 
 
 @pytest.mark.parametrize("trigger", ["push", "pull_request"])
@@ -1759,11 +1918,16 @@ GUARDED_TODAY = [
     # branches' censuses open these sources by path (core-solvers' andon walk, builders' exit
     # convention). All under `tools/**`, which both triggers already carry.
     "tools/armature_core/framing.py",
+    # WAVE-10 MERGE (coordinator, 2026-09-04): `glb.py` (core-solvers' MalformedGLB census) and
+    # `render_pose_sticks.py` (instruments-measure's Gate COUNT census) are opened by path by
+    # sibling branches' new tests; both under `tools/**`, which both triggers carry.
+    "tools/armature_core/glb.py",
     "tools/armature_core/walk.py",
     "tools/armature_index.py",
     "tools/build_payload.py",
     "tools/fetch_run.py",
     "tools/make_test_armature.py",
+    "tools/render_pose_sticks.py",
     "tools/sheet_compose.py",
     "verify.ps1",
 ]

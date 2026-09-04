@@ -316,15 +316,57 @@ def _completeness_population(filename):
     return listdirs, isfiles, getsizes
 
 
+def _completeness_bindings(filename):
+    """`{name: the expression bound to it}` for the three completeness lists in `main`.
+
+    AST, not a substring over source (wave 10, F-18061bcb). The pin here used to be the
+    exact expression `missing = [p for p in paths if not os.path.isfile(p)]`, which is
+    wrong in BOTH directions: inserting a space or wrapping the line turns it red with the
+    behaviour unchanged, and a comment carrying the same text turns it green with the
+    behaviour broken.
+    """
+    tree = _ast.parse(_read_source(filename))
+    fn = next(n for n in _ast.walk(tree)
+              if isinstance(n, _ast.FunctionDef) and n.name == "main")
+    out = {}
+    for node in _ast.walk(fn):
+        if not isinstance(node, _ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if isinstance(target, _ast.Name) and target.id in ("missing", "empty", "strays"):
+            out[target.id] = node.value
+    return out
+
+
+def _iterated_name(comp):
+    """The NAME a comprehension iterates, or None."""
+    if not isinstance(comp, (_ast.ListComp, _ast.SetComp, _ast.GeneratorExp)):
+        return None
+    src = comp.generators[0].iter
+    return src.id if isinstance(src, _ast.Name) else None
+
+
 def test_render_performer_counts_the_plan_and_not_the_directory():
     listdirs, isfiles, getsizes = _completeness_population("render_performer.py")
     assert isfiles, "no per-planned-frame existence check"
     assert getsizes, "a zero-byte frame still passes: nothing reads getsize"
-    src = _read_source("render_performer.py")
-    assert "missing = [p for p in paths if not os.path.isfile(p)]" in src, (
-        "the population is still whatever is in the directory")
-    assert 'f.startswith("0") and f.endswith(".png")' not in src, (
-        "the bare listdir census is still the andon's population")
+
+    bound = _completeness_bindings("render_performer.py")
+    assert set(bound) == {"missing", "empty", "strays"}, sorted(bound)
+
+    # `missing` is derived from the PLANNED paths, not from a directory listing...
+    assert _iterated_name(bound["missing"]) == "paths", _ast.unparse(bound["missing"])
+    # ...and its condition is the per-path existence check, read as STRUCTURE rather than
+    # as text, so whitespace moves freely and a comment cannot satisfy it.
+    condition = bound["missing"].generators[0].ifs
+    assert len(condition) == 1
+    assert isinstance(condition[0], _ast.UnaryOp) and isinstance(condition[0].op, _ast.Not)
+    call = condition[0].operand
+    assert isinstance(call, _ast.Call) and call.func.attr == "isfile", _ast.unparse(call)
+
+    # the bare listdir census may not be the andon's population
+    for name in ("missing", "empty"):
+        assert "listdir" not in _ast.unparse(bound[name]), (name, _ast.unparse(bound[name]))
 
 
 def test_the_stray_is_reported_as_a_stray_and_not_as_a_success():
@@ -332,18 +374,61 @@ def test_the_stray_is_reported_as_a_stray_and_not_as_a_success():
     `preview_walk` uses. The difference is which list the verdict is computed over."""
     listdirs, _, _ = _completeness_population("render_performer.py")
     assert listdirs, "strays are no longer reported at all"
-    src = _read_source("render_performer.py")
-    assert "unexpected_files_in_out_dir" in src
+    bound = _completeness_bindings("render_performer.py")
+    assert "listdir" in _ast.unparse(bound["strays"]), _ast.unparse(bound["strays"])
+    # the strays reach the RECORD under their own key -- read off the dict literals in
+    # `main`, not off the file's text, so a comment naming the key cannot satisfy it
+    tree = _ast.parse(_read_source("render_performer.py"))
+    fn = next(n for n in _ast.walk(tree)
+              if isinstance(n, _ast.FunctionDef) and n.name == "main")
+    keys = {k.value for node in _ast.walk(fn) if isinstance(node, _ast.Dict)
+            for k in node.keys
+            if isinstance(k, _ast.Constant) and isinstance(k.value, str)}
+    assert "unexpected_files_in_out_dir" in keys, sorted(keys)
 
 
 def test_both_renderers_that_write_a_frame_sequence_agree_on_the_shape():
     """The family: `preview_walk.py` and `render_performer.py`. One shape, so a fix to one
     is a fix to both."""
     for filename in ("preview_walk.py", "render_performer.py"):
-        src = _read_source(filename)
-        assert "missing" in src and "empty" in src and "strays" in src, filename
+        # `assert "missing" in src and "empty" in src and "strays" in src` stood here:
+        # three ordinary English words, each satisfied by a docstring or a comment, none
+        # of which proves any of the three states is COMPUTED (F-18061bcb).
+        # `render_performer` alone carries the word "empty" nine times in prose. The three
+        # names must be BOUND in `main`, each to a comprehension, and the two derived from
+        # the plan must not be computed off a directory listing.
+        bound = _completeness_bindings(filename)
+        assert set(bound) == {"missing", "empty", "strays"}, (filename, sorted(bound))
+        for name in ("missing", "empty"):
+            assert isinstance(bound[name], (_ast.ListComp, _ast.SetComp)), (
+                filename, name, _ast.unparse(bound[name]))
+            assert "listdir" not in _ast.unparse(bound[name]), (filename, name)
+        assert "listdir" in _ast.unparse(bound["strays"]), filename
         _, isfiles, getsizes = _completeness_population(filename)
         assert isfiles and getsizes, filename
+
+
+def test_the_completeness_binding_walk_cannot_be_satisfied_by_prose(tmp_path):
+    """Rule 3 on the walk itself: the shape the old substring pin accepted must now fail.
+
+    A module whose `main` MENTIONS all three words in prose and binds none of them reads
+    as empty here, where the retired pin read green.
+    """
+    probe = tmp_path / "prose_only.py"
+    probe.write_text(
+        "def main():\n"
+        "    # missing, empty and strays are all reported here, honest\n"
+        "    note = 'the missing frames, the empty ones, and any strays'\n"
+        "    return note\n", encoding="utf-8")
+    tree = _ast.parse(probe.read_text(encoding="utf-8"))
+    fn = next(n for n in _ast.walk(tree)
+              if isinstance(n, _ast.FunctionDef) and n.name == "main")
+    bound = {t.id for node in _ast.walk(fn) if isinstance(node, _ast.Assign)
+             for t in node.targets if isinstance(t, _ast.Name)}
+    assert bound & {"missing", "empty", "strays"} == set()
+    src = probe.read_text(encoding="utf-8")
+    assert "missing" in src and "empty" in src and "strays" in src, (
+        "the retired pin would have passed this module")
 
 
 def test_gate_coverage_may_be_tightened_and_may_not_be_loosened():

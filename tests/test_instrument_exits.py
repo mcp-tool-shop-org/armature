@@ -37,8 +37,7 @@ THE CONTRACT (one shape, agreed with the instruments domain 2026-09-04 and pinne
               refusal answering 1 both give it the wrong answer.
 
   stdout      EXACTLY ONE line `<STEM>_HALT <json object>`, `<STEM>` being the module
-              basename upper-cased, printed from a `finally` so it survives a failed
-              `halt.json` write. The object carries EXACTLY six keys: `tool`, `outcome`,
+              basename upper-cased. The object carries EXACTLY six keys: `tool`, `outcome`,
               `gate`, `error`, `message`, `evidence`.
 
   outcome     one of three literals, spaced em-dash included:
@@ -46,6 +45,28 @@ THE CONTRACT (one shape, agreed with the instruments domain 2026-09-04 and pinne
               "REFUSED — the tool declined to proceed"    (ArmatureError, not GateFailure)
               "FAILED — an unhandled error"               (anything else)
               Three, not two, because a bad `--mode=` is a refusal and not a gate.
+
+WAVE 10, F-6320c8e2 — this contract used to end the stdout clause with "printed from a
+`finally` so it survives a failed `halt.json` write", stated of all 21, and it is a
+property 16 of them do not have. Measured 2026-09-04 over every `__main__` block: five
+tools (`rig_bake`, `rig_character`, `rig_parts`, `rig_repair`, `rig_retopo`) use a `finally`
+and write a halt record; the other 16 print from a bare `except BaseException` block, use
+no `finally`, and write no halt record at all — so there is no `halt.json` write for their
+sentinel to survive and no `finally` protecting it. `sentinel_violations` reads the printed
+line only and asserts nothing about the block's shape, so the discrepancy was invisible; a
+maintainer reading this docstring would reason that any secondary failure in a handler still
+yields a sentinel and an exit code, which F-7467e90d measures to be false for all 21.
+
+So the contract is split, and the split is asserted rather than described:
+
+  all 21     one sentinel line, six keys, three outcomes, the 2/2/1 codes, and `sys.exit`
+             reached on every path (including an evidence dict the sentinel cannot
+             serialise as written — see the F-7467e90d block below).
+
+  the five   additionally write a halt RECORD, from a `finally` so it survives a failed
+  writers    write of that record. Which five is derived, not typed:
+             `test_the_halt_record_writers_are_the_ones_the_contract_names`. The halt-FILE
+             half itself is asserted in `tests/test_instruments_amend_w8.py:214-267`.
 
 The population is derived (`blender_stub.blender_tools`, which walks the tree for
 `import bpy`), never typed out, so a new Blender tool joins it the day it lands.
@@ -55,7 +76,7 @@ import json
 
 import pytest
 
-from blender_stub import blender_tools, exit_code_of_main_block, main_block
+from blender_stub import blender_tools, exit_code_of_main_block, main_block, read_source
 
 #: Re-derived 2026-09-04 and EMPTY (F-d5bd42b1). It held `preview_glb.py` under the
 #: comment "a library of preview helpers with no `__main__` block; it is not invoked as a
@@ -168,6 +189,85 @@ def _run(filename, kind, tmp_path, argv=None):
     return exit_code_of_main_block(filename, raiser=_raiser(kind), argv=argv)
 
 
+#: Derived 2026-09-04 (F-6320c8e2). The five tools whose `__main__` block uses a `finally`
+#: and writes a halt RECORD; the other 16 print their sentinel from a bare
+#: `except BaseException` and write no record at all.
+RECORDED_HALT_RECORD_WRITERS = [
+    "rig_bake.py", "rig_character.py", "rig_parts.py", "rig_repair.py", "rig_retopo.py",
+]
+
+
+def _block_shape(filename):
+    """`(uses_finally, writes_a_halt_record)` for one tool's `__main__` block.
+
+    THE NODE: the `__main__` block's own statements. `writes_a_halt_record` is read off the
+    module — `rig_character` writes through `_write_halt(...)`, which puts the `halt.json`
+    literal one function away — so the discriminator asserted below is the `finally`, and
+    the record write is checked to agree with it.
+    """
+    import ast
+
+    tree = ast.parse(read_source(filename))
+    block = next(n for n in tree.body
+                 if isinstance(n, ast.If) and isinstance(n.test, ast.Compare)
+                 and getattr(n.test.left, "id", None) == "__name__")
+    uses_finally = any(isinstance(n, ast.Try) and n.finalbody for n in ast.walk(block))
+    writes_record = any(
+        isinstance(n, ast.Constant) and isinstance(n.value, str) and "halt.json" in n.value
+        for n in ast.walk(tree))
+    return uses_finally, writes_record
+
+
+def test_the_halt_record_writers_are_the_ones_the_contract_names():
+    """The split this file's own prose used to state of all 21.
+
+    Size and membership before the property: the five are DERIVED off the `finally` in each
+    `__main__` block, and the halt-record write is asserted to agree with that derivation,
+    so a sixth writer — or one of the five losing its `finally` — fails here rather than
+    leaving the docstring describing a tree that no longer looks like it.
+    """
+    shapes = {f: _block_shape(f) for f in WITH_MAIN}
+    with_finally = sorted(f for f, (fin, _) in shapes.items() if fin)
+    assert with_finally == RECORDED_HALT_RECORD_WRITERS, {
+        "appeared": sorted(set(with_finally) - set(RECORDED_HALT_RECORD_WRITERS)),
+        "vanished": sorted(set(RECORDED_HALT_RECORD_WRITERS) - set(with_finally)),
+    }
+    writes = sorted(f for f, (_, rec) in shapes.items() if rec)
+    assert writes == RECORDED_HALT_RECORD_WRITERS, {
+        "writes a halt record with no `finally` protecting it":
+            sorted(set(writes) - set(with_finally)),
+        "has a `finally` and no record to protect": sorted(set(with_finally) - set(writes)),
+    }
+    assert len(WITH_MAIN) - len(with_finally) == 16, (
+        "16 tools print their sentinel from a bare `except BaseException`, use no "
+        "`finally`, and write no halt record; the contract above says so of THEM, not of "
+        "all 21")
+
+
+def test_the_block_shape_walk_can_tell_the_two_shapes_apart():
+    """Rule 3 on the walk itself: a `finally`-less block must not read as a writer."""
+    import ast
+
+    with_finally = ast.parse(
+        'if __name__ == "__main__":\n'
+        "    try:\n"
+        "        main()\n"
+        "    except BaseException:\n"
+        "        pass\n"
+        "    finally:\n"
+        "        print('X_HALT {}')\n")
+    without = ast.parse(
+        'if __name__ == "__main__":\n'
+        "    try:\n"
+        "        main()\n"
+        "    except BaseException:\n"
+        "        print('X_HALT {}')\n")
+    for tree, expected in ((with_finally, True), (without, False)):
+        block = tree.body[0]
+        got = any(isinstance(n, ast.Try) and n.finalbody for n in ast.walk(block))
+        assert got is expected
+
+
 def test_the_population_is_the_whole_blender_side_of_the_repo():
     """A census that quietly stopped enumerating would report green over anything."""
     tools = blender_tools()
@@ -246,6 +346,121 @@ def test_a_missing_glb_does_not_delete_the_exit_code(filename, tmp_path):
                                "--out=" + str(tmp_path / "out")])
     assert escaped is None, f"{filename}: {escaped!r} escaped the handler; blender exits 0"
     assert code == 1, f"{filename}: exit code {code!r}, contract says 1 for a crash"
+
+
+# ------------------------------------- the input that escapes: evidence the sentinel cannot
+#                                        serialise (wave 10, F-7467e90d)
+#
+# THE NODE THIS KEYS ON: the handler's own `print("<STEM>_HALT " + json.dumps({...},
+# default=str))` followed by `sys.exit(...)`. The three argv/glb directions above vary the
+# ARGV; not one of them varies the EVIDENCE, and the evidence is what the handler
+# serialises. `json.dumps(default=str)` consults `default=` for VALUES only, never for
+# KEYS, so a non-str key raises inside the `except` block, the second exception leaves the
+# whole `try`, `sys.exit` never runs, and `blender -b -P` exits 0 — exactly the E07 failure
+# the contract exists to end, with the census green.
+#
+# Measured 2026-09-04 on cd2d941 by driving `exit_code_of_main_block` over all 21 WITH_MAIN
+# tools with three evidence shapes: 21 of 21 returned `code=None` with
+# `TypeError("keys must be str, int, float, bool or None, not tuple")`,
+# `... not numpy.int64`, and `ValueError("Circular reference detected")` respectively.
+# That includes the five `rig_*` tools whose `finally` guards the halt.json write — the
+# guard wraps the FILE write, not the `print`.
+#
+# Tuple-keyed and numpy-keyed evidence are ORDINARY here: per-view and per-frame
+# measurements are how this repo's andons describe what fired them.
+#
+# Instruments owns the fix and is landing it in place in all 21 handlers (SEAM 3,
+# 2026-09-04): the sentinel is built key-safely and the print moves inside its own
+# try/except/finally so `sys.exit(_code)` runs on every path. This census asserts the
+# BEHAVIOUR — no escape, the contract code — never the helper's name or location.
+
+
+def _numpy_key():
+    numpy = pytest.importorskip("numpy")
+    return numpy.int64(3)
+
+
+def _evidence_shapes():
+    """`(label, build)` per evidence dict — each a shape this repo's andons produce."""
+    def per_view():
+        return {"per_view": {(0, 30): 1.0}, "note": "a tuple key is a view pair"}
+
+    def per_frame():
+        return {"per_frame": {_numpy_key(): 0.5}}
+
+    def circular():
+        ev = {"gate": "PROBE"}
+        ev["self"] = ev
+        return ev
+
+    return [("tuple_key", per_view), ("numpy_int_key", per_frame),
+            ("circular", circular)]
+
+
+EVIDENCE_SHAPES = _evidence_shapes()
+
+#: The two shapes whose sentinel must still be WELL FORMED after the fix: a key that can be
+#: stringified. `circular` is held to the exit-code half only — a cycle cannot be
+#: stringified away, and the contract clause it exercises is "`sys.exit` runs on every
+#: path", not "the JSON is complete".
+SERIALISABLE_SHAPES = {"tuple_key", "numpy_int_key"}
+
+
+def _evidence_raiser(build):
+    from armature_core.errors import GateFailure
+
+    class _Gate(GateFailure):
+        gate = "PROBE"
+
+    def gate():
+        raise _Gate("a gate fired", build())
+
+    return gate
+
+
+@pytest.mark.parametrize("label,build", EVIDENCE_SHAPES, ids=[s[0] for s in EVIDENCE_SHAPES])
+@pytest.mark.parametrize("filename", WITH_MAIN)
+def test_a_measurement_keyed_evidence_dict_does_not_escape_the_handler(
+        filename, label, build, tmp_path, capsys):
+    """The direction the halt census never asserted: an evidence dict the sentinel cannot
+    serialise as written. `escaped is None` and the contract's code, for every tool."""
+    code, escaped = exit_code_of_main_block(
+        filename, raiser=_evidence_raiser(build),
+        argv=["blender", "-b", "-P", filename, "--", "--glb=nope.glb",
+              "--out=" + str(tmp_path / "out")])
+    out = capsys.readouterr().out
+    assert escaped is None, (
+        f"{filename} ({label}): {escaped!r} escaped the handler, so `sys.exit` never ran "
+        f"and `blender -b -P` reports success on a fired gate")
+    assert code == 2, f"{filename} ({label}): exit code {code!r}, contract says 2 for a gate"
+    if label in SERIALISABLE_SHAPES:
+        stem = filename[:-3].upper()
+        token = f"{stem}_HALT"
+        lines = [l for l in out.splitlines() if l.split(" ", 1)[0] == token]
+        assert len(lines) == 1, f"{filename} ({label}): {len(lines)} sentinel lines"
+        rec = json.loads(lines[0][len(token):].strip())
+        assert set(rec) == SENTINEL_KEYS, sorted(rec)
+        assert rec["gate"] == "PROBE"
+        assert isinstance(rec["evidence"], dict)
+        assert all(isinstance(k, str) for k in rec["evidence"]), rec["evidence"]
+
+
+def test_the_evidence_shapes_this_census_drives_are_the_ones_json_dumps_refuses():
+    """The premise, measured here rather than asserted: `default=` is consulted for VALUES
+    only. If a future Python applied it to keys, these fixtures would stop probing anything
+    and this test says so instead of going quietly green."""
+    for label, build in EVIDENCE_SHAPES:
+        with pytest.raises((TypeError, ValueError)):
+            json.dumps(build(), default=str)
+    # …and the same dicts serialise once the keys are strings, so the shapes are not
+    # unserialisable in principle — the KEY is the whole defect.
+    for label, build in EVIDENCE_SHAPES:
+        if label not in SERIALISABLE_SHAPES:
+            continue
+        ev = build()
+        flat = {k: {str(kk): vv for kk, vv in v.items()} if isinstance(v, dict) else v
+                for k, v in ev.items()}
+        json.dumps(flat, default=str)
 
 
 # ------------------------------------------------------------- the checker, shown red

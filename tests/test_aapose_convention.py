@@ -241,14 +241,58 @@ def test_the_transcription_matches_the_banked_file_itself():
     names = re.findall(r'"([A-Za-z]+)"', names_src)
     assert names == SOURCE_KEYPOINT_NAMES
 
-    # The v2 width expression, verbatim, inside draw_aapose_new.
-    body = text[at:text.index("def draw_bbox(", at)]
-    assert "stickwidth = max(int(min(H, W) / 200) - 1, 1)" in body
-    # …and the hand pass's halving, inside draw_handpose_new.
-    hand = text[text.index("def draw_handpose_new("):text.index("def draw_ellipse_by_2kp(")]
-    assert "stickwidth = max(max(int(min(H, W) / 200) - 1, 1) // 2, 1)" in hand
+    # The v2 width expression and the hand pass's halving, as EXPRESSIONS rather than as
+    # source text (wave 10, F-18061bcb). The pins here were the two lines verbatim:
+    # inserting a space or wrapping either turns them red with the formula unchanged, and
+    # a comment carrying the same text turns them green with the formula broken. Compared
+    # through `ast.unparse`, which normalises whitespace and cannot be satisfied by a
+    # comment or a string.
+    assert _stickwidth_expr(text, "draw_aapose_new") == \
+        "max(int(min(H, W) / 200) - 1, 1)"
+    assert _stickwidth_expr(text, "draw_handpose_new") == \
+        "max(max(int(min(H, W) / 200) - 1, 1) // 2, 1)"
     # …and that limbs are filled at 60% while joints are not.
+    body = text[at:text.index("def draw_bbox(", at)]
     assert "[int(float(c) * 0.6) for c in color]" in body
+
+
+
+def _stickwidth_expr(text, function_name):
+    """`ast.unparse` of the `stickwidth = ...` assignment inside one banked function.
+
+    The banked file is Python, so its formulas can be compared as expressions instead of
+    as source text. Whitespace and line wrapping move freely; a comment or a docstring
+    carrying the same characters satisfies nothing (F-18061bcb).
+    """
+    import ast as _ast
+
+    tree = _ast.parse(text)
+    fn = next(n for n in _ast.walk(tree)
+              if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef))
+              and n.name == function_name)
+    found = [n.value for n in _ast.walk(fn)
+             if isinstance(n, _ast.Assign) and len(n.targets) == 1
+             and isinstance(n.targets[0], _ast.Name)
+             and n.targets[0].id == "stickwidth"]
+    assert len(found) == 1, (function_name, [_ast.unparse(f) for f in found])
+    return _ast.unparse(found[0])
+
+
+def test_the_stickwidth_reader_can_tell_a_changed_formula_from_a_reformatted_one():
+    """Rule 3 on the reader: reformatting must not move the answer, and a real change must.
+    The retired pin got both of these backwards."""
+    same = ("def draw(H, W):\n"
+            "    stickwidth = max(\n"
+            "        int(min(H, W) / 200) - 1,\n"
+            "        1,\n"
+            "    )\n")
+    changed = ("def draw(H, W):\n"
+               "    # stickwidth = max(int(min(H, W) / 200) - 1, 1)\n"
+               "    stickwidth = max(int(min(H, W) / 100) - 1, 1)\n")
+    assert _stickwidth_expr(same, "draw") == "max(int(min(H, W) / 200) - 1, 1)"
+    assert _stickwidth_expr(changed, "draw") == "max(int(min(H, W) / 100) - 1, 1)"
+    assert "stickwidth = max(int(min(H, W) / 200) - 1, 1)" in changed, (
+        "the retired substring pin reads the COMMENT and passes on a changed formula")
 
 
 def test_the_channel_order_evidence_is_still_in_the_banked_file():

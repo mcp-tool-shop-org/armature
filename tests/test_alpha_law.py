@@ -347,7 +347,83 @@ def test_the_call_site_check_is_not_satisfied_by_the_comment_above_the_call():
 # `compose_over_named_plate` appears in each of the four sources, so the divergent flag
 # parsers were invisible to it.
 
-PLATE_PRODUCERS = ("fit_reference", "make_plate", "pack_pose_pack", "encode_control")
+#: The flag each member of the alpha population parses its plate from. `--alpha-over` is
+#: the default; `composite_reference` is the one member whose flag is `--plate`
+#: (tools/composite_reference.py:211 — `parse_plate(a.plate, ReferenceGate, flag="--plate")`).
+#:
+#: WAVE 10, F-fd0ad544 — this used to be a hand-typed four beside a derived five, with the
+#: one-member gap unwritten anywhere. `composite_reference` — which this file's own comment
+#: above records as "a third variant with no range check at all" — was in the derived
+#: population and absent from the behavioural one, with no assertion tying them together, so
+#: a fifth producer joining the derived census would not have joined this one and nobody
+#: would have learned that from a green suite. The reason for the gap was real and is
+#: recorded here; the member is no longer excluded, it is driven under its own flag.
+PLATE_FLAG = {
+    "composite_reference": "--plate",
+    "encode_control": "--alpha-over",
+    "fit_reference": "--alpha-over",
+    "make_plate": "--alpha-over",
+    "pack_pose_pack": "--alpha-over",
+}
+
+
+def plate_producers():
+    """DERIVED: every member of the alpha population, each with its own plate flag."""
+    return tuple(sorted(alpha_law_tools()))
+
+
+PLATE_PRODUCERS = plate_producers()
+
+
+def test_the_behavioural_population_is_the_derived_one_and_names_every_flag():
+    """The two populations in this file must be the same population.
+
+    Size, membership and the property: every derived alpha tool is driven below, and each
+    has a flag named here. A member with no flag recorded fails HERE, saying which, rather
+    than being silently absent from the refusal test.
+    """
+    assert set(PLATE_PRODUCERS) == set(RECORDED_ALPHA_TOOLS), {
+        "derived but not driven": sorted(set(RECORDED_ALPHA_TOOLS) - set(PLATE_PRODUCERS)),
+        "driven but not derived": sorted(set(PLATE_PRODUCERS) - set(RECORDED_ALPHA_TOOLS)),
+    }
+    assert set(PLATE_FLAG) == set(PLATE_PRODUCERS), {
+        "no flag recorded": sorted(set(PLATE_PRODUCERS) - set(PLATE_FLAG)),
+        "flag recorded for a non-member": sorted(set(PLATE_FLAG) - set(PLATE_PRODUCERS)),
+    }
+    # …and the one member that differs is the one the reason names, read off its source
+    assert [m for m, f in sorted(PLATE_FLAG.items()) if f != "--alpha-over"] ==         ["composite_reference"]
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "tools", "composite_reference.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    declared = {a.value for node in ast.walk(tree)
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "add_argument"
+                for a in node.args
+                if isinstance(a, ast.Constant) and isinstance(a.value, str)}
+    assert "--plate" in declared and "--alpha-over" not in declared, sorted(declared)
+
+
+def _alpha_kit(tmp_path):
+    """A minimal `turn_rgba` kit with its manifest — `composite_reference`'s only input.
+
+    Valid on purpose, for the reason `_drive_with_bad_plate` states: the plate flag is
+    parsed after the kit is read, so an invalid kit would be refused by a different andon
+    and this test would pass without reaching the parser it exists for.
+    """
+    import composite_reference as CR
+
+    kit = tmp_path / "turn_rgba"
+    kit.mkdir(exist_ok=True)
+    arr = np.zeros((12, 8, 4), dtype=np.uint8)
+    arr[3:9, 2:6] = (136, 98, 79, 255)
+    p = kit / "turn_0.png"
+    Image.fromarray(arr, mode="RGBA").save(p)
+    (kit / "turnaround_manifest.json").write_text(
+        json.dumps({"source": {"glb": "x.glb", "sha256": "deadbeef"},
+                    "views": [{"file": "turn_0.png", "azimuth_deg": 270.0,
+                               "sha256": CR.sha256_file(str(p))}]}),
+        encoding="utf-8")
+    return kit
 
 
 def _drive_with_bad_plate(mod_name, tmp_path):
@@ -372,7 +448,9 @@ def _drive_with_bad_plate(mod_name, tmp_path):
                        "--why=a reason"],
         "pack_pose_pack": [f"--frames={frames}", f"--out={out}"],
         "encode_control": [f"--frames={frames}", f"--out={out}/v.mkv"],
-    }[mod_name] + ["--alpha-over=1,2"]
+        "composite_reference": [f"--kit={_alpha_kit(tmp_path)}", "--views=turn_0",
+                                f"--out={out}"],
+    }[mod_name] + [f"{PLATE_FLAG[mod_name]}=1,2"]
     return mod, argv
 
 
@@ -387,7 +465,8 @@ def test_every_producer_refuses_a_malformed_alpha_over_through_the_one_parser(
     with pytest.raises(errors.ArmatureError) as e:
         mod.main(argv)
     assert e.value.evidence["supplied"] == "1,2", (mod_name, e.value.evidence)
-    assert "--alpha-over" in str(e.value), mod_name
+    # each tool names ITS OWN flag, which is the thing the reader has to retype
+    assert PLATE_FLAG[mod_name] in str(e.value), (mod_name, str(e.value))
 
 
 def test_the_flag_parser_is_one_implementation_read_off_the_ast():

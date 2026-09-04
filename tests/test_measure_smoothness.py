@@ -142,8 +142,15 @@ def test_a_record_whose_names_do_not_cover_its_own_keypoints_raises():
     """The half that would produce a KeyError-shaped crash or, worse, a short table."""
     a, b = _pair()
     a["keypoint_names"] = a["keypoint_names"][:2]
-    with pytest.raises(MS.SmoothnessInputError, match="names 2"):
+    # `match="names 2"` matched "names 20" and "names 25" just as well; the PHRASE names
+    # the clause and the number is anchored and read back off the evidence (F-02683edb).
+    with pytest.raises(MS.SmoothnessInputError,
+                       match=r"names \b2 keypoint\(s\) and its frames carry") as e:
         MS.check_records(a, b)
+    # the count read back off the structured evidence, which a neighbouring message
+    # cannot satisfy however the numbers move
+    assert e.value.evidence["n_keypoints_a"] == 3
+    assert len(a["keypoint_names"]) == 2
 
 
 def test_matching_records_pass_the_check_and_still_produce_a_table(tmp_path):

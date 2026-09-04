@@ -28,8 +28,10 @@ the family by being listed.
 """
 
 import ast
+import glob
 import json
 import os
+import subprocess
 import sys
 
 import pytest
@@ -704,6 +706,285 @@ def test_every_sheet_that_draws_an_rgba_tile_routes_through_the_one_helper():
                             "make_sheet", "make_startframe_sheet",
                             "make_thesis_sheet"}, sorted(derived)
     assert without == [], without
+
+
+# ------------------------------------- the OTHER half of the plate law: the flag PARSERS
+#
+# THE NODE THIS KEYS ON (wave 10, F-8f8cceec): a parser's `add_argument` calls, versus the
+# attributes `main` reads off the namespace `parse_args` returns. The census above keys on
+# TILE LOADERS (`_rgb` / `_load_rgb`), which is a different node: a sheet can route every
+# tile through `load_rgb_over_plate` and still die before it draws one, because `main` reads
+# a flag its own parser never declared.
+#
+# Measured 2026-09-04 on cd2d941: `tools/make_gate0_sheet.py`'s parser (lines 226-238)
+# declares `--run --frames-dir --reference --meta --out --frames --captions`, and its `main`
+# reads `a.sheet_plate` at :250. Every command-line run of the Gate 0 sheet — the sheet the
+# Director reads the thesis off — dies with `AttributeError: 'Namespace' object has no
+# attribute 'sheet_plate'` after opening `--meta`. The other four `--sheet-plate` sheets all
+# declare it. No test in the suite invoked `make_gate0_sheet.main`, so the loader census
+# reported the sheet compliant.
+#
+# instruments-measure owns the flag itself; this census is the red proof.
+
+
+def _argparse_dests(node):
+    """Every namespace attribute an `add_argument`/`set_defaults` under `node` creates."""
+    out = set()
+    for n in ast.walk(node):
+        if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)):
+            continue
+        if n.func.attr == "set_defaults":
+            out.update(kw.arg for kw in n.keywords if kw.arg)
+            continue
+        if n.func.attr != "add_argument":
+            continue
+        explicit = [kw.value.value for kw in n.keywords
+                    if kw.arg == "dest" and isinstance(kw.value, ast.Constant)]
+        if explicit:
+            out.add(explicit[0])
+            continue
+        longs = [a.value for a in n.args if isinstance(a, ast.Constant)
+                 and isinstance(a.value, str) and a.value.startswith("--")]
+        if longs:
+            out.add(longs[0][2:].replace("-", "_"))
+            continue
+        positional = [a.value for a in n.args if isinstance(a, ast.Constant)
+                      and isinstance(a.value, str) and not a.value.startswith("-")]
+        if positional:
+            out.add(positional[0].replace("-", "_"))
+    return out
+
+
+def _tools_dir():
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+
+
+def _module_trees():
+    """`{module name: ast.Module}` for `tools/*.py` and `tools/armature_core/*.py`."""
+    out = {}
+    for pattern in ("*.py", os.path.join("armature_core", "*.py")):
+        for path in sorted(glob.glob(os.path.join(_tools_dir(), pattern))):
+            name = os.path.basename(path)[:-3]
+            with open(path, encoding="utf-8") as fh:
+                out[name] = ast.parse(fh.read())
+    return out
+
+
+def _flag_helpers(trees):
+    """`{(module, function): dests}` for every function that adds flags to a parser.
+
+    Keyed by MODULE and function, never by bare name: a name-keyed table unions every
+    module's `main` into one entry and reported this whole census green (measured while
+    writing it — `sheet_plate` arrived from `make_identity_sheet.main`).
+    """
+    out = {}
+    for mod, tree in trees.items():
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                dests = _argparse_dests(node)
+                if dests:
+                    out[(mod, node.name)] = dests
+    return out
+
+
+def _visible_functions(tree, mod):
+    """`{local name: (module, function)}` — module-local defs plus `from X import f`."""
+    vis = {n.name: (mod, n.name) for n in tree.body
+           if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            src = node.module.split(".")[-1]
+            for alias in node.names:
+                vis[alias.asname or alias.name] = (src, alias.name)
+    return vis
+
+
+def _main_of(tree):
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "main":
+            return node
+    return None
+
+
+def declared_flags(tree, mod, helpers):
+    """Everything `main`'s parser can put on the namespace, helper calls resolved."""
+    main = _main_of(tree)
+    if main is None:
+        return set()
+    out = _argparse_dests(main)
+    for node in tree.body:  # a parser built at module level
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out |= _argparse_dests(node)
+    vis = _visible_functions(tree, mod)
+    for node in ast.walk(main):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            name = node.func.id
+            if name != "main" and vis.get(name) in helpers:
+                out |= helpers[vis[name]]
+    return out
+
+
+def _walk_scope(fn):
+    """Every node belonging to `fn` ITSELF — stops at nested defs, lambdas and classes.
+
+    NON-DESCENDING on purpose (SEAM 9, instruments-measure, 2026-09-04): a sibling scope's
+    local named `a` — a numpy array, say — makes `a.shape` and `a.ndim` read as argparse
+    namespace attributes, which is how a descending walk invents five offenders out of
+    `composite_reference`, `encode_control`, `fit_reference`, `make_plate` and
+    `pack_pose_pack`. Same wrong-node class as everything else this wave.
+    """
+    stack = list(fn.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda,
+                             ast.ClassDef)):
+            continue
+        yield node
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def namespace_reads(tree):
+    """`{attribute: first line}` read off whatever `parse_args` returned, inside `main`."""
+    main = _main_of(tree)
+    if main is None:
+        return {}
+    ns = set()
+    for node in _walk_scope(main):
+        if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Attribute)
+                and node.value.func.attr in ("parse_args", "parse_known_args")):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    ns.add(target.id)
+                elif isinstance(target, ast.Tuple):
+                    for elt in target.elts:
+                        if isinstance(elt, ast.Name):
+                            ns.add(elt.id)
+                            break
+    out = {}
+    for node in _walk_scope(main):
+        if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                and node.value.id in ns):
+            out.setdefault(node.attr, node.lineno)
+    return out
+
+
+def parser_population():
+    """Every `tools/*.py` whose module-level `main` reads a `parse_args` namespace."""
+    trees = _module_trees()
+    return sorted(mod for mod in trees
+                  if os.path.exists(os.path.join(_tools_dir(), mod + ".py"))
+                  and namespace_reads(trees[mod]))
+
+
+#: Derived 2026-09-04. Size and membership before the property; a new CLI tool joins on the
+#: day it lands rather than being policed by a list somebody forgot.
+RECORDED_PARSER_POPULATION = [
+    "build_assembly_payload", "build_cascade_payload", "build_lora_arm_payload",
+    "build_payload", "build_r2v_payload", "build_t2v_payload", "canon_gate",
+    "composite_reference", "encode_control", "extract_clip_frames", "fetch_run",
+    "fetch_t2v_run", "gate_b_frames", "gate_saved_graph", "invert_frames", "make_ab_clip",
+    "make_cast_sheet", "make_crop_strip", "make_e13_sheet", "make_gate0_sheet",
+    "make_hole_survey", "make_identity_sheet", "make_lift_sheet", "make_review_clip",
+    "make_shotset_sheet", "make_startframe_sheet", "make_test_armature", "make_thesis_sheet",
+    "make_zoom_sheet", "measure_arm", "measure_cascade_clip", "measure_clip", "measure_floor",
+    "measure_smoothness", "measure_tracking",
+]
+
+
+def test_the_parser_population_is_every_tool_with_a_command_line():
+    pop = parser_population()
+    assert pop == RECORDED_PARSER_POPULATION, {
+        "appeared": sorted(set(pop) - set(RECORDED_PARSER_POPULATION)),
+        "vanished": sorted(set(RECORDED_PARSER_POPULATION) - set(pop)),
+    }
+    assert len(pop) == 35
+
+
+@pytest.mark.parametrize("mod", RECORDED_PARSER_POPULATION)
+def test_every_flag_main_reads_is_a_flag_its_own_parser_declares(mod):
+    """A call site with no flag is exactly what no loader census can see."""
+    trees = _module_trees()
+    helpers = _flag_helpers(trees)
+    tree = trees[mod]
+    declared = declared_flags(tree, mod, helpers)
+    read = namespace_reads(tree)
+    undeclared = {k: v for k, v in sorted(read.items()) if k not in declared}
+    assert undeclared == {}, (
+        f"tools/{mod}.py: `main` reads {sorted(undeclared)} off its argparse namespace and "
+        f"its parser declares none of them (line numbers {undeclared}); every command-line "
+        f"invocation dies with AttributeError. Declared: {sorted(declared)}")
+
+
+def test_the_parser_census_goes_red_on_a_flag_that_is_read_and_never_declared(tmp_path):
+    """The census, shown red on synthetic modules — and shown NOT red on the helper shape
+    that made an earlier draft of this walk report the tree clean."""
+    good = tmp_path / "make_good_sheet.py"
+    good.write_text(
+        "import argparse\n"
+        "def main(argv=None):\n"
+        "    ap = argparse.ArgumentParser()\n"
+        "    ap.add_argument('--sheet-plate', default=None)\n"
+        "    a = ap.parse_args(argv)\n"
+        "    return a.sheet_plate\n", encoding="utf-8")
+    bad = tmp_path / "make_bad_sheet.py"
+    bad.write_text(
+        "import argparse\n"
+        "def main(argv=None):\n"
+        "    ap = argparse.ArgumentParser()\n"
+        "    ap.add_argument('--out', required=True)\n"
+        "    a = ap.parse_args(argv)\n"
+        "    return a.out, a.sheet_plate\n", encoding="utf-8")
+    helped = tmp_path / "make_helped_sheet.py"
+    helped.write_text(
+        "import argparse\n"
+        "def add_plate_flag(ap):\n"
+        "    ap.add_argument('--sheet-plate', default=None)\n"
+        "def main(argv=None):\n"
+        "    ap = argparse.ArgumentParser()\n"
+        "    add_plate_flag(ap)\n"
+        "    a = ap.parse_args(argv)\n"
+        "    return a.sheet_plate\n", encoding="utf-8")
+
+    def diff(path):
+        mod = path.stem
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        helpers = _flag_helpers({mod: tree})
+        return sorted(set(namespace_reads(tree)) - declared_flags(tree, mod, helpers))
+
+    nested = tmp_path / "make_nested_sheet.py"
+    nested.write_text(
+        "import argparse\n"
+        "def _rows(a):\n"
+        "    return a.shape[0] + a.ndim\n"
+        "def main(argv=None):\n"
+        "    ap = argparse.ArgumentParser()\n"
+        "    ap.add_argument('--out', required=True)\n"
+        "    a = ap.parse_args(argv)\n"
+        "    return a.out\n", encoding="utf-8")
+
+    assert diff(good) == []
+    assert diff(bad) == ["sheet_plate"], "the census cannot see a flag nobody declared"
+    assert diff(helped) == [], "a flag added by a module-local helper IS declared"
+    assert diff(nested) == [], (
+        "`a.shape` in a SIBLING scope is not an argparse read; a descending walk invents "
+        "offenders out of any function whose local is also called `a`")
+
+
+@pytest.mark.parametrize("mod", sorted(
+    m for m in RECORDED_PARSER_POPULATION
+    if "sheet_plate" in namespace_reads(_module_trees()[m])))
+def test_a_sheet_that_reads_the_plate_flag_offers_it_on_its_own_help(mod):
+    """The runtime half of the same claim: `--help` is what an operator reads, and it is
+    built by the parser rather than by this walk."""
+    proc = subprocess.run(
+        [sys.executable, os.path.join(_tools_dir(), mod + ".py"), "--help"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        env=dict(os.environ, PYTHONPATH=_tools_dir()), cwd=_tools_dir())
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "--sheet-plate" in proc.stdout, (
+        f"tools/{mod}.py reads `a.sheet_plate` and never offers `--sheet-plate`:\n"
+        f"{proc.stdout}")
 
 
 def test_the_helper_census_goes_red_on_a_module_that_flattens_by_hand(tmp_path):

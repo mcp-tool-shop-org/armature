@@ -365,6 +365,106 @@ def test_the_subclass_walk_sees_every_andon_not_just_the_imported_ones():
         assert expected in names, f"{expected} missing from {sorted(names)}"
 
 
+#: Re-derived 2026-09-04 (wave 10, F-27a92797) with `blender_scene` imported under
+#: `blender_stub.blender_stubbed()`. Size AND membership, so a new andon fails HERE by name
+#: rather than sliding under a `>= 29`.
+#:
+#: MERGE NOTE: core-solvers' branch adds `CadenceGate` (gate CADENCE), `GaitGate` (GAIT) and
+#: `PinnedCameraGate` (PIN) as `GateFailure` subclasses (SEAM 1, 2026-09-04). Re-DERIVE this
+#: list after the merge — never hand-edit it to make the merge green.
+RECORDED_ANDON_CLASSES = [
+    "assembly.AssemblyGate", "assembly.CascadeGate", "blender_scene.CompositorWiring",
+    "donor_gate.DonorGate", "errors.G1GeneratorLegality", "errors.G2Completeness",
+    "errors.G4BboxSanity", "errors.G5ConventionConformance", "errors.G6SubjectMotion",
+    "errors.GateBBatching", "errors.GateCanon", "errors.GateDDeterminism",
+    "errors.GateNNames", "errors.GatePRestPose", "errors.GateRRoundTrip",
+    "errors.GateSSeedRegistration", "glb.GateAtlasUntouched", "glb.ReliftMismatch",
+    "landmarks.FacingGate", "lift_solve.SolveGate", "parts.GatePartsAccounting",
+    "parts.GatePartsDeterminism", "parts.GateRigidArrival", "resample.ResampleGate",
+    "route_gates.PairGate", "route_gates.RouteGate", "startframe.AlphaGate",
+    "startframe.BackdropGate", "startframe.StartFrameGate", "turnaround.TurnaroundAlphaGate",
+    "turnaround.TurnaroundCropGate", "turnaround.TurnaroundGate",
+]
+
+
+def package_andons():
+    """The andons DEFINED BY `armature_core`, as `<module>.<class>`, deduplicated.
+
+    Two filters, each measured rather than assumed:
+
+    * `__module__.startswith("armature_core")` — `gate_failure_subclasses()` deliberately
+      returns test-local decoys too (`test_the_enumeration_would_catch_a_new_andon_that_
+      forgot_its_id` depends on that), and a decoy is not a member of the package.
+    * DEDUPLICATED — measured 2026-09-04 running `tests/test_core_solver_evidence.py`
+      first: `gate_failure_subclasses()` returns 38 classes with six names twice
+      (`AlphaGate`, `BackdropGate`, `StartFrameGate`, `TurnaroundAlphaGate`,
+      `TurnaroundCropGate`, `TurnaroundGate`). That file re-imports `startframe` and
+      `turnaround` under `blender_stub.blender_stubbed()`, whose teardown pops them out of
+      `sys.modules`, so the next import builds a SECOND class object of the same name. That
+      is a property of the suite's fixtures, not of the package, and the module-qualified
+      key keeps two genuinely different classes with one name apart while collapsing two
+      objects of the same one.
+    """
+    return sorted({f"{c.__module__.split('.')[-1]}.{c.__name__}"
+                   for c in gate_failure_subclasses()
+                   if c.__module__.startswith("armature_core")})
+
+
+def test_the_andon_population_is_the_one_the_class_wide_invariants_are_asked_of():
+    """Size and membership before the property.
+
+    THE NODE: the class hierarchy rooted at `GateFailure`, with every `armature_core`
+    module imported first. Until wave 10 the enumerator SKIPPED `armature_core.
+    blender_scene` on the premise that it "imports bpy and cannot resolve under a plain
+    CPython" — a premise this suite's own `blender_stub.blender_stubbed()` falsifies, and
+    which `tests/test_core_solver_evidence._gate_raises` already walks that module through.
+    Measured 2026-09-04: 31 classes before, 32 after, the newcomer `CompositorWiring`.
+    """
+    names = package_andons()
+    assert names == RECORDED_ANDON_CLASSES, {
+        "appeared": sorted(set(names) - set(RECORDED_ANDON_CLASSES)),
+        "vanished": sorted(set(RECORDED_ANDON_CLASSES) - set(names)),
+    }
+
+
+def test_the_andon_the_enumerator_used_to_skip_is_asked_the_class_wide_invariants():
+    """The measurement that overturned the exclusion, kept runnable.
+
+    `CompositorWiring` passes both invariants today, so this was an unasked question rather
+    than a live break — and a census whose guarantee is "no new andon can opt out" cannot
+    have a module it never asks.
+    """
+    from armature_core.errors import GateFailure as GF
+
+    assert "blender_scene.CompositorWiring" in package_andons(), package_andons()
+    cls = next(c for c in gate_failure_subclasses() if c.__name__ == "CompositorWiring")
+    assert cls.__module__ == "armature_core.blender_scene"
+    assert cls.gate == "COMPOSITOR" and cls.gate != GF.gate
+    assert str(cls("something happened")).startswith("[COMPOSITOR] ")
+
+    # The falsified premise, MEASURED rather than asserted — in a subprocess, because
+    # observing it in this one would mean writing into `sys.modules`, which is the thing
+    # `test_packaging.sys_modules_writers` exists to forbid outside the three installers.
+    import subprocess
+    import sys as _sys
+
+    from conftest import TOOLS
+
+    proc = subprocess.run(
+        [_sys.executable, "-c",
+         "import sys; sys.path.insert(0, sys.argv[1]); "
+         "import armature_core.blender_scene", TOOLS],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert proc.returncode != 0, (
+        "blender_scene now imports under a plain CPython; re-derive this exclusion")
+    assert "bpy" in proc.stderr, proc.stderr[-800:]
+
+    # …and calling the enumerator twice returns the same population: the module is imported
+    # exactly once and held by a strong reference, so the stub teardown neither unregisters
+    # the class nor lets a second import register a duplicate.
+    assert package_andons() == RECORDED_ANDON_CLASSES
+
+
 def test_the_enumeration_would_catch_a_new_andon_that_forgot_its_id():
     """The red direction. A check that only ever runs on a clean population is unproven,
     so an andon that forgets is defined here and the same enumeration must find it."""
@@ -406,7 +506,9 @@ def test_an_evidence_free_gate_is_what_assert_gate_exists_to_refuse():
     assert assert_gate(carried, "G1", width=1020) == {"width": 1020}
     with pytest.raises(AssertionError, match="no 'height'"):
         assert_gate(carried, "G1", height=768)
-    with pytest.raises(AssertionError, match="with gate 'G1'"):
+    # the class name is the phrase; the quoted id is anchored by the newline that follows
+    # it, so `'G1'` cannot be satisfied by a message reading `'G1x'` (F-02683edb)
+    with pytest.raises(AssertionError, match=r"raised G1GeneratorLegality with gate 'G1'\n"):
         assert_gate(carried, "G4")
 
 
@@ -536,29 +638,27 @@ def _enclosing_function(tree):
     return owner
 
 
-def _evidence_node(raise_node, fn):
-    """The dict handed to this raise: `None` (none given) or a node, or `"UNRESOLVED"`."""
-    exc = raise_node.exc
-    if not isinstance(exc, _ast.Call):
-        return None
-    node = exc.args[1] if len(exc.args) >= 2 else None
-    for kw in exc.keywords:
-        if kw.arg == "evidence":
-            node = kw.value
-    if node is None:
-        return None
+def _resolve_dict_expr(node, fn, before_line):
+    """Follow an expression back to a `Dict` node, or `"UNRESOLVED"`.
+
+    Shapes: a dict literal; `dict(base, ...)`; `dict(x or {})` (the BoolOp base — canon.py:
+    91); and a `Name` resolved to its latest assignment above `before_line` inside `fn`.
+    """
     for _ in range(5):
         if isinstance(node, _ast.Dict):
             return node
         if isinstance(node, _ast.Call) and getattr(node.func, "id", "") == "dict":
             if not node.args:
                 return "UNRESOLVED"
-            node = node.args[0]
+            arg = node.args[0]
+            if isinstance(arg, _ast.BoolOp) and isinstance(arg.op, _ast.Or) and arg.values:
+                arg = arg.values[0]
+            node = arg
             continue
         if isinstance(node, _ast.Name) and fn is not None:
             latest = None
             for assign in _ast.walk(fn):
-                if (isinstance(assign, _ast.Assign) and assign.lineno < raise_node.lineno
+                if (isinstance(assign, _ast.Assign) and assign.lineno < before_line
                         and any(isinstance(t, _ast.Name) and t.id == node.id
                                 for t in assign.targets)):
                     latest = assign.value
@@ -570,17 +670,211 @@ def _evidence_node(raise_node, fn):
     return "UNRESOLVED"
 
 
+def _evidence_expr(raise_node):
+    """The expression handed to this raise as evidence, or `None`."""
+    exc = raise_node.exc
+    if not isinstance(exc, _ast.Call):
+        return None
+    node = exc.args[1] if len(exc.args) >= 2 else None
+    for kw in exc.keywords:
+        if kw.arg == "evidence":
+            node = kw.value
+    return node
+
+
+def _evidence_node(raise_node, fn):
+    """The dict handed to this raise: `None` (none given) or a node, or `"UNRESOLVED"`."""
+    node = _evidence_expr(raise_node)
+    if node is None:
+        return None
+    return _resolve_dict_expr(node, fn, raise_node.lineno)
+
+
+def _evidence_name(raise_node):
+    """The NAME the evidence was handed under, if it was handed under one."""
+    exc = raise_node.exc
+    if not isinstance(exc, _ast.Call):
+        return None
+    node = exc.args[1] if len(exc.args) >= 2 else None
+    for kw in exc.keywords:
+        if kw.arg == "evidence":
+            node = kw.value
+    return node.id if isinstance(node, _ast.Name) else None
+
+
+def _dict_call_keyword_keys(raise_node):
+    """Keys supplied as KEYWORDS to a `dict(base, gate=..., andon=...)` evidence argument.
+
+    `donor_gate.ankle_framing` builds its evidence as
+    `dict({k: v for ...}, gate="DONOR", andon="DonorGate")`: the base is a comprehension
+    the walk cannot read, but the two keys the census asks about are right there.
+    """
+    exc = raise_node.exc
+    if not isinstance(exc, _ast.Call):
+        return set()
+    node = exc.args[1] if len(exc.args) >= 2 else None
+    for kw in exc.keywords:
+        if kw.arg == "evidence":
+            node = kw.value
+    if isinstance(node, _ast.Call) and getattr(node.func, "id", "") == "dict":
+        return {kw.arg for kw in node.keywords if kw.arg}
+    return set()
+
+
+def _update_keys(fn, name, before_line):
+    """Keys added by `name.update({...})` inside `fn`, above `before_line`."""
+    if fn is None or name is None:
+        return set()
+    keys = set()
+    for node in _ast.walk(fn):
+        if not isinstance(node, _ast.Call) or getattr(node, "lineno", 0) >= before_line:
+            continue
+        func = node.func
+        if not (isinstance(func, _ast.Attribute) and func.attr == "update"
+                and isinstance(func.value, _ast.Name) and func.value.id == name):
+            continue
+        for arg in node.args:
+            if isinstance(arg, _ast.Dict):
+                keys.update(k.value for k in arg.keys
+                            if isinstance(k, _ast.Constant) and isinstance(k.value, str))
+        keys.update(kw.arg for kw in node.keywords if kw.arg)
+    return keys
+
+
+def _subscript_keys(fn, name, before_line):
+    """Keys added by `name["k"] = ...` inside `fn`, above `before_line`.
+
+    The second live shape the walk could not read (F-b01840fc): a dict built or received
+    earlier and MUTATED by subscript — `ev["andon"] = "GateCanon"` at canon.py:91,
+    `ev` as a function PARAMETER at gates.py:668/675 and route_gates.py:857/867/875. The
+    old walk returned `UNRESOLVED` for all of them, and `UNRESOLVED` was silently skipped,
+    so ten `GateFailure` raise sites were invisible to a property test whose whole claim
+    was that it read every one.
+    """
+    if fn is None or name is None:
+        return set()
+    keys = set()
+    for node in _ast.walk(fn):
+        if not isinstance(node, _ast.Assign) or node.lineno >= before_line:
+            continue
+        for target in node.targets:
+            if (isinstance(target, _ast.Subscript)
+                    and isinstance(target.value, _ast.Name) and target.value.id == name
+                    and isinstance(target.slice, _ast.Constant)
+                    and isinstance(target.slice.value, str)):
+                keys.add(target.slice.value)
+    return keys
+
+
+#: `_evidence_keys` verdicts.
+#:   NONE      — no evidence argument at all (a different defect; `EVIDENCE_FREE_GATE_RAISES`)
+#:   LITERAL   — every key is readable, so ABSENCE of a key is provable
+#:   AUGMENTED — a `**spread`, a parameter, or `dict(x or {})` base: PRESENCE is provable
+#:               from the subscript writes, absence is not
+#:   UNREADABLE— nothing about the keys is knowable
+EV_NONE, EV_LITERAL, EV_AUGMENTED, EV_UNREADABLE = "NONE", "LITERAL", "AUGMENTED", "UNREADABLE"
+
+
+def _builder_keys(tree, call_node):
+    """Keys of the dict a module-local builder RETURNS, when every return is a literal.
+
+    `lift_solve.gate_round_trip` does `ev = round_trip_report(...)` and raises with `ev`;
+    the keys are one function away, and following one hop is the difference between
+    "unreadable" and reading the `{"gate": "SOLVE", "andon": "SolveGate", …}` that is
+    actually there. Returns `(keys, complete)` — `complete` is False when any return is not
+    a dict literal, in which case absence is still not provable.
+    """
+    if not isinstance(call_node, _ast.Call):
+        return set(), False
+    name = getattr(call_node.func, "id", None)
+    if name is None:
+        return set(), False
+    target = next((n for n in tree.body
+                   if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef))
+                   and n.name == name), None)
+    if target is None:
+        return set(), False
+    keys, complete, saw = set(), True, False
+    for node in _ast.walk(target):
+        if not isinstance(node, _ast.Return) or node.value is None:
+            continue
+        saw = True
+        value = _resolve_dict_expr(node.value, target, node.lineno)
+        if isinstance(value, _ast.Dict) and not any(k is None for k in value.keys):
+            local = {k.value for k in value.keys
+                     if isinstance(k, _ast.Constant) and isinstance(k.value, str)}
+            if isinstance(node.value, _ast.Name):
+                local |= _subscript_keys(target, node.value.id, node.lineno)
+                local |= _update_keys(target, node.value.id, node.lineno)
+            keys.update(local)
+        else:
+            complete = False
+    return keys, (complete and saw)
+
+
+def _evidence_keys(raise_node, fn, tree=None):
+    """`(keys, verdict)` for one raise — see the four verdicts above."""
+    found = _evidence_node(raise_node, fn)
+    name = _evidence_name(raise_node)
+    written = (_subscript_keys(fn, name, raise_node.lineno)
+               | _update_keys(fn, name, raise_node.lineno)
+               | _dict_call_keyword_keys(raise_node))
+    if found is None:
+        return set(), EV_NONE
+    if found == "UNRESOLVED":
+        # one hop into a module-local builder: `ev = round_trip_report(...)`
+        if tree is not None and name is not None:
+            expr = _evidence_expr(raise_node)
+            latest = None
+            if fn is not None and isinstance(expr, _ast.Name):
+                for assign in _ast.walk(fn):
+                    if (isinstance(assign, _ast.Assign)
+                            and assign.lineno < raise_node.lineno
+                            and any(isinstance(t, _ast.Name) and t.id == expr.id
+                                    for t in assign.targets)):
+                        latest = assign.value
+            built, complete = _builder_keys(tree, latest)
+            if built:
+                return written | built, EV_LITERAL if complete else EV_AUGMENTED
+        return written, EV_AUGMENTED if written else EV_UNREADABLE
+    literal = {k.value for k in found.keys if isinstance(k, _ast.Constant)}
+    if any(k is None for k in found.keys):          # `{**base, ...}`
+        return literal | written, EV_AUGMENTED
+    return literal | written, EV_LITERAL
+
+
+def _site_key(path, fn, cls):
+    """`<file>:<function> (<class>)` — the stable identity of a raise site.
+
+    NOT the line number (wave 10, F-a30afea5): a line number moves under any edit above it,
+    and 23 of the 31 entries in the ratchet below named a `(file, line)` that no longer
+    held a raise at all. `(file, function, class)` survives the edit that a line number does
+    not, which is what an exemption has to do to stay meaningful.
+    """
+    return f"{path.name}:{fn.name if fn is not None else '<module>'} ({cls})"
+
+
 def evidence_dicts_missing(key, root=None):
     """Every raise in the `ArmatureError` family whose evidence dict omits `key`.
 
-    Returns `(offenders, examined)` — `examined` is the number of raises that carried a
-    dict this walk could read, so a census over nothing cannot read as a clean tree.
-    A dict built with `**spread` or from an unresolvable expression is counted as examined
-    and never reported: this census refuses to guess.
+    Returns `(offenders, examined, unreadable)`:
+
+    * `offenders` — sites whose keys are fully readable and where `key` is absent. A
+      genuine defect: the receipt cannot name its own andon.
+    * `examined` — raises this walk could say anything about, so a census over nothing
+      cannot read as a clean tree.
+    * `unreadable` — sites this walk CANNOT decide: a `**spread`, a parameter, or a
+      `dict(x or {})` base whose incoming keys are not knowable here, and where the
+      subscript writes do not supply `key`. Returned rather than silently skipped, which is
+      the wave-10 correction (F-b01840fc): 10 `GateFailure` raise sites were dropped as
+      `UNRESOLVED` and never counted, while the consolidation that named this the
+      authoritative walk said it "resolves those shapes". It did not; it dropped them.
+
+    Site identity is `(file, function, class)`, not a line number — see `_site_key`.
     """
     root = CORE_DIR if root is None else _pathlib.Path(root)
     family = _armature_error_family(TOOLS_DIR if root == CORE_DIR else root)
-    offenders, examined = [], 0
+    offenders, unreadable, examined = set(), set(), 0
     for path in sorted(root.glob("*.py")):
         tree = _ast.parse(path.read_text(encoding="utf-8"))
         owner = _enclosing_function(tree)
@@ -592,62 +886,45 @@ def evidence_dicts_missing(key, root=None):
                     else getattr(func, "id", ""))
             if name not in family:
                 continue
-            found = _evidence_node(node, owner.get(node))
-            if found is None or found == "UNRESOLVED":
-                continue
-            keys = {k.value for k in found.keys if isinstance(k, _ast.Constant)}
-            if any(k is None for k in found.keys):      # `{**base, ...}` — unreadable
-                examined += 1
+            fn = owner.get(node)
+            keys, verdict = _evidence_keys(node, fn, tree)
+            if verdict == EV_NONE:
                 continue
             examined += 1
-            if key not in keys:
-                fn = owner.get(node)
-                offenders.append(
-                    f"{path.name}:{node.lineno} {fn.name if fn else '<module>'} ({name})")
-    return sorted(offenders), examined
+            if key in keys:
+                continue
+            if verdict == EV_LITERAL:
+                offenders.add(_site_key(path, fn, name))
+            else:
+                unreadable.add(_site_key(path, fn, name))
+    return sorted(offenders), examined, sorted(unreadable)
 
 
-#: Every raise whose evidence dict omitted `gate` on 2026-09-04, RE-DERIVED with the walk
-#: above (the old module-granularity set could not name a site). SUBSET assertion, so this
-#: can only shrink; per SITE, so a second bad dict in an already-listed module fails here.
-#: Named with the domain that owns each: `gates.py`, `route_gates.py` and `canon.py` are
-#: core-gates; `startframe.py`, `turnaround.py`, `lift_solve.py`, `donor_gate.py` and
-#: `blender_scene.py` are core-solvers. They are a RATCHET, exactly as
-#: `EVIDENCE_FREE_GATE_RAISES` above is: this file's job is to stop the 32nd being
-#: written, and to name the 31 so the domains that own them can close them.
-EVIDENCE_WITHOUT_GATE_ID_ROUTED = {
-    "blender_scene.py:87 import_glb (G6SubjectMotion)",
-    "donor_gate.py:105 mean_consecutive_frame_difference (DonorGate)",
-    "donor_gate.py:113 mean_consecutive_frame_difference (DonorGate)",
-    "donor_gate.py:160 ankle_framing (DonorGate)",
-    "donor_gate.py:82 frame_paths (DonorGate)",
-    "gates.py:178 resolve_generator (G1GeneratorLegality)",
-    "gates.py:219 g1_generator_legality (G1GeneratorLegality)",
-    "gates.py:267 g2_completeness (G2Completeness)",
-    "gates.py:326 g2_completeness (G2Completeness)",
-    "gates.py:462 g5_openpose_conformance (G5ConventionConformance)",
-    "lift_solve.py:707 validate_motion_record (SolveGate)",
-    "lift_solve.py:710 validate_motion_record (SolveGate)",
-    "lift_solve.py:718 validate_motion_record (SolveGate)",
-    "route_gates.py:1020 hosted_frame_legality (RouteGate)",
-    "route_gates.py:1149 verify (RouteGate)",
-    "route_gates.py:877 _frame_triple (RouteGate)",
-    "route_gates.py:883 _frame_triple (RouteGate)",
-    "route_gates.py:903 _frame_form (RouteGate)",
-    "route_gates.py:928 frame_legality (RouteGate)",
-    "route_gates.py:933 frame_legality (RouteGate)",
-    "startframe.py:177 cover_fit (BackdropGate)",
-    "startframe.py:181 cover_fit (BackdropGate)",
-    "startframe.py:186 cover_fit (BackdropGate)",
-    "startframe.py:380 framing_cloud (StartFrameGate)",
-    "startframe.py:384 framing_cloud (StartFrameGate)",
-    "startframe.py:435 silhouette_extent (StartFrameGate)",
-    "startframe.py:75 composite_colour (AlphaGate)",
-    "startframe.py:82 composite_colour (AlphaGate)",
-    "startframe.py:88 composite_colour (AlphaGate)",
-    "startframe.py:91 composite_colour (AlphaGate)",
-    "turnaround.py:115 orbit_azimuths (TurnaroundGate)",
-}
+#: RE-DERIVED 2026-09-04 (wave 10, F-a30afea5) and EMPTY.
+#:
+#: What it held: 31 sites, keyed on `(file, LINE, function, class)`. Two things had gone
+#: wrong with it at once. First, `evidence_dicts_missing("gate")` returns no offenders on
+#: this tree, so `new = offenders - ROUTED` was empty and `set(offenders) <= ROUTED` was
+#: trivially true over an empty set — both assertions were SUBSET assertions, so a
+#: regression at any of the 31 named sites would have been re-admitted in silence, which
+#: is the one direction the set existed to close. Second, the variable that would have
+#: named the staleness, `closed`, was computed and used only as the failure MESSAGE of the
+#: other assertion, so it could never fire; cross-checked against the AST, 23 of the 31
+#: named a `(file, line)` that no longer held any raise at all.
+#:
+#: So: the assertion below is EQUALITY in both directions, and site identity is
+#: `(file, function, class)` — a line number moves under any edit above it, which is how
+#: 23 of 31 entries came to name nothing. A site that is closed must be deleted from this
+#: set in the commit that closes it, and a site that regresses fails here.
+EVIDENCE_WITHOUT_GATE_ID_ROUTED = set()
+
+#: Raise sites whose evidence keys this walk cannot decide — named, dated, and asserted to
+#: be a SUBSET of what the walk reports, so an exemption cannot outlive the shape it names.
+#: EMPTY on 2026-09-04: the four shapes that were `UNRESOLVED` are now read (a parameter
+#: mutated by `ev["k"] = ...`, `dict(x or {})`, `ev.update({...})`, `dict(base, gate=…)`,
+#: and one hop into a module-local builder — `lift_solve.gate_round_trip`'s
+#: `ev = round_trip_report(...)`). See F-b01840fc.
+EVIDENCE_UNREADABLE_EXEMPT = set()
 
 
 def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention():
@@ -660,7 +937,7 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     for outside_the_naming_convention in ("G1GeneratorLegality", "G2Completeness",
                                           "G5ConventionConformance", "G6SubjectMotion"):
         assert outside_the_naming_convention in family
-    _, examined = evidence_dicts_missing("gate")
+    _, examined, _unreadable = evidence_dicts_missing("gate")
     assert examined >= 120, (
         f"only {examined} readable evidence dicts found in armature_core; the walk has "
         f"stopped reaching the package and every assertion below is vacuous")
@@ -669,13 +946,20 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
 def test_no_new_gate_raises_evidence_that_cannot_name_its_own_andon():
     """The census, per SITE. A ratchet: the 31 sites the widened walk found on 2026-09-04
     are written down above with the domain that owns each, and a 32nd fails here."""
-    offenders, _ = evidence_dicts_missing("gate")
-    new = sorted(set(offenders) - EVIDENCE_WITHOUT_GATE_ID_ROUTED)
-    assert not new, (
-        f"these evidence dicts omit their own gate id: {new}. A receipt read back from "
-        f"stage_render's GATE_EVIDENCE line cannot name the andon that produced it.")
-    closed = sorted(EVIDENCE_WITHOUT_GATE_ID_ROUTED - set(offenders))
-    assert set(offenders) <= EVIDENCE_WITHOUT_GATE_ID_ROUTED, closed
+    offenders, _, unreadable = evidence_dicts_missing("gate")
+    assert set(offenders) == EVIDENCE_WITHOUT_GATE_ID_ROUTED, {
+        "regressed (omit their own gate id)":
+            sorted(set(offenders) - EVIDENCE_WITHOUT_GATE_ID_ROUTED),
+        "closed but still listed (delete these in the commit that closed them)":
+            sorted(EVIDENCE_WITHOUT_GATE_ID_ROUTED - set(offenders)),
+    }
+    assert set(unreadable) == EVIDENCE_UNREADABLE_EXEMPT, {
+        "the walk cannot decide these":
+            sorted(set(unreadable) - EVIDENCE_UNREADABLE_EXEMPT),
+        "no longer unreadable":
+            sorted(EVIDENCE_UNREADABLE_EXEMPT - set(unreadable)),
+    }
+    assert EVIDENCE_UNREADABLE_EXEMPT <= set(unreadable) | EVIDENCE_UNREADABLE_EXEMPT
 
 
 def test_the_census_calls_its_own_shipped_walk_on_a_tree_whose_answers_are_known(tmp_path):
@@ -703,20 +987,21 @@ def test_the_census_calls_its_own_shipped_walk_on_a_tree_whose_answers_are_known
         "def carries_its_id(a):\n"
         "    raise SomeGate('bad', {'gate': 'X', 'n': len(a)})\n", encoding="utf-8")
 
-    offenders, examined = evidence_dicts_missing("gate", root=pkg)
+    offenders, examined, unreadable = evidence_dicts_missing("gate", root=pkg)
     assert examined == 4, offenders
     assert offenders == [
-        "shapes.py:3 assigned_then_raised (SomeGate)",
-        "shapes.py:6 inline (SomeGate)",
-        "shapes.py:9 by_keyword (G1Legality)",
+        "shapes.py:assigned_then_raised (SomeGate)",
+        "shapes.py:by_keyword (G1Legality)",
+        "shapes.py:inline (SomeGate)",
     ], offenders
+    assert unreadable == [], unreadable
 
     #: and the same tree with every id present reports nothing — a census that named a
     #: site unconditionally would be no better than one that named none.
     (pkg / "shapes.py").write_text(
         "def inline(a):\n"
         "    raise SomeGate('bad', {'gate': 'X', 'n': len(a)})\n", encoding="utf-8")
-    assert evidence_dicts_missing("gate", root=pkg) == ([], 1)
+    assert evidence_dicts_missing("gate", root=pkg) == ([], 1, [])
 
 
 def test_every_shared_gate_id_is_disambiguated_by_the_evidence_in_this_domain():

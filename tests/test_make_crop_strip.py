@@ -81,7 +81,7 @@ def _frames(tmp, numbers, size=(40, 30)):
 def test_a_number_the_directory_does_not_hold_is_refused_naming_the_range(tmp_path):
     frames = _frames(tmp_path, [1, 2, 3])
     out = tmp_path / "strip.png"
-    with pytest.raises(C.CropStripError, match=r"holds frames 1\.\.3") as e:
+    with pytest.raises(C.CropStripError, match=r"holds frames \b1\.\.3\b") as e:
         C.main([f"--frames={frames}", f"--out={out}", "--boxes=0:0,0,20,20"])
     ev = e.value.evidence
     assert (ev["asked"], ev["lo"], ev["hi"]) == (0, 1, 3)
@@ -91,7 +91,7 @@ def test_a_number_the_directory_does_not_hold_is_refused_naming_the_range(tmp_pa
 def test_a_negative_frame_no_longer_cuts_the_last_one(tmp_path):
     """The guard bounded only the high side: `-1` cut the LAST frame and recorded -1."""
     frames = _frames(tmp_path, [1, 2, 3])
-    with pytest.raises(C.CropStripError, match=r"holds frames 1\.\.3"):
+    with pytest.raises(C.CropStripError, match=r"holds frames \b1\.\.3\b"):
         C.main([f"--frames={frames}", f"--out={tmp_path / 'strip.png'}",
                 "--boxes=-1:0,0,20,20"])
 
