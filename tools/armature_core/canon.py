@@ -692,15 +692,16 @@ def texts_from_api_graph(graph):
             "all on it, which is not the same answer as a graph carrying none",
             {"clause": "not_api_format", "type": type(graph).__name__},
         )
+    # The "no node-shaped value here" clause that used to stand below is GONE, and its
+    # deletion is the point of reading through the one loader rather than a second
+    # copy. `normalise_graph` returns an API-format doc only when some value is a dict
+    # carrying `class_type` — which is a node under the predicate below — so the clause
+    # could no longer fire on any input at all. A check that cannot fail is not a check;
+    # the question it asked is now answered above, once, by the loader every gate in
+    # `route_gates` reads through, and the two answers it separates ("no text here" and
+    # "I did not recognise this shape") are still separate.
     nodes = [v for v in doc.values()
              if isinstance(v, dict) and ("inputs" in v or "class_type" in v)]
-    if not nodes:
-        _raise(
-            "no node-shaped value in this graph, so no prompt could be read from it. "
-            "That is not the same as a graph carrying no text, and a spend must not "
-            "proceed on the difference",
-            {"clause": "unrecognised_graph", "top_level_keys": sorted(map(str, doc))},
-        )
     out = []
     for node in nodes:
         inputs = node.get("inputs") or {}

@@ -251,6 +251,27 @@ CAMERA_NODES = {
 #: Widget values that name a weight file. Anything ending in one of these is a component.
 WEIGHT_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".task")
 
+#: Extra node-CLASS-NAME substrings that identify a `RULED_COMPONENTS` row, beyond the
+#: row key itself. Lower-cased substring test, exactly as `rulings_for` matches a file.
+#:
+#: ⚠ **A banned tier can enter a graph as a NODE CLASS carrying no weight filename at
+#: all.** Every clause of the licence gate read `widgets_values` for something ending in
+#: a weight suffix, so a `DWPreprocessor` — the served Animate template's detector, whose
+#: `dwpose` row in `RULED_COMPONENTS` reads BANNED / "weights not fetched" — contributed
+#: nothing to `components()` and `verify()` reported the graph clean. The detector fetches
+#: its own weights at run time; there is no filename in the graph for the file clause to
+#: see. A licence row is not a wiring claim, and a wiring claim is not always a filename.
+#:
+#: This table only ADDS aliases: the row key is always a pattern, so a row absent here is
+#: not silently exempt — it is matched on its own name. The two entries below are the
+#: preprocessor tier, whose ComfyUI class names do not contain their row key
+#: (`DWPreprocessor` does not contain "dwpose"). Measured against the served Animate
+#: template, which wires `DWPreprocessor` and `OpenposePreprocessor`.
+RULED_COMPONENT_CLASSES = {
+    "dwpose": ("dwpreprocessor", "dwposeestimator"),
+    "openpose": ("openposepreprocessor", "openpose_preprocessor"),
+}
+
 # =======================================================================================
 # GATE PAIR — does the model this graph loads have a channel for the conditioning wired
 # at it? Commissioned by the E11 wave-2 ruling (R3), 2026-08-12, and paid for by one
@@ -596,11 +617,78 @@ def rulings_for(filename):
     return hits
 
 
-def components(graph):
-    """Every weight file the graph loads, with the repo's ruling on each.
+def class_patterns_for(key):
+    """Every class-name substring that identifies the `RULED_COMPONENTS` row `key`.
 
-    The ruling is the STRICTEST row the filename matches, and `ruling["matches"]` names
-    every row it matched — see `rulings_for`.
+    The key itself is always one of them, so a row that names no alias is still matched
+    on its own name rather than silently exempted.
+    """
+    return tuple(sorted({str(key).lower()}
+                        | {str(a).lower() for a in RULED_COMPONENT_CLASSES.get(key, ())}))
+
+
+def rulings_for_class(class_type):
+    """EVERY `RULED_COMPONENTS` row this NODE CLASS name matches, strictest first.
+
+    The class-name twin of `rulings_for`, and it is a separate reading because the thing
+    being read is different: a weight file is a value inside `widgets_values`, a class is
+    the node's own type. A banned preprocessor tier appears only as the second.
+    """
+    low = str(class_type).lower()
+    hits = []
+    for key, rec in RULED_COMPONENTS.items():
+        pat = next((c for c in class_patterns_for(key) if c in low), None)
+        if pat is not None:
+            hits.append(dict(rec, matched_on=key, matched_class_pattern=pat))
+    hits.sort(key=lambda r: -VERDICT_RANK.get(r["verdict"], 0))
+    return hits
+
+
+def ruled_node_classes(graph):
+    """Every node whose CLASS NAME the licence map has already ruled on.
+
+    Reads in either format and through the subgraph walk, like every other clause here.
+    Each row carries `class_type`, `verdict`, `licence` and `reason` at the top level for
+    a caller that wants the ruling without unpacking, and the full `ruling` (strictest
+    row, with `matches` naming every row hit) beside them.
+
+    These rows are also returned by `components()`, so a caller already filtering that
+    list on BANNED picks them up without a second call. `verify` refuses them exactly as
+    it refuses a banned weight file.
+    """
+    graph = normalise_graph(graph)
+    out = []
+    for where, n in _iter_nodes(graph):
+        cls = n.get("type")
+        if not isinstance(cls, str):
+            continue
+        hits = rulings_for_class(cls)
+        if not hits:
+            continue
+        ruling = dict(hits[0])
+        ruling["matches"] = [{"matched_on": h["matched_on"], "verdict": h["verdict"],
+                              "licence": h.get("licence"),
+                              "matched_class_pattern": h["matched_class_pattern"]}
+                             for h in hits]
+        out.append({"kind": "class", "file": None, "class_type": cls,
+                    "class": cls, "node_id": n.get("id"), "where": where,
+                    "verdict": ruling["verdict"], "licence": ruling.get("licence"),
+                    "reason": ruling.get("reason"),
+                    "matched_on": ruling.get("matched_on"), "ruling": ruling})
+    return out
+
+
+def components(graph):
+    """Every ruled thing the graph carries: weight files loaded, and ruled node CLASSES.
+
+    The ruling is the STRICTEST row the name matches, and `ruling["matches"]` names
+    every row it matched — see `rulings_for` and `rulings_for_class`.
+
+    Rows carry `kind`: `"weight"` for a file named in `widgets_values`, `"class"` for a
+    node class the licence map rules on (see `ruled_node_classes` — a `DWPreprocessor`
+    brings no filename with it and was invisible to every clause here until 2026-09-04).
+    Both carry `verdict` at the top level as well as inside `ruling`, so one filter
+    reads both kinds.
     """
     graph = normalise_graph(graph)
     out = []
@@ -615,9 +703,19 @@ def components(graph):
                                                  "reason": "check docs/license-map.md"}
             ruling["matches"] = [{"matched_on": h["matched_on"], "verdict": h["verdict"],
                                   "licence": h.get("licence")} for h in hits]
-            out.append({"file": v, "node_id": n.get("id"), "class": n.get("type"),
-                        "where": where, "ruling": ruling})
+            out.append({"kind": "weight", "file": v, "node_id": n.get("id"),
+                        "class": n.get("type"), "where": where,
+                        "verdict": ruling["verdict"], "licence": ruling.get("licence"),
+                        "reason": ruling.get("reason"),
+                        "matched_on": ruling.get("matched_on"), "ruling": ruling})
+    out.extend(ruled_node_classes(graph))
     return out
+
+
+def _component_label(rec):
+    """What to call a component in a refusal: its filename, or its node class."""
+    return (f"node class {rec['class_type']!r}" if rec.get("kind") == "class"
+            else repr(rec.get("file")))
 
 
 #: The input names a seed lives under in API format, per node class.
@@ -629,6 +727,41 @@ SEED_INPUTS = {"KSampler": "seed", "KSamplerAdvanced": "noise_seed",
 #: that answers "this table does not know that class" instead of answering "no seeds".
 SEED_INPUT_NAMES = ("seed", "noise_seed", "rand_seed")
 SEED_CLASS_SUFFIXES = ("Sampler", "Noise")
+
+#: Class-name suffixes that mark a HOSTED / partner node, whose save-format
+#: `widgets_values` this repo cannot interpret without a recorded widget-index row.
+#:
+#: ⚠ Used by `unrecorded_seed_sources` in SAVE FORMAT ONLY. In API format inputs are
+#: keyed by name and the input-name clause already answers; in save format the values are
+#: positional and nothing names them, so a vendor node's widget list is exactly the
+#: direction no other clause bounds — and save format is the format the cloud hands back
+#: and the one `load_graph` / `gate_saved_graph` read before submission. Measured
+#: 2026-09-04 on `{"nodes": [KSampler(seed 7, "fixed"), KlingVideoApi(widgets
+#: [..., 999999999]), ...]}`: `unrecorded_seed_sources` returned [], `gate_s_registration`
+#: reported "1 noise-bearing seed(s), all pinned and all drawn from the committed list of
+#: 1", and node 4's 999999999 was never examined. `Wan2ReferenceVideoApi` carries a
+#: `SEED_NODES` row and so is read rather than flagged — which is what the andon asks
+#: for: a row, in the spec that arms the tier.
+HOSTED_API_CLASS_SUFFIXES = ("Api", "API")
+
+
+def _save_format_input_names(node):
+    """Every input NAME a save-format node declares, converted widgets included.
+
+    Save format spells `inputs` as a LIST of slot dicts (`{"name", "type", "link"}`); a
+    widget converted to an input also carries `{"widget": {"name": ...}}`. API format
+    spells it as a mapping, which the caller reads directly.
+    """
+    out = []
+    for slot in node.get("inputs") or []:
+        if not isinstance(slot, dict):
+            continue
+        if isinstance(slot.get("name"), str):
+            out.append(slot["name"])
+        widget = slot.get("widget")
+        if isinstance(widget, dict) and isinstance(widget.get("name"), str):
+            out.append(widget["name"])
+    return out
 
 
 def unrecorded_seed_sources(graph):
@@ -650,11 +783,30 @@ def unrecorded_seed_sources(graph):
     way Gate L and Gate PAIR already answer: "nothing was checkable" is a third answer,
     and it raises.
 
-    Detection is by the thing being read, not by a vendor prefix: in API format an inputs
-    key named `seed`/`noise_seed`/`rand_seed` on a class with no row; in EITHER format a
-    class name ending in `Sampler` or `Noise` with no row. `endswith` rather than a
-    substring on purpose — `KSamplerSelect` picks a scheduler and carries no seed, and an
-    andon that fires on a correct graph is not one anybody keeps.
+    Detection is by the thing being read, not by a vendor prefix: an input named
+    `seed`/`noise_seed`/`rand_seed` on a class with no row; or a class name ending in
+    `Sampler` or `Noise` with no row. `endswith` rather than a substring on purpose —
+    `KSamplerSelect` picks a scheduler and carries no seed, and an andon that fires on a
+    correct graph is not one anybody keeps.
+
+    ⚠ **The input-name half used to run in API FORMAT ONLY, and the two formats then
+    gave opposite answers about the same graph.** Line `if api:` gated it, and in save
+    format only the class-name suffix survived — so a hosted or vendor node carrying a
+    seed widget was invisible. Measured 2026-09-04 on the save-format graph `{"nodes":
+    [KSampler(seed 7, control "fixed"), KlingVideoApi(widgets [..., 999999999]),
+    UNETLoader, WanImageToVideo]}`: this function returned [], `seeds()` returned only
+    the KSampler, `gate_s_registration(g, [7])` returned "1 noise-bearing seed(s), all
+    pinned and all drawn from the committed list of 1", and `verify(g,
+    frame=(832,480,81))` returned "CHECKED — 1 seed(s) all pinned" — while node 4's seed
+    999999999 was never examined and no committed list pre-registers it. The same node in
+    API format WAS caught. Save format is the format the cloud hands back and the one
+    `load_graph` / `gate_saved_graph` read before submission.
+
+    Save format names inputs too — as a list of slot dicts, converted widgets included —
+    so the input-name clause now runs in both, reading each format's own spelling
+    (`_save_format_input_names`). The second save-format clause is
+    `HOSTED_API_CLASS_SUFFIXES`: a partner node whose positional widget list this repo
+    has no recorded row for, which is the KlingVideoApi shape above.
     """
     graph = normalise_graph(graph)
     api = is_api_format(graph)
@@ -663,13 +815,19 @@ def unrecorded_seed_sources(graph):
         cls = n.get("type")
         if not isinstance(cls, str) or cls in SEED_NODES:
             continue
+        names = (list(n.get("inputs") or {}) if api
+                 else _save_format_input_names(n))
         why = None
-        if api:
-            hit = sorted(k for k in (n.get("inputs") or {}) if k in SEED_INPUT_NAMES)
-            if hit:
-                why = f"carries seed-shaped input(s) {', '.join(hit)}"
+        hit = sorted({k for k in names if k in SEED_INPUT_NAMES})
+        if hit:
+            why = f"carries seed-shaped input(s) {', '.join(hit)}"
         if why is None and cls.endswith(SEED_CLASS_SUFFIXES):
             why = "the class name declares a sampling or noise role"
+        if why is None and not api and cls.endswith(HOSTED_API_CLASS_SUFFIXES):
+            why = (f"it is a hosted/partner node whose save-format widgets are "
+                   f"positional and this module has no recorded widget row for "
+                   f"{cls!r}, so a seed among its {len(n.get('widgets_values') or [])} "
+                   f"widget value(s) cannot be read at all")
         if why:
             out.append({"node_id": n.get("id"), "class": cls, "where": where, "why": why})
     return out
@@ -1051,7 +1209,16 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
     graph = normalise_graph(graph)
     found = seeds(graph)
     reg = list(registered or [])
-    ev = {"gate": "S", "registered": reg, "seeds": found}
+    # The evidence's `gate` is the id of the andon that will raise, which is
+    # `RouteGate.gate` == "ROUTE". It used to read "S": `stage_render.py:509-510` prints
+    # `GATE_FAILURE <exc.gate>` and `GATE_EVIDENCE <json of exc.evidence>` as two lines,
+    # so a receipt for this clause said ROUTE on one and S on the other — and "S" is
+    # already the id of a DIFFERENT andon (`errors.GateSSeedRegistration`), carrying
+    # different evidence keys, so a reader resolving the id landed on the wrong class.
+    # The clause's own name rides beside it instead. `pairing` on this page already does
+    # it this way (`ev["gate"] == "PAIR"` and it raises `PairGate`).
+    ev = {"gate": "ROUTE", "andon": "RouteGate", "clause": "gate_s_registration",
+          "registered": reg, "seeds": found}
     # · ANDON — the third answer. See `_seed_population_andon`: a sampler class with no
     # SEED_NODES row makes `seeds()` return [] and this function then reported "0
     # noise-bearing seed(s), all pinned and all drawn from the committed list".
@@ -1189,7 +1356,8 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     if bad:
         raise RouteGate(
             "the graph loads " + ", ".join(
-                f"{c['file']!r} ({c['ruling']['verdict']}: {c['ruling']['reason']})"
+                f"{_component_label(c)} ({c['ruling']['verdict']}: "
+                f"{c['ruling']['reason']})"
                 + (" [this filename also matches "
                    + ", ".join(f"{m['matched_on']}={m['verdict']}"
                                for m in c["ruling"]["matches"][1:]) + "]"
@@ -1411,7 +1579,31 @@ def load_graph(path):
     """
     with open(path, encoding="utf-8") as fh:
         raw = fh.read()
-    doc = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+    # The parse used to sit OUTSIDE the try below, so this function's own docstring
+    # promise — "raises RouteGate naming the top-level keys" — did not hold for a file
+    # that is not JSON at all. Measured 2026-09-04: a file containing `{ not json at all }`
+    # raised `json.JSONDecodeError('Expecting property name enclosed in double quotes')`
+    # with the path nowhere in the message, and an EMPTY file raised
+    # `JSONDecodeError('Expecting value')` because `find` and `rfind` both return -1 and
+    # the slice is ''. Neither is an `ArmatureError`, so a caller catching `GateFailure`
+    # around a submission step did not catch it and the operator saw a decoder error with
+    # no filename.
+    start, end = raw.find("{"), raw.rfind("}")
+    if start < 0 or end < start:
+        raise RouteGate(
+            f"{path}: contains no JSON object at all "
+            f"({len(raw)} character(s) read, no '{{' ... '}}' pair). An empty or "
+            f"brace-free file is refused by name rather than parsed as ''",
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "unparseable_file",
+             "path": str(path), "n_chars": len(raw)})
+    try:
+        doc = json.loads(raw[start:end + 1])
+    except json.JSONDecodeError as err:
+        raise RouteGate(
+            f"{path}: could not parse as JSON: {err}",
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "unparseable_file",
+             "path": str(path), "error": str(err),
+             "line": err.lineno, "column": err.colno}) from None
     try:
         return normalise_graph(doc)
     except RouteGate as exc:
