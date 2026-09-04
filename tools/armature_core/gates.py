@@ -25,6 +25,7 @@ from .errors import (
     GateRRoundTrip,
     GateSSeedRegistration,
 )
+from .parts import require_finite
 
 
 class GeneratorProfile:
@@ -407,6 +408,28 @@ def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, width, height):
                 f"and the surplus edges would have passed unexamined",
                 ev,
             )
+        # · ANDON — and the four numbers are NUMBERS. The clause above says `float`, and
+        # `float('nan')` is a float, so the one `>` comparison on this page that the
+        # non-finite family did not reach is `max(deltas) > tolerance_px`. A NaN disables
+        # the WHOLE comparison rather than a quarter of it, because `max()` returns the
+        # NaN when it is first and `nan > tolerance_px` is False. Measured 2026-09-04:
+        # `g4_bbox_sanity(0, (nan,nan,nan,nan), (10,10,500,500), 832, 480)` returned
+        # `[nan,nan,nan,nan]` — a PASS — and `g4_bbox_sanity(0, (10,10,20,20),
+        # (nan,10,500,500), 832, 480)` returned `[nan, 0, 480, 480]`, also a PASS, on a
+        # mask disagreeing with the projected mesh by 480 px on two of four edges.
+        #
+        # Bounded honestly: no production caller can produce this today —
+        # `blender_scene.projected_bbox_px` returns ints and drops non-finite points at
+        # its `inside` mask, and `startframe.mask_bbox` returns integer pixel bounds — so
+        # this is the same latent class as the short-bbox case above, filed because a
+        # future mask source, or a bbox read back out of a JSON record (where the bare
+        # token `NaN` parses), arrives through the same argument.
+        #
+        # Through `parts.require_finite` — the repo's ONE non-finite helper — so this page
+        # does not grow its own spelling of it. `positive=False`: a bbox edge may sit at 0
+        # and a projected one may sit off-frame at a negative pixel.
+        for edge, v in zip(("x0", "y0", "x1", "y1"), box):
+            require_finite(f"{label}.{edge}", v, G4BboxSanity, ev, positive=False)
 
     if projected_bbox is None:
         raise G4BboxSanity(
@@ -793,7 +816,8 @@ def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
         "experiment": experiment,
         "seed": seed,
         "seed_was_explicit": bool(seed_was_explicit),
-        "registry_size": len(registry) if registry else 0,
+        "registry_size": len(registry) if registry is not None else 0,
+        "registry_declared": registry is not None,
     }
 
     if not isinstance(seed, int) or isinstance(seed, bool):
@@ -803,7 +827,11 @@ def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
             ev,
         )
 
-    if not registry:
+    # · `None` and `[]` are two different facts and this branch used to collapse them.
+    # `None` is the documented meaning "this experiment pre-registered no seeds", which
+    # the docstring above draws and the code did not; `[]` is "a list was declared and it
+    # came back empty", which is not a registration at all.
+    if registry is None:
         if seed_was_explicit:
             raise GateSSeedRegistration(
                 f"{experiment} has no pre-registered seed list, so its seed may not be "
@@ -815,6 +843,31 @@ def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
             )
         ev["verdict"] = f"N/A — {experiment} pre-registered no seeds and did not vary its own"
         return ev
+
+    # · ANDON — a verdict over an EMPTY declared population, which is the refusal the four
+    # siblings on these two pages were already given (`g2_completeness`,
+    # `g5_openpose_conformance`, `gate_b_batching`, `rig_gates.gate_n_names`) and Gate S
+    # was the clause that still stated one. Measured 2026-09-04:
+    # `gate_s_seed_registration(7, [], 'E14', False)` returned `registry_size: 0` with
+    # verdict "N/A — E14 pre-registered no seeds and did not vary its own" — a PASS whose
+    # verdict asserts a property of a spec this call never read.
+    #
+    # The direction nothing else bounds: an experiment whose spec DOES carry a committed
+    # list, whose list is dropped or mis-keyed on the way here (a renamed spec field, a
+    # `.get('seeds', [])`), submits any seed at all with Gate S reporting N/A. Gate S
+    # guards a failure with NO technical symptom, so nothing downstream contradicts it and
+    # the number is quoted forever against a run nobody registered.
+    if not registry:
+        raise GateSSeedRegistration(
+            f"{experiment} declared a seed registry and it is EMPTY ({registry!r}), so "
+            f"there is no committed list to check {seed} against. An empty list is not "
+            f"the same fact as no list: 'N/A — pre-registered no seeds' over it is a "
+            f"statement about a spec this call never read, and the shape that produces it "
+            f"is a renamed spec field or a `.get('seeds', [])` default — exactly the "
+            f"silent drop the committed list exists to make impossible. Pass None to mean "
+            f"'this experiment pre-registered none', or fix the read that emptied the list",
+            ev,
+        )
 
     if seed not in registry:
         raise GateSSeedRegistration(

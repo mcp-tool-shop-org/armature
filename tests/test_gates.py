@@ -1073,8 +1073,16 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # `PngWriteError`'s zero-dimension clause), core-gates added 39 refusals of which the in-package ones
     # (`unreadable_node`, `uncredited_conditional_component`, `attribution_entry_for`, `gate_b_batching`,
     # `gate_n_names`, `g5` empty-reference, `canon.load`, `shotspec`) land here. Re-measured, not summed.
-    assert total == 296, (
-        f"{total} family raises in armature_core; 296 were measured on 2026-09-04 (merged tree). This is "
+    # WAVE 14 (core-gates, 2026-09-04): 296 → 303 on this branch, MEASURED not summed.
+    # The seven: `rig_gates._require_numeric` (a non-numeric bbox_diagonal, F-8a5683e0);
+    # `subject.py`'s three refusals re-classed from bare `ValueError` into the family plus
+    # its non-finite clause (F-89eb81a9); `gates.gate_s_seed_registration`'s empty declared
+    # registry (F-b4706738); `route_gates.verify`'s `orphan_attribution` (F-74787978); and
+    # `shotspec`'s two new named refusals — the render-engine enum and the
+    # `normal_angle_deg` domain (F-b543a535). The four measurement guards of F-13a144c2
+    # raise from `parts.require_finite`, which this count already carries.
+    assert total == 303, (
+        f"{total} family raises in armature_core; 303 were measured on 2026-09-04 (wave 14). This is "
         f"the denominator every ratio below is quoted against — re-measure it deliberately")
 
 

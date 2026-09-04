@@ -72,14 +72,24 @@ RECORDED_GATE_RAISES = {
     ("gates.py", "G6SubjectMotion"): 2,
     ("gates.py", "GateBBatching"): 3,  # +1 w12: expectation-of-zero refusal
     ("gates.py", "GateRRoundTrip"): 4,
-    ("gates.py", "GateSSeedRegistration"): 3,
+    ("gates.py", "GateSSeedRegistration"): 4,  # +1 w14: a DECLARED but empty registry
+                                               # (F-b4706738) — `if not registry:`
+                                               # collapsed None and [], so 'N/A — pre-
+                                               # registered no seeds' was stated over a
+                                               # list the caller declared and dropped
     ("rig_gates.py", "GateDDeterminism"): 3,  # +1 w12: degenerate bbox_diagonal
     ("rig_gates.py", "GateNNames"): 2,  # +1 w12: empty registry
     ("rig_gates.py", "GatePRestPose"): 12,
     ("route_gates.py", "PairGate"): 3,
-    ("route_gates.py", "RouteGate"): 35,  # +3 w12: unreadable_node,
+    ("route_gates.py", "RouteGate"): 36,  # +3 w12: unreadable_node,
                                           # uncredited_conditional_component,
                                           # attribution_for_unconditional_row
+                                          # +1 w14: orphan_attribution (F-74787978) — the
+                                          # converse of the conditional clause: a credit
+                                          # naming no component the graph loads. w14 also
+                                          # MOVED `unreadable_node` into `_readable_node`
+                                          # so the nested walk shares it (F-b44c880d);
+                                          # one site before, one site after.
 }
 
 
@@ -186,7 +196,10 @@ def test_the_derived_population_is_the_one_this_file_records():
     assert counted == RECORDED_GATE_RAISES, (
         "the gate-raise population moved. Add the new site to RECORDED_GATE_RAISES in "
         f"the same commit that adds the raise.\nderived: {sorted(counted.items())}")
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 84
+    # WAVE 14 (core-gates): 84 -> 86. `gates.GateSSeedRegistration` +1 (a declared but
+    # empty registry, F-b4706738) and `route_gates.RouteGate` +1 (`orphan_attribution`,
+    # F-74787978). MEASURED on this branch, itemised on the two rows above.
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 86
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

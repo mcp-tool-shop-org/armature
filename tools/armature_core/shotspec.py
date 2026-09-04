@@ -34,6 +34,15 @@ SPEC_VERSION = 1
 
 KNOWN_CHANNELS = ("depth", "normal", "mask", "edge", "pose")
 
+#: The render engines a spec may name. `blender_scene.configure_render` assigns
+#: `scene.render.engine = r["engine"]` verbatim, so an unknown identifier is refused by
+#: Blender's own RNA with a `TypeError` from inside the render layer — the loud-not-silent
+#: shape this contract exists to answer BEFORE the tool that writes is entered. Both EEVEE
+#: spellings are here because Blender renamed it between versions and five tools in this
+#: tree carry an `ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")` loop for
+#: exactly that reason; refusing the newer name would refuse a spec those tools can run.
+KNOWN_ENGINES = ("BLENDER_EEVEE", "BLENDER_EEVEE_NEXT", "CYCLES", "BLENDER_WORKBENCH")
+
 #: How the subject behaves across the shot. `static` is E01/E02: the scene frame is pinned
 #: so only the camera moves. `per_frame` is E03: the scene frame advances with the control
 #: frame, so an action carried by the asset performs — and G6 checks that it actually did.
@@ -296,6 +305,16 @@ def normalise_spec(raw, spec_path=None):
             raise SpecError(
                 "spec.depth.window must be 'per_shot' or a 2-number [z_min, z_max]"
             )
+        # · ANDON — `spec.depth.window` was covered against NaN only BY ACCIDENT: the
+        # ordering test below is `window[0] < window[1]`, which is False for a NaN, so a
+        # NaN was refused with the words of an ordering complaint. An INFINITY was not
+        # covered at all — measured 2026-09-04, `window=[-inf, inf]` was ACCEPTED and
+        # returned unchanged, and the depth normalisation window is then degenerate.
+        # `load_spec` uses `json.load` with the stdlib default, which reads the bare
+        # tokens `NaN` and `Infinity`, so a spec file carrying one parses.
+        for i in (0, 1):
+            _require_finite_number(dict(enumerate(window)), i, "spec.depth.window",
+                                   positive=False)
         if not window[0] < window[1]:
             raise SpecError(
                 f"spec.depth.window is [{window[0]}, {window[1]}]; z_min must be below "
@@ -337,6 +356,20 @@ def normalise_spec(raw, spec_path=None):
             raise SpecError(
                 "spec.camera.target must be 'bbox_center' or a 3-number [x, y, z]"
             )
+        # · ANDON — `target` is the ONE numeric camera field the wave-12 non-finite sweep
+        # did not reach: the comment below says "the rest of the camera block's numbers"
+        # and the loop it introduces covers `lens_mm`, `sensor_mm`, `fit_margin`,
+        # `clip_start`, `clip_end` and the three angles, with `radius` covered above.
+        # `target` was checked for list shape, length and bool-ness and for nothing else.
+        # Measured 2026-09-04: `camera={'type':'orbit','target':[nan,0,0]}` and
+        # `target=[inf,0,0]` were both ACCEPTED and returned unchanged. The camera is then
+        # placed at a non-finite target, `projected_bbox_px` finds nothing inside the
+        # frame and returns None, and the operator gets G4's "no mesh vertex projects into
+        # the frame" from the render layer instead of a SpecError naming the malformed
+        # field. `positive=False`: a target coordinate is a position, not a distance.
+        for i in (0, 1, 2):
+            _require_finite_number(dict(enumerate(target)), i, "spec.camera.target",
+                                   positive=False)
 
     # An orbit RADIUS is a distance, and a non-positive one is not a spec that parses.
     #
@@ -392,6 +425,61 @@ def normalise_spec(raw, spec_path=None):
             f"{cam['clip_end']}; the near plane must be in front of the far one or the "
             f"camera has no depth range at all"
         )
+
+    # · ANDON — `spec.edge` and `spec.render` were validated in NO WAY AT ALL: no
+    # `_require`, no `_require_positive`, no `_require_finite_number`. `normalise_spec`
+    # returned having never touched either block, while the comment above makes the
+    # argument for exactly this shape about `camera`. Measured 2026-09-04, every one
+    # ACCEPTED and round-tripped: `edge={'depth_rel_threshold': 'off',
+    # 'normal_angle_deg': None}`, `edge={'depth_rel_threshold': nan,
+    # 'normal_angle_deg': nan}`, `render={'engine': 'BLENDER_EEVEE', 'samples': -1,
+    # 'filter_size': nan, 'film_transparent': True}`.
+    #
+    # The NaN case is the silent one and it is this repo's highest-priority defect class.
+    # `stage_render.py:370` hands both edge numbers straight to `channels.derive_edge`,
+    # where `rel > float(nan)` and `min_dot < cos(nan)` are both all-False. Measured on an
+    # 8x8 synthetic depth step: `derive_edge(..., 0.02, 30.0)` reports `depth_break_px 16,
+    # edge_px 16`; the same call with both thresholds NaN reports `depth_break_px 0,
+    # normal_break_px 0, edge_px 0`. A completely blank edge control channel is then
+    # written as a well-formed PNG at every frame, G2 counts the files present and
+    # non-empty, G4 compares mask against projection and is blind to channel CONTENT, the
+    # manifest records the run as finished, and the credits are spent on a generation
+    # whose edge control carried no information.
+    edge = _require(spec, "edge", dict, "spec")
+    _require(edge, "depth_rel_threshold", (int, float), "spec.edge")
+    _require_positive(edge, "depth_rel_threshold", "spec.edge",
+                      note="which is a relative depth gradient")
+    _require(edge, "normal_angle_deg", (int, float), "spec.edge")
+    _require_finite_number(edge, "normal_angle_deg", "spec.edge", positive=False)
+    # An angle, so sign is not the question the way it is for the threshold — but the
+    # DOMAIN is: `derive_edge` reads this as `cos(radians(x))`, and cosine is periodic, so
+    # 390 and 30 are the same break angle while 210 is 150's. A spec naming an angle
+    # outside the half-turn is not a tighter or looser threshold, it is a number whose
+    # meaning is not the one the field's name states.
+    if not 0.0 <= float(edge["normal_angle_deg"]) <= 180.0:
+        raise SpecError(
+            f"spec.edge.normal_angle_deg is {edge['normal_angle_deg']}; a normal break "
+            f"angle lives in [0, 180]. `channels.derive_edge` reads it as "
+            f"cos(radians(x)), which is periodic, so a value outside the half-turn "
+            f"silently means a different angle than the one written down"
+        )
+
+    render = _require(spec, "render", dict, "spec")
+    engine = _require(render, "engine", str, "spec.render")
+    if engine not in KNOWN_ENGINES:
+        raise SpecError(
+            f"spec.render.engine {engine!r} is not one of {list(KNOWN_ENGINES)}. "
+            f"`blender_scene.configure_render` assigns it to `scene.render.engine` "
+            f"verbatim, so an unknown identifier is refused by Blender's RNA from inside "
+            f"the render layer — after the scene is built and the tool that writes has "
+            f"been entered"
+        )
+    _require(render, "samples", int, "spec.render")
+    _require_positive(render, "samples", "spec.render", note="which is a sample COUNT")
+    _require(render, "filter_size", (int, float), "spec.render")
+    _require_positive(render, "filter_size", "spec.render",
+                      note="which is a pixel filter WIDTH")
+    _require(render, "film_transparent", bool, "spec.render")
 
     if spec_path:
         spec.setdefault("_spec_path", os.path.abspath(spec_path))
