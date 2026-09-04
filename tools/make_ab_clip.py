@@ -20,6 +20,16 @@ duration.
   B at 20 fps: events at j/20 for j in 0..n_b-1
   composite:   the sorted union of those instants
 
+**k and j are LISTING POSITIONS, and Gate TIMELINE is what makes that legitimate.** The
+claim above — every frame of both arms shown once for exactly its own duration — held only
+while each arm's file NUMBERS were the contiguous run those positions assume. Measured
+2026-09-04 on an arm numbered `00000, 00001, 00003, 00004`: `f00003` was placed at
+t = 0.1250 s and `f00004` at t = 0.1875 s, the instants of frames 2 and 3, so both claims
+above and the manifest's own `composite.rule` were false on that input while the banner —
+corrected in wave 14 to read the file's own number — said so on every frame. An OFFSET is
+harmless and is not refused (wave 14 measured real arms numbered `00005..00007`); a GAP is
+refused by name before the axis is built. See `gate_contiguous_numbering`.
+
 **Integer milliseconds, with the drift corrected rather than accumulated.** WebP and APNG
 carry per-frame delays in whole milliseconds, and 1/16 s is 62.5 of them. Rounding each
 delay independently would drift by half a millisecond per frame — 32 ms over four seconds,
@@ -93,6 +103,55 @@ def frame_numbers(paths):
     return [int(os.path.splitext(os.path.basename(p))[0]) for p in paths]
 
 
+def gate_contiguous_numbering(numbers, arm):
+    """ANDON — this arm's file NUMBERS are the contiguous run its POSITIONS assume.
+
+    F-b1949407, wave 16. `event_timeline` below builds the time axis from
+    `{k / fps for k in range(n)}` — LISTING POSITIONS — while the banner burned into every
+    composite frame was corrected in wave 14 to read the file's own NUMBER. Nothing compared
+    the two, and `frame_numbers` was recorded in the sidecar beside a `rule` string
+    asserting that neither arm is retimed.
+
+    Measured in this worktree on an arm whose files are `00000, 00001, 00003, 00004` (one
+    number missing) against a contiguous 4-frame arm at the same 16 fps: the composite
+    placed `f00003` at t = 0.1250 s and `f00004` at t = 0.1875 s — the instants of frames 2
+    and 3 — so every frame after the gap ran one frame-time (62.5 ms) early for the rest of
+    the clip while the banner correctly read `f00003`. This module's docstring ("Every frame
+    of both arms is shown, once, for exactly its own duration") and the manifest's own
+    `composite.rule` ("NEITHER arm is resampled or retimed") were both false on that input,
+    and the Director reads the resulting desynchronisation as a difference between the arms:
+    the exact corruption the tool was written to prevent.
+
+    **An OFFSET is not the defect and is not refused.** Wave 14 measured real arms numbered
+    `00005, 00006, 00007`; an arm whose numbers start anywhere and run contiguously has
+    positions and numbers in exact correspondence, so its time axis is right. A GAP is what
+    breaks the correspondence, and it is what this refuses.
+
+    The pairing question is separate and stays out: this tool pairs by TIME by design (its
+    module docstring argues that at length) and is correctly outside `measure_lift`'s
+    positional-pairing gate.
+    """
+    numbers = list(numbers)
+    ev = {"gate": "TIMELINE", "arm": arm, "numbers": numbers, "first_gap": None,
+          "rule": ("the time axis is built from listing POSITIONS, so the file numbers "
+                   "must be the contiguous run those positions assume; an offset is fine, "
+                   "a gap is not")}
+    for i in range(1, len(numbers)):
+        if numbers[i] != numbers[i - 1] + 1:
+            ev["first_gap"] = [numbers[i - 1], numbers[i]]
+            raise ABClipError(
+                f"{arm}'s frames are not contiguous: {numbers[i - 1]:05d} is followed by "
+                f"{numbers[i]:05d}. The composite's time axis is built from listing "
+                f"positions, so every frame after that gap would be shown "
+                f"{1000.0 / max(len(numbers), 1):.0f} ms-scale early against its own "
+                f"banner, and the two arms would run out of step for the rest of the clip "
+                f"— which is read as a difference between the arms",
+                ev)
+    ev["verdict"] = (f"contiguous from {numbers[0]}" if numbers
+                     else "no frames")
+    return ev
+
+
 def event_timeline(n_a, fps_a, n_b, fps_b):
     """`[(t_seconds, index_into_a, index_into_b)]` — the union of both arms' frame times.
 
@@ -153,6 +212,10 @@ def main(argv=None):
     ib_frames = [Image.open(p).convert("RGB") for p in pb]
 
     na, nb = frame_numbers(pa), frame_numbers(pb)
+    # ---- ANDON, before the time axis exists: the numbers the banner prints are the
+    #      contiguous run the axis's positions assume. Both arms, not the first one read.
+    gate_a = gate_contiguous_numbering(na, "--a")
+    gate_b = gate_contiguous_numbering(nb, "--b")
     times = event_timeline(len(pa), a.a_fps, len(pb), a.b_fps)
     tail = max(1.0 / a.a_fps, 1.0 / a.b_fps)
     delays = durations_ms([t for t, _x, _y in times], tail)
@@ -192,7 +255,12 @@ def main(argv=None):
                           "lossless": bool(a.lossless),
                           "rule": ("union of both arms' frame times; each side holds its "
                                    "own frame between its own events. NEITHER arm is "
-                                   "resampled or retimed")},
+                                   "resampled or retimed"),
+                          # The receipt for that claim: the axis is built from listing
+                          # positions, and Gate TIMELINE checked that each arm's own file
+                          # numbers are the contiguous run those positions assume.
+                          "numbering": {"a": gate_a["verdict"], "b": gate_b["verdict"]},
+                          "gate_TIMELINE": {"a": gate_a, "b": gate_b}},
             "delays_ms_first16": delays[:16],
         }, fh, indent=2)
 

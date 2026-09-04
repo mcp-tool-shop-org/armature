@@ -324,3 +324,92 @@ def test_a_positive_source_rate_still_resamples(tmp_path, capsys):
     assert rec["resample"]["fps_src"] == 20.0
     assert rec["resample"]["fps_dst_true_tempo"] > 0
     assert rec["resample"]["span_s_first_to_last_sample"] > 0
+
+
+# ===========================================================================
+# F-b1949407 — the A/B time axis was built from LISTING POSITIONS
+# ===========================================================================
+
+
+def _arm(tmp, name, numbers, colour=(10, 20, 30)):
+    """A frames directory whose files carry exactly `numbers` — the lever."""
+    d = tmp / name
+    d.mkdir(parents=True, exist_ok=True)
+    for i in numbers:
+        Image.new("RGB", (8, 8), colour).save(d / f"{i:05d}.png")
+    return str(d)
+
+
+def test_a_gap_in_an_arms_numbering_is_refused_before_the_timeline_is_built(tmp_path):
+    """THE OPERAND: `00000, 00001, 00003, 00004` against a contiguous arm at 16 fps.
+
+    Measured on the base tree: `event_timeline` takes `{k / fps for k in range(n)}` — the
+    LISTING POSITIONS — while the banner burned into every frame was corrected in wave 14 to
+    read the file's own NUMBER. On that input the composite placed `f00003` at t=0.1250 s
+    and `f00004` at t=0.1875 s, the instants of frames 2 and 3, so every frame after the gap
+    was shown one frame-time (62.5 ms) early for the rest of the clip while the banner
+    correctly read `f00003`. The module docstring's central claim ("Every frame of both arms
+    is shown, once, for exactly its own duration") and the manifest's own `composite.rule`
+    ("NEITHER arm is resampled or retimed") were both false on that input.
+
+    The Director then watches an A/B whose two arms are out of step by one frame-time and
+    reads the desynchronisation as a difference between the arms — the exact corruption the
+    tool exists to prevent.
+    """
+    import make_ab_clip as AB
+
+    a = _arm(tmp_path, "a", [0, 1, 3, 4])
+    b = _arm(tmp_path, "b", [0, 1, 2, 3])
+    out = tmp_path / "ab.webp"
+    with pytest.raises(AB.ABClipError, match=r"contiguous|gap") as exc:
+        AB.main([f"--a={a}", "--a-fps=16", f"--b={b}", "--b-fps=16", f"--out={out}"])
+    ev = exc.value.evidence
+    assert ev is not None, "the refusal carries no receipt"
+    assert ev["gate"] == "TIMELINE", ev
+    assert ev["arm"] == "--a", ev
+    assert ev["numbers"] == [0, 1, 3, 4], ev
+    assert ev["first_gap"] == [1, 3], ev
+    assert not out.exists(), "a refused run wrote a composite anyway"
+
+
+def test_the_second_arm_is_walked_too(tmp_path):
+    """The POPULATION is BOTH arms, not the first one the loop happens to reach.
+
+    Red on an arm numbered 0/1/3/4 in the `--b` position with a contiguous `--a` — a member
+    outside any check that only guards the arm it read first.
+    """
+    import make_ab_clip as AB
+
+    a = _arm(tmp_path, "a2", [0, 1, 2, 3])
+    b = _arm(tmp_path, "b2", [0, 1, 3, 4])
+    out = tmp_path / "ab2.webp"
+    with pytest.raises(AB.ABClipError, match=r"contiguous|gap") as exc:
+        AB.main([f"--a={a}", "--a-fps=16", f"--b={b}", "--b-fps=16", f"--out={out}"])
+    assert exc.value.evidence["arm"] == "--b", exc.value.evidence
+
+
+def test_an_arm_that_is_merely_OFFSET_still_builds(tmp_path):
+    """Grade the arm only on what it can move. An OFFSET is not the defect — wave 14
+    measured real arms numbered `00005, 00006, 00007` and the banner fix is what that
+    earned. A gate that refused an offset would fail on correct work."""
+    import make_ab_clip as AB
+
+    a = _arm(tmp_path, "a3", [5, 6, 7, 8])
+    b = _arm(tmp_path, "b3", [0, 1, 2, 3])
+    out = tmp_path / "ab3.webp"
+    assert AB.main([f"--a={a}", "--a-fps=16", f"--b={b}", "--b-fps=16",
+                    f"--out={out}"]) == 0
+    assert out.exists()
+    side = json.loads((tmp_path / "ab3_manifest.json").read_text(encoding="utf-8"))
+    assert side["a"]["frame_numbers"] == [5, 6, 7, 8]
+    assert side["composite"]["numbering"]["a"] == "contiguous from 5"
+
+
+def test_a_single_frame_arm_is_contiguous_by_construction(tmp_path):
+    """The degenerate end of the population: one frame has no gap, and the gate must not
+    invent one."""
+    import make_ab_clip as AB
+
+    assert AB.gate_contiguous_numbering([7], "--a")["verdict"].startswith("4 frame") is False
+    ev = AB.gate_contiguous_numbering([7], "--a")
+    assert ev["numbers"] == [7] and ev["first_gap"] is None
