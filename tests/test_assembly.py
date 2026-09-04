@@ -863,7 +863,12 @@ def test_the_png_case_rule_is_the_same_one_its_consumers_use():
     assert B.FRAME_KEY.match("00000.PNG"), "this gate's own population rule is narrower"
     assert F.verify_downloads is __import__("fetch_t2v_run").verify_downloads
 
-    for name, line in (("encode_control.py", 126), ("invert_frames.py", 70)):
+    # WAVE 16 (instruments-measure): 126 -> 122 and 70 -> 66. Both files lost their
+    # class's normalising `__init__` (four lines each, rule 5 / F-13333ef4), which moved
+    # every line below it. The citations are RE-MEASURED here, in the commit that moved
+    # them, rather than relaxed into a grep — the point of the pin is that it names the
+    # site, and a pin that drifts silently is what wave 15 found seven of.
+    for name, line in (("encode_control.py", 122), ("invert_frames.py", 66)):
         src = open(os.path.join(TOOLS, name), encoding="utf-8").read().splitlines()
         assert ".lower()" in src[line - 1], f"{name}:{line} no longer lower-cases"
 
