@@ -15,6 +15,7 @@ Pure stdlib. No bpy, no numpy, no image decoding — it never has to understand 
 import hashlib
 import json
 import struct
+from collections import Counter
 
 from .errors import GateFailure
 
@@ -97,6 +98,15 @@ def gate_atlas_untouched(source_path, export_path):
     "the atlas survives with zero re-bake"; certifying it over a subset without saying so
     is the shape of receipt this repo pays for. So an unhashable source image now raises,
     and the verdict states coverage as N of M.
+
+    That widened verdict was then measured false in a second way (F-937f8a81): the
+    comparison was `h not in out_hashes`, a MEMBERSHIP test over two sorted lists, so a
+    source hash appearing twice was satisfied by one occurrence in the export. Measured
+    2026-09-04 on a source embedding the same 20-byte image twice against an export
+    embedding it once plus a different image, this gate PASSED with the verdict "2 of 2
+    embedded image(s) byte-identical through the route, 0 unhashable" - the count clause
+    reads 2 == 2 and both images are hashable. The comparison is now a multiset residual
+    (`Counter(src) - Counter(out)`), reported per hash in the evidence.
     """
     before = embedded_images(source_path)
     after = embedded_images(export_path)
@@ -127,10 +137,23 @@ def gate_atlas_untouched(source_path, export_path):
             f"(storage: {sorted({u['storage'] for u in unhashable})}), so 'the atlas "
             f"survives with zero re-bake' cannot be checked for them and a PASS would "
             f"certify the promise over a subset without saying so")
-    missing = [h for h in src_hashes if h not in out_hashes]
-    if missing:
-        problems.append(f"{len(missing)} source image(s) do not appear byte-identical in "
-                        f"the export - the texture was re-encoded or resampled")
+    # Multiset, not membership (F-937f8a81). `h not in out_hashes` is satisfied by ONE
+    # occurrence, so a source that embeds the same image twice was certified by an export
+    # carrying it once and a different image beside it: the count clause did not fire
+    # (2 == 2), nothing was unhashable, and the verdict read "2 of 2 byte-identical". The
+    # sibling discipline is turnaround.gate_set_distinct, which counts occurrences rather
+    # than testing membership. Order stays irrelevant — a swapped pair is not a re-encode.
+    src_counts = Counter(src_hashes)
+    out_counts = Counter(out_hashes)
+    residual = src_counts - out_counts
+    ev["source_hash_counts"] = dict(sorted(src_counts.items()))
+    ev["export_hash_counts"] = dict(sorted(out_counts.items()))
+    ev["missing_hash_counts"] = dict(sorted(residual.items()))
+    if residual:
+        short = ", ".join(f"{h[:12]} x{c}" for h, c in sorted(residual.items()))
+        problems.append(f"{sum(residual.values())} source image occurrence(s) do not "
+                        f"appear byte-identical in the export - the texture was "
+                        f"re-encoded or resampled (short by: {short})")
 
     if problems:
         raise GateAtlasUntouched(
