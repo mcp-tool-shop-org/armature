@@ -152,7 +152,12 @@ class BlenderBackend:
         if animation == "per_frame":
             bounds = bs.world_bounds_over_frames(scene, meshes, spec["frames"]["count"])
         else:
-            bounds = bs.world_bounds(meshes)
+            # `scene=` passed, so the filtering happens inside the reader rather than
+            # depending on this caller having filtered `meshes` fifteen lines above. The
+            # bare form is the spelling `tests/test_render_visibility.py` bans: it is
+            # correct here only because of a fact a reader has to go and check, and the
+            # day the two lines drift the framing silently includes a hidden decoy.
+            bounds = bs.world_bounds(meshes, scene=scene)
         if bounds is None:
             raise SpecError(f"{asset_path} has no evaluated geometry")
         center, half, sphere_r = bounds

@@ -127,6 +127,47 @@ def _namespace_attrs_read(tree):
     return reads
 
 
+def _success_tokens(path):
+    """The success sentinel(s) `main` PRINTS, read off the file by AST.
+
+    One node — the `print` calls directly inside `main`, walked WITHOUT descending into a
+    nested function — so the token this file pins per tool is the token that tool actually
+    emits, rather than a string typed twice. An f-string's leading constant is its first
+    word, which is where every sentinel in this repo lives.
+    """
+    with open(path, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    main = next((n for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef) and n.name == "main"), None)
+    if main is None:
+        return set()
+
+    stack, nodes = list(ast.iter_child_nodes(main)), []
+    while stack:
+        node = stack.pop()
+        nodes.append(node)
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            stack.extend(ast.iter_child_nodes(node))
+
+    tokens = set()
+    for node in nodes:
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "print" and node.args):
+            continue
+        first = node.args[0]
+        # `print("TOKEN " + json.dumps(...))` is the other spelling in this family; the
+        # leading constant is the left operand of the concatenation.
+        while isinstance(first, ast.BinOp) and isinstance(first.op, ast.Add):
+            first = first.left
+        if isinstance(first, ast.JoinedStr) and first.values:
+            first = first.values[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str):
+            word = first.value.strip().split()
+            if word:
+                tokens.add(word[0])
+    return tokens
+
+
 def _parser_census():
     """`{module: (path, declared dests, namespace attrs read)}` over every `tools/*.py`."""
     out = {}
@@ -291,6 +332,17 @@ def test_the_argv_smoke_population_is_the_plate_parsing_population():
     assert set(SHEETS) == set(PLATE_SHEETS)
 
 
+def test_each_sheet_prints_exactly_one_success_token_and_they_are_all_distinct():
+    """Derived per tool from its own `main`. Two tools sharing a token make a caller that
+    keys on it unable to say which one succeeded — the reason the shared `PANELS_OK` was
+    retired from the bpy side this wave."""
+    tokens = {name: _success_tokens(path) for name, path in PLATE_SHEETS.items()}
+    for name, found in tokens.items():
+        assert len(found) == 1, (name, sorted(found))
+    flat = [next(iter(v)) for v in tokens.values()]
+    assert len(set(flat)) == len(flat), sorted(flat)
+
+
 @pytest.mark.parametrize("name", sorted(SHEETS))
 def test_every_sheet_main_runs_end_to_end_from_argv(name, tmp_path, capsys):
     """SUCCESS direction: exit 0, the success sentinel, and the file it named on disk.
@@ -300,6 +352,10 @@ def test_every_sheet_main_runs_end_to_end_from_argv(name, tmp_path, capsys):
     suite green.
     """
     mod, argv, out, sentinel, _exc = SHEETS[name](tmp_path)
+    # The token is DERIVED from the tool's own source, not only typed here: exactly one
+    # success sentinel per tool, and it is the one this test pins.
+    derived = _success_tokens(PLATE_SHEETS[name])
+    assert derived == {sentinel}, (name, sorted(derived))
     assert mod.main(argv) == 0, name
     assert sentinel in capsys.readouterr().out, name
     assert os.path.exists(out) and os.path.getsize(out) > 0, out
