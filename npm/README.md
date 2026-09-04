@@ -40,12 +40,15 @@ the Python that holds the truth.
 When the toolkit is missing it says which of the two things is wrong — no interpreter, or an
 interpreter without the package — prints the one command that fixes it, and exits non-zero.
 
-Point it at a specific interpreter with `ARMATURE_PYTHON` if you keep several.
+Point it at a specific interpreter with `ARMATURE_PYTHON` if you keep several. While it is
+set it is the only interpreter tried — PATH is not searched — so a pinned interpreter without
+the package refuses by name (exit 127) instead of quietly running a different install that
+happens to have it.
 
 ## Commands
 
 ```bash
-armature check      # import every module and report what resolved
+armature check      # resolve every module AND its function-local imports; exit 1 on any needs-*
 armature modules    # what each module is for  (--json for machine output)
 armature where      # where the docs and the Blender-side scripts live
 ```

@@ -69,7 +69,11 @@ blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --or
 
 They stay here in the repository, where the invocation that works is the one written down.
 `armature_core.blender_scene` is the single module that imports `bpy`; `armature check` reports
-it as `needs-blender` rather than as a defect.
+it as `needs-blender` rather than as a defect. `check` states what is true of the install you
+ran it from, not merely what imports: it resolves the function-local imports too, so a source
+checkout or a `--no-deps` install missing OpenCV, Pillow or matplotlib reports `needs-cv2` /
+`needs-PIL` rows, prints `UNRESOLVED:` and exits 1 — where it once printed "all modules
+resolved" on an install whose drawing functions could not run.
 
 The npm package is a **launcher, not a port**: re-implementing a threshold in a second language
 is how a threshold drifts, so it forwards to the Python that holds the truth, and refuses —
@@ -94,8 +98,8 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Routes | **three, measured** — the **driven route** (rig-rendered AAPose sticks → Animate; proven at shot level, parked, and licence-clear for its unpark) · the **free route** (GLB-authored start frame → camera tier at the 6.0 / uni_pc baseline; identity holds unanchored, a handed world holds on two seeds, and the LoRA scene-lever is measured live — E14) · the **composed route** (authored references into a hosted identity-lock tier — graduated by E13: identity-locked, model-decided cinematography with worlds steered by what the references carry; disclosure note in its spec) |
 | Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** (GPU-hour billing) under per-experiment ceilings; **E13's four generations are the repo's first partner-credit spend, inside their pre-stated 424–844 bracket**; E14's two generations metered **0 partner credits** at a two-generation ceiling, reached exactly |
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
-| Spend gates | **Gate CANON** refuses a paid submission whose subject cannot be named against a machine-readable canon — surface is the row, a null occupant is a **hole rather than an absence**, and both directions are checked (the prompt covers the canon; everything in the prompt *is* canon). It fires **before** the output directory is created, inside each of the seven payload builders, because the irreversible step this repo owns is writing a payload. The escape is census-backed: `--no-canon` on a subject that *has* canon is refused, not honoured |
-| Tests | **1351 passing on the rig** (14 skips, measured 2026-08-18), identical under `-O`; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
+| Spend gates | **Gate CANON** refuses a paid submission whose subject cannot be named against a machine-readable canon — surface is the row, a null occupant is a **hole rather than an absence**, and both directions are checked (the prompt covers the canon; everything in the prompt *is* canon). It fires **before** the output directory is created, inside each of the seven payload builders, because the irreversible step this repo owns is writing a payload. The escape is census-backed: `--no-canon` on a subject that *has* canon is refused, not honoured — and since the first health pass it is **loud on every spend**: each builder prints `[canon] ARMED\|UNGATED: <subject>` and records the verdict under `gates.CANON`, so no record can leave the question of whether canon was armed or escaped unanswered |
+| Tests | **1781 passing on the rig** (13 skips, measured 2026-09-04 after the first health pass — 1359 before it), identical under `-O`; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
 | Status | **v0.3.0** — the record gains a spend gate and an index that verifies itself. `armature_core` ships to PyPI as `armature-studio` and npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere |
 
 ### What is measured (the current arc)
@@ -175,13 +179,13 @@ invoked directly:
 ```
 python tools/<name>.py --help                       # measurement, sheets, payload builders
 blender -b -P tools/stage_render.py -- <args>       # staging and render, headless only
-pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, site build
+pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + clean install, site build
 ```
 
 | | |
 |---|---|
 | Platform | Windows 11 on the rig (Omen 45L, RTX 5090). The hermetic tests also run on `ubuntu-latest` in CI; Blender-dependent tests **skip visibly** where Blender is absent rather than passing silently |
-| Python | 3.13+ — CI runs 3.13, the rig venv runs 3.14. Test dependencies are numpy, pillow, pytest, opencv (pinned to the rig's version, because the pose-raster tests assert byte-stable rasterization) and matplotlib |
+| Python | 3.10+ per the package; CI runs 3.13, the rig venv runs 3.14. `pip install armature-studio` installs numpy, opencv-python-headless, Pillow and matplotlib — the runtime dependencies the code actually imports (declared since the wave-3 health pass; a clean install used to import `armature_core` and then fail on its first drawing call). pytest is the one test-only dependency; CI pins opencv to the rig's version because the pose-raster tests assert byte-stable rasterization |
 | Blender | 5.2, headless only. A live GUI session produces artifacts with no recorded parameters, and a recipe that does not reproduce its output is not a recipe |
 | Node | 22, for the site under `site/` only |
 | Generation | runs on Comfy Cloud and is submitted by the operator; rendering and measurement run locally |

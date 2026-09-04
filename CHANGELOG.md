@@ -13,11 +13,88 @@ installs.
 
 ## [Unreleased]
 
+**The first health pass: 89 defects, most of them a check that reported safety it never
+verified.** A dogfood swarm audited the tree in six domains, a cross-family panel re-rated the
+findings, a family-different jury corroborated the wave, and six amend agents fixed every
+approved finding with a test that was seen red first. The suite grew from 1359 to 1781 tests.
+
 ### Added
+
+- **Every spend builder prints `[canon] ARMED|UNGATED: <subject>` and records the verdict under
+  `gates.CANON`.** Gate CANON's escape was silent from the seven tools that author a spend and
+  loud only from the diagnostic CLI; a record could not say whether canon was armed or escaped.
+  `--canon-prompt` must now be the text the builder ships — gating a string other than the one
+  shipped was a working skip.
+- **The cascade and batch topology gates check that slot *k* carries frame *k*.** They required
+  the caller's ordered per-frame source ids; an upload map keyed by unpadded names put `10.png`
+  in slot 2 with "groups in frame order" printed. Upload maps must be keyed `00000`… or
+  `00000.png`…, one shape per map, with no gaps.
+- **G2 reports `unexpected` files beside `missing` and `empty`, and raises on them.** It counted
+  expected filenames only, so a stale frame from a longer earlier run passed a shorter run's
+  completeness check and reached the encoder.
+- **`encode_control` refuses RGBA and non-8-bit frames** (`--alpha-over=R,G,B` makes a composite an
+  explicit, recorded choice) and takes its frame population from the shot spec, not a bare
+  directory listing. `--expect` checks the count.
+- **Gate DONOR's framing clause counts the clip**, not only the frames the detector fired on, and
+  the `thresholds=` parameter that let a caller disarm the andon is gone.
+- **Gate ROUTE's verdict says what ran**: `N seed(s) NOT CHECKED for pinning` when the seed clause
+  is skipped, and `WAIVED components [...]` when a licence row was waved — and only `EXCLUDED`
+  rows can be waved; a `BANNED` (non-commercial) weight can no longer pass with one keyword.
+  Gate PAIR's unknown-class detector keys on the `*ToVideo` role, not the `Wan` prefix. Every
+  hosted node in a graph is graded, not the first one found. Nested subgraph definitions are
+  walked.
+- **The G4 tolerance is the gate's** (`gates.G4_TOLERANCE_PX`), no longer a shot-spec field a
+  spec could widen to disarm it; **`asset.sha256` is required** in every shot spec, so a spec
+  pins the bytes it was written against. Five committed specs lost their `gates` row (every
+  value was the default) and the two E03 specs gained the hash their run manifests recorded.
+- **The gait refuses every `stance_frac` but 0.5**, the one value the model represents; the
+  integrator's ±1 stance endpoints and the literal half-cycle offset were valid only there, and at
+  0.4 the hips travelled backward for a frame while the character walked forward.
+- **`armature check` resolves function-local imports** and exits 1 with `needs-cv2` / `needs-PIL`
+  on an install that cannot run its drawing functions; **the wheel declares its real runtime
+  dependencies** (opencv-python-headless, Pillow, matplotlib) instead of numpy alone.
+- **`release.yml`'s tag gate is unconditional** — a `workflow_dispatch` from a branch fails
+  closed instead of reaching both registries with the tag comparison skipped; the manifests'
+  version agreement is now also a test. The PyPI publish action is pinned to a commit SHA.
+- **`verify.ps1` records an explicit outcome per leg**: an absent command is a FAIL, not the
+  previous leg's zero; two legs added (clean-venv install-and-run, `npm audit`); an ANDON when
+  `node`/`npm` are missing for the selected legs.
+- **The sheet composers find a licence-verified font or refuse by name** (Arial → Liberation Sans
+  → Noto Sans); `C:\Windows\Fonts` is no longer hard-coded, and CI installs Liberation
+  explicitly so 23 sheet tests that always skipped there now run.
+- Instruments stopped reporting what they had not measured: `measure_floor` refuses unequal or
+  duplicate runs instead of truncating with `zip`; `compare_runs` refuses empty channel
+  directories instead of printing `max_abs_diff 0`; `measure_cascade_clip` decodes at the
+  stream's dimensions and refuses a mismatch; the E08 sheet renders every panel line from the
+  record. `fetch_run` inspects curl's return code, indexes fallback paths, and halts on an
+  unmapped source node.
+- Tests: the E02 payload byte pins run everywhere on a committed fixture; a `-O` receipt for the
+  gate every submitted graph passes; the pose-arc round-trip check gained the pytest wrapper its
+  siblings had; twenty guards that depended on the caller's working directory are anchored.
 
 ### Fixed
 
+- `build_camera_i2v_payload` requires `--start-frame` and hashes it (the sha256 flag was an
+  optional ledger entry); the three animate/i2v builders resolve the seed default before Gate S.
+- `gate_saved_graph.link_round_trip` walks both socket lists, so a socket the save/convert round
+  trip dropped is a refusal, not a silent pass.
+- `clipcompare.frame_fidelity` counts differing pixels, not channels ×3; `compare_runs` likewise.
+- `glb.gate_atlas_untouched` reports `K unhashable` images instead of silently comparing only the
+  hashable ones; `normalize_depth` reserves byte 0 for background — geometry starts at 1/255.
+- `assembly.gate_no_paid_nodes` raises the gate, not a `TypeError`, on a node with no `class_type`.
+- `lift_solve.round_trip_report` lost the `raise_on_fail` keyword that let a caller disarm it.
+
 ### Changed
+
+- **Shot-spec contract:** no `gates` block; `asset.sha256` required. **Gait:** `GaitParams` accepts
+  `stance_frac == 0.5` only. **Records:** the `ceiling` field in `specs/*seeds.json` is an object
+  (`ceiling.note` carries the prose); assembly records name whose frames they hold.
+- Verdict strings changed in `gate_atlas_untouched`, the CASCADE ceiling and topology gates, and
+  Gate ROUTE; `compare_runs` renames `mean_abs_diff` → `mean_abs_diff_per_sample`;
+  `measure_cascade_clip` names `first_frame` / `mid_frame` with a `frame_index`.
+- `tests/blender/check_pose_arc_roundtrip.py` signals by a printed `POSE_ARC <json>` record, not
+  an exit code, and accepts `--fps N`.
+- `ci.yml` also triggers on `README.pypi.md` and `LICENSE` (they ride the sdist).
 
 ## [0.3.0] — 2026-08-18
 
