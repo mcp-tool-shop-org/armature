@@ -151,6 +151,50 @@ def common_frame_count(stacks):
     return counts[0]
 
 
+def common_frame_names(names_per_run):
+    """ANDON — every run names the SAME frames, or raise naming the disagreement.
+
+    The names were computed and thrown away. `frame_population` derives each run's
+    NUMBERED names, `_stack` used them only to open files, and `common_frame_count`
+    compared COUNTS across runs and nothing else — so no clause anywhere compared run A's
+    names with run B's, on the instrument whose docstring calls itself "the denominator
+    every later number is read against".
+
+    Measured 2026-09-04: `r1` numbered 00000..00004 against `r2` numbered 00001..00005,
+    each frame's pixels a function of its own frame NUMBER (a deterministic provider),
+    exit 0, "frames identical: 0/5", `max|d| 20` on every index, and floor.json keying
+    `pairs[].frame` by POSITION. A deterministic provider read as noisy, and every later
+    arm would be graded against that floor.
+
+    This is the refusal `compare_runs.compare_channel` already raises for the same reason
+    (`names_a != names_b`) and `measure_lift.gate_pairing` implements as a gate.
+    """
+    runs = list(names_per_run)
+    base = runs[0]
+    truth = list(names_per_run[base])
+    odd = [r for r in runs[1:] if list(names_per_run[r]) != truth]
+
+    def unique_to(r):
+        others = set()
+        for o in runs:
+            if o != r:
+                others |= set(names_per_run[o])
+        return sorted(set(names_per_run[r]) - others)[:16]
+
+    ev = {"gate": "NAMES", "runs": runs, "against": base,
+          "frames_per_run": {r: list(v)[:32] for r, v in names_per_run.items()},
+          "runs_disagreeing": odd,
+          "only_in": {r: unique_to(r) for r in runs}}
+    if odd:
+        raise FloorError(
+            f"the runs do not name the same frames ({', '.join(odd)} disagree with "
+            f"{base}); the pairs would be built by POSITION, so a deterministic provider "
+            f"reads as noisy and the floor every later arm is graded against is measured "
+            f"between frames that were never the same moment", ev)
+    ev["verdict"] = f"all {len(runs)} runs name the same {len(truth)} frames"
+    return truth, ev
+
+
 def frame_population(d, expect=None):
     """The NUMBERED frames of one run's channel directory, in index order, or raise.
 
@@ -209,9 +253,16 @@ def frame_population(d, expect=None):
 
 
 def _stack(run_dir, sub="lossless", expect=None):
+    """`(names, frames)` for one run.
+
+    It used to return the arrays alone. The names were derived one line above and dropped
+    on the floor, which is how two runs naming different frames were paired by POSITION
+    with nothing in the record saying so — see `common_frame_names`.
+    """
     d = os.path.join(run_dir, sub)
     names = frame_population(d, expect=expect)
-    return [np.array(Image.open(os.path.join(d, n)).convert("RGB")).astype(np.int16) for n in names]
+    return names, [np.array(Image.open(os.path.join(d, n)).convert("RGB")).astype(np.int16)
+                   for n in names]
 
 
 def _span(text, name):
@@ -309,11 +360,22 @@ def bound_windows(n, early_text=None, late_text=None, fraction=WINDOW_FRACTION):
     return windows["early"], windows["late"], source
 
 
-def pair_stats(A, B, big=8):
+def pair_stats(A, B, big=8, names=None):
     """Per-frame stats for one pair of runs.
 
     The length check is here rather than only at the call site because `zip` is here:
     a truncating pair is produced by this function, so this is where it is refused.
+
+    `names` keys each row by the FILE's own frame number rather than by its position in
+    the listing — a position depends on what else is in the directory and on where the
+    run's numbering starts, and is not a thing a later reader can look up.
+
+    **A pixel is a position, not a sample.** `pct_gt` was `100 * (d > big).mean()` over an
+    (H, W, C) array and every heading above it read `px >{big}`. Measured 2026-09-04 on a
+    pair differing in exactly one of three channels on every pixel: the tool printed
+    33.333% where 100% of the pixels differ. Both quantities are now reported under their
+    own names with `samples_per_pixel` beside them, which is the correction
+    `compare_runs` already carries.
     """
     if len(A) != len(B):
         raise FloorError(
@@ -325,11 +387,21 @@ def pair_stats(A, B, big=8):
     out = []
     for i, (a, b) in enumerate(zip(A, B)):
         d = np.abs(a - b)
+        spp = int(d.shape[2]) if d.ndim == 3 else 1
+        over = d > big
+        px_over = over.any(axis=-1) if d.ndim == 3 else over
+        number = i
+        if names is not None:
+            stem = os.path.splitext(str(names[i]))[0]
+            number = int(stem) if stem.isdigit() else i
         out.append({
-            "frame": i,
+            "frame": number,
+            "file": str(names[i]) if names is not None else None,
             "max": int(d.max()),
             "mean": float(d.mean()),
-            "pct_gt": float(100.0 * (d > big).mean()),
+            "samples_per_pixel": spp,
+            "pct_px_gt": float(100.0 * px_over.mean()),
+            "pct_samples_gt": float(100.0 * over.mean()),
             "identical": bool(d.max() == 0),
         })
     return out
@@ -357,15 +429,21 @@ def main(argv=None):
     runs = check_runs([r for r in a.runs.split(",") if r])
     # ---- ANDON, before a single pair is compared: each run's population is its
     #      NUMBERED frames and nothing else. A contact strip beside them is refused.
-    stacks = {r: _stack(os.path.join(a.root, r), expect=a.expect) for r in runs}
+    loaded = {r: _stack(os.path.join(a.root, r), expect=a.expect) for r in runs}
+    names_per_run = {r: v[0] for r, v in loaded.items()}
+    stacks = {r: v[1] for r, v in loaded.items()}
     # ---- ANDON, before a single pair is compared: one verified frame count, not run[0]'s.
     n = common_frame_count(stacks)
+    # ---- ANDON, before a single pair is compared: the runs name the SAME frames. The
+    #      names were derived per run and DISCARDED; nothing compared them across runs,
+    #      so two runs of equal length numbered 0..4 and 1..5 were paired by position.
+    frame_names, gate_names = common_frame_names(names_per_run)
     # ---- ANDON, before a single pair is compared: the windows are bounded by THIS run.
     early, late, window_source = bound_windows(n, a.early, a.late)
 
     pairs = {}
     for x, y in itertools.combinations(runs, 2):
-        pairs[f"{x}|{y}"] = pair_stats(stacks[x], stacks[y], a.big)
+        pairs[f"{x}|{y}"] = pair_stats(stacks[x], stacks[y], a.big, names=frame_names)
 
     print(f"A0 — repeat variance on LOSSLESS frames · {len(runs)} runs · {n} frames · "
           f"{len(pairs)} pairs")
@@ -389,47 +467,84 @@ def main(argv=None):
         # No `if i < len(ps)` filter: every index here was bounded against n by
         # `bound_windows` before a pair was compared. That filter is what let a window
         # report over fewer frames than the heading above it named.
-        return [ps[i]["max"] for i in idx], [ps[i]["pct_gt"] for i in idx]
+        #
+        # `idx` indexes the POSITION in this pair's rows, which `bound_windows` bounded
+        # against n; the row it lands on names its own frame number.
+        return ([ps[i]["max"] for i in idx],
+                [ps[i]["pct_px_gt"] for i in idx],
+                [ps[i]["pct_samples_gt"] for i in idx])
+
+    def window_numbers(idx):
+        """The FILE numbers at those positions. `--early`/`--late` name POSITIONS in the
+        run (bounded against `n` by `bound_windows`); the heading names the frames those
+        positions actually are, which on a run numbered from anything but 0 is not the
+        same list."""
+        out = []
+        for i in idx:
+            stem = os.path.splitext(str(frame_names[i]))[0]
+            out.append(int(stem) if stem.isdigit() else i)
+        return out
 
     def heading(name, idx):
-        return f"{name} (frames {idx[0]}-{idx[-1]}, {len(idx)} of {n})"
+        num = window_numbers(idx)
+        return f"{name} (frames {num[0]}-{num[-1]}, {len(idx)} of {n})"
 
     print(f"{heading('EARLY', early)} vs {heading('LATE', late)} - reported separately, "
           f"always")
     print(f"  windows: early {window_source['early']}; late {window_source['late']}")
     rows = []
     for k, ps in pairs.items():
-        em, eg = window(ps, early)
-        lm, lg = window(ps, late)
-        rows.append((k, em, eg, lm, lg))
+        em, egp, egs = window(ps, early)
+        lm, lgp, lgs = window(ps, late)
+        rows.append((k, em, egp, egs, lm, lgp, lgs))
         print(f"  {k}")
         print(f"    early  max|d|: min {min(em):>3} median {int(st.median(em)):>3} max {max(em):>3}"
-              f"   |  px >{a.big}: {st.mean(eg):.3f}%")
+              f"   |  px >{a.big}: {st.mean(egp):.3f}%"
+              f"   |  samples >{a.big}: {st.mean(egs):.3f}%")
         print(f"    late   max|d|: min {min(lm):>3} median {int(st.median(lm)):>3} max {max(lm):>3}"
-              f"   |  px >{a.big}: {st.mean(lg):.3f}%")
+              f"   |  px >{a.big}: {st.mean(lgp):.3f}%"
+              f"   |  samples >{a.big}: {st.mean(lgs):.3f}%")
 
     allmax = [p["max"] for ps in pairs.values() for p in ps]
-    allpct = [p["pct_gt"] for ps in pairs.values() for p in ps]
+    # Two quantities, two names. `px` and `samples` differ by the channel count, and the
+    # single number this file used to print was the sample fraction under a `px` heading.
+    allpct_px = [p["pct_px_gt"] for ps in pairs.values() for p in ps]
+    allpct_samples = [p["pct_samples_gt"] for ps in pairs.values() for p in ps]
+    spp = sorted({p["samples_per_pixel"] for ps in pairs.values() for p in ps})
     ndiff = sum(1 for ps in pairs.values() for p in ps if not p["identical"])
     print()
     print("WHOLE-CLIP SCALAR — recorded only so it can be compared with the codec-contaminated")
     print("                    first pass. It is NOT the floor; the per-index shape above is.")
     print(f"  frames differing : {ndiff} of {n * len(pairs)}")
     print(f"  per-frame max|d| : min {min(allmax)} · median {int(st.median(allmax))} · max {max(allmax)}")
-    print(f"  px differing >{a.big}  : {st.mean(allpct):.3f}%")
+    print(f"  px differing >{a.big}  : {st.mean(allpct_px):.3f}%  "
+          f"(a pixel is a position: counted once however many channels differ)")
+    print(f"  samples >{a.big}       : {st.mean(allpct_samples):.3f}%  "
+          f"(samples_per_pixel {spp})")
 
     payload = {
         "runs": runs, "n_frames": n, "big_threshold": a.big, "expect": a.expect,
         "frames_per_run": {r: len(s) for r, s in stacks.items()},
+        # The REALISED names, per run and shared. They were derived and discarded, which
+        # is how two runs naming different frames were paired by position.
+        "frame_names": frame_names,
+        "frame_names_per_run": names_per_run,
+        "gate_NAMES": gate_names,
         # The REALISED index lists, which `bound_windows` has already proved are frames
         # this run carries -- never the requested text.
         "early_window": early, "late_window": late, "window_source": window_source,
+        # The positions above, resolved to the frame numbers on the files — the heading
+        # printed positions under the word "frames".
+        "early_window_frames": window_numbers(early),
+        "late_window_frames": window_numbers(late),
         "window_fraction": WINDOW_FRACTION,
         "pairs": pairs,
         "whole_clip": {
             "frames_differing": ndiff, "of": n * len(pairs),
             "max_min": min(allmax), "max_median": st.median(allmax), "max_max": max(allmax),
-            "pct_gt_big_mean": st.mean(allpct),
+            "samples_per_pixel": spp,
+            "pct_px_gt_big_mean": st.mean(allpct_px),
+            "pct_samples_gt_big_mean": st.mean(allpct_samples),
         },
     }
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)

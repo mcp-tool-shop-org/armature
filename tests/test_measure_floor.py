@@ -46,7 +46,7 @@ def test_runs_of_different_lengths_raise_before_any_pair_is_compared(tmp_path):
     """5 / 5 / 9. The old code paired the first 5 of every run and called the floor zero."""
     for name, n in (("r1", 5), ("r2", 5), ("r3", 9)):
         _run(tmp_path, name, n)
-    stacks = {r: MF._stack(os.path.join(str(tmp_path), r)) for r in ("r1", "r2", "r3")}
+    stacks = {r: MF._stack(os.path.join(str(tmp_path), r))[1] for r in ("r1", "r2", "r3")}
 
     with pytest.raises(MF.FloorError) as e:
         MF.common_frame_count(stacks)
@@ -59,7 +59,7 @@ def test_runs_of_different_lengths_raise_before_any_pair_is_compared(tmp_path):
 def test_equal_lengths_return_the_verified_count(tmp_path):
     for name in ("r1", "r2"):
         _run(tmp_path, name, 6)
-    stacks = {r: MF._stack(os.path.join(str(tmp_path), r)) for r in ("r1", "r2")}
+    stacks = {r: MF._stack(os.path.join(str(tmp_path), r))[1] for r in ("r1", "r2")}
     assert MF.common_frame_count(stacks) == 6
 
 
@@ -296,7 +296,7 @@ def test_the_png_match_is_case_insensitive_like_its_four_siblings(tmp_path):
         d = os.path.join(str(tmp_path), name, "lossless")
         Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8)).save(
             os.path.join(d, "00003.PNG"))
-    assert len(MF._stack(os.path.join(str(tmp_path), "r1"))) == 4
+    assert len(MF._stack(os.path.join(str(tmp_path), "r1"))[1]) == 4
 
 
 # --------------------------------------------- the two ends are the SAME size, always
@@ -386,3 +386,133 @@ def test_the_floor_andons_survive_python_optimize(tmp_path):
     assert "STRAY_RAISED" in out.stdout, out.stderr
     assert "SIZE_RAISED" in out.stdout, out.stderr
     assert "SPAN_RAISED" in out.stdout, out.stderr
+
+
+# ------------------------- the two runs name the SAME frames, and the spread names its unit
+#
+# **The names were computed and discarded.** `frame_population` derives each run's NUMBERED
+# names; `_stack` used them only to open files and returned bare arrays; `common_frame_count`
+# compared COUNTS across runs and nothing else. No clause anywhere compared run A's names
+# with run B's — on the instrument whose own docstring calls itself "the denominator every
+# later number is read against".
+#
+# Measured 2026-09-04 in this worktree: `r1/lossless` numbered 00000..00004 and `r2/lossless`
+# numbered 00001..00005, each frame's pixels a function of its own frame NUMBER (a
+# deterministic provider), `--runs=r1,r2`: exit 0, "2 runs, 5 frames, 1 pairs",
+# "frames identical: 0/5", per-frame `max|d| 20` on every index, and floor.json recording
+# `pairs["r1|r2"][].frame` = 0..4 — POSITIONS, not the numbers on the files. Nothing in the
+# record stated that the two runs named different frames. A deterministic provider reads as
+# noisy, and every later arm is graded against that floor.
+#
+# The refusal is the one `compare_runs.compare_channel` already raises for the same reason
+# (`names_a != names_b`) and `measure_lift.gate_pairing` implements as a gate.
+#
+# **And the spread statistic named the wrong denominator.** `pct_gt` was
+# `100 * (d > big).mean()` over an (H, W, C) array under printed headings reading
+# `px >{big}`. Measured on a 5-frame pair differing in exactly one of three channels on
+# every pixel of an 8x8 frame: the tool printed 33.333% where 100% of the PIXELS differ.
+# `compare_runs` records the correction for this exact unit (`n_differing_px` from
+# `(d > 0).any(axis=-1)` beside `n_differing_samples` and `samples_per_pixel`).
+
+
+def _run_numbered(root, name, numbers, h=4, w=4):
+    """A run whose every frame's pixels are a function of its own frame NUMBER.
+
+    That is what makes the fixture able to catch the defect: a deterministic provider, so
+    any difference between the two runs is the PAIRING and not the provider.
+    """
+    d = os.path.join(str(root), name, "lossless")
+    os.makedirs(d, exist_ok=True)
+    for n in numbers:
+        Image.fromarray(np.full((h, w, 3), 10 + 5 * n, dtype=np.uint8)).save(
+            os.path.join(d, f"{n:05d}.png"))
+    return name
+
+
+def test_two_runs_naming_different_frames_are_refused_before_any_pair(tmp_path):
+    """THE fixture: five frames each, numbered 0..4 and 1..5. Counts agree; names do not."""
+    _run_numbered(tmp_path, "r1", [0, 1, 2, 3, 4])
+    _run_numbered(tmp_path, "r2", [1, 2, 3, 4, 5])
+    out = tmp_path / "floor.json"
+    with pytest.raises(MF.FloorError) as e:
+        MF.main(["--runs=r1,r2", f"--root={tmp_path}", "--early=0-1", "--late=3-4",
+                 f"--out={out}"])
+    ev = e.value.evidence
+    assert ev["gate"] == "NAMES"
+    assert ev["frames_per_run"]["r1"][:2] == ["00000.png", "00001.png"]
+    assert ev["only_in"]["r1"] == ["00000.png"]
+    assert ev["only_in"]["r2"] == ["00005.png"]
+    assert not out.exists()
+
+
+def test_two_runs_naming_the_same_frames_still_measure(tmp_path):
+    """The guard the other way: the refusal must not make a correct pair unmeasurable, and
+    the record now names the population it measured."""
+    _run_numbered(tmp_path, "r1", [3, 4, 5, 6])
+    _run_numbered(tmp_path, "r2", [3, 4, 5, 6])
+    # `--early`/`--late` name POSITIONS in the run; this run's positions 0..3 ARE frames
+    # 3..6, which is exactly the distinction the heading used to elide.
+    rec = MF.main(["--runs=r1,r2", f"--root={tmp_path}", "--early=0-1", "--late=2-3",
+                   f"--out={tmp_path / 'floor.json'}"])
+    assert rec["frame_names"] == ["00003.png", "00004.png", "00005.png", "00006.png"]
+    assert rec["frames_per_run"] == {"r1": 4, "r2": 4}
+    # keyed by the FILE's own number, not by its position in the listing
+    assert [p["frame"] for p in rec["pairs"]["r1|r2"]] == [3, 4, 5, 6]
+    assert rec["early_window"] == [0, 1] and rec["early_window_frames"] == [3, 4]
+    assert rec["late_window"] == [2, 3] and rec["late_window_frames"] == [5, 6]
+
+
+def test_the_name_andon_survives_python_optimize(tmp_path):
+    """It raises; it is not an `assert`."""
+    import subprocess
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _run_numbered(tmp_path, "r1", [0, 1, 2])
+    _run_numbered(tmp_path, "r2", [1, 2, 3])
+    code = (
+        "import sys; sys.path.insert(0, r'%s')\n"
+        "import measure_floor as MF\n"
+        "try:\n"
+        "    MF.common_frame_names({'r1': ['00000.png'], 'r2': ['00001.png']})\n"
+        "except MF.FloorError:\n"
+        "    print('NAMES_RAISED')\n"
+    ) % os.path.join(root, "tools")
+    out = subprocess.run([sys.executable, "-O", "-c", code], capture_output=True, text=True)
+    assert "NAMES_RAISED" in out.stdout, out.stderr
+
+
+def _one_channel_pair(root, frames=5, h=8, w=8):
+    """Two runs differing in exactly ONE of three channels, on every pixel."""
+    for name, delta in (("r1", 0), ("r2", 40)):
+        d = os.path.join(str(root), name, "lossless")
+        os.makedirs(d, exist_ok=True)
+        for i in range(frames):
+            arr = np.full((h, w, 3), 100, dtype=np.uint8)
+            arr[..., 1] = 100 + delta
+            Image.fromarray(arr).save(os.path.join(d, f"{i:05d}.png"))
+
+
+def test_the_spread_reports_pixels_and_samples_under_their_own_names(tmp_path):
+    """100% of the PIXELS differ and 33.3% of the SAMPLES do. The old single number was
+    the sample fraction printed under a heading reading `px >8`."""
+    _one_channel_pair(tmp_path)
+    rec = MF.main(["--runs=r1,r2", f"--root={tmp_path}", "--early=0-1", "--late=3-4",
+                   f"--out={tmp_path / 'floor.json'}"])
+    per_frame = rec["pairs"]["r1|r2"][0]
+    assert per_frame["samples_per_pixel"] == 3
+    assert per_frame["pct_px_gt"] == pytest.approx(100.0)
+    assert per_frame["pct_samples_gt"] == pytest.approx(100.0 / 3.0, rel=1e-6)
+    assert rec["whole_clip"]["pct_px_gt_big_mean"] == pytest.approx(100.0)
+    assert rec["whole_clip"]["pct_samples_gt_big_mean"] == pytest.approx(100.0 / 3.0,
+                                                                        rel=1e-6)
+    # the key that named neither quantity is gone
+    assert "pct_gt" not in per_frame
+    assert "pct_gt_big_mean" not in rec["whole_clip"]
+
+
+def test_the_printed_headings_name_the_quantity_under_them(tmp_path, capsys):
+    _one_channel_pair(tmp_path)
+    MF.main(["--runs=r1,r2", f"--root={tmp_path}", "--early=0-1", "--late=3-4",
+             f"--out={tmp_path / 'floor.json'}"])
+    printed = capsys.readouterr().out
+    assert "px >8" in printed and "samples >8" in printed
