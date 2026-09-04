@@ -38,6 +38,7 @@ from test_ci_workflows import (
     _has_a_ceiling,
     _install_tokens,
     clean_room_script,
+    npm_clean_room_script,
     run_script,
     step_containing,
 )
@@ -520,3 +521,53 @@ def test_the_toolchain_parity_check_goes_red_on_the_leg_this_repo_had():
     forked = "& $python -m pip install 'build' 'twine'"
     assert _missing_from(forked, clean_room_install_tokens()), (
         "an unconstrained local install reads as matching CI's pinned one")
+
+
+# -- the npm clean room, locally too (wave 10, F-3729edd4 family carry) --------------------
+#
+# The family is "places that run the npm package's launcher as coverage": ci.yml's `launcher`
+# job, release.yml's `npm` job, and verify.ps1's leg 3. All three ran
+# `node bin/armature.mjs --node-selftest` out of the CHECKOUT, which consults neither `bin`,
+# nor `files`, nor the tarball — measured green on a `bin` map pointed at a typo, with no
+# `armature` command existing anywhere after the install. ci.yml and release.yml now call
+# `.github/actions/npm-clean-room`; this is the same leg in the script whose DESCRIPTION says
+# a green local run and a green CI run are the same claim.
+
+
+def _runs_the_npm_clean_room(text):
+    """True when a text packs the npm package, installs the tarball into a scratch prefix,
+    and invokes the shim npm created there.
+
+    The bash action and the PowerShell script cannot share tokens verbatim, so what is
+    compared is the three MECHANISMS, and the action is held to the same predicate below so
+    a change of mechanism there fails here rather than drifting.
+    """
+    return (
+        "npm pack" in text
+        and re.search(r"npm\s+(install|i)\b[^\n]*--prefix", text) is not None
+        and "node_modules/.bin" in text
+        and "--node-selftest" in text
+    )
+
+
+def test_verify_runs_the_npm_package_from_a_clean_install_the_way_ci_does():
+    """The third member of the family, in the file that claims parity with the other two."""
+    assert _runs_the_npm_clean_room(npm_clean_room_script()), (
+        "the CI leg this is mirrored from no longer matches the mechanisms compared here:\n"
+        + npm_clean_room_script())
+    assert _runs_the_npm_clean_room(VERIFY.replace("\\", "/")), (
+        "verify.ps1 runs the launcher out of the checkout and never installs the package it "
+        "would publish; a `bin` map that resolves to nothing passes locally")
+
+
+def test_the_local_npm_clean_room_check_goes_red_on_the_leg_this_script_had():
+    """The mutation: leg 3's npm step exactly as it stood, and two near-misses."""
+    before = "Push-Location (Join-Path $repo 'npm')\ntry { node bin/armature.mjs --node-selftest } finally { Pop-Location }"
+    assert not _runs_the_npm_clean_room(before), (
+        "the checkout self-test reads as a clean install")
+    assert not _runs_the_npm_clean_room("npm pack --silent\nnode bin/armature.mjs --node-selftest"), (
+        "packing and then running the CHECKOUT reads as a clean install")
+    assert not _runs_the_npm_clean_room(
+        "npm pack --silent\nnpm install --prefix $npmroom $tarball.FullName"), (
+        "installing without invoking the shim reads as a clean install; that is the exact "
+        "state where npm reported `added 1 package` and made no bin directory")

@@ -259,7 +259,50 @@ print("clean room: draw_body, draw_hand and mean_consecutive_frame_difference al
             }
 
             Push-Location (Join-Path $repo 'npm')
-            try { node bin\armature.mjs --node-selftest } finally { Pop-Location }
+            try {
+                node bin\armature.mjs --node-selftest
+                if ($LASTEXITCODE -ne 0) { return }
+
+                # ci.yml's npm clean room (`.github/actions/npm-clean-room`), mirrored — the
+                # npm half of the leg above. The self-test on the line before runs the
+                # launcher out of the CHECKOUT and consults neither `bin`, `files`, nor the
+                # tarball; measured 2026-09-04 with the `bin` map pointed at a typo, that
+                # self-test passed, `npm pack` passed, the install reported `added 1 package`,
+                # and no `armature` command existed anywhere. The package is published
+                # irreversibly, so the command it installs is what has to be run.
+                Get-ChildItem -Path . -Filter '*.tgz' -ErrorAction SilentlyContinue |
+                    Remove-Item -Force -ErrorAction SilentlyContinue
+                npm pack --silent
+                if ($LASTEXITCODE -ne 0) { return }
+                $tarball = Get-ChildItem -Path . -Filter '*.tgz' |
+                    Sort-Object LastWriteTime | Select-Object -Last 1
+                if (-not $tarball) {
+                    Write-Host '  npm pack produced no tarball' -ForegroundColor Red
+                    $global:LASTEXITCODE = 1
+                    return
+                }
+                $npmroom = Join-Path ([System.IO.Path]::GetTempPath()) "armature-npmroom-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+                try {
+                    New-Item -ItemType Directory -Path $npmroom -Force | Out-Null
+                    npm install --prefix $npmroom $tarball.FullName
+                    if ($LASTEXITCODE -ne 0) { return }
+                    $shimName = if ($IsWindows -eq $false) { 'armature' } else { 'armature.cmd' }
+                    $shim = Join-Path $npmroom (Join-Path 'node_modules/.bin' $shimName)
+                    if (-not (Test-Path $shim)) {
+                        Write-Host "  the installed package provides no armature command at $shim" -ForegroundColor Red
+                        Write-Host '  check bin/ and files/ in npm/package.json' -ForegroundColor Red
+                        $global:LASTEXITCODE = 1
+                        return
+                    }
+                    & $shim --node-selftest
+                    if ($LASTEXITCODE -ne 0) { return }
+                } finally {
+                    if (Test-Path $npmroom) {
+                        Remove-Item $npmroom -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                    Remove-Item $tarball.FullName -Force -ErrorAction SilentlyContinue
+                }
+            } finally { Pop-Location }
         } finally { Pop-Location }
     }
 }
