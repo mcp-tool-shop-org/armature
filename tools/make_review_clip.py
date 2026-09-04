@@ -67,16 +67,11 @@ def main(argv=None):
     ap.add_argument("--crop", type=int, default=224, help="still crop size, native pixels")
     a = ap.parse_args(argv)
 
-    os.makedirs(a.out, exist_ok=True)     # scripts create their own output directories
     names = sorted(f for f in os.listdir(a.frames)
-                   if f.endswith(".png") and f[0].isdigit())
+                   if f.lower().endswith(".png") and f[0].isdigit())
     if not names:
         raise SystemExit(f"no frames in {a.frames}")
     ims = [Image.open(os.path.join(a.frames, n)).convert("RGB") for n in names]
-
-    clip = os.path.join(a.out, clip_name(a.fps, a.source_fps))
-    ims[0].save(clip, save_all=True, append_images=ims[1:],
-                duration=int(round(1000.0 / a.fps)), loop=0, lossless=True, quality=100)
 
     det = None
     if a.detection:
@@ -85,6 +80,21 @@ def main(argv=None):
         # ---- ANDON. The rows describe THESE frames, by frame number — not by position.
         gate_listing_pairing({"frames": names, "detection": det})
 
+    idx = [int(v) for v in a.stills.split(",") if v.strip() != ""]
+    # ---- every requested still index exists. The count had no denominator.
+    require_frames(idx, ims, what="clip frame(s)", where=a.frames)
+
+    # ---- the output directory is created only once every in-tool andon above has
+    #      fired. A refused run that has already made its directory leaves an empty
+    #      one behind, which a later reader -- or a re-run into the same --out --
+    #      reads as an attempt that produced nothing rather than one that was refused.
+    #      The clip used to be written between the two andons above, so a run refused
+    #      by either left a directory holding a review clip and no stills.
+    os.makedirs(a.out, exist_ok=True)
+    clip = os.path.join(a.out, clip_name(a.fps, a.source_fps))
+    ims[0].save(clip, save_all=True, append_images=ims[1:],
+                duration=int(round(1000.0 / a.fps)), loop=0, lossless=True, quality=100)
+
     W, H = ims[0].size
     half = a.crop // 2
     # 15/16 = left/right wrist, 27/28 = ankles. Hands and feet are where a video model's
@@ -92,9 +102,6 @@ def main(argv=None):
     # stills. A landmark the detector placed OUTSIDE the image is still cut — and the
     # sidecar records that it was outside, which is the finding rather than a missing file.
     targets = {"hand_L": 15, "hand_R": 16, "foot_L": 27, "foot_R": 28}
-    idx = [int(v) for v in a.stills.split(",") if v.strip() != ""]
-    # ---- every requested still index exists. The count had no denominator.
-    require_frames(idx, ims, what="clip frame(s)", where=a.frames)
     cuts = []
     for i in idx:
         for label, li in targets.items():

@@ -261,3 +261,282 @@ def test_no_sheet_still_carries_the_silent_continue(tmp_path):
                     and "continue" in "".join(lines[i:i + 2])):
                 offenders.append(f"{mod}:{i + 1} {stripped}")
     assert offenders == [], offenders
+
+
+# ------------------------------------------- two empty populations are not a passing gate
+#
+# `gate_pairing`'s passing verdict was built as `f"...numbered {rendered[0]}..{rendered[-1]}"`,
+# indexing a list that may be empty. Two empty populations satisfy every earlier clause —
+# no unnumbered files, equal lengths, no first disagreement — and the function then died on
+# the verdict line. Measured 2026-09-04:
+# `gate_listing_pairing({'control': [], 'output': []})` raised `IndexError: list index out
+# of range`, not `PairingGate`; and because `gate_listing_pairing`'s re-wrap catches only
+# `PairingGate`, the `IndexError` propagated raw out of the four sheets that call it. The
+# repo's rule for this case is written three doors down in `gate_b_frames.frame_paths`: a
+# comparison over zero frames proves nothing and would report a passing gate.
+
+
+def test_two_empty_populations_raise_the_pairing_gate_not_an_indexerror():
+    with pytest.raises(ML.PairingGate) as e:
+        ML.gate_listing_pairing({"a": [], "b": []})
+    ev = e.value.evidence
+    assert ev["gate"] == "PAIRING"
+    assert ev["n_rendered"] == 0 and ev["n_authored"] == 0
+
+
+def test_an_empty_rendered_population_against_an_authored_one_still_names_the_gate():
+    with pytest.raises(ML.PairingGate) as e:
+        ML.gate_pairing([], [{"frame": 0}])
+    assert e.value.evidence["gate"] == "PAIRING"
+
+
+def test_a_non_empty_pair_still_returns_its_verdict():
+    """The guard the other way: the refusal must not make a real pairing unreachable."""
+    ev = ML.gate_pairing([{"file": "00000.png"}, {"file": "00001.png"}],
+                         [{"frame": 0}, {"frame": 1}])
+    assert "0..1" in ev["verdict"]
+
+
+def test_a_sheet_pointed_at_two_empty_directories_reports_the_gate(tmp_path, monkeypatch):
+    """End to end, through `make_lift_sheet`: the operator gets the andon's evidence
+    dict naming the columns, not a bare `IndexError` naming neither directory."""
+    src = _plate(_clip(str(tmp_path / "src"), []))
+    lif = _plate(_clip(str(tmp_path / "lif"), []))
+    det = _detection(str(tmp_path / "det.json"), [])
+    out = str(tmp_path / "sheet.png")
+    monkeypatch.setattr(sys, "argv", [
+        "make_lift_sheet.py", f"--source={src}", f"--detection={det}",
+        f"--lifted={lif}", f"--out={out}", "--frames=0", "--tile-h=24",
+        "--source-uncropped"])
+    with pytest.raises(ML.PairingGate) as e:
+        LS.main()
+    assert e.value.evidence["gate"] == "PAIRING"
+    assert not os.path.exists(out)
+
+
+def test_the_empty_population_refusal_survives_python_optimize(tmp_path):
+    import subprocess
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = (
+        "import sys; sys.path.insert(0, r'%s')\n"
+        "import measure_lift as ML\n"
+        "try:\n"
+        "    ML.gate_listing_pairing({'a': [], 'b': []})\n"
+        "except ML.PairingGate:\n"
+        "    print('RAISED')\n"
+    ) % (os.path.join(root, "tools"),)
+    res = subprocess.run([sys.executable, "-O", "-c", code], capture_output=True, text=True)
+    assert "RAISED" in res.stdout, res.stderr
+
+
+# ---------------------------------------- the plate a panel composites over is NAMED
+#
+# Five of the sheets the Director judges on flattened an RGBA source over a hard-coded,
+# unrecorded black plate — `Image.new("RGB", im.size, (0, 0, 0))` and a paste through the
+# alpha, in five copies (`make_thesis_sheet._rgb`, `make_gate0_sheet._rgb`,
+# `make_identity_sheet._load_rgb`, `make_lift_sheet._rgb`, `make_startframe_sheet._rgb`).
+# Nothing in the sheet, its printed line or its sidecar said which plate was used.
+#
+# The Director's authored-RGBA ruling is that "the RGB composite each route actually
+# submits is a deliberate, recorded choice", and `composite_reference` records exactly that
+# for the submitted plates (`plate_rgb_srgb` + `plate_why`), with
+# `SURVEY_PLATE = (154, 154, 157)` as the value his eye passed on the S03 kit. So the
+# reference column of a `control | output | reference | provenance` sheet could show the
+# character against a plate the route did not submit, and the difference would be read as a
+# difference in the OUTPUT.
+#
+# The black plate was at least deliberate (it used the alpha as a mask rather than PIL's
+# silent `convert("RGB")`); what was missing is that it was named.
+
+import ast  # noqa: E402
+import glob  # noqa: E402
+import subprocess  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+import make_identity_sheet as MIS  # noqa: E402
+import make_startframe_sheet as MSF  # noqa: E402
+
+
+def _rgba_clip(d, numbers, digits=3):
+    """A render directory whose frames carry a real alpha channel."""
+    os.makedirs(d, exist_ok=True)
+    for k, n in enumerate(numbers):
+        arr = np.zeros((SIZE[1], SIZE[0], 4), dtype=np.uint8)
+        arr[..., 0] = 200 + k                     # a figure colour under a real alpha
+        arr[4:12, 4:12, 3] = 255                  # opaque only where the figure is
+        Image.fromarray(arr, mode="RGBA").save(os.path.join(d, f"{n:0{digits}d}.png"))
+    return d
+
+
+def _lift_with_plate(tmp, plate_flag=None):
+    src = _plate(_rgba_clip(str(tmp / "src"), [0, 1]))
+    lif = _plate(_rgba_clip(str(tmp / "lif"), [0, 1]))
+    det = _detection(str(tmp / "det.json"), [0, 1])
+    out = str(tmp / "sheet.png")
+    argv = ["make_lift_sheet.py", f"--source={src}", f"--detection={det}",
+            f"--lifted={lif}", f"--out={out}", "--frames=0,1", "--tile-h=24",
+            "--source-uncropped"]
+    if plate_flag is not None:
+        argv.append(f"--sheet-plate={plate_flag}")
+    return argv, out
+
+
+def test_the_lift_sheet_records_the_plate_it_drew_the_character_against(
+        tmp_path, monkeypatch, capsys):
+    argv, out = _lift_with_plate(tmp_path)
+    monkeypatch.setattr(sys, "argv", argv)
+    LS.main()
+    side = json.loads((tmp_path / "sheet.json").read_text(encoding="utf-8"))
+    assert side["sheet_plate_rgb_srgb"] == [0, 0, 0], side
+    assert '"sheet_plate": [0, 0, 0]' in capsys.readouterr().out
+
+
+def test_changing_the_plate_changes_both_the_pixels_and_the_record(
+        tmp_path, monkeypatch):
+    """Both halves. A record that moves while the pixels do not is a record of nothing."""
+    a_dir, b_dir = tmp_path / "a", tmp_path / "b"
+    argv_a, out_a = _lift_with_plate(a_dir)
+    monkeypatch.setattr(sys, "argv", argv_a)
+    LS.main()
+    argv_b, out_b = _lift_with_plate(b_dir, plate_flag="154,154,157")
+    monkeypatch.setattr(sys, "argv", argv_b)
+    LS.main()
+
+    rec_a = json.loads((a_dir / "sheet.json").read_text(encoding="utf-8"))
+    rec_b = json.loads((b_dir / "sheet.json").read_text(encoding="utf-8"))
+    assert rec_a["sheet_plate_rgb_srgb"] == [0, 0, 0]
+    assert rec_b["sheet_plate_rgb_srgb"] == [154, 154, 157]
+
+    px_a = set(Image.open(out_a).convert("RGB").getdata())
+    px_b = set(Image.open(out_b).convert("RGB").getdata())
+    assert (154, 154, 157) in px_b, "the named plate is not in the pixels"
+    assert (154, 154, 157) not in px_a
+    assert px_a != px_b
+
+
+def test_every_composing_sheet_prints_the_plate_on_its_own_ok_line(tmp_path, capsys):
+    """The three that carry no sidecar say it on the line the operator reads."""
+    ctl = _rgba_clip(str(tmp_path / "ctl"), [0, 1, 2], digits=5)
+    arm = _rgba_clip(str(tmp_path / "arm"), [0, 1, 2], digits=5)
+    TS.main([f"--control={ctl}", f"--arms=A1:{arm}", "--reference=none",
+             f"--out={tmp_path / 'thesis.png'}", "--frames=0,1", "--tile-height=24",
+             "--sheet-plate=154,154,157"])
+    assert "plate=(154, 154, 157)" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------------ the census
+
+
+def _functions_that_flatten_alpha_by_hand(path):
+    """Any function building an `Image.new("RGB", ...)` and pasting through a mask.
+
+    The literal mechanism, walked on the AST rather than grepped for: this is the shape the
+    five copies had, and a sixth sheet written tomorrow would have it too.
+    """
+    with open(path, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    out = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        makes_rgb, pastes_masked = False, False
+        for sub in ast.walk(node):
+            if not isinstance(sub, ast.Call):
+                continue
+            f = sub.func
+            name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+            if (name == "new" and sub.args
+                    and isinstance(sub.args[0], ast.Constant) and sub.args[0].value == "RGB"):
+                makes_rgb = True
+            if name == "paste" and any(k.arg == "mask" for k in sub.keywords):
+                pastes_masked = True
+        if makes_rgb and pastes_masked:
+            out.append(node.name)
+    return out
+
+
+#: The ONE implementation every copy now routes through. Named, dated 2026-09-04, and
+#: checked below against its reason rather than trusted for being on a list: it is the
+#: only flattener that takes a `plate` parameter and returns the record naming it.
+PLATE_HELPER = ("sheet_compose.py", "load_rgb_over_plate")
+
+
+def test_the_one_exemption_is_the_shared_helper_and_earns_it():
+    """Its reason, mechanically: a `plate` parameter defaulting to the shared constant,
+    and a returned record that names the plate it used."""
+    import inspect
+
+    fname, funcname = PLATE_HELPER
+    fn = getattr(SC, funcname)
+    assert "plate" in inspect.signature(fn).parameters
+    assert inspect.signature(fn).parameters["plate"].default == SC.SHEET_PLATE
+    assert funcname in _functions_that_flatten_alpha_by_hand(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "tools", fname))
+
+
+def test_no_tool_still_flattens_alpha_over_an_unnamed_plate():
+    """Derived by walking every `tools/*.py`: the copies are gone, and a new one cannot
+    arrive without failing here. The composite itself is not the defect — the plate being
+    unnamed is — so this is paired with the census below, which requires the shared helper.
+
+    It found a member the finding did not name: `make_sheet._load_rgb`, which did the
+    worse thing (`img.convert("RGB")`, PIL's silent alpha drop) and is now routed here too.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    offenders = {}
+    for path in sorted(glob.glob(os.path.join(root, "tools", "*.py"))):
+        found = [f for f in _functions_that_flatten_alpha_by_hand(path)
+                 if (os.path.basename(path), f) != PLATE_HELPER]
+        if found:
+            offenders[os.path.basename(path)] = found
+    assert offenders == {}, offenders
+
+
+def test_every_sheet_that_draws_an_rgba_tile_routes_through_the_one_helper():
+    """The population is derived: every module in `tools/` defining a tile loader named
+    `_rgb` or `_load_rgb`. Each must call `sheet_compose.load_rgb_over_plate`."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    derived, without = {}, []
+    for path in sorted(glob.glob(os.path.join(root, "tools", "*.py"))):
+        with open(path, encoding="utf-8") as fh:
+            src = fh.read()
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name in ("_rgb", "_load_rgb"):
+                mod = os.path.basename(path)[:-3]
+                derived[mod] = node
+                if "load_rgb_over_plate" not in ast.dump(node):
+                    without.append(mod)
+    assert set(derived) == {"make_gate0_sheet", "make_identity_sheet", "make_lift_sheet",
+                            "make_sheet", "make_startframe_sheet",
+                            "make_thesis_sheet"}, sorted(derived)
+    assert without == [], without
+
+
+def test_the_helper_census_goes_red_on_a_module_that_flattens_by_hand(tmp_path):
+    """The falsifiability fixture: a temp module carrying the exact old shape must be
+    caught by the walk, or the census cannot fail."""
+    p = tmp_path / "make_sixth_sheet.py"
+    p.write_text(
+        "from PIL import Image\n"
+        "def _rgb(path):\n"
+        "    im = Image.open(path)\n"
+        "    if im.mode == 'RGBA':\n"
+        "        flat = Image.new('RGB', im.size, (0, 0, 0))\n"
+        "        flat.paste(im, mask=im.split()[3])\n"
+        "        return flat\n"
+        "    return im.convert('RGB')\n", encoding="utf-8")
+    assert _functions_that_flatten_alpha_by_hand(str(p)) == ["_rgb"]
+
+
+def test_the_identity_and_startframe_loaders_take_a_plate_parameter():
+    """The shared default is `sheet_compose.SHEET_PLATE`, not a literal in five places."""
+    import inspect
+
+    for fn in (MIS._load_rgb, MSF._rgb, TS._rgb, G0._rgb, LS._rgb):
+        sig = inspect.signature(fn)
+        assert "plate" in sig.parameters, fn
+        assert sig.parameters["plate"].default == SC.SHEET_PLATE, fn

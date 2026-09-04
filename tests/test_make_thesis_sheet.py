@@ -122,3 +122,135 @@ def test_every_writer_in_this_family_creates_its_own_output_directory():
         if not any(ln.strip().startswith("os.makedirs(") for ln in lines):
             without.append(mod)
     assert without == [], without
+
+
+# ------------------------------------------- two arms may not share one `--arms` label
+#
+# The pairing andon is armed with a dict comprehension keyed by the row TITLE —
+# `gate_listing_pairing({title: names for title, _d, names in rows})` — while `rows` is a
+# LIST built from `--arms=LABEL:dir,LABEL:dir`. Two arms sharing a label collapse to one
+# key, and the earlier one's listing is discarded before the gate ever sees it.
+#
+# Measured 2026-09-04: a control numbered 00000..00002 with
+# `--arms=A1:<dir numbered 00007..00009>,A1:<dir numbered 00000..00002>` built the sheet and
+# printed `THESIS_SHEET ... 358x220`, exit 0, with the mis-numbered arm drawn as a row under
+# captions f000/f001; the same two arms with distinct labels (`A1:` and `A2:`) raised
+# `PairingGate`. The `require_frames` loop iterates the LIST and so does still check every
+# row's index presence — it is only the frame-NUMBER agreement, the check that line exists
+# for, that a duplicate label removes.
+#
+# The E02 thesis panel is the panel this repo says turns a demonstration into evidence, and
+# a repeated `--arms` label was the one input shape that disarmed its andon.
+
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+
+import make_thesis_sheet as MTS  # noqa: E402
+from sheet_compose import SheetPopulationError  # noqa: E402
+
+
+def _numbered(d, numbers, digits=5, base=(20, 20, 24)):
+    os.makedirs(d, exist_ok=True)
+    for k, n in enumerate(numbers):
+        Image.new("RGB", (32, 24),
+                  (base[0] + 20 * k, base[1] + 7 * k, base[2])).save(
+            os.path.join(d, f"{n:0{digits}d}.png"))
+    return d
+
+
+def test_a_repeated_arms_label_is_refused_before_the_gate_is_armed(tmp_path):
+    ctl = _numbered(str(tmp_path / "ctl"), [0, 1, 2])
+    bad = _numbered(str(tmp_path / "bad"), [7, 8, 9])
+    good = _numbered(str(tmp_path / "good"), [0, 1, 2])
+    out = tmp_path / "thesis.png"
+    with pytest.raises(SheetPopulationError, match=r"repeats the label") as e:
+        MTS.main([f"--control={ctl}", f"--arms=A1:{bad},A1:{good}", "--reference=none",
+                  f"--out={out}", "--frames=0,1", "--tile-height=24"])
+    assert e.value.evidence["repeated"] == ["A1"], e.value.evidence
+    assert e.value.evidence["arms"] == ["A1", "A1"]
+    assert not out.exists()
+
+
+def test_the_same_two_arms_under_distinct_labels_still_reach_the_pairing_gate(tmp_path):
+    """The check the duplicate label was hiding: with distinct labels the mis-numbered arm
+    is refused by the andon, which is what the panel exists to guarantee."""
+    import measure_lift as ML
+
+    ctl = _numbered(str(tmp_path / "ctl"), [0, 1, 2])
+    bad = _numbered(str(tmp_path / "bad"), [7, 8, 9])
+    good = _numbered(str(tmp_path / "good"), [0, 1, 2])
+    with pytest.raises(ML.PairingGate):
+        MTS.main([f"--control={ctl}", f"--arms=A1:{bad},A2:{good}", "--reference=none",
+                  f"--out={tmp_path / 'thesis.png'}", "--frames=0,1", "--tile-height=24"])
+
+
+def test_two_distinctly_labelled_good_arms_still_build(tmp_path):
+    """The guard the other way: the refusal must not make a real two-arm panel
+    unreachable."""
+    ctl = _numbered(str(tmp_path / "ctl"), [0, 1, 2])
+    a1 = _numbered(str(tmp_path / "a1"), [0, 1, 2])
+    a2 = _numbered(str(tmp_path / "a2"), [0, 1, 2])
+    out = tmp_path / "thesis.png"
+    MTS.main([f"--control={ctl}", f"--arms=A1:{a1},A2:{a2}", "--reference=none",
+              f"--out={out}", "--frames=0,1", "--tile-height=24"])
+    assert out.exists()
+
+
+def test_the_duplicate_label_refusal_survives_python_optimize(tmp_path):
+    import subprocess
+    import sys as _sys
+
+    ctl = _numbered(str(tmp_path / "ctl"), [0, 1, 2])
+    bad = _numbered(str(tmp_path / "bad"), [7, 8, 9])
+    good = _numbered(str(tmp_path / "good"), [0, 1, 2])
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = (
+        "import sys; sys.path.insert(0, r'%s')\n"
+        "import make_thesis_sheet as TS\n"
+        "from sheet_compose import SheetPopulationError\n"
+        "try:\n"
+        "    TS.main([r'--control=%s', r'--arms=A1:%s,A1:%s', '--reference=none',\n"
+        "             r'--out=%s', '--frames=0,1', '--tile-height=24'])\n"
+        "except SheetPopulationError:\n"
+        "    print('RAISED')\n"
+    ) % (os.path.join(root, "tools"), ctl, bad, good, tmp_path / "o.png")
+    res = subprocess.run([_sys.executable, "-O", "-c", code], capture_output=True, text=True)
+    assert "RAISED" in res.stdout, res.stderr
+
+
+def test_every_panel_that_takes_labelled_arms_refuses_a_repeat():
+    """Derived, not typed: every module in `tools/` whose parser defines an `--arms` flag
+    must refuse a repeated label. One member today; a second joins by existing."""
+    import argparse
+    import ast
+    import glob
+    import importlib
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    derived = []
+    for path in sorted(glob.glob(os.path.join(root, "tools", "*.py"))):
+        with open(path, encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call)
+                    and getattr(node.func, "attr", "") == "add_argument"
+                    and node.args and isinstance(node.args[0], ast.Constant)
+                    and node.args[0].value == "--arms"):
+                derived.append(os.path.basename(path)[:-3])
+    assert sorted(set(derived)) == ["make_thesis_sheet"], sorted(set(derived))
+    for mod_name in set(derived):
+        tree = ast.parse(open(os.path.join(root, "tools", mod_name + ".py"),
+                              encoding="utf-8").read())
+        fn = next(n for n in tree.body
+                  if isinstance(n, ast.FunctionDef) and n.name == "main")
+        # An actual `raise` STATEMENT whose message names the repeat — read off the AST,
+        # so a comment recording the defect cannot satisfy it (the shape that turned this
+        # wave's `composite_reference` parser census green on the broken tool).
+        raises = [node for node in ast.walk(fn) if isinstance(node, ast.Raise)]
+        naming_a_repeat = [
+            r for r in raises
+            if any(isinstance(c, ast.Constant) and isinstance(c.value, str)
+                   and "repeat" in c.value for c in ast.walk(r))]
+        assert naming_a_repeat, (
+            f"{mod_name}.main takes --arms and never raises on a repeated label; the "
+            f"pairing gate is keyed by that label")
+        assert argparse is not None and importlib is not None

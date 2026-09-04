@@ -38,9 +38,21 @@ difference list, the render "reproducing" over one of four frames.
 So the two sides must name the SAME frames for a shared channel, and every shared name must
 be comparable. This is the refusal `measure_floor.common_frame_count` already implements for
 the same reason — pairing populations that disagree reports over a population nobody
-described. `frames_a`, `frames_b`, `n_name_mismatch` and `n_shape_mismatch` ride
-`verdict_inputs` and the printed line as well, so the happy path also states what it
-compared rather than only how much.
+described. `frames_a` and `frames_b` ride `verdict_inputs` and the printed line as well,
+so the happy path also states what it compared rather than only how much.
+
+**CORRECTED 2026-09-04, and the correction is the interesting half.** That last sentence
+also promised `n_name_mismatch` and `n_shape_mismatch` on `verdict_inputs`, and they were
+put there — as sums over per-channel keys that a returned channel record can never carry,
+because `compare_channel` RAISES on the first name disagreement and RAISES on any shape
+disagreement, both before a `rec` exists to sum. Measured: a matched pair returned
+`n_name_mismatch 0, n_shape_mismatch 0` and the channel record did not even hold a
+`name_mismatch` key; a 3-vs-4-frame pair and an 8px-vs-16px pair each raised instead of
+returning a report. The only two values those fields could ever take were 0 and 0, sitting
+beside `frames_compared: N` and reading as a measurement that the two runs named the same
+frames. That is a report carrying a placeholder shaped like evidence, and a check that
+cannot fail is not a check. The counts are gone; in their place `verdict_inputs` states the
+POLICY — these disagreements are refused, never reported — which is what is true.
 
 **A pixel is counted once.** `n_differing_px` used to sum `(d > 0)` over the whole
 (H, W, C) array, so a single differing RGB pixel read 3. The pixel count and the sample
@@ -86,8 +98,8 @@ def _load(path):
 
 
 def compare_channel(dir_a, dir_b):
-    names_a = sorted(f for f in os.listdir(dir_a) if f.endswith(".png"))
-    names_b = sorted(f for f in os.listdir(dir_b) if f.endswith(".png"))
+    names_a = sorted(f for f in os.listdir(dir_a) if f.lower().endswith(".png"))
+    names_b = sorted(f for f in os.listdir(dir_b) if f.lower().endswith(".png"))
     rec = {
         "frames_a": len(names_a),
         "frames_b": len(names_b),
@@ -103,7 +115,9 @@ def compare_channel(dir_a, dir_b):
     only_a = sorted(set(names_a) - set(names_b))
     only_b = sorted(set(names_b) - set(names_a))
     if names_a != names_b:
-        rec["name_mismatch"] = {"only_in_a": only_a[:8], "only_in_b": only_b[:8]}
+        # No `rec["name_mismatch"] = ...` here any more: it was assigned one line above a
+        # raise, so no caller could ever read it, and the aggregate that summed it across
+        # channels could only ever be 0. The evidence dict below carries the disagreement.
         # ---- ANDON. Not on a difference — on the two sides not being the same frames.
         #      A truncated or renamed run compared over its intersection reports a clean
         #      verdict for the frames that survived and says nothing about the rest.
@@ -221,12 +235,16 @@ def compare_runs(run_a, run_b):
         "frames_compared": sum(v["frames_compared"] for v in report["channels"].values()),
         "frames_a": sum(v["frames_a"] for v in report["channels"].values()),
         "frames_b": sum(v["frames_b"] for v in report["channels"].values()),
-        "n_name_mismatch": sum(
-            len(v.get("name_mismatch", {}).get("only_in_a", []))
-            + len(v.get("name_mismatch", {}).get("only_in_b", []))
-            for v in report["channels"].values()),
-        "n_shape_mismatch": sum(
-            len(v["shape_mismatch"]) for v in report["channels"].values()),
+        # Not counts. `compare_channel` raises on ANY name disagreement and on ANY shape
+        # disagreement before it can return, so a report that exists at all is a report
+        # over two populations that named the same frames at the same shapes. The counts
+        # that used to sit here could only ever be 0 and 0.
+        "name_mismatch_policy": ("refused, never reported: compare_channel raises "
+                                 "CompareError on any name disagreement before a report "
+                                 "exists"),
+        "shape_mismatch_policy": ("refused, never reported: compare_channel raises "
+                                  "CompareError on any shape disagreement before a report "
+                                  "exists"),
         "channels_compared": sorted(report["channels"]),
         "max_abs_diff_any_channel": max(
             (v["max_abs_diff"] for v in report["channels"].values()), default=None

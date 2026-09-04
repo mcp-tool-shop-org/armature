@@ -74,6 +74,45 @@ class SheetPopulationError(ArmatureError):
         self.evidence = evidence or {}
 
 
+#: The RGB plate a sheet composites an RGBA tile over before drawing it.
+#:
+#: Black, which is what all five composing sheets used — hard-coded, in five copies, and
+#: recorded nowhere. The Director's authored-RGBA ruling is that "the RGB composite each
+#: route actually submits is a deliberate, recorded choice", and `composite_reference`
+#: records exactly that for the submitted plates (`plate_rgb_srgb` + `plate_why`), with
+#: `SURVEY_PLATE = (154, 154, 157)` as the value his eye passed on the S03 kit. So a
+#: reference could be composited over black on the panel while the route composited the
+#: same master over mid-grey, and the panel said nothing — the difference then reads as a
+#: difference in the OUTPUT. The plate is a parameter here, and every sheet prints it.
+SHEET_PLATE = (0, 0, 0)
+
+
+def load_rgb_over_plate(path, plate=SHEET_PLATE):
+    """One RGB tile for a sheet, and the record of how its alpha was disposed of.
+
+    Deliberately not `Image.convert("RGB")`, which drops alpha silently onto whatever RGB
+    the author made invisible. This composites through the alpha, like the five copies it
+    replaces — the difference is that the plate is named, returned, and printable.
+    """
+    im = Image.open(path)
+    if im.mode == "1":
+        # A bilevel mask. `make_sheet` special-cased this before routing here.
+        im = im.convert("L")
+    if im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info:
+        src = im.convert("RGBA")
+        flat = Image.new("RGB", src.size, tuple(int(v) for v in plate))
+        flat.paste(src, mask=src.split()[3])
+        return flat, {
+            "plate_rgb_srgb": [int(v) for v in plate],
+            "alpha_disposition": (f"composited over the named sheet plate "
+                                  f"{tuple(int(v) for v in plate)}"),
+        }
+    return im.convert("RGB"), {
+        "plate_rgb_srgb": None,
+        "alpha_disposition": "no alpha channel in the source",
+    }
+
+
 def require_frames(requested, population, *, what, where, exc=SheetPopulationError):
     """Every requested index EXISTS in `population`, or raise naming the shortfall.
 

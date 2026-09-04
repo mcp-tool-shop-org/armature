@@ -217,3 +217,85 @@ def test_the_shared_law_is_one_implementation(tmp_path):
         src = open(os.path.join(root, "tools", f"{mod}.py"), encoding="utf-8").read()
         assert "compose_over_named_plate" in src, mod
     assert callable(CREF.compose_over_named_plate)
+
+
+# --------------------------------------- one flag parser, not three, for --alpha-over
+#
+# `compose_over_named_plate`'s docstring states the contract the wave-6 sweep delivered:
+# "there is one refusal, one composite and one record shape". The COMPOSITE and the RECORD
+# were one implementation; the FLAG PARSER was three. `fit_reference`, `make_plate` and
+# `pack_pose_pack` all called `composite_reference.parse_plate` and got a typed error with
+# an evidence dict; `encode_control.main` reimplemented the same three-integer check inline
+# and raised `SystemExit("--alpha-over takes three 0-255 integers, ...")` — a bare string
+# with no evidence dict and no `EncodeFailure`, in the one tool of the four whose output is
+# UPLOADED. And `composite_reference.main` was a third variant with no range check at all.
+#
+# `test_the_shared_law_is_one_implementation` above asserts only that the string
+# `compose_over_named_plate` appears in each of the four sources, so the divergent flag
+# parsers were invisible to it.
+
+PLATE_PRODUCERS = ("fit_reference", "make_plate", "pack_pose_pack", "encode_control")
+
+
+def _drive_with_bad_plate(mod_name, tmp_path):
+    """Each producer's `main`, given VALID inputs and an invalid `--alpha-over`.
+
+    Valid inputs on purpose: three of the four parse the flag only after reading their
+    source image, so a fake path would be refused by a different andon and the test would
+    pass without ever reaching the parser it exists for.
+    """
+    import importlib
+
+    mod = importlib.import_module(mod_name)
+    out = str(tmp_path / mod_name)
+    src = str(tmp_path / "src.png")
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(src)
+    frames = tmp_path / "frames"
+    frames.mkdir(exist_ok=True)
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(frames / "00000.png")
+    argv = {
+        "fit_reference": [f"--src={src}", f"--out={out}", "--width=8", "--height=8"],
+        "make_plate": [f"--src={src}", f"--out={out}", "--width=8", "--height=8",
+                       "--why=a reason"],
+        "pack_pose_pack": [f"--frames={frames}", f"--out={out}"],
+        "encode_control": [f"--frames={frames}", f"--out={out}/v.mkv"],
+    }[mod_name] + ["--alpha-over=1,2"]
+    return mod, argv
+
+
+@pytest.mark.parametrize("mod_name", PLATE_PRODUCERS)
+def test_every_producer_refuses_a_malformed_alpha_over_through_the_one_parser(
+        mod_name, tmp_path):
+    """The refusal is the TOOL's own typed error carrying `supplied` — never a bare
+    `SystemExit` string, and never a different shape in the tool that uploads."""
+    import armature_core.errors as errors
+
+    mod, argv = _drive_with_bad_plate(mod_name, tmp_path)
+    with pytest.raises(errors.ArmatureError) as e:
+        mod.main(argv)
+    assert e.value.evidence["supplied"] == "1,2", (mod_name, e.value.evidence)
+    assert "--alpha-over" in str(e.value), mod_name
+
+
+def test_the_flag_parser_is_one_implementation_read_off_the_ast():
+    """The census `test_the_shared_law_is_one_implementation` could not see: every producer
+    CALLS `parse_plate`, and none of them splits the flag itself. Read off the AST so a
+    comment recording the defect cannot satisfy it."""
+    import ast
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for mod in PLATE_PRODUCERS + ("composite_reference",):
+        tree = ast.parse(open(os.path.join(root, "tools", f"{mod}.py"),
+                              encoding="utf-8").read())
+        calls, splits = set(), []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                f = node.func
+                name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+                calls.add(name)
+                if (name == "split" and isinstance(f, ast.Attribute)
+                        and isinstance(f.value, ast.Attribute)
+                        and f.value.attr in ("alpha_over", "plate")):
+                    splits.append(mod)
+        assert "parse_plate" in calls, mod
+        assert splits == [], splits

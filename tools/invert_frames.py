@@ -100,30 +100,45 @@ def frame_population(src, expect=None):
 def _read_u8_gray(path):
     """Read one control frame as a 2-D uint8 array, or raise saying which way it is wrong."""
     im = Image.open(path)
+    # Every refusal below carries the measurement that fired it. `InvertError`'s own class
+    # docstring says it does — "Carries an evidence dict, like every other refusal in this
+    # repo" — and these five each called it with the message alone, so `e.evidence` was
+    # `{}` on all of them while `frame_population`'s three in the same file carried one.
+    # The first of them is the alpha-law refusal, the one that refuses inverting opacity:
+    # a halt on a control directory reached the run record with nothing machine-readable
+    # behind it.
     if im.mode in ("RGBA", "LA", "PA"):
         raise InvertError(
             f"{path}: mode {im.mode!r} carries alpha; `255 - x` over an alpha channel "
-            f"inverts opacity, not polarity"
+            f"inverts opacity, not polarity",
+            {"path": path, "mode": im.mode},
         )
     if im.mode == "P":
         raise InvertError(
             f"{path}: mode 'P' is palette-indexed; inverting an index is not inverting "
-            f"a value"
+            f"a value",
+            {"path": path, "mode": im.mode},
         )
     arr = np.array(im)
     if arr.dtype != np.uint8:
         raise InvertError(
-            f"{path}: dtype {arr.dtype}; `255 - x` is the polarity flip only for 8-bit data"
+            f"{path}: dtype {arr.dtype}; `255 - x` is the polarity flip only for 8-bit data",
+            {"path": path, "mode": im.mode, "dtype": str(arr.dtype),
+             "shape": [int(v) for v in arr.shape]},
         )
     if arr.ndim == 3:
         if arr.shape[2] != 3 or not (arr[..., 0] == arr[..., 1]).all() \
                 or not (arr[..., 1] == arr[..., 2]).all():
             raise InvertError(
-                f"{path}: 3-channel and not R=G=B; this tool inverts a grayscale channel"
+                f"{path}: 3-channel and not R=G=B; this tool inverts a grayscale channel",
+                {"path": path, "mode": im.mode, "dtype": str(arr.dtype),
+                 "shape": [int(v) for v in arr.shape]},
             )
         arr = arr[..., 0]
     elif arr.ndim != 2:
-        raise InvertError(f"{path}: unsupported array shape {arr.shape}")
+        raise InvertError(f"{path}: unsupported array shape {arr.shape}",
+                          {"path": path, "mode": im.mode, "dtype": str(arr.dtype),
+                           "shape": [int(v) for v in arr.shape]})
     return np.ascontiguousarray(arr)
 
 

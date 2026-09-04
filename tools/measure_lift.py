@@ -156,6 +156,19 @@ def gate_pairing(rows, truth):
             f"rendered frame {rendered[first]} is paired with authored frame "
             f"{authored[first]} at position {first}; every angle from here down would be "
             f"graded against a pose that belongs to a different frame", ev)
+    # ---- ANDON on the direction every clause above leaves open. Two EMPTY populations
+    #      satisfy all three: no unnumbered files, equal lengths, no first disagreement --
+    #      and the verdict line then indexed `rendered[0]` on an empty list. Measured
+    #      2026-09-04: `gate_listing_pairing({'control': [], 'output': []})` raised
+    #      `IndexError: list index out of range`, and because the re-wrap below catches
+    #      only `PairingGate` it propagated raw out of the four sheets that call it. The
+    #      rule for this case is written three doors down, in `gate_b_frames.frame_paths`:
+    #      a comparison over zero frames proves nothing and would report a passing gate.
+    if not rows or not truth:
+        raise PairingGate(
+            f"the pairing gate was handed {len(rows)} rendered frame(s) against "
+            f"{len(truth)} authored; a comparison over zero frames names no moment of "
+            f"the performance and would return a passing verdict", ev)
     ev["verdict"] = (f"{len(rows)} rendered frames numbered {rendered[0]}..{rendered[-1]}, "
                      f"paired with the same authored frame numbers")
     return ev
@@ -295,7 +308,7 @@ def detect(render_dir, model_path, fps):
     from mediapipe.tasks.python import vision
 
     frames = sorted(f for f in os.listdir(render_dir)
-                    if f.endswith(".png") and f[0].isdigit())
+                    if f.lower().endswith(".png") and f[0].isdigit())
     options = vision.PoseLandmarkerOptions(
         base_options=mp_python.BaseOptions(model_asset_path=model_path),
         running_mode=vision.RunningMode.VIDEO,
@@ -493,7 +506,6 @@ def main():
     started = time.time()
     a = parse_args()
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     with open(os.path.join(a.render, "render_provenance.json"), encoding="utf-8") as fh:
         prov = json.load(fh)
@@ -511,6 +523,12 @@ def main():
     #      detector fired on what it was given and says nothing about whether that is
     #      the population the ground truth describes.
     pairing = gate_pairing(rows, truth)
+
+    # ---- the output directory is created only once every in-tool andon above has
+    #      fired. A refused run that has already made its directory leaves an empty
+    #      one behind, which a later reader -- or a re-run into the same --out --
+    #      reads as an attempt that produced nothing rather than one that was refused.
+    os.makedirs(out, exist_ok=True)
 
     sites = sorted(LS.SITE_FROM_LANDMARK)
     cam = prov["camera"]

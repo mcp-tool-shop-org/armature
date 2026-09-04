@@ -111,7 +111,7 @@ def detect(frames_dir, model_path, fps):
     from mediapipe.tasks.python import vision
 
     names = sorted(f for f in os.listdir(frames_dir)
-                   if f.endswith(".png") and f[0].isdigit())
+                   if f.lower().endswith(".png") and f[0].isdigit())
     options = vision.PoseLandmarkerOptions(
         base_options=mp_python.BaseOptions(model_asset_path=model_path),
         running_mode=vision.RunningMode.VIDEO, num_poses=1,
@@ -244,7 +244,6 @@ def main():
     started = time.time()
     a = parse_args()
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     rest, man = read_rest(a.manifest)
     diagonal = float(man["bbox"]["diagonal"])
@@ -345,6 +344,11 @@ def main():
             "denominator are carried separately and the ratio is not quoted as a reading."),
         "elapsed_s": time.time() - started,
     }
+    # ---- the output directory is created only once every in-tool andon above has
+    #      fired. A refused run that has already made its directory leaves an empty
+    #      one behind, which a later reader -- or a re-run into the same --out --
+    #      reads as an attempt that produced nothing rather than one that was refused.
+    os.makedirs(out, exist_ok=True)
     with open(os.path.join(out, "measurement.json"), "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2)
     with open(os.path.join(out, "detection_raw.json"), "w", encoding="utf-8") as fh:

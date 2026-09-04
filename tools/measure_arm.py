@@ -43,10 +43,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.framing import half_fovs  # noqa: E402
+from measure_lift import as_pairing_rows, gate_pairing  # noqa: E402
 
 
 class MeasureError(ArmatureError):
-    """The measurement could not be made as specified."""
+    """The measurement could not be made as specified.
+
+    Carries an evidence dict, like every other refusal in this repo: the measurement that
+    fired it is the useful half.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 # ------------------------------------------------------------------------ projection
@@ -168,9 +177,37 @@ def crossing_frame(angles, threshold):
 
 
 def _load_frames(d):
-    names = sorted(n for n in os.listdir(d) if n.lower().endswith(".png"))
+    """The NUMBERED frames of `d`, in index order, and a refusal for anything else.
+
+    The filter its four siblings already have (`encode_control.frame_population`,
+    `invert_frames.frame_population`, `measure_clip.frame_paths`,
+    `gate_b_frames.frame_paths`), for the reason their docstrings name:
+    `render_pose_sticks` writes a `strip_every{N}.png` contact sheet into the very
+    directory it just filled with `NNNNN.png` frames. Under the bare `os.listdir` this
+    function used, that stray sorted LAST and became the final measured frame of the arm
+    arc. Measured 2026-09-04: a 5-frame authored arc against a directory of 10 numbered
+    frames plus one `strip_every8.png` produced 11 measured rows, the last naming
+    `file: strip_every8.png` as `frame: 10`.
+
+    It raises rather than filtering, because the row it would produce is published as a
+    measured angle beside an authored one.
+    """
+    if not os.path.isdir(d):
+        raise MeasureError(f"{d} is not a directory of frames", {"frames_dir": d})
+    pngs = sorted(n for n in os.listdir(d) if n.lower().endswith(".png"))
+    numbered = [n for n in pngs if os.path.splitext(n)[0].isdigit()]
+    unexpected = [n for n in pngs if n not in set(numbered)]
+    names = sorted(numbered, key=lambda n: int(os.path.splitext(n)[0]))
+    if unexpected:
+        raise MeasureError(
+            f"{d} holds {len(unexpected)} PNG(s) that are not numbered frames "
+            f"({', '.join(unexpected[:8])}); a stray sorts into the population and is "
+            f"published as a measured angle beside an authored one",
+            {"frames_dir": d, "unexpected": unexpected, "frames": names},
+        )
     if not names:
-        raise MeasureError(f"no PNG frames in {d}")
+        raise MeasureError(f"no NNNNN.png frames in {d}",
+                           {"frames_dir": d, "png_files": pngs})
     return names, [np.array(Image.open(os.path.join(d, n)).convert("RGB")) for n in names]
 
 
@@ -226,13 +263,25 @@ def run(run_dir, joints_path, frames_dir=None, label=None, tol=12):
 
     if frames_dir:
         names, frames = _load_frames(frames_dir)
+        # ---- ANDON, before a single angle is computed: the MEASURED population IS the
+        #      AUTHORED population, frame for frame, by frame NUMBER. `measure_lift`'s
+        #      gate is one import away in the same domain and was not called: measured
+        #      2026-09-04, a 5-frame authored arc against a directory of 10 numbered
+        #      frames produced `len(truth) == 5` and `len(out["measured"]) == 11` with
+        #      no refusal and nothing in the record stating the populations differ —
+        #      and `measured_crossing_frame`, the number the arm is graded on, was then
+        #      an index into a population nobody described. The rows carry `"frame": i`,
+        #      the enumeration index, which is precisely the number `gate_pairing`'s own
+        #      docstring says does NOT carry the information.
+        out["gate_PAIRING"] = gate_pairing(as_pairing_rows(names), truth)
         shoulder = np.array(truth[0]["shoulder_px"])
         angles, rows = [], []
-        for i, (n, f) in enumerate(zip(names, frames)):
+        for n, f in zip(names, frames):
+            number = int(os.path.splitext(n)[0])
             mask, seg = subject_mask(f, tol=tol)
             ang, adiag = arm_angle(mask, shoulder, r_in, r_out)
             angles.append(ang)
-            rows.append({"frame": i, "file": n, "angle_deg_measured": (
+            rows.append({"frame": number, "file": n, "angle_deg_measured": (
                 round(ang, 3) if ang is not None else None), "segmentation": seg, **adiag})
         out["measured"] = rows
         out["measured_angles"] = [None if a is None else round(a, 3) for a in angles]

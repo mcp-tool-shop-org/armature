@@ -168,7 +168,6 @@ def main(argv=None):
     import cv2
 
     out_dir = os.path.abspath(a.out)
-    os.makedirs(out_dir, exist_ok=True)
 
     # UNCHANGED, not COLOR: a 4th channel must reach the law below rather than being
     # dropped by the decoder before anything can refuse it.
@@ -208,6 +207,11 @@ def main(argv=None):
 
     fitted, placement = letterbox(img, a.width, a.height, pad)
     stem = os.path.splitext(os.path.basename(a.src))[0]
+    # ---- the output directory is created only once every in-tool andon above has
+    #      fired. A refused run that has already made its directory leaves an empty
+    #      one behind, which a later reader -- or a re-run into the same --out --
+    #      reads as an attempt that produced nothing rather than one that was refused.
+    os.makedirs(out_dir, exist_ok=True)
     dst = os.path.join(out_dir, f"{stem}_fit_{a.width}x{a.height}.png")
     if not cv2.imwrite(dst, fitted):
         raise FitReferenceError(f"cv2 refused to write {dst}", {"dst": dst})
