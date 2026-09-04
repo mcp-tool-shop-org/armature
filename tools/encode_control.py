@@ -45,7 +45,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates, shotspec  # noqa: E402
-from composite_reference import compose_over_named_plate  # noqa: E402
+from composite_reference import compose_over_named_plate, parse_plate  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
 FFMPEG = os.environ.get(
@@ -423,12 +423,16 @@ def main(argv=None):
 
     if not args.frames or not args.out:
         raise SystemExit("--frames and --out are required unless --survey")
-    plate = None
-    if args.alpha_over:
-        parts = [p.strip() for p in args.alpha_over.split(",")]
-        if len(parts) != 3 or not all(p.isdigit() and 0 <= int(p) <= 255 for p in parts):
-            raise SystemExit("--alpha-over takes three 0-255 integers, e.g. --alpha-over=0,0,0")
-        plate = tuple(int(p) for p in parts)
+    # ---- the ONE parser. `compose_over_named_plate`'s docstring states the contract the
+    #      wave-6 sweep delivered -- "there is one refusal, one composite and one record
+    #      shape" -- and the composite and the record WERE one implementation while the
+    #      flag parser was three. `fit_reference`, `make_plate` and `pack_pose_pack` all
+    #      call `composite_reference.parse_plate` and get a typed error with an evidence
+    #      dict; this reimplemented the same three-integer check inline and raised a bare
+    #      `SystemExit` string, in the one tool of the four whose output is UPLOADED -- so
+    #      a caller catching `EncodeFailure` around `main` did not catch it, and the halt
+    #      carried none of the measurement that fired it.
+    plate = parse_plate(args.alpha_over, EncodeFailure)
     receipt = build(args.frames, args.out, args.codec, invert=args.invert, fps=args.fps,
                     expect=args.expect, alpha_over=plate)
     print("ENCODE_CONTROL " + json.dumps({

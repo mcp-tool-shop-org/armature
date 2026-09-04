@@ -184,13 +184,19 @@ def test_some_shared_names_shape_mismatched_is_not_a_reproduction(tmp_path):
 
 
 def test_the_printed_verdict_carries_the_two_populations_and_the_mismatch_counts(tmp_path):
-    """A clean verdict may not be readable without the population behind it."""
+    """A clean verdict may not be readable without the population behind it.
+
+    The population half is unchanged. The two mismatch COUNTS this used to assert were
+    removed in wave 8 and the reason is the block appended at the end of this file: they
+    were structurally unreachable above zero, so asserting `== 0` was asserting a
+    constant. What replaces them is the policy statement, which is what is true.
+    """
     a = _run(tmp_path, "a", frames=3)
     b = _run(tmp_path, "b", frames=3)
     vi = CR.compare_runs(a, b)["verdict_inputs"]
     assert vi["frames_a"] == 3 and vi["frames_b"] == 3
-    assert vi["n_name_mismatch"] == 0
-    assert vi["n_shape_mismatch"] == 0
+    assert "refused, never reported" in vi["name_mismatch_policy"]
+    assert "refused, never reported" in vi["shape_mismatch_policy"]
 
 
 def test_the_partial_andon_survives_python_optimize(tmp_path):
@@ -211,3 +217,75 @@ def test_the_partial_andon_survives_python_optimize(tmp_path):
     ) % (os.path.join(repo, "tools"), a, b)
     out = subprocess.run([_sys.executable, "-O", "-c", code], capture_output=True, text=True)
     assert "RAISED" in out.stdout, out.stderr
+
+
+# ------------------------- a field with one reachable value is not a measurement
+#
+# `verdict_inputs` reported `n_name_mismatch` (summed from each channel's `name_mismatch`
+# key) and `n_shape_mismatch` (summed from each channel's `shape_mismatch` list). Both were
+# structurally unreachable above zero on the merged tree: `compare_channel` RAISES on any
+# name disagreement before `rec` can be returned — so the `rec["name_mismatch"]` assignment
+# one line above that raise was dead — and RAISES on any shape disagreement before the same.
+#
+# Measured 2026-09-04: a matched pair returned `n_name_mismatch 0`, `n_shape_mismatch 0`,
+# and the returned channel record did not even carry a `name_mismatch` key; a 3-vs-4-frame
+# pair and an 8px-vs-16px pair each raised `CompareError` instead of returning a report. The
+# only two values those fields could ever take were 0 and 0 — sitting beside
+# `frames_compared: N` and reading as a measurement that the two runs named the same frames
+# and had comparable shapes. CLAUDE.md names the class twice over: a report may not contain
+# a placeholder shaped like evidence, and a check that cannot fail is not a check.
+
+
+def test_no_returned_report_can_carry_a_mismatch_count(tmp_path):
+    """The fields are gone; nothing downstream can read a constant as a measurement."""
+    a = _run(tmp_path, "a", frames=3)
+    b = _run(tmp_path, "b", frames=3)
+    report = CR.compare_runs(a, b)
+    assert "n_name_mismatch" not in report["verdict_inputs"]
+    assert "n_shape_mismatch" not in report["verdict_inputs"]
+    for rec in report["channels"].values():
+        assert "name_mismatch" not in rec, rec
+
+
+def test_the_policy_the_report_states_is_the_one_the_code_enforces(tmp_path):
+    """Both halves of the claim, exercised: a name disagreement raises, and a shape
+    disagreement raises — so "refused, never reported" is a statement about behaviour."""
+    a = _run(tmp_path, "a", frames=3)
+    b = _run(tmp_path, "b", frames=4)
+    with pytest.raises(CR.CompareError, match=r"do not name the same frames"):
+        CR.compare_runs(a, b)
+
+    c = _run(tmp_path, "c", frames=2)
+    d = _run(tmp_path, "d", frames=2, h=16, w=16)
+    with pytest.raises(CR.CompareError, match=r"differ in SHAPE"):
+        CR.compare_runs(c, d)
+
+
+def test_the_dead_assignment_is_gone_from_the_source():
+    """Read off the AST: the `rec["name_mismatch"] = ...` statement sat one line above the
+    raise that made it unreachable. A comment recording the defect must not satisfy this."""
+    import ast
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tree = ast.parse(open(os.path.join(root, "tools", "compare_runs.py"),
+                          encoding="utf-8").read())
+    subscripts = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Subscript) and isinstance(t.slice, ast.Constant)
+                and t.slice.value == "name_mismatch" for t in node.targets)]
+    assert subscripts == [], [ast.dump(s) for s in subscripts]
+
+
+def test_the_png_listing_is_case_insensitive_like_the_fetchers(tmp_path):
+    """`fetch_run.verify_downloads` counts `00099.PNG` as a downloaded frame; a comparison
+    that cannot see it would report a reproduction over fewer frames than were fetched."""
+    a = _run(tmp_path, "a", frames=2)
+    b = _run(tmp_path, "b", frames=2)
+    for run in (a, b):
+        chan = os.path.join(run, "lossless")
+        src = os.path.join(chan, sorted(os.listdir(chan))[0])
+        Image.open(src).save(os.path.join(chan, "00009.PNG"))
+    report = CR.compare_runs(a, b)
+    # two numbered frames per run plus the upper-case one: three compared.
+    assert report["verdict_inputs"]["frames_compared"] == 3

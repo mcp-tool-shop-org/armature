@@ -181,3 +181,81 @@ def test_cli_writes_a_receipt_beside_the_output(src, tmp_path, capsys):
     assert receipt["n_frames"] == 1
     assert receipt["resolution"] == [4, 4]
     assert "INVERT_FRAMES" in capsys.readouterr().out
+
+
+# --------------------------------- every refusal carries the measurement that fired it
+#
+# `InvertError`'s own class docstring says it does — "Carries an evidence dict, like every
+# other refusal in this repo: the measurement that fired it is the useful half" — and
+# `_read_u8_gray`'s five refusals all called it with the message alone, so `e.evidence` was
+# `{}` on every one of them, while `frame_population`'s three refusals in the same file all
+# carried one. Measured 2026-09-04: `InvertError('x').evidence == {}`.
+#
+# The first of the five is the alpha-law-adjacent one — the refusal that exists because
+# inverting opacity is not a polarity flip. A halt on a control directory reached the run
+# record with nothing machine-readable behind it; a human reading stderr still got the mode
+# or the dtype from the message, and nothing else did.
+
+import invert_frames as IF  # noqa: E402
+import numpy as _np  # noqa: E402
+from PIL import Image as _Image  # noqa: E402
+
+
+def _write(path, arr, mode=None):
+    _Image.fromarray(arr, mode=mode).save(path) if mode else _Image.fromarray(arr).save(path)
+    return str(path)
+
+
+def test_an_rgba_source_names_its_mode_in_the_evidence(tmp_path):
+    p = _write(tmp_path / "a.png", _np.zeros((4, 4, 4), dtype=_np.uint8), mode="RGBA")
+    with pytest.raises(IF.InvertError, match=r"carries alpha") as e:
+        IF._read_u8_gray(p)
+    assert e.value.evidence["mode"] == "RGBA"
+    assert e.value.evidence["path"] == p
+
+
+def test_a_palette_source_names_its_mode_in_the_evidence(tmp_path):
+    p = tmp_path / "p.png"
+    _Image.fromarray(_np.zeros((4, 4), dtype=_np.uint8)).convert("P").save(p)
+    with pytest.raises(IF.InvertError, match=r"palette-indexed") as e:
+        IF._read_u8_gray(str(p))
+    assert e.value.evidence["mode"] == "P"
+
+
+def test_a_sixteen_bit_source_names_its_dtype_in_the_evidence(tmp_path):
+    p = tmp_path / "d.png"
+    _Image.fromarray(_np.full((4, 4), 40000, dtype=_np.uint16)).save(p)
+    with pytest.raises(IF.InvertError, match=r"polarity flip only for 8-bit") as e:
+        IF._read_u8_gray(str(p))
+    assert "dtype" in e.value.evidence and e.value.evidence["dtype"] != "uint8"
+
+
+def test_a_colour_source_names_its_shape_in_the_evidence(tmp_path):
+    arr = _np.zeros((4, 4, 3), dtype=_np.uint8)
+    arr[..., 0] = 200                                   # R != G, so not a grayscale channel
+    p = _write(tmp_path / "c.png", arr)
+    with pytest.raises(IF.InvertError, match=r"not R=G=B") as e:
+        IF._read_u8_gray(p)
+    assert e.value.evidence["shape"] == [4, 4, 3]
+
+
+def test_a_grayscale_source_still_reads(tmp_path):
+    """The guard the other way: the evidence dicts must not have made a legal read fail."""
+    p = _write(tmp_path / "g.png", _np.full((4, 4), 17, dtype=_np.uint8))
+    assert IF._read_u8_gray(p).shape == (4, 4)
+
+
+def test_no_refusal_in_this_module_reaches_a_report_empty_handed():
+    """Derived by AST over the module: every `raise InvertError(...)` passes a second
+    argument. Written as a walk so a sixth refusal added later cannot opt out."""
+    import ast
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tree = ast.parse(open(os.path.join(root, "tools", "invert_frames.py"),
+                          encoding="utf-8").read())
+    raises = [n for n in ast.walk(tree)
+              if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
+              and getattr(n.exc.func, "id", "") == "InvertError"]
+    assert len(raises) >= 8, len(raises)
+    bare = [ast.unparse(r)[:70] for r in raises if len(r.exc.args) < 2]
+    assert bare == [], bare

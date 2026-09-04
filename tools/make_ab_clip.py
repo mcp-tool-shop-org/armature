@@ -53,6 +53,24 @@ def frame_paths(directory):
             for n in sorted(names, key=lambda n: int(os.path.splitext(n)[0]))]
 
 
+def frame_numbers(paths):
+    """The number in each file's own NAME, in the order `frame_paths` returned them.
+
+    The banner burned into every composite frame read `f{x}` / `f{y}`, where x and y are
+    POSITIONS produced by `event_timeline` — indices into `range(n)` — not the numbers in
+    the file names. Measured 2026-09-04: two arms whose files are `00005.png, 00006.png,
+    00007.png` give timeline indices (0,0), (1,1), (2,2), so the clip the Director watches
+    was captioned `f0 f1 f2` over frames 5, 6 and 7, and the manifest recorded only
+    `frames: 3` and `fps` — nothing in the record recovered the mapping. A note taken off
+    the clip ("the hand melts around f12") then names a frame that is not the file, and the
+    still pulled for the sheet is the wrong one.
+
+    This is the LABELLING half only. `make_ab_clip` pairs by TIME by design (its module
+    docstring argues that at length) and is correctly outside the pairing gate.
+    """
+    return [int(os.path.splitext(os.path.basename(p))[0]) for p in paths]
+
+
 def event_timeline(n_a, fps_a, n_b, fps_b):
     """`[(t_seconds, index_into_a, index_into_b)]` — the union of both arms' frame times.
 
@@ -112,6 +130,7 @@ def main(argv=None):
     ia_frames = [Image.open(p).convert("RGB") for p in pa]
     ib_frames = [Image.open(p).convert("RGB") for p in pb]
 
+    na, nb = frame_numbers(pa), frame_numbers(pb)
     times = event_timeline(len(pa), a.a_fps, len(pb), a.b_fps)
     tail = max(1.0 / a.a_fps, 1.0 / a.b_fps)
     delays = durations_ms([t for t, _x, _y in times], tail)
@@ -120,8 +139,9 @@ def main(argv=None):
     label_b = f"{a.b_label}"
     comps = []
     for (t, x, y), _d in zip(times, delays):
-        left = banner(ia_frames[x], f"{label_a}   f{x}   t={t:.3f}s")
-        right = banner(ib_frames[y], f"{label_b}   f{y}   t={t:.3f}s")
+        # The FILE's own number, five digits like the file itself — never the position.
+        left = banner(ia_frames[x], f"{label_a}   f{na[x]:05d}   t={t:.3f}s")
+        right = banner(ib_frames[y], f"{label_b}   f{nb[y]:05d}   t={t:.3f}s")
         h = max(left.height, right.height)
         canvas = Image.new("RGB", (left.width + right.width + 8, h), (0, 0, 0))
         canvas.paste(left, (0, 0))
@@ -137,10 +157,12 @@ def main(argv=None):
         json.dump({
             "tool": "make_ab_clip", "tool_version": TOOL_VERSION,
             "a": {"dir": os.path.abspath(a.a), "frames": len(pa), "fps": a.a_fps,
+                  "frame_numbers": na,
                   "label": label_a,
                   "clip_s_frames_over_fps": len(pa) / a.a_fps,
                   "span_s_first_to_last_frame": (len(pa) - 1) / a.a_fps},
             "b": {"dir": os.path.abspath(a.b), "frames": len(pb), "fps": a.b_fps,
+                  "frame_numbers": nb,
                   "label": label_b,
                   "clip_s_frames_over_fps": len(pb) / a.b_fps,
                   "span_s_first_to_last_frame": (len(pb) - 1) / a.b_fps},
