@@ -1616,3 +1616,69 @@ def test_no_graph_this_repo_builds_is_caught_by_the_widened_api_clause():
     the detector-free API graph, in both readings."""
     assert RG.unrecorded_seed_sources(graph(top=CLEAN_TOP)) == []
     assert RG.verify(graph(top=CLEAN_TOP))["frame_legality"][0]["legal"] is True
+
+
+# --- W10 amend: the alias table's REVERSE direction is pinned (F-62accd2c) ------------
+
+
+def test_every_alias_key_names_a_ruled_component_row():
+    """The forward direction — every row is matched on its own key — is pinned above by
+    `test_every_ruled_row_is_matched_on_its_own_key_even_with_no_alias`. This is the
+    reverse, and it was pinned nowhere.
+
+    `class_patterns_for` is only ever reached through `rulings_for_class`, which iterates
+    `RULED_COMPONENTS.items()` — so an alias entry whose key is no longer a row is never
+    consulted and never reported. `RULED_COMPONENTS` is a MIRROR of docs/license-map.md,
+    and a re-fetch renaming or retiring a row is a normal, expected edit."""
+    assert set(RG.RULED_COMPONENT_CLASSES) <= set(RG.RULED_COMPONENTS)
+    assert RG.orphaned_component_class_aliases() == []
+
+
+def test_an_orphaned_alias_is_refused_where_a_wrong_table_is_loudest(monkeypatch):
+    """The RED direction, by mutation: rename the row and the alias orphans.
+
+    Measured 2026-09-04 before the fix: on a save-format graph carrying one
+    `DWPreprocessor`, `ruled_node_classes` returned one row ('DWPreprocessor', 'BANNED');
+    renaming the `RULED_COMPONENTS` key 'dwpose' to 'dwpose_ts' while leaving the alias
+    entry under 'dwpose' made `ruled_node_classes` return [] and
+    `class_patterns_for('dwpose_ts')` return only ('dwpose_ts',) — the class clause fell
+    back to matching the row key literally, which is the exact state this table's header
+    describes as the defect it was built to close."""
+    rows = dict(RG.RULED_COMPONENTS)
+    rows["dwpose_ts"] = rows.pop("dwpose")
+    monkeypatch.setattr(RG, "RULED_COMPONENTS", rows)
+
+    assert RG.orphaned_component_class_aliases() == ["dwpose"]
+    with pytest.raises(RG.RouteGate, match=r"alias") as exc:
+        RG.gate_alias_table()
+    assert exc.value.evidence["orphaned"] == ["dwpose"]
+    assert exc.value.evidence["clause"] == "orphaned_component_class_alias"
+
+    # And a graph may not be verified while the table is orphaned — the detector tier the
+    # aliases exist for would pass unseen.
+    with pytest.raises(RG.RouteGate, match=r"alias"):
+        RG.verify(graph(top=CLEAN_TOP))
+
+
+def test_the_alias_table_is_checked_at_import_too():
+    """The module-level derivation: a wrong table is loudest where every tool reads it,
+    so the check runs at import as well as inside `verify`. Pinned behaviourally — the
+    module imported, so it ran and returned."""
+    import ast
+    import inspect as _inspect
+
+    src = _inspect.getsource(RG)
+    calls = [n for n in ast.parse(src).body
+             if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)
+             and getattr(n.value.func, "id", None) == "gate_alias_table"]
+    assert len(calls) == 1, "the import-time call is the module-level one"
+    assert RG.gate_alias_table()["verdict"].startswith("every alias key")
+
+
+def test_a_row_with_no_alias_is_still_not_orphaned():
+    """The green direction of the same reading: the table only ADDS aliases, so the many
+    rows absent from it are matched on their own names and are not members of the orphan
+    population."""
+    assert set(RG.RULED_COMPONENTS) - set(RG.RULED_COMPONENT_CLASSES)
+    assert RG.orphaned_component_class_aliases() == []
+    assert RG.rulings_for_class("DWPreprocessor")[0]["matched_on"] == "dwpose"

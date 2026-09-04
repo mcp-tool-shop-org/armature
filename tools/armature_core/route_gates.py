@@ -267,6 +267,20 @@ WEIGHT_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".ta
 #: preprocessor tier, whose ComfyUI class names do not contain their row key
 #: (`DWPreprocessor` does not contain "dwpose"). Measured against the served Animate
 #: template, which wires `DWPreprocessor` and `OpenposePreprocessor`.
+#:
+#: ⚠ **The KEYS are `RULED_COMPONENTS` row keys, and nothing checked that they still name
+#: rows.** `class_patterns_for` is only ever reached through `rulings_for_class`, which
+#: iterates `RULED_COMPONENTS.items()` — so an alias entry whose key is no longer a row is
+#: never consulted and never reported. Measured 2026-09-04: on a save-format graph
+#: carrying one `DWPreprocessor`, `ruled_node_classes` returned one row (BANNED); renaming
+#: the row key "dwpose" to "dwpose_ts" while leaving the alias under "dwpose" made
+#: `ruled_node_classes` return [] and `class_patterns_for("dwpose_ts")` return only
+#: ("dwpose_ts",) — the class clause silently fell back to matching the row key literally,
+#: which is precisely the state this header describes as the defect the table was built to
+#: close. The forward direction (every row matched on its own key) was pinned in the
+#: suite; the reverse was pinned nowhere, and this table is a MIRROR of
+#: docs/license-map.md, where a re-fetch renaming or retiring a row is a normal edit.
+#: `gate_alias_table` is the mechanical form, and it runs at import and inside `verify`.
 RULED_COMPONENT_CLASSES = {
     "dwpose": ("dwpreprocessor", "dwposeestimator"),
     "openpose": ("openposepreprocessor", "openpose_preprocessor"),
@@ -627,6 +641,54 @@ def class_patterns_for(key):
     """
     return tuple(sorted({str(key).lower()}
                         | {str(a).lower() for a in RULED_COMPONENT_CLASSES.get(key, ())}))
+
+
+def orphaned_component_class_aliases():
+    """Alias keys in `RULED_COMPONENT_CLASSES` that name no `RULED_COMPONENTS` row.
+
+    Derived from the two tables, never typed: `set(RULED_COMPONENT_CLASSES) -
+    set(RULED_COMPONENTS)`. An orphan is unreachable — `rulings_for_class` iterates the
+    ROWS — so it is invisible in exactly the direction the class clause exists to see.
+    """
+    return sorted(set(RULED_COMPONENT_CLASSES) - set(RULED_COMPONENTS))
+
+
+def gate_alias_table():
+    """· ANDON — the class-alias table names rows that exist.
+
+    Raises rather than returning a flag, and runs where a wrong table is loudest: at
+    IMPORT (below), so a licence-map re-fetch that renames a row halts every tool that
+    reads this module, and again inside `verify`, so a table mutated at run time cannot
+    verify a graph either. The direction it bounds is the one no other clause does: the
+    forward reading (a row absent from the alias table is matched on its own name) is
+    already safe by construction, while an orphaned ALIAS is silent — the class-level
+    licence clause simply stops seeing the tier it was added for while every gate reports
+    green.
+    """
+    orphaned = orphaned_component_class_aliases()
+    if orphaned:
+        raise RouteGate(
+            "RULED_COMPONENT_CLASSES names " + ", ".join(repr(k) for k in orphaned) +
+            ", which is not a RULED_COMPONENTS row. An alias whose key names no row is "
+            "never consulted — `rulings_for_class` iterates the ROWS — so the node "
+            "classes it exists to catch (the banned preprocessor tier) contribute "
+            "nothing to `components()` and `verify()` reports the graph clean. This "
+            "table mirrors docs/license-map.md; a row renamed or retired by a re-fetch "
+            "takes its aliases with it",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "orphaned_component_class_alias",
+             "orphaned": orphaned,
+             "alias_keys": sorted(RULED_COMPONENT_CLASSES),
+             "row_keys": sorted(RULED_COMPONENTS)})
+    return {"gate": "ROUTE", "andon": "RouteGate",
+            "clause": "orphaned_component_class_alias",
+            "n_alias_keys": len(RULED_COMPONENT_CLASSES),
+            "n_rows": len(RULED_COMPONENTS),
+            "verdict": (f"every alias key names a row: "
+                        f"{len(RULED_COMPONENT_CLASSES)} of {len(RULED_COMPONENTS)}")}
+
+
+gate_alias_table()
 
 
 def rulings_for_class(class_type):
@@ -1368,6 +1430,9 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     frame-legality clause is **INDETERMINATE — unproven — and raises**, because a check
     that cannot fail is not a check.
     """
+    # · ANDON, before anything is read — the licence clause below asks
+    # `RULED_COMPONENTS` a question, and an orphaned alias makes it the wrong question.
+    gate_alias_table()
     graph = normalise_graph(graph)
     if hosted_tier is not None and frame is not None:
         raise RouteGate(

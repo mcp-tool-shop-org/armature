@@ -186,9 +186,9 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # added Gate P's truncation refusal and the class-level licence refusals.
         "assembly": 18, "blender_scene": 4, "canon": 1, "donor_gate": 6, "gates": 20,
         "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 7, "resample": 4,
-        "rig_gates": 15, "route_gates": 34, "startframe": 19, "turnaround": 9,
+        "rig_gates": 15, "route_gates": 35, "startframe": 19, "turnaround": 9,
     }, with_gates
-    assert sum(with_gates.values()) == 148
+    assert sum(with_gates.values()) == 149
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

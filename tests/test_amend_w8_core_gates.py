@@ -72,7 +72,7 @@ RECORDED_GATE_RAISES = {
     ("rig_gates.py", "GateNNames"): 1,
     ("rig_gates.py", "GatePRestPose"): 12,
     ("route_gates.py", "PairGate"): 3,
-    ("route_gates.py", "RouteGate"): 31,
+    ("route_gates.py", "RouteGate"): 32,
 }
 
 
@@ -179,7 +179,7 @@ def test_the_derived_population_is_the_one_this_file_records():
     assert counted == RECORDED_GATE_RAISES, (
         "the gate-raise population moved. Add the new site to RECORDED_GATE_RAISES in "
         f"the same commit that adds the raise.\nderived: {sorted(counted.items())}")
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 76
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 77
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

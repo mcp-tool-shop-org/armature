@@ -182,7 +182,7 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # 45 on the tests branch; 51 on the merged wave-8 tree, where core-gates added the
     # class-level licence refusals, Gate P's truncation refusal and the save-format seed
     # clauses (all RouteGate). Recorded as measured at the merge.
-    assert len(RAISE_SITES["RouteGate"]) == 51, sorted(RAISE_SITES["RouteGate"])
+    assert len(RAISE_SITES["RouteGate"]) == 52, sorted(RAISE_SITES["RouteGate"])
     files = {path for path, _ in RAISE_SITES["RouteGate"]}
     # `build_lora_arm_payload.py` joined at the wave-8 merge: its new `gate_base_licence`
     # raises RouteGate on a banned node class in the operator's baseline graph.
