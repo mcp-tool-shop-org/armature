@@ -15,6 +15,9 @@ skipped — a skip here would be the silence the finding is about.
 import ast
 import json
 import os
+import subprocess
+import sys
+import textwrap
 
 import pytest
 
@@ -130,3 +133,168 @@ def test_every_load_pinned_camera_call_site_states_its_expectation():
     assert len(sites) >= 2, sites
     bare = [(p, ln) for p, ln, kw, npos in sites if "expect" not in kw and npos < 2]
     assert bare == [], f"call sites that disarm the pinned-camera andon: {bare}"
+
+
+# ------------------------------------------- and none of the new refusals is an `assert`
+
+PROBE = textwrap.dedent(
+    """
+    import json, sys, types
+    sys.path.insert(0, sys.argv[1])
+
+    import numpy as np
+    from armature_core import parts, walk, landmarks, glb, assembly as AS
+    from armature_core import turnaround as TA
+
+    asserts_active = False
+    try:
+        assert False
+    except AssertionError:
+        asserts_active = True
+
+    for _n in ("bpy", "mathutils"):
+        if _n not in sys.modules:
+            _s = types.ModuleType(_n)
+            _s.context = types.SimpleNamespace()
+            _s.data = types.SimpleNamespace()
+            _s.ops = types.SimpleNamespace()
+            sys.modules[_n] = _s
+    from armature_core import blender_scene as BS
+
+    NAMES = ["chest", "neck", "head"]
+
+    def _fp():
+        return {n: {"n_verts": 4, "n_faces": 2,
+                    "positions": np.zeros((4, 3))} for n in NAMES}
+
+    def parts_determinism_empty():
+        parts.gate_parts_determinism({}, {}, 1.0)
+
+    def parts_determinism_disjoint():
+        parts.gate_parts_determinism(_fp(), {"other": _fp()["chest"]}, 1.0)
+
+    def parts_accounting_empty():
+        parts.gate_parts_accounting(np.array([], dtype=int), 0, [])
+
+    def turn_empty_set():
+        TA.gate_set_distinct([], 0)
+
+    def walk_cadence():
+        p = walk.GaitParams(n_walk=2, n_decel=2, steps=30)
+        _speed, phase, _omega = walk._phase_schedule(p)
+        walk.gate_cadence_is_representable(phase, p.stance_frac, where="probe")
+
+    def walk_missing_landmark():
+        lm = {n: [0.0, 0.0, float(i)] for i, n in enumerate(walk.REQUIRED_LANDMARKS)}
+        del lm["head_top"]
+        walk.Performer(lm, -1.0, 1.0)
+
+    def facing_tie():
+        pts = [(0.0, -0.05, 0.01), (0.0, 0.05, 0.01), (0.0, 0.0, 0.08),
+               (0.0, -0.08, 0.95), (0.0, 0.08, 0.95)]
+        landmarks.facing(np.array(pts, dtype=np.float64), 0.06, 1.0, 0.0)
+
+    def facing_head_outvotes():
+        pts = [(0.0, -0.011, 0.01), (0.0, 0.010, 0.01), (0.0, 0.0, 0.08),
+               (0.0, -0.02, 0.95), (0.0, -0.02, 0.95), (0.0, 0.20, 0.95)]
+        landmarks.facing(np.array(pts, dtype=np.float64), 0.06, 1.0, 0.0)
+
+    def compositor_no_link():
+        BS.gate_compositor_wiring("depth", "Depth", "Render Layers", [])
+
+    def compositor_wrong_socket():
+        BS.gate_compositor_wiring("depth", "Depth", "Render Layers",
+                                  [("Render Layers", "Alpha")])
+
+    def union_single_use_iterator():
+        BS.union_sphere(iter([np.zeros((1, 3))]))
+
+    CASES = {
+        "parts_determinism_empty": parts_determinism_empty,
+        "parts_determinism_disjoint": parts_determinism_disjoint,
+        "parts_accounting_empty": parts_accounting_empty,
+        "turn_empty_set": turn_empty_set,
+        "walk_cadence": walk_cadence,
+        "walk_missing_landmark": walk_missing_landmark,
+        "facing_tie": facing_tie,
+        "facing_head_outvotes": facing_head_outvotes,
+        "compositor_no_link": compositor_no_link,
+        "compositor_wrong_socket": compositor_wrong_socket,
+        "union_single_use_iterator": union_single_use_iterator,
+    }
+
+    out = {"asserts_active": asserts_active, "raised": {}}
+    for name, fn in CASES.items():
+        try:
+            fn()
+            out["raised"][name] = "NO_RAISE"
+        except BaseException as exc:
+            out["raised"][name] = type(exc).__name__
+    print("AMEND6 " + json.dumps(out))
+    """
+)
+
+
+def _run_probe(tmp_path, *, flag=False, env_var=False):
+    script = tmp_path / f"w6_probe_{int(flag)}_{int(env_var)}.py"
+    script.write_text(PROBE, encoding="utf-8")
+    env = dict(os.environ)
+    env.pop("PYTHONOPTIMIZE", None)
+    if env_var:
+        env["PYTHONOPTIMIZE"] = "1"
+    cmd = [sys.executable] + (["-O"] if flag else []) + [str(script), TOOLS]
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=300)
+    assert proc.returncode == 0, proc.stderr
+    line = [ln for ln in proc.stdout.splitlines() if ln.startswith("AMEND6 ")]
+    assert line, proc.stdout + proc.stderr
+    return json.loads(line[-1][len("AMEND6 "):])
+
+
+@pytest.mark.parametrize(
+    "flag,env_var,label",
+    [(False, False, "plain"), (True, False, "-O"), (False, True, "PYTHONOPTIMIZE=1")],
+)
+def test_every_refusal_added_in_this_amend_survives_optimization(tmp_path, flag, env_var,
+                                                                 label):
+    """CLAUDE.md: gates raise, never `assert` — an `assert` is deleted by `-O` or
+    `PYTHONOPTIMIZE=1`, and 87 of facet's andons turned out to be removable by an
+    environment variable. Every refusal added in this amend MUTATES the protected thing
+    and must still fire with assertions gone."""
+    #: The exact exception each mutation must produce. Naming the class rather than
+    #: accepting "something raised" is the difference between proving the andon fired and
+    #: proving a typo did.
+    expected = {
+        "parts_determinism_empty": "GatePartsDeterminism",
+        "parts_determinism_disjoint": "GatePartsDeterminism",
+        "parts_accounting_empty": "GatePartsAccounting",
+        "turn_empty_set": "TurnaroundGate",
+        "walk_cadence": "WalkError",
+        "walk_missing_landmark": "WalkError",
+        "facing_tie": "FacingGate",
+        "facing_head_outvotes": "FacingGate",
+        "compositor_no_link": "CompositorWiring",
+        "compositor_wrong_socket": "CompositorWiring",
+        "union_single_use_iterator": "TypeError",
+    }
+    res = _run_probe(tmp_path, flag=flag, env_var=env_var)
+    assert set(res["raised"]) == set(expected), res["raised"]
+    for name, want in expected.items():
+        assert res["raised"][name] == want, (
+            f"{label}/{name}: expected {want}, got {res['raised'][name]}")
+
+
+def test_the_optimization_actually_took_effect(tmp_path):
+    """Otherwise the parametrisation above is three copies of the same run."""
+    assert _run_probe(tmp_path, flag=False)["asserts_active"] is True
+    assert _run_probe(tmp_path, flag=True)["asserts_active"] is False
+    assert _run_probe(tmp_path, env_var=True)["asserts_active"] is False
+
+
+def test_none_of_the_modules_this_amend_touched_uses_a_bare_assert():
+    """Source-level, because `-O` deletes asserts and this repo has been bitten."""
+    for name in ("assembly.py", "blender_scene.py", "framing.py", "glb.py", "joints.py",
+                 "landmarks.py", "parts.py", "turnaround.py", "walk.py"):
+        path = os.path.join(TOOLS, "armature_core", name)
+        with open(path, encoding="utf-8") as fh:
+            for i, line in enumerate(fh, 1):
+                assert not line.strip().startswith("assert "), f"{name}:{i} {line!r}"
