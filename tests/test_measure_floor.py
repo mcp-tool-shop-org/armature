@@ -196,3 +196,192 @@ def test_a_run_too_short_for_two_distinct_ends_refuses_rather_than_reporting_one
                  f"--out={tmp_path / 'floor.json'}"])
     assert e.value.evidence["n_frames"] == 1
     assert "overlap" in str(e.value)
+
+
+# --------------------------------------------------- the population the floor is read over
+#
+# The wave-6 fix corrected the WINDOW half of the literal defect and left the POPULATION
+# half untouched: `_stack` took the floor's frames from a bare `*.png` listing with no
+# numbered filter, while every sibling in this domain that feeds an upload
+# (`encode_control.frame_population`, `invert_frames.frame_population`,
+# `measure_clip.frame_paths`, `gate_b_frames.frame_paths`) already filters — and their
+# docstrings name the exact mechanism: `render_pose_sticks` writes a `strip_every{N}.png`
+# contact sheet into the directory it just filled with `NNNNN.png` frames.
+#
+# Measured 2026-09-04 on this branch, two synthetic runs of 8 numbered frames plus one
+# `strip_every8.png` each: `_stack` returned 9 arrays, `common_frame_count` returned 9, and
+# `bound_windows(9)` derived `early=[0]` / `late=[8]` — the LATE end of the clip WAS the
+# contact sheet. Because the stray is byte-identical across runs it also contributed an
+# `identical: True` pair and lowered the reported floor. `n_frames: 9`, `late_window: [8]`
+# and `frames_per_run` all went into floor.json.
+
+
+def _stray(root, name, filename="strip_every8.png", size=(4, 4)):
+    """A contact strip beside the numbered frames — `render_pose_sticks`' own output."""
+    d = os.path.join(str(root), name, "lossless")
+    os.makedirs(d, exist_ok=True)
+    Image.fromarray(np.full((size[0], size[1], 3), 200, dtype=np.uint8)).save(
+        os.path.join(d, filename))
+    return os.path.join(d, filename)
+
+
+def test_a_contact_strip_beside_the_frames_is_refused_not_counted_as_a_frame(tmp_path):
+    for name in ("r1", "r2"):
+        _run(tmp_path, name, 8, seed=17)
+        _stray(tmp_path, name)
+    with pytest.raises(MF.FloorError) as e:
+        MF._stack(os.path.join(str(tmp_path), "r1"))
+    ev = e.value.evidence
+    assert ev["unexpected"] == ["strip_every8.png"], ev
+    assert len(ev["frames"]) == 8, ev
+
+
+def test_the_cli_halts_on_a_stray_and_writes_no_floor(tmp_path):
+    """The andon is inside the tool that publishes the denominator, not beside it."""
+    for name in ("r1", "r2"):
+        _run(tmp_path, name, 8, seed=19)
+        _stray(tmp_path, name)
+    out = tmp_path / "floor.json"
+    with pytest.raises(MF.FloorError) as e:
+        MF.main([f"--runs=r1,r2", f"--root={tmp_path}", f"--out={out}"])
+    assert "strip_every8.png" in str(e.value)
+    assert not out.exists()
+
+
+def test_the_same_runs_without_the_stray_still_measure(tmp_path):
+    """The guard the other way: the refusal must not make a real floor unreachable."""
+    for name in ("r1", "r2"):
+        _run(tmp_path, name, 8, seed=19)
+    out = tmp_path / "floor.json"
+    rec = MF.main([f"--runs=r1,r2", f"--root={tmp_path}", f"--out={out}"])
+    assert rec["n_frames"] == 8
+    assert rec["frames_per_run"] == {"r1": 8, "r2": 8}
+
+
+def test_an_empty_lossless_directory_raises_rather_than_returning_nothing(tmp_path):
+    d = os.path.join(str(tmp_path), "r1", "lossless")
+    os.makedirs(d, exist_ok=True)
+    with pytest.raises(MF.FloorError) as e:
+        MF._stack(os.path.join(str(tmp_path), "r1"))
+    assert e.value.evidence["png_files"] == []
+
+
+def test_expect_pins_the_population_to_the_specs_own_names(tmp_path):
+    """A short run is a refusal, not a shorter floor."""
+    for name in ("r1", "r2"):
+        _run(tmp_path, name, 7, seed=23)
+    with pytest.raises(MF.FloorError) as e:
+        MF.main([f"--runs=r1,r2", f"--root={tmp_path}", "--expect=8",
+                 f"--out={tmp_path / 'floor.json'}"])
+    ev = e.value.evidence
+    assert len(ev["expected"]) == 8 and len(ev["found"]) == 7, ev
+
+
+def test_expect_that_matches_still_measures(tmp_path):
+    for name in ("r1", "r2"):
+        _run(tmp_path, name, 8, seed=23)
+    rec = MF.main([f"--runs=r1,r2", f"--root={tmp_path}", "--expect=8",
+                   f"--out={tmp_path / 'floor.json'}"])
+    assert rec["n_frames"] == 8
+    assert rec["expect"] == 8
+
+
+def test_the_png_match_is_case_insensitive_like_its_four_siblings(tmp_path):
+    """`00099.PNG` is a frame to `fetch_run.verify_downloads` and to `encode_control`;
+    a floor population that cannot see it would report over fewer frames than were
+    downloaded."""
+    for name in ("r1", "r2"):
+        _run(tmp_path, name, 3, seed=29)
+        d = os.path.join(str(tmp_path), name, "lossless")
+        Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8)).save(
+            os.path.join(d, "00003.PNG"))
+    assert len(MF._stack(os.path.join(str(tmp_path), "r1"))) == 4
+
+
+# --------------------------------------------- the two ends are the SAME size, always
+#
+# `derive_window`'s docstring states the invariant the wave-6 fix was written for — "Both
+# ends are the SAME size, which the literals were not (five frames early against four
+# late) -- two windows of different sizes are not comparable rows" — but on the DERIVED
+# path `k` is computed once and used at both ends, so the equality cannot be violated
+# there. The andon sat on the direction the arithmetic already bounds and was absent from
+# the direction the defect actually arrived on. Measured 2026-09-04:
+# `bound_windows(33, '0-4', '29-32')` returned an early of 5 and a late of 4, no refusal —
+# the exact literals the module docstring records as the defect, accepted verbatim.
+
+
+def test_two_requested_windows_of_different_sizes_are_refused(tmp_path):
+    with pytest.raises(MF.FloorError) as e:
+        MF.bound_windows(33, "0-4", "29-32")
+    ev = e.value.evidence
+    assert ev["n_early"] == 5 and ev["n_late"] == 4, ev
+    assert ev["early"] == [0, 1, 2, 3, 4]
+    assert ev["late"] == [29, 30, 31, 32]
+    assert "window_source" in ev
+
+
+def test_two_requested_windows_of_the_same_size_are_accepted(tmp_path):
+    """The guard the other way."""
+    early, late, source = MF.bound_windows(33, "0-4", "28-32")
+    assert len(early) == len(late) == 5
+    assert source["early"].startswith("requested")
+
+
+def test_the_size_invariant_holds_on_the_cli(tmp_path):
+    for name in ("r1", "r2"):
+        _run(tmp_path, name, 33, seed=31)
+    out = tmp_path / "floor.json"
+    with pytest.raises(MF.FloorError):
+        MF.main([f"--runs=r1,r2", f"--root={tmp_path}", "--early=0-4", "--late=29-32",
+                 f"--out={out}"])
+    assert not out.exists()
+
+
+# ------------------------------------------------- a malformed window is this tool's refusal
+
+
+@pytest.mark.parametrize("text", ["5", "abc-def", "", "1-2-3", "0-"])
+def test_a_malformed_window_raises_the_tools_own_error_not_a_bare_valueerror(text):
+    """Every other way of getting a window wrong here raises `FloorError` with an
+    evidence dict. `--early=5` — one number instead of a span — escaped as a raw
+    `ValueError: invalid literal for int() with base 10: ''`."""
+    with pytest.raises(MF.FloorError) as e:
+        MF.bound_windows(33, text, None)
+    ev = e.value.evidence
+    assert ev["window"] == "early"
+    assert ev["requested_text"] == text
+    assert ev["expected_shape"] == "a-b"
+
+
+def test_a_well_formed_window_still_parses():
+    assert MF._span("0-4", "early") == [0, 1, 2, 3, 4]
+
+
+def test_the_floor_andons_survive_python_optimize(tmp_path):
+    """They raise; they are not asserts. `-O` deletes an assert."""
+    import subprocess
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for name in ("r1", "r2"):
+        _run(tmp_path, name, 8, seed=37)
+        _stray(tmp_path, name)
+    code = (
+        "import sys; sys.path.insert(0, r'%s')\n"
+        "import measure_floor as MF\n"
+        "try:\n"
+        "    MF._stack(r'%s')\n"
+        "except MF.FloorError:\n"
+        "    print('STRAY_RAISED')\n"
+        "try:\n"
+        "    MF.bound_windows(33, '0-4', '29-32')\n"
+        "except MF.FloorError:\n"
+        "    print('SIZE_RAISED')\n"
+        "try:\n"
+        "    MF.bound_windows(33, '5', None)\n"
+        "except MF.FloorError:\n"
+        "    print('SPAN_RAISED')\n"
+    ) % (os.path.join(root, "tools"), os.path.join(str(tmp_path), "r1"))
+    out = subprocess.run([sys.executable, "-O", "-c", code], capture_output=True, text=True)
+    assert "STRAY_RAISED" in out.stdout, out.stderr
+    assert "SIZE_RAISED" in out.stdout, out.stderr
+    assert "SPAN_RAISED" in out.stdout, out.stderr

@@ -88,6 +88,7 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from armature_core import shotspec  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
 
@@ -150,15 +151,92 @@ def common_frame_count(stacks):
     return counts[0]
 
 
-def _stack(run_dir, sub="lossless"):
+def frame_population(d, expect=None):
+    """The NUMBERED frames of one run's channel directory, in index order, or raise.
+
+    The twin of `encode_control.frame_population` and `invert_frames.frame_population`,
+    carrying THEIR refusal rather than a third implementation of it, and it exists for
+    the same measured reason: `render_pose_sticks` writes a `strip_every{N}.png` contact
+    sheet into the very directory it just filled with `NNNNN.png` frames.
+
+    **Why a refusal and not the filter its two diagnostic siblings use.**
+    `gate_b_frames.frame_paths` and `measure_clip.frame_paths` drop a stray silently,
+    which is right for a diagnostic that describes one run. This tool publishes the
+    DENOMINATOR every later difference is read against, so a directory holding a file
+    this tool cannot name is a directory whose contents nobody has stated. Measured
+    2026-09-04 on two synthetic runs of 8 numbered frames plus one `strip_every8.png`
+    each: the bare `*.png` listing returned 9, `common_frame_count` returned 9, and the
+    derived LATE window was `[8]` — the contact sheet. Byte-identical across runs, it
+    also contributed an `identical: True` pair and lowered the published floor.
+
+    The `.png` match is case-insensitive, agreeing with `fetch_run.verify_downloads`
+    (which sweeps `00099.PNG` as a downloaded frame) and with the two upload-feeding
+    siblings: a population that cannot see a file the fetcher counted would report the
+    floor over fewer frames than were downloaded.
+
+    `expect` pins the population to `shotspec.frame_names`, the spec's own names, rather
+    than to a length any N files would satisfy.
+    """
+    if not os.path.isdir(d):
+        raise FloorError(f"{d} is not a directory of frames", {"channel_dir": d})
+    pngs = sorted(n for n in os.listdir(d) if n.lower().endswith(".png"))
+    numbered = [n for n in pngs if os.path.splitext(n)[0].isdigit()]
+    unexpected = [n for n in pngs if n not in set(numbered)]
+    names = sorted(numbered, key=lambda n: int(os.path.splitext(n)[0]))
+    if unexpected:
+        raise FloorError(
+            f"{d} holds {len(unexpected)} PNG(s) that are not numbered frames "
+            f"({', '.join(unexpected[:8])}); a stray sorts into the population and "
+            f"becomes a frame of the run the noise floor is measured over",
+            {"channel_dir": d, "unexpected": unexpected, "frames": names},
+        )
+    if not names:
+        raise FloorError(
+            f"no NNNNN.png frames in {d}; a floor over no frames is not a measurement",
+            {"channel_dir": d, "png_files": pngs},
+        )
+    if expect is not None:
+        want = shotspec.frame_names(expect, "png")
+        if names != want:
+            raise FloorError(
+                f"{d} holds {len(names)} frame(s) and the spec names {len(want)}; the "
+                f"floor would be published over a population the spec does not describe",
+                {"channel_dir": d, "found": names, "expected": want,
+                 "missing": [n for n in want if n not in set(names)],
+                 "unexpected": [n for n in names if n not in set(want)]},
+            )
+    return names
+
+
+def _stack(run_dir, sub="lossless", expect=None):
     d = os.path.join(run_dir, sub)
-    names = sorted(n for n in os.listdir(d) if n.endswith(".png"))
+    names = frame_population(d, expect=expect)
     return [np.array(Image.open(os.path.join(d, n)).convert("RGB")).astype(np.int16) for n in names]
 
 
-def _span(text):
-    a, _, b = text.partition("-")
-    return list(range(int(a), int(b) + 1))
+def _span(text, name):
+    """`"a-b"` inclusive, or raise naming the flag and the shape it wanted.
+
+    Every other way of getting a window wrong in this file raises `FloorError` with an
+    evidence dict naming `requested`, `n_frames` and `out_of_range`. A malformed span
+    escaped all of it: measured 2026-09-04, `bound_windows(33, '5', None)` — the
+    plausible operator typo, one number instead of a span — died on
+    `ValueError: invalid literal for int() with base 10: ''`, naming neither the flag
+    nor the expected shape, and `'abc-def'` did the same.
+    """
+    parts = str(text).split("-")
+    ev = {"window": name, "requested_text": text, "expected_shape": "a-b"}
+    if len(parts) != 2 or not all(p.strip().lstrip("+").isdigit() for p in parts):
+        raise FloorError(
+            f"--{name}={text!r} is not a window; it must be written a-b, two frame "
+            f"indices inclusive (argparse eats leading minus signs, so pass "
+            f"--{name}=0-4)", ev)
+    a, b = int(parts[0]), int(parts[1])
+    if b < a:
+        raise FloorError(
+            f"--{name}={text!r} ends before it begins; a window of no frames would be "
+            f"reported under a heading naming two", dict(ev, first=a, last=b))
+    return list(range(a, b + 1))
 
 
 def derive_window(n, fraction=WINDOW_FRACTION):
@@ -191,7 +269,7 @@ def bound_windows(n, early_text=None, late_text=None, fraction=WINDOW_FRACTION):
             source[name] = (f"derived from this run's own {n} frames at "
                             f"{fraction:.1%} of it per end")
             continue
-        idx = _span(text)
+        idx = _span(text, name)
         bad = [i for i in idx if i < 0 or i >= n]
         if not idx or bad:
             raise FloorError(
@@ -212,6 +290,22 @@ def bound_windows(n, early_text=None, late_text=None, fraction=WINDOW_FRACTION):
             f"that claim to be the two ends of the clip",
             {"n_frames": n, "early": windows["early"], "late": windows["late"],
              "overlap": both, "window_source": source})
+    # ---- ANDON on the direction the arithmetic does NOT bound. `derive_window` computes
+    #      `k` once and uses it at both ends, so on the derived path the equality cannot
+    #      be violated and the invariant its docstring states was unenforced exactly where
+    #      the defect arrived: measured 2026-09-04, `bound_windows(33, '0-4', '29-32')`
+    #      returned an early of five frames and a late of four with no refusal — the
+    #      literals this module's docstring records as the defect, accepted verbatim from
+    #      the command line.
+    if len(windows["early"]) != len(windows["late"]):
+        raise FloorError(
+            f"the EARLY window covers {len(windows['early'])} frame(s) and the LATE "
+            f"window {len(windows['late'])} on a {n}-frame run; two windows of different "
+            f"sizes are not comparable rows, and the record would name them as the two "
+            f"ends of one clip",
+            {"n_frames": n, "early": windows["early"], "late": windows["late"],
+             "n_early": len(windows["early"]), "n_late": len(windows["late"]),
+             "window_source": source})
     return windows["early"], windows["late"], source
 
 
@@ -253,12 +347,17 @@ def main(argv=None):
                     help="a-b, inclusive. Omitted, the window is derived from the run's "
                          "own frame count")
     ap.add_argument("--big", type=int, default=8)
+    ap.add_argument("--expect", type=int, default=None,
+                    help="the frame count the spec declares; every run's numbered frames "
+                         "must be exactly shotspec.frame_names(expect, 'png')")
     ap.add_argument("--out", default="outputs/E02/floor.json")
     a = ap.parse_args(argv)
 
     # ---- ANDON, before a single PNG is opened: distinct runs, at least two of them.
     runs = check_runs([r for r in a.runs.split(",") if r])
-    stacks = {r: _stack(os.path.join(a.root, r)) for r in runs}
+    # ---- ANDON, before a single pair is compared: each run's population is its
+    #      NUMBERED frames and nothing else. A contact strip beside them is refused.
+    stacks = {r: _stack(os.path.join(a.root, r), expect=a.expect) for r in runs}
     # ---- ANDON, before a single pair is compared: one verified frame count, not run[0]'s.
     n = common_frame_count(stacks)
     # ---- ANDON, before a single pair is compared: the windows are bounded by THIS run.
@@ -320,7 +419,7 @@ def main(argv=None):
     print(f"  px differing >{a.big}  : {st.mean(allpct):.3f}%")
 
     payload = {
-        "runs": runs, "n_frames": n, "big_threshold": a.big,
+        "runs": runs, "n_frames": n, "big_threshold": a.big, "expect": a.expect,
         "frames_per_run": {r: len(s) for r, s in stacks.items()},
         # The REALISED index lists, which `bound_windows` has already proved are frames
         # this run carries -- never the requested text.
