@@ -1137,10 +1137,27 @@ def camera_widget_order_evidence(graph, expect):
 
 
 def _frame_triple(frame):
-    """`(width, height, length)` from a tuple or a mapping, or raise saying what arrived."""
+    """`(width, height, length)` from a tuple or a mapping, or raise saying what arrived.
+
+    ⚠ **It used to COERCE, in front of a guard whose whole job was to refuse.** Wave 8
+    added `frame_legality`'s int-type refusal with the reason written out — "a wrong TYPE
+    is a malformed question and raises" — and it could not fire on the only path a caller
+    supplies a frame, because both return paths here read `int(...)` first. Measured
+    2026-09-04: `_frame_triple((832.9, 480.4, 81))` returned `(832, 480, 81)` and
+    `_frame_triple(('832','480','81'))` returned `(832, 480, 81)` — a float truncated and
+    a string parsed, both silently, so the guard downstream saw ints on every call. A
+    builder that derived a non-integer frame (a division that did not floor) had it
+    truncated, and `verify`'s evidence and the `SAVED_ADMISSION_OK` line then quoted a
+    frame that is not the number the builder computed — while the supplied-vs-graph clash
+    clause compared the TRUNCATED value and could not see the difference either.
+
+    The values are now passed through untouched, so `frame_legality` states the ONE
+    refusal for a malformed frame. Nothing in `tools/` supplies anything but ints today
+    (read at the seven `verify(..., frame=...)` call sites).
+    """
     if isinstance(frame, dict):
         try:
-            return int(frame["width"]), int(frame["height"]), int(frame["length"])
+            return frame["width"], frame["height"], frame["length"]
         except KeyError as exc:
             raise RouteGate(
                 f"the supplied frame is missing {exc.args[0]!r}; Gate L needs all three of "
@@ -1148,7 +1165,7 @@ def _frame_triple(frame):
                 {"gate": "ROUTE", "andon": "RouteGate", "clause": "frame_triple",
                  "supplied": frame}) from None
     if isinstance(frame, (list, tuple)) and len(frame) == 3:
-        return int(frame[0]), int(frame[1]), int(frame[2])
+        return frame[0], frame[1], frame[2]
     raise RouteGate(
         f"the supplied frame {frame!r} is not (width, height, length) or a mapping "
         f"carrying those three keys",

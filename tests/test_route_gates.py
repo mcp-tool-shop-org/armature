@@ -1682,3 +1682,73 @@ def test_a_row_with_no_alias_is_still_not_orphaned():
     assert set(RG.RULED_COMPONENTS) - set(RG.RULED_COMPONENT_CLASSES)
     assert RG.orphaned_component_class_aliases() == []
     assert RG.rulings_for_class("DWPreprocessor")[0]["matched_on"] == "dwpose"
+
+
+# --- W10 amend: `frame_legality`'s int refusal is reachable from the supplied path -----
+# (F-ef11d857)
+
+
+def _frame_graph():
+    """A graph with NO checkable latent, so `frame=` is the only frame in play — which is
+    the path the finding is about."""
+    return graph(top=[loader(1, "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"),
+                      sampler(2, 12345, "fixed")])
+
+
+@pytest.mark.parametrize("frame", [
+    (832.9, 480, 81), ("832", "480", "81"), (832, 480.0, 81), (832, 480, True),
+    {"width": 832.9, "height": 480, "length": 81},
+])
+def test_a_frame_that_is_not_three_ints_is_refused_rather_than_coerced(frame):
+    """Wave 8 added the int-type guard at `frame_legality` with its reason written out
+    ("a wrong TYPE is a malformed question and raises") — and it could not fire on the
+    only path a caller supplies a frame, because `_frame_triple` coerced first. Measured
+    2026-09-04: `_frame_triple((832.9, 480.4, 81))` returned `(832, 480, 81)` and
+    `_frame_triple(('832','480','81'))` returned `(832, 480, 81)` — a float truncated and
+    a string parsed, both silently, so the guard downstream saw ints on every call.
+
+    The consequence: a builder that derives a non-integer frame (a division that did not
+    floor) has it silently truncated, and `verify`'s evidence and the `SAVED_ADMISSION_OK`
+    line then quote a frame that is not the number the builder computed — and the
+    supplied-vs-graph clash clause compares the TRUNCATED value, so it cannot see the
+    difference either."""
+    with pytest.raises(RG.RouteGate, match=r"is not an int") as exc:
+        RG.verify(_frame_graph(), frame=frame)
+    assert exc.value.evidence["clause"] in ("frame_type", "frame_triple")
+
+
+def test_the_coercion_is_gone_from_the_reader_itself():
+    """ONE refusal for a malformed frame, rather than a coercion in front of a guard.
+
+    The reader passes the values through untouched and `frame_legality` — which already
+    carries the refusal, and carries it for the graph-read path too — states it. So this
+    asserts the absence of the coercion (the float arrives as a float) rather than a
+    second refusal here."""
+    assert RG._frame_triple((832, 480, 81)) == (832, 480, 81)
+    assert RG._frame_triple({"width": 832, "height": 480, "length": 81}) == (832, 480, 81)
+    assert RG._frame_triple((832.9, 480, 81)) == (832.9, 480, 81)
+    assert RG._frame_triple(("832", "480", "81")) == ("832", "480", "81")
+    with pytest.raises(RG.RouteGate, match=r"is not an int") as exc:
+        RG.frame_legality(*RG._frame_triple((832.9, 480, 81)))
+    assert exc.value.evidence["clause"] == "frame_type"
+
+
+def test_the_shape_refusals_of_the_supplied_frame_are_unchanged():
+    """The clauses that were already there: a two-of-three tuple, a mapping missing a
+    key, and something that is neither."""
+    with pytest.raises(RG.RouteGate, match=r"is not \(width, height, length\)"):
+        RG.verify(_frame_graph(), frame=(832, 480))
+    with pytest.raises(RG.RouteGate, match=r"missing 'length'"):
+        RG.verify(_frame_graph(), frame={"width": 832, "height": 480})
+    with pytest.raises(RG.RouteGate, match=r"is not \(width, height, length\)"):
+        RG.verify(_frame_graph(), frame="832x480x81")
+
+
+def test_the_int_cases_every_builder_supplies_today_still_pass():
+    """Read at the seven `RG.verify(..., frame=...)` call sites: every builder in the
+    tree derives its frame as an int, so this is the population that must not move."""
+    ev = RG.verify(_frame_graph(), frame=(832, 480, 81))
+    supplied = [f for f in ev["frame_legality"] if f["source"] == "supplied"]
+    assert len(supplied) == 1 and supplied[0]["legal"] is True
+    ev = RG.verify(_frame_graph(), frame={"width": 832, "height": 480, "length": 81})
+    assert [f["source"] for f in ev["frame_legality"]] == ["supplied"]
