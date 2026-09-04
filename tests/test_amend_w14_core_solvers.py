@@ -442,7 +442,8 @@ def test_gate_turn_passes_a_set_whose_views_really_differ():
     ev = turnaround.gate_set_distinct(records, 8)
     assert ev["n_pairs_identical_in_pixels"] == 0
     assert ev["n_views_compared_in_pixels"] == 8
-    assert "pixel" in ev["verdict"]
+    assert "distinct in PIXELS over 8 of 8" in ev["verdict"]
+    assert ev["min_adjacent_pixel_distance"] > 0.0
 
 
 def test_gate_turn_verdict_says_so_when_no_view_carried_pixels():
