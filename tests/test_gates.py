@@ -983,17 +983,37 @@ EVIDENCE_UNREADABLE_EXEMPT = set()
 #: whose `evidence or {}` is empty and therefore omits `gate`. Named, dated 2026-09-04, and
 #: re-derived from the walk itself, the way `EVIDENCE_UNREADABLE_EXEMPT` is.
 #:
-#: 50 sites carrying 102 raises. Every one of them is a plain refusal: all 159 `GateFailure`
+#: 50 sites when this set was written; 40 today (see the wave-14 block below — the ten
+#: closed by wave 12's receipts are deleted). Every one of them is a plain refusal: all `GateFailure`
 #: raises in the package carry a readable dict (the ONE-judge agreement test at
 #: `tests/test_core_solver_evidence.py:266` confirms 159 == 159 under the class filter), so
 #: nothing here is a gate that lost its evidence — it is the wave-10 contract, "a plain
 #: refusal writes `gate: None` + `andon` + `clause`", realised on 9 of the 111 plain refusal
 #: sites.
 #:
-#: **Direction: CEILING, not equality, while wave 12 is in flight.** core-solvers owns
-#: extending the `gate: None` receipt to every plain refusal in walk/framing/glb, so this set
-#: is expected to shrink; a NEW no-evidence site fails here. Entries closed by a receipt are
-#: deleted by the commit that adds it.
+#: **WAVE 14, F-95ac9f17 — RE-DERIVED to 40, and the direction is now EQUALITY.** The ceiling
+#: DID shrink and the constant did not follow it. Measured on the wave-13 tree,
+#: `evidence_dicts_missing('gate')` returned 40 no-evidence sites against this 50-entry set,
+#: and the ten that named nothing were precisely the receipts core-solvers landed in wave 12:
+#: `framing.py:_norm`, `framing.py:camera_basis`, `framing.py:ortho_half_spans`,
+#: `framing.py:solve_camera`, `glb.py:_image_blob`, `walk.py:__init__`,
+#: `walk.py:_integrate_forward`, `walk.py:_phase_schedule`, `walk.py:_rot`,
+#: `blender_scene.py:union_sphere`. The comment below stated the discipline — "entries closed
+#: by a receipt are deleted by the commit that adds it" — and the deletion did not happen at
+#: the merge, so those ten were a standing permission slip: simulated by re-adding all ten to
+#: `no_evidence`, `new` stayed `[]` and the test stayed green. A refactor in `framing` or
+#: `walk` — the two modules with the most churn in this run — could have reverted the wave-12
+#: plain-refusal contract for nine of its sites with no test to notice, and `errors.py`'s
+#: `self.evidence = evidence or {}` then writes `evidence: null` into the halt line.
+#:
+#: The converse direction is asserted beside the growth one, which is the shape
+#: `EVIDENCE_UNREADABLE_EXEMPT` already has by being empty: a routed entry that stops naming a
+#: live site fails here rather than sitting as a silent exemption. Entries closed by a receipt
+#: are deleted by the commit that adds it.
+#:
+#: Re-derive with:
+#:     python -c "import sys;sys.path[:0]=['tests','tools'];import test_gates as G;\
+#:     print(len(G.evidence_dicts_missing('gate')[3]))"
 EVIDENCE_NO_EVIDENCE_ROUTED = {
     "aapose.py:check_convention (ArmatureError)",
     "aapose.py:draw_body (ArmatureError)",
@@ -1004,12 +1024,6 @@ EVIDENCE_NO_EVIDENCE_ROUTED = {
     "aapose.py:require_rig_map (ArmatureError)",
     "aapose.py:stickwidth (ArmatureError)",
     "binding.py:rigid_segment_weights (ArmatureError)",
-    "blender_scene.py:union_sphere (NonReiterableFrames)",
-    "framing.py:_norm (FramingError)",
-    "framing.py:camera_basis (FramingError)",
-    "framing.py:ortho_half_spans (FramingError)",
-    "framing.py:solve_camera (FramingError)",
-    "glb.py:_image_blob (MalformedGLB)",
     "joints.py:_limb_radius (LandmarkError)",
     "joints.py:snap_sites_to_balls (LandmarkError)",
     "joints.py:sphere_fit (LandmarkError)",
@@ -1041,10 +1055,6 @@ EVIDENCE_NO_EVIDENCE_ROUTED = {
     "shotspec.py:normalise_spec (SpecError)",
     "shotspec.py:resolve_asset (SpecError)",
     "turnaround.py:projection_plan (TurnaroundPlanRefusal)",
-    "walk.py:__init__ (WalkError)",
-    "walk.py:_integrate_forward (WalkError)",
-    "walk.py:_phase_schedule (WalkError)",
-    "walk.py:_rot (WalkError)",
 }
 
 
@@ -1099,6 +1109,124 @@ def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_categor
                           "line records a null evidence value and the receipt for a "
                           "refused stage cannot name what refused it",
     }
+    # WAVE 14, F-95ac9f17: the CONVERSE direction. Without it a routed entry outlives the
+    # site it names and becomes a standing permission slip for that site to regress.
+    closed = sorted(EVIDENCE_NO_EVIDENCE_ROUTED - set(no_evidence))
+    assert closed == [], {
+        "carries a receipt now and is still routed (delete these in the commit that adds "
+        "the receipt)": closed,
+        "why it matters": "a routed entry that names no live site re-admits that site in "
+                          "silence: the ten wave-12 receipts in framing/walk/glb/"
+                          "blender_scene could all have been reverted with this test green",
+    }
+    # The census on the page, pinned `==` (wave 14, rule 4). Re-derive with the command
+    # beside EVIDENCE_NO_EVIDENCE_ROUTED.
+    assert len(no_evidence) == 40, sorted(no_evidence)
+
+
+#: Modules of `armature_core` whose classes this census cannot INSTANTIATE on a rig with no
+#: Blender, because importing them imports `bpy`. Named and dated 2026-09-04, and DERIVED —
+#: the census below puts every module through `importlib` and files the failures here, so a
+#: module that starts needing Blender joins loudly and one that stops leaves. Counting what it
+#: cannot judge rather than skipping past it (wave 12, rule 3).
+CORE_MODULES_NEEDING_BLENDER = {"blender_scene"}
+
+
+def _family_classes_defined_in_core():
+    """`{module stem: {class names}}` for every `ArmatureError` family class defined under
+    `armature_core/`, read off the AST — the population, before the property."""
+    family = _armature_error_family(TOOLS_DIR)
+    out = {}
+    for path in sorted(CORE_DIR.glob("*.py")):
+        for node in _ast.walk(_ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, _ast.ClassDef) and node.name in family:
+                out.setdefault(path.stem, set()).add(node.name)
+    return out
+
+
+def test_every_family_class_stores_the_evidence_it_is_passed():
+    """The other half of the evidence census: the raise site PASSES a dict — does the class
+    KEEP it?
+
+    WAVE 14, the seam from instruments-measure (`F-8393e66c`). `stage_render.py:582` raised
+    the BASE `ArmatureError(msg, {...})`; the base had no `__init__`, so the second argument
+    went to `RuntimeError.args` and `.evidence` did not exist — the halt line printed
+    `"evidence": null` for a refusal whose raise site looked, to the AST census above,
+    perfectly compliant. A census that reads only the CALL cannot see that, which is why the
+    two halves are both needed: `evidence_dicts_missing` judges what is written at the raise,
+    and this judges what the class does with it.
+
+    The population is derived from the AST family and reconciled against the classes that are
+    actually importable, so a class the walk finds but never instantiates cannot hide here.
+    """
+    import importlib
+
+    defined = _family_classes_defined_in_core()
+    unimportable, live = {}, {}
+    for stem, names in sorted(defined.items()):
+        try:
+            mod = importlib.import_module(f"armature_core.{stem}")
+        except Exception as exc:                                        # noqa: BLE001
+            unimportable[stem] = f"{type(exc).__name__}: {exc}"
+            continue
+        for name in sorted(names):
+            live[f"{stem}.{name}"] = getattr(mod, name)
+
+    assert set(unimportable) == CORE_MODULES_NEEDING_BLENDER, {
+        "cannot be imported without Blender and is not named": unimportable,
+        "named and importable now (delete it)":
+            sorted(CORE_MODULES_NEEDING_BLENDER - set(unimportable))}
+    expected = {f"{stem}.{n}" for stem, names in defined.items()
+                for n in names if stem not in unimportable}
+    assert set(live) == expected, {
+        "defined by the walk and not reached live": sorted(expected - set(live)),
+        "reached live and not defined by the walk": sorted(set(live) - expected)}
+    assert live, "the census instantiated nothing; it is not measuring the family"
+
+    sentinel = {"measured": 1, "threshold": 2}
+    dropped = {}
+    for qualified, cls in sorted(live.items()):
+        try:
+            exc = cls("a refusal", sentinel)
+        except Exception as err:                                        # noqa: BLE001
+            dropped[qualified] = f"cannot take (message, evidence): {type(err).__name__}"
+            continue
+        got = getattr(exc, "evidence", None)
+        if got != sentinel:
+            dropped[qualified] = repr(got)
+    assert dropped == {}, {
+        "raised with an evidence dict and does not store it": dropped,
+        "why it matters": "the halt handler records `getattr(exc, 'evidence', None)`, so a "
+                          "class that drops the argument prints `\"evidence\": null` for a "
+                          "refusal whose raise site the AST census scores compliant",
+    }
+
+
+def test_the_evidence_a_family_class_stores_is_the_object_the_halt_line_reads():
+    """Rule 3 on the census above, on the shape it exists to catch.
+
+    A class that takes `(message, evidence)` and throws the second argument away is exactly
+    `ArmatureError` before wave 14, and it must be reported — otherwise the test is asserting
+    a property of `GateFailure` and calling it a property of the family.
+    """
+    from armature_core.errors import ArmatureError
+
+    class _Drops(ArmatureError):
+        def __init__(self, message, evidence=None):
+            RuntimeError.__init__(self, message)
+
+    sentinel = {"measured": 1}
+    exc = _Drops("a refusal", sentinel)
+    assert getattr(exc, "evidence", None) != sentinel, (
+        "the probe class stored the evidence anyway; it does not carry the defect and the "
+        "comparison below says nothing")
+    with pytest.raises(AssertionError):
+        assert getattr(exc, "evidence", None) == sentinel
+
+    # …and the real base, which is the operand the seam named.
+    assert ArmatureError("a refusal", sentinel).evidence == sentinel, (
+        "the base class drops the evidence dict its callers pass; a bare "
+        "`ArmatureError(msg, {...})` raise prints `\"evidence\": null` in the halt line")
 
 
 def test_the_no_evidence_sites_are_plain_refusals_and_not_gates_that_lost_their_receipt():
