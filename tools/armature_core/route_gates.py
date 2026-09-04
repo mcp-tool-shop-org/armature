@@ -323,6 +323,26 @@ class PairGate(GateFailure):
     gate = "PAIR"
 
 
+#: Class-name suffixes that mark a node as *conditioning a video model* — the role Gate
+#: PAIR needs a row for. Matched by ROLE, not by vendor prefix.
+#:
+#: ⚠ The fail-closed clause used to read `startswith("Wan") and endswith("ToVideo")`,
+#: which a class name disarmed outright: measured 2026-09-03, a graph loading
+#: `wan2.2_t2v_high_noise.safetensors` and wiring `HunyuanImageToVideo` returned
+#: "0 conditioning node(s) paired against 1 model file(s)" — green, with
+#: `conditioning_nodes == []` — while renaming that same node `WanSomethingNewToVideo`
+#: raised. The gate exists because a licence row is not a wiring claim; a gate that only
+#: recognises one vendor's naming is a licence row of its own. The E11 wave-2 failure
+#: (65 frames, no subject after f1, every other gate green) would repeat unseen on any
+#: non-Wan tier, which the note at the head of `LATENT_NODES` already predicts.
+CONDITIONING_CLASS_SUFFIXES = ("ToVideo", "ToVideoLatent")
+
+
+def _looks_like_conditioning(cls):
+    """Does this class name declare the conditioning role, whoever built it?"""
+    return isinstance(cls, str) and cls.endswith(CONDITIONING_CLASS_SUFFIXES)
+
+
 def families_of(filename):
     """Every family a weight filename matches, lower-cased substring test."""
     low = str(filename).lower()
@@ -364,8 +384,7 @@ def pairing(graph):
                                  for i, c in cond]}
 
     unknown = sorted({n.get("type") for _, n in _iter_nodes(graph)
-                      if isinstance(n.get("type"), str)
-                      and n["type"].startswith("Wan") and n["type"].endswith("ToVideo")
+                      if _looks_like_conditioning(n.get("type"))
                       and n["type"] not in CONDITIONING_WEIGHT_FAMILY
                       and n["type"] not in CONDITIONING_FAMILY_EXEMPT})
     if unknown:
@@ -428,6 +447,18 @@ def _iter_nodes(graph):
     save-format one. **Both formats matter here**: we build in API format and the cloud is
     handed a saved file, so the gate has to be able to read what we wrote AND what came
     back.
+
+    ⚠ **The recursion is the clause, not the loop.** Until 2026-09-03 this walked
+    `definitions.subgraphs[*].nodes` and stopped, so a definition carrying its own
+    `definitions` hid everything inside it. Measured: a graph whose outer subgraph
+    contains a nested subgraph holding a `LoraLoaderModelOnly` for `causvid_x.safetensors`
+    returned `['base.safetensors', 'clean.safetensors']` from `components()` — the BANNED
+    file two levels down was missed and `verify` would have reported the graph clean.
+    That is this function's own docstring one level further down. NOT measured: whether
+    Comfy's served save format ever nests definitions rather than hoisting them, so this
+    closed a hole in the walk rather than a demonstrated escape. A `visited` set of
+    definition ids stands against a blueprint that references itself: the gate before a
+    spend must halt or answer, never hang.
     """
     if is_api_format(graph):
         for node_id, node in graph.items():
@@ -441,9 +472,22 @@ def _iter_nodes(graph):
         return
     for n in graph.get("nodes") or []:
         yield ("top", n)
-    for d in (graph.get("definitions") or {}).get("subgraphs") or []:
+    yield from _iter_definitions(graph, set())
+
+
+def _iter_definitions(container, visited):
+    """Every node inside `container`'s subgraph definitions, to any depth."""
+    for d in (container.get("definitions") or {}).get("subgraphs") or []:
+        if not isinstance(d, dict):
+            continue
+        key = id(d) if d.get("id") is None else ("id", d["id"])
+        if key in visited:
+            continue
+        visited.add(key)
+        where = d.get("name") or d.get("id") or "subgraph"
         for n in d.get("nodes") or []:
-            yield (d.get("name") or d.get("id") or "subgraph", n)
+            yield (where, n)
+        yield from _iter_definitions(d, visited)
 
 
 def components(graph):
@@ -480,6 +524,16 @@ def seeds(graph):
     seed, so `randomize` is not pinned however concrete the current number looks. In API
     format that widget does not exist at all: a seed is pinned when it is a literal, and
     unpinned when it arrives over a link from a node that could compute anything.
+
+    **A third state exists and it used to read as the first.** `literal = not
+    isinstance(value, list)` is True for a key that is not there at all, so an API
+    `KSampler` carrying no `seed` input was recorded `seed=None, seed_is_literal=True,
+    pinned=True` — measured 2026-09-03, `verify` reported "1 seed(s) all pinned" on it.
+    An absent seed is not a pinned one: nothing in the graph says what will run, which is
+    the same thing a link says and worse. It is now `seed_is_literal=False,
+    pinned=False`, carrying `seed_input_present=False` so a reader can tell the missing
+    key from the link. (`gate_s_registration` did fail closed on the same graph, so this
+    was confined to `verify`'s pinned clause and its verdict string.)
     """
     api = is_api_format(graph)
     out = []
@@ -490,11 +544,14 @@ def seeds(graph):
             continue
         if api:
             key = SEED_INPUTS[cls]
-            value = (n.get("inputs") or {}).get(key)
-            literal = not isinstance(value, list)
+            inputs = n.get("inputs") or {}
+            present = key in inputs
+            value = inputs.get(key)
+            literal = present and not isinstance(value, list)
             out.append({"node_id": n.get("id"), "class": cls, "where": where,
                         "seed": value if literal else None,
                         "control_after_generate": None,
+                        "seed_input_present": present,
                         "seed_is_literal": literal, "pinned": literal})
             continue
         wv = n.get("widgets_values") or []
@@ -626,34 +683,77 @@ def _frame_triple(frame):
         f"carrying those three keys", {"supplied": frame})
 
 
+def _frame_form(rules, family):
+    """`(modulus, residue)` parsed out of a family's declared `frame_form`.
+
+    The rule is DATA — `GENERATOR_RULES['wan']['frame_form'] == '4n+1'` — and the code
+    used to test `(length - 1) % 4` against a literal 4, so the declared field was never
+    read. A second family declaring `8n+1` would have been graded on wan's temporal rule
+    while its own row said otherwise, and nothing would have printed differently.
+    `gates.GeneratorProfile` already stores modulus and residue separately; this parses
+    the same two numbers out of the string form this table uses.
+    """
+    form = rules.get("frame_form")
+    try:
+        mod, res = str(form).split("n+")
+        return int(mod), int(res)
+    except (AttributeError, TypeError, ValueError):
+        raise RouteGate(
+            f"generator family {family!r} declares frame_form {form!r}, which is not of "
+            f"the form '<modulus>n+<residue>'. The rule is data and it is read; a family "
+            f"whose row cannot be parsed is graded on nobody's rule rather than silently "
+            f"on wan's", {"family": family, "rules": rules}) from None
+
+
 def frame_legality(width, height, length, family="wan"):
     """Gate L, standalone: is this frame legal for that generator? Derive, then round.
 
     Returns the verdict and, when illegal, the nearest legal value in each direction — so a
     caller rounds to a stated number instead of guessing one.
+
+    **Zero and negative are illegal, and they used not to be.** Measured 2026-09-03,
+    `frame_legality(0, 0, 1)` and `frame_legality(-16, -16, 1)` both returned
+    `legal=True` with no problems, because 0 and -16 are multiples of 16 and (1-1) is a
+    multiple of 4: a builder whose frame derivation returned 0 got a green Gate L. A
+    non-integer dimension raised a bare `TypeError` from the modulo, which is not an
+    exception any caller of a gate is catching — that now raises `RouteGate` naming the
+    value. The split is deliberate: a wrong TYPE is a malformed question and raises; a
+    wrong VALUE is an illegality and is reported through `problems` like every other,
+    so `verify` halts on it with the whole evidence dict rather than a bare error.
     """
     rules = GENERATOR_RULES.get(family)
     if rules is None:
         raise RouteGate(f"no recorded frame rules for generator family {family!r}; the "
                         f"constraint is recorded per model in the spec that first uses it",
                         {"known": sorted(GENERATOR_RULES)})
+    for axis, value in (("width", width), ("height", height), ("length", length)):
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise RouteGate(
+                f"{axis} {value!r} is not an int ({type(value).__name__}); Gate L "
+                f"compares it against a divisibility rule and would otherwise raise a "
+                f"bare TypeError out of the modulo",
+                {"family": family, "width": width, "height": height, "length": length})
     m = rules["dim_multiple"]
+    modulus, residue = _frame_form(rules, family)
     problems = []
-    if width % m:
-        problems.append(f"width {width} is not a multiple of {m} "
-                        f"(nearest: {m * round(width / m)})")
-    if height % m:
-        problems.append(f"height {height} is not a multiple of {m} "
-                        f"(nearest: {m * round(height / m)})")
-    if (length - 1) % 4:
-        problems.append(f"length {length} is not of the form 4n+1 "
-                        f"(nearest: {4 * round((length - 1) / 4) + 1})")
+    for axis, value in (("width", width), ("height", height)):
+        if value <= 0:
+            problems.append(f"{axis} {value} is not positive")
+        elif value % m:
+            problems.append(f"{axis} {value} is not a multiple of {m} "
+                            f"(nearest: {m * round(value / m)})")
+    if length <= 0:
+        problems.append(f"length {length} is not positive")
+    elif (length - residue) % modulus:
+        problems.append(
+            f"length {length} is not of the form {modulus}n+{residue} "
+            f"(nearest: {modulus * round((length - residue) / modulus) + residue})")
     if length > rules["max_frames"]:
         problems.append(f"length {length} exceeds the {rules['max_frames']}-frame "
                         f"trained horizon")
     return {"gate": "L", "family": family, "width": width, "height": height,
-            "length": length, "rules": rules, "problems": problems,
-            "legal": not problems}
+            "length": length, "rules": rules, "frame_form": f"{modulus}n+{residue}",
+            "problems": problems, "legal": not problems}
 
 
 #: Where a hosted tier's enum values sit in SAVE format's positional `widgets_values`.
@@ -667,28 +767,37 @@ HOSTED_ENUM_WIDGETS = {
 
 
 def hosted_enums(graph):
-    """A hosted tier's `(node_id, resolution, ratio, duration)`, in EITHER format.
+    """EVERY hosted node's `(node_id, resolution, ratio, duration)`, in EITHER format.
 
     Found by the field rather than by the class name in API format, because the thing being
     read is the field. In save format there are no field names at all — the values are
     positional — so the class-keyed table above is the only way in, and a class missing
-    from it returns nothing rather than guessing an index.
+    from it contributes nothing rather than guessing an index.
+
+    ⚠ **It returns a LIST because it used to return the first match.** Measured
+    2026-09-03 on a save-format graph with two `Wan2ReferenceVideoApi` nodes — the first
+    at ('720P', '16:9', 5) and the second at ('4K', '99:1', 900) — this function returned
+    the first and `verify`'s hosted branch checked only that tuple, reporting "hosted tier
+    wan2.7-r2v at 720P 16:9 5s — enum-legal". The illegal second node was named nowhere
+    in the evidence, so a two-shot hosted graph could carry an out-of-contract resolution,
+    ratio or duration under a green Gate L receipt.
     """
     api = is_api_format(graph)
-    for where, n in _iter_nodes(graph):
+    out = []
+    for _where, n in _iter_nodes(graph):
         if api:
             inp = n.get("inputs") or {}
             if "model.resolution" in inp:
-                return (n.get("id"), inp.get("model.resolution"), inp.get("model.ratio"),
-                        inp.get("model.duration"))
+                out.append((n.get("id"), inp.get("model.resolution"),
+                            inp.get("model.ratio"), inp.get("model.duration")))
         else:
             idx = HOSTED_ENUM_WIDGETS.get(n.get("type"))
             if idx:
                 wv = n.get("widgets_values") or []
                 if len(wv) > max(idx.values()):
-                    return (n.get("id"), wv[idx["resolution"]], wv[idx["ratio"]],
-                            wv[idx["duration"]])
-    return (None, None, None, None)
+                    out.append((n.get("id"), wv[idx["resolution"]], wv[idx["ratio"]],
+                                wv[idx["duration"]]))
+    return out
 
 
 def hosted_frame_legality(resolution, ratio, duration, tier):
@@ -844,6 +953,24 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
           "latents_checkable": sum(1 for l in lat if l["checkable"]),
           "frame_legality": legality}
 
+    # `allow` may wave a METHODOLOGY ruling. It may not wave a LICENCE one. The filter
+    # used to treat the two verdicts as one class, so `allow=('causvid',)` moved a
+    # CC-BY-NC weight through and returned a green verdict that said nothing about the
+    # waiver — measured 2026-09-03. CLAUDE.md's licence gate is a non-negotiable: no
+    # non-commercially-licensed weight anywhere in the pipeline, experiments included.
+    # An attempt to allow one is refused here rather than obeyed, and it is refused even
+    # on a graph that does not load it, because the call itself is the defect.
+    banned_allowed = sorted(k for k in allow
+                            if RULED_COMPONENTS.get(k, {}).get("verdict") == "BANNED")
+    if banned_allowed:
+        raise RouteGate(
+            "allow= names " + ", ".join(
+                f"{k!r} ({RULED_COMPONENTS[k]['licence']}: "
+                f"{RULED_COMPONENTS[k]['reason']})" for k in banned_allowed) +
+            ". A BANNED row is a LICENCE ruling and no keyword argument waves one; "
+            "`allow` exists for the EXCLUDED rows, which are methodology rulings",
+            dict(ev, allow=list(allow)))
+
     bad = [c for c in comp
            if c["ruling"]["verdict"] in ("BANNED", "EXCLUDED")
            and c["ruling"].get("matched_on") not in allow]
@@ -855,11 +982,32 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             ". The licence map's ruling is that presence is presence — a bypassed node "
             "still counts, and these are not even bypassed", ev)
 
+    # A waived component appears in `components` with its verdict, but the string a
+    # builder stores and a provenance sheet prints is `verdict` — so the waiver is named
+    # there too. A receipt that omits it is a receipt that reads clean.
+    waived = sorted({c["ruling"]["matched_on"] for c in comp
+                     if c["ruling"]["verdict"] == "EXCLUDED"
+                     and c["ruling"].get("matched_on") in allow})
+    ev["waived"] = waived
+
     # · ANDON — Gate PAIR. Placed after the licence clause (a banned weight stays the
     # headline) and before everything else, because every clause below is a question about
     # the graph's internal consistency and this one is the only question about whether the
     # model can receive what the graph wires at it. Wave 2 was internally consistent.
     ev["pairing"] = pairing(graph)
+
+    # The verdict must describe what RAN. `require_pinned_seeds=False` skipped the clause
+    # and still returned "N seed(s) all pinned" — the string `build_t2v_payload` and
+    # `gate_saved_graph` store in the spend meta and `make_startframe_sheet` renders onto
+    # the provenance sheet. Measured 2026-09-03 on a graph whose only sampler carries
+    # control_after_generate='randomize'. A record may not assert a property nobody
+    # checked, so the skip is named in the verdict rather than hidden by it.
+    ev["seed_clause_verdict"] = (
+        f"CHECKED — {len(sd)} seed(s) all pinned" if require_pinned_seeds
+        else "NOT CHECKED (require_pinned_seeds=False)")
+    seed_phrase = (f"{len(sd)} seed(s) all pinned" if require_pinned_seeds
+                   else f"{len(sd)} seed(s) NOT CHECKED for pinning "
+                        f"(require_pinned_seeds=False)")
 
     if require_pinned_seeds:
         loose = [s for s in sd if not s["pinned"]]
@@ -949,27 +1097,49 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                 f"carries {len(lat)} latent-sizing node(s). One of those two is wrong, and "
                 f"the pixel clause would go unchecked either way",
                 dict(ev, hosted_tier=hosted_tier))
-        node_id, res, ratio, dur = hosted_enums(graph)
-        if node_id is None:
+        found = hosted_enums(graph)
+        if not found:
             raise RouteGate(
                 f"verify() was told this is hosted tier {hosted_tier!r}, but no node in the "
                 f"graph carries that tier's enum inputs. Gate L would then have nothing to "
                 f"decide in EITHER clause, which is the vacuous state this argument exists "
                 f"to remove", dict(ev, hosted_tier=hosted_tier))
-        tier_ev = dict(hosted_frame_legality(res, ratio, dur, hosted_tier),
-                       source="graph", node_id=node_id)
-        ev["hosted_frame_legality"] = tier_ev
+        # EVERY hosted node is graded, and every one is recorded, before anything raises.
+        # `hosted_enums` used to return the first match and this branch checked only that
+        # tuple: a second node at an illegal resolution, ratio or duration was named
+        # nowhere in the evidence.
+        rows = [dict(hosted_frame_legality(res, ratio, dur, hosted_tier),
+                     source="graph", node_id=nid) for nid, res, ratio, dur in found]
+        ev["hosted_frame_legality_nodes"] = rows
         ev["frame_legality_verdict"] = "INAPPLICABLE — hosted tier, enum clause instead"
         ev["frame_legality_inapplicable_reason"] = (
             f"{hosted_tier} receives no width, height or frame count from this graph; the "
             f"pixel rules of family {family!r} decide nothing here, so the tier's own enum "
             f"constraints are checked instead and are reported in `hosted_frame_legality`")
-        if not tier_ev["legal"]:
-            raise RouteGate("Gate L (hosted tier): " + "; ".join(tier_ev["problems"]), ev)
+        illegal_rows = [r for r in rows if not r["legal"]]
+        if illegal_rows:
+            raise RouteGate(
+                "Gate L (hosted tier): " + "; ".join(
+                    f"node {r['node_id']}: " + "; ".join(r["problems"])
+                    for r in illegal_rows), ev)
+        if len(rows) > 1:
+            # Both legal is not the same as one checked. This tier bills per node, so a
+            # graph carrying two of them is one submission and two charges, and a single
+            # tier verdict would be the number nobody checked — the argument this
+            # function already makes for `frame` and `hosted_tier` together.
+            raise RouteGate(
+                f"the graph carries {len(rows)} {hosted_tier} node(s) "
+                f"({', '.join(str(r['node_id']) for r in rows)}); every one is legal and "
+                f"reported in `hosted_frame_legality_nodes`, but one submission carrying "
+                f"two billable nodes is two charges against a ceiling counted per "
+                f"submission, and one tier verdict cannot describe both", ev)
+        tier_ev = rows[0]
+        ev["hosted_frame_legality"] = tier_ev
         ev["verdict"] = (
-            f"{len(comp)} weight file(s), {len(sd)} seed(s) all pinned, hosted tier "
+            f"{len(comp)} weight file(s), {seed_phrase}, hosted tier "
             f"{hosted_tier} at {tier_ev['resolution']} {tier_ev['ratio']} "
-            f"{tier_ev['duration_s']}s — enum-legal; the pixel clause is inapplicable")
+            f"{tier_ev['duration_s']}s — enum-legal; the pixel clause is inapplicable"
+            + (f"; WAIVED components {waived}" if waived else ""))
         return ev
 
     if not ev["frame_legality"]:
@@ -983,11 +1153,12 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             f"gate then checks it against the generator's rules like any other", ev)
 
     ev["frame_legality_verdict"] = "PROVEN"
-    ev["verdict"] = (f"{len(comp)} weight file(s), {len(sd)} seed(s) all pinned, "
+    ev["verdict"] = (f"{len(comp)} weight file(s), {seed_phrase}, "
                      f"{ev['latents_checkable']} of {len(lat)} latent(s) checkable, "
                      f"{len(ev['frame_legality'])} frame(s) checked and generator-legal"
                      + (f", {len(cams)} camera trajectory(s) on the generated frame"
-                        if cams else ""))
+                        if cams else "")
+                     + (f"; WAIVED components {waived}" if waived else ""))
     return ev
 
 
