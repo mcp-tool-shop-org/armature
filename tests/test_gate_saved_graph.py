@@ -12,6 +12,14 @@ from armature_core import route_gates as RG
 
 
 API = {
+    # The origin nodes are carried here (and in `saved` below) because a save-format file
+    # declares every node a link comes FROM, and wave 6 taught `link_round_trip` to resolve
+    # the saved link table and compare origins. A fixture whose links pointed at nodes
+    # neither document declared could not exercise that clause.
+    "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "a positive prompt"}},
+    "105": {"class_type": "VAELoader", "inputs": {"vae_name": "wan_2.1_vae.safetensors"}},
+    "200": {"class_type": "LoadImage", "inputs": {"image": "pose_pack.webp"}},
+    "8": {"class_type": "VAEDecode", "inputs": {}},
     "49": {"class_type": "WanAnimateToVideo",
            "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1,
                       "continue_motion_max_frames": 5, "video_frame_offset": 0,
@@ -20,8 +28,16 @@ API = {
            "inputs": {"fps": 20, "bit_depth": 8, "images": ["8", 0]}},
 }
 
+#: `[id, origin_node, origin_slot, target_node, target_slot, type]` — the converter's own
+#: shape, read off a save-format file.
+LINKS = [[10, 6, 0, 49, 0, "CONDITIONING"],
+         [12, 105, 0, 49, 1, "VAE"],
+         [14, 200, 0, 49, 2, "IMAGE"],
+         [17, 8, 0, 68, 0, "IMAGE"],
+         [99, 200, 0, 49, 3, "IMAGE"]]
 
-def saved(length=81, fps=20, extra_link=None, drop_link=False):
+
+def saved(length=81, fps=20, extra_link=None, drop_link=False, links=LINKS):
     animate_inputs = [
         {"name": "positive", "type": "CONDITIONING", "link": None if drop_link else 10},
         {"name": "vae", "type": "VAE", "link": 12},
@@ -29,13 +45,19 @@ def saved(length=81, fps=20, extra_link=None, drop_link=False):
         {"name": "background_video", "type": "IMAGE", "link": extra_link},
     ]
     return {"nodes": [
+        {"id": 6, "type": "CLIPTextEncode", "inputs": [],
+         "widgets_values": ["a positive prompt"]},
+        {"id": 105, "type": "VAELoader", "inputs": [],
+         "widgets_values": ["wan_2.1_vae.safetensors"]},
+        {"id": 200, "type": "LoadImage", "inputs": [], "widgets_values": ["pose_pack.webp"]},
+        {"id": 8, "type": "VAEDecode", "inputs": [], "widgets_values": []},
         {"id": 49, "type": "WanAnimateToVideo", "inputs": animate_inputs,
          "widgets_values": [832, 480, length, 1, 5, 0]},
         {"id": 68, "type": "CreateVideo",
          "inputs": [{"name": "images", "type": "IMAGE", "link": 17},
                     {"name": "audio", "type": "AUDIO", "link": None}],
          "widgets_values": [fps, 8]},
-    ]}
+    ], "links": [list(row) for row in links]}
 
 
 # ---------------------------------------------------------- the camera tier (E11 wave 2)
@@ -109,7 +131,9 @@ def test_an_unrecorded_class_still_halts_rather_than_being_skipped():
 def test_a_faithful_round_trip_compares_every_pinned_value():
     ev = GSG.round_trip(API, saved())
     assert ev["all_equal"] is True
-    assert ev["n_values_compared"] == 8      # 6 Animate widgets + fps + bit_depth
+    # 6 Animate widgets + fps + bit_depth + the three literals on the origin nodes the
+    # fixture now declares (text, vae_name, image), which a save-format file always carries.
+    assert ev["n_values_compared"] == 11
 
 
 def test_a_frame_count_that_changed_in_the_save_is_caught():
@@ -265,3 +289,149 @@ def test_a_refused_admission_leaves_no_output_directory(tmp_path):
                   f"--seeds={seeds_path}", f"--out={out}"])
     assert not out.exists()
     assert not out.parent.exists(), "a refused admission created its output directory"
+
+
+# ------------------------------------------- the link TABLE, resolved (wave 6, F-004403e2)
+
+#: Two same-type CONDITIONING links into one node. The only thing that differs between the
+#: as-built save and the crossed one is WHICH of the two link ids each socket carries — and
+#: the saved file's own link table says so. Every widget value is identical in both.
+CROSS_API = {
+    "30": {"class_type": "CLIPTextEncode", "inputs": {"text": "the positive"}},
+    "31": {"class_type": "CLIPTextEncode", "inputs": {"text": "the negative"}},
+    "50": {"class_type": "WanCameraImageToVideo",
+           "inputs": {"width": 832, "height": 480, "length": 65, "batch_size": 1,
+                      "positive": ["30", 0], "negative": ["31", 0]}},
+}
+
+
+def cross_saved(crossed=False, links=True, table=None):
+    """The converter's own shape: sockets carrying link IDS, and a top-level link table."""
+    pos, neg = (7, 6) if crossed else (6, 7)
+    doc = {"nodes": [
+        {"id": 30, "type": "CLIPTextEncode", "inputs": [],
+         "widgets_values": ["the positive"]},
+        {"id": 31, "type": "CLIPTextEncode", "inputs": [],
+         "widgets_values": ["the negative"]},
+        {"id": 50, "type": "WanCameraImageToVideo",
+         "inputs": [{"name": "positive", "type": "CONDITIONING", "link": pos},
+                    {"name": "negative", "type": "CONDITIONING", "link": neg}],
+         "widgets_values": [832, 480, 65, 1]},
+    ]}
+    if table is not None:
+        doc["links"] = table
+    elif links:
+        doc["links"] = ([[6, 30, 0, 50, 1, "CONDITIONING"],
+                         [7, 31, 0, 50, 0, "CONDITIONING"]] if crossed else
+                        [[6, 30, 0, 50, 0, "CONDITIONING"],
+                         [7, 31, 0, 50, 1, "CONDITIONING"]])
+    return doc
+
+
+def test_the_as_built_save_resolves_every_link_to_the_node_we_wired():
+    ev = GSG.link_round_trip(CROSS_API, cross_saved())
+    assert ev["n_links"] == 2
+    assert ev["links"] == ["50.negative", "50.positive"]
+
+
+def test_two_conditioning_links_crossed_in_the_save_are_caught():
+    """The finding. `slot.get("link") is not None` is satisfied by ANY link id, so the
+    as-built file and the crossed one produced byte-identical gate output: n_links 5 with
+    the identical `links` list, and `round_trip` all_equal on both. A conditioning swap is
+    the most expensive thing this comparison can miss, on the last gate before credits."""
+    assert GSG.round_trip(CROSS_API, cross_saved(crossed=True))["all_equal"] is True
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_round_trip(CROSS_API, cross_saved(crossed=True))
+    problems = exc.value.evidence["problems"]
+    assert any("50.positive" in p for p in problems), problems
+    assert any("50.negative" in p for p in problems), problems
+    assert any("31" in p for p in problems), problems
+
+
+def test_a_link_id_the_saved_table_does_not_carry_is_its_own_clause():
+    doc = cross_saved(table=[[6, 30, 0, 50, 0, "CONDITIONING"]])   # link 7 unlisted
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_round_trip(CROSS_API, doc)
+    assert "link 7" in str(exc.value)
+
+
+def test_a_link_whose_origin_node_the_saved_file_does_not_declare_is_its_own_clause():
+    doc = cross_saved(table=[[6, 30, 0, 50, 0, "CONDITIONING"],
+                             [7, 999, 0, 50, 1, "CONDITIONING"]])
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_round_trip(CROSS_API, doc)
+    assert "999" in str(exc.value)
+
+
+def test_an_origin_slot_that_moved_is_caught():
+    """Same origin node, different output slot: a value-only comparison passes and so does
+    a comparison that only asks whether a link id is present."""
+    doc = cross_saved(table=[[6, 30, 1, 50, 0, "CONDITIONING"],
+                             [7, 31, 0, 50, 1, "CONDITIONING"]])
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_round_trip(CROSS_API, doc)
+    assert "slot" in str(exc.value)
+
+
+def test_a_saved_file_that_carries_links_but_no_link_table_is_refused_by_name():
+    """Nothing can be resolved, so no origin claim is checkable and the verdict may not
+    say the topology is the topology this repo built."""
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_round_trip(CROSS_API, cross_saved(links=False))
+    assert "link table" in str(exc.value)
+
+
+def test_a_malformed_link_table_entry_halts_rather_than_being_skipped():
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_round_trip(CROSS_API, cross_saved(table=[[6, 30, 0], "nonsense"]))
+    assert "link table" in str(exc.value)
+
+
+# ------------------------------------- a wrapped save-format file (wave 6, F-2b80fb89)
+
+
+def _wrapped_case(tmp_path, wrapper):
+    import json as _json
+
+    d = tmp_path / "in"
+    d.mkdir(parents=True)
+    graph = {"nodes": [{"id": 49, "type": "WanAnimateToVideo", "inputs": [],
+                        "widgets_values": [832, 480, 81, 1, 5, 0]}]}
+    (d / "g.saved.json").write_text(_json.dumps({wrapper: graph}), encoding="utf-8")
+    (d / "g.api.json").write_text(_json.dumps({
+        "49": {"class_type": "WanAnimateToVideo",
+               "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1,
+                          "continue_motion_max_frames": 5, "video_frame_offset": 0}}}),
+        encoding="utf-8")
+    (d / "seeds.json").write_text(_json.dumps({"seeds": [1]}), encoding="utf-8")
+    return d
+
+
+@pytest.mark.parametrize("wrapper", ["prompt", "output", "some_surface_nobody_mapped"])
+def test_a_wrapped_saved_file_is_refused_by_name_not_by_a_stdlib_key(tmp_path, wrapper):
+    """`load_graph` unwraps `workflow_json` and `workflow` and returns anything else as the
+    wrapper dict, so `round_trip`'s first statement raised a bare `KeyError: 'nodes'` with
+    no gate id and no evidence — while Gate ROUTE and Gate S both return GREEN verdicts
+    over zero nodes on the same doc, because `_iter_nodes` reads a wrapper-key doc as no
+    nodes. The KeyError was the only thing standing between a wrapped file and a
+    SAVED_ADMISSION_OK over a graph nothing examined."""
+    d = _wrapped_case(tmp_path, wrapper)
+    out = tmp_path / "fresh" / "admission.json"
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.main([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
+                  f"--seeds={d / 'seeds.json'}", f"--out={out}"])
+    assert "save-format graph" in str(exc.value)
+    assert wrapper in str(exc.value) or wrapper in exc.value.evidence["top_level_keys"]
+    assert exc.value.evidence["unwrapped_by_load_graph"]
+    assert not out.parent.exists(), "a refused admission created its output directory"
+
+
+def test_the_wrappers_load_graph_does_unwrap_still_admit(tmp_path):
+    """The mutation that must NOT fire it: the two keys `load_graph` unwraps."""
+    import json as _json
+
+    for wrapper in GSG.UNWRAPPED_BY_LOAD_GRAPH:
+        d = _wrapped_case(tmp_path / wrapper, wrapper)
+        loaded = RG.load_graph(str(d / "g.saved.json"))
+        assert [n["id"] for n in loaded["nodes"]] == [49]
+        assert _json.loads((d / "g.saved.json").read_text(encoding="utf-8")).keys()
