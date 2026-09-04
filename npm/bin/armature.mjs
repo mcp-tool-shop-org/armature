@@ -15,6 +15,7 @@
  * and exits non-zero.
  */
 import { spawn, spawnSync } from "node:child_process";
+import { constants } from "node:os";
 import process from "node:process";
 
 const PYPI = "armature-studio";
@@ -122,6 +123,39 @@ function fail(found, err) {
   process.exit(127);
 }
 
+/**
+ * The exit code a caller should see for a child that ended with `code` / `signal`.
+ *
+ * THE COLLAPSE THIS REPLACES. The handler was `signal ? 1 : code ?? 0`, so every signal
+ * death arrived at the caller as 1 — byte-identical to an ordinary Python traceback. The
+ * rest of this repository spends real effort on that distinction: 2 is a refusal, 1 is a
+ * crash (`tests/test_packaging.py` pins that convention on the CPU tools), and the realistic
+ * signal here is the OOM killer taking the Python process during a frame or GLB pass. A
+ * wrapper that retries a crash and halts on a kill could not tell them apart, so an
+ * OOM-killed run was retried into the same wall with nothing naming the signal.
+ *
+ * 128 + N is the shell convention, which is what a caller already knows how to read — a
+ * shell reports exactly this for its own killed children. A signal Node names but this
+ * platform does not number falls back to 1 rather than inventing a code.
+ */
+function exitCodeFor(code, signal) {
+  const number = signal ? constants.signals[signal] : undefined;
+  if (signal) return number ? 128 + number : 1;
+  return code ?? 0;
+}
+
+/** Say which signal ended the run, because the exit code alone is a number to look up. */
+function reportSignal(signal) {
+  process.stderr.write(
+    `armature: the ${PYPI} process was killed by ${signal} ` +
+      `(exit ${exitCodeFor(null, signal)}).\n\n` +
+      `  Nothing in Python refused: the process was terminated from outside. On a long\n` +
+      `  frame or GLB pass the usual cause is the OOM killer. Retrying without changing\n` +
+      `  anything will meet the same limit.\n\n` +
+      `  Docs: ${DOCS}\n`
+  );
+}
+
 const argv = process.argv.slice(2);
 
 // A self-test that does not need Python present: it proves this file parses, resolves its
@@ -155,7 +189,32 @@ if (argv[0] === "--node-selftest") {
     if (saved === undefined) delete process.env.ARMATURE_PYTHON;
     else process.env.ARMATURE_PYTHON = saved;
   }
-  process.stdout.write(`armature launcher ok — candidates: ${list.join(", ")}\n`);
+  // The signal mapping, checked here because `npm test` is the launcher's only coverage in
+  // CI and there is no Python to kill on a runner. A launcher that honours the convention
+  // and one that collapses every signal into 1 are indistinguishable from outside unless
+  // something asserts the mapping itself — the same reason the pin is checked above.
+  const mapping = [
+    ["SIGKILL", 137],
+    ["SIGTERM", 143],
+    ["SIGINT", 130],
+  ];
+  for (const [name, expected] of mapping) {
+    const got = exitCodeFor(null, name);
+    if (got !== expected) {
+      process.stderr.write(`selftest: ${name} maps to ${got}, not ${expected}\n`);
+      process.exit(1);
+    }
+  }
+  // The half that must not move while the half above is added: the child's own exit code
+  // still reaches the caller, and a refusal (2) is still distinct from a crash (1).
+  if (exitCodeFor(0, null) !== 0 || exitCodeFor(2, null) !== 2 || exitCodeFor(1, null) !== 1) {
+    process.stderr.write("selftest: the child's exit code no longer reaches the caller\n");
+    process.exit(1);
+  }
+  const reported = mapping.map(([name, code]) => `${name}=${code}`).join(", ");
+  process.stdout.write(
+    `armature launcher ok — candidates: ${list.join(", ")}; signal exits: ${reported}\n`
+  );
   process.exit(0);
 }
 
@@ -163,12 +222,17 @@ const found = locate();
 if (!found.exe) fail(found);
 
 // Forward everything verbatim and inherit the child's exit code, so a gate that raises in
-// Python still fails the shell that called this launcher.
+// Python still fails the shell that called this launcher. A child that did not exit on its
+// own has no exit code to inherit, so its signal is named and reported as 128 + N rather
+// than erased into the crash code — see `exitCodeFor` above.
 const child = spawn(found.exe, [...found.pre, "-m", "armature_core.cli", ...argv], {
   stdio: "inherit",
   shell: false,
 });
-child.on("exit", (code, signal) => process.exit(signal ? 1 : code ?? 0));
+child.on("exit", (code, signal) => {
+  if (signal) reportSignal(signal);
+  process.exit(exitCodeFor(code, signal));
+});
 // The error is carried in, not dropped: `fail(found)` with no error reports "no interpreter",
 // which is a claim about a probe that had already succeeded.
 child.on("error", (e) => fail(found, e));
