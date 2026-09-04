@@ -220,3 +220,56 @@ def test_run_skeleton_records_the_unbound_determinism_record():
     assert "unbound_determinism_record" in body, (
         "run_skeleton still writes the raw gate record, whose verdict names weights no "
         "build in that run ever had")
+
+
+# ------------------------- the facing dict reaches the record whole (core-solvers seam)
+#
+# SEAM, wave 6: `armature_core.landmarks.facing()` now compares its two previously
+# uncompared quantities and raises `FacingGate` (gate FACING, evidence = the whole facing
+# dict) on an exact tie on the feet and on a head cross-check that disagrees while
+# separating front/back at least as well as the feet do; margins are reported per structure
+# as fractions of that structure's own y-extent (core-solvers F-d876df3f).
+#
+# rig_character is where a reader sees that dict. Two things have to stay true: nothing
+# here catches the gate, and the manifest records the dict as landmarks returns it — a
+# manifest that cherry-picked `facing_y_sign` and `left_x_sign` would drop the margins the
+# disagreement is visible in.
+
+
+def test_nothing_between_the_landmark_solve_and_the_manifest_catches_a_gate():
+    """`FacingGate` is a GateFailure and must reach the __main__ handler, which writes its
+    gate id into halt.json and exits 2."""
+    tree = ast.parse(read_source("rig_character.py"))
+    module_level_handlers = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Try):
+            continue
+        for handler in node.handlers:
+            name = getattr(handler.type, "id", None)
+            if name in ("GateFailure", "ArmatureError", "Exception", None, "BaseException"):
+                module_level_handlers.append((handler.lineno, name))
+    # The only broad handlers in this file are the two in the `__main__` block, which is
+    # where a halt is SUPPOSED to be caught, recorded and re-raised as a non-zero exit.
+    main_block = next(n for n in tree.body
+                      if isinstance(n, ast.If) and isinstance(n.test, ast.Compare)
+                      and getattr(n.test.left, "id", None) == "__name__")
+    in_main = {h.lineno for n in ast.walk(main_block) if isinstance(n, ast.Try)
+               for h in n.handlers}
+    stray = [(lineno, name) for lineno, name in module_level_handlers
+             if lineno not in in_main]
+    assert not stray, (
+        f"rig_character catches {stray} outside its __main__ handler; a FacingGate caught "
+        f"there would never reach halt.json or the exit code")
+
+
+def test_every_manifest_records_the_facing_dict_whole():
+    """Not `facing_y_sign` and `left_x_sign` picked out of it: the margin fractions
+    core-solvers now reports are what make a head/foot disagreement legible."""
+    src = read_source("rig_character.py")
+    tree = ast.parse(src)
+    writes = [n for n in ast.walk(tree)
+              if isinstance(n, ast.Subscript)
+              and isinstance(n.slice, ast.Constant) and n.slice.value == "facing"]
+    assert len(writes) >= 4, len(writes)
+    assert src.count('"facing": ctx["landmarks"]["facing"]') >= 3, (
+        "a manifest no longer records the facing dict as landmarks returns it")
