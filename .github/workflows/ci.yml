@@ -30,14 +30,15 @@ on:
       - "site/**"
       - "tools/**"
       - "tests/**"
-      # `.github/**`, not `.github/workflows/**`. Wave 6 moved the font install OUT of the
-      # two workflows and INTO `.github/actions/sheet-fonts/action.yml`, which ci.yml and
-      # release.yml both now depend on — and it moved out from under the only filter that
+      # `.github/actions/**` beside `.github/workflows/**`. Wave 6 moved the font install
+      # OUT of the two workflows and INTO `.github/actions/sheet-fonts/action.yml`, which
+      # ci.yml and release.yml both now depend on — and it moved out from under the only filter that
       # covered it. Measured before this line changed, by evaluating the suite's own
       # `_on_block()` over every workflow: `.github/actions/sheet-fonts/action.yml` -> NO
       # WORKFLOW RUNS. A renamed face or a dropped `apt-get update` would have reached main
       # green-by-absence and first surfaced in release.yml, after `release: published`.
-      - ".github/**"
+      - ".github/workflows/**"
+      - ".github/actions/**"
       # The packaging manifests. Added at v0.2.0: without these a change to
       # pyproject.toml or the launcher could reach a tag having never been built,
       # and the first place that failure would surface is the release job — after
@@ -62,6 +63,11 @@ on:
       # .gitignore each have a test file of their own and matched nothing at all.
       - "verify.ps1"
       - ".gitignore"
+      # Named by tests/test_record_index_binding.py's fixtures: the record index binds
+      # these two documents, so a rename or a move is a change the suite has an opinion
+      # about and CI must run on.
+      - "HANDOFF.md"
+      - "README.md"
       - "specs/**"
       - "docs/experiments/**"
       - "docs/index/**"
@@ -70,14 +76,15 @@ on:
       - "site/**"
       - "tools/**"
       - "tests/**"
-      # `.github/**`, not `.github/workflows/**`. Wave 6 moved the font install OUT of the
-      # two workflows and INTO `.github/actions/sheet-fonts/action.yml`, which ci.yml and
-      # release.yml both now depend on — and it moved out from under the only filter that
+      # `.github/actions/**` beside `.github/workflows/**`. Wave 6 moved the font install
+      # OUT of the two workflows and INTO `.github/actions/sheet-fonts/action.yml`, which
+      # ci.yml and release.yml both now depend on — and it moved out from under the only filter that
       # covered it. Measured before this line changed, by evaluating the suite's own
       # `_on_block()` over every workflow: `.github/actions/sheet-fonts/action.yml` -> NO
       # WORKFLOW RUNS. A renamed face or a dropped `apt-get update` would have reached main
       # green-by-absence and first surfaced in release.yml, after `release: published`.
-      - ".github/**"
+      - ".github/workflows/**"
+      - ".github/actions/**"
       # The packaging manifests. Added at v0.2.0: without these a change to
       # pyproject.toml or the launcher could reach a tag having never been built,
       # and the first place that failure would surface is the release job — after
@@ -102,6 +109,11 @@ on:
       # .gitignore each have a test file of their own and matched nothing at all.
       - "verify.ps1"
       - ".gitignore"
+      # Named by tests/test_record_index_binding.py's fixtures: the record index binds
+      # these two documents, so a rename or a move is a change the suite has an opinion
+      # about and CI must run on.
+      - "HANDOFF.md"
+      - "README.md"
       - "specs/**"
       - "docs/experiments/**"
       - "docs/index/**"
