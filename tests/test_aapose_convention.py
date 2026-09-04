@@ -177,9 +177,9 @@ def test_hand_stickwidth_is_half_the_body_width_floored_at_one(h, w, v2):
 def test_unknown_stickwidth_type_raises_rather_than_falling_through():
     """The source takes this branch to a bare `raise`; an unrecognised profile is the case
     where nothing is checked at all."""
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"unknown stickwidth_type 'v3'"):
         aapose.stickwidth(480, 832, "v3")
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"unknown stickwidth_type 'v3'"):
         aapose.hand_stickwidth(480, 832, "v3")
 
 
@@ -342,7 +342,7 @@ def test_hand_frame_survives_a_hand_collinear_with_its_forearm():
 
 
 def test_hand_frame_refuses_a_zero_length_hand():
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"no length and no direction"):
         aapose.hand_frame((0, 0, 0), (0, 0, 0), (0, -1, 0))
 
 
@@ -392,7 +392,7 @@ def test_mitten_hand_is_rigid_in_its_own_frame_and_rotates_with_the_wrist():
 
 
 def test_mitten_hand_refuses_a_zero_length_hand():
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"needs a positive length"):
         aapose.mitten_hand((0, 0, 0), (0, 1, 0), (1, 0, 0), 0.0)
 
 

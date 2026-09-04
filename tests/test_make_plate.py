@@ -51,9 +51,12 @@ def test_exactly_one_source_or_it_halts(tmp_path):
     frames.mkdir()
     _write(frames / "00003.png", _gradient(20, 10))
 
-    with pytest.raises(ArmatureError):
+    # One clause, two directions: neither source and both sources are refused by the
+    # same sentence, and pinning it is what stops a later missing-file or bad-index gate
+    # from satisfying this test under the name "exactly one source".
+    with pytest.raises(ArmatureError, match=r"name exactly one source"):
         make_plate.resolve_source(None, None, None)
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"name exactly one source"):
         make_plate.resolve_source(src, str(frames), 3)
 
 
@@ -78,12 +81,12 @@ def test_frames_without_an_index_halts(tmp_path):
     frames = tmp_path / "f"
     frames.mkdir()
     _write(frames / "00000.png", _gradient(20, 10))
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"--frames needs --index"):
         make_plate.resolve_source(None, str(frames), None)
 
 
 def test_a_missing_file_halts(tmp_path):
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"no such plate source"):
         make_plate.resolve_source(str(tmp_path / "nope.png"), None, None)
 
 
@@ -169,8 +172,10 @@ def test_a_plate_with_no_reason_never_gets_written(tmp_path):
     retroactively."""
     src = _write(tmp_path / "a.png", _gradient(832, 480))
     out = tmp_path / "plate"
+    # The clause, not merely a raise: a size gate, an anchor gate or a source gate firing
+    # first would otherwise pass all three inputs under the name "no reason".
     for missing in ([], ["--why="], ["--why=   "]):
-        with pytest.raises(ArmatureError):
+        with pytest.raises(ArmatureError, match=r"--why is required"):
             make_plate.main([f"--src={src}", f"--out={out}",
                              "--width=1024", "--height=576"] + missing)
     assert not out.exists(), "the output directory was created before the reason was checked"
@@ -180,8 +185,13 @@ def test_the_named_anchors_resolve_and_a_bad_one_halts():
     assert make_plate.parse_anchor("bottom") == (0.5, 1.0)
     assert make_plate.parse_anchor("top") == (0.5, 0.0)
     assert make_plate.parse_anchor("0.25,0.75") == (0.25, 0.75)
-    for bad in ("middle", "0.5", "a,b", ""):
-        with pytest.raises(ArmatureError):
+    # Per input, because the two refusals are different sentences and a single loose
+    # clause would let either stand in for the other.
+    for bad, clause in (("middle", r"--anchor must be one of"),
+                        ("0.5", r"--anchor must be one of"),
+                        ("a,b", r"--anchor carries a non-number"),
+                        ("", r"--anchor must be one of")):
+        with pytest.raises(ArmatureError, match=clause):
             make_plate.parse_anchor(bad)
 
 
@@ -224,7 +234,8 @@ def test_the_band_the_record_claims_is_the_band_the_plate_has(tmp_path):
 def test_a_band_the_target_frame_does_not_contain_halts(tmp_path):
     src = _write(tmp_path / "s.png", _gradient(1248, 832))
     for bad in ("0,900", "300,100"):
-        with pytest.raises(ArmatureError):
+        with pytest.raises(ArmatureError,
+                           match=r"--visible-rows must be y0,y1 inside 0\.\.576"):
             make_plate.main([f"--src={src}", f"--out={tmp_path / 'b'}", "--width=1024",
                             "--height=576", "--why=x", f"--visible-rows={bad}"])
 

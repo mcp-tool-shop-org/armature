@@ -29,8 +29,21 @@ def rt():
     reach. Stubbing the two modules Blender owns and importing the real file covers
     `parse_args`, both solves, the manifest's scale record and the module constants at
     once, and it fails loudly if the import surface changes.
+
+    Wave 6, routed from core-solvers and measured here. Restoring `bpy` and `mathutils`
+    is not the whole teardown. `render_turnaround` imports `armature_core.blender_scene`,
+    which imports `bpy`, so under the stub that module lands in `sys.modules` and STAYS
+    there — importable, for the rest of the session, on a machine with no Blender.
+    `tests/test_cli.py` then reads `_probe("blender_scene")` as `ok` where the honest
+    answer is `needs-blender`. Measured on this branch:
+    `pytest tests/test_turnaround_ortho.py tests/test_cli.py` -> 3 failed;
+    `pytest tests/test_cli.py` alone -> 0. Alphabetical collection puts `test_cli.py`
+    first in a full run, so the suite hid an order-dependent pass rather than a broken
+    one. `tests/test_cli.py:139-153` already carries this idea for its own stubbing; the
+    fix here is the same one, in the fixture that installs the stubs.
     """
     saved = {k: sys.modules.get(k) for k in ("bpy", "mathutils")}
+    before = set(sys.modules)
     sys.modules["bpy"] = mock.MagicMock(name="bpy")
     mathutils = types.ModuleType("mathutils")
     mathutils.Vector = lambda v: v
@@ -48,6 +61,12 @@ def rt():
                 sys.modules.pop(k, None)
             else:
                 sys.modules[k] = v
+        # Everything that was first imported UNDER the stub goes with it. Anything else
+        # would leave a module the next test can import only because Blender was faked
+        # for it — the reading `armature check` exists to make honestly.
+        for name in sorted(set(sys.modules) - before):
+            if name == "armature_core" or name.startswith("armature_core."):
+                sys.modules.pop(name, None)
 
 
 # --------------------------------------------------------------- repo-anchored resources
@@ -253,6 +272,40 @@ def pil_has_a_scalable_font():
         return False
 
 
+#: Every module that draws a sheet through `sheet_compose`'s resolver, in the order the
+#: fallback is installed. `rig_sheet_compose` and `make_cast_sheet` do
+#: `from sheet_compose import font as _font`, so each holds its OWN reference bound at
+#: import — patching `sheet_compose._font` does not reach either of them.
+#: `tests/test_font_resolution.py` asserts this list against the modules in `tools/` that
+#: actually bind it, so a fourth composer joins the fixture rather than escaping it.
+SHEET_COMPOSERS = ("sheet_compose", "rig_sheet_compose", "make_cast_sheet")
+
+
+def install_sheet_font_fallback(monkeypatch):
+    """Point every composer's `_font` at PIL's bundled scalable face.
+
+    Wave 6, F-c707995d. The fixture below said it let "the sheet composers" run on a
+    machine with no platform fonts and patched `sheet_compose._font` alone. Measured by
+    simulating a fontless runner (`platform_font_dirs() -> []`, `ARMATURE_FONT_DIR` unset)
+    and running the whole suite: exactly two tests failed —
+    `test_the_rig_sheet_is_as_wide_as_its_own_parameter_line` and
+    `test_the_cast_sheet_is_as_wide_as_its_own_stats_label` — both raising
+    `sheet_compose.FontError` at `sheet_compose.py:157` through `rig_sheet_compose.py:53`
+    and `make_cast_sheet.py:44`. Both carry the module-wide
+    `pytest.mark.usefixtures("sheet_fonts")`, so the fixture was active and simply missed
+    them. It is a separate function from the fixture so a test can install it on a machine
+    that DOES have fonts and check that it reaches all three.
+    """
+    import importlib
+
+    def fallback(name, size):
+        return pil_scalable_fallback(size)
+
+    for name in SHEET_COMPOSERS:
+        monkeypatch.setattr(importlib.import_module(name), "_font", fallback)
+    return fallback
+
+
 @pytest.fixture
 def sheet_fonts(monkeypatch):
     """Let the sheet composers run on a machine with no platform fonts.
@@ -277,9 +330,9 @@ def sheet_fonts(monkeypatch):
 
     try:
         sheet_compose._font(SHEET_REGULAR, 26)
+        sheet_compose._font(SHEET_BOLD, 26)
     except Exception:
-        monkeypatch.setattr(sheet_compose, "_font",
-                            lambda name, size: pil_scalable_fallback(size))
+        install_sheet_font_fallback(monkeypatch)
     yield sheet_compose._font
 
 

@@ -91,5 +91,6 @@ def test_border_colour_scales_with_the_image_rather_than_a_pixel_count():
 
 
 def test_a_degenerate_source_raises():
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError,
+                       match=r"degenerate source image of shape \(0, 10, 3\)"):
         FR.letterbox(np.zeros((0, 10, 3), np.uint8), 832, 480, (0, 0, 0))

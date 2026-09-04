@@ -128,6 +128,62 @@ def scope_scanner():
     return cli.import_roots_by_scope
 
 
+# ------------------------------------------------- one scanner, and its exact complement
+#
+# Wave 6, F-71538ecf. The function-local import scan was implemented TWICE and the two
+# disagreed by construction, with nothing pinning them against each other.
+# `armature_core.cli._function_local_dependencies` walks with a FunctionDef DEPTH counter,
+# so an import at module scope inside a `try:` or an `if:` stays depth 0 and is correctly
+# not function-local. This module detected module scope by iterating `tree.body` alone, so
+# the same guarded import was invisible to it and its root was classified lazy. Measured
+# with a synthetic module whose only import is `try: import matplotlib / except
+# ImportError:` at module scope: the shipped scanner returned [] (correct) and this
+# module's detector never saw the import at all, leaving `at_module_scope` False.
+#
+# The consequence crossed a module boundary: `tests/test_ci_workflows.py` imports
+# `lazy_third_party_roots` and requires CI's clean-room leg to CALL a function that imports
+# each "lazy" root. For a guarded module-scope dependency there is no such function, so the
+# suite would go red for a false reason while `armature check` reported the honest answer.
+#
+# The second implementation is deleted. `lazy_third_party_roots` now reads the SHIPPED
+# scanner, and the only walk left here answers the complementary question — which roots are
+# imported at module scope — with the same depth rule, asserted against the shipped scanner
+# on every armature_core module and on the two fixture sources that separate them.
+
+
+def _module_scope_roots_of_tree(tree):
+    """Roots imported at module scope, by the same depth rule the shipped scanner uses.
+
+    Depth counts FunctionDef and ClassDef nesting and nothing else, so an import inside a module-level
+    `try:` / `if:` / `with:` is module scope — which is exactly what the old `tree.body`
+    iteration could not see.
+    """
+    roots, stack = set(), [(tree, 0)]
+    while stack:
+        node, depth = stack.pop()
+        for child in ast.iter_child_nodes(node):
+            d = depth
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                d += 1  # merge fix-up: the shipped scanner counts a class body as nested scope too
+
+            elif d == 0 and isinstance(child, ast.Import):
+                roots.update(a.name.split(".")[0] for a in child.names)
+            elif (d == 0 and isinstance(child, ast.ImportFrom)
+                  and child.level == 0 and child.module):
+                roots.add(child.module.split(".")[0])
+            stack.append((child, d))
+    return roots
+
+
+def _third_party(roots):
+    local = {f[:-3] for f in os.listdir(CORE) if f.endswith(".py")} | {"armature_core"}
+    return {r for r in roots if r not in sys.stdlib_module_names and r not in local}
+
+
+def _core_modules():
+    return [n[:-3] for n in sorted(os.listdir(CORE)) if n.endswith(".py")]
+
+
 def lazy_third_party_roots():
     """The third-party roots imported ONLY inside function bodies.
 
@@ -155,6 +211,97 @@ def lazy_third_party_roots():
         if not at_module_scope:
             lazy[root] = files
     return lazy
+
+
+#: A module-scope import inside a `try:` — the case that separated the two scanners. Kept
+#: as source rather than a file under `tools/`: the shipped scanner resolves its path from
+#: `cli.__file__`, so pointing that at a temporary directory exercises the real walk.
+GUARDED_MODULE_SCOPE_SOURCE = """\
+try:
+    import matplotlib
+except ImportError:  # pragma: no cover
+    matplotlib = None
+
+
+def draw():
+    return matplotlib
+"""
+
+FUNCTION_LOCAL_SOURCE = """\
+def draw():
+    import matplotlib
+    return matplotlib
+"""
+
+
+def _shipped_scan(tmp_path, monkeypatch, source, name="probe_guarded"):
+    """`cli._function_local_dependencies` run over a source of our choosing."""
+    from armature_core import cli
+
+    (tmp_path / (name + ".py")).write_text(source, encoding="utf-8")
+    monkeypatch.setattr(cli, "__file__", str(tmp_path / "cli.py"))
+    cli._FUNC_LOCAL_CACHE.clear()
+    try:
+        return cli._function_local_dependencies(name)
+    finally:
+        cli._FUNC_LOCAL_CACHE.clear()
+
+
+def _body_only_module_scope_roots(tree):
+    """The detector this module used to carry, kept only so the fixture below can show
+    what it missed."""
+    roots = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            roots.update(a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            roots.add(node.module.split(".")[0])
+    return roots
+
+
+def test_a_guarded_module_scope_import_separates_the_two_scanners(tmp_path, monkeypatch):
+    """The fixture the finding names, both sources run through both walks.
+
+    A `try: import matplotlib` at module scope is NOT function-local — the shipped scanner
+    says so and `armature check` reports it honestly — and the old `tree.body` detector
+    could not see it at all, which is what made the same root read as lazy here.
+    """
+    assert _shipped_scan(tmp_path, monkeypatch, GUARDED_MODULE_SCOPE_SOURCE) == []
+    assert _shipped_scan(tmp_path, monkeypatch, FUNCTION_LOCAL_SOURCE) == ["matplotlib"]
+
+    guarded = ast.parse(GUARDED_MODULE_SCOPE_SOURCE)
+    local = ast.parse(FUNCTION_LOCAL_SOURCE)
+    assert _module_scope_roots_of_tree(guarded) == {"matplotlib"}
+    assert _module_scope_roots_of_tree(local) == set()
+    assert _body_only_module_scope_roots(guarded) == set(), (
+        "the retired detector now sees the guarded import; this fixture no longer "
+        "separates the two scanners")
+
+
+def test_the_two_import_scans_agree_on_every_armature_core_module():
+    """The pin the finding asked for: every module, both questions, complementary answers.
+
+    `module scope | function local == every third-party root the file imports`, and the
+    two sets are disjoint — no root in this package is imported both ways in one file, so
+    the derivation `lazy_third_party_roots` performs is exact on this tree. The day one is,
+    this fails rather than the classification quietly drifting.
+    """
+    from armature_core import cli
+
+    for mod in _core_modules():
+        path = os.path.join(CORE, mod + ".py")
+        with open(path, encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        module_scope = _third_party(_module_scope_roots_of_tree(tree))
+        func_local = set(cli._function_local_dependencies(mod))
+        every = _third_party(_root_imports(path))
+        assert module_scope | func_local == every, (
+            f"{mod}: module scope {sorted(module_scope)} plus function-local "
+            f"{sorted(func_local)} does not account for {sorted(every)}")
+        assert module_scope & func_local == set(), (
+            f"{mod} imports {sorted(module_scope & func_local)} both at module scope and "
+            f"inside a function; the lazy classification can no longer be derived from "
+            f"the two answers alone")
 
 
 def lazy_import_call_sites():
@@ -413,3 +560,91 @@ def test_todays_tree_still_reads_the_way_the_measurement_recorded_it():
     assert cli._function_local_dependencies("donor_gate") == ["PIL", "numpy"]
     assert cli._function_local_dependencies("aapose") == ["cv2", "matplotlib"]
     assert set(lazy_third_party_roots()) == {"cv2", "matplotlib", "PIL"}
+
+# ------------------------------------------- the stub that outlived the fixture that set it
+#
+# Wave 6, routed from core-solvers and measured here. `conftest.rt` stubs `bpy` and
+# `mathutils`, imports `render_turnaround.py` — which imports `armature_core.blender_scene`,
+# which imports `bpy` — and on teardown restored only the two stub entries. The
+# blender_scene module stayed in `sys.modules`, importable for the rest of the session on a
+# machine with no Blender, so `tests/test_cli.py`'s three `needs-blender` readings turned
+# `ok` for a reason that has nothing to do with the install.
+#
+# Measured before the fix: `pytest tests/test_turnaround_ortho.py tests/test_cli.py` -> 3
+# failed; `pytest tests/test_cli.py` alone -> 0. A full run collects alphabetically, so
+# `test_cli.py` ran first and the suite reported green on an order-dependent pass — the
+# same class as the two import scans above, one directory over.
+#
+# This is checked in a subprocess because the leak is a property of a session's teardown and
+# cannot be observed from inside the module whose fixture is doing the leaking.
+
+ORDER_DEPENDENT_PAIRS = [
+    ("test_turnaround_ortho.py", "test_cli.py"),
+    ("test_turnaround_pin.py", "test_cli.py"),
+]
+
+
+@pytest.mark.parametrize("first,second", ORDER_DEPENDENT_PAIRS,
+                         ids=lambda v: v.replace(".py", ""))
+def test_a_stub_using_module_does_not_change_what_the_next_one_can_import(first, second,
+                                                                          tmp_path):
+    """The order the suite does NOT run in, run on purpose.
+
+    What this looks like if the teardown is wrong: `armature check` reports `ok` for a
+    module whose import needs Blender, because a fixture two files ago faked it.
+    """
+    tests_dir = os.path.dirname(os.path.abspath(__file__))
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        p for p in (env.get("PYTHONPATH", ""), CORE, REPO) if p)
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+         "--basetemp", str(tmp_path / "bt"),
+         os.path.join(tests_dir, first), os.path.join(tests_dir, second)],
+        cwd=REPO, env=env, capture_output=True, text=True)
+    assert proc.returncode == 0, (
+        f"{first} before {second} is not the same suite as {second} alone; a fixture in "
+        f"{first} left a module in sys.modules that {second} then read as importable:\n"
+        + proc.stdout[-3000:] + proc.stderr[-2000:])
+
+
+def test_every_stub_installing_fixture_restores_what_it_imported():
+    """The family, asserted rather than left to the two pairs above.
+
+    `conftest.rt` is the only fixture in this suite that writes into `sys.modules`
+    (`tests/test_cli.py` does it too, through `monkeypatch.delitem`, which pytest undoes
+    itself). Any second one must clear what was imported under its stub, so the census is
+    the check: a new stub-installing fixture fails here until it is paired with a teardown
+    and added to the pairs above.
+    """
+    conftest_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conftest.py")
+    with open(conftest_path, encoding="utf-8") as fh:
+        src = fh.read()
+    tree = ast.parse(src)
+
+    installers = []
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        writes_stub = any(
+            isinstance(n, ast.Assign)
+            and any(isinstance(t, ast.Subscript)
+                    and isinstance(t.value, ast.Attribute) and t.value.attr == "modules"
+                    for t in n.targets)
+            for n in ast.walk(fn))
+        if writes_stub:
+            installers.append(fn)
+
+    assert [fn.name for fn in installers] == ["rt"], (
+        f"conftest installs stub modules in {[fn.name for fn in installers]}; each one "
+        f"needs a teardown that clears what was imported under it, and a pair in "
+        f"ORDER_DEPENDENT_PAIRS that runs it before a module reading those imports")
+
+    for fn in installers:
+        body = ast.get_source_segment(src, fn) or ""
+        assert "set(sys.modules) - before" in body or "- before" in body, (
+            f"conftest.{fn.name} installs a stub and never clears the modules imported "
+            f"under it; restoring the stub entries alone leaves those importable")
+        assert "armature_core" in body, (
+            f"conftest.{fn.name}'s teardown does not name the package whose modules the "
+            f"stub makes importable")

@@ -49,7 +49,7 @@ def test_normalising_squeezes_the_short_thin_bone_out_entirely():
 
 
 def test_normalised_assignment_still_needs_a_radius_and_refuses_a_default():
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"no positive measured radius for "):
         parts.assign_faces(np.zeros((4, 3)), BONES, {"chest": 0.05}, normalise=True)
 
 
@@ -59,9 +59,11 @@ def test_plain_assignment_does_not_require_radii_at_all():
 
 
 def test_a_malformed_centroid_array_raises():
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError,
+                       match=r"non-empty \(N, 3\) centroid array, got \(0, 3\)"):
         parts.assign_faces(np.zeros((0, 3)), BONES, RADII)
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError,
+                       match=r"non-empty \(N, 3\) centroid array, got \(5, 2\)"):
         parts.assign_faces(np.zeros((5, 2)), BONES, RADII)
 
 
@@ -119,14 +121,15 @@ def test_a_joint_with_no_ball_falls_back_and_says_so_in_the_record():
 
 
 def test_a_joint_with_neither_a_ball_nor_a_cross_section_raises():
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError,
+                       match=r"no positive radius from a ball or a cross-section"):
         parts.joint_planes(BONES, {}, {}, {"chest": 0.05})
 
 
 def test_a_zero_length_child_bone_raises_because_its_plane_has_no_normal():
     bad = [dict(BONES[0]), {"name": "neck", "head": (0, 0, 0.3), "tail": (0, 0, 0.3),
                             "parent": "chest"}]
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"the child bone has no length"):
         parts.joint_planes(bad, {}, {}, {"chest": 0.05, "neck": 0.02})
 
 

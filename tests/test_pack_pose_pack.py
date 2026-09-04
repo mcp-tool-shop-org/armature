@@ -75,7 +75,7 @@ def test_unpadded_names_still_sort_numerically(tmp_path):
 
 
 def test_an_empty_directory_raises_rather_than_packing_nothing(tmp_path):
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"no NNNNN\.png frames in"):
         PP.frame_paths(str(tmp_path))
 
 
