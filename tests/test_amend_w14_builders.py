@@ -217,3 +217,146 @@ def test_two_receipts_that_disagree_about_the_sampler_are_refused(tmp_path):
     with pytest.raises(RG.RouteGate) as exc:
         GSG.route_facts(str(record))
     assert exc.value.evidence["clause"] == "record_route_facts_disagree"
+
+
+# ===========================================================================
+# F-b7e7c5c0 — `gate_base_licence`'s receipt distinguishes "nothing banned"
+#              from "the table ruled nothing".
+# ===========================================================================
+
+import build_lora_arm_payload as BLA  # noqa: E402
+
+#: Three weight files the licence map has never seen. `route_gates.components()` returns
+#: three rows all reading verdict `NOT IN THIS TABLE` with `matched_on: None` — the table
+#: RULED none of them, which is the operand.
+UNKNOWN_BASE = {
+    "1": {"class_type": "LoraLoaderModelOnly",
+          "inputs": {"lora_name": "some_unknown_style_v3.safetensors",
+                     "strength_model": 1.0}},
+    "2": {"class_type": "VAELoader", "inputs": {"vae_name": "mystery_vae_xyz.safetensors"}},
+    "3": {"class_type": "CLIPLoader",
+          "inputs": {"clip_name": "nobody_knows_clip.safetensors", "type": "wan"}},
+}
+
+
+def test_base_licence_receipt_separates_classified_from_merely_examined():
+    """F-b7e7c5c0 · operand: a baseline whose three components the table RULED NONE of.
+
+    reverted-red: yes. On the reverted tree `gate_base_licence(UNKNOWN_BASE)` returns
+    "3 ruled component(s) read off the baseline, none BANNED and none EXCLUDED" and an
+    evidence dict whose keys are ['andon','banned','clause','gate','n_components_examined',
+    'path','refused_verdicts','verdict'] — no `classified`, no `unclassified`, nothing a
+    reader can use to tell a clean baseline from an unknown one.
+    """
+    ev = BLA.gate_base_licence(UNKNOWN_BASE)
+    assert ev["n_components_examined"] == 3
+    assert ev["n_components_classified"] == 0
+    assert ev["n_components_unclassified"] == 3
+    assert sorted(ev["unclassified"]) == sorted(
+        [c for c in ev["unclassified"]]), "the NAMES, not a count"
+    joined = " ".join(ev["unclassified"])
+    assert "some_unknown_style_v3.safetensors" in joined
+    assert "mystery_vae_xyz.safetensors" in joined
+    assert "nobody_knows_clip.safetensors" in joined
+    # the verdict may not assert that the table ruled what it did not rule
+    assert "3 ruled component(s)" not in ev["verdict"]
+    assert "0 of 3" in ev["verdict"]
+    assert "3 unclassified" in ev["verdict"]
+
+
+def test_base_licence_receipt_counts_a_conditional_row_it_actually_ruled():
+    """F-b7e7c5c0 · the same receipt on a baseline the table DOES rule, incl. CONDITIONAL."""
+    ev = BLA.gate_base_licence({
+        "1": {"class_type": "UNETLoader",
+              "inputs": {"unet_name": TECHNICALLY_COLOR, "weight_dtype": "default"}}})
+    assert ev["n_components_examined"] == 1
+    assert ev["n_components_classified"] == 1
+    assert ev["n_components_unclassified"] == 0
+    assert ev["n_components_conditional"] == 1
+    assert ev["unclassified"] == []
+    assert "1 of 1" in ev["verdict"] and "1 conditional" in ev["verdict"]
+
+
+def test_base_licence_still_refuses_a_banned_component():
+    """F-b7e7c5c0 · the receipt changed; the kill did not. Red on the BANNED direction."""
+    with pytest.raises(RG.RouteGate) as exc:
+        BLA.gate_base_licence({"900": {"class_type": "DWPreprocessor", "inputs": {}}})
+    assert exc.value.evidence["clause"] == "banned_component_in_base"
+
+
+# ===========================================================================
+# F-92f67091 — the CONDITIONAL obligation is said out loud at the moment it
+#              is incurred, and rides the record's disclosure block.
+# ===========================================================================
+
+def _lora_arm_cli(tmp_path):
+    """arm T on the repo's own pinned E12 baseline — the arm that incurs the obligation."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(BLA.__file__)))
+    fixture = os.path.join(root, "tests", "fixtures", "E12-w3-camera-i2v.api.json")
+    registry = os.path.join(root, "specs", "E14-seeds.json")
+    seed = json.loads(open(registry, encoding="utf-8").read())["seeds"][0]
+    out = tmp_path / "fresh" / "run"
+    return [f"--base={fixture}", "--arm=T", f"--out={out}",
+            f"--seeds-registry={registry}", f"--seed={seed}",
+            "--subject", "PERFORMER", "--no-canon"], out
+
+
+def test_the_credit_obligation_is_printed_at_the_moment_it_is_incurred(tmp_path, capsys):
+    """F-92f67091 · operand: the OPERATOR-FACING lines of the tool that authors the spend.
+
+    reverted-red: yes. On the reverted tree the success block prints the canon line, the
+    ledger verdict, one line per LoRA insertion, PAIR_TIER, the graph path, the record path
+    and BUILD_LORA_ARM_OK — and `credit_obligation`, `attribution` and the ROUTE verdict
+    appear only inside the JSON. The obligation this grant is conditional on was never said
+    out loud, so footage could be taken forward without it.
+
+    The receipt is read BACK off stdout, not off the record.
+    """
+    argv, out = _lora_arm_cli(tmp_path)
+    assert BLA.main(argv) == 0
+    printed = capsys.readouterr().out
+
+    assert "CREDIT OBLIGATION" in printed
+    # in the ROW's own words, not this builder's
+    row = RG.RULED_COMPONENTS["technically_color"]["condition"]
+    assert row["creditor"] in printed
+    assert row["text"] in printed
+    assert "credits" in printed.lower()
+    # and the ROUTE verdict, which lived only in the JSON
+    record = json.loads(
+        (out / "E14-T-payload-record.json").read_text(encoding="utf-8"))
+    assert record["gates"]["ROUTE"]["verdict"] in printed
+
+
+def test_the_record_carries_a_disclosure_block_naming_the_obligation(tmp_path):
+    """F-92f67091 · per-route disclosure (CLAUDE.md): the obligation rides the provenance.
+
+    reverted-red: yes — `disclosure` is not a key of the record on the reverted tree.
+    """
+    argv, out = _lora_arm_cli(tmp_path)
+    assert BLA.main(argv) == 0
+    record = json.loads(
+        (out / "E14-T-payload-record.json").read_text(encoding="utf-8"))
+    d = record["disclosure"]
+    assert d["conditional_components"] == ["technically_color"]
+    assert d["obligations"], "an arm with a CONDITIONAL row states its obligation"
+    assert d["obligations"][0]["creditor"] == "renderartist"
+    assert d["obligations"][0]["applies_to"] == "published footage from this arm"
+    assert d["route_verdict"] == record["gates"]["ROUTE"]["verdict"]
+
+
+def test_an_arm_with_no_conditional_row_says_so_rather_than_saying_nothing(tmp_path,
+                                                                          capsys):
+    """F-92f67091 · arm S carries no CONDITIONAL row: the disclosure states that, in words.
+
+    A silent absence and a measured "none" are different receipts; this is the second one.
+    """
+    argv, out = _lora_arm_cli(tmp_path)
+    argv = [("--arm=S" if a == "--arm=T" else a) for a in argv]
+    assert BLA.main(argv) == 0
+    printed = capsys.readouterr().out
+    assert "CREDIT OBLIGATION" in printed
+    record = json.loads(
+        (out / "E14-S-payload-record.json").read_text(encoding="utf-8"))
+    assert record["disclosure"]["conditional_components"] == []
+    assert record["disclosure"]["obligations"] == []
