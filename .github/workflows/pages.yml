@@ -46,6 +46,16 @@ jobs:
         working-directory: site
         run: npm ci
 
+      # ci.yml's dependency scan, the same command verify.ps1 runs locally. This job had
+      # `npm ci` and `npm run build` and nothing else, while ci.yml's site-build — the job
+      # that DOES scan — was skipped on every push. So a push to main that bumped
+      # site/package-lock.json built and DEPLOYED it with no scan having run anywhere, under a
+      # comment in ci.yml claiming the two builds were equivalent. site/ is the repo's only
+      # dependency manifest, so this is the whole scannable surface.
+      - name: scan site dependencies
+        working-directory: site
+        run: npm audit --audit-level=high
+
       - name: build site
         working-directory: site
         run: npm run build

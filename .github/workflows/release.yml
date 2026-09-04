@@ -51,6 +51,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install build twine pytest numpy pillow opencv-python-headless==5.0.0.93 matplotlib==3.11.1
+      # The same font ci.yml installs, from the same implementation. This job ran the suite
+      # without one: two tests hard-require a permitted face and FAIL rather than skip without
+      # it, so this gate depended on exactly what ci.yml refuses to depend on — and by the time
+      # it runs, `release: published` has fired and both registries are waiting.
+      - uses: ./.github/actions/sheet-fonts
       - name: Suite
         run: python -m pytest -q
       - name: Suite under -O

@@ -363,3 +363,419 @@ def test_the_clean_room_leg_reaches_every_lazily_imported_dependency():
         f"the clean-room leg calls nothing that reaches {unreached}; it would pass on a "
         "wheel whose drawing and donor paths raise ModuleNotFoundError on first call"
     )
+
+
+# -- the census tests: what must be true of EVERY workflow, not just the one that broke ----
+#
+# Each block below was added because the guard that should have caught the defect was
+# parametrized over a hand-written list, or read one step in one file. A list a new workflow
+# is not on, and a step a rename moves, are guards that stop guarding without going red. The
+# population is therefore enumerated from the directory on every run.
+
+
+def workflow_files():
+    """Every workflow in `.github/workflows/`, enumerated — never a written-down list."""
+    return sorted(f for f in os.listdir(WORKFLOWS) if f.endswith((".yml", ".yaml")))
+
+
+def _workflow_level_permissions(text):
+    """The `permissions:` block at column 0, or None. Not the same object as a job's."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.rstrip() == "permissions:" and _indent(line) == 0:
+            return "\n".join(block_at(lines, i))
+    return None
+
+
+@pytest.mark.parametrize("workflow", workflow_files())
+def test_every_checkout_job_runs_on_a_declared_token_scope(workflow):
+    """A job may inherit a scope only if there is one to inherit.
+
+    `test_a_job_that_checks_out_declares_contents_read` `continue`s past any job with no
+    job-level block, on the premise that it inherits the workflow-level grant. ci.yml has no
+    workflow-level grant, so for its two jobs that premise was false and the check was
+    vacuous — in the workflow that runs the most third-party code (`npm ci` over site/'s whole
+    lockfile and its lifecycle scripts, four `pip install` lines, an apt install) and handed
+    all of it a token whose scope this repository never stated.
+
+    The population is read from the directory, so a fourth workflow is covered the day it
+    lands rather than the day someone remembers to add it to a list.
+    """
+    text = _text(workflow)
+    workflow_level = _workflow_level_permissions(text)
+    for name in job_names(text):
+        body = "\n".join(_job_lines(text, name))
+        if "actions/checkout" not in body:
+            continue
+        job_level = re.search(r"(?m)^    permissions:\s*$", body) is not None
+        effective = body if job_level else workflow_level
+        assert effective is not None, (
+            f"{workflow} job {name!r} checks out with no permissions block of its own and "
+            "none at workflow level to inherit; the token's scope is whatever the "
+            "organisation default happens to be"
+        )
+        assert re.search(r"(?m)^\s+contents:\s*(read|write)\s*$", effective), (
+            f"{workflow} job {name!r} checks out under a permissions block that grants no "
+            f"contents scope:\n{effective}"
+        )
+
+
+ACTIONS = os.path.join(REPO, ".github", "actions")
+SHEET_FONTS = "./.github/actions/sheet-fonts"
+
+
+def action_files():
+    """Every composite action in `.github/actions/`."""
+    out = []
+    for root, _dirs, files in os.walk(ACTIONS):
+        for f in files:
+            if f in ("action.yml", "action.yaml"):
+                out.append(os.path.join(root, f))
+    return sorted(out)
+
+
+def _all_run_scripts():
+    """(source, script) for every `run:` in `.github/` — workflows and composite actions.
+
+    Enumerated rather than listed: a step added to a fourth workflow, or to a second action,
+    is held to the same rules the day it lands.
+    """
+    out = []
+    sources = [(n, _text(n)) for n in workflow_files()]
+    for path in action_files():
+        with open(path, encoding="utf-8") as fh:
+            sources.append((os.path.relpath(path, REPO).replace("\\", "/"), fh.read()))
+    for name, text in sources:
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            if not line.strip().startswith("run:"):
+                continue
+            if line.strip() in ("run: |", "run: |-"):
+                body = block_at(lines, i)
+                pad = min((_indent(x) for x in body if x.strip()), default=0)
+                out.append((name, "\n".join(x[pad:] for x in body)))
+            else:
+                out.append((name, line.strip()[len("run: ") :]))
+    return out
+
+
+def jobs_that_run_the_suite():
+    """(workflow, job) for every job whose steps run pytest — read, never listed."""
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if re.search(r"(?m)^\s*(-\s*(name|run):.*)?$", body) and "pytest" in _code_only(body):
+                out.append((name, job))
+    return out
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_run_the_suite())
+def test_every_job_that_runs_the_suite_installs_the_sheet_fonts(workflow, job):
+    """ci.yml refused to inherit the runner image's fonts; release.yml's gate did inherit them.
+
+    Two tests hard-require a resolvable permitted face and FAIL rather than skip without one
+    (measured: `tests/test_sheet_compose.py` 29 passed -> 2 failed, 27 passed with the
+    resolver pointed at dead directories). release.yml's Install step says in its own comment
+    that the release gate runs the SAME suite CI runs, "so a shorter list here would mean the
+    gate is a weaker check than the one that already passed on the same commit" — and the font
+    was in one list and not the other. By then `release: published` has fired: the tag and the
+    release object exist and both registries are waiting.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    assert SHEET_FONTS in body, (
+        f"{workflow} job {job!r} runs the suite without {SHEET_FONTS}; the two sheet tests "
+        "that FAIL rather than skip without a permitted face depend on whatever the runner "
+        f"image happens to carry:\n{body}"
+    )
+
+
+def test_the_font_dependency_has_one_implementation():
+    """A copied step is a second implementation of one dependency, and lists that are copied fork.
+
+    The package name may appear only inside the shared action; a workflow that installs it
+    directly has started the fork again.
+    """
+    offenders = [name for name in workflow_files() if "fonts-liberation" in _text(name)]
+    assert offenders == [], (
+        f"these workflows install the font themselves instead of calling {SHEET_FONTS}: "
+        f"{offenders}; two copies of one dependency list is how release.yml came to run the "
+        "suite without a font in the first place"
+    )
+
+
+def sheet_font_action_faces():
+    """The faces the action's own andon checks for, read out of its `FACES=` line.
+
+    Not "somewhere in the file": the header comment quotes a FontError that names
+    `arialbd.ttf`, and a check that reads the whole text passes on the strength of a comment.
+    What the step VERIFIES is the list it loops over, so that is what is read.
+    """
+    with open(os.path.join(ACTIONS, "sheet-fonts", "action.yml"), encoding="utf-8") as fh:
+        action = fh.read()
+    match = re.search(r'(?m)^\s*FACES="([^"]+)"\s*$', action)
+    assert match, "the sheet-fonts action no longer declares a FACES list to check"
+    return match.group(1).split()
+
+
+def composer_font_aliases():
+    """`sheet_compose.FONT_ALIASES`, parsed out of the source rather than imported.
+
+    `sheet_compose` imports PIL at module level. Importing it here would mean a checkout
+    without Pillow could not COLLECT this file at all — and this file holds the tag gate, the
+    pinning census and the permissions census, none of which have anything to do with fonts.
+    A guard that cannot be collected is a guard that is not running.
+    """
+    import ast
+
+    with open(os.path.join(REPO, "tools", "sheet_compose.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "FONT_ALIASES" for t in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError("sheet_compose no longer declares FONT_ALIASES")
+
+
+@pytest.mark.parametrize("alias", sorted(composer_font_aliases()))
+def test_the_font_action_supplies_a_face_for_every_alias_the_composers_need(alias):
+    """Read out of `sheet_compose.FONT_ALIASES`, not written here.
+
+    Adding a third alias to the composers, or renaming a fallback face, moves this
+    requirement with it instead of leaving the action installing a face nobody resolves.
+    """
+    installed = sheet_font_action_faces()
+    faces = composer_font_aliases()[alias]
+    assert any(face in installed for face in faces), (
+        f"the sheet-fonts action installs {installed} and none of them is one of "
+        f"{list(faces)}, so `{alias}` resolves on a Linux runner only if the image happened "
+        "to carry a face the repo never asked for"
+    )
+
+
+@pytest.mark.parametrize("source,script", [(s, c) for s, c in _all_run_scripts() if "apt-get install" in c])
+def test_every_apt_install_refreshes_the_index_first(source, script):
+    """A cached Packages entry can name a .deb the mirror has already superseded.
+
+    The hosted images are rebuilt on a slower cadence than the archive rotates versions, so
+    `apt-get install` against a stale index 404s — and with no `update`, no retry and no
+    `|| true` that turns the whole job red for a reason that has nothing to do with the
+    commit. The refresh must be in the SAME script: a shell chain can walk past a failing
+    exit code, and a step somewhere else in the file is not one this step's failure implicates.
+    """
+    install = script.index("apt-get install")
+    update = script.find("apt-get update")
+    assert update != -1 and update < install, (
+        f"{source} installs an apt package without refreshing the index first:\n{script}"
+    )
+
+
+def uses_refs():
+    """(source, owner/name, ref, whole line) for every `uses:` under `.github/`.
+
+    Enumerated from the directory, workflows and composite actions alike. A fourth workflow,
+    or a step added to an existing one, is held to the pinning law the day it lands rather
+    than the day someone remembers to extend a list.
+    """
+    out = []
+    sources = [(n, _text(n)) for n in workflow_files()]
+    for path in action_files():
+        with open(path, encoding="utf-8") as fh:
+            sources.append((os.path.relpath(path, REPO).replace("\\", "/"), fh.read()))
+    for name, text in sources:
+        for line in text.splitlines():
+            match = re.match(r"\s*-?\s*uses:\s*(\S+)", line)
+            if not match:
+                continue
+            spec = match.group(1)
+            if spec.startswith("./"):
+                continue  # a path into this repo, resolved by the checkout it rides on
+            action, _, ref = spec.partition("@")
+            out.append((name, action, ref, line.strip()))
+    return out
+
+
+@pytest.mark.parametrize("source,action,ref,line", uses_refs())
+def test_no_action_is_resolved_from_a_branch_ref(source, action, ref, line):
+    """A branch ref resolves at run time, so the code that runs is not the code reviewed.
+
+    `pypa/gh-action-pypi-publish@release/v1` was exactly this until 2026-09-04 — in the job
+    that performs the one step with no compensator.
+    """
+    assert ref, f"{source}: `{line}` names no ref at all, so it resolves to the default branch"
+    assert not re.match(r"^(main|master|develop|release/.*|.*-branch)$", ref), (
+        f"{source} resolves {action} from the branch ref {ref!r}; the code performing the "
+        f"step is whatever that branch holds on the day it runs:\n{line}"
+    )
+
+
+THIRD_PARTY = [row for row in uses_refs() if not row[1].startswith("actions/")]
+
+
+def test_the_repo_still_has_a_third_party_action_to_hold_to_the_pin():
+    """The population may not empty itself silently.
+
+    A test parametrized over an empty list reports green, and a pinning law with no subject
+    is the shape four prior gates in this repo took: passing N/N because N was zero.
+    """
+    assert THIRD_PARTY, (
+        "no third-party action is used anywhere under .github/ any more; if that is "
+        "deliberate this test and its sibling have no subject and should be retired "
+        "deliberately, not left reporting green"
+    )
+
+
+@pytest.mark.parametrize("source,action,ref,line", THIRD_PARTY)
+def test_a_third_party_action_is_pinned_to_a_commit_and_says_which_version(source, action, ref, line):
+    """The npm half of this law is pinned by a test; the PyPI half was pinned by a comment.
+
+    `npm install -g npm@^11.5.1` is held to a constraint by
+    `test_the_publish_toolchain_is_not_resolved_on_release_day`. The action beside it — which
+    performs the upload itself, the step with no compensator — carried a 40-hex SHA and a
+    comment ending "Bump deliberately, by re-resolving", and nothing anywhere asserted it:
+    substituting the branch ref it held until 2026-09-04 left both guarding tests green.
+
+    The trailing `# vX.Y.Z` is part of the requirement, not decoration: a bare hash is
+    unreadable, and a bump is reviewed by comparing the version a human can read.
+    """
+    assert re.fullmatch(r"[0-9a-f]{40}", ref), (
+        f"{source} pins {action} to {ref!r}, which is not a full commit SHA; a tag or branch "
+        f"is re-resolved on the day the step runs:\n{line}"
+    )
+    assert re.search(r"#\s*v?\d+\.\d+(\.\d+)?", line), (
+        f"{source} pins {action} to a bare hash with no version beside it; nobody can review "
+        f"a bump they cannot read:\n{line}"
+    )
+
+
+# -- the dependency scan: does it run on every event a lockfile change can arrive on? -------
+#
+# `if: github.event_name != 'push'` skipped ci.yml's site-build on EVERY push, and the comment
+# above it justified that as "pages.yml already builds site/ ... for no coverage." Enumerated:
+# ci.yml's site-build runs `npm ci`, `npm audit --audit-level=high` and `npm run build`;
+# pages.yml's build runs `npm ci` and `npm run build` and nothing else. The claim was false by
+# exactly one step, and that step is the repo's only dependency scan — ci.yml says so itself:
+# "The repo's only dependency manifest is site/ ... this is the whole scannable surface."
+
+SCAN = "npm audit --audit-level=high"
+CHANGED = "site/package-lock.json"
+
+
+def _on_block(text):
+    """{event: {'branches': [...], 'paths': [...]}} read out of the `on:` key."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.rstrip() == "on:")
+    events, event, key = {}, None, None
+    for line in block_at(lines, start):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if _indent(line) == 2 and stripped.endswith(":"):
+            event, key = stripped[:-1], None
+            events[event] = {}
+            continue
+        if _indent(line) == 4 and event is not None:
+            if stripped.endswith(":"):
+                key = stripped[:-1]
+                events[event][key] = []
+            elif ":" in stripped:  # `branches: [main]` on one line
+                k, _, v = stripped.partition(":")
+                events[event][k.strip()] = [
+                    x.strip().strip("[]").strip("\"'") for x in v.split(",") if x.strip().strip("[]")
+                ]
+                key = None
+            continue
+        if _indent(line) >= 6 and stripped.startswith("- ") and key is not None:
+            events[event][key].append(stripped[2:].strip().strip("\"'"))
+    return events
+
+
+def _pattern_hits(patterns, path):
+    return any(p == path or (p.endswith("/**") and path.startswith(p[:-3] + "/")) for p in patterns)
+
+
+def _eval_if(expr, ctx):
+    """Evaluate a workflow `if:` expression for one context.
+
+    Only the operators these workflows actually use, and an unmodelled `github.*` reference
+    raises rather than quietly deciding the answer — a truth table built on a silently
+    mis-evaluated condition would be worse than no truth table.
+    """
+    body = expr.strip()
+    if body.startswith("${{") and body.endswith("}}"):
+        body = body[3:-2].strip()
+    for name in sorted(ctx, key=len, reverse=True):
+        body = body.replace(name, repr(ctx[name]))
+    body = body.replace("||", " or ").replace("&&", " and ")
+    assert "github." not in body, f"unmodelled context in an if-expression: {expr!r}"
+    return bool(eval(body, {"__builtins__": {}}, {}))  # noqa: S307 - the input is this repo's own YAML
+
+
+def _job_if(text, job):
+    for line in _job_lines(text, job):
+        if line.strip().startswith("if:"):
+            return line.strip()[len("if:") :].strip()
+    return None
+
+
+def site_jobs():
+    """(workflow, job) for every job anywhere that installs site/'s lockfile."""
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if "npm ci" in body:
+                out.append((name, job))
+    return out
+
+
+ARRIVALS = [
+    ("a push to main", {"github.event_name": "push", "github.ref": "refs/heads/main"}),
+    ("a push to a branch", {"github.event_name": "push", "github.ref": "refs/heads/topic"}),
+    ("a pull request", {"github.event_name": "pull_request", "github.ref": "refs/pull/7/merge"}),
+]
+
+
+def _jobs_that_run(ctx):
+    """Which site jobs actually run for one arrival of a change to site/package-lock.json."""
+    running = []
+    for workflow, job in site_jobs():
+        text = _text(workflow)
+        triggers = _on_block(text)
+        event = triggers.get(ctx["github.event_name"])
+        if event is None:
+            continue
+        branches = event.get("branches")
+        if branches and ctx["github.ref"] not in [f"refs/heads/{b}" for b in branches]:
+            continue
+        paths = event.get("paths")
+        if paths and not _pattern_hits(paths, CHANGED):
+            continue
+        condition = _job_if(text, job)
+        if condition is not None and not _eval_if(condition, ctx):
+            continue
+        running.append((workflow, job, "\n".join(_job_lines(text, job))))
+    return running
+
+
+@pytest.mark.parametrize("arrival,ctx", ARRIVALS)
+def test_a_lockfile_change_is_scanned_however_it_arrives(arrival, ctx):
+    """site/ is the repo's whole scannable surface; the scan must run on every way in.
+
+    Two measured holes, both on the direct-push path this repo actually uses: a push to main
+    changing the lockfile ran pages.yml (build and deploy, no audit) and ci.yml with
+    site-build skipped, so nothing scanned it; and a push to a non-main branch matched neither
+    pages.yml's `branches: [main]` nor ci.yml's skipped job, so site/ was built nowhere at all
+    until a PR was opened.
+    """
+    running = _jobs_that_run(ctx)
+    assert running, f"on {arrival}, a change to {CHANGED} builds site/ in no job at all"
+    scanned = [f"{w}:{j}" for w, j, body in running if SCAN in body]
+    assert scanned, (
+        f"on {arrival} the jobs that build site/ are "
+        f"{[f'{w}:{j}' for w, j, _ in running]} and none of them runs `{SCAN}`; a lockfile "
+        "bump carrying a high-severity advisory reaches main with no scan having run on it"
+    )

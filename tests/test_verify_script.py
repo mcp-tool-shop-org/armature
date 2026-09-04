@@ -172,3 +172,134 @@ def test_verify_describes_the_legs_it_actually_has():
         assert phrase in text.lower(), (
             f"the DESCRIPTION does not mention the {phrase!r} leg that the script now runs"
         )
+
+
+# -- the pre-flight ANDONs ----------------------------------------------------------------
+#
+# Two halts run before any leg does: the missing interpreter, and the missing node/npm that
+# legs 3 and 4 shell out to. Both fire correctly today and neither had a fixture -- in the
+# script whose whole subject is a leg that reports success while doing nothing. An edit to the
+# `$needed` list, or to the `-NoPackage`/`-NoSite` conditions that build it, disarms either one
+# with the suite green. The mirror case is asserted too: the comment above the halt claims a
+# `-NoSite -NoPackage` run on a box with no npm is still a legitimate partial run, and nothing
+# pinned that either -- a halt that fired there would be a gate in the wrong direction.
+
+NODE_BINARIES = ("node", "node.exe", "npm", "npm.cmd", "npm.exe", "npm.bat")
+
+
+def _path_without_node():
+    """PATH with every directory that carries node or npm removed, or None if that is not possible."""
+    kept = []
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry.strip():
+            continue
+        try:
+            names = set(os.listdir(entry))
+        except OSError:
+            kept.append(entry)
+            continue
+        if names.intersection(NODE_BINARIES):
+            continue
+        kept.append(entry)
+    stripped = os.pathsep.join(kept)
+    if shutil.which("node", path=stripped) or shutil.which("npm", path=stripped):
+        return None
+    return stripped
+
+
+STRIPPED_PATH = _path_without_node()
+needs_stripped_path = pytest.mark.skipif(
+    STRIPPED_PATH is None,
+    reason="node/npm could not be removed from PATH here, so the halt cannot be exercised",
+)
+
+
+def _scratch_verify(tmp_path, interpreter=True):
+    r"""A copy of the real verify.ps1 with its own $PSScriptRoot, and optionally a dummy venv.
+
+    The script is copied rather than re-implemented: a halt written here would prove something
+    about the copy. `Join-Path` on a POSIX host leaves the backslashes in
+    `.venv\Scripts\python.exe` alone, so the file the script will actually look for is created
+    under both spellings and the fixture runs the same on either platform.
+    """
+    root = tmp_path / "repo"
+    root.mkdir(exist_ok=True)
+    shutil.copy2(VERIFY_PATH, root / "verify.ps1")
+    if interpreter:
+        nested = root / ".venv" / "Scripts"
+        nested.mkdir(parents=True, exist_ok=True)
+        (nested / "python.exe").write_bytes(b"")
+        if os.name != "nt":
+            (root / r".venv\Scripts\python.exe").write_bytes(b"")
+    return root
+
+
+def _run_verify(root, *args, path=None):
+    env = dict(os.environ)
+    if path is not None:
+        env["PATH"] = path
+        env.pop("Path", None)
+    return subprocess.run(
+        [PWSH, "-NoProfile", "-NonInteractive", "-File", str(root / "verify.ps1"), *args],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(root),
+    )
+
+
+@needs_pwsh
+def test_the_preflight_halts_when_the_interpreter_is_missing(tmp_path):
+    """Leg 1 runs `& $python`; with no interpreter the halt must come first, and by name."""
+    root = _scratch_verify(tmp_path, interpreter=False)
+    got = _run_verify(root)
+    assert got.returncode == 2, f"exit {got.returncode}\n{got.stdout}\n{got.stderr}"
+    assert "ANDON: no interpreter at" in got.stdout, got.stdout + got.stderr
+
+
+@needs_pwsh
+@needs_stripped_path
+def test_the_preflight_halts_when_node_and_npm_are_absent(tmp_path):
+    """The mutation is the environment: remove what legs 3 and 4 shell out to.
+
+    Without this halt the run discovers it three legs in — and `Invoke-Leg`'s own history is
+    that an absent binary was recorded as the PREVIOUS leg's zero.
+    """
+    root = _scratch_verify(tmp_path)
+    got = _run_verify(root, path=STRIPPED_PATH)
+    assert got.returncode == 2, f"exit {got.returncode}\n{got.stdout}\n{got.stderr}"
+    assert "ANDON: not on PATH" in got.stdout, got.stdout + got.stderr
+    for name in ("node", "npm"):
+        assert name in got.stdout, f"the halt did not name {name}:\n{got.stdout}"
+
+
+@needs_pwsh
+@needs_stripped_path
+def test_a_deliberate_partial_run_does_not_halt_on_the_tools_it_skipped(tmp_path):
+    """The other direction, which the halt's own comment claims and nothing pinned.
+
+    Only the tools the SELECTED legs need are required, so `-NoSite -NoPackage` on a box with
+    no npm is a legitimate partial run. A halt here would be a gate firing on an invariant it
+    does not bound.
+    """
+    root = _scratch_verify(tmp_path)
+    got = _run_verify(root, "-NoSite", "-NoPackage", path=STRIPPED_PATH)
+    assert got.returncode != 2, (
+        "a deliberate partial run halted on tools no selected leg shells out to:\n"
+        f"{got.stdout}\n{got.stderr}"
+    )
+    assert "ANDON: not on PATH" not in got.stdout, got.stdout
+
+
+@needs_pwsh
+@needs_stripped_path
+def test_the_halt_is_armed_by_the_legs_that_were_selected(tmp_path):
+    """`-NoSite` alone still needs node: leg 3 runs the launcher self-test with it.
+
+    This is the clause an edit to `$needed` deletes silently — the site leg is the obvious one,
+    and the package leg's dependency on node is the one that goes missing.
+    """
+    root = _scratch_verify(tmp_path)
+    got = _run_verify(root, "-NoSite", path=STRIPPED_PATH)
+    assert got.returncode == 2, f"exit {got.returncode}\n{got.stdout}\n{got.stderr}"
+    assert "node" in got.stdout, got.stdout

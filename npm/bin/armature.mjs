@@ -66,13 +66,38 @@ function locate() {
     });
     if (probe.error) continue; // this candidate is not on PATH at all
     sawInterpreter = true;
-    if (probe.status === 0) return { exe, pre };
+    // `sawInterpreter` rides the SUCCESS shape too. It used to be on the failure shape only,
+    // and `fail()` branches on it: handed a success object, `found.sawInterpreter` was
+    // undefined and the launcher reported "No Python interpreter was found on PATH" about an
+    // interpreter it had just imported the toolkit with. A caller cannot read a fact off a
+    // shape that only carries it when the answer is no.
+    if (probe.status === 0) return { exe, pre, sawInterpreter: true };
   }
   return { exe: null, pre: null, sawInterpreter };
 }
 
-function fail(found) {
+/**
+ * The refusal. `err` is present only when an interpreter was FOUND and then would not start.
+ *
+ * That distinction is the whole point of the two-question probe above: telling someone whose
+ * Python is fine, and whose toolkit is installed, to `pip install` the toolkit sends them
+ * fixing the one thing that is not broken — and reinstalling changes nothing. The spawn fails
+ * after a successful probe for reasons that have nothing to do with either: EACCES/EPERM from
+ * an AV or policy hook, the interpreter renamed or unmounted between the two calls, EMFILE.
+ */
+function fail(found, err) {
   const pinned = process.env.ARMATURE_PYTHON;
+  if (err) {
+    process.stderr.write(
+      `armature: could not start ${found.exe}: ${err.code ?? err.message}\n\n` +
+        `  That interpreter WAS found and it imports the ${PYPI} toolkit — the probe ran and\n` +
+        `  succeeded. Something stopped this process from launching it: a security or policy\n` +
+        `  hook, a file that moved between the probe and the launch, or a process limit.\n` +
+        `  Reinstalling ${PYPI} will not change this.\n\n` +
+        `  Docs: ${DOCS}\n`
+    );
+    process.exit(127);
+  }
   // A pinned run and an unpinned one fail for different reasons, and saying "no Python was
   // found on PATH" to someone who pinned one would send them fixing the wrong thing — the
   // same distinction `locate()` draws between "no interpreter" and "no package".
@@ -144,4 +169,6 @@ const child = spawn(found.exe, [...found.pre, "-m", "armature_core.cli", ...argv
   shell: false,
 });
 child.on("exit", (code, signal) => process.exit(signal ? 1 : code ?? 0));
-child.on("error", () => fail(found));
+// The error is carried in, not dropped: `fail(found)` with no error reports "no interpreter",
+// which is a claim about a probe that had already succeeded.
+child.on("error", (e) => fail(found, e));
