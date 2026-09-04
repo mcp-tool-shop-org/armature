@@ -382,22 +382,76 @@ def _measure_alpha_plane(plane_bottom_up):
     }
 
 
+#: What `_alpha_stats` hands back as the second element, and what Gate TURN's pixel clause
+#: is therefore comparing. Recorded in the manifest so the number the gate quotes has a
+#: unit and an orientation attached rather than being a bare float.
+PIXEL_PLANE = {
+    "dtype": "float32", "shape": "(height, width, 4)", "channels": "RGBA",
+    "origin": "top-down (row 0 is the top of the image, as the PNG reads)",
+    "range": "0.0-1.0, the values Blender's image buffer holds",
+    "source": "the WRITTEN PNG, re-loaded — not the render buffer",
+    "compare_stride": TA.PIXEL_COMPARE_STRIDE,
+}
+
+
 def _alpha_stats(path, width, height):
-    """`_measure_alpha_plane` of the WRITTEN PNG's alpha channel.
+    """`(_measure_alpha_plane(alpha), the whole RGBA plane)` of the WRITTEN PNG.
 
     Measured off the file rather than off the render buffer. The buffer is what the
     renderer believes it produced; the file is what a route is handed, and the two differ
     exactly when the file format or the colour-mode setting drops the channel — which is
     the failure this whole tool is aimed at.
+
+    WAVE 16, F-1e564267 — A CLAUSE WITH NO CALLER. `turnaround.gate_set_distinct` grew a
+    pixel clause in wave 14 (core-solvers, F-c4cf355d) that is armed only by a caller which
+    attaches `pixels` to each view record, and this file — the gate's ONLY caller —
+    attached none: measured in this tree, `grep -n '"pixels"' tools/render_turnaround.py`
+    returned zero hits, so the gate took its `else` branch on every run
+    (`n_views_compared_in_pixels: 0`, `min_adjacent_pixel_distance: None`) and ruled on the
+    bytes alone. The defect the byte clause provably cannot see is an orbit helper that
+    advances by a rounding error rather than by zero — a collapsed int/float step, a
+    `sweep_deg` of 1e-4 — which writes N files with N different digests over visually one
+    picture, and the PINNED shot set that is the whole product ships as the front view
+    eight times.
+
+    The plane was already in hand and thrown away one line later: this function loaded the
+    file into a `(height, width, 4)` buffer and kept `[..., 3]`. It now returns both. The
+    RGBA half is flipped to top-down, the orientation the PNG reads in, so a plane quoted
+    in a record and a plane opened in a viewer are the same picture; the alpha measurement
+    is unchanged, because `_measure_alpha_plane` does its own flip.
     """
     img = bpy.data.images.load(path)
     try:
         buf = np.empty(width * height * 4, dtype=np.float32)
         img.pixels.foreach_get(buf)
-        plane = buf.reshape(height, width, 4)[..., 3].copy()
+        frame_bottom_up = buf.reshape(height, width, 4)
+        plane = frame_bottom_up[..., 3].copy()
+        rgba = frame_bottom_up[::-1].copy()
     finally:
         bpy.data.images.remove(img)
-    return _measure_alpha_plane(plane)
+    return _measure_alpha_plane(plane), rgba
+
+
+def attach_pixels(rec, plane):
+    """Put the measured RGBA plane on a view record, ARMING Gate TURN's pixel clause.
+
+    One line, and named, because the clause it arms is the whole point: a census can find
+    this call, and a fixture can build the two records the gate refuses without
+    re-implementing what the loop does with the plane.
+    """
+    rec["pixels"] = plane
+    return rec
+
+
+def manifest_views(views):
+    """The view records as the MANIFEST carries them — every plane dropped.
+
+    The planes are `numpy` arrays and the manifest is `json.dump`ed, so they cannot ride
+    it; they are also (height x width x 4) floats per view, which is not a thing to write
+    to disk beside eight PNGs that already hold it. `PIXEL_PLANE` above records what was
+    compared, and Gate TURN's own evidence records how many views it reached.
+    """
+    return [{k: v for k, v in rec.items() if k != "pixels"} for rec in views]
 
 
 def _border_contact(bbox, width, height):
@@ -753,7 +807,7 @@ def main():
                 {"clause": "write", "view": i, "azimuth_deg": az, "path": path,
                  "views_written": [v["path"] for v in views]})
 
-        m = _alpha_stats(path, width, height)
+        m, plane = _alpha_stats(path, width, height)
         extent = SF.silhouette_extent(cloud, target, radius, az, a.elevation, a.lens,
                                       a.sensor, width, height, ortho_scale=ortho_scale)
         rec = {
@@ -783,7 +837,10 @@ def main():
                                   "on the perspective path; the measurement is reported"),
                 "border_contact": _border_contact(m["subject_bbox"], width, height),
             }
-        views.append(rec)
+        # WAVE 16, F-1e564267: the plane rides the record, so Gate TURN's pixel clause is
+        # ARMED rather than "armed only when". It is dropped again by `manifest_views`
+        # below, after the gate and before the manifest is written.
+        views.append(attach_pixels(rec, plane))
 
     # ---- the set-level andon, after the frames and BEFORE the manifest.
     gate_turn = TA.gate_set_distinct(views, a.views)
@@ -853,7 +910,8 @@ def main():
                           "master; the RGB composite is the consuming route's own "
                           "recorded choice, per the law"),
         },
-        "views": views,
+        "views": manifest_views(views),
+        "pixel_plane": PIXEL_PLANE,
         "gates": {"TURN": gate_turn,
                   "ALPHA": [v["gate_ALPHA"]["verdict"] for v in views],
                   "WHOLE": [v["gate_WHOLE"]["verdict"] for v in views],

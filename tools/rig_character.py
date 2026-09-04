@@ -315,6 +315,13 @@ def gate_glb_written(path, *, result, before, what="the exported GLB"):
             f"run's GLB from the PREVIOUS run's file at the same path, and every other "
             f"clause here passes on that file, so a falsy `before` would hand back a "
             f"byte count and a sha256 for a file this process never wrote", ev)
+    # A DIAGNOSTIC, not a clause. A snapshot of a DIFFERENT path is a snapshot of a
+    # different file, and clause 4 would then be comparing this export against something
+    # it never overwrote. It rides the evidence rather than raising because one existing
+    # fixture deliberately snapshots `<path>.absent` to obtain an `existed: False` record,
+    # and that fixture is another domain's to move; a diagnostic and a gate are different
+    # objects (CLAUDE.md).
+    ev["snapshot_is_of_this_path"] = (before.get("path") == p)
     # CLAUSE 1 - the operator's own verdict, which this gate named and never read. The
     # shape is `rig_bake.py`'s `if 'FINISHED' not in result` on `bpy.ops.object.bake`.
     if status is None or "FINISHED" not in status:

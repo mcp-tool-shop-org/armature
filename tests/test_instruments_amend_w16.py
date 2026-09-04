@@ -323,3 +323,185 @@ def test_a_receipt_bearing_refusal_keeps_the_dict_it_was_handed(rigchar):
     d = {"clause": "site_registration_invalid"}
     assert rigchar.SiteListInvalid("x", d).evidence is d
 
+
+
+# ================================================ F-1e564267 — a clause with no caller
+#
+# THE POPULATION: every view record `render_turnaround.run` builds — N per run, N being
+# `--views`, eight in the pinned shot set. `turnaround.gate_set_distinct`'s pixel clause
+# (core-solvers, wave 14) is armed only by a caller that attaches `pixels`, and this file
+# is its ONLY caller and attached none: measured on the base tree, a grep for the key
+# returned zero hits and the gate took its `else` branch every run
+# (`n_views_compared_in_pixels: 0`, a verdict ruling on the bytes alone).
+#
+# The member OUTSIDE the old walk: a PAIR of views that are byte-different and identical in
+# pixels. The byte-hash clause provably cannot see it — that is the whole reason the pixel
+# clause exists — so no fixture keyed on digests reaches it.
+
+
+class _FakeImage:
+    """`bpy.data.images.load(path)`'s return, for the two calls `_alpha_stats` makes."""
+
+    def __init__(self, flat):
+        self._flat = flat
+        self.pixels = self
+
+    def foreach_get(self, buf):
+        buf[:] = self._flat
+
+
+class _FakeImages:
+    """`bpy.data.images` — a loader keyed on the basename, and a remover that records."""
+
+    def __init__(self, buffers):
+        self._buffers = buffers
+        self.removed = []
+
+    def load(self, path):
+        return _FakeImage(self._buffers[os.path.basename(path)])
+
+    def remove(self, img):
+        self.removed.append(img)
+
+
+def _rgba_flat(height, width, fill):
+    """A bottom-up RGBA buffer as Blender hands one to `foreach_get`."""
+    a = np.zeros((height, width, 4), dtype=np.float32)
+    a[..., 3] = 1.0
+    a[..., 0] = fill
+    return a.reshape(-1)
+
+
+@pytest.fixture(scope="module")
+def rt16():
+    return load_tool("render_turnaround.py")
+
+
+def test_alpha_stats_hands_back_the_plane_it_already_loaded(rt16, monkeypatch, tmp_path):
+    """RED on the operand: the (H, W, 4) buffer this function read and discarded.
+
+    Reverted-red: yes — on the base tree `_alpha_stats` returns a bare dict, so the tuple
+    unpacking below raises `ValueError: too many values to unpack`.
+    """
+    h, w = 6, 4
+    flat = _rgba_flat(h, w, 0.25)
+    monkeypatch.setattr(rt16.bpy.data, "images", _FakeImages({"v.png": flat}))
+    stats, plane = rt16._alpha_stats(str(tmp_path / "v.png"), w, h)
+    assert plane.dtype == np.float32
+    assert plane.shape == (h, w, 4)
+    # The alpha measurement is UNCHANGED by the second return value.
+    assert stats["alpha_min"] == 255 and stats["alpha_max"] == 255
+    assert stats["transparent_fraction"] == 0.0
+    # Top-down: the plane is the bottom-up buffer flipped, which is how the PNG reads.
+    assert np.array_equal(plane, flat.reshape(h, w, 4)[::-1])
+
+
+def test_the_pixel_clause_refuses_two_byte_different_views_with_identical_pixels(
+        rt16, monkeypatch, tmp_path):
+    """THE OPERAND, end to end: two renders whose PNGs differ in bytes and agree
+    pixel-for-pixel. The byte-hash clause cannot see this pair by construction.
+
+    Reverted-red: yes — with `attach_pixels` gone the records carry no plane,
+    `gate_set_distinct` returns its `else` branch with `n_views_compared_in_pixels: 0` and
+    a verdict reading "... this verdict rules on the bytes only", and nothing is raised.
+    """
+    h, w = 8, 8
+    flat = _rgba_flat(h, w, 0.5)
+    monkeypatch.setattr(rt16.bpy.data, "images",
+                        _FakeImages({"a.png": flat, "b.png": flat.copy()}))
+    views = []
+    for i, (name, digest) in enumerate((("a.png", "a" * 64), ("b.png", "b" * 64))):
+        _stats, plane = rt16._alpha_stats(str(tmp_path / name), w, h)
+        views.append(rt16.attach_pixels(
+            {"view": i, "azimuth_deg": i * 45.0, "path": name,
+             "bytes": 100 + i, "sha256": digest}, plane))
+    with pytest.raises(rt16.TA.TurnaroundGate) as exc:
+        rt16.TA.gate_set_distinct(views, 2)
+    ev = exc.value.evidence
+    assert ev["clause"] == "views_identical_in_pixels"
+    assert ev["n_views_compared_in_pixels"] == 2
+    assert ev["min_adjacent_pixel_distance"] == 0.0
+    assert ev["distinct_sha256"] == 2, "the byte clause passed this set, as it must"
+
+
+def test_a_real_eight_view_set_reports_all_eight_compared_in_pixels(rt16, monkeypatch,
+                                                                    tmp_path):
+    """The other half the finding asks for: the gate's verdict names the population it
+    actually compared, and it is the whole set rather than none of it.
+
+    Reverted-red: yes — `n_views_compared_in_pixels` was 0 and the verdict said the pixel
+    comparison did not happen.
+    """
+    h, w = 8, 8
+    buffers = {f"v{i}.png": _rgba_flat(h, w, 0.1 * i) for i in range(8)}
+    monkeypatch.setattr(rt16.bpy.data, "images", _FakeImages(buffers))
+    views = []
+    for i in range(8):
+        _stats, plane = rt16._alpha_stats(str(tmp_path / f"v{i}.png"), w, h)
+        views.append(rt16.attach_pixels(
+            {"view": i, "azimuth_deg": i * 45.0, "path": f"v{i}.png",
+             "bytes": 100 + i, "sha256": f"{i}" * 64}, plane))
+    ev = rt16.TA.gate_set_distinct(views, 8)
+    assert ev["n_views_compared_in_pixels"] == 8
+    assert ev["min_adjacent_pixel_distance"] > 0.0
+    assert "distinct in PIXELS over 8 of 8" in ev["verdict"]
+
+
+def test_the_manifest_drops_the_planes_and_records_what_was_compared(rt16):
+    """A `numpy` array cannot ride a `json.dump`ed manifest, and eight full RGBA planes
+    have no business on disk beside the eight PNGs that hold them. `manifest_views` drops
+    them; `PIXEL_PLANE` says what the gate compared instead."""
+    plane = np.zeros((4, 4, 4), dtype=np.float32)
+    views = [rt16.attach_pixels({"view": 0, "sha256": "a" * 64}, plane)]
+    with pytest.raises(TypeError):
+        json.dumps(views)
+    stripped = rt16.manifest_views(views)
+    assert "pixels" not in stripped[0]
+    assert views[0]["pixels"] is plane, "the gate's own list is not mutated"
+    assert json.loads(json.dumps(stripped))[0]["sha256"] == "a" * 64
+    assert rt16.PIXEL_PLANE["dtype"] == "float32"
+    assert rt16.PIXEL_PLANE["compare_stride"] == rt16.TA.PIXEL_COMPARE_STRIDE
+
+
+def _run_body():
+    """`render_turnaround.main` — the function that renders the set and writes the manifest."""
+    tree = ast.parse(read_source("render_turnaround.py"))
+    return next(n for n in tree.body
+                if isinstance(n, ast.FunctionDef) and n.name == "main")
+
+
+def test_every_view_record_the_run_loop_appends_carries_a_plane():
+    """THE POPULATION, not the sample: the clause is armed for EVERY view the loop builds,
+    read off the one `views.append(...)` in `main` rather than off a fixture's two records.
+
+    Reverted-red: yes — the base tree's statement is `views.append(rec)`.
+    """
+    appends = [n for n in ast.walk(_run_body())
+               if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+               and n.func.attr == "append"
+               and isinstance(n.func.value, ast.Name) and n.func.value.id == "views"]
+    assert len(appends) == 1, [ast.unparse(a) for a in appends]
+    arg = appends[0].args[0]
+    assert isinstance(arg, ast.Call) and getattr(arg.func, "id", None) == "attach_pixels", (
+        ast.unparse(appends[0]))
+
+
+def test_the_gate_sees_the_planes_and_the_manifest_does_not():
+    """The ORDER is the property: `gate_set_distinct` is handed the live `views` list, and
+    the manifest is handed `manifest_views(views)`. Either half alone is a defect — the
+    gate reading stripped records is the disarmed clause again, and the manifest carrying
+    planes is a `TypeError` inside `json.dump` after eight renders have been paid for."""
+    body = _run_body()
+    gate_calls = [n for n in ast.walk(body)
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                  and n.func.attr == "gate_set_distinct"]
+    assert len(gate_calls) == 1
+    assert getattr(gate_calls[0].args[0], "id", None) == "views", ast.unparse(gate_calls[0])
+    manifest = next(n for n in ast.walk(body)
+                    if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", None) == "manifest" for t in n.targets))
+    views_value = next(v for k, v in zip(manifest.value.keys, manifest.value.values)
+                       if isinstance(k, ast.Constant) and k.value == "views")
+    assert (isinstance(views_value, ast.Call)
+            and getattr(views_value.func, "id", None) == "manifest_views"), (
+        ast.unparse(views_value))
