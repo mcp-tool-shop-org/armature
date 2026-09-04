@@ -34,7 +34,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PIL import Image, ImageDraw  # noqa: E402
 
-from sheet_compose import require_frames  # noqa: E402
+from composite_reference import parse_plate  # noqa: E402
+from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
+                           load_rgb_over_plate, require_frames)
 
 MARGIN = 10
 LABEL_H = 18
@@ -45,13 +47,9 @@ DIM = (140, 140, 150)
 MISSING = "NOT RECORDED"
 
 
-def _rgb(path):
-    im = Image.open(path)
-    if im.mode == "RGBA":
-        flat = Image.new("RGB", im.size, (0, 0, 0))
-        flat.paste(im, mask=im.split()[3])
-        return flat
-    return im.convert("RGB")
+def _rgb(path, plate=SHEET_PLATE):
+    """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""
+    return load_rgb_over_plate(path, plate)[0]
 
 
 def _get(meta, *path, default=MISSING):
@@ -124,14 +122,14 @@ def provenance_lines(meta, prompt_id=None, measurements=None):
 
 
 def build(start_path, frame_paths, indices, meta, prompt_id=None, measurements=None,
-          captions=None, scale=0.5):
-    start = _rgb(start_path)
+          captions=None, scale=0.5, plate=SHEET_PLATE):
+    start = _rgb(start_path, plate)
     # ---- the family refusal (`sheet_compose.require_frames`): a requested index past the
     #      population was DROPPED, and only a total wipeout raised. A partial drop showed
     #      the Director fewer frames than were asked for and said nothing.
     require_frames(indices, frame_paths, what="output frame(s)",
                    where="the output frame listing")
-    tiles = [(fi, _rgb(frame_paths[fi])) for fi in indices]
+    tiles = [(fi, _rgb(frame_paths[fi], plate)) for fi in indices]
 
     def fit(im):
         return im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))),
@@ -197,6 +195,9 @@ def main(argv=None):
     ap.add_argument("--prompt-id", default=None)
     ap.add_argument("--scale", type=float, default=0.5)
     ap.add_argument("--captions", default=None, help="idx=text,idx=text")
+    ap.add_argument("--sheet-plate", default=",".join(str(v) for v in SHEET_PLATE),
+                    help="R,G,B of the plate an RGBA tile is composited over before it "
+                         "is drawn; printed on the OK line")
     ap.add_argument("--measurements", default=None,
                     help="a measure_clip record; a few of its headline numbers are "
                          "printed under the provenance, labelled as diagnostics")
@@ -231,11 +232,16 @@ def main(argv=None):
             captions[int(k)] = v
 
     idx = [int(v) for v in a.at.split(",") if v.strip()]
+    plate = parse_plate(a.sheet_plate, SheetPopulationError, flag="--sheet-plate")
+    # ---- the output directory is created only once every in-tool andon above
+    #      has fired -- the plate parse included.
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     sheet = build(a.start, paths, idx, meta, prompt_id=a.prompt_id,
-                  measurements=measurements, captions=captions, scale=a.scale)
+                  measurements=measurements, captions=captions, scale=a.scale,
+                  plate=plate)
     sheet.save(a.out)
-    print(f"STARTFRAME_SHEET {a.out} {sheet.width}x{sheet.height}")
+    print(f"STARTFRAME_SHEET {a.out} {sheet.width}x{sheet.height} "
+          f"plate={tuple(int(v) for v in plate)}")
     return 0
 
 

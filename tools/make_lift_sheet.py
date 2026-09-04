@@ -59,8 +59,10 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from composite_reference import parse_plate  # noqa: E402
 from measure_lift import gate_listing_pairing  # noqa: E402
-from sheet_compose import require_frames  # noqa: E402
+from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
+                           load_rgb_over_plate, require_frames)
 
 MARGIN = 12
 LABEL_H = 20
@@ -77,13 +79,9 @@ EDGES = ((11, 12), (11, 23), (12, 24), (23, 24),
          (0, 11), (0, 12), (7, 0), (8, 0))
 
 
-def _rgb(path):
-    im = Image.open(path)
-    if im.mode == "RGBA":
-        flat = Image.new("RGB", im.size, (0, 0, 0))
-        flat.paste(im, mask=im.split()[3])
-        return flat
-    return im.convert("RGB")
+def _rgb(path, plate=SHEET_PLATE):
+    """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""
+    return load_rgb_over_plate(path, plate)[0]
 
 
 def default_labels(full_size):
@@ -177,12 +175,17 @@ def main():
     ap.add_argument("--source-camera", default=None,
                     help="the source clip's camera, as its own recipe records it; "
                          "printed on the sheet and in the sidecar. Absent = NOT RECORDED.")
+    ap.add_argument("--sheet-plate", default=",".join(str(v) for v in SHEET_PLATE),
+                    help="R,G,B of the plate an RGBA tile is composited over before it "
+                         "is drawn; printed on the OK line and recorded in the sidecar")
     ap.add_argument("--lifted-camera", default=None,
                     help="the render_performer camera behind the lifted column; "
                          "printed on the sheet and in the sidecar. Absent = NOT RECORDED.")
     a = ap.parse_args()
 
     idx = [int(v) for v in a.frames.split(",") if v.strip() != ""]
+
+    plate = parse_plate(a.sheet_plate, SheetPopulationError, flag="--sheet-plate")
 
     src = sorted(n for n in os.listdir(a.source)
                  if n.lower().endswith(".png") and n[0].isdigit())
@@ -206,7 +209,7 @@ def main():
 
     src_paths = [os.path.join(a.source, src[i]) for i in idx]
     lif_paths = [os.path.join(a.lifted, lif[i]) for i in idx]
-    full_size = _rgb(src_paths[0]).size
+    full_size = _rgb(src_paths[0], plate).size
     box_l = subject_box(lif_paths, os.path.join(a.lifted, "empty_plate.png"))
 
     if a.source_uncropped:
@@ -219,7 +222,7 @@ def main():
                          max(box_s[2], box_l[2]), max(box_s[3], box_l[3]))
 
     def tile(path, box, overlay=None):
-        im = _rgb(path).crop(box)
+        im = _rgb(path, plate).crop(box)
         if overlay is not None:
             im = draw_landmarks(im, overlay[0], overlay[1], box, full_size)
         s = a.tile_h / im.height
@@ -267,6 +270,9 @@ def main():
 
     with open(os.path.splitext(a.out)[0] + ".json", "w", encoding="utf-8") as fh:
         json.dump({"tool": "make_lift_sheet", "frames": idx,
+                   # The RGB composite is a deliberate, recorded choice; the sidecar is
+                   # where the panel says which plate it drew the character against.
+                   "sheet_plate_rgb_srgb": [int(v) for v in plate],
                    # The FILE each column loaded, not the index that was asked for: the
                    # sidecar of the mis-paired run named [0,1,2] and nothing else.
                    "rows": [{"frame": i,
@@ -282,6 +288,7 @@ def main():
                    "detection": os.path.abspath(a.detection),
                    "sheet": os.path.abspath(a.out)}, fh, indent=2)
     print("MAKE_LIFT_SHEET_OK " + json.dumps({"out": os.path.abspath(a.out),
+                                              "sheet_plate": [int(v) for v in plate],
                                               "frames": idx, "crop_source": list(box_s),
                    "crop_lifted": list(box_l)}))
 

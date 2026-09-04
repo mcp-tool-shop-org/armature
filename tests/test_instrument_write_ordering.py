@@ -138,8 +138,9 @@ POPULATION_MEASURED_2026_09_04 = {
     "build_lora_arm_payload", "build_payload", "build_r2v_payload", "build_t2v_payload",
     "composite_reference", "fetch_t2v_run", "fit_reference", "gate_b_frames",
     "gate_saved_graph", "lift_clip", "lift_solve", "make_ab_clip", "make_crop_strip",
-    "make_lift_sheet", "make_pick_sheet", "make_plate", "make_review_clip",
-    "make_skeleton_sheet", "make_thesis_sheet", "measure_floor", "measure_lift",
+    "make_gate0_sheet", "make_identity_sheet", "make_lift_sheet", "make_pick_sheet",
+    "make_plate", "make_review_clip", "make_skeleton_sheet", "make_startframe_sheet",
+    "make_thesis_sheet", "measure_floor", "measure_lift",
     "pack_pose_pack", "project_pose_keypoints", "render_performer", "render_pose_sticks",
     "render_start_frame", "render_turnaround", "rig_character", "rig_parts",
 }

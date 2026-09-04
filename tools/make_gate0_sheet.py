@@ -39,8 +39,10 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from composite_reference import parse_plate  # noqa: E402
 from measure_lift import gate_listing_pairing  # noqa: E402
-from sheet_compose import require_frames  # noqa: E402
+from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
+                           load_rgb_over_plate, require_frames)
 
 MARGIN = 10
 LABEL_H = 18
@@ -51,13 +53,9 @@ DIM = (140, 140, 150)
 MISSING = "NOT RECORDED"
 
 
-def _rgb(path):
-    im = Image.open(path)
-    if im.mode == "RGBA":
-        flat = Image.new("RGB", im.size, (0, 0, 0))
-        flat.paste(im, mask=im.split()[3])
-        return flat
-    return im.convert("RGB")
+def _rgb(path, plate=SHEET_PLATE):
+    """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""
+    return load_rgb_over_plate(path, plate)[0]
 
 
 def _get(meta, *path, default=MISSING):
@@ -145,7 +143,8 @@ def provenance_lines(meta):
     return lines
 
 
-def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, captions=None):
+def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, captions=None,
+          plate=SHEET_PLATE):
     """Assemble the panel.
 
     `reference` may be None. E03 runs with **no reference image at all** — held constant
@@ -158,8 +157,8 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
     index: the tool used to compute an azimuth from the frame count, which was E02's
     orbit baked in — on a run that does not orbit it printed angles that never happened.
     """
-    cnames = sorted(n for n in os.listdir(control_dir) if n.endswith(".png"))
-    onames = sorted(n for n in os.listdir(frames_dir) if n.endswith(".png"))
+    cnames = sorted(n for n in os.listdir(control_dir) if n.lower().endswith(".png"))
+    onames = sorted(n for n in os.listdir(frames_dir) if n.lower().endswith(".png"))
     # ---- ANDON. The control and output listings were two populations indexed by the same
     #      `fi`, with nothing checking they name the same frames; and a requested index
     #      past either was dropped in SILENCE (`continue`), on the panel the whole judging
@@ -167,7 +166,7 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
     gate_listing_pairing({"control": cnames, "output": onames})
     require_frames(frame_idx, cnames, what="control frame(s)", where=control_dir)
     require_frames(frame_idx, onames, what="output frame(s)", where=frames_dir)
-    ref = _rgb(reference) if reference else None
+    ref = _rgb(reference, plate) if reference else None
 
     def fit(im):
         s = tile_h / im.height
@@ -175,8 +174,8 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
 
     cols = []
     for fi in frame_idx:
-        c = fit(_rgb(os.path.join(control_dir, cnames[fi])))
-        o = fit(_rgb(os.path.join(frames_dir, onames[fi])))
+        c = fit(_rgb(os.path.join(control_dir, cnames[fi]), plate))
+        o = fit(_rgb(os.path.join(frames_dir, onames[fi]), plate))
         cols.append((frame_caption(fi, captions), c, o))
 
     rtile = fit(ref) if ref is not None else None
@@ -248,10 +247,15 @@ def main(argv=None):
             k, _, v = part.partition("=")
             captions[int(k)] = v
     reference = None if a.reference.lower() == "none" else a.reference
+    plate = parse_plate(a.sheet_plate, SheetPopulationError, flag="--sheet-plate")
+    # ---- the output directory is created only once every in-tool andon above
+    #      has fired -- the plate parse included.
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    sheet = build(a.run, a.frames_dir, reference, meta, idx, captions=captions)
+    sheet = build(a.run, a.frames_dir, reference, meta, idx, captions=captions,
+                  plate=plate)
     sheet.save(a.out)
-    print(f"GATE0_SHEET {a.out} {sheet.width}x{sheet.height}")
+    print(f"GATE0_SHEET {a.out} {sheet.width}x{sheet.height} "
+          f"plate={tuple(int(v) for v in plate)}")
     return 0
 
 

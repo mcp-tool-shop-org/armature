@@ -32,8 +32,10 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from composite_reference import parse_plate  # noqa: E402
 from measure_lift import gate_listing_pairing  # noqa: E402
-from sheet_compose import require_frames  # noqa: E402
+from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
+                           load_rgb_over_plate, require_frames)
 
 MARGIN = 10
 LABEL_H = 17
@@ -43,13 +45,9 @@ FG = (235, 235, 235)
 DIM = (145, 145, 155)
 
 
-def _rgb(p):
-    im = Image.open(p)
-    if im.mode == "RGBA":
-        f = Image.new("RGB", im.size, (0, 0, 0))
-        f.paste(im, mask=im.split()[3])
-        return f
-    return im.convert("RGB")
+def _rgb(p, plate=SHEET_PLATE):
+    """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""
+    return load_rgb_over_plate(p, plate)[0]
 
 
 def main(argv=None):
@@ -75,7 +73,13 @@ def main(argv=None):
                     help="label frames as turnaround azimuth (only true for a turnaround)")
     ap.add_argument("--no-reference-note", default=None,
                     help="pipe-separated lines drawn when --reference=none")
+    ap.add_argument("--sheet-plate", default=",".join(str(v) for v in SHEET_PLATE),
+                    help="R,G,B of the plate an RGBA tile is composited over before it is "
+                         "drawn. Named and recorded, never assumed: the reference column "
+                         "of a panel must not show the character against a plate the "
+                         "route did not submit")
     a = ap.parse_args(argv)
+    plate = parse_plate(a.sheet_plate, SheetPopulationError, flag="--sheet-plate")
 
     captions = None
     if a.captions:
@@ -90,9 +94,27 @@ def main(argv=None):
     for tok in a.arms.split(","):
         lab, _, d = tok.partition(":")
         arms.append((lab, d))
+    # ---- ANDON, before the pairing gate is armed: the labels are DISTINCT. The gate below
+    #      is armed with a dict comprehension keyed by the row TITLE, so two arms sharing a
+    #      label collapsed to one key and the earlier one's listing was discarded before the
+    #      gate saw it. Measured 2026-09-04: a control numbered 00000..00002 with
+    #      `--arms=A1:<dir numbered 00007..00009>,A1:<dir numbered 00000..00002>` built the
+    #      sheet, printed THESIS_SHEET and exited 0, with the mis-numbered arm drawn under
+    #      captions f000/f001; the same two arms with distinct labels raised PairingGate.
+    #      The one input shape that disarmed the andon on the panel this repo says turns a
+    #      demonstration into evidence.
+    repeated = sorted({lab for lab in [x[0] for x in arms]
+                       if [x[0] for x in arms].count(lab) > 1})
+    if repeated:
+        raise SheetPopulationError(
+            f"--arms repeats the label(s) {', '.join(repr(r) for r in repeated)}; the "
+            f"pairing gate is keyed by label, so a repeat discards the earlier arm's "
+            f"listing before the gate sees it and puts two different moments of the "
+            f"performance side by side with exit 0",
+            {"arms": [lab for lab, _d in arms], "repeated": repeated})
 
     def listing(d):
-        return sorted(n for n in os.listdir(d) if n.endswith(".png"))
+        return sorted(n for n in os.listdir(d) if n.lower().endswith(".png"))
 
     cn = listing(a.control)
 
@@ -110,9 +132,9 @@ def main(argv=None):
     for title, ddir, names in rows:
         require_frames(idx, names, what=f"frame(s) of {title}", where=ddir)
 
-    tw = fit(_rgb(os.path.join(a.control, cn[0]))).width
+    tw = fit(_rgb(os.path.join(a.control, cn[0]), plate)).width
     # `none` is a real value: E03's arms deliberately carry no reference image.
-    ref = None if a.reference.lower() == "none" else fit(_rgb(a.reference))
+    ref = None if a.reference.lower() == "none" else fit(_rgb(a.reference, plate))
     ref_w = ref.width if ref is not None else 260
     width = MARGIN + len(idx) * (tw + MARGIN) + ref_w + MARGIN * 2
     height = HDR + len(rows) * (LABEL_H + th + LABEL_H + MARGIN) + MARGIN
@@ -128,7 +150,7 @@ def main(argv=None):
         d.text((MARGIN, y), title, fill=FG)
         x = MARGIN
         for fi in idx:
-            t = fit(_rgb(os.path.join(ddir, names[fi])))
+            t = fit(_rgb(os.path.join(ddir, names[fi]), plate))
             sheet.paste(t, (x, y + LABEL_H))
             if captions is not None:
                 cap = f"f{fi:03d}  {captions.get(fi, '')}"
@@ -156,7 +178,8 @@ def main(argv=None):
     # scripts create their own output directories — matching make_lift_sheet.py
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     sheet.save(a.out)
-    print(f"THESIS_SHEET {a.out} {sheet.width}x{sheet.height}")
+    print(f"THESIS_SHEET {a.out} {sheet.width}x{sheet.height} "
+          f"plate={tuple(int(v) for v in plate)}")
 
 
 if __name__ == "__main__":

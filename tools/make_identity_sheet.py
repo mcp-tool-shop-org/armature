@@ -31,7 +31,9 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
-from sheet_compose import SheetPopulationError, require_frames  # noqa: E402
+from composite_reference import parse_plate  # noqa: E402
+from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
+                           load_rgb_over_plate, require_frames)
 
 MARGIN = 10
 LABEL_H = 20
@@ -55,13 +57,9 @@ class IdentitySheetError(SheetPopulationError):
         self.evidence = evidence or {}
 
 
-def _load_rgb(path):
-    im = Image.open(path)
-    if im.mode == "RGBA":
-        flat = Image.new("RGB", im.size, (0, 0, 0))
-        flat.paste(im, mask=im.split()[3])
-        return flat
-    return im.convert("RGB")
+def _load_rgb(path, plate=SHEET_PLATE):
+    """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""
+    return load_rgb_over_plate(path, plate)[0]
 
 
 def _fit(im, h):
@@ -71,13 +69,14 @@ def _fit(im, h):
     return im.resize((max(1, round(im.width * s)), h), Image.LANCZOS), s
 
 
-def rows_for(run_dir, plates, frames, tile_h=360, channel="normal"):
+def rows_for(run_dir, plates, frames, tile_h=360, channel="normal",
+             azimuth_captions=False, plate=SHEET_PLATE):
     """The sheet's rows, or raise naming what the run does not carry."""
     rows = []
 
     plate_tiles = []
     for p in plates:
-        im = _load_rgb(p)
+        im = _load_rgb(p, plate)
         t, s = _fit(im, tile_h)
         plate_tiles.append((t, f"{os.path.basename(p)}  {im.width}x{im.height} @{s:.2f}x"))
     if not plate_tiles:
@@ -91,7 +90,7 @@ def rows_for(run_dir, plates, frames, tile_h=360, channel="normal"):
         raise IdentitySheetError(
             f"{cdir} is not a directory; the {channel!r} channel of this run was never "
             f"written", {"run_dir": run_dir, "channel": channel, "channel_dir": cdir})
-    names = sorted(n for n in os.listdir(cdir) if n.endswith(".png"))
+    names = sorted(n for n in os.listdir(cdir) if n.lower().endswith(".png"))
     # ---- every requested index must EXIST. Dropping one silently shows the Director
     #      fewer angles than were asked for, on the panel where identity is judged. The
     #      refusal written here in wave 3 now lives in `sheet_compose.require_frames`,
@@ -101,19 +100,34 @@ def rows_for(run_dir, plates, frames, tile_h=360, channel="normal"):
 
     mesh_tiles = []
     for fi in frames:
-        im = _load_rgb(os.path.join(cdir, names[fi]))
+        im = _load_rgb(os.path.join(cdir, names[fi]), plate)
         t, s = _fit(im, tile_h)
-        az = 360.0 * fi / len(names)
-        mesh_tiles.append((t, f"f{fi:03d}  az {az:.0f}d  @{s:.2f}x"))
-    # The orbit length is the RUN's, not a literal 33. The azimuth beside each tile was
-    # already computed from len(names), so the label used to contradict its own row.
+        # Azimuth is OPT-IN, as of wave 8. It used to be computed unconditionally as
+        # 360*fi/len(names) and printed on every tile, with "orbit" in the row title —
+        # E02's turnaround baked into the tool, on the panel whose own row title asks the
+        # Director "is this the same man?". Measured 2026-09-04 on a 16-frame VIDEO clip
+        # (time, not a camera orbit) with --frames=0,4,8,12: the tiles came back labelled
+        # `f000 az 0d`, `f004 az 90d`, `f008 az 180d`, `f012 az 270d` under a row headed
+        # "16-frame orbit" — four camera angles that never happened, in a caption a reader
+        # has no reason to doubt. Both siblings had this removed in wave 6 and say so in
+        # their own source (`make_gate0_sheet.frame_caption`,
+        # `make_thesis_sheet --azimuth-captions`); this was the third member of the family
+        # and was not swept.
+        if azimuth_captions:
+            az = 360.0 * fi / len(names)
+            mesh_tiles.append((t, f"f{fi:03d}  az {az:.0f}d  @{s:.2f}x"))
+        else:
+            mesh_tiles.append((t, f"f{fi:03d}  @{s:.2f}x"))
+    shape = "frame orbit" if azimuth_captions else "frame run"
     rows.append((f"THE MESH, {os.path.basename(run_dir)}  -  {channel} channel, "
-                 f"{len(names)}-frame orbit", mesh_tiles))
+                 f"{len(names)}-{shape}", mesh_tiles))
     return rows
 
 
-def build(run_dir, plates, frames, tile_h=360, channel="normal"):
-    rows = rows_for(run_dir, plates, frames, tile_h=tile_h, channel=channel)
+def build(run_dir, plates, frames, tile_h=360, channel="normal",
+          azimuth_captions=False, plate=SHEET_PLATE):
+    rows = rows_for(run_dir, plates, frames, tile_h=tile_h, channel=channel,
+                    azimuth_captions=azimuth_captions, plate=plate)
 
     width = MARGIN
     for _, tiles in rows:
@@ -144,14 +158,30 @@ def main(argv=None):
     ap.add_argument("--frames", default="0,8,16,24")
     ap.add_argument("--channel", default="normal")
     ap.add_argument("--tile-height", type=int, default=360)
+    # A turnaround run orbits and a video run does not. The caption says so only when the
+    # caller says it is true.
+    ap.add_argument("--azimuth-captions", action="store_true",
+                    help="label frames as turnaround azimuth and call the row an orbit "
+                         "(only true for a turnaround)")
+    ap.add_argument("--sheet-plate", default=",".join(str(v) for v in SHEET_PLATE),
+                    help="R,G,B of the plate an RGBA tile is composited over before it is "
+                         "drawn. Named and recorded, never assumed: the reference column "
+                         "of a panel must not show the character against a plate the "
+                         "route did not submit")
     a = ap.parse_args(argv)
 
     plates = [p for p in a.plates.split(",") if p]
     frames = [int(v) for v in a.frames.split(",") if v.strip()]
+    plate = parse_plate(a.sheet_plate, IdentitySheetError, flag="--sheet-plate")
+    # ---- the output directory is created only once every in-tool andon above
+    #      has fired -- the plate parse included.
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    sheet = build(a.run, plates, frames, tile_h=a.tile_height, channel=a.channel)
+    sheet = build(a.run, plates, frames, tile_h=a.tile_height, channel=a.channel,
+                  azimuth_captions=a.azimuth_captions, plate=plate)
     sheet.save(a.out)
-    print(f"IDENTITY_SHEET {a.out} {sheet.width}x{sheet.height}")
+    print(f"IDENTITY_SHEET {a.out} {sheet.width}x{sheet.height} "
+          f"plate={tuple(int(v) for v in plate)} "
+          f"azimuth_captions={bool(a.azimuth_captions)}")
     return 0
 
 

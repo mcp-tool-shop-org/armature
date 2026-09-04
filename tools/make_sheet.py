@@ -21,16 +21,26 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from sheet_compose import SHEET_PLATE, load_rgb_over_plate  # noqa: E402
+
 MARGIN = 8
 LABEL_H = 18
 HEADER_H = 74
 
 
-def _load_rgb(path):
-    img = Image.open(path)
-    if img.mode == "1":
-        img = img.convert("L")
-    return img.convert("RGB")
+def _load_rgb(path, plate=SHEET_PLATE):
+    """One channel tile, composited over the NAMED plate.
+
+    This was `img.convert("RGB")` — PIL's SILENT alpha drop, which is the worse half of
+    the family the four sheets carried: they at least composited through the mask, while
+    this one submitted whatever RGB the author had made invisible with nothing recording
+    that a channel had been dropped. Found 2026-09-04 by the census in
+    `tests/test_sheet_pairing.py`, which derives its population from the tree rather than
+    from the three sheets the finding named.
+    """
+    return load_rgb_over_plate(path, plate)[0]
 
 
 def build_sheet(run_dir, frames=None, channels=None):
@@ -107,7 +117,8 @@ def main(argv=None):
     out = args["out"]
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     sheet.save(out)
-    print("SHEET " + json.dumps({"path": os.path.abspath(out), "size": list(sheet.size)}))
+    print("SHEET " + json.dumps({"path": os.path.abspath(out), "size": list(sheet.size),
+                                 "sheet_plate": [int(v) for v in SHEET_PLATE]}))
     return 0
 
 
