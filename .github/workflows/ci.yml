@@ -61,6 +61,19 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Stated, not inherited. This is the workflow that executes the most third-party code —
+# `npm ci` over site/'s whole lockfile and every lifecycle script in it, four `pip install`
+# lines including one inside a clean-room venv, and an apt install — and until v0.3.1 it was
+# the only one of the three that handed all of that a GITHUB_TOKEN whose scope this
+# repository never stated. pages.yml and release.yml both declare theirs; the guard that was
+# supposed to cover this one skipped it, because a job with no block of its own was read as
+# inheriting a workflow-level grant that did not exist here.
+#
+# `contents: read` is the whole requirement: both jobs only read the tree. Nothing here
+# writes a commit, a release, a package or a comment.
+permissions:
+  contents: read
+
 jobs:
   # Pull-request only, deliberately. On a push to main, pages.yml already builds
   # site/ before deploying it, so running this job there would burn a second

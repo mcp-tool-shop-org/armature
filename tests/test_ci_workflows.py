@@ -363,3 +363,58 @@ def test_the_clean_room_leg_reaches_every_lazily_imported_dependency():
         f"the clean-room leg calls nothing that reaches {unreached}; it would pass on a "
         "wheel whose drawing and donor paths raise ModuleNotFoundError on first call"
     )
+
+
+# -- the census tests: what must be true of EVERY workflow, not just the one that broke ----
+#
+# Each block below was added because the guard that should have caught the defect was
+# parametrized over a hand-written list, or read one step in one file. A list a new workflow
+# is not on, and a step a rename moves, are guards that stop guarding without going red. The
+# population is therefore enumerated from the directory on every run.
+
+
+def workflow_files():
+    """Every workflow in `.github/workflows/`, enumerated — never a written-down list."""
+    return sorted(f for f in os.listdir(WORKFLOWS) if f.endswith((".yml", ".yaml")))
+
+
+def _workflow_level_permissions(text):
+    """The `permissions:` block at column 0, or None. Not the same object as a job's."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.rstrip() == "permissions:" and _indent(line) == 0:
+            return "\n".join(block_at(lines, i))
+    return None
+
+
+@pytest.mark.parametrize("workflow", workflow_files())
+def test_every_checkout_job_runs_on_a_declared_token_scope(workflow):
+    """A job may inherit a scope only if there is one to inherit.
+
+    `test_a_job_that_checks_out_declares_contents_read` `continue`s past any job with no
+    job-level block, on the premise that it inherits the workflow-level grant. ci.yml has no
+    workflow-level grant, so for its two jobs that premise was false and the check was
+    vacuous — in the workflow that runs the most third-party code (`npm ci` over site/'s whole
+    lockfile and its lifecycle scripts, four `pip install` lines, an apt install) and handed
+    all of it a token whose scope this repository never stated.
+
+    The population is read from the directory, so a fourth workflow is covered the day it
+    lands rather than the day someone remembers to add it to a list.
+    """
+    text = _text(workflow)
+    workflow_level = _workflow_level_permissions(text)
+    for name in job_names(text):
+        body = "\n".join(_job_lines(text, name))
+        if "actions/checkout" not in body:
+            continue
+        job_level = re.search(r"(?m)^    permissions:\s*$", body) is not None
+        effective = body if job_level else workflow_level
+        assert effective is not None, (
+            f"{workflow} job {name!r} checks out with no permissions block of its own and "
+            "none at workflow level to inherit; the token's scope is whatever the "
+            "organisation default happens to be"
+        )
+        assert re.search(r"(?m)^\s+contents:\s*(read|write)\s*$", effective), (
+            f"{workflow} job {name!r} checks out under a permissions block that grants no "
+            f"contents scope:\n{effective}"
+        )
