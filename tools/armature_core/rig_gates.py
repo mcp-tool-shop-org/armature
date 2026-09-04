@@ -16,6 +16,7 @@ the gate a wrong input.
 import numpy as np
 
 from .errors import GateDDeterminism, GateNNames, GatePRestPose
+from .parts import require_finite
 
 #: Gate P's epsilon, as a fraction of the mesh's own bbox diagonal. Not a length in
 #: metres: a global constant must not govern a local feature.
@@ -39,6 +40,30 @@ def gate_n_names(observed, registered, where):
     ev = {"gate": "N", "andon": "GateNNames",
           "where": where, "n_observed": len(observed),
           "n_registered": len(registered)}
+
+    # · ANDON — a coverage verdict over an empty registry is not a verdict. Measured
+    # 2026-09-04: `gate_n_names([], [], "the re-imported export")` returned
+    # `verdict: "0 / 0 registered sites map to one bone each"` — a PASS having compared
+    # nothing, phrased as a coverage claim. Its two neighbours were given exactly this
+    # refusal in wave 10 on exactly this reasoning (`gate_d_determinism` below, on both
+    # fingerprints carrying zero bones; `gates.g2_completeness`, on an empty channel
+    # mapping) and both acknowledge the same reachability: the input needs a caller bug to
+    # arrive. Every live call site passes `sitelist.ALL_NAMES` (`author_walk.py:552/612`,
+    # `lift_solve.py:307`, `rig_character.py:1196`), a module constant that is non-empty
+    # today, so an empty registry means that constant was emptied or mis-imported — and
+    # THAT is the edit this andon exists to catch: E01's whole result (four rigged GLBs
+    # naming bone_0..bone_N, zero of 18 sites findable, every other check passing) is
+    # reproducible with this gate reporting 0 / 0. The other direction is already safe —
+    # an empty `observed` against a non-empty registry raises, measured.
+    if not registered:
+        raise GateNNames(
+            f"Gate N was asked to check {len(observed)} bone name(s) against a registry "
+            f"of ZERO registered sites, which is not a coverage verdict: nothing would be "
+            f"compared and '0 / 0 registered sites map to one bone each' would be a "
+            f"statement about an empty population. Every call site passes "
+            f"sitelist.ALL_NAMES; an empty one means the committed list was emptied or "
+            f"mis-imported, which is exactly the defect this gate exists to see",
+            ev)
 
     counts = {}
     for n in observed:
@@ -109,6 +134,15 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
         )
     if a.ndim != 2 or a.shape[1] != 3 or a.shape[0] == 0:
         raise GatePRestPose(f"expected a non-empty (N, 3) vertex array, got {a.shape}", ev)
+    # · ANDON — `> 0` covered HALF this quantity: `nan > 0` is False and refused, but
+    # `inf > 0` is True and walked straight through into `epsilon_frac * inf`, giving an
+    # infinite threshold that no displacement can exceed. `require_finite` is the repo's
+    # ONE non-finite helper (`parts.py`, wave 10's rule 4) and it refuses nan, inf,
+    # zero and negatives by name with the value in the evidence — one implementation
+    # across the four clauses on this page and the four `parts`/`startframe`/`lift_solve`
+    # callers, never a second `math.isfinite`.
+    bbox_diagonal = require_finite("bbox_diagonal", bbox_diagonal, GatePRestPose, ev,
+                                  positive=False)
     if not (bbox_diagonal > 0):
         raise GatePRestPose(
             f"bbox diagonal is {bbox_diagonal}; the threshold is a fraction of the mesh's "
@@ -198,6 +232,9 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
             raise GatePRestPose(
                 f"expected a non-empty (N, 3) vertex array for the {label}, got "
                 f"{arr.shape}", ev)
+    # · ANDON — the same half-covered quantity as `gate_p_rest_pose`'s: `inf > 0` passes.
+    bbox_diagonal = require_finite("bbox_diagonal", bbox_diagonal, GatePRestPose, ev,
+                                  positive=False)
     if not (bbox_diagonal > 0):
         raise GatePRestPose(f"bbox diagonal is {bbox_diagonal}; no threshold can be derived",
                             ev)
@@ -318,6 +355,12 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
     # exactly what this function's docstring says a caller-supplied floor of 0 would do.
     if a.ndim != 2 or a.shape[1] != 3 or a.shape[0] == 0:
         raise GatePRestPose(f"expected a non-empty (N, 3) vertex array, got {a.shape}", ev)
+    # · ANDON — as above, and this clause is the one an INFINITY inverts hardest: an
+    # infinite floor makes `d.max() <= threshold` True for every real displacement, so the
+    # liveness andon would fire on a mesh that DID move — an andon that fails on correct
+    # work, which is the andon nobody keeps.
+    bbox_diagonal = require_finite("bbox_diagonal", bbox_diagonal, GatePRestPose, ev,
+                                  positive=False)
     if not (bbox_diagonal > 0):
         raise GatePRestPose(
             f"bbox diagonal is {bbox_diagonal}; the liveness floor is a fraction of the "
@@ -397,15 +440,43 @@ def gate_d_determinism(a, b, bbox_diagonal):
     length_frac = DETERMINISM_LENGTH_FRAC
     weight_tol = DETERMINISM_WEIGHT_TOL
     angle_tol = DETERMINISM_ANGLE_TOL
-    tol = length_frac * float(bbox_diagonal)
     ev = {"gate": "D", "andon": "GateDDeterminism",
-          "length_tolerance": tol, "weight_tolerance": weight_tol,
+          "weight_tolerance": weight_tol,
           "angle_tolerance": angle_tol,
           "tolerance_source": ("rig_gates.DETERMINISM_LENGTH_FRAC / "
                                "DETERMINISM_WEIGHT_TOL / DETERMINISM_ANGLE_TOL"),
-          "bbox_diagonal": float(bbox_diagonal),
           "n_bones_a": len(a["bones"]), "n_bones_b": len(b["bones"]),
           "n_weight_groups_a": len(a["weights"]), "n_weight_groups_b": len(b["weights"])}
+
+    # · ANDON — Gate D was the ONE clause on this page that derived a tolerance from
+    # `bbox_diagonal` without first refusing a degenerate one, and the route that reaches
+    # it is the one route where the clauses that DO refuse never run. Measured 2026-09-04
+    # on two fingerprints whose one bone's tail differs by 4.0 with both weight dicts
+    # empty: `bbox_diagonal=inf` returned "two builds agree on bones and hierarchy over 1
+    # bone(s)" with `length_tolerance` inf, and `nan` returned the same verdict with a nan
+    # tolerance. The caller: `rig_character.py:1050/:1194` pass `ctx['diagonal']`, which is
+    # `float(np.linalg.norm(hi - lo))` over the raw imported vertices, with both Gate P
+    # clauses inside `if bind:` — so on `--mode=skeleton` (bind=False, deliberate) NOTHING
+    # has looked at that number before this line scales a tolerance by it. A GLB carrying
+    # a non-finite vertex position (representable in glTF's float32 and passed through by
+    # the importer) yields a non-finite diagonal, and the skeleton build's determinism
+    # receipt then says "two builds agree" over bones that moved — a recipe that does not
+    # reproduce its output, with the andon that exists to catch exactly that reporting
+    # green. The weight clause still binds either way (its tolerance is a constant); what
+    # went vacuous is the bone geometry, which on the skeleton route is the whole quantity.
+    bbox_diagonal = require_finite("bbox_diagonal", bbox_diagonal, GateDDeterminism, ev,
+                                  positive=False)
+    ev["bbox_diagonal"] = bbox_diagonal
+    if not (bbox_diagonal > 0):
+        raise GateDDeterminism(
+            f"bbox diagonal is {bbox_diagonal}; the length tolerance is a fraction of the "
+            f"subject's own size and cannot be computed from a degenerate one. This is the "
+            f"clause the three Gate P clauses on this page already carry, and Gate D was "
+            f"the one that did not",
+            ev,
+        )
+    tol = length_frac * bbox_diagonal
+    ev["length_tolerance"] = tol
     problems = []
 
     # · ANDON — a comparison over zero bones is not a determinism verdict.

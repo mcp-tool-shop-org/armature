@@ -443,7 +443,54 @@ def g5_openpose_conformance(keypoint_count, limb_seq, reference_count, reference
     Compared element for element against the **retrieved** reference (F20), not
     against memory, and including its 1-indexing: F20 records `limbSeq` as 19 pairs
     that index keypoints from 1, which is a live trap for a from-scratch renderer.
+
+    ⚠ **DORMANT — this gate has NO production call site anywhere in the tree, and it stays
+    dormant until the drawing convention is retrieved.** Grepped 2026-09-04 across `tools/`
+    and `tests/`: `g5_openpose_conformance` appears at this definition, in `cli.SURFACE`'s
+    gate list, and in `tests/test_gates.py` — and nowhere else. The pose channel cannot be
+    emitted today: `stage_render.py:281-284` calls `openpose.require_drawing_convention()`
+    whenever `pose` is requested and that function raises unconditionally, because
+    `openpose.PALETTE` and `openpose.KEYPOINT_NAMES` are both None. So there is nothing to
+    wire this to yet, and wiring it to a channel that cannot exist would be a call site
+    that can never run.
+
+    **What that does NOT license is a manifest asserting a verdict this gate never
+    computed.** `stage_render.py:470-471` writes
+    `"G5": {"verdict": "NOT RUN -- pose was not emitted"} if "pose" not in requested else
+    {"verdict": "PASS"}` — a literal PASS for a gate the file never invokes, beside
+    G1/G2/G4/G6 verdicts that are all read back from gates that did run. The day the
+    convention is retrieved and the pose channel is enabled, that manifest asserts G5 PASS
+    on the first run and this andon — the one that exists because F20's retrieved `limbSeq`
+    is 1-indexed while a from-scratch renderer will emit 0-indexed pairs — never fires. The
+    manifest half is `stage_render`'s (instruments-measure domain, routed 2026-09-04); the
+    half that lives here is this record and the empty-population refusal below.
     """
+    # · ANDON — a conformance verdict over ZERO keypoints and ZERO limb pairs is not a
+    # verdict. Measured 2026-09-04: `g5_openpose_conformance(0, [], 0, [])` returned True
+    # having compared nothing — the counts agreed because both were zero, the pair loop
+    # ran zero times, and `flat` was empty so the 0-indexing clause was skipped too. Its
+    # siblings on this page carry exactly this refusal for exactly this reason
+    # (`g2_completeness` on an empty channel mapping, `gate_r_round_trip` on an empty
+    # frame pair), and this gate needs it MORE than they do, not less: the population it
+    # would be handed on the first live run comes from a renderer that does not exist yet,
+    # and an empty skeleton is the shape a stub emits.
+    if not reference_count or not list(reference_limb_seq):
+        raise G5ConventionConformance(
+            f"G5 was asked to check conformance against a reference of "
+            f"{reference_count!r} keypoint(s) and {len(list(reference_limb_seq))} limb "
+            f"pair(s), which is not a conformance verdict: with an empty reference the "
+            f"count clause agrees because both sides are zero, the pair loop runs zero "
+            f"times and the 1-indexing clause has no index to read. F20's retrieved "
+            f"convention is 18 keypoints and 19 limb pairs; an empty one means the "
+            f"reference was never loaded",
+            {"gate": "G5", "andon": "G5ConventionConformance",
+             "clause": "empty_reference",
+             "keypoint_count": keypoint_count,
+             "reference_count": reference_count,
+             "n_limb_pairs": len(list(limb_seq)),
+             "n_reference_limb_pairs": len(list(reference_limb_seq))},
+        )
+
     problems = []
     if keypoint_count != reference_count:
         problems.append(f"keypoint count {keypoint_count} != {reference_count}")
@@ -670,6 +717,38 @@ def gate_b_batching(expected_frames, observed_batch_images, evidence=None):
             f"was not observed, so batching is unverified rather than verified",
             ev,
         )
+
+    # · ANDON — "batch intact" over ZERO submitted images is not a batching verdict.
+    #
+    # Measured 2026-09-04: `gate_b_batching(0, 0)` returned
+    # `{'gate': 'B', ..., 'expected_frames': 0, 'observed_batch_images': 0,
+    #   'verdict': 'batch intact'}`. This gate's own docstring makes the population
+    # argument for the SURPLUS direction ("a batch larger than submitted is as wrong as a
+    # smaller one") and never put it under the population itself; `g2_completeness` on
+    # this page raises on an empty expectation for exactly that reason, in these words.
+    # The single call site is `gate_b_frames.py:119`,
+    # `gates.gate_b_batching(len(src_paths), len(got_paths))` over two `frame_paths()`
+    # listings, so two empty or mistyped directories give 0 == 0.
+    #
+    # Bounded honestly: the very next statement in that tool is
+    # `gates.gate_r_round_trip(src, got, ...)` (:122), which raises "no frames to compare;
+    # the round trip proves nothing" on the same input before any record is written — so
+    # the false verdict never reached a file. What it cost was the halt output: an operator
+    # read Gate B reporting the batch intact immediately above Gate R saying there were no
+    # frames at all, and spent the debugging time on the wrong bridge. It is placed BELOW
+    # the bool clause so `gate_b_batching(0, False)` still refuses as "not a count" — the
+    # observed value is the stronger defect and keeps its own message.
+    if (not isinstance(expected_frames, int) or isinstance(expected_frames, bool)
+            or expected_frames <= 0):
+        raise GateBBatching(
+            f"Gate B was asked to check a batch against an expectation of "
+            f"{expected_frames!r} image(s), which is not a batching verdict: nothing was "
+            f"submitted to compare against, and 'batch intact' would be a statement about "
+            f"an empty population. g2_completeness refuses an empty channel expectation on "
+            f"the same grounds",
+            ev,
+        )
+
     if observed_batch_images != expected_frames:
         short = observed_batch_images < expected_frames
         raise GateBBatching(

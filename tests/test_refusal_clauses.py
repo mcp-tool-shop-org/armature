@@ -185,6 +185,15 @@ RECORDED_POPULATION = frozenset({
     # its record colliding on one path. Two raise sites in `gate_out_paths`, so its name is
     # not its clause and each site needs a distinguishing phrase.
     "PayloadOutHalt",
+    # Joined 2026-09-04 (wave 12, core-gates), and both crossed the one-site line the same
+    # way: each gained a SECOND refusal, so its class name stopped being its clause.
+    # `G5ConventionConformance` now also refuses an empty reference convention (a
+    # conformance verdict over zero keypoints and zero limb pairs is not a verdict), and
+    # `GateNNames` now also refuses an empty registry (a "0 / 0 registered sites map to one
+    # bone each" verdict is a coverage claim about an empty population). Every
+    # `pytest.raises` on either class in this suite therefore has to name which refusal it
+    # is pinning, and this census is what found them.
+    "G5ConventionConformance", "GateNNames",
 })
 
 #: Re-derived 2026-09-04 and EMPTY. There is no class this census excuses: a class raised
@@ -227,7 +236,9 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # `gate_out_paths`. 80 + 1 = 81. ⚠ This number moves once per domain that adds a typed
     # refusal in a wave; the coordinator re-measures it at the merge, as it did at wave 10.
     # WAVE-12 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(POLICED) == 85, sorted(POLICED)
+
+    # WAVE-12 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(POLICED) == 87, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -267,7 +278,18 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # entries are absent — an unknown attribution is not something a spend tool completes.
     # 54 + 1 = 55 on this branch. ⚠ core-gates' branch takes the same count to 57; the
     # merged number is 58 and the coordinator re-measures it, as at wave 10.
-    assert len(RAISE_SITES["RouteGate"]) == 55, sorted(RAISE_SITES["RouteGate"])
+    # WAVE-12 MERGE (coordinator, 2026-09-04): builders +1 (`conditional_attribution`) and core-gates +3
+    # (`unreadable_node`, `uncredited_conditional_component`, `attribution_entry_for`): 54 + 1 + 3 = 58,
+    # MEASURED on the merged tree.
+    assert len(RAISE_SITES["RouteGate"]) == 58, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
+    #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
+    #       and `_iter_definitions` already carried and this one did not (a `None` inside
+    #       `nodes` used to leave through `AttributeError`, bypassing the halt contract).
+    #   +1  `verify`'s `uncredited_conditional_component`: a CONDITIONAL licence row is
+    #       passed only when the submitting record credits it.
+    #   +1  `attribution_entry_for`: a credit line asked for on a row that owes none.
+    # (core-gates' 57 was its branch alone; the merged assertion above carries the measured 58.)
     files = {path for path, _ in RAISE_SITES["RouteGate"]}
     # `build_lora_arm_payload.py` joined at the wave-8 merge: its new `gate_base_licence`
     # raises RouteGate on a banned node class in the operator's baseline graph.
