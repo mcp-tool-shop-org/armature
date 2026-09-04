@@ -248,6 +248,121 @@ def test_a_missing_glb_does_not_delete_the_exit_code(filename, tmp_path):
     assert code == 1, f"{filename}: exit code {code!r}, contract says 1 for a crash"
 
 
+# ------------------------------------- the input that escapes: evidence the sentinel cannot
+#                                        serialise (wave 10, F-7467e90d)
+#
+# THE NODE THIS KEYS ON: the handler's own `print("<STEM>_HALT " + json.dumps({...},
+# default=str))` followed by `sys.exit(...)`. The three argv/glb directions above vary the
+# ARGV; not one of them varies the EVIDENCE, and the evidence is what the handler
+# serialises. `json.dumps(default=str)` consults `default=` for VALUES only, never for
+# KEYS, so a non-str key raises inside the `except` block, the second exception leaves the
+# whole `try`, `sys.exit` never runs, and `blender -b -P` exits 0 — exactly the E07 failure
+# the contract exists to end, with the census green.
+#
+# Measured 2026-09-04 on cd2d941 by driving `exit_code_of_main_block` over all 21 WITH_MAIN
+# tools with three evidence shapes: 21 of 21 returned `code=None` with
+# `TypeError("keys must be str, int, float, bool or None, not tuple")`,
+# `... not numpy.int64`, and `ValueError("Circular reference detected")` respectively.
+# That includes the five `rig_*` tools whose `finally` guards the halt.json write — the
+# guard wraps the FILE write, not the `print`.
+#
+# Tuple-keyed and numpy-keyed evidence are ORDINARY here: per-view and per-frame
+# measurements are how this repo's andons describe what fired them.
+#
+# Instruments owns the fix and is landing it in place in all 21 handlers (SEAM 3,
+# 2026-09-04): the sentinel is built key-safely and the print moves inside its own
+# try/except/finally so `sys.exit(_code)` runs on every path. This census asserts the
+# BEHAVIOUR — no escape, the contract code — never the helper's name or location.
+
+
+def _numpy_key():
+    numpy = pytest.importorskip("numpy")
+    return numpy.int64(3)
+
+
+def _evidence_shapes():
+    """`(label, build)` per evidence dict — each a shape this repo's andons produce."""
+    def per_view():
+        return {"per_view": {(0, 30): 1.0}, "note": "a tuple key is a view pair"}
+
+    def per_frame():
+        return {"per_frame": {_numpy_key(): 0.5}}
+
+    def circular():
+        ev = {"gate": "PROBE"}
+        ev["self"] = ev
+        return ev
+
+    return [("tuple_key", per_view), ("numpy_int_key", per_frame),
+            ("circular", circular)]
+
+
+EVIDENCE_SHAPES = _evidence_shapes()
+
+#: The two shapes whose sentinel must still be WELL FORMED after the fix: a key that can be
+#: stringified. `circular` is held to the exit-code half only — a cycle cannot be
+#: stringified away, and the contract clause it exercises is "`sys.exit` runs on every
+#: path", not "the JSON is complete".
+SERIALISABLE_SHAPES = {"tuple_key", "numpy_int_key"}
+
+
+def _evidence_raiser(build):
+    from armature_core.errors import GateFailure
+
+    class _Gate(GateFailure):
+        gate = "PROBE"
+
+    def gate():
+        raise _Gate("a gate fired", build())
+
+    return gate
+
+
+@pytest.mark.parametrize("label,build", EVIDENCE_SHAPES, ids=[s[0] for s in EVIDENCE_SHAPES])
+@pytest.mark.parametrize("filename", WITH_MAIN)
+def test_a_measurement_keyed_evidence_dict_does_not_escape_the_handler(
+        filename, label, build, tmp_path, capsys):
+    """The direction the halt census never asserted: an evidence dict the sentinel cannot
+    serialise as written. `escaped is None` and the contract's code, for every tool."""
+    code, escaped = exit_code_of_main_block(
+        filename, raiser=_evidence_raiser(build),
+        argv=["blender", "-b", "-P", filename, "--", "--glb=nope.glb",
+              "--out=" + str(tmp_path / "out")])
+    out = capsys.readouterr().out
+    assert escaped is None, (
+        f"{filename} ({label}): {escaped!r} escaped the handler, so `sys.exit` never ran "
+        f"and `blender -b -P` reports success on a fired gate")
+    assert code == 2, f"{filename} ({label}): exit code {code!r}, contract says 2 for a gate"
+    if label in SERIALISABLE_SHAPES:
+        stem = filename[:-3].upper()
+        token = f"{stem}_HALT"
+        lines = [l for l in out.splitlines() if l.split(" ", 1)[0] == token]
+        assert len(lines) == 1, f"{filename} ({label}): {len(lines)} sentinel lines"
+        rec = json.loads(lines[0][len(token):].strip())
+        assert set(rec) == SENTINEL_KEYS, sorted(rec)
+        assert rec["gate"] == "PROBE"
+        assert isinstance(rec["evidence"], dict)
+        assert all(isinstance(k, str) for k in rec["evidence"]), rec["evidence"]
+
+
+def test_the_evidence_shapes_this_census_drives_are_the_ones_json_dumps_refuses():
+    """The premise, measured here rather than asserted: `default=` is consulted for VALUES
+    only. If a future Python applied it to keys, these fixtures would stop probing anything
+    and this test says so instead of going quietly green."""
+    for label, build in EVIDENCE_SHAPES:
+        with pytest.raises((TypeError, ValueError)):
+            json.dumps(build(), default=str)
+    # …and the same dicts serialise once the keys are strings, so the shapes are not
+    # unserialisable in principle — the KEY is the whole defect.
+    for label, build in EVIDENCE_SHAPES:
+        if label not in SERIALISABLE_SHAPES:
+            continue
+        ev = build()
+        flat = {k: {str(kk): vv for kk, vv in v.items()} if isinstance(v, dict) else v
+                for k, v in ev.items()}
+        json.dumps(flat, default=str)
+
+
 # ------------------------------------------------------------- the checker, shown red
 #
 # Rule 3 of wave 8: a census proves it can fail. `sentinel_violations` is a pure function,

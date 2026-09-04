@@ -365,6 +365,75 @@ def test_the_subclass_walk_sees_every_andon_not_just_the_imported_ones():
         assert expected in names, f"{expected} missing from {sorted(names)}"
 
 
+#: Re-derived 2026-09-04 (wave 10, F-27a92797) with `blender_scene` imported under
+#: `blender_stub.blender_stubbed()`. Size AND membership, so a new andon fails HERE by name
+#: rather than sliding under a `>= 29`.
+#:
+#: MERGE NOTE: core-solvers' branch adds `CadenceGate` (gate CADENCE), `GaitGate` (GAIT) and
+#: `PinnedCameraGate` (PIN) as `GateFailure` subclasses (SEAM 1, 2026-09-04). Re-DERIVE this
+#: list after the merge — never hand-edit it to make the merge green.
+RECORDED_ANDON_CLASSES = [
+    "AlphaGate", "AssemblyGate", "BackdropGate", "CascadeGate", "CompositorWiring",
+    "DonorGate", "FacingGate", "G1GeneratorLegality", "G2Completeness", "G4BboxSanity",
+    "G5ConventionConformance", "G6SubjectMotion", "GateAtlasUntouched", "GateBBatching",
+    "GateCanon", "GateDDeterminism", "GateNNames", "GatePRestPose", "GatePartsAccounting",
+    "GatePartsDeterminism", "GateRRoundTrip", "GateRigidArrival", "GateSSeedRegistration",
+    "PairGate", "ReliftMismatch", "ResampleGate", "RouteGate", "SolveGate",
+    "StartFrameGate", "TurnaroundAlphaGate", "TurnaroundCropGate", "TurnaroundGate",
+]
+
+
+def test_the_andon_population_is_the_one_the_class_wide_invariants_are_asked_of():
+    """Size and membership before the property.
+
+    THE NODE: the class hierarchy rooted at `GateFailure`, with every `armature_core`
+    module imported first. Until wave 10 the enumerator SKIPPED `armature_core.
+    blender_scene` on the premise that it "imports bpy and cannot resolve under a plain
+    CPython" — a premise this suite's own `blender_stub.blender_stubbed()` falsifies, and
+    which `tests/test_core_solver_evidence._gate_raises` already walks that module through.
+    Measured 2026-09-04: 31 classes before, 32 after, the newcomer `CompositorWiring`.
+    """
+    names = sorted(c.__name__ for c in gate_failure_subclasses())
+    assert names == RECORDED_ANDON_CLASSES, {
+        "appeared": sorted(set(names) - set(RECORDED_ANDON_CLASSES)),
+        "vanished": sorted(set(RECORDED_ANDON_CLASSES) - set(names)),
+    }
+
+
+def test_the_andon_the_enumerator_used_to_skip_is_asked_the_class_wide_invariants():
+    """The measurement that overturned the exclusion, kept runnable.
+
+    `CompositorWiring` passes both invariants today, so this was an unasked question rather
+    than a live break — and a census whose guarantee is "no new andon can opt out" cannot
+    have a module it never asks.
+    """
+    from armature_core.errors import GateFailure as GF
+
+    subs = {c.__name__: c for c in gate_failure_subclasses()}
+    assert "CompositorWiring" in subs, sorted(subs)
+    cls = subs["CompositorWiring"]
+    assert cls.__module__ == "armature_core.blender_scene"
+    assert cls.gate == "COMPOSITOR" and cls.gate != GF.gate
+    assert str(cls("something happened")).startswith("[COMPOSITOR] ")
+
+    # the falsified premise, measured rather than asserted: the module resolves under the
+    # suite's stub and does NOT resolve without it.
+    import importlib
+    import sys as _sys
+
+    saved = _sys.modules.pop("armature_core.blender_scene", None)
+    try:
+        _sys.modules.pop("bpy", None)
+        with pytest.raises(BaseException):
+            importlib.import_module("armature_core.blender_scene")
+    finally:
+        if saved is not None:
+            _sys.modules["armature_core.blender_scene"] = saved
+    # …and the population is unchanged by that round trip: the enumerator holds a strong
+    # reference, so popping sys.modules does not unregister the class or duplicate it.
+    assert sorted(c.__name__ for c in gate_failure_subclasses()) == RECORDED_ANDON_CLASSES
+
+
 def test_the_enumeration_would_catch_a_new_andon_that_forgot_its_id():
     """The red direction. A check that only ever runs on a clean population is unproven,
     so an andon that forgets is defined here and the same enumeration must find it."""

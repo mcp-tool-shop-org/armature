@@ -169,28 +169,58 @@ def _upload_records_are_resolved():
 
 # ------------------------------------------------------------------- gate assertions
 
+#: Modules first imported under `blender_stub.blender_stubbed()`, held by STRONG reference
+#: so the classes they define stay registered in `GateFailure.__subclasses__()` after the
+#: stub's teardown pops them out of `sys.modules`. Keyed by name and imported exactly once:
+#: a second stubbed import would build a SECOND class object of the same name and the
+#: derived population would grow by one on every call.
+_STUB_IMPORTED = {}
+
+
 def _import_every_core_module():
     """Import every `armature_core` module so a subclass walk sees all of them.
 
     `__subclasses__()` only knows about classes whose module has been imported, so the
     population depends on which tests ran first — measured: `test_gates.py` alone sees 12
     andons, the full suite sees 29. A class-wide invariant checked against a population
-    that changes with collection order is not class-wide. `blender_scene` is the
-    deliberate exception everywhere in this suite: it imports bpy and cannot resolve under
-    a plain CPython.
+    that changes with collection order is not class-wide.
+
+    WAVE 10, F-27a92797 — why `blender_scene` is no longer excluded. The exclusion's stated
+    reason was "it imports bpy and cannot resolve under a plain CPython", and this suite
+    falsifies that in its own fixtures: `tests/blender_stub.blender_stubbed()` resolves it,
+    and `tests/test_core_solver_evidence._gate_raises` already walks that exact module
+    through the stub. Measured 2026-09-04: `gate_failure_subclasses()` returned 31 classes
+    and `CompositorWiring` (gate `COMPOSITOR`, 3 raise sites in `blender_scene.py` by AST)
+    was not among them, so `test_gates.py:387` (no subclass may inherit `GateFailure.gate`)
+    and `:393` (`str(cls(...))` starts with `[<gate>] `) had never once been asked of it,
+    and `test_amend_w8_core_gates`'s `known` set would have called a correct
+    `andon: "CompositorWiring"` a name for no real andon. The class passes both invariants
+    today — the defect was that the question could not be asked, which is the one guarantee
+    a class-wide census exists to give.
     """
     import glob
     import importlib
     import warnings
 
+    from blender_stub import blender_stubbed
+
     for path in sorted(glob.glob(os.path.join(TOOLS, "armature_core", "*.py"))):
         name = os.path.basename(path)[:-3]
-        if name.startswith("__") or name == "blender_scene":
+        if name.startswith("__"):
+            continue
+        needs_stub = name == "blender_scene"
+        if needs_stub and (name in _STUB_IMPORTED
+                           or "armature_core." + name in sys.modules):
             continue
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                importlib.import_module("armature_core." + name)
+                if needs_stub:
+                    with blender_stubbed():
+                        _STUB_IMPORTED[name] = importlib.import_module(
+                            "armature_core." + name)
+                else:
+                    importlib.import_module("armature_core." + name)
         except Exception:  # pragma: no cover - a module needing an absent dependency
             pass
 

@@ -25,6 +25,7 @@ rather than a reading:
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -879,7 +880,16 @@ def _spend_and_fetch_tools():
 
 
 def _exit_convention(path):
-    """`(has_main_block, prints_halt_sentinel, discriminates_2_vs_1)` for one file."""
+    """`(has_main_block, halt_prefix_or_False, discriminates_2_vs_1)` for one file.
+
+    The middle member was a bool until wave 10; it is now the PREFIX read out of the
+    `<PREFIX>_HALT` literal in the `__main__` block, because that is the node the success
+    convention keys on too (F-4e011521). The prefix is NOT the file stem: measured on
+    cd2d941, six of the thirteen disagree (`build_assembly_payload` →
+    `BUILD_ASSEMBLY_HALT`, `gate_saved_graph` → `SAVED_ADMISSION_HALT`, …), so a census
+    keyed on the stem would have policed a name nobody prints. Still truthy when present,
+    so every existing caller reads the same thing.
+    """
     src = open(path, encoding="utf-8").read()
     block = None
     for node in ast.parse(src).body:
@@ -896,7 +906,7 @@ def _exit_convention(path):
             for lit in ast.walk(node):
                 if isinstance(lit, ast.Constant) and isinstance(lit.value, str) \
                         and lit.value.strip().endswith("_HALT"):
-                    sentinel = True
+                    sentinel = lit.value.strip()[: -len("_HALT")]
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                 and node.func.attr == "exit" and node.args
                 and isinstance(node.args[0], ast.IfExp)):
@@ -947,7 +957,7 @@ def test_the_census_goes_RED_on_a_member_without_the_convention(tmp_path, monkey
         '        print("BUILD_BLUNT_HALT " + json.dumps({}))\n'
         '        sys.exit(2)\n', encoding="utf-8")
     has_main, sentinel, discriminates = _exit_convention(str(blunt))
-    assert (has_main, sentinel) == (True, True)
+    assert (has_main, sentinel) == (True, "BUILD_BLUNT")
     assert discriminates is False
 
     # And the walk itself sees a new member rather than a typed list of the old ones.
@@ -986,6 +996,293 @@ def test_a_gate_refusal_exits_2_with_its_sentinel_and_a_crash_exits_1(tmp_path):
     assert crash.returncode == 1, crash.stdout + crash.stderr
     assert "FETCH_RUN_HALT" in crash.stdout
     assert "FileNotFoundError" in crash.stdout
+
+
+# -- 3a-bis. the SUCCESS direction of the same convention (wave 10, F-4e011521) -----------
+#
+# THE NODE THIS KEYS ON: the `<PREFIX>_HALT` literal in each tool's own `__main__` block —
+# the same node the failure half above reads. Not the file stem: six of the thirteen stems
+# disagree with their prefix (SEAM 4, builders, 2026-09-04).
+#
+# What the failure-only census could not see, measured in this worktree on cd2d941:
+# `python tools/build_cascade_payload.py --uploads=<81-frame map> --out=<dir>` wrote both
+# artefacts, printed `BUILD_CASCADE_OK <path>`, and EXITED 1 — because `main()` returns `wf`
+# (build_cascade_payload.py:234) under `raise SystemExit(main())` (:248), and SystemExit
+# with a non-int code prints the object to stderr and exits 1. Same shape at
+# build_r2v_payload.py:329/:343 (`return wf, record`) and build_assembly_payload.py:395/:409.
+# A `verify.ps1` leg, a Makefile step or an operator shell chaining on a builder therefore
+# reads a completed payload build as a failure, and `PSNativeCommandUseErrorActionPreference`
+# halts the leg after a build that in fact succeeded.
+
+
+def _module_ast(filename):
+    with open(os.path.join(REPO, "tools", filename), encoding="utf-8") as fh:
+        return ast.parse(fh.read())
+
+
+def _leftmost_literal(node):
+    """The leading string constant of a print argument, through `+` and f-strings."""
+    while True:
+        if isinstance(node, ast.Constant):
+            return node.value if isinstance(node.value, str) else None
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            node = node.left
+            continue
+        if isinstance(node, ast.JoinedStr) and node.values:
+            node = node.values[0]
+            continue
+        return None
+
+
+def _success_lines(filename):
+    """Every leading print literal in the module — the shapes a caller can key on."""
+    out = []
+    for node in ast.walk(_module_ast(filename)):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "print" and node.args):
+            lit = _leftmost_literal(node.args[0])
+            if lit:
+                out.append(lit)
+    return out
+
+
+def _direct_returns(fn):
+    """Every `return` that belongs to `fn` ITSELF — a NON-DESCENDING walk.
+
+    `ast.walk` descends into nested `def`s and lambdas and attributes their returns to the
+    enclosing function, which is the wrong-node class this whole wave is about: measured
+    2026-09-04 (SEAM 5, instruments), a descending walk reads `make_skeleton_sheet.main` as
+    returning `(body, bones)` when those two `return`s belong to the nested closure
+    `def render(...)` and `main` has no direct return at all.
+    """
+    out = []
+    stack = list(fn.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            continue
+        if isinstance(node, ast.Return):
+            out.append(node.value)
+        stack.extend(ast.iter_child_nodes(node))
+    return out
+
+
+def _main_returns(filename):
+    """Every `return` value belonging to the module-level `def main` itself."""
+    out = []
+    for node in _module_ast(filename).body:
+        if isinstance(node, ast.FunctionDef) and node.name == "main":
+            out.extend(_direct_returns(node))
+    return out
+
+
+def _returns_an_exit_code(value):
+    """A value `raise SystemExit(main())` can use as a process exit code.
+
+    `None` (fall through / bare return), an int literal, or a Call — a delegation whose own
+    contract is the code, which is how `canon_gate.main` dispatches (`return args.func(args)`).
+    A Name, a Tuple, a dict or a list is a WORK PRODUCT: SystemExit prints it to stderr and
+    exits 1, which is the exact defect this clause exists to catch.
+
+    A Call is admitted rather than exempted BY NAME, so `canon_gate` needs no exemption; the
+    dispatch targets themselves (`cmd_*`, each returning an int literal) are pinned by
+    builders' own census (SEAM 6, 2026-09-04). Measured there across all 53
+    `raise SystemExit(main())` tools, exactly four direct returns are non-int: the three
+    this clause is red on today, plus that dispatch.
+    """
+    if value is None:
+        return True
+    if isinstance(value, ast.Constant):
+        return value.value is None or isinstance(value.value, int)
+    return isinstance(value, ast.Call)
+
+
+@pytest.mark.parametrize("filename", SPEND_AND_FETCH)
+def test_every_spend_and_fetch_main_returns_an_exit_code_not_a_work_product(filename):
+    """The static half of the success direction, over the WHOLE derived population."""
+    bad = [ast.unparse(v) for v in _main_returns(filename) if not _returns_an_exit_code(v)]
+    assert bad == [], (
+        f"{filename}: `main()` returns {bad} under `raise SystemExit(main())`; a non-int "
+        f"SystemExit code is printed to stderr and the process exits 1 on a fully "
+        f"successful, fully gated run")
+
+
+@pytest.mark.parametrize("filename", SPEND_AND_FETCH)
+def test_every_spend_and_fetch_tool_prints_the_success_line_its_halt_prefix_names(filename):
+    """One success convention across the thirteen, keyed on each tool's OWN halt prefix.
+
+    A caller that keys on `<PREFIX>_HALT` to detect a refusal has nothing to key on for the
+    other direction unless the same prefix names the success line.
+    """
+    has_main, prefix, _ = _exit_convention(os.path.join(REPO, "tools", filename))
+    assert has_main and prefix, filename
+    wanted = re.compile(r"^" + re.escape(prefix) + r"_OK\s")
+    lines = _success_lines(filename)
+    assert any(wanted.match(l) for l in lines), (
+        f"{filename} halts as `{prefix}_HALT` and has no `{prefix}_OK ` line; the printed "
+        f"leading literals are {sorted(set(lines))}")
+
+
+#: Behavioural success invocations, 2026-09-04. Each returns the argv for a run that
+#: performs the tool's whole job on a synthetic fixture and must exit 0. Keyed by member of
+#: `SPEND_AND_FETCH`; the members NOT here are exempted below, with the reason.
+def _cascade_success(tmp_path):
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps({f"{i:05d}.png": f"{(80 - i):064x}.png" for i in range(81)}),
+                  encoding="utf-8")
+    return ["build_cascade_payload.py", f"--uploads={up}", f"--out={tmp_path / 'route'}"]
+
+
+def _assembly_success(tmp_path):
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps({f"{i:05d}.png": f"{(80 - i):064x}.png" for i in range(81)}),
+                  encoding="utf-8")
+    return ["build_assembly_payload.py", "--uploads", str(up),
+            "--out", str(tmp_path / "route")]
+
+
+def _r2v_success(tmp_path):
+    import test_r2v_payload as R  # the fixture values this tool's own suite already pins
+
+    seeds = tmp_path / "seeds.json"
+    seeds.write_text(json.dumps({"seeds": R.SEEDS}), encoding="utf-8")
+    prompt = tmp_path / "prompt.json"
+    prompt.write_text(json.dumps({"prompt": R.PROMPT, "negative_prompt": R.NEG}),
+                      encoding="utf-8")
+    refs = tmp_path / "refs.json"
+    refs.write_text(json.dumps({"views": [
+        {"slot": f"image{i + 1}", "view": f"turn_{i}", "upload_name": R.REFS[i]}
+        for i in range(4)]}), encoding="utf-8")
+    return ["build_r2v_payload.py", "--arm=A1", f"--seed={R.SEEDS[0]}", f"--seeds={seeds}",
+            f"--prompt-file={prompt}", f"--refs={refs}", f"--out={tmp_path / 'route'}",
+            "--subject=PERFORMER", "--no-canon"]
+
+
+SUCCESS_INVOCATIONS = {
+    "build_assembly_payload.py": _assembly_success,
+    "build_cascade_payload.py": _cascade_success,
+    "build_r2v_payload.py": _r2v_success,
+}
+
+#: Named and dated 2026-09-04. Every member here is exempt from the BEHAVIOURAL direction
+#: only — both static clauses above hold for all thirteen. The reason is the same for all
+#: ten and it is a property of the tool, not of this file: a success run needs an input the
+#: suite cannot synthesise in-process at this size (a canon surfaces file and an experiment
+#: arm, a real dump from a completed cloud run, a saved graph the round-trip admits). Each
+#: is exercised end to end by its own module (`tests/test_canon_spend.py`,
+#: `tests/test_fetch_run.py`, `tests/test_gate_saved_graph.py`, …) through `main(argv)`
+#: IN-PROCESS, which is exactly the call shape that cannot see the SystemExit defect.
+SUCCESS_EXEMPT = {
+    "build_animate_payload.py", "build_camera_i2v_payload.py", "build_i2v_payload.py",
+    "build_lora_arm_payload.py", "build_payload.py", "build_t2v_payload.py",
+    "canon_gate.py", "fetch_run.py", "fetch_t2v_run.py", "gate_saved_graph.py",
+}
+
+
+def test_the_success_exemption_is_a_subset_of_the_population_and_covers_the_rest():
+    """Exemptions are named, dated and RE-DERIVED (wave 8 rule 4): the exemption set must be
+    a subset of the derived population, and the two halves must exhaust it, so a new member
+    lands in neither and fails here."""
+    assert SUCCESS_EXEMPT <= set(SPEND_AND_FETCH), sorted(SUCCESS_EXEMPT - set(SPEND_AND_FETCH))
+    assert set(SUCCESS_INVOCATIONS) <= set(SPEND_AND_FETCH)
+    assert SUCCESS_EXEMPT & set(SUCCESS_INVOCATIONS) == set()
+    assert SUCCESS_EXEMPT | set(SUCCESS_INVOCATIONS) == set(SPEND_AND_FETCH), {
+        "in neither": sorted(set(SPEND_AND_FETCH) - SUCCESS_EXEMPT - set(SUCCESS_INVOCATIONS)),
+    }
+
+
+@pytest.mark.parametrize("filename", sorted(SUCCESS_INVOCATIONS))
+def test_a_fully_successful_run_exits_0_with_its_success_line(filename, tmp_path):
+    """The direction no test in this repo asserted before wave 10: the tool is run AS A
+    SCRIPT on its happy path and the process's exit code is read.
+
+    `grep 'returncode == 0'` over `tests/` returned twenty sites on cd2d941 and not one of
+    them invoked a builder as `__main__`; `tests/test_r2v_payload.py` calls `B.main([...])`
+    in-process and unpacks its tuple return, which is precisely the call shape that cannot
+    observe what `raise SystemExit(main())` does with that tuple.
+    """
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(
+        [os.path.join(REPO, "tools"), TESTS_DIR, os.environ.get("PYTHONPATH", "")]))
+    argv = SUCCESS_INVOCATIONS[filename](tmp_path)
+    proc = subprocess.run(
+        [sys.executable, os.path.join(REPO, "tools", argv[0])] + argv[1:],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        env=env, cwd=REPO)
+    prefix = _exit_convention(os.path.join(REPO, "tools", filename))[1]
+    assert re.search(r"^" + re.escape(prefix) + r"_OK\s", proc.stdout, re.M), (
+        f"the run printed no `{prefix}_OK` line:\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}")
+    assert f"{prefix}_HALT" not in proc.stdout, proc.stdout[-2000:]
+    assert proc.returncode == 0, (
+        f"{filename} printed its success line and exited {proc.returncode}; stderr tail:\n"
+        f"{proc.stderr[-2000:]}")
+
+
+def test_the_success_census_goes_RED_on_a_main_that_returns_its_work_product(tmp_path):
+    """A census that cannot fail is not a census. Both static clauses are driven against
+    modules that carry the defect and against ones that do not."""
+    good = tmp_path / "build_good_payload.py"
+    good.write_text(
+        "def main(argv=None):\n"
+        "    print(f'BUILD_GOOD_OK {1}')\n"
+        "    return 0\n"
+        'if __name__ == "__main__":\n'
+        "    try:\n"
+        "        raise SystemExit(main())\n"
+        "    except BaseException as exc:\n"
+        "        print('BUILD_GOOD_HALT ' + json.dumps({}))\n"
+        "        sys.exit(2 if isinstance(exc, GateFailure) else 1)\n", encoding="utf-8")
+    bad = tmp_path / "build_bad_payload.py"
+    bad.write_text(
+        "def main(argv=None):\n"
+        "    wf = {}\n"
+        "    record = {}\n"
+        "    print('BUILD_BAD_HALT_NOT')\n"
+        "    return wf, record\n"
+        'if __name__ == "__main__":\n'
+        "    try:\n"
+        "        raise SystemExit(main())\n"
+        "    except BaseException as exc:\n"
+        "        print('BUILD_BAD_HALT ' + json.dumps({}))\n"
+        "        sys.exit(2 if isinstance(exc, GateFailure) else 1)\n", encoding="utf-8")
+
+    def returns(path):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
+        return _direct_returns(fn)
+
+    assert all(_returns_an_exit_code(v) for v in returns(good))
+    assert not any(_returns_an_exit_code(v) for v in returns(bad)), (
+        "`return wf, record` must not read as an exit code")
+
+    # the NON-DESCENDING half: a nested closure's return is not `main`'s return
+    nested = tmp_path / "build_nested_payload.py"
+    nested.write_text(
+        "def main(argv=None):\n"
+        "    def render(x):\n"
+        "        return x, x\n"
+        "    render(1)\n"
+        "    return 0\n", encoding="utf-8")
+    tree = ast.parse(nested.read_text(encoding="utf-8"))
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
+    assert [ast.unparse(v) for v in _direct_returns(fn)] == ["0"]
+    assert len([s for s in ast.walk(fn) if isinstance(s, ast.Return)]) == 2, (
+        "the descending walk sees the closure's return; that is the misattribution "
+        "SEAM 5 measured on make_skeleton_sheet.main")
+
+    # and the success-line clause: the prefix comes from the __main__ block, so a module
+    # that prints `BUILD_BAD_HALT_NOT` has no `BUILD_BAD_OK ` line and must be refused.
+    assert _exit_convention(str(good))[1] == "BUILD_GOOD"
+    assert _exit_convention(str(bad))[1] == "BUILD_BAD"
+    lit = [_leftmost_literal(n.args[0])
+           for n in ast.walk(ast.parse(bad.read_text(encoding="utf-8")))
+           if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+           and n.func.id == "print" and n.args]
+    assert not any(re.match(r"^BUILD_BAD_OK\s", l or "") for l in lit)
+    lit_good = [_leftmost_literal(n.args[0])
+                for n in ast.walk(ast.parse(good.read_text(encoding="utf-8")))
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "print" and n.args]
+    assert any(re.match(r"^BUILD_GOOD_OK\s", l or "") for l in lit_good)
 
 
 # -- 3b. the two ignore populations, DERIVED from the tree (F-0162b2ce) -------------------
