@@ -142,12 +142,39 @@ def _upload_records_are_resolved():
 
 # ------------------------------------------------------------------- gate assertions
 
+def _import_every_core_module():
+    """Import every `armature_core` module so a subclass walk sees all of them.
+
+    `__subclasses__()` only knows about classes whose module has been imported, so the
+    population depends on which tests ran first — measured: `test_gates.py` alone sees 12
+    andons, the full suite sees 29. A class-wide invariant checked against a population
+    that changes with collection order is not class-wide. `blender_scene` is the
+    deliberate exception everywhere in this suite: it imports bpy and cannot resolve under
+    a plain CPython.
+    """
+    import glob
+    import importlib
+    import warnings
+
+    for path in sorted(glob.glob(os.path.join(TOOLS, "armature_core", "*.py"))):
+        name = os.path.basename(path)[:-3]
+        if name.startswith("__") or name == "blender_scene":
+            continue
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                importlib.import_module("armature_core." + name)
+        except Exception:  # pragma: no cover - a module needing an absent dependency
+            pass
+
+
 def gate_failure_subclasses():
     """Every concrete `GateFailure` subclass, however deeply nested.
 
     Enumerated rather than listed, so a gate added later joins the checks automatically —
     the whole point of the class-wide invariant is that no new andon can opt out of it.
     """
+    _import_every_core_module()
     from armature_core.errors import GateFailure
 
     seen, out = set(), []

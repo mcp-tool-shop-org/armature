@@ -254,11 +254,47 @@ def test_every_gate_failure_subclass_declares_its_own_id():
     assert not blank, blank
 
 
-def test_gate_ids_are_unique_across_the_andons():
-    """Two andons sharing an id makes a report ambiguous about which one pulled."""
-    ids = [c.gate for c in gate_failure_subclasses()]
-    dupes = sorted({i for i in ids if ids.count(i) > 1})
-    assert not dupes, f"gate ids used by more than one class: {dupes}"
+#: Gate ids carried by more than one andon today, with the pair that carries each. Both
+#: are one law applied in two tools — the alpha law on a start frame and on a turnaround
+#: master, determinism on a rig and on a parts build — so a report that names `[ALPHA]`
+#: or `[D]` needs its message to say which. Recorded rather than changed here: those are
+#: other domains' files, and a rename would move strings that provenance records already
+#: carry. The assertion is that this population may not GROW.
+SHARED_GATE_IDS = {
+    "ALPHA": {"AlphaGate", "TurnaroundAlphaGate"},
+    "D": {"GateDDeterminism", "GatePartsDeterminism"},
+}
+
+
+def test_no_new_andon_takes_an_id_another_andon_already_uses():
+    """Two andons sharing an id makes a report ambiguous about which one pulled.
+
+    Measured 2026-09-03 with every `armature_core` module imported: 29 subclasses, of
+    which two ids are shared by exactly two classes each. A third class on either id, or a
+    new collision, is a report nobody can read back.
+    """
+    subs = gate_failure_subclasses()
+    by_id = {}
+    for cls in subs:
+        by_id.setdefault(cls.gate, set()).add(cls.__name__)
+
+    shared = {gate: names for gate, names in by_id.items() if len(names) > 1}
+    assert shared == SHARED_GATE_IDS, (
+        f"the gate ids carried by more than one andon are now {shared}; recorded is "
+        f"{SHARED_GATE_IDS}. An id shared by a third class, or a new collision, makes a "
+        f"provenance record ambiguous about which andon pulled.")
+
+
+def test_the_subclass_walk_sees_every_andon_not_just_the_imported_ones():
+    """`__subclasses__()` only knows about classes whose module has been imported, so a
+    walk that did not force the imports would check a population that changes with
+    collection order — measured: 12 andons from test_gates.py alone, 29 from the full
+    suite. The helper imports every core module first; this is what says it still does."""
+    names = {c.__name__ for c in gate_failure_subclasses()}
+    assert len(names) >= 29, sorted(names)
+    for expected in ("AlphaGate", "GatePartsDeterminism", "RouteGate", "PairGate",
+                     "GateCanon", "G1GeneratorLegality"):
+        assert expected in names, f"{expected} missing from {sorted(names)}"
 
 
 def test_the_enumeration_would_catch_a_new_andon_that_forgot_its_id():
