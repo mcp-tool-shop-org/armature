@@ -102,9 +102,10 @@ class ConventionError(ArmatureError):
     written down rather than left absent.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+    # WAVE-14 MERGE (coordinator, 2026-09-04): the explicit constructor this class carried on its branch is gone — the
+    # base `ArmatureError(message, evidence=None)` (core-gates, F-8393e66c root) stores what it is passed,
+    # and both raise sites pass a full dict, so nothing observable changes; a non-GateFailure that
+    # normalised to `{}` would have been a third rule where the family now has two (SEAM 8 §3, SEAM 10).
 
 
 # --------------------------------------------------------------------------- the pin

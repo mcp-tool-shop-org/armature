@@ -743,7 +743,7 @@ PROBE = _tw.dedent(
         "tightened_negative": (tightened_negative, "GateRigidArrival"),
         "allowlist_widened": (allowlist_widened, "AssemblyGate"),
         "empty_graph": (empty_graph, "AssemblyGate"),
-        "conv_module_tables_drifted": (conv_module_tables_drifted, "ArmatureError"),
+        "conv_module_tables_drifted": (conv_module_tables_drifted, "ConventionError"),  # WAVE-14 MERGE (coordinator, 2026-09-04): core-solvers re-classed the refusal (F-d0de0c2d)
         "png_zero_dimension": (png_zero_dimension, "PngWriteError"),
         "sitelist_inconsistent": (sitelist_inconsistent, "SiteListError"),
         "clipstats_bad_frame": (clipstats_bad_frame, "ClipStatsError"),

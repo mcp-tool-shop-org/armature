@@ -1018,14 +1018,9 @@ EVIDENCE_UNREADABLE_EXEMPT = set()
 #:     python -c "import sys;sys.path[:0]=['tests','tools'];import test_gates as G;\
 #:     print(len(G.evidence_dicts_missing('gate')[3]))"
 EVIDENCE_NO_EVIDENCE_ROUTED = {
-    "aapose.py:check_convention (ArmatureError)",
-    "aapose.py:draw_body (ArmatureError)",
-    "aapose.py:draw_hand (ArmatureError)",
-    "aapose.py:hand_frame (ArmatureError)",
-    "aapose.py:hand_stickwidth (ArmatureError)",
-    "aapose.py:mitten_hand (ArmatureError)",
-    "aapose.py:require_rig_map (ArmatureError)",
-    "aapose.py:stickwidth (ArmatureError)",
+    # WAVE-14 MERGE (coordinator, 2026-09-04): 8 routed entries left this set because they carry a receipt on the merged tree
+    # (core-solvers gave every `aapose.py` refusal `gate: None` + andon + clause, F-d0de0c2d/F-d59fab92);
+    # measured as `ROUTED - no_evidence`, deleted rather than commented.
     "binding.py:rigid_segment_weights (ArmatureError)",
     "joints.py:_limb_radius (LandmarkError)",
     "joints.py:snap_sites_to_balls (LandmarkError)",
@@ -1094,8 +1089,10 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # `shotspec`'s two new named refusals — the render-engine enum and the
     # `normal_angle_deg` domain (F-b543a535). The four measurement guards of F-13a144c2
     # raise from `parts.require_finite`, which this count already carries.
-    assert total == 303, (
-        f"{total} family raises in armature_core; 303 were measured on 2026-09-04 (wave 14). This is "
+    # WAVE-14 MERGE (coordinator, 2026-09-04): 303 (core-gates alone) → 307 on the merged tree — core-solvers' +4 (`assembly`,
+    # `startframe` ×2, `turnaround`) land here too. Re-measured, never summed (SEAM 8 §1 is the worked example).
+    assert total == 307, (
+        f"{total} family raises in armature_core; 307 were measured on 2026-09-04 (wave-14 merge). This is "
         f"the denominator every ratio below is quoted against — re-measure it deliberately")
 
 
@@ -1132,7 +1129,8 @@ def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_categor
     }
     # The census on the page, pinned `==` (wave 14, rule 4). Re-derive with the command
     # beside EVIDENCE_NO_EVIDENCE_ROUTED.
-    assert len(no_evidence) == 40, sorted(no_evidence)
+    # WAVE-14 MERGE (coordinator, 2026-09-04): 40 → 32, measured on the merged tree.
+    assert len(no_evidence) == 32, sorted(no_evidence)
 
 
 #: Modules of `armature_core` whose classes this census cannot INSTANTIATE on a rig with no

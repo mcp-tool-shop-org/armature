@@ -130,6 +130,9 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: its raise count, never on its bases, which is the whole reason `FramingError` and
 #: `WalkError` are policed at all.
 RECORDED_POPULATION = frozenset({
+    # WAVE-14 MERGE (coordinator, 2026-09-04): `aapose.ConventionError` (core-solvers, F-d0de0c2d) — the class landed, the
+    # name did not; measured `POLICED - RECORDED_POPULATION == ["ConventionError"]` on the merged tree.
+    "ConventionError",
     "CadenceGate", "PinnedCameraGate",
     "CropStripError", "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate",
     "PreviewWalkGate",
@@ -282,7 +285,9 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # handler classified a deliberate refusal exit 1 (unhandled crash) instead of exit 2.
     # Three raise sites plus the non-finite clause, so it crosses the two-site threshold
     # the derivation uses. MEASURED on this branch; the coordinator re-measures at merge.
-    assert len(POLICED) == 92, sorted(POLICED)
+    # WAVE-14 MERGE (coordinator, 2026-09-04): 91 → 92 on core-gates (`SubjectExtentError`) AND 91 → 92 on core-solvers
+    # (`ConventionError`) — two classes, one number twice; the merged tree measures 93 (SEAM 8 §2).
+    assert len(POLICED) == 93, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

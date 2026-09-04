@@ -219,9 +219,12 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         #                        module helper rather than a `gate_*` body, so they are
         #                        `parts` sites or outside this walk's population — the
         #                        same accounting the w12 note makes for `require_finite`.
-        "assembly": 20, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
+        # WAVE-14 MERGE (coordinator, 2026-09-04): core-solvers (F-594e1792, F-3bc3659d, F-c4cf355d) `assembly` 20 → 21,
+        #   `startframe` 19 → 21, `turnaround` 9 → 10 on the same tree as core-gates' +2 above; the
+        #   dict below is MEASURED on the merged tree, never composed.
+        "assembly": 21, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
         "gates": 23, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
-        "rig_gates": 17, "route_gates": 39, "startframe": 19, "turnaround": 9, "walk": 3,
+        "rig_gates": 17, "route_gates": 39, "startframe": 21, "turnaround": 10, "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
     # route_gates 34 -> 35 in the same wave; merged = 155 + 3 + 1 = 159, MEASURED on the merged tree.
@@ -230,7 +233,8 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # 159 + 2 + 7 = 168, MEASURED on the merged tree.
     # WAVE 14 (core-gates, 2026-09-04): gates +1, route_gates +1 -> 170, MEASURED on this
     # branch. The coordinator re-measures at the merge, as at waves 10 and 12.
-    assert sum(with_gates.values()) == 170
+    # WAVE-14 MERGE (coordinator, 2026-09-04): 170 (core-gates alone) → 174, MEASURED on the merged tree.
+    assert sum(with_gates.values()) == 174
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

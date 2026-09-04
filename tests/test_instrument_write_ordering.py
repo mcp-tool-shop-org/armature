@@ -287,6 +287,10 @@ def test_the_two_exemption_classes_do_not_absorb_each_other():
 # fail this file. Equality returns the moment the moves have landed; the growth direction —
 # the one that protects the property — is asserted today.
 REFUSALS_BELOW_THE_FIRST_WRITE = {
+    # WAVE-14 MERGE (coordinator, 2026-09-04): `make_rig_sheet`, `make_skeleton_sheet` (instruments, the two true strands) and
+    # `make_shotset_sheet` (instruments-measure) strand NOTHING on the merged tree — entries deleted, not
+    # edited; `gate_ink` MOVED above the write in `render_pose_sticks` (instruments-measure) and is not a
+    # read-back, so it leaves this table and enters nothing. SEAM 13 + SEAM 15.
     # WAVE-12 MERGE (coordinator, 2026-09-04): RE-DERIVED on the merged tree with this file's own
     # behavioural walk after the moves landed (instruments moved eleven tools' refusals above
     # `makedirs` — F-244b2ad5; the coordinator moved `render_pose_sticks` and `pack_pose_pack`).
@@ -299,7 +303,9 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     "author_walk": ["gate_a_arrival", "gate_glb_written", "gate_n_names", "pick_subject"],
     "extract_clip_frames": ["probe", "raise ClipReadError"],
     "fetch_run": ["download", "verify_downloads"],
-    "fetch_t2v_run": ["download", "gate_order_evidence", "order_evidence", "raise FetchHalt"],
+    # WAVE-14 MERGE (coordinator, 2026-09-04): `download` LEFT — `fetch_t2v_run.download` is now a call into
+    # `fetch_run.download` (builders, F-a3ba416b: one downloader across both fetchers); measured.
+    "fetch_t2v_run": ["gate_order_evidence", "order_evidence", "raise FetchHalt"],
     "fit_reference": ["raise FitReferenceError"],
     "lift_solve": ["gate_arrived", "gate_glb_written", "gate_n_names", "pick_subject"],
     "make_binding_sheet": ["render_arm"],
@@ -308,9 +314,6 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     "make_overlay_sheet": ["raise OverlaySheetError"],
     "make_parts_sheet": ["shoot"],
     "make_plate": ["raise ArmatureError"],
-    "make_rig_sheet": ["import_reference"],
-    "make_shotset_sheet": ["_refuse_across_elevations", "load_set", "raise ShotsetSheetError"],
-    "make_skeleton_sheet": ["gate_any_pivot_matched"],
     "make_test_armature": ["gate_glb_written"],
     "make_zoom_sheet": ["raise ZoomSheetError"],
     "measure_cascade_clip": ["raise ClipCountError"],
@@ -318,7 +321,7 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     "preview_glb": ["gate_previews_written"],
     "preview_walk": ["raise PreviewWalkGate"],
     "render_performer": ["gate_coverage", "raise RenderGate"],
-    "render_pose_sticks": ["gate_ink", "raise SticksGate"],
+    "render_pose_sticks": ["raise SticksGate"],
     "render_start_frame": ["gate_alpha", "gate_backdrop", "raise RenderGate"],
     "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop", "gate_whole", "raise RenderTurnaroundGate"],
     "rig_bake": ["gate_glb_written"],
@@ -399,26 +402,23 @@ READBACK_REASONS = {
 #:     import test_instrument_write_ordering as M;\
 #:     print(len(M.NOT_YET_MOVED))"
 NOT_YET_MOVED = {
-    "_refuse_across_elevations": "make_shotset_sheet refuses across elevations after `<out>/` exists",
+    # WAVE-14 MERGE (coordinator, 2026-09-04): six names left — the four `make_shotset_sheet` / `make_rig_sheet` / `make_skeleton_sheet`
+    # strands moved above their writes (instruments, instruments-measure) and `gate_ink` moved (instruments-measure).
     "build_pass": "rig_character's build pass refuses below the measure branch's makedirs (wave 13 read this family as an artefact of the walk's mutually-exclusive-branch handling; the walk is the operand, not the reason)",
     "export_rigged": "rig_character, same family as `build_pass`",
     "gate_a_arrival": "author_walk stages the walk and refuses after the run directory exists",
     "gate_alpha": "render_start_frame refuses on alpha after the first frame's directory exists",
-    "gate_any_pivot_matched": "make_skeleton_sheet:333 \u2014 one of the two TRUE strands wave 13 named; routed to instruments",
     "gate_arrived": "lift_solve, the author_walk shape one domain over",
     "gate_atlas_untouched": "rig_parts refuses on the atlas after the part GLBs are written",
     "gate_backdrop": "render_start_frame, same family as `gate_alpha`",
     "gate_coverage": "render_performer refuses on coverage after the render directory exists",
     "gate_d_determinism": "rig_character, same family as `build_pass`",
-    "gate_ink": "render_pose_sticks:202 \u2014 measures the IN-MEMORY canvas, not the written frames, so it is not the read-back this table claimed for two waves; routed to instruments-measure (F-5f2a7452)",
     "gate_n_names": "author_walk / lift_solve / rig_character",
     "gate_part_names": "rig_parts, same family as `gate_atlas_untouched`",
     "gate_set_distinct": "render_turnaround refuses on the view set after the out dir exists",
     "gate_view_alpha": "render_turnaround, same family as `gate_set_distinct`",
     "gate_view_crop": "render_turnaround, same family as `gate_set_distinct`",
     "gate_whole": "render_turnaround, same family as `gate_set_distinct`",
-    "import_reference": "make_rig_sheet:205 \u2014 the second TRUE strand wave 13 named; routed to instruments",
-    "load_set": "make_shotset_sheet loads the set after `<out>/` exists",
     "pick_subject": "author_walk / lift_solve pick the subject after the run directory exists",
     "probe": "extract_clip_frames probes the clip after the frame directory exists",
     "raise ArmatureError": "make_plate refuses inline below its first write",
@@ -429,7 +429,6 @@ NOT_YET_MOVED = {
     "raise PreviewWalkGate": "preview_walk refuses inline below its first write",
     "raise RenderGate": "render_performer / render_start_frame",
     "raise RenderTurnaroundGate": "render_turnaround, same family as `gate_set_distinct`",
-    "raise ShotsetSheetError": "make_shotset_sheet, same family as `load_set`",
     "render_arm": "make_binding_sheet renders the arm after `<out>/` exists",
     "shoot": "make_parts_sheet shoots after `<out>/` exists",
     "subject_box": "make_lift_sheet takes the subject box after `<out>/` exists",
@@ -578,11 +577,12 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     #     import test_instrument_write_ordering as M;\
     #     d=M.stranded_by_tool();print(len(d),sum(len(v) for v in d.values()),\
     #     M.stranded_site_count())"
-    assert len(derived) == 30, sorted(derived)
+    # WAVE-14 MERGE (coordinator, 2026-09-04): 30 / 58 / 72 → 27 / 51 / 69, MEASURED on the merged tree (never subtracted).
+    assert len(derived) == 27, sorted(derived)
     names = sum(len(v) for v in derived.values())
-    assert names == 58, sorted(derived.items())
+    assert names == 51, sorted(derived.items())
     sites = stranded_site_count(members)
-    assert sites == 72, (
+    assert sites == 69, (
         f"{sites} refusal SITES below a first write; 72 were measured on 2026-09-04 over "
         f"the full derived population, and the number falls as the moves land")
 
@@ -688,8 +688,9 @@ def test_the_read_back_table_is_read_and_says_what_it_means():
     #     python -c "import sys;sys.path[:0]=['tests','tools'];\
     #     import test_instrument_write_ordering as M;\
     #     print(len(M.READBACK_REASONS), len(M.NOT_YET_MOVED))"
+    # WAVE-14 MERGE (coordinator, 2026-09-04): 12 / 35 → 12 / 29, measured after the six names left.
     assert len(READBACK_REASONS) == 12, sorted(READBACK_REASONS)
-    assert len(NOT_YET_MOVED) == 35, (
+    assert len(NOT_YET_MOVED) == 29, (
         f"{len(NOT_YET_MOVED)} refusals still sit below a first write without reading it "
         f"back; 35 were measured on 2026-09-04 and the number may only fall — a move "
         f"deletes its entry in the commit that makes it")
@@ -809,9 +810,12 @@ def test_the_nine_tools_the_name_keyed_walk_could_not_see_are_in_the_population_
     # the stranded half names the four that still strand one. The entry is corrected in
     # place rather than deleted: "the walk could not see it" and "it strands a refusal" are
     # two different claims, and only the second one stopped being true.
-    joined = ["extract_clip_frames", "make_parts_sheet", "make_rig_sheet",
+    # WAVE-14 MERGE (coordinator, 2026-09-04): `make_rig_sheet` LEFT this list too — instruments split its argv clause into
+    # `require_reference_file` (F-4db23b72), a `require_` name the name-keyed walk sees; four remain.
+    joined = ["extract_clip_frames", "make_parts_sheet",
               "make_shotset_sheet", "preview_walk"]
-    strands_one_today = [n for n in joined if n != "make_shotset_sheet"]
+    # WAVE-14 MERGE (coordinator, 2026-09-04): `make_rig_sheet` stopped stranding too (instruments, F-4db23b72).
+    strands_one_today = [n for n in joined if n not in ("make_shotset_sheet", "make_rig_sheet")]
     pop = derive_population()
     for name in joined:
         assert name in pop, f"{name} is not in the derived population"

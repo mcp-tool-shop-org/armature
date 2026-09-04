@@ -15,5 +15,10 @@ prune docs
 prune site
 prune npm
 prune outputs
+# WAVE-14 MERGE (coordinator, 2026-09-04): this line keeps a STALE checked-out egg-info directory out of
+# the archive; it cannot remove `<name>.egg-info/SOURCES.txt` from an sdist, because setuptools regenerates
+# the egg-info metadata (PKG-INFO, SOURCES.txt, ...) into every sdist by design (measured by ci-packaging at
+# wave 13: the built tarball carries `tools/armature_studio.egg-info/SOURCES.txt`). That file is sdist
+# metadata, not a shipped source, and is expected there.
 recursive-exclude tools/armature_studio.egg-info *
 global-exclude *.pyc
