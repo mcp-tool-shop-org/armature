@@ -2,7 +2,8 @@
 """canon_gate — resolve, cover, spend-check. Nothing here submits.
 
     python tools/canon_gate.py resolve --subject PERFORMER
-    python tools/canon_gate.py check --subject PROBE --prompt "..." --roots tests/fixtures/canon
+    python tools/canon_gate.py --roots tests/fixtures/canon check --subject PROBE \
+        --prompt "..."
     python tools/canon_gate.py coverage --canon tests/fixtures/canon/probe.surfaces.json
     python tools/canon_gate.py spend --subject PERFORMER --no-canon --prompt "..."
 

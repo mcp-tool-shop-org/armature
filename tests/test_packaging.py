@@ -1677,3 +1677,236 @@ def test_a_name_return_is_judged_by_its_own_assignments_and_not_admitted_by_spel
     assert not _name_resolves_to_an_exit_code("code", nested)
     mixed = main_of("def main(argv=None):\n    code = run()\n    code = (a, b)\n    return code\n")
     assert not _name_resolves_to_an_exit_code("code", mixed)
+
+
+# ============================================================ wave 12, F-4150910d
+# An operator copies the invocation printed at the top of a tool, it halts, and the halt names
+# a problem the documented line gave no way to anticipate — on tools that author a spend.
+# Three sites, all measured in this worktree on 2026-09-04:
+#
+#   (1) `build_payload.py:4-6` documented three invocations and none carried `--subject`, so
+#       `add_spend_flags` made Gate CANON fire before anything was built:
+#       `--experiment=E03 --arm=B2 --out=<path>` printed
+#       "[CANON] no subject: a spend with no census id has no answer" and exited 2. All three
+#       documented lines halted.
+#   (2) `fetch_run.py:4` documented `[--arm=A1a]`, a flag no parser in the file declares —
+#       argparse printed "unrecognized arguments: --arm=A1a" and exited 2, the code this
+#       module's own convention reserves for "a gate refused", with no FETCH_RUN_HALT line for
+#       a wrapper to key on.
+#   (3) `canon_gate.py:5` documented `check --subject PROBE --prompt "..." --roots <dir>`, but
+#       `--roots` is declared on the TOP-LEVEL parser above `add_subparsers`, so it must
+#       precede the subcommand: "unrecognized arguments: --roots tests/fixtures/canon". The
+#       module's own later comment writes the correct order.
+#
+# The census below keys on BEHAVIOUR — "a flag this tool's argument reader accepts" — not on
+# the spelling `add_argument`: it resolves argparse declarations on every parser in the file,
+# resolves the `add_spend_flags(p)` helper ONE HOP into `armature_core/canon.py`, and reads the
+# hand-rolled `args["<key>"]` / `args.get("<key>")` form four sheets use instead of argparse.
+# Proven red on all three hidden spellings: an undeclared flag, a top-level flag written after
+# a subcommand, and a spend line with no `--subject` (which no "is it declared?" check can see,
+# because `--subject` IS declared — it is the flag's ABSENCE that halts).
+
+
+def _flag_readers():
+    """{tool name: (top-level flags, subparser flags, has_subparsers)}, derived from the tree.
+
+    Three readers are recognised, because three exist:
+      * `<parser>.add_argument("--x", …)` anywhere in the file;
+      * `armature_core.canon.add_spend_flags(<parser>)`, resolved one hop into the helper's
+        own `add_argument` calls — `canon_gate.py` declares `--no-canon` only through it;
+      * the hand-rolled `for token in argv: args[token[2:].partition("=")[0]] = …` loop, whose
+        accepted flags are the string keys it later subscripts. `make_sheet` and `analyze_p3`
+        accept `--run`/`--out` this way and declare no parser at all.
+    """
+    import ast
+
+    TOOLS_DIR = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+
+    helper = ast.parse(open(os.path.join(TOOLS_DIR, "armature_core", "canon.py"),
+                            encoding="utf-8").read())
+    spend_flags = set()
+    for fn in [n for n in ast.walk(helper)
+               if isinstance(n, ast.FunctionDef) and n.name == "add_spend_flags"]:
+        for node in ast.walk(fn):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "add_argument" and node.args
+                    and isinstance(node.args[0], ast.Constant)):
+                spend_flags.add(node.args[0].value)
+    assert "--subject" in spend_flags and "--no-canon" in spend_flags, spend_flags
+
+    out = {}
+    for name in sorted(os.listdir(TOOLS_DIR)):
+        if not name.endswith(".py"):
+            continue
+        tree = ast.parse(open(os.path.join(TOOLS_DIR, name), encoding="utf-8").read())
+        top, sub, has, topname = set(), set(), False, None
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "add_subparsers"
+                    and isinstance(node.func.value, ast.Name)):
+                has, topname = True, node.func.value.id
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if (node.func.attr == "add_argument" and node.args
+                        and isinstance(node.args[0], ast.Constant)
+                        and str(node.args[0].value).startswith("--")):
+                    owner = getattr(node.func.value, "id", None)
+                    (top if (owner == topname or not has) else sub).add(node.args[0].value)
+                if node.func.attr == "get" and node.args and isinstance(
+                        node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                    sub.add("--" + node.args[0].value) if has else top.add(
+                        "--" + node.args[0].value)
+            # the helper, one hop
+            if (isinstance(node, ast.Call)
+                    and getattr(node.func, "attr", getattr(node.func, "id", None))
+                    == "add_spend_flags"):
+                (sub if has else top).update(spend_flags)
+            # the hand-rolled loop's accepted keys
+            if (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
+                    and node.value.id == "args" and isinstance(node.slice, ast.Constant)
+                    and isinstance(node.slice.value, str)):
+                (sub if has else top).add("--" + node.slice.value)
+        out[name] = (top, sub, has)
+    return out
+
+
+def _usage_lines():
+    """{tool name: [documented invocation, ...]} — every `python tools/<self>.py …` line in
+    the tool's own module docstring."""
+    import ast
+
+    TOOLS_DIR = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+    pat = re.compile(r"^\s*python\s+tools[/\\](\w+)\.py\s*(.*)$")
+    out = {}
+    for name in sorted(os.listdir(TOOLS_DIR)):
+        if not name.endswith(".py"):
+            continue
+        doc = ast.get_docstring(
+            ast.parse(open(os.path.join(TOOLS_DIR, name), encoding="utf-8").read())) or ""
+        lines = [(m.group(2), line.strip()) for line, m in
+                 ((ln, pat.match(ln)) for ln in doc.splitlines())
+                 if m and m.group(1) + ".py" == name]
+        if lines:
+            out[name] = lines
+    return out
+
+
+def _authors_a_spend(name, rest):
+    """Does this documented invocation reach `canon_spend`?
+
+    A tool without subcommands that carries the spend flags authors one on every documented
+    line. `canon_gate` is the one subcommand tool in the population, and only its `spend`
+    subcommand is a spend — `resolve`, `check` and `coverage` create nothing and are not
+    refused for naming a subject without the census escape.
+    """
+    first = (rest.split() or [""])[0]
+    if name == "canon_gate.py":
+        return first == "spend"
+    return True
+
+
+def test_every_documented_flag_is_one_the_tool_ACCEPTS():
+    """(2). A documented flag no reader accepts makes the documented line exit 2 on argparse's
+    own usage error — the code this tree reserves for "a gate refused" — with no
+    `<PREFIX>_HALT` line for a wrapper to key on."""
+    readers = _flag_readers()
+    offenders = []
+    for name, lines in _usage_lines().items():
+        top, sub, _has = readers[name]
+        for rest, line in lines:
+            for flag in re.findall(r"(--[A-Za-z][\w-]*)", rest):
+                if flag not in (top | sub):
+                    offenders.append(f"{name}: {flag} in {line!r}")
+    assert offenders == [], offenders
+
+
+def test_a_top_level_flag_is_documented_BEFORE_the_subcommand():
+    """(3). argparse binds a flag declared above `add_subparsers` to the top-level parser, so
+    it must precede the subcommand token. The order is not cosmetic: it decides whether the
+    line runs."""
+    readers = _flag_readers()
+    offenders = []
+    for name, lines in _usage_lines().items():
+        top, sub, has = readers[name]
+        if not has:
+            continue
+        for rest, line in lines:
+            toks = rest.split()
+            cmd = next((t for t in toks
+                        if not t.startswith("-") and not t.startswith("<")), None)
+            if not cmd:
+                continue
+            after = rest.split(cmd, 1)[1]
+            for flag in re.findall(r"(--[A-Za-z][\w-]*)", after):
+                if flag in top and flag not in sub:
+                    offenders.append(
+                        f"{name}: {flag} is declared on the top-level parser and is written "
+                        f"after the `{cmd}` subcommand in {line!r}")
+    assert offenders == [], offenders
+
+
+def test_every_documented_line_of_a_SPEND_tool_names_a_subject():
+    """(1). The clause no "is it declared?" check can make: `--subject` IS declared on every
+    one of these tools — it is its ABSENCE from the documented line that halts, because
+    `canon_spend` refuses a spend with no census id before anything is built.
+
+    The population is derived by BEHAVIOUR — a tool that calls `add_spend_flags`, i.e. one
+    that arms Gate CANON — rather than by a name pattern like `build_*`.
+    """
+    import ast
+
+    TOOLS_DIR = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+    spenders = []
+    for name in sorted(os.listdir(TOOLS_DIR)):
+        if not name.endswith(".py"):
+            continue
+        tree = ast.parse(open(os.path.join(TOOLS_DIR, name), encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call)
+                    and getattr(node.func, "attr", getattr(node.func, "id", None))
+                    == "add_spend_flags"):
+                spenders.append(name)
+                break
+    assert len(spenders) >= 8, spenders          # size, then membership, then the property
+    assert "build_payload.py" in spenders and "canon_gate.py" in spenders, spenders
+
+    usage = _usage_lines()
+    offenders = []
+    for name in spenders:
+        for rest, line in usage.get(name, []):
+            if not _authors_a_spend(name, rest):
+                continue
+            if "--subject" not in rest:
+                offenders.append(f"{name}: {line!r} carries no --subject")
+    assert offenders == [], offenders
+
+
+def test_the_documented_subject_of_a_spend_line_matches_the_census_escape():
+    """`--no-canon` is refused on a subject that HAS a surfaces file (the checkbox trap), and
+    REQUIRED on one that does not. A documented line that names an identity-only subject
+    without the escape halts just as surely as one that names no subject at all."""
+    sys.path.insert(0, os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+    from armature_core import canon_census as CC
+
+    offenders = []
+    for name, lines in _usage_lines().items():
+        for rest, line in lines:
+            m = re.search(r"--subject[= ]([A-Z][A-Z0-9_]*)", rest)
+            if not m or not _authors_a_spend(name, rest):
+                continue
+            row = CC.CENSUS.get(m.group(1))
+            if row is None:
+                continue
+            identity_only = row.get("surfaces") is None
+            if identity_only and "--no-canon" not in rest:
+                offenders.append(
+                    f"{name}: {line!r} names {m.group(1)}, which the census carries as "
+                    f"identity-only, and omits --no-canon")
+            if not identity_only and "--no-canon" in rest:
+                offenders.append(
+                    f"{name}: {line!r} passes --no-canon on a subject that has surfaces")
+    assert offenders == [], offenders

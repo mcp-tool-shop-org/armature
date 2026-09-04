@@ -1,9 +1,18 @@
 #!/usr/bin/env python
 """build_payload — assemble a submission, with the gates that must fire first.
 
-    python tools/build_payload.py --experiment=E02 --arm=A1a --out=<payload.json>
-    python tools/build_payload.py --experiment=E03 --arm=B1  --out=<payload.json>
-    python tools/build_payload.py --experiment=E06 --arm=D1  --out=<payload.json>
+    python tools/build_payload.py --experiment=E02 --arm=A1a --out=<payload.json> \
+        --subject=BLACKGUARD --no-canon
+    python tools/build_payload.py --experiment=E03 --arm=B1  --out=<payload.json> \
+        --subject=WIRE --no-canon
+    python tools/build_payload.py --experiment=E06 --arm=D1  --out=<payload.json> \
+        --subject=WIRE --no-canon
+
+`--subject` is not decoration on these lines: `add_spend_flags` arms Gate CANON, which
+fires BEFORE the payload is built, and all three invocations halted without it —
+"[CANON] no subject: a spend with no census id has no answer", exit 2 (wave 12,
+F-4150910d). BLACKGUARD and WIRE are census rows with no ratified surfaces file, so
+`--no-canon` is the escape that row requires and it announces itself in the record.
 
 Emits ComfyUI **API format**. The bridge is the one ruled in `E02-halt-ruling.md`:
 33 x `LoadImage` -> `BatchImagesNode` -> `control_video`. There is no encoder anywhere in
@@ -696,6 +705,72 @@ def verify_topology(wf, arm, use_control, expects_reference=None, control_names=
     return True
 
 
+#: The record's suffix. A module constant so the census below and the tests can name the
+#: one place it is spelled, and so a caller can prove the collision clause fires.
+META_SUFFIX = ".meta.json"
+
+
+class PayloadOutHalt(GateFailure):
+    """The two artifacts this tool writes would not land at two distinct paths.
+
+    Wave 12, F-4f72af05. The meta path was `a.out.replace(".json", ".meta.json")` — a
+    substring rewrite of the WHOLE path, on a `--out` whose spelling argparse constrains in
+    no way. Measured twice in a worktree:
+
+    * `--out=<dir>/payload` (no extension): `replace` is a no-op, so the graph was written
+      and then OVERWRITTEN by the record at the same path. Exactly one file existed
+      afterwards, carrying the RECORD's keys, and stdout still ended `BUILD_PAYLOAD_OK {…
+      "out": ".../payload"}` with exit 0 — the file an operator points a submission step at
+      held the record, and the graph whose sha256 that record names reached no disk at all.
+    * `--out=<dir>/run.json.d/A.json`: `str.replace` rewrites EVERY occurrence, so the
+      record was aimed at `<dir>/run.meta.json.d/A.meta.json`, a directory that does not
+      exist. The graph was already on disk, the tool died `FileNotFoundError`, printed
+      `BUILD_PAYLOAD_HALT` with `evidence: null` and exited 1 — a partial write reported as
+      a crash.
+
+    The derivation is now the six siblings' (`os.path.splitext(out)[0] + <suffix>`:
+    `author_walk:655`, `lift_solve:345`, `make_ab_clip:181`, `make_crop_strip:244`,
+    `make_lift_sheet:283`, `make_pick_sheet:311`), which touches only the last component's
+    extension. **The andon is on the direction that derivation does not bound**: it cannot
+    rewrite a directory, but nothing in it forbids the two names COLLIDING, and a collision
+    is silent — one artifact replaces the other under a green OK line. So the equality is
+    checked, in the tool that performs the write, before either write and before
+    `os.makedirs`, so a refusal leaves no output directory.
+    """
+
+    gate = "OUT"
+
+
+def gate_out_paths(out, meta_suffix=None):
+    """`(graph_path, record_path)` for `--out`, or raise saying why there is only one.
+
+    Called before `os.makedirs`: a refuse must leave no output directory, the invariant
+    this file already states for Gate CANON.
+    """
+    suffix = META_SUFFIX if meta_suffix is None else meta_suffix
+    graph = os.path.abspath(out)
+    meta = os.path.splitext(graph)[0] + suffix
+    ev = {"gate": "OUT", "andon": "PayloadOutHalt", "clause": "meta_path_equals_graph_path",
+          "out": graph, "meta": meta, "meta_suffix": suffix,
+          "derived_by": "os.path.splitext(out)[0] + META_SUFFIX"}
+    if meta == graph:
+        raise PayloadOutHalt(
+            f"the graph and its record would both be written to {graph!r}: the second "
+            f"write would overwrite the first and the file --out names would hold the "
+            f"RECORD, while the graph whose payload_sha256 that record states reached no "
+            f"disk anywhere. Give --out a name whose stem plus {suffix!r} is a different "
+            f"path", ev)
+    if os.path.dirname(meta) != os.path.dirname(graph):
+        raise PayloadOutHalt(
+            f"the record would be written to {meta!r}, which is not the directory the "
+            f"graph goes to ({os.path.dirname(graph)!r}). The two artifacts of one build "
+            f"belong beside each other",
+            dict(ev, clause="meta_leaves_the_graphs_directory"))
+    ev["verdict"] = (f"the graph and its record are two distinct paths in one directory: "
+                     f"{os.path.basename(graph)} and {os.path.basename(meta)}")
+    return graph, meta, ev
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--experiment", default="E02", choices=sorted(EXPERIMENTS))
@@ -710,6 +785,10 @@ def main(argv=None):
                          "experiment's committed list")
     add_spend_flags(ap)
     a = ap.parse_args(argv)
+
+    # ---- Gate OUT · ANDON, before Gate CANON's own "leaves no output directory" clause
+    # and before anything is created. The two artifacts of one build are two paths.
+    gpath, mpath, gate_out = gate_out_paths(a.out)
 
     cfg = EXPERIMENTS[a.experiment]
     arm_cfg = cfg["arms"][a.arm]
@@ -733,10 +812,11 @@ def main(argv=None):
     # router checked is the text the payload carries.
     gate_canon_ships_what_it_gated(positive, meta.get("positive"))
     meta["gate_CANON"] = canon_ev
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    with open(a.out, "w", encoding="utf-8") as fh:
+    meta["gate_OUT"] = gate_out
+    os.makedirs(os.path.dirname(gpath), exist_ok=True)
+    with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=1)
-    with open(a.out.replace(".json", ".meta.json"), "w", encoding="utf-8") as fh:
+    with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2)
     print(canon_line(canon_ev))
     # The SUCCESS half of the exit convention (wave 10). The failure half already agrees
@@ -749,7 +829,7 @@ def main(argv=None):
         "reference": meta["reference_image"],
         "control_distinct_images": (
             meta["control"]["distinct_images"] if isinstance(meta["control"], dict) else None),
-        "sha256": meta["payload_sha256"][:16], "out": a.out}))
+        "sha256": meta["payload_sha256"][:16], "out": gpath, "record": mpath}))
     return 0
 
 

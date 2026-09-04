@@ -605,3 +605,132 @@ def test_the_success_line_is_the_halt_sentinels_prefix_with_OK(tmp_path, capsys)
     out = capsys.readouterr().out
     assert len([ln for ln in out.splitlines()
                 if ln.startswith("BUILD_PAYLOAD_OK ")]) == 1
+
+
+# ---------------------------------------------------------------- wave 12, F-4f72af05
+# The meta path was `a.out.replace(".json", ".meta.json")` — a substring rewrite of the
+# WHOLE path, on a `--out` whose spelling argparse constrains in no way. Two measured
+# consequences, both under exit 0 or a partial write:
+#
+#   (a) `--out=<dir>/payload` (no extension): `replace` is a no-op, so the graph is written
+#       and then OVERWRITTEN by the meta at the same path. One file existed afterwards; its
+#       top-level keys were the RECORD's, and stdout still ended
+#       `BUILD_PAYLOAD_OK {... "out": ".../payload"}` with exit 0. The file an operator
+#       points a submission step at holds the record, and the graph whose sha256 that record
+#       names reached no disk anywhere.
+#   (b) `--out=<dir>/run.json.d/A.json`: `str.replace` rewrites EVERY occurrence, so the meta
+#       was aimed at `<dir>/run.meta.json.d/A.meta.json` — a directory that does not exist.
+#       The graph was already on disk, the tool died `FileNotFoundError`, printed
+#       BUILD_PAYLOAD_HALT with `evidence: null` and exited 1: a partial write reported as a
+#       crash.
+#
+# family: keyed on the SECOND-ARTIFACT path derivation (a sidecar path computed from an
+# `--out`), via grep over `tools/*.py` for `splitext(<out>)[0] + <suffix>` and
+# `<out>.replace(` → 7 sites: author_walk.py:655, lift_solve.py:345, make_ab_clip.py:181,
+# make_crop_strip.py:244, make_lift_sheet.py:283, make_pick_sheet.py:311 all derive from the
+# STEM; build_payload.py:739 was the only `str.replace`. The sibling's implementation is
+# carried, not a seventh spelling.
+
+
+def _e03_argv(out):
+    return ["--experiment=E03", "--arm=B1", f"--out={out}", "--subject=BLACKGUARD",
+            "--no-canon"]
+
+
+def test_an_out_with_no_json_suffix_writes_TWO_files_and_the_graph_is_the_graph(tmp_path):
+    """(a). The graph and its record are two artifacts and must land at two paths."""
+    out = tmp_path / "p" / "payload"
+    assert bp.main(_e03_argv(out)) == 0
+
+    with open(out, encoding="utf-8") as fh:
+        graph = json.load(fh)
+    assert all("class_type" in n for n in graph.values()), (
+        f"the file --out names holds {sorted(graph)[:6]}, not an API graph")
+    assert "payload_sha256" not in graph, "the RECORD was written over the graph"
+
+    meta = tmp_path / "p" / "payload.meta.json"
+    assert meta.is_file(), sorted(os.listdir(tmp_path / "p"))
+    with open(meta, encoding="utf-8") as fh:
+        rec = json.load(fh)
+    assert rec["payload_sha256"] and rec["arm"] == "B1"
+
+
+def test_a_directory_named_like_the_suffix_does_not_move_the_meta_out_of_the_run(tmp_path):
+    """(b). `str.replace` rewrote the DIRECTORY component too. The stem operation cannot:
+    only the extension of the last component is replaced."""
+    out = tmp_path / "run.json.d" / "A.json"
+    assert bp.main(_e03_argv(out)) == 0
+    assert (tmp_path / "run.json.d" / "A.meta.json").is_file(), sorted(
+        p.name for p in (tmp_path / "run.json.d").iterdir())
+    assert not (tmp_path / "run.meta.json.d").exists()
+
+
+def test_the_two_artifacts_never_share_a_path_and_the_gate_says_so(tmp_path):
+    """The andon on the direction the derivation does not bound: if the two names ever
+    collide, one artifact silently replaces the other under a green OK line. The gate fires
+    BEFORE either write and before `os.makedirs`, so a refusal leaves no run directory —
+    the invariant `build_payload` already states for Gate CANON."""
+    out = tmp_path / "fresh" / "payload.json"
+    with pytest.raises(bp.PayloadOutHalt,
+                       match=r"the graph and its record would both be written to") as exc:
+        bp.gate_out_paths(str(out), meta_suffix=".json")
+    assert exc.value.evidence["out"] == exc.value.evidence["meta"]
+    assert exc.value.evidence["clause"] == "meta_path_equals_graph_path"
+    assert not out.parent.exists()
+
+
+def test_the_gate_is_reachable_from_main_and_leaves_no_directory(tmp_path, monkeypatch):
+    """The gate lives inside the tool that performs the write, not beside it."""
+    monkeypatch.setattr(bp, "META_SUFFIX", ".json")
+    out = tmp_path / "fresh" / "payload.json"
+    with pytest.raises(bp.PayloadOutHalt,
+                       match=r"the graph and its record would both be written to"):
+        bp.main(_e03_argv(out))
+    assert not out.parent.exists()
+
+
+def test_no_builder_derives_a_sidecar_path_by_whole_path_substring():
+    """The family census. Keyed on BEHAVIOUR — can this expression rewrite a DIRECTORY
+    component? — rather than on a spelling or a file list: every `str.replace(<".ext">,
+    <"...json">)` in `tools/**` is collected by AST, and the ones nested inside an
+    `os.path.join(...)` call are exempt because they operate on a path COMPONENT that has
+    no directory to rewrite. The exemption is re-derived from the tree on every run and
+    reported, never typed.
+
+    Red on today's `build_payload.py:739`, and NOT red on `make_shotset_sheet.py:232`
+    (`os.path.join(out_dir, filename.replace(".png", "-panels.json"))`, a basename) — which
+    is the discrimination this census exists to make.
+    """
+    import ast
+
+    TOOLS_DIR = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+    offenders, exempt = [], []
+    for name in sorted(os.listdir(TOOLS_DIR)):
+        if not name.endswith(".py"):
+            continue
+        tree = ast.parse(open(os.path.join(TOOLS_DIR, name), encoding="utf-8").read())
+        # The components: every `replace` call that is an ARGUMENT to os.path.join.
+        joined = set()
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "join"):
+                for arg in node.args:
+                    for sub in ast.walk(arg):
+                        joined.add(id(sub))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "replace" and len(node.args) == 2
+                    and all(isinstance(x, ast.Constant) and isinstance(x.value, str)
+                            for x in node.args)
+                    and node.args[0].value.startswith(".")
+                    and node.args[1].value.endswith(".json")):
+                (exempt if id(node) in joined else offenders).append(
+                    f"{name}:{node.lineno}")
+    assert offenders == [], (
+        f"{offenders} derive a sidecar path by rewriting every occurrence of an extension "
+        f"in a whole PATH; the six siblings use os.path.splitext(out)[0] + <suffix>. "
+        f"Path COMPONENTS exempted this run: {exempt}")
+    assert exempt == ["make_shotset_sheet.py:232"], (
+        f"the exemption set moved: {exempt}. Each member must be a `replace` whose result "
+        f"is joined into a directory, so it cannot rewrite a directory component.")

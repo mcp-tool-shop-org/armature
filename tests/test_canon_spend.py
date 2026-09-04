@@ -545,6 +545,23 @@ def _banked_negative(tmp_path):
 STUB_IDENTITY = "a jointed clay mannequin"
 
 
+def _authored_png(path, size):
+    """A real PNG at a route's own frame, written by the repo's dependency-free writer.
+
+    Wave 12, F-08853dfb. Two fixtures below wrote 26 bytes of ASCII and an 8-byte PNG
+    signature followed by prose, standing in for the entire image conditioning of an i2v
+    route — the shape `resolve_start_frame` now refuses, because a record that asserts how
+    the frame FITS the generation while carrying no measurement of the file is a claim, not
+    a measurement.
+    """
+    import numpy as np
+
+    from armature_core import pngio
+
+    pngio.write_png(str(path), np.zeros((size[1], size[0], 3), dtype="uint8"))
+    return path
+
+
 def test_build_i2v_records_the_canon_verdict(tmp_path, monkeypatch):
     import build_animate_payload as E08
     import build_i2v_payload as bi
@@ -566,7 +583,9 @@ def test_build_i2v_records_the_canon_verdict(tmp_path, monkeypatch):
     # Wave 10 (F-531c5f1f): the start frame is this route's whole image conditioning, and
     # the tool hashes it, so the fixture supplies a real file rather than a typed digest.
     start = tmp_path / "start.png"
-    start.write_bytes(b"authored-start-frame-bytes")
+    # Wave 12 (F-08853dfb): `resolve_start_frame` refuses a file whose IHDR it cannot
+    # read, so the fixture is a real PNG at the route's own frame.
+    _authored_png(start, (bi.WIDTH, bi.HEIGHT))
     _, printed = _capture(bi.main, [f"--uploads={up}", f"--out={out}",
                                     f"--negative-source={neg}", f"--e08-record={e08}",
                                     f"--start-frame={start}",
@@ -592,7 +611,7 @@ def test_build_camera_i2v_records_the_canon_verdict(tmp_path, monkeypatch):
     w1.write_text(json.dumps(w1_record()), encoding="utf-8")
     # The one load-bearing control input, hashed from the artifact by the tool.
     start = tmp_path / "w3_start.png"
-    start.write_bytes(b"\x89PNG\r\n\x1a\n" + b"a re-authored start frame")
+    _authored_png(start, (bc.WIDTH, bc.HEIGHT))
     out = tmp_path / "e12"
     registry = os.path.join(os.path.dirname(TOOLS), "specs", "E12-seeds.json")
     _, printed = _capture(bc.main, [f"--uploads={up}", f"--out={out}",

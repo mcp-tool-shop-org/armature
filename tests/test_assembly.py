@@ -23,6 +23,7 @@ import pytest
 
 import build_assembly_payload as B
 from armature_core import assembly as AS
+from armature_core import route_gates as RG
 from conftest import TOOLS
 
 
@@ -54,11 +55,22 @@ def _names(n):
     return [f"{i:064x}.png" for i in range(n)]
 
 
-def _graph(n=81, **kw):
+#: The default frame count for every fixture that goes through `B.build`.
+#:
+#: Wave 12, F-133f2bdc: it was 81 — the exact flat chain S03 watched pass pre-flight and die
+#: at execution, and the shape `gate_flat_slot_ceiling` exists to refuse. The gate now lives
+#: inside `build`, so the builder's own tests may not be built on a graph the builder
+#: refuses. It is read from the tool's measured constant rather than typed, so the day
+#: someone measures where the boundary between 8 and 81 actually is, these fixtures move
+#: with it.
+N = B.MEASURED_FLAT_SLOT_MAX
+
+
+def _graph(n=N, **kw):
     return B.build(_names(n), **kw)
 
 
-def _srcs(n=81):
+def _srcs(n=N):
     """The builder's own per-frame LoadImage node ids, in frame order.
 
     `gate_batch_topology` requires these: without them it could relate no slot to any
@@ -76,8 +88,8 @@ def test_the_built_chain_passes_both_clauses():
     ev = AS.gate_no_paid_nodes(wf)
     assert set(ev["classes"]) == set(AS.ALLOWED_CLASSES)
     assert ev["name_pattern_flagged"] == []
-    assert AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                               expected_sources=_srcs(81))["verdict"]
+    assert AS.gate_batch_topology(wf, N, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(N))["verdict"]
 
 
 def test_a_partner_node_in_the_graph_raises():
@@ -178,28 +190,31 @@ def test_the_bare_images_list_dry_run_validated():
 
 
 def test_a_short_batch_raises():
-    """40 frames where 81 were uploaded: a shorter video, and nothing else notices."""
-    wf = _graph(81)
+    """Half the frames where all of them were uploaded: a shorter video, and nothing else
+    notices. Stated at 81 when this was written; the clause is about the DIFFERENCE, and the
+    fixture is at `N` because the builder refuses to emit 81 slots (wave 12, F-133f2bdc)."""
+    half = N // 2
+    wf = _graph(N)
     bi = wf[str(B.BATCH_ID)]["inputs"]
-    for i in range(40, 81):
+    for i in range(half, N):
         del bi[f"images.image{i}"]
     with pytest.raises(AS.AssemblyGate) as exc:
-        AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                               expected_sources=_srcs(81))
-    assert "40 key(s), expected 81" in str(exc.value)
+        AS.gate_batch_topology(wf, N, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(N))
+    assert f"{half} key(s), expected {N}" in str(exc.value)
 
 
 def test_a_link_bound_twice_raises_even_though_the_count_is_right():
     """The clause a count alone cannot make. 81 slots, 80 distinct sources: the video is
     81 frames long, the batch gate that counts images is satisfied, and one frame of the
     performance is silently doubled while another is gone."""
-    wf = _graph(81)
-    wf[str(B.BATCH_ID)]["inputs"]["images.image80"] = [str(B.FIRST_IMAGE_ID), 0]
+    wf = _graph(N)
+    wf[str(B.BATCH_ID)]["inputs"][f"images.image{N - 1}"] = [str(B.FIRST_IMAGE_ID), 0]
     with pytest.raises(AS.AssemblyGate) as exc:
-        AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                               expected_sources=_srcs(81))
+        AS.gate_batch_topology(wf, N, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=_srcs(N))
     assert "distinct LoadImage node(s)" in str(exc.value)
-    assert exc.value.evidence["distinct_sources"] == 80
+    assert exc.value.evidence["distinct_sources"] == N - 1
 
 
 def test_create_video_fed_from_somewhere_other_than_the_batch_raises():
@@ -807,3 +822,174 @@ def test_the_png_case_rule_is_the_same_one_its_consumers_use():
     for name, line in (("encode_control.py", 126), ("invert_frames.py", 70)):
         src = open(os.path.join(TOOLS, name), encoding="utf-8").read().splitlines()
         assert ".lower()" in src[line - 1], f"{name}:{line} no longer lower-cases"
+
+
+# ============================================================ wave 12, F-133f2bdc
+# `gate_flat_slot_ceiling` was called in `build_and_write`, not in `build()` — the function
+# that EMITS the BatchImagesNode — while the sibling gate in the same file,
+# `gate_create_video_fps`, sits inside `build()` under the comment "The gate lives inside the
+# function that emits the node, so an in-process caller cannot route around it the way a
+# check in `main` would allow". The ceiling gate's own docstring claimed the stronger
+# placement: "it is checked here, in the tool that authors the graph, before any submission".
+#
+# Measured in this worktree before the fix: `build(["%064x.png" % i for i in range(81)])`
+# returned an 84-node graph whose node 400 carried 81 `images.image*` slots and raised
+# nothing, while `gate_flat_slot_ceiling(wf, BATCH_ID)` on that same graph raised
+# AssemblyGate. The suite's own default fixture was that shape — `_graph(n=81)` — so the
+# builder's tests exercised a graph the builder refuses, which is why the four call sites
+# below are re-based on the measured maximum.
+#
+# family: keyed on BEHAVIOUR — "a gate whose subject is a node this function emits" — by
+# reading each gate call in this module against the function that writes the node it judges
+# -> 2 sites: `gate_create_video_fps` (already inside `build`) and `gate_flat_slot_ceiling`
+# (moved). The cascade builder's `AS.gate_slot_ceiling` judges the GROUP plan, which
+# `build` takes as an argument rather than emitting, and stays where it is.
+
+
+def test_build_itself_refuses_the_81_slot_flat_chain_S03_falsified():
+    """The whole finding: an in-process caller received the exact shape S03 watched pass
+    pre-flight and die at execution, from the builder that carries a gate against it."""
+    with pytest.raises(AS.AssemblyGate, match=r"largest flat batch anyone has SEEN EXECUTE"):
+        B.build(_names(81))
+
+
+def test_the_ceiling_gate_is_the_LAST_thing_build_does_so_the_graph_is_complete():
+    """Placed before the return rather than before the loop: the gate reads the emitted
+    node, so it must run after the node exists — and it must still run before any caller
+    can take the graph."""
+    wf = B.build(_names(B.MEASURED_FLAT_SLOT_MAX))
+    slots = [k for k in wf[str(B.BATCH_ID)]["inputs"] if k.startswith("images.image")]
+    assert len(slots) == B.MEASURED_FLAT_SLOT_MAX
+
+
+def test_the_record_still_carries_the_ceiling_evidence(tmp_path):
+    """`build_and_write` re-runs the gate for the RECORD — the pattern
+    `gate_create_video_fps` already uses — so the receipt states the contract that was
+    checked rather than asserting a number nothing read."""
+    # 5, not 8: Gate ROUTE's frame-legality clause requires a length of the form 4n+1, and
+    # the write path runs it. The ceiling is still the number the RECORD is checked against.
+    n = 5
+    assert n <= B.MEASURED_FLAT_SLOT_MAX
+    uploads = {f"{i:05d}.png": f"{i:064x}.png" for i in range(n)}
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps(uploads), encoding="utf-8")
+    out = tmp_path / "run"
+    B.build_and_write(["--uploads", str(up), "--out", str(out)])
+    rec = json.loads((out / "S03-assembly-payload-record.json").read_text(encoding="utf-8"))
+    ev = rec["gates"]["FLAT_SLOT_CEILING"]
+    assert ev["slots"] == n and ev["measured_max"] == B.MEASURED_FLAT_SLOT_MAX
+    assert ev["boundary_located"] is False
+
+
+def test_the_write_path_refuses_an_81_frame_upload_map_and_leaves_no_directory(tmp_path):
+    """The gate moved INTO `build`, so the refusal now happens above `os.makedirs` on the
+    write path too."""
+    uploads = {f"{i:05d}.png": f"{i:064x}.png" for i in range(81)}
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps(uploads), encoding="utf-8")
+    out = tmp_path / "fresh" / "run"
+    with pytest.raises(AS.AssemblyGate, match=r"largest flat batch anyone has SEEN EXECUTE"):
+        B.build_and_write(["--uploads", str(up), "--out", str(out)])
+    assert not out.exists() and not out.parent.exists()
+
+
+def test_every_gate_this_module_calls_on_a_node_build_emits_is_called_INSIDE_build():
+    """The census, keyed on the AST: for each gate call in this module, which function is
+    it in, and does the graph it judges come from `build`? Red on today's tree, where
+    `gate_flat_slot_ceiling` is called only from `build_and_write`."""
+    import ast
+
+    from conftest import TOOLS
+
+    tree = ast.parse(open(os.path.join(TOOLS, "build_assembly_payload.py"),
+                          encoding="utf-8").read())
+    inside = {}
+    for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                inside.setdefault(node.func.id, set()).add(fn.name)
+    for gate in ("gate_create_video_fps", "gate_flat_slot_ceiling"):
+        assert "build" in inside.get(gate, set()), (
+            f"{gate} judges a node `build` emits and is called only from "
+            f"{sorted(inside.get(gate, set()))}; an in-process caller routes around it")
+
+
+# ============================================================ wave 12, F-60a1222b
+# Both textless assemblers expressed "this graph has no sampler" with the UNCHECKED flag
+# `require_pinned_seeds=False`, while `route_gates` grew `carries_no_sampler=True` as the
+# CHECKED form of that exact sentence — which their own comments write in the checked form's
+# words ("this graph has no noise-bearing node at all, so the seed clause has nothing to
+# decide"). Measured in this worktree on the flat graph at a legal 5 frames with a
+# KSamplerAdvanced spliced in as node 900: the builders' verbatim call returned GREEN with
+# `seed_clause_verdict: "NOT CHECKED"`, while `RG.verify(same graph, carries_no_sampler=True,
+# ...)` raises "the caller asserted this graph carries no sampler and it carries 1
+# seed-bearing node(s) ... The assertion is checked, not obeyed". The flag also skipped
+# `unrecorded_seed_sources` entirely: a node classed `SomeUnknownSamplerApi` rode the same
+# call green with no `unrecorded_seed_sources` key in the evidence at all.
+#
+# REFUTED half, and recorded as refuted: no sampler can reach that call on either builder
+# today, because `AS.gate_no_paid_nodes` runs first in both and its allowlist is closed. So
+# the direction was bounded — but by a NEIGHBOURING module's allowlist rather than by the
+# clause whose comment claims it, and a widening of ALLOWED_CLASSES silently un-blocked it.
+#
+# family: keyed on the CALL — every `RG.verify(...)` in this domain passing
+# `require_pinned_seeds=False` — by grep over tools/build_*.py -> 2 sites
+# (build_assembly_payload, build_cascade_payload). `verify` refuses the two keywords
+# together, so it is a swap, not an addition.
+
+
+def _with_a_sampler(wf):
+    wf = dict(wf)
+    wf["900"] = {"class_type": "KSamplerAdvanced",
+                 "inputs": {"noise_seed": 7, "add_noise": "enable",
+                            "control_after_generate": "fixed"}}
+    return wf
+
+
+def test_the_seed_clause_is_CHECKED_and_the_record_says_so(tmp_path):
+    n = 5
+    uploads = {f"{i:05d}.png": f"{i:064x}.png" for i in range(n)}
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps(uploads), encoding="utf-8")
+    out = tmp_path / "run"
+    B.build_and_write(["--uploads", str(up), "--out", str(out)])
+    rec = json.loads((out / "S03-assembly-payload-record.json").read_text(encoding="utf-8"))
+    route = rec["gates"]["ROUTE"]
+    assert route["seed_clause_verdict"].startswith("CHECKED"), route["seed_clause_verdict"]
+    assert "NOT CHECKED" not in route["verdict"]
+    assert "unrecorded_seed_sources" in route, (
+        "the unrecorded-seed-source andon does not run under require_pinned_seeds=False")
+
+
+def test_the_route_call_refuses_a_spliced_sampler_ON_ITS_OWN(tmp_path):
+    """Independently of `gate_no_paid_nodes`, which is what bounded this direction before —
+    a neighbouring module's allowlist, one widening away from un-blocking it."""
+    wf = _with_a_sampler(B.build(_names(5)))
+    with pytest.raises(RG.RouteGate, match=r"asserted this graph carries no sampler"):
+        RG.verify(wf, family="wan", carries_no_sampler=True, frame=(B.WIDTH, B.HEIGHT, 5))
+
+
+def test_no_builder_in_this_domain_still_says_NOT_CHECKED_where_it_means_no_sampler():
+    """The family census, keyed on the CALL rather than on a comment: any `verify(...)`
+    passing `require_pinned_seeds=False` in a builder is the unchecked spelling of a
+    checkable claim."""
+    import ast
+
+    from conftest import TOOLS
+
+    offenders = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not (name.startswith("build_") and name.endswith(".py")):
+            continue
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for kw in node.keywords:
+                if (kw.arg == "require_pinned_seeds"
+                        and isinstance(kw.value, ast.Constant)
+                        and kw.value.value is False):
+                    offenders.append(f"{name}:{node.lineno}")
+    assert offenders == [], (
+        f"{offenders} tell Gate ROUTE nobody looked, where what they mean is that the "
+        f"graph carries no sampler — which `carries_no_sampler=True` states AND checks")

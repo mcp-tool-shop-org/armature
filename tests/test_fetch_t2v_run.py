@@ -168,7 +168,7 @@ def _run_main(tmp_path, monkeypatch, ev):
         for j in jobs:
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             with open(j["out"], "wb") as fh:
-                fh.write(b"\x89PNG\r\n")
+                fh.write(T.PNG_SIGNATURE)
 
     monkeypatch.setattr(T, "download", fake_download)
     monkeypatch.setattr(T, "order_evidence", lambda out: ev)
@@ -244,7 +244,7 @@ def _writer(skip=(), monkeypatch=None):
                 continue
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             with open(j["out"], "wb") as fh:
-                fh.write(b"\x89PNG\r\n")
+                fh.write(T.PNG_SIGNATURE)
     return fake_download
 
 
@@ -402,3 +402,168 @@ def test_both_fetchers_sweep_the_run_root_through_the_one_andon():
         assert "root" in kwargs, f"{name} sweeps no run root"
         assert "directories" in kwargs, f"{name} sweeps no mapped directory"
     assert T.verify_downloads is F.verify_downloads
+
+
+# ============================================================ wave 12, F-4421d98f
+# An operator pastes a get_output dump for a job that has returned nothing yet. `download`
+# computed `tmp = os.path.join(os.path.dirname(jobs[0]["out"]), "_urls.json")` with no
+# clause on `jobs` being non-empty, and `main` created `--out` and wrote
+# `download_manifest.json` before calling it. Measured in this worktree with
+# `{"results": []}`: `IndexError: list index out of range`, and `run/` left on disk holding
+# `download_manifest.json` — a half-built run directory a later session reads as a run that
+# happened, contradicting the invariant five other builders in this domain state and enforce
+# ("a refuse leaves no output directory"), under a halt line carrying `error: "IndexError"`
+# and `evidence: null` where this file's own FetchHalt clauses carry a gate id and a
+# measurement. `fetch_run` had the same blind spot one step later: the same empty dump raised
+# `FileNotFoundError` on `urls.json`, because the loop that creates the directories never ran.
+#
+# family: keyed on BEHAVIOUR — a planner that returns without refusing an EMPTY population,
+# whose caller then writes — via a read of both fetchers' `plan`/`main` pairs -> 2 sites,
+# both fixed here (fetch_t2v_run.plan and fetch_run.plan), one clause each, same words.
+
+
+def test_an_empty_results_array_is_REFUSED_BY_NAME(tmp_path):
+    with pytest.raises(T.FetchHalt, match=r"carries no results") as exc:
+        T.plan([], str(tmp_path / "run"))
+    assert exc.value.evidence["clause"] == "empty_results"
+    assert exc.value.evidence["n_results"] == 0
+
+
+def test_an_empty_dump_leaves_NO_run_directory(tmp_path):
+    """The invariant this file's siblings state: a refuse leaves no output directory. It
+    used to leave one holding `download_manifest.json`, and to halt with an IndexError."""
+    dump = tmp_path / "dump.json"
+    dump.write_text(json.dumps({"results": []}), encoding="utf-8")
+    run = tmp_path / "run"
+    with pytest.raises(T.FetchHalt, match=r"carries no results") as exc:
+        T.main([f"--dump={dump}", f"--out={run}"])
+    assert exc.value.evidence["dump"] == os.path.abspath(str(dump))
+    assert not run.exists(), sorted(p.name for p in run.iterdir())
+
+
+# ============================================================ wave 12, F-8ccedf71
+# `os.remove(tmp)` sat AFTER the `if proc.returncode != 0: raise FetchHalt(...)` block rather
+# than in a `finally`, so a halt on a non-zero downloader left `_urls.json` — every result
+# URL the operator pasted, signed download links included — in the run directory, where this
+# tool's own root sweep does not call it a stray (`root_suffixes` is VIDEO_SUFFIXES only) and
+# nothing later removes it. The sibling `fetch_run` writes its manifest as the DURABLE
+# `urls.json` by design and keeps it deliberately; this file's `_urls.json` is a temporary
+# whose deletion is the intended behaviour on every path.
+
+
+def test_the_temporary_url_file_is_removed_when_the_downloader_HALTS(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.subprocess, "run",
+                        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "boom"))
+    jobs = T.plan([{"source_node_id": 70, "filename": "a.png", "url": "u"}],
+                  str(tmp_path / "run"))
+    with pytest.raises(T.FetchHalt, match=r"the downloader exited 1"):
+        T.download(jobs)
+    strays = [p for p in (tmp_path / "run" / "lossless").iterdir()]
+    assert strays == [], (
+        f"{[p.name for p in strays]} left behind; _urls.json carries every signed URL the "
+        f"operator pasted and nothing downstream removes it")
+
+
+def test_the_temporary_url_file_is_removed_when_the_download_SUCCEEDS(tmp_path, monkeypatch):
+    """The direction that already worked, pinned so the `finally` is not mistaken for a
+    behaviour change."""
+    monkeypatch.setattr(T.subprocess, "run",
+                        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "", ""))
+    jobs = T.plan([{"source_node_id": 70, "filename": "a.png", "url": "u"}],
+                  str(tmp_path / "run"))
+    T.download(jobs)
+    assert not (tmp_path / "run" / "lossless" / "_urls.json").exists()
+
+
+def test_the_temporary_url_file_is_removed_when_the_downloader_RAISES(tmp_path, monkeypatch):
+    """The third path — an exception from `subprocess.run` itself, which neither the old
+    ordering nor a `raise`-only clause covers. This is what `finally` buys over moving the
+    remove above the refusal."""
+    def boom(cmd, **kw):
+        raise OSError("pwsh is not on PATH")
+
+    monkeypatch.setattr(T.subprocess, "run", boom)
+    jobs = T.plan([{"source_node_id": 70, "filename": "a.png", "url": "u"}],
+                  str(tmp_path / "run"))
+    with pytest.raises(OSError):
+        T.download(jobs)
+    assert not (tmp_path / "run" / "lossless" / "_urls.json").exists()
+
+
+# ============================================================ wave 12, F-bd2ace34
+# `by_hash = sorted(array_order, key=lambda p: _hash_name(p, out))` called `_hash_name` once
+# per comparison, and `_hash_name` OPENED and `json.loads`-ed `download_manifest.json` on
+# every call — on the 81-frame clip this tool is written for, several hundred parses of one
+# file. Worse, `_hash_name` ended `return os.path.basename(path)` when no manifest row
+# matched: since the local frames are named `00000.png` onward, a lookup that fails for
+# EVERY frame makes the hash-sorted permutation byte-identical to the array order, ratio
+# exactly 1.0, and Gate ORDER raises FETCH_ORDER_UNVOUCHED — it fails closed, but the halt
+# names an unvouched ORDER when the real fault is an unreadable manifest.
+
+
+def _frames(out, n=3):
+    import numpy as np
+
+    from armature_core import pngio
+
+    d = os.path.join(out, "lossless")
+    os.makedirs(d, exist_ok=True)
+    paths = []
+    for i in range(n):
+        p = os.path.join(d, f"{i:05d}.png")
+        pngio.write_png(p, np.full((4, 4, 3), i * 40, dtype="uint8"))
+        paths.append(p)
+    return paths
+
+
+def test_the_manifest_is_read_ONCE_per_order_evidence(tmp_path, monkeypatch):
+    out = str(tmp_path / "run")
+    paths = _frames(out)
+    with open(os.path.join(out, "download_manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump({"files": [{"out": os.path.abspath(p), "cloud_name": f"{i:064x}.png",
+                              "array_index": i} for i, p in enumerate(paths)]}, fh)
+
+    reads = []
+    real_open = open
+
+    def counting_open(path, *a, **kw):
+        if str(path).endswith("download_manifest.json"):
+            reads.append(str(path))
+        return real_open(path, *a, **kw)
+
+    monkeypatch.setattr("builtins.open", counting_open)
+    T.order_evidence(out)
+    assert len(reads) == 1, (
+        f"the manifest was parsed {len(reads)} times for {len(paths)} frames; the sort key "
+        f"re-reads it on every comparison")
+
+
+def test_a_frame_the_manifest_does_not_name_HALTS_instead_of_falling_back(tmp_path):
+    """The fallback made the two orderings identical, so an unreadable manifest arrived as
+    FETCH_ORDER_UNVOUCHED — a halt naming the wrong problem. The two failures are
+    distinguishable now."""
+    out = str(tmp_path / "run")
+    paths = _frames(out)
+    with open(os.path.join(out, "download_manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump({"files": [{"out": os.path.abspath(paths[0]),
+                              "cloud_name": "0" * 64 + ".png", "array_index": 0}]}, fh)
+    with pytest.raises(T.FetchHalt, match=r"names no cloud filename for") as exc:
+        T.order_evidence(out)
+    ev = exc.value.evidence
+    assert ev["clause"] == "frame_absent_from_manifest"
+    assert os.path.basename(ev["unnamed"][0]) == "00001.png"
+    assert "UNVOUCHED" not in str(exc.value), (
+        "an unreadable manifest must not be reported as an unvouched ORDER")
+
+
+def test_the_hash_sorted_arm_is_a_REAL_permutation_when_the_manifest_is_complete(tmp_path):
+    """The mutation that must not fire it, and the property the discriminator needs: the
+    two orderings differ because the cloud names sort differently from the local ones."""
+    out = str(tmp_path / "run")
+    paths = _frames(out)
+    names = ["f" * 64 + ".png", "0" * 64 + ".png", "9" * 64 + ".png"]
+    with open(os.path.join(out, "download_manifest.json"), "w", encoding="utf-8") as fh:
+        json.dump({"files": [{"out": os.path.abspath(p), "cloud_name": n, "array_index": i}
+                             for i, (p, n) in enumerate(zip(paths, names))]}, fh)
+    ev = T.order_evidence(out)
+    assert ev["hash_sorted_order"]["mean"] != ev["results_array_order"]["mean"]

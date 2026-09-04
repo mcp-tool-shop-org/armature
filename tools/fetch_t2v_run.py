@@ -55,7 +55,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # same fix. Wave 6: the sibling's implementation is imported rather than re-written.
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
-from fetch_run import FetchHalt, verify_downloads  # noqa: E402,F401
+from fetch_run import (  # noqa: E402,F401
+    FetchHalt, PNG_SIGNATURE, verify_downloads)
 
 TOOL_VERSION = "E09.A3"
 
@@ -72,7 +73,25 @@ MANIFEST_ENV = "ARMATURE_FETCH_MANIFEST"
 
 
 def plan(results, out):
-    """Where each returned file lands. Array position IS the frame index."""
+    """Where each returned file lands. Array position IS the frame index.
+
+    ⚠ **An empty `results` is refused here** (wave 12, F-4421d98f) — the sibling's clause,
+    one wording, both planners. `download` computed
+    `os.path.join(os.path.dirname(jobs[0]["out"]), "_urls.json")` with no clause on `jobs`
+    being non-empty, and `main` created `--out` and wrote `download_manifest.json` before
+    calling it. Measured with `{"results": []}`: `IndexError: list index out of range`, and
+    `run/` left on disk holding the manifest — a half-built run directory a later session
+    reads as a run that happened, under a halt line carrying `error: "IndexError"` and
+    `evidence: null`, where every FetchHalt in this file carries a gate id and a
+    measurement.
+    """
+    if not results:
+        raise FetchHalt(
+            "the dump carries no results at all. A job that has returned nothing is not a "
+            "run to fetch, and continuing would leave a directory a later session reads as "
+            "a run that happened",
+            {"gate": "FETCH", "andon": "FetchHalt", "clause": "empty_results",
+             "n_results": 0, "out": os.path.abspath(out)})
     jobs, i = [], 0
     for r in results:
         nid = str(r["source_node_id"])
@@ -117,16 +136,27 @@ def download(jobs):
           "{ curl.exe -sS -L --fail-with-body -o $x.out -- $x.url }")
     env = dict(os.environ)
     env[MANIFEST_ENV] = os.path.abspath(tmp)
-    proc = subprocess.run(["pwsh", "-NoProfile", "-Command", ps],
-                          capture_output=True, text=True, env=env)
-    if proc.returncode != 0:
-        raise FetchHalt(
-            f"the downloader exited {proc.returncode}; the frames this run would be "
-            f"measured on are not on disk",
-            {"returncode": proc.returncode,
-             "stdout": (proc.stdout or "")[-2000:],
-             "stderr": (proc.stderr or "")[-2000:]})
-    os.remove(tmp)
+    # ---- wave 12, F-8ccedf71. `os.remove(tmp)` sat BELOW the refusal, so it ran only on
+    # the success path: a halt on a non-zero downloader left `_urls.json` — every result URL
+    # the operator pasted, signed download links included — in the run directory, where this
+    # tool's own root sweep does not call it a stray (`root_suffixes` is VIDEO_SUFFIXES only)
+    # and nothing later removes it. The sibling's `urls.json` is DURABLE by design and is
+    # kept deliberately; this file's `_urls.json` is a temporary whose deletion is the
+    # intended behaviour on every path, including one where `subprocess.run` itself raises.
+    try:
+        proc = subprocess.run(["pwsh", "-NoProfile", "-Command", ps],
+                              capture_output=True, text=True, env=env)
+        if proc.returncode != 0:
+            raise FetchHalt(
+                f"the downloader exited {proc.returncode}; the frames this run would be "
+                f"measured on are not on disk",
+                {"gate": "FETCH", "andon": "FetchHalt", "clause": "downloader_exit_nonzero",
+                 "returncode": proc.returncode,
+                 "stdout": (proc.stdout or "")[-2000:],
+                 "stderr": (proc.stderr or "")[-2000:]})
+    finally:
+        if os.path.isfile(tmp):
+            os.remove(tmp)
     return proc
 
 
@@ -163,12 +193,38 @@ def gate_order_evidence(ev):
 
 
 def order_evidence(out):
-    """The 7.6x discriminator, recomputed on this run's own frames."""
+    """The 7.6x discriminator, recomputed on this run's own frames.
+
+    Wave 12, F-bd2ace34. The sort key used to be `lambda p: _hash_name(p, out)`, and
+    `_hash_name` OPENED and parsed `download_manifest.json` on every call — several hundred
+    parses of one file on the 81-frame clip this tool is written for. Worse, it ended
+    `return os.path.basename(path)` when no row matched: the local frames are named
+    `00000.png` onward, so a lookup that failed for EVERY frame made the hash-sorted
+    permutation byte-identical to the array order, ratio exactly 1.0, and Gate ORDER raised
+    FETCH_ORDER_UNVOUCHED. It failed closed — but the halt named an unvouched ORDER when the
+    real fault was an unreadable manifest, and the two are different repairs. The map is read
+    once, and a frame the manifest does not name is its own refusal.
+    """
     from armature_core import donor_gate as DG
 
     d = os.path.join(out, "lossless")
     array_order = DG.frame_paths(d)                       # 00000.png ... , i.e. as returned
-    by_hash = sorted(array_order, key=lambda p: _hash_name(p, out))
+    names = cloud_names(out)
+    unnamed = [p for p in array_order if os.path.abspath(p) not in names]
+    if unnamed:
+        raise FetchHalt(
+            f"download_manifest.json names no cloud filename for {len(unnamed)} of the "
+            f"{len(array_order)} frame(s) on disk: "
+            f"{[os.path.basename(p) for p in unnamed[:5]]}. The permutation this gate "
+            f"differences against would fall back to the LOCAL names, which are already the "
+            f"array order — the two arms would be the same list, the ratio exactly 1.0, and "
+            f"the halt would name an unvouched ORDER when the manifest is what cannot be "
+            f"read",
+            {"gate": "FETCH", "andon": "FetchHalt",
+             "clause": "frame_absent_from_manifest", "unnamed": unnamed,
+             "n_frames": len(array_order), "n_named": len(names),
+             "manifest": os.path.join(os.path.abspath(out), "download_manifest.json")})
+    by_hash = sorted(array_order, key=lambda p: names[os.path.abspath(p)])
     return {
         "results_array_order": {k: v for k, v in
                                 DG.mean_consecutive_frame_difference(array_order).items()
@@ -184,14 +240,11 @@ def order_evidence(out):
     }
 
 
-def _hash_name(path, out):
-    """The cloud filename this local frame came from — the permutation being tested."""
+def cloud_names(out):
+    """`{abspath: cloud_name}` read ONCE from this run's own download manifest."""
     with open(os.path.join(out, "download_manifest.json"), encoding="utf-8") as fh:
         m = json.load(fh)
-    for j in m["files"]:
-        if os.path.abspath(j["out"]) == os.path.abspath(path):
-            return j["cloud_name"]
-    return os.path.basename(path)
+    return {os.path.abspath(j["out"]): j["cloud_name"] for j in m["files"]}
 
 
 def main(argv=None):
@@ -203,7 +256,12 @@ def main(argv=None):
 
     with open(a.dump, encoding="utf-8") as fh:
         results = json.load(fh)["results"]
-    jobs = plan(results, a.out)
+    try:
+        jobs = plan(results, a.out)
+    except FetchHalt as exc:
+        # The operator's own input, named in the receipt: the halt is about THIS dump.
+        exc.evidence["dump"] = os.path.abspath(a.dump)
+        raise
     os.makedirs(a.out, exist_ok=True)
     with open(os.path.join(a.out, "download_manifest.json"), "w", encoding="utf-8") as fh:
         json.dump({"tool": "fetch_t2v_run", "tool_version": TOOL_VERSION,

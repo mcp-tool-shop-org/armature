@@ -180,6 +180,11 @@ RECORDED_POPULATION = frozenset({
     # re-iterability clause. The comment above that recorded it as "deliberately absent —
     # one raise site, so the class IS its clause" is corrected here rather than deleted.
     "NonReiterableFrames",
+    # Joined 2026-09-04 (wave 12, builders, F-4f72af05). `build_payload.PayloadOutHalt` is
+    # the andon on the direction the sidecar-path derivation does not bound: the graph and
+    # its record colliding on one path. Two raise sites in `gate_out_paths`, so its name is
+    # not its clause and each site needs a distinguishing phrase.
+    "PayloadOutHalt",
 })
 
 #: Re-derived 2026-09-04 and EMPTY. There is no class this census excuses: a class raised
@@ -217,7 +222,12 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # crossing from one site to two = 84, MEASURED on this branch. `SiteListError` and
     # `MeasurementWithoutScene` are new classes with ONE raise site each and are correctly
     # not derived.
-    assert len(POLICED) == 84, sorted(POLICED)
+    # WAVE 12 (builders, F-4f72af05): `build_payload.PayloadOutHalt` — the andon on the
+    # direction the sidecar-path derivation does not bound, raised from 2 sites in
+    # `gate_out_paths`. 80 + 1 = 81. ⚠ This number moves once per domain that adds a typed
+    # refusal in a wave; the coordinator re-measures it at the merge, as it did at wave 10.
+    # WAVE-12 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(POLICED) == 85, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -251,7 +261,13 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # 51 + 3 - 1 = 53. Re-pinned with the reason rather than relaxed (wave 3 section 0).
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch added one RouteGate raise site
     # (51 -> 52 on its own branch); merged = 53 + 1 = 54, MEASURED on the merged tree.
-    assert len(RAISE_SITES["RouteGate"]) == 54, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 12 (builders, F-4f72af05's sibling deliverable — the coordinator's CONDITIONAL
+    # licence ruling): `build_lora_arm_payload.conditional_attribution` raises `RouteGate`
+    # when the licence table rules a row CONDITIONAL and the readers that build its credit
+    # entries are absent — an unknown attribution is not something a spend tool completes.
+    # 54 + 1 = 55 on this branch. ⚠ core-gates' branch takes the same count to 57; the
+    # merged number is 58 and the coordinator re-measures it, as at wave 10.
+    assert len(RAISE_SITES["RouteGate"]) == 55, sorted(RAISE_SITES["RouteGate"])
     files = {path for path, _ in RAISE_SITES["RouteGate"]}
     # `build_lora_arm_payload.py` joined at the wave-8 merge: its new `gate_base_licence`
     # raises RouteGate on a banned node class in the operator's baseline graph.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 r"""build_camera_i2v_payload — E11's camera-held graph, built in this repo.
 
-    python tools\build_camera_i2v_payload.py --uploads=<uploads.json> --out=<dir>
+    python tools\build_camera_i2v_payload.py --uploads=<uploads.json> --out=<dir> --subject=PERFORMER --no-canon
            --negative-source=<wan22_shared_config.py> --seeds-registry=specs\E11-seeds.json
            --w1-record=<E11-probe-payload-record.json> --start-frame=<start.png>
            [--seed=2026081233 | --seeds-registry=specs\\E12-seeds.json]
@@ -555,6 +555,34 @@ def resolve_start_frame(path, declared_sha256):
           # file is not a PNG, which is itself a fact worth recording on a route whose
           # entire conditioning is this one image.
           "image": png_header(path)}
+    # ---- ANDON, wave 12 (F-08853dfb). `png_header` DECLINES TO GUESS at a file without an
+    # IHDR and returns None; storing that None was the end of the matter, so a 403-byte file
+    # with a JPEG header rode this route as the whole of its conditioning with
+    # BUILD_I2V_OK printed, and `fit_agrees_with_the_file` degraded to a null on exactly the
+    # input the comparison exists for — leaving the record's asserted `fit` sentence
+    # unchallenged. Measured 2026-09-04 against this function: a 1024x576 RGBA PNG, a
+    # 1024x576 RGB PNG and a 403-byte JPEG-headed file were all ACCEPTED; the third returned
+    # image: None. A route whose whole conditioning is one image may not record a
+    # conditioning input it could not open.
+    #
+    # The two jobs stay separate: the READER reports an absent measurement rather than an
+    # invented one, and the REFUSAL lives here, in the function both routes resolve
+    # through — `build_i2v_payload.resolve_start_frame` carries this one rather than
+    # writing a second.
+    if ev["image"] is None:
+        with open(path, "rb") as fh:
+            head = fh.read(8)
+        raise PayloadError(
+            f"--start-frame {path!r} is not a PNG this tool can read: its first 8 bytes are "
+            f"{head.hex()!r} and no IHDR chunk follows them, so its width, height and "
+            f"colour type cannot be measured. On this route the start frame is the entire "
+            f"image conditioning, and a record that asserts how the frame FITS the "
+            f"generation while carrying no measurement of the file is the claim wave 10 set "
+            f"out to replace",
+            {"gate": "PAYLOAD", "andon": "start_frame", "clause": "start_frame_not_a_png",
+             "flag": "--start-frame", "path": os.path.abspath(path),
+             "first_8_bytes": head.hex(), "bytes": ev["bytes"], "sha256": digest,
+             "read_by": "IHDR, stdlib struct - no image library"})
     if declared_sha256:
         if declared_sha256.strip().lower() != digest:
             raise PayloadError(
@@ -751,7 +779,8 @@ def effective_trajectory(overrides=None):
 
 
 def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
-          length=LENGTH, fps=FPS, wave=WAVE, trajectory_overrides=None):
+          length=LENGTH, fps=FPS, wave=WAVE, trajectory_overrides=None,
+          start_frame=None):
     """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists.
 
     `wave` is a parameter and not the module constant for the reason this repo has now paid
@@ -760,6 +789,29 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
     `"wave": 3` field, and cloud output prefixes under `E12/w3/` — every one of them a
     plausible label pointing at the wrong run.
     """
+    # ---- ANDON, wave 12 (F-d979ec52), the sibling's clause carried verbatim in shape.
+    # `start_image` used to be `{"server_name": …, "fit": "native — authored at 832x480,
+    # the same upload wave 1 ran"}` — prose about wave 1's resolution inside a record whose
+    # own DELIBERATE_BREAKS says this wave generates at 1024x576. The measurement that
+    # settles it was already computed by `resolve_start_frame` in `main` and reached only
+    # `gate_LEDGER_W3`. It is a parameter of the graph builder now, and required here rather
+    # than in `main` so an in-process caller cannot route around it.
+    if not start_frame or not start_frame.get("sha256"):
+        raise PayloadError(
+            "build() needs the resolved start frame: on this route the start image is the "
+            "whole of the conditioning, and `meta['start_image']` used to identify it only "
+            "by a server-side content-addressed name beside a `fit` sentence nothing "
+            "checked. Call `resolve_start_frame(path, declared)` and pass its evidence",
+            {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
+             "start_frame": start_frame})
+    if not start_frame.get("image"):
+        raise PayloadError(
+            "the resolved start frame carries no measurement of its own pixels: "
+            "`fit_agrees_with_the_file` would be null on exactly the input the comparison "
+            "exists for. Resolve it through `resolve_start_frame`, which reads the file's "
+            "IHDR and refuses a file it cannot read",
+            {"gate": "PAYLOAD", "andon": "start_frame", "clause": "start_frame_unmeasured",
+             "flag": "--start-frame", "start_frame": start_frame})
     # ---- Gate ROUTE - ANDON on `CreateVideo.fps` (wave 10, F-29693a0e, family carry).
     # `--fps` reached the node with no clause in all five builders that take the flag,
     # while every one of their records states the node's measured contract as
@@ -922,8 +974,17 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
         },
         "positive": positive,
         "negative": negative,
-        "start_image": {"server_name": start_name,
-                        "fit": "native — authored at 832x480, the same upload wave 1 ran"},
+        # ONE implementation of this block, in the sibling (see `W1.start_image_record`).
+        # `fit` names THIS wave's own resolution, and the boolean beside it is the file's
+        # own IHDR compared against the frame the graph generates.
+        "start_image": W1.start_image_record(
+            start_frame, start_name, WIDTH, HEIGHT,
+            fit=(f"native — authored at {WIDTH}x{HEIGHT}, this wave's own frame; wave 1 "
+                 f"ran 832x480 and DELIBERATE_BREAKS['resolution'] is the ruling that "
+                 f"moved it"),
+            why=("the start frame is re-authored for this wave: the resolution changed and "
+                 "the alpha law (the Director's ruling 2026-08-12) governs the artifact, so "
+                 "nothing here is wave 1's upload")),
         "unconnected_inputs": {
             "clip_vision_output": "unconnected, as in wave 1",
         },
@@ -1076,7 +1137,7 @@ def main(argv=None):
 
     wf, meta = build(uploads, a.seed, negative, positive, registry,
                      experiment=a.experiment, length=a.length, fps=a.fps, wave=a.wave,
-                     trajectory_overrides=overrides)
+                     trajectory_overrides=overrides, start_frame=start_frame)
     meta["gate_LEDGER_W3"] = gate_ledger
     meta["gate_CANON"] = canon_ev
     meta["prompt_record"] = {

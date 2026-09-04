@@ -70,19 +70,34 @@ def _result(nid, i, ext=".png"):
 
 @pytest.fixture()
 def stub_download(monkeypatch):
-    """A downloader that writes one byte per planned output, and records its call."""
+    """A downloader that lands every planned output, and records its call.
+
+    Wave 12 (F-ef81516f): it writes the full PNG signature rather than four bytes of it,
+    and it writes the per-job exit record the real command string now produces. Both are
+    corrections to a stand-in that was less honest than the thing it stands in for: the
+    real `-Parallel` block cannot report a failed curl through the process code, so the
+    record IS the observation, and `--fail-with-body` means the bytes on disk are the
+    difference between a frame and an HTTP refusal.
+    """
     calls = []
 
     def fake_run(cmd, **kw):
         calls.append({"cmd": list(cmd), "kw": kw})
         env = kw.get("env") or {}
-        manifest = env.get("ARMATURE_FETCH_MANIFEST")
+        manifest = env.get(F.MANIFEST_ENV)
+        rows = []
         if manifest and os.path.isfile(manifest):
             with open(manifest, encoding="utf-8") as fh:
                 for job in json.load(fh):
                     os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
                     with open(job["out"], "wb") as out:
-                        out.write(b"\x89PNG")
+                        out.write(F.PNG_SIGNATURE)
+                    rows.append({"out": job["out"], "url": job["url"], "code": 0,
+                                 "message": ""})
+        exits = env.get(F.EXITS_ENV)
+        if exits:
+            with open(exits, "w", encoding="utf-8") as fh:
+                json.dump(rows, fh)
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(F.subprocess, "run", fake_run)
@@ -142,11 +157,35 @@ def test_a_downloader_that_fails_halts_instead_of_printing_fetch_run(tmp_path, m
     assert "FETCH_RUN" not in capsys.readouterr().out
 
 
+def _stub_run_claiming_success(landed):
+    """A downloader that reports every job as exit 0 and lands `landed(job)` on disk.
+
+    Wave 12 (F-ef81516f): the per-job exit record is now the observation `-Parallel`
+    cannot give the process, so a stub that writes NO record halts on that clause and never
+    reaches the plan-to-disk one. These two tests are about the plan-to-disk clause, so
+    their downloader claims success — which is exactly the case `verify_downloads` exists
+    for: curl says 0 and the frames are not there.
+    """
+    def fake_run(cmd, **kw):
+        env = kw.get("env") or {}
+        with open(env[F.MANIFEST_ENV], encoding="utf-8") as fh:
+            jobs = json.load(fh)
+        rows = []
+        for job in jobs:
+            landed(job)
+            rows.append({"out": job["out"], "url": job["url"], "code": 0, "message": ""})
+        with open(env[F.EXITS_ENV], "w", encoding="utf-8") as fh:
+            json.dump(rows, fh)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    return fake_run
+
+
 def test_a_download_that_lands_nothing_halts(tmp_path, monkeypatch, capsys):
     """curl runs with --fail-with-body, so an error body lands at the -o path and counts.
     A silent no-op is the other half, and it exits 0 today."""
     monkeypatch.setattr(F.subprocess, "run",
-                        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "", ""))
+                        _stub_run_claiming_success(lambda job: None))
     dump = _dump(tmp_path, [_result("302", 0), _result("302", 1)])
     with pytest.raises(F.FetchHalt) as exc:
         F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
@@ -155,16 +194,14 @@ def test_a_download_that_lands_nothing_halts(tmp_path, monkeypatch, capsys):
     assert "FETCH_RUN" not in capsys.readouterr().out
 
 
-def test_a_zero_length_file_halts_even_though_the_count_matches(tmp_path, monkeypatch):
-    def fake_run(cmd, **kw):
-        env = kw.get("env") or {}
-        with open(env["ARMATURE_FETCH_MANIFEST"], encoding="utf-8") as fh:
-            for job in json.load(fh):
-                os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
-                open(job["out"], "wb").close()
-        return subprocess.CompletedProcess(cmd, 0, "", "")
+def _touch_empty(job):
+    os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
+    open(job["out"], "wb").close()
 
-    monkeypatch.setattr(F.subprocess, "run", fake_run)
+
+def test_a_zero_length_file_halts_even_though_the_count_matches(tmp_path, monkeypatch):
+    monkeypatch.setattr(F.subprocess, "run",
+                        _stub_run_claiming_success(_touch_empty))
     dump = _dump(tmp_path, [_result("302", 0)])
     with pytest.raises(F.FetchHalt) as exc:
         F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
@@ -414,7 +451,7 @@ def _landed_run(tmp_path, run="A0r1", extra_root_files=()):
     jobs = []
     for i in range(2):
         out = base / "lossless" / f"{i:05d}.png"
-        out.write_bytes(b"png")
+        out.write_bytes(F.PNG_SIGNATURE)   # wave 12: a planned .png must BE one
         jobs.append((f"http://x/{i}", str(out)))
     vid = base / f"{run}_00000.mp4"
     vid.write_bytes(b"mp4")
@@ -497,3 +534,267 @@ def test_the_exemption_is_empty_by_default_so_a_caller_opts_in(tmp_path):
         F.verify_downloads(jobs, directories=[str(base / "lossless")], root=str(base))
     assert [os.path.basename(x) for x in exc.value.evidence["extra"]] == [
         "A0r1_review_8fps.mp4"]
+
+
+# ============================================================ wave 12, F-ef81516f
+# **The gate that could not fire.** `download` built
+# `$j | ForEach-Object -Parallel { curl.exe … } -ThrottleLimit 12` and then refused on
+# `proc.returncode != 0`. A native non-zero exit inside a `-Parallel` runspace does not
+# reach the pwsh process code. MEASURED ON THIS RIG, 2026-09-04, not inherited:
+#
+#     pwsh -NoProfile -Command '$j = @(1,2); $j | ForEach-Object -Parallel
+#         { cmd.exe /c "exit 22" } -ThrottleLimit 12'      -> process exit 0
+#
+# while the sibling `fetch_t2v_run.py`'s `foreach ($x in $j) { … }` shape exits 1 on the
+# identical inner command — so the two fetchers' identically-worded gates disagreed about
+# whether they could fire at all. This is NOT the closed F-61771e61 ("the returncode is
+# never inspected"): the inspection existed and was structurally unreachable.
+#
+# The backstop did not cover the gap. curl runs with `--fail-with-body`, which WRITES the
+# HTTP error body to the `-o` path, and `verify_downloads` bound only presence, zero length
+# and unplanned extras: three planned frames replaced by 35-byte
+# `{"error":"AccessDenied","code":403}` bodies returned missing=[], empty=[], extra=[] and
+# the verdict "3 planned file(s), all present and non-empty". A measurement taken from that
+# directory is a measurement of a paid generation that was never retrieved.
+#
+# The fix makes the failure OBSERVABLE rather than hoping it propagates: each job records
+# its own `$LASTEXITCODE` (and curl's message) into a JSON record, and Gate FETCH refuses
+# any non-zero — plus refuses a record that does not cover the plan, because a gate whose
+# evidence is missing has not run. Measured on this rig with the new shape and
+# `cmd.exe /c "exit 22"` in curl's place: process exit 0, exits record
+# `[{"out":"a","url":"u1","code":22,"message":"boom"}]`.
+#
+# family: keyed on BEHAVIOUR — "a downloader whose per-job failure the parent process can
+# observe" — via a read of both fetchers' pwsh command strings, not on the word `curl`
+# -> 2 sites: fetch_run.download (-Parallel, unobservable) and fetch_t2v_run.download
+# (foreach, observable, measured). The second is left as it is and the census below pins
+# WHY, so a later switch to -Parallel there cannot be silent.
+
+
+def _exits_path(base):
+    return os.path.join(base, F.EXITS_NAME)
+
+
+@pytest.fixture()
+def stub_parallel_download(monkeypatch):
+    """A downloader that behaves the way the measured `-Parallel` shape does.
+
+    Every job fails, every job's exit is recorded, an HTTP error body is written to each
+    `-o` path by `--fail-with-body`, and the pwsh process still exits 0.
+    """
+    def fake_run(cmd, **kw):
+        env = kw.get("env") or {}
+        with open(env["ARMATURE_FETCH_MANIFEST"], encoding="utf-8") as fh:
+            jobs = json.load(fh)
+        rows = []
+        for job in jobs:
+            os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
+            with open(job["out"], "wb") as out:
+                out.write(b'{"error":"AccessDenied","code":403}')
+            rows.append({"out": job["out"], "url": job["url"], "code": 22,
+                         "message": "curl: (22) The requested URL returned error: 403"})
+        with open(env["ARMATURE_FETCH_EXITS"], "w", encoding="utf-8") as fh:
+            json.dump(rows, fh)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(F.subprocess, "run", fake_run)
+
+
+def test_a_curl_that_failed_inside_the_parallel_block_HALTS(tmp_path, stub_parallel_download):
+    """The whole point: every download fails, the process exits 0, and the tool refuses."""
+    dump = _dump(tmp_path, [_result("302", i) for i in range(3)])
+    with pytest.raises(F.FetchHalt, match=r"exited non-zero") as exc:
+        F.main(["--dump", dump, "--run", "r", "--root", str(tmp_path / "runs")])
+    ev = exc.value.evidence
+    assert ev["clause"] == "downloader_job_exit_nonzero"
+    assert [row["code"] for row in ev["failed"]] == [22, 22, 22]
+    assert ev["process_returncode"] == 0, (
+        "the halt must say that the PROCESS said nothing was wrong")
+
+
+def test_an_exit_record_that_does_not_cover_the_plan_HALTS(tmp_path, monkeypatch):
+    """A gate whose evidence is absent has not run. The old shape's whole failure was that
+    nothing observed the jobs, so 'no observation' may not read as success."""
+    def fake_run(cmd, **kw):
+        env = kw.get("env") or {}
+        with open(env["ARMATURE_FETCH_MANIFEST"], encoding="utf-8") as fh:
+            jobs = json.load(fh)
+        for job in jobs:
+            os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
+            with open(job["out"], "wb") as out:
+                out.write(F.PNG_SIGNATURE)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(F.subprocess, "run", fake_run)
+    dump = _dump(tmp_path, [_result("302", i) for i in range(2)])
+    with pytest.raises(F.FetchHalt, match=r"recorded no per-job exit") as exc:
+        F.main(["--dump", dump, "--run", "r", "--root", str(tmp_path / "runs")])
+    assert exc.value.evidence["clause"] == "downloader_exits_unobserved"
+
+
+def test_an_exit_record_short_of_the_plan_HALTS(tmp_path, monkeypatch):
+    """One row per planned job, or the record is not evidence about the plan."""
+    def fake_run(cmd, **kw):
+        env = kw.get("env") or {}
+        with open(env["ARMATURE_FETCH_MANIFEST"], encoding="utf-8") as fh:
+            jobs = json.load(fh)
+        for job in jobs:
+            os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
+            with open(job["out"], "wb") as out:
+                out.write(F.PNG_SIGNATURE)
+        with open(env["ARMATURE_FETCH_EXITS"], "w", encoding="utf-8") as fh:
+            json.dump([{"out": jobs[0]["out"], "url": jobs[0]["url"], "code": 0}], fh)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(F.subprocess, "run", fake_run)
+    dump = _dump(tmp_path, [_result("302", i) for i in range(3)])
+    with pytest.raises(F.FetchHalt, match=r"recorded 1 job exit\(s\) for 3 planned") as exc:
+        F.main(["--dump", dump, "--run", "r", "--root", str(tmp_path / "runs")])
+    assert exc.value.evidence["clause"] == "downloader_exits_incomplete"
+
+
+def test_the_downloader_command_asks_each_job_for_its_own_exit(tmp_path, stub_download):
+    """The command shape's contract, pinned. Measured on this rig: a native non-zero exit
+    inside a `-Parallel` runspace leaves the pwsh process code at 0, so the only way the
+    parent can see a failed curl is if each runspace records `$LASTEXITCODE` itself."""
+    dump = _dump(tmp_path, [_result("302", 0)])
+    F.main(["--dump", dump, "--run", "r", "--root", str(tmp_path / "runs")])
+    cmd = stub_download[-1]["cmd"]
+    ps = cmd[-1]
+    assert "-Parallel" in ps
+    assert "$LASTEXITCODE" in ps, (
+        "no per-job exit is captured, so a failed curl is invisible to this process")
+    assert f"$env:{F.EXITS_ENV}" in ps, "the exits record has nowhere to land"
+    assert stub_download[-1]["kw"]["env"][F.EXITS_ENV].endswith(F.EXITS_NAME)
+
+
+def test_the_two_fetchers_disagree_about_the_shell_shape_and_the_record_says_why():
+    """The family census, keyed on the pwsh command each fetcher builds rather than on the
+    word `curl`. `fetch_t2v_run`'s `foreach` shape DOES propagate a native non-zero exit
+    (measured); `fetch_run`'s `-Parallel` shape does not, and so must observe each job.
+    Red if a later edit gives `fetch_t2v_run` a `-Parallel` block without the observation."""
+    import fetch_t2v_run as T
+
+    for mod, shape in ((F, "-Parallel"), (T, "foreach")):
+        src = open(os.path.join(TOOLS, f"{mod.__name__}.py"), encoding="utf-8").read()
+        body = src[src.index("def download("):]
+        body = body[:body.index("\ndef ")]
+        assert shape in body, f"{mod.__name__} no longer builds a {shape} downloader"
+        if "-Parallel" in body:
+            assert "$LASTEXITCODE" in body, (
+                f"{mod.__name__} runs curl in a -Parallel runspace, whose native non-zero "
+                f"exit does not reach the process code, and records no per-job exit")
+
+
+# ------------------------------------------------ the backstop: a body is not a frame
+
+
+def test_a_planned_png_whose_bytes_are_an_error_body_HALTS(tmp_path, monkeypatch):
+    """`--fail-with-body` writes the HTTP error body to the `-o` path, so 'present and
+    non-empty' is satisfied by a 35-byte JSON refusal. Measured before this clause:
+    missing=[], empty=[], extra=[] and a green verdict."""
+    d = tmp_path / "lossless"
+    d.mkdir(parents=True)
+    jobs = []
+    for i in range(3):
+        p = d / f"{i:05d}.png"
+        p.write_bytes(b'{"error":"AccessDenied","code":403}')
+        jobs.append(("https://example.invalid/x", str(p)))
+    with pytest.raises(F.FetchHalt, match=r"not the content type the plan asked for") as exc:
+        F.verify_downloads(jobs, directories=[str(d)])
+    ev = exc.value.evidence
+    assert len(ev["wrong_type"]) == 3
+    assert ev["wrong_type"][0]["expected"] == "png"
+    assert ev["wrong_type"][0]["first_8_bytes"] == b'{"error"'.hex()
+
+
+def test_a_planned_png_that_IS_a_png_passes_the_content_clause(tmp_path):
+    """The mutation that must not fire it."""
+    d = tmp_path / "lossless"
+    d.mkdir(parents=True)
+    jobs = []
+    for i in range(2):
+        p = d / f"{i:05d}.png"
+        p.write_bytes(F.PNG_SIGNATURE + b"IHDR-and-the-rest")
+        jobs.append(("https://example.invalid/x", str(p)))
+    ev = F.verify_downloads(jobs, directories=[str(d)])
+    assert ev["wrong_type"] == []
+    assert "all present and non-empty" in ev["verdict"]
+
+
+def test_the_content_clause_only_binds_what_the_plan_NAMED(tmp_path):
+    """A `.mp4` video tap is not asserted to be a PNG. The clause reads the extension the
+    PLAN wrote, so it says nothing about suffixes it has no signature for."""
+    p = tmp_path / "r_00000.mp4"
+    p.write_bytes(b"not really an mp4 either")
+    ev = F.verify_downloads([("https://example.invalid/x", str(p))], directories=[])
+    assert ev["wrong_type"] == []
+    assert ev["content_checked"] == {"png": 0}
+
+
+# ============================================================ wave 12, F-a72178c2
+# `out[nid] = sub` was a last-write-wins assignment with no duplicate clause, in a function
+# whose own docstring states the law: "A malformed map must not fall back to the default:
+# the caller would get E02's mapping applied to somebody else's graph ... and the only
+# symptom would be a directory of files with the wrong names." Measured in this worktree:
+# `parse_node_map("301=batchprobe,301=lossless")` returned `{"301": "lossless"}` with no
+# halt — the batchprobe half discarded unexamined, a clip's frames landing in a directory
+# named for another tap, and every count in the receipt reading right because `got` and
+# `vids` are both derived from the plan. The same shape one door over IS refused:
+# `gate_saved_graph.link_table` raises on a link id declared twice with different origins,
+# on the reasoning that "which one a socket resolves to is an accident of array order".
+
+
+def test_a_repeated_node_id_in_the_map_HALTS(tmp_path):
+    with pytest.raises(F.FetchHalt, match=r"names node 301 twice") as exc:
+        F.parse_node_map("301=batchprobe,301=lossless")
+    ev = exc.value.evidence
+    assert ev["clause"] == "node_map_duplicate_id"
+    assert ev["duplicates"] == {"301": ["batchprobe", "lossless"]}
+
+
+def test_a_node_id_repeated_with_the_SAME_directory_also_HALTS():
+    """Idempotence is not the question. The map is an operator's statement about a graph,
+    and a statement made twice is a statement one of whose halves was not read."""
+    with pytest.raises(F.FetchHalt, match=r"names node 71 twice"):
+        F.parse_node_map("41=startprobe,71=lossless,71=lossless")
+
+
+def test_a_map_naming_each_node_ONCE_still_parses():
+    """The mutation that must not fire it."""
+    assert F.parse_node_map("41=startprobe,71=lossless") == {
+        "41": "startprobe", "71": "lossless"}
+
+
+def test_the_sibling_clause_this_one_was_derived_from_still_refuses(tmp_path):
+    """family: keyed on BEHAVIOUR — a mapping built by assignment in a loop, where a
+    repeated key silently keeps the last spelling — across this domain's parsers. Two
+    sites: `fetch_run.parse_node_map` (this fix) and `gate_saved_graph.link_table`, which
+    already refuses. `fetch_run.parse_video_nodes` builds a SET, where a repeat cannot
+    discard anything, so it is not a member."""
+    import gate_saved_graph as G
+    from armature_core import route_gates as RG
+
+    with pytest.raises(RG.RouteGate, match=r"declares link .* TWICE with different"):
+        G.link_table({"links": [[1, "10", 0, "20", 0, "IMAGE"],
+                                [1, "11", 0, "20", 0, "IMAGE"]]})
+
+
+# ============================================================ wave 12, F-4421d98f (this fetcher's half)
+
+
+def test_an_empty_results_array_is_REFUSED_BY_NAME_here_too(tmp_path):
+    """The sibling's clause, one wording, both planners. `fetch_run` reached
+    `FileNotFoundError` on `urls.json` one step later than `fetch_t2v_run` reached its
+    `IndexError`, for the same reason: the loop that creates the directories never ran."""
+    with pytest.raises(F.FetchHalt, match=r"carries no results") as exc:
+        F.plan([], str(tmp_path / "runs" / "r"), "r", F.NODE_DIR, F.VIDEO_NODES)
+    assert exc.value.evidence["clause"] == "empty_results"
+
+
+def test_an_empty_dump_leaves_no_run_directory_here_either(tmp_path):
+    dump = _dump(tmp_path, [])
+    run_root = tmp_path / "runs"
+    with pytest.raises(F.FetchHalt, match=r"carries no results"):
+        F.main([f"--dump={dump}", "--run=r", f"--root={run_root}"])
+    assert not (run_root / "r").exists()
