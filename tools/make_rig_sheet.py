@@ -53,6 +53,14 @@ def evaluated(ob, depsgraph):
     return v
 
 
+class ReferenceFileError(ArmatureError):
+    """`--reference` does not name a readable file. A plain refusal (gate None + andon + clause): the
+    path is known at parse time and nothing has been written. WAVE-14 MERGE (coordinator, 2026-09-04, after #159/#160 and receipt #287): named because
+    instruments-measure's census over tools/** refuses a BASE `ArmatureError` raised with an evidence
+    argument (the wave-14 rule is a named subclass with a clause) — the coordinator's previous cut had
+    added the evidence to the base."""
+
+
 def require_reference_file(path):
     """`--reference` names a readable file, refused BEFORE anything is written.
 
@@ -67,20 +75,20 @@ def require_reference_file(path):
     if not os.path.isfile(path):
         # WAVE-14 MERGE (coordinator, 2026-09-04, after #159): the refusal carries the plain-refusal receipt
         # (gate None + andon + clause) like every other wave-14 refusal; it was a bare base raise.
-        raise ArmatureError(
+        raise ReferenceFileError(
             f"--reference={path!r} is not a file. It is the ORIGINAL textured GLB the "
             f"texture-fidelity row is built from, and it is named on the command line, so "
             f"this is refused before the output directory exists rather than after seven "
             f"panels have been rendered into it",
-            {"gate": None, "andon": "ArmatureError", "clause": "reference_not_a_file",
+            {"gate": None, "andon": "ReferenceFileError", "clause": "reference_not_a_file",
              "path": path})
     try:
         with open(path, "rb") as fh:
             fh.read(1)
     except OSError as exc:
-        raise ArmatureError(
+        raise ReferenceFileError(
             f"--reference={path!r} cannot be read: {exc}",
-            {"gate": None, "andon": "ArmatureError", "clause": "reference_unreadable",
+            {"gate": None, "andon": "ReferenceFileError", "clause": "reference_unreadable",
              "path": path, "error": type(exc).__name__}) from exc
     return os.path.abspath(path)
 

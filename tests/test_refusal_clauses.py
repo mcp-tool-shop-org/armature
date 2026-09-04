@@ -133,6 +133,8 @@ RECORDED_POPULATION = frozenset({
     # WAVE-14 MERGE (coordinator, 2026-09-04): `aapose.ConventionError` (core-solvers, F-d0de0c2d) — the class landed, the
     # name did not; measured `POLICED - RECORDED_POPULATION == ["ConventionError"]` on the merged tree.
     "ConventionError",
+    # WAVE-14 MERGE (coordinator, 2026-09-04, after #159/#160 and receipt #287): `make_rig_sheet.ReferenceFileError` — two raise sites, a plain refusal.
+    "ReferenceFileError",
     "CadenceGate", "PinnedCameraGate",
     "CropStripError", "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate",
     "PreviewWalkGate",
@@ -287,7 +289,8 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # the derivation uses. MEASURED on this branch; the coordinator re-measures at merge.
     # WAVE-14 MERGE (coordinator, 2026-09-04): 91 → 92 on core-gates (`SubjectExtentError`) AND 91 → 92 on core-solvers
     # (`ConventionError`) — two classes, one number twice; the merged tree measures 93 (SEAM 8 §2).
-    assert len(POLICED) == 93, sorted(POLICED)
+    # WAVE-14 MERGE (coordinator, 2026-09-04, after #159/#160 and receipt #287): 93 → 94 (`ReferenceFileError`), measured.
+    assert len(POLICED) == 94, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

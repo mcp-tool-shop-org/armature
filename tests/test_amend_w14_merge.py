@@ -14,8 +14,9 @@ from blender_stub import load_tool
 
 
 def _refusal(mod, path):
-    with pytest.raises(mod.ArmatureError) as exc:
+    with pytest.raises(mod.ReferenceFileError) as exc:   # a NAMED subclass, never the base
         mod.require_reference_file(path)
+    assert isinstance(exc.value, mod.ArmatureError)
     return exc.value
 
 
@@ -26,7 +27,7 @@ def test_a_missing_reference_is_refused_with_a_receipt_a_halt_line_can_print(tmp
     err = _refusal(mod, missing)
     ev = err.evidence
     assert isinstance(ev, dict), ev
-    assert ev["gate"] is None and ev["andon"] == "ArmatureError", ev
+    assert ev["gate"] is None and ev["andon"] == "ReferenceFileError", ev
     assert ev["clause"] == "reference_not_a_file", ev
     assert ev["path"] == missing
 
@@ -44,7 +45,8 @@ def test_an_unreadable_reference_is_refused_with_its_own_clause(tmp_path):
 
 
 def test_every_refusal_in_require_reference_file_names_a_clause():
-    """Source-level: no `raise ArmatureError(` in that function carries fewer than two arguments."""
+    """Source-level: every raise in that function is the NAMED class with two arguments (a bare base
+    raise, with or without evidence, is the shape two censuses refuse)."""
     import ast, inspect
     mod = load_tool("make_rig_sheet.py")
     src = inspect.getsource(mod.require_reference_file)
@@ -53,6 +55,7 @@ def test_every_refusal_in_require_reference_file_names_a_clause():
     assert len(raises) == 2, len(raises)
     for r in raises:
         assert isinstance(r.exc, ast.Call) and len(r.exc.args) == 2, ast.dump(r.exc)[:200]
+        assert getattr(r.exc.func, "id", None) == "ReferenceFileError", ast.dump(r.exc.func)
         ev = r.exc.args[1]
         keys = {k.value for k in ev.keys if isinstance(k, ast.Constant)}
         assert {"gate", "andon", "clause"} <= keys, keys
