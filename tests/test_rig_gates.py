@@ -443,18 +443,32 @@ def test_the_gate_p_clause_population_is_the_three_measured_today():
     assert len(_gate_p_clauses()) == 3
 
 
+def _refuses_an_empty_pair(fn):
+    """Does this clause refuse `(0, 3)` by name, as `GatePRestPose`?"""
+    try:
+        fn(np.zeros((0, 3)), np.zeros((0, 3)), 1.0)
+    except GatePRestPose:
+        return True
+    except Exception:
+        return False
+    return False
+
+
 def test_a_fourth_gate_p_clause_is_seen_by_this_census(monkeypatch):
-    """The census's RED direction: add a member to the node it keys on and the population
-    changes, so the guard tests below cannot go stale by omission."""
+    """The census's RED direction, by mutation: a clause added to the node this census
+    keys on joins the population, and a clause without the guards is the one member the
+    property below does not hold for. Before the fix this same walk named
+    `gate_p_evaluation_is_live` and `gate_p_round_trip_positions`."""
     def gate_p_fourth_clause(a, b, bbox_diagonal):        # no guards at all
         return {"verdict": "green"}
 
     monkeypatch.setattr(rig_gates, "gate_p_fourth_clause", gate_p_fourth_clause,
                         raising=False)
-    assert set(_gate_p_clauses()) == GATE_P_CLAUSES_TODAY | {"gate_p_fourth_clause"}
-    with pytest.raises(GatePRestPose):
-        for fn in _gate_p_clauses().values():
-            fn(np.zeros((0, 3)), np.zeros((0, 3)), 1.0)
+    population = _gate_p_clauses()
+    assert set(population) == GATE_P_CLAUSES_TODAY | {"gate_p_fourth_clause"}
+    unguarded = sorted(n for n, fn in population.items()
+                       if not _refuses_an_empty_pair(fn))
+    assert unguarded == ["gate_p_fourth_clause"], unguarded
 
 
 @pytest.mark.parametrize("clause", sorted(GATE_P_CLAUSES_TODAY))
