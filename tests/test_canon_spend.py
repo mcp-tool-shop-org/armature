@@ -211,6 +211,8 @@ import glob
 import io
 import contextlib
 
+import _census_nodes as CN
+
 SPEND_BUILDERS = sorted(
     os.path.basename(p) for p in glob.glob(os.path.join(TOOLS, "build_*payload*.py"))
     if "add_spend_flags" in open(p, encoding="utf-8").read())
@@ -270,56 +272,34 @@ def test_no_spend_builder_discards_the_canon_evidence(name):
 #: The three names the canon gate is called by across the builders.
 CANON_CALLS = ("gate_write", "canon_spend", "require_canon")
 
-#: Attribute calls that are in-tool refusals but carry no `gate_` prefix. Named rather than
-#: inferred: `route_gates.verify` and `route_gates.frame_legality` raise, and the ordering
-#: check below is blind to any refusal it cannot name.
-OTHER_GATE_CALLS = ("verify", "frame_legality")
+#: Attribute calls that are in-tool refusals but carry no `gate_` prefix. A hint since wave
+#: 12, not the definition: the predicate is behavioural and resolves a module-local helper
+#: that raises. These two are `route_gates.verify` and `route_gates.frame_legality`, which
+#: are attribute calls into another module and so are not reachable by the one-hop walk.
+OTHER_GATE_CALLS = ("verify", "frame_legality", "parse_plate", "parse_boxes",
+                    "frame_paths", "frame_population", "frames_by_number", "check_runs",
+                    "common_frame_count", "bound_windows")
+
+#: Every `ArmatureError` subclass name, from the live hierarchy AND from the tree. Computed
+#: once; the walk above runs many times.
+ERROR_NAMES = CN.armature_error_names()
 
 
-def _called_name(node):
-    func = node.func
-    return (func.id if isinstance(func, ast.Name)
-            else func.attr if isinstance(func, ast.Attribute) else "")
+# ONE implementation of each of these nodes, in `tests/_census_nodes.py` (F-e63ce880).
+# `_called_name`, `_is_gate_call` and `_cli_body` used to be duplicated byte-for-byte
+# between this file and `tests/test_instrument_write_ordering.py` — identical 1901-character
+# AST dumps — and only that copy applied the mutually-exclusive-branch correction, so the
+# two walks reported different write lines on `encode_control`, `measure_cascade_clip` and
+# `rig_character` while each file's docstring claimed to compute the other's answer. None of
+# the three is in `BUILDERS`, so no verdict differed on that tree; the divergence would have
+# surfaced the day a module crossed between the two populations, with each file citing the
+# other as its authority.
+_called_name = CN.called_name
+_cli_body = CN.cli_body
 
 
 def _is_gate_call(called):
-    return called.startswith("gate_") or called in CANON_CALLS or called in OTHER_GATE_CALLS
-
-
-def _cli_body(tree):
-    """The module-level function that IS the tool's command line — derived, not named.
-
-    The census used to key on the function literally called `main`. That was the right node
-    only while every tool's `main` held its own body: wave 10 split three builders'
-    (`build_assembly_payload`, `build_cascade_payload`, `build_r2v_payload`) into
-    `build_and_write(argv)` — which builds, gates and writes — plus a `main(argv)` that
-    returns the process exit code and nothing else, because `main` used to `return wf`
-    under `raise SystemExit(main())` and exited 1 on a fully gated success. Keyed on the
-    NAME, this census reported "runs no in-tool refusal at all" for three tools whose
-    refusals had not moved an inch.
-
-    The derivation follows ONE delegation, and only out of a `main` that is a wrapper and
-    nothing else: at most three statements (its docstring aside) and exactly one call to a
-    module-level function of its own module. That function is then the body. Every other
-    `main` — including the eight builders that never split — is read exactly as before.
-    (An earlier draft keyed on "which function calls `parse_args`". Three builders define a
-    module-level helper literally named `parse_args`, so it picked the helper and reported
-    the same false emptiness one level down. Measured 2026-09-04.)
-    """
-    named = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
-    fn = named.get("main")
-    if fn is None:
-        return None
-    body = [st for st in fn.body
-            if not (isinstance(st, ast.Expr) and isinstance(st.value, ast.Constant))]
-    if len(body) > 3:
-        return fn
-    called = {c.func.id for c in ast.walk(fn)
-              if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
-              and c.func.id in named}
-    if len(called) == 1:
-        return named[next(iter(called))]
-    return fn
+    return CN.is_refusal_call(called, CANON_CALLS, OTHER_GATE_CALLS)
 
 
 def _main_of(src, what):
@@ -811,7 +791,7 @@ def test_every_spend_builder_exposes_the_spend_flags(name):
 
 
 def _gate_and_write_lines(src, what):
-    """`({gate name: line}, {write kind: line})` for `main()`.
+    """`({line: refusal}, {line: write kind})` for the builder's CLI body.
 
     Wave 6, F-f770490d. This walk used to count ONLY `gate_write` / `canon_spend` /
     `require_canon` and then compare `min(gates_at) < min(writes_at)` — the FIRST gate
@@ -823,24 +803,36 @@ def _gate_and_write_lines(src, what):
     Driving it with an unregistered seed raises Gate S and leaves an empty run directory
     on disk — an empty directory beside real ones, read later as a run that happened.
 
-    So: every in-tool refusal main() runs is collected, and the first write is compared
-    against the LAST of them.
+    So: every in-tool refusal the CLI body runs is collected, and the first write is
+    compared against the LAST of them.
+
+    WAVE 12, F-183635ad + F-e63ce880 — ONE implementation, and it is behavioural. The walk
+    is `tests/_census_nodes.refusal_and_write_lines`, shared with
+    `tests/test_instrument_write_ordering.py`; a refusal is any `raise` of an
+    `ArmatureError` subclass, inline or one hop through a module-local helper, unioned with
+    the named gate calls. The mutually-exclusive-branch correction rides with it, so the two
+    files can no longer answer differently about the same module.
     """
-    fn = _main_of(src, what)
-    gates_at, writes_at = {}, {}
-    for node in ast.walk(fn):
-        if not isinstance(node, ast.Call):
-            continue
-        called = _called_name(node)
-        if _is_gate_call(called):
-            gates_at.setdefault(node.lineno, called)
-        elif called == "makedirs":
-            writes_at.setdefault(node.lineno, "os.makedirs")
-        elif (called == "open" and len(node.args) >= 2
-              and isinstance(node.args[1], ast.Constant)
-              and "w" in str(node.args[1].value)):
-            writes_at.setdefault(node.lineno, 'open(..., "w")')
-    return gates_at, writes_at
+    return CN.refusal_and_write_lines(
+        src, error_names=ERROR_NAMES, canon_calls=CANON_CALLS,
+        other_gate_calls=OTHER_GATE_CALLS)
+
+
+def test_the_builders_and_the_instruments_are_read_by_the_same_function():
+    """F-e63ce880's fix, asserted rather than described.
+
+    The shape `tests/test_packaging.py` already uses for the two import scanners: not "these
+    two walks agree today" but "there is one walk". This file's docstring for
+    `gate_and_write_lines` in the instruments census claimed the two computed the same
+    shape; they did not, and nothing could have told a reader which was authoritative.
+    """
+    import test_instrument_write_ordering as WO
+
+    assert _cli_body is WO._cli_body is CN.cli_body
+    assert _called_name is WO._called_name is CN.called_name
+    for name in sorted(set(BUILDERS)):
+        src = _builder_source(name)
+        assert _gate_and_write_lines(src, name) == WO.gate_and_write_lines(src, name), name
 
 
 @pytest.mark.parametrize("name", BUILDERS)
