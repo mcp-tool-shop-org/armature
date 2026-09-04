@@ -158,6 +158,10 @@ RECORDED_RECORD_WRITERS = [
     "preview_walk.py", "probe_glb.py", "probe_subject.py", "render_performer.py",
     "render_start_frame.py", "render_turnaround.py", "rig_bake.py", "rig_character.py",
     "rig_parts.py", "rig_repair.py", "rig_retopo.py",
+    # WAVE 12 (F-6b3040d1): JOINED when `blender_tools()` stopped keying on the literal
+    # token `import bpy`. `stage_render` writes the run's per-frame manifest with
+    # `json.dump`, so it has always been a record writer; the population could not see it.
+    "stage_render.py",
 ]
 
 #: The writers that state no Blender version, measured 2026-09-04 with the derived walk
@@ -179,7 +183,7 @@ def test_the_record_writing_population_is_derived_and_has_not_grown_silently():
         "appeared": sorted(set(RECORD_WRITERS) - set(RECORDED_RECORD_WRITERS)),
         "vanished": sorted(set(RECORDED_RECORD_WRITERS) - set(RECORD_WRITERS)),
     }
-    assert len(RECORD_WRITERS) == 21, RECORD_WRITERS
+    assert len(RECORD_WRITERS) == 22, RECORD_WRITERS
     assert NO_BLENDER_VERSION_ROUTED <= set(RECORD_WRITERS)
     #: the eight the old `'"tool":' in src` predicate could not see
     assert {"make_binding_sheet.py", "preview_glb.py", "probe_glb.py"} <= set(RECORD_WRITERS)

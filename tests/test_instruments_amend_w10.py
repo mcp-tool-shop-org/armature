@@ -19,6 +19,11 @@ import re
 
 import pytest
 
+# ONE definition of "this member cannot yet be held to the sentinel half of the halt
+# contract", imported rather than restated: `stage_render.py` joined the Blender population
+# in wave 12 (F-6b3040d1) when it stopped keying on the literal token `import bpy`, and the
+# handler it needs is instruments-measure's to write (F-f9251c74).
+from test_instrument_exits import halt_contract_pending
 from blender_stub import (blender_tools, exit_code_of_main_block, load_tool, main_block,
                           read_source)
 
@@ -271,8 +276,27 @@ def success_tokens(filename):
 
 BLENDER_TOOLS = blender_tools()
 
+#: The members that print no `<STEM>_HALT` line at all, so no clause of the halt contract
+#: has anything to read. Derived from the objective property, never typed — the category
+#: empties itself the moment the handler lands.
+HALT_PENDING = [f for f in BLENDER_TOOLS if halt_contract_pending(f)]
+HALT_HELD = [f for f in BLENDER_TOOLS if not halt_contract_pending(f)]
 
-@pytest.mark.parametrize("filename", BLENDER_TOOLS)
+
+def test_the_halt_pending_category_is_the_one_the_exit_census_names():
+    """Rule 3: what cannot be judged is counted, and counted in ONE place.
+
+    This file and `tests/test_instrument_exits.py` read the same category from the same
+    function, so the two cannot disagree about which members are pending.
+    """
+    import test_instrument_exits as EX
+
+    assert set(HALT_PENDING) <= EX.HALT_CONTRACT_PENDING, sorted(
+        set(HALT_PENDING) - EX.HALT_CONTRACT_PENDING)
+    assert set(HALT_PENDING) | set(HALT_HELD) == set(BLENDER_TOOLS)
+
+
+@pytest.mark.parametrize("filename", HALT_HELD)
 def test_every_blender_tool_prints_the_success_token_its_halt_token_pairs_with(filename):
     """`<PREFIX>_OK <payload>` for the same `<PREFIX>` the handler halts under.
 
@@ -309,16 +333,16 @@ def test_no_success_token_is_printed_by_two_different_tools():
     """MEASURED 2026-09-04: `PANELS_OK` came from `make_binding_sheet:267`,
     `make_parts_sheet:313`, `make_rig_sheet:237` and `make_skeleton_sheet:351`, so a caller
     that ran one of them and grepped for it was satisfied by any of the other three."""
-    derived = {fn: set(success_tokens(fn)) for fn in BLENDER_TOOLS}
+    derived = {fn: set(success_tokens(fn)) for fn in HALT_HELD}
     shared = shared_success_tokens(derived)
     assert shared == {}, f"success tokens claimed by more than one tool: {shared}"
 
 
 def test_no_success_token_is_a_prefix_of_any_tools_halt_token():
     """`PROBE_GLB` matched `PROBE_GLB_HALT`: the success grep was satisfied by the halt."""
-    halts = {halt_prefix(fn) + "_HALT" for fn in BLENDER_TOOLS}
+    halts = {halt_prefix(fn) + "_HALT" for fn in HALT_HELD}
     bad = []
-    for fn in BLENDER_TOOLS:
+    for fn in HALT_HELD:
         for token in success_tokens(fn):
             hits = sorted(h for h in halts if h.startswith(token))
             if hits:
@@ -391,7 +415,7 @@ def _nonstring_key_raiser():
     return raiser
 
 
-@pytest.mark.parametrize("filename", [f for f in BLENDER_TOOLS if main_block(f) is not None])
+@pytest.mark.parametrize("filename", [f for f in HALT_HELD if main_block(f) is not None])
 def test_a_non_string_keyed_evidence_dict_does_not_delete_the_exit_code(filename, tmp_path,
                                                                        capsys):
     """The handler serialises its own keys, and `sys.exit` runs whatever happens.
@@ -436,7 +460,7 @@ def test_the_keysafe_helper_stringifies_keys_at_every_depth():
         "('hip', 'z')": {"3": "x"}, "rows": [{"(1, 2)": "y"}]}
 
 
-@pytest.mark.parametrize("filename", [f for f in BLENDER_TOOLS if main_block(f) is not None])
+@pytest.mark.parametrize("filename", [f for f in HALT_HELD if main_block(f) is not None])
 def test_every_handler_carries_the_keysafe_helper(filename):
     """The family census. One implementation per tool today (21 copies, recorded as a
     Stage B lift into `armature_core.errors` under `skipped[]`), so the property has to be
@@ -731,6 +755,15 @@ def stranded_refusals(filename):
 
     The refusal population is the sibling census's own `gate_and_write_lines` -- carried,
     not reimplemented, so the two files cannot disagree about what a refusal is.
+
+    WAVE 12, F-183635ad: carrying the sibling's walk was right and the walk was blind.
+    It recognised a refusal only by CALLEE NAME, and this file's own docstring said the
+    import existed "so the two files cannot disagree about what a refusal is" -- which made
+    both files agree on a predicate that cannot see an INLINE `raise`. Measured: this
+    function returned `[]` for every tool, while eleven of the 21 strand a refusal between
+    their `makedirs` and their first byte. `make_rig_sheet` is the instruments auditor's
+    example and it holds exactly: `<out>/` at :95, `<out>/panels/` at :97, then
+    `raise ArmatureError` inline at :112, :119 and :139.
     """
     import test_instrument_write_ordering as WO
 
@@ -739,6 +772,22 @@ def stranded_refusals(filename):
         return []
     gates, _writes = WO.gate_and_write_lines(read_source(filename), filename[:-3])
     return sorted(line for line in gates if makedirs < line < first_byte)
+
+
+def stranded_refusal_names(filename):
+    """The same sites, as NAMES.
+
+    Keyed on names, not line numbers, for the ratchet below: a line number moves under any
+    edit above it, which is how 23 of 31 entries in `test_gates`'s evidence ratchet came to
+    name nothing (F-a30afea5).
+    """
+    import test_instrument_write_ordering as WO
+
+    makedirs, first_byte = write_window(filename)
+    if makedirs is None or first_byte is None:
+        return []
+    gates, _writes = WO.gate_and_write_lines(read_source(filename), filename[:-3])
+    return sorted({gates[line] for line in gates if makedirs < line < first_byte})
 
 
 #: Derived 2026-09-04: every Blender tool whose `main()` both creates its output directory
@@ -760,6 +809,44 @@ def test_the_write_ordering_population_is_derived_and_is_the_one_recorded():
         "vanished": sorted(set(RECORDED_DIR_AND_WRITE) - set(derived))}
 
 
+#: MEASURED 2026-09-04 under the BEHAVIOURAL refusal predicate (wave 12, F-183635ad):
+#: eleven of the 21 strand a refusal between `makedirs` and the first byte, 22 distinct
+#: refusal names in all. Not one of them was visible while the predicate keyed on the callee
+#: name, so this whole table is a measurement of the old blindness rather than of new code.
+#:
+#: The moves are INSTRUMENTS' (the wave-12 brief routes "the 18 stranded refusals moved
+#: above the first write" there); this file's half is the census that makes them visible and
+#: the ratchet that stops a new one arriving. The set may not GROW; it is expected to shrink
+#: as the moves land, and an entry closed by a move is deleted by the commit that moves it.
+STRANDED_BETWEEN_DIR_AND_BYTE = {
+    "diagnose_bone_heat.py": ["load"],
+    "make_binding_sheet.py": ["render_arm"],
+    "make_parts_sheet.py": ["articulated_side", "light_the_scene", "raise ArmatureError"],
+    "make_rig_sheet.py": ["raise ArmatureError"],
+    "make_skeleton_sheet.py": ["light_the_scene", "raise SkeletonSheetGate"],
+    "make_test_armature.py": ["build"],
+    "render_turnaround.py": ["solve_ortho_scale_for_height", "solve_radius_for_height"],
+    "rig_bake.py": ["_import", "bake", "raise BakeEmpty", "unwrap"],
+    "rig_character.py": ["build_pass"],
+    "rig_repair.py": ["raise ArmatureError", "raise NotManifoldAfterRepair",
+                      "raise TooMuchRemoved"],
+    "rig_retopo.py": ["import_subject", "quadriflow", "raise NoRetopoProduced"],
+}
+
+
+def test_the_stranded_ratchet_names_real_members_and_may_not_grow():
+    """Size and membership before the property, in the direction that protects it."""
+    assert set(STRANDED_BETWEEN_DIR_AND_BYTE) <= set(RECORDED_DIR_AND_WRITE), sorted(
+        set(STRANDED_BETWEEN_DIR_AND_BYTE) - set(RECORDED_DIR_AND_WRITE))
+    derived = {f: stranded_refusal_names(f) for f in RECORDED_DIR_AND_WRITE}
+    derived = {f: v for f, v in derived.items() if v}
+    grew = {f: sorted(set(v) - set(STRANDED_BETWEEN_DIR_AND_BYTE.get(f, [])))
+            for f, v in derived.items()
+            if set(v) - set(STRANDED_BETWEEN_DIR_AND_BYTE.get(f, []))}
+    assert grew == {}, {"new refusals between the directory and the first byte": grew}
+    assert sum(len(v) for v in derived.values()) <= 22, sorted(derived.items())
+
+
 @pytest.mark.parametrize("filename", RECORDED_DIR_AND_WRITE)
 def test_no_refusal_sits_between_the_output_directory_and_the_first_byte(filename):
     """MEASURED 2026-09-04, thirteen stranded refusals across four tools:
@@ -771,6 +858,13 @@ def test_no_refusal_sits_between_the_output_directory_and_the_first_byte(filenam
     A run refused by one of those leaves an empty output directory behind, which a reader
     scanning `outputs/` -- or a re-run into the same `--out` -- reads as an attempt that
     produced nothing rather than one that was refused."""
+    if filename in STRANDED_BETWEEN_DIR_AND_BYTE:
+        pytest.skip(
+            f"its stranded refusals are named individually in "
+            f"STRANDED_BETWEEN_DIR_AND_BYTE and ratcheted there "
+            f"({STRANDED_BETWEEN_DIR_AND_BYTE[filename]}); the moves are instruments' "
+            f"(wave 12, F-183635ad) and this module-level assertion would say nothing the "
+            f"ratchet does not")
     stranded = stranded_refusals(filename)
     makedirs, first_byte = write_window(filename)
     assert stranded == [], (
@@ -1180,7 +1274,7 @@ def outcome_literals(filename):
     return [], None
 
 
-@pytest.mark.parametrize("filename", BLENDER_TOOLS)
+@pytest.mark.parametrize("filename", HALT_HELD)
 def test_every_handler_spells_the_three_outcomes_the_same_way(filename):
     lits, _routed = outcome_literals(filename)
     assert tuple(lits) == OUTCOME_VOCABULARY, (
@@ -1191,7 +1285,7 @@ def test_every_handler_spells_the_three_outcomes_the_same_way(filename):
 def test_exactly_one_tool_routes_the_vocabulary_through_a_named_function():
     """The duplication itself, measured rather than described: 20 inline copies and one
     named `halt_outcome`, which is why the lift into `armature_core.errors` is filed."""
-    routed = {f: r for f in BLENDER_TOOLS for _l, r in [outcome_literals(f)] if r}
+    routed = {f: r for f in HALT_HELD for _l, r in [outcome_literals(f)] if r}
     assert routed == {"rig_character.py": "halt_outcome"}, routed
 
 

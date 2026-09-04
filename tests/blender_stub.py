@@ -28,20 +28,81 @@ from unittest import mock
 
 TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 
-#: Every module under `tools/` that imports `bpy`. Built by reading the files, not typed
-#: out, so a new Blender tool joins the population the day it lands.
-def blender_tools():
+
+def blender_reach_src(src):
+    """The set of reasons this SOURCE runs under Blender — empty if it does not.
+
+    Takes the text rather than a filename so a census can point the same derivation at a
+    scratch tree carrying a defective member (`test_instruments_amend_w8.blender_tools_in`
+    used to carry a third copy of the walk for exactly that reason, and it was the copy
+    that kept the token-keyed predicate).
+    """
+    why = set()
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(a.name == "bpy" or a.name.startswith("bpy.") for a in node.names):
+                why.add("import bpy")
+            if any(a.name.endswith("blender_scene") for a in node.names):
+                why.add("armature_core.blender_scene backend")
+        if isinstance(node, ast.ImportFrom):
+            if (node.module or "").split(".")[0] == "bpy":
+                why.add("import bpy")
+            if (node.module or "").endswith("blender_scene"):
+                why.add("armature_core.blender_scene backend")
+            if any(a.name == "blender_scene" for a in node.names):
+                why.add("armature_core.blender_scene backend")
+    if "blender -b -P" in src:
+        why.add("documented `blender -b -P`")
+    return why
+
+
+def blender_tools_in(directory):
+    """Every `*.py` under `directory` that runs under Blender — ONE derivation."""
     names = []
-    for fn in sorted(os.listdir(TOOLS)):
+    for fn in sorted(os.listdir(directory)):
         if not fn.endswith(".py"):
             continue
-        src = read_source(fn)
-        tree = ast.parse(src)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import) and any(a.name == "bpy" for a in node.names):
+        with open(os.path.join(directory, fn), encoding="utf-8") as fh:
+            if blender_reach_src(fh.read()):
                 names.append(fn)
-                break
     return names
+
+
+def blender_reach(filename):
+    """The set of reasons `tools/<filename>` runs under Blender — empty if it does not.
+
+    THE NODE (wave 12, F-6b3040d1): "runs under Blender" is a BEHAVIOUR, and it has three
+    spellings in this tree. This population used to key on one of them — an `ast.Import`
+    naming `bpy` at any depth — and `tools/stage_render.py` writes none: it reaches Blender
+    through a lazily-instantiated backend (`stage_render.py:106`, "Imports bpy only when
+    instantiated") and a `grep` for `import bpy` in it returns zero hits. Measured on this
+    tree: the token-keyed walk returned 21 names and `stage_render` was not among them, nor
+    in `test_amend_w10_builders.CPU_TOOLS`, so no test anywhere asserted its exit code or
+    its halt sentinel — on the tool whose documented invocation is
+    `blender -b -P tools/stage_render.py -- <args>` (README.md:181) and whose `__main__` is
+    a bare `sys.exit(main())` with `main` catching `GateFailure` only. Under `blender -b -P`
+    an escaped exception is exit 0, which this repo has measured three times
+    (`tools/author_walk.py:739-741`), so a run refused by a plain `ArmatureError` reports
+    SUCCESS to whatever ran it.
+
+    The three spellings, unioned:
+
+    * `import bpy` / `from bpy... import` anywhere in the module, nesting included — a
+      lazy import inside a function counts, because the module still runs under Blender;
+    * a documented `blender -b -P` invocation in the module's own text;
+    * `armature_core.blender_scene` used as a backend.
+
+    Returning the REASONS rather than a bool is deliberate: a census that grows can say
+    which spelling brought the new member in.
+    """
+    return blender_reach_src(read_source(filename))
+
+
+#: Every module under `tools/` that runs under Blender. Built by reading the files, not
+#: typed out, so a new Blender tool joins the population the day it lands.
+def blender_tools():
+    return blender_tools_in(TOOLS)
 
 
 def read_source(filename):
