@@ -208,3 +208,200 @@ def test_the_evaluated_vertex_reader_has_a_public_name_that_filters_by_visibilit
     params = list(inspect.signature(BS.evaluated_world_vertices).parameters)
     assert params[:2] == ["scene", "objects"], params
     assert "render_visible_meshes" in inspect.getsource(BS.evaluated_world_vertices)
+
+
+# --- F-ae34fe44: callability is not re-iterability -----------------------------------
+
+
+def test_a_callable_returning_a_spent_iterator_is_refused_not_read_as_radius_zero(BS):
+    """Measured against the stubbed module over two frames spanning a 1.118 bounding
+    radius: `union_sphere(lambda: iter(frames))` returned radius 1.118033988749895, while
+    `it = iter(frames); union_sphere(lambda: it)` PASSED the `callable()` guard and
+    returned radius 0.0 — `centre` and `half` correct in both, so nothing anywhere
+    disagreed with the zero. That radius is `auto_radius`'s only size input, so a 0.0
+    sphere puts the orbit camera on the target with the subject wrapped around the lens.
+    """
+    frames = [np.array([[-1.0, 0.0, 0.0]]), np.array([[1.0, 0.0, 1.0]])]
+    it = iter(frames)
+    with pytest.raises(BS.NonReiterableFrames) as exc:
+        BS.union_sphere(lambda: it)
+    msg = str(exc.value)
+    assert "2" in msg and "0" in msg, msg
+    assert "second pass" in msg
+
+
+def test_a_generator_function_over_a_spent_source_is_refused(BS):
+    """The exact shape `world_bounds_over_frames.frames()` uses — a generator FUNCTION,
+    perfectly callable, closing over a source that is already spent."""
+    src = iter([np.array([[0.0, 0.0, 0.0]]), np.array([[1.0, 1.0, 1.0]])])
+
+    def frames():
+        for arr in src:
+            yield arr
+
+    with pytest.raises(BS.NonReiterableFrames, match=r"not re-iterable"):
+        BS.union_sphere(frames)
+
+
+def test_a_partly_spent_source_is_refused_too(BS):
+    """A spent iterator yields zero; a partly-spent one yields fewer. Counting both
+    passes catches every shape `callable()` cannot."""
+    arrays = [np.array([[float(i), 0.0, 0.0]]) for i in range(4)]
+    state = {"n": 0}
+
+    def frames():
+        state["n"] += 1
+        take = arrays if state["n"] == 1 else arrays[:2]
+        return iter(take)
+
+    with pytest.raises(BS.NonReiterableFrames) as exc:
+        BS.union_sphere(frames)
+    assert "4" in str(exc.value) and "2" in str(exc.value)
+
+
+def test_a_genuinely_re_iterable_source_still_returns_the_same_numbers(BS):
+    """The check binds in both directions: handed a fresh iterator the two passes must
+    still reproduce the one-pass arithmetic exactly."""
+    rng = np.random.default_rng(11)
+    arrays = [rng.uniform(-1.0, 1.0, size=(30, 3)) + i * 0.2 for i in range(5)]
+    center, half, radius = BS.union_sphere(_frames(arrays))
+    allpts = np.concatenate(arrays, axis=0)
+    lo, hi = allpts.min(axis=0), allpts.max(axis=0)
+    want_center = (lo + hi) * 0.5
+    assert center == pytest.approx(want_center)
+    assert half == pytest.approx((hi - lo) * 0.5)
+    assert radius == pytest.approx(
+        max(float(np.linalg.norm(a - want_center, axis=1).max()) for a in arrays))
+
+
+def test_a_source_whose_empty_frames_differ_between_passes_is_refused(BS):
+    """The count is of frames YIELDED, before the empty-array skip, so a source that
+    changes what it yields between passes is caught even when the geometry agrees."""
+    state = {"n": 0}
+
+    def frames():
+        state["n"] += 1
+        if state["n"] == 1:
+            return iter([np.zeros((0, 3)), np.array([[1.0, 0.0, 0.0]])])
+        return iter([np.array([[1.0, 0.0, 0.0]])])
+
+    with pytest.raises(BS.NonReiterableFrames, match=r"not re-iterable"):
+        BS.union_sphere(frames)
+
+
+# --- F-0e29613a: the measuring entry points go through the filtering reader -----------
+
+
+def _routing_probe(BS, monkeypatch):
+    """Record what `evaluated_world_vertices` was handed, without a real depsgraph."""
+    seen = {}
+
+    def fake_visible(scene, objects):
+        seen["scene"] = scene
+        return ["visible-only"]
+
+    def fake_points(objects):
+        seen["measured"] = objects
+        return np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+
+    monkeypatch.setattr(BS, "render_visible_meshes", fake_visible)
+    monkeypatch.setattr(BS, "_evaluated_world_vertices", fake_points)
+    return seen
+
+
+def test_world_bounds_filters_by_render_visibility_when_it_is_given_the_scene(BS,
+                                                                              monkeypatch):
+    """`evaluated_world_vertices(scene, objects)` was introduced so that "there is no
+    shape of it that skips the filter", and it guarded ONE entry point of five: this one,
+    `world_bounds_over_frames`, `evaluated_geometry_signature` and `projected_bbox_px` all
+    still called the unfiltered primitive on whatever list they were handed (F-0e29613a).
+    """
+    seen = _routing_probe(BS, monkeypatch)
+    BS.world_bounds(["a", "b"], scene="SCENE")
+    assert seen == {"scene": "SCENE", "measured": ["visible-only"]}
+
+
+def test_world_bounds_without_a_scene_still_measures_what_it_was_handed(BS, monkeypatch):
+    """The other direction: the caller-filtered contract is unchanged, which is what keeps
+    `unfiltered_world_bounds`'s deliberately naive row honest."""
+    seen = _routing_probe(BS, monkeypatch)
+    BS.world_bounds(["a", "b"])
+    assert seen == {"measured": ["a", "b"]}
+
+
+def test_the_unfiltered_bounds_have_a_public_name(BS, monkeypatch):
+    """`probe_subject` reports the naive bounds beside the filtered ones, and
+    `tests/blender/check_visibility.py` pins that the two differ — so the naive
+    measurement needs a public name rather than a reach into the private primitive."""
+    seen = _routing_probe(BS, monkeypatch)
+    assert BS.unfiltered_world_bounds(["a", "b"])[2] == pytest.approx(0.5)
+    assert seen == {"measured": ["a", "b"]}
+
+
+def test_the_geometry_signature_filters_when_it_is_given_the_scene(BS, monkeypatch):
+    seen = _routing_probe(BS, monkeypatch)
+    BS.evaluated_geometry_signature(["a", "b"], scene="SCENE")
+    assert seen == {"scene": "SCENE", "measured": ["visible-only"]}
+
+
+def test_world_bounds_over_frames_always_filters_because_it_holds_the_scene(BS,
+                                                                            monkeypatch):
+    """It already took `scene` and still read the unfiltered primitive."""
+    seen = _routing_probe(BS, monkeypatch)
+    monkeypatch.setattr(BS, "set_scene_frame", lambda scene, i: None)
+    BS.world_bounds_over_frames("SCENE", ["a", "b"], 2)
+    assert seen == {"scene": "SCENE", "measured": ["visible-only"]}
+
+
+def _functions_calling(source, callee):
+    """Every function in `source` whose body calls `callee` by name.
+
+    Derived by AST over the module itself, so a fifth reader of the unfiltered primitive
+    joins the population the moment it is written.
+    """
+    import ast
+
+    found = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for sub in ast.walk(node):
+            if (isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)
+                    and sub.func.id == callee):
+                found.add(node.name)
+    return found
+
+
+def test_the_unfiltered_primitive_has_exactly_three_readers_inside_the_module(BS):
+    """Census, derived by AST over blender_scene.py.
+
+    Measured on this tree: `_evaluated_world_vertices` is reached from the public filtering
+    reader, from the funnel the four measuring entry points share, and from the one
+    deliberately naive measurement. Nothing else may read it, and a new reader fails here.
+    """
+    import inspect
+
+    derived = _functions_calling(inspect.getsource(BS), "_evaluated_world_vertices")
+    assert derived == {"evaluated_world_vertices", "_points_to_measure",
+                       "unfiltered_world_bounds"}, sorted(derived)
+
+
+def test_that_census_goes_red_on_a_fourth_reader():
+    """Prove it can fail — the mutation adds a member without the property."""
+    mutated = (
+        "def evaluated_world_vertices(scene, objects):\n"
+        "    return _evaluated_world_vertices(render_visible_meshes(scene, objects))\n"
+        "\n"
+        "def _points_to_measure(objects, scene):\n"
+        "    return _evaluated_world_vertices(objects)\n"
+        "\n"
+        "def unfiltered_world_bounds(objects):\n"
+        "    return _evaluated_world_vertices(objects)\n"
+        "\n"
+        "def new_measurement(objects):\n"
+        "    return _evaluated_world_vertices(objects)\n"
+    )
+    derived = _functions_calling(mutated, "_evaluated_world_vertices")
+    assert "new_measurement" in derived
+    assert derived != {"evaluated_world_vertices", "_points_to_measure",
+                       "unfiltered_world_bounds"}

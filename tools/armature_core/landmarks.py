@@ -430,6 +430,58 @@ def derive(verts, n_bands=200):
     face = facing(verts, z_ankle, height, z_ground)
     left_sign = face["left_x_sign"]
 
+    expected = _expected_counts(bands, reg)
+
+    # --- the figure's own X centreline, measured band by band off the trunk column.
+    #
+    # ⚠ **The defect this closes (F-884c0c8e).** Nine landmarks — the whole torso chain
+    # plus the nose — used to be written at the LITERAL world x = 0.0 while every limb
+    # landmark was measured off the mesh, `head_half` was a half-width about the WORLD
+    # origin, and `side_picker` split left from right on `c["cx"] > 0`. Nothing in this
+    # module, in `rig_character.measure_subject`, or in E07's recorded premises required
+    # or checked that the subject's own centreline sits on world x = 0 — `rig_character`
+    # hands `world_verts(mesh_obj)` straight in. Measured on the suite's synthetic figure
+    # translated in X: at dx = 0.02 / 0.05 / 0.08 on a 1.000-tall figure the whole torso
+    # chain stayed at x = +0.0000 while the hips travelled with the mesh, dislocating the
+    # `hips` bone head from the midpoint of its own two children by exactly the offset;
+    # the ears came back up to 1.94× too wide, symmetric about the world axis rather than
+    # about the skull, and `aapose` reads ear_R / ear_L as keypoints 16 / 17, so the pose
+    # stick that conditions a generation was drawn that wide too. No gate can see any of
+    # it: Gate N reads names, Gate P compares the rest pose to itself, Gate D reproduces
+    # the same wrong skeleton, and `joints.snap_sites_to_balls` only touches the twelve
+    # limb pivots. The module's own law is that a global constant must not govern a local
+    # feature; a world coordinate typed into a placement is exactly that.
+    #
+    # So the centreline is derived per structure, the same way every limb already is. The
+    # trunk column is traced FIRST and its per-band `cx` is the axis the torso, the head
+    # and the left/right split are all placed about.
+    def trunk_pick(band):
+        """The trunk cluster: the MIDDLE one by x, never the one nearest world x = 0.
+
+        Above the crotch a band shows three clusters (arm, trunk, arm) or one (trunk
+        alone), so the middle by x IS the trunk at any offset. The previous `min(abs(cx))`
+        agrees with this on a centred figure and silently picks an ARM once the figure is
+        translated past half the arm's own offset.
+        """
+        cs = band["clusters"]
+        return sorted(cs, key=lambda c: c["cx"])[len(cs) // 2] if cs else None
+
+    trunk_trace = _column_trace(bands, reg["trunk_and_arms"][1], len(bands),
+                               trunk_pick, expected)[::-1]
+    if len(trunk_trace) < 4:
+        raise LandmarkError(
+            f"the trunk column resolves to {len(trunk_trace)} bands; a torso read off fewer "
+            f"than four is noise"
+        )
+    x_axis = float(np.median([t["cx"] for t in trunk_trace]))
+
+    def trunk_x_at(z):
+        """This figure's own measured trunk centre at that height — MEASURED, per band."""
+        return float(min(trunk_trace, key=lambda t: abs(t["z"] - z))["cx"])
+
+    traces = {"trunk": trunk_trace}
+    trace_health = {"trunk": {"kept": len(trunk_trace), "dropped": 0, "max_jump": None}}
+
     def side_picker(which, outer):
         """Pick the arm (outer) or leg (inner) cluster on the named body side."""
         def pick(band):
@@ -437,10 +489,10 @@ def derive(verts, n_bands=200):
             if len(cs) < 2:
                 return None
             want_positive_x = (which == "L") == (left_sign > 0)
-            half = [c for c in cs if (c["cx"] > 0) == want_positive_x]
+            half = [c for c in cs if (c["cx"] > x_axis) == want_positive_x]
             if not half:
                 return None
-            key = (lambda c: abs(c["cx"]))
+            key = (lambda c: abs(c["cx"] - x_axis))
             return max(half, key=key) if outer else min(half, key=key)
         return pick
 
@@ -453,23 +505,31 @@ def derive(verts, n_bands=200):
         prov[name] = provenance
 
     # --- trunk chain. Ends measured; the two interior spine joints split a measured span.
+    #     x comes from the trunk column's own centroid at that height, never from world 0.
     z_shoulder = 0.5 * (z_armpit + z_neck_base)
-    put("crotch", (0.0, y_trunk, z_crotch), "MEASURED — band where the two legs merge")
-    put("neck_base", (0.0, y_trunk, z_neck_base),
-        "MEASURED — lowest band above the neck minimum at ≥2× its width")
-    put("head_base", (0.0, y_trunk, z_head_base),
-        "MEASURED — lowest band above the neck minimum at ≥2× its width")
-    put("head_top", (0.0, y_trunk, z_top), "MEASURED — mesh bbox maximum in Z")
-    put("shoulder_line", (0.0, y_trunk, z_shoulder),
-        "DERIVED(midpoint of the measured armpit→neck-base span)")
+    put("crotch", (trunk_x_at(z_crotch), y_trunk, z_crotch),
+        "MEASURED — band where the two legs merge; x from the trunk column's own centroid")
+    put("neck_base", (trunk_x_at(z_neck_base), y_trunk, z_neck_base),
+        "MEASURED — lowest band above the neck minimum at ≥2× its width; x from the "
+        "trunk column's own centroid")
+    put("head_base", (trunk_x_at(z_head_base), y_trunk, z_head_base),
+        "MEASURED — lowest band above the neck minimum at ≥2× its width; x from the "
+        "trunk column's own centroid")
+    put("head_top", (trunk_x_at(z_top), y_trunk, z_top),
+        "MEASURED — mesh bbox maximum in Z; x from the trunk column's own centroid")
+    put("shoulder_line", (trunk_x_at(z_shoulder), y_trunk, z_shoulder),
+        "DERIVED(midpoint of the measured armpit→neck-base span) + MEASURED(x from the "
+        "trunk column's own centroid)")
     span = z_neck_base - z_crotch
-    put("spine_base", (0.0, y_trunk, z_crotch + span / 3.0),
-        "DERIVED(1/3 of the measured crotch→neck-base span)")
-    put("chest_base", (0.0, y_trunk, z_crotch + 2.0 * span / 3.0),
-        "DERIVED(2/3 of the measured crotch→neck-base span)")
+    z_spine = z_crotch + span / 3.0
+    z_chest = z_crotch + 2.0 * span / 3.0
+    put("spine_base", (trunk_x_at(z_spine), y_trunk, z_spine),
+        "DERIVED(1/3 of the measured crotch→neck-base span) + MEASURED(x from the trunk "
+        "column's own centroid)")
+    put("chest_base", (trunk_x_at(z_chest), y_trunk, z_chest),
+        "DERIVED(2/3 of the measured crotch→neck-base span) + MEASURED(x from the trunk "
+        "column's own centroid)")
 
-    expected = _expected_counts(bands, reg)
-    traces, trace_health = {}, {}
     for side in ("L", "R"):
         arm = _column_trace(bands, a0, a1, side_picker(side, outer=True), expected)[::-1]
         leg = _column_trace(bands, g0, g1, side_picker(side, outer=False), expected)[::-1]
@@ -515,29 +575,17 @@ def derive(verts, n_bands=200):
             f"measurable knee")
 
         foot = verts[(verts[:, 2] < z_ankle) &
-                     ((verts[:, 0] > 0) == ((side == "L") == (left_sign > 0)))]
+                     ((verts[:, 0] > x_axis) == ((side == "L") == (left_sign > 0)))]
         if len(foot) == 0:
             raise LandmarkError(f"side {side}: no foot vertices below the ankle")
         toe_y = float(foot[:, 1].max() if face["facing_y_sign"] > 0 else foot[:, 1].min())
         put(f"toe_{side}", (ank["cx"], toe_y, z_ground),
             "MEASURED — furthest foot vertex in the measured facing direction, at ground")
 
-    # The trunk column, every band from the crotch up. Its per-band radii are how the torso,
-    # neck and head bones get a measured thickness — the same way the limb traces size the
-    # arms and legs. See `cross_section_radius`.
-    def trunk_pick(band):
-        cs = band["clusters"]
-        return min(cs, key=lambda c: abs(c["cx"])) if cs else None
-
-    trunk_trace = _column_trace(bands, reg["trunk_and_arms"][1], len(bands),
-                               trunk_pick, expected)[::-1]
-    if len(trunk_trace) < 4:
-        raise LandmarkError(
-            f"the trunk column resolves to {len(trunk_trace)} bands; a torso read off fewer "
-            f"than four is noise"
-        )
-    traces["trunk"] = trunk_trace
-    trace_health["trunk"] = {"kept": len(trunk_trace), "dropped": 0, "max_jump": None}
+    # The trunk column (traced above, before the torso chain, because its per-band `cx` is
+    # the axis every torso and head landmark is placed about) is also how the torso, neck
+    # and head bones get a measured thickness — the same way the limb traces size the arms
+    # and legs. See `cross_section_radius`.
 
     # --- head markers. Nose is measured; eyes and ears are not on a clay mannequin.
     head = verts[verts[:, 2] >= z_head_base]
@@ -547,9 +595,14 @@ def derive(verts, n_bands=200):
     face_slab = head[(head[:, 2] > hz - 0.06 * height) & (head[:, 2] < hz + 0.06 * height)]
     slab = face_slab if len(face_slab) else head
     nose_y = float(slab[:, 1].max() if face["facing_y_sign"] > 0 else slab[:, 1].min())
-    put("nose", (0.0, nose_y, hz),
-        "MEASURED — furthest head vertex in the measured facing direction, at mid-head height")
-    head_half = float(max(abs(head[:, 0].max()), abs(head[:, 0].min())))
+    head_cx = trunk_x_at(hz)
+    put("nose", (head_cx, nose_y, hz),
+        "MEASURED — furthest head vertex in the measured facing direction, at mid-head "
+        "height; x from the trunk column's own centroid at that height")
+    # Half-width about the HEAD's own axis, not about world x = 0 (F-884c0c8e). The old
+    # form, `max(abs(head[:,0].max()), abs(head[:,0].min()))`, read a translated head as up
+    # to 1.94× wider than it is and placed both ears symmetric about the world axis.
+    head_half = float(max(head[:, 0].max() - head_cx, head_cx - head[:, 0].min()))
     head_top_z, head_base_z = float(head[:, 2].max()), z_head_base
     eye_z = head_base_z + 0.62 * (head_top_z - head_base_z)
     ear_z = head_base_z + 0.55 * (head_top_z - head_base_z)
@@ -558,21 +611,23 @@ def derive(verts, n_bands=200):
     # their tails carry no anatomy and are a short offset off their own head, sized as a
     # fraction of this head's own measured half-width.
     stub = 0.30 * head_half
-    put("nose_tip", (0.0, nose_y + face["facing_y_sign"] * stub, hz),
+    put("nose_tip", (head_cx, nose_y + face["facing_y_sign"] * stub, hz),
         f"DERIVED(marker tail: {stub:.5f} = 0.30 of this head's own measured half-width, "
         f"along the measured facing direction) — a non-deforming bone still needs a tail")
     for side in ("L", "R"):
-        sx = head_half * (0.35 if (side == "L") == (left_sign > 0) else -0.35)
-        ex = head_half * (0.95 if (side == "L") == (left_sign > 0) else -0.95)
+        sx = head_cx + head_half * (0.35 if (side == "L") == (left_sign > 0) else -0.35)
+        ex = head_cx + head_half * (0.95 if (side == "L") == (left_sign > 0) else -0.95)
         put(f"eye_{side}", (sx, eye_y, eye_z),
-            "DERIVED(0.35 of this head's own measured half-width, 0.62 of its own measured "
-            "height) — NO EYE FEATURE IS PRESENT ON THIS MESH to measure against")
+            "DERIVED(0.35 of this head's own measured half-width about its own measured "
+            "axis, 0.62 of its own measured height) — NO EYE FEATURE IS PRESENT ON THIS "
+            "MESH to measure against")
         put(f"ear_{side}", (ex, float(head[:, 1].mean()), ear_z),
-            "DERIVED(0.95 of this head's own measured half-width, 0.55 of its own measured "
-            "height) — NO EAR FEATURE IS PRESENT ON THIS MESH to measure against")
+            "DERIVED(0.95 of this head's own measured half-width about its own measured "
+            "axis, 0.55 of its own measured height) — NO EAR FEATURE IS PRESENT ON THIS "
+            "MESH to measure against")
         put(f"eye_{side}_tip", (sx, eye_y + face["facing_y_sign"] * stub, eye_z),
             "DERIVED(marker tail, 0.30 of this head's own measured half-width)")
-        put(f"ear_{side}_tip", (ex + (stub if ex > 0 else -stub),
+        put(f"ear_{side}_tip", (ex + (stub if ex > head_cx else -stub),
                                 float(head[:, 1].mean()), ear_z),
             "DERIVED(marker tail, 0.30 of this head's own measured half-width)")
 
@@ -588,6 +643,10 @@ def derive(verts, n_bands=200):
             "z_neck_base": float(z_neck_base), "z_neck_min": float(bands[i_neck]["z"]),
             "neck_min_width": float(w_neck),
             "z_head_base": float(z_head_base), "z_top": float(z_top),
+            # The premise that used to be silent: this figure's own measured X centreline.
+            # Nothing requires it to be 0, and nothing downstream may assume it is.
+            "x_centreline": float(x_axis),
+            "x_head_centreline": float(head_cx),
             "cluster_runs": {k: [int(v[0]), int(v[1]), int(v[2])]
                              for k, v in reg.items() if k != "counts"},
         },

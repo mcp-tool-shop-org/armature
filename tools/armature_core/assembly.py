@@ -93,7 +93,8 @@ def gate_no_paid_nodes(graph, allowed=ALLOWED_CLASSES):
     unnamed = sorted(str(nid) for nid, n in graph.items() if n.get("class_type") is None)
     classes = sorted(c for c in {n.get("class_type") for n in graph.values()}
                      if c is not None)
-    ev = {"gate": "ASSEMBLY", "classes": classes, "allowed": list(allowed),
+    ev = {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+          "classes": classes, "allowed": list(allowed),
           "n_nodes": len(graph), "nodes_without_class_type": unnamed}
 
     if unnamed:
@@ -140,6 +141,28 @@ def _link(v):
     return None
 
 
+def _links_equal(got, want):
+    """Do two links name the same node and output slot? Type-normalised, like `_link`.
+
+    F-527b4284. `_link` exists precisely because "a raw `==` between two links can differ
+    on type alone and report an ordering fault that is not one", and two of the seven link
+    comparisons in this module went through it while five compared raw file values against
+    `[str(x), 0]`. Measured on a 2-frame, group-size-1 cascade: with string node ids inside
+    the links `gate_cascade_topology` PASSES; with the identical topology whose links carry
+    INTEGER node ids it raises "the final batch's slots are [[10, 0], [11, 0]], not the
+    group nodes in order [['10', 0], ['11', 0]] - the clip's frames would be assembled out
+    of sequence", while the per-group slots (which do go through `_link`) pass on the same
+    input. The direction is a false REFUSAL, so nothing is submitted wrong; the cost is a
+    halt whose message misdescribes the graph, on the andon a builder is meant to trust
+    before spending credits. All seven comparisons now read the same way.
+
+    A missing or malformed link normalises to None and therefore never compares equal,
+    which is the behaviour the raw `!=` already had for those cases.
+    """
+    a = _link(got)
+    return a is not None and a == _link(want)
+
+
 def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expected_sources):
     """Gate ASSEMBLY - ANDON - all `n_frames` reach the batch in order, and it is wired.
 
@@ -159,7 +182,8 @@ def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expecte
     """
     n = int(n_frames)
     exp = [str(s) for s in expected_sources]
-    ev = {"gate": "ASSEMBLY", "n_frames": n, "batch_node": batch_id,
+    ev = {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+          "n_frames": n, "batch_node": batch_id,
           "video_node": video_id, "save_node": save_id, "n_expected_sources": len(exp)}
     problems = []
 
@@ -224,7 +248,7 @@ def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expecte
     video = graph.get(str(video_id))
     if video is None or video.get("class_type") != "CreateVideo":
         problems.append(f"node {video_id} is not a CreateVideo")
-    elif video["inputs"].get("images") != [str(batch_id), 0]:
+    elif not _links_equal(video["inputs"].get("images"), [str(batch_id), 0]):
         problems.append(
             f"CreateVideo.images is {video['inputs'].get('images')!r}, not the batch "
             f"node's output - the video would be assembled from something other than the "
@@ -233,7 +257,7 @@ def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expecte
     save = graph.get(str(save_id))
     if save is None or save.get("class_type") != "SaveVideo":
         problems.append(f"node {save_id} is not a SaveVideo")
-    elif save["inputs"].get("video") != [str(video_id), 0]:
+    elif not _links_equal(save["inputs"].get("video"), [str(video_id), 0]):
         problems.append(
             f"SaveVideo.video is {save['inputs'].get('video')!r}, not CreateVideo's "
             f"output; CreateVideo is `output_node: false`, so nothing would be saved at all")
@@ -288,7 +312,8 @@ def cascade_plan(n, group_size=GROUP_SIZE):
     n, group_size = int(n), int(group_size)
     if group_size < 1:
         raise CascadeGate("group size must be at least 1",
-                          {"gate": "CASCADE", "group_size": group_size})
+                          {"gate": "CASCADE", "andon": "CascadeGate",
+                           "group_size": group_size})
     return [(s, min(s + group_size, n)) for s in range(0, n, group_size)]
 
 
@@ -350,7 +375,8 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
     and `gate_cascade_topology` already refuse a comparison over nothing.
     """
     ceiling = int(MAX_SLOTS_PER_NODE)
-    ev = {"gate": "CASCADE", "module_ceiling": int(MAX_SLOTS_PER_NODE),
+    ev = {"gate": "CASCADE", "andon": "CascadeGate",
+          "module_ceiling": int(MAX_SLOTS_PER_NODE),
           "cap_requested": None if cap is None else int(cap),
           "declared_group_size": None if group_size is None else int(group_size),
           "ceiling": ceiling, "per_node": {}}
@@ -441,7 +467,8 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
     """
     n = int(n_frames)
     exp = [str(s) for s in expected_sources]
-    ev = {"gate": "CASCADE", "n_frames": n, "group_size": int(group_size),
+    ev = {"gate": "CASCADE", "andon": "CascadeGate",
+          "n_frames": n, "group_size": int(group_size),
           "group_nodes": [str(g) for g in group_ids],
           "final_node": str(final_id), "video_node": str(video_id),
           "consumer": {"node": str(consumer_id), "input": consumer_input},
@@ -528,7 +555,7 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
         if sorted(fi) != sorted(want):
             problems.append(f"the final batch has {len(fi)} slot(s), expected {len(plan)}")
         else:
-            got = [fi[k] for k in want]
+            got = [_link(fi[k]) for k in want]
             expect = [[str(g), 0] for g in group_ids]
             ev["final_links"] = got
             if got != expect:
@@ -540,7 +567,7 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
     video = graph.get(str(video_id))
     if video is None or video.get("class_type") != "CreateVideo":
         problems.append(f"node {video_id} is not a CreateVideo")
-    elif video["inputs"].get("images") != [str(final_id), 0]:
+    elif not _links_equal(video["inputs"].get("images"), [str(final_id), 0]):
         problems.append(
             f"CreateVideo.images is {video['inputs'].get('images')!r}, not the FINAL "
             f"batch's output - the video would carry one group instead of the clip")
@@ -549,7 +576,7 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
     if consumer is None:
         problems.append(f"the constructed VIDEO's consumer, node {consumer_id}, is not in "
                         f"the graph")
-    elif consumer["inputs"].get(consumer_input) != [str(video_id), 0]:
+    elif not _links_equal(consumer["inputs"].get(consumer_input), [str(video_id), 0]):
         problems.append(
             f"{consumer.get('class_type')}.{consumer_input} is "
             f"{consumer['inputs'].get(consumer_input)!r}, not CreateVideo's output. "

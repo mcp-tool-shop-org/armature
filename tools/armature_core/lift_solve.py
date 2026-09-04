@@ -626,21 +626,38 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
             "gate_round_trip(rest, obs, solved, diagonal[, tol_frac]) - it has no flag")
     got = fk_sites(rest, solved)
     tol = tol_frac * diagonal
+    # The population this report claims to cover, written down before it is walked
+    # (F-1831f75d). `n_sites` used to ride the evidence alone and nothing compared it to
+    # the registered population, so a shrinking comparison carried an unchanged verdict:
+    # measured on a complete synthetic rest table the report covers 19 sites, and dropping
+    # the four landmarks that are bone TAILS only and never a bone head - hand_end_L,
+    # hand_end_R, toe_L, toe_R - it silently covers 15, `within_tolerance` still True. The
+    # four that vanish are the extremities, which is where a lift is most likely wrong.
+    expected = sorted(SITE_FROM_LANDMARK)
     per_site, worst = {}, {"site": None, "d": 0.0}
-    for site in sorted(SITE_FROM_LANDMARK):
-        if site not in got:
+    not_placed = [s for s in expected if s not in got]
+    not_observed = [s for s in expected if s in got and s not in obs]
+    for site in expected:
+        if site not in got or site not in obs:
             continue
         d = _norm(_sub(got[site], obs[site]))
         per_site[site] = d
         if d > worst["d"]:
             worst = {"site": site, "d": d}
-    ev = {"gate": "SOLVE", "tolerance": tol, "tolerance_frac_of_diagonal": tol_frac,
+    ev = {"gate": "SOLVE", "andon": "SolveGate",
+          "tolerance": tol, "tolerance_frac_of_diagonal": tol_frac,
           "bbox_diagonal": diagonal, "worst": worst, "per_site": per_site,
-          "n_sites": len(per_site), "within_tolerance": bool(worst["d"] <= tol),
+          "n_sites": len(per_site), "n_sites_expected": len(expected),
+          "sites_expected": expected,
+          "sites_not_placed_by_fk": not_placed,
+          "sites_not_observed": not_observed,
+          "population_complete": not (not_placed or not_observed),
+          "within_tolerance": bool(worst["d"] <= tol),
           "note": ("distance between each observed site and where the solved rotations "
                    "put it; exact by construction when the observation came from this "
                    "rig's own kinematics inside this model")}
-    ev["verdict"] = f"max {worst['d']:.3e} over {len(per_site)} sites (tolerance {tol:.3e})"
+    ev["verdict"] = (f"max {worst['d']:.3e} over {len(per_site)} of {len(expected)} sites "
+                     f"(tolerance {tol:.3e})")
     return ev
 
 
@@ -653,10 +670,34 @@ def gate_round_trip(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC):
     quoted against a wrong pose while every other number looked reasonable.
 
     The synthetic path is the one whose invariant is exactness, and this is the function
-    it calls. The measurement path - where the observation comes from another body, so a
-    residual is the thing being measured - calls `round_trip_report` by name.
+    it calls. **No tool implements that path**: grep finds `lift_clip.py:276` and
+    `measure_lift.py:468`, both on the DIAGNOSTIC `round_trip_report`, and this gate's only
+    callers are `tests/test_lift_solve.py` and `tests/test_amend_w3_andons.py`. The
+    docstring used to name a caller that does not exist in the tree; corrected here rather
+    than deleted, because the correction is the useful part (F-1831f75d).
+
+    **The population is a clause of the verdict, not a number beside it.** The compared set
+    used to be whatever `fk_sites` happened to place, and nothing compared it to
+    `SITE_FROM_LANDMARK`: on a rest table missing the four tail-only landmarks the gate
+    returned `max 1.799e-16 over 15 sites`, `within_tolerance` True, no refusal - and the
+    four it dropped are the extremities. A gate that exists to prove an inversion is exact
+    cannot certify exactness over 15 of 19 sites; that is a different claim. Every sibling
+    gate in this repo grew an explicit population guard in wave 6
+    (`parts.gate_parts_determinism`, `glb.gate_atlas_untouched`,
+    `turnaround.gate_set_distinct`, `assembly.gate_batch_topology`, `gate_slot_ceiling`);
+    this is that guard. `round_trip_report` keeps reporting the partial set, because that
+    is the measurement path.
     """
     ev = round_trip_report(rest, obs, solved, diagonal, tol_frac)
+    if not ev["population_complete"]:
+        raise SolveGate(
+            f"the round trip covered {ev['n_sites']} of {ev['n_sites_expected']} "
+            f"registered sites, so a PASS would certify exactness over a subset without "
+            f"saying so. Not placed by forward kinematics: "
+            f"{ev['sites_not_placed_by_fk'] or 'none'}; present in the solve but not "
+            f"observed: {ev['sites_not_observed'] or 'none'}. The gate exists to prove an "
+            f"inversion is exact, and exactness over part of the population is a "
+            f"different claim", ev)
     if ev["worst"]["d"] > ev["tolerance"]:
         raise SolveGate(
             f"the solve does not reproduce the positions it was solved from: "
@@ -704,22 +745,24 @@ def validate_motion_record(frames):
     the stutter reads as the lift being noisy rather than as a frame that never arrived.
     """
     if not frames:
-        raise SolveGate("the motion record carries no frames", {"n": 0})
+        raise SolveGate("the motion record carries no frames",
+                        {"gate": "SOLVE", "andon": "SolveGate", "n": 0})
     for i, fr in enumerate(frames):
         if fr.get("frame") != i:
             raise SolveGate(
                 f"the solved frames are not a contiguous run from 0: entry {i} says frame "
                 f"{fr.get('frame')!r}. A gap filled by the neighbouring pose would play as "
                 f"a stutter and be read as detector noise",
-                {"index": i, "says": fr.get("frame"), "n": len(frames)})
+                {"gate": "SOLVE", "andon": "SolveGate",
+                 "index": i, "says": fr.get("frame"), "n": len(frames)})
         local = fr.get("local") or {}
         missing = [b for b in sitelist.ALL_NAMES if b not in local]
         if missing:
             raise SolveGate(
                 f"frame {i} carries no rotation for {missing}; a bone left out here would "
                 f"hold its previous pose while every gate downstream stayed green",
-                {"frame": i, "missing": missing})
-    return {"gate": "SOLVE", "n_frames": len(frames),
+                {"gate": "SOLVE", "andon": "SolveGate", "frame": i, "missing": missing})
+    return {"gate": "SOLVE", "andon": "SolveGate", "n_frames": len(frames),
             "verdict": f"{len(frames)} contiguous frames, all {len(sitelist.ALL_NAMES)} "
                        f"registered bones present on each"}
 

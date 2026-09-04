@@ -76,23 +76,23 @@ def composite_colour(text):
             "no composite colour was named: under the alpha law the render is authored "
             "RGBA and the RGB actually submitted is composited over a NAMED background. "
             "Pass linear floats, e.g. 0.035,0.022,0.014, with a reason",
-            {"supplied": text})
+            {"gate": "ALPHA", "andon": "AlphaGate", "supplied": text})
     parts = [p.strip() for p in str(text).split(",")]
     if len(parts) != 3:
         raise AlphaGate(
             f"the composite colour must be three linear floats `r,g,b`, got {text!r}",
-            {"supplied": text})
+            {"gate": "ALPHA", "andon": "AlphaGate", "supplied": text})
     try:
         rgb = tuple(float(p) for p in parts)
     except ValueError:
         raise AlphaGate(f"the composite colour carries a non-number: {text!r}",
-                        {"supplied": text}) from None
+                        {"gate": "ALPHA", "andon": "AlphaGate", "supplied": text}) from None
     if any(c < 0.0 or c > 1.0 for c in rgb):
         raise AlphaGate(
             f"composite values are linear scene-referred floats in [0,1], got {rgb}. sRGB "
             f"bytes like 52,41,31 are NOT linear floats — that form would render as a "
             f"blown white void, which is the failure this law exists to end",
-            {"supplied": list(rgb)})
+            {"gate": "ALPHA", "andon": "AlphaGate", "supplied": list(rgb)})
     return rgb
 
 
@@ -110,7 +110,7 @@ def gate_alpha(transparent_fraction, composite_rgb, why, master_path=None):
     `transparent_fraction` is a measured number, so this function stays free of bpy and can
     be tested against every value it can take, including the two that matter: 0 and 1.
     """
-    ev = {"gate": "ALPHA", "master": master_path,
+    ev = {"gate": "ALPHA", "andon": "AlphaGate", "master": master_path,
           "transparent_fraction": float(transparent_fraction),
           "opaque_fraction": 1.0 - float(transparent_fraction),
           "composite_linear_rgb": list(composite_rgb), "composite_why": why,
@@ -176,18 +176,20 @@ def cover_fit(src_w, src_h, width, height, anchor_x=0.5, anchor_y=0.5):
     if src_w <= 0 or src_h <= 0:
         raise BackdropGate(
             f"degenerate plate of {src_w}x{src_h}; there is no image to stand behind the "
-            f"performer", {"source_size": [src_w, src_h]})
+            f"performer", {"gate": "BACKDROP", "andon": "BackdropGate",
+             "source_size": [src_w, src_h]})
     if width <= 0 or height <= 0:
         raise BackdropGate(
             f"degenerate target frame of {width}x{height}",
-            {"target_size": [width, height]})
+            {"gate": "BACKDROP", "andon": "BackdropGate", "target_size": [width, height]})
     for name, v in (("anchor_x", anchor_x), ("anchor_y", anchor_y)):
         if not (0.0 <= float(v) <= 1.0):
             raise BackdropGate(
                 f"{name}={v} is outside 0..1; an anchor is the fraction of the overhang "
                 f"taken off the near side, and a value outside that range would place the "
                 f"crop box off the resized image",
-                {"anchor_x": anchor_x, "anchor_y": anchor_y})
+                {"gate": "BACKDROP", "andon": "BackdropGate",
+                 "anchor_x": anchor_x, "anchor_y": anchor_y})
 
     scale = max(width / src_w, height / src_h)
     # ceil, not round: rounding down by a single pixel would leave one row or column of the
@@ -324,7 +326,8 @@ def gate_backdrop(void_vs_plate_255, plate_vs_flat_255, transparent_fraction, wh
     Both are measured quantities, so this function stays free of bpy and of any image
     library and can be tested against every value it can take.
     """
-    ev = {"gate": "BACKDROP", "plate": plate, "plate_sha256": plate_sha256,
+    ev = {"gate": "BACKDROP", "andon": "BackdropGate",
+          "plate": plate, "plate_sha256": plate_sha256,
           "void_vs_plate_255": float(void_vs_plate_255),
           "plate_vs_flat_255": float(plate_vs_flat_255),
           "tol_255": float(tol_255), "min_separation_255": float(min_separation_255),
@@ -379,11 +382,11 @@ def framing_cloud(points, cap=1500):
     if not pts:
         raise StartFrameGate(
             "no vertices to frame; a camera solved against nothing frames the origin and "
-            "the render would be of an empty room", {"n_points": 0})
+            "the render would be of an empty room", {"gate": "WHOLE", "andon": "StartFrameGate", "n_points": 0})
     if cap < 8:
         raise StartFrameGate(
             f"cap={cap} is below the 8 bbox corners this reduction must keep",
-            {"cap": cap})
+            {"gate": "WHOLE", "andon": "StartFrameGate", "cap": cap})
     if len(pts) <= cap:
         return list(pts)
 
@@ -434,7 +437,8 @@ def silhouette_extent(points, target, radius, azimuth_deg, elevation_deg,
     if not xs:
         raise StartFrameGate(
             f"every one of {len(points)} points is behind the camera; there is no "
-            f"silhouette to measure", {"n_points": len(points), "n_behind": behind})
+            f"silhouette to measure", {"gate": "WHOLE", "andon": "StartFrameGate",
+             "n_points": len(points), "n_behind": behind})
     return {"x0": min(xs), "x1": max(xs), "y0": min(ys), "y1": max(ys),
             "n_behind": behind, "n_points": len(points)}
 
@@ -460,7 +464,8 @@ def gate_whole(extent, width, height, margin_px):
     frame. The andon is placed where nothing else looks.
     """
     ev = {
-        "gate": "WHOLE", "margin_px": margin_px, "resolution": [width, height],
+        "gate": "WHOLE", "andon": "StartFrameGate",
+        "margin_px": margin_px, "resolution": [width, height],
         "extent_px": {k: extent[k] for k in ("x0", "x1", "y0", "y1")},
         "n_points": extent.get("n_points"), "n_behind": extent.get("n_behind"),
         "margins_px": {

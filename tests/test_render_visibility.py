@@ -179,3 +179,75 @@ def test_no_tool_reaches_into_the_private_vertex_primitive():
         assert "_evaluated_world_vertices" not in src, (
             f"{filename} calls the private primitive instead of "
             f"blender_scene.evaluated_world_vertices(scene, objects)")
+
+
+# --- F-0e29613a: the ban covers every tool, not only the ones that import a GLB -------
+
+
+def _all_tool_sources():
+    """Every `.py` under `tools/`, including `tools/superseded/`.
+
+    Derived by walking the directory — not by a substring in source. The existing ban
+    (`test_no_tool_reaches_into_the_private_vertex_primitive`) enumerated only files
+    containing `import_glb(`, so a future tool that MEASURES without importing sat outside
+    the population the ban claimed to cover. Returns `{relative path: source}`.
+    """
+    out = {}
+    root = TOOLS_DIR
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for fn in sorted(filenames):
+            if not fn.endswith(".py"):
+                continue
+            full = os.path.join(dirpath, fn)
+            rel = os.path.relpath(full, root).replace(os.sep, "/")
+            with open(full, encoding="utf-8") as fh:
+                out[rel] = fh.read()
+    return out
+
+
+def test_the_widened_population_is_a_superset_of_the_import_glb_one():
+    """The census's own premise, measured: walking the tree must cover strictly more than
+    the substring filter it replaces, and the extra files are real tools."""
+    walked = set(_all_tool_sources())
+    substring = set(_tools_that_import_glb())
+    assert substring <= walked, sorted(substring - walked)
+    assert len(walked) > len(substring), (len(walked), len(substring))
+
+
+def test_no_file_under_tools_reaches_into_the_private_vertex_primitive():
+    """Widened form of the wave-6 ban (F-0e29613a).
+
+    `blender_scene.evaluated_world_vertices(scene, objects)` is the public name and filters
+    by render visibility itself; `unfiltered_world_bounds` is the public name for the one
+    measurement that is deliberately naive. The old ban only walked files containing
+    `import_glb(`, so it covered neither `armature_core` itself nor a future tool that
+    measures geometry it was handed. This walks every `.py` under `tools/`.
+    """
+    sources = _all_tool_sources()
+    # The one exemption, re-derived rather than trusted: the file exempt from the ban must
+    # be in the walked population AND must be the file that DEFINES the primitive.
+    exempt = "armature_core/blender_scene.py"
+    assert exempt in sources, sorted(sources)
+    assert "def _evaluated_world_vertices(" in sources[exempt], (
+        f"{exempt} is exempt because it defines the primitive; it no longer does")
+    offenders = sorted(
+        rel for rel, src in sources.items()
+        if "_evaluated_world_vertices" in src and rel != exempt)
+    assert offenders == [], (
+        f"{offenders} reach into the private primitive instead of "
+        f"blender_scene.evaluated_world_vertices(scene, objects) — or, for a row that is "
+        f"deliberately unfiltered, blender_scene.unfiltered_world_bounds(objects)")
+
+
+def test_the_widened_ban_goes_red_on_a_tool_that_does_not_import_a_glb(tmp_path):
+    """Prove the census can fail on a member the OLD population could not see: a file with
+    no `import_glb(` in it at all, which the substring filter would never have enumerated.
+    """
+    probe = tmp_path / "measure_only.py"
+    probe.write_text(
+        "from armature_core import blender_scene\n"
+        "def run(meshes):\n"
+        "    return blender_scene._evaluated_world_vertices(meshes)\n", encoding="utf-8")
+    src = probe.read_text(encoding="utf-8")
+    assert "import_glb(" not in src, "the old population would not have enumerated this"
+    assert "_evaluated_world_vertices" in src, "the widened ban catches it"

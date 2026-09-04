@@ -64,8 +64,12 @@ scene.collection.objects.link(obj_hidden)
 all_meshes = [o for o in bpy.data.objects if o.type == "MESH"]
 visible = bs.render_visible_meshes(scene, all_meshes)
 
-naive_bounds = bs.world_bounds(all_meshes)
-filtered_bounds = bs.world_bounds(visible)
+# The naive row reads the objects AS GIVEN and says so by name: `world_bounds` now
+# takes the scene and filters itself when it is given one (F-0e29613a), so the
+# deliberately unfiltered measurement needs its own public name rather than the
+# absence of an argument.
+naive_bounds = bs.unfiltered_world_bounds(all_meshes)
+filtered_bounds = bs.world_bounds(all_meshes, scene=scene)
 
 print("VISIBILITY " + json.dumps({
     "all_mesh_names": sorted(o.name for o in all_meshes),

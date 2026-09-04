@@ -28,9 +28,30 @@ import bpy
 import mathutils
 import numpy as np
 
-from .errors import G6SubjectMotion, GateFailure
+from .errors import ArmatureError, G6SubjectMotion, GateFailure
 
 SKY_Z = 1e9
+
+
+class NonReiterableFrames(ArmatureError):
+    """`union_sphere` was handed a frame source it could not walk twice.
+
+    F-ae34fe44. The guard that was here checked `callable(frame_points)`, and its own
+    message named the failure it exists to stop — "a single-use iterator would silently
+    make the second pass read nothing". **Callability is not re-iterability.** Measured
+    against the stubbed bpy/mathutils over two frames spanning a 1.118 bounding radius:
+    `union_sphere(lambda: iter(frames))` returns 1.118033988749895, while
+    `it = iter(frames); union_sphere(lambda: it)` passes the `callable()` guard and
+    returns radius 0.0 — as does a generator FUNCTION closing over a spent source, which
+    is the exact shape `world_bounds_over_frames.frames()` uses. `centre` and `half` are
+    correct in every case, so nothing anywhere disagrees with the zero, and that radius is
+    `auto_radius`'s only size input: a 0.0 sphere puts the orbit camera on the target with
+    the subject wrapped around the lens.
+
+    The andon is therefore on the direction the invariant does not bound — the frames each
+    pass actually yields are counted and compared, which catches a spent source (zero), a
+    partly-spent one (fewer) and a source that changes what it yields (different).
+    """
 
 
 def scene_fps():
@@ -90,7 +111,8 @@ def import_glb(path, *, expected_fps):
             f"NOW. Importing here would silently place the action on the wrong frames and "
             f"the render would sample a fraction of the performance — call "
             f"`set_frame_rate(scene, fps)` before importing",
-            {"scene_fps": scene_fps(), "expected_fps": expected_fps, "asset": path},
+            {"gate": "G6", "andon": "G6SubjectMotion",
+             "scene_fps": scene_fps(), "expected_fps": expected_fps, "asset": path},
         )
     before = set(bpy.data.objects.keys())
     bpy.ops.import_scene.gltf(filepath=path)
@@ -261,9 +283,31 @@ def evaluated_world_vertices(scene, objects):
     return _evaluated_world_vertices(render_visible_meshes(scene, objects))
 
 
-def world_bounds(objects):
-    """(center, half_extent, bounding_sphere_radius) over evaluated geometry."""
-    pts = _evaluated_world_vertices(objects)
+def _points_to_measure(objects, scene):
+    """The vertices a measurement should read — filtered whenever a scene is available.
+
+    F-0e29613a. `evaluated_world_vertices(scene, objects)` was introduced so that "there
+    is no shape of it that skips the filter", but the split guarded ONE entry point of
+    five: `world_bounds`, `world_bounds_over_frames`, `evaluated_geometry_signature` and
+    `projected_bbox_px` all still called the unfiltered primitive on whatever object list
+    they were handed, so the visibility obligation stayed on every caller of those four —
+    the state the public name was created to end. Every production caller measured on this
+    tree does pass a `render_visible_meshes` result, so this is a shape rather than a live
+    defect; it is also the shape the defect came back through once already, one import at
+    a time. This funnel is where a scene turns the obligation back into the module's.
+
+    `scene=None` keeps the caller-filtered contract for the sites that have already
+    selected (and for `unfiltered_world_bounds`, the one measurement that is DELIBERATELY
+    naive: `probe_subject` reports the difference between the two, so filtering that row
+    would silently turn its comparison into a no-op).
+    """
+    if scene is not None:
+        return evaluated_world_vertices(scene, objects)
+    return _evaluated_world_vertices(objects)
+
+
+def _sphere(pts):
+    """(center, half_extent, bounding_sphere_radius) over a vertex cloud, or None."""
     if pts.shape[0] == 0:
         return None
     lo, hi = pts.min(axis=0), pts.max(axis=0)
@@ -271,6 +315,27 @@ def world_bounds(objects):
     half = (hi - lo) * 0.5
     radius = float(np.linalg.norm(pts - center, axis=1).max())
     return center, half, radius
+
+
+def world_bounds(objects, scene=None):
+    """(center, half_extent, bounding_sphere_radius) over evaluated geometry.
+
+    Pass `scene` and this filters by render visibility itself; omit it and the caller
+    carries that obligation. See `_points_to_measure`.
+    """
+    return _sphere(_points_to_measure(objects, scene))
+
+
+def unfiltered_world_bounds(objects):
+    """`world_bounds` over the objects AS GIVEN — the deliberately naive measurement.
+
+    A public name for the one thing that must not be filtered: `probe_subject` reports the
+    naive bounds beside the filtered ones so a session can see what the glTF importer's
+    hidden decoy would have done to the framing, and `tests/blender/check_visibility.py`
+    pins that the two differ. Naming it here keeps that row honest AND keeps tools out of
+    the private primitive, which `tests/test_render_visibility.py` bans.
+    """
+    return _sphere(_evaluated_world_vertices(objects))
 
 
 def union_sphere(frame_points):
@@ -284,6 +349,12 @@ def union_sphere(frame_points):
     iterator would leave the radius pass reading nothing and returning 0.0 — a bounding
     sphere of radius zero around a real subject, with every other check green.
 
+    **Callability was never the invariant** (F-ae34fe44). `lambda: it` over a spent
+    iterator is callable and returns radius 0.0; so does a generator function closing over
+    a spent source, which is the exact shape `world_bounds_over_frames.frames()` uses. The
+    frames each pass yields are counted and compared, and a disagreement raises
+    `NonReiterableFrames` with both counts. See that class.
+
     Returns None when no frame carried geometry.
     """
     if not callable(frame_points):
@@ -294,7 +365,9 @@ def union_sphere(frame_points):
             "single-use iterator would silently make the second pass read nothing")
 
     lo = hi = None
+    n_first = 0
     for pts in frame_points():
+        n_first += 1
         pts = np.asarray(pts, dtype=np.float64)
         if pts.shape[0] == 0:
             continue
@@ -309,11 +382,22 @@ def union_sphere(frame_points):
     # Measured about the UNION centre over every frame's vertices, so it bounds the whole
     # performance rather than the worst single frame about its own centre.
     radius = 0.0
+    n_second = 0
     for pts in frame_points():
+        n_second += 1
         pts = np.asarray(pts, dtype=np.float64)
         if pts.shape[0] == 0:
             continue
         radius = max(radius, float(np.linalg.norm(pts - center, axis=1).max()))
+    # Counted, not assumed. The frames are counted BEFORE the empty-array skip, so this
+    # reads re-iterability itself rather than the geometry that survived it.
+    if n_second != n_first:
+        raise NonReiterableFrames(
+            f"the frame source is not re-iterable: the first pass yielded {n_first} "
+            f"frame(s) and the second pass {n_second}. The union radius is measured about "
+            f"a centre the first pass computes, so the two passes must see the same "
+            f"frames; a spent iterator yields zero and returns a bounding sphere of "
+            f"radius 0.0 around a real subject, which is auto_radius's only size input")
     return center, half, radius
 
 
@@ -345,7 +429,9 @@ def world_bounds_over_frames(scene, objects, count):
     def frames():
         for i in range(count):
             set_scene_frame(scene, i)
-            pts = _evaluated_world_vertices(objects)
+            # Through the filtering reader (F-0e29613a): this function already holds the
+            # scene, so there was never a reason for it to read the unfiltered primitive.
+            pts = evaluated_world_vertices(scene, objects)
             if pts.shape[0]:
                 yield pts
 
@@ -354,15 +440,18 @@ def world_bounds_over_frames(scene, objects, count):
     return result
 
 
-def evaluated_geometry_signature(objects):
+def evaluated_geometry_signature(objects, scene=None):
     """A hash of the subject's evaluated world-space vertices at the current frame.
 
     G6's quantity. Taken from *evaluated* geometry so it follows the imported glTF action,
     parenting and modifiers — the authored intent is irrelevant here, only what the
     renderer is about to draw. Rounded to 1e-9 before hashing so float noise in the
     depsgraph cannot manufacture motion that is not there.
+
+    Pass `scene` and this filters by render visibility itself (F-0e29613a); omit it and
+    the caller carries that obligation. See `_points_to_measure`.
     """
-    pts = _evaluated_world_vertices(objects)
+    pts = _points_to_measure(objects, scene)
     if pts.shape[0] == 0:
         return "empty"
     return hashlib.sha256(np.round(pts, 9).tobytes()).hexdigest()
@@ -429,15 +518,18 @@ def make_camera(scene, spec):
     return cam
 
 
-def projected_bbox_px(cam, objects, width, height):
+def projected_bbox_px(cam, objects, width, height, scene=None):
     """Pixel bbox of every mesh vertex pushed through the camera matrix.
 
     For a polygonal mesh whose silhouette outline runs along edges between vertices,
     this is the *exact* expected mask bbox — which is what lets G4's tolerance be
     tight enough to bind in both directions.
+
+    Pass `scene` and this filters by render visibility itself (F-0e29613a); omit it and
+    the caller carries that obligation. See `_points_to_measure`.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    pts = _evaluated_world_vertices(objects)
+    pts = _points_to_measure(objects, scene)
     if pts.shape[0] == 0:
         return None
 

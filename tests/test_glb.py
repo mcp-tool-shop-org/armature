@@ -223,3 +223,171 @@ def test_the_atlas_gate_carries_its_own_id_in_the_evidence(tmp_path):
     with pytest.raises(glb.GateAtlasUntouched) as exc:
         glb.gate_atlas_untouched(a, c)
     assert exc.value.evidence["gate"] == exc.value.gate == "ATLAS"
+
+
+# ---------------------------------------------------------------------------
+# F-edbd890a: unchecked container reads
+# ---------------------------------------------------------------------------
+
+
+def _glb_raw(path, js_dict, binary):
+    """A GLB carrying exactly the JSON and BIN bytes given — malformations included.
+
+    `_glb` and `_glb_blobs` always write a self-consistent container, so neither can
+    build the files these cases need: a bufferView index that is not an index, and a
+    bufferView whose declared range runs past the BIN chunk.
+    """
+    js = json.dumps(js_dict).encode("utf-8")
+    js += b" " * (-len(js) % 4)
+    total = 12 + 8 + len(js) + 8 + len(binary)
+    with open(path, "wb") as fh:
+        fh.write(struct.pack("<III", glb.GLB_MAGIC, 2, total))
+        fh.write(struct.pack("<II", len(js), glb.CHUNK_JSON))
+        fh.write(js)
+        fh.write(struct.pack("<II", len(binary), glb.CHUNK_BIN))
+        fh.write(binary)
+    return path
+
+
+def _one_view_doc(byte_offset, byte_length, buffer_view_ref):
+    return {"asset": {"version": "2.0"},
+            "buffers": [{"byteLength": 64}],
+            "bufferViews": [{"buffer": 0, "byteOffset": byte_offset,
+                             "byteLength": byte_length}],
+            "images": [{"bufferView": buffer_view_ref, "mimeType": "image/png",
+                        "name": "atlas"}]}
+
+
+def test_a_bufferView_index_past_the_table_is_named_not_an_IndexError(tmp_path):
+    """`views[image['bufferView']]` indexed a list built from the file with a value taken
+    straight out of the same file (F-edbd890a)."""
+    p = _glb_raw(str(tmp_path / "a.glb"), _one_view_doc(0, 16, 7), b"\x00" * 16)
+    with pytest.raises(glb.MalformedGLB) as exc:
+        glb.embedded_images(p)
+    assert "bufferView 7" in str(exc.value)
+    assert "1 bufferView" in str(exc.value)
+
+
+def test_a_negative_bufferView_index_is_refused_rather_than_hashing_another_view(tmp_path):
+    """A negative index is a valid Python index and an invalid glTF one: it hashed a
+    DIFFERENT bufferView and reported the digest as this image's."""
+    doc = {"asset": {"version": "2.0"},
+           "buffers": [{"byteLength": 32}],
+           "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 16},
+                           {"buffer": 0, "byteOffset": 16, "byteLength": 16}],
+           "images": [{"bufferView": -1, "mimeType": "image/png", "name": "atlas"}]}
+    p = _glb_raw(str(tmp_path / "a.glb"), doc, bytes(range(32)))
+    with pytest.raises(glb.MalformedGLB) as exc:
+        glb.embedded_images(p)
+    assert "bufferView -1" in str(exc.value)
+
+
+def test_a_bufferView_running_past_the_bin_chunk_raises_rather_than_hashing_short(tmp_path):
+    """`binary[start:start + length]` is a Python slice, so an over-declared range yielded
+    a SHORT blob whose sha256 was reported as though it were the whole image — and Gate
+    ATLAS compares hashes on both sides, so an identical truncation cancels and the gate
+    certifies bytes neither file contains."""
+    p = _glb_raw(str(tmp_path / "a.glb"), _one_view_doc(0, 4096, 0), b"\x00" * 16)
+    with pytest.raises(glb.MalformedGLB) as exc:
+        glb.embedded_images(p)
+    msg = str(exc.value)
+    assert "the BIN chunk does not contain" in msg
+    assert "4096" in msg and "16" in msg
+
+
+def test_the_atlas_gate_halts_on_a_truncating_container_instead_of_certifying_it(tmp_path):
+    """The gate's own failure mode: source and export both over-declare by the same
+    amount, both hash the same short blob, and the verdict reads byte-identical."""
+    doc = _one_view_doc(0, 4096, 0)
+    a = _glb_raw(str(tmp_path / "src.glb"), doc, b"\x00" * 16)
+    b = _glb_raw(str(tmp_path / "out.glb"), doc, b"\x00" * 16)
+    with pytest.raises(glb.MalformedGLB, match=r"the BIN chunk does not contain"):
+        glb.gate_atlas_untouched(a, b)
+
+
+def test_a_bufferView_with_no_byteLength_is_named(tmp_path):
+    doc = {"asset": {"version": "2.0"},
+           "buffers": [{"byteLength": 16}],
+           "bufferViews": [{"buffer": 0, "byteOffset": 0}],
+           "images": [{"bufferView": 0, "mimeType": "image/png", "name": "atlas"}]}
+    p = _glb_raw(str(tmp_path / "a.glb"), doc, b"\x00" * 16)
+    with pytest.raises(glb.MalformedGLB) as exc:
+        glb.embedded_images(p)
+    assert "byteLength" in str(exc.value)
+
+
+def test_a_truncated_bin_chunk_is_refused_by_the_reader(tmp_path):
+    """`fh.read(length)` returns what is there. A chunk header declaring more than the
+    file holds gave a silently short BIN chunk, and every slice off it was then short."""
+    js = json.dumps(_one_view_doc(0, 16, 0)).encode("utf-8")
+    js += b" " * (-len(js) % 4)
+    path = str(tmp_path / "trunc.glb")
+    with open(path, "wb") as fh:
+        fh.write(struct.pack("<III", glb.GLB_MAGIC, 2, 12 + 8 + len(js) + 8 + 4096))
+        fh.write(struct.pack("<II", len(js), glb.CHUNK_JSON))
+        fh.write(js)
+        fh.write(struct.pack("<II", 4096, glb.CHUNK_BIN))
+        fh.write(b"\x00" * 16)
+    with pytest.raises(glb.MalformedGLB) as exc:
+        glb.read_chunks(path)
+    assert "4096" in str(exc.value) and "16" in str(exc.value)
+
+
+def test_a_well_formed_container_still_reads(tmp_path):
+    """The guards bind in both directions: the happy path must not have moved."""
+    p = _glb(str(tmp_path / "a.glb"), ATLAS, images=2)
+    images = glb.embedded_images(p)
+    assert [i["bytes"] for i in images] == [len(ATLAS), len(ATLAS)]
+    assert images[0]["sha256"] == hashlib.sha256(ATLAS).hexdigest()
+
+
+def _functions_subscripting(source, container_names):
+    """Every function in `source` whose body subscripts one of `container_names`.
+
+    Derived by walking the module's own AST — not a typed list — so a new unguarded read
+    of the file's own tables joins the population the moment it is written.
+    """
+    import ast
+
+    found = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for sub in ast.walk(node):
+            if (isinstance(sub, ast.Subscript)
+                    and isinstance(sub.value, ast.Name)
+                    and sub.value.id in container_names):
+                found.add(node.name)
+    return found
+
+
+def test_every_read_of_the_containers_goes_through_the_one_checked_helper():
+    """Census, derived by AST over glb.py: which functions subscript `views` or `binary`?
+
+    Measured on this tree the answer must be exactly `_image_blob`, the helper that
+    validates the index and the range before touching either. `embedded_images` used to
+    index both directly (F-edbd890a); this census is what keeps a second such read from
+    appearing without a check.
+    """
+    import inspect
+
+    derived = _functions_subscripting(inspect.getsource(glb), {"views", "binary"})
+    assert derived == {"_image_blob"}, (
+        "container reads outside the checked helper: "
+        + repr(sorted(derived - {"_image_blob"})))
+
+
+def test_the_container_read_census_goes_red_on_an_unguarded_reader():
+    """Prove the census can fail. The mutation adds a member without the property — a
+    second function reading `views` — to a synthetic source, so nothing in the tree is
+    weakened to demonstrate it."""
+    mutated = (
+        "def _image_blob(views, binary, image, index, path):\n"
+        "    return binary[0:1]\n"
+        "\n"
+        "def sneaky(views, binary):\n"
+        "    return views[0]\n"
+    )
+    derived = _functions_subscripting(mutated, {"views", "binary"})
+    assert derived == {"_image_blob", "sneaky"}
+    assert derived != {"_image_blob"}, "the census would not have caught the extra reader"

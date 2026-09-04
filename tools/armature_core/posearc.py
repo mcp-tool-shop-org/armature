@@ -117,11 +117,29 @@ def arc_readout(arc, count, start_deg, end_deg):
     always answers 0 measures nothing. The arm cannot move that number, which is the one
     property a readout must not have.
 
-    The readout used instead is the frame at which the arm passes the **midpoint angle**
-    (45° for a 0→90° arc): monotonic, crossed exactly once, unambiguous by eye at the
-    Director's zoom, and authored rather than measured. `leaves_start_frame` and
-    `reaches_end_frame` are reported beside it so the whole profile is legible and the
-    spec's original intent is still answerable from the record.
+    The readout used instead is the frame at which the arm passes the arc's **registered
+    readout angle** (`POSE_ARCS[...]["readout_deg"]`, 45° for `arm_r_raise`): monotonic,
+    crossed exactly once, unambiguous by eye at the Director's zoom, and authored rather
+    than measured. `leaves_start_frame` and `reaches_end_frame` are reported beside it so
+    the whole profile is legible and the spec's original intent is still answerable from
+    the record.
+
+    ⚠ **The record used to call that angle the MIDPOINT, and no code computed one**
+    (F-314c4a79). `readout_deg` is a per-arc literal; the arc's span is a caller's choice
+    (`make_test_armature.py` exposes `--arc-start-deg` / `--arc-end-deg`). Measured here
+    at count=33: 0..90 gives readout 45.0 at `crossing_frame_exact` 16.00, and the true
+    midpoint frame is also 16.00 — they agree by construction. 0..180 gives the same
+    readout 45.0 at frame 8.00, while the midpoint (90°) is frame 16.00: the record named
+    MIDPOINT and reported the QUARTER crossing, off by 8 of 32 frames. The only guard was
+    the "lies outside the arc" clause, which a 0..180 arc satisfies. `rig_character.py:661`
+    uses fixed 0..90 probe angles so the shipped probe agreed by coincidence; the CLI path
+    did not.
+
+    The registration is kept rather than re-derived — re-deriving would silently change a
+    registered prediction, and the "outside the arc" refusal exists only because the
+    registered angle is independent of the span. What is fixed is the claim: the record now
+    reports `midpoint_deg`, `midpoint_frame_exact` and `is_the_midpoint`, and its note says
+    "registered readout angle" and states whether the two coincide for THIS arc.
 
     Flagged for the advisor to overrule: it is a change to how a registered prediction is
     read, made before the prediction was registered and before anything was rendered.
@@ -140,11 +158,20 @@ def arc_readout(arc, count, start_deg, end_deg):
             f"it would never be crossed"
         )
     exact = (readout_deg - start_deg) / span * (count - 1)
+    # The midpoint of THIS arc, computed rather than assumed (F-314c4a79). It is reported
+    # beside the registered readout so a reader can see when the two coincide instead of
+    # reading a note that claims they always do.
+    midpoint_deg = 0.5 * (start_deg + end_deg)
+    midpoint_exact = (midpoint_deg - start_deg) / span * (count - 1)
+    is_midpoint = abs(readout_deg - midpoint_deg) < 1e-9
     return {
         "readout_deg": readout_deg,
         "crossing_frame_exact": exact,
         "crossing_frame_nearest": int(round(exact)),
         "lands_on_an_integer_frame": abs(exact - round(exact)) < 1e-9,
+        "midpoint_deg": midpoint_deg,
+        "midpoint_frame_exact": midpoint_exact,
+        "is_the_midpoint": is_midpoint,
         "leaves_start_frame": 0,
         "reaches_end_frame": count - 1,
         "start_deg": start_deg,
@@ -152,8 +179,14 @@ def arc_readout(arc, count, start_deg, end_deg):
         "frames": count,
         "monotonic": True,
         "note": (
-            "The readout is the MIDPOINT crossing, not 'passes horizontal'. A T-pose arm "
-            "begins horizontal, so the spec's stated readout is 0 for every possible "
-            "outcome and cannot be moved by the arm. See arc_readout.__doc__."
+            "The readout is the arc's REGISTERED readout angle, not 'passes horizontal'. "
+            "A T-pose arm begins horizontal, so the spec's stated readout is 0 for every "
+            "possible outcome and cannot be moved by the arm. "
+            + ("For this arc the registered readout IS the midpoint of the span."
+               if is_midpoint else
+               f"For this arc the registered readout {readout_deg}deg is NOT the midpoint "
+               f"of {start_deg}..{end_deg}deg (midpoint {midpoint_deg}deg, frame "
+               f"{midpoint_exact}); the crossing reported above is the registered angle's.")
+            + " See arc_readout.__doc__."
         ),
     }

@@ -113,7 +113,8 @@ def orbit_azimuths(n_views, start_deg, sweep_deg):
     n = int(n_views)
     if n < 1:
         raise TurnaroundGate(
-            f"a turnaround of {n} view(s) is not a turnaround", {"n_views": n})
+            f"a turnaround of {n} view(s) is not a turnaround",
+            {"gate": "TURN", "andon": "TurnaroundGate", "n_views": n})
     return [float(start_deg) + float(sweep_deg) * (i / float(n)) for i in range(n)]
 
 
@@ -236,7 +237,8 @@ def gate_view_crop(view_index, subject_bbox, width, height, path=None, alpha_thr
     """
     w, h = int(width), int(height)
     ev = {
-        "gate": "CROP", "view": int(view_index), "path": path,
+        "gate": "CROP", "andon": "TurnaroundCropGate",
+        "view": int(view_index), "path": path,
         "resolution": [w, h], "subject_bbox_px": (list(subject_bbox)
                                                   if subject_bbox is not None else None),
         "alpha_threshold": alpha_threshold,
