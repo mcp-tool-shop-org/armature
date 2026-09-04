@@ -76,6 +76,32 @@ HEAD_LANDMARK = {
 }
 
 
+#: Every site `forward_kinematics` emits, and the (gait bone, rest landmark) it is placed
+#: from. `forward_kinematics` BUILDS its per-frame record by iterating this table and
+#: `Performer` requires exactly the landmarks it names, so the two cannot drift apart
+#: (F-ed7acbf3: `head_top` was read on every frame by `place("head", "head_top")` and was
+#: in neither the checked map nor the four hand-written extras, so a table missing it built
+#: a Performer, built a full gait, and died with a bare `KeyError: 'head_top'` after the
+#: whole performance had been computed).
+FK_SITES = {
+    "hips": ("hips", "crotch"),
+    "head_top": ("head", "head_top"),
+    "ankle_L": ("ankle.L", "ankle_L"),
+    "ankle_R": ("ankle.R", "ankle_R"),
+    "toe_L": ("ankle.L", "toe_L"),
+    "toe_R": ("ankle.R", "toe_R"),
+    "wrist_L": ("wrist.L", "wrist_L"),
+    "wrist_R": ("wrist.R", "wrist_R"),
+    "hand_end_L": ("wrist.L", "hand_end_L"),
+    "hand_end_R": ("wrist.R", "hand_end_R"),
+}
+
+#: Derived, never restated: the rest heads every bone needs, plus every landmark
+#: `forward_kinematics` reads. Adding a site to FK_SITES adds its landmark here.
+REQUIRED_LANDMARKS = frozenset(HEAD_LANDMARK.values()) | {
+    landmark for _bone, landmark in FK_SITES.values()}
+
+
 class WalkError(ValueError):
     """The gait could not be built as specified.
 
@@ -333,13 +359,13 @@ class Performer:
     """
 
     def __init__(self, landmarks, facing_y_sign, left_x_sign):
-        missing = [n for n in set(HEAD_LANDMARK.values()) if n not in landmarks]
-        extra = [n for n in ("toe_L", "toe_R", "hand_end_L", "hand_end_R") if n not in landmarks]
-        if missing or extra:
+        missing = sorted(n for n in REQUIRED_LANDMARKS if n not in landmarks)
+        if missing:
             raise WalkError(
-                f"the landmark table is missing {sorted(missing + extra)}; the gait scales "
-                f"itself against this character's own measurements and cannot proceed on "
-                f"defaults"
+                f"the landmark table is missing {missing}; the gait scales itself against "
+                f"this character's own measurements and cannot proceed on defaults. The "
+                f"required set is derived from HEAD_LANDMARK and FK_SITES rather than "
+                f"restated, so it cannot drift from what the code reads"
             )
         self.landmarks = {k: [float(v) for v in p] for k, p in landmarks.items()}
         self.facing_y_sign = float(facing_y_sign)
@@ -359,6 +385,10 @@ class Performer:
         self.hip_half_separation = 0.5 * abs(
             self.landmarks["hip_L"][0] - self.landmarks["hip_R"][0]
         )
+        # Over every landmark supplied. It came back short whenever a required one was
+        # absent - measured on the suite's performer, 1.0018 complete against 0.8190 with
+        # head_top dropped, 18.2% short - and that number rides the record, so the
+        # completeness check above is what makes this span mean anything.
         zs = [p[2] for p in self.landmarks.values()]
         self.height = max(zs) - min(zs)
         if self.leg_length <= 0.0 or self.height <= 0.0:
@@ -370,6 +400,7 @@ class Performer:
             "arm_length": self.arm_length,
             "hip_half_separation": self.hip_half_separation,
             "landmark_height_span": self.height,
+            "n_landmarks": len(self.landmarks),
             "facing_y_sign": self.facing_y_sign,
             "left_x_sign": self.left_x_sign,
         }
@@ -692,19 +723,13 @@ def forward_kinematics(performer, gait):
             v = lm[landmark]
             return [_mat_vec(R, v)[k] + t[k] for k in range(3)]
 
-        out.append({
-            "frame": rec["frame"],
-            "hips": place("hips", "crotch"),
-            "head_top": place("head", "head_top"),
-            "ankle_L": place("ankle.L", "ankle_L"),
-            "ankle_R": place("ankle.R", "ankle_R"),
-            "toe_L": place("ankle.L", "toe_L"),
-            "toe_R": place("ankle.R", "toe_R"),
-            "wrist_L": place("wrist.L", "wrist_L"),
-            "wrist_R": place("wrist.R", "wrist_R"),
-            "hand_end_L": place("wrist.L", "hand_end_L"),
-            "hand_end_R": place("wrist.R", "hand_end_R"),
-        })
+        record = {"frame": rec["frame"]}
+        # Iterated, not restated: FK_SITES is the same table `Performer` derives its
+        # required landmark set from, so a site added here cannot be read off a table
+        # nobody checked for it.
+        for site, (bone, landmark) in FK_SITES.items():
+            record[site] = place(bone, landmark)
+        out.append(record)
     return out
 
 
