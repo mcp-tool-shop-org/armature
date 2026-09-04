@@ -891,9 +891,16 @@ def qualify_truncated_round_trip(ev):
     This does not re-run the comparison and does not move a measurement. It rewrites the
     verdict so a reader cannot mistake a comparison made over a prefix of the difference
     set for a comparison made over all of it — the `NOT YET RUN` convention this file
-    already uses three times in the same manifest, applied to a partial clause. Whether a
-    truncated probe should REFUSE instead is a Director decision and is the core-gates
-    half of this finding (`armature_core/rig_gates.py:188-190`).
+    already uses three times in the same manifest, applied to a partial clause.
+
+    ROUTED, and landed in the same wave: core-gates' half of this finding makes Gate P
+    REFUSE a probe it cannot finish rather than return a truncated pass, so on the merged
+    tree this function is the second line and should never fire — a truncated comparison
+    arrives here as a `GatePRestPose` halt carrying `probe_truncated_at`, and the halt
+    contract exits 2 with the evidence. It stays because the shape it guards against (a
+    partial clause reaching a manifest wearing an unqualified verdict) is the one this
+    file's manifest is read for, and a gate that changes its mind later must not silently
+    re-open it.
     """
     if not isinstance(ev, dict) or "probe_truncated_at" not in ev:
         return ev

@@ -279,3 +279,81 @@ def test_the_preview_counts_its_frames_by_name_not_by_extension():
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
              and n.func.attr == "frame_names"]
     assert calls, "preview_walk does not build its population from shotspec.frame_names"
+
+
+# ===========================================================================================
+# Wave 8 (appended block). F-ed1dfdb5: the frame-completeness andon counts the PLAN.
+#
+# `render_performer.py:321` counted `os.listdir(out)` and compared the count to `count`,
+# while `paths` -- the list the render had just written against -- sat two lines above and
+# was passed straight into `gate_coverage`. Measured on those two lines verbatim: a
+# 16-frame run into an `--out` already holding a stale `00099.png`, with `00007.png` never
+# written, gives `len(written) == 16 == count` and the gate does NOT fire; and a 16-frame
+# run into a directory holding 33 stale frames prints "wrote 33 frames" about a run that
+# wrote 16. A zero-byte frame passed either way. `preview_walk.py:167` already carried the
+# corrected shape in the same repo, under a comment naming this exact failure.
+# ===========================================================================================
+
+import ast as _ast  # noqa: E402
+
+from blender_stub import read_source as _read_source  # noqa: E402
+
+
+def _completeness_population(filename):
+    """Which name the completeness andon counts over, read off the AST."""
+    tree = _ast.parse(_read_source(filename))
+    fn = next(n for n in _ast.walk(tree)
+              if isinstance(n, _ast.FunctionDef) and n.name == "main")
+    listdirs = [n.lineno for n in _ast.walk(fn)
+                if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Attribute)
+                and n.func.attr == "listdir"]
+    isfiles = [n.lineno for n in _ast.walk(fn)
+               if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Attribute)
+               and n.func.attr == "isfile"]
+    getsizes = [n.lineno for n in _ast.walk(fn)
+                if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Attribute)
+                and n.func.attr == "getsize"]
+    return listdirs, isfiles, getsizes
+
+
+def test_render_performer_counts_the_plan_and_not_the_directory():
+    listdirs, isfiles, getsizes = _completeness_population("render_performer.py")
+    assert isfiles, "no per-planned-frame existence check"
+    assert getsizes, "a zero-byte frame still passes: nothing reads getsize"
+    src = _read_source("render_performer.py")
+    assert "missing = [p for p in paths if not os.path.isfile(p)]" in src, (
+        "the population is still whatever is in the directory")
+    assert 'f.startswith("0") and f.endswith(".png")' not in src, (
+        "the bare listdir census is still the andon's population")
+
+
+def test_the_stray_is_reported_as_a_stray_and_not_as_a_success():
+    """`listdir` is still called -- to REPORT unexpected files -- and that is the shape
+    `preview_walk` uses. The difference is which list the verdict is computed over."""
+    listdirs, _, _ = _completeness_population("render_performer.py")
+    assert listdirs, "strays are no longer reported at all"
+    src = _read_source("render_performer.py")
+    assert "unexpected_files_in_out_dir" in src
+
+
+def test_both_renderers_that_write_a_frame_sequence_agree_on_the_shape():
+    """The family: `preview_walk.py` and `render_performer.py`. One shape, so a fix to one
+    is a fix to both."""
+    for filename in ("preview_walk.py", "render_performer.py"):
+        src = _read_source(filename)
+        assert "missing" in src and "empty" in src and "strays" in src, filename
+        _, isfiles, getsizes = _completeness_population(filename)
+        assert isfiles and getsizes, filename
+
+
+def test_gate_coverage_may_be_tightened_and_may_not_be_loosened():
+    """ROUTED from core-gates' threshold-argument family (the shape they applied to four
+    rig gates): a tolerance the caller can LOOSEN is a gate the caller can switch off one
+    keyword at a time, with the record still saying it ran and passed."""
+    import pytest as _pytest
+    from armature_core.errors import GateFailure
+    from blender_stub import load_tool
+
+    rp = load_tool("render_performer.py")
+    with _pytest.raises(GateFailure, match=r"may TIGHTEN this gate and may not loosen it"):
+        rp.gate_coverage([], "plate.png", min_frac=rp.MIN_SUBJECT_FRAC * 10)

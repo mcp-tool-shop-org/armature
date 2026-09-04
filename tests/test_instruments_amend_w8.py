@@ -294,3 +294,331 @@ def test_the_shape_assertion_refuses_a_defective_handlers_output():
     with pytest.raises(AssertionError):
         _assert_sentinel("preview_walk.py", [old], outcome=HALTED, gate="PREVIEW",
                          error="RuntimeError", evidence={"missing": ["00007.png"]})
+
+
+# ===========================================================================================
+# The three other family censuses this wave's instruments findings name. Each derives its
+# population from the TREE (wave 8's rule), asserts SIZE and MEMBERSHIP, then the property,
+# and has a red direction that adds a member without the property.
+#
+# They live here rather than in the wave-6 files they correct, because those files
+# (`test_render_visibility.py`, `test_retopo_and_bake.py`, `test_canon_spend.py`) are the
+# tests domain's this wave and a second implementation in them would be a merge conflict
+# wearing a census. The wave-6 checks still pass; these are strictly wider.
+# ===========================================================================================
+
+
+def _dotted(node):
+    parts, cur = [], node
+    while isinstance(cur, ast.Attribute):
+        parts.append(cur.attr)
+        cur = cur.value
+    if isinstance(cur, ast.Name):
+        parts.append(cur.id)
+    return ".".join(reversed(parts))
+
+
+def _calls(tree):
+    """Every call in `tree`, as dotted names -- `bpy.ops.import_scene.gltf`, `import_glb`."""
+    out = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name):
+            out.append((node.func.id, node.lineno))
+        elif isinstance(node.func, ast.Attribute):
+            out.append((_dotted(node.func), node.lineno))
+    return out
+
+
+def _tree(directory, filename):
+    with open(os.path.join(directory, filename), encoding="utf-8") as fh:
+        return ast.parse(fh.read())
+
+
+# ------------------------------------------------- F-0e7d8b05: who imports a GLB, really
+
+
+def tools_that_import_a_glb(directory=TOOLS):
+    """Every tool that brings a GLB into the scene, by EITHER route.
+
+    `tests/test_render_visibility.py:89` builds this population as `"import_glb(" in src`,
+    which is 9 files. Twelve more import through `bpy.ops.import_scene.gltf` directly and
+    are invisible to it -- including `preview_glb.py`, which was measuring the unfiltered
+    mesh list. Derived here by AST over the call sites, which is 21.
+    """
+    found = []
+    for fn in sorted(os.listdir(directory)):
+        if not fn.endswith(".py"):
+            continue
+        names = {n for n, _ in _calls(_tree(directory, fn))}
+        if any(n == "import_glb" or n.endswith(".import_glb")
+               or n.endswith("import_scene.gltf") for n in names):
+            found.append(fn)
+    return found
+
+
+#: Measured 2026-09-04. 21 files: the 20 Blender-side tools that import a subject, plus
+#: `stage_render.py`, which imports `bpy` lazily and so is not in `blender_tools()`.
+GLB_IMPORTERS = [
+    "author_walk.py", "check_relift.py", "diagnose_bone_heat.py", "lift_solve.py",
+    "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
+    "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py", "probe_glb.py",
+    "probe_subject.py", "render_performer.py", "render_start_frame.py",
+    "render_turnaround.py", "rig_bake.py", "rig_character.py", "rig_parts.py",
+    "rig_repair.py", "rig_retopo.py", "stage_render.py",
+]
+
+#: NAMED, DATED and CHECKED (wave 8's rule 4), not asserted by name alone. Both of these
+#: import a GLB and neither FRAMES, BOUNDS nor POSITIONS anything from the mesh list, which
+#: is what `render_visible_meshes` exists to protect:
+#:
+#:   probe_glb.py   reports what a file CONTAINS -- an object-type histogram, counts, bone
+#:                  names. Its `mesh_objects` count includes the importer's decoy on
+#:                  purpose, the way `object_types` does.
+#:   rig_parts.py   refuses outright when the mesh count is not 1, loudly, rather than
+#:                  measuring the list.
+#:
+#: `test_the_exemptions_are_a_subset_and_still_earn_it` checks that reason mechanically.
+VISIBILITY_EXEMPT = {"probe_glb.py", "rig_parts.py"}
+
+#: The helpers whose presence means a tool FRAMES or BOUNDS from the imported list. An
+#: exempt tool that starts calling one of these stops being exempt.
+FRAMING_HELPERS = ("world_bounds", "world_bounds_over_frames", "evaluated_world_vertices",
+                   "auto_radius", "orbit_matrix", "solve_camera", "scene_bbox",
+                   "framing_cloud", "union_sphere")
+
+
+def test_the_glb_importing_population_is_the_size_and_membership_it_was_measured_to_be():
+    derived = tools_that_import_a_glb()
+    assert len(derived) == 21, derived
+    assert sorted(derived) == sorted(GLB_IMPORTERS), sorted(set(derived) ^ set(GLB_IMPORTERS))
+
+
+@pytest.mark.parametrize("filename", [f for f in GLB_IMPORTERS
+                                      if f not in VISIBILITY_EXEMPT])
+def test_every_tool_that_measures_imported_meshes_filters_by_render_visibility(filename):
+    with open(os.path.join(TOOLS, filename), encoding="utf-8") as fh:
+        src = fh.read()
+    assert "render_visible_meshes" in src, (
+        f"{filename} imports a GLB and never filters by render visibility. Blender's glTF "
+        f"importer drops a hidden radius-1.0 Icosphere into `glTF_not_exported`; measuring "
+        f"it reframes the shot (E02-report.md:34: a 3.23:1 figure read as a 1.05:1 "
+        f"near-cube) and no gate downstream can see it.")
+
+
+def test_the_exemptions_are_a_subset_and_still_earn_it():
+    """An exemption set that is not re-derived is how `preview_glb` stayed exempt on a
+    premise its own docstring contradicted."""
+    derived = set(tools_that_import_a_glb())
+    assert VISIBILITY_EXEMPT <= derived, VISIBILITY_EXEMPT - derived
+    for filename in sorted(VISIBILITY_EXEMPT):
+        names = {n for n, _ in _calls(_tree(TOOLS, filename))}
+        framing = sorted(n for n in names
+                         if any(n == h or n.endswith("." + h) for h in FRAMING_HELPERS))
+        assert framing == [], (
+            f"{filename} now calls {framing}: it frames or bounds from the imported list, "
+            f"so the reason it is exempt from the render-visibility filter no longer holds")
+
+
+def test_preview_glb_is_the_file_the_wave_six_census_could_not_see():
+    """The specific site. `preview_glb.py:70` selected `type == "MESH"` and then measured
+    that list -- the triangle total, and `scene_bbox`, whose radius sets every camera
+    distance and whose dims/hi.z set the head-crop centre and radius."""
+    with open(os.path.join(TOOLS, "preview_glb.py"), encoding="utf-8") as fh:
+        src = fh.read()
+    assert "render_visible_meshes" in src
+    assert "mesh_objects_excluded" in src, (
+        "preview_glb filters but does not record what it excluded (the shape "
+        "probe_subject.py:57-59 uses)")
+    # and the substring census that missed it would still miss it, which is why the
+    # derivation above is by AST rather than by `"import_glb(" in src`
+    assert "import_glb(" not in src
+
+
+def test_the_glb_import_derivation_catches_a_tool_the_substring_scan_misses(tmp_path):
+    """RED direction: a tool that imports through `bpy.ops` and never filters."""
+    (tmp_path / "sneaky.py").write_text(
+        "import bpy\n"
+        "def main(path):\n"
+        "    bpy.ops.import_scene.gltf(filepath=path)\n"
+        "    return [o for o in bpy.data.objects if o.type == 'MESH']\n", encoding="utf-8")
+    derived = tools_that_import_a_glb(str(tmp_path))
+    assert derived == ["sneaky.py"], derived
+    src = (tmp_path / "sneaky.py").read_text(encoding="utf-8")
+    assert "import_glb(" not in src, "the wave-6 substring census would have returned []"
+    assert "render_visible_meshes" not in src, "and this member fails the property"
+
+
+# ------------------------------------------ F-fa4e6bb0: who states which Blender ran it
+
+
+def test_every_blender_side_tool_records_the_blender_it_ran_on():
+    """`tests/test_retopo_and_bake.py:122` builds its population as `'"tool":' in src`, a
+    literal key match that returned 13 of 21. Six tools wrote JSON records -- four
+    `panels.json` writers, `preview_glb`'s `_stats.json` and `preview_walk`'s OK payload --
+    with neither `blender_provenance()` nor `bpy.app.version_string` anywhere, and the
+    census could not see any of them. Those panels are not layout-only: `make_rig_sheet`
+    prints `max_vertex_motion` onto the sheet, `make_parts_sheet` prints
+    `max_displacement`, and `make_skeleton_sheet` is the artifact the Director gates the
+    experiment at.
+
+    The population here is every Blender-side tool, derived by the `import bpy` walk: all
+    21 emit a JSON record, if only the halt sentinel, and a recipe that does not reproduce
+    its output is not a recipe."""
+    derived = blender_tools_in(TOOLS)
+    assert len(derived) == 21, derived
+    missing = []
+    for fn in derived:
+        with open(os.path.join(TOOLS, fn), encoding="utf-8") as fh:
+            src = fh.read()
+        if "blender_provenance()" not in src and "bpy.app.version_string" not in src:
+            missing.append(fn)
+    assert missing == [], missing
+
+
+@pytest.mark.parametrize("filename", [
+    "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
+    "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py",
+])
+def test_the_six_records_the_literal_key_census_could_not_see(filename):
+    """The provenance has to be in the RECORD, not merely somewhere in the file."""
+    marker = '"blender": blender_scene.blender_provenance()'
+    with open(os.path.join(TOOLS, filename), encoding="utf-8") as fh:
+        assert marker in fh.read(), filename
+
+
+# ------------------------------------------ F-bba38f1c: the engine that silently was not
+
+
+def tools_with_an_engine_candidate_loop(directory=TOOLS):
+    """Every tool that tries more than one render-engine identifier."""
+    found = []
+    for fn in sorted(os.listdir(directory)):
+        if not fn.endswith(".py"):
+            continue
+        with open(os.path.join(directory, fn), encoding="utf-8") as fh:
+            src = fh.read()
+        if "ENGINE_CANDIDATES" in src or 'for eng in ("BLENDER_EEVEE' in src:
+            found.append(fn)
+    return found
+
+
+ENGINE_LOOPS = ["make_binding_sheet.py", "make_parts_sheet.py", "make_skeleton_sheet.py",
+                "preview_glb.py"]
+
+
+def test_the_engine_loop_population_is_the_four_it_was_measured_to_be():
+    assert sorted(tools_with_an_engine_candidate_loop()) == sorted(ENGINE_LOOPS)
+
+
+class _RefusingRender:
+    """A `scene.render` whose `engine` setter raises `TypeError` for every name."""
+
+    def __setattr__(self, name, value):
+        if name == "engine":
+            raise TypeError("no such engine")
+        object.__setattr__(self, name, value)
+
+
+class _RefusingScene:
+    def __init__(self):
+        self.render = _RefusingRender()
+
+
+@pytest.mark.parametrize("filename", ENGINE_LOOPS)
+def test_the_four_engine_loops_agree_on_the_order_and_refuse_a_fall_through(filename):
+    """MEASURED 2026-09-04: the loop had no `else`, so if a future Blender renamed both
+    identifiers the `for` would complete normally, nothing would be set, and the sheet
+    would render on the factory default with no field in the record able to say so. And
+    `preview_glb` tried the two names in the OPPOSITE order to the three sheets, so on a
+    Blender where both are valid they did not agree on which engine drew them."""
+    from armature_core.errors import GateFailure
+    from blender_stub import load_tool
+
+    mod = load_tool(filename)
+    assert mod.ENGINE_CANDIDATES == ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"), filename
+    setter = getattr(mod, "select_engine", None) or mod.light_the_scene
+    with pytest.raises(GateFailure,
+                       match=r"none of the candidate render engines is valid"):
+        setter(_RefusingScene())
+
+
+@pytest.mark.parametrize("filename", ENGINE_LOOPS)
+def test_the_engine_actually_set_reaches_the_record(filename):
+    with open(os.path.join(TOOLS, filename), encoding="utf-8") as fh:
+        src = fh.read()
+    assert '"engine": engine' in src or 'stats["engine"] = select_engine' in src, filename
+
+
+# --------------------- F-8d2b9d7d: a refusal that fires before a pixel exists leaves no dir
+
+
+def renderers(directory=TOOLS):
+    """Every tool whose `main` both creates the output directory AND renders into it."""
+    found = []
+    for fn in sorted(os.listdir(directory)):
+        if not fn.endswith(".py"):
+            continue
+        tree = _tree(directory, fn)
+        fn_main = next((n for n in tree.body
+                        if isinstance(n, ast.FunctionDef) and n.name == "main"), None)
+        if fn_main is None:
+            continue
+        calls = _calls(fn_main)
+        if (any(n == "os.makedirs" for n, _ in calls)
+                and any(n == "bpy.ops.render.render" for n, _ in calls)):
+            found.append(fn)
+    return found
+
+
+RENDERERS = ["preview_walk.py", "render_performer.py", "render_start_frame.py",
+             "render_turnaround.py"]
+
+
+def test_the_renderer_population_is_the_four_it_was_measured_to_be():
+    assert sorted(renderers()) == sorted(RENDERERS)
+
+
+@pytest.mark.parametrize("filename", RENDERERS)
+def test_no_refusal_reachable_before_the_first_render_sits_below_the_makedirs(filename):
+    """Thirteen refusals across these four files sat BELOW `os.makedirs` and ABOVE the
+    first render, so each left an empty output directory behind -- which is the input
+    condition a later run reads as a used one.
+
+    This is the part of the builders' ordering rule that TRANSFERS. The whole rule (the
+    last in-tool gate above the first write) cannot: `render_start_frame`'s alpha gate and
+    coverage gate READ the render, and a check that reads a render cannot precede it."""
+    tree = _tree(TOOLS, filename)
+    fn_main = next(n for n in tree.body
+                   if isinstance(n, ast.FunctionDef) and n.name == "main")
+    calls = _calls(fn_main)
+    makedirs = min(l for n, l in calls if n == "os.makedirs")
+    first_render = min(l for n, l in calls if n == "bpy.ops.render.render")
+    between = sorted(n.lineno for n in ast.walk(fn_main)
+                     if isinstance(n, ast.Raise) and makedirs < n.lineno < first_render)
+    assert between == [], (
+        f"{filename}: refusals at {between} sit below os.makedirs (line {makedirs}) and "
+        f"above the first render (line {first_render}); each leaves an empty --out behind")
+
+
+def test_the_ordering_scan_catches_the_shape_it_was_written_for(tmp_path):
+    """RED direction."""
+    (tmp_path / "leaky.py").write_text(
+        "import bpy\n"
+        "import os\n"
+        "def main():\n"
+        "    os.makedirs(out, exist_ok=True)\n"
+        "    if not subject:\n"
+        "        raise RenderGate('nothing to render')\n"
+        "    bpy.ops.render.render(write_still=True)\n", encoding="utf-8")
+    assert renderers(str(tmp_path)) == ["leaky.py"]
+    tree = _tree(str(tmp_path), "leaky.py")
+    fn_main = next(n for n in tree.body
+                   if isinstance(n, ast.FunctionDef) and n.name == "main")
+    calls = _calls(fn_main)
+    makedirs = min(l for n, l in calls if n == "os.makedirs")
+    first_render = min(l for n, l in calls if n == "bpy.ops.render.render")
+    between = [n.lineno for n in ast.walk(fn_main)
+               if isinstance(n, ast.Raise) and makedirs < n.lineno < first_render]
+    assert between == [6], between

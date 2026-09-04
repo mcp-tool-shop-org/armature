@@ -159,7 +159,23 @@ def gate_coverage(paths, empty_plate, min_frac=MIN_SUBJECT_FRAC):
     exists to catch is not a check. The plate is the same camera, the same lights and the
     same floor with the character hidden, rendered once because none of those move, so the
     difference is the subject and nothing else.
+
+    **The gate owns its threshold; a caller may only tighten it.** ROUTED 2026-09-04 from
+    core-gates' threshold-argument family (the same shape they applied to four rig gates):
+    a tolerance the caller can LOOSEN is a gate the caller can switch off, one keyword at a
+    time, with the record still reporting that the gate ran and passed. `MIN_SUBJECT_FRAC`
+    is a decision about what a picture of the performer IS, and it belongs to the gate.
+    Passing a smaller `min_frac` (a stricter bar) is allowed and recorded; passing a larger
+    one raises here, before a single pixel is read.
     """
+    if min_frac > MIN_SUBJECT_FRAC:
+        raise RenderGate(
+            f"gate_coverage was asked to accept {min_frac} where its own floor is "
+            f"{MIN_SUBJECT_FRAC}. A caller may TIGHTEN this gate and may not loosen it: "
+            f"what counts as a picture of the performer is the gate's decision, not the "
+            f"caller's, and a loosened threshold leaves a record saying the gate passed",
+            {"gate": "COVERAGE", "requested_min_fraction": min_frac,
+             "gate_floor": MIN_SUBJECT_FRAC})
     base = _pixels(empty_plate)
     per_frame, worst = [], {"frame": None, "frac": 1.0}
     for i, p in enumerate(paths):
