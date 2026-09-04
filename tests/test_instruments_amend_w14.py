@@ -803,3 +803,146 @@ def test_the_start_frame_caller_still_gets_its_own_refusal_class(turn):
     assert exc.value.evidence["gate"] == "STARTFRAME"
     assert exc.value.evidence["who"] == "render_start_frame"
     assert rsf.require_frame_size(832, 480) == (832, 480)
+
+
+# ================================= F-a74b69c9 / F-4db23b72 — the two true stranded refusals
+#
+# THE OPERAND, both times: a refusal whose only input is available long before the first
+# byte is written, sitting below it. `make_skeleton_sheet.gate_any_pivot_matched(table)` was
+# called 36 lines after `table` was produced and 28 lines after `os.makedirs(frames)`, with
+# four body/bones panels shot into `frames/` in between and nothing in the gate reading any
+# of them. `make_rig_sheet.import_reference`'s argument is `args['reference']`, a path known
+# at PARSE time, and seven panels sat between the directory and it. Both left a half-built
+# approval artifact where a refusal belonged — which reads as an interrupted render, and is
+# more misreadable than the empty directory the wave-12 comments were written against.
+
+
+def _write_ordering():
+    import test_instrument_write_ordering as W
+
+    return W
+
+
+def test_the_two_true_strands_are_no_longer_below_a_first_write():
+    """RED on the operand: the repo's own behavioural walk, over the two tools the
+    coordinator named. Reverted-red: yes — both names come back."""
+    W = _write_ordering()
+    assert W.refusals_below_the_first_write("make_skeleton_sheet") == []
+    assert W.refusals_below_the_first_write("make_rig_sheet") == []
+
+
+def test_the_skeleton_sheet_gate_sits_directly_under_the_table_it_reads():
+    """Not merely above the directory — above it AND adjacent to its own input, so a later
+    edit that moves the directory up cannot re-strand it."""
+    src = read_source("make_skeleton_sheet.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    gate_lines = [n.lineno for n in ast.walk(fn)
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                  and n.func.id == "gate_any_pivot_matched"]
+    snap_lines = [n.lineno for n in ast.walk(fn)
+                  if isinstance(n, ast.Call)
+                  and ast.unparse(n.func).endswith("snap_sites_to_balls")]
+    write_lines = [n.lineno for n in ast.walk(fn)
+                   if isinstance(n, ast.Call)
+                   and ast.unparse(n.func).endswith("makedirs")]
+    assert len(gate_lines) == 1 and snap_lines and write_lines, (
+        gate_lines, snap_lines, write_lines)
+    assert snap_lines[0] < gate_lines[0] < min(write_lines), (
+        snap_lines, gate_lines, write_lines)
+
+
+def test_make_rig_sheet_refuses_a_missing_reference_before_it_makes_a_directory(tmp_path):
+    """RED on the operand the finding named: `--reference` naming a path that is not there.
+
+    The refusal fires and `--out` is never created — the half-built `panels/` the finding is
+    about cannot exist. Reverted-red: yes; on the base tree the check is inside
+    `import_reference`, 55 lines below `os.makedirs(out_dir)`.
+    """
+    mod = load_tool("make_rig_sheet.py")
+    out = tmp_path / "sheet"
+    with pytest.raises(mod.ArmatureError, match="--reference"):
+        mod.require_reference_file(str(tmp_path / "no_such.glb"))
+    assert not out.exists()
+    real = tmp_path / "ref.glb"
+    real.write_bytes(b"glTF")
+    assert mod.require_reference_file(str(real)) == os.path.abspath(str(real))
+
+
+def test_make_rig_sheet_imports_the_reference_above_the_first_write():
+    """The whole refusal, not only its argv half: the ambiguous-import `raise` inside
+    `import_reference` needs the scene and the skinned mesh, and both exist above the
+    directory — so the import is performed there and the reference is hidden immediately."""
+    src = read_source("make_rig_sheet.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    import_lines = [n.lineno for n in ast.walk(fn)
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                    and n.func.id == "import_reference"]
+    write_lines = [n.lineno for n in ast.walk(fn)
+                   if isinstance(n, ast.Call)
+                   and ast.unparse(n.func).endswith("makedirs")]
+    assert len(import_lines) == 1, import_lines
+    assert import_lines[0] < min(write_lines), (import_lines, write_lines)
+
+
+# ===================================== F-7e7703cb — a success line earned by a measurement
+
+
+def test_the_bone_heat_sentinel_carries_the_sweep_s_own_counts():
+    """THE OPERAND: the token, and what follows it.
+
+    `print('DIAGNOSE_BONE_HEAT_OK ' + path)` put nothing after the token but the JSON's
+    location, so the sentinel was earned by reaching the end of `main`. The twelve arms'
+    numbers existed one line below it. This drives `main`'s printing block by AST rather
+    than by running Blender: the OK line's payload must be derived from `arms`.
+    Reverted-red: yes — the base tree's line is a bare concatenation with `path`.
+    """
+    src = read_source("diagnose_bone_heat.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    prints = [n for n in ast.walk(fn)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+              and n.func.id == "print"
+              and "DIAGNOSE_BONE_HEAT_OK" in ast.unparse(n)]
+    assert len(prints) == 1, [ast.unparse(n) for n in prints]
+    payload = ast.unparse(prints[0])
+    for key in ("n_arms", "n_arms_with_weight", "best_arm", "best_weighted_fraction"):
+        assert key in payload, (key, payload)
+    assert "arms" in payload, payload
+    assert payload.strip() != "print('DIAGNOSE_BONE_HEAT_OK ' + path)"
+
+
+def test_an_all_zero_sweep_reads_differently_from_a_working_one():
+    """The two cases the old sentinel could not tell apart, computed with the tool's own
+    expressions over synthetic arm records. An all-zero sweep is a LEGITIMATE result for a
+    diagnostic, so it must still be an OK line — but a distinguishable one."""
+    def summarise(arms):
+        weighted = {k: v for k, v in arms.items() if v["weighted_fraction"] > 0}
+        best = max(arms.items(), key=lambda kv: kv[1]["weighted_fraction"], default=None)
+        return {"n_arms": len(arms), "n_arms_with_weight": len(weighted),
+                "best_arm": best[0] if best else None,
+                "all_arms_weighted_nothing": len(weighted) == 0}
+
+    dead = {f"arm{i}": {"weighted_fraction": 0.0} for i in range(12)}
+    live = dict(dead, arm3={"weighted_fraction": 0.81})
+    assert summarise(dead)["n_arms_with_weight"] == 0
+    assert summarise(dead)["all_arms_weighted_nothing"] is True
+    assert summarise(live)["n_arms_with_weight"] == 1
+    assert summarise(live)["best_arm"] == "arm3"
+    assert summarise(dead) != summarise(live)
+
+
+def test_the_bone_heat_sweep_still_has_no_gate_on_an_all_zero_result():
+    """The direction that must NOT be added. An all-zero sweep is the exact condition this
+    diagnostic exists to investigate; a refusal there would delete the finding."""
+    src = read_source("diagnose_bone_heat.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Raise):
+            assert "weighted" not in ast.unparse(node), ast.unparse(node)

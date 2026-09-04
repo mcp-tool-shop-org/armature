@@ -332,6 +332,15 @@ def main():
     before_marks = dict(lm["landmarks"])
     balls, _ = rig_character.measure_joint_balls(mesh_obj, diagonal)
     after_marks, table = joints.snap_sites_to_balls(lm, balls)
+    # THE ANDON, MOVED (F-a74b69c9, wave 14). It used to sit 36 lines below, after
+    # `os.makedirs(frames)` and after four body/bones panels had been shot into it -- and
+    # nothing in it reads anything those four renders wrote. Its only input is `table`,
+    # produced on the line above. What a refused run left behind was `frames/` holding four
+    # panels and no sheet, which reads as an interrupted render rather than as a refusal
+    # and is MORE misreadable than the empty directory the comment below was written
+    # against. The whole purpose of this andon is that a subject where no ball matched any
+    # pivot must not produce something that looks like an approval artifact.
+    gate_snap = gate_any_pivot_matched(table)
 
     engine = light_the_scene(scene)
     # F-244b2ad5: the subject-ambiguity `raise` above and `light_the_scene` (which raises
@@ -367,7 +376,6 @@ def main():
     # only thing that moves between the two rows is the pivot.
     side = "L" if lm["facing"]["left_x_sign"] > 0 else "R"
     inset_scale = height * INSET_HEIGHT_FRACTION
-    gate_snap = gate_any_pivot_matched(table)
     insets = {}
     for joint in INSET_JOINTS:
         site = f"{joint}_{side}"
