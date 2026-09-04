@@ -2203,16 +2203,27 @@ GUARDED_TODAY = [
     "verify.ps1",
 ]
 
-#: WAVE 12, F-387eb031. Members of the guarded population that ci.yml's filters do not yet
-#: cover. Named, dated 2026-09-04, routed: `docs/research-grounding.md` is ci-packaging's
-#: F-5d2c6d28 ("add it to both trigger lists"). SUBSET, so the entry becomes deletable — not
-#: red — the moment the filter lands.
+#: RE-DERIVED 2026-09-04 (wave 14, F-f70a495d) and EMPTY.
 #:
-#: The stake: a PR editing only that file runs no CI job at all, and
+#: What it held: `{"docs/research-grounding.md"}`, routed to ci-packaging in wave 12 as
+#: F-5d2c6d28 ("add it to both trigger lists") under a SUBSET assertion so the entry would
+#: become deletable rather than red once the filter landed. The filter landed —
+#: `.github/workflows/ci.yml` lists `- "docs/research-grounding.md"` under both `push` and
+#: `pull_request` — and `_unfiltered(paths_the_suite_guards(), …)` returns `[]` for both
+#: triggers. But `test_ci_runs_on_every_file_the_suite_guards` subtracted this set
+#: UNCONDITIONALLY, so deleting the ci.yml line again — in a filter-tidying PR, say — left
+#: the test green, and the stale entry hid the exact regression its own comment described.
+#:
+#: The stake, unchanged: a PR editing only that file would run no CI job at all, and
 #: `tests/test_openpose_convention.py:55`, whose whole purpose is "if someone edits
 #: research-grounding.md's F20, this fails", is green-by-absence on the PR and first surfaces
 #: on some later unrelated push, attributed to whatever that push touched.
-UNFILTERED_PENDING = {"docs/research-grounding.md"}
+#:
+#: Re-derive with:
+#:     python -c "import sys;sys.path[:0]=['tests','tools'];import test_ci_workflows as C;\
+#:     print({t: C._unfiltered(C.paths_the_suite_guards(), t) \
+#:            for t in ('push','pull_request')})"
+UNFILTERED_PENDING = set()
 
 
 def test_the_guarded_path_census_is_the_one_the_suite_actually_opens():
@@ -2310,8 +2321,12 @@ def _unfiltered(paths, trigger):
 @pytest.mark.parametrize("trigger", ["push", "pull_request"])
 def test_ci_runs_on_every_file_the_suite_guards(trigger):
     """A file a test opens, that no filter covers, is a guard that cannot run on its subject."""
-    missing = [p for p in _unfiltered(paths_the_suite_guards(), trigger)
-               if p not in UNFILTERED_PENDING]
+    # WAVE 14, F-f70a495d: the `if p not in UNFILTERED_PENDING` subtraction is gone with the
+    # set it read. `_unfiltered` returns `[]` for both triggers on this tree, so the
+    # assertion holds without it — and it starts covering `docs/research-grounding.md` again
+    # the moment the filter line is removed.
+    assert UNFILTERED_PENDING == set(), sorted(UNFILTERED_PENDING)
+    missing = _unfiltered(paths_the_suite_guards(), trigger)
     assert missing == [], (
         f"{trigger} runs nothing when these change, and a test in tests/ reads every one of "
         f"them: {missing}; the guard does not run on the change it exists to guard"
