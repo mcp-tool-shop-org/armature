@@ -110,7 +110,8 @@ def test_isolation_consults_collection_level_visibility(retopo):
     parked = FakeObject("B_voxel_then_quadriflow", collection=hidden_coll)
     assert retopo.isolate_subject(FakeScene([a, parked]), [a], a) == []
     parked.users_collection = [FakeCollection(name="Scene Collection")]
-    with pytest.raises(retopo.ComparisonNotIsolated):
+    with pytest.raises(retopo.ComparisonNotIsolated,
+                       match="still in the render beside the panel's subject"):
         retopo.isolate_subject(FakeScene([a, parked]), [a], a)
 
 
@@ -313,7 +314,7 @@ def test_gate_glb_refuses_a_return_value_that_is_not_a_status_set(rigchar, tmp_p
     p.write_bytes(b"glTF")
     before = rigchar.export_target_snapshot(str(p))
     for bogus in (None, 7, object()):
-        with pytest.raises(rigchar.GateGlbWritten):
+        with pytest.raises(rigchar.GateGlbWritten, match="did not report FINISHED"):
             rigchar.gate_glb_written(str(p), result=bogus, before=before)
 
 
@@ -439,7 +440,6 @@ def test_every_captured_render_status_reaches_a_refusal():
                 continue
             with open(os.path.join(root, fn), encoding="utf-8") as fh:
                 src = fh.read()
-            n_sites = len(_operator_call_sites(root, "bpy.ops.render.render"))
             n_sites = sum(1 for f, _, _ in _operator_call_sites(root, "bpy.ops.render.render")
                           if f == fn)
             if not n_sites:
@@ -448,11 +448,20 @@ def test_every_captured_render_status_reaches_a_refusal():
             calls = [n for n in ast.walk(tree)
                      if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                      and n.func.id == "_render_status"]
+            # A refusal keyed on FINISHED, wherever it is written: an `if` whose test names
+            # it and whose body raises, OR a comprehension that collects the declined views
+            # and a raise that reads it. `preview_glb` is the second shape deliberately —
+            # its shooter RETURNS the status and `gate_previews_written` refuses once over
+            # the whole plan, because a raise inside the shooter would strand a refusal
+            # below the first write (measured; see the wave-14 report).
             raises = [n for n in ast.walk(tree) if isinstance(n, ast.If)
                       and "FINISHED" in ast.unparse(n.test)
                       and any(isinstance(b, ast.Raise) for b in n.body)]
-            if len(calls) < n_sites or len(raises) < n_sites:
-                offenders.append((fn, n_sites, len(calls), len(raises)))
+            plan_gate = [n for n in ast.walk(tree)
+                         if isinstance(n, ast.Raise) and "declined" in ast.unparse(n)]
+            # every site's status must be CAPTURED, and the module must refuse on it
+            if len(calls) < n_sites or not (len(raises) >= n_sites or plan_gate):
+                offenders.append((fn, n_sites, len(calls), len(raises), len(plan_gate)))
     assert offenders == [], offenders
 
 
