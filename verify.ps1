@@ -4,7 +4,13 @@
 
 .DESCRIPTION
   The legs are the same ones `.github/workflows/ci.yml` runs, in the same order and with
-  the same meaning, so a green local run and a green CI run are the same claim:
+  the same meaning, so a green local run and a green CI run are the same claim ABOUT WHAT
+  RAN. They are not the same claim about the interpreter it ran on: every Python leg here
+  uses `$repo\.venv\Scripts\python.exe`, whatever version the rig happens to hold, while
+  ci.yml's `python-tests` job runs its own matrix and release.yml's gate runs one version --
+  none of them necessarily this one. The summary block prints the resolved interpreter, so
+  each run states which one its claim was made on; a version-specific behaviour can still
+  pass here and fail on a runner, and that line is where to look first. The legs themselves:
 
     1. the test suite on the repo venv
     2. the test suite again under `-O` with PYTHONOPTIMIZE=1 — this leg is not a
@@ -144,9 +150,21 @@ if (-not (Test-Path $python)) {
 
 # The legs that shell out to node and npm halt up front rather than discovering it mid-run,
 # the same way the missing interpreter does. Only the tools the SELECTED legs need are
-# required, so `-NoSite` on a box with no npm is still a legitimate partial run.
+# required, so `-NoSite -NoPackage` on a box with no npm is still a legitimate partial run.
+#
+# LEG 3 NEEDS BOTH, and asked for `node` alone until 2026-09-04. It gained the npm clean room
+# in wave 10 -- `npm pack --silent` and `npm install --prefix $npmroom` below -- and this list
+# did not move with it, while the guard that pins the clause asserted only that `node` was
+# named. So `pwsh verify.ps1 -NoSite` on a box with node and no npm walked past the halt, ran
+# both pytest legs and the whole pip-install / build / twine / clean-venv / wheel-probe
+# sequence, and died at `npm pack` with a CommandNotFoundException -- recorded honestly as
+# `FAIL (the leg established no outcome)`, but after paying the cost this halt exists to
+# avoid. `tests/test_verify_script.py` now DERIVES the requirement instead of naming it: it
+# reads the external commands each leg's body invokes out of PowerShell's own parser and
+# holds this list to them under all four flag combinations, so a leg that starts shelling out
+# to a third tool moves the requirement with it.
 $needed = @()
-if (-not $NoPackage) { $needed += 'node' }
+if (-not $NoPackage) { $needed += @('node', 'npm') }
 if (-not $NoSite) { $needed += @('node', 'npm') }
 $absent = @($needed | Sort-Object -Unique | Where-Object {
     -not (Get-Command $_ -ErrorAction SilentlyContinue)
@@ -333,6 +351,29 @@ if ($NoSite) {
 
 Write-Host ''
 Write-Host '════════ verify' -ForegroundColor Cyan
+
+# WHICH INTERPRETER THE CLAIM WAS MADE ON. The DESCRIPTION equates a green run here with a
+# green CI run; that holds for the legs and their order and NOT for the interpreter. Every
+# Python leg above ran on the venv interpreter, whose version CI does not necessarily run --
+# measured 2026-09-04, this rig's venv is a version above the top classifier pyproject
+# declares, and ci.yml runs neither end of it here. So the run states it rather than leaving
+# the reader to assume equivalence: a version-specific red on a runner is then one line away
+# from being recognised as an interpreter difference instead of a change to debug.
+#
+# The version is only reported when it can be READ. `& $python --version` on a file that is
+# not a working interpreter writes a message and leaves whatever `$LASTEXITCODE` already
+# held, so the output is matched against the shape a version has rather than printed
+# whatever came back -- a line that quoted an error message under the word "interpreter"
+# would be a placeholder shaped like evidence.
+$interpreter = "$python (version unreadable)"
+try {
+    $reported = (& $python --version 2>&1 | Out-String).Trim()
+    if ($reported -match '^Python\s+\S+') { $interpreter = "$python -- $reported" }
+} catch { }
+Write-Host ("  interpreter: {0}" -f $interpreter)
+Write-Host '  (the legs and their order are ci.yml''s; the interpreter is this rig''s venv)'
+Write-Host ''
+
 foreach ($r in $results) {
     $verdict = if ($r.Outcome -eq 'PASS') {
         'PASS'
