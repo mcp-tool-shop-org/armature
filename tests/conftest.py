@@ -1,3 +1,4 @@
+import copy
 import importlib.util
 import os
 import sys
@@ -47,3 +48,249 @@ def rt():
                 sys.modules.pop(k, None)
             else:
                 sys.modules[k] = v
+
+
+# --------------------------------------------------------------- repo-anchored resources
+
+FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+UPLOAD_FIXTURES = os.path.join(FIXTURES, "uploads")
+
+#: The upload name maps `build_payload.EXPERIMENTS` names as `outputs/E0x/uploads_*.json`.
+#: They are content-addressed server filenames and nothing else — no pixels, ~2.7 KB each —
+#: so committing them lets the E02 byte pin and E03's arm comparisons ride every run.
+#: Measured 2026-09-03: `bp.build` reads ONLY these maps (the 480x832 control PNGs are read
+#: by `_distinct_source_frames`, which returns None when the directory is absent), and both
+#: pinned E02 payload hashes reproduce from the maps alone.
+UPLOAD_RECORDS = (
+    "outputs/E02/uploads_depth_pershot.json",
+    "outputs/E02/uploads_depth_pershot_inverted.json",
+    "outputs/E02/uploads_reference.json",
+    "outputs/E03/uploads_posearc.json",
+    "outputs/E03/uploads_static.json",
+)
+
+
+def repo_file(relpath):
+    """An absolute path under the repo root for a `outputs/...`-style relative path.
+
+    Skip guards and fixture reads anchor here, never on `os.getcwd()`. A bare relative
+    path resolves against whatever directory pytest was invoked from: measured both
+    directions on 2026-09-03 — from the repo root a guard read False, and from an
+    unrelated scratch directory seeded with the same file name it read True. Thirty-two
+    tests, including the whole through-the-builder half of Gate S, were decided by four
+    such guards, and the skip reason read as though the repo simply had no run in it.
+    """
+    return os.path.join(REPO, *str(relpath).split("/"))
+
+
+def upload_record(relpath):
+    """Resolve one upload name map: the real run if this rig has one, else the fixture.
+
+    `outputs/` is gitignored, so on CI and on any clone the fallback is what exists. The
+    fixture is a byte copy of the record the run actually submitted, which is why the
+    pinned payload hashes still bind against it.
+    """
+    live = repo_file(relpath)
+    if os.path.isfile(live):
+        return live
+    fixture = os.path.join(UPLOAD_FIXTURES, *str(relpath).split("/")[1:])
+    if os.path.isfile(fixture):
+        return fixture
+    # Neither: hand back the path the caller asked for so its own error names it.
+    return live
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _upload_records_are_resolved():
+    """Point `build_payload`'s upload paths at a file that exists, wherever pytest ran.
+
+    The builder names them `outputs/E0x/uploads_*.json`, relative to the caller's working
+    directory, and `outputs/` is gitignored — so the E02 byte pin, E03's arm comparisons
+    and the through-the-builder half of Gate S all skipped on every clone and every CI
+    run. They are the tests that stop a refactor silently re-topologising an experiment
+    that has already been run and reported, which is precisely the thing that must not
+    depend on who happens to have `outputs/` on their rig.
+
+    This rewrites the paths and nothing else: same bytes, same maps, same hashes.
+    """
+    try:
+        import build_payload as bp
+    except Exception:  # pragma: no cover - the builder is always importable in this repo
+        yield
+        return
+
+    saved_map = dict(bp.UPLOAD_MAP)
+    saved_experiments = copy.deepcopy(bp.EXPERIMENTS)
+
+    for arm, path in list(bp.UPLOAD_MAP.items()):
+        bp.UPLOAD_MAP[arm] = upload_record(path)
+    for cfg in bp.EXPERIMENTS.values():
+        ref = cfg.get("reference")
+        if ref:
+            cfg["reference"] = (upload_record(ref[0]), ref[1])
+        for arm_cfg in cfg["arms"].values():
+            if isinstance(arm_cfg, dict) and arm_cfg.get("uploads"):
+                arm_cfg["uploads"] = upload_record(arm_cfg["uploads"])
+    try:
+        yield
+    finally:
+        bp.UPLOAD_MAP.clear()
+        bp.UPLOAD_MAP.update(saved_map)
+        bp.EXPERIMENTS.clear()
+        bp.EXPERIMENTS.update(saved_experiments)
+
+
+# ------------------------------------------------------------------- gate assertions
+
+def _import_every_core_module():
+    """Import every `armature_core` module so a subclass walk sees all of them.
+
+    `__subclasses__()` only knows about classes whose module has been imported, so the
+    population depends on which tests ran first — measured: `test_gates.py` alone sees 12
+    andons, the full suite sees 29. A class-wide invariant checked against a population
+    that changes with collection order is not class-wide. `blender_scene` is the
+    deliberate exception everywhere in this suite: it imports bpy and cannot resolve under
+    a plain CPython.
+    """
+    import glob
+    import importlib
+    import warnings
+
+    for path in sorted(glob.glob(os.path.join(TOOLS, "armature_core", "*.py"))):
+        name = os.path.basename(path)[:-3]
+        if name.startswith("__") or name == "blender_scene":
+            continue
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                importlib.import_module("armature_core." + name)
+        except Exception:  # pragma: no cover - a module needing an absent dependency
+            pass
+
+
+def gate_failure_subclasses():
+    """Every concrete `GateFailure` subclass, however deeply nested.
+
+    Enumerated rather than listed, so a gate added later joins the checks automatically —
+    the whole point of the class-wide invariant is that no new andon can opt out of it.
+    """
+    _import_every_core_module()
+    from armature_core.errors import GateFailure
+
+    seen, out = set(), []
+    stack = [GateFailure]
+    while stack:
+        for sub in stack.pop().__subclasses__():
+            if sub in seen:
+                continue
+            seen.add(sub)
+            out.append(sub)
+            stack.append(sub)
+    return sorted(out, key=lambda c: c.__name__)
+
+
+def assert_gate(exc, gate_id, **expected_evidence):
+    """A raised gate names its andon AND carries the measurement that fired it.
+
+    `armature_core.errors.GateFailure.__init__` is `self.evidence = evidence or {}`, so a
+    gate raised with no evidence at all is a well-formed, silent object: the report the
+    Director reads names an andon with nothing behind it, and a test asserting on the
+    message string stays green through it. Across `tests/` there are hundreds of
+    `pytest.raises` sites on gate types and only a handful assert on `.evidence`; this is
+    the shared shape that makes emptiness fail loudly.
+
+    Accepts pytest's `ExceptionInfo` or the exception itself. `expected_evidence` is
+    checked by containment, never by equality — a gate is free to report MORE than a
+    caller asked about (P1 adds `unexpected` beside G2's `missing`), and a test that
+    demanded an exact key set would fail on a gate that got better.
+    """
+    err = getattr(exc, "value", exc)
+    assert isinstance(err, Exception), err
+    assert err.gate == gate_id, f"raised {type(err).__name__} with gate {err.gate!r}"
+    assert isinstance(err.evidence, dict), type(err.evidence)
+    assert err.evidence, (
+        f"[{gate_id}] {err} carries an EMPTY evidence dict. A gate that reaches a report "
+        f"with nothing behind it names an andon and proves nothing; the measurement that "
+        f"fired it is the payload."
+    )
+    for key, want in expected_evidence.items():
+        assert key in err.evidence, (
+            f"[{gate_id}] evidence has {sorted(err.evidence)}, no {key!r}")
+        if want is not ...:
+            assert err.evidence[key] == want, (
+                f"[{gate_id}] evidence[{key!r}] is {err.evidence[key]!r}, expected {want!r}")
+    return err.evidence
+
+
+# --------------------------------------------------------------------- sheet fonts
+
+#: The two faces `sheet_compose` asks for by name.
+SHEET_REGULAR, SHEET_BOLD = "arial.ttf", "arialbd.ttf"
+
+
+def pil_scalable_fallback(size):
+    """A scalable font PIL itself ships — no platform font, no committed binary.
+
+    `ImageFont.load_default(size)` returns a real FreeTypeFont (Aileron) from Pillow
+    10.1 onward; before that it returned a fixed-size bitmap font that `textlength`
+    cannot scale, which is why the guard below tests the returned object rather than a
+    version number.
+    """
+    from PIL import ImageFont
+
+    return ImageFont.load_default(size)
+
+
+def pil_has_a_scalable_font():
+    try:
+        from PIL import ImageDraw, Image
+
+        a = pil_scalable_fallback(20)
+        b = pil_scalable_fallback(40)
+        ruler = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        return ruler.textlength("MMMM", font=b) > ruler.textlength("MMMM", font=a)
+    except Exception:  # pragma: no cover - ancient Pillow
+        return False
+
+
+@pytest.fixture
+def sheet_fonts(monkeypatch):
+    """Let the sheet composers run on a machine with no platform fonts.
+
+    `sheet_compose.FONT_DIR` is a hard-coded Windows font directory and the two sheet test
+    modules used to skip on `not os.path.isdir(FONT_DIR)` — 23 tests that skipped on
+    EVERY CI run, because CI is `ubuntu-latest` and that directory can never exist there.
+    Nothing about them needs Windows: they compose PIL images and measure text widths,
+    and both files exist for defects found the expensive way (1153 px of label in a
+    1024 px cell that saved, opened and looked finished; a sheet cropping its own
+    measurements off the right edge).
+
+    The substitution is deliberate and narrow. If the module's own resolver produces a
+    font, it is left alone and the tests measure exactly what the module draws with. If
+    it cannot, `_font` is pointed at PIL's bundled scalable face for the duration of the
+    test — so what is exercised is the LAYOUT ARITHMETIC, which is what these files
+    measure, on every platform. Whether `sheet_compose` finds a real font, and whether it
+    refuses by name rather than substituting silently when it cannot, is that module's
+    own contract and belongs in a test of `_font`.
+    """
+    import sheet_compose
+
+    try:
+        sheet_compose._font(SHEET_REGULAR, 26)
+    except Exception:
+        monkeypatch.setattr(sheet_compose, "_font",
+                            lambda name, size: pil_scalable_fallback(size))
+    yield sheet_compose._font
+
+
+def sheet_font(name, size):
+    """The font `sheet_compose` will actually draw with, for a test that must measure it.
+
+    Resolved through the module's own `_font` rather than by rebuilding
+    `os.path.join(FONT_DIR, name)` in the test: the two must agree or a width assertion is
+    comparing one font's metrics against another's, and FONT_DIR is exactly the thing P7
+    replaces.
+    """
+    import sheet_compose
+
+    return sheet_compose._font(name, size)

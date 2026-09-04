@@ -60,6 +60,19 @@ class FakeBackend:
         if self.lie_about_bbox:
             projected = (0, 0, w - 1, h - 1)
 
+        # `master_paths` is the manifest's per-frame pointer back to the source EXRs — the
+        # link "a recipe that does not reproduce its output is not a recipe" rests on. The
+        # writer reads it with `.get()`, so a backend that omits it writes `null` into every
+        # record and nothing anywhere errors. This backend renders arithmetic rather than
+        # pixels and has no EXRs, so the names are synthetic; what matters is that the key
+        # is SUPPLIED, because every key the writer reads with `.get()` must be supplied by
+        # both backends or the two contracts have drifted.
+        master_paths = {
+            channel: f"masters/{channel}/{index:05d}.exr"
+            for channel in (("depth", "alpha", "normal") if self.need_normal
+                            else ("depth", "alpha"))
+        }
+
         return {
             "z": z,
             "alpha": alpha,
@@ -70,6 +83,7 @@ class FakeBackend:
             "camera_matrix": np.eye(4).tolist(),
             "scene_frame": 1 + index,
             "geometry_signature": f"frame{index}" if self.moves else "static-subject",
+            "master_paths": master_paths,
         }
 
     def provenance(self):

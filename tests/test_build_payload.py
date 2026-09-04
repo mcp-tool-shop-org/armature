@@ -26,11 +26,14 @@ E02_PINNED_SHA256 = {
     "A2": "ab7b683ec04b025bbcc969c0240d36537fe85d7f73d10596c32b1e251c7a0fb8",
 }
 
-HAVE_E02_UPLOADS = os.path.isfile("outputs/E02/uploads_depth_pershot.json")
-HAVE_E03_UPLOADS = os.path.isfile("outputs/E03/uploads_posearc.json")
+# The four `os.path.isfile("outputs/...")` guards that used to stand here resolved against
+# `os.getcwd()`, not against the repo, and `outputs/` is gitignored — so the pin below and
+# every E03/E06 comparison skipped on CI and on every clone with the reason "E02 upload
+# records are gitignored output". The name maps are now committed under
+# `tests/fixtures/uploads/` and conftest's session fixture points the builder at whichever
+# copy exists, so these ride every run. See `conftest.upload_record`.
 
 
-@pytest.mark.skipif(not HAVE_E02_UPLOADS, reason="E02 upload records are gitignored output")
 @pytest.mark.parametrize("arm,pinned", sorted(E02_PINNED_SHA256.items()))
 def test_E02_payload_bytes_have_not_moved(arm, pinned):
     """E02 was submitted and reported on these exact bytes. They may not drift."""
@@ -41,7 +44,6 @@ def test_E02_payload_bytes_have_not_moved(arm, pinned):
     )
 
 
-@pytest.mark.skipif(not HAVE_E03_UPLOADS, reason="E03 upload records are gitignored output")
 class TestE03Arms:
     def test_B1_and_B3_differ_only_in_which_control_they_carry(self):
         b1, m1 = bp.build("B1", "E03")
@@ -133,8 +135,6 @@ def test_unknown_experiment_and_arm_raise():
         bp.build("B1", "E02")
 
 
-@pytest.mark.skipif(not HAVE_E03_UPLOADS, reason="E03 upload records are gitignored output")
-@pytest.mark.skipif(not HAVE_E02_UPLOADS, reason="E02 upload records are gitignored output")
 class TestE06Arms:
     """E06 = B1's control byte-identical + E02's reference. Two arms, one prompt apart.
 
@@ -263,16 +263,50 @@ def test_an_E06_arm_that_lost_its_reference_is_caught_by_the_existing_gate():
         bp.verify_topology(wf, "D1", use_control=True, expects_reference=True)
 
 
-@pytest.mark.skipif(not HAVE_E03_UPLOADS, reason="E03 upload records are gitignored output")
+def _control_dir(tmp_path, name, distinct):
+    """A local control directory holding `distinct` distinct PNGs across 33 frames.
+
+    `_distinct_source_frames` hashes the bytes of every `.png` in the directory, so the
+    content only has to differ — this is the expectation side of the check, and it is
+    supplied here rather than depending on a gitignored render that only one rig has.
+    """
+    d = tmp_path / name
+    d.mkdir()
+    for i in range(33):
+        (d / f"{i:05d}.png").write_bytes(b"png-" + str(i % distinct).encode())
+    return str(d)
+
+
+def _arm_pointed_at(monkeypatch, experiment, arm, *, uploads, source_dir):
+    cfg = dict(bp.EXPERIMENTS[experiment])
+    arms = dict(cfg["arms"])
+    arms[arm] = dict(arms[arm], uploads=uploads, source_dir=source_dir)
+    monkeypatch.setitem(bp.EXPERIMENTS, experiment, dict(cfg, arms=arms))
+
+
 def test_the_distinct_name_check_binds_in_BOTH_directions(tmp_path, monkeypatch):
     """A moving control that collapsed on upload must raise, and so must a static arm that
-    did not collapse. E02's version only caught the first."""
-    # A "static" arm whose uploads did NOT collapse: 33 distinct names, 1 local image.
+    did not collapse. E02's version only caught the first.
+
+    Both directions are exercised here now. The expectation side used to come from a
+    gitignored render directory, so on any tree without `outputs/` the whole check
+    degraded to "at least one distinct image" — the branch it exists to make impossible —
+    and the test skipped rather than saying so. Both sides are supplied by the fixture.
+    """
+    # Direction 1 — a MOVING control (33 distinct local images) whose upload collapsed to
+    # one server name. This is the batch that arrives as one frame repeated 33 times.
+    collapsed = tmp_path / "uploads_moving_collapsed.json"
+    collapsed.write_text(json.dumps({f"{i:05d}": "same.png" for i in range(33)}))
+    _arm_pointed_at(monkeypatch, "E03", "B1", uploads=str(collapsed),
+                    source_dir=_control_dir(tmp_path, "moving", 33))
+    with pytest.raises(bp.PayloadError, match="1 distinct server name"):
+        bp.build("B1", "E03")
+
+    # Direction 2 — a STATIC arm (1 distinct local image) whose uploads did NOT collapse.
+    # It would not be the arm it claims to be, and E02's version let this through.
     fake = tmp_path / "uploads_static_broken.json"
     fake.write_text(json.dumps({f"{i:05d}": f"name{i}.png" for i in range(33)}))
-    cfg = dict(bp.EXPERIMENTS["E03"])
-    arms = dict(cfg["arms"])
-    arms["B3"] = dict(arms["B3"], uploads=str(fake))
-    monkeypatch.setitem(bp.EXPERIMENTS, "E03", dict(cfg, arms=arms))
+    _arm_pointed_at(monkeypatch, "E03", "B3", uploads=str(fake),
+                    source_dir=_control_dir(tmp_path, "static", 1))
     with pytest.raises(bp.PayloadError, match="33 distinct server name"):
         bp.build("B3", "E03")
