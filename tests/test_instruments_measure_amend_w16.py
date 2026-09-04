@@ -101,11 +101,16 @@ def test_the_plain_refusal_population_is_the_thirty_this_wave_names():
     files, and all thirty normalised a bare refusal's receipt to `{}`. Twenty-eight declared
     their own `__init__`; two more (`measure_tracking.TrackingError`, `.AnchorMismatch`)
     inherited one from `_CarriesEvidence`, a base with ZERO raise sites. This wave deletes
-    twenty-seven constructors and `_CarriesEvidence` itself, so the population that remains
-    is TWENTY-NINE classes, every one of them inheriting the base's contract.
+    twenty-seven constructors and `_CarriesEvidence` itself (30 - 1 = 29) and adds two NEW
+    named andons — `make_pick_sheet.PickSheetError` (F-9b7cc1de) and
+    `make_e13_sheet.E13SheetError` (F-9297b54f) — each replacing a refusal that named the
+    wrong fault or was no refusal at all. 29 + 2 = 31, written as arithmetic rather than
+    replaced, so a class appearing or vanishing fails HERE on the day it lands.
     """
     live = _plain_refusal_classes()
-    assert len(live) == 29, sorted(live)
+    assert len(live) == 31, sorted(live)
+    assert "make_pick_sheet.PickSheetError" in live
+    assert "make_e13_sheet.E13SheetError" in live
     # the three the wave-14 probe walked ...
     for q in ("extract_clip_frames.ClipReadError", "measure_tracking.TrackingError",
               "measure_tracking.AnchorMismatch"):
@@ -413,3 +418,148 @@ def test_a_single_frame_arm_is_contiguous_by_construction(tmp_path):
     assert AB.gate_contiguous_numbering([7], "--a")["verdict"].startswith("4 frame") is False
     ev = AB.gate_contiguous_numbering([7], "--a")
     assert ev["numbers"] == [7] and ev["first_gap"] is None
+
+
+# ===========================================================================
+# make_pick_sheet — the two Gate PLATE findings
+# ===========================================================================
+
+
+def _pick_clip(tmp_path, n=6):
+    import numpy as np
+
+    d = tmp_path / "lossless"
+    d.mkdir(parents=True, exist_ok=True)
+    rng = np.random.default_rng(3)
+    for i in range(n):
+        a = rng.integers(0, 256, size=(48, 64, 3), dtype="uint8")
+        Image.fromarray(a, mode="RGB").save(d / f"{i:05d}.png")
+    return str(d)
+
+
+# ---- F-da27f9de: a RECORDED null is not a missing key ---------------------
+
+
+@pytest.mark.parametrize("field,line", [
+    ("seed", "source seed"),
+    ("prompt_id", "source run"),
+])
+def test_a_null_field_in_the_payload_record_prints_not_recorded(tmp_path, field, line):
+    """THE OPERAND is the printed LINE, not `source_run`'s dict — the line is the surface
+    the Director reads.
+
+    Measured on the base tree: `prompt_id` was normalised with `or MISSING` and `seed` with
+    `rec.get('seed', MISSING)` — a DEFAULT, not a null check — so a payload record carrying
+    `"seed": null` yielded `{'seed': None}` and `provenance_lines` emitted the literal line
+    `source seed    None`. That contradicts this module's own rule ("A value the inputs do
+    not carry prints `NOT RECORDED` rather than a plausible default") on the one artifact
+    whose whole purpose is that its labels are derived and not typed: a reader
+    reconstructing the pick later cannot tell an unrecorded seed from a recorded null.
+
+    RULE 3 of this wave: the clause keys on the VALUE, never on the presence of the key.
+    Red on `seed: null` — a member outside the walk `prompt_id`'s `or MISSING` covered.
+    """
+    import make_pick_sheet as MPS
+
+    payload = {"prompt_id": "abc", "seed": 2026081231, "resolution": "720P", "length": 5}
+    payload[field] = None
+    rec_path = tmp_path / "payload.json"
+    rec_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    run = MPS.source_run(str(rec_path))
+    assert run[field] == MPS.MISSING, run
+    rec = {"frames_dir": "d", "n_frames": 3, "source_size": [832, 480],
+           "cover_fit": {"target_size": [1024, 576], "scale": 1.2,
+                         "resized_size": [1024, 591], "crop_box": [0, 7, 1024, 583],
+                         "dropped_px_resized": {"x": 0, "y": 15},
+                         "kept_fraction_of_source_area": 0.97},
+           "visible_rows_target": [0, 182], "visible_rows_source": [5.7, 153.6],
+           "band_fraction_of_target": 0.316, "source_run": run}
+    lines = MPS.provenance_lines(rec)
+    assert any(l.startswith(line) and MPS.MISSING in l for l in lines), lines
+    assert not any(l.startswith(line) and "None" in l for l in lines), lines
+
+
+def test_no_python_none_reaches_any_provenance_line(tmp_path):
+    """The POPULATION: all four fields `source_run` reads, not the two that are printed
+    today. `resolution` and `length` carry the same `.get(k, MISSING)` shape and nothing
+    prints them yet — which is exactly how a defect waits for a caller."""
+    import make_pick_sheet as MPS
+
+    rec_path = tmp_path / "null.json"
+    rec_path.write_text(json.dumps(
+        {"prompt_id": None, "seed": None, "resolution": None, "length": None}),
+        encoding="utf-8")
+    run = MPS.source_run(str(rec_path))
+    assert set(run) == {"prompt_id", "seed", "resolution", "length", "record"}
+    for key, value in run.items():
+        assert value is not None, (key, run)
+        if key != "record":
+            assert value == MPS.MISSING, (key, run)
+
+
+# ---- F-9b7cc1de: an empty `--at` named a fault that did not exist --------
+
+
+@pytest.mark.parametrize("at", ["", ",,", "  ", ", ,"])
+def test_an_empty_at_list_is_refused_as_a_candidate_set(tmp_path, at):
+    """THE OPERAND: `--at=` on a directory whose frames ARE all one size.
+
+    Measured on the base tree, on a 6-frame directory: `indices` is `[]`, `measure` walks
+    nothing, `sizes` is `{}`, `distinct` is `[]`, and the SIZE andon fires because
+    `len([]) != 1` — raising "the frames are not all one size ([]); one cover fit cannot
+    describe all of them and the marked bands would be wrong on some tiles". The refusal is
+    correct that it must not proceed (`main` would die at `cands[0]` on the next line) and
+    names a fault that does not exist: the frames are all one size; the CANDIDATE SET is
+    empty. An operator whose `--at` list was eaten by a shell then spends the next step
+    inspecting frame dimensions, because that is what the tool told him was wrong.
+
+    Red on `--at=,,` and `--at=, ,` too — spellings that reach `[]` through the
+    `if v.strip()` filter rather than through an empty string.
+    """
+    import make_pick_sheet as MPS
+
+    clip = _pick_clip(tmp_path)
+    out = tmp_path / "sheet.png"
+    with pytest.raises(MPS.PickSheetError, match=r"candidate") as exc:
+        MPS.main([f"--frames={clip}", f"--at={at}", "--target=1024x576",
+                  "--visible-rows=0,182", f"--out={out}"])
+    ev = exc.value.evidence
+    assert ev is not None, "the refusal carries no receipt"
+    assert ev["clause"] == "no_candidate_frames", ev
+    assert ev["at"] == at, ev
+    assert ev["frames_present"] == 6, ev
+    assert "one size" not in str(exc.value), str(exc.value)
+    assert not out.exists()
+
+
+def test_the_size_refusal_still_fires_on_a_genuinely_mixed_directory(tmp_path):
+    """Grade the arm only on what it can move: the size andon must still name the size
+    fault when the size fault is the one that exists."""
+    import numpy as np
+    import make_pick_sheet as MPS
+    from armature_core.errors import ArmatureError as AE
+
+    clip = _pick_clip(tmp_path, n=3)
+    rng = np.random.default_rng(5)
+    Image.fromarray(rng.integers(0, 256, size=(24, 32, 3), dtype="uint8"),
+                    mode="RGB").save(os.path.join(clip, "00003.png"))
+    out = tmp_path / "mixed.png"
+    with pytest.raises(AE, match=r"not all one size"):
+        MPS.main([f"--frames={clip}", "--at=2,3", "--target=1024x576",
+                  "--visible-rows=0,182", f"--out={out}"])
+
+
+def test_a_seed_of_zero_is_a_recorded_value_and_survives(tmp_path):
+    """The direction the naive fix breaks. `or MISSING` reads as a null check and is a
+    truthiness test: a seed of 0 and a length of 0 are values a payload record can carry,
+    and `or` erases both into `NOT RECORDED` — a different lie in the same place."""
+    import make_pick_sheet as MPS
+
+    rec_path = tmp_path / "zero.json"
+    rec_path.write_text(json.dumps({"prompt_id": "abc", "seed": 0, "length": 0}),
+                        encoding="utf-8")
+    run = MPS.source_run(str(rec_path))
+    assert run["seed"] == 0, run
+    assert run["length"] == 0, run
+    assert run["seed"] != MPS.MISSING
