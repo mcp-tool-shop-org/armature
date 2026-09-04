@@ -14,7 +14,11 @@ import pytest
 
 from conftest import BLENDER, REPO
 
-pytestmark = pytest.mark.skipif(
+#: Scoped to the tests that actually subprocess Blender. This was a module-level
+#: `pytestmark`, which took the static censuses below down with it — and those are the half
+#: that has to run on CI, where there is no Blender at all. A census skipped wherever it
+#: would matter polices nothing.
+needs_blender = pytest.mark.skipif(
     not os.path.isfile(BLENDER), reason=f"Blender not found at {BLENDER}"
 )
 
@@ -31,24 +35,29 @@ def vis():
     return json.loads(lines[-1][len("VISIBILITY "):])
 
 
+@needs_blender
 def test_only_the_subject_survives_the_filter(vis):
     assert vis["render_visible_names"] == ["subject"]
 
 
+@needs_blender
 def test_the_naive_filter_would_have_returned_all_four(vis):
     """If this ever stops being true the fixture has gone slack and is no longer
     testing anything."""
     assert len(vis["all_mesh_names"]) == 4
 
 
+@needs_blender
 def test_the_gltf_importers_hidden_collection_is_excluded(vis):
     assert "gltf_decoy" not in vis["render_visible_names"]
 
 
+@needs_blender
 def test_object_level_hide_render_is_excluded(vis):
     assert "obj_hidden" not in vis["render_visible_names"]
 
 
+@needs_blender
 def test_render_hidden_but_viewport_visible_is_excluded(vis):
     """`visible_get()` is viewport visibility. A predicate built on it would keep this
     decoy, and the instrument would disagree with the renderer again."""
@@ -56,6 +65,7 @@ def test_render_hidden_but_viewport_visible_is_excluded(vis):
     assert "viewport_visible_decoy" not in vis["render_visible_names"]
 
 
+@needs_blender
 def test_the_decoys_would_have_moved_the_framing(vis):
     """The bounding sphere is what auto_radius fits, so a decoy does not merely add a
     stray object — it reframes the shot."""
@@ -86,34 +96,185 @@ from blender_stub import read_source
 #: The mesh objects `import_glb` hands back are filtered on `o.type == "MESH"` alone. Any
 #: tool that MEASURES them — framing, bbox, ground height, vertex cloud — must select
 #: through `render_visible_meshes` first.
-def _tools_that_import_glb():
+#:
+#: Wave 8, F-09a56210 — why neither half of this census is a substring any more.
+#: The population was `'import_glb(' in src`, and the property was
+#: `'render_visible_meshes' in src`. Both are satisfied by PROSE, in a repo whose own
+#: convention (this file's header, `test_alpha_law.py`) is that naming a thing in a comment
+#: is how a defect gets RECORDED. Measured on the nine-file population: every member had
+#: exactly one real call site, so deleting the call and leaving the comment above it kept
+#: this test green. The population missed the other half of the family outright — 21 tools
+#: import `bpy` and twelve of them build a MESH-filtered object list without going anywhere
+#: near `import_glb`.
+
+
+def _call_lines(tree, name):
+    """Every line at which `name` appears as the callee of an `ast.Call`."""
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if called == name:
+                out.append(node.lineno)
+    return sorted(out)
+
+
+def _selects_mesh_objects_by_type(tree):
+    """Every line comparing some object's `.type` to the literal `"MESH"`.
+
+    This is the shape the whole file exists for: `[o for o in bpy.data.objects if
+    o.type == "MESH"]` is the filter that sweeps up the importer's decoy, whether the
+    objects arrived through `import_glb` or through `bpy.ops.import_scene.gltf` directly.
+    """
+    out = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Compare) and isinstance(node.left, ast.Attribute)
+                and node.left.attr == "type"
+                and any(isinstance(c, ast.Constant) and c.value == "MESH"
+                        for c in node.comparators)):
+            out.append(node.lineno)
+    return sorted(out)
+
+
+def _tools_that_obtain_meshes(tools_dir=None):
+    """THE DERIVATION: every tool that obtains mesh objects from `bpy` at all.
+
+    A tool is in the population when its AST carries any of: a CALL to `import_glb`, a
+    CALL to `render_visible_meshes`, or a `.type == "MESH"` comparison. Nothing is read as
+    a substring, so a comment naming any of the three puts nothing in and takes nothing
+    out. 21 members on 2026-09-04 — the nine the old predicate found, plus the twelve that
+    import through `bpy.ops.import_scene.gltf` and filter by type themselves.
+    """
+    tools_dir = TOOLS_DIR if tools_dir is None else tools_dir
     found = []
-    for fn in sorted(os.listdir(TOOLS_DIR)):
+    for fn in sorted(os.listdir(tools_dir)):
         if not fn.endswith(".py"):
             continue
-        src = read_source(fn)
-        if "import_glb(" in src:
+        with open(os.path.join(tools_dir, fn), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        if (_call_lines(tree, "import_glb") or _call_lines(tree, "render_visible_meshes")
+                or _selects_mesh_objects_by_type(tree)):
             found.append(fn)
     return found
 
 
-def test_the_import_glb_population_is_what_it_was_measured_to_be():
-    """A census that stopped enumerating would report green over everything."""
-    pop = _tools_that_import_glb()
-    assert len(pop) >= 9, pop
-    for expected in ("render_turnaround.py", "render_performer.py", "preview_walk.py",
-                     "render_start_frame.py", "stage_render.py"):
-        assert expected in pop, (expected, pop)
+#: The population as derived on 2026-09-04. Equality, so a new Blender tool joins the
+#: census on the day it lands rather than the day somebody remembers to widen a tuple.
+RECORDED_MESH_TOOLS = [
+    "author_walk.py", "check_relift.py", "diagnose_bone_heat.py", "lift_solve.py",
+    "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
+    "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py", "probe_glb.py",
+    "probe_subject.py", "render_performer.py", "render_start_frame.py",
+    "render_turnaround.py", "rig_bake.py", "rig_character.py", "rig_parts.py",
+    "rig_repair.py", "rig_retopo.py", "stage_render.py",
+]
+
+#: Exemptions, re-derived 2026-09-04, each with the clause that makes it true and a
+#: mechanical check of that clause below — an exemption whose premise nobody re-reads is
+#: how `preview_glb` sat outside the exit-handler census under a comment its own file
+#: falsified. `preview_glb.py` is deliberately NOT here: it derives a camera radius from
+#: `scene_bbox(meshes)` over the unfiltered list, which is the defect verbatim, and its fix
+#: is the instruments domain's (wave 8, "the visibility fix reaches this file").
+MEASURES_NOTHING_FROM_THE_MESH_LIST = {
+    "probe_glb.py": "reports an inventory of what the FILE contains — object counts, a "
+                    "type histogram, vertex and vertex-group totals. Filtering by render "
+                    "visibility would make the probe lie about the file it is probing, and "
+                    "`len(o.data.vertices)` summed over the meshes is a COUNT, not a "
+                    "vertex cloud. Checked: the module makes no world-space measurement "
+                    "at all — no `matrix_world`, no `bound_box`, so nothing it writes can "
+                    "reframe a shot.",
+    "rig_parts.py": "refuses rather than measures: the import is followed immediately by "
+                    "a count guard that raises unless exactly one MESH object arrived, so "
+                    "the importer's decoy halts the tool instead of joining a "
+                    "measurement. Checked: the guard is still there.",
+}
 
 
-@pytest.mark.parametrize("filename", _tools_that_import_glb())
+def test_the_mesh_tool_population_is_derived_and_has_not_grown_silently():
+    """Size, then membership. A census that stopped enumerating would report green over
+    everything, and one whose predicate was a substring would report green over a comment.
+    """
+    pop = _tools_that_obtain_meshes()
+    assert len(pop) == 21, pop
+    assert pop == RECORDED_MESH_TOOLS, {
+        "appeared": sorted(set(pop) - set(RECORDED_MESH_TOOLS)),
+        "vanished": sorted(set(RECORDED_MESH_TOOLS) - set(pop)),
+    }
+    #: the twelve the old `'import_glb(' in src` predicate could not see
+    assert {"rig_character.py", "rig_parts.py", "make_rig_sheet.py", "probe_glb.py",
+            "preview_glb.py", "diagnose_bone_heat.py"} <= set(pop)
+
+
+def test_the_exemptions_sit_inside_the_population_and_their_clauses_still_hold():
+    """Rule 4: named, dated, re-derived — and each checked against the REASON it is
+    exempt, not merely listed."""
+    pop = set(_tools_that_obtain_meshes())
+    assert set(MEASURES_NOTHING_FROM_THE_MESH_LIST) <= pop
+
+    probe = ast.parse(read_source("probe_glb.py"))
+    world = [n.lineno for n in ast.walk(probe)
+             if isinstance(n, ast.Attribute) and n.attr in ("matrix_world", "bound_box")]
+    assert world == [], (
+        f"probe_glb.py measures world-space geometry at {world}; it is exempt only for as "
+        f"long as its record is an inventory rather than a measurement")
+
+    parts = ast.parse(read_source("rig_parts.py"))
+    guards = [n.lineno for n in ast.walk(parts)
+              if isinstance(n, ast.If)
+              and any(isinstance(b, ast.Raise) for b in n.body)
+              and "expected one mesh object" in ast.dump(n)]
+    assert guards, (
+        "rig_parts.py no longer raises on a mesh count other than one, so the clause its "
+        "exemption rests on is gone: a decoy would now be measured rather than refused")
+
+
+@pytest.mark.parametrize("filename", _tools_that_obtain_meshes())
 def test_every_tool_that_measures_imported_meshes_filters_by_render_visibility(filename):
-    src = read_source(filename)
-    assert "render_visible_meshes" in src, (
-        f"{filename} calls import_glb and never filters by render visibility. The glTF "
-        f"importer drops a hidden radius-1.0 Icosphere into `glTF_not_exported`; measuring "
-        f"it reframes the shot (E02-report.md:34: a 3.23:1 figure read as a 1.05:1 "
-        f"near-cube) and no gate downstream can see it.")
+    """The property, asserted as a CALL. `'render_visible_meshes' in src` is satisfied by
+    the comment that explains the call, which is precisely the sentence a seat writes just
+    before deleting the line under it."""
+    if filename in MEASURES_NOTHING_FROM_THE_MESH_LIST:
+        pytest.skip(f"{filename}: {MEASURES_NOTHING_FROM_THE_MESH_LIST[filename]}")
+    tree = ast.parse(read_source(filename))
+    assert _call_lines(tree, "render_visible_meshes"), (
+        f"{filename} obtains mesh objects from bpy and never CALLS render_visible_meshes. "
+        f"The glTF importer drops a hidden radius-1.0 Icosphere into `glTF_not_exported`; "
+        f"measuring it reframes the shot (E02-report.md:34: a 3.23:1 figure read as a "
+        f"1.05:1 near-cube) and no gate downstream can see it.")
+
+
+def test_the_call_site_census_goes_red_when_the_call_goes_and_the_comment_stays(tmp_path):
+    """Rule 3: prove the census fails on a mutation that adds a member without the
+    property. Three synthetic tools — one that calls the filter, one that only NAMES it in
+    a comment and a docstring, and one that never mentions it. The middle one is the
+    mutation the old substring predicate accepted."""
+    root = tmp_path / "tools"
+    root.mkdir()
+    (root / "keeps_the_call.py").write_text(
+        'def main(scene):\n'
+        '    meshes = render_visible_meshes(scene)\n'
+        '    return [o for o in meshes]\n', encoding="utf-8")
+    (root / "keeps_only_the_words.py").write_text(
+        '"""Selects through render_visible_meshes so the decoy never lands."""\n'
+        'def main(scene):\n'
+        '    # render_visible_meshes(scene) — see the module docstring\n'
+        '    meshes = [o for o in scene.objects if o.type == "MESH"]\n'
+        '    return meshes\n', encoding="utf-8")
+    (root / "never_heard_of_it.py").write_text(
+        'def main(scene):\n'
+        '    return [o for o in scene.objects if o.type == "MESH"]\n', encoding="utf-8")
+
+    pop = _tools_that_obtain_meshes(str(root))
+    assert pop == ["keeps_only_the_words.py", "keeps_the_call.py",
+                   "never_heard_of_it.py"], pop
+
+    verdict = {}
+    for fn in pop:
+        with open(root / fn, encoding="utf-8") as fh:
+            verdict[fn] = bool(_call_lines(ast.parse(fh.read()), "render_visible_meshes"))
+    assert verdict == {"keeps_the_call.py": True, "keeps_only_the_words.py": False,
+                       "never_heard_of_it.py": False}, verdict
 
 
 def _measurement_loops_over_unfiltered_meshes(filename):
@@ -140,8 +301,10 @@ def _measurement_loops_over_unfiltered_meshes(filename):
     return hits
 
 
-@pytest.mark.parametrize("filename", _tools_that_import_glb())
+@pytest.mark.parametrize("filename", _tools_that_obtain_meshes())
 def test_no_tool_measures_the_unfiltered_mesh_list(filename):
+    if filename in MEASURES_NOTHING_FROM_THE_MESH_LIST:
+        pytest.skip(f"{filename}: {MEASURES_NOTHING_FROM_THE_MESH_LIST[filename]}")
     hits = _measurement_loops_over_unfiltered_meshes(filename)
     assert not hits, (
         f"{filename} lines {hits}: geometry measured over the unfiltered mesh list. "
@@ -174,7 +337,7 @@ def test_no_tool_reaches_into_the_private_vertex_primitive():
     the filter. `render_turnaround.py:553` and `render_start_frame.py:452` were the two
     tools importing the private `_evaluated_world_vertices`, and a private primitive that
     tools reach into is a filter waiting to be bypassed again."""
-    for filename in _tools_that_import_glb():
+    for filename in _tools_that_obtain_meshes():
         src = read_source(filename)
         assert "_evaluated_world_vertices" not in src, (
             f"{filename} calls the private primitive instead of "

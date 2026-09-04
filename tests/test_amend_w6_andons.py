@@ -35,10 +35,17 @@ def _func(module_relpath, name):
     raise AssertionError(f"{name} not found in {module_relpath}")
 
 
-def _call_sites(func_name):
-    """(path, lineno, keywords, n_positional) for every call to `func_name` under tools/."""
+def _call_sites(func_name, tools_root=None):
+    """(path, lineno, keywords, n_positional) for every call to `func_name` under tools/.
+
+    `tools_root` exists so the census below can be driven against a synthetic tree and
+    shown red on demand: a walk that silently reached nothing would report an empty family
+    forever, which is exactly how a routed exemption outlives the defect it excused.
+    """
+    tools_root = TOOLS if tools_root is None else tools_root
+    base = REPO if os.path.abspath(tools_root) == os.path.abspath(TOOLS) else tools_root
     out = []
-    for root, _dirs, files in os.walk(TOOLS):
+    for root, _dirs, files in os.walk(tools_root):
         for fname in sorted(files):
             if not fname.endswith(".py"):
                 continue
@@ -53,7 +60,7 @@ def _call_sites(func_name):
                 attr = getattr(node.func, "attr", getattr(node.func, "id", None))
                 if attr != func_name:
                     continue
-                out.append((os.path.relpath(path, REPO).replace("\\", "/"), node.lineno,
+                out.append((os.path.relpath(path, base).replace("\\", "/"), node.lineno,
                             {k.arg for k in node.keywords}, len(node.args)))
     return out
 
@@ -77,18 +84,26 @@ def test_import_glb_cannot_be_called_without_the_fps_expectation():
         "expected_fps carries a default, which is what makes the andon optional")
 
 
-#: The one call site that still omits the fps expectation, measured 2026-09-04. It is
-#: outside the core-solvers domain (instruments owns `tools/probe_subject.py`) and is
-#: routed there; the correct call is `expected_fps=int(blender_scene.scene_fps())` right
-#: after its `reset_scene()`, so the omission becomes a recorded choice. Subset assertion,
-#: so the list can only shrink — a NEW bare call site fails this test.
-IMPORT_GLB_SITES_WITHOUT_AN_EXPECTATION_ROUTED = {"tools/probe_subject.py"}
+#: EMPTY, and the date the last routed site closed is 2026-09-04. It held
+#: `tools/probe_subject.py` while that fix was in flight in another domain; the fix landed
+#: (`probe_subject.py:49` now passes `expected_fps=int(blender_scene.scene_fps())`), and
+#: re-deriving the set with the file's own `_call_sites('import_glb')` over the 13 call
+#: sites in the tree returns nothing. An escape hatch that outlives its errand is an
+#: escape hatch: leaving `probe_subject` named here would have let it regress to a bare
+#: `import_glb(path)` under a green test — the same shape as
+#: `EVIDENCE_WITHOUT_GATE_ID_ROUTED`, which was emptied when ITS fix landed.
+#: The subset assertion stays, so this set can only ever shrink.
+IMPORT_GLB_SITES_WITHOUT_AN_EXPECTATION_ROUTED = set()
 
 
 def test_every_import_glb_call_site_states_the_rate_it_expects():
     """The family, not the instance. `probe_subject.py:42` called `import_glb(path)` with
     no expectation immediately after `reset_scene()` — harmless there because it reads
-    geometry, and proof that nothing anywhere required a caller to arm the andon."""
+    geometry, and proof that nothing anywhere required a caller to arm the andon.
+
+    The population is derived: every `ast.Call` to `import_glb` anywhere under `tools/`,
+    13 of them on 2026-09-04 across nine live tools and two in `superseded/`.
+    """
     sites = _call_sites("import_glb")
     assert len(sites) >= 10, sites
     bare = {p for p, ln, kw, npos in sites if "expected_fps" not in kw and npos < 2}
@@ -96,6 +111,28 @@ def test_every_import_glb_call_site_states_the_rate_it_expects():
         f"a call site disarms the fps andon by omission: {sorted(bare)}; routed and "
         f"expected to shrink, never to grow: "
         f"{sorted(IMPORT_GLB_SITES_WITHOUT_AN_EXPECTATION_ROUTED)}")
+
+
+def test_the_bare_call_site_census_can_still_see_one(tmp_path):
+    """What an empty routed set is worth depends entirely on the walk finding a bare site
+    at all, so the walk is driven against a tree that has one. Both directions: the bare
+    call is named, and the same call with the expectation stated is not."""
+    root = tmp_path / "tools"
+    root.mkdir()
+    (root / "regressed.py").write_text(
+        "def main(path):\n"
+        "    import_glb(path)\n", encoding="utf-8")
+    sites = _call_sites("import_glb", str(root))
+    bare = {p for p, ln, kw, npos in sites if "expected_fps" not in kw and npos < 2}
+    assert bare == {"regressed.py"}, sites
+    assert not bare <= IMPORT_GLB_SITES_WITHOUT_AN_EXPECTATION_ROUTED
+
+    (root / "regressed.py").write_text(
+        "def main(path):\n"
+        "    import_glb(path, expected_fps=24)\n", encoding="utf-8")
+    sites = _call_sites("import_glb", str(root))
+    assert [p for p, ln, kw, npos in sites
+            if "expected_fps" not in kw and npos < 2] == []
 
 
 # --------------------------------------- load_pinned_camera: expect is not optional

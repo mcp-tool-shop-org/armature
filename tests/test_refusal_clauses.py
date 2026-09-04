@@ -104,7 +104,17 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: that a class which grows a second raise site fails HERE, on the day it lands, instead of
 #: quietly joining a set nobody re-derives. A new member is not a defect: add it to this set
 #: in the same commit, and give its bare `pytest.raises` sites a clause.
+#:
+#: Two names — `PreviewGlbGate` and `PreviewWalkGate` — are recorded here BEFORE they exist
+#: in this branch's tree. They arrive with the instruments wave-8 amend (measured in that
+#: worktree 2026-09-04: 2 raise sites in `tools/preview_glb.py`, 3 in
+#: `tools/preview_walk.py`), and this census is an equality, so it is red on this branch
+#: alone and green on the merged tree. `RenderTurnaroundGate` is unaffected by being
+#: re-based on `GateFailure` in the same amend: the derivation keys on the class NAME and
+#: its raise count, never on its bases, which is the whole reason `FramingError` and
+#: `WalkError` are policed at all.
 RECORDED_POPULATION = frozenset({
+    "PreviewGlbGate", "PreviewWalkGate",
     "AlphaGate", "ArmatureError", "AssemblyGate", "BackdropGate", "BakeEmpty",
     "CascadeGate", "ClipReadError", "ClipShapeError", "CompareError",
     "ComparisonNotIsolated", "CompositorWiring", "DetectionGate", "DonorGate",
@@ -143,7 +153,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     the derivation cannot see it. The typed set is therefore checked by direction — the
     two names that ARE raised must still be policed — rather than by containment.
     """
-    assert len(POLICED) == 65, sorted(POLICED)
+    assert len(POLICED) == 67, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
