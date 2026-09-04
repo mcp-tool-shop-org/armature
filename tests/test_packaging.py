@@ -116,6 +116,61 @@ def test_every_third_party_import_in_armature_core_is_declared():
     assert undeclared == [], "undeclared runtime dependencies: " + "; ".join(undeclared)
 
 
+# ------------------------------------------------- one scanner, and its exact complement
+#
+# Wave 6, F-71538ecf. The function-local import scan was implemented TWICE and the two
+# disagreed by construction, with nothing pinning them against each other.
+# `armature_core.cli._function_local_dependencies` walks with a FunctionDef DEPTH counter,
+# so an import at module scope inside a `try:` or an `if:` stays depth 0 and is correctly
+# not function-local. This module detected module scope by iterating `tree.body` alone, so
+# the same guarded import was invisible to it and its root was classified lazy. Measured
+# with a synthetic module whose only import is `try: import matplotlib / except
+# ImportError:` at module scope: the shipped scanner returned [] (correct) and this
+# module's detector never saw the import at all, leaving `at_module_scope` False.
+#
+# The consequence crossed a module boundary: `tests/test_ci_workflows.py` imports
+# `lazy_third_party_roots` and requires CI's clean-room leg to CALL a function that imports
+# each "lazy" root. For a guarded module-scope dependency there is no such function, so the
+# suite would go red for a false reason while `armature check` reported the honest answer.
+#
+# The second implementation is deleted. `lazy_third_party_roots` now reads the SHIPPED
+# scanner, and the only walk left here answers the complementary question — which roots are
+# imported at module scope — with the same depth rule, asserted against the shipped scanner
+# on every armature_core module and on the two fixture sources that separate them.
+
+
+def _module_scope_roots_of_tree(tree):
+    """Roots imported at module scope, by the same depth rule the shipped scanner uses.
+
+    Depth counts FunctionDef nesting and nothing else, so an import inside a module-level
+    `try:` / `if:` / `with:` is module scope — which is exactly what the old `tree.body`
+    iteration could not see.
+    """
+    roots, stack = set(), [(tree, 0)]
+    while stack:
+        node, depth = stack.pop()
+        for child in ast.iter_child_nodes(node):
+            d = depth
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                d += 1
+            elif d == 0 and isinstance(child, ast.Import):
+                roots.update(a.name.split(".")[0] for a in child.names)
+            elif (d == 0 and isinstance(child, ast.ImportFrom)
+                  and child.level == 0 and child.module):
+                roots.add(child.module.split(".")[0])
+            stack.append((child, d))
+    return roots
+
+
+def _third_party(roots):
+    local = {f[:-3] for f in os.listdir(CORE) if f.endswith(".py")} | {"armature_core"}
+    return {r for r in roots if r not in sys.stdlib_module_names and r not in local}
+
+
+def _core_modules():
+    return [n[:-3] for n in sorted(os.listdir(CORE)) if n.endswith(".py")]
+
+
 def lazy_third_party_roots():
     """The third-party roots imported ONLY inside function bodies.
 
@@ -123,24 +178,113 @@ def lazy_third_party_roots():
     first call raises. `test_ci_workflows` reads this list to require that the clean-room
     leg actually reaches each of them, so a newly added lazy dependency drags its coverage
     along instead of arriving silently.
+
+    The function-local half is the shipped scanner's answer, not a copy of it, so what the
+    suite measures is what `armature check` reports.
     """
-    lazy = {}
-    for root, files in third_party_roots().items():
-        if root in NOT_ON_PYPI:
-            continue
-        at_module_scope = False
-        for name in files:
-            tree = ast.parse(open(os.path.join(CORE, name), encoding="utf-8").read())
-            for node in tree.body:
-                if isinstance(node, ast.Import):
-                    if root in {a.name.split(".")[0] for a in node.names}:
-                        at_module_scope = True
-                elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-                    if node.module.split(".")[0] == root:
-                        at_module_scope = True
-        if not at_module_scope:
-            lazy[root] = files
-    return lazy
+    from armature_core import cli
+
+    module_scope, func_local = set(), {}
+    for mod in _core_modules():
+        with open(os.path.join(CORE, mod + ".py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        module_scope |= _third_party(_module_scope_roots_of_tree(tree))
+        for root in cli._function_local_dependencies(mod):
+            if root in NOT_ON_PYPI:
+                continue
+            func_local.setdefault(root, []).append(mod + ".py")
+    return {root: files for root, files in func_local.items() if root not in module_scope}
+
+
+#: A module-scope import inside a `try:` — the case that separated the two scanners. Kept
+#: as source rather than a file under `tools/`: the shipped scanner resolves its path from
+#: `cli.__file__`, so pointing that at a temporary directory exercises the real walk.
+GUARDED_MODULE_SCOPE_SOURCE = """\
+try:
+    import matplotlib
+except ImportError:  # pragma: no cover
+    matplotlib = None
+
+
+def draw():
+    return matplotlib
+"""
+
+FUNCTION_LOCAL_SOURCE = """\
+def draw():
+    import matplotlib
+    return matplotlib
+"""
+
+
+def _shipped_scan(tmp_path, monkeypatch, source, name="probe_guarded"):
+    """`cli._function_local_dependencies` run over a source of our choosing."""
+    from armature_core import cli
+
+    (tmp_path / (name + ".py")).write_text(source, encoding="utf-8")
+    monkeypatch.setattr(cli, "__file__", str(tmp_path / "cli.py"))
+    cli._FUNC_LOCAL_CACHE.clear()
+    try:
+        return cli._function_local_dependencies(name)
+    finally:
+        cli._FUNC_LOCAL_CACHE.clear()
+
+
+def _body_only_module_scope_roots(tree):
+    """The detector this module used to carry, kept only so the fixture below can show
+    what it missed."""
+    roots = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            roots.update(a.name.split(".")[0] for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            roots.add(node.module.split(".")[0])
+    return roots
+
+
+def test_a_guarded_module_scope_import_separates_the_two_scanners(tmp_path, monkeypatch):
+    """The fixture the finding names, both sources run through both walks.
+
+    A `try: import matplotlib` at module scope is NOT function-local — the shipped scanner
+    says so and `armature check` reports it honestly — and the old `tree.body` detector
+    could not see it at all, which is what made the same root read as lazy here.
+    """
+    assert _shipped_scan(tmp_path, monkeypatch, GUARDED_MODULE_SCOPE_SOURCE) == []
+    assert _shipped_scan(tmp_path, monkeypatch, FUNCTION_LOCAL_SOURCE) == ["matplotlib"]
+
+    guarded = ast.parse(GUARDED_MODULE_SCOPE_SOURCE)
+    local = ast.parse(FUNCTION_LOCAL_SOURCE)
+    assert _module_scope_roots_of_tree(guarded) == {"matplotlib"}
+    assert _module_scope_roots_of_tree(local) == set()
+    assert _body_only_module_scope_roots(guarded) == set(), (
+        "the retired detector now sees the guarded import; this fixture no longer "
+        "separates the two scanners")
+
+
+def test_the_two_import_scans_agree_on_every_armature_core_module():
+    """The pin the finding asked for: every module, both questions, complementary answers.
+
+    `module scope | function local == every third-party root the file imports`, and the
+    two sets are disjoint — no root in this package is imported both ways in one file, so
+    the derivation `lazy_third_party_roots` performs is exact on this tree. The day one is,
+    this fails rather than the classification quietly drifting.
+    """
+    from armature_core import cli
+
+    for mod in _core_modules():
+        path = os.path.join(CORE, mod + ".py")
+        with open(path, encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        module_scope = _third_party(_module_scope_roots_of_tree(tree))
+        func_local = set(cli._function_local_dependencies(mod))
+        every = _third_party(_root_imports(path))
+        assert module_scope | func_local == every, (
+            f"{mod}: module scope {sorted(module_scope)} plus function-local "
+            f"{sorted(func_local)} does not account for {sorted(every)}")
+        assert module_scope & func_local == set(), (
+            f"{mod} imports {sorted(module_scope & func_local)} both at module scope and "
+            f"inside a function; the lazy classification can no longer be derived from "
+            f"the two answers alone")
 
 
 def lazy_import_call_sites():
