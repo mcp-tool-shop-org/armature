@@ -469,15 +469,21 @@ def test_no_new_gate_raise_ships_without_its_evidence():
 
 # --------------------------------------- the receipt's id lives in the evidence too
 
-#: Modules whose gate-function evidence dicts still omit the `gate` key, as measured
-#: 2026-09-04 (F-f2f42e4a). `stage_render.py:509` prints `GATE_FAILURE <exc.gate>` and
-#: `GATE_EVIDENCE <json of exc.evidence>` as two lines, so a reader holding only the JSON
-#: has no id at all — and ids are shared across andon families ("D" by GateDDeterminism
-#: and GatePartsDeterminism, "ALPHA" by AlphaGate and TurnaroundAlphaGate), so the prose
-#: is not enough either. These sit outside the core-solvers domain and are routed to
-#: core-gates; the census below is a SUBSET assertion, so it goes green as they are fixed
-#: and red the moment a new module joins them.
-EVIDENCE_WITHOUT_GATE_ID_ROUTED = {"gates.py", "rig_gates.py"}
+#: Modules whose gate-function evidence dicts omit the `gate` key. EMPTY, as of the
+#: wave-6 amend: ten sites were measured 2026-09-04 (F-f2f42e4a), four in core-solvers
+#: (`parts.py` x3, `glb.py`) fixed with this test, and the rest in `gates.py` and
+#: `rig_gates.py` fixed on the core-gates branch (commit b4b49f1, seven sites - the six
+#: this census found plus `g6_subject_motion`, which their own AST sweep added).
+#:
+#: `stage_render.py:509` prints `GATE_FAILURE <exc.gate>` and `GATE_EVIDENCE <json of
+#: exc.evidence>` as two lines, so a reader holding only the JSON has no id at all - and
+#: ids are shared across andon families ("D" by GateDDeterminism and GatePartsDeterminism,
+#: "ALPHA" by AlphaGate and TurnaroundAlphaGate), so the prose is not enough either.
+#:
+#: SUBSET assertion: the set can only shrink. Until the core-gates branch is merged this
+#: test is RED on the core-solvers branch alone, by two modules that branch owns - the
+#: coordinated-pair artifact the wave brief names, not a defect in either half.
+EVIDENCE_WITHOUT_GATE_ID_ROUTED = set()
 
 
 def _evidence_dicts_missing_the_gate_key():
