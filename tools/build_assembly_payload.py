@@ -61,7 +61,17 @@ TOOL_VERSION = "S03.2"
 #: The only shape a frame key in an upload map may take. Zero padded to five digits, so a
 #: lexicographic sort of the keys IS the numeric order — the property the ordering rule
 #: assumed and never checked.
-FRAME_KEY = re.compile(r"^[0-9]{5}(\.png)?$")
+#: An upload map key: five zero-padded digits, optionally suffixed `.png`.
+#:
+#: The suffix is matched case-INSENSITIVELY (wave 8, F-d85dafd9, routed from
+#: instruments-measure). This was the `.png` case family's last builders site and the
+#: only member keyed on an upload KEY rather than a directory listing. Measured before
+#: the widening: a map keyed `00000.PNG` refused with "4 key(s) that are not a
+#: zero-padded frame name" — safe, but through the wrong clause, telling an operator
+#: their keys are not zero-padded frame names when they are, while every consumer of the
+#: same frames (`encode_control.py:126`, `invert_frames.py:70`) and both fetchers'
+#: EXTRA andon (`fetch_run.verify_downloads`, carried here) read `.PNG` as a frame.
+FRAME_KEY = re.compile(r"^[0-9]{5}(\.png)?$", re.IGNORECASE)
 
 
 def frame_order(uploads):
@@ -95,11 +105,18 @@ def frame_order(uploads):
     # lexicographically; the five zero-padded digits catch that in either shape, so both are
     # accepted — but one map must use one shape, because `00000` sorts before `00000.png`
     # and a mixed map has no single order to check.
-    suffixes = {".png" if str(k).endswith(".png") else "" for k in keys}
+    #
+    # Each key's suffix VERBATIM, not normalised. Widening the case above must not reach
+    # this line: the invariant here is SORT ORDER, and '.PNG' sorts before '.png' in ASCII,
+    # so a map mixing the two cases genuinely has no single order and must still refuse —
+    # through the mixed-shape clause below, which is the sentence that describes it. Taking
+    # the suffix verbatim also keeps `want` reconstructing the operator's own key spelling.
+    suffixes = {str(k)[5:] for k in keys}
     if len(suffixes) > 1:
         raise AS.AssemblyGate(
-            f"the upload map mixes bare frame keys (00000) with .png-suffixed ones "
-            f"(00000.png); a mixed map has no single sort order. Use one shape throughout",
+            f"the upload map mixes frame-key shapes {sorted(suffixes)!r} (bare 00000, "
+            f".png-suffixed, or a differently-CASED suffix); a mixed map has no single "
+            f"sort order, and '.PNG' sorts before '.png'. Use one shape throughout",
             {**ev, "suffixes": sorted(suffixes)})
     suffix = next(iter(suffixes)) if suffixes else ""
     ordered = sorted(keys)

@@ -686,3 +686,82 @@ def test_both_production_call_sites_pair_the_plan_STRICTLY():
     # And the pairing really does raise on a mismatched length, rather than truncating.
     with pytest.raises(ValueError, match=r"zip\(\) argument"):
         list(zip(AS.cascade_plan(81, AS.GROUP_SIZE), ["400", "401"], strict=True))
+
+
+# ---- the .png case family's last builders site (wave 8, F-d85dafd9, routed by the
+# ---- coordinator from instruments-measure)
+#
+# `frame_order` is the one site in this domain where the suffix belongs to an upload KEY
+# rather than to a directory listing, and it was the last one still comparing case
+# SENSITIVELY. Measured on this branch before the fix:
+#
+#   all `00000.png`  -> OK
+#   all `00000.PNG`  -> AssemblyGate "4 key(s) that are not a zero-padded frame name"
+#   mixed png/PNG    -> AssemblyGate, same clause, naming the two .PNG keys
+#   bare `00000`     -> OK
+#
+# The `.PNG` map REFUSED, so nothing unsafe was admitted — but it refused through the wrong
+# clause, telling an operator their keys are not zero-padded frame names when they are, and
+# it made this gate's population rule disagree with every consumer of the same frames
+# (`encode_control.py:126` and `invert_frames.py:70` both `n.lower().endswith('.png')`) and
+# with both fetchers, whose EXTRA andon now lower-cases too.
+#
+# The shape classification takes each key's suffix VERBATIM rather than normalising it,
+# because the invariant this gate exists for is SORT ORDER: '.PNG' sorts before '.png' in
+# ASCII, so a map mixing the two cases genuinely has no single order and must still refuse —
+# now through the mixed-shape clause, which is the sentence that describes it.
+
+
+def _map(keys):
+    return {k: f"server_{i}.png" for i, k in enumerate(keys)}
+
+
+def test_an_upload_map_keyed_with_an_uppercase_suffix_is_a_frame_map():
+    """The population rule, agreeing with the consumers and with both fetchers."""
+    keys = [f"{i:05d}.PNG" for i in range(4)]
+    assert B.frame_order(_map(keys)) == sorted(keys)
+
+
+def test_the_lowercase_and_bare_shapes_are_unchanged():
+    """The mutations that must NOT change: the eleven E02/E03 maps on this rig are keyed
+    bare, and the cascade route keys its maps `00000.png`."""
+    assert B.frame_order(_map([f"{i:05d}.png" for i in range(4)])) == \
+        [f"{i:05d}.png" for i in range(4)]
+    assert B.frame_order(_map([f"{i:05d}" for i in range(4)])) == \
+        [f"{i:05d}" for i in range(4)]
+
+
+def test_a_map_mixing_the_two_CASES_refuses_through_the_mixed_shape_clause():
+    """It must still refuse — '.PNG' sorts before '.png', so a mixed-case map has no single
+    order — but through the clause that names the real defect, not through 'these are not
+    zero-padded frame names'."""
+    keys = ["00000.PNG", "00001.png", "00002.PNG", "00003.png"]
+    with pytest.raises(AS.AssemblyGate, match=r"mixes") as exc:
+        B.frame_order(_map(keys))
+    assert sorted(exc.value.evidence["suffixes"]) == [".PNG", ".png"]
+
+
+def test_a_key_that_really_is_malformed_still_halts_on_the_malformed_clause():
+    """The boundary on the fix: widening the SUFFIX's case must not widen anything else."""
+    for bad in ("0.png", "00000.jpg", "frame_00000.png", "00000.png.bak"):
+        with pytest.raises(AS.AssemblyGate, match=r"not a zero-padded frame name"):
+            B.frame_order(_map([bad] + [f"{i:05d}.png" for i in range(1, 4)]))
+
+
+def test_the_png_case_rule_is_the_same_one_its_consumers_use():
+    """family: derived by grep over tools/ for a `.png` suffix test -> 5 sites —
+    fetch_run.py (verify_downloads, the EXTRA andon), fetch_t2v_run.py (same function,
+    imported not re-written), build_payload.py (`_distinct_source_frames`),
+    encode_control.py:126 and invert_frames.py:70 (the consumers), plus this one,
+    build_assembly_payload.py:96, which is the only member keyed on an upload KEY rather
+    than a directory listing. SIBLING CARRIED: `fetch_run.verify_downloads`'s lower-cased
+    comparison, settled with instruments-measure this wave. Every member treats a
+    differently-cased suffix as the same population."""
+    import fetch_run as F
+
+    assert B.FRAME_KEY.match("00000.PNG"), "this gate's own population rule is narrower"
+    assert F.verify_downloads is __import__("fetch_t2v_run").verify_downloads
+
+    for name, line in (("encode_control.py", 126), ("invert_frames.py", 70)):
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read().splitlines()
+        assert ".lower()" in src[line - 1], f"{name}:{line} no longer lower-cases"
