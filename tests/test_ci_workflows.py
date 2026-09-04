@@ -2183,6 +2183,8 @@ GUARDED_TODAY = [
     # trusted. Under `tools/**`, which both triggers already carry. (The list is SORTED;
     # this entry sits above `framing.py` for that reason, not by topic.)
     "tools/armature_core/blender_scene.py",
+    # WAVE-12 MERGE (coordinator, 2026-09-04): `canon.py` opened by path by a wave-12 test; under `tools/**`.
+    "tools/armature_core/canon.py",
     "tools/armature_core/framing.py",
     # WAVE-10 MERGE (coordinator, 2026-09-04): `glb.py` (core-solvers' MalformedGLB census) and
     # `render_pose_sticks.py` (instruments-measure's Gate COUNT census) are opened by path by

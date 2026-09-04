@@ -217,10 +217,18 @@ def test_gate_route_raises_on_every_gate_dead_lora(base, dead):
 @pytest.mark.parametrize("arm", ["T", "S"])
 def test_gate_route_passes_the_two_survivors(base, arm):
     built, _ = B.build_arm(base, arm)
-    ev = route_gates.verify(built, frame=(1024, 576, 81))
+    # WAVE-12 MERGE (coordinator, 2026-09-04): arm T loads the CONDITIONAL LoRA (credit required — the coordinator's
+    # ruling, core-gates' tier, builders' record); the record's attribution, built FROM the licence row,
+    # is what lets `verify` pass it. Arm S's rows stay ALLOWED.
+    attribution = B.conditional_attribution(built)
+    ev = route_gates.verify(built, frame=(1024, 576, 81), attribution=attribution)
     verdicts = {c["file"]: c["ruling"]["verdict"] for c in ev["components"]}
+    expected = "CONDITIONAL" if arm == "T" else "ALLOWED"
     for node in ("14", "15"):
-        assert verdicts[built[node]["inputs"]["lora_name"]] == "ALLOWED"
+        assert verdicts[built[node]["inputs"]["lora_name"]] == expected, (arm, verdicts)
+    if arm == "T":
+        assert attribution and attribution[0]["creditor"] == "renderartist", attribution
+        assert ev["components_conditional_credited"] >= 1, ev
 
 
 def test_the_lora_files_are_not_counted_as_diffusion_weights(base):

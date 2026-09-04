@@ -1068,8 +1068,13 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
         f"the walk looked at {examined} of {total} `ArmatureError`-family raises in "
         f"armature_core; a raise it does not count is a raise it cannot police, and the "
         f"whole census reads as a clean tree over the gap")
-    assert total == 270, (
-        f"{total} family raises in armature_core; 270 were measured on 2026-09-04. This is "
+    # WAVE-12 MERGE (coordinator, 2026-09-04): 270 → 296 on the merged tree — core-solvers re-classed 13 bare builtin
+    # refusals into the family and added new refusals (`narrowed`, the vacuity guard, `MeasurementWithoutScene`,
+    # `PngWriteError`'s zero-dimension clause), core-gates added 39 refusals of which the in-package ones
+    # (`unreadable_node`, `uncredited_conditional_component`, `attribution_entry_for`, `gate_b_batching`,
+    # `gate_n_names`, `g5` empty-reference, `canon.load`, `shotspec`) land here. Re-measured, not summed.
+    assert total == 296, (
+        f"{total} family raises in armature_core; 296 were measured on 2026-09-04 (merged tree). This is "
         f"the denominator every ratio below is quoted against — re-measure it deliberately")
 
 

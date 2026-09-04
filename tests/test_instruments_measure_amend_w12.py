@@ -315,21 +315,42 @@ def test_stage_render_delivers_the_six_key_halt_line(kind, want_code, want_outco
 def test_stage_render_main_catches_the_family_and_not_gate_failure_alone(tmp_path):
     """`_parse_argv`, `load_spec` and every `SpecError` inside `prepare` sat OUTSIDE the
     handler. Measured before this amend: `--spec=nope.json` raised FileNotFoundError,
-    `--out` alone raised SpecError, `-spec=x` raised SpecError — all escaping `main`."""
+    `--out` alone raised SpecError, `-spec=x` raised SpecError — all escaping `main`.
+
+    WAVE-12 MERGE (coordinator, 2026-09-04): `main` no longer prints the halt line itself — under the
+    one shape all 22 Blender-side tools carry, `main` raises a FAMILY exception and the
+    `__main__` handler prints the six-key line and exits 2 (a second named printer failed
+    tests' one-vocabulary census). So the property here is: every one of the three
+    argv shapes leaves `main` as an `ArmatureError` (the family, never a bare builtin), and
+    nothing reaches disk.
+    """
     import stage_render
+    from armature_core.errors import ArmatureError, GateFailure
 
     for argv in ([f"--spec={tmp_path / 'nope.json'}", f"--out={tmp_path / 'x'}"],
                  [f"--out={tmp_path / 'x'}"],
                  ["-spec=x", f"--out={tmp_path / 'x'}"]):
-        assert stage_render.main(argv) == 2, argv
+        with pytest.raises(ArmatureError) as exc:
+            stage_render.main(argv)
+        assert str(exc.value) and not isinstance(exc.value, GateFailure), (argv, exc.value)
     assert not os.path.exists(tmp_path / "x")
 
 
-def test_stage_render_main_prints_the_halt_line_it_returns_two_for(tmp_path, capsys):
-    """A refusal `main` handles is still legible to a reader keyed on the contract."""
-    import stage_render
+def test_stage_render_main_prints_the_halt_line_it_returns_two_for(capsys):
+    """A refusal `main` raises is still legible to a reader keyed on the contract — through
+    the `__main__` handler, driven the way the other 21 are (WAVE-12 MERGE (coordinator, 2026-09-04))."""
+    from blender_stub import exit_code_of_main_block
+    from armature_core.errors import SpecError
 
-    assert stage_render.main([f"--out={tmp_path / 'x'}"]) == 2
+    def raiser():
+        raise SpecError("missing --spec=<path>",
+                        {"gate": None, "andon": "SpecError", "clause": "argv"})
+
+    code, escaped = exit_code_of_main_block(
+        "stage_render.py", raiser=raiser,
+        argv=["blender", "-b", "-P", "stage_render.py", "--", "--out=x"])
+    assert escaped is None, escaped
+    assert code == 2
     out = capsys.readouterr().out
     lines = [l for l in out.splitlines() if l.split(" ", 1)[0] == "STAGE_RENDER_HALT"]
     assert len(lines) == 1, out

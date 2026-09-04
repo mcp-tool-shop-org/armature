@@ -147,7 +147,6 @@ def main(argv=None):
     started = time.time()
     a = parse_args(argv)
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     import cv2
 
@@ -176,6 +175,10 @@ def main(argv=None):
     sw = aapose.stickwidth(height, width, a.stickwidth_type)
     hsw = aapose.hand_stickwidth(height, width, a.stickwidth_type)
 
+    # WAVE-12 MERGE (coordinator, 2026-09-04): the output directory is created below the last refusal that needs
+    # no file (the record's self-consistency, Gate CONV, the convention pin, Gate CANVAS), so a run
+    # refused there leaves nothing on disk; the refusals below this line read back what was written.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     paths, fracs, digests = [], [], {}
     for i in range(n):
         canvas = aapose.draw_frame(

@@ -298,7 +298,8 @@ def test_the_halt_record_writers_are_the_ones_the_contract_names():
     assert with_finally == sorted(held), {
         "delivers its sentinel and exit outside a `finally`":
             sorted(set(held) - set(with_finally))}
-    assert len(held) - len(writes) == 16, (
+    # WAVE-12 MERGE (coordinator, 2026-09-04): `stage_render` joined the population (22) and writes no halt record.
+    assert len(held) - len(writes) == 17, (
         "16 tools print their sentinel and exit from the `finally` and write no halt record; "
         "the five that write one are the rig tools the contract names")
 

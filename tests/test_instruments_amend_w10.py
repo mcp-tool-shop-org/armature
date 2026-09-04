@@ -734,14 +734,19 @@ def _counted_payload_terms(filename):
 #: Derived 2026-09-04: the Blender-side tools whose success payload reports a count.
 RECORDED_COUNTING_SUCCESS_LINES = [
     "lift_solve.py", "make_parts_sheet.py", "make_rig_sheet.py", "preview_walk.py",
-    "probe_subject.py", "rig_parts.py", "rig_repair.py",
+    # WAVE-12 MERGE (coordinator, 2026-09-04): `probe_subject` LEFT — its payload is now
+    # `{"n_probed","n_measured","n_errors","json"}` computed from a population guarded by
+    # `require_openable` / `require_something_measured` (instruments F-5b3ead49), no longer a bare
+    # `len()`; the census derives the counting population and no longer sees it.
+    "rig_parts.py", "rig_repair.py",
 ]
 
 #: Named, dated 2026-09-04, routed to INSTRUMENTS: `probe_subject` prints
 #: `PROBE_SUBJECT_OK {"json": ..., "n": len(records)}` with nothing between the loop and the
 #: print, so a run that opened nothing announces success. A CEILING — a tool that grows the
 #: refusal leaves this set, and a NEW counting success line with no guard fails loudly.
-COUNTED_SUCCESS_WITHOUT_A_GUARD_ROUTED = {"probe_subject.py"}
+# WAVE-12 MERGE (coordinator, 2026-09-04): EMPTY — the routed guard landed (F-5b3ead49).
+COUNTED_SUCCESS_WITHOUT_A_GUARD_ROUTED = set()
 
 
 def _guards_the_count(filename, counted):
@@ -863,17 +868,31 @@ def test_a_success_line_that_reports_a_count_is_guarded_against_an_empty_one(fil
         f"the token says the run succeeded and the count says it did nothing")
 
 
-def test_the_counted_success_walk_can_tell_a_guarded_tool_from_an_unguarded_one():
-    """Rule 3 on the walk itself, on the real tree: the two answers must differ.
+def test_the_counted_success_walk_can_tell_a_guarded_tool_from_an_unguarded_one(monkeypatch):
+    """Rule 3 on the walk itself: the two answers must differ.
 
-    `preview_walk` counts frames it has already gated; `probe_subject` counts records
-    nothing refuses. A walk that answered the same for both would be measuring nothing.
+    WAVE-12 MERGE (coordinator, 2026-09-04): `probe_subject` was the real unguarded example until
+    instruments landed its guard (F-5b3ead49), so the unguarded half is now a SYNTHETIC
+    module — a count appended inside a loop and printed with no refusal above it — fed to
+    the walk through `read_source`, exactly the shape the routed finding described.
     """
-    guarded = {f: _guards_the_count(f, sorted(
-        {t for v in _counted_payload_terms(f).values() for t in v}))
-        for f in RECORDED_COUNTING_SUCCESS_LINES}
-    assert guarded["probe_subject.py"] is False, guarded
-    assert any(v for k, v in guarded.items() if k != "probe_subject.py"), guarded
+    import test_instruments_amend_w10 as me
+
+    fake = (
+        "import json\n"
+        "def main(argv=None):\n"
+        "    records = []\n"
+        "    for path in argv or []:\n"
+        "        records.append(path)\n"
+        "    print('FAKE_OK ' + json.dumps({'n': len(records)}))\n"
+        "    return 0\n")
+    real = me.read_source
+    monkeypatch.setattr(me, "read_source", lambda f: fake if f == "fake_counter.py" else real(f))
+    assert me._guards_the_count("fake_counter.py", ["records"]) is False
+    guarded = {f: me._guards_the_count(f, sorted(
+        {t for v in me._counted_payload_terms(f).values() for t in v}))
+        for f in me.RECORDED_COUNTING_SUCCESS_LINES}
+    assert any(guarded.values()), guarded
 
 
 def _writes_nothing():

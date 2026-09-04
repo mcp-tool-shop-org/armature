@@ -180,9 +180,12 @@ def _require_finite_number(mapping, key, where, note=None, positive=False):
         return require_finite(f"{where}.{key}", mapping[key], SpecError, ev,
                               positive=positive)
     except SpecError as err:
+        # WAVE-12 MERGE (coordinator, 2026-09-04): the re-raise dropped `ev` (tests' no-evidence census found
+        # the one site in the package raising with no receipt); the helper's evidence rides the raise.
         raise SpecError(
             f"{where}.{key} is {mapping[key]!r}" + (f", {note}" if note else "")
-            + f"; it must be a finite number. {err.args[0] if err.args else ''}"
+            + f"; it must be a finite number. {err.args[0] if err.args else ''}",
+            ev,
         ) from None
 
 

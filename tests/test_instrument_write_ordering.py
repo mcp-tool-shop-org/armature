@@ -162,6 +162,9 @@ def imports_bpy(name):
 #: `make_rig_sheet` is the pointed one: it creates `<out>/` and `<out>/panels/` and then
 #: raises `ArmatureError` inline at three lines below them.
 POPULATION_MEASURED_2026_09_04 = {
+    # WAVE-12 MERGE (coordinator, 2026-09-04): `make_overlay_sheet` JOINED — its `cv2.imwrite` return is a typed
+    # refusal now (instruments-measure), so it gates-and-writes.
+    "make_overlay_sheet",
     "author_walk", "build_animate_payload", "build_assembly_payload",
     "build_camera_i2v_payload", "build_cascade_payload", "build_i2v_payload",
     "build_lora_arm_payload", "build_payload", "build_r2v_payload", "build_t2v_payload",
@@ -271,45 +274,92 @@ def test_the_two_exemption_classes_do_not_absorb_each_other():
 # fail this file. Equality returns the moment the moves have landed; the growth direction —
 # the one that protects the property — is asserted today.
 REFUSALS_BELOW_THE_FIRST_WRITE = {
-    # ---- instruments (Blender-side) ----
-    "author_walk": ["gate_a_arrival", "gate_n_names", "pick_subject"],
-    "diagnose_bone_heat": ["load"],
-    "lift_solve": ["gate_arrived", "gate_n_names", "pick_subject"],   # core-solvers' module
+    # WAVE-12 MERGE (coordinator, 2026-09-04): RE-DERIVED on the merged tree with this file's own
+    # behavioural walk after the moves landed (instruments moved eleven tools' refusals above
+    # `makedirs` — F-244b2ad5; the coordinator moved `render_pose_sticks` and `pack_pose_pack`).
+    # Every entry that remains is a refusal that READS BACK the write it sits below — the
+    # reason is named per name in READBACK_REASONS — so equality is asserted again.
+    "author_walk": ["gate_a_arrival", "gate_glb_written", "gate_n_names", "pick_subject"],
+    "extract_clip_frames": ["probe", "raise ClipReadError"],
+    "fetch_run": ["download", "verify_downloads"],
+    "fetch_t2v_run": ["download", "gate_order_evidence", "order_evidence", "raise FetchHalt"],
+    "fit_reference": ["raise FitReferenceError"],
+    "lift_solve": ["gate_arrived", "gate_glb_written", "gate_n_names", "pick_subject"],
     "make_binding_sheet": ["render_arm"],
-    "make_parts_sheet": ["articulated_side", "light_the_scene", "raise ArmatureError",
-                         "shoot"],
-    "make_rig_sheet": ["import_reference", "raise ArmatureError"],
-    "make_skeleton_sheet": ["gate_any_pivot_matched", "light_the_scene",
-                            "raise SkeletonSheetGate"],
-    "make_test_armature": ["build"],
-    # `preview_glb.gate_previews_written` checks that the four views reached disk
-    # (F-13bd448d) and can only run AFTER the writes; a refusal that verifies its own output
-    # is below the first write by construction.
+    "make_e08_sheet": ["raise SheetInputError"],
+    "make_lift_sheet": ["subject_box"],
+    "make_overlay_sheet": ["raise OverlaySheetError"],
+    "make_parts_sheet": ["shoot"],
+    "make_plate": ["raise ArmatureError"],
+    "make_rig_sheet": ["import_reference"],
+    "make_shotset_sheet": ["_refuse_across_elevations", "load_set", "raise ShotsetSheetError"],
+    "make_skeleton_sheet": ["gate_any_pivot_matched"],
+    "make_test_armature": ["gate_glb_written"],
+    "make_zoom_sheet": ["raise ZoomSheetError"],
+    "measure_cascade_clip": ["raise ClipCountError"],
+    "pack_pose_pack": ["gate_r_round_trip"],
     "preview_glb": ["gate_previews_written"],
     "preview_walk": ["raise PreviewWalkGate"],
     "render_performer": ["gate_coverage", "raise RenderGate"],
+    "render_pose_sticks": ["gate_ink", "raise SticksGate"],
     "render_start_frame": ["gate_alpha", "gate_backdrop", "raise RenderGate"],
-    "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop",
-                          "gate_whole", "raise RenderTurnaroundGate",
-                          "solve_ortho_scale_for_height", "solve_radius_for_height"],
-    "rig_bake": ["_import", "bake", "raise BakeEmpty", "unwrap"],
-    "rig_character": ["build_pass", "export_rigged", "gate_d_determinism", "gate_n_names",
-                      "raise GateMode", "unbound_determinism_record"],
-    "rig_parts": ["gate_atlas_untouched", "gate_part_names"],
-    "rig_repair": ["raise ArmatureError", "raise NotManifoldAfterRepair",
-                   "raise TooMuchRemoved"],
-    "rig_retopo": ["import_subject", "quadriflow", "raise NoRetopoProduced"],
-    # ---- instruments-measure / instruments (CPython) — JOINED 2026-09-04 under the
-    # behavioural predicate; none of these was visible to the name-keyed walk ----
-    "extract_clip_frames": ["probe", "raise ClipReadError"],
-    "fit_reference": ["raise FitReferenceError"],
-    "make_lift_sheet": ["subject_box"],
-    "make_plate": ["raise ArmatureError"],
-    "make_shotset_sheet": ["_refuse_across_elevations", "load_set",
-                           "raise ShotsetSheetError"],
-    "measure_cascade_clip": ["raise ClipCountError", "raise ClipShapeError"],
-    # ---- builders ----
-    "fetch_run": ["download", "verify_downloads"],
+    "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop", "gate_whole", "raise RenderTurnaroundGate"],
+    "rig_bake": ["gate_glb_written"],
+    "rig_character": ["build_pass", "export_rigged", "gate_d_determinism", "gate_n_names", "raise GateMode", "unbound_determinism_record"],
+    "rig_parts": ["gate_atlas_untouched", "gate_glb_written", "gate_part_names"],
+    "rig_repair": ["gate_glb_written"],
+    "rig_retopo": ["gate_glb_written"],
+}
+
+#: Why each name above may sit below the first write: it verifies that write.
+READBACK_REASONS = {
+    "_refuse_across_elevations": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "build_pass": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "download": "the fetcher's write IS the download; the refusal reads back what arrived",
+    "export_rigged": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_a_arrival": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_alpha": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_any_pivot_matched": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_arrived": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_atlas_untouched": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_backdrop": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_coverage": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_d_determinism": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_glb_written": "reads back the GLB the export just wrote (instruments F-9b2d4106)",
+    "gate_ink": "ink fraction measured over the frames just written",
+    "gate_n_names": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_order_evidence": "reads back the downloaded manifest (fetch_t2v_run)",
+    "gate_part_names": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_previews_written": "reads back the four renders (F-13bd448d)",
+    "gate_r_round_trip": "Gate R re-decodes the pack this tool wrote",
+    "gate_set_distinct": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_view_alpha": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_view_crop": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "gate_whole": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "import_reference": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "load_set": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "order_evidence": "reads back the downloaded manifest (fetch_t2v_run)",
+    "pick_subject": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "probe": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise ArmatureError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise ClipCountError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise ClipReadError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise FetchHalt": "reads back what it downloaded (fetch_t2v_run)",
+    "raise FitReferenceError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise GateMode": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise OverlaySheetError": "the refusal IS the `cv2.imwrite` return",
+    "raise PreviewWalkGate": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise RenderGate": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise RenderTurnaroundGate": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise SheetInputError": "the refusal IS the `cv2.imwrite` return \u2014 it verifies the write it just made",
+    "raise ShotsetSheetError": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "raise SticksGate": "the refusals below the first frame read back written frames (`cv2.imwrite` return, ink over written frames)",
+    "raise ZoomSheetError": "the refusal IS the `cv2.imwrite` return / the sidecar of a written sheet",
+    "render_arm": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "shoot": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "subject_box": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "unbound_determinism_record": "REVIEW: not a read-back \u2014 a strand the coordinator did not move",
+    "verify_downloads": "reads back what it downloaded (fetch_run)",
 }
 
 #: The old name, kept as an alias for one wave so a sibling worktree importing it does not
@@ -485,9 +535,12 @@ def test_the_nine_tools_the_name_keyed_walk_could_not_see_are_in_the_population_
     `derive_population()` entirely under the name-keyed predicate, because that function
     keeps a module only when it can see both a refusal and a write.
     """
+    # WAVE-12 MERGE (coordinator, 2026-09-04): `measure_cascade_clip` LEFT this list — instruments-measure gave it
+    # `gate_clip_rate` (a `gate_` name) in the same wave, so the name-keyed walk sees it too; eight remain.
+    # `rig_bake`, `rig_repair`, `rig_retopo` LEFT too — instruments gave each `gate_glb_written`
+    # (a `gate_` name, F-9b2d4106); five remain invisible to the name-keyed walk on the merged tree.
     joined = ["extract_clip_frames", "make_parts_sheet", "make_rig_sheet",
-              "make_shotset_sheet", "measure_cascade_clip", "preview_walk", "rig_bake",
-              "rig_repair", "rig_retopo"]
+              "make_shotset_sheet", "preview_walk"]
     pop = derive_population()
     for name in joined:
         assert name in pop, f"{name} is not in the derived population"

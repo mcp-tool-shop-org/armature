@@ -159,10 +159,12 @@ def read_pack(path):
 def main(argv=None):
     a = parse_args(argv)
     out_dir = os.path.abspath(a.out)
-    os.makedirs(out_dir, exist_ok=True)
 
     paths = frame_paths(a.frames)
     frames = load_frames(paths, alpha_over=parse_plate(a.alpha_over, PosePackError))
+    # WAVE-12 MERGE (coordinator, 2026-09-04): created below the frame refusals (a missing or unreadable frame leaves
+    # nothing on disk); Gate R below reads back the pack this tool writes.
+    os.makedirs(out_dir, exist_ok=True)
     ext = "apng.png" if a.format == "apng" else "webp"
     dst = os.path.join(out_dir, f"{a.name}.{ext}")
     write_pack(frames, dst, a.fps, a.format)

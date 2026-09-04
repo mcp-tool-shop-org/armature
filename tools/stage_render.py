@@ -544,47 +544,6 @@ def _halt_keysafe(value, _seen=None):
     return value
 
 
-def halt_sentinel(exc):
-    """The six-key halt record for one exception. ONE construction, two callers.
-
-    THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
-    itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (a
-    mistyped flag, a spec that names a hidden-mesh asset); anything else is a crash.
-    Recording a crash as "a gate fired" is a false record.
-    """
-    return {
-        "tool": "stage_render",
-        "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
-                    else "REFUSED — the tool declined to proceed"
-                    if isinstance(exc, ArmatureError)
-                    else "FAILED — an unhandled error"),
-        "gate": getattr(exc, "gate", None),
-        "error": type(exc).__name__,
-        "message": str(exc),
-        "evidence": (_halt_keysafe(getattr(exc, "evidence", None))
-                     if isinstance(getattr(exc, "evidence", None), dict) else None),
-    }
-
-
-def print_halt(exc):
-    """Print exactly one `STAGE_RENDER_HALT <json>` line for `exc`. Never raises.
-
-    The sentinel is the contract and it may not be deleted by a failure to serialise the
-    sentinel itself -- the fallback line carries only values that are already strings, so
-    it cannot fail in turn.
-    """
-    try:
-        rec = halt_sentinel(exc)
-        line = json.dumps(rec, default=str)
-    except BaseException:                                             # noqa: BLE001
-        line = json.dumps({
-            "tool": "stage_render",
-            "outcome": "FAILED — an unhandled error",
-            "gate": None, "error": type(exc).__name__, "message": str(exc),
-            "evidence": None})
-    print("STAGE_RENDER_HALT " + line, flush=True)
-
-
 def main(argv=None):
     """Export one shot spec. Returns 0 on success and 2 on any deliberate refusal.
 
@@ -609,22 +568,23 @@ def main(argv=None):
             spec["asset"]["path"] = args["asset"]
         manifest = run_export(spec, args["out"])
     except ArmatureError as exc:
-        # The two lines this repo's evidence-id discipline keys on, kept: a reader holding
-        # only the JSON needs the gate id, and `GATE_EVIDENCE` is where the measurement is.
-        if isinstance(exc, GateFailure):
-            print("GATE_FAILURE", exc.gate, str(exc), flush=True)
-            print("GATE_EVIDENCE", json.dumps(_halt_keysafe(exc.evidence), default=str),
-                  flush=True)
-        # ...and the six-key line the 21 siblings deliver, so an existing reader can parse
-        # this tool's halt without a second parser.
-        print_halt(exc)
-        return 2
+        # WAVE-12 MERGE (coordinator, 2026-09-04): the former `GATE_FAILURE` / `GATE_EVIDENCE` lines are gone —
+        # the six-key `STAGE_RENDER_HALT` line carries the gate id and the evidence, and a second
+        # uppercase token per tool failed tests' success/halt pairing census (four test docstrings
+        # cite the old lines as history; nothing asserted on them).
+        # WAVE-12 MERGE (coordinator, 2026-09-04): the six-key halt line is delivered by the `__main__`
+        # handler below, in the shape all 21 siblings carry (one handler, one line, exit 2);
+        # re-raise so that handler sees the family exception.
+        raise
     except OSError as exc:
         # A spec path that is not there is a refusal, not a crash: the operator mistyped a
-        # flag. It reached no gate, so it carries no gate id.
-        print_halt(exc)
-        return 2
-    print("EXPORT_OK", json.dumps({
+        # flag. It reached no gate, so it carries no gate id (`gate: None` is the receipt).
+        raise ArmatureError(
+            f"{type(exc).__name__}: {exc}",
+            {"gate": None, "andon": "ArmatureError", "clause": "spec_or_asset_path_unreadable"},
+        ) from exc
+    # WAVE-12 MERGE (coordinator, 2026-09-04): `STAGE_RENDER_OK` pairs with `STAGE_RENDER_HALT` (was `EXPORT_OK`).
+    print("STAGE_RENDER_OK " + json.dumps({
         "run_dir": os.path.abspath(args["out"]),
         "frames": manifest["frame_count"],
         "channels": manifest["channel_dirs"],
@@ -633,26 +593,43 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    # THE HALT CONTRACT — the shape all 21 Blender-side tools carry, on the 22nd.
-    # `blender -b -P` exits **0** when the script's exception propagates (E07, measured
-    # three times), so a halt that does not exit deliberately is reported as a success.
-    # This tool is invisible to `blender_stub.blender_tools()` because that census keys on
-    # a MODULE-LEVEL `import bpy` and this module imports its backend lazily inside
-    # `BlenderBackend.__init__` — deliberately, so the gate tests can drive the real write
-    # path outside Blender. The re-keying of that population is the tests domain's half;
-    # the handler is this one's.
-    #
-    # A deliberate refusal exits 2; a crash exits 1. The sentinel line and `sys.exit` are
-    # both delivered from a `finally`, so neither is deleted by a secondary failure.
+    # THE HALT CONTRACT — the shape all 21 Blender-side tools carry, on the 22nd
+    # (instruments-measure F-f9251c74; WAVE-12 MERGE (coordinator, 2026-09-04): brought to the
+    # rewritten shape instruments landed on the 21 the same day — F-586822bf — because this
+    # tool's copy was taken from the wave-10 form an hour before that rewrite). `blender -b -P`
+    # exits **0** when the script's exception propagates, so a halt that does not exit
+    # deliberately is reported as a success. THREE outcomes: a typed `GateFailure` is an andon
+    # that fired; a bare `ArmatureError` is a deliberate refusal; anything else is a crash.
+    # A deliberate refusal exits 2; a crash exits 1. Everything that can fail is inside the
+    # guard; the sentinel line and `sys.exit` are delivered from a `finally`.
     try:
         raise SystemExit(main())
     except SystemExit:
         raise
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
-        traceback.print_exc()
         _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _outcome = ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                    else "REFUSED — the tool declined to proceed"
+                    if isinstance(exc, ArmatureError)
+                    else "FAILED — an unhandled error")
+        _sentinel = {
+            "tool": "stage_render", "outcome": _outcome, "gate": None,
+            "error": type(exc).__name__,
+            "message": "the halt line could not be built", "evidence": None}
+        _line = json.dumps(_sentinel)
         try:
-            print_halt(exc)
+            traceback.print_exc()
+            _detail = getattr(exc, "evidence", None)
+            _sentinel = {
+                "tool": "stage_render", "outcome": _outcome,
+                "gate": getattr(exc, "gate", None),
+                "error": type(exc).__name__, "message": str(exc),
+                "evidence": (_halt_keysafe(_detail)
+                             if isinstance(_detail, dict) else None)}
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            pass
         finally:
+            print("STAGE_RENDER_HALT " + _line)
             sys.exit(_code)
