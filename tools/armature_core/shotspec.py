@@ -16,9 +16,10 @@ shipped as a plain spec field that `normalise_spec` validated in no way: measure
 2026-09-03, the values 1000000000, -5, 'off' and None were every one accepted, and
 `stage_render` handed whatever arrived straight to G4 — so a spec with one extra zero
 rendered and submitted a control sequence whose mask was not the subject, with the
-gate green. A spec that still names the key is now REFUSED, with the constant's new
-home in the message; the five committed specs under `specs/` carry the row and want
-it deleted.
+gate green. A spec that still names the key is now REFUSED - the KEY itself, not
+a row under it, so an EMPTY `gates` block is refused too - with the constant's new
+home in the message when a row is present. No committed spec under `specs/` carries
+the key any more.
 """
 
 import copy
@@ -140,10 +141,30 @@ def normalise_spec(raw, spec_path=None):
     # this argument for `dim_divisor` in its own opening lines; `g4_tolerance_px` was
     # the same flag wearing a schema's clothes, and unlike `dim_divisor` it was actually
     # wired — `stage_render` read it and handed it to G4 unvalidated.
-    gate_fields = spec.get("gates")
-    if gate_fields is not None:
+    #
+    # The refusal is on the KEY's PRESENCE, not on its rows. It used to be
+    # `for key in sorted(gate_fields): ... raise`, which can only fire on a NON-EMPTY
+    # block: measured 2026-09-03, a spec carrying `"gates": {}` was ACCEPTED and
+    # `spec["gates"]` came back {}, while the same spec with one row raised. The module
+    # docstring states the rule without that qualifier — "A spec that still names the key
+    # is now REFUSED" — and the refusal message tells the author to "delete the row from
+    # the spec", so an author who emptied the block instead of deleting it got a green
+    # spec and `dump_spec` round-tripped the empty block back out. `spec.gates` stayed
+    # alive as an accepted schema surface, and the next key added under it would only be
+    # refused if a value happened to be present.
+    if "gates" in raw:
+        gate_fields = raw.get("gates")
         if not isinstance(gate_fields, dict):
-            raise SpecError("spec.gates must be an object")
+            raise SpecError("spec.gates must be an object — and it is refused whatever "
+                            "it contains; delete the key")
+        if not gate_fields:
+            raise SpecError(
+                "spec.gates is refused even when it is EMPTY: the key itself is the "
+                "retired schema surface, and an empty block that round-trips back out "
+                "is the next number's home. Delete the key. "
+                f"(Known retired keys and their new homes: {sorted(RETIRED_GATE_KEYS)}; "
+                "g4_tolerance_px now lives in gates.G4_TOLERANCE_PX)"
+            )
         for key in sorted(gate_fields):
             home = RETIRED_GATE_KEYS.get(key)
             raise SpecError(
@@ -215,7 +236,11 @@ def normalise_spec(raw, spec_path=None):
     if cam.get("type") != "orbit":
         raise SpecError(f"spec.camera.type {cam.get('type')!r} is not implemented (only 'orbit')")
     radius = cam.get("radius")
-    if radius != "auto" and not isinstance(radius, (int, float)):
+    # `bool` is a subclass of `int`, so `radius: true` was accepted as a number and
+    # resolved to an orbit radius of 1.0. The `target` clause immediately below already
+    # carries `not isinstance(v, bool)`; the same clause, not a second mechanism.
+    if radius != "auto" and (not isinstance(radius, (int, float))
+                             or isinstance(radius, bool)):
         raise SpecError("spec.camera.radius must be a number or the string 'auto'")
 
     # `target` may be pinned numerically as well as derived. E03 needs this: its animated

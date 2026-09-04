@@ -30,7 +30,7 @@ import tomllib
 
 import pytest
 
-from conftest import REPO
+from conftest import REPO  # noqa: F401  (puts tools/ on sys.path)
 
 CORE = os.path.join(REPO, "tools", "armature_core")
 GIT = os.environ.get("ARMATURE_GIT", "git")
@@ -116,6 +116,18 @@ def test_every_third_party_import_in_armature_core_is_declared():
     assert undeclared == [], "undeclared runtime dependencies: " + "; ".join(undeclared)
 
 
+def scope_scanner():
+    """`armature_core.cli.import_roots_by_scope` — the ONE import scan, resolved here.
+
+    Resolved through a function rather than imported at module scope so this file still
+    collects against a tree that does not carry the scanner, and the tests that need it
+    fail as tests rather than as a collection error.
+    """
+    from armature_core import cli
+
+    return cli.import_roots_by_scope
+
+
 def lazy_third_party_roots():
     """The third-party roots imported ONLY inside function bodies.
 
@@ -123,21 +135,23 @@ def lazy_third_party_roots():
     first call raises. `test_ci_workflows` reads this list to require that the clean-room
     leg actually reaches each of them, so a newly added lazy dependency drags its coverage
     along instead of arriving silently.
+
+    ⚠ The scope reading is `armature_core.cli.import_roots_by_scope` — the SAME walk
+    `armature check` uses — rather than a second one derived here. This function used to
+    classify by whether the root appeared in `tree.body`, which called an import inside a
+    class body, a module-level `try:` or a module-level `if:` LAZY while the cli scan
+    called it neither lazy nor function-local. Two implementations of "not at module
+    scope" that do not agree is the install-health blind spot one scope over.
     """
     lazy = {}
     for root, files in third_party_roots().items():
         if root in NOT_ON_PYPI:
             continue
-        at_module_scope = False
-        for name in files:
-            tree = ast.parse(open(os.path.join(CORE, name), encoding="utf-8").read())
-            for node in tree.body:
-                if isinstance(node, ast.Import):
-                    if root in {a.name.split(".")[0] for a in node.names}:
-                        at_module_scope = True
-                elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-                    if node.module.split(".")[0] == root:
-                        at_module_scope = True
+        at_module_scope = any(
+            root in scope_scanner()(
+                open(os.path.join(CORE, name), encoding="utf-8").read(),
+                filename=name)["module_scope"]
+            for name in files)
         if not at_module_scope:
             lazy[root] = files
     return lazy
@@ -157,8 +171,13 @@ def lazy_import_call_sites():
             if not name.endswith(".py"):
                 continue
             tree = ast.parse(open(os.path.join(CORE, name), encoding="utf-8").read())
+            # ClassDef as well as FunctionDef: `lazy_third_party_roots` reads scope
+            # through the one scanner, which counts a class body as not-module-scope, so
+            # a class-body import would otherwise be LAZY with no site to name and this
+            # function's caller would fail on an absence it could not locate.
             for node in ast.walk(tree):
-                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                         ast.ClassDef)):
                     continue
                 if root in _root_imports_of_body(node):
                     sites.setdefault(root, []).append(node.name)
@@ -194,13 +213,11 @@ def test_the_lazily_imported_ones_are_still_lazy():
         ("aapose.py", "matplotlib"),
         ("donor_gate.py", "PIL"),
     ):
-        tree = ast.parse(open(os.path.join(CORE, module), encoding="utf-8").read())
-        module_level = set()
-        for node in tree.body:
-            if isinstance(node, ast.Import):
-                module_level |= {a.name.split(".")[0] for a in node.names}
-            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-                module_level.add(node.module.split(".")[0])
+        # The THIRD copy of this walk, routed through the one scanner: it read only
+        # `tree.body` too, so it agreed with neither of the other two about a class
+        # body or a module-level try block.
+        src = open(os.path.join(CORE, module), encoding="utf-8").read()
+        module_level = scope_scanner()(src, filename=module)["module_scope"]
         assert name not in module_level, f"{name} became a module-scope import in {module}"
 
 
@@ -313,3 +330,86 @@ def test_every_negation_points_at_a_path_that_exists():
             if not os.path.exists(os.path.join(REPO, head)):
                 dead.append(line)
     assert dead == [], f"negations pointing at nothing: {dead}"
+
+
+# -- 4. one import scan, not two that disagree (F-3a6dd108) -----------------------------
+
+CLASS_BODY = "class Thing:\n    import cv2\n"
+FUNC_BODY = "def f():\n    import cv2\n"
+NESTED_FUNC = "def f():\n    def g():\n        from cv2 import imread\n"
+MODULE_SCOPE = "import cv2\n"
+MODULE_TRY = "try:\n    import cv2\nexcept ImportError:\n    cv2 = None\n"
+METHOD_BODY = "class Thing:\n    def m(self):\n        import cv2\n"
+BOTH = "import cv2\n\n\ndef f():\n    import cv2\n"
+
+
+@pytest.mark.parametrize("src,at_module_scope,nested", [
+    (MODULE_SCOPE, True, False),
+    (MODULE_TRY, True, False),
+    (FUNC_BODY, False, True),
+    (NESTED_FUNC, False, True),
+    (METHOD_BODY, False, True),
+    (CLASS_BODY, False, True),
+    (BOTH, True, True),
+])
+def test_one_scanner_answers_the_scope_question_for_both_callers(src, at_module_scope,
+                                                                 nested):
+    """The measured divergence: `cli._function_local_dependencies` incremented its depth
+    counter only on FunctionDef, so a CLASS-BODY import sat at depth 0 and was never
+    collected, while this file classified laziness by presence in `tree.body`, so the
+    same import was classified LAZY and `lazy_import_call_sites` then found no site for
+    it. Both callers now read one function."""
+    got = scope_scanner()(src)
+    assert ("cv2" in got["module_scope"]) is at_module_scope
+    assert ("cv2" in got["not_module_scope"]) is nested
+
+
+def test_the_packaging_scan_and_the_cli_scan_are_literally_the_same_function():
+    """The de-duplication itself, asserted rather than described: this module reads scope
+    through `armature_core.cli`'s scanner and derives no walk of its own."""
+    from armature_core import cli
+
+    import inspect
+
+    assert scope_scanner() is cli.import_roots_by_scope
+    # and this module derives no walk of its own: every scope decision here goes
+    # through `scope_scanner()`, so there is no second implementation to drift.
+    import textwrap
+
+    for fn in (lazy_third_party_roots, lazy_import_call_sites,
+               test_the_lazily_imported_ones_are_still_lazy):
+        node = ast.parse(textwrap.dedent(inspect.getsource(fn))).body[0]
+        if (node.body and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Constant)):
+            node.body = node.body[1:]          # the docstring may DESCRIBE the walk
+        assert "tree.body" not in ast.unparse(node), fn.__name__
+
+
+def test_the_two_readings_agree_on_every_module_in_the_package():
+    """The census over the real tree, in both directions."""
+    from armature_core import cli
+
+    for name in sorted(os.listdir(CORE)):
+        if not name.endswith(".py") or name.startswith("__"):
+            continue
+        src = open(os.path.join(CORE, name), encoding="utf-8").read()
+        scope = scope_scanner()(src, filename=name)
+        reported = set(cli._function_local_dependencies(name[:-3]))
+        # everything the cli reports is a root the scanner calls not-module-scope
+        assert reported <= scope["not_module_scope"], (name, reported)
+        # and every third-party not-module-scope root is reported by the cli
+        third_party = {r for r in scope["not_module_scope"]
+                       if r not in sys.stdlib_module_names
+                       and r not in {f[:-3] for f in os.listdir(CORE) if f.endswith(".py")}
+                       and r != "armature_core"}
+        assert third_party <= reported, (name, third_party - reported)
+
+
+def test_todays_tree_still_reads_the_way_the_measurement_recorded_it():
+    """gates -> numpy; donor_gate -> PIL, numpy; aapose -> cv2, matplotlib."""
+    from armature_core import cli
+
+    assert cli._function_local_dependencies("gates") == ["numpy"]
+    assert cli._function_local_dependencies("donor_gate") == ["PIL", "numpy"]
+    assert cli._function_local_dependencies("aapose") == ["cv2", "matplotlib"]
+    assert set(lazy_third_party_roots()) == {"cv2", "matplotlib", "PIL"}

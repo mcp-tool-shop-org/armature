@@ -564,3 +564,71 @@ def test_every_shared_gate_id_is_disambiguated_by_the_evidence_in_this_domain():
         TA.gate_view_alpha(0, 255, 255, 0.0)
     assert exc.value.gate == "ALPHA"
     assert exc.value.evidence["andon"] == "TurnaroundAlphaGate"
+
+
+# --- W6 amend: completeness over zero channels (F-2bf70017) ---------------------------
+
+
+@pytest.mark.parametrize("expected", [{}, dict()])
+def test_g2_refuses_an_empty_channel_expectation(tmp_path, expected):
+    """The loop iterates `expected`, so an empty mapping walked no channels and the gate
+    returned {} — a PASS having examined nothing, with no statement anywhere that nothing
+    was examined. Measured 2026-09-03: g2_completeness(<empty tmpdir>, {}, 33) returned
+    {}. This gate runs immediately before the manifest that makes a run look finished."""
+    with pytest.raises(G2Completeness) as exc:
+        gates.g2_completeness(str(tmp_path), expected, 33)
+    assert_gate(exc, "G2", expected_channels=[], frame_count=33)
+    assert "ZERO channels" in str(exc.value)
+
+
+def test_g2_still_passes_on_a_populated_expectation(tmp_path):
+    """The direction the andon must not break."""
+    names = [f"{i:05d}.png" for i in range(3)]
+    d = tmp_path / "mask"
+    d.mkdir()
+    for n in names:
+        (d / n).write_bytes(b"x")
+    assert gates.g2_completeness(str(tmp_path), {"mask": names}, 3)["mask"]["present"] == 3
+
+
+# --- W6 amend: a receipt names its own andon unambiguously (core-solvers seam) --------
+
+
+def test_every_gate_in_gates_and_rig_gates_carries_its_own_id_in_its_evidence():
+    """The census core-solvers' `EVIDENCE_WITHOUT_GATE_ID_ROUTED` was waiting on.
+    `stage_render.py` prints `GATE_FAILURE <exc.gate>` beside the evidence dict, so a
+    receipt whose `ev["gate"]` is absent (or disagrees with the raising class's `.gate`)
+    cannot be read back to the andon that produced it. Shared ids stay shared — the three
+    Gate P clauses all report "P" — the requirement is agreement, not uniqueness."""
+    import ast
+    import inspect
+
+    from armature_core import rig_gates
+
+    for module in (gates, rig_gates):
+        tree = ast.parse(inspect.getsource(module))
+        for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+            for node in ast.walk(fn):
+                if (isinstance(node, ast.Assign)
+                        and getattr(node.targets[0], "id", None) == "ev"
+                        and isinstance(node.value, ast.Dict)):
+                    keys = [k.value for k in node.value.keys
+                            if isinstance(k, ast.Constant)]
+                    assert "gate" in keys, (
+                        f"{module.__name__}.{fn.name} builds an evidence dict with no "
+                        f"'gate' key; the receipt cannot name its own andon")
+                    assert "andon" in keys, (
+                        f"{module.__name__}.{fn.name}'s evidence names no raising class")
+
+
+@pytest.mark.parametrize("gate_id,call", [
+    ("G4", lambda: gates.g4_bbox_sanity(0, (10, 10), (10, 10, 500, 500), 832, 480)),
+    ("R", lambda: gates.gate_r_round_trip([1], [1, 2])),
+    ("B", lambda: gates.gate_b_batching(1, True)),
+])
+def test_a_raised_gates_evidence_agrees_with_the_class_it_was_raised_from(gate_id, call):
+    with pytest.raises(GateFailure) as exc:
+        call()
+    assert exc.value.gate == gate_id
+    if "gate" in exc.value.evidence:
+        assert exc.value.evidence["gate"] == gate_id

@@ -277,3 +277,40 @@ def test_round_trip_fires_on_a_degenerate_diagonal():
     a = np.zeros((10, 3), dtype=np.float32)
     with pytest.raises(GatePRestPose):
         rig_gates.gate_p_round_trip_positions(a, a, 0.0)
+
+
+# --- W6 amend: Gate D's verdict says only what was checked (F-2c39d08d) --------------
+
+
+def test_gate_d_refuses_two_fingerprints_with_no_bones_at_all():
+    """Measured 2026-09-03: gate_d_determinism(rig_fingerprint({}, {}, 0),
+    rig_fingerprint({}, {}, 0), 1.0) returned "two builds agree on bones, hierarchy and
+    weights" with n_bones_a == n_bones_b == 0. gate_p_rest_pose on the same page already
+    raises on an empty vertex array."""
+    empty = rig_gates.rig_fingerprint({}, {}, 0)
+    with pytest.raises(GateDDeterminism) as exc:
+        rig_gates.gate_d_determinism(empty, rig_gates.rig_fingerprint({}, {}, 0), 1.0)
+    assert "ZERO bones" in str(exc.value)
+    assert exc.value.evidence["n_bones_a"] == 0
+
+
+def test_gate_d_does_not_claim_weights_agree_when_neither_side_carries_any():
+    """The skeleton-only route: rig_character.build_pass initialises weights = {} and
+    only fills it inside `if bind:`, and that route calls build_pass(..., bind=False)
+    twice and hands both fingerprints straight to this gate. The per-vertex comparison
+    the docstring names as part of the contract then examines nothing."""
+    bones = {b.name: {"head": [0.0, 0.0, float(i)], "tail": [0.0, 0.0, float(i) + 1],
+                      "roll": 0.0, "parent": b.parent, "use_deform": b.deform}
+             for i, b in enumerate(sitelist.BONES)}
+    a = rig_gates.rig_fingerprint(bones, {}, 0)
+    b = rig_gates.rig_fingerprint(dict(bones), {}, 0)
+    ev = rig_gates.gate_d_determinism(a, b, DIAGONAL)
+    assert "weights NOT COMPARED" in ev["verdict"]
+    assert "agree on bones and hierarchy" in ev["verdict"]
+    assert ev["n_weight_groups_compared"] == 0
+
+
+def test_gate_d_still_claims_weights_when_it_actually_compared_some():
+    ev = rig_gates.gate_d_determinism(_fp(), _fp(), DIAGONAL)
+    assert ev["verdict"] == "two builds agree on bones, hierarchy and weights"
+    assert ev["n_weight_groups_compared"] > 0

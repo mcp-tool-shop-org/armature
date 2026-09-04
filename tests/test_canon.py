@@ -403,3 +403,86 @@ def test_a_forbidden_word_does_not_fire_inside_a_longer_word():
     """The direction the plural stem must not break: 'light' is not 'lighting', and
     'even lighting' is a licensed clause of the probe fixture."""
     assert C.cover(_forbidden_doc("light"), COVERED)["verdict"] == "COVERED"
+
+
+# =====================================================================================
+# W6 amend — the forbidden clause, both inflections and every surface
+# =====================================================================================
+
+
+@pytest.mark.parametrize("canon_word,prompt_word", [
+    ("gauntlet", "gauntlets"),      # singular canon, plural prompt — closed in W3
+    ("gauntlets", "gauntlet"),      # plural canon, singular prompt — the open half
+    ("gauntlets", "gauntlets"),
+    ("gauntlet", "gauntlet"),
+    ("boots", "boot"),
+    ("greaves", "greave"),
+    ("gloves", "glove"),
+])
+def test_a_forbidden_word_fires_in_both_inflections(canon_word, prompt_word):
+    """Measured 2026-09-03: forbidden 'gauntlet' fired on "wearing gauntlets" (True) and
+    forbidden 'gauntlets' did NOT fire on "wearing a gauntlet" (False). The plural is the
+    natural form a canon author writes for gauntlets, boots, gloves, greaves and
+    pauldrons, so the refusal list that reads most naturally was the one that passed."""
+    doc = _forbidden_doc(canon_word, licensed=(prompt_word,))
+    with pytest.raises(GateCanon) as exc:
+        C.cover(doc, COVERED + ", " + prompt_word)
+    assert exc.value.evidence["forbidden"][0]["word"] == canon_word
+
+
+@pytest.mark.parametrize("canon_word,prompt", [
+    ("light", "even lighting"),          # not a stem of a longer word
+    ("sleeve", "sleeveless"),            # the boundary still holds
+    ("cape", "a caped figure"),
+])
+def test_the_stem_normalisation_does_not_reach_inside_a_longer_word(canon_word, prompt):
+    doc = _forbidden_doc(canon_word, licensed=(prompt,))
+    assert C.cover(doc, COVERED + ", " + prompt)["verdict"] == "COVERED"
+
+
+def test_a_word_that_genuinely_ends_in_s_keeps_its_plural():
+    """Normalising the canon side must not cost the prompt side: 'dress' -> 'dresses'."""
+    doc = _forbidden_doc("dress", licensed=("two dresses",))
+    with pytest.raises(GateCanon):
+        C.cover(doc, COVERED + ", two dresses")
+
+
+def _mixed_ratification_doc(word="gauntlet"):
+    """A ratified torso occupant and an UNRATIFIED hand occupant carrying a refusal."""
+    doc = load_probe()
+    hole = next(s for s in doc["surfaces"] if s["id"] == "hand_L")
+    hole["occupant"] = {"kind": "bare", "forbidden": [word], "ratified": False}
+    doc["legal_clauses"].append({"id": "LX9", "phrase": word, "class": "style"})
+    return doc
+
+
+def test_a_refusal_on_an_unratified_occupant_is_still_read():
+    """Measured 2026-09-03: with a ratified torso occupant and an unratified hands
+    occupant carrying forbidden ['gauntlet'], cover(doc, "... gauntlet") returned COVERED
+    with forbidden []; flipping only that occupant's ratified flag made the same prompt
+    raise. `blocked_additions`, the doc-level refusal list, is checked regardless of any
+    ratification, so the two refusal mechanisms disagreed with each other."""
+    doc = _mixed_ratification_doc()
+    with pytest.raises(GateCanon) as exc:
+        C.cover(doc, COVERED + ", gauntlet")
+    hit = exc.value.evidence["forbidden"][0]
+    assert hit["word"] == "gauntlet"
+    assert hit["surface"] == "hand_L"
+    assert hit["ratified"] is False
+
+
+def test_a_ratified_refusal_still_records_which_side_of_the_line_it_came_from():
+    doc = _forbidden_doc("gauntlet", licensed=("gauntlet",))
+    with pytest.raises(GateCanon) as exc:
+        C.cover(doc, COVERED + ", gauntlet")
+    assert exc.value.evidence["forbidden"][0]["ratified"] is True
+
+
+def test_a_phrase_on_an_unratified_occupant_is_still_NOT_demanded():
+    """The other side of the line, so the fix does not turn ratification off: a PHRASE is
+    a claim about the occupant and stays behind ratification; a refusal is a claim about
+    the prompt and does not."""
+    doc = load_probe()
+    hole = next(s for s in doc["surfaces"] if s["id"] == "hand_L")
+    hole["occupant"] = {"kind": "prompt", "phrase": "a brass ring", "ratified": False}
+    assert C.cover(doc, COVERED)["verdict"] == "COVERED"

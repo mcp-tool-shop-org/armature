@@ -91,6 +91,55 @@ _LOCAL_MODULES = frozenset(
 _FUNC_LOCAL_CACHE = {}
 
 
+def import_roots_by_scope(source, filename="<source>"):
+    """Every root module a source imports, split by whether the import is at MODULE SCOPE.
+
+    THE one import scan. Returns
+    `{"module_scope": frozenset(...), "not_module_scope": frozenset(...)}` — the first is
+    what a plain `import <module>` executes, the second is what it does not.
+
+    ⚠ **This walk existed TWICE and the two copies did not agree on what "not at module
+    scope" means.** `_function_local_dependencies` incremented its depth counter only on
+    `FunctionDef`/`AsyncFunctionDef`, so an import in a CLASS BODY sat at depth 0 and was
+    never collected; `tests/test_packaging.lazy_third_party_roots` classified laziness by
+    whether the root appeared in `tree.body`, so a class-body import — and equally an
+    import inside a module-level `try:` or `if:` — was classified LAZY, and
+    `lazy_import_call_sites` (which walked `FunctionDef` nodes) then found no call site
+    for it. Measured 2026-09-03 by dropping a module containing `class Thing: import
+    cv2_probe_pkg` into `armature_core/` and removing it again: both readings returned
+    nothing, i.e. `armature check` would print `ok` for that module on an install where
+    the class body raises, and the packaging test's clean-room requirement would have no
+    call site to demand. On today's tree the two agree exactly, so this is a divergence
+    with no live instance — closed as ONE scanner both callers read, rather than as two
+    walks patched to match.
+
+    A `ClassDef` counts as a nested scope here for the same reason a `FunctionDef` does:
+    the question this function answers for its callers is "which imports would a probe
+    that only walks module-level statements fail to see", and a class body is one of
+    them. `Lambda` is included for completeness.
+    """
+    tree = source if isinstance(source, ast.AST) else ast.parse(source, filename)
+    at_module_scope, nested = set(), set()
+    stack = [(tree, 0)]
+    while stack:
+        node, depth = stack.pop()
+        for child in ast.iter_child_nodes(node):
+            d = depth
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                                  ast.Lambda)):
+                d += 1
+            elif isinstance(child, ast.Import):
+                (nested if depth else at_module_scope).update(
+                    a.name.split(".")[0] for a in child.names)
+            elif isinstance(child, ast.ImportFrom):
+                if child.level == 0 and child.module:
+                    (nested if depth else at_module_scope).add(
+                        child.module.split(".")[0])
+            stack.append((child, d))
+    return {"module_scope": frozenset(at_module_scope),
+            "not_module_scope": frozenset(nested)}
+
+
 def _function_local_dependencies(name):
     """Third-party roots this module imports INSIDE a function body.
 
@@ -102,16 +151,18 @@ def _function_local_dependencies(name):
     `ModuleNotFoundError: PIL`. The command said "importable" in language an operator
     reads as "runnable", on an install where two modules' functions cannot run.
 
-    They CAN be resolved without executing the functions: an `ast.walk` over the module's
-    source for `Import`/`ImportFrom` nested in a `FunctionDef`, then `find_spec` on each
-    root name. That walk finds gates -> numpy; donor_gate -> PIL, numpy; aapose -> cv2,
-    matplotlib. Reading the source rather than importing keeps this probe as cheap and as
-    side-effect-free as it was.
+    They CAN be resolved without executing the functions: read the source and take the
+    imports that are NOT at module scope, then `find_spec` on each root name. That reading
+    finds gates -> numpy; donor_gate -> PIL, numpy; aapose -> cv2, matplotlib. Reading the
+    source rather than importing keeps this probe as cheap and as side-effect-free as it
+    was.
+
+    The scan itself is `import_roots_by_scope`, which `tests/test_packaging.py` also
+    reads — one walk, not two that disagree. See that function for the divergence.
     """
     if name in _FUNC_LOCAL_CACHE:
         return _FUNC_LOCAL_CACHE[name]
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{name}.py")
-    roots = set()
     try:
         with open(path, encoding="utf-8") as fh:
             tree = ast.parse(fh.read())
@@ -120,19 +171,7 @@ def _function_local_dependencies(name):
         # function's silence here is not a verdict.
         _FUNC_LOCAL_CACHE[name] = []
         return []
-    stack = [(tree, 0)]
-    while stack:
-        node, depth = stack.pop()
-        for child in ast.iter_child_nodes(node):
-            d = depth
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                d += 1
-            elif depth and isinstance(child, ast.Import):
-                roots.update(a.name.split(".")[0] for a in child.names)
-            elif depth and isinstance(child, ast.ImportFrom):
-                if child.level == 0 and child.module:
-                    roots.add(child.module.split(".")[0])
-            stack.append((child, d))
+    roots = import_roots_by_scope(tree, filename=path)["not_module_scope"]
     out = sorted(r for r in roots
                  if r not in sys.stdlib_module_names
                  and r not in _LOCAL_MODULES

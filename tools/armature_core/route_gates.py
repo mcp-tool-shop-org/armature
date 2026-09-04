@@ -27,9 +27,16 @@ graph contains; the rulings about what may run are the Director's and the adviso
 
 import json
 
+from .canon import GRAPH_WRAPPER_KEYS
 from .errors import GateFailure
 
 TOOL_VERSION = "E09.1"
+
+#: The wrapper keys `normalise_graph` (and therefore every gate here, and `load_graph`)
+#: unwraps, published under this module's own name so a caller outside the package reads
+#: the SAME list the loader uses instead of re-typing a subset of it. It is
+#: `canon.GRAPH_WRAPPER_KEYS` — one tuple, two names, no second implementation.
+WRAPPER_KEYS = GRAPH_WRAPPER_KEYS
 
 #: Generator constraints, per model family, from the spec that first used each. Wan's are
 #: the ones E02 and E08 measured: both dimensions divisible by 16, frame count of the form
@@ -352,6 +359,7 @@ def families_of(filename):
 
 def model_weights(graph):
     """Every DIFFUSION-model weight file the graph loads, with the families it matches."""
+    graph = normalise_graph(graph)
     out = []
     for where, n in _iter_nodes(graph):
         if n.get("type") not in MODEL_LOADER_CLASSES:
@@ -372,6 +380,7 @@ def pairing(graph):
     model this gate can read. "Nothing to check" and "everything checked out" are different
     verdicts here for the same reason they are in `verify`.
     """
+    graph = normalise_graph(graph)
     loaded = model_weights(graph)
     present = sorted({fam for w in loaded for fam in w["families"]})
     cond = [(str(n.get("id")), n.get("type")) for _, n in _iter_nodes(graph)
@@ -427,14 +436,82 @@ class RouteGate(GateFailure):
     gate = "ROUTE"
 
 
+def _shape_of(doc):
+    """`'api'`, `'save'`, or `None` when this mapping is neither. Decides nothing."""
+    if not isinstance(doc, dict):
+        return None
+    if isinstance(doc.get("nodes"), list):
+        return "save"
+    if any(isinstance(v, dict) and "class_type" in v for v in doc.values()):
+        return "api"
+    return None
+
+
+def normalise_graph(graph):
+    """THE loader. Every gate in this module reads its graph through this one function.
+
+    Returns the graph in the shape the walk understands — API format (node-id keyed,
+    `class_type` per value) or save format (a `nodes` list) — unwrapping a submission
+    envelope named in `canon.GRAPH_WRAPPER_KEYS` when it finds one, and RAISING
+    `RouteGate` on a mapping it cannot recognise at all.
+
+    ⚠ **"This graph has no nodes" and "I cannot read this shape" were the same answer,
+    and the second one arrived under a green receipt.** Measured 2026-09-03 on the
+    standard ComfyUI submission envelope `{"prompt": <api graph>}` wrapping a graph that
+    loads `causvid_x.safetensors` (BANNED, CC-BY-NC) and a `KSamplerAdvanced` at
+    noise_seed 999999: bare, `verify(g, frame=(832, 480, 81))` raised naming the banned
+    file; wrapped, `components()`, `seeds()` and `latents()` all returned `[]` and
+    `verify` returned "0 weight file(s), 0 seed(s) all pinned, 0 of 0 latent(s)
+    checkable, 1 frame(s) checked and generator-legal", with pairing reporting "0
+    conditioning node(s) paired against 0 model file(s)". `gate_s_registration(wrapped,
+    [7])` likewise reported every seed pinned and registered. Gate ROUTE reported a graph
+    clean on licence, seeds and pairing having read zero nodes.
+
+    This is verbatim the fix wave 3 applied to `canon.texts_from_api_graph` — "'No text
+    here' and 'I did not recognise this shape' are different answers" — carried into the
+    module where the spend gates live, as ONE loader rather than a second implementation:
+    the wrapper-key tuple is `canon.GRAPH_WRAPPER_KEYS`, so the comment beside it and the
+    behaviour here cannot drift apart again.
+    """
+    doc = graph
+    for _ in range(len(GRAPH_WRAPPER_KEYS) + 1):
+        if _shape_of(doc) is not None:
+            return doc
+        inner = None
+        if isinstance(doc, dict):
+            inner = next((doc[k] for k in GRAPH_WRAPPER_KEYS
+                          if isinstance(doc.get(k), dict)), None)
+        if inner is None:
+            break
+        doc = inner
+    raise RouteGate(
+        f"this is not a graph this module can read: a {type(doc).__name__} that is "
+        f"neither API format (node-id keyed values carrying `class_type`) nor save "
+        f"format (a `nodes` list), and that carries no wrapper key from "
+        f"{list(GRAPH_WRAPPER_KEYS)}. A shape that cannot be read is not an empty "
+        f"graph, and every clause of this module would otherwise report its "
+        f"zero-population verdict as a pass",
+        {"gate": "ROUTE", "type": type(doc).__name__,
+         "top_level_keys": sorted(map(str, doc)) if isinstance(doc, dict) else None,
+         "wrapper_keys": list(GRAPH_WRAPPER_KEYS)})
+
+
 def is_api_format(graph):
-    """API format is node-id keyed with `class_type`; save format has a `nodes` array."""
-    if isinstance(graph.get("nodes"), list):
-        return False
-    return any(isinstance(v, dict) and "class_type" in v for v in graph.values())
+    """API format is node-id keyed with `class_type`; save format has a `nodes` array.
+
+    Reads through `normalise_graph`, so an unrecognised shape raises here too rather
+    than answering `False` and sending the caller down the save-format branch to walk a
+    `nodes` list that does not exist.
+    """
+    return _shape_of(normalise_graph(graph)) == "api"
 
 
 def _iter_nodes(graph):
+    """Every node in the graph, read through `normalise_graph`. See `_walk_nodes`."""
+    return _walk_nodes(normalise_graph(graph))
+
+
+def _walk_nodes(graph):
     """Every node in the graph, INCLUDING the ones inside subgraph definitions.
 
     The clause that matters. A served template can present four nodes at the top level and
@@ -460,7 +537,7 @@ def _iter_nodes(graph):
     definition ids stands against a blueprint that references itself: the gate before a
     spend must halt or answer, never hang.
     """
-    if is_api_format(graph):
+    if _shape_of(graph) == "api":
         for node_id, node in graph.items():
             if not isinstance(node, dict) or "class_type" not in node:
                 continue
@@ -490,8 +567,42 @@ def _iter_definitions(container, visited):
         yield from _iter_definitions(d, visited)
 
 
+#: Verdict precedence, strictest first. A filename that matches more than one row in
+#: `RULED_COMPONENTS` is governed by the STRICTEST match, never by whichever row happens
+#: to have been typed into the dict first.
+VERDICT_RANK = {"BANNED": 3, "EXCLUDED": 2, "ALLOWED": 1, "NOT IN THIS TABLE": 0}
+
+
+def rulings_for(filename):
+    """EVERY `RULED_COMPONENTS` row this weight filename matches, strictest first.
+
+    ⚠ **`components()` used to take the FIRST match in dict-insertion order and record
+    no other.** `families_of()` on the same page deliberately does the opposite and its
+    table's comment says why: "A file may match more than one and every match is
+    recorded." The licence clause — the one CLAUDE.md calls a non-negotiable — got the
+    weaker rule. Measured 2026-09-03: `technically_color_instagirl_v2.safetensors`
+    matches `technically_color` (ALLOWED, typed in at index 4) and `instagirl` (BANNED,
+    Instara Fair Use — "prohibits use on any image/video generation service", index 9),
+    and `components()` returned verdict ALLOWED, matched_on technically_color, with the
+    BANNED row named nowhere in the evidence; `verify()` on a graph loading it returned
+    green. The precedence was an accident of typing order. Stacked and merged LoRA names
+    are concatenations, and the served style field this table mirrors is exactly where
+    those names come from.
+    """
+    low = str(filename).lower()
+    hits = [dict(rec, matched_on=key) for key, rec in RULED_COMPONENTS.items()
+            if key in low]
+    hits.sort(key=lambda r: -VERDICT_RANK.get(r["verdict"], 0))
+    return hits
+
+
 def components(graph):
-    """Every weight file the graph loads, with the repo's ruling on each."""
+    """Every weight file the graph loads, with the repo's ruling on each.
+
+    The ruling is the STRICTEST row the filename matches, and `ruling["matches"]` names
+    every row it matched — see `rulings_for`.
+    """
+    graph = normalise_graph(graph)
     out = []
     for where, n in _iter_nodes(graph):
         for v in (n.get("widgets_values") or []):
@@ -499,21 +610,108 @@ def components(graph):
                 continue
             if not v.lower().endswith(WEIGHT_SUFFIXES):
                 continue
-            ruling = None
-            for key, rec in RULED_COMPONENTS.items():
-                if key in v.lower():
-                    ruling = dict(rec, matched_on=key)
-                    break
+            hits = rulings_for(v)
+            ruling = dict(hits[0]) if hits else {"verdict": "NOT IN THIS TABLE",
+                                                 "reason": "check docs/license-map.md"}
+            ruling["matches"] = [{"matched_on": h["matched_on"], "verdict": h["verdict"],
+                                  "licence": h.get("licence")} for h in hits]
             out.append({"file": v, "node_id": n.get("id"), "class": n.get("type"),
-                        "where": where,
-                        "ruling": ruling or {"verdict": "NOT IN THIS TABLE",
-                                             "reason": "check docs/license-map.md"}})
+                        "where": where, "ruling": ruling})
     return out
 
 
 #: The input names a seed lives under in API format, per node class.
 SEED_INPUTS = {"KSampler": "seed", "KSamplerAdvanced": "noise_seed",
                "Wan2ReferenceVideoApi": "seed"}
+
+#: Input names that ARE a seed, whatever class carries them, and class-name suffixes that
+#: declare a sampling or noise role. Used only by `unrecorded_seed_sources` — the andon
+#: that answers "this table does not know that class" instead of answering "no seeds".
+SEED_INPUT_NAMES = ("seed", "noise_seed", "rand_seed")
+SEED_CLASS_SUFFIXES = ("Sampler", "Noise")
+
+
+def unrecorded_seed_sources(graph):
+    """Nodes that look like they carry a seed and have NO `SEED_NODES` row.
+
+    ⚠ **A class absent from `SEED_NODES` used to disarm Gate S in the affirmative.**
+    `seeds()` returns [] for it, and both readers then reported green. Measured
+    2026-09-03 on an API graph wiring `SamplerCustomAdvanced` fed by `RandomNoise` at
+    `noise_seed=123456789`: `seeds()` returned [], `verify(g, family="wan")` reported
+    "0 seed(s) all pinned" with `seed_clause_verdict = "CHECKED — 0 seed(s) all pinned"`,
+    and `gate_s_registration(g, [7])` reported "0 noise-bearing seed(s), all pinned and
+    all drawn from the committed list of 1" — while the seed that would actually run was
+    123456789 and the committed list was [7].
+
+    That is the shape the E13 halt-era executor refused to record as a pass, and the
+    remedy taken then was to add one row to `SEED_NODES` — which is exactly what the
+    `LATENT_NODES` note says is not a fix: "Adding a class to this table fixes one graph;
+    it does not fix the shape of that failure." So the shape is fixed here instead, the
+    way Gate L and Gate PAIR already answer: "nothing was checkable" is a third answer,
+    and it raises.
+
+    Detection is by the thing being read, not by a vendor prefix: in API format an inputs
+    key named `seed`/`noise_seed`/`rand_seed` on a class with no row; in EITHER format a
+    class name ending in `Sampler` or `Noise` with no row. `endswith` rather than a
+    substring on purpose — `KSamplerSelect` picks a scheduler and carries no seed, and an
+    andon that fires on a correct graph is not one anybody keeps.
+    """
+    graph = normalise_graph(graph)
+    api = is_api_format(graph)
+    out = []
+    for where, n in _iter_nodes(graph):
+        cls = n.get("type")
+        if not isinstance(cls, str) or cls in SEED_NODES:
+            continue
+        why = None
+        if api:
+            hit = sorted(k for k in (n.get("inputs") or {}) if k in SEED_INPUT_NAMES)
+            if hit:
+                why = f"carries seed-shaped input(s) {', '.join(hit)}"
+        if why is None and cls.endswith(SEED_CLASS_SUFFIXES):
+            why = "the class name declares a sampling or noise role"
+        if why:
+            out.append({"node_id": n.get("id"), "class": cls, "where": where, "why": why})
+    return out
+
+
+def _seed_population_andon(graph, found, ev, carries_no_sampler):
+    """The third answer, shared by `verify`'s seed clause and `gate_s_registration`.
+
+    Raises unless the seed population is one this module can honestly describe. The
+    caller may assert `carries_no_sampler=True` — and that assertion is CHECKED, not
+    obeyed: it raises if a seed or an unrecorded seed source turns up under it, which is
+    what keeps it from being a skip flag.
+    """
+    unrecorded = unrecorded_seed_sources(graph)
+    ev["unrecorded_seed_sources"] = unrecorded
+    ev["carries_no_sampler_asserted"] = bool(carries_no_sampler)
+    if unrecorded:
+        ev["seed_clause_verdict"] = "INDETERMINATE"
+        raise RouteGate(
+            "the seed clause is INDETERMINATE: " + "; ".join(
+                f"node {u['node_id']} is {u['class']}, which has no SEED_NODES row and "
+                f"{u['why']}" for u in unrecorded) +
+            ". `seeds()` reports nothing for such a class and every reader then reports "
+            "green — the affirmative form of the failure Gate S exists to prevent. Add "
+            "the class's row in the spec that first arms the tier", ev)
+    if carries_no_sampler:
+        if found:
+            ev["seed_clause_verdict"] = "CONTRADICTED"
+            raise RouteGate(
+                f"the caller asserted this graph carries no sampler and it carries "
+                f"{len(found)} seed-bearing node(s): " + ", ".join(
+                    f"node {s['node_id']} ({s['class']})" for s in found) +
+                ". The assertion is checked, not obeyed", ev)
+        return
+    if not found:
+        ev["seed_clause_verdict"] = "INDETERMINATE"
+        raise RouteGate(
+            "the seed clause is INDETERMINATE on this graph and therefore UNPROVEN: it "
+            "found no seed at all, and 'no seed was found' and 'every seed is pinned' "
+            "are not the same verdict — the second is what this module used to print. "
+            "Pass carries_no_sampler=True if the graph really carries none (the "
+            "assertion is checked), or add the sampler class's SEED_NODES row", ev)
 
 
 def seeds(graph):
@@ -535,6 +733,7 @@ def seeds(graph):
     key from the link. (`gate_s_registration` did fail closed on the same graph, so this
     was confined to `verify`'s pinned clause and its verdict string.)
     """
+    graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
     for where, n in _iter_nodes(graph):
@@ -572,6 +771,7 @@ def latents(graph):
     checkable ones, because a list whose entries answer nothing is the shape the E08 defect
     wore.
     """
+    graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
     for where, n in _iter_nodes(graph):
@@ -602,6 +802,7 @@ def cameras(graph):
     number. These records are reported separately from the latents so that Gate L's count of
     "frames checked" cannot be inflated by a node that sizes no frame at all.
     """
+    graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
     for where, n in _iter_nodes(graph):
@@ -639,6 +840,7 @@ def camera_widget_order_evidence(graph, expect):
     disagreement halts, because on an API-format graph there is nothing positional to
     confirm and the honest answer there is `not_applicable`, not `PASS`.
     """
+    graph = normalise_graph(graph)
     ev = {"check": "camera widget order (empirical second reading)", "expect": dict(expect),
           "nodes": []}
     if is_api_format(graph):
@@ -782,6 +984,7 @@ def hosted_enums(graph):
     in the evidence, so a two-shot hosted graph could carry an out-of-contract resolution,
     ratio or duration under a green Gate L receipt.
     """
+    graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
     for _where, n in _iter_nodes(graph):
@@ -834,7 +1037,7 @@ def hosted_frame_legality(resolution, ratio, duration, tier):
             "problems": problems, "legal": not problems}
 
 
-def gate_s_registration(graph, registered):
+def gate_s_registration(graph, registered, *, carries_no_sampler=False):
     """Gate S · ANDON — every seed about to run was pre-registered in a committed list.
 
     E04's andon, and it guards a failure with no technical symptom at all: every other gate
@@ -845,9 +1048,14 @@ def gate_s_registration(graph, registered):
     registered list that the graph does not draw from is the second: a graph running some
     other number while a tidy list sits in the repo is the same defect wearing a receipt.
     """
+    graph = normalise_graph(graph)
     found = seeds(graph)
     reg = list(registered or [])
     ev = {"gate": "S", "registered": reg, "seeds": found}
+    # · ANDON — the third answer. See `_seed_population_andon`: a sampler class with no
+    # SEED_NODES row makes `seeds()` return [] and this function then reported "0
+    # noise-bearing seed(s), all pinned and all drawn from the committed list".
+    _seed_population_andon(graph, found, ev, carries_no_sampler)
     if not reg:
         raise RouteGate(
             "Gate S: no seed list was pre-registered, so no seed may be varied at all. "
@@ -893,13 +1101,16 @@ def gate_s_registration(graph, registered):
                 f"node {s['node_id']} would run seed {s['seed']}" for s in unregistered) +
             f", which the committed list {reg} does not pre-register. A seed chosen after "
             f"seeing a result turns a measurement into a selection of one", ev)
-    ev["verdict"] = (f"{len(live)} noise-bearing seed(s), all pinned and all drawn from "
-                     f"the committed list of {len(reg)}")
+    ev["verdict"] = (
+        f"no sampler in this graph (asserted by the caller and checked), so no seed was "
+        f"drawn against the committed list of {len(reg)}" if not found else
+        f"{len(live)} noise-bearing seed(s), all pinned and all drawn from "
+        f"the committed list of {len(reg)}")
     return ev
 
 
 def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=None,
-           hosted_tier=None):
+           hosted_tier=None, carries_no_sampler=False):
     """The three questions at once. Raises on anything the record already ruled against.
 
     `allow` names component keys the caller has an explicit ruling for — it is not a skip
@@ -933,6 +1144,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     frame-legality clause is **INDETERMINATE — unproven — and raises**, because a check
     that cannot fail is not a check.
     """
+    graph = normalise_graph(graph)
     if hosted_tier is not None and frame is not None:
         raise RouteGate(
             "verify() was given both a hosted tier and a pixel frame; they are two answers "
@@ -978,6 +1190,10 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         raise RouteGate(
             "the graph loads " + ", ".join(
                 f"{c['file']!r} ({c['ruling']['verdict']}: {c['ruling']['reason']})"
+                + (" [this filename also matches "
+                   + ", ".join(f"{m['matched_on']}={m['verdict']}"
+                               for m in c["ruling"]["matches"][1:]) + "]"
+                   if len(c["ruling"].get("matches") or []) > 1 else "")
                 for c in bad) +
             ". The licence map's ruling is that presence is presence — a bypassed node "
             "still counts, and these are not even bypassed", ev)
@@ -1002,12 +1218,29 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # the provenance sheet. Measured 2026-09-03 on a graph whose only sampler carries
     # control_after_generate='randomize'. A record may not assert a property nobody
     # checked, so the skip is named in the verdict rather than hidden by it.
-    ev["seed_clause_verdict"] = (
-        f"CHECKED — {len(sd)} seed(s) all pinned" if require_pinned_seeds
-        else "NOT CHECKED (require_pinned_seeds=False)")
-    seed_phrase = (f"{len(sd)} seed(s) all pinned" if require_pinned_seeds
-                   else f"{len(sd)} seed(s) NOT CHECKED for pinning "
-                        f"(require_pinned_seeds=False)")
+    if require_pinned_seeds:
+        # · ANDON — the third answer the other three clauses in this file already have
+        # (Gate L latent, Gate L hosted, Gate PAIR). A sampler class absent from
+        # SEED_NODES makes `seeds()` return [] and this clause used to print "0 seed(s)
+        # all pinned" over it. See `_seed_population_andon`.
+        _seed_population_andon(graph, sd, ev, carries_no_sampler)
+    elif carries_no_sampler:
+        raise RouteGate(
+            "verify() was given carries_no_sampler=True with require_pinned_seeds=False; "
+            "one asserts a property of the graph and the other says nobody looked, and "
+            "the assertion would go unchecked", dict(ev, seeds=sd))
+
+    if not require_pinned_seeds:
+        ev["seed_clause_verdict"] = "NOT CHECKED (require_pinned_seeds=False)"
+        seed_phrase = (f"{len(sd)} seed(s) NOT CHECKED for pinning "
+                       f"(require_pinned_seeds=False)")
+    elif not sd:
+        ev["seed_clause_verdict"] = (
+            "CHECKED — no sampler in this graph (asserted by the caller and checked)")
+        seed_phrase = "no sampler (asserted and checked), so no seed to pin"
+    else:
+        ev["seed_clause_verdict"] = f"CHECKED — {len(sd)} seed(s) all pinned"
+        seed_phrase = f"{len(sd)} seed(s) all pinned"
 
     if require_pinned_seeds:
         loose = [s for s in sd if not s["pinned"]]
@@ -1163,11 +1396,23 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
 
 
 def load_graph(path):
-    """A save-format graph from disk, tolerating a tool-result wrapper around the JSON."""
+    """A graph from disk, read through the one loader.
+
+    ⚠ **This function used to unwrap `workflow_json` and `workflow` and NOT `prompt` —
+    the standard submission envelope.** A file left inside that envelope was returned
+    whole, and every clause of `verify` then reported its zero-population verdict as a
+    pass (the measurement is on `normalise_graph`). `gate_saved_graph.round_trip` died
+    on the same file with `KeyError: 'nodes'`, which is a crash rather than a wrong
+    answer and so the good kind of latent bug.
+
+    The unwrap list is now `WRAPPER_KEYS` (== `canon.GRAPH_WRAPPER_KEYS`) and it is read
+    through `normalise_graph`, so a file whose shape this module cannot read raises
+    `RouteGate` naming the top-level keys instead of being handed on as an empty graph.
+    """
     with open(path, encoding="utf-8") as fh:
         raw = fh.read()
     doc = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
-    for key in ("workflow_json", "workflow"):
-        if isinstance(doc.get(key), dict):
-            return doc[key]
-    return doc
+    try:
+        return normalise_graph(doc)
+    except RouteGate as exc:
+        raise RouteGate(f"{path}: {exc}", dict(exc.evidence or {}, path=str(path))) from None

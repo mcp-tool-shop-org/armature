@@ -28,7 +28,10 @@ of them create an output directory. The escape is census-backed
 ``no_canon=True`` on a subject that HAS surfaces is refused.
 
 Both directions. Forward: every ratified occupant phrase occurs in the
-prompt, un-negated, and no forbidden word or blocked addition occurs.
+prompt, un-negated, and no forbidden word or blocked addition occurs. A
+forbidden word is read from EVERY surface's occupant, ratified or not - a
+refusal is a claim about the prompt, not about the occupant - while a
+phrase is a claim about the occupant and so stays behind ratification.
 Reverse: armed whenever legal_clauses is declared (schema 1 requires the
 key). Residue after licensed spans refuses.
 
@@ -369,18 +372,49 @@ def residue(prompt, doc):
     return WORD.findall(text)
 
 
-def _forbidden_hit(word, hay):
-    """A forbidden word, matched as a stem with an optional plural.
+def _forbidden_forms(word):
+    """The canon word plus its de-pluralised stem(s) - both sides of the pair.
 
-    ⚠ A bare `\\b<word>\\b` fires on 'gauntlet' and NOT on 'gauntlets', so a canon that
-    forbids a garment feature passed any prompt naming it in the plural and Gate CANON
-    reported COVERED (measured 2026-09-03). `(?:e?s)?` before the closing boundary
-    catches both plural forms and still cannot match inside a longer word: 'sleeveless'
-    fails the trailing boundary exactly as it did before, which is why the hand-written
-    `SLEEVE = \\bsleeve(?!less)\\b` special case was inert — the boundary was already
-    doing that work — and is now deleted rather than kept as a second mechanism.
+    The 2026-09-03 fix appended `(?:e?s)?` to the CANON word, which closes the
+    singular-canon / plural-prompt direction only. Measured 2026-09-03, one inflection
+    over: forbidden 'gauntlet' fires on "wearing gauntlets" (True) and forbidden
+    'gauntlets' does NOT fire on "wearing a gauntlet" (False). The plural is the natural
+    form a canon author writes for gauntlets, boots, gloves, greaves and pauldrons, so the
+    refusal list that reads most naturally was the one that passed the singular, and Gate
+    CANON reported COVERED on it.
+
+    Normalising BOTH sides means stripping a trailing s/es from the canon word as well as
+    allowing one on the prompt. A stem is only added when it is long enough to be a word,
+    so a two-letter alternative cannot start matching bare articles; and every form still
+    carries the optional plural suffix, so a word that genuinely ends in s ('dress' ->
+    'dresses') keeps the behaviour it already had.
     """
-    return re.search(r"\b" + re.escape(word.lower()) + r"(?:e?s)?\b", hay) is not None
+    w = str(word).lower()
+    forms = {w}
+    if w.endswith("es") and len(w) >= 5:
+        forms.add(w[:-2])
+        forms.add(w[:-1])
+    elif w.endswith("s") and len(w) >= 4:
+        forms.add(w[:-1])
+    return sorted(forms, key=len, reverse=True)
+
+
+def _forbidden_hit(word, hay):
+    """A forbidden word, matched as a stem with an optional plural, in BOTH directions.
+
+    A bare word-boundary pattern fires on 'gauntlet' and NOT on 'gauntlets', so a canon
+    that forbids a garment feature passed any prompt naming it in the plural and Gate
+    CANON reported COVERED (measured 2026-09-03). The optional `(?:e?s)?` before the
+    closing boundary catches both plural forms and still cannot match inside a longer
+    word: 'sleeveless' fails the trailing boundary exactly as it did before, which is why
+    the hand-written sleeve/sleeveless special case was inert - the boundary was already
+    doing that work - and is deleted rather than kept as a second mechanism.
+
+    That fix closed ONE direction of the pair. The canon side is normalised too - see
+    `_forbidden_forms` - so a plural canon word fires on a singular prompt as well.
+    """
+    stems = "|".join(re.escape(f) for f in _forbidden_forms(word))
+    return re.search(r"\b(?:" + stems + r")(?:e?s)?\b", hay) is not None
 
 
 def cover(doc, prompt):
@@ -404,6 +438,27 @@ def cover(doc, prompt):
     forbidden = []
     for s in doc["surfaces"]:
         occ = s.get("occupant") or {}
+        # A refusal is read from EVERY surface, ratified or not.
+        #
+        # The forbidden loop used to sit below the ratification `continue`, so a
+        # forbidden list on an unratified occupant was never read. Measured 2026-09-03 on
+        # a doc with a ratified torso occupant and an unratified hands occupant carrying
+        # forbidden ["gauntlet"]: `cover(doc, "black plate wearing gauntlet")` returned
+        # COVERED with forbidden []; flipping only that occupant's ratified flag made the
+        # same prompt raise. `blocked_additions`, the doc-level refusal list, is checked
+        # regardless of any ratification, so the two refusal mechanisms disagreed about
+        # whether ratification gates a refusal — and `require_canon`'s tripwire only
+        # refuses a doc with ZERO ratified phrase-carrying occupants, so a MIXED doc
+        # reaches here normally with every unratified surface's list inert.
+        #
+        # A refusal is not a claim about the occupant; it is a claim about the prompt. A
+        # phrase, by contrast, IS a claim about the occupant — "this surface reads like
+        # this" — so the forward phrase clauses stay behind ratification. The record says
+        # which side of the line each hit came from.
+        for word in occ.get("forbidden") or []:
+            if _forbidden_hit(word, hay):
+                forbidden.append({"surface": s["id"], "word": word,
+                                  "ratified": is_ratified(s)})
         if not is_ratified(s):
             continue
         phrase = occ.get("phrase")
@@ -413,9 +468,6 @@ def cover(doc, prompt):
                 missing.append({"surface": s["id"], "phrase": phrase})
             elif _negated_at(hay, idx):
                 negated.append({"surface": s["id"], "phrase": phrase})
-        for word in occ.get("forbidden") or []:
-            if _forbidden_hit(word, hay):
-                forbidden.append({"surface": s["id"], "word": word})
     blocked = [b for b in blocked_additions(doc) if _find_phrase(hay, b["phrase"]) >= 0]
     ev["missing"] = missing
     ev["negated"] = negated
