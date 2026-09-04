@@ -435,10 +435,68 @@ def test_no_file_under_tools_reaches_into_the_private_vertex_primitive():
 # Owners: core-solvers (`blender_scene.world_bounds`'s refusal/routing), instruments
 # (probe_subject, preview_walk), instruments-measure (stage_render, make_parts_sheet).
 
+# WAVE 12, F-82687368 — the family is DERIVED, and it always had three members.
+#
+# The comment above defines the family as "every public reader whose first argument is an
+# object list and whose filter depends on being handed a scene", and then the tuple named
+# ONE. Two other public readers match that definition exactly and route through the same
+# private entry: `evaluated_geometry_signature(objects, scene=None)` (blender_scene.py:471,
+# body `pts = _points_to_measure(objects, scene)` at :482) and
+# `projected_bbox_px(cam, objects, width, height, scene=None)` (:549, `_points_to_measure`
+# at :560). `_points_to_measure` returns `_evaluated_world_vertices(objects)` verbatim when
+# `scene is None` (:306) — the unfiltered measurement this ban exists to stop.
+#
+# Measured 2026-09-04 with this file's own call-site rule: `world_bounds` has 3 live sites
+# and ALL THREE pass `scene=`, so the one member named was the one with nothing left to
+# catch; `evaluated_geometry_signature` has 3 sites and all three omit the scene
+# (check_relift.py:167, render_start_frame.py:669, stage_render.py:219) and
+# `projected_bbox_px` has 1, also without it (stage_render.py:236). Four live unfiltered
+# measurements sat outside a ban whose only enforced clause was already at zero.
+#
+# `stage_render.py:219` is the pointed one: the per-frame geometry signature written into
+# the run manifest and read by Gate G6's `distinct_signatures` clause. Computed over every
+# handed object it includes render-hidden decoys, so a hidden proxy mesh moving between
+# frames changes the signature — and the gate that exists to prove the subject moved rules
+# on a number measured over objects that were never rendered.
+
+
+def _derived_bounds_family():
+    """Every public `blender_scene` reader that reaches `_points_to_measure`.
+
+    `{name: index of the `scene` parameter}` — the index matters because a scene may be
+    passed positionally, and it is the SECOND argument to two members and the FIFTH to
+    `projected_bbox_px`. Derived off the defining module, so a fourth door joins the ban the
+    day it lands rather than the day somebody remembers it.
+
+    `unfiltered_world_bounds` is not a member and cannot become one: it does not take a
+    scene, which is exactly how a site says out loud that it means the naive row.
+    """
+    src = _all_tool_sources()["armature_core/blender_scene.py"]
+    out = {}
+    for node in ast.parse(src).body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name.startswith("_"):
+            continue
+        reaches = any(isinstance(c, ast.Call) and getattr(c.func, "id", None)
+                      == "_points_to_measure" for c in ast.walk(node))
+        names = [a.arg for a in node.args.args]
+        if reaches and "scene" in names:
+            out[node.name] = names.index("scene")
+    return out
+
+
+BOUNDS_FAMILY_INDEX = _derived_bounds_family()
+
 #: The family: every public reader whose first argument is an object list and whose filter
 #: depends on being handed a scene. `unfiltered_world_bounds` is deliberately absent — it is
-#: the sanctioned way to ASK for the naive measurement.
-BOUNDS_FAMILY = ("world_bounds",)
+#: the sanctioned way to ASK for the naive measurement. DERIVED (see above), not typed.
+BOUNDS_FAMILY = tuple(sorted(BOUNDS_FAMILY_INDEX))
+
+#: Measured 2026-09-04, and asserted below so the derivation cannot silently shrink back to
+#: the one member it named for two waves.
+RECORDED_BOUNDS_FAMILY = ("evaluated_geometry_signature", "projected_bbox_px",
+                          "world_bounds")
 
 #: Named and dated 2026-09-04. `tools/superseded/` is not a pipeline path: CLAUDE.md keeps
 #: falsified approaches in the tree, runnable, as the record of why they were falsified, and
@@ -466,9 +524,15 @@ def _bounds_call_sites():
                 continue
             fn = node.func
             name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
-            if name not in BOUNDS_FAMILY:
+            if name not in BOUNDS_FAMILY_INDEX:
                 continue
-            has_scene = len(node.args) >= 2 or any(kw.arg == "scene" for kw in node.keywords)
+            # PER MEMBER (wave 12): the scene is the 2nd positional argument to
+            # `world_bounds` and `evaluated_geometry_signature` and the 5th to
+            # `projected_bbox_px`. `len(node.args) >= 2` — what this asked for every member
+            # — reads `projected_bbox_px(cam, objs, w, h)` as filtered.
+            index = BOUNDS_FAMILY_INDEX[name]
+            has_scene = (len(node.args) > index
+                         or any(kw.arg == "scene" for kw in node.keywords))
             if not has_scene:
                 out.setdefault(rel, []).append((node.lineno, ast.unparse(node)))
     return out
@@ -499,8 +563,19 @@ def test_the_exempt_paths_and_the_family_are_the_ones_this_ban_claims():
     tree = ast.parse(defining)
     defined = {n.name for n in ast.walk(tree)
                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    assert BOUNDS_FAMILY == RECORDED_BOUNDS_FAMILY, {
+        "derived": BOUNDS_FAMILY, "recorded": RECORDED_BOUNDS_FAMILY}
     for name in BOUNDS_FAMILY:
         assert name in defined, f"{name} is not defined by blender_scene.py any more"
+    # every member's body really does reach the private entry — the premise the ban rests on
+    for name in BOUNDS_FAMILY:
+        member = next(n for n in tree.body
+                      if isinstance(n, ast.FunctionDef) and n.name == name)
+        assert any(isinstance(c, ast.Call) and getattr(c.func, "id", None)
+                   == "_points_to_measure" for c in ast.walk(member)), name
+    assert "unfiltered_world_bounds" not in BOUNDS_FAMILY, (
+        "the sanctioned naive reader has grown a `scene` parameter; it is no longer the way "
+        "to ask for the naive row")
     assert "unfiltered_world_bounds" in defined, (
         "the sanctioned naive reader is gone; a site that means the naive measurement has "
         "no way left to say so")
@@ -512,10 +587,42 @@ def test_the_exempt_paths_and_the_family_are_the_ones_this_ban_claims():
         "`_points_to_measure` no longer reaches the private primitive; re-derive this ban")
 
 
+#: WAVE 12, F-82687368. The four live unfiltered measurements the ban could not see while
+#: `BOUNDS_FAMILY` named one of its three doors. Named, dated 2026-09-04, keyed by
+#: `path -> callee`, and routed:
+#:
+#:   check_relift.py:167          `evaluated_geometry_signature`  core-solvers F-efe65849 /
+#:   render_start_frame.py:669    `evaluated_geometry_signature`  instruments  F-33fb7947
+#:   stage_render.py:219          `evaluated_geometry_signature`  instruments-measure
+#:   stage_render.py:236          `projected_bbox_px`             instruments-measure
+#:
+#: SUBSET, so a site that starts passing `scene=` leaves this set without failing the file
+#: that named it, and a FIFTH unfiltered site fails loudly.
+BOUNDS_SITES_ROUTED = {
+    ("check_relift.py", "evaluated_geometry_signature"),
+    ("render_start_frame.py", "evaluated_geometry_signature"),
+    ("stage_render.py", "evaluated_geometry_signature"),
+    ("stage_render.py", "projected_bbox_px"),
+}
+
+
+def _routed_key(rel, source):
+    """`(basename, callee)` for a reported site — the identity the routing keys on.
+
+    Not the line number: a line number moves under any edit above it, which is how 23 of 31
+    entries in `test_gates`'s evidence ratchet came to name nothing (F-a30afea5).
+    """
+    callee = source.split("(", 1)[0].rsplit(".", 1)[-1]
+    return (os.path.basename(rel), callee)
+
+
 def test_no_tool_takes_a_bounds_measurement_with_the_scene_omitted():
     """The behavioural ban. `world_bounds(meshes)` IS the unfiltered primitive, one frame
     deeper — geometry that never renders defining a camera fit or a framing measurement."""
-    offenders = _bounds_call_sites()
+    offenders = {rel: [(ln, src) for ln, src in sites
+                       if _routed_key(rel, src) not in BOUNDS_SITES_ROUTED]
+                 for rel, sites in _bounds_call_sites().items()}
+    offenders = {rel: v for rel, v in offenders.items() if v}
     assert offenders == {}, (
         "these call the bounds family with no scene, so `_points_to_measure` takes the "
         "objects AS GIVEN: " + json.dumps(offenders, indent=2) + "\n  Pass `scene=` for the "
@@ -563,6 +670,67 @@ def test_the_behavioural_ban_goes_red_on_both_doors(tmp_path, monkeypatch):
     # and the exempt directory really is exempt rather than merely absent
     fake["superseded/old.py"] = files["door_one.py"]
     assert sorted(_bounds_call_sites()) == ["door_one.py"]
+
+
+def test_the_ban_goes_red_on_the_two_doors_the_family_name_could_not_see(monkeypatch):
+    """RED on the spellings that hide from the NAME (wave 12, rule 2; F-82687368).
+
+    Two synthetic modules, one per door the tuple `("world_bounds",)` never named, plus the
+    filtered forms of each — and `projected_bbox_px`'s scene is the FIFTH argument, so the
+    old `len(node.args) >= 2` test would have read the unfiltered call as filtered even had
+    the name been in the family.
+    """
+    files = {
+        "sig_door.py": ("from armature_core import blender_scene\n"
+                        "def run(meshes):\n"
+                        "    return blender_scene.evaluated_geometry_signature(meshes)\n"),
+        "bbox_door.py": ("from armature_core import blender_scene\n"
+                         "def run(cam, meshes, w, h):\n"
+                         "    return blender_scene.projected_bbox_px(cam, meshes, w, h)\n"),
+        "sig_filtered.py": ("from armature_core import blender_scene\n"
+                            "def run(scene, meshes):\n"
+                            "    return blender_scene.evaluated_geometry_signature(\n"
+                            "        meshes, scene=scene)\n"),
+        "bbox_filtered.py": ("from armature_core import blender_scene\n"
+                             "def run(scene, cam, meshes, w, h):\n"
+                             "    return blender_scene.projected_bbox_px(\n"
+                             "        cam, meshes, w, h, scene)\n"),
+    }
+    fake = {"armature_core/blender_scene.py":
+            _all_tool_sources()["armature_core/blender_scene.py"]}
+    fake.update(files)
+    monkeypatch.setitem(globals(), "_all_tool_sources", lambda: fake)
+
+    reported = _bounds_call_sites()
+    assert sorted(reported) == ["bbox_door.py", "sig_door.py"], reported
+
+    # …and the pre-wave-12 predicate is shown blind to both, or this compares nothing.
+    old_family = ("world_bounds",)
+    blind = []
+    for rel, src in fake.items():
+        if rel == "armature_core/blender_scene.py":
+            continue
+        for node in ast.walk(ast.parse(src)):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
+            if name not in old_family:
+                continue
+            if not (len(node.args) >= 2 or any(kw.arg == "scene" for kw in node.keywords)):
+                blind.append(rel)
+    assert blind == [], (
+        "the one-member family saw one of these doors; it cannot, and if it could this "
+        "comparison would be with itself")
+
+    # the positional-index half, stated on its own: the old arity test reads the
+    # four-positional-argument `projected_bbox_px` call as filtered.
+    call = next(n for n in ast.walk(ast.parse(files["bbox_door.py"]))
+                if isinstance(n, ast.Call)
+                and getattr(n.func, "attr", None) == "projected_bbox_px")
+    assert len(call.args) >= 2, "the old arity test would have passed this call"
+    assert len(call.args) <= BOUNDS_FAMILY_INDEX["projected_bbox_px"], (
+        "the per-member index must report this call as unfiltered")
 
 
 def test_the_widened_ban_goes_red_on_a_tool_that_does_not_import_a_glb(tmp_path):

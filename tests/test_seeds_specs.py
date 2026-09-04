@@ -207,50 +207,104 @@ def test_the_specs_correction_agrees_with_the_tree_it_describes():
         f"{both} now read BOTH a seeds list and a `ceiling` key; the eight specs' "
         f"correction says nothing counts against ceiling.submissions and it is stale")
 
-    # And every CITATION in the paragraph resolves: a report may not contain a placeholder
-    # shaped like evidence, and `<file>.py:<line>` is exactly that shape. Each cited line
-    # must exist and must be the line that reads the key.
+
+# -------------------------------- every spec's citations, not `SEED_SPECS[0]`'s (F-c92a6cfb)
+#
+# The clause below enforces the repo's law that "a report may not contain a placeholder
+# shaped like evidence", and `<file>.py:<line>` is exactly that shape. It used to read
+# `_load(SEED_SPECS[0])` inside a NON-parametrized test while its four siblings in this file
+# parametrize over the whole derived population — so it examined ONE spec, and `[0]` is
+# `E08-seeds.json` by alphabetical accident, which is the one spec re-anchored at the
+# wave-10 merge.
+#
+# Measured 2026-09-04 by running the clause's own three checks over all eight specs: E08 has
+# 0 stale of 7 cited; each of E09-A3, E09, E10, E11, E12, E13 and E14 has 4 stale of 7 — 28
+# stale citations in committed spend-ceiling specs that the census never opened. Three
+# examples, identical across the seven: `build_animate_payload.py:475` is cited as a `seeds`
+# reader and reads `uploads = json.load(fh)`; `build_camera_i2v_payload.py:1004` reads an
+# f-string about a noise sampler; `build_i2v_payload.py:496` reads
+# `if "clip_vision_output" in inp:`.
+#
+# Correcting the 28 is BUILDERS' (F-5e7fe9dc). This file's half is opening every spec, so
+# the ceiling below can only fall.
+
+
+def _citations(path):
     import re
 
-    why = _load(SEED_SPECS[0])["ceiling"]["why_machine_readable"]
-    cited = re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)\b", why)
-    assert len(cited) == 7, cited
-    for name, lineno in cited:
-        path = os.path.join(TOOLS, name)
-        assert os.path.isfile(path), f"{name} is cited and does not exist"
-        lines = open(path, encoding="utf-8").read().splitlines()
-        assert 1 <= int(lineno) <= len(lines), f"{name}:{lineno} is past the end of the file"
-        assert "seeds" in lines[int(lineno) - 1], (
-            f"{name}:{lineno} is cited as a `seeds` reader and reads "
-            f"{lines[int(lineno) - 1].strip()!r}")
+    why = _load(path)["ceiling"]["why_machine_readable"]
+    return re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)\b", why)
 
 
-# ============================================================ wave 12, F-5e7fe9dc
-# Seven of the eight `specs/*seeds.json` carried the wave-8 correction paragraph with four of
-# its seven `<file>.py:<line>` citations pointing at unrelated code. Measured in this worktree
-# on 2026-09-04 by resolving every citation: **28 stale anchors, four per file** —
-# `build_animate_payload.py:475` read `uploads = json.load(fh)`,
-# `build_camera_i2v_payload.py:1004` read an f-string inside a topology error message,
-# `build_i2v_payload.py:496` read `if "clip_vision_output" in inp:`,
-# `build_r2v_payload.py:207` read `registration = json.load(fh)`. `specs/E08-seeds.json` alone
-# was clean, having been re-anchored at the wave-10 merge while the other seven were not.
-# CLAUDE.md forbids a report carrying a placeholder shaped like evidence, and
-# `<file>.py:<line>` beside a verdict is exactly that shape: a session re-deriving the census
-# from the specs' own citations opens the cited line, finds unrelated code, and concludes the
-# reader was deleted — or copies the stale block forward into a ninth spec, which is how seven
-# identical copies came to exist.
-#
-# **Why the existing census did not see it.** `test_only_seeds_is_read_by_a_tool` above reads
-# `SEED_SPECS[0]` — the one file that is clean — and never the seven that are not. This is the
-# same census, keyed on the same node, over the DERIVED population instead of its first
-# member; it is proven red on the hidden spelling by parametrising, which is the shape that
-# hid from the original.
-#
-# **And the citations now carry the enclosing function**, so a code move that shifts the line
-# leaves something recoverable in the record rather than only a number that is wrong.
-#
-# family: keyed on the CITATION (`<file>.py:<line>` inside `ceiling.why_machine_readable`) via
-# `glob("specs/*seeds.json")` -> 8 files x 7 citations = 56 anchors, all resolved on every run.
+def stale_citations(path):
+    """`[(file, line, what that line actually says)]` for one spec's citation paragraph."""
+    out = []
+    for name, lineno in _citations(path):
+        target = os.path.join(TOOLS, name)
+        if not os.path.isfile(target):
+            out.append((name, lineno, "the file does not exist"))
+            continue
+        lines = open(target, encoding="utf-8").read().splitlines()
+        if not 1 <= int(lineno) <= len(lines):
+            out.append((name, lineno, "past the end of the file"))
+            continue
+        if "seeds" not in lines[int(lineno) - 1]:
+            out.append((name, lineno, lines[int(lineno) - 1].strip()))
+    return out
+
+
+#: Measured 2026-09-04 per spec. A CEILING, not equality: builders is re-anchoring the 28
+#: stale citations this wave (F-5e7fe9dc), so a spec that gets corrected leaves this file
+#: green and its entry merely becomes deletable. A citation that GOES stale fails here.
+STALE_CITATIONS_TODAY = {
+    "E08-seeds.json": 0,
+    "E09-A3-seeds.json": 4,
+    "E09-seeds.json": 4,
+    "E10-seeds.json": 4,
+    "E11-seeds.json": 4,
+    "E12-seeds.json": 4,
+    "E13-seeds.json": 4,
+    "E14-seeds.json": 4,
+}
+
+
+@pytest.mark.parametrize("path", SEED_SPECS, ids=os.path.basename)
+def test_every_specs_citations_resolve_to_the_lines_they_claim(path):
+    """The clause its four siblings already have: run over EVERY spec.
+
+    A reader re-deriving the ceiling before a spend reads a cited line that says something
+    else and concludes the clause moved, while the test written to make exactly that
+    impossible passes over one file in eight.
+    """
+    name = os.path.basename(path)
+    assert len(_citations(path)) == 7, (name, _citations(path))
+    assert name in STALE_CITATIONS_TODAY, (
+        f"{name} is a committed seeds spec with no measured citation count; measure it and "
+        f"record it rather than letting it join a census that never opened it")
+    stale = stale_citations(path)
+    assert len(stale) <= STALE_CITATIONS_TODAY[name], {
+        "spec": name,
+        "stale now": stale,
+        "stale on 2026-09-04": STALE_CITATIONS_TODAY[name],
+    }
+
+
+def test_the_citation_census_opens_every_spec_and_not_the_first_one():
+    """The measurement that justifies the widening, kept runnable.
+
+    `SEED_SPECS[0]` is `E08-seeds.json`, and it is the ONLY spec with no stale citation. A
+    clause indexed at [0] therefore reported a clean tree over 28 stale `<file>.py:<line>`
+    citations in seven committed spend-ceiling specs.
+    """
+    assert os.path.basename(SEED_SPECS[0]) == "E08-seeds.json", SEED_SPECS[0]
+    assert stale_citations(SEED_SPECS[0]) == [], (
+        "E08 has stale citations too, so the [0] index was not merely lucky; re-derive this")
+    others = {os.path.basename(p): len(stale_citations(p)) for p in SEED_SPECS[1:]}
+    assert sum(others.values()) <= 28, others
+    assert set(others) == set(STALE_CITATIONS_TODAY) - {"E08-seeds.json"}, sorted(others)
+
+
+# WAVE-12 MERGE (coordinator, 2026-09-04): builders' appended census (F-5e7fe9dc) carried beside tests' widening.
 
 
 @pytest.mark.parametrize("spec", SEED_SPECS, ids=lambda p: os.path.basename(p))

@@ -68,11 +68,33 @@ So the contract is split, and the split is asserted rather than described:
              `test_the_halt_record_writers_are_the_ones_the_contract_names`. The halt-FILE
              half itself is asserted in `tests/test_instruments_amend_w8.py:214-267`.
 
-The population is derived (`blender_stub.blender_tools`, which walks the tree for
-`import bpy`), never typed out, so a new Blender tool joins it the day it lands.
+WAVE 12, F-6b3040d1 — the population is keyed on BEHAVIOUR, not on the token `import bpy`.
+
+`blender_stub.blender_tools()` derived its population from an `ast.Import` naming `bpy`.
+`tools/stage_render.py` writes none: it reaches Blender through a lazily-instantiated
+backend ("Imports bpy only when instantiated", stage_render.py:106) and a grep for
+`import bpy` in it returns zero hits — so the walk returned 21 names, `stage_render` was
+not among them, `test_amend_w10_builders.CPU_TOOLS` did not carry it either, and NO TEST IN
+THIS REPO asserted its exit code or its halt sentinel. What sat outside: its documented
+invocation is `blender -b -P tools/stage_render.py -- <args>` (README.md:181), its
+`__main__` is a bare `sys.exit(main())`, and `main` catches `GateFailure` only — so a
+`SpecError` (an `ArmatureError`, not a `GateFailure`) leaves `main` with a traceback, no
+`STAGE_RENDER_HALT` line and no `sys.exit(2)`, which under `blender -b -P` is exit 0. That
+is on the tool that writes the run directory, the per-frame manifest and the control frames
+every downstream payload builder consumes.
+
+`blender_tools()` now keys on the behaviour and returns 22. The handler itself is
+instruments-measure's to write (F-f9251c74); until it lands, `stage_render` is counted in
+its OWN category — `HALT_CONTRACT_PENDING` below, keyed on the objective property "prints
+no `<STEM>_HALT` line anywhere", so the category empties itself the moment the handler
+arrives rather than needing to be remembered.
+
+The population is derived (`blender_stub.blender_tools`), never typed out, so a new Blender
+tool joins it the day it lands.
 """
 
 import json
+import os
 
 import pytest
 
@@ -95,14 +117,48 @@ WITH_MAIN = [f for f in blender_tools() if main_block(f) is not None]
 
 #: Derived by `blender_tools()` on 2026-09-04. Equality, so a new Blender tool cannot join
 #: the tree without joining this census in the same commit.
+#: WAVE 12 (F-6b3040d1): `stage_render.py` JOINED when the population stopped keying on the
+#: literal token `import bpy`. It is not new code; it was invisible.
 RECORDED_BLENDER_TOOLS = [
     "author_walk.py", "check_relift.py", "diagnose_bone_heat.py", "lift_solve.py",
     "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
     "make_skeleton_sheet.py", "make_test_armature.py", "preview_glb.py",
     "preview_walk.py", "probe_glb.py", "probe_subject.py", "render_performer.py",
     "render_start_frame.py", "render_turnaround.py", "rig_bake.py", "rig_character.py",
-    "rig_parts.py", "rig_repair.py", "rig_retopo.py",
+    "rig_parts.py", "rig_repair.py", "rig_retopo.py", "stage_render.py",
 ]
+
+
+def halt_contract_pending(filename):
+    """A reason string if this member prints no `<STEM>_HALT` line at all, else None.
+
+    THE CATEGORY, not a skip flag (wave 12, rule 3: a walk that cannot judge a site reports
+    it in its own category rather than `continue`ing past it). A member that carries no
+    sentinel token anywhere in its source cannot be measured against a contract whose every
+    clause reads that line; asserting the clauses one at a time would produce fourteen
+    identical failures saying the same single thing.
+
+    Keyed on the OBJECTIVE property — the `<STEM>_HALT` literal — so the category empties
+    itself the moment the handler lands, and `test_the_pending_category_may_not_grow` fails
+    if anything else falls into it.
+    """
+    stem = os.path.basename(filename)[:-3].upper()
+    if f"{stem}_HALT" in read_source(filename):
+        return None
+    return (
+        f"{filename} joined this census in wave 12 (F-6b3040d1) when the population stopped "
+        f"keying on the literal token `import bpy` and started keying on the behaviour "
+        f"'runs under Blender'. It prints no `{stem}_HALT` line anywhere: its `__main__` is "
+        f"a bare `sys.exit(main())` and `main` catches `GateFailure` only, so a plain "
+        f"`ArmatureError` escapes and `blender -b -P` exits 0. The handler is "
+        f"instruments-measure's to write (F-f9251c74, wave 12); this file's half is the "
+        f"population that makes it visible.")
+
+
+#: Named and dated 2026-09-04. Members of the population that cannot yet be held to the
+#: sentinel half of the contract, each for the reason `halt_contract_pending` computes. The
+#: set may not GROW; it empties on its own.
+HALT_CONTRACT_PENDING = {"stage_render.py"}
 
 GATE_OUTCOME = "HALTED \u2014 a gate fired"
 REFUSAL_OUTCOME = "REFUSED \u2014 the tool declined to proceed"
@@ -226,7 +282,8 @@ def test_the_halt_record_writers_are_the_ones_the_contract_names():
     so a sixth writer — or one of the five losing its `finally` — fails here rather than
     leaving the docstring describing a tree that no longer looks like it.
     """
-    shapes = {f: _block_shape(f) for f in WITH_MAIN}
+    held = [f for f in WITH_MAIN if not halt_contract_pending(f)]
+    shapes = {f: _block_shape(f) for f in held}
     # WAVE-10 MERGE (coordinator, 2026-09-04): the `finally` stopped discriminating the moment instruments closed the
     # key-serialisation escape (F-13bd448d) — every one of the 21 handlers now delivers its
     # sentinel line and `sys.exit` from a `finally`, so THE NODE for "writes a halt record" is
@@ -238,10 +295,10 @@ def test_the_halt_record_writers_are_the_ones_the_contract_names():
         "vanished": sorted(set(RECORDED_HALT_RECORD_WRITERS) - set(writes)),
     }
     with_finally = sorted(f for f, (fin, _) in shapes.items() if fin)
-    assert with_finally == sorted(WITH_MAIN), {
+    assert with_finally == sorted(held), {
         "delivers its sentinel and exit outside a `finally`":
-            sorted(set(WITH_MAIN) - set(with_finally))}
-    assert len(WITH_MAIN) - len(writes) == 16, (
+            sorted(set(held) - set(with_finally))}
+    assert len(held) - len(writes) == 16, (
         "16 tools print their sentinel and exit from the `finally` and write no halt record; "
         "the five that write one are the rig tools the contract names")
 
@@ -270,10 +327,76 @@ def test_the_block_shape_walk_can_tell_the_two_shapes_apart():
         assert got is expected
 
 
+def test_the_population_sees_the_two_spellings_the_import_token_cannot(tmp_path,
+                                                                       monkeypatch):
+    """RED on the shapes that hide from the name (wave 12, rule 2).
+
+    Three synthetic modules: one whose `import bpy` lives inside a function (a lazy import
+    — `stage_render`'s backend does exactly this one module away), one that never writes
+    the token at all and only DOCUMENTS `blender -b -P`, and one that is plainly CPython.
+    The token-keyed walk this population used to be — a module-level `ast.Import` naming
+    `bpy` — is run beside it and must be blind to the first two, or the comparison this
+    test makes says nothing.
+    """
+    import ast as _ast
+
+    import blender_stub
+
+    lazy = ("def render(scene):\n"
+            "    import bpy\n"
+            "    return bpy.context\n")
+    documented = ('"""Run me as `blender -b -P tools/probe_documented.py -- --out x`."""\n'
+                  "from armature_core import blender_scene\n"
+                  "def main():\n"
+                  "    return blender_scene.backend()\n")
+    plain = ("import json\n"
+             "def main():\n"
+             "    return json.dumps({})\n")
+    for name, src in (("probe_lazy.py", lazy), ("probe_documented.py", documented),
+                      ("probe_plain.py", plain)):
+        (tmp_path / name).write_text(src, encoding="utf-8")
+    monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
+
+    def token_keyed(fn):
+        """The pre-wave-12 walk, verbatim: a MODULE-LEVEL `import bpy`."""
+        tree = _ast.parse(blender_stub.read_source(fn))
+        return any(isinstance(n, _ast.Import) and any(a.name == "bpy" for a in n.names)
+                   for n in tree.body)
+
+    assert blender_stub.blender_tools() == ["probe_documented.py", "probe_lazy.py"], (
+        blender_stub.blender_tools())
+    assert blender_stub.blender_reach("probe_lazy.py") == {"import bpy"}
+    assert blender_stub.blender_reach("probe_documented.py") == {
+        "documented `blender -b -P`", "armature_core.blender_scene backend"}
+    assert blender_stub.blender_reach("probe_plain.py") == set()
+    assert not token_keyed("probe_lazy.py"), (
+        "the token-keyed walk saw the lazy import; it cannot, and if it could this test "
+        "would be comparing a walk with itself")
+    assert not token_keyed("probe_documented.py")
+
+
+def test_the_pending_category_is_named_dated_and_may_not_grow():
+    """Rule 3: what the census cannot judge is COUNTED, in its own category.
+
+    The category is derived from the objective property, not from the list: a member that
+    stops printing its sentinel falls in here and fails, and a member that starts printing
+    one falls out and the list entry becomes deletable.
+    """
+    derived = sorted(f for f in WITH_MAIN if halt_contract_pending(f))
+    assert set(derived) <= HALT_CONTRACT_PENDING, {
+        "prints no `<STEM>_HALT` line and is not named as pending":
+            sorted(set(derived) - HALT_CONTRACT_PENDING)}
+    assert HALT_CONTRACT_PENDING <= set(blender_tools()), sorted(
+        HALT_CONTRACT_PENDING - set(blender_tools()))
+    # the reason is a real, readable one — not an empty string standing in for evidence
+    for name in sorted(derived):
+        assert "F-f9251c74" in halt_contract_pending(name), name
+
+
 def test_the_population_is_the_whole_blender_side_of_the_repo():
     """A census that quietly stopped enumerating would report green over anything."""
     tools = blender_tools()
-    assert len(tools) == 21, tools
+    assert len(tools) == 22, tools
     assert tools == RECORDED_BLENDER_TOOLS, {
         "appeared": sorted(set(tools) - set(RECORDED_BLENDER_TOOLS)),
         "vanished": sorted(set(RECORDED_BLENDER_TOOLS) - set(tools)),
@@ -292,6 +415,9 @@ def test_the_exit_code_is_the_one_the_outcome_earns(filename, kind, tmp_path):
     `code not in (0, None)` — what this asserted until wave 8 — is satisfied by every
     tool collapsing every outcome to 1, which is the state six of twenty were in.
     """
+    pending = halt_contract_pending(filename)
+    if pending:
+        pytest.skip(pending)
     want_code = CONTRACT[kind][0]
     code, escaped = _run(filename, kind, tmp_path)
     assert escaped is None, f"{filename}: {escaped!r} escaped the handler; blender exits 0"
@@ -303,6 +429,9 @@ def test_a_refusal_and_a_crash_do_not_answer_with_the_same_code(filename, tmp_pa
     """The divergence itself, stated separately from the two absolute codes: a regression
     that collapses every outcome to one number is invisible to a test that only asks for
     non-zero, and the whole point of the 2 is that it is NOT the 1."""
+    pending = halt_contract_pending(filename)
+    if pending:
+        pytest.skip(pending)
     refusal, _ = _run(filename, "refusal", tmp_path)
     crash, _ = _run(filename, "crash", tmp_path)
     assert refusal != crash, (
@@ -317,6 +446,9 @@ def test_the_halt_sentinel_says_which_of_the_three_things_happened(filename, kin
     """The receipt, not just the code. A halt whose sentinel omits `gate` cannot be read
     back to the andon that produced it, which is the state the evidence-id census in
     `test_gates.py` exists to end — and stdout is where an operator reads it."""
+    pending = halt_contract_pending(filename)
+    if pending:
+        pytest.skip(pending)
     code, escaped = _run(filename, kind, tmp_path)
     out = capsys.readouterr().out
     assert escaped is None, f"{filename}: {escaped!r} escaped the handler; blender exits 0"
@@ -330,6 +462,9 @@ def test_an_unparseable_argv_still_exits_non_zero(filename, tmp_path):
     """F-f5530688's exact shape. `main` fails on a bad flag; the handler then re-parses the
     SAME argv to find out where to write `halt.json`, and fails again. Whatever the handler
     does about that, it may not let the second failure delete the exit code."""
+    pending = halt_contract_pending(filename)
+    if pending:
+        pytest.skip(pending)
     code, escaped = _run(filename, "refusal", tmp_path,
                          argv=["blender", "-b", "-P", filename, "--", "--not-a-flag=1"])
     assert escaped is None, (
@@ -342,6 +477,9 @@ def test_an_unparseable_argv_still_exits_non_zero(filename, tmp_path):
 def test_a_missing_glb_does_not_delete_the_exit_code(filename, tmp_path):
     """The other half of F-f5530688: `sha256_file(_args['glb'])` inside the `except` block
     raises `FileNotFoundError` on a mistyped path."""
+    pending = halt_contract_pending(filename)
+    if pending:
+        pytest.skip(pending)
     code, escaped = _run(filename, "crash", tmp_path,
                          argv=["blender", "-b", "-P", filename, "--",
                                "--glb=E:/no/such/file/at/all.glb",
@@ -382,6 +520,37 @@ def _numpy_key():
     return numpy.int64(3)
 
 
+class _KeyWhoseStrRaises:
+    """A key the KEYSAFE WALK ITSELF cannot survive.
+
+    WAVE 12, F-e47781f3. The three shapes above are all shapes `_halt_keysafe` HANDLES —
+    the census drives the fix's own happy path. The class the fix's structure does not cover
+    is an exception raised INSIDE the walk: in all 21 handlers the call `_halt_keysafe(
+    _detail)` builds `_sentinel` OUTSIDE the `try:` that guards `json.dumps`, so anything
+    the keysafe walk raises escapes before the fallback line and before the `finally`
+    carrying `print` + `sys.exit`.
+
+    Measured 2026-09-04 with `blender_stub.exit_code_of_main_block` over all 21 WITH_MAIN
+    tools: this shape returned `(code=None, escaped=ReferenceError)` for 21 of 21 — no
+    sentinel line, `sys.exit` never reached, which under `blender -b -P` is exit 0 on a
+    fired andon. A deeply nested (non-circular) dict returned `(None, RecursionError)` for
+    21 of 21 by the same door.
+
+    The shape this proves is STRUCTURAL, not about `__str__`: the keysafe call must move
+    INSIDE the guarded `try`. `_keysafe_is_guarded` below reads exactly that off the AST,
+    and the behavioural direction runs against each tool as soon as it holds.
+    """
+
+    def __str__(self):
+        raise ReferenceError("this key cannot be stringified")
+
+    def __repr__(self):
+        raise ReferenceError("this key cannot be reprised either")
+
+    def __hash__(self):
+        return 7
+
+
 def _evidence_shapes():
     """`(label, build)` per evidence dict — each a shape this repo's andons produce."""
     def per_view():
@@ -395,11 +564,57 @@ def _evidence_shapes():
         ev["self"] = ev
         return ev
 
+    def key_str_raises():
+        return {"per_view": {_KeyWhoseStrRaises(): 1.0}, "gate": "PROBE"}
+
     return [("tuple_key", per_view), ("numpy_int_key", per_frame),
-            ("circular", circular)]
+            ("circular", circular), ("key_str_raises", key_str_raises)]
 
 
 EVIDENCE_SHAPES = _evidence_shapes()
+
+
+def _keysafe_is_guarded(filename):
+    """True when the handler builds its sentinel INSIDE the try that guards `json.dumps`.
+
+    THE NODE: the inner `ast.Try` whose `finalbody` prints the `<STEM>_HALT` line. If the
+    `_halt_keysafe(...)` call sits in that try's BODY, an exception raised while building
+    the line falls to the fallback and the `finally` still delivers a sentinel and an exit
+    code. If it sits above the try — where all 21 handlers put it on 2026-09-04 — the walk's
+    own failure escapes the whole handler.
+    """
+    import ast
+
+    src = read_source(filename)
+    stem = os.path.basename(filename)[:-3].upper()
+    tree = ast.parse(src)
+    block = next((n for n in tree.body
+                  if isinstance(n, ast.If) and isinstance(n.test, ast.Compare)
+                  and getattr(n.test.left, "id", None) == "__name__"), None)
+    if block is None:
+        return False
+    for node in ast.walk(block):
+        if not (isinstance(node, ast.Try) and node.finalbody):
+            continue
+        delivers = any(
+            isinstance(c, ast.Constant) and isinstance(c.value, str)
+            and c.value.strip().startswith(f"{stem}_HALT")
+            for c in ast.walk(ast.Module(body=node.finalbody, type_ignores=[])))
+        if not delivers:
+            continue
+        guarded = ast.Module(body=node.body, type_ignores=[])
+        if any(isinstance(c, ast.Call) and getattr(c.func, "id", None) == "_halt_keysafe"
+               for c in ast.walk(guarded)):
+            return True
+    return False
+
+
+#: The shapes whose behavioural direction is gated on a structural property the tool must
+#: carry first. Named, dated 2026-09-04, keyed on the property rather than on a list of
+#: tools, so it self-closes: `key_str_raises` runs against a tool the moment
+#: `_keysafe_is_guarded` is true of it. The move is instruments'/instruments-measure's
+#: (wave 12: "`_halt_keysafe` construction inside the guarded region").
+SHAPES_NEEDING_A_GUARDED_CONSTRUCTION = {"key_str_raises"}
 
 #: The two shapes whose sentinel must still be WELL FORMED after the fix: a key that can be
 #: stringified. `circular` is held to the exit-code half only — a cycle cannot be
@@ -426,6 +641,18 @@ def test_a_measurement_keyed_evidence_dict_does_not_escape_the_handler(
         filename, label, build, tmp_path, capsys):
     """The direction the halt census never asserted: an evidence dict the sentinel cannot
     serialise as written. `escaped is None` and the contract's code, for every tool."""
+    pending = halt_contract_pending(filename)
+    if pending:
+        pytest.skip(pending)
+    if label in SHAPES_NEEDING_A_GUARDED_CONSTRUCTION and not _keysafe_is_guarded(filename):
+        pytest.skip(
+            f"{filename} builds its sentinel — `_halt_keysafe(_detail)` — ABOVE the `try` "
+            f"that guards `json.dumps`, so an exception raised inside the keysafe walk "
+            f"escapes before the fallback line and before the `finally` that carries the "
+            f"print and `sys.exit`. Measured 2026-09-04: (code=None, "
+            f"escaped=ReferenceError) for 21 of 21. Moving the construction inside the "
+            f"guarded region is instruments'/instruments-measure's half (wave 12, "
+            f"F-e47781f3); this direction runs against this tool the moment it lands.")
     code, escaped = exit_code_of_main_block(
         filename, raiser=_evidence_raiser(build),
         argv=["blender", "-b", "-P", filename, "--", "--glb=nope.glb",
@@ -463,6 +690,119 @@ def test_the_evidence_shapes_this_census_drives_are_the_ones_json_dumps_refuses(
         flat = {k: {str(kk): vv for kk, vv in v.items()} if isinstance(v, dict) else v
                 for k, v in ev.items()}
         json.dumps(flat, default=str)
+
+
+def test_the_guarded_construction_walk_tells_the_two_handler_shapes_apart(tmp_path,
+                                                                          monkeypatch):
+    """The red direction for `_keysafe_is_guarded`, on both spellings of the handler.
+
+    A check that cannot fail is not a check: the walk is driven against a handler that
+    builds its sentinel ABOVE the guarded `try` (the shape all 21 carry on 2026-09-04) and
+    against one that builds it INSIDE, and must answer differently.
+    """
+    import blender_stub
+
+    unguarded = (
+        "import json, sys\n"
+        "def _halt_keysafe(d):\n"
+        "    return {str(k): v for k, v in d.items()}\n"
+        "def main():\n"
+        "    return 0\n"
+        'if __name__ == "__main__":\n'
+        "    try:\n"
+        "        raise SystemExit(main())\n"
+        "    except SystemExit:\n"
+        "        raise\n"
+        "    except BaseException as exc:\n"
+        "        _code = 1\n"
+        "        _sentinel = {'evidence': _halt_keysafe(getattr(exc, 'evidence', {}))}\n"
+        "        try:\n"
+        "            _line = json.dumps(_sentinel, default=str)\n"
+        "        except BaseException:\n"
+        "            _line = '{}'\n"
+        "        finally:\n"
+        "            print('PROBE_UNGUARDED_HALT ' + _line)\n"
+        "            sys.exit(_code)\n")
+    guarded = unguarded.replace(
+        "        _sentinel = {'evidence': _halt_keysafe(getattr(exc, 'evidence', {}))}\n"
+        "        try:\n"
+        "            _line = json.dumps(_sentinel, default=str)\n",
+        "        try:\n"
+        "            _sentinel = {'evidence': _halt_keysafe(getattr(exc, 'evidence', {}))}\n"
+        "            _line = json.dumps(_sentinel, default=str)\n"
+    ).replace("PROBE_UNGUARDED_HALT", "PROBE_GUARDED_HALT")
+
+    (tmp_path / "probe_unguarded.py").write_text(unguarded, encoding="utf-8")
+    (tmp_path / "probe_guarded.py").write_text(guarded, encoding="utf-8")
+    monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
+
+    assert _keysafe_is_guarded("probe_unguarded.py") is False, (
+        "a sentinel built above the guarded `try` must not read as guarded; the walk "
+        "cannot distinguish the shape it exists to find")
+    assert _keysafe_is_guarded("probe_guarded.py") is True
+
+
+def test_a_key_whose_str_raises_escapes_an_unguarded_handler_and_not_a_guarded_one(
+        tmp_path, monkeypatch):
+    """The BEHAVIOUR behind the structural claim, driven end to end on both shapes.
+
+    This is the shape F-e47781f3 measured escaping 21 of 21 handlers. Proving it here — on
+    synthetic modules this file owns — means the census's fourth direction is shown red
+    without waiting on the sibling domain that moves the construction in the 21.
+    """
+    import blender_stub
+
+    def handler(token, guarded):
+        build = ("        _sentinel = {'evidence': _halt_keysafe(_detail)}\n"
+                 "        try:\n"
+                 "            _line = json.dumps(_sentinel, default=str)\n")
+        if guarded:
+            build = ("        try:\n"
+                     "            _sentinel = {'evidence': _halt_keysafe(_detail)}\n"
+                     "            _line = json.dumps(_sentinel, default=str)\n")
+        # RECURSIVE, like the 21 real ones: the raising key is nested under `per_view`,
+        # which is where this repo's andons put a per-measurement key.
+        return (
+            "import json, sys\n"
+            "def _halt_keysafe(d):\n"
+            "    if isinstance(d, dict):\n"
+            "        return {str(k): _halt_keysafe(v) for k, v in d.items()}\n"
+            "    return d\n"
+            "def main():\n"
+            "    return 0\n"
+            'if __name__ == "__main__":\n'
+            "    try:\n"
+            "        raise SystemExit(main())\n"
+            "    except SystemExit:\n"
+            "        raise\n"
+            "    except BaseException as exc:\n"
+            "        _code = 2\n"
+            "        _detail = getattr(exc, 'evidence', None) or {}\n"
+            + build +
+            "        except BaseException:\n"
+            "            _line = json.dumps({'evidence': None})\n"
+            "        finally:\n"
+            f"            print('{token} ' + _line)\n"
+            "            sys.exit(_code)\n")
+
+    (tmp_path / "probe_open.py").write_text(handler("PROBE_OPEN_HALT", False),
+                                            encoding="utf-8")
+    (tmp_path / "probe_shut.py").write_text(handler("PROBE_SHUT_HALT", True),
+                                            encoding="utf-8")
+    monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
+
+    raiser = _evidence_raiser(dict(EVIDENCE_SHAPES)["key_str_raises"])
+    argv = ["blender", "-b", "-P", "probe.py"]
+
+    code, escaped = exit_code_of_main_block("probe_open.py", raiser=raiser, argv=argv)
+    assert isinstance(escaped, ReferenceError), (code, escaped)
+    assert code is None, (
+        "the unguarded handler must lose its exit code; if it does not, this fixture is "
+        "not reproducing the shape the census exists to catch")
+
+    code, escaped = exit_code_of_main_block("probe_shut.py", raiser=raiser, argv=argv)
+    assert escaped is None, escaped
+    assert code == 2, code
 
 
 # ------------------------------------------------------------- the checker, shown red

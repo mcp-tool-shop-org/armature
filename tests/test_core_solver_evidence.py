@@ -266,7 +266,8 @@ def test_every_gate_raise_carries_both_its_id_and_its_andon():
     root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         "tools", "armature_core")
     for key in ("gate", "andon"):
-        offenders, examined, unreadable = evidence_dicts_missing(key, root=root)
+        offenders, examined, unreadable, _no_evidence = evidence_dicts_missing(
+            key, root=root)
         assert examined > 0, "the walk examined no raise; a census over nothing is not a clean tree"
         assert unreadable == [], (
             f"the judge cannot decide these raises' {key!r} key, so they are policed by "
@@ -293,7 +294,8 @@ def test_the_population_pin_and_the_one_evidence_judge_count_the_same_sites():
     # walks agree on the population they SHARE, so the judge is narrowed to the andon classes
     # here; the family-wide count stays the judge's own business.
     andons = {c.split(".", 1)[1] for c in package_andons()}
-    _, examined, unreadable = evidence_dicts_missing("gate", root=CORE, classes=andons)
+    _, examined, unreadable, _no_ev = evidence_dicts_missing(
+        "gate", root=CORE, classes=andons)
     with_gates = {m: len(_gate_raises(m)) for m in _module_names() if _gate_raises(m)}
     assert unreadable == [], unreadable
     assert examined == sum(with_gates.values()), {

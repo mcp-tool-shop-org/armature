@@ -424,6 +424,93 @@ def test_the_halt_is_armed_by_the_legs_that_were_selected(tmp_path):
         assert name in got.stdout, f"the halt did not name {name}:\n{got.stdout}"
 
 
+# -------------- the halt names every tool the SELECTED legs shell out to (F-7d109c56) -----
+#
+# The clause above is narrow on purpose and it is NOT the census. `"node" in got.stdout` is
+# satisfied by the clause that is still there and cannot see the one that went missing — and
+# the one that went missing is npm, not node. Measured 2026-09-04 by copying the real
+# `verify.ps1` into a scratch root and running it under pwsh with this file's own
+# `STRIPPED_PATH`: `verify.ps1 -NoSite` exits 2 and prints `ANDON: not on PATH: node`, while
+# leg 3 — the leg `-NoSite` KEEPS — runs `npm pack --silent` (verify.ps1:275) and
+# `npm install --prefix $npmroom $tarball` (:288) as the npm clean room it mirrors from
+# ci.yml. On a box with node and no npm, `verify.ps1 -NoSite` passes the pre-flight and then
+# discovers npm mid-leg: exactly the failure the block's own comment says it exists to
+# prevent ("halt up front rather than discovering it mid-run", :145-147), with the leg's
+# recorded outcome depending on how PowerShell reports the missing command rather than on an
+# andon — the same family as the recorded headline defect at verify.ps1:79-81.
+#
+# The `$needed` line itself is ci-packaging's (F-329a630d). This block is APPENDED and the
+# clause above is left byte-for-byte as it was, so both land without touching the same lines
+# (their SEAM 2, 2026-09-04).
+
+#: The native commands the pre-flight can require, and nothing else. Two, because the halt
+#: block's own text names two ("The launcher self-test and the site build shell out to
+#: these"); a third would need its own row here and in `$needed`.
+PREFLIGHT_COMMANDS = ("node", "npm")
+
+
+def legs_and_their_commands():
+    """`{skip flag: {commands that leg shells out to}}` — read off verify.ps1, not typed.
+
+    THE NODE: the COMMANDS a leg invokes, sliced out of the leg's own body, against the flag
+    that skips that leg. The slice is each `if ($NoX) { ... } else { Invoke-Leg ... }` block,
+    from the guard to the next top-level `if ($No`, with comment lines dropped — the steps
+    explain each other, so both commands appear in the prose above them and an inventory read
+    off a comment would be an inventory read off an explanation.
+    """
+    guards = [(m.start(), m.group(1))
+              for m in re.finditer(r"^if \(\$(No[A-Za-z]+)\) \{", VERIFY, re.M)]
+    out = {}
+    for i, (start, flag) in enumerate(guards):
+        end = guards[i + 1][0] if i + 1 < len(guards) else len(VERIFY)
+        body = chr(10).join(line for line in VERIFY[start:end].splitlines()
+                            if not line.lstrip().startswith("#"))
+        found = {c for c in PREFLIGHT_COMMANDS
+                 if re.search(r"^\s*" + c + r"\s", body, re.M)}
+        if found:
+            out["-" + flag] = found
+    return out
+
+
+def test_the_leg_command_inventory_is_the_one_measured_on_this_script():
+    """Size and membership before the property: the derivation is shown to have found the
+    two legs that shell out, and what each shells out to."""
+    inventory = legs_and_their_commands()
+    assert inventory == {
+        "-NoPackage": {"node", "npm"},
+        "-NoSite": {"npm"},
+    }, inventory
+
+
+#: Measured 2026-09-04: `verify.ps1 -NoSite` prints `ANDON: not on PATH: node` and does not
+#: name npm, while the leg it keeps runs `npm pack` and `npm install`. The `$needed` line
+#: (verify.ps1:148-150) is ci-packaging's to correct this wave; a SUBSET assertion, so the
+#: entry becomes deletable rather than red the moment it lands.
+PREFLIGHT_GAP_TODAY = {"-NoSite": {"npm"}}
+
+
+@needs_pwsh
+@needs_stripped_path
+@pytest.mark.parametrize("skipped", ["-NoSite", "-NoPackage"])
+def test_the_halt_names_every_tool_the_selected_legs_shell_out_to(skipped, tmp_path):
+    """DERIVED, not typed: whatever the KEPT legs invoke must appear in the ANDON line."""
+    inventory = legs_and_their_commands()
+    wanted = set().union(*(cmds for flag, cmds in inventory.items() if flag != skipped))
+    assert wanted, (skipped, inventory)
+
+    root = _scratch_verify(tmp_path)
+    got = _run_verify(root, skipped, path=STRIPPED_PATH)
+    assert got.returncode == 2, f"exit {got.returncode}\n{got.stdout}\n{got.stderr}"
+    assert "ANDON: not on PATH" in got.stdout, got.stdout + got.stderr
+    known_gap = PREFLIGHT_GAP_TODAY.get(skipped, set())
+    missing = sorted(c for c in wanted if c not in got.stdout and c not in known_gap)
+    assert missing == [], (
+        f"`verify.ps1 {skipped}` keeps a leg that shells out to {sorted(missing)} and the "
+        f"pre-flight halt does not name it:\n{got.stdout}\n"
+        f"the kept legs invoke {sorted(wanted)}; verify.ps1's `$needed` (:148-150) is what "
+        f"decides, and it is ci-packaging's to correct")
+
+
 # -- the local site leg scans before it installs, the way CI does (F-a495cc98) -------------
 #
 # `npm ci` runs every lifecycle script in the resolved tree, so a scan that follows it

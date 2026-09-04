@@ -32,6 +32,7 @@ import tomllib
 
 import pytest
 
+import _census_nodes as CN
 from conftest import REPO  # noqa: F401  (puts tools/ on sys.path)
 
 CORE = os.path.join(REPO, "tools", "armature_core")
@@ -960,21 +961,19 @@ def test_every_derived_installer_is_driven_by_a_pair_that_runs_it_before_a_reade
 # started to would read a build_payload refusal as a crash.
 
 
-def _spend_and_fetch_tools():
-    """The population, WALKED rather than typed.
+# WAVE 12, F-e63ce880: ONE derivation, in `tests/_census_nodes.py`. This was byte-identical
+# to `test_amend_w10_builders._spend_and_fetch_tools`; a census population derived twice
+# means a correction to one is a silent drift in the other's membership.
+_spend_and_fetch_tools = CN.spend_and_fetch_tools
 
-    Every `tools/build_*payload*.py`, `tools/canon_gate.py`, `tools/fetch_*.py` and
-    `tools/gate_saved_graph.py` — the CPU-side tools that either author a submission, gate
-    one, or retrieve its output. A typed list is what let this family drift into three
-    conventions; a member added tomorrow joins the census the day it lands.
-    """
-    tools = os.path.join(REPO, "tools")
-    return sorted(
-        n for n in os.listdir(tools)
-        if n.endswith(".py")
-        and ((n.startswith("build_") and "payload" in n)
-             or n.startswith("fetch_")
-             or n in ("canon_gate.py", "gate_saved_graph.py")))
+
+def test_the_two_spend_and_fetch_censuses_are_literally_the_same_function():
+    """Not "they agree today" — there is one function. The shape this file already uses for
+    the two import scanners, applied to the population the two files share."""
+    import test_amend_w10_builders as B
+
+    assert _spend_and_fetch_tools is B._spend_and_fetch_tools is CN.spend_and_fetch_tools
+    assert SPEND_AND_FETCH == B.CPU_TOOLS
 
 
 def _exit_convention(path):
@@ -1292,24 +1291,67 @@ def _r2v_success(tmp_path):
             "--subject=PERFORMER", "--no-canon"]
 
 
+def _saved_graph_success(tmp_path):
+    """WAVE 12, F-f148b33d. `gate_saved_graph.py` was exempt from the behavioural direction
+    on the stated reason "a success run needs an input the suite cannot synthesise
+    in-process at this size (… a saved graph the round-trip admits)". The reason was false:
+    the suite already carries a faithful admitting pair as module-level fixtures.
+
+    Measured 2026-09-04 with exactly these three files: one `SAVED_ADMISSION_OK` line,
+    exit 0, `round_trip_values_compared: 8`, Gate ROUTE / S / L all reported.
+    """
+    import test_gate_saved_graph as G  # the fixtures this tool's own suite already pins
+
+    api = tmp_path / "api.json"
+    api.write_text(json.dumps(G.REF_API), encoding="utf-8")
+    saved = tmp_path / "saved.json"
+    saved.write_text(json.dumps(G.ref_saved()), encoding="utf-8")
+    seeds = tmp_path / "seeds.json"
+    seeds.write_text(json.dumps({"seeds": [2026081351]}), encoding="utf-8")
+    return ["gate_saved_graph.py", f"--saved={saved}", f"--api={api}", f"--seeds={seeds}",
+            f"--out={tmp_path / 'admission.json'}", "--hosted-tier=wan2.7-r2v"]
+
+
 SUCCESS_INVOCATIONS = {
     "build_assembly_payload.py": _assembly_success,
     "build_cascade_payload.py": _cascade_success,
     "build_r2v_payload.py": _r2v_success,
+    "gate_saved_graph.py": _saved_graph_success,
 }
 
 #: Named and dated 2026-09-04. Every member here is exempt from the BEHAVIOURAL direction
-#: only — both static clauses above hold for all thirteen. The reason is the same for all
-#: ten and it is a property of the tool, not of this file: a success run needs an input the
-#: suite cannot synthesise in-process at this size (a canon surfaces file and an experiment
-#: arm, a real dump from a completed cloud run, a saved graph the round-trip admits). Each
-#: is exercised end to end by its own module (`tests/test_canon_spend.py`,
-#: `tests/test_fetch_run.py`, `tests/test_gate_saved_graph.py`, …) through `main(argv)`
-#: IN-PROCESS, which is exactly the call shape that cannot see the SystemExit defect.
+#: only — both static clauses above hold for all thirteen. Each is exercised end to end by
+#: its own module through `main(argv)` IN-PROCESS, which is exactly the call shape that
+#: cannot see the SystemExit defect: the whole point of this leg is the PROCESS's exit code.
+#:
+#: WAVE 12, F-f148b33d — the reason is now stated PER MEMBER and each one names the specific
+#: input the suite cannot build. It used to be one sentence covering all ten ("a success run
+#: needs an input the suite cannot synthesise in-process at this size"), and the sentence was
+#: measurably false for `gate_saved_graph.py`: the suite already carries a faithful admitting
+#: pair as module-level fixtures in `tests/test_gate_saved_graph.py` (`REF_API` and
+#: `ref_saved()`, built from the widget table's own row), and running the tool as a script on
+#: those files plus `{"seeds": [2026081351]}` printed exactly one `SAVED_ADMISSION_OK` line
+#: and exited 0 — the whole job. It has moved into `SUCCESS_INVOCATIONS` above. A reason that
+#: covers ten members at once cannot be checked against any of them.
 SUCCESS_EXEMPT = {
-    "build_animate_payload.py", "build_camera_i2v_payload.py", "build_i2v_payload.py",
-    "build_lora_arm_payload.py", "build_payload.py", "build_t2v_payload.py",
-    "canon_gate.py", "fetch_run.py", "fetch_t2v_run.py", "gate_saved_graph.py",
+    "build_animate_payload.py":
+        "needs a real Animate run's uploads dump plus a canon surfaces file for the arm",
+    "build_camera_i2v_payload.py":
+        "needs the E12 start frame on disk — the fit block is measured off the PNG header",
+    "build_i2v_payload.py":
+        "needs the one conditioning image E11 spends on, sha256'd from the file",
+    "build_lora_arm_payload.py":
+        "needs a base graph on disk carrying the LoRA arm's own node classes",
+    "build_payload.py":
+        "needs an experiment arm and its canon surfaces file (--experiment/--arm)",
+    "build_t2v_payload.py":
+        "needs a canon surfaces file for the prompt the router checks",
+    "canon_gate.py":
+        "needs a canon surfaces file; NEXT TO MEASURE against tests/test_canon.FIXTURES",
+    "fetch_run.py":
+        "needs a real dump from a completed cloud run, and downloads over the network",
+    "fetch_t2v_run.py":
+        "needs a real T2V dump from a completed cloud run, and downloads over the network",
 }
 
 
@@ -1317,12 +1359,19 @@ def test_the_success_exemption_is_a_subset_of_the_population_and_covers_the_rest
     """Exemptions are named, dated and RE-DERIVED (wave 8 rule 4): the exemption set must be
     a subset of the derived population, and the two halves must exhaust it, so a new member
     lands in neither and fails here."""
-    assert SUCCESS_EXEMPT <= set(SPEND_AND_FETCH), sorted(SUCCESS_EXEMPT - set(SPEND_AND_FETCH))
+    assert set(SUCCESS_EXEMPT) <= set(SPEND_AND_FETCH), sorted(
+        set(SUCCESS_EXEMPT) - set(SPEND_AND_FETCH))
     assert set(SUCCESS_INVOCATIONS) <= set(SPEND_AND_FETCH)
-    assert SUCCESS_EXEMPT & set(SUCCESS_INVOCATIONS) == set()
-    assert SUCCESS_EXEMPT | set(SUCCESS_INVOCATIONS) == set(SPEND_AND_FETCH), {
-        "in neither": sorted(set(SPEND_AND_FETCH) - SUCCESS_EXEMPT - set(SUCCESS_INVOCATIONS)),
+    assert set(SUCCESS_EXEMPT) & set(SUCCESS_INVOCATIONS) == set()
+    assert set(SUCCESS_EXEMPT) | set(SUCCESS_INVOCATIONS) == set(SPEND_AND_FETCH), {
+        "in neither": sorted(set(SPEND_AND_FETCH) - set(SUCCESS_EXEMPT)
+                             - set(SUCCESS_INVOCATIONS)),
     }
+    # WAVE 12, F-f148b33d: the reason is PER MEMBER and each one names a specific input, so
+    # a reader can check it against the tool rather than against a sentence covering ten.
+    for name, reason in sorted(SUCCESS_EXEMPT.items()):
+        assert isinstance(reason, str) and len(reason.split()) >= 5, (name, reason)
+        assert "needs" in reason, (name, reason)
 
 
 @pytest.mark.parametrize("filename", sorted(SUCCESS_INVOCATIONS))
@@ -1540,6 +1589,99 @@ def test_the_credential_file_of_every_registry_this_repo_publishes_to_is_ignored
 # code were wrong in the specific way this check exists to catch: the default `tests/test*.py`
 # glob puts 112 test files into the archive with none of what they import, and the unpacked
 # archive reads as self-verifying and cannot collect.
+
+
+# ---------------------- the declared developer install runs the tests that exist (F-4b5ffe4c)
+#
+# The two tests that assert what the RELEASED sdist carries are gated on an optional
+# dependency the project's own declared dev extra omits. `pyproject.toml:103` is
+# `dev = ["pytest>=8.0"]` and nothing else, so `pip install -e .[dev]` — the manifest's only
+# published statement of how to set up to run this suite — produces an interpreter in which
+# `test_the_sdist_ships_no_tests_and_says_so_in_manifest` and
+# `test_the_sdist_still_carries_the_package_the_wheel_installs` SKIP, and the skip line is
+# one of 45 in a quiet run. What bounds it, measured: `build` IS present in the repo venv
+# here and both paths that matter install it explicitly (`ci.yml:239` and `verify.ps1:191`),
+# so the release path exercises them.
+#
+# The agreement is asserted MECHANICALLY rather than remembered: the distributions this file
+# skips on are derived from its own source, and each must appear in the `dev` extra. The
+# pyproject edit is ci-packaging's (F-968c4c54), so a distribution not yet in the extra is
+# named here, dated, with a SUBSET assertion — the entry becomes stale, not red, the moment
+# the extra grows.
+
+
+def _distributions_this_file_skips_on():
+    """Every `X` in a `find_spec("X") is None` guard that leads to a `pytest.skip`.
+
+    THE NODE: the guard, read off this module's own AST. A typed list would drift from the
+    skips the moment one was added, which is the whole shape of this finding.
+    """
+    with open(__file__, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    out = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        skips = any(isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "skip"
+                    for c in ast.walk(ast.Module(body=node.body, type_ignores=[])))
+        if not skips:
+            continue
+        for call in ast.walk(node.test):
+            if (isinstance(call, ast.Call)
+                    and getattr(call.func, "attr", "") == "find_spec"
+                    and call.args and isinstance(call.args[0], ast.Constant)):
+                out.add(call.args[0].value)
+    return out
+
+
+#: Named and dated 2026-09-04. Distributions this file skips on that the `dev` extra does not
+#: yet declare. SUBSET, so ci-packaging adding `build>=1.5,<2` to the extra (F-968c4c54)
+#: leaves this test green and the entry merely deletable.
+DEV_EXTRA_ADDITIONS_PENDING = {"build"}
+
+
+def test_the_declared_dev_install_carries_every_distribution_this_file_skips_on():
+    """A skip keyed on a dependency the manifest never asks for is a silent gap.
+
+    Measured 2026-09-04: `_distributions_this_file_skips_on()` is `{"build"}` and
+    `pyproject.toml`'s `dev` extra is `["pytest>=8.0"]`, so a contributor who installs the
+    way the manifest tells them to runs a suite in which the sdist's contents — the artifact
+    `pyproject.toml:114-122` records as measured-and-not-yet-decided, 156 files with 84
+    collection errors when unpacked — are asserted by nothing.
+    """
+    with open(os.path.join(REPO, "pyproject.toml"), "rb") as fh:
+        cfg = tomllib.load(fh)
+    extra = cfg["project"].get("optional-dependencies", {}).get("dev", [])
+    declared = {re.split(r"[<>=!~\[ ]", spec.strip())[0] for spec in extra}
+    needed = _distributions_this_file_skips_on()
+    assert needed, "the walk found no skip guards; it is not reading this file"
+    missing = sorted(needed - declared)
+    assert set(missing) <= DEV_EXTRA_ADDITIONS_PENDING, {
+        "skipped on, and the `dev` extra does not declare it":
+            sorted(set(missing) - DEV_EXTRA_ADDITIONS_PENDING),
+        "the extra declares": sorted(declared)}
+
+
+def test_the_dev_extra_walk_would_see_a_new_skip_guard():
+    """Rule 3 on the walk itself: a guard added tomorrow must be reported."""
+    src = ('import importlib.util\n'
+           'def t():\n'
+           '    if importlib.util.find_spec("twine") is None:\n'
+           '        pytest.skip("no twine")\n')
+    tree = ast.parse(src)
+    found = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        if not any(isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "skip"
+                   for c in ast.walk(ast.Module(body=node.body, type_ignores=[]))):
+            continue
+        for call in ast.walk(node.test):
+            if (isinstance(call, ast.Call)
+                    and getattr(call.func, "attr", "") == "find_spec"
+                    and call.args and isinstance(call.args[0], ast.Constant)):
+                found.add(call.args[0].value)
+    assert found == {"twine"}, found
 
 
 def _build_sdist(tmp_path):

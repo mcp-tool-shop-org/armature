@@ -50,7 +50,11 @@ import os
 
 import pytest
 
-from blender_stub import TOOLS, blender_tools, exit_code_of_main_block, main_block
+from blender_stub import (TOOLS, blender_tools, blender_tools_in,
+                          exit_code_of_main_block, main_block)
+# ONE definition of "this member cannot yet be held to the sentinel half of the contract",
+# imported rather than restated (F-e63ce880's rule applied to a category as well as a walk).
+from test_instrument_exits import halt_contract_pending
 
 HALTED = "HALTED — a gate fired"
 REFUSED = "REFUSED — the tool declined to proceed"
@@ -61,35 +65,27 @@ FAILED = "FAILED — an unhandled error"
 SENTINEL_KEYS = {"tool", "outcome", "gate", "error", "message", "evidence"}
 
 
-def blender_tools_in(directory):
-    """Every `*.py` under `directory` that does `import bpy` — the wave-8 derivation.
-
-    `blender_stub.blender_tools()` is this walk pinned to the repo's own `tools/`. This
-    takes the directory so `test_the_derivation_catches_a_tool_that_does_not_answer`
-    can run it over a tree carrying a member that fails the property.
-    """
-    names = []
-    for fn in sorted(os.listdir(directory)):
-        if not fn.endswith(".py"):
-            continue
-        with open(os.path.join(directory, fn), encoding="utf-8") as fh:
-            tree = ast.parse(fh.read())
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import) and any(a.name == "bpy" for a in node.names):
-                names.append(fn)
-                break
-    return names
+# WAVE 12, F-6b3040d1 + F-e63ce880. `blender_tools_in` used to be defined HERE — a third
+# copy of the Blender-tool derivation, and the copy that kept the token-keyed predicate
+# (`ast.Import` naming `bpy`), so this file and `blender_stub` could disagree about the
+# population while `test_the_population_is_the_size_and_the_membership_it_was_measured_to_be`
+# asserted they agreed. It is now imported from `blender_stub`, which keys on the BEHAVIOUR
+# "runs under Blender" — a lazy import inside a function, a documented `blender -b -P`
+# invocation, or the `armature_core.blender_scene` backend — and still takes a directory, so
+# `test_the_derivation_catches_a_tool_that_does_not_answer` can point it at a scratch tree.
 
 
 #: Measured 2026-09-04 by the walk above over `tools/`. Written out so a new Blender tool
 #: fails this file loudly rather than joining a census nobody re-read.
+#: WAVE 12 (F-6b3040d1): `stage_render.py` JOINED when the derivation stopped keying on the
+#: token. It is not new code; it was invisible to every exit census in the suite.
 POPULATION = [
     "author_walk.py", "check_relift.py", "diagnose_bone_heat.py", "lift_solve.py",
     "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
     "make_skeleton_sheet.py", "make_test_armature.py", "preview_glb.py",
     "preview_walk.py", "probe_glb.py", "probe_subject.py", "render_performer.py",
     "render_start_frame.py", "render_turnaround.py", "rig_bake.py", "rig_character.py",
-    "rig_parts.py", "rig_repair.py", "rig_retopo.py",
+    "rig_parts.py", "rig_repair.py", "rig_retopo.py", "stage_render.py",
 ]
 
 
@@ -97,7 +93,7 @@ def test_the_population_is_the_size_and_the_membership_it_was_measured_to_be():
     """SIZE and MEMBERSHIP, then the property — a census that quietly stopped
     enumerating would report green over everything it no longer reaches."""
     derived = blender_tools_in(TOOLS)
-    assert len(derived) == 21, derived
+    assert len(derived) == 22, derived
     assert sorted(derived) == sorted(POPULATION), (
         sorted(set(derived) ^ set(POPULATION)))
     assert sorted(derived) == sorted(blender_tools()), "blender_stub disagrees with the walk"
@@ -169,6 +165,9 @@ def test_a_typed_gate_exits_two_and_names_itself(filename, tmp_path, capsys):
     class _Gate(GateFailure):
         gate = "PROBE"
 
+    pending = halt_contract_pending(filename)
+    if pending:
+        pytest.skip(pending)
     def raiser():
         raise _Gate("a gate fired", {"measured": 1})
 
@@ -186,6 +185,9 @@ def test_a_bare_refusal_exits_two_and_names_no_gate(filename, tmp_path, capsys):
     and it is not a gate (`gate` is null, and the outcome does not say one fired)."""
     from armature_core.errors import ArmatureError
 
+    pending = halt_contract_pending(filename)
+    if pending:
+        pytest.skip(pending)
     def raiser():
         raise ArmatureError("unknown --mode='wobble'; known: skeleton, full")
 
@@ -200,6 +202,9 @@ def test_a_bare_refusal_exits_two_and_names_no_gate(filename, tmp_path, capsys):
 def test_a_crash_exits_one_and_is_not_recorded_as_a_gate(filename, tmp_path, capsys):
     """F-c3f86abc's direction: the two records must DIFFER. A `ValueError` may not
     produce an outcome containing 'a gate fired'."""
+    pending = halt_contract_pending(filename)
+    if pending:
+        pytest.skip(pending)
     def raiser():
         raise ValueError("a bug, not a gate")
 
@@ -467,7 +472,7 @@ def test_every_blender_side_tool_records_the_blender_it_ran_on():
     21 emit a JSON record, if only the halt sentinel, and a recipe that does not reproduce
     its output is not a recipe."""
     derived = blender_tools_in(TOOLS)
-    assert len(derived) == 21, derived
+    assert len(derived) == 22, derived
     missing = []
     for fn in derived:
         with open(os.path.join(TOOLS, fn), encoding="utf-8") as fh:

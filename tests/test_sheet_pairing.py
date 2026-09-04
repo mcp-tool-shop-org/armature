@@ -35,6 +35,8 @@ import subprocess
 import sys
 
 import pytest
+
+import _census_nodes as CN
 from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -727,152 +729,41 @@ def test_every_sheet_that_draws_an_rgba_tile_routes_through_the_one_helper():
 # instruments-measure owns the flag itself; this census is the red proof.
 
 
-def _argparse_dests(node):
-    """Every namespace attribute an `add_argument`/`set_defaults` under `node` creates."""
-    out = set()
-    for n in ast.walk(node):
-        if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)):
-            continue
-        if n.func.attr == "set_defaults":
-            out.update(kw.arg for kw in n.keywords if kw.arg)
-            continue
-        if n.func.attr == "add_subparsers":
-            # WAVE-10 MERGE (coordinator, 2026-09-04): `add_subparsers(dest=...)` creates the attribute the
-            # chosen sub-command is read from (`canon_gate.main` reads `a.cmd`).
-            out.update(kw.value.value for kw in n.keywords
-                       if kw.arg == "dest" and isinstance(kw.value, ast.Constant))
-            continue
-        if n.func.attr != "add_argument":
-            continue
-        explicit = [kw.value.value for kw in n.keywords
-                    if kw.arg == "dest" and isinstance(kw.value, ast.Constant)]
-        if explicit:
-            out.add(explicit[0])
-            continue
-        longs = [a.value for a in n.args if isinstance(a, ast.Constant)
-                 and isinstance(a.value, str) and a.value.startswith("--")]
-        if longs:
-            out.add(longs[0][2:].replace("-", "_"))
-            continue
-        positional = [a.value for a in n.args if isinstance(a, ast.Constant)
-                      and isinstance(a.value, str) and not a.value.startswith("-")]
-        if positional:
-            out.add(positional[0].replace("-", "_"))
-    return out
+# ONE implementation of every node below, in `tests/_census_nodes.py` (F-0e0709b2 +
+# F-1c9d39e2 + F-e63ce880). Three things were wrong with keeping them here:
+#
+#   * this file's `_main_of` returned the module-level function literally called `main`,
+#     while `test_canon_spend.py` and `test_instrument_write_ordering.py` each carried a
+#     `_cli_body` that follows ONE delegation out of a wrapper `main`. Wave 10 moved three
+#     builders' argv parsing into `build_and_write(argv)`, so `build_assembly_payload`,
+#     `build_cascade_payload` and `build_r2v_payload` LEFT this census — the population fell
+#     to 33 and an undeclared flag read on any of the three, on the paths that author paid
+#     submissions, was invisible. Measured: inserting `_probe_undeclared = a.frames_dir`
+#     after `a = ap.parse_args(argv)` in `build_r2v_payload.build_and_write` left both
+#     parser censuses green while the tool died on every command-line invocation.
+#   * `tests/test_sheet_argv_smoke.py` carried a SECOND "read and never declared" walk that
+#     resolves no cross-module helper and no `set_defaults`, and reports six correct modules
+#     as offenders. It now imports these.
+#   * the same functions, copied, drift. `_cli_body` was byte-identical between two files
+#     and only one of them applied the returning-branch correction.
+#
+# The names are re-exported here because this file's own tests and its siblings read them.
+_argparse_dests = CN.argparse_dests
+_module_trees = CN.module_trees
+_flag_helpers = CN.flag_helpers
+_visible_functions = CN.visible_functions
+_walk_scope = CN.walk_scope
+declared_flags = CN.declared_flags
+namespace_reads = CN.namespace_reads
 
 
 def _tools_dir():
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
-
-
-def _module_trees():
-    """`{module name: ast.Module}` for `tools/*.py` and `tools/armature_core/*.py`."""
-    out = {}
-    for pattern in ("*.py", os.path.join("armature_core", "*.py")):
-        for path in sorted(glob.glob(os.path.join(_tools_dir(), pattern))):
-            name = os.path.basename(path)[:-3]
-            with open(path, encoding="utf-8") as fh:
-                out[name] = ast.parse(fh.read())
-    return out
-
-
-def _flag_helpers(trees):
-    """`{(module, function): dests}` for every function that adds flags to a parser.
-
-    Keyed by MODULE and function, never by bare name: a name-keyed table unions every
-    module's `main` into one entry and reported this whole census green (measured while
-    writing it — `sheet_plate` arrived from `make_identity_sheet.main`).
-    """
-    out = {}
-    for mod, tree in trees.items():
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                dests = _argparse_dests(node)
-                if dests:
-                    out[(mod, node.name)] = dests
-    return out
-
-
-def _visible_functions(tree, mod):
-    """`{local name: (module, function)}` — module-local defs plus `from X import f`."""
-    vis = {n.name: (mod, n.name) for n in tree.body
-           if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            src = node.module.split(".")[-1]
-            for alias in node.names:
-                vis[alias.asname or alias.name] = (src, alias.name)
-    return vis
+    return CN.TOOLS
 
 
 def _main_of(tree):
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == "main":
-            return node
-    return None
-
-
-def declared_flags(tree, mod, helpers):
-    """Everything `main`'s parser can put on the namespace, helper calls resolved."""
-    main = _main_of(tree)
-    if main is None:
-        return set()
-    out = _argparse_dests(main)
-    for node in tree.body:  # a parser built at module level
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            out |= _argparse_dests(node)
-    vis = _visible_functions(tree, mod)
-    for node in ast.walk(main):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            name = node.func.id
-            if name != "main" and vis.get(name) in helpers:
-                out |= helpers[vis[name]]
-    return out
-
-
-def _walk_scope(fn):
-    """Every node belonging to `fn` ITSELF — stops at nested defs, lambdas and classes.
-
-    NON-DESCENDING on purpose (SEAM 9, instruments-measure, 2026-09-04): a sibling scope's
-    local named `a` — a numpy array, say — makes `a.shape` and `a.ndim` read as argparse
-    namespace attributes, which is how a descending walk invents five offenders out of
-    `composite_reference`, `encode_control`, `fit_reference`, `make_plate` and
-    `pack_pose_pack`. Same wrong-node class as everything else this wave.
-    """
-    stack = list(fn.body)
-    while stack:
-        node = stack.pop()
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda,
-                             ast.ClassDef)):
-            continue
-        yield node
-        stack.extend(ast.iter_child_nodes(node))
-
-
-def namespace_reads(tree):
-    """`{attribute: first line}` read off whatever `parse_args` returned, inside `main`."""
-    main = _main_of(tree)
-    if main is None:
-        return {}
-    ns = set()
-    for node in _walk_scope(main):
-        if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
-                and isinstance(node.value.func, ast.Attribute)
-                and node.value.func.attr in ("parse_args", "parse_known_args")):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    ns.add(target.id)
-                elif isinstance(target, ast.Tuple):
-                    for elt in target.elts:
-                        if isinstance(elt, ast.Name):
-                            ns.add(elt.id)
-                            break
-    out = {}
-    for node in _walk_scope(main):
-        if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-                and node.value.id in ns):
-            out.setdefault(node.attr, node.lineno)
-    return out
+    """THE NODE: the tool's CLI body, not the function named `main` (F-0e0709b2)."""
+    return CN.cli_body(tree)
 
 
 def parser_population():
@@ -890,9 +781,13 @@ def parser_population():
 # that `main` returns an exit code (F-c236304b family), and THE NODE this census keys on is the
 # module-level `main`; `compare_runs` JOINED (argparse, F-7e7a7f7d). Following the function `main`
 # delegates its argv to is a Stage B widening of the node, recorded in the run's seeds.
+# WAVE 12 (F-0e0709b2): the three builders that left in wave 10 are BACK — the census keys
+# on `cli_body` now, so a parser that moved into `build_and_write(argv)` is still this
+# tool's parser. 33 -> 36, and the population is the one the file's docstring always
+# claimed: every tool with a command line.
 RECORDED_PARSER_POPULATION = [
-    "build_lora_arm_payload",
-    "build_payload", "build_t2v_payload", "canon_gate", "compare_runs",
+    "build_assembly_payload", "build_cascade_payload", "build_lora_arm_payload",
+    "build_payload", "build_r2v_payload", "build_t2v_payload", "canon_gate", "compare_runs",
     "composite_reference", "encode_control", "extract_clip_frames", "fetch_run",
     "fetch_t2v_run", "gate_b_frames", "gate_saved_graph", "invert_frames", "make_ab_clip",
     "make_cast_sheet", "make_crop_strip", "make_e13_sheet", "make_gate0_sheet",
@@ -909,7 +804,7 @@ def test_the_parser_population_is_every_tool_with_a_command_line():
         "appeared": sorted(set(pop) - set(RECORDED_PARSER_POPULATION)),
         "vanished": sorted(set(RECORDED_PARSER_POPULATION) - set(pop)),
     }
-    assert len(pop) == 33  # WAVE-10 MERGE (coordinator, 2026-09-04): 35 - 3 builders + compare_runs; see RECORDED_PARSER_POPULATION
+    assert len(pop) == 36, pop  # WAVE 12: the three wave-10 builders rejoined; see above
 
 
 @pytest.mark.parametrize("mod", RECORDED_PARSER_POPULATION)
@@ -980,6 +875,81 @@ def test_the_parser_census_goes_red_on_a_flag_that_is_read_and_never_declared(tm
     assert diff(nested) == [], (
         "`a.shape` in a SIBLING scope is not an argparse read; a descending walk invents "
         "offenders out of any function whose local is also called `a`")
+
+
+def test_the_parser_census_goes_red_on_a_wrapper_main_that_delegates_its_argv(tmp_path):
+    """RED on the spelling that hides from the NAME (wave 12, rule 2; F-0e0709b2).
+
+    The shape is `build_r2v_payload`'s: a `main(argv)` that is a three-line wrapper
+    returning an exit code, and a `build_and_write(argv)` that holds the parser, the reads,
+    the gates and the writes. Keyed on the module-level `main`, this census saw no parser at
+    all and reported the module absent — which is how three spend builders left the
+    population in wave 10 with an undeclared read policed by nothing.
+
+    Both directions, on the same shape: the wrapper whose delegate declares its flag is
+    clean, and the wrapper whose delegate reads one it never declared is reported.
+    """
+    good = tmp_path / "build_good_payload.py"
+    good.write_text(
+        "import argparse\n"
+        "def build_and_write(argv=None):\n"
+        "    ap = argparse.ArgumentParser()\n"
+        "    ap.add_argument('--frames-dir', required=True)\n"
+        "    a = ap.parse_args(argv)\n"
+        "    return a.frames_dir\n"
+        "def main(argv=None):\n"
+        "    build_and_write(argv)\n"
+        "    return 0\n", encoding="utf-8")
+    bad = tmp_path / "build_bad_payload.py"
+    bad.write_text(
+        "import argparse\n"
+        "def build_and_write(argv=None):\n"
+        "    ap = argparse.ArgumentParser()\n"
+        "    ap.add_argument('--out', required=True)\n"
+        "    a = ap.parse_args(argv)\n"
+        "    return a.out, a.frames_dir\n"
+        "def main(argv=None):\n"
+        "    build_and_write(argv)\n"
+        "    return 0\n", encoding="utf-8")
+
+    def diff(path):
+        mod = path.stem
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        helpers = _flag_helpers({mod: tree})
+        return sorted(set(namespace_reads(tree)) - declared_flags(tree, mod, helpers))
+
+    def name_keyed(path):
+        """The pre-wave-12 node, verbatim: the function literally called `main`."""
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        fn = next((n for n in tree.body
+                   if isinstance(n, ast.FunctionDef) and n.name == "main"), None)
+        return _argparse_dests(fn) if fn is not None else set()
+
+    assert diff(good) == []
+    assert diff(bad) == ["frames_dir"], (
+        "a flag read in the delegate and declared nowhere must be reported")
+    assert name_keyed(bad) == set(), (
+        "the name-keyed node saw the delegate's parser; if it could, this comparison would "
+        "be with itself")
+    assert namespace_reads(ast.parse(bad.read_text(encoding="utf-8"))), (
+        "the CLI-body node must reach the delegate's namespace reads")
+
+
+def test_the_three_wave_ten_builders_are_policed_where_their_parsers_actually_live():
+    """The measurement, asserted (F-0e0709b2).
+
+    `build_assembly_payload`, `build_cascade_payload` and `build_r2v_payload` moved their
+    argv parsing into `build_and_write(argv)` in wave 10 and left this census. They are
+    back, and the node that brought them back is `cli_body`, not a name.
+    """
+    trees = _module_trees()
+    for mod in ("build_assembly_payload", "build_cascade_payload", "build_r2v_payload"):
+        assert mod in RECORDED_PARSER_POPULATION, mod
+        assert namespace_reads(trees[mod]), mod
+        body = CN.cli_body(trees[mod])
+        assert body.name == "build_and_write", (mod, body.name)
+        assert _argparse_dests(body), (
+            f"{mod}'s parser is in {body.name}, and the census must read it there")
 
 
 @pytest.mark.parametrize("mod", sorted(

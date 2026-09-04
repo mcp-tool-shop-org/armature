@@ -1996,8 +1996,65 @@ def test_the_runtime_check_goes_red_on_a_floor_nothing_runs():
 TESTS_DIR = os.path.join(REPO, "tests")
 
 
+def _repo_root_expression(node, env):
+    """`""` when `node` evaluates to the repository root, else None.
+
+    WAVE 12, F-387eb031 — THE NODE this census could not resolve. `_joined_relpath` resolved
+    a join's first argument only when it was a string literal or a `Name` already in the
+    environment, so a join ROOTED IN A CALL was invisible. The repo's own idiom for "the
+    repository root" is a call:
+
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    which is exactly how `tests/test_openpose_convention.py:46-49` builds the path to
+    `docs/research-grounding.md`, opens it, and asserts the document still carries F20's
+    limbSeq verbatim — the pinning whose stated purpose is "if someone edits
+    research-grounding.md's F20, this fails". Measured 2026-09-04: the file exists,
+    `paths_the_suite_guards()` did not return it, it was absent from `GUARDED_TODAY`, and it
+    matched none of ci.yml's push or pull_request filters. A PR editing only that file — the
+    retrieved record the OpenPose convention is transcribed from — ran no CI job at all, and
+    the test written to fail on that edit was green-by-absence on the PR.
+
+    Three spellings of the same root are resolved, because the point is the root and not the
+    spelling: the double `dirname` of `abspath(__file__)`, the double `dirname` of
+    `__file__`, and `dirname(X)` where `X` already resolves to `tests`.
+    """
+    if isinstance(node, ast.Name):
+        return env.get(node.id)
+    if not isinstance(node, ast.Call):
+        return None
+    fn = node.func
+    if not (isinstance(fn, ast.Attribute) and fn.attr == "dirname"
+            and isinstance(fn.value, ast.Attribute) and fn.value.attr == "path"):
+        return None
+    if len(node.args) != 1:
+        return None
+    inner = node.args[0]
+    # `os.path.dirname(<something that resolves to a relative dir>)`
+    resolved = _repo_root_expression(inner, env)
+    if resolved is not None:
+        parent = "/".join(resolved.strip("/").split("/")[:-1])
+        return parent
+    # `os.path.dirname(os.path.abspath(__file__))` / `os.path.dirname(__file__)` -> tests
+    if isinstance(inner, ast.Name) and inner.id == "__file__":
+        return "tests"
+    if (isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute)
+            and inner.func.attr == "abspath"
+            and isinstance(inner.func.value, ast.Attribute)
+            and inner.func.value.attr == "path"
+            and len(inner.args) == 1
+            and isinstance(inner.args[0], ast.Name) and inner.args[0].id == "__file__"):
+        return "tests"
+    return None
+
+
 def _joined_relpath(node, env):
-    """`os.path.join(BASE, "a", "b")` -> `BASE/a/b`, or None if any part is not resolvable."""
+    """`os.path.join(BASE, "a", "b")` -> `BASE/a/b`, or None if any part is not resolvable.
+
+    The first argument may be a string literal, a `Name` in the environment, or — since wave
+    12 — any expression `_repo_root_expression` can resolve, which is where the Call-rooted
+    repo-root idiom enters.
+    """
     if not isinstance(node, ast.Call):
         return None
     fn = node.func
@@ -2011,6 +2068,12 @@ def _joined_relpath(node, env):
         elif i == 0 and isinstance(arg, ast.Name) and arg.id in env:
             if env[arg.id]:
                 parts.append(env[arg.id])
+        elif i == 0:
+            rooted = _repo_root_expression(arg, env)
+            if rooted is None:
+                return None
+            if rooted:
+                parts.append(rooted)
         else:
             return None
     return "/".join(p.strip("/") for p in parts if p.strip("/"))
@@ -2071,13 +2134,29 @@ GUARDED_TODAY = [
     # cover this file, so `test_ci_runs_on_every_file_the_suite_guards` names it until the
     # line `- "docs/license-map.md"` is added under both triggers.
     "docs/license-map.md",
+    # WAVE 12 (F-387eb031): JOINED when `_joined_relpath` learned to resolve a join ROOTED IN
+    # A CALL — `os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    # "docs", "research-grounding.md")`, which is how `tests/test_openpose_convention.py`
+    # opens the retrieved record it asserts F20's limbSeq against. It matches NO ci.yml
+    # filter; the trigger half is ci-packaging's (F-5d2c6d28) and it is named in
+    # `UNFILTERED_PENDING` below until that lands.
+    "docs/research-grounding.md",
     "npm/bin/armature.mjs",
     "npm/package.json",
     "pyproject.toml",
+    # WAVE 12 (F-387eb031): the same widening brought fifteen more members in, every one of
+    # them already covered by an existing `specs/**`, `tests/**` or `tools/**` filter — they
+    # were invisible for the same reason and were never a trigger gap.
+    "specs",
+    "specs/E01-anchor.json",
+    "specs/E08-seeds.json",
     "specs/E09-A3-seeds.json",
     "specs/E09-seeds.json",
+    "specs/E11-seeds.json",
+    "specs/E12-seeds.json",
     "specs/E13-prompt.json",
     "specs/E13-seeds.json",
+    "specs/E14-seeds.json",
     "tests",
     "tests/blender/check_floor_material.py",
     "tests/blender/check_ortho_convention.py",
@@ -2085,6 +2164,14 @@ GUARDED_TODAY = [
     "tests/blender/check_pose_arc_roundtrip.py",
     "tests/blender/check_visibility.py",
     "tests/blender/make_synthetic_run.py",
+    "tests/fake_backend.py",
+    "tests/fixtures",
+    "tests/fixtures/E12-w3-camera-i2v.api.json",
+    "tests/fixtures/canon",
+    "tests/fixtures/canon/probe.surfaces.json",
+    "tests/fixtures/uploads",
+    # my own new test opens this by path, to name the site the widening was written for
+    "tests/test_openpose_convention.py",
     "tools",
     "tools/armature_core",
     # the next two and `build_payload.py`/`fetch_run.py` joined at the wave-8 merge: sibling
@@ -2105,11 +2192,25 @@ GUARDED_TODAY = [
     "tools/armature_index.py",
     "tools/build_payload.py",
     "tools/fetch_run.py",
+    "tools/make_crop_strip.py",
     "tools/make_test_armature.py",
     "tools/render_pose_sticks.py",
+    "tools/render_turnaround.py",
+    "tools/rig_sheet_compose.py",
     "tools/sheet_compose.py",
     "verify.ps1",
 ]
+
+#: WAVE 12, F-387eb031. Members of the guarded population that ci.yml's filters do not yet
+#: cover. Named, dated 2026-09-04, routed: `docs/research-grounding.md` is ci-packaging's
+#: F-5d2c6d28 ("add it to both trigger lists"). SUBSET, so the entry becomes deletable — not
+#: red — the moment the filter lands.
+#:
+#: The stake: a PR editing only that file runs no CI job at all, and
+#: `tests/test_openpose_convention.py:55`, whose whole purpose is "if someone edits
+#: research-grounding.md's F20, this fails", is green-by-absence on the PR and first surfaces
+#: on some later unrelated push, attributed to whatever that push touched.
+UNFILTERED_PENDING = {"docs/research-grounding.md"}
 
 
 def test_the_guarded_path_census_is_the_one_the_suite_actually_opens():
@@ -2118,6 +2219,74 @@ def test_the_guarded_path_census_is_the_one_the_suite_actually_opens():
         "the set of repo files the suite opens by path has changed; each new member needs a "
         "push and a pull_request filter that covers it before this list is updated:\n  "
         + "\n  ".join(sorted(set(paths_the_suite_guards()) ^ set(GUARDED_TODAY))))
+
+
+def test_the_guarded_census_resolves_a_join_rooted_in_a_call(tmp_path, monkeypatch):
+    """RED on the shape that hides from the name (wave 12, rule 2; F-387eb031).
+
+    A synthetic tests/ module whose ONLY path join is Call-rooted — the repo-root idiom —
+    must appear in the population, and the pre-wave-12 resolver must be shown blind to it in
+    the same test, or the comparison says nothing.
+    """
+    import test_ci_workflows as SELF
+
+    repo = tmp_path / "repo"
+    (repo / "tests").mkdir(parents=True)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "research-grounding.md").write_text("F20 limbSeq", encoding="utf-8")
+    (repo / "tests" / "test_probe.py").write_text(
+        "import os\n"
+        "def test_it():\n"
+        "    p = os.path.join(\n"
+        "        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n"
+        "        'docs', 'research-grounding.md')\n"
+        "    open(p).read()\n", encoding="utf-8")
+
+    monkeypatch.setattr(SELF, "REPO", str(repo))
+    monkeypatch.setattr(SELF, "TESTS_DIR", str(repo / "tests"))
+    assert paths_the_suite_guards() == ["docs/research-grounding.md"], (
+        paths_the_suite_guards())
+
+    # …and the resolver as it stood before wave 12: first argument must be a literal or a
+    # Name already in the environment, anything else returns None.
+    def old_joined_relpath(node, env):
+        if not isinstance(node, ast.Call):
+            return None
+        fn = node.func
+        if not (isinstance(fn, ast.Attribute) and fn.attr == "join"
+                and isinstance(fn.value, ast.Attribute) and fn.value.attr == "path"):
+            return None
+        parts = []
+        for i, arg in enumerate(node.args):
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                parts.append(arg.value)
+            elif i == 0 and isinstance(arg, ast.Name) and arg.id in env:
+                if env[arg.id]:
+                    parts.append(env[arg.id])
+            else:
+                return None
+        return "/".join(p.strip("/") for p in parts if p.strip("/"))
+
+    tree = ast.parse((repo / "tests" / "test_probe.py").read_text(encoding="utf-8"))
+    joins = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "join"]
+    assert len(joins) == 1
+    assert old_joined_relpath(joins[0], {"REPO": ""}) is None, (
+        "the pre-wave-12 resolver resolved the Call-rooted join; if it could, the census "
+        "would never have missed docs/research-grounding.md and this test compares nothing")
+    assert _joined_relpath(joins[0], {"REPO": ""}) == "docs/research-grounding.md"
+
+
+def test_the_real_openpose_pin_is_the_site_this_widening_was_written_for():
+    """Named, on the real tree: the guard whose subject ran no CI job."""
+    with open(os.path.join(TESTS_DIR, "test_openpose_convention.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    env = {"REPO": ""}
+    resolved = {r for node in ast.walk(tree) if isinstance(node, ast.Call)
+                for r in [_joined_relpath(node, env)] if r}
+    assert "docs/research-grounding.md" in resolved, sorted(resolved)
+    assert "docs/research-grounding.md" in GUARDED_TODAY
 
 
 def _probe_path(rel):
@@ -2139,7 +2308,8 @@ def _unfiltered(paths, trigger):
 @pytest.mark.parametrize("trigger", ["push", "pull_request"])
 def test_ci_runs_on_every_file_the_suite_guards(trigger):
     """A file a test opens, that no filter covers, is a guard that cannot run on its subject."""
-    missing = _unfiltered(paths_the_suite_guards(), trigger)
+    missing = [p for p in _unfiltered(paths_the_suite_guards(), trigger)
+               if p not in UNFILTERED_PENDING]
     assert missing == [], (
         f"{trigger} runs nothing when these change, and a test in tests/ reads every one of "
         f"them: {missing}; the guard does not run on the change it exists to guard"

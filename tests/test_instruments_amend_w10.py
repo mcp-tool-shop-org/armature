@@ -19,6 +19,11 @@ import re
 
 import pytest
 
+# ONE definition of "this member cannot yet be held to the sentinel half of the halt
+# contract", imported rather than restated: `stage_render.py` joined the Blender population
+# in wave 12 (F-6b3040d1) when it stopped keying on the literal token `import bpy`, and the
+# handler it needs is instruments-measure's to write (F-f9251c74).
+from test_instrument_exits import halt_contract_pending
 from blender_stub import (blender_tools, exit_code_of_main_block, load_tool, main_block,
                           read_source)
 
@@ -271,8 +276,27 @@ def success_tokens(filename):
 
 BLENDER_TOOLS = blender_tools()
 
+#: The members that print no `<STEM>_HALT` line at all, so no clause of the halt contract
+#: has anything to read. Derived from the objective property, never typed — the category
+#: empties itself the moment the handler lands.
+HALT_PENDING = [f for f in BLENDER_TOOLS if halt_contract_pending(f)]
+HALT_HELD = [f for f in BLENDER_TOOLS if not halt_contract_pending(f)]
 
-@pytest.mark.parametrize("filename", BLENDER_TOOLS)
+
+def test_the_halt_pending_category_is_the_one_the_exit_census_names():
+    """Rule 3: what cannot be judged is counted, and counted in ONE place.
+
+    This file and `tests/test_instrument_exits.py` read the same category from the same
+    function, so the two cannot disagree about which members are pending.
+    """
+    import test_instrument_exits as EX
+
+    assert set(HALT_PENDING) <= EX.HALT_CONTRACT_PENDING, sorted(
+        set(HALT_PENDING) - EX.HALT_CONTRACT_PENDING)
+    assert set(HALT_PENDING) | set(HALT_HELD) == set(BLENDER_TOOLS)
+
+
+@pytest.mark.parametrize("filename", HALT_HELD)
 def test_every_blender_tool_prints_the_success_token_its_halt_token_pairs_with(filename):
     """`<PREFIX>_OK <payload>` for the same `<PREFIX>` the handler halts under.
 
@@ -309,16 +333,16 @@ def test_no_success_token_is_printed_by_two_different_tools():
     """MEASURED 2026-09-04: `PANELS_OK` came from `make_binding_sheet:267`,
     `make_parts_sheet:313`, `make_rig_sheet:237` and `make_skeleton_sheet:351`, so a caller
     that ran one of them and grepped for it was satisfied by any of the other three."""
-    derived = {fn: set(success_tokens(fn)) for fn in BLENDER_TOOLS}
+    derived = {fn: set(success_tokens(fn)) for fn in HALT_HELD}
     shared = shared_success_tokens(derived)
     assert shared == {}, f"success tokens claimed by more than one tool: {shared}"
 
 
 def test_no_success_token_is_a_prefix_of_any_tools_halt_token():
     """`PROBE_GLB` matched `PROBE_GLB_HALT`: the success grep was satisfied by the halt."""
-    halts = {halt_prefix(fn) + "_HALT" for fn in BLENDER_TOOLS}
+    halts = {halt_prefix(fn) + "_HALT" for fn in HALT_HELD}
     bad = []
-    for fn in BLENDER_TOOLS:
+    for fn in HALT_HELD:
         for token in success_tokens(fn):
             hits = sorted(h for h in halts if h.startswith(token))
             if hits:
@@ -391,7 +415,7 @@ def _nonstring_key_raiser():
     return raiser
 
 
-@pytest.mark.parametrize("filename", [f for f in BLENDER_TOOLS if main_block(f) is not None])
+@pytest.mark.parametrize("filename", [f for f in HALT_HELD if main_block(f) is not None])
 def test_a_non_string_keyed_evidence_dict_does_not_delete_the_exit_code(filename, tmp_path,
                                                                        capsys):
     """The handler serialises its own keys, and `sys.exit` runs whatever happens.
@@ -436,7 +460,7 @@ def test_the_keysafe_helper_stringifies_keys_at_every_depth():
         "('hip', 'z')": {"3": "x"}, "rows": [{"(1, 2)": "y"}]}
 
 
-@pytest.mark.parametrize("filename", [f for f in BLENDER_TOOLS if main_block(f) is not None])
+@pytest.mark.parametrize("filename", [f for f in HALT_HELD if main_block(f) is not None])
 def test_every_handler_carries_the_keysafe_helper(filename):
     """The family census. One implementation per tool today (21 copies, recorded as a
     Stage B lift into `armature_core.errors` under `skipped[]`), so the property has to be
@@ -465,12 +489,56 @@ def test_every_handler_carries_the_keysafe_helper(filename):
 # imports `make_parts_sheet.shoot`, so it is a fifth caller of the same fix.
 
 
+#: WAVE 12, F-b777d4a3 — the population of "a tool that writes an artefact", by BEHAVIOUR.
+#:
+#: `_render_call_sites` kept a node only when `ast.unparse(node.func)` was exactly
+#: `bpy.ops.render.render`, so the tools whose output is a GLB rather than a PNG were
+#: outside this census entirely. Measured over `tools/*.py` on 2026-09-04: **9 export calls
+#: across 8 modules** — author_walk :604, lift_solve :332, make_test_armature :301,
+#: rig_bake :279, rig_character :944, rig_parts :519, rig_repair :202, rig_retopo :405 and
+#: :412 — and none of them was reachable by this walk. (The routed finding quoted 13 across
+#: the same 8 modules; re-measured here, 4 of those 13 are
+#: `bpy.ops.export_scene.gltf.get_rna_type(...)` introspection calls in author_walk,
+#: lift_solve, rig_character and rig_parts, which discover the exporter's own keyword names
+#: and write nothing. The population is the same 8; the site count is 9.) The exported GLB is
+#: this repo's canonical
+#: deliverable (the rig_* family's entire product), and the comment around this census
+#: reasons about "a sentinel over a directory that may hold nothing", which is precisely what
+#: an unverified export leaves.
+WRITER_OPS = ("bpy.ops.render.render", "bpy.ops.export_scene.gltf")
+
+
+def _writer_call_sites(filename, ops=WRITER_OPS):
+    """`{op: [lines]}` for every `bpy.ops.*` call in `ops` — the artefact writers.
+
+    Exact match on the unparsed callee, so `bpy.ops.export_scene.gltf.get_rna_type()` — an
+    INTROSPECTION call the exporters make to discover their own keyword names — is not
+    counted as a write.
+    """
+    tree = ast.parse(read_source(filename))
+    out = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        try:
+            called = ast.unparse(node.func)
+        except Exception:                                               # noqa: BLE001
+            continue
+        if called in ops:
+            out.setdefault(called, []).append(node.lineno)
+    return {k: sorted(v) for k, v in out.items()}
+
+
 def _render_call_sites(filename):
     """Line numbers of every `bpy.ops.render.render(...)` call in the file."""
-    tree = ast.parse(read_source(filename))
-    return sorted(node.lineno for node in ast.walk(tree)
-                  if isinstance(node, ast.Call)
-                  and ast.unparse(node.func) == "bpy.ops.render.render")
+    return _writer_call_sites(filename, ("bpy.ops.render.render",)).get(
+        "bpy.ops.render.render", [])
+
+
+def _export_call_sites(filename):
+    """Line numbers of every `bpy.ops.export_scene.gltf(...)` call in the file."""
+    return _writer_call_sites(filename, ("bpy.ops.export_scene.gltf",)).get(
+        "bpy.ops.export_scene.gltf", [])
 
 
 def _calls_named(filename, names):
@@ -515,12 +583,85 @@ READ_BACK_EXEMPT = {
 }
 
 
-def test_the_renderer_population_is_derived_and_is_the_one_recorded():
-    derived = sorted(f for f in BLENDER_TOOLS if _render_call_sites(f))
-    assert derived == RECORDED_RENDERERS, {
-        "appeared": sorted(set(derived) - set(RECORDED_RENDERERS)),
-        "vanished": sorted(set(RECORDED_RENDERERS) - set(derived))}
-    assert set(READ_BACK_EXEMPT) <= set(derived), sorted(READ_BACK_EXEMPT)
+#: Derived 2026-09-04 by AST over `blender_tools()` for `bpy.ops.export_scene.gltf` call
+#: sites — the half of the writer population `_render_call_sites` could not reach. Equality,
+#: so a tool that starts exporting cannot skip this census in the same commit.
+RECORDED_EXPORTERS = [
+    "author_walk.py", "lift_solve.py", "make_test_armature.py", "rig_bake.py",
+    "rig_character.py", "rig_parts.py", "rig_repair.py", "rig_retopo.py",
+]
+
+#: WAVE 12, F-b777d4a3. The eight exporters do not ask whether the GLB they claim to have
+#: written is there — none of them contains an `os.path.isfile(` at all. Named, dated
+#: 2026-09-04, routed to INSTRUMENTS (the rig_* family and author_walk) and core-solvers
+#: (`lift_solve`). A CEILING: a tool that grows the read-back leaves this set without failing
+#: the file that named it, and a NEW exporter with no read-back fails loudly.
+#:
+#: The stake: a `rig_*` tool whose glTF export silently writes nothing — a wrong filepath, an
+#: empty selection, an exporter refusal swallowed upstream — prints its `_OK` line and exits
+#: 0 over an empty output directory, and the census written to make a writer verify its own
+#: output has never looked at the export half of the tree.
+EXPORT_READ_BACK_ROUTED = set(RECORDED_EXPORTERS)
+
+
+def test_the_writer_population_is_derived_and_is_the_one_recorded():
+    """Size and membership before the property, for BOTH halves of "writes an artefact"."""
+    renderers = sorted(f for f in BLENDER_TOOLS if _render_call_sites(f))
+    assert renderers == RECORDED_RENDERERS, {
+        "appeared": sorted(set(renderers) - set(RECORDED_RENDERERS)),
+        "vanished": sorted(set(RECORDED_RENDERERS) - set(renderers))}
+    assert set(READ_BACK_EXEMPT) <= set(renderers), sorted(READ_BACK_EXEMPT)
+
+    exporters = sorted(f for f in BLENDER_TOOLS if _export_call_sites(f))
+    assert exporters == RECORDED_EXPORTERS, {
+        "appeared": sorted(set(exporters) - set(RECORDED_EXPORTERS)),
+        "vanished": sorted(set(RECORDED_EXPORTERS) - set(exporters))}
+    assert set(EXPORT_READ_BACK_ROUTED) <= set(exporters), sorted(
+        set(EXPORT_READ_BACK_ROUTED) - set(exporters))
+
+    # 9 export calls across the 8, measured — beside the membership, so a call vanishing
+    # inside a module that keeps one is visible.
+    total = sum(len(_export_call_sites(f)) for f in exporters)
+    assert total == 9, {f: _export_call_sites(f) for f in exporters}
+
+
+def test_the_writer_walk_does_not_count_the_exporters_introspection_call():
+    """`bpy.ops.export_scene.gltf.get_rna_type()` is how four of these tools discover their
+    own keyword names. Counting it as a write would inflate the population and make the
+    site count above meaningless."""
+    src = read_source("rig_character.py")
+    assert "bpy.ops.export_scene.gltf.get_rna_type" in src, (
+        "the introspection call is gone; re-derive this test's premise")
+    sites = _writer_call_sites("rig_character.py")
+    assert sites["bpy.ops.export_scene.gltf"] == _export_call_sites("rig_character.py")
+    assert len(sites["bpy.ops.export_scene.gltf"]) == 1, sites
+    # …and a walk that matched on a PREFIX would count three here instead of one.
+    prefix_matched = [n for n in ast.walk(ast.parse(src))
+                      if isinstance(n, ast.Call)
+                      and ast.unparse(n.func).startswith("bpy.ops.export_scene.gltf")]
+    assert len(prefix_matched) == 3, len(prefix_matched)
+
+
+@pytest.mark.parametrize("filename", RECORDED_EXPORTERS)
+def test_every_exporter_asks_whether_the_glb_it_claims_to_have_written_is_there(filename):
+    """The verify-your-own-output property, extended to the export half of the tree.
+
+    The exported GLB is this repo's canonical deliverable; a `bpy.ops.export_scene.gltf`
+    that writes nothing raises no exception the caller sees.
+    """
+    src = read_source(filename)
+    reads_back = "os.path.isfile(" in src and "os.path.getsize(" in src
+    if not reads_back and filename in EXPORT_READ_BACK_ROUTED:
+        pytest.skip(
+            f"{filename} exports at {_export_call_sites(filename)} and never asks whether "
+            f"the GLB reached disk. Routed 2026-09-04 (F-b777d4a3) to the domain that owns "
+            f"the tool — instruments for author_walk and the rig_* family, core-solvers for "
+            f"lift_solve — and named in EXPORT_READ_BACK_ROUTED; this direction runs against "
+            f"this tool the moment the read-back lands.")
+    assert reads_back, (
+        f"{filename} exports at {_export_call_sites(filename)} and never asks whether the "
+        f"GLB reached disk; a wrong filepath, an empty selection or a swallowed exporter "
+        f"refusal produces a success sentinel over an empty directory")
 
 
 @pytest.mark.parametrize("filename", [f for f in RECORDED_RENDERERS
@@ -548,6 +689,191 @@ def test_the_read_back_exemption_holds_for_the_reason_it_states():
             read_back.update(names)
         assert written <= read_back, {
             "file": filename, "rendered_but_never_opened": sorted(written - read_back)}
+
+
+# ---------------------- a success line is EARNED by a measurable effect (wave 12, rule 4)
+#
+# F-b777d4a3's second half. `test_every_blender_tool_prints_the_success_token_its_halt_token_
+# pairs_with` asserts that the token's SPELLING pairs with the halt prefix and that it
+# carries a payload — never that the run it announces did anything. That is how
+# `probe_subject` can print `PROBE_SUBJECT_OK {"json": ..., "n": len(records)}` and exit 0
+# with `n` at whatever the loop produced, including zero.
+#
+# THE NODE: a success line whose payload carries a `len(X)` term. `X` is the thing the run
+# produced, so the tool must REFUSE an empty `X` before it announces success — the same
+# structural claim as "a writer verifies its own output", one level up.
+
+
+def _counted_payload_terms(filename):
+    """`{line: [names counted with len() in the `_OK` payload]}` for one tool."""
+    tree = ast.parse(read_source(filename))
+    out = {}
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and getattr(node.func, "id", "") == "print"
+                and node.args):
+            continue
+        try:
+            rendered = ast.unparse(node)
+        except Exception:                                               # noqa: BLE001
+            continue
+        if "_OK" not in rendered:
+            continue
+        counted = []
+        for inner in ast.walk(node):
+            if (isinstance(inner, ast.Call) and getattr(inner.func, "id", "") == "len"
+                    and inner.args):
+                try:
+                    counted.append(ast.unparse(inner.args[0]))
+                except Exception:                                       # noqa: BLE001
+                    continue
+        if counted:
+            out[node.lineno] = sorted(set(counted))
+    return out
+
+
+#: Derived 2026-09-04: the Blender-side tools whose success payload reports a count.
+RECORDED_COUNTING_SUCCESS_LINES = [
+    "lift_solve.py", "make_parts_sheet.py", "make_rig_sheet.py", "preview_walk.py",
+    "probe_subject.py", "rig_parts.py", "rig_repair.py",
+]
+
+#: Named, dated 2026-09-04, routed to INSTRUMENTS: `probe_subject` prints
+#: `PROBE_SUBJECT_OK {"json": ..., "n": len(records)}` with nothing between the loop and the
+#: print, so a run that opened nothing announces success. A CEILING — a tool that grows the
+#: refusal leaves this set, and a NEW counting success line with no guard fails loudly.
+COUNTED_SUCCESS_WITHOUT_A_GUARD_ROUTED = {"probe_subject.py"}
+
+
+def _guards_the_count(filename, counted):
+    """True when some refusal ABOVE the success line mentions one of the counted names.
+
+    Structural and deliberately loose: the claim is "something refuses on the emptiness of
+    the thing being counted", not "it refuses in one particular spelling". A refusal is a
+    `raise` of an `ArmatureError` subclass or a `gate_`/`require_` call, which is the
+    behavioural predicate `tests/_census_nodes.py` derives.
+    """
+    import _census_nodes as CN
+
+    tree = ast.parse(read_source(filename))
+    names = {term.split("[", 1)[0].split(".", 1)[0] for term in counted}
+    error_names = CN.armature_error_names()
+    for fn in tree.body:
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for node in ast.walk(fn):
+            refuses = (isinstance(node, ast.Raise) and node.exc is not None
+                       and (getattr(getattr(node.exc, "func", node.exc), "id", "")
+                            in error_names
+                            or getattr(getattr(node.exc, "func", node.exc), "attr", "")
+                            in error_names))
+            calls_gate = (isinstance(node, ast.Call)
+                          and CN.is_refusal_call(CN.called_name(node)))
+            if not (refuses or calls_gate):
+                continue
+            try:
+                rendered = ast.unparse(node)
+            except Exception:                                           # noqa: BLE001
+                continue
+            if any(name and name in rendered for name in names):
+                return True
+    return False
+
+
+def _count_is_structurally_nonzero(filename, counted):
+    """True when a counted name is appended to UNCONDITIONALLY somewhere in a function.
+
+    The second honest category, and it is not an exemption granted by hand: measured on
+    `make_rig_sheet`, `rows` is `[]` followed by three `rows.append({...})` statements at the
+    top level of `main`, none of them inside an `if`, a `for`, a `while` or a `try` — so
+    `len(rows)` cannot be 0 and a guard against an empty one would be a check that cannot
+    fire. `probe_subject`'s `records` is appended to INSIDE a loop, which is exactly why its
+    count can be zero.
+    """
+    tree = ast.parse(read_source(filename))
+    names = {term.split("[", 1)[0].split(".", 1)[0] for term in counted}
+
+    def unconditional(body):
+        for stmt in body:
+            if isinstance(stmt, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try,
+                                 ast.With, ast.AsyncWith)):
+                continue
+            for node in ast.walk(stmt):
+                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                        and node.func.attr in ("append", "extend")
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id in names):
+                    return True
+        return False
+
+    for fn in ast.walk(tree):
+        if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and unconditional(fn.body):
+            return True
+    return False
+
+
+def test_the_structurally_nonzero_category_is_measured_and_not_asserted():
+    """Rule 3: the walk must tell the two shapes apart on the real tree, or it is an
+    exemption wearing a derivation's clothes."""
+    def terms(f):
+        return sorted({t for v in _counted_payload_terms(f).values() for t in v})
+
+    assert _count_is_structurally_nonzero("make_rig_sheet.py", terms("make_rig_sheet.py")), (
+        "`rows` is appended to unconditionally three times; if this reads as conditional the "
+        "category is measuring nothing")
+    assert not _count_is_structurally_nonzero(
+        "probe_subject.py", terms("probe_subject.py")), (
+        "`records` is appended to inside a loop and CAN be empty; the category must not "
+        "absorb the site it exists to leave uncovered")
+
+
+def test_the_counting_success_population_is_the_one_measured_today():
+    derived = sorted(f for f in BLENDER_TOOLS if _counted_payload_terms(f))
+    assert derived == RECORDED_COUNTING_SUCCESS_LINES, {
+        "appeared": sorted(set(derived) - set(RECORDED_COUNTING_SUCCESS_LINES)),
+        "vanished": sorted(set(RECORDED_COUNTING_SUCCESS_LINES) - set(derived))}
+    assert COUNTED_SUCCESS_WITHOUT_A_GUARD_ROUTED <= set(derived), sorted(
+        COUNTED_SUCCESS_WITHOUT_A_GUARD_ROUTED - set(derived))
+
+
+@pytest.mark.parametrize("filename", RECORDED_COUNTING_SUCCESS_LINES)
+def test_a_success_line_that_reports_a_count_is_guarded_against_an_empty_one(filename):
+    """Rule 4: `<PREFIX>_OK` prints only after the tool's own record shows it did the thing.
+
+    A payload that says `"n": len(records)` is the tool telling its caller how much work it
+    did; `0` is a run that did none, announced as a success.
+    """
+    counted = _counted_payload_terms(filename)
+    assert counted, filename
+    terms = sorted({t for v in counted.values() for t in v})
+    if _count_is_structurally_nonzero(filename, terms):
+        pytest.skip(
+            f"{filename}'s counted {terms} is appended to unconditionally, so `len()` "
+            f"cannot be 0 and a guard against an empty one would be a check that cannot "
+            f"fire. Measured by `_count_is_structurally_nonzero`, not granted by hand.")
+    guarded = _guards_the_count(filename, terms)
+    if not guarded and filename in COUNTED_SUCCESS_WITHOUT_A_GUARD_ROUTED:
+        pytest.skip(
+            f"{filename} prints a success line reporting {terms} and no refusal in the "
+            f"module mentions any of them, so a run that produced nothing announces "
+            f"success. Routed 2026-09-04 (F-b777d4a3) to instruments — `probe_subject` "
+            f"refuses an empty population before `PROBE_SUBJECT_OK`; this direction runs "
+            f"against this tool the moment that lands.")
+    assert guarded, (
+        f"{filename}'s success payload reports {terms} and nothing refuses an empty one; "
+        f"the token says the run succeeded and the count says it did nothing")
+
+
+def test_the_counted_success_walk_can_tell_a_guarded_tool_from_an_unguarded_one():
+    """Rule 3 on the walk itself, on the real tree: the two answers must differ.
+
+    `preview_walk` counts frames it has already gated; `probe_subject` counts records
+    nothing refuses. A walk that answered the same for both would be measuring nothing.
+    """
+    guarded = {f: _guards_the_count(f, sorted(
+        {t for v in _counted_payload_terms(f).values() for t in v}))
+        for f in RECORDED_COUNTING_SUCCESS_LINES}
+    assert guarded["probe_subject.py"] is False, guarded
+    assert any(v for k, v in guarded.items() if k != "probe_subject.py"), guarded
 
 
 def _writes_nothing():
@@ -731,6 +1057,15 @@ def stranded_refusals(filename):
 
     The refusal population is the sibling census's own `gate_and_write_lines` -- carried,
     not reimplemented, so the two files cannot disagree about what a refusal is.
+
+    WAVE 12, F-183635ad: carrying the sibling's walk was right and the walk was blind.
+    It recognised a refusal only by CALLEE NAME, and this file's own docstring said the
+    import existed "so the two files cannot disagree about what a refusal is" -- which made
+    both files agree on a predicate that cannot see an INLINE `raise`. Measured: this
+    function returned `[]` for every tool, while eleven of the 21 strand a refusal between
+    their `makedirs` and their first byte. `make_rig_sheet` is the instruments auditor's
+    example and it holds exactly: `<out>/` at :95, `<out>/panels/` at :97, then
+    `raise ArmatureError` inline at :112, :119 and :139.
     """
     import test_instrument_write_ordering as WO
 
@@ -739,6 +1074,22 @@ def stranded_refusals(filename):
         return []
     gates, _writes = WO.gate_and_write_lines(read_source(filename), filename[:-3])
     return sorted(line for line in gates if makedirs < line < first_byte)
+
+
+def stranded_refusal_names(filename):
+    """The same sites, as NAMES.
+
+    Keyed on names, not line numbers, for the ratchet below: a line number moves under any
+    edit above it, which is how 23 of 31 entries in `test_gates`'s evidence ratchet came to
+    name nothing (F-a30afea5).
+    """
+    import test_instrument_write_ordering as WO
+
+    makedirs, first_byte = write_window(filename)
+    if makedirs is None or first_byte is None:
+        return []
+    gates, _writes = WO.gate_and_write_lines(read_source(filename), filename[:-3])
+    return sorted({gates[line] for line in gates if makedirs < line < first_byte})
 
 
 #: Derived 2026-09-04: every Blender tool whose `main()` both creates its output directory
@@ -760,6 +1111,44 @@ def test_the_write_ordering_population_is_derived_and_is_the_one_recorded():
         "vanished": sorted(set(RECORDED_DIR_AND_WRITE) - set(derived))}
 
 
+#: MEASURED 2026-09-04 under the BEHAVIOURAL refusal predicate (wave 12, F-183635ad):
+#: eleven of the 21 strand a refusal between `makedirs` and the first byte, 22 distinct
+#: refusal names in all. Not one of them was visible while the predicate keyed on the callee
+#: name, so this whole table is a measurement of the old blindness rather than of new code.
+#:
+#: The moves are INSTRUMENTS' (the wave-12 brief routes "the 18 stranded refusals moved
+#: above the first write" there); this file's half is the census that makes them visible and
+#: the ratchet that stops a new one arriving. The set may not GROW; it is expected to shrink
+#: as the moves land, and an entry closed by a move is deleted by the commit that moves it.
+STRANDED_BETWEEN_DIR_AND_BYTE = {
+    "diagnose_bone_heat.py": ["load"],
+    "make_binding_sheet.py": ["render_arm"],
+    "make_parts_sheet.py": ["articulated_side", "light_the_scene", "raise ArmatureError"],
+    "make_rig_sheet.py": ["raise ArmatureError"],
+    "make_skeleton_sheet.py": ["light_the_scene", "raise SkeletonSheetGate"],
+    "make_test_armature.py": ["build"],
+    "render_turnaround.py": ["solve_ortho_scale_for_height", "solve_radius_for_height"],
+    "rig_bake.py": ["_import", "bake", "raise BakeEmpty", "unwrap"],
+    "rig_character.py": ["build_pass"],
+    "rig_repair.py": ["raise ArmatureError", "raise NotManifoldAfterRepair",
+                      "raise TooMuchRemoved"],
+    "rig_retopo.py": ["import_subject", "quadriflow", "raise NoRetopoProduced"],
+}
+
+
+def test_the_stranded_ratchet_names_real_members_and_may_not_grow():
+    """Size and membership before the property, in the direction that protects it."""
+    assert set(STRANDED_BETWEEN_DIR_AND_BYTE) <= set(RECORDED_DIR_AND_WRITE), sorted(
+        set(STRANDED_BETWEEN_DIR_AND_BYTE) - set(RECORDED_DIR_AND_WRITE))
+    derived = {f: stranded_refusal_names(f) for f in RECORDED_DIR_AND_WRITE}
+    derived = {f: v for f, v in derived.items() if v}
+    grew = {f: sorted(set(v) - set(STRANDED_BETWEEN_DIR_AND_BYTE.get(f, [])))
+            for f, v in derived.items()
+            if set(v) - set(STRANDED_BETWEEN_DIR_AND_BYTE.get(f, []))}
+    assert grew == {}, {"new refusals between the directory and the first byte": grew}
+    assert sum(len(v) for v in derived.values()) <= 22, sorted(derived.items())
+
+
 @pytest.mark.parametrize("filename", RECORDED_DIR_AND_WRITE)
 def test_no_refusal_sits_between_the_output_directory_and_the_first_byte(filename):
     """MEASURED 2026-09-04, thirteen stranded refusals across four tools:
@@ -771,6 +1160,13 @@ def test_no_refusal_sits_between_the_output_directory_and_the_first_byte(filenam
     A run refused by one of those leaves an empty output directory behind, which a reader
     scanning `outputs/` -- or a re-run into the same `--out` -- reads as an attempt that
     produced nothing rather than one that was refused."""
+    if filename in STRANDED_BETWEEN_DIR_AND_BYTE:
+        pytest.skip(
+            f"its stranded refusals are named individually in "
+            f"STRANDED_BETWEEN_DIR_AND_BYTE and ratcheted there "
+            f"({STRANDED_BETWEEN_DIR_AND_BYTE[filename]}); the moves are instruments' "
+            f"(wave 12, F-183635ad) and this module-level assertion would say nothing the "
+            f"ratchet does not")
     stranded = stranded_refusals(filename)
     makedirs, first_byte = write_window(filename)
     assert stranded == [], (
@@ -1180,7 +1576,7 @@ def outcome_literals(filename):
     return [], None
 
 
-@pytest.mark.parametrize("filename", BLENDER_TOOLS)
+@pytest.mark.parametrize("filename", HALT_HELD)
 def test_every_handler_spells_the_three_outcomes_the_same_way(filename):
     lits, _routed = outcome_literals(filename)
     assert tuple(lits) == OUTCOME_VOCABULARY, (
@@ -1191,7 +1587,7 @@ def test_every_handler_spells_the_three_outcomes_the_same_way(filename):
 def test_exactly_one_tool_routes_the_vocabulary_through_a_named_function():
     """The duplication itself, measured rather than described: 20 inline copies and one
     named `halt_outcome`, which is why the lift into `armature_core.errors` is filed."""
-    routed = {f: r for f in BLENDER_TOOLS for _l, r in [outcome_literals(f)] if r}
+    routed = {f: r for f in HALT_HELD for _l, r in [outcome_literals(f)] if r}
     assert routed == {"rig_character.py": "halt_outcome"}, routed
 
 

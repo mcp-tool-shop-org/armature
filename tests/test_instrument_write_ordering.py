@@ -22,16 +22,33 @@ same `--out`, reads as an attempt that produced nothing rather than one that was
 its docstring says its three andons all raise "before a byte is written", and that was
 true of the first view only — the gates ran inside the write loop.
 
-**The population is DERIVED, not typed.** It is every module in `tools/` whose
-module-level `main()` both runs an in-tool refusal and writes, read off the AST — so a
-tool added later joins this file by existing rather than by being remembered. The
-membership is asserted against what was measured today, so a new member fails loudly.
+**The population is DERIVED, not typed.** It is every module in `tools/` whose CLI body
+both runs an in-tool refusal and writes, read off the AST — so a tool added later joins
+this file by existing rather than by being remembered. The membership is asserted against
+what was measured today, so a new member fails loudly.
+
+**WAVE 12 (F-183635ad) — the predicate is keyed on BEHAVIOUR, not on a spelling.** Until
+this wave a refusal was recognised only by CALLEE NAME (`gate_`/`require_`/a named list).
+An inline `raise` is not a call, and a helper whose name matches none of those spellings is
+not one either, so both were invisible — and because `derive_population()` keeps a module
+only when `gates_at and writes_at`, a tool whose refusals are ALL inline never entered the
+population at all. Measured on this tree: 39 members under the old predicate, 62 under this
+one; 25 tools strand a refusal below their first write, and nine of them
+(`extract_clip_frames`, `make_parts_sheet`, `make_rig_sheet`, `make_shotset_sheet`,
+`measure_cascade_clip`, `preview_walk`, `rig_bake`, `rig_repair`, `rig_retopo`) were
+outside the census entirely. `make_rig_sheet.main` creates `<out>/` at :95 and
+`<out>/panels/` at :97 and then raises `ArmatureError` inline at :112, :119 and :139, so a
+refused run leaves two empty directories on disk and this file reported nothing about it.
+The predicate now lives in `tests/_census_nodes.refusal_and_write_lines` — ONE
+implementation, shared with `tests/test_canon_spend.py` (F-e63ce880) — and its blindness is
+kept runnable as `by_name_only=True` so the red proof can show, in one test, that the old
+walk cannot see the shape the new one reports.
 
 **The exemptions are named, dated, and checked against their reason**, not merely listed:
 
-* **Renders into its own output directory** — the tool writes the artefact that its later
-  gates then measure, so the directory must exist before the gate can run. Checked
-  mechanically: the module imports `bpy`.
+* **Refuses below its first write** — a per-refusal ratchet, no longer a module-wide skip
+  and no longer bpy-only. See the comment above `REFUSALS_BELOW_THE_FIRST_WRITE` for the
+  direction of the assertion and why it is a ceiling while wave 12's moves land.
 * **Reads back what it wrote** — `pack_pose_pack` encodes the pack, re-decodes the FILE
   (`read_pack(dst)`) and runs Gate R over the decode, which is the whole point of Gate R;
   `render_pose_sticks` measures the PNGs it drew; `fetch_t2v_run` gates the order of files
@@ -43,154 +60,107 @@ membership is asserted against what was measured today, so a new member fails lo
 """
 
 import ast
-import glob
 import os
 
 import pytest
 
-TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+import _census_nodes as CN
+
+TOOLS = CN.TOOLS
 
 #: The canon gate's three call names, as `tests/test_canon_spend.py` names them.
-CANON_CALLS = ("gate_write", "canon_spend", "require_canon")
+CANON_CALLS = CN.CANON_CALLS
 
-#: In-tool refusals that carry no `gate_`/`require_` prefix. Named rather than inferred,
-#: exactly as `test_canon_spend.OTHER_GATE_CALLS` is: this walk is blind to any refusal it
-#: cannot name, and each of these raises a typed error with an evidence dict.
+#: In-tool refusals that carry no `gate_`/`require_` prefix and raise through a helper this
+#: walk resolves anyway. Kept as a hint, not as the definition: since wave 12 the predicate
+#: is BEHAVIOURAL (`_census_nodes.refusal_and_write_lines`) and a refusal is any `raise` of
+#: an `ArmatureError` subclass, inline or one hop through a module-local helper.
 OTHER_GATE_CALLS = (
     "verify", "frame_legality", "parse_plate", "parse_boxes", "frame_paths",
     "frame_population", "frames_by_number", "check_runs", "common_frame_count",
     "bound_windows",
 )
 
+#: Every `ArmatureError` subclass name, from the live class hierarchy AND from the tree.
+#: Computed once: the walk below is run several hundred times across this module.
+ERROR_NAMES = CN.armature_error_names()
 
-def _called_name(node):
-    f = node.func
-    return (f.id if isinstance(f, ast.Name)
-            else f.attr if isinstance(f, ast.Attribute) else "")
+# ONE implementation of each node, in `tests/_census_nodes.py` (F-e63ce880): `_called_name`,
+# `_is_gate_call` and `_cli_body` used to be duplicated byte-for-byte between this file and
+# `tests/test_canon_spend.py` (identical 1901-character AST dumps), and only this copy
+# applied the mutually-exclusive-branch correction — so the two files reported different
+# write lines on `encode_control`, `measure_cascade_clip` and `rig_character` while each
+# docstring claimed to compute the other's answer.
+_called_name = CN.called_name
+_cli_body = CN.cli_body
+_returning_branch_spans = CN.returning_branch_spans
 
 
 def _is_gate_call(name):
-    return (name.startswith("gate_") or name.startswith("require_")
-            or name in CANON_CALLS or name in OTHER_GATE_CALLS)
+    """The NAME half of the predicate. Kept, and no longer the whole of it."""
+    return CN.is_refusal_call(name, CANON_CALLS, OTHER_GATE_CALLS)
 
 
-def _returning_branch_spans(fn):
-    """Line spans of `if` bodies that end in a `return` or a `raise`.
+def gate_and_write_lines(src, what, *, by_name_only=False):
+    """`({line: refusal}, {line: write kind})` for the tool's CLI body, or `(None, None)`.
 
-    A write inside one of those is on a path that never reaches the code below it, so
-    comparing its line number against a later refusal compares two mutually exclusive
-    branches and reports a defect that cannot happen. Measured 2026-09-04 on
-    `encode_control.main`: its `--survey` mode writes a codec report and returns, and the
-    plate parse sixteen lines below is on the other branch. Corrected here rather than
-    exempted, because the same shape will arrive again.
+    THE NODE, since wave 12 (F-183635ad): a refusal is any `raise` of an `ArmatureError`
+    subclass — inline in the CLI body, or one hop through a module-local helper that raises
+    one — UNIONED with the named gate calls above. The predicate this file shipped
+    recognised a refusal only by CALLEE NAME, and an inline `raise` is not a call: measured
+    on this tree, 18 tools strand one below their first write and 9 of them never entered
+    `derive_population()` at all, because that function keeps a module only when
+    `gates_at and writes_at`. `make_rig_sheet.main` creates `<out>/` and `<out>/panels/`
+    and then raises `ArmatureError` inline three times below them; the census reported
+    nothing about it, and `tests/test_instruments_amend_w10.stranded_refusals` — which
+    imports this function precisely "so the two files cannot disagree about what a refusal
+    is" — inherited the blindness and returned `[]` for every tool.
+
+    `by_name_only=True` restores the pre-wave-12 predicate, so the red proof below can show
+    in one test that the old walk cannot see the shape the new one reports.
     """
-    spans = []
-    for node in ast.walk(fn):
-        if (isinstance(node, ast.If) and node.body
-                and isinstance(node.body[-1], (ast.Return, ast.Raise))):
-            spans.append((node.body[0].lineno, node.body[-1].end_lineno))
-    return spans
-
-
-def _cli_body(tree):
-    """The module-level function that IS the tool's command line — derived, not named.
-
-    The census used to key on the function literally called `main`. That was the right node
-    only while every tool's `main` held its own body: wave 10 split three builders'
-    (`build_assembly_payload`, `build_cascade_payload`, `build_r2v_payload`) into
-    `build_and_write(argv)` — which builds, gates and writes — plus a `main(argv)` that
-    returns the process exit code and nothing else, because `main` used to `return wf`
-    under `raise SystemExit(main())` and exited 1 on a fully gated success. Keyed on the
-    NAME, this census reported "runs no in-tool refusal at all" for three tools whose
-    refusals had not moved an inch.
-
-    The derivation follows ONE delegation, and only out of a `main` that is a wrapper and
-    nothing else: at most three statements (its docstring aside) and exactly one call to a
-    module-level function of its own module. That function is then the body. Every other
-    `main` — including the eight builders that never split — is read exactly as before.
-    (An earlier draft keyed on "which function calls `parse_args`". Three builders define a
-    module-level helper literally named `parse_args`, so it picked the helper and reported
-    the same false emptiness one level down. Measured 2026-09-04.)
-    """
-    named = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
-    fn = named.get("main")
-    if fn is None:
-        return None
-    body = [st for st in fn.body
-            if not (isinstance(st, ast.Expr) and isinstance(st.value, ast.Constant))]
-    if len(body) > 3:
-        return fn
-    called = {c.func.id for c in ast.walk(fn)
-              if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
-              and c.func.id in named}
-    if len(called) == 1:
-        return named[next(iter(called))]
-    return fn
-
-
-def gate_and_write_lines(src, what):
-    """`({line: gate name}, {line: write kind})` for `main()`, or `(None, None)`.
-
-    The same shape `test_canon_spend._gate_and_write_lines` computes for the builders,
-    lifted here so the instruments are read by the same rule rather than a second one —
-    plus the mutually-exclusive-branch correction above.
-    """
-    fn = _cli_body(ast.parse(src))
-    if fn is None:
-        return None, None
-    gates_at, writes_at = {}, {}
-    for node in ast.walk(fn):
-        if not isinstance(node, ast.Call):
-            continue
-        called = _called_name(node)
-        if _is_gate_call(called):
-            gates_at.setdefault(node.lineno, called)
-        elif called == "makedirs":
-            writes_at.setdefault(node.lineno, "os.makedirs")
-        elif (called == "open" and len(node.args) >= 2
-              and isinstance(node.args[1], ast.Constant)
-              and "w" in str(node.args[1].value)):
-            writes_at.setdefault(node.lineno, 'open(..., "w")')
-    spans = _returning_branch_spans(fn)
-    for line in list(writes_at):
-        for lo, hi in spans:
-            if lo <= line <= hi and not any(lo <= g <= hi for g in gates_at):
-                del writes_at[line]
-                break
-    return gates_at, writes_at
+    return CN.refusal_and_write_lines(
+        src, error_names=ERROR_NAMES, canon_calls=CANON_CALLS,
+        other_gate_calls=OTHER_GATE_CALLS, by_name_only=by_name_only)
 
 
 def _source(name):
-    with open(os.path.join(TOOLS, f"{name}.py"), encoding="utf-8") as fh:
-        return fh.read()
+    return CN.read_source(name)
 
 
 def derive_population():
-    """Every `tools/*.py` whose `main()` both refuses and writes — walked, never typed."""
+    """Every `tools/*.py` whose CLI body both refuses and writes — walked, never typed."""
     out = {}
-    for path in sorted(glob.glob(os.path.join(TOOLS, "*.py"))):
+    for path in CN.tool_paths():
         name = os.path.basename(path)[:-3]
-        with open(path, encoding="utf-8") as fh:
-            src = fh.read()
-        gates_at, writes_at = gate_and_write_lines(src, name)
+        gates_at, writes_at = gate_and_write_lines(CN.read_source(name), name)
         if gates_at and writes_at:
             out[name] = (gates_at, writes_at)
     return out
 
 
 def imports_bpy(name):
-    """`import bpy` anywhere in the module — a Blender tool renders into its own out dir."""
-    for node in ast.walk(ast.parse(_source(name))):
-        if isinstance(node, ast.Import):
-            if any(a.name == "bpy" or a.name.startswith("bpy.") for a in node.names):
-                return True
-        if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "bpy":
-            return True
-    return False
+    """The module reaches Blender — a Blender tool renders into its own out dir.
+
+    Keyed on BEHAVIOUR since wave 12 (F-6b3040d1), not on the literal token `import bpy`:
+    `stage_render` reaches Blender through a lazily-instantiated backend and documents
+    `blender -b -P tools/stage_render.py`, and a population keyed on the token could not
+    see it. The name is kept because every caller reads it as the question "is this a
+    Blender tool".
+    """
+    return bool(CN.blender_reach(CN.read_source(name)))
 
 
-#: Measured 2026-09-04 by `derive_population()` on this tree. Asserted, so a tool that
-#: starts gating-and-writing joins this file loudly rather than slipping past it.
+#: Measured 2026-09-04 by `derive_population()` on this tree, under the BEHAVIOURAL refusal
+#: predicate (wave 12, F-183635ad). Asserted, so a tool that starts gating-and-writing joins
+#: this file loudly rather than slipping past it.
+#:
+#: 39 members under the name-keyed predicate, 62 under this one. The 23 that JOINED are the
+#: measurement of the finding: every one of them refuses — by an inline `raise` of an
+#: `ArmatureError` subclass, or through a module-local helper whose name carries no
+#: `gate_`/`require_` prefix — and writes, and none of them was examined by anything.
+#: `make_rig_sheet` is the pointed one: it creates `<out>/` and `<out>/panels/` and then
+#: raises `ArmatureError` inline at three lines below them.
 POPULATION_MEASURED_2026_09_04 = {
     "author_walk", "build_animate_payload", "build_assembly_payload",
     "build_camera_i2v_payload", "build_cascade_payload", "build_i2v_payload",
@@ -212,32 +182,18 @@ POPULATION_MEASURED_2026_09_04 = {
     # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`, which measures
     # the reason rather than the `imports_bpy` proxy.
     "preview_glb",
-    # JOINED 2026-09-04 by the instruments wave-12 amend (F-5b3ead49): `probe_subject.main`
-    # now calls `require_openable` before the population is built and
-    # `require_something_measured` before its OK line, so it gates-and-writes where before
-    # it only wrote. It is a `bpy` tool; its ordering is pinned by
-    # `tests/test_instruments_amend_w12.py::
-    # test_no_refusal_is_stranded_below_the_output_directory_in_any_of_the_eleven`'s
-    # population test, which measures the reason rather than the `imports_bpy` proxy, and
-    # `os.makedirs` sits below both refusals.
-    "probe_subject",
-    # JOINED 2026-09-04 by the instruments wave-12 amend (F-9b2d4106): all four now call
-    # `rig_character.gate_glb_written` after `bpy.ops.export_scene.gltf`, which returns an
-    # operator status set and can return CANCELLED without raising. They gate-and-write
-    # where before they only wrote. All four are `bpy` tools; the ordering itself is pinned
-    # by `tests/test_instruments_amend_w12.py`'s window census, which measures the reason
-    # rather than the `imports_bpy` proxy.
-    "make_test_armature", "rig_bake", "rig_repair", "rig_retopo",
-    # JOINED 2026-09-04 by the instruments-measure wave-12 amend (F-c397574b):
-    # `measure_cascade_clip.main` now calls `gate_clip_rate` -- `--expect-fps` was parsed,
-    # recorded and printed beside the rate read off the stream with nothing comparing them
-    # -- so it gates-and-writes where before it only wrote. Its `os.makedirs` moved BELOW
-    # the shape and rate clauses in the same commit; it stays above the COUNT clause, which
-    # deliberately writes its `COUNT MISMATCH` record before raising.
-    "measure_cascade_clip",
     "make_thesis_sheet", "measure_floor", "measure_lift",
     "pack_pose_pack", "project_pose_keypoints", "render_performer", "render_pose_sticks",
     "render_start_frame", "render_turnaround", "rig_character", "rig_parts",
+    # ---------------------------------------------------------------------------------
+    # JOINED 2026-09-04 (wave 12, F-183635ad) when the predicate stopped keying on the
+    # callee's SPELLING. Each of these refuses somewhere the name-keyed walk could not
+    # look; none of them is new code.
+    "compare_runs", "diagnose_bone_heat", "extract_clip_frames", "fetch_run",
+    "make_binding_sheet", "make_e08_sheet", "make_parts_sheet", "make_rig_sheet",
+    "make_shotset_sheet", "make_test_armature", "make_zoom_sheet", "measure_arm",
+    "measure_cascade_clip", "measure_clip", "measure_smoothness", "measure_tracking",
+    "preview_walk", "probe_glb", "probe_subject", "rig_bake", "rig_repair", "rig_retopo",
 }
 
 #: The write IS the thing the later gate measures. Named, dated 2026-09-04, and each
@@ -289,58 +245,76 @@ def test_the_two_exemption_classes_do_not_absorb_each_other():
     assert both == [], both
 
 
-# --------------------------- the bpy exemption, keyed on the REFUSAL rather than the module
+# ------------------------------- the exemption, keyed on the REFUSAL rather than the module
 #
 # WAVE 10, F-82e87ccc. The stated reason for the bpy exemption is narrow — "the tool writes
 # the artefact that its later gates then measure, so the directory must exist before the
 # gate can run" — and the check was `if imports_bpy(name): pytest.skip(...)`, which excuses
 # EVERY refusal in the module rather than the ones that measure a rendered artefact. That is
-# the proxy-instead-of-reason shape this wave exists to close: `imports bpy` is a property of
-# the MODULE; "measures what it wrote" is a property of the REFUSAL.
+# the proxy-instead-of-reason shape: `imports bpy` is a property of the MODULE; "measures
+# what it wrote" is a property of the REFUSAL. So the module-wide skip became a per-refusal
+# RATCHET.
 #
-# Measured 2026-09-04 over the derived population (8 bpy members, 3 read-back members, 27
-# policed): 29 refusals sit below their tool's first write, and several are plainly
-# independent of the output directory — `gate_n_names`, `gate_space_is_identity` and
-# `gate_objects_registered` read the ARMATURE, not a render.
+# WAVE 12, F-183635ad. The ratchet was right and its INPUT was blind. Under the behavioural
+# predicate the ratchet is no longer a bpy-only list — a CPython instrument strands a
+# refusal exactly the same way, and five of them do — so it is renamed for what it holds and
+# re-measured: 25 tools, 62 distinct refusal names, 87 sites, on 2026-09-04.
 #
-# So the module-wide skip is replaced by a per-refusal RATCHET, asserted by equality in both
-# directions: the set below may not GROW (a new refusal under a write fails here, naming the
-# tool and the refusal) and a refusal that moves above the write must be deleted from it in
-# the same commit. Each entry is routed to the domain that owns the tool: author_walk,
-# lift_solve, render_performer, render_start_frame, render_turnaround, rig_character and
-# rig_parts are instruments (lift_solve is core-solvers' module and a bpy tool);
-# make_skeleton_sheet is instruments.
-REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL = {
-    # WAVE-10 MERGE (coordinator, 2026-09-04): instruments moved thirteen refusals above the first write across four
-    # tools (F-d47095fa): `author_walk` and `lift_solve` each CLOSED four here (measured; deleted).
-    # WAVE 12 (instruments, F-9b2d4106): `gate_glb_written` joins eight entries across six
-    # tools, and it is the EXEMPTION'S OWN REASON rather than an excuse — it reads back the
-    # GLB the export just wrote, so it cannot run before that write any more than
-    # `preview_glb.gate_previews_written` can run before its four renders.
-    # `bpy.ops.export_scene.gltf` returns an operator status set and can return CANCELLED
-    # without raising; nothing in the tree refused a zero-byte export before this wave.
-    "author_walk": ["gate_a_arrival", "gate_glb_written", "gate_n_names"],
-    "lift_solve": ["gate_arrived", "gate_glb_written", "gate_n_names"],
-    "make_skeleton_sheet": ["gate_any_pivot_matched"],
-    "make_test_armature": ["gate_glb_written"],
-    "render_performer": ["gate_coverage"],
-    # WAVE-10 MERGE (coordinator, 2026-09-04): `preview_glb` JOINED — `gate_previews_written` checks that the four views
-    # reached disk (F-13bd448d) and can only run AFTER the writes; a refusal that verifies its own
-    # output is below the first write by construction. `render_start_frame.gate_whole` and three
-    # `rig_parts` refusals CLOSED (measured on the merged tree; deleted, not relaxed).
+# **Direction of the assertion, and why it is not equality this wave.** The set may not
+# GROW: a new stranded refusal — under a tool already listed or a tool not listed — fails
+# loudly, naming the tool and the refusal. It is expected to SHRINK while wave 12 is in
+# flight: `instruments` and `instruments-measure` own the moves (the coordinator brief
+# routes "the 18 stranded refusals moved above the first write" to instruments), and each
+# entry names the domain that owns it below. An entry closed by such a move is DELETED in
+# the commit that moves it — that is the ratchet's other half, and it is administered at
+# merge rather than here, because a sibling landing its half in a parallel worktree must not
+# fail this file. Equality returns the moment the moves have landed; the growth direction —
+# the one that protects the property — is asserted today.
+REFUSALS_BELOW_THE_FIRST_WRITE = {
+    # ---- instruments (Blender-side) ----
+    "author_walk": ["gate_a_arrival", "gate_n_names", "pick_subject"],
+    "diagnose_bone_heat": ["load"],
+    "lift_solve": ["gate_arrived", "gate_n_names", "pick_subject"],   # core-solvers' module
+    "make_binding_sheet": ["render_arm"],
+    "make_parts_sheet": ["articulated_side", "light_the_scene", "raise ArmatureError",
+                         "shoot"],
+    "make_rig_sheet": ["import_reference", "raise ArmatureError"],
+    "make_skeleton_sheet": ["gate_any_pivot_matched", "light_the_scene",
+                            "raise SkeletonSheetGate"],
+    "make_test_armature": ["build"],
+    # `preview_glb.gate_previews_written` checks that the four views reached disk
+    # (F-13bd448d) and can only run AFTER the writes; a refusal that verifies its own output
+    # is below the first write by construction.
     "preview_glb": ["gate_previews_written"],
-    "render_start_frame": ["gate_alpha", "gate_backdrop"],
+    "preview_walk": ["raise PreviewWalkGate"],
+    "render_performer": ["gate_coverage", "raise RenderGate"],
+    "render_start_frame": ["gate_alpha", "gate_backdrop", "raise RenderGate"],
     "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop",
-                          "gate_whole"],
-    # WAVE-12 (instruments, F-244b2ad5): `rig_character` CLOSED both of its entries in the
-    # commit that moved them. `os.makedirs` left the top of `main` and is now created per
-    # branch below the last refusal, so Gate D and Gate N both sit ABOVE the first write on
-    # every route. Deleted here, as this ratchet's own rule requires, rather than relaxed.
-    "rig_bake": ["gate_glb_written"],
-    "rig_parts": ["gate_atlas_untouched", "gate_glb_written", "gate_part_names"],
-    "rig_repair": ["gate_glb_written"],
-    "rig_retopo": ["gate_glb_written"],
+                          "gate_whole", "raise RenderTurnaroundGate",
+                          "solve_ortho_scale_for_height", "solve_radius_for_height"],
+    "rig_bake": ["_import", "bake", "raise BakeEmpty", "unwrap"],
+    "rig_character": ["build_pass", "export_rigged", "gate_d_determinism", "gate_n_names",
+                      "raise GateMode", "unbound_determinism_record"],
+    "rig_parts": ["gate_atlas_untouched", "gate_part_names"],
+    "rig_repair": ["raise ArmatureError", "raise NotManifoldAfterRepair",
+                   "raise TooMuchRemoved"],
+    "rig_retopo": ["import_subject", "quadriflow", "raise NoRetopoProduced"],
+    # ---- instruments-measure / instruments (CPython) — JOINED 2026-09-04 under the
+    # behavioural predicate; none of these was visible to the name-keyed walk ----
+    "extract_clip_frames": ["probe", "raise ClipReadError"],
+    "fit_reference": ["raise FitReferenceError"],
+    "make_lift_sheet": ["subject_box"],
+    "make_plate": ["raise ArmatureError"],
+    "make_shotset_sheet": ["_refuse_across_elevations", "load_set",
+                           "raise ShotsetSheetError"],
+    "measure_cascade_clip": ["raise ClipCountError", "raise ClipShapeError"],
+    # ---- builders ----
+    "fetch_run": ["download", "verify_downloads"],
 }
+
+#: The old name, kept as an alias for one wave so a sibling worktree importing it does not
+#: break at merge. It is the same object; the list is no longer bpy-only.
+REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL = REFUSALS_BELOW_THE_FIRST_WRITE
 
 
 def refusals_below_the_first_write(name):
@@ -358,58 +332,55 @@ def refusals_below_the_first_write(name):
     return sorted({gates_at[ln] for ln in gates_at if ln > first_write})
 
 
-def test_the_bpy_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
-    """Size and membership before the property, and equality in BOTH directions.
+def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
+    """Size and membership before the property, in the direction that protects it.
 
-    A subset assertion here would let a closed refusal sit in the list forever and a new
-    one arrive under an already-listed tool in silence.
+    The ratchet MAY NOT GROW: a stranded refusal that is not on the list fails here, naming
+    the tool and the refusal, whether or not the tool is already listed. It may shrink while
+    wave 12's moves land in sibling worktrees (see the comment above the constant); the
+    entries closed by a move are deleted by the commit that moves them.
+
+    Every listed tool is checked to be a real member of the derived population, so an entry
+    naming a tool that stopped gating-and-writing cannot sit here saying nothing.
     """
-    bpy_members = sorted(n for n in derive_population() if imports_bpy(n))
-    listed = sorted(REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL)
-    assert set(listed) <= set(bpy_members), sorted(set(listed) - set(bpy_members))
-    derived = {n: refusals_below_the_first_write(n) for n in bpy_members}
-    derived = {n: v for n, v in derived.items() if v}
-    assert derived == REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL, {
-        "new refusals under a write (fix, or add with the reason)":
-            {n: sorted(set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL.get(n, [])))
-             for n, v in derived.items()
-             if set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL.get(n, []))},
-        "closed — delete these in the commit that moved them":
-            {n: sorted(set(v) - set(derived.get(n, [])))
-             for n, v in REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL.items()
-             if set(v) - set(derived.get(n, []))},
-    }
-    # Two numbers, because they count two different things and the finding quoted the
-    # second: 26 distinct refusal NAMES over 29 SITES, the gap being names that appear
-    # twice under one tool (`author_walk.gate_n_names` at :552 and :604, and two more).
-    # The ratchet keys on names; the site count is asserted beside it so a duplicate
-    # appearing or vanishing is visible rather than silently collapsed.
-    # WAVE-10 MERGE (coordinator, 2026-09-04): 26 names / 29 sites -> re-measured on the merged tree after instruments moved
-    # thirteen refusals above the first write (F-d47095fa); both numbers below are the measurement.
-    # WAVE 12 (instruments): 17 names / 17 sites -> 22 / 23. `rig_character`'s
-    # `gate_d_determinism` and `gate_n_names` both moved ABOVE the first write when
-    # `os.makedirs` left the top of `main` (F-244b2ad5, -2); `gate_glb_written` joined
-    # eight entries across six tools (F-9b2d4106, +7 names because `rig_parts` already
-    # listed two). Both numbers are re-measured, not relaxed; the site count exceeds the
-    # name count because `author_walk.gate_n_names` appears at two lines under one tool.
-    assert sum(len(v) for v in derived.values()) == 22, sorted(derived.items())
+    members = sorted(derive_population())
+    listed = sorted(REFUSALS_BELOW_THE_FIRST_WRITE)
+    assert set(listed) <= set(members), sorted(set(listed) - set(members))
+    derived = {n: refusals_below_the_first_write(n) for n in members}
+    derived = {n: v for n, v in derived.items() if v and n not in GATES_READ_BACK_WHAT_THEY_WROTE}
+    grew = {n: sorted(set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, [])))
+            for n, v in derived.items()
+            if set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, []))}
+    assert grew == {}, {
+        "new refusals under a write (move them above it, or add with the reason)": grew}
+    # Two numbers, because they count two different things: distinct refusal NAMES and
+    # SITES, the gap being names that appear twice under one tool. The ratchet keys on
+    # names; the site count is asserted beside it so a duplicate appearing is visible
+    # rather than silently collapsed. Both are ceilings, for the reason above.
+    # MEASURED 2026-09-04 under the behavioural predicate: 25 tools, 62 names, 87 sites.
+    names = sum(len(v) for v in derived.values())
+    assert names <= 62, sorted(derived.items())
     sites = 0
-    for name in bpy_members:
+    for name in members:
+        if name in GATES_READ_BACK_WHAT_THEY_WROTE:
+            continue
         gates_at, writes_at = gate_and_write_lines(_source(name), name)
         if not gates_at or not writes_at:
             continue
         sites += sum(1 for ln in gates_at if ln > min(writes_at))
-    assert sites == 23, (
-        f"{sites} refusal SITES below a first write; 23 were measured on 2026-09-04 "
-        f"(wave 12, after rig_character's two moved above its first write and "
-        f"`gate_glb_written` landed on the eight glTF exporters)")
+    assert sites <= 87, (
+        f"{sites} refusal SITES below a first write; 87 were measured on 2026-09-04 under "
+        f"the behavioural predicate and the number may only fall")
 
 
-def test_a_bpy_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():
-    """The exemption excuses REFUSALS, not modules: a bpy tool whose refusals all sit above
-    its first write must still be asserted, not skipped for importing bpy."""
-    bpy_members = sorted(n for n in derive_population() if imports_bpy(n))
-    clean = [n for n in bpy_members if not refusals_below_the_first_write(n)]
+def test_a_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():
+    """The exemption excuses REFUSALS, not modules: a tool whose refusals all sit above its
+    first write must still be asserted, not skipped for reaching Blender."""
+    members = sorted(derive_population())
+    clean = [n for n in members
+             if not refusals_below_the_first_write(n)
+             and n not in GATES_READ_BACK_WHAT_THEY_WROTE]
+    assert clean, "no member is clean; the walk is not measuring anything"
     for name in clean:
         gates_at, writes_at = gate_and_write_lines(_source(name), name)
         if not gates_at or not writes_at:
@@ -431,20 +402,112 @@ def test_the_per_refusal_exemption_goes_red_on_a_new_refusal_under_a_write():
     gates_at, mutated_writes = gate_and_write_lines("".join(lines), name)
     below = sorted({gates_at[ln] for ln in gates_at if ln > min(mutated_writes)})
     assert "gate_a_brand_new_refusal" in below, below
-    assert set(below) - set(
-        REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL.get(name, [])) == {
+    assert set(below) - set(REFUSALS_BELOW_THE_FIRST_WRITE[name]) == {
         "gate_a_brand_new_refusal"}
+
+
+# ---------------------------------------- THE RED PROOF: the shape that hides from the name
+#
+# Wave 12, rule 2: every census fix ships a fixture carrying the property under a DIFFERENT
+# spelling and is shown red on it. The spelling this walk was blind to is an INLINE `raise`
+# — not a call at all, so no callee-name predicate can reach it — and a module-local helper
+# whose name carries no `gate_`/`require_` prefix.
+
+
+INLINE_RAISE_MODULE = (
+    "import os\n"
+    "from armature_core.errors import ArmatureError\n"
+    "def main(argv=None):\n"
+    "    os.makedirs(out, exist_ok=True)\n"
+    "    if not frames:\n"
+    "        raise ArmatureError('expected exactly one skinned mesh')\n"
+    "    with open(path, 'w') as fh:\n"
+    "        fh.write('x')\n"
+)
+
+# `main` here carries four statements on purpose: `cli_body` follows ONE delegation out of a
+# `main` that is a three-statement wrapper calling exactly one module-level function, so a
+# shorter probe would be read AS the helper rather than as a caller of it.
+HELPER_HOP_MODULE = (
+    "import os\n"
+    "from armature_core.errors import ArmatureError\n"
+    "def import_reference(path):\n"
+    "    raise ArmatureError('nothing importable')\n"
+    "def main(argv=None):\n"
+    "    src = argv[0]\n"
+    "    out = argv[1]\n"
+    "    os.makedirs(out, exist_ok=True)\n"
+    "    import_reference(src)\n"
+    "    with open(out, 'w') as fh:\n"
+    "        fh.write('x')\n"
+)
+
+
+def test_the_refusal_predicate_sees_an_inline_raise_that_the_name_keyed_one_cannot():
+    """RED on the hidden spelling, and the old walk shown blind to it in the same test.
+
+    `make_rig_sheet.main` is this shape on the real tree: `<out>/` at :95 and
+    `<out>/panels/` at :97, then `raise ArmatureError` inline at :112, :119 and :139. Under
+    the name-keyed predicate the module carried no refusals at all, so
+    `derive_population()` — which keeps a module only when `gates_at and writes_at` —
+    dropped it, and the census reported nothing about a refused run that leaves two empty
+    directories on disk.
+    """
+    gates, writes = gate_and_write_lines(INLINE_RAISE_MODULE, "probe")
+    assert writes, "the probe writes; the walk must see that"
+    stranded = sorted(gates[ln] for ln in gates if ln > min(writes))
+    assert stranded == ["raise ArmatureError"], (gates, writes)
+
+    blind_gates, blind_writes = gate_and_write_lines(
+        INLINE_RAISE_MODULE, "probe", by_name_only=True)
+    assert blind_gates == {}, (
+        "the pre-wave-12 predicate reported a refusal it cannot structurally see; the "
+        "comparison this test makes is meaningless")
+    assert blind_writes, blind_writes
+    # …and the consequence: with no refusal, the module never enters `derive_population()`.
+    assert not (blind_gates and blind_writes)
+
+
+def test_the_refusal_predicate_follows_one_hop_into_a_helper_with_no_gate_prefix():
+    """The second hidden spelling: `import_reference(src)` is a refusal because the callee
+    raises, not because of how it is spelled."""
+    gates, writes = gate_and_write_lines(HELPER_HOP_MODULE, "probe")
+    stranded = sorted(gates[ln] for ln in gates if ln > min(writes))
+    assert stranded == ["import_reference"], (gates, writes)
+    blind_gates, _ = gate_and_write_lines(HELPER_HOP_MODULE, "probe", by_name_only=True)
+    assert blind_gates == {}, blind_gates
+
+
+def test_the_nine_tools_the_name_keyed_walk_could_not_see_are_in_the_population_now():
+    """The measurement, asserted rather than narrated (F-183635ad).
+
+    Nine tools strand a refusal below their first write AND were outside
+    `derive_population()` entirely under the name-keyed predicate, because that function
+    keeps a module only when it can see both a refusal and a write.
+    """
+    joined = ["extract_clip_frames", "make_parts_sheet", "make_rig_sheet",
+              "make_shotset_sheet", "measure_cascade_clip", "preview_walk", "rig_bake",
+              "rig_repair", "rig_retopo"]
+    pop = derive_population()
+    for name in joined:
+        assert name in pop, f"{name} is not in the derived population"
+        assert refusals_below_the_first_write(name), name
+        blind_gates, blind_writes = gate_and_write_lines(
+            _source(name), name, by_name_only=True)
+        assert not (blind_gates and blind_writes), (
+            f"{name} was already visible to the name-keyed predicate; it does not belong "
+            f"in this list")
 
 
 @pytest.mark.parametrize("name", sorted(POPULATION_MEASURED_2026_09_04))
 def test_no_refusal_sits_below_the_first_write(name):
     if name in GATES_READ_BACK_WHAT_THEY_WROTE:
         pytest.skip(f"exempt: {GATES_READ_BACK_WHAT_THEY_WROTE[name]}")
-    if name in REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL:
+    if name in REFUSALS_BELOW_THE_FIRST_WRITE:
         pytest.skip(
             "its refusals under the first write are named individually in "
-            "REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL and ratcheted there; this "
-            "module-level assertion would say nothing the ratchet does not")
+            "REFUSALS_BELOW_THE_FIRST_WRITE and ratcheted there; this module-level "
+            "assertion would say nothing the ratchet does not")
     gates_at, writes_at = gate_and_write_lines(_source(name), name)
     last_gate, first_write = max(gates_at), min(writes_at)
     assert last_gate < first_write, (

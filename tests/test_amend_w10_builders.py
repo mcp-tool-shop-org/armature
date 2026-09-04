@@ -41,6 +41,7 @@ import pytest
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "tools"))
 
+import _census_nodes as CN  # noqa: E402
 import build_assembly_payload as ASSEMBLY  # noqa: E402
 import build_cascade_payload as CASCADE  # noqa: E402
 from armature_core import assembly as AS  # noqa: E402
@@ -51,19 +52,12 @@ from armature_core import route_gates as RG  # noqa: E402
 # the population, derived the way test_packaging derives it
 # =======================================================================================
 
-def _spend_and_fetch_tools():
-    """Every `tools/build_*payload*.py`, `tools/fetch_*.py`, `canon_gate.py` and
-    `gate_saved_graph.py` — the CPU-side tools that author a submission, gate one, or
-    retrieve its output. The same derivation `test_packaging._spend_and_fetch_tools` uses;
-    the two must agree, and `test_the_population_agrees_with_the_packaging_census` says so.
-    """
-    tools = os.path.join(REPO, "tools")
-    return sorted(
-        n for n in os.listdir(tools)
-        if n.endswith(".py")
-        and ((n.startswith("build_") and "payload" in n)
-             or n.startswith("fetch_")
-             or n in ("canon_gate.py", "gate_saved_graph.py")))
+# WAVE 12, F-e63ce880: ONE derivation. This function was byte-identical to
+# `test_packaging._spend_and_fetch_tools` — a census POPULATION derived twice, so a
+# correction to either would have been a silent drift in the other's membership, with
+# `test_the_population_agrees_with_the_packaging_census` asserting agreement between two
+# copies of the same code rather than the identity of one.
+_spend_and_fetch_tools = CN.spend_and_fetch_tools
 
 
 CPU_TOOLS = _spend_and_fetch_tools()
