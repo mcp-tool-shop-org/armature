@@ -219,10 +219,134 @@ def test_the_two_exemption_classes_do_not_absorb_each_other():
     assert both == [], both
 
 
+# --------------------------- the bpy exemption, keyed on the REFUSAL rather than the module
+#
+# WAVE 10, F-82e87ccc. The stated reason for the bpy exemption is narrow — "the tool writes
+# the artefact that its later gates then measure, so the directory must exist before the
+# gate can run" — and the check was `if imports_bpy(name): pytest.skip(...)`, which excuses
+# EVERY refusal in the module rather than the ones that measure a rendered artefact. That is
+# the proxy-instead-of-reason shape this wave exists to close: `imports bpy` is a property of
+# the MODULE; "measures what it wrote" is a property of the REFUSAL.
+#
+# Measured 2026-09-04 over the derived population (8 bpy members, 3 read-back members, 27
+# policed): 29 refusals sit below their tool's first write, and several are plainly
+# independent of the output directory — `gate_n_names`, `gate_space_is_identity` and
+# `gate_objects_registered` read the ARMATURE, not a render.
+#
+# So the module-wide skip is replaced by a per-refusal RATCHET, asserted by equality in both
+# directions: the set below may not GROW (a new refusal under a write fails here, naming the
+# tool and the refusal) and a refusal that moves above the write must be deleted from it in
+# the same commit. Each entry is routed to the domain that owns the tool: author_walk,
+# lift_solve, render_performer, render_start_frame, render_turnaround, rig_character and
+# rig_parts are instruments (lift_solve is core-solvers' module and a bpy tool);
+# make_skeleton_sheet is instruments.
+REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL = {
+    "author_walk": ["gate_a_arrival", "gate_d_determinism", "gate_f_fk_agreement",
+                    "gate_n_names", "gate_objects_registered", "gate_space_is_identity"],
+    "lift_solve": ["gate_arrived", "gate_n_names", "gate_objects_registered",
+                   "gate_space_is_identity"],
+    "make_skeleton_sheet": ["gate_any_pivot_matched"],
+    "render_performer": ["gate_coverage"],
+    "render_start_frame": ["gate_alpha", "gate_backdrop", "gate_whole"],
+    "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop",
+                          "gate_whole"],
+    "rig_character": ["gate_d_determinism", "gate_n_names"],
+    "rig_parts": ["gate_atlas_untouched", "gate_p_bind_pose", "gate_part_names",
+                  "gate_parts_determinism", "gate_rigid_arrival"],
+}
+
+
+def refusals_below_the_first_write(name):
+    """The refusal NAMES in `name.main` that sit below its first write.
+
+    Keyed on names, not line numbers: a line number moves under any edit above it, which is
+    how 23 of 31 entries in `test_gates`'s evidence ratchet came to name nothing
+    (F-a30afea5). A duplicate name at two lines collapses to one entry, deliberately — the
+    question this ratchet asks is "which refusals are excused", not "how many times".
+    """
+    gates_at, writes_at = gate_and_write_lines(_source(name), name)
+    if not gates_at or not writes_at:
+        return []
+    first_write = min(writes_at)
+    return sorted({gates_at[ln] for ln in gates_at if ln > first_write})
+
+
+def test_the_bpy_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
+    """Size and membership before the property, and equality in BOTH directions.
+
+    A subset assertion here would let a closed refusal sit in the list forever and a new
+    one arrive under an already-listed tool in silence.
+    """
+    bpy_members = sorted(n for n in derive_population() if imports_bpy(n))
+    listed = sorted(REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL)
+    assert set(listed) <= set(bpy_members), sorted(set(listed) - set(bpy_members))
+    derived = {n: refusals_below_the_first_write(n) for n in bpy_members}
+    derived = {n: v for n, v in derived.items() if v}
+    assert derived == REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL, {
+        "new refusals under a write (fix, or add with the reason)":
+            {n: sorted(set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL.get(n, [])))
+             for n, v in derived.items()
+             if set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL.get(n, []))},
+        "closed — delete these in the commit that moved them":
+            {n: sorted(set(v) - set(derived.get(n, [])))
+             for n, v in REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL.items()
+             if set(v) - set(derived.get(n, []))},
+    }
+    # Two numbers, because they count two different things and the finding quoted the
+    # second: 26 distinct refusal NAMES over 29 SITES, the gap being names that appear
+    # twice under one tool (`author_walk.gate_n_names` at :552 and :604, and two more).
+    # The ratchet keys on names; the site count is asserted beside it so a duplicate
+    # appearing or vanishing is visible rather than silently collapsed.
+    assert sum(len(v) for v in derived.values()) == 26, sorted(derived.items())
+    sites = 0
+    for name in bpy_members:
+        gates_at, writes_at = gate_and_write_lines(_source(name), name)
+        if not gates_at or not writes_at:
+            continue
+        sites += sum(1 for ln in gates_at if ln > min(writes_at))
+    assert sites == 29, (
+        f"{sites} refusal SITES below a first write; 29 were measured on 2026-09-04")
+
+
+def test_a_bpy_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():
+    """The exemption excuses REFUSALS, not modules: a bpy tool whose refusals all sit above
+    its first write must still be asserted, not skipped for importing bpy."""
+    bpy_members = sorted(n for n in derive_population() if imports_bpy(n))
+    clean = [n for n in bpy_members if not refusals_below_the_first_write(n)]
+    for name in clean:
+        gates_at, writes_at = gate_and_write_lines(_source(name), name)
+        if not gates_at or not writes_at:
+            continue
+        assert max(gates_at) < min(writes_at), (name, gates_at, writes_at)
+
+
+def test_the_per_refusal_exemption_goes_red_on_a_new_refusal_under_a_write():
+    """Rule 3, on a real member's real source: insert a refusal BELOW the first write in a
+    bpy tool and the derived set must grow, so the ratchet above would fail."""
+    name = "rig_character"
+    src = _source(name)
+    _, writes_at = gate_and_write_lines(src, name)
+    at = min(writes_at)
+    lines = src.splitlines(keepends=True)
+    target = lines[at - 1]
+    indent = target[:len(target) - len(target.lstrip())]
+    lines.insert(at, f"{indent}gate_a_brand_new_refusal(x)\n")
+    gates_at, mutated_writes = gate_and_write_lines("".join(lines), name)
+    below = sorted({gates_at[ln] for ln in gates_at if ln > min(mutated_writes)})
+    assert "gate_a_brand_new_refusal" in below, below
+    assert set(below) - set(REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL[name]) == {
+        "gate_a_brand_new_refusal"}
+
+
 @pytest.mark.parametrize("name", sorted(POPULATION_MEASURED_2026_09_04))
 def test_no_refusal_sits_below_the_first_write(name):
-    if imports_bpy(name) or name in GATES_READ_BACK_WHAT_THEY_WROTE:
-        pytest.skip(f"exempt: {'renders into its own out dir (imports bpy)' if imports_bpy(name) else GATES_READ_BACK_WHAT_THEY_WROTE[name]}")
+    if name in GATES_READ_BACK_WHAT_THEY_WROTE:
+        pytest.skip(f"exempt: {GATES_READ_BACK_WHAT_THEY_WROTE[name]}")
+    if name in REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL:
+        pytest.skip(
+            "its refusals under the first write are named individually in "
+            "REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL and ratcheted there; this "
+            "module-level assertion would say nothing the ratchet does not")
     gates_at, writes_at = gate_and_write_lines(_source(name), name)
     last_gate, first_write = max(gates_at), min(writes_at)
     assert last_gate < first_write, (
