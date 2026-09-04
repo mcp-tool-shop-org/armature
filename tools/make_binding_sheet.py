@@ -34,7 +34,7 @@ from mathutils import Vector  # noqa: E402
 
 import rig_character  # noqa: E402
 from armature_core import blender_scene  # noqa: E402
-from armature_core.errors import ArmatureError  # noqa: E402
+from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 from make_parts_sheet import articulated_side, side_word  # noqa: E402,F401
 
 FULL_W, FULL_H = 780, 1180
@@ -58,13 +58,42 @@ def parse_args():
     return p.parse_args(argv)
 
 
+#: The engine identifiers this tool will accept, in the order it tries them. One order
+#: across `make_skeleton_sheet`, `make_binding_sheet`, `make_parts_sheet` and
+#: `preview_glb` -- `preview_glb` used to try them the other way round.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+class BindingSheetGate(GateFailure):
+    """The sheet cannot be composed reproducibly."""
+
+    gate = "BINDING_SHEET"
+
+
 def light_the_scene(scene):
-    for eng in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
+    """Light the sheet, and RETURN the render engine actually set.
+
+    MEASURED 2026-09-04 (F-bba38f1c): this loop had no `else`, so if a future Blender
+    renamed both identifiers the `for` would complete normally, nothing would be set, and
+    the sheet would render on whatever the factory settings left in place -- with no field
+    in `panels.json` able to reveal it. Four copies of the loop existed and `preview_glb`
+    tried the two names in the OPPOSITE order, so on a Blender where both are valid the
+    preview and the sheets did not agree on which engine drew them. One order now, and the
+    engine that was set is written into the record.
+    """
+    engine = None
+    for eng in ENGINE_CANDIDATES:
         try:
             scene.render.engine = eng
-            break
         except TypeError:
             continue
+        engine = eng
+        break
+    if engine is None:
+        raise BindingSheetGate(
+            "none of the candidate render engines is valid on this Blender, so the sheet "
+            "would be drawn by whatever the factory settings left in place",
+            {"candidates": list(ENGINE_CANDIDATES), "blender": bpy.app.version_string})
     scene.view_settings.view_transform = "Standard"
     world = bpy.data.worlds.new("w")
     scene.world = world
@@ -79,6 +108,7 @@ def light_the_scene(scene):
         ob = bpy.data.objects.new(name, data)
         scene.collection.objects.link(ob)
         ob.rotation_euler = tuple(math.radians(a) for a in rot)
+    return engine
 
 
 def ortho_camera(scene, name, target, ortho_scale, res, azim_deg=0.0):
@@ -132,7 +162,7 @@ def evaluated(ob):
 
 def render_arm(glb, tag, out_dir, targets=None):
     scene, mesh_obj, arm_obj = load(glb)
-    light_the_scene(scene)
+    engine = light_the_scene(scene)
 
     source = rig_character.world_verts(mesh_obj)
     lo, hi = source.min(axis=0), source.max(axis=0)
@@ -199,6 +229,9 @@ def main():
 
     last = rig_character.PROBE_FRAMES
     spec = {
+        "tool": "make_binding_sheet",
+        "blender": blender_scene.blender_provenance(),
+        "engine": engine,
         "out": out,
         "filename": "E07-binding-comparison.png",
         "title": "E07 — the two bindings, for the Director's eye",

@@ -31,6 +31,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 from mathutils import Euler  # noqa: E402
 
+from armature_core.errors import ArmatureError  # noqa: E402
+
 # Token sets for the anatomical sites an 18-keypoint body skeleton needs. Matching is
 # substring-on-lowercased-name, side-aware. These are naming conventions (Mixamo,
 # Rigify, glTF/VRM humanoid), not a retrieved COCO-18 ordering.
@@ -101,13 +103,52 @@ def _side_of(name):
     return None
 
 
+def _site_token_matches(site_token, tokens):
+    """A site token must BE a name token, or a contiguous RUN of them.
+
+    The separator-insensitive half is what makes the compound conventions work:
+    `upper_arm` is `["upper", "arm"]` in `DEF-upper_arm.R` and `["upperarm"]` in
+    `mixamorig:UpperArm`, and `upleg` is `["up", "leg"]` in `mixamorig:LeftUpLeg`. Both
+    are the SAME site token once the separators are dropped, so the comparison is made on
+    the joined run rather than on the raw string.
+    """
+    want = "".join(ch for ch in site_token.lower() if ch.isalnum())
+    if not want:
+        return False
+    for i in range(len(tokens)):
+        joined = ""
+        for j in range(i, len(tokens)):
+            joined += tokens[j]
+            if joined == want:
+                return True
+            if len(joined) >= len(want):
+                break
+    return False
+
+
 def match_sites(bone_names):
+    """Which anatomical sites this bone list names, and which bones name them.
+
+    MEASURED 2026-09-04 (F-d83052e8): site tokens used to be matched as bare SUBSTRINGS of
+    the whole lowercased name (`any(t in low for t in tokens)`) while `_side_of` matched
+    side markers as whole name TOKENS -- the boundary rule F-187f792c installed on the side
+    half was never applied to the site half. On a standard 23-bone Mixamo skeleton that
+    reported 15 of 18 sites found, two of them being
+
+        ear.L -> ['mixamorig:LeftForeArm']    ear.R -> ['mixamorig:RightForeArm']
+
+    because "ear" is a substring of "f-o-r-e-a-r-m". That skeleton has no ear bone, no eye
+    bone and no nose bone; the true anatomical-site count on it is **13 of 18**, and the
+    same forearm bone was simultaneously the correct `elbow.L` hit. `anatomical_sites_count`
+    and `P2b_all_18_sites_named` are read straight off this dict, and E01's headline P2
+    figures are summed from them.
+    """
     found = {}
     for site, (tokens, side) in SITES.items():
         hits = []
         for name in bone_names:
-            low = name.lower()
-            if not any(t in low for t in tokens):
+            name_toks = name_tokens(name)
+            if not any(_site_token_matches(t, name_toks) for t in tokens):
                 continue
             if side is not None and _side_of(name) != side:
                 continue
@@ -202,17 +243,61 @@ def probe_one(path):
     return rec
 
 
-def main():
-    argv = sys.argv[sys.argv.index("--") + 1:]
-    out_dir, globs = None, []
-    for token in argv:
+def parse_argv(argv, *, known=("out", "glb")):
+    """`--out=<dir>` once and `--glb=<path>` one or more times. Anything else RAISES.
+
+    MEASURED 2026-09-04 (F-f3cd559e). The loop this replaces was
+
         key, _, value = token[2:].partition("=")
+        if key == "out": out_dir = value
+        elif key == "glb": globs.append(value)
+
+    which silently ignores what it does not recognise and silently ADMITS empty paths into
+    the probed population. Measured on those lines verbatim: `--out=d --glb=a.glb --glb
+    b.glb` (the space form) yields `['a.glb', '', '']` -- `--glb` alone gives key "glb"
+    with value "", and `'b.glb'[2:]` is ALSO "glb", so the bare path contributes a second
+    "" -- and the summary then reports `n_files` 3 for two files named. `--gbl=b.glb` (a
+    typo) is dropped without a word; a bare positional adds another ""; `--help` is
+    swallowed and the tool probes anyway. Each "" reaches `probe_one`, which records
+    `{{"path": "", "exists": false, "clause_A_loads": false}}` -- a phantom member of a
+    denominator that every number this tool exists to produce is computed over.
+
+    `rig_character.parse_args` and `rig_parts.parse_args` already refuse an unknown token
+    by name; this is that shape, carried.
+    """
+    out_dir, paths = None, []
+    for token in argv:
+        if not token.startswith("--"):
+            raise ArmatureError(
+                f"unexpected argument {token!r}: every value is attached to its flag with "
+                f"'=' ({' '.join('--' + k + '=<value>' for k in known)}). The space form "
+                f"is not accepted, because `token[2:]` on a bare path silently produced a "
+                f"second empty member of the probed population")
+        key, sep, value = token[2:].partition("=")
+        key = key.replace("-", "_")
+        if key not in known:
+            raise ArmatureError(
+                f"unknown argument {token!r}; known: {sorted(known)}")
+        if not sep or not value:
+            raise ArmatureError(
+                f"{token!r} carries no value; an empty --{key} would join the population "
+                f"as a file that does not exist and be counted in every denominator")
         if key == "out":
+            if out_dir is not None:
+                raise ArmatureError(
+                    f"--out given twice ({out_dir!r} then {value!r}); one run writes one "
+                    f"record")
             out_dir = value
-        elif key == "glb":
-            globs.append(value)
-    if not out_dir or not globs:
-        raise SystemExit("usage: -- --out=<dir> --glb=<path> [--glb=<path> ...]")
+        else:
+            paths.append(value)
+    if not out_dir or not paths:
+        raise ArmatureError("usage: -- --out=<dir> --glb=<path> [--glb=<path> ...]")
+    return out_dir, paths
+
+
+def main():
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    out_dir, globs = parse_argv(argv)
     os.makedirs(out_dir, exist_ok=True)
 
     records = [probe_one(p) for p in globs]

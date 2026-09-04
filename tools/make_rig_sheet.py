@@ -220,7 +220,9 @@ def main():
     rows.append({"title": "Texture fidelity — at rest, same camera, nothing else changed",
                  "panels": fidelity})
 
-    spec = {"title": args["title"],
+    spec = {"tool": "make_rig_sheet",
+            "blender": blender_scene.blender_provenance(),
+            "title": args["title"],
             "subtitle": (f"one skinned mesh, {len(mesh.data.vertices):,} verts, "
                          f"{len(mesh.data.polygons):,} faces, bone-heat weights normalised "
                          f"to 1.0 · the arc is E03's: the character's "

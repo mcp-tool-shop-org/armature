@@ -67,6 +67,45 @@ PROBE_START_DEG = 0.0
 PROBE_END_DEG = 90.0
 
 
+#: Gate P's round-trip probe cap, passed EXPLICITLY at the call site rather than inherited
+#: from `rig_gates.gate_p_round_trip_positions`' declared default. MEASURED 2026-09-04
+#: (F-2d1fd05e): the call passed three positional arguments, so the cap was taken silently.
+#: This subject comes back from a glTF round trip as 399,140 source vertices against
+#: 399,903 exported, with 149,643 unique positions -- an order of magnitude above the cap.
+#: When the cap bites, the gate sets `probe_truncated_at`, keeps `pts[:max_probe]` (numpy's
+#: lexicographic order, i.e. the smallest-x positions) and still reaches its pass verdict;
+#: a repo-wide grep for `probe_truncated_at` returned exactly one hit, the gate's own write.
+#: The value is unchanged from the inherited default so this fix moves no measurement; what
+#: changes is that the choice is stated here and the flag is READ BACK below.
+ROUND_TRIP_MAX_PROBE = 20000
+
+
+class GateObjects(GateFailure):
+    """Gate OBJ - the export would carry an object nobody registered.
+
+    MEASURED 2026-09-04 (F-2ef09fa0): the refusal raised the bare `ArmatureError`, so the
+    object table the gate had just assembled -- every object with its type, collections and
+    effective render visibility, i.e. exactly the "whether it originates in the file or in
+    Blender's importer" the docstring says the gate records rather than assumes -- was
+    neither passed nor returned on the raising path. `_write_halt` then wrote `"gate": "?"`
+    and `"evidence": {}`, in the tool that produces the rigged GLB.
+    """
+
+    gate = "OBJ"
+
+
+class GateSubject(GateFailure):
+    """The subject cannot be identified without guessing which mesh is the character."""
+
+    gate = "SUBJECT"
+
+
+class GateMode(GateFailure):
+    """A named route this tool does not have."""
+
+    gate = "MODE"
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -397,11 +436,12 @@ def gate_objects_registered(scene, subject, armature):
               "verdict": (f"{len(seen)} object(s) in the scene, none unregistered and "
                           f"render-visible" if not strays else "STRAY OBJECTS")}
     if strays:
-        raise ArmatureError(
+        raise GateObjects(
             f"the export would carry {len(strays)} object(s) nobody registered: "
             f"{[o['name'] for o in strays]}. Gate N refuses an unregistered bone; an "
             f"unregistered object is the same defect one level up, and one already leaked "
-            f"into a delivered GLB.")
+            f"into a delivered GLB.",
+            record)
     return record
 
 
@@ -445,8 +485,9 @@ def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_mult
                            "1.0 units tall, which is a global constant governing a local "
                            "feature and is recorded as such")
         else:
-            raise ArmatureError(
-                f"unknown --envelope-radii={envelope_radii!r}; known: measured, default")
+            raise GateMode(
+                f"unknown --envelope-radii={envelope_radii!r}; known: measured, default",
+                {"envelope_radii": envelope_radii, "known": ["measured", "default"]})
         _parent_to(mesh_obj, arm_obj, "ARMATURE_ENVELOPE")
         rec = {
             "binding": "envelope", "operator": "parent_set(ARMATURE_ENVELOPE)",
@@ -473,7 +514,8 @@ def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_mult
                "weight_quantisation": RIGID_WEIGHT_QUANTISATION,
                "radii_source": "measured cross-section (landmarks.bone_radii)"}
     else:
-        raise ArmatureError(f"unknown binding {mode!r}; known: auto, envelope, rigid")
+        raise GateMode(f"unknown binding {mode!r}; known: auto, envelope, rigid",
+                       {"binding": mode, "known": ["auto", "envelope", "rigid"]})
     return time.time() - t0, rec
 
 
@@ -559,10 +601,12 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
     if len(meshes) != 1:
-        raise ArmatureError(
+        raise GateSubject(
             f"expected exactly one mesh object in the subject, found {len(meshes)}: "
             f"{[o.name for o in meshes]}. Which one carries the character is a question "
-            f"this tool will not answer by picking the biggest"
+            f"this tool will not answer by picking the biggest",
+            {"glb": glb_path, "mesh_objects": [o.name for o in meshes],
+             "armatures": [o.name for o in armatures]}
         )
     mesh_obj = meshes[0]
     weld = weld_seam_splits(mesh_obj)
@@ -830,6 +874,45 @@ def deformation_diagnostics(ctx, probe):
 # ----------------------------------------------------------------------- export
 
 
+def qualify_truncated_round_trip(ev):
+    """Gate P's round-trip evidence, with a truncated probe SAID rather than buried.
+
+    MEASURED 2026-09-04 (F-2d1fd05e). `rig_gates.gate_p_round_trip_positions` caps the
+    nearest-neighbour probe at `max_probe`; when the cap bites it writes
+    `probe_truncated_at` into the evidence, keeps `pts[:max_probe]` — `np.unique`'s
+    lexicographic order, i.e. the smallest-x positions — and still reaches the verdict
+    `"positions agree within <threshold>"`. A repo-wide grep for `probe_truncated_at`
+    returned exactly one hit: the gate's own write. No tool, no test and no doc read it.
+    `rig_character` embeds the whole evidence dict into the manifest under
+    `gates.P_rest_pose_round_trip`, so the key IS in the file when it fires — sitting
+    beside an unqualified pass verdict, with neither the printed OK line nor the manifest's
+    summary fields mentioning it.
+
+    This does not re-run the comparison and does not move a measurement. It rewrites the
+    verdict so a reader cannot mistake a comparison made over a prefix of the difference
+    set for a comparison made over all of it — the `NOT YET RUN` convention this file
+    already uses three times in the same manifest, applied to a partial clause. Whether a
+    truncated probe should REFUSE instead is a Director decision and is the core-gates
+    half of this finding (`armature_core/rig_gates.py:188-190`).
+    """
+    if not isinstance(ev, dict) or "probe_truncated_at" not in ev:
+        return ev
+    rec = dict(ev)
+    cap = rec["probe_truncated_at"]
+    differing = (int(rec.get("positions_only_in_source", 0))
+                 + int(rec.get("positions_only_in_roundtrip", 0)))
+    rec["verdict_before_qualification"] = rec.get("verdict")
+    rec["verdict"] = (
+        f"TRUNCATED — the nearest-neighbour probe compared at most {cap} of the "
+        f"{differing} differing position(s), taken in lexicographic order, so "
+        f"{rec.get('max_deviation')} is the worst deviation over that PREFIX and not over "
+        f"the difference set. This clause is NOT a pass over the whole surface.")
+    rec["probe_truncated_reason"] = (
+        f"max_probe={cap} was passed explicitly by rig_character "
+        f"(ROUND_TRIP_MAX_PROBE); the difference set is larger than the cap")
+    return rec
+
+
 def export_rigged(ctx, probe, out_path, animated=True):
     """Export, then Gate N on the RE-IMPORTED result. Raises before any manifest exists.
 
@@ -872,14 +955,20 @@ def export_rigged(ctx, probe, out_path, animated=True):
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     visible = blender_scene.render_visible_meshes(bpy.context.scene, meshes)
     if len(visible) != 1:
-        raise ArmatureError(
+        raise GateSubject(
             f"the re-imported export presents {len(visible)} render-visible mesh object(s) "
             f"({[o.name for o in visible]}, from {[o.name for o in meshes]}); Gate P's "
             f"round-trip clause cannot say which one is the subject, and guessing would "
-            f"make it report on geometry nobody asked about"
+            f"make it report on geometry nobody asked about",
+            {"glb": out_path, "mesh_objects_all": [o.name for o in meshes],
+             "mesh_objects_render_visible": [o.name for o in visible]}
         )
-    gate_p_round_trip = rig_gates.gate_p_round_trip_positions(
-        ctx["source"], world_verts(visible[0]), ctx["diagonal"])
+    # `max_probe` passed EXPLICITLY — see ROUND_TRIP_MAX_PROBE for why the choice is stated
+    # here rather than inherited from the gate's declared default.
+    gate_p_round_trip = qualify_truncated_round_trip(
+        rig_gates.gate_p_round_trip_positions(
+            ctx["source"], world_verts(visible[0]), ctx["diagonal"],
+            max_probe=ROUND_TRIP_MAX_PROBE))
     actions = [a.name for a in bpy.data.actions]
     return {
         "export_kwargs": {k: v for k, v in kwargs.items() if k != "filepath"},
@@ -1080,7 +1169,8 @@ def main():
         run_skeleton(args, out_dir, source_sha, started)
         return
     if args["mode"] != "full":
-        raise ArmatureError(f"unknown --mode={args['mode']!r}; known: skeleton, full")
+        raise GateMode(f"unknown --mode={args['mode']!r}; known: skeleton, full",
+                       {"mode": args["mode"], "known": ["skeleton", "full"]})
 
     # Two full builds from the same input. The second is the one kept; Gate D compares.
     mode = args["binding"]

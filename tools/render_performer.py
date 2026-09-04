@@ -323,10 +323,34 @@ def main():
         bpy.ops.render.render(write_still=True)
         paths.append(p)
 
-    written = sorted(f for f in os.listdir(out) if f.startswith("0") and f.endswith(".png"))
-    if len(written) != count:
+    # The population is the PLAN, not whatever is in the directory — the shape
+    # `preview_walk.py:167` carries, under a comment naming this exact failure. MEASURED
+    # 2026-09-04 (F-ed1dfdb5) on the superseded two lines
+    #
+    #     written = sorted(f for f in os.listdir(out) if f.startswith("0") ...)
+    #     if len(written) != count: raise RenderGate(f"wrote {len(written)} frames ...")
+    #
+    # a 16-frame run into an `--out` already holding a stale `00099.png`, with `00007.png`
+    # never written, gives `len(written) == 16 == count` and the gate does NOT fire; and a
+    # 16-frame run into a directory holding 33 stale frames prints "wrote 33 frames" about
+    # a run that wrote 16. A zero-byte frame passed either way, because nothing read
+    # `getsize`. `paths` is built two lines above and is the list the render wrote against.
+    missing = [p for p in paths if not os.path.isfile(p)]
+    empty = [p for p in paths
+             if p not in missing and os.path.getsize(p) == 0]
+    planned_names = {os.path.basename(p) for p in paths}
+    strays = sorted(f for f in os.listdir(out)
+                    if f.endswith(".png") and f not in planned_names
+                    and f != "empty_plate.png")
+    if missing or empty:
         raise RenderGate(
-            f"wrote {len(written)} frames and the performance is {count}", {"out": out})
+            f"the performance is not complete: {len(missing)} of {count} frames were "
+            f"never written {[os.path.basename(p) for p in missing[:8]]} and "
+            f"{len(empty)} are zero bytes {[os.path.basename(p) for p in empty[:8]]}",
+            {"out": out, "planned": count,
+             "missing": [os.path.basename(p) for p in missing],
+             "empty": [os.path.basename(p) for p in empty],
+             "unexpected_files_in_out_dir": strays})
 
     # ---- the empty plate the coverage andon measures against: same camera, same lights,
     # same floor, character hidden. One frame, because none of those move.
@@ -349,6 +373,7 @@ def main():
                        "framed_against": frame_source,
                        "manifest": os.path.abspath(a.manifest)},
             "resolution": [WIDTH, HEIGHT], "frames": count, "fps": a.fps,
+            "unexpected_files_in_out_dir": strays,
             "floor_drawn": bool(a.floor),
             "camera": {
                 "azimuth_deg": AZIMUTH_DEG, "elevation_deg": ELEVATION_DEG,

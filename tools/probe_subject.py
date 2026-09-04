@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 
 from armature_core import blender_scene  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.subject import extent_summary  # noqa: E402
 
 
@@ -81,17 +82,61 @@ def probe_one(path):
     return rec
 
 
-def main():
-    argv = sys.argv[sys.argv.index("--") + 1:]
+def parse_argv(argv, *, known=("out", "glb")):
+    """`--out=<dir>` once and `--glb=<path>` one or more times. Anything else RAISES.
+
+    MEASURED 2026-09-04 (F-f3cd559e). The loop this replaces was
+
+        key, _, value = token[2:].partition("=")
+        if key == "out": out_dir = value
+        elif key == "glb": globs.append(value)
+
+    which silently ignores what it does not recognise and silently ADMITS empty paths into
+    the probed population. Measured on those lines verbatim: `--out=d --glb=a.glb --glb
+    b.glb` (the space form) yields `['a.glb', '', '']` -- `--glb` alone gives key "glb"
+    with value "", and `'b.glb'[2:]` is ALSO "glb", so the bare path contributes a second
+    "" -- and the summary then reports `n_files` 3 for two files named. `--gbl=b.glb` (a
+    typo) is dropped without a word; a bare positional adds another ""; `--help` is
+    swallowed and the tool probes anyway. Each "" reaches `probe_one`, which records
+    `{{"path": "", "exists": false, "clause_A_loads": false}}` -- a phantom member of a
+    denominator that every number this tool exists to produce is computed over.
+
+    `rig_character.parse_args` and `rig_parts.parse_args` already refuse an unknown token
+    by name; this is that shape, carried.
+    """
     out_dir, paths = None, []
     for token in argv:
-        key, _, value = token[2:].partition("=")
+        if not token.startswith("--"):
+            raise ArmatureError(
+                f"unexpected argument {token!r}: every value is attached to its flag with "
+                f"'=' ({' '.join('--' + k + '=<value>' for k in known)}). The space form "
+                f"is not accepted, because `token[2:]` on a bare path silently produced a "
+                f"second empty member of the probed population")
+        key, sep, value = token[2:].partition("=")
+        key = key.replace("-", "_")
+        if key not in known:
+            raise ArmatureError(
+                f"unknown argument {token!r}; known: {sorted(known)}")
+        if not sep or not value:
+            raise ArmatureError(
+                f"{token!r} carries no value; an empty --{key} would join the population "
+                f"as a file that does not exist and be counted in every denominator")
         if key == "out":
+            if out_dir is not None:
+                raise ArmatureError(
+                    f"--out given twice ({out_dir!r} then {value!r}); one run writes one "
+                    f"record")
             out_dir = value
-        elif key == "glb":
+        else:
             paths.append(value)
     if not out_dir or not paths:
-        raise SystemExit("usage: -- --out=<dir> --glb=<path> [--glb=<path> ...]")
+        raise ArmatureError("usage: -- --out=<dir> --glb=<path> [--glb=<path> ...]")
+    return out_dir, paths
+
+
+def main():
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    out_dir, paths = parse_argv(argv)
     os.makedirs(out_dir, exist_ok=True)
 
     records = [probe_one(p) for p in paths]

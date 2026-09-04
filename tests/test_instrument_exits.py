@@ -25,19 +25,9 @@ import pytest
 
 from blender_stub import blender_tools, exit_code_of_main_block, main_block
 
-#: EMPTY, and re-derived 2026-09-04 (F-7e64c103). This set used to read
-#: `("preview_glb.py",)` under the note *"a library of preview helpers with no `__main__`
-#: block; it is not invoked as a script and so has no exit code to be wrong about"*. The
-#: file's own docstring line 3 is the command line that invokes it, and it had no
-#: `__main__` block because it called `main()` unconditionally at module scope instead —
-#: so every failure of that tool returned 0 to a caller reading `$LASTEXITCODE`. An
-#: exemption asserted by name, on a premise contradicted inside the exempted file, is the
-#: shape wave 8 exists to close: exemptions are named, dated, and checked against the
-#: reason they are exempt.
-#:
-#: The EXACT code per outcome (2 for a deliberate refusal, 1 for a crash) and the shape of
-#: the `<TOOL>_HALT` sentinel are asserted in `tests/test_instruments_amend_w8.py`; the
-#: four directions below remain the weaker, older statement that nothing returns success.
+#: EMPTY, re-derived 2026-09-04 (F-7e64c103): `preview_glb.py` now carries the handler,
+#: so line 40's exemption assertion no longer holds with the old value. Exact codes and
+#: sentinel shape: `tests/test_instruments_amend_w8.py`.
 NO_MAIN_BLOCK = ()
 
 WITH_MAIN = [f for f in blender_tools() if main_block(f) is not None]

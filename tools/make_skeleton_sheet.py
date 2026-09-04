@@ -50,6 +50,12 @@ AFTER_RGB = (0.10, 0.85, 1.00)    # the placement measured off the sculpted ball
 INSET_JOINTS = ("shoulder", "elbow", "wrist", "hip", "knee", "ankle")
 
 
+#: The engine identifiers this tool will accept, in the order it tries them. One order
+#: across `make_skeleton_sheet`, `make_binding_sheet`, `make_parts_sheet` and
+#: `preview_glb` -- `preview_glb` used to try them the other way round.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
 class SkeletonSheetGate(GateFailure):
     """The approval sheet cannot be composed as an approval sheet."""
 
@@ -177,12 +183,29 @@ def overlay_from_marks(marks, height, rgb, tag):
 
 
 def light_the_scene(scene):
-    for eng in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
+    """Light the sheet, and RETURN the render engine actually set.
+
+    MEASURED 2026-09-04 (F-bba38f1c): this loop had no `else`, so if a future Blender
+    renamed both identifiers the `for` would complete normally, nothing would be set, and
+    the sheet would render on whatever the factory settings left in place -- with no field
+    in `panels.json` able to reveal it. Four copies of the loop existed and `preview_glb`
+    tried the two names in the OPPOSITE order, so on a Blender where both are valid the
+    preview and the sheets did not agree on which engine drew them. One order now, and the
+    engine that was set is written into the record.
+    """
+    engine = None
+    for eng in ENGINE_CANDIDATES:
         try:
             scene.render.engine = eng
-            break
         except TypeError:
             continue
+        engine = eng
+        break
+    if engine is None:
+        raise SkeletonSheetGate(
+            "none of the candidate render engines is valid on this Blender, so the sheet "
+            "would be drawn by whatever the factory settings left in place",
+            {"candidates": list(ENGINE_CANDIDATES), "blender": bpy.app.version_string})
     scene.view_settings.view_transform = "Standard"
     world = bpy.data.worlds.new("w")
     scene.world = world
@@ -197,6 +220,7 @@ def light_the_scene(scene):
         ob = bpy.data.objects.new(name, data)
         scene.collection.objects.link(ob)
         ob.rotation_euler = tuple(math.radians(a) for a in rot)
+    return engine
 
 
 def ortho_camera(scene, name, target, azim_deg, ortho_scale, res):
@@ -258,7 +282,7 @@ def main():
     balls, _ = rig_character.measure_joint_balls(mesh_obj, diagonal)
     after_marks, table = joints.snap_sites_to_balls(lm, balls)
 
-    light_the_scene(scene)
+    engine = light_the_scene(scene)
     ov_before = overlay_from_marks(before_marks, height, BEFORE_RGB, "before")
     ov_after = overlay_from_marks(after_marks, height, AFTER_RGB, "after")
 
@@ -298,6 +322,9 @@ def main():
                                      after=bones_a)
 
     spec = {
+        "tool": "make_skeleton_sheet",
+        "blender": blender_scene.blender_provenance(),
+        "engine": engine,
         "out": out,
         "filename": "E07-skeleton-approval.png",
         "title": "E07 — the skeleton, for approval",
