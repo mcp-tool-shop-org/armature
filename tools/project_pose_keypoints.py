@@ -212,13 +212,95 @@ def gate_motion(body_px, n_frames):
 
 
 def span_stats(seq):
-    """Per-frame max extent of a keypoint set, in pixels. A diagnostic; gates nothing."""
+    """Per-frame max extent of a keypoint set, in pixels. A diagnostic; gates nothing.
+
+    It refuses an EMPTY population by name rather than reaching `min([])` (F-c961d99a, wave
+    16): `min()`/`max()` over a list a loop built is the same empty-population shape as
+    `ankle_to_toe_ratios` below, one screen up, and an untyped `ValueError` here would reach
+    the halt handler as a crash rather than as a refusal.
+    """
     per = []
     for f in seq:
         xs = [kp[0] for kp in f]
         ys = [kp[1] for kp in f]
         per.append(max(max(xs) - min(xs), max(ys) - min(ys)))
-    return {"min": min(per), "median": sorted(per)[len(per) // 2], "max": max(per)}
+    if not per:
+        raise ProjectGate(
+            "span_stats was given no frames; a min/median/max over an empty keypoint "
+            "population is not a diagnostic, it is three exceptions",
+            {"gate": "PROJECT", "andon": "ProjectGate",
+             "clause": "empty_keypoint_population", "n_frames": 0})
+    return {"min": min(per), "median": sorted(per)[len(per) // 2], "max": max(per),
+            "n_frames": len(per)}
+
+
+def ankle_to_toe_ratios(body_px):
+    """`ankle_to_toe_over_hip_to_ankle`, WITH the denominator it was quoted without.
+
+    F-c961d99a, wave 16. This was a loop — `if leg > 0: ratios.append(foot / leg)` — that
+    DROPPED frames silently, and the record then reported `min(ratios)`,
+    `sorted(ratios)[len(ratios)//2]` and `max(ratios)` with no count of how many frames
+    contributed. That is this repo's count-without-a-denominator shape (F-0660d594, and this
+    file's sibling `make_review_clip`'s `"stills": 12`) on the one number whose stated job is
+    to catch the superseded GLB-tail route, where it read 0.33-0.55: the diagnostic reads
+    clean over the frames it could compute while an unrecorded number of frames were
+    excluded, and the reader has no denominator to notice.
+
+    Measured statically on the base tree: if every frame projects hip and ankle to the same
+    pixel — a degenerate framing — `ratios` is `[]` and `min([])` raises
+    `ValueError: min() arg is an empty sequence`, untyped, after all four gates have passed
+    and before `os.makedirs`, so the halt reports a crash rather than a refusal.
+
+    A DIAGNOSTIC still: it gates nothing about the performance. The refusal here is about
+    the measurement being impossible, not about the motion being wrong.
+    """
+    ratios, dropped = [], []
+    for i, f in enumerate(body_px):
+        leg = float(np.hypot(f[8][0] - f[10][0], f[8][1] - f[10][1]))
+        foot = float(np.hypot(f[10][0] - f[19][0], f[10][1] - f[19][1]))
+        if leg > 0:
+            ratios.append(foot / leg)
+        else:
+            dropped.append(i)
+    if not ratios:
+        raise ProjectGate(
+            f"no frame of {len(body_px)} carries a measurable leg: hip and ankle project "
+            f"to the same pixel on every one of them, so the ankle-to-toe ratio has no "
+            f"denominator to be a fraction of",
+            {"gate": "PROJECT", "andon": "ProjectGate",
+             "clause": "no_frame_carries_a_measurable_leg",
+             "n_frames": len(body_px), "n_frames_contributing": 0,
+             "dropped_frame_indices": dropped})
+    return {
+        "min": min(ratios), "median": sorted(ratios)[len(ratios) // 2], "max": max(ratios),
+        "n_frames": len(body_px),
+        "n_frames_contributing": len(ratios),
+        "n_frames_dropped_zero_leg": len(dropped),
+        "dropped_frame_indices": dropped,
+        "note": ("the quantity that caught the superseded GLB-tail route, where it read "
+                 "0.33-0.55; a foot is a small fraction of a leg. The three statistics are "
+                 "over `n_frames_contributing` frames, NOT over `n_frames` — a frame whose "
+                 "hip and ankle project to the same pixel has no denominator and is "
+                 "excluded by index rather than in silence"),
+    }
+
+
+def front_gate_detail(body_px, lhand_px, rhand_px):
+    """Gate FRONT's detail line, DERIVED from what was projected.
+
+    It read `f"{n_frames * 62} points, all in front of the camera"` — a literal 62, in a file
+    whose stated rule is that nothing is a literal (F-c961d99a). The number is
+    `len(aapose.LANDMARK_SITES)` body landmarks plus twenty-one mitten-hand points per side;
+    it happens to be 62 today, and it is counted here rather than asserted.
+    """
+    per_channel = [sum(len(f) for f in seq) for seq in (body_px, lhand_px, rhand_px)]
+    total = sum(per_channel)
+    n = len(body_px)
+    return (f"{total} points, all in front of the camera "
+            f"({n} frame(s) x {total // n if n else 0}: "
+            f"{per_channel[0] // n if n else 0} body landmark(s) + "
+            f"{per_channel[1] // n if n else 0} left-hand + "
+            f"{per_channel[2] // n if n else 0} right-hand)")
 
 
 def main(argv=None):
@@ -275,12 +357,9 @@ def main(argv=None):
     # Diagnostics. They gate nothing. The ankle->toe ratio is here because it is the
     # quantity that caught the superseded route: a foot is a small fraction of a leg, and
     # a number two to three times too large is what a synthesised bone tail looks like.
-    ratios = []
-    for f in body_px:
-        leg = float(np.hypot(f[8][0] - f[10][0], f[8][1] - f[10][1]))
-        foot = float(np.hypot(f[10][0] - f[19][0], f[10][1] - f[19][1]))
-        if leg > 0:
-            ratios.append(foot / leg)
+    # It is computed in `ankle_to_toe_ratios`, which reports the population it was computed
+    # OVER beside the three statistics (F-c961d99a).
+    ratio_stats = ankle_to_toe_ratios(body_px)
 
     payload = {
         "tool": "project_pose_keypoints",
@@ -316,17 +395,12 @@ def main(argv=None):
             "body_span_px_per_frame": span_stats(body_px),
             "left_hand_span_px_per_frame": span_stats(lhand_px),
             "right_hand_span_px_per_frame": span_stats(rhand_px),
-            "ankle_to_toe_over_hip_to_ankle": {
-                "min": min(ratios), "median": sorted(ratios)[len(ratios) // 2],
-                "max": max(ratios),
-                "note": ("the quantity that caught the superseded GLB-tail route, where it "
-                         "read 0.33-0.55; a foot is a small fraction of a leg"),
-            },
+            "ankle_to_toe_over_hip_to_ankle": ratio_stats,
         },
         "gates": {
             "MAP": {"verdict": "PASS", "detail": "aapose.require_rig_map"},
             "FRONT": {"verdict": "PASS",
-                      "detail": f"{n_frames * 62} points, all in front of the camera"},
+                      "detail": front_gate_detail(body_px, lhand_px, rhand_px)},
             "FRAMING": framing_gate,
             "MOTION": gate_mot,
         },

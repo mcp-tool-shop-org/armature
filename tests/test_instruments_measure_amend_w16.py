@@ -641,3 +641,91 @@ def test_the_reference_band_shows_one_panel_per_distinct_sample(tmp_path, n_ref,
     assert len(picks) == expected, picks
     assert len(set(picks)) == len(picks), picks
     assert picks == sorted(picks) and picks[0] == 0 and picks[-1] == n_ref - 1, picks
+
+
+# ===========================================================================
+# F-c961d99a — a count with no denominator, on the diagnostic that caught the
+#              superseded GLB-tail route
+# ===========================================================================
+
+
+def _body(n_frames, *, leg=10.0, foot=4.0):
+    """`body_px` frames of 20 keypoints. `leg` is the hip(8)->ankle(10) pixel distance and
+    `foot` the ankle(10)->toe(19) one; `leg=0` is the degenerate framing."""
+    out = []
+    for k in range(n_frames):
+        f = [[float(j), float(k)] for j in range(20)]
+        f[8] = [0.0, 0.0]
+        f[10] = [0.0, float(leg)]
+        f[19] = [0.0, float(leg) + float(foot)]
+        out.append(f)
+    return out
+
+
+def test_the_ratio_diagnostic_reports_the_population_it_was_computed_over():
+    """THE OPERAND: the loop `if leg > 0: ratios.append(foot / leg)` DROPPED frames
+    silently, and the record then reported `min`, `median` and `max` with no count of how
+    many frames contributed. This is the repo's count-without-a-denominator shape, on the
+    one number whose stated job is to catch the superseded GLB-tail route.
+    """
+    import project_pose_keypoints as PPK
+
+    good = _body(4, leg=10.0, foot=4.0)
+    degenerate = _body(2, leg=0.0, foot=4.0)
+    mixed = good + degenerate
+    stats = PPK.ankle_to_toe_ratios(mixed)
+    assert stats["n_frames"] == 6, stats
+    assert stats["n_frames_contributing"] == 4, stats
+    assert stats["n_frames_dropped_zero_leg"] == 2, stats
+    assert stats["dropped_frame_indices"] == [4, 5], stats
+    assert stats["median"] == pytest.approx(0.4), stats
+    assert stats["min"] == pytest.approx(0.4) and stats["max"] == pytest.approx(0.4)
+
+
+def test_a_degenerate_framing_refuses_by_name_rather_than_min_of_an_empty_sequence():
+    """Measured statically on the base tree: if every frame projects hip and ankle to the
+    same pixel, `ratios` is `[]` and `min([])` raises
+    `ValueError: min() arg is an empty sequence` — untyped, after all four gates have passed
+    and before `os.makedirs`, so the halt reports a crash rather than a refusal."""
+    import project_pose_keypoints as PPK
+
+    with pytest.raises(PPK.ProjectGate, match=r"leg") as exc:
+        PPK.ankle_to_toe_ratios(_body(3, leg=0.0))
+    ev = exc.value.evidence
+    assert ev["clause"] == "no_frame_carries_a_measurable_leg", ev
+    assert ev["n_frames"] == 3 and ev["n_frames_contributing"] == 0, ev
+    assert ev["dropped_frame_indices"] == [0, 1, 2], ev
+
+
+def test_span_stats_refuses_an_empty_population_rather_than_min_of_nothing():
+    """The SAME empty-population shape one screen up, which the finding names: `span_stats`
+    calls `min(per)` / `max(per)` over a per-frame list built by a loop.
+
+    Red on a member outside the ratio walk entirely — this is the second site of the family,
+    not the one the finding's headline named.
+    """
+    import project_pose_keypoints as PPK
+
+    assert PPK.span_stats(_body(2))["min"] > 0
+    with pytest.raises(PPK.ProjectGate, match=r"no frames|empty") as exc:
+        PPK.span_stats([])
+    assert exc.value.evidence["clause"] == "empty_keypoint_population", exc.value.evidence
+
+
+def test_the_front_gates_point_count_is_derived_and_not_the_literal_sixty_two():
+    """`gates.FRONT.detail` spelled the count as the literal `n_frames * 62` in a file whose
+    stated rule is that nothing is a literal. Derived from what was actually projected:
+    twenty body landmarks plus twenty-one points per mitten hand."""
+    import project_pose_keypoints as PPK
+    from armature_core import aapose
+
+    body = _body(3)
+    hands = [[[0.0, 0.0]] * 21 for _ in range(3)]
+    detail = PPK.front_gate_detail(body, hands, hands)
+    assert "62" not in detail or "186" in detail, detail
+    assert str(3 * (len(aapose.LANDMARK_SITES) + 42)) in detail, detail
+    assert "literal" not in detail
+    # and it MOVES with the population, which a literal cannot
+    other = PPK.front_gate_detail(_body(5), [[[0.0, 0.0]] * 21 for _ in range(5)],
+                                  [[[0.0, 0.0]] * 21 for _ in range(5)])
+    assert str(5 * 62) in other, other
