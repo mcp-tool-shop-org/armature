@@ -194,13 +194,19 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # a `GateFailure`, and this walk counts `GateFailure` subclasses only.
         # core-gates' branch moves `rig_gates` 12 → 15 in the same wave; the merged total is
         # re-derived on the merged tree rather than added up from two branches.
-        "assembly": 18, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
+        # WAVE 12, core-solvers (F-5a810b95): `assembly` 18 → 20. `gate_no_paid_nodes`
+        # gains a vacuity guard (an empty graph was returning the full success verdict) and
+        # a licence-ruling clause read through `route_gates.rulings_for_class`, replacing a
+        # two-word substring match that no real partner class name triggers.
+        "assembly": 20, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
         "gates": 20, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
         "rig_gates": 15, "route_gates": 35, "startframe": 19, "turnaround": 9, "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
     # route_gates 34 -> 35 in the same wave; merged = 155 + 3 + 1 = 159, MEASURED on the merged tree.
-    assert sum(with_gates.values()) == 159
+    # WAVE 12 (core-solvers, F-5a810b95): assembly 18 -> 20, so 159 + 2 = 161, MEASURED on
+    # this branch.
+    assert sum(with_gates.values()) == 161
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

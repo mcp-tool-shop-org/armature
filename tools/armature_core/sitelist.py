@@ -16,6 +16,33 @@ placed at that anatomical location. E01's 18 are keypoints — joint *locations*
 a segment. The two are different objects and the mapping between them is this rule.
 """
 
+from .errors import ArmatureError
+
+
+class SiteListError(ArmatureError):
+    """The registration is internally inconsistent — the andon on the registration itself.
+
+    A deliberate refusal, and it used to be a bare `ValueError` (F-9fab7829, wave 12). The
+    docstring on `validate` already said "Raises ValueError, never asserts": the intent was
+    a refusal, only the class was wrong. `validate()` is called by three production Blender
+    tools (`tools/rig_character.py:1135`, `tools/rig_parts.py:480`,
+    `tools/project_pose_keypoints.py:229`) and the 21-tool halt contract classifies on the
+    `ArmatureError` family, so measured 2026-09-04 by driving that classifier with the
+    exception `validate()` raises on a duplicated registration: ('FAILED - an unhandled
+    error', exit 1, gate None, evidence None). The tool wrote a halt record asserting an
+    unhandled error in the rigging code when what happened is the registration refusing to
+    proceed — the false-record class arriving from the other direction, and an executor
+    reading it goes looking for a bug in the rigging routine instead of at the site list
+    and its E07 registration document disagreeing.
+
+    Carries an `evidence` dict; a plain refusal writes `gate: None` + `andon` + `clause`.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
 #: The 18 sites `tools/probe_glb.py::SITES` enumerates — the list every `0 / 18` in E01's
 #: report was computed against, and the gap E07 exists to close.
 E01_SITES = (
@@ -99,7 +126,10 @@ def by_name():
 
 
 def validate():
-    """Internal consistency of the registration itself. Raises ValueError, never asserts."""
+    """Internal consistency of the registration itself. Raises `SiteListError`, never asserts.
+
+    See `SiteListError` for why the class is not `ValueError` any more.
+    """
     problems = []
     seen = []
     for b in BONES:
@@ -130,6 +160,10 @@ def validate():
         problems.append(f"E01_SITES holds {len(E01_SITES)} entries, not the 18 E01 counted")
 
     if problems:
-        raise ValueError("the registered site list is internally inconsistent: "
-                         + "; ".join(problems))
+        raise SiteListError(
+            "the registered site list is internally inconsistent: " + "; ".join(problems),
+            {"gate": None, "andon": "SiteListError",
+             "clause": "registration_inconsistent",
+             "problems": problems, "n_bones": len(BONES),
+             "n_e01_sites": len(E01_SITES)})
     return True

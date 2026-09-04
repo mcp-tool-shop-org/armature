@@ -1917,6 +1917,12 @@ GUARDED_TODAY = [
     # the next two and `build_payload.py`/`fetch_run.py` joined at the wave-8 merge: sibling
     # branches' censuses open these sources by path (core-solvers' andon walk, builders' exit
     # convention). All under `tools/**`, which both triggers already carry.
+    # WAVE 12 (core-solvers, F-e2be2262): `blender_scene.py` is opened by path by the
+    # wave-12 amend's docstring check — the `world_bounds` docstring asserted three live
+    # naive call sites the tree does not have, and the correction is asserted rather than
+    # trusted. Under `tools/**`, which both triggers already carry. (The list is SORTED;
+    # this entry sits above `framing.py` for that reason, not by topic.)
+    "tools/armature_core/blender_scene.py",
     "tools/armature_core/framing.py",
     # WAVE-10 MERGE (coordinator, 2026-09-04): `glb.py` (core-solvers' MalformedGLB census) and
     # `render_pose_sticks.py` (instruments-measure's Gate COUNT census) are opened by path by

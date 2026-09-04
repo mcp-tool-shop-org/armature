@@ -54,7 +54,8 @@ def test_a_one_level_shift_is_not_identical_and_reports_its_size():
 
 def test_a_shape_mismatch_raises_rather_than_broadcasting():
     a, b = _frames(1)[0], np.zeros((8, 8, 3), dtype=np.uint8)
-    with pytest.raises(ValueError):
+    # WAVE 12 (F-9fab7829): `ClipCompareError`, not `ValueError` — see the class docstring.
+    with pytest.raises(CC.ClipCompareError, match=r"shape mismatch"):
         CC.frame_fidelity(a, b)
 
 
@@ -124,7 +125,7 @@ def test_a_single_transposed_pair_is_caught():
 
 def test_a_length_mismatch_raises_rather_than_comparing_a_prefix():
     fr = _frames(9)
-    with pytest.raises(ValueError):
+    with pytest.raises(CC.ClipCompareError, match=r"source frame\(s\) against"):
         CC.order_check(fr, fr[:8], step=1)
 
 
@@ -155,7 +156,7 @@ def test_a_two_dimensional_frame_raises_rather_than_changing_the_unit():
     a2 = np.zeros((4, 100), dtype=np.uint8)
     b2 = a2.copy()
     b2[1, 50] = 255
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(CC.ClipCompareError) as exc:
         CC.frame_fidelity(a2, b2)
     assert "(H, W, 3)" in str(exc.value)
 

@@ -54,12 +54,15 @@ def test_orientation_row_zero_is_the_top(tmp_path):
 
 
 def test_rejects_wrong_dtype(tmp_path):
-    with pytest.raises(ValueError):
+    # WAVE 12 (F-9fab7829): `PngWriteError`, not `ValueError` — a refusal raised as a bare
+    # builtin is recorded by the 21-tool halt contract as "FAILED - an unhandled error" at
+    # exit 1 rather than as "REFUSED" at exit 2, inside a render.
+    with pytest.raises(pngio.PngWriteError, match=r"bit_depth=8 needs uint8"):
         pngio.write_png(str(tmp_path / "x.png"), np.zeros((4, 4), dtype=np.float32), 8)
 
 
 def test_rejects_non_binary_array_at_one_bit(tmp_path):
-    with pytest.raises(ValueError):
+    with pytest.raises(pngio.PngWriteError, match=r"only 0 and 1"):
         pngio.write_png(str(tmp_path / "x.png"), np.full((4, 4), 7, dtype=np.uint8), 1)
 
 

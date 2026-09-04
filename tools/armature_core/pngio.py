@@ -24,6 +24,25 @@ import zlib
 
 import numpy as np
 
+from .errors import ArmatureError
+
+
+class PngWriteError(ArmatureError):
+    """This writer will not write the file it was asked for.
+
+    A deliberate refusal, and the five that existed were bare `ValueError`s (F-9fab7829,
+    wave 12). The 21-tool halt contract classifies on the `ArmatureError` family, so a
+    refusal here was recorded as "FAILED — an unhandled error" at exit 1 inside a render,
+    where the honest record is "REFUSED" at exit 2 naming the array that could not be
+    written. Carries an `evidence` dict; a plain refusal writes `gate: None` + `andon` +
+    `clause`.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 COLOR_GRAY = 0
@@ -55,25 +74,69 @@ def _raw_scanlines(arr, bit_depth, channels):
 
 
 def write_png(path, arr, bit_depth=8):
-    """Write `arr` to `path` as a PNG. Returns the number of bytes written."""
+    """Write `arr` to `path` as a PNG. Returns the number of bytes written.
+
+    **A zero dimension is refused by name** (F-ae74741c, wave 12). The writer validated
+    `arr.ndim`, the RGB channel count, the bit depth and the dtype, and never that `width`
+    and `height` are non-zero — while the PNG spec requires both to be greater than zero in
+    IHDR. Measured 2026-09-04: `write_png(p, np.zeros((0,64,3), uint8), bit_depth=8)` wrote
+    65 bytes and returned 65 with no refusal; `np.zeros((64,0), uint8)` wrote 69. Both files
+    exist on disk and PIL — the deliberately different reader this module's docstring names
+    as its external verifier — raises `UnidentifiedImageError: cannot identify image file`
+    on each. The contract line is "Returns the number of bytes written", so a caller
+    checking the return saw success. (The `bit_depth=1` mask path failed loudly for an
+    unrelated reason: `np.packbits` collapses first and `reshape` raises.)
+
+    Every live caller derives H and W from a render resolution, so a zero dimension needs a
+    zero-resolution render — the same door `startframe.gate_whole` left open until wave 12
+    checked its own denominators. The consequence if it is ever reached is that a
+    control-sequence frame is written, the write reports success, and the file is
+    unreadable by every consumer including the upload path — discovered at submission
+    rather than at write. The check sits ahead of `open()`, so a refusal leaves no file.
+    """
     arr = np.asarray(arr)
     if arr.ndim == 2:
         channels, color_type = 1, COLOR_GRAY
     elif arr.ndim == 3 and arr.shape[2] == 3:
         channels, color_type = 3, COLOR_RGB
     else:
-        raise ValueError(f"unsupported array shape {arr.shape}")
+        raise PngWriteError(
+            f"unsupported array shape {arr.shape}",
+            {"gate": None, "andon": "PngWriteError", "clause": "unsupported_shape",
+             "shape": list(arr.shape)})
+
+    if arr.shape[0] == 0 or arr.shape[1] == 0:
+        raise PngWriteError(
+            f"array shape {arr.shape} has a zero dimension, and IHDR requires both width "
+            f"and height to be greater than zero. Writing it produces a structurally "
+            f"invalid PNG that this function would report as a successful byte count, and "
+            f"that every reader — PIL included — refuses to open",
+            {"gate": None, "andon": "PngWriteError", "clause": "zero_dimension",
+             "shape": list(arr.shape), "height": int(arr.shape[0]),
+             "width": int(arr.shape[1]), "path": str(path)})
 
     if bit_depth == 1:
         if color_type != COLOR_GRAY:
-            raise ValueError("bit_depth=1 is grayscale only")
+            raise PngWriteError(
+                "bit_depth=1 is grayscale only",
+                {"gate": None, "andon": "PngWriteError", "clause": "bit1_not_grayscale",
+                 "shape": list(arr.shape)})
         if not np.isin(np.unique(arr), (0, 1)).all():
-            raise ValueError("bit_depth=1 needs an array of only 0 and 1")
+            raise PngWriteError(
+                "bit_depth=1 needs an array of only 0 and 1",
+                {"gate": None, "andon": "PngWriteError", "clause": "bit1_values",
+                 "distinct_values": [int(v) for v in np.unique(arr)[:8]]})
     elif bit_depth == 8:
         if arr.dtype != np.uint8:
-            raise ValueError(f"bit_depth=8 needs uint8, got {arr.dtype}")
+            raise PngWriteError(
+                f"bit_depth=8 needs uint8, got {arr.dtype}",
+                {"gate": None, "andon": "PngWriteError", "clause": "bit8_dtype",
+                 "dtype": str(arr.dtype)})
     else:
-        raise ValueError(f"unsupported bit depth {bit_depth}")
+        raise PngWriteError(
+            f"unsupported bit depth {bit_depth}",
+            {"gate": None, "andon": "PngWriteError", "clause": "unsupported_bit_depth",
+             "bit_depth": bit_depth})
 
     height, width = arr.shape[0], arr.shape[1]
     ihdr = struct.pack(">IIBBBBB", width, height, bit_depth, color_type, 0, 0, 0)

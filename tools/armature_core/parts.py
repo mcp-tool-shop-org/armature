@@ -356,10 +356,36 @@ def tightened(name, requested, owned, gate_cls, ev):
     `resample.require_rotation`, F-8cd65665 on `lift_solve.gate_round_trip`) — one
     implementation, imported, rather than a third and a fourth copy of the same paragraph.
     `_tightened` remains as this module's own spelling.
+
+    **Zero is the tightest legal request, and it was refused** (F-2a564189, wave 12). This
+    function called `require_finite` with the `positive=True` default, so `requested=0.0`
+    — exact match, the one value that is unambiguously NOT a loosening — raised, and it
+    raised quoting `require_finite`'s NaN paragraph, none of which is true of a number that
+    compares correctly in both directions. Measured 2026-09-04 against `owned = 1e-4`:
+    1e-30 accepted, 1e-4 accepted, 1e-3 refused as a loosening (correct), 0.0 refused as
+    "not a finite positive number". The refusal reached every public gate importing the
+    helper (`resample.require_rotation(I, 'w', tol=0.0)` -> ResampleGate with the same
+    text), and the natural caller is a determinism tightening:
+    `gate_parts_determinism(..., epsilon_frac=0.0)` meaning "two builds must be
+    byte-identical", the strictest reading of Gate D. A session asking a gate for exact
+    equality was told its number was not comparable, and the way past that message is to
+    loosen — the guard producing the loosening it exists to prevent.
+
+    So the two obligations are split: finiteness is asked with `positive=False`, and a
+    NEGATIVE bound gets its own clause and its own sentence. The NaN paragraph is now
+    quoted only at values it describes.
     """
     if requested is None:
         return float(owned)
-    value = require_finite(name, requested, gate_cls, ev)
+    value = require_finite(name, requested, gate_cls, ev, positive=False)
+    if value < 0.0:
+        ev[name] = value
+        raise gate_cls(
+            f"a caller asked this gate to run with {name}={value:.3e}: a negative "
+            f"tolerance admits nothing, so the gate would fire on correct work and the "
+            f"refusal would describe a defect that is not there. Zero is the tightest "
+            f"legal request (exact equality); below zero is not a tightening, it is a "
+            f"bound no measurement can satisfy", ev)
     if value > float(owned):
         ev[name] = value
         raise gate_cls(
@@ -372,6 +398,45 @@ def tightened(name, requested, owned, gate_cls, ev):
 
 #: This module's own spelling of the shared helper above.
 _tightened = tightened
+
+
+def narrowed(name, requested, owned, gate_cls, ev):
+    """`requested` if it is a SUBSET of `owned`, else raise. None means "use the module's".
+
+    `tightened`'s set-valued sibling, and the same law: a bound the caller supplies is a
+    bound the caller can widen. Written here, beside the numeric one, rather than inside
+    the module that needed it first — the two are the same rule over two orderings
+    (`<=` on the reals, `⊆` on a finite set), and the repo has already paid for the second
+    copy of a rule drifting from the first.
+
+    Commissioned by F-5a810b95 (wave 12): `assembly.gate_no_paid_nodes(graph,
+    allowed=ALLOWED_CLASSES)` was the fourth site of the family closed three times in wave
+    10 (`gate_rigid_arrival`/`gate_parts_determinism`, `assembly.gate_slot_ceiling`,
+    `resample.require_rotation`, `lift_solve.gate_round_trip`) and the only one of the
+    family that guards SPEND. Measured 2026-09-04: the graph
+    `{'1': {'class_type': 'KlingVideoNode'}}` raises on the default allowlist and RETURNS a
+    full success verdict under `allowed=ALLOWED_CLASSES + ('KlingVideoNode',)`.
+
+    The evidence records both sides and the difference, so the refusal names the classes
+    that were added rather than only that a widening happened.
+    """
+    own = tuple(owned)
+    if requested is None:
+        return own
+    req = tuple(requested)
+    added = sorted(set(req) - set(own))
+    if added:
+        ev[name] = list(req)
+        ev[name + "_added"] = added
+        ev[name + "_module_owns"] = list(own)
+        raise gate_cls(
+            f"a caller asked this gate to run with {name} widened by {added}, which the "
+            f"module's own {name} does not name. It may only NARROW: an allowlist the "
+            f"caller supplies is an allowlist the caller can widen, and widening it at a "
+            f"call site puts the addition outside every clause written to watch the "
+            f"module constant. Widen the constant in a deliberate diff, or narrow here",
+            ev)
+    return req
 
 
 def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_frac=None):

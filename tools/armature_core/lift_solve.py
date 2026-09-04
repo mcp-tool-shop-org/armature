@@ -106,7 +106,16 @@ COLLINEAR_SIN_EPS = 1e-6
 
 
 class SolveError(ArmatureError):
-    """The landmarks do not present what the solve requires."""
+    """The landmarks do not present what the solve requires.
+
+    Carries an `evidence` dict like `GateFailure` does, so a refusal reaches a halt record
+    with the measurement that fired it. A plain refusal writes `gate: None` + `andon` +
+    `clause` — a refusal is not an andon and has no gate id.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 class SolveGate(GateFailure):
@@ -631,9 +640,12 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
     and the residual is the thing being measured rather than a defect.
     """
     if raise_on_fail:
-        raise TypeError(
+        # F-9fab7829, wave 12: a bare `TypeError` here is recorded by the 21-tool halt
+        # contract as "FAILED - an unhandled error" at exit 1. It is a deliberate refusal.
+        raise SolveError(
             "round_trip_report is a diagnostic and cannot be armed; call "
-            "gate_round_trip(rest, obs, solved, diagonal[, tol_frac]) - it has no flag")
+            "gate_round_trip(rest, obs, solved, diagonal[, tol_frac]) - it has no flag",
+            {"gate": None, "andon": "SolveError", "clause": "diagnostic_cannot_be_armed"})
     got = fk_sites(rest, solved)
     tol = tol_frac * diagonal
     # The population this report claims to cover, written down before it is walked

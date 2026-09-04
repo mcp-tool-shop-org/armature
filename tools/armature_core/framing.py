@@ -95,7 +95,10 @@ def _cross(a, b):
 def _norm(a):
     n = math.sqrt(_dot(a, a))
     if n < 1e-12:
-        raise FramingError("cannot normalise a zero-length direction")
+        raise FramingError(
+            "cannot normalise a zero-length direction",
+            {"gate": None, "andon": "FramingError", "clause": "zero_length_direction",
+             "vector": [float(v) for v in a], "length": n})
     return _scale(a, 1.0 / n)
 
 
@@ -131,7 +134,9 @@ def ortho_half_spans(ortho_scale, width, height):
         raise FramingError(
             f"ortho_scale is {ortho_scale}, which spans no world at all; a parallel camera "
             f"with a non-positive scale collapses every point onto the frame centre, and "
-            f"the render still saves as a well-formed image")
+            f"the render still saves as a well-formed image",
+            {"gate": None, "andon": "FramingError", "clause": "ortho_scale_not_positive",
+             "ortho_scale": ortho_scale, "width": width, "height": height})
     if width >= height:
         sx = ortho_scale
         sy = ortho_scale * height / width
@@ -160,7 +165,11 @@ def camera_basis(target, position):
     if math.sqrt(_dot(proj, proj)) < 1e-9:
         raise FramingError(
             "the camera is looking straight up or down; the up vector is undefined and "
-            "the roll of the shot would be arbitrary")
+            "the roll of the shot would be arbitrary",
+            {"gate": None, "andon": "FramingError",
+             "clause": "view_direction_parallel_to_up",
+             "position": [float(v) for v in position],
+             "target": [float(v) for v in target]})
     up = _norm(proj)
     right = _cross(up, back)
     return right, up, back
@@ -340,7 +349,10 @@ def solve_camera(all_points, end_points, azimuth_deg, elevation_deg,
     quotes them against the render's own measured bbox.
     """
     if not all_points or not end_points:
-        raise FramingError("no points to frame")
+        raise FramingError(
+            "no points to frame",
+            {"gate": None, "andon": "FramingError", "clause": "empty_point_cloud",
+             "n_all_points": len(all_points), "n_end_points": len(end_points)})
     cx = sum(p[0] for p in all_points) / len(all_points)
     cy = sum(p[1] for p in all_points) / len(all_points)
     cz = sum(p[2] for p in all_points) / len(all_points)
@@ -407,7 +419,12 @@ def solve_camera(all_points, end_points, azimuth_deg, elevation_deg,
             f"{az}, elevation {el}). Requested height_frac {height_frac}, end_x_frac "
             f"{end_x_frac}, target_y_frac {target_y_frac}: no camera on this orbit frames "
             f"that, so the numbers below would have been read off a projection that does "
-            f"not exist")
+            f"not exist",
+            {"gate": None, "andon": "FramingError",
+             "clause": "composition_puts_points_behind_the_camera",
+             "behind": behind, "passes": passes, "radius": float(radius),
+             "azimuth": az, "elevation": el, "height_frac": height_frac,
+             "end_x_frac": end_x_frac, "target_y_frac": target_y_frac})
     return {
         "target": list(target),
         "radius": radius,

@@ -325,7 +325,9 @@ def _rot(axis, deg):
         return [[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]]
     if axis == "Z":
         return [[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]]
-    raise WalkError(f"unknown axis {axis!r}; expected 'X', 'Y' or 'Z'")
+    raise WalkError(
+        f"unknown axis {axis!r}; expected 'X', 'Y' or 'Z'",
+        {"gate": None, "andon": "WalkError", "clause": "unknown_axis", "axis": axis})
 
 
 def rotation_matrix(rx, ry, rz):
@@ -380,9 +382,16 @@ class GaitParams:
         self.gesture_wrist_deg = float(gesture_wrist_deg)
 
         if min(self.n_walk, self.n_decel, self.n_gesture, self.n_hold) < 1:
-            raise WalkError("every phase must be at least one frame long")
+            raise WalkError(
+                "every phase must be at least one frame long",
+                {"gate": None, "andon": "WalkError", "clause": "phase_shorter_than_a_frame",
+                 "n_walk": self.n_walk, "n_decel": self.n_decel,
+                 "n_gesture": self.n_gesture, "n_hold": self.n_hold})
         if self.steps < 1:
-            raise WalkError("a walk needs at least one step")
+            raise WalkError(
+                "a walk needs at least one step",
+                {"gate": None, "andon": "WalkError", "clause": "no_steps",
+                 "steps": self.steps})
         if not 0.0 < self.stance_frac < 1.0:
             raise WalkError(
                 f"stance_frac={self.stance_frac}; a leg must spend part of the cycle on "
@@ -416,7 +425,9 @@ class Performer:
                 f"the landmark table is missing {missing}; the gait scales itself against "
                 f"this character's own measurements and cannot proceed on defaults. The "
                 f"required set is derived from HEAD_LANDMARK and FK_SITES rather than "
-                f"restated, so it cannot drift from what the code reads"
+                f"restated, so it cannot drift from what the code reads",
+                {"gate": None, "andon": "WalkError", "clause": "landmarks_missing",
+                 "missing": missing, "n_given": len(landmarks)}
             )
         self.landmarks = {k: [float(v) for v in p] for k, p in landmarks.items()}
         self.facing_y_sign = float(facing_y_sign)
@@ -424,7 +435,9 @@ class Performer:
         if self.facing_y_sign not in (1.0, -1.0) or self.left_x_sign not in (1.0, -1.0):
             raise WalkError(
                 f"facing_y_sign={facing_y_sign} left_x_sign={left_x_sign}; both are "
-                f"measured signs and must be exactly +1 or -1"
+                f"measured signs and must be exactly +1 or -1",
+                {"gate": None, "andon": "WalkError", "clause": "sign_not_unit",
+                 "facing_y_sign": facing_y_sign, "left_x_sign": left_x_sign}
             )
 
         def dist(a, b):
@@ -443,7 +456,10 @@ class Performer:
         zs = [p[2] for p in self.landmarks.values()]
         self.height = max(zs) - min(zs)
         if self.leg_length <= 0.0 or self.height <= 0.0:
-            raise WalkError("the measured leg length or height is not positive")
+            raise WalkError(
+                "the measured leg length or height is not positive",
+                {"gate": None, "andon": "WalkError", "clause": "measurement_not_positive",
+                 "leg_length": self.leg_length, "height": self.height})
 
     def as_dict(self):
         return {
@@ -474,7 +490,10 @@ def _phase_schedule(p):
     moving_frames = p.n_walk + p.n_decel
     effective = sum(speed[:moving_frames])
     if effective <= 0.0:
-        raise WalkError("the deceleration envelope leaves no moving frames")
+        raise WalkError(
+            "the deceleration envelope leaves no moving frames",
+            {"gate": None, "andon": "WalkError", "clause": "no_moving_frames",
+             "effective": effective, "moving_frames": moving_frames})
     omega = (p.steps + 0.5) * math.pi / effective
 
     phase = [0.0]
@@ -557,7 +576,11 @@ def _integrate_forward(performer, p, phase, speed, legs):
                 raise WalkError(
                     f"frame {i}: the gait advances {du:.3f} of a cycle in one frame, so "
                     f"more than one stance exchange falls between two samples; the walk "
-                    f"cannot be represented at this frame rate"
+                    f"cannot be represented at this frame rate",
+                    {"gate": None, "andon": "WalkError",
+                     "clause": "cadence_outruns_frame_rate",
+                     "frame": i, "cycles_this_frame": du,
+                     "max_cycles_per_frame": MAX_CYCLES_PER_FRAME}
                 )
             amp_mid = 0.5 * (amp_a + amp_b)
             out_key = "psi_L" if a["stance_L"] else "psi_R"

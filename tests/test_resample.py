@@ -320,12 +320,27 @@ def test_the_rotation_gate_still_accepts_a_caller_that_tightens():
     assert ev["orthonormality_error"] == 0.0
 
 
-@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), 0.0, -1.0])
-def test_the_rotation_gate_refuses_a_tolerance_that_is_not_a_positive_finite_number(bad):
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), -1.0])
+def test_the_rotation_gate_refuses_a_tolerance_that_is_not_a_number_or_is_negative(bad):
     """`nan > ORTHONORMAL_TOL` is False, so a NaN would have read as a tightening and then
-    made `worst <= tol` False in both directions."""
-    with pytest.raises(RS.ResampleGate, match=r"not a finite positive"):
+    made `worst <= tol` False in both directions.
+
+    WAVE 12 (F-2a564189): `0.0` left this sweep. It is exact-match, the tightest legal
+    request, and it was being refused with `require_finite`'s NaN paragraph — measured on
+    the base: `require_rotation(I, 'w', tol=0.0)` raised ResampleGate with the identical
+    NaN text on a matrix that IS exactly a rotation. A negative tolerance now has its own
+    clause and its own sentence."""
+    with pytest.raises(RS.ResampleGate, match=r"not a finite number|admits nothing"):
         RS.require_rotation(_sheared(), "frame 0", tol=bad)
+
+
+def test_the_rotation_gate_accepts_an_exact_tolerance_and_still_binds():
+    """Zero is accepted as a bound and still fires on a matrix that is not a rotation."""
+    ev = RS.require_rotation([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                             "frame 0", tol=0.0)
+    assert ev["orthonormality_error"] == 0.0
+    with pytest.raises(RS.ResampleGate, match=r"is not a rotation"):
+        RS.require_rotation(_sheared(), "frame 0", tol=0.0)
 
 
 def test_is_rotation_keeps_its_plain_keyword_because_it_returns_rather_than_gating():

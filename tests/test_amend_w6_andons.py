@@ -315,7 +315,12 @@ def test_every_refusal_added_in_this_amend_survives_optimization(tmp_path, flag,
         "facing_head_outvotes": "FacingGate",
         "compositor_no_link": "CompositorWiring",
         "compositor_wrong_socket": "CompositorWiring",
-        "union_single_use_iterator": "TypeError",
+        # WAVE 12 (F-9fab7829): `NonReiterableFrames`, not a bare `TypeError`. The 21-tool
+        # halt contract classifies on the `ArmatureError` family, so a builtin here was
+        # recorded as "FAILED - an unhandled error" at exit 1 where this is a refusal at
+        # exit 2 — and the class this function already raises for the re-iterability
+        # clause two branches down is the one that was wanted.
+        "union_single_use_iterator": "NonReiterableFrames",
     }
     res = _run_probe(tmp_path, flag=flag, env_var=env_var)
     assert set(res["raised"]) == set(expected), res["raised"]

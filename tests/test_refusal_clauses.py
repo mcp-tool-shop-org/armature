@@ -164,6 +164,22 @@ RECORDED_POPULATION = frozenset({
     # (`ABClipError` is raised from exactly one site, so its name IS its clause and the
     # derivation deliberately leaves it out.)
     "ReviewClipError", "SheetPopulationError", "ShotsetSheetError", "ZoomSheetError",
+    # Joined 2026-09-04 (wave 12, core-solvers, F-9fab7829). Thirteen bare `ValueError` /
+    # `TypeError` refusals in six owned modules became typed members of the `ArmatureError`
+    # family, because the 21-tool halt contract classifies on that family and recorded every
+    # one of them as "FAILED - an unhandled error" at exit 1 where the honest record is
+    # "REFUSED" at exit 2. Three of the new classes reach more than one raise site and
+    # therefore enter the policed population: `PngWriteError` (6 sites in `pngio.py`),
+    # `ClipCompareError` (3 in `clipcompare.py`), `ClipStatsError` (2 in `clipstats.py`).
+    # `SiteListError` (1 site) and `MeasurementWithoutScene` (1) are deliberately absent —
+    # one raise site means the class IS its clause — and join the day a second one is
+    # written, exactly as `walk.GaitGate` and `ABClipError` do.
+    "ClipCompareError", "ClipStatsError", "PngWriteError",
+    # And `NonReiterableFrames` crosses from one raise site to two: `union_sphere`'s
+    # non-callable guard was a bare `TypeError` and is now the same class as its
+    # re-iterability clause. The comment above that recorded it as "deliberately absent —
+    # one raise site, so the class IS its clause" is corrected here rather than deleted.
+    "NonReiterableFrames",
 })
 
 #: Re-derived 2026-09-04 and EMPTY. There is no class this census excuses: a class raised
@@ -196,7 +212,12 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # 71 + 2 + 3 = 76; instruments-measure's branch added `ReviewClipError`, `ShotsetSheetError`,
     # `ZoomSheetError` (new classes) and `SheetPopulationError` (crossed to two sites):
     # 76 + 4 = 80, MEASURED on the merged tree.
-    assert len(POLICED) == 80, sorted(POLICED)
+    # WAVE 12 (core-solvers, F-9fab7829): 80 + 3 new classes with two or more raise sites
+    # (`PngWriteError`, `ClipCompareError`, `ClipStatsError`) + `NonReiterableFrames`
+    # crossing from one site to two = 84, MEASURED on this branch. `SiteListError` and
+    # `MeasurementWithoutScene` are new classes with ONE raise site each and are correctly
+    # not derived.
+    assert len(POLICED) == 84, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

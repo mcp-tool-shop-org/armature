@@ -49,7 +49,8 @@ def test_luma_uses_rec_709_and_is_not_a_plain_mean():
 
 
 def test_luma_refuses_a_frame_that_is_not_three_channel():
-    with pytest.raises(ValueError):
+    # WAVE 12 (F-9fab7829): `ClipStatsError`, not `ValueError` — see the class docstring.
+    with pytest.raises(CS.ClipStatsError, match=r"expected an \(H, W, 3\) frame"):
         CS.luma(np.zeros((4, 4), dtype=np.uint8))
 
 
@@ -116,7 +117,7 @@ def test_a_repainted_room_reports_not_found_rather_than_a_number():
 
 
 def test_the_horizon_search_refuses_a_band_with_nothing_in_it():
-    with pytest.raises(ValueError):
+    with pytest.raises(CS.ClipStatsError, match=r"fewer than two rows to search"):
         CS.horizon_row(studio(), band=(10, 11))
 
 

@@ -74,7 +74,10 @@ Toes come from the ankle bones' TAILS (`sitelist` places `ankle.L` head->`ankle_
 tail->`toe_L`), which is the only place toe positions exist on this 22-bone rig.
 """
 
+import hashlib
+import json
 import math
+import os
 
 import numpy as np
 
@@ -160,6 +163,120 @@ LIMB_BRIGHTNESS = 0.6
 
 #: `draw_aapose_by_meta_new`'s default. Points below it are skipped entirely.
 DEFAULT_THRESHOLD = 0.5
+
+
+# ------------------------------------------------- the RECORDED reference (Gate CONV)
+#
+# F-499b7cfa, wave 12. **Gate CONV compared the module's tables against the module's own
+# tables, and the provenance recorded the comparison it did not make.**
+# `check_convention(keypoint_count, limb_seq, palette)` compared its three arguments
+# element-for-element against `KEYPOINT_COUNT` / `LIMB_SEQ` / `PALETTE` in this same
+# module, and the ONE production call site is
+# `tools/render_pose_sticks.py:165: aapose.check_convention(len(aapose.KEYPOINT_NAMES),
+# aapose.LIMB_SEQ, aapose.PALETTE)` — three parameters with zero degrees of freedom.
+#
+# Measured 2026-09-04 on the wave-12 base: the tool's exact call returns True; then, with
+# the module's own tables swapped to a ControlNet-18 shape (`KEYPOINT_NAMES[:18]`,
+# `PALETTE[:18]`, `LIMB_SEQ` opened with ControlNet's closing pairs `(3,17),(6,18)`) —
+# precisely the conflation this module's docstring says it exists to keep visible — the
+# SAME call still returns True. The run then writes
+# `"CONV": {"verdict": "PASS", "detail": "... vs wan/modules/animate/preprocess/
+# human_visualization.py @ 29d4a35d3227"}`: a verdict naming a comparison against the
+# fetched source that no code in the run performs. That is this repo's named
+# most-expensive defect class, on the artifact that decides what the model draws.
+#
+# So the convention is RECORDED here, once, as data — a second transcription from the
+# banked source, held apart from the live tables above so that the gate has something to
+# compare them against — and the record is pinned by a digest over its own canonical JSON.
+# An edit to the live tables now fires the gate; an edit to BOTH the live tables and this
+# record has to recompute `RECORDED_CONVENTION_SHA256`, which is a deliberate, visible act
+# rather than a silent one.
+#
+# **Why it is in this module and not a sidecar data file.** The wave-12 frozen domain map
+# gives core-solvers twenty-one named `.py` files and no data directory; a new
+# `armature_core/data/*.json` would be an ownership violation that blocks the wave. The
+# digest gives the in-module record the property the sidecar was wanted for. The seam is
+# posted for whoever holds the map next.
+#
+# The banked source (`outputs/E08/convention/human_visualization.py`) is checked when it is
+# present and reported ABSENT when it is not — `outputs/` is git-ignored by design, so it
+# is absent in every fresh checkout including CI. `check_convention` says which of those
+# happened; it does not print a verdict naming a file it never opened.
+
+RECORDED_CONVENTION = {
+    "source_path": "wan/modules/animate/preprocess/human_visualization.py",
+    "source_commit": "29d4a35d32273d5309a3a95250bd4e118d8789b2",
+    "source_sha256": "962813c71b2f2e09f7cd745b35b31a0d278b122b5f2f429018d0576c795eda33",
+    "function": "draw_aapose_new via draw_aapose_by_meta_new",
+    "recorded": "2026-09-04",
+    "keypoint_names": [
+        "Nose", "Neck", "RShoulder", "RElbow", "RWrist", "LShoulder", "LElbow", "LWrist",
+        "RHip", "RKnee", "RAnkle", "LHip", "LKnee", "LAnkle",
+        "REye", "LEye", "REar", "LEar", "LToe", "RToe",
+    ],
+    "limb_seq": [
+        [2, 3], [2, 6],
+        [3, 4], [4, 5],
+        [6, 7], [7, 8],
+        [2, 9], [9, 10], [10, 11],
+        [2, 12], [12, 13], [13, 14],
+        [2, 1],
+        [1, 15], [15, 17], [1, 16], [16, 18],
+        [14, 19], [11, 20],
+    ],
+    "palette": [
+        [255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0],
+        [170, 255, 0], [85, 255, 0], [0, 255, 0], [0, 255, 85],
+        [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255],
+        [0, 0, 255], [85, 0, 255], [170, 0, 255], [255, 0, 255],
+        [255, 0, 170], [255, 0, 85],
+        [200, 200, 0], [100, 100, 0],
+    ],
+    "hand_edges": [
+        [0, 1], [1, 2], [2, 3], [3, 4],
+        [0, 5], [5, 6], [6, 7], [7, 8],
+        [0, 9], [9, 10], [10, 11], [11, 12],
+        [0, 13], [13, 14], [14, 15], [15, 16],
+        [0, 17], [17, 18], [18, 19], [19, 20],
+    ],
+    "hand_keypoint_count": 21,
+    "limb_brightness": 0.6,
+}
+
+#: sha256 over `json.dumps(RECORDED_CONVENTION, sort_keys=True, separators=(",", ":"))`.
+#: Recomputed only in a commit that deliberately re-records the convention.
+RECORDED_CONVENTION_SHA256 = (
+    "0967b4a45e34abc99d85a36fb58f6ead399a37fbbfdc2424738c1b746339d79c")
+
+#: Where the fetched source is banked when a session has fetched it. Git-ignored by design.
+BANKED_SOURCE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "outputs", "E08", "convention", "human_visualization.py")
+
+
+def recorded_convention_digest(record=None):
+    """sha256 over the canonical JSON of `RECORDED_CONVENTION`."""
+    rec = RECORDED_CONVENTION if record is None else record
+    blob = json.dumps(rec, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()
+
+
+def banked_source_state():
+    """`(state, sha256_or_None)` for the fetched source — `verified`, `MISMATCH`, `absent`.
+
+    A diagnostic, not a gate on its own: the file is git-ignored, so "absent" is the
+    ordinary state of a fresh checkout and refusing on it would take every render down.
+    What the gate refuses is a MISMATCH, which is the only reading that means the pin and
+    the file disagree.
+    """
+    try:
+        with open(BANKED_SOURCE, "rb") as fh:
+            got = hashlib.sha256(fh.read()).hexdigest()
+    except OSError:
+        return "absent", None
+    if got != SOURCE["sha256"]:
+        return "MISMATCH", got
+    return "verified", got
 
 #: `draw_handpose_new`'s eps guard on hand coordinates.
 HAND_EPS = 0.01
@@ -295,42 +412,132 @@ def hand_frame(wrist, hand_end, elbow):
     raise ArmatureError("could not build a palm plane; every reference was collinear")
 
 
-def check_convention(keypoint_count, limb_seq, palette):
-    """Conformance against the transcribed source. Raises `ArmatureError`.
-
-    Compared element for element, including the 1-indexing and including the last two pairs,
-    which is where a ControlNet/DWPose convention would differ (see the module docstring).
-    """
+def _compare_against_record(label, keypoint_count, limb_seq, palette, record):
+    """Element-for-element differences between one triple and the RECORDED reference."""
     problems = []
-    if keypoint_count != KEYPOINT_COUNT:
-        problems.append(f"keypoint count {keypoint_count} != {KEYPOINT_COUNT}")
+    want_names = record["keypoint_names"]
+    if int(keypoint_count) != len(want_names):
+        problems.append(
+            f"{label}: keypoint count {keypoint_count} != {len(want_names)}")
 
     ours = [tuple(p) for p in limb_seq]
-    if len(ours) != len(LIMB_SEQ):
-        problems.append(f"limb pair count {len(ours)} != {len(LIMB_SEQ)}")
+    want_limbs = [tuple(p) for p in record["limb_seq"]]
+    if len(ours) != len(want_limbs):
+        problems.append(f"{label}: limb pair count {len(ours)} != {len(want_limbs)}")
     else:
-        for i, (a, b) in enumerate(zip(ours, LIMB_SEQ)):
+        for i, (a, b) in enumerate(zip(ours, want_limbs)):
             if a != b:
-                problems.append(f"limb pair {i}: {a} != source {b}")
+                problems.append(f"{label}: limb pair {i}: {a} != recorded {b}")
 
     flat = [v for pair in ours for v in pair]
     if flat and min(flat) == 0:
-        problems.append("limb pairs are 0-indexed; the source's limbSeq is 1-indexed")
+        problems.append(
+            f"{label}: limb pairs are 0-indexed; the source's limbSeq is 1-indexed")
 
     pal = [tuple(c) for c in palette]
-    if len(pal) != len(PALETTE):
-        problems.append(f"palette length {len(pal)} != {len(PALETTE)}")
+    want_pal = [tuple(c) for c in record["palette"]]
+    if len(pal) != len(want_pal):
+        problems.append(f"{label}: palette length {len(pal)} != {len(want_pal)}")
     else:
-        for i, (a, b) in enumerate(zip(pal, PALETTE)):
+        for i, (a, b) in enumerate(zip(pal, want_pal)):
             if a != b:
-                problems.append(f"palette entry {i}: {a} != source {b}")
+                problems.append(f"{label}: palette entry {i}: {a} != recorded {b}")
+    return problems
+
+
+def check_convention(keypoint_count, limb_seq, palette):
+    """Gate CONV · ANDON — conformance against the RECORDED reference. Raises `ArmatureError`.
+
+    Three comparisons, in the order a reader should trust them, and the returned dict says
+    which ones ran:
+
+    1. **The record against its own digest.** `RECORDED_CONVENTION` is pinned by
+       `RECORDED_CONVENTION_SHA256`, so the reference cannot be edited into agreement with
+       a wrong table without the pin firing.
+    2. **This module's live tables against the record.** THE clause the gate was missing.
+    3. **The caller's arguments against the record** — the original comparison, kept,
+       because a caller may hand in tables it built itself.
+
+    Plus the banked source's own sha256 when the file is present (`banked_source_state`).
+
+    **What this replaces, and why** (F-499b7cfa, wave 12 — see the RECORDED reference
+    block above). The three parameters were read off the same tables they were compared
+    with, so the gate had zero degrees of freedom and could not fail; the run's provenance
+    nonetheless wrote `"CONV": {"verdict": "PASS", "detail": "... vs
+    human_visualization.py @ 29d4a35d3227"}` — a verdict naming a comparison against the
+    fetched source that no code performed. Measured on the base: with the module's own
+    tables swapped to a ControlNet-18 shape the tool's exact call still returned True.
+
+    **Returns a dict, not `True`.** A provenance record must be able to quote what was
+    actually compared instead of a literal typed at the call site: `compared_against`,
+    `recorded_sha256`, `banked_source`, `source_commit` and a `detail` line that names the
+    fetched file ONLY when the fetched file was hashed. The dict is truthy, so an existing
+    `if check_convention(...)` still reads the same.
+    """
+    record = RECORDED_CONVENTION
+    digest = recorded_convention_digest(record)
+    if digest != RECORDED_CONVENTION_SHA256:
+        raise ArmatureError(
+            "the recorded AAPose-20 reference does not match its own pinned digest "
+            f"(computed {digest[:16]}, pinned {RECORDED_CONVENTION_SHA256[:16]}). The "
+            "record is what Gate CONV compares the module's tables against, so a record "
+            "that has drifted turns the gate back into the module checking itself. "
+            "Re-record the convention from the banked source and update the pin in the "
+            "same commit")
+
+    problems = _compare_against_record(
+        "module tables", KEYPOINT_COUNT, LIMB_SEQ, PALETTE, record)
+    problems += _compare_against_record(
+        "caller", keypoint_count, limb_seq, palette, record)
+    if list(KEYPOINT_NAMES) != list(record["keypoint_names"]):
+        problems.append(
+            f"module tables: keypoint names {list(KEYPOINT_NAMES)} != recorded "
+            f"{record['keypoint_names']}")
+    if [tuple(e) for e in HAND_EDGES] != [tuple(e) for e in record["hand_edges"]]:
+        problems.append("module tables: hand edges differ from the recorded reference")
+
+    banked, banked_sha = banked_source_state()
+    if banked == "MISMATCH":
+        problems.append(
+            f"the banked source at {BANKED_SOURCE} hashes {banked_sha[:16]} and the pin "
+            f"records {SOURCE['sha256'][:16]}")
 
     if problems:
         raise ArmatureError(
-            "the emitted skeleton does not match the transcribed Wan AAPose-20 convention "
-            f"({SOURCE['path']} @ {SOURCE['commit'][:12]}): " + "; ".join(problems)
+            "the emitted skeleton does not match the recorded reference for the Wan "
+            f"AAPose-20 convention ({record['source_path']} @ "
+            f"{record['source_commit'][:12]}, recorded {record['recorded']}): "
+            + "; ".join(problems)
         )
-    return True
+
+    if banked == "verified":
+        detail = (f"{len(record['keypoint_names'])} keypoints / "
+                  f"{len(record['limb_seq'])} pairs / {len(record['palette'])} palette "
+                  f"entries, module tables and caller both equal to "
+                  f"RECORDED_CONVENTION (digest {digest[:12]}); banked "
+                  f"{record['source_path']} @ {record['source_commit'][:12]} hashed and "
+                  f"matching the pin")
+    else:
+        detail = (f"{len(record['keypoint_names'])} keypoints / "
+                  f"{len(record['limb_seq'])} pairs / {len(record['palette'])} palette "
+                  f"entries, module tables and caller both equal to "
+                  f"RECORDED_CONVENTION (digest {digest[:12]}); the fetched source was "
+                  f"NOT opened by this run (banked copy absent — outputs/ is git-ignored)")
+
+    return {
+        "verdict": "PASS",
+        "compared_against": "armature_core.aapose.RECORDED_CONVENTION",
+        "recorded_sha256": RECORDED_CONVENTION_SHA256,
+        "recorded_on": record["recorded"],
+        "source_path": record["source_path"],
+        "source_commit": record["source_commit"],
+        "banked_source": banked,
+        "banked_source_sha256": banked_sha,
+        "keypoint_count": len(record["keypoint_names"]),
+        "limb_pairs": len(record["limb_seq"]),
+        "palette_entries": len(record["palette"]),
+        "detail": detail,
+    }
 
 
 # ------------------------------------------------------------------------- the hand

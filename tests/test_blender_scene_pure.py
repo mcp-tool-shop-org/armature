@@ -189,7 +189,11 @@ def test_a_single_use_iterator_is_refused_rather_than_silently_read_once(BS):
     """Handing this an exhausted iterator would make the radius pass read nothing and
     return 0.0 — a bounding sphere of radius zero around a real subject, with every other
     check green."""
-    with pytest.raises(TypeError):
+    # WAVE 12 (F-9fab7829): `NonReiterableFrames`, not a bare `TypeError` — the halt
+    # contract records a builtin as "FAILED - an unhandled error" at exit 1 where this is a
+    # refusal at exit 2, and the class this function already raises for the same reason
+    # exists two clauses down.
+    with pytest.raises(BS.NonReiterableFrames, match=r"takes a CALLABLE"):
         BS.union_sphere(iter([np.array([[0.0, 0.0, 0.0]])]))
 
 
@@ -321,37 +325,50 @@ def test_world_bounds_filters_by_render_visibility_when_it_is_given_the_scene(BS
     assert seen == {"scene": "SCENE", "measured": ["visible-only"]}
 
 
-def test_world_bounds_without_a_scene_still_measures_what_it_was_handed(BS, monkeypatch):
-    """The other direction: the caller-filtered contract is unchanged, which is what keeps
-    `unfiltered_world_bounds`'s deliberately naive row honest."""
-    seen = _routing_probe(BS, monkeypatch)
-    BS.world_bounds(["a", "b"])
-    assert seen == {"measured": ["a", "b"]}
+def test_world_bounds_without_a_scene_is_now_refused_by_name(BS, monkeypatch):
+    """CORRECTED IN PLACE, wave 12 (F-e2be2262 / F-efe65849). This test used to assert the
+    other direction — "the caller-filtered contract is unchanged" — and pinned that
+    `world_bounds(["a","b"])` measured what it was handed. That contract is gone: the
+    docstring justifying it said "three call sites in other domains still omit it and the
+    signature cannot tighten until they move", and a grep across `tools/` and `tests/` on
+    the wave-12 base found ZERO live call sites omitting `scene` (the only omission,
+    `tools/superseded/render_reference.py:183`, is inside `UNFILTERED_BAN_EXEMPT_DIRS` by
+    name and date). So `scene` is required, and an explicit `scene=None` is refused toward
+    `unfiltered_world_bounds` — the name a deliberately naive reading has."""
+    _routing_probe(BS, monkeypatch)
+    with pytest.raises(TypeError):
+        BS.world_bounds(["a", "b"])
+    with pytest.raises(BS.MeasurementWithoutScene) as exc:
+        BS.world_bounds(["a", "b"], scene=None)
+    assert "unfiltered_world_bounds" in str(exc.value)
+    assert exc.value.evidence["gate"] is None
+    assert exc.value.evidence["clause"] == "world_bounds_without_scene"
 
 
-def test_the_naive_spelling_and_the_naive_NAME_are_the_same_measurement(BS, monkeypatch):
-    """F-08b5c1b8, the half that lives in this module: `world_bounds(objects)` with `scene`
-    omitted is behaviourally identical to `unfiltered_world_bounds(objects)` — same triple,
-    same object list handed to the primitive — so a deliberate naive row and a forgotten
-    `scene=` cannot be told apart by reading the code.
+def test_there_is_now_only_ONE_naive_spelling_and_it_is_the_naive_NAME(BS, monkeypatch):
+    """CORRECTED IN PLACE, wave 12 (F-e2be2262 / F-efe65849). This test used to pin the two
+    spellings as the SAME measurement — `world_bounds(objects)` with `scene` omitted was
+    behaviourally identical to `unfiltered_world_bounds(objects)`, same triple and same
+    object list handed to the primitive — with the reasoning that "a ban is only worth
+    having while these two really are the same call".
 
-    Pinned as a SAMENESS rather than left implicit: the guard against the second spelling
-    is a suite-side ban on `world_bounds(...)` without `scene=` (tests' wave-10 census), and
-    a ban is only worth having while these two really are the same call. If someone later
-    makes them differ, this fails and the ban has to be re-argued rather than silently
-    becoming a check on nothing.
+    They are no longer the same call, and the correction is the stronger one the old
+    docstring asked for: the ambiguous spelling has been removed rather than merely banned
+    suite-side, so a deliberate naive row and a forgotten `scene=` can no longer be
+    confused because the second one does not run. What is pinned now is that
+    `unfiltered_world_bounds` is the ONE naive reader and that the filtered name has no
+    naive shape at all.
     """
     seen = _routing_probe(BS, monkeypatch)
-    naive_spelling = BS.world_bounds(["decoy", "real"])
-    handed_to_spelling = seen["measured"]
-
-    seen2 = _routing_probe(BS, monkeypatch)
     naive_name = BS.unfiltered_world_bounds(["decoy", "real"])
+    assert "scene" not in seen
+    assert seen["measured"] == ["decoy", "real"]
+    assert len(naive_name) == 3
 
-    assert "scene" not in seen and "scene" not in seen2
-    assert handed_to_spelling == seen2["measured"] == ["decoy", "real"]
-    for a, b in zip(naive_spelling, naive_name):
-        assert np.allclose(np.asarray(a), np.asarray(b))
+    for call in (lambda: BS.world_bounds(["decoy", "real"], scene=None),
+                 lambda: BS.world_bounds(["decoy", "real"])):
+        with pytest.raises((BS.MeasurementWithoutScene, TypeError)):
+            call()
 
 
 def test_the_unfiltered_bounds_have_a_public_name(BS, monkeypatch):
