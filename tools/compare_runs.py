@@ -14,6 +14,20 @@ differ" and "the pixels differ" is itself the finding facet paid for.
 
 Runs outside Blender (Pillow is not in Blender's python), which also makes the decoder
 a different implementation from the writer.
+
+**What DOES raise, and why it is not a halt on a difference.** Reporting a nonzero
+difference is the design. Reporting a *clean* verdict over a comparison that opened no
+pixels is not a measurement at all: two runs whose channel directories exist and hold no
+PNGs used to print `{"max_abs_diff_any_channel": 0, ...}` and exit 0, byte for byte what a
+run that genuinely reproduced prints, and so did two runs with no channel in common. So a
+channel that compared zero frames raises, a pair of runs sharing no channel raises, and
+`frames_compared` rides the printed line — a clean verdict now cannot be read without the
+population behind it. Measured 2026-09-03.
+
+**A pixel is counted once.** `n_differing_px` used to sum `(d > 0)` over the whole
+(H, W, C) array, so a single differing RGB pixel read 3. The pixel count and the sample
+count are now reported as separate, separately named quantities with the channel count
+beside them.
 """
 
 import hashlib
@@ -23,6 +37,18 @@ import sys
 
 import numpy as np
 from PIL import Image
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from armature_core.errors import ArmatureError  # noqa: E402
+
+
+class CompareError(ArmatureError):
+    """The comparison could not be made — not "the runs differ", but "nothing was opened"."""
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 def _sha256(path):
@@ -49,7 +75,8 @@ def compare_channel(dir_a, dir_b):
         "frames_b": len(names_b),
         "frames_compared": 0,
         "max_abs_diff": 0,
-        "mean_abs_diff": 0.0,
+        "mean_abs_diff_per_sample": 0.0,
+        "samples_per_pixel": None,
         "n_frames_with_any_pixel_difference": 0,
         "n_frames_with_byte_difference": 0,
         "worst_frame": None,
@@ -73,21 +100,42 @@ def compare_channel(dir_a, dir_b):
             continue
         d = np.abs(a - b)
         rec["frames_compared"] += 1
+        # A PIXEL is a position, not a sample. `(d > 0).sum()` over an (H, W, C) array
+        # counts one differing RGB pixel three times, and there was nothing beside the
+        # number saying which of the two it was.
+        spp = int(d.shape[2]) if d.ndim == 3 else 1
+        rec["samples_per_pixel"] = spp
         mx = int(d.max())
         if mx > 0:
             rec["n_frames_with_any_pixel_difference"] += 1
             if rec["worst_frame"] is None or mx > rec["max_abs_diff"]:
                 ys, xs = np.nonzero(d.reshape(d.shape[0], -1))
+                differing = (d > 0).any(axis=-1) if d.ndim == 3 else (d > 0)
                 rec["worst_frame"] = {
                     "frame": name,
                     "max_abs_diff": mx,
-                    "n_differing_px": int((d > 0).sum()),
+                    "n_differing_px": int(differing.sum()),
+                    "n_differing_samples": int((d > 0).sum()),
+                    "samples_per_pixel": spp,
                     "first_differing_row": int(ys.min()) if ys.size else None,
                 }
         rec["max_abs_diff"] = max(rec["max_abs_diff"], mx)
         total += float(d.sum())
         npx += int(d.size)
-    rec["mean_abs_diff"] = (total / npx) if npx else None
+    # ---- ANDON. Not on a difference — on having compared nothing, which reports as a
+    #      perfect zero and is indistinguishable from a run that reproduced.
+    if rec["frames_compared"] == 0:
+        raise CompareError(
+            f"nothing was compared between {dir_a} and {dir_b}: "
+            f"{len(names_a)} PNG(s) on the a side, {len(names_b)} on the b side, "
+            f"{len(shared)} shared name(s), {len(rec['shape_mismatch'])} of those "
+            f"shape-mismatched. A zero difference over zero pixels is not a measurement",
+            {"dir_a": dir_a, "dir_b": dir_b,
+             "names_a": names_a[:32], "names_b": names_b[:32],
+             "shared": shared[:32], "frames_compared": 0,
+             "shape_mismatch": rec["shape_mismatch"][:8]},
+        )
+    rec["mean_abs_diff_per_sample"] = (total / npx) if npx else None
     return rec
 
 
@@ -95,6 +143,18 @@ def compare_runs(run_a, run_b):
     chans_a = {d for d in os.listdir(run_a) if os.path.isdir(os.path.join(run_a, d))}
     chans_b = {d for d in os.listdir(run_b) if os.path.isdir(os.path.join(run_b, d))}
     shared = sorted(c for c in chans_a & chans_b if c != "master")
+    # ---- ANDON. A mistyped --a/--b, a run whose channels were written under different
+    #      names, or an aborted render all reach here, and all used to print a null max
+    #      with an empty channel list and exit 0.
+    if not shared:
+        raise CompareError(
+            f"{run_a} and {run_b} share no comparable channel directory "
+            f"(master is excluded by design); a report over no channels reads exactly "
+            f"like a run that reproduced",
+            {"run_a": os.path.abspath(run_a), "run_b": os.path.abspath(run_b),
+             "channels_a": sorted(chans_a), "channels_b": sorted(chans_b),
+             "shared": []},
+        )
 
     report = {
         "run_a": os.path.abspath(run_a),
@@ -109,6 +169,10 @@ def compare_runs(run_a, run_b):
         )
 
     report["verdict_inputs"] = {
+        # The size of the population every number below is read over. A verdict without
+        # it can be clean because nothing was opened.
+        "frames_compared": sum(v["frames_compared"] for v in report["channels"].values()),
+        "channels_compared": sorted(report["channels"]),
         "max_abs_diff_any_channel": max(
             (v["max_abs_diff"] for v in report["channels"].values()), default=None
         ),

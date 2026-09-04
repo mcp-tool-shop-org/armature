@@ -98,3 +98,130 @@ def test_panels_are_never_resampled(tmp_path):
     spec["rows"][0]["panels"][0]["body"] = _panel(tmp_path / "big.png", 300, 200)
     sheet = _run(tmp_path, spec)
     assert sheet.height >= 200
+
+
+# --------------------------------------------------------------- rows and directories
+
+def test_a_row_whose_later_panels_are_taller_is_not_cropped(tmp_path):
+    """`height` and the row advance both used `panels[0][0].height`, while the module's own
+    rule is that panels are pasted at their rendered size and never resampled. A row whose
+    first panel is the short one therefore overflowed into the next row and off the bottom
+    — silently, with SHEET_OK printed."""
+    spec = _spec(tmp_path)
+    spec["rows"][0]["panels"] = [
+        {"body": _panel(tmp_path / "short.png", 120, 80), "label": "short"},
+        {"body": _panel(tmp_path / "tall.png", 120, 300), "label": "tall"},
+    ]
+    sheet = _run(tmp_path, spec)
+    assert sheet.height >= sheet_compose.TITLE_H + sheet_compose.ROW_TITLE_H + 300 + \
+        sheet_compose.LABEL_H
+
+
+def test_a_ragged_rows_label_sits_below_the_tallest_panel(tmp_path):
+    """The label baseline followed the same wrong height, so on a ragged row it was drawn
+    across the tall panel's face rather than under the row."""
+    spec = _spec(tmp_path)
+    spec["rows"][0]["panels"] = [
+        {"body": _panel(tmp_path / "short.png", 120, 80), "label": "under me"},
+        {"body": _panel(tmp_path / "tall.png", 120, 300), "label": "and me"},
+    ]
+    import numpy as np
+    sheet = np.asarray(_run(tmp_path, spec).convert("RGB"))
+    band = sheet[sheet_compose.TITLE_H + sheet_compose.ROW_TITLE_H:
+                 sheet_compose.TITLE_H + sheet_compose.ROW_TITLE_H + 300,
+                 sheet_compose.PAD + 6: sheet_compose.PAD + 100]
+    # the tall panel's own pixels are (90, 90, 90); no label ink may sit inside that band
+    assert not (band > 150).any(), "a label was drawn across a panel's face"
+
+
+def test_the_composer_creates_its_own_output_directory(tmp_path):
+    """`sheet.save(path)` wrote into `spec['out']` with no makedirs, against the repo's
+    'scripts create their own output directories' rule that two facet runs died on."""
+    spec = _spec(tmp_path)
+    spec["out"] = str(tmp_path / "not" / "yet" / "there")
+    sheet = _run(tmp_path, spec)
+    assert sheet.width > 0
+    assert os.path.isfile(os.path.join(spec["out"], "sheet.png"))
+
+
+def test_the_output_line_names_the_typeface_it_used(tmp_path, capsys):
+    """A substituted face must be stated, not silent."""
+    _run(tmp_path, _spec(tmp_path))
+    out = capsys.readouterr().out
+    assert "SHEET_OK" in out and "font=" in out
+
+
+# ------------------------------------------- the siblings that never got the text fix
+
+def _rig_spec(tmp_path, subtitle_frames=200):
+    """`rig_sheet_compose`'s panels.json, at the smallest shape it accepts."""
+    body = _panel(tmp_path / "body.png", 60, 60)
+    bones = _panel(tmp_path / "bones.png", 60, 60)
+    out = tmp_path / "rigout"
+    return {
+        "geometry": {"pad": 26, "label_h": 54, "title_h": 150, "probe_frames": 33},
+        "views": [["front", 0, "front"]],
+        "full": {"front": [body, bones]},
+        "arc": {"1": body, "33": body},
+        "insets": {"elbow.L": [body, bones]},
+        "joint_order": ["elbow.L"],
+        "side": "left",
+        "probe": {"which_arm_is_on_plus_x": "left", "frames": subtitle_frames, "fps": 16},
+        "out": str(out),
+    }
+
+
+def test_the_rig_sheet_is_as_wide_as_its_own_parameter_line(tmp_path):
+    """`W = max(PAD + sum(panel widths))` ignored every string drawn on the sheet, while
+    the subtitle is a ~150-character line carrying the arm, the arc range, the key count
+    and the fps. sheet_compose computes exactly this and records why; the fix was never
+    carried across."""
+    import rig_sheet_compose as RSC
+    from PIL import Image as _I
+
+    spec = _rig_spec(tmp_path)
+    p = tmp_path / "panels.json"
+    p.write_text(json.dumps(spec), encoding="utf-8")
+
+    import sys
+    argv = sys.argv
+    sys.argv = ["rig_sheet_compose", str(p)]
+    try:
+        RSC.main()
+    finally:
+        sys.argv = argv
+
+    sheet = _I.open(os.path.join(spec["out"], "E07-rig-sheet.png"))
+    f_lab = sheet_compose.font("arial.ttf", 26)
+    subtitle = (f"22 named bones placed from landmarks measured on the mesh  ·  the arc is "
+                f"E03's: the +X-side arm (left), 0°→90° about +Y, "
+                f"{spec['probe']['frames']} keys at 16 fps")
+    needed = sheet_compose.max_text_width([(subtitle, f_lab)])
+    assert sheet.width >= needed + spec["geometry"]["pad"], (
+        f"the sheet is {sheet.width}px and the parameter line needs {needed:.0f}px")
+
+
+def test_the_cast_sheet_is_as_wide_as_its_own_stats_label(tmp_path):
+    import make_cast_sheet as MCS
+    from PIL import Image as _I
+
+    d = tmp_path / "preview"
+    d.mkdir()
+    name = "a_very_long_subject_name_that_makes_the_label_run"
+    for suf in ("full_a", "full_b", "head_a", "head_b"):
+        _panel(d / f"{name}_{suf}.png", 60, 60)
+    (d / f"{name}_stats.json").write_text(json.dumps({
+        "triangles": 123456, "mesh_objects": 3, "materials": 4,
+        "images": [["tex_a", [2048, 2048]], ["tex_b", [2048, 2048]]],
+        "empties": 2, "armatures": [["arm", 22, ["hips", "spine", "chest", "neck"]]],
+    }), encoding="utf-8")
+
+    out = tmp_path / "castout" / "cast.png"
+    MCS.main([f"--dir={d}", f"--names={name}", "--title=cast", f"--out={out}"])
+
+    sheet = _I.open(out)
+    font_r = sheet_compose.font("arial.ttf", 24)
+    label = (f"{name}   -   123,456 tris, 3 mesh obj, 4 mats, 2 tex (2048, 2048 px), "
+             f"2 empties, armature: 22 bones (hips, spine, chest...)")
+    needed = sheet_compose.max_text_width([(label, font_r)])
+    assert sheet.width >= needed

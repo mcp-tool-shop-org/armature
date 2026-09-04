@@ -42,6 +42,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from armature_core.framing import half_fovs  # noqa: E402
 
 
 class MeasureError(ArmatureError):
@@ -50,19 +51,15 @@ class MeasureError(ArmatureError):
 
 # ------------------------------------------------------------------------ projection
 
-
-def half_fovs(lens_mm, sensor_mm, width, height):
-    """Half field-of-view per axis, matching Blender's AUTO sensor fit.
-
-    Duplicated from blender_scene rather than imported because that module imports bpy at
-    module scope and this tool runs outside Blender. `test_measure_arm.py` pins the two
-    against each other numerically so the copy cannot drift silently.
-    """
-    if width >= height:
-        sx, sy = sensor_mm, sensor_mm * height / width
-    else:
-        sy, sx = sensor_mm, sensor_mm * width / height
-    return math.atan(sx * 0.5 / lens_mm), math.atan(sy * 0.5 / lens_mm)
+#: Half field-of-view per axis, matching Blender's AUTO sensor fit — **imported, not
+#: copied**. This file used to carry a third implementation beside
+#: `armature_core.blender_scene.half_fovs` and `armature_core.framing.half_fovs`, and
+#: justified it by naming a test that pinned the copies together. That test did not
+#: exist; `tests/test_framing.py::test_half_fovs_matches_blenders` pins framing's copy
+#: against blender_scene's, and this one was pinned by nothing. `framing` imports no bpy,
+#: so there was never a reason to copy it — the reason given was blender_scene's import,
+#: and framing is the copy that already solved that. `tests/test_measure_arm.py` now
+#: exists and asserts the two are one function object.
 
 
 def project(points_zup, camera_matrix, lens_mm, sensor_mm, width, height):

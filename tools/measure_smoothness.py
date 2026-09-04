@@ -54,7 +54,68 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from armature_core.errors import ArmatureError  # noqa: E402
+
 TOOL_VERSION = "E10.1"
+
+
+class SmoothnessInputError(ArmatureError):
+    """The two records do not describe the same population, so no ratio between them means
+    anything.
+
+    Carries the two lists that disagree — the useful half of the refusal.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+def check_records(ra, rb, label_a="A", label_b="B"):
+    """Refuse two records whose keypoints are not the same keypoints, in the same order.
+
+    `main` already refuses different resolutions and different cameras. It then took
+    `names = ra['keypoint_names']` and labelled BOTH arms of the per-keypoint table with
+    it, so nothing anywhere compared the two conventions. AAPose-20 and OpenPose-18
+    ordering, and the left/right convention between them, are live hazards in this repo:
+    under a permuted convention a wrist's second differences are divided by an elbow's
+    under a single joint name, in the instrument E10 uses to make its densification
+    attribution causal rather than a vibe.
+
+    Both directions are checked, plus the record's internal agreement between its names
+    and the keypoints its own frames carry — a short name list would silently truncate
+    the table rather than fail.
+    """
+    na, nb = ra.get("keypoint_names"), rb.get("keypoint_names")
+    ka = len(ra["body"][0]) if ra.get("body") else 0
+    kb = len(rb["body"][0]) if rb.get("body") else 0
+    ev = {"keypoint_names_a": na, "keypoint_names_b": nb,
+          "n_keypoints_a": ka, "n_keypoints_b": kb,
+          "label_a": label_a, "label_b": label_b}
+
+    for label, names, k in ((label_a, na, ka), (label_b, nb, kb)):
+        if not isinstance(names, list):
+            raise SmoothnessInputError(
+                f"record {label} carries no keypoint_names; the per-keypoint table "
+                f"would be labelled by position alone", ev)
+        if len(names) != k:
+            raise SmoothnessInputError(
+                f"record {label} names {len(names)} keypoint(s) and its frames carry "
+                f"{k}; a table built from the shorter of the two is a table over a "
+                f"population the record never described", ev)
+    if ka != kb:
+        raise SmoothnessInputError(
+            f"the two records carry {ka} and {kb} keypoints per frame; a ratio between "
+            f"them would divide one joint's second differences by another's", ev)
+    if na != nb:
+        differing = [i for i, (x, y) in enumerate(zip(na, nb)) if x != y]
+        raise SmoothnessInputError(
+            f"the two records name their keypoints differently at index "
+            f"{differing[:8]} ({[na[i] for i in differing[:8]]} vs "
+            f"{[nb[i] for i in differing[:8]]}); the per-keypoint table labels BOTH arms "
+            f"with the first record's names, so the ratios would compare different joints "
+            f"under one joint name", {**ev, "differing_indices": differing})
+    return list(na)
 
 
 def second_differences(series):
@@ -156,11 +217,13 @@ def main(argv=None):
         raise SystemExit("the two records were projected through different cameras; the "
                          "difference measured would include the composition")
 
+    # ---- the same style of refusal as the two above, on the axis they left open.
+    names = check_records(ra, rb, label_a=a.label_a, label_b=a.label_b)
+
     fa, fb = ra["fps"], rb["fps"]
     pa, pb = pooled(ra, fa), pooled(rb, fb)
     ka, kb = measure(ra, fa), measure(rb, fb)
 
-    names = ra["keypoint_names"]
     per_kp = {}
     for k in ka:
         per_kp[names[k]] = {

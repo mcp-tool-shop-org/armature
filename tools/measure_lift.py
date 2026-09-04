@@ -22,7 +22,14 @@ for this fixture class is a full success, not a failure to be worked around.
 person. The solve happily inverts whatever positions it is handed; the round trip closes on
 noise as readily as on a pose; the bone-length residual returns a number for a landmark set
 regressed off a shadow. Detection is the one thing the rest of the pipeline cannot see, so
-it is the one thing gated here.
+it is gated here.
+
+**And Gate PAIRING behind it**, because DETECT proves the detector fired on every frame it
+was *given* and says nothing about whether those are the frames the ground truth describes.
+The rendered and authored populations used to be joined by `zip`, which truncates to the
+shorter and cannot see an off-by-one at all — the row's `frame` is its enumeration index, so
+a directory numbered from 1 pairs every detection with its predecessor's authored pose while
+both sequences read 0..n-1. PAIRING compares the file NUMBERS to the authored frame numbers.
 
 --------------------------------------------------------------------------------
 The axis convention is MEASURED, not assumed
@@ -86,6 +93,72 @@ class DetectionGate(GateFailure):
     """The detector did not return a pose on every frame."""
 
     gate = "DETECT"
+
+
+class PairingGate(GateFailure):
+    """The detected frames and the authored frames are not the same frames.
+
+    **The direction Gate DETECT does not bound.** DETECT proves the detector fired on
+    every frame it was *given*; it never looks at whether those are the frames the
+    ground truth describes. `main` paired them with `zip(rows, truth)` and
+    `rotation_errors` zipped again, so a render directory of a different length was
+    silently truncated to the shorter side, and a directory numbered from 1 paired each
+    detection with its predecessor's authored pose all the way down. Every rotation
+    error, jitter and foot-slip figure would then be computed against the wrong authored
+    pose, and the record's `"frames": len(rows)` would name the detected count as if it
+    were the compared population.
+
+    The off-by-one is the one an obvious gate misses: `detect()` sets each row's `frame`
+    to the ENUMERATION index, so `[r['frame'] for r in rows]` is `range(n)` no matter how
+    the directory is numbered. The number that carries the information is in the file
+    NAME, and that is what this compares.
+    """
+
+    gate = "PAIRING"
+
+
+def gate_pairing(rows, truth):
+    """ANDON — the rendered population IS the authored population, frame for frame.
+
+    Raises before any convention is fitted or any error number exists; returns the
+    evidence dict when it holds, because a gate whose passing verdict is never written
+    down is a gate nobody can read.
+    """
+    rendered, unnumbered = [], []
+    for r in rows:
+        stem = os.path.splitext(str(r.get("file", "")))[0]
+        if stem.isdigit():
+            rendered.append(int(stem))
+        else:
+            rendered.append(None)
+            unnumbered.append(r.get("file"))
+    authored = [t["frame"] for t in truth]
+    first = next((i for i, (a, b) in enumerate(zip(rendered, authored)) if a != b), None)
+    ev = {
+        "gate": "PAIRING",
+        "n_rendered": len(rows), "n_authored": len(truth),
+        "rendered_frames": rendered, "authored_frames": authored,
+        "unnumbered_files": unnumbered,
+        "first_disagreement": first,
+    }
+    if unnumbered:
+        raise PairingGate(
+            f"{len(unnumbered)} rendered file(s) are not numbered frames "
+            f"({', '.join(str(u) for u in unnumbered[:6])}); a file whose index cannot "
+            f"be read cannot be paired with an authored pose", ev)
+    if len(rows) != len(truth):
+        raise PairingGate(
+            f"{len(rows)} rendered frame(s) against {len(truth)} authored; zip would "
+            f"pair the first {min(len(rows), len(truth))} and grade nothing against the "
+            f"rest, while the record named the detected count as the population", ev)
+    if first is not None:
+        raise PairingGate(
+            f"rendered frame {rendered[first]} is paired with authored frame "
+            f"{authored[first]} at position {first}; every angle from here down would be "
+            f"graded against a pose that belongs to a different frame", ev)
+    ev["verdict"] = (f"{len(rows)} rendered frames numbered {rendered[0]}..{rendered[-1]}, "
+                     f"paired with the same authored frame numbers")
+    return ev
 
 
 def parse_args():
@@ -373,6 +446,10 @@ def main():
     # ---- the detector, then the gate, and nothing numeric before it.
     frame_files, rows = detect(a.render, a.model, a.fps)
     gate = gate_detection(rows)                       # raises; the halt is the result
+    # ---- ANDON · the detected frames ARE the authored frames. DETECT proves the
+    #      detector fired on what it was given and says nothing about whether that is
+    #      the population the ground truth describes.
+    pairing = gate_pairing(rows, truth)
 
     sites = sorted(LS.SITE_FROM_LANDMARK)
     cam = prov["camera"]
@@ -478,7 +555,7 @@ def main():
                      "ones rebuilt here from the authored angles; the ground truth every "
                      "error below is quoted against"),
         },
-        "gates": {"DETECT": gate},
+        "gates": {"DETECT": gate, "PAIRING": pairing},
         "convention": dict(
             {k: v for k, v in conv.items()
              if k not in ("per_frame", "mirrored_per_frame")},

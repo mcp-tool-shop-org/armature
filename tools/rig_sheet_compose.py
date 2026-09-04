@@ -10,20 +10,31 @@ which is why a two-step is acceptable here and would not be for a gate.
 shares one orthographic scale, so a millimetre of character is the same number of pixels in
 every panel of that row, and the joint insets are true 1:1. Resizing here to make a row fit
 would silently destroy both properties.
+
+**The sheet is as wide as its longest line of text, too.** `W` was the widest PANEL ROW and
+ignored every string drawn on it — while the subtitle below is a ~150-character line carrying
+the arm, the arc range, the key count and the fps. `sheet_compose` computes exactly this and
+records why ("a cropped sheet still saves, still opens, and looks fine"); the fix was written
+there and never carried here. The width computation and the typeface resolution are now
+imported from that module rather than re-derived, so there is one of each.
 """
 
 import json
 import os
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import sheet_compose  # noqa: E402
+from sheet_compose import font as _font  # noqa: E402
+from sheet_compose import max_text_width  # noqa: E402
 
 BG, INK, SUB = (22, 22, 24), (238, 238, 240), (166, 166, 172)
-FONT_DIR = r"C:\Windows\Fonts"
 
-
-def _font(name, size):
-    return ImageFont.truetype(os.path.join(FONT_DIR, name), size)
+#: Kept as a name for callers; the search is `sheet_compose.font_search_paths()`.
+FONT_DIR = sheet_compose.FONT_DIR
 
 
 def over(body_path, bones_path, alpha=0.92):
@@ -52,33 +63,44 @@ def main():
             ("The authored arc, body only", row_b),
             (f"At 1:1 — the deforming joints, character's {spec['side']} side", row_c)]
 
-    W = max(PAD + sum(im.width + PAD for im, _ in row) for _, row in rows)
-    H = TITLE_H + sum(44 + row[0][0].height + LABEL_H + PAD for _, row in rows) + PAD
+    p = spec["probe"]
+    title_text = "E07 — the skeleton on the performer"
+    subtitle = (f"22 named bones placed from landmarks measured on the mesh  ·  the arc is "
+                f"E03's: the +X-side arm ({p['which_arm_is_on_plus_x']}), 0°→90° about +Y, "
+                f"{p['frames']} keys at {p['fps']} fps")
+
+    # As wide as the widest ROW **or the longest line of text** — sheet_compose's rule,
+    # carried across at last. The numbers are what a cropped sheet loses first.
+    text_w = max_text_width(
+        [(title_text, f_title), (subtitle, f_lab)]
+        + [(t, f_head) for t, _ in rows]
+        + [(lab, f_lab) for _, row in rows for _, lab in row])
+    W = max(max(PAD + sum(im.width + PAD for im, _ in row) for _, row in rows),
+            int(PAD + text_w + PAD) + 6)
+    # A row is as tall as its TALLEST panel, not as its first: panels are never resampled.
+    row_heights = [max(im.height for im, _ in row) for _, row in rows]
+    H = TITLE_H + sum(44 + rh + LABEL_H + PAD for rh in row_heights) + PAD
     sheet = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(sheet)
 
-    p = spec["probe"]
-    d.text((PAD, 30), "E07 — the skeleton on the performer", font=f_title, fill=INK)
-    d.text((PAD, 88),
-           f"22 named bones placed from landmarks measured on the mesh  ·  the arc is "
-           f"E03's: the +X-side arm ({p['which_arm_is_on_plus_x']}), 0°→90° about +Y, "
-           f"{p['frames']} keys at {p['fps']} fps",
-           font=f_lab, fill=SUB)
+    d.text((PAD, 30), title_text, font=f_title, fill=INK)
+    d.text((PAD, 88), subtitle, font=f_lab, fill=SUB)
 
     y = TITLE_H
-    for title, row in rows:
+    for (title, row), row_h in zip(rows, row_heights):
         d.text((PAD, y), title, font=f_head, fill=INK)
         y += 44
         x = PAD
         for im, label in row:
             sheet.paste(im, (x, y))
-            d.text((x + 6, y + im.height + 12), label, font=f_lab, fill=SUB)
+            d.text((x + 6, y + row_h + 12), label, font=f_lab, fill=SUB)
             x += im.width + PAD
-        y += row[0][0].height + LABEL_H + PAD
+        y += row_h + LABEL_H + PAD
 
+    os.makedirs(spec["out"], exist_ok=True)  # scripts create their own output directories
     path = os.path.join(spec["out"], "E07-rig-sheet.png")
     sheet.save(path)
-    print("SHEET_OK " + path)
+    print(f"SHEET_OK {path} font={f_lab.path}")
 
 
 if __name__ == "__main__":

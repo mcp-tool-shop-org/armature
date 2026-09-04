@@ -21,6 +21,19 @@ frames and *before* the manifest, because the manifest is what makes a run look
 finished. G4 runs inside the per-frame loop. All of them `raise`; none of them is an
 `assert` (deleted by -O / PYTHONOPTIMIZE=1) and none takes a skip argument.
 
+**No number a gate compares against arrives through this tool.** G4's tolerance used to:
+`g4_tol = spec['gates']['g4_tolerance_px']`, passed straight into `g4_bbox_sanity` with
+no range check, no type check and no record of the value used. `normalise_spec` validated
+nothing under `gates` — measured 2026-09-03, `g4_tolerance_px: 100000` was accepted and
+the gate then did not fire on facet's own recorded defect, so a spec with one extra zero
+would have rendered and submitted a control sequence whose mask was not the subject, with
+a full per-frame `g4_deltas_px` record and a manifest that looked finished. Note the
+asymmetry that made it invisible: too-SMALL values still fired, so the only unbounded
+direction was the one that DISARMED the gate. The constant now lives in
+`gates.G4_TOLERANCE_PX`, `g4_bbox_sanity` takes no tolerance argument at all, a spec that
+still names the key is refused by `normalise_spec`, and the manifest reads the value and
+its provenance back off the gate rather than restating them.
+
 Nothing here is chained behind a shell operator, because a chain can walk past a
 failing exit code.
 
@@ -285,7 +298,6 @@ def run_export(spec, out_dir, backend=None):
     scene_info = backend.prepare(spec, asset_path, width, height, out_dir, need_normal)
 
     names = shotspec.frame_names(count, "png")
-    g4_tol = spec["gates"]["g4_tolerance_px"]
 
     z_frames, mask_frames, per_frame = [], [], []
 
@@ -301,10 +313,12 @@ def run_export(spec, out_dir, backend=None):
         mask = ch.mask_from_alpha(alpha)
         mask_bbox = ch.bbox_of(mask)
 
-        # ---- G4 · bbox sanity, inside the loop that writes the frame
-        deltas = gates.g4_bbox_sanity(
-            i, mask_bbox, f["projected_bbox"], g4_tol, width, height
-        )
+        # ---- G4 · bbox sanity, inside the loop that writes the frame.
+        #      **No tolerance argument.** One used to be read out of the spec here and
+        #      handed over unvalidated; the number lives in `gates.G4_TOLERANCE_PX` and no
+        #      caller may widen it, this one included. The module docstring records what a
+        #      settable one cost.
+        deltas = gates.g4_bbox_sanity(i, mask_bbox, f["projected_bbox"], width, height)
 
         rec = {
             "frame": i,
@@ -442,7 +456,11 @@ def run_export(spec, out_dir, backend=None):
         "gates": {
             "G1": {"verdict": "PASS", "profile": profile.as_dict()},
             "G2": {"verdict": "PASS", "detail": g2_detail},
-            "G4": {"verdict": "PASS", "tolerance_px": g4_tol,
+            # The tolerance is READ BACK from the gate that used it, so the manifest
+            # cannot name a number the run did not actually check against.
+            "G4": {"verdict": "PASS",
+                   "tolerance_px": gates.G4_TOLERANCE_PX,
+                   "tolerance_source": gates.G4_TOLERANCE_SOURCE,
                    "max_delta_px": max((max(r["g4_deltas_px"]) for r in per_frame), default=None)},
             "G5": {"verdict": "NOT RUN — pose was not emitted"}
             if "pose" not in requested else {"verdict": "PASS"},

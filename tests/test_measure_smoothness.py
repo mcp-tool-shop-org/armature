@@ -91,3 +91,77 @@ def test_a_keypoint_whose_second_difference_rose_is_named_not_averaged_away():
     b = MS.measure(_record([steady, jumpy], 16), 16)
     assert MS.ratios(a[1]["second_px_per_frame2"], b[1]["second_px_per_frame2"]) is not None
     assert b[1]["second_px_per_frame2"]["median"] > a[1]["second_px_per_frame2"]["median"]
+
+
+# ------------------------------------------------------------ the population compared
+
+def _write(tmp_path, name, rec):
+    import json
+    p = tmp_path / name
+    p.write_text(json.dumps(rec), encoding="utf-8")
+    return str(p)
+
+
+def _pair(**kw):
+    """Two records over the same three keypoints, differing only as `kw` says."""
+    paths = [[(t, 0.0) for t in range(5)],
+             [(t, t * 1.0) for t in range(5)],
+             [(t, t * t) for t in range(5)]]
+    a, b = _record(paths, 16), _record(paths, 16)
+    return a, b
+
+
+def test_records_with_permuted_keypoint_names_raise_rather_than_producing_ratios(tmp_path):
+    """THE fixture. `main` refuses different resolutions and different cameras, then took
+    `names = ra['keypoint_names']` and used it to label BOTH arms of the per-keypoint
+    table. Under a permuted convention a wrist's second differences are divided by an
+    elbow's under a single joint name — in the instrument E10 uses to make its
+    densification attribution causal rather than a vibe. AAPose/OpenPose ordering and the
+    left/right convention are named live hazards in this repo.
+    """
+    a, b = _pair()
+    b["keypoint_names"] = [b["keypoint_names"][i] for i in (1, 0, 2)]
+
+    with pytest.raises(MS.SmoothnessInputError) as e:
+        MS.check_records(a, b)
+    assert e.value.evidence["keypoint_names_a"] == ["kp0", "kp1", "kp2"]
+    assert e.value.evidence["keypoint_names_b"] == ["kp1", "kp0", "kp2"]
+
+
+def test_records_with_different_keypoint_counts_raise(tmp_path):
+    a, b = _pair()
+    b["keypoint_names"] = b["keypoint_names"][:2]
+    b["body"] = [f[:2] for f in b["body"]]
+    with pytest.raises(MS.SmoothnessInputError) as e:
+        MS.check_records(a, b)
+    assert e.value.evidence["n_keypoints_a"] == 3
+    assert e.value.evidence["n_keypoints_b"] == 2
+
+
+def test_a_record_whose_names_do_not_cover_its_own_keypoints_raises():
+    """The half that would produce a KeyError-shaped crash or, worse, a short table."""
+    a, b = _pair()
+    a["keypoint_names"] = a["keypoint_names"][:2]
+    with pytest.raises(MS.SmoothnessInputError, match="names 2"):
+        MS.check_records(a, b)
+
+
+def test_matching_records_pass_the_check_and_still_produce_a_table(tmp_path):
+    """The guard the other way: the refusal must not have made the happy path unreachable."""
+    import json
+    a, b = _pair()
+    out = tmp_path / "smooth.json"
+    MS.main([f"--a={_write(tmp_path, 'a.json', a)}", f"--b={_write(tmp_path, 'b.json', b)}",
+             f"--out={out}"])
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert sorted(payload["per_keypoint"]) == ["kp0", "kp1", "kp2"]
+
+
+def test_the_cli_halts_on_permuted_names_before_writing_anything(tmp_path):
+    a, b = _pair()
+    b["keypoint_names"] = [b["keypoint_names"][i] for i in (1, 0, 2)]
+    out = tmp_path / "smooth.json"
+    with pytest.raises(MS.SmoothnessInputError):
+        MS.main([f"--a={_write(tmp_path, 'a.json', a)}", f"--b={_write(tmp_path, 'b.json', b)}",
+                 f"--out={out}"])
+    assert not out.exists()

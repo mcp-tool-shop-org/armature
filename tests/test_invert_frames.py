@@ -121,6 +121,46 @@ def test_empty_directory_raises(src, tmp_path):
         invert_dir(str(src), str(tmp_path / "dst"))
 
 
+def test_a_stray_contact_sheet_beside_the_frames_is_refused(src, tmp_path):
+    """The other half of P1, on the tool that writes the files an upload is built from.
+
+    `render_pose_sticks` writes `strip_every{N}.png` into the very directory it just
+    filled with `NNNNN.png` frames. Under the old bare listdir the stray sorted last,
+    was inverted like a frame, and appeared in the receipt's `frame_names` — while
+    `--expect` counted it, so a 33-frame shot with a contact sheet in it satisfied
+    `--expect=34` and nothing anywhere said what the 34th frame was.
+    """
+    for i in range(3):
+        _write_gray(str(src / f"{i:05d}.png"), np.zeros((4, 4), dtype=np.uint8))
+    _write_gray(str(src / "strip_every8.png"), np.zeros((4, 4), dtype=np.uint8))
+
+    with pytest.raises(InvertError) as e:
+        invert_dir(str(src), str(tmp_path / "dst"))
+    assert "strip_every8.png" in str(e.value)
+    assert e.value.evidence["unexpected"] == ["strip_every8.png"]
+    assert e.value.evidence["frames"] == ["00000.png", "00001.png", "00002.png"]
+    assert not os.path.exists(str(tmp_path / "dst"))
+
+
+def test_the_declared_count_pins_the_population_to_the_specs_own_names(src, tmp_path):
+    """`--expect` used to compare a length. A length is satisfied by any five files;
+    the spec names five particular ones."""
+    for i in (1, 2, 3):
+        _write_gray(str(src / f"{i:05d}.png"), np.zeros((4, 4), dtype=np.uint8))
+    with pytest.raises(InvertError) as e:
+        invert_dir(str(src), str(tmp_path / "dst"), expect=3)
+    assert e.value.evidence["missing"] == ["00000.png"]
+    assert e.value.evidence["unexpected"] == ["00003.png"]
+
+
+def test_frames_are_ordered_by_number_not_by_string(src, tmp_path):
+    """Unpadded numbering sorts `10` before `9`; the receipt's order is the performance."""
+    for i in (0, 2, 9, 10):
+        _write_gray(str(src / f"{i}.png"), np.full((4, 4), i, dtype=np.uint8))
+    receipt = invert_dir(str(src), str(tmp_path / "dst"))
+    assert receipt["frame_names"] == ["0.png", "2.png", "9.png", "10.png"]
+
+
 def test_short_directory_raises_when_a_count_is_declared(src, tmp_path):
     """A short control directory becomes a short batch, and Gate B only sees it after a spend."""
     for i in range(4):
