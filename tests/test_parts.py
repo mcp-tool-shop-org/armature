@@ -548,9 +548,27 @@ def test_the_loosened_tolerance_would_have_hidden_a_real_difference():
 # ------------------------------------------------------- "may only TIGHTEN" guard
 
 
-@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), 0.0, -1.0])
+
+
+# ------------------------------------------------------- wave 12 (F-2a564189): the two
+# ------------------------------------------------------- obligations `tightened` conflated
+#
+# `tightened` called `require_finite` with the `positive=True` default, so `requested=0.0`
+# — exact match, the one value that is unambiguously NOT a loosening — was refused, and
+# refused quoting `require_finite`'s NaN paragraph, none of which is true of a number that
+# compares correctly in both directions. Measured on the wave-12 base against
+# `owned = 1e-4`: 1e-30 accepted, 1e-4 accepted, 1e-3 refused as a loosening (correct), 0.0
+# refused as "not a finite positive number". The same refusal reached every public gate
+# importing the helper. So the sweeps below are split: NON-FINITE keeps
+# "not a finite number", NEGATIVE gets its own "admits nothing" clause, and ZERO is
+# accepted as the tightest legal request. A quantity that is a LENGTH SCALE
+# (`bbox_diagonal`, `diagonal`) keeps `positive=True` and still refuses zero.
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), -1.0])
 @pytest.mark.parametrize("keyword", ["epsilon_frac", "rigidity_frac"])
-def test_rigid_refuses_a_tolerance_that_is_not_a_positive_finite_number(keyword, bad):
+def test_rigid_refuses_a_tolerance_that_is_not_a_finite_number_or_is_negative(keyword,
+                                                                             bad):
     """F-e982d505, half (1). `_tightened` refused on `value > owned`, and `nan > 1e-4` is
     False — so a NaN was accepted AS A TIGHTENING and every comparison below it then read
     False in both directions. Measured before the fix: `gate_rigid_arrival([_obs('a',
@@ -559,7 +577,8 @@ def test_rigid_refuses_a_tolerance_that_is_not_a_positive_finite_number(keyword,
     transform', where the same call at the module default raises. Zero and negative are the
     same door one step further: they are not above the owned value either.
     """
-    with pytest.raises(parts.GateRigidArrival, match=r"not a finite positive") as exc:
+    want = r"admits nothing" if bad == bad and bad < 0 and bad != float("-inf")         else r"not a finite number|admits nothing"
+    with pytest.raises(parts.GateRigidArrival, match=want) as exc:
         parts.gate_rigid_arrival([_obs("a", xform=1e-3)], 1.0, **{keyword: bad})
     ev = exc.value.evidence
     assert "verdict" not in ev
@@ -567,18 +586,42 @@ def test_rigid_refuses_a_tolerance_that_is_not_a_positive_finite_number(keyword,
     assert repr(ev[keyword]) == repr(float(bad))
 
 
-@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 0.0, -1.0])
-def test_determinism_refuses_a_length_fraction_that_is_not_positive_and_finite(bad):
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -1.0])
+def test_determinism_refuses_a_length_fraction_that_is_not_a_number_or_is_negative(bad):
     """The same door on Gate D. Measured before the fix: `gate_parts_determinism(a, b, 1.0,
     length_frac=float('nan'))` returned the verdict '3 parts identical across two builds'
     while its own evidence recorded a `worst` delta far above the module's tolerance."""
     a, b = _fp(), _fp()
     b["chest"]["positions"] = [[v + 99.0 for v in p] for p in b["chest"]["positions"]]
     with pytest.raises(parts.GatePartsDeterminism,
-                       match=r"not a finite positive") as exc:
+                       match=r"not a finite number|admits nothing") as exc:
         parts.gate_parts_determinism(a, b, 1.0, length_frac=bad)
     assert "verdict" not in exc.value.evidence
     assert exc.value.evidence["gate"] == "D"
+
+
+def test_zero_is_the_tightest_legal_request_and_is_accepted_by_gate_d():
+    """Wave 12, F-2a564189. `length_frac=0.0` on Gate D means "two builds must be
+    byte-identical", the strictest reading of the gate — and it was refused with a message
+    saying the number could not be compared, whose only remedy is to loosen. The guard was
+    producing the loosening it exists to prevent."""
+    ev = parts.gate_parts_determinism(_fp(), _fp(), 1.0, length_frac=0.0)
+    assert ev["gate"] == "D" and ev["length_frac"] == 0.0
+
+
+def test_zero_is_accepted_as_a_bound_by_gate_rigid_and_still_binds():
+    """Accepted, not certified: at zero tolerance an arrival 1e-3 off its bone transform
+    fires the gate on the RESIDUAL, and the message is the arrival defect rather than
+    `require_finite`'s NaN paragraph quoted at a number that compares correctly."""
+    with pytest.raises(parts.GateRigidArrival) as exc:
+        parts.gate_rigid_arrival([_obs("a", xform=1e-3)], 1.0, epsilon_frac=0.0)
+    assert "did not arrive whole" in str(exc.value)
+    assert "not a finite" not in str(exc.value)
+    assert exc.value.evidence["transform_frac"] == 0.0
+    # And a clean arrival clears it at the same zero bound.
+    ev = parts.gate_rigid_arrival([_obs("a", xform=0.0, pair=0.0, disp=0.5)], 1.0,
+                                  epsilon_frac=0.0)
+    assert ev["gate"] == "RIGID"
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), 0.0, -1.0])

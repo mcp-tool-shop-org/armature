@@ -500,6 +500,24 @@ def gate_whole(extent, width, height, margin_px):
     camera, a projection through zero — passed this gate with the verdict "whole
     silhouette in frame; smallest margin nan px". `margin_px` is checked too: a
     non-finite border is a border nothing can fail to clear.
+
+    **The sweep stopped two numbers short of its own denominators** (F-cd1cbd18, wave 12).
+    Five of the seven numbers were checked; `width` and `height` — which appear in
+    `margins_px['right'] = float(width) - extent['x1']`, `margins_px['bottom']`,
+    `height_frac` and `width_frac` — were used raw, and the docstring above says the sweep
+    was done "because the rule is about the shape, not about the two functions F-90122505
+    names". It stopped at the arguments the closed finding happened to name. Measured
+    2026-09-04 on an extent that passes at 1024x1024: `gate_whole(ext, nan, 1024, 16.0)`
+    RETURNED "whole silhouette in frame; smallest margin 100.0 px" with
+    `margins_px['right'] = nan` and `width_frac = nan`; `inf` returned PASS with
+    `right: inf`; `gate_whole(ext, 1024, 0, 16.0)` raised a bare `ZeroDivisionError` from
+    inside the gate, which the halt contract records as an unhandled error at exit 1 rather
+    than as a refusal at exit 2. Both are now checked with the DEFAULT `positive=True`: a
+    resolution cannot be zero or negative, and this frame IS the conditioning image for a
+    whole generation, so a PASS beside a measurement that is not a number certifies
+    nothing. `tools/render_start_frame.py:142-143` declares `--width`/`--height` as
+    `type=int` with no positivity bound — the parser half is filed for that domain; this
+    gate refuses regardless of who calls it.
     """
     ev = {
         "gate": "WHOLE", "andon": "StartFrameGate",
@@ -509,6 +527,8 @@ def gate_whole(extent, width, height, margin_px):
         require_finite("extent_" + _side, extent[_side], StartFrameGate, ev,
                        positive=False)
     require_finite("margin_px", margin_px, StartFrameGate, ev, positive=False)
+    require_finite("width", width, StartFrameGate, ev)
+    require_finite("height", height, StartFrameGate, ev)
     ev.update({
         "extent_px": {k: extent[k] for k in ("x0", "x1", "y0", "y1")},
         "n_points": extent.get("n_points"), "n_behind": extent.get("n_behind"),

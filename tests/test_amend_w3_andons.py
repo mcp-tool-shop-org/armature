@@ -89,8 +89,13 @@ PROBE = textwrap.dedent(
              "stance_frac_mutated_after_construction":
                  (stance_frac_mutated_after_construction, "GaitGate"),
              "round_trip_gate": (round_trip_gate, "SolveGate"),
-             "arming_the_diagnostic": (arming_the_diagnostic, "TypeError"),
-             "frame_fidelity_shape": (frame_fidelity_shape, "ValueError")}
+             # WAVE 12 (F-9fab7829): both of these were bare builtins, and the 21-tool
+             # halt contract classifies on the `ArmatureError` family — so each was
+             # recorded as "FAILED - an unhandled error" at exit 1 where the honest record
+             # is "REFUSED" at exit 2. The NAME is pinned rather than the base, as this
+             # file's comment above demands.
+             "arming_the_diagnostic": (arming_the_diagnostic, "SolveError"),
+             "frame_fidelity_shape": (frame_fidelity_shape, "ClipCompareError")}
 
     out = {"optimize_flag": sys.flags.optimize, "asserts_active": asserts_active,
            "raised": {}}

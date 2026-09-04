@@ -100,10 +100,18 @@ def _run_validate_with(bones):
         sitelist.BONES = original
 
 
+# WAVE 12 (F-9fab7829): `validate()` raises `sitelist.SiteListError`, not `ValueError`.
+# Its own docstring already said "Raises ValueError, never asserts" — the intent was a
+# refusal and only the class was wrong. Measured on the wave-12 base by driving the 21-tool
+# halt contract's own classifier with the exception a duplicated registration raises:
+# ('FAILED - an unhandled error', exit 1, gate None, evidence None), on a tool called by
+# `rig_character.py:1135`, `rig_parts.py:480` and `project_pose_keypoints.py:229`.
+
+
 def test_validate_fires_on_a_duplicate_name():
     bones, _ = _mutated()
     bones[3].name = bones[2].name          # 'neck' becomes a second 'chest'
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(sitelist.SiteListError) as exc:
         _run_validate_with(bones)
     assert "duplicate" in str(exc.value) or "no bone" in str(exc.value)
 
@@ -114,7 +122,7 @@ def test_validate_fires_when_a_registered_site_loses_its_bone():
     for b in bones:
         if b.name == "ear.R":
             b.name = "ear_right"
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(sitelist.SiteListError) as exc:
         _run_validate_with(bones)
     assert "ear.R" in str(exc.value)
 
@@ -124,7 +132,7 @@ def test_validate_fires_on_a_forward_parent_reference():
     for b in bones:
         if b.name == "hips":
             b.parent = "ankle.R"           # defined last; the build would KeyError
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(sitelist.SiteListError) as exc:
         _run_validate_with(bones)
     assert "does not precede" in str(exc.value)
 
@@ -132,6 +140,6 @@ def test_validate_fires_on_a_forward_parent_reference():
 def test_validate_fires_on_a_bone_no_list_registered():
     bones, _ = _mutated()
     bones.append(sitelist.Bone("thumb.L", "wrist.L", "wrist_L", "hand_end_L", True, False))
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(sitelist.SiteListError) as exc:
         _run_validate_with(bones)
     assert "thumb.L" in str(exc.value)

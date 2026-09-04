@@ -51,7 +51,34 @@ class NonReiterableFrames(ArmatureError):
     The andon is therefore on the direction the invariant does not bound — the frames each
     pass actually yields are counted and compared, which catches a spent source (zero), a
     partly-spent one (fewer) and a source that changes what it yields (different).
+
+    **It carries an `evidence` dict** (F-197cf096 / F-9fab7829, wave 12), so both of this
+    function's refusals reach a halt record with the measurement that fired them rather
+    than as a sentence — and the second of them, the non-callable guard, stops being a bare
+    `TypeError` that the halt contract records as a crash.
     """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+class MeasurementWithoutScene(ArmatureError):
+    """A measurement that filters by render visibility was asked to run without a scene.
+
+    F-e2be2262 / F-efe65849, wave 12. `world_bounds(objects, scene=None)` routed to the
+    unfiltered primitive and returned the naive bounds under the filtered name; the
+    docstring on `world_bounds` records the measurement that showed the two spellings are
+    behaviourally identical, and the grep that showed no live caller omits the scene any
+    more. The refusal names `unfiltered_world_bounds`, which is what a deliberately naive
+    reading is called here, so the message says what to do rather than only what not to.
+
+    Carries an `evidence` dict; a plain refusal writes `gate: None` + `andon` + `clause`.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 def scene_fps():
@@ -317,30 +344,66 @@ def _sphere(pts):
     return center, half, radius
 
 
-def world_bounds(objects, scene=None):
-    """(center, half_extent, bounding_sphere_radius) over evaluated geometry.
+def world_bounds(objects, scene):
+    """(center, half_extent, bounding_sphere_radius) over the RENDER-VISIBLE geometry.
 
-    Pass `scene` and this filters by render visibility itself; omit it and the caller
-    carries that obligation. See `_points_to_measure`.
+    `scene` is REQUIRED and may not be None: this function filters by render visibility
+    itself, and there is no shape of it that does not. The deliberately naive measurement
+    has its own public name, `unfiltered_world_bounds`.
 
-    **Omitting `scene` is the naive measurement, and it is indistinguishable from
-    forgetting to pass one** (F-08b5c1b8, measured 2026-09-04). With `scene` omitted this
-    routes through `_points_to_measure`'s `return _evaluated_world_vertices(objects)` and is
-    behaviourally IDENTICAL to `unfiltered_world_bounds`: under the bpy stub with
-    `_evaluated_world_vertices` monkeypatched to record its argument, `world_bounds(["decoy",
-    "real"])` and `unfiltered_world_bounds(["decoy", "real"])` returned the same triple and
-    were handed the same object list. So a deliberately naive row and a forgotten `scene=`
-    read the same way to a reader — and to the census that polices naive measurement, which
-    keys on the private name `_evaluated_world_vertices` appearing in a tool's source, a
-    name this spelling never mentions.
+    **Why omitting `scene` was the naive measurement, and why it is gone** (F-08b5c1b8,
+    measured 2026-09-04; signature tightened by F-e2be2262 / F-efe65849, wave 12). With
+    `scene` omitted this routed through `_points_to_measure`'s
+    `return _evaluated_world_vertices(objects)` and was behaviourally IDENTICAL to
+    `unfiltered_world_bounds`: under the bpy stub with `_evaluated_world_vertices`
+    monkeypatched to record its argument, `world_bounds(["decoy", "real"])` and
+    `unfiltered_world_bounds(["decoy", "real"])` returned the same triple and were handed
+    the same object list. So a deliberately naive row and a forgotten `scene=` read the
+    same way to a reader — and to the census that polices naive measurement, which keys on
+    the private name `_evaluated_world_vertices` appearing in a tool's source, a name that
+    spelling never mentions.
 
-    **The name a deliberately naive measurement uses is `unfiltered_world_bounds`.** The
-    guard on the other spelling is a suite-side ban on `world_bounds(...)` called without
-    `scene=` outside this module (tests' wave-10 census), not a refusal here: three
-    call sites in other domains still omit it and the signature cannot tighten until they
-    move. `tests/test_blender_scene_pure.py` pins the two functions as behaviourally the
-    same today, so nobody re-derives that as a difference.
+    **The claim that used to stand here, corrected in place with the measurement that
+    overturned it** (F-e2be2262). This docstring read: "The guard on the other spelling is
+    a suite-side ban ... not a refusal here: three call sites in other domains still omit
+    it and the signature cannot tighten until they move." Re-derived by grep across
+    `tools/` and `tests/` on the wave-12 base (`89269f1`): every live `world_bounds(...)`
+    call passes a scene — `preview_walk.py:159`, `probe_subject.py:67`,
+    `stage_render.py:160`, `tests/blender/check_visibility.py:72`,
+    `tests/test_blender_scene_pure.py:320` — and the single omission left,
+    `tools/superseded/render_reference.py:183`, is inside `UNFILTERED_BAN_EXEMPT_DIRS` by
+    name and date. **Zero live call sites, not three**, so the signature could tighten and
+    now has. It is the second time this same docstring asserted a call-site relationship
+    the tree did not have (F-08b5c1b8 corrected `unfiltered_world_bounds`'s "probe_subject
+    reports the naive bounds" for the same reason), which is why the correction is written
+    here beside the claim rather than substituted for it.
+
+    **The two doors that are still open are named, because this one is not the one
+    production uses naively** (F-efe65849). `_points_to_measure` has three public entry
+    points; `evaluated_geometry_signature` and `projected_bbox_px` keep their `scene=None`
+    default and ARE called with the scene omitted — `check_relift.py:167`,
+    `render_start_frame.py:669`, `stage_render.py:219` and `stage_render.py:236`. All four
+    pass a `render_visible_meshes` result today, so that is a shape rather than a live wrong
+    number; the ban's population half (widening `BOUNDS_FAMILY` to all three doors by
+    behaviour) is the tests domain's, and the four call sites naming their selection are
+    instruments' and instruments-measure's. What is closed here is the one door whose naive
+    spelling had no remaining caller.
+
+    A superseded tool calling the old shape (`tools/superseded/render_reference.py:183`)
+    will now raise on that line. That file is a recorded failure kept runnable for its
+    reason, not a route; the exempt list names it, and the refusal it now gets says what to
+    call instead.
     """
+    if scene is None:
+        raise MeasurementWithoutScene(
+            "world_bounds measures the geometry that will actually RENDER and needs the "
+            "scene to filter with; `scene=None` is the naive measurement wearing the "
+            "filtered name. Pass the scene, or call "
+            "`blender_scene.unfiltered_world_bounds(objects)` if the naive bounds are what "
+            "you want — that name is what a deliberately unfiltered reading is called here",
+            {"gate": None, "andon": "MeasurementWithoutScene",
+             "clause": "world_bounds_without_scene",
+             "n_objects": len(objects) if hasattr(objects, "__len__") else None})
     return _sphere(_points_to_measure(objects, scene))
 
 
@@ -386,11 +449,17 @@ def union_sphere(frame_points):
     Returns None when no frame carried geometry.
     """
     if not callable(frame_points):
-        raise TypeError(
+        # F-9fab7829, wave 12: this was a bare `TypeError`, which the 21-tool halt contract
+        # records as "FAILED - an unhandled error" at exit 1. It is a refusal, and the class
+        # that already exists for this function's refusals is `NonReiterableFrames`.
+        raise NonReiterableFrames(
             "union_sphere takes a CALLABLE returning a fresh iterator of per-frame vertex "
             "arrays, not an iterator: it walks the frames twice (the radius is measured "
             "about a centre that is not known until the first pass ends), and a "
-            "single-use iterator would silently make the second pass read nothing")
+            "single-use iterator would silently make the second pass read nothing",
+            {"gate": None, "andon": "NonReiterableFrames",
+             "clause": "frame_source_not_callable",
+             "given_type": type(frame_points).__name__})
 
     lo = hi = None
     n_first = 0
@@ -425,7 +494,10 @@ def union_sphere(frame_points):
             f"frame(s) and the second pass {n_second}. The union radius is measured about "
             f"a centre the first pass computes, so the two passes must see the same "
             f"frames; a spent iterator yields zero and returns a bounding sphere of "
-            f"radius 0.0 around a real subject, which is auto_radius's only size input")
+            f"radius 0.0 around a real subject, which is auto_radius's only size input",
+            {"gate": None, "andon": "NonReiterableFrames",
+             "clause": "frame_source_not_reiterable",
+             "n_first_pass": n_first, "n_second_pass": n_second})
     return center, half, radius
 
 

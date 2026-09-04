@@ -193,30 +193,43 @@ def _image_blob(views, binary, image, index, path):
     ref = image["bufferView"]
     if isinstance(ref, bool) or not isinstance(ref, int):
         raise MalformedGLB(
-            f"{path}: image {index} names bufferView {ref!r}, which is not an index")
+            f"{path}: image {index} names bufferView {ref!r}, which is not an index",
+            {"gate": None, "andon": "MalformedGLB", "clause": "bufferview_not_an_index",
+             "image_index": index, "bufferView": repr(ref), "path": str(path)})
     if ref < 0 or ref >= len(views):
         raise MalformedGLB(
             f"{path}: image {index} names bufferView {ref} and the container declares "
             f"{len(views)} bufferView(s) - a negative index is a legal Python index and "
-            f"would have hashed a different view")
+            f"would have hashed a different view",
+            {"gate": None, "andon": "MalformedGLB", "clause": "bufferview_out_of_range",
+             "image_index": index, "bufferView": ref, "n_views": len(views),
+             "path": str(path)})
     view = views[ref]
     if "byteLength" not in view:
         raise MalformedGLB(
             f"{path}: image {index} names bufferView {ref}, which declares no byteLength, "
-            f"so there is no range to hash")
+            f"so there is no range to hash",
+            {"gate": None, "andon": "MalformedGLB", "clause": "bufferview_no_bytelength",
+             "image_index": index, "bufferView": ref, "path": str(path)})
     start = int(view.get("byteOffset", 0))
     length = int(view["byteLength"])
     if start < 0 or length < 0:
         raise MalformedGLB(
             f"{path}: image {index} names bufferView {ref} with byteOffset {start} and "
-            f"byteLength {length}; neither may be negative")
+            f"byteLength {length}; neither may be negative",
+            {"gate": None, "andon": "MalformedGLB", "clause": "bufferview_negative_range",
+             "image_index": index, "bufferView": ref, "byteOffset": start,
+             "byteLength": length, "path": str(path)})
     if start + length > len(binary):
         raise MalformedGLB(
             f"{path}: image {index} declares bytes [{start}, {start + length}) and the "
             f"BIN chunk does not contain them - it holds {len(binary)} bytes. Slicing "
             f"anyway hashes a short blob and reports it as the whole image; a truncation "
             f"identical on both sides of Gate ATLAS would cancel and certify bytes the "
-            f"files do not carry. This is a broken export, not a re-encode")
+            f"files do not carry. This is a broken export, not a re-encode",
+            {"gate": None, "andon": "MalformedGLB", "clause": "bufferview_past_bin_chunk",
+             "image_index": index, "bufferView": ref, "byteOffset": start,
+             "byteLength": length, "bin_bytes": len(binary), "path": str(path)})
     return binary[start:start + length]
 
 

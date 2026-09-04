@@ -35,6 +35,30 @@ import hashlib
 
 import numpy as np
 
+from .errors import ArmatureError
+
+
+class ClipStatsError(ArmatureError):
+    """An instrument in this module was handed something it cannot measure.
+
+    A deliberate refusal, and it used to be a bare `ValueError` (F-9fab7829, wave 12). The
+    21-tool halt contract classifies on the `ArmatureError` family — `GateFailure` is
+    "HALTED", `ArmatureError` is "REFUSED" at exit 2, and anything else is "FAILED — an
+    unhandled error" at exit 1 — so every refusal in this module was recorded as a crash
+    in the measuring code when what happened is the instrument declining to read an input
+    it cannot read. Same defect `walk.WalkError`, `framing.FramingError` and
+    `glb.MalformedGLB` carried before wave 10 rebased them.
+
+    Carries an `evidence` dict like `GateFailure` does, and a plain refusal writes
+    `gate: None` + `andon` + `clause` — a refusal is not an andon and has no gate id, so
+    the honest answer is written down rather than left absent.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
 #: Rec.709. Written out rather than imported so the weights are visible next to every
 #: number computed from them.
 LUMA_WEIGHTS = (0.2126, 0.7152, 0.0722)
@@ -48,18 +72,60 @@ def luma(frame):
     """Rec.709 luminance of an `(H, W, 3)` frame, in the frame's own units."""
     a = _as_float(frame)
     if a.ndim != 3 or a.shape[2] < 3:
-        raise ValueError(f"expected an (H, W, 3) frame, got shape {a.shape}")
+        raise ClipStatsError(
+            f"expected an (H, W, 3) frame, got shape {a.shape}",
+            {"gate": None, "andon": "ClipStatsError", "clause": "frame_not_hw3",
+             "shape": list(a.shape)})
     return a[..., 0] * LUMA_WEIGHTS[0] + a[..., 1] * LUMA_WEIGHTS[1] \
         + a[..., 2] * LUMA_WEIGHTS[2]
 
 
+#: The keys `_stats` returns for EVERY population, empty or not. Written down so a
+#: consumer can read the contract without running the function.
+STAT_KEYS = ("n", "n_finite", "n_non_finite", "min", "median", "mean", "p90", "max")
+
+
 def _stats(values):
-    if not len(values):
-        return {"n": 0}
-    v = np.asarray(values, dtype=np.float64)
-    return {"n": int(v.size), "min": float(v.min()), "median": float(np.median(v)),
-            "mean": float(v.mean()), "p90": float(np.percentile(v, 90)),
-            "max": float(v.max())}
+    """Summary over `values`, partitioned into finite and non-finite. One key set, always.
+
+    **Two findings, one function, and they pull in the same direction.**
+
+    F-11b349bf — *one degenerate frame turned every aggregate into NaN while the receipt
+    still said nine values were summarised.* `similarity_to_first` writes `float("nan")`
+    into `per_frame_correlation` whenever a frame has zero variance (an all-black frame, a
+    flat fade, a decode that produced a constant plate), and `v.min()` / `np.median` /
+    `v.mean()` / `np.percentile` / `v.max()` all propagate NaN. Measured 2026-09-04 on
+    nine frames of which exactly ONE (index 5) is flat: `n nan in corr: 1 of 9`, and
+    `stats_correlation = {'n': 9, 'min': nan, 'median': nan, 'mean': nan, 'p90': nan,
+    'max': nan}` — eight good correlations discarded by a summary still reporting `n: 9`,
+    and a reader who takes `nan` for "no correlation" reads a healthy clip as a scene
+    change. This module's own docstring says "a diagnostic that returns a number on a
+    frame it cannot read is noise wearing a unit", and `horizon_row` is built to return
+    None with an agreement figure rather than a plausible number; this was the same module
+    taking the opposite decision silently.
+
+    F-86e9b5b9 — *the empty case returned a DIFFERENT KEY SET.* `{"n": 0}` with no
+    `min`/`median`/`mean`/`p90`/`max`, and `tools/measure_clip.py:131` does
+    `round(arm["frame_deltas"]["stats"]["median"], 3)` unguarded, so a one-frame clip —
+    the natural input for exactly the failure these instruments exist to detect — killed
+    the instrument with a bare `KeyError: 'median'` instead of describing the clip.
+
+    So: `n` is the population, `n_finite` and `n_non_finite` partition it, the five
+    statistics are computed over the FINITE values only, and they are `None` (never NaN,
+    never a missing key) when there are none. A single non-finite entry never erases a
+    population again, and a consumer's `stats["median"]` always resolves.
+    """
+    v = np.asarray(list(values), dtype=np.float64)
+    finite = v[np.isfinite(v)] if v.size else v
+    out = {"n": int(v.size), "n_finite": int(finite.size),
+           "n_non_finite": int(v.size - finite.size)}
+    if finite.size:
+        out.update({"min": float(finite.min()), "median": float(np.median(finite)),
+                    "mean": float(finite.mean()),
+                    "p90": float(np.percentile(finite, 90)), "max": float(finite.max())})
+    else:
+        out.update({k: None for k in ("min", "median", "mean", "p90", "max")})
+    return out
 
 
 def frame_deltas(frames):
@@ -111,7 +177,9 @@ def similarity_to_first(frames):
     near-flat correlation.
     """
     if not frames:
-        return {"per_frame": [], "stats": {"n": 0}}
+        return {"per_frame_mean_abs": [], "per_frame_correlation": [],
+                "stats_mean_abs": _stats([]), "stats_correlation": _stats([]),
+                "measures": "no frames were given, so there is nothing to compare"}
     first = _as_float(frames[0])
     fz = first.ravel() - first.mean()
     fz_norm = float(np.sqrt((fz * fz).sum()))
@@ -149,7 +217,10 @@ def horizon_row(frame, band=None, tolerance=3, min_agreement=0.5):
     lo, hi = band if band else (1, h - 1)
     lo, hi = max(1, int(lo)), min(h - 1, int(hi))
     if hi - lo < 2:
-        raise ValueError(f"band ({lo}, {hi}) leaves fewer than two rows to search")
+        raise ClipStatsError(
+            f"band ({lo}, {hi}) leaves fewer than two rows to search",
+            {"gate": None, "andon": "ClipStatsError", "clause": "band_too_narrow",
+             "band": [lo, hi], "frame_height": int(h)})
     grad = np.abs(lum[lo + 1:hi + 1, :] - lum[lo - 1:hi - 1, :])
     rows = np.argmax(grad, axis=0) + lo
     med = float(np.median(rows))

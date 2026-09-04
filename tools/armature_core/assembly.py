@@ -42,7 +42,9 @@ warnings and was refused only by a real submission. A `dry_run` PASS does not pr
 sanity, so the link topology is checked in code.
 """
 
+from . import route_gates
 from .errors import GateFailure
+from .parts import narrowed
 
 
 class AssemblyGate(GateFailure):
@@ -77,11 +79,17 @@ ALLOWED_CLASSES = ("LoadImage", "BatchImagesNode", "CreateVideo", "SaveVideo")
 API_MARKERS = ("api", "partner")
 
 
-def gate_no_paid_nodes(graph, allowed=ALLOWED_CLASSES):
+def gate_no_paid_nodes(graph, allowed=None):
     """Gate ASSEMBLY - ANDON - nothing in this graph can bill a partner credit.
 
-    Two independent clauses. The allowlist binds; the name pattern is a second opinion on
-    the allowlist itself. Reported either way, so the evidence shows both ran.
+    Four clauses now, and the evidence shows every one of them ran:
+
+    * a vacuity guard — an empty graph is refused rather than certified;
+    * the allowlist, which may only be NARROWED by a caller (`parts.narrowed`);
+    * the allowlist membership check, which binds;
+    * a **licence** second opinion: every class name is read against the same
+      `route_gates` tables the licence clause reads, and a class the licence map has ruled
+      BANNED or EXCLUDED is refused even when the allowlist names it.
 
     A node carrying **no** `class_type` is refused before anything is sorted. It used to
     contribute `None` to the class set, and `sorted()` then raised `TypeError: '<' not
@@ -89,19 +97,83 @@ def gate_no_paid_nodes(graph, allowed=ALLOWED_CLASSES):
     in exactly one class of malformed graph, and the caller got an untyped error with no
     gate id and no evidence where the andon belonged. `parts.py:155-159` records the
     identical defect being caught by its own test.
+
+    **What changed and why** (F-5a810b95, wave 12). `allowed` was a plain keyword with no
+    tightening guard — the fourth site of the family closed three times in wave 10
+    (`parts.gate_rigid_arrival`/`gate_parts_determinism`, `gate_slot_ceiling`,
+    `resample.require_rotation`, `lift_solve.gate_round_trip`) and **the only one of the
+    family that guards spend**. The docstring called the name-pattern clause "a second
+    opinion on the allowlist itself" and "the moment to look" when the allowlist is
+    widened, but it was `any(m in c.lower() for m in ("api", "partner"))` — a two-word
+    substring match, and no real Comfy partner class name (Kling, Luma, Minimax, Veo,
+    Ideogram, Recraft, Pixverse, Runway, Moonvalley, Gemini, Dalle) contains either word.
+    Measured 2026-09-04: `gate_no_paid_nodes({'1': {'class_type': 'KlingVideoNode'}})`
+    raises on the default allowlist, and the same graph with
+    `allowed=ALLOWED_CLASSES + ('KlingVideoNode',)` RETURNED the full success verdict "1
+    node(s) across 1 class(es), all named by the allowlist and none reading as a partner
+    class" — the second opinion silent because the widening it was written to catch does
+    not contain its two words. Both production call sites take the default today
+    (`tools/build_assembly_payload.py:474`, `tools/build_cascade_payload.py:170`, measured
+    by grep), so this was the SHAPE and not a live escape.
+
+    Measured in the same call: `gate_no_paid_nodes({})` returned "PASS — 0 node(s) across 0
+    class(es), all named by the allowlist" — no vacuity guard, while its two siblings in
+    this module got theirs at wave 10 (`gate_cascade_topology`, and
+    `parts.gate_parts_determinism`).
+
+    `allowed=None` means "the module's", the same spelling `parts.tightened`'s callers use.
+    The name-pattern markers are kept in the evidence as a reported diagnostic — they are
+    cheap and they cost nothing — but they are no longer the clause that is claimed to
+    stand between this graph and a credit.
     """
+    ev = {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+          "n_nodes": len(graph), "module_allowed": list(ALLOWED_CLASSES)}
+    allowed = narrowed("allowed", allowed, ALLOWED_CLASSES, AssemblyGate, ev)
+
+    if not graph:
+        raise AssemblyGate(
+            "the graph is empty, so there is nothing to clear. A gate that certifies "
+            "zero nodes as free reports its strongest verdict on its weakest input, and "
+            "the caller reads it as a licence clause that ran", ev)
+
     unnamed = sorted(str(nid) for nid, n in graph.items() if n.get("class_type") is None)
     classes = sorted(c for c in {n.get("class_type") for n in graph.values()}
                      if c is not None)
-    ev = {"gate": "ASSEMBLY", "andon": "AssemblyGate",
-          "classes": classes, "allowed": list(allowed),
-          "n_nodes": len(graph), "nodes_without_class_type": unnamed}
+    ev.update({"classes": classes, "allowed": list(allowed),
+               "nodes_without_class_type": unnamed})
 
     if unnamed:
         raise AssemblyGate(
             f"node(s) {unnamed} carry no `class_type`, so what they would execute is "
             f"unknown and the allowlist cannot name them. A graph this gate cannot read is "
             f"not a graph this gate can clear", ev)
+
+    # The second opinion, measured rather than spelled, and it runs BEFORE the allowlist
+    # membership clause on purpose: after it, every remaining class is one of the module's
+    # four and the licence tables have nothing to say about any of them, so the clause
+    # would be a check that cannot fire. Placed here it is reachable from both directions
+    # the finding names — a graph carrying a ruled class (diagnosed by its licence ruling
+    # rather than by the generic "not in the allowlist"), and a widening of the module
+    # constant itself, which is the only widening the narrowing guard still permits.
+    ruled = {}
+    refused = []
+    for c in classes:
+        hits = route_gates.rulings_for_class(c)
+        if hits:
+            ruled[c] = {"verdict": hits[0].get("verdict"),
+                        "licence": hits[0].get("licence"),
+                        "matched_on": hits[0].get("matched_on")}
+            if hits[0].get("verdict") in ("BANNED", "EXCLUDED"):
+                refused.append(c)
+    ev["licence_rulings"] = ruled
+    ev["licence_refused"] = refused
+    if refused:
+        raise AssemblyGate(
+            f"the licence map rules {refused} "
+            f"{[ruled[c]['verdict'] for c in refused]}, and a class the map has ruled is "
+            f"refused whatever an allowlist names. This is the second opinion on the "
+            f"allowlist: the substring match it replaces looked for the words 'api' and "
+            f"'partner', which no real partner class name carries", ev)
 
     unexpected = [c for c in classes if c not in allowed]
     if unexpected:
@@ -120,7 +192,8 @@ def gate_no_paid_nodes(graph, allowed=ALLOWED_CLASSES):
             "this is that look", ev)
 
     ev["verdict"] = (f"{len(graph)} node(s) across {len(classes)} class(es), all named by "
-                     f"the allowlist and none reading as a partner class")
+                     f"the allowlist, none reading as a partner class, and "
+                     f"{len(ruled)} carrying a licence-map ruling (none BANNED/EXCLUDED)")
     return ev
 
 

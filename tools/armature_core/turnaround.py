@@ -37,6 +37,7 @@ condition the experiment could move.
 import math
 
 from .errors import ArmatureError, GateFailure
+from .parts import require_finite
 
 
 class TurnaroundGate(GateFailure):
@@ -281,18 +282,37 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
     "it carries alpha" and "it carries alpha on four pixels" are different facts about a
     reference view, and the second one is a warning for the Director's eye rather than a
     verdict this gate should invent.
+
+    **A non-finite fraction is refused before either extreme is asked** (F-bf3dfb4e, wave
+    12). This gate decides on `alpha_min`/`alpha_max` only, and wrote
+    `float(transparent_fraction)` into its evidence AND into its verdict string with no
+    check. Measured 2026-09-04: `gate_view_alpha(3, 0, 255, float('nan'))` RETURNED with
+    `verdict = "view 3 authored RGBA; extrema (0, 255), nan of the frame transparent"` and
+    `transparent_fraction: nan`; with `inf` the verdict read "inf of the frame
+    transparent". The sibling on the start-frame route refuses the same value
+    (`startframe.gate_alpha(nan, ...)` -> AlphaGate), so the two ALPHA gates on the two
+    routes disagreed about what a measurement is — the wave-10 sweep that closed
+    F-90122505 stayed inside `startframe.py` and this is the turnaround route's other
+    alpha gate. `tools/render_turnaround.py:777` prints the same number to the console as
+    the per-view summary an executor reads. Through `parts.require_finite` with
+    `positive=False`, because a transparent fraction may legitimately be 0.0 — one
+    implementation of the NaN family, never a second `isfinite`.
     """
     lo, hi = int(alpha_min), int(alpha_max)
     ev = {
         "gate": "ALPHA", "andon": "TurnaroundAlphaGate",
         "view": int(view_index), "path": path,
         "alpha_extrema": [lo, hi],
+    }
+    require_finite("transparent_fraction", transparent_fraction, TurnaroundAlphaGate, ev,
+                   positive=False)
+    ev.update({
         "transparent_fraction": float(transparent_fraction),
         "opaque_fraction": 1.0 - float(transparent_fraction),
         "note": ("film_transparent makes the world background alpha=0 while the subject's "
                  "own geometry stays opaque, so a solid figure standing in a transparent "
                  "field is the expected shape"),
-    }
+    })
     if lo >= OPAQUE:
         raise TurnaroundAlphaGate(
             f"view {view_index} has alpha extrema ({lo}, {hi}): NO pixel is transparent, "

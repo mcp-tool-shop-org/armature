@@ -107,22 +107,56 @@ def test_an_innocuous_unlisted_class_also_raises():
     assert "ImageScale" in str(exc.value)
 
 
-def test_widening_the_allowlist_to_a_partner_class_is_caught_by_the_second_clause():
-    """The two clauses fail differently, and this is the case the allowlist alone cannot
-    see: somebody adds a paid class to the allowlist, so membership passes. The name
-    pattern is the second opinion on the allowlist itself."""
+def test_widening_the_allowlist_at_a_call_site_is_refused_outright():
+    """CORRECTED IN PLACE, wave 12 (F-5a810b95). This test used to assert that widening the
+    allowlist to `Wan2ReferenceVideoApi` was caught by the NAME-PATTERN clause, and it was —
+    because that particular class name happens to contain the substring "api". Measured on
+    the wave-12 base with a real partner class instead:
+    `gate_no_paid_nodes({'1': {'class_type': 'KlingVideoNode'}})` raises on the default
+    allowlist, and the SAME graph under `allowed=ALLOWED_CLASSES + ('KlingVideoNode',)`
+    RETURNED the full success verdict — the second opinion silent, because no real Comfy
+    partner class name (Kling, Luma, Minimax, Veo, Ideogram, Recraft, Pixverse, Runway,
+    Moonvalley, Gemini, Dalle) carries either of its two words. So the test that read as
+    proof was passing on the one name that fit the substring.
+
+    `allowed` is now bounded by `parts.narrowed`: a caller may only NARROW the module's
+    constant. Widening is a deliberate diff to `ALLOWED_CLASSES`, which is where the other
+    clauses can see it."""
     wf = _graph(4)
     wf["500"] = {"class_type": "Wan2ReferenceVideoApi", "inputs": {}}
     widened = AS.ALLOWED_CLASSES + ("Wan2ReferenceVideoApi",)
     with pytest.raises(AS.AssemblyGate) as exc:
         AS.gate_no_paid_nodes(wf, allowed=widened)
-    assert "the allowlist itself names" in str(exc.value)
+    assert "may only NARROW" in str(exc.value)
+    assert exc.value.evidence["allowed_added"] == ["Wan2ReferenceVideoApi"]
+
+
+def test_the_real_partner_class_the_substring_clause_could_not_see():
+    """The measurement that made the correction above necessary, pinned so it cannot come
+    back: a graph carrying a partner class is refused on the default allowlist, and the
+    widening that used to walk past the second opinion is refused before it is reached."""
+    wf = _graph(4)
+    wf["500"] = {"class_type": "KlingVideoNode", "inputs": {}}
+    with pytest.raises(AS.AssemblyGate, match=r"the allowlist does not name"):
+        AS.gate_no_paid_nodes(wf)
+    with pytest.raises(AS.AssemblyGate, match=r"may only NARROW"):
+        AS.gate_no_paid_nodes(wf, allowed=AS.ALLOWED_CLASSES + ("KlingVideoNode",))
+
+
+def test_an_empty_graph_is_refused_rather_than_certified():
+    """Wave 12, F-5a810b95. Measured on the base: `gate_no_paid_nodes({})` returned
+    "PASS - 0 node(s) across 0 class(es), all named by the allowlist". Its two siblings in
+    this module got their vacuity guards at wave 10."""
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_no_paid_nodes({})
+    assert exc.value.evidence["n_nodes"] == 0
 
 
 def test_the_pattern_clause_has_unknown_recall_and_the_test_says_so():
     """Recorded rather than left implicit: a paid class whose name carries no marker
     passes the second clause. That is not a bug in the clause — it is why the clause is
-    not the one doing the work, and it is stated in the module docstring."""
+    not the one doing the work, and it is why the LICENCE ruling (read through the same
+    `route_gates` tables the licence gate reads) is what the second opinion is now."""
     assert not any(m in "KlingTextToVideoNode".lower() for m in AS.API_MARKERS)
 
 

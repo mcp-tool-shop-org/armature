@@ -590,7 +590,9 @@ def test_arming_the_diagnostic_by_keyword_is_refused_rather_than_honoured():
     rest = synthetic_rest()
     obs = observed_from(rest, motion(LIMB_MOTION))
     solved = LS.solve_frame(rest, obs)
-    with pytest.raises(TypeError) as exc:
+    # WAVE 12 (F-9fab7829): `SolveError`, not a bare `TypeError` — the halt contract
+    # records a builtin as "FAILED - an unhandled error" at exit 1 where this is a refusal.
+    with pytest.raises(LS.SolveError) as exc:
         LS.round_trip_report(rest, obs, solved, DIAGONAL, raise_on_fail=True)
     assert "gate_round_trip" in str(exc.value)
 
@@ -728,14 +730,44 @@ def test_gate_solve_refuses_a_caller_that_loosens_its_exactness_claim():
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), 0.0, -1.0])
-def test_gate_solve_refuses_a_tolerance_or_a_diagonal_that_is_not_a_number(bad):
+def test_gate_solve_refuses_a_diagonal_that_is_not_a_positive_number(bad):
     """`diagonal` multiplies the tolerance and was not checked at all — the same open door
-    wave 10 closed one argument over on `parts.gate_rigid_arrival`."""
+    wave 10 closed one argument over on `parts.gate_rigid_arrival`. A length scale may not
+    be zero, so the `positive=True` default is the right bound here."""
     rest, obs, solved = _round_trip_inputs()
     with pytest.raises(LS.SolveGate, match=r"not a finite positive"):
-        LS.gate_round_trip(rest, obs, solved, DIAGONAL, tol_frac=bad)
-    with pytest.raises(LS.SolveGate, match=r"not a finite positive"):
         LS.gate_round_trip(rest, obs, solved, bad)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_gate_solve_refuses_a_tolerance_that_is_not_a_number(bad):
+    rest, obs, solved = _round_trip_inputs()
+    with pytest.raises(LS.SolveGate, match=r"not a finite number"):
+        LS.gate_round_trip(rest, obs, solved, DIAGONAL, tol_frac=bad)
+
+
+def test_gate_solve_refuses_a_negative_tolerance_by_its_own_clause():
+    rest, obs, solved = _round_trip_inputs()
+    with pytest.raises(LS.SolveGate, match=r"admits nothing"):
+        LS.gate_round_trip(rest, obs, solved, DIAGONAL, tol_frac=-1.0)
+
+
+def test_gate_solve_accepts_a_tolerance_of_zero_the_tightest_legal_request():
+    """CORRECTED IN PLACE, wave 12 (F-2a564189). `tol_frac=0.0` used to be refused here
+    with `require_finite`'s NaN paragraph, none of which is true of a number that compares
+    correctly in both directions. Zero is exact-match — the one value that is unambiguously
+    not a loosening — and asking a gate for exact equality must not be answered with "your
+    measurement came back NaN", because the way past that message is to loosen: the guard
+    producing the loosening it exists to prevent."""
+    rest, obs, solved = _round_trip_inputs()
+    with pytest.raises(LS.SolveGate) as exc:
+        LS.gate_round_trip(rest, obs, solved, DIAGONAL, tol_frac=0.0)
+    # It IS accepted as a bound: the gate fires on the residual it measured, not on a
+    # refusal to compare. The message a session reads is the inversion defect, not the NaN
+    # paragraph that used to be quoted at a number comparing correctly in both directions.
+    assert "does not reproduce the positions" in str(exc.value)
+    assert "not a finite" not in str(exc.value)
+    assert exc.value.evidence["tolerance_frac_of_diagonal"] == 0.0
 
 
 def test_the_diagnostic_keeps_its_plain_keyword():

@@ -25,6 +25,23 @@ where they mean something.
 
 import numpy as np
 
+from .errors import ArmatureError
+
+
+class ClipCompareError(ArmatureError):
+    """A comparison in this module was handed inputs it cannot compare.
+
+    A deliberate refusal, and it used to be a bare `ValueError` (F-9fab7829, wave 12). The
+    21-tool halt contract discriminates three outcomes on the `ArmatureError` family, so a
+    bare builtin was recorded as "FAILED — an unhandled error" at exit 1 in the comparing
+    code, when what happened is this module declining to compare. Carries an `evidence`
+    dict; a plain refusal writes `gate: None` + `andon` + `clause`.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
 
 def _f(a):
     return np.asarray(a, dtype=np.float64)
@@ -46,9 +63,15 @@ def frame_fidelity(src, dec):
     """
     s, d = _f(src), _f(dec)
     if s.ndim != 3 or s.shape[2] < 3:
-        raise ValueError(f"expected an (H, W, 3) frame, got shape {s.shape}")
+        raise ClipCompareError(
+            f"expected an (H, W, 3) frame, got shape {s.shape}",
+            {"gate": None, "andon": "ClipCompareError", "clause": "frame_not_hw3",
+             "source_shape": list(s.shape)})
     if s.shape != d.shape:
-        raise ValueError(f"shape mismatch: source {s.shape} vs decoded {d.shape}")
+        raise ClipCompareError(
+            f"shape mismatch: source {s.shape} vs decoded {d.shape}",
+            {"gate": None, "andon": "ClipCompareError", "clause": "shape_mismatch",
+             "source_shape": list(s.shape), "decoded_shape": list(d.shape)})
     diff = np.abs(s - d)
     return {
         "identical": bool(np.array_equal(np.asarray(src), np.asarray(dec))),
@@ -95,22 +118,58 @@ def order_check(sources, decoded, step=8):
     diagonal, and the worst offender. A permutation shows up as a diagonal count below n;
     a cascade wired out of group order shows up as whole contiguous runs displaced by a
     group's length, which is why the run of mismatches is reported and not only the count.
+
+    **A TIE is reported as a tie, not as a displacement** (F-2ceefec7, wave 12). Each
+    decoded frame was assigned `np.argmin` of its distance to every source, and `argmin`
+    breaks ties at the LOWEST index — so N identical frames all resolved to the first of
+    them and the N-1 that follow read as displaced. This repo's own walk generator ends
+    every authored walk with a hold (`walk.GaitParams.n_hold`), so the false alarm was on
+    the ordinary shape of its own clips. Measured 2026-09-04 on a walk-shaped 12-frame clip
+    (8 distinct moving frames then a 4-frame hold) compared against an EXACT COPY of
+    itself: `order_preserved: False`, `n_on_diagonal: 8/12`, `n_displaced: 4`,
+    `displaced: [(8,7),(9,7),(10,7),(11,7)]` — four frames reported as landing in the wrong
+    place in a clip where source and decode are the same bytes. `min_margin` did read 0.0
+    and the note below explains that as weak separation, but `order_preserved` and
+    `displaced` are what a report quotes and both invented a fault.
+    `tools/measure_cascade_clip.py:185` is the live consumer, on the cascade path where a
+    real group displacement is what the check exists for — so the false alarm arrived
+    beside the true positive it would be confused with, and either reading is expensive:
+    credits re-spent on a clip that round-tripped perfectly, or a real displacement
+    dismissed as "that's just the hold frames again".
+
+    So frame `i` counts as on-diagonal when `i` is among the source indices AT the minimum
+    distance (within `tie_atol`), the tie sets are returned as `tie_groups`, and `n_tied`
+    counts the frames whose answer was ambiguous. A genuinely ambiguous clip now says so
+    instead of reading as displaced, and a real displacement still reads as one because a
+    displaced frame is not tied with its own index.
     """
     if len(sources) != len(decoded):
-        raise ValueError(f"{len(sources)} source frame(s) against {len(decoded)} decoded")
+        raise ClipCompareError(
+            f"{len(sources)} source frame(s) against {len(decoded)} decoded",
+            {"gate": None, "andon": "ClipCompareError", "clause": "length_mismatch",
+             "n_sources": len(sources), "n_decoded": len(decoded)})
     n = len(sources)
     S = np.stack([downsample(f, step).ravel() for f in sources])
     D = np.stack([downsample(f, step).ravel() for f in decoded])
-    nearest, margins = [], []
+    tie_atol = 0.0
+    nearest, margins, ties = [], [], []
     for i in range(n):
         dist = np.abs(S - D[i]).mean(axis=1)
-        j = int(np.argmin(dist))
+        lo = float(dist.min())
+        at_min = [int(k) for k in np.flatnonzero(dist <= lo + tie_atol)]
+        # The reported nearest prefers the diagonal when the diagonal is AMONG the minima:
+        # `argmin`'s lowest-index rule is an arbitrary choice between equals, and choosing
+        # it over `i` is what manufactured the displacement.
+        j = i if i in at_min else int(np.argmin(dist))
         nearest.append(j)
+        ties.append(at_min)
         own = float(dist[i])
         other = float(np.min(np.delete(dist, i))) if n > 1 else float("inf")
         margins.append(other - own)
     on_diagonal = [i for i, j in enumerate(nearest) if j == i]
     off = [(i, nearest[i]) for i in range(n) if nearest[i] != i]
+    tied = [i for i in range(n) if len(ties[i]) > 1]
+    groups = sorted({tuple(sorted(ties[i])) for i in tied})
     return {
         "n": n, "step": int(step),
         "nearest": nearest,
@@ -118,6 +177,11 @@ def order_check(sources, decoded, step=8):
         "order_preserved": len(on_diagonal) == n,
         "displaced": off[:20],
         "n_displaced": len(off),
+        # Frames whose nearest source is not unique — identical pictures, which is what a
+        # hold phase IS. Reported rather than resolved silently by index order.
+        "n_tied": len(tied),
+        "tie_groups": [list(g) for g in groups],
+        "tie_atol": tie_atol,
         # How much closer each decoded frame is to its own source than to any other. A
         # thin margin means the order finding is weakly separated and says so, rather
         # than reading as a clean result on a clip whose frames barely differ.
