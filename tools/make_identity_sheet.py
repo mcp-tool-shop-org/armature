@@ -69,6 +69,27 @@ def _fit(im, h):
     return im.resize((max(1, round(im.width * s)), h), Image.LANCZOS), s
 
 
+def _numbered_population(cdir, channel):
+    """`(names, {frame NUMBER: path})` for one channel directory, or raise naming the stray.
+
+    The refusal five siblings already carry, in the shape this sheet needs. It raises
+    rather than filtering because the file it would drop — or draw — is shown to the
+    Director as a frame of this run.
+    """
+    pngs = sorted(n for n in os.listdir(cdir) if n.lower().endswith(".png"))
+    numbered = [n for n in pngs if os.path.splitext(n)[0].isdigit()]
+    unexpected = [n for n in pngs if n not in set(numbered)]
+    names = sorted(numbered, key=lambda n: int(os.path.splitext(n)[0]))
+    if unexpected:
+        raise IdentitySheetError(
+            f"{cdir} holds {len(unexpected)} PNG(s) that are not numbered frames "
+            f"({', '.join(unexpected[:8])}); a stray sorts into the population and is "
+            f"drawn as a tile of the run under a caption naming a frame",
+            {"channel_dir": cdir, "channel": channel, "unexpected": unexpected,
+             "frames": names})
+    return names, {int(os.path.splitext(n)[0]): os.path.join(cdir, n) for n in names}
+
+
 def rows_for(run_dir, plates, frames, tile_h=360, channel="normal",
              azimuth_captions=False, plate=SHEET_PLATE):
     """The sheet's rows, or raise naming what the run does not carry."""
@@ -90,17 +111,30 @@ def rows_for(run_dir, plates, frames, tile_h=360, channel="normal",
         raise IdentitySheetError(
             f"{cdir} is not a directory; the {channel!r} channel of this run was never "
             f"written", {"run_dir": run_dir, "channel": channel, "channel_dir": cdir})
-    names = sorted(n for n in os.listdir(cdir) if n.lower().endswith(".png"))
-    # ---- every requested index must EXIST. Dropping one silently shows the Director
-    #      fewer angles than were asked for, on the panel where identity is judged. The
-    #      refusal written here in wave 3 now lives in `sheet_compose.require_frames`,
-    #      because four sibling sheets needed the same one and had none.
+    # ---- ANDON, before a tile is cut: the population is this channel's NUMBERED frames
+    #      and nothing else. The bare `*.png` listing took `render_pose_sticks`'
+    #      `strip_every{N}.png` contact sheet — written into the very directory it has
+    #      just filled — as a member, and `names[fi]` then drew it as a tile. Measured
+    #      2026-09-04 on `00001,00002,00003 + strip_every8.png` with `--frames=0,3`:
+    #      exit 0, row title "4-frame orbit", the tile captioned `f003 az 270d` cut from
+    #      the contact sheet. The refusal is the one five siblings already carry
+    #      (`encode_control.frame_population`, `invert_frames.frame_population`,
+    #      `measure_floor.frame_population`, `measure_arm._load_frames`,
+    #      `gate_b_frames.frame_paths`) — a stray is NAMED, never filtered in silence,
+    #      because the tile it produces is shown to the Director as a frame of this run.
+    names, by_number = _numbered_population(cdir, channel)
+    # ---- and every requested frame NUMBER must exist. Keyed by the number in the file
+    #      name, not by a position in a listing: on a run numbered from 1 the positional
+    #      index put the run's first file under the caption `f000`, a frame the run does
+    #      not hold — the distinction `make_crop_strip.frames_by_number` was given for
+    #      the same reason, on the panel whose row title asks "is this the same man?".
     require_frames(frames, names, what=f"{channel!r} frame(s)", where=cdir,
-                   exc=IdentitySheetError)
+                   exc=IdentitySheetError, numbers=sorted(by_number))
 
+    order = sorted(by_number)
     mesh_tiles = []
     for fi in frames:
-        im = _load_rgb(os.path.join(cdir, names[fi]), plate)
+        im = _load_rgb(by_number[fi], plate)
         t, s = _fit(im, tile_h)
         # Azimuth is OPT-IN, as of wave 8. It used to be computed unconditionally as
         # 360*fi/len(names) and printed on every tile, with "orbit" in the row title —
@@ -114,7 +148,10 @@ def rows_for(run_dir, plates, frames, tile_h=360, channel="normal",
         # `make_thesis_sheet --azimuth-captions`); this was the third member of the family
         # and was not swept.
         if azimuth_captions:
-            az = 360.0 * fi / len(names)
+            # The frame's POSITION in this run's own orbit, not its number: a run
+            # numbered 1..4 has four positions, and `360*fi/len(names)` printed 270d for
+            # the third of them.
+            az = 360.0 * order.index(fi) / len(order)
             mesh_tiles.append((t, f"f{fi:03d}  az {az:.0f}d  @{s:.2f}x"))
         else:
             mesh_tiles.append((t, f"f{fi:03d}  @{s:.2f}x"))
