@@ -16,6 +16,8 @@ outside the rig. What does NOT skip is the check that the anchor *can* fail — 
 that cannot fail is not a check.
 """
 
+import ast
+import importlib
 import os
 import sys
 
@@ -25,9 +27,20 @@ from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 
+import _census_nodes as CN  # noqa: E402
+from conftest import repo_file  # noqa: E402
+
 import measure_tracking as mt  # noqa: E402
 
-E02_ROOT = "outputs/E02"
+#: WAVE 16, F-269878af. This was `E02_ROOT = "outputs/E02"` — a bare relative path resolved
+#: against `os.getcwd()`, and the FIFTH guard of the shape `conftest.repo_file()` was written
+#: to end. Re-measured both directions on 041027c: run from an unrelated scratch directory,
+#: the three tests below SKIP even on the rig that HAS the runs; seed that scratch directory
+#: with an empty `outputs/E02/runs` and the guard reads True, the three ARM, and
+#: `measure_tracking.py:133` fails on "no such frame directory" for a directory that is not
+#: this repo's. The anchor that reproduces every published E02 figure therefore reported
+#: green having examined nothing, from any working directory but the repo root.
+E02_ROOT = repo_file("outputs/E02")
 HAVE_E02 = os.path.isdir(os.path.join(E02_ROOT, "runs"))
 
 
@@ -242,3 +255,128 @@ def test_A1a_lossless_and_A1a_H264_are_NOT_the_same_number():
     h264 = mt.measure(h264_dir, ctl)
     assert abs(lossless["timing_correlation"] - h264["timing_correlation"]) > 0.02
     assert lossless["timing_correlation"] == pytest.approx(0.521, abs=0.0005)
+
+
+# ------------------------------------------- the output-gated guards, ENUMERATED (wave 16)
+#
+# WAVE 16, F-269878af + F-665cd590. Two findings, one missing object: nothing in the suite
+# named the population of guards that decide whether a gitignored `outputs/` run is visible.
+# That is how the fifth guard was written as a bare relative path four waves after the other
+# four were anchored, and how the worktree/main skip delta had to be re-measured from
+# scratch by three consecutive waves — the coordinator's standing seed even attributed it to
+# the wrong pair of files ("12 test_gate_s:154, 3 test_aapose_convention:190"; measured here,
+# the aapose trio skips in BOTH trees and is not in the delta at all).
+#
+# The census lives in `tests/_census_nodes.py` beside every other walk this suite keys on.
+# It reads three spellings of the decorator, because all three are live:
+# `@pytest.mark.skipif(not GUARD, ...)`, a module-level `needs_bank = pytest.mark.skipif(...)`
+# applied bare, and no decorator at all (a helper that calls `pytest.skip`).
+
+
+def _parametrized_item_count(mod_name, test_name):
+    """How many COLLECTED items one gated test function is, from its own decorators.
+
+    `test_gate_s`'s single gated function is 12 items (4 arms x 3 seeds) and that is where
+    12 of the 15 delta skips come from. The multiplier is read off the module's own
+    `parametrize` arguments rather than typed, so adding a seed moves this count without
+    anybody editing a number.
+    """
+    module = importlib.import_module(mod_name)
+    tree = CN.test_module_trees()[mod_name]
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+              and n.name == test_name)
+    count = 1
+    for dec in fn.decorator_list:
+        if not (isinstance(dec, ast.Call) and CN.called_name(dec) == "parametrize"):
+            continue
+        if len(dec.args) < 2:
+            raise AssertionError(f"{mod_name}::{test_name} parametrize takes no argvalues")
+        count *= len(eval(ast.unparse(dec.args[1]), vars(module)))  # noqa: S307
+    return count
+
+
+def test_every_output_gated_guard_in_the_suite_is_anchored_on_the_repo_root():
+    """The POPULATION, not the site the finding named (wave-16 rule 1).
+
+    Seven module-level constants across six test modules resolve a path under `outputs/`.
+    Six were already repo-anchored; the seventh was this file's `E02_ROOT`. A guard that
+    resolves against `os.getcwd()` answers a different question from the one it is asked,
+    in both directions, and the skip reason it prints reads as though the repo simply has
+    no run in it.
+    """
+    constants = CN.output_path_constants()
+    drifting = {k: v[0] for k, v in constants.items() if not v[1]}
+    assert drifting == {}, (
+        f"{sorted(drifting)} resolve an `outputs/` path against os.getcwd(); anchor them on "
+        f"conftest.repo_file() or os.path.join(REPO, ...) like the other guards")
+    assert sorted(constants) == [
+        ("test_aapose_convention", "BANKED"),
+        ("test_build_i2v_payload", "BANKED"),
+        ("test_build_t2v_payload_a3", "BANK"),
+        ("test_donor_gate", "PROBE"),
+        ("test_donor_gate", "PROBE_MEASURE"),
+        ("test_gate_s", "E02_PAYLOAD_PATHS"),
+        ("test_measure_tracking", "E02_ROOT"),
+    ], sorted(constants)
+
+
+def test_a_foreign_working_directory_cannot_arm_or_disarm_an_output_gated_guard(tmp_path,
+                                                                                monkeypatch):
+    """The RED PROOF, on the operand the finding named: the working directory.
+
+    Both directions on the same scratch cwd. The anchored expression this file now uses is
+    unmoved by a decoy `outputs/E02/runs` sitting in the caller's working directory; the
+    bare relative expression it replaced reads True on that decoy — which is the false ARM
+    that took the three anchor tests into `measure_tracking.py:133` on a directory that is
+    not this repo's.
+    """
+    decoy = tmp_path / "outputs" / "E02" / "runs"
+    decoy.mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+
+    anchored = os.path.isdir(os.path.join(repo_file("outputs/E02"), "runs"))
+    bare = os.path.isdir(os.path.join("outputs/E02", "runs"))
+    assert bare is True, "the decoy must be visible to the spelling that was replaced"
+    assert anchored is os.path.isdir(
+        os.path.join(repo_file("outputs/E02"), "runs")), "the anchor is cwd-independent"
+    assert anchored != bare, (
+        "on this rig the repo has no E02 runs and the scratch cwd does; if these agree the "
+        "fixture is not measuring what it was written to measure")
+
+
+def test_the_worktree_to_checkout_skip_delta_is_read_off_the_suite_not_re_measured():
+    """F-665cd590: PIN the delta by PATH, so the fourth wave does not measure it again.
+
+    Measured on 041027c by running the six gated modules in both trees under one recipe: a
+    fresh worktree skips 28 of these, a checkout carrying `outputs/` skips 13, and the
+    15-test difference is EXACTLY the E02 subtree — 12 collected items at
+    `test_gate_s.py:154` (4 arms x 3 seeds) and 3 at `test_measure_tracking.py:211/219/228`.
+    The other 13 (aapose 3, build_i2v 2, build_t2v_payload_a3 5, donor_gate 3) gate on E08,
+    E09 and E11 banks that are absent in BOTH trees and are part of the common baseline.
+    """
+    gated = CN.output_gated_tests()
+    by_module = {}
+    for mod, name, _line in gated:
+        by_module.setdefault(mod, set()).add(name)
+    assert sorted(by_module) == [
+        "test_aapose_convention", "test_build_i2v_payload", "test_build_t2v_payload_a3",
+        "test_donor_gate", "test_gate_s", "test_measure_tracking"], sorted(by_module)
+    assert len(gated) == 17, sorted(gated)
+
+    e02 = {(m, n) for (m, n, _l) in gated if m in ("test_gate_s", "test_measure_tracking")}
+    items = sum(_parametrized_item_count(m, n) for m, n in sorted(e02))
+    assert items == 15, sorted(e02)
+    assert _parametrized_item_count(
+        "test_gate_s", "test_an_E04_payload_differs_from_its_E02_base_ONLY_in_the_seed") == 12
+    assert len([n for (m, n, _l) in gated if m == "test_measure_tracking"]) == 3
+
+
+def test_the_three_anchor_tests_are_the_ones_this_delta_names():
+    """The membership behind the 3, so a fourth gated test here is not silently absorbed."""
+    mine = sorted(n for (m, n, _l) in CN.output_gated_tests() if m == "test_measure_tracking")
+    assert mine == [
+        "test_A1a_lossless_and_A1a_H264_are_NOT_the_same_number",
+        "test_the_anchor_CAN_fail",
+        "test_the_anchor_reproduces_every_published_E02_figure",
+    ], mine

@@ -81,7 +81,13 @@ RECORDED_GATE_RAISES = {
     ("rig_gates.py", "GateNNames"): 2,  # +1 w12: empty registry
     ("rig_gates.py", "GatePRestPose"): 12,
     ("route_gates.py", "PairGate"): 3,
-    ("route_gates.py", "RouteGate"): 36,  # +3 w12: unreadable_node,
+    # WAVE 16: 36 → 38 (core-gates, SEAM 5 §4). `_unreadable_level` — ONE raise reached from
+    # three container levels (`definitions`, `definitions.subgraphs`, a non-dict definition
+    # entry), all clause `unreadable_node` — and Gate S's andon for a graph where `seeds()`
+    # found samplers and every one carries `add_noise=disable`, which used to return a PASS
+    # over an empty population. Carried from their branch measurement, not measured here:
+    # this entry is RED on the tests branch (which reads 36) and expected green at merge.
+    ("route_gates.py", "RouteGate"): 38,  # +3 w12: unreadable_node,
                                           # uncredited_conditional_component,
                                           # attribution_for_unconditional_row
                                           # +1 w14: orphan_attribution (F-74787978) — the
@@ -199,7 +205,13 @@ def test_the_derived_population_is_the_one_this_file_records():
     # WAVE 14 (core-gates): 84 -> 86. `gates.GateSSeedRegistration` +1 (a declared but
     # empty registry, F-b4706738) and `route_gates.RouteGate` +1 (`orphan_attribution`,
     # F-74787978). MEASURED on this branch, itemised on the two rows above.
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 86
+    # WAVE 16: 86 → 88, both from `route_gates.RouteGate` (see the row's own note).
+    # core-solvers' +4 `GateFailure` raises this wave are in `assembly.py` and
+    # `turnaround.py`, which this census does not walk, and their fifth is
+    # `aapose.ConventionError`, a plain refusal. instruments, instruments-measure and
+    # builders add none in `armature_core` at all. RED on the tests branch (88 vs 86);
+    # composed from branch measurements, so re-measure at merge.
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 88
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

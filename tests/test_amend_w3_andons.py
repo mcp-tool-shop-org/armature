@@ -97,15 +97,18 @@ PROBE = textwrap.dedent(
              "arming_the_diagnostic": (arming_the_diagnostic, "SolveError"),
              "frame_fidelity_shape": (frame_fidelity_shape, "ClipCompareError")}
 
+    # WAVE 16 (F-a64f4f47): the MRO, not the spelling. See the note on the assertion below.
     out = {"optimize_flag": sys.flags.optimize, "asserts_active": asserts_active,
-           "raised": {}}
+           "raised": {}, "mro": {}}
     for name, (fn, want) in CASES.items():
         try:
             fn()
             out["raised"][name] = "NO_RAISE"
+            out["mro"][name] = []
         except BaseException as exc:
-            got = type(exc).__name__
-            out["raised"][name] = "RAISED" if got == want else "WRONG_ERROR:" + got
+            mro = [c.__name__ for c in type(exc).__mro__]
+            out["mro"][name] = mro
+            out["raised"][name] = "RAISED" if want in mro else "WRONG_ERROR:" + mro[0]
     print("AMEND " + json.dumps(out))
     """
 )
@@ -139,6 +142,17 @@ def test_every_refusal_added_in_this_amend_survives_optimization(tmp_path, flag,
         "round_trip_gate", "arming_the_diagnostic", "frame_fidelity_shape"}
     for name, outcome in res["raised"].items():
         assert outcome == "RAISED", f"{label}/{name}: {outcome}"
+    # WAVE 16, F-a64f4f47. This file's comment at :91-95 names family membership as the
+    # reason a bare builtin here was recorded as a crash at exit 1 rather than a refusal at
+    # exit 2 — and this file mentioned `ArmatureError` nowhere, so the property it calls
+    # load-bearing was asserted for none of its five. The probe now transports the MRO, so
+    # a subclass re-class that keeps the contract stays green and a departure from the
+    # family goes red.
+    for name, mro in res["mro"].items():
+        assert "ArmatureError" in mro, (
+            f"{label}/{name} raised {mro[0]}, outside the ArmatureError family: the 21-tool "
+            f"halt contract records it as 'FAILED - an unhandled error' at exit 1 rather "
+            f"than a refusal at exit 2. MRO: {mro}")
 
 
 def test_the_optimization_actually_took_effect(tmp_path):

@@ -767,8 +767,13 @@ def _main_of(tree):
 
 
 def parser_population():
-    """Every `tools/*.py` whose module-level `main` reads a `parse_args` namespace."""
-    trees = _module_trees()
+    """Every `tools/*.py` whose module-level `main` reads a `parse_args` namespace.
+
+    Walks `tool_trees()`, not `module_trees()`: the latter is keyed by BASENAME and
+    `armature_core/lift_solve.py` shadowed `tools/lift_solve.py` there, so the tool was
+    walked as the solver and reported as having no command line (F-beeab1d0).
+    """
+    trees = CN.tool_trees()
     return sorted(mod for mod in trees
                   if os.path.exists(os.path.join(_tools_dir(), mod + ".py"))
                   and namespace_reads(trees[mod]))
@@ -785,16 +790,32 @@ def parser_population():
 # on `cli_body` now, so a parser that moved into `build_and_write(argv)` is still this
 # tool's parser. 33 -> 36, and the population is the one the file's docstring always
 # claimed: every tool with a command line.
+# WAVE 16 (F-beeab1d0): 36 -> 67. "every tool with a command line" had meant "every tool
+# that spells its parse `a = ap.parse_args(argv)`". 31 tools factor the parser into a
+# module-level helper and write `a = parse_args(argv)`; four of those return `vars(...)` and
+# read their flags as subscripts; `armature_index` hands `_dispatch` to a shared runner; and
+# `armature_core/lift_solve.py` shadowed `tools/lift_solve.py` in this basename-keyed dict.
+# All 31 sat outside the undeclared-flag property. The list below is DERIVED
+# (`CN.parser_population()`), and the assertion beneath it now compares the population
+# against `CN.tools_calling_add_argument()` rather than against its own history.
 RECORDED_PARSER_POPULATION = [
-    "build_assembly_payload", "build_cascade_payload", "build_lora_arm_payload",
-    "build_payload", "build_r2v_payload", "build_t2v_payload", "canon_gate", "compare_runs",
-    "composite_reference", "encode_control", "extract_clip_frames", "fetch_run",
-    "fetch_t2v_run", "gate_b_frames", "gate_saved_graph", "invert_frames", "make_ab_clip",
-    "make_cast_sheet", "make_crop_strip", "make_e13_sheet", "make_gate0_sheet",
-    "make_hole_survey", "make_identity_sheet", "make_lift_sheet", "make_review_clip",
-    "make_shotset_sheet", "make_startframe_sheet", "make_test_armature", "make_thesis_sheet",
-    "make_zoom_sheet", "measure_arm", "measure_cascade_clip", "measure_clip", "measure_floor",
-    "measure_smoothness", "measure_tracking",
+    "armature_index", "author_walk", "build_animate_payload", "build_assembly_payload",
+    "build_camera_i2v_payload", "build_cascade_payload", "build_i2v_payload",
+    "build_lora_arm_payload", "build_payload", "build_r2v_payload", "build_t2v_payload",
+    "canon_gate", "check_relift", "compare_runs", "composite_reference",
+    "diagnose_bone_heat", "encode_control", "extract_clip_frames", "fetch_run",
+    "fetch_t2v_run", "fit_reference", "gate_b_frames", "gate_saved_graph",
+    "invert_frames", "lift_clip", "lift_solve", "make_ab_clip", "make_binding_sheet",
+    "make_cast_sheet", "make_crop_strip", "make_e08_sheet", "make_e13_sheet",
+    "make_gate0_sheet", "make_hole_survey", "make_identity_sheet", "make_lift_sheet",
+    "make_overlay_sheet", "make_parts_sheet", "make_pick_sheet", "make_plate",
+    "make_review_clip", "make_rig_sheet", "make_shotset_sheet", "make_skeleton_sheet",
+    "make_startframe_sheet", "make_test_armature", "make_thesis_sheet",
+    "make_zoom_sheet", "measure_arm", "measure_cascade_clip", "measure_clip",
+    "measure_floor", "measure_lift", "measure_smoothness", "measure_tracking",
+    "pack_pose_pack", "preview_glb", "preview_walk", "project_pose_keypoints",
+    "render_performer", "render_pose_sticks", "render_start_frame", "render_turnaround",
+    "resample_motion", "rig_bake", "rig_repair", "rig_retopo",
 ]
 
 
@@ -804,14 +825,23 @@ def test_the_parser_population_is_every_tool_with_a_command_line():
         "appeared": sorted(set(pop) - set(RECORDED_PARSER_POPULATION)),
         "vanished": sorted(set(RECORDED_PARSER_POPULATION) - set(pop)),
     }
-    assert len(pop) == 36, pop  # WAVE 12: the three wave-10 builders rejoined; see above
+    assert len(pop) == 67, pop  # WAVE 16: the parse_args-helper idiom joined; see above
+    # The population is asserted against the thing it is ABOUT, not against its own history:
+    # every `tools/*.py` that calls `add_argument(` has a command line, whatever idiom it
+    # reaches its namespace through.
+    assert pop == CN.tools_calling_add_argument(), {
+        "declares a flag, census blind to it":
+            sorted(set(CN.tools_calling_add_argument()) - set(pop)),
+        "in the census, declares nothing":
+            sorted(set(pop) - set(CN.tools_calling_add_argument())),
+    }
 
 
 @pytest.mark.parametrize("mod", RECORDED_PARSER_POPULATION)
 def test_every_flag_main_reads_is_a_flag_its_own_parser_declares(mod):
     """A call site with no flag is exactly what no loader census can see."""
-    trees = _module_trees()
-    helpers = _flag_helpers(trees)
+    trees = CN.tool_trees()
+    helpers = _flag_helpers(_module_trees())
     tree = trees[mod]
     declared = declared_flags(tree, mod, helpers)
     read = namespace_reads(tree)
@@ -942,7 +972,7 @@ def test_the_three_wave_ten_builders_are_policed_where_their_parsers_actually_li
     argv parsing into `build_and_write(argv)` in wave 10 and left this census. They are
     back, and the node that brought them back is `cli_body`, not a name.
     """
-    trees = _module_trees()
+    trees = CN.tool_trees()
     for mod in ("build_assembly_payload", "build_cascade_payload", "build_r2v_payload"):
         assert mod in RECORDED_PARSER_POPULATION, mod
         assert namespace_reads(trees[mod]), mod
@@ -954,7 +984,7 @@ def test_the_three_wave_ten_builders_are_policed_where_their_parsers_actually_li
 
 @pytest.mark.parametrize("mod", sorted(
     m for m in RECORDED_PARSER_POPULATION
-    if "sheet_plate" in namespace_reads(_module_trees()[m])))
+    if "sheet_plate" in namespace_reads(CN.tool_trees()[m])))
 def test_a_sheet_that_reads_the_plate_flag_offers_it_on_its_own_help(mod):
     """The runtime half of the same claim: `--help` is what an operator reads, and it is
     built by the parser rather than by this walk."""

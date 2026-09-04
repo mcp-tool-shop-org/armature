@@ -31,6 +31,7 @@ import sys
 import tomllib
 
 import pytest
+import requests.utils
 
 import _census_nodes as CN
 from conftest import REPO  # noqa: F401  (puts tools/ on sys.path)
@@ -1531,9 +1532,19 @@ def test_a_dependency_tree_is_ignored_wherever_npm_can_create_one(root):
 #:   both — .netrc, read by npm (`npm config` follows curl/netrc conventions for registry
 #:   auth) and by pip/twine through requests' trust_env; it is the third file a maintainer
 #:   debugging a publish by hand creates, and it was not on the list.
+#:
+#: WAVE 16 (ci-packaging SEAM 2, `F-e070af6b`): the netrc carrier has TWO spellings and this
+#: table asked for ONE. `requests` — which is what twine reaches the index through — reads
+#: `.netrc` AND `_netrc`, the second being the Windows convention, and `git check-ignore`
+#: measured `_netrc`, `npm/_netrc`, `site/_netrc` and `tools/_netrc` all NOT IGNORED on
+#: `041027c`. So this census was green on the missing half of its own subject. The names are
+#: DERIVED from the object that decides the behaviour, not typed, so a third spelling in a
+#: future `requests` joins the census rather than being remembered.
+NETRC_NAMES = tuple(requests.utils.NETRC_FILES)
+
 REGISTRY_CARRIERS = {
-    "pypi": (".pypirc", ".netrc"),
-    "npm": (".npmrc", ".netrc"),
+    "pypi": (".pypirc",) + NETRC_NAMES,
+    "npm": (".npmrc",) + NETRC_NAMES,
 }
 
 #: How each registry is recognised in the workflow that publishes to it.
@@ -1563,6 +1574,23 @@ def test_every_registry_this_repo_publishes_to_has_a_credential_row():
     assert set(found) <= set(REGISTRY_CARRIERS), (
         f"{sorted(set(found) - set(REGISTRY_CARRIERS))} is published to and has no row in "
         "REGISTRY_CARRIERS, so its credential file is covered by nothing here")
+
+
+def test_the_netrc_carrier_is_derived_from_requests_and_not_from_one_spelling():
+    """The population, so a spelling cannot leave the census by not being remembered.
+
+    `.netrc` was the only name on the list; `_netrc` is the Windows spelling `requests`
+    reads with equal weight, and `git check-ignore` measured it NOT IGNORED on `041027c` at
+    the repository root and under `npm/`, `site/` and `tools/`. Both names now come from
+    `requests.utils.NETRC_FILES` itself. `.npmrc` and `.pypirc` have one spelling each —
+    neither client defines an `_npmrc`/`_pypirc` convention — so netrc is the only
+    two-spelling member and the only one derived.
+    """
+    assert NETRC_NAMES == (".netrc", "_netrc"), NETRC_NAMES
+    assert tuple(requests.utils.NETRC_FILES) == NETRC_NAMES
+    for registry, carriers in REGISTRY_CARRIERS.items():
+        assert set(NETRC_NAMES) <= set(carriers), (registry, carriers)
+        assert len(carriers) == 3, (registry, carriers)
 
 
 @requires_git

@@ -82,14 +82,90 @@ def _raised_name(node):
     return getattr(func, "id", "")
 
 
+def _raising_parameters(trees):
+    """`{function name: {parameter name: positional index or None}}` — the `exc=` helpers.
+
+    WAVE 16, F-d426d4bd. This census keyed `sites` on the identifier in a literal
+    `raise X(...)`, and the repo routes three of its refusal classes through a helper
+    instead: `make_sheet.parse_argv(..., exc=<class>)` raises whatever it was handed, and so
+    does `sheet_compose.compose_over_named_plate` and `parse_plate`. Measured over `tools/`:
+    `MakeSheetError`, `PosePackError` and `AnalyzeP3Error` appeared in NO `raise` at all, so
+    each was recorded with zero raise sites, reached neither `POLICED` nor the
+    deliberately-unpoliced single-site set, and was policed by nothing — while
+    `pack_pose_pack` is what conditions a paid submission and `tests/test_alpha_law.py:101`
+    already carries a bare `pytest.raises(PPP.PosePackError)` the census exempts by
+    construction.
+
+    A parameter that a function `raise`s IS a refusal class slot, so the call that fills it
+    is a raise site. Derived from the tree, never listed: a second helper of this shape
+    joins the day it lands.
+    """
+    out = {}
+    for tree in trees:
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            params = [a.arg for a in node.args.args + node.args.kwonlyargs]
+            positional = {a.arg: i for i, a in enumerate(node.args.args)}
+            raised = {_raised_name(n) for n in ast.walk(node) if isinstance(n, ast.Raise)}
+            slots = {p: positional.get(p) for p in params if p in raised}
+            if slots:
+                out.setdefault(node.name, {}).update(slots)
+    return out
+
+
+def _delegated_raise_sites(tree, defined, raising):
+    """`[(name, lineno)]` — a refusal class handed to a helper that raises its parameter.
+
+    Three spellings, all live: the `exc=<Class>` keyword (`analyze_p3.py:173`,
+    `pack_pose_pack.py:116`), the class as a bare POSITIONAL in the raised parameter's slot
+    (`pack_pose_pack.py:164`, `parse_plate(a.alpha_over, PosePackError)`), and the
+    module-level fallback `exc = exc or MakeSheetError` (`make_sheet.py:52`), which fills the
+    slot for every caller that names none.
+    """
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            slots = raising.get(called_name_of(node))
+            if slots:
+                for kw in node.keywords:
+                    if (kw.arg in slots and isinstance(kw.value, ast.Name)
+                            and kw.value.id in defined):
+                        out.append((kw.value.id, node.lineno))
+                for index, arg in enumerate(node.args):
+                    if (isinstance(arg, ast.Name) and arg.id in defined
+                            and index in set(slots.values())):
+                        out.append((arg.id, node.lineno))
+        # `exc = exc or MakeSheetError` — the default that fills the slot for every caller
+        # that names none. Keyed on the ASSIGNMENT to a name the enclosing function raises,
+        # which is why `raising` is consulted rather than the spelling `exc`.
+        if (isinstance(node, ast.Assign) and isinstance(node.value, ast.BoolOp)
+                and isinstance(node.value.op, ast.Or)):
+            targets = {t.id for t in node.targets if isinstance(t, ast.Name)}
+            if any(t in slot for slot in raising.values() for t in targets):
+                for value in node.value.values:
+                    if isinstance(value, ast.Name) and value.id in defined:
+                        out.append((value.id, node.lineno))
+    return out
+
+
+def called_name_of(node):
+    """The bare callee name of a `Call` — `f(...)` and `mod.f(...)` both give `f`."""
+    func = node.func
+    return (func.id if isinstance(func, ast.Name)
+            else func.attr if isinstance(func, ast.Attribute) else "")
+
+
 def derive_population(tools_root):
     """`(policed, raise_sites)` — see THE DERIVATION in this module's docstring."""
     defined = set()
     sites = {}
+    parsed = []
     for path in _tool_modules(tools_root):
         with open(path, encoding="utf-8") as fh:
             tree = ast.parse(fh.read())
         rel = os.path.relpath(path, tools_root).replace(os.sep, "/")
+        parsed.append((rel, tree))
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 defined.add(node.name)
@@ -97,6 +173,11 @@ def derive_population(tools_root):
                 name = _raised_name(node)
                 if name:
                     sites.setdefault(name, set()).add((rel, node.lineno))
+    # THE SECOND EDGE (wave 16, F-d426d4bd): a class handed to a helper that raises it.
+    raising = _raising_parameters([tree for _rel, tree in parsed])
+    for rel, tree in parsed:
+        for name, lineno in _delegated_raise_sites(tree, defined, raising):
+            sites.setdefault(name, set()).add((rel, lineno))
     policed = {n for n in defined if len(sites.get(n, ())) > 1}
     return policed, sites
 
@@ -130,6 +211,31 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: its raise count, never on its bases, which is the whole reason `FramingError` and
 #: `WalkError` are policed at all.
 RECORDED_POPULATION = frozenset({
+    # WAVE 16 (tests, F-d426d4bd) — MEASURED in this worktree. The derivation gained a
+    # second edge: a refusal class handed to a helper that raises its own parameter. Two
+    # classes cross the two-site threshold on it. `PosePackError` was raised on every real
+    # run through `compose_over_named_plate(..., exc=PosePackError)` (pack_pose_pack.py:115)
+    # and `parse_plate(a.alpha_over, PosePackError)` (:164) and was recorded with ZERO raise
+    # sites; `PlateError` had one literal raise (make_plate.py:204) and gains :207 and :210
+    # the same way. `MakeSheetError` and `AnalyzeP3Error` reach exactly ONE site each
+    # (`exc = exc or MakeSheetError` at make_sheet.py:52; `exc=AnalyzeP3Error` at
+    # analyze_p3.py:172) and are therefore deliberately absent — a class raised once IS its
+    # clause — and join the day a second site is written.
+    "PlateError", "PosePackError",
+    # WAVE 16 — CARRIED FROM THE SEAMS INBOX, not measured in this worktree, and therefore
+    # RED HERE and expected green on the merged tree. Each is a class a sibling domain
+    # posted as crossing the two-site threshold this wave:
+    #   `ABClipError`, `ResampleArgError` — instruments-measure, SEAM 5 ("POLICED 94 -> 96":
+    #     Gate TIMELINE gives `make_ab_clip.ABClipError` a second site, the `--fps-src`
+    #     clause gives `resample_motion.ResampleArgError` one). Their two NEW classes
+    #     (`PickSheetError`, `E13SheetError`) are deliberately single-site and absent.
+    #   `SeedRegistrationError` — builders, SEAM 4 (`build_assembly_payload.py`, ONE seed
+    #     registration reader with five clauses, "+6 raises" there and "+1 raise" in
+    #     `build_t2v_payload.py`). Builders posted the raise deltas, not a POLICED delta;
+    #     six sites is unambiguously more than one, so it is recorded here and the seam asks
+    #     them to confirm. If it does not land, this assertion names it by name.
+    "ABClipError", "ResampleArgError", "SeedRegistrationError", "SpendCeiling",
+    "ArcDidNotSurvive",
     # WAVE-14 MERGE (coordinator, 2026-09-04): `aapose.ConventionError` (core-solvers, F-d0de0c2d) — the class landed, the
     # name did not; measured `POLICED - RECORDED_POPULATION == ["ConventionError"]` on the merged tree.
     "ConventionError",
@@ -306,7 +412,23 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     #      (`errors.GateSSeedRegistration`) rather than defining a second class on that id,
     #      so it adds nothing here. ⚠ Sibling branches move this too; the coordinator
     #      re-measures the merged number, as at waves 10, 12 and 14.
-    assert len(POLICED) == 96, sorted(POLICED)
+    # WAVE 16: 94 → 99. Composition, because this number cannot be measured on one branch:
+    #   +2 MEASURED HERE (tests, F-d426d4bd): `PosePackError`, `PlateError` cross the
+    #      threshold on the new `exc=` edge — derivation command:
+    #      python -c "import sys;sys.path[:0]=['tests','tools'];import test_refusal_clauses as M;print(len(M.POLICED))"
+    #      reads 96 in this worktree.
+    #   +2 CARRIED from instruments-measure's SEAM 5 (`ABClipError`, `ResampleArgError`).
+    #   +2 CARRIED from builders' SEAM 10 (`SeedRegistrationError`, 5 raise sites;
+    #      `SpendCeiling`, 2 sites under its own gate id — builders measured POLICED 96 on
+    #      their branch, i.e. base + these two).
+    #   +1 CARRIED from instruments' SEAM 13 (`make_parts_sheet.ArcDidNotSurvive`, three
+    #      literal raise sites across `make_parts_sheet:413`, `make_binding_sheet:241` and
+    #      `make_rig_sheet:192`, each carrying `clause == "arc_did_not_survive"`).
+    # So this assertion is RED on this branch (96) and expected green on the merged tree.
+    # The coordinator re-measures at merge; the SET assertion beneath names any member that
+    # did not arrive, which is why the pin is a set and not only a count.
+    # WAVE-16 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(POLICED) == 101, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -384,7 +506,19 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # evidence names (F-f85c37f0): one to `errors.GateSSeedRegistration` and two to the new
     # `SpendCeiling`. A raise that leaves this count because it became MORE specific is the
     # fix working, not the census shrinking.
-    assert len(RAISE_SITES["RouteGate"]) == 62, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 16: 63 → 63, and the zero hides three moves in both directions, so it is
+    # itemised rather than left as "unchanged" (SEAM 5 §4 + SEAM 10 §2):
+    #   +2 core-gates in `armature_core/route_gates.py` (`_unreadable_level`, Gate S's
+    #      all-`add_noise=disable` andon);
+    #   +1 builders in `gate_saved_graph.py` (`duplicate_socket_name`);
+    #   −3 builders in `build_r2v_payload.py`, where three raises moved off the bare
+    #      `RouteGate` onto `SpendCeiling`, the class whose own gate id the evidence names.
+    # This is the first wave this count has gone DOWN. ⚠ The `files` assertion below still
+    # names `build_r2v_payload.py`; builders' SEAM 10 does not say whether any `RouteGate`
+    # raise remains there. If none does, that set loses a member at merge — flagged in the
+    # inbox rather than guessed at here.
+    # WAVE-16 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(RAISE_SITES["RouteGate"]) == 64, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside
@@ -414,12 +548,114 @@ def test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed():
     """The predicate's other half, stated so it cannot drift into "police everything".
 
     A class raised once IS its own clause — `pytest.raises(QuadriflowDeclined)` can only be
-    satisfied by the single refusal that exists. Measured: 15 such classes today.
+    satisfied by the single refusal that exists. Measured 2026-09-04 (wave 16): 25 such
+    classes, of which 22 are `ArmatureError`-family classes defined under `tools/**`.
     """
     single = {n for n, s in RAISE_SITES.items() if len(s) == 1} & {
         n for n in RAISE_SITES if n not in POLICED}
     assert "QuadriflowDeclined" in single
     assert not (single & POLICED)
+
+
+def _family_classes_defined_under_tools():
+    """Every `ArmatureError`-family class DEFINED under `tools/**` — the whole 120."""
+    import _census_nodes as CN
+
+    family = CN.armature_error_names()
+    out = set()
+    for path in _tool_modules(TOOLS):
+        with open(path, encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name in family:
+                out.add(node.name)
+    return out
+
+
+#: The classes NOTHING raises — named and dated, because "zero raise sites" was the hole.
+#: `POLICED` keeps a class only when `len(sites) > 1`, and
+#: `test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed` states the other
+#: half for ONE-site classes; nothing stated anything about ZERO-site ones, so three classes
+#: that fire on every real run through an `exc=` parameter sat outside both categories and
+#: were policed by nothing (F-d426d4bd). With the second edge they are back in the
+#: derivation and this set is what remains.
+NOTHING_RAISES_THESE = {
+    "GateFailure": "the family's gate BASE (armature_core/errors.py). A base is raised "
+                   "through its subclasses; a literal `raise GateFailure(...)` would be the "
+                   "defect `test_two_policed_classes_do_not_descend...` exists to name.",
+    "_CarriesEvidence": "measure_tracking.py:91 — a mixin with no behaviour and no raise "
+                        "site anywhere in the tree. instruments-measure DELETES it this "
+                        "wave (SEAM 5, rule 5), so this entry is conditional on the class "
+                        "still being defined: when it goes, it leaves both sets at once.",
+}
+
+
+def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_by_nothing():
+    """The three-way partition, so a class cannot fall out of the census in silence.
+
+    F-d426d4bd. `derive_population` keyed `sites` on the identifier in a literal
+    `raise X(...)`, and three refusal classes that fire on ordinary runs are handed to a
+    helper instead — `MakeSheetError`, `PosePackError`, `AnalyzeP3Error`. Each was recorded
+    with ZERO raise sites: not policed (the predicate needs two), not in the deliberately-
+    unpoliced single-site set (the predicate needs one), and named by nothing. So
+    `pack_pose_pack` — which is what conditions a paid submission — could grow a second
+    refusal through the same helper with no test in the suite required to tell the two
+    apart.
+
+    Every member of the 120 now lands in exactly one of three named categories, and the
+    third one is a table with a reason per entry rather than a silence.
+    """
+    defined = _family_classes_defined_under_tools()
+    assert len(defined) == 120, len(defined)
+
+    zero = {n for n in defined if not RAISE_SITES.get(n)}
+    one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
+    policed = {n for n in defined if n in POLICED}
+
+    assert zero | one | policed == defined, sorted(
+        defined - (zero | one | policed))
+    assert not (zero & one) and not (one & policed) and not (zero & policed)
+    assert zero == {n for n in NOTHING_RAISES_THESE if n in defined}, {
+        "raised by nothing and not named": sorted(
+            zero - set(NOTHING_RAISES_THESE)),
+        "named as raised by nothing and now raised": sorted(
+            {n for n in NOTHING_RAISES_THESE if n in defined} - zero)}
+    for name, why in NOTHING_RAISES_THESE.items():
+        assert why and "REVIEW" not in why, (name, why)
+
+
+def test_the_delegated_edge_sees_the_three_classes_the_literal_walk_could_not():
+    """RED on members OUTSIDE the old walk (wave-16 rule 2), in both directions.
+
+    The pre-wave-16 derivation is reconstructed here — literal `raise X(...)` only — and
+    shown returning ZERO sites for all three, while the widened one returns the sites the
+    tools actually reach. If the old walk could see them, this comparison would be with
+    itself.
+    """
+    def literal_sites_only(tools_root):
+        sites = {}
+        for path in _tool_modules(tools_root):
+            with open(path, encoding="utf-8") as fh:
+                tree = ast.parse(fh.read())
+            rel = os.path.relpath(path, tools_root).replace(os.sep, "/")
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Raise) and _raised_name(node):
+                    sites.setdefault(_raised_name(node), set()).add((rel, node.lineno))
+        return sites
+
+    old = literal_sites_only(TOOLS)
+    for name in ("MakeSheetError", "PosePackError", "AnalyzeP3Error"):
+        assert old.get(name, set()) == set(), (name, sorted(old.get(name, ())))
+        assert RAISE_SITES[name], name
+
+    assert sorted(RAISE_SITES["PosePackError"]) == [
+        ("pack_pose_pack.py", 115), ("pack_pose_pack.py", 164)]
+    assert sorted(RAISE_SITES["MakeSheetError"]) == [("make_sheet.py", 52)]
+    assert sorted(RAISE_SITES["AnalyzeP3Error"]) == [("analyze_p3.py", 172)]
+    # `PlateError` had ONE literal site and gains two delegated ones, so the edge moves a
+    # class across the threshold as well as into the census.
+    assert len(old.get("PlateError", ())) == 1 and len(RAISE_SITES["PlateError"]) == 3
+    assert "PlateError" in POLICED and "PosePackError" in POLICED
 
 
 def _class_bases(path):

@@ -222,9 +222,25 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # WAVE-14 MERGE (coordinator, 2026-09-04): core-solvers (F-594e1792, F-3bc3659d, F-c4cf355d) `assembly` 20 → 21,
         #   `startframe` 19 → 21, `turnaround` 9 → 10 on the same tree as core-gates' +2 above; the
         #   dict below is MEASURED on the merged tree, never composed.
-        "assembly": 21, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
+        # WAVE 16 — three rows move, COMPOSED from branch measurements posted in the seams
+        # inbox and NOT measured on a merged tree; the coordinator re-measures, as at waves
+        # 10, 12 and 14. This dict is RED on the tests branch, which still reads
+        # assembly 21 / route_gates 39 / turnaround 10.
+        #   assembly    21 → 22  core-solvers (SEAM 11 §2): `gate_no_paid_nodes`'s
+        #                        `class_with_an_unreadable_measurement_date`.
+        #   route_gates 39 → 41  core-gates (SEAM 5 §4): `_unreadable_level` (one raise
+        #                        shared by three container levels) and Gate S's
+        #                        all-`add_noise=disable` andon.
+        #   turnaround  10 → 13  core-solvers (SEAM 11 §2): `gate_set_distinct`'s
+        #                        unreadable-plane refusal, `views_without_pixels` and
+        #                        `adjacent_pair_shapes_differ`.
+        # `aapose` does NOT join this dict: its new raise is `ConventionError`, a plain
+        # refusal with `gate: None`, and this walk counts `GateFailure` subclasses only.
+        # `rig_gates`, `donor_gate` and `parts` are unchanged — core-gates' two new donor
+        # clauses raise from `parts.require_finite`, already a `parts` site.
+        "assembly": 22, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
         "gates": 23, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
-        "rig_gates": 17, "route_gates": 39, "startframe": 21, "turnaround": 10, "walk": 3,
+        "rig_gates": 17, "route_gates": 41, "startframe": 21, "turnaround": 13, "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
     # route_gates 34 -> 35 in the same wave; merged = 155 + 3 + 1 = 159, MEASURED on the merged tree.
@@ -234,7 +250,9 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # WAVE 14 (core-gates, 2026-09-04): gates +1, route_gates +1 -> 170, MEASURED on this
     # branch. The coordinator re-measures at the merge, as at waves 10 and 12.
     # WAVE-14 MERGE (coordinator, 2026-09-04): 170 (core-gates alone) → 174, MEASURED on the merged tree.
-    assert sum(with_gates.values()) == 174
+    # WAVE 16: 174 → 180 (+2 core-gates in `route_gates`, +1 core-solvers in `assembly`,
+    # +3 core-solvers in `turnaround`). COMPOSED, not measured on a merged tree.
+    assert sum(with_gates.values()) == 180
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():
@@ -518,7 +536,19 @@ def test_the_two_dual_based_andons_are_both_kinds_of_refusal_at_once():
         assert cls.gate == gate
         assert str(cls("why", {"gate": gate})).startswith(f"[{gate}] ")
 
+    receipt = {"k": 1}
     for cls in (walk.WalkError, framing.FramingError, glb.MalformedGLB):
         assert issubclass(cls, ArmatureError)
         assert not issubclass(cls, GateFailure)
-        assert cls("m", {"k": 1}).evidence == {"k": 1}
+        # WAVE 16, F-738053cc + rule 5. This loop established that all three are OUTSIDE the
+        # `GateFailure` subtree and then checked only the PASSED path — two lines from where
+        # it could have caught that all three normalised a bare message to `{}` anyway,
+        # which is the one thing the exemption is supposed to distinguish. Both directions
+        # now, and the passed one by IDENTITY: `dict(evidence)` satisfies `==` and publishes
+        # a receipt the raising line never wrote. RED ON THIS BRANCH until core-solvers'
+        # SEAM 4 deletion merges (their `-10` constructors include all three).
+        assert cls("m", receipt).evidence is receipt
+        assert cls("m").evidence is None, (
+            f"{cls.__name__} is outside the `GateFailure` subtree and invents an empty "
+            f"receipt for a bare message; the halt record then reads as a gate that "
+            f"measured nothing instead of a refusal that carried nothing")

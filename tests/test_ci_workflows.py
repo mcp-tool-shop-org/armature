@@ -2451,6 +2451,13 @@ GUARDED_TODAY = [
     # naive call sites the tree does not have, and the correction is asserted rather than
     # trusted. Under `tools/**`, which both triggers already carry. (The list is SORTED;
     # this entry sits above `framing.py` for that reason, not by topic.)
+    # WAVE 16 (core-solvers, SEAM 11 §5): four files their new tests open by path. All four
+    # are under `tools/**`, which BOTH triggers already carry, so no `ci.yml` change is
+    # needed — only this list. RED ON THE tests BRANCH ALONE: those tests live in
+    # `tests/test_amend_w16_core_solvers.py`, which is not in this worktree, so
+    # `paths_the_suite_guards()` reads 53 here and 57 on the merged tree. The list is
+    # SORTED, so each entry sits by name and not by topic.
+    "tools/armature_core/aapose.py",
     "tools/armature_core/blender_scene.py",
     # WAVE-12 MERGE (coordinator, 2026-09-04): `canon.py` opened by path by a wave-12 test; under `tools/**`.
     "tools/armature_core/canon.py",
@@ -2459,6 +2466,8 @@ GUARDED_TODAY = [
     # `render_pose_sticks.py` (instruments-measure's Gate COUNT census) are opened by path by
     # sibling branches' new tests; both under `tools/**`, which both triggers carry.
     "tools/armature_core/glb.py",
+    # WAVE 16 (core-solvers, SEAM 11 §5) — see the note above `aapose.py`.
+    "tools/armature_core/sitelist.py",
     "tools/armature_core/walk.py",
     "tools/armature_index.py",
     # WAVE 16 (builders): five more sources joined, all opened by path by this wave's
@@ -2481,7 +2490,11 @@ GUARDED_TODAY = [
     "tools/gate_saved_graph.py",
     "tools/make_crop_strip.py",
     "tools/make_test_armature.py",
+    # WAVE 16 (core-solvers, SEAM 11 §5) — see the note above `aapose.py`.
+    "tools/measure_cascade_clip.py",
     "tools/render_pose_sticks.py",
+    # WAVE 16 (core-solvers, SEAM 11 §5) — see the note above `aapose.py`.
+    "tools/render_start_frame.py",
     "tools/render_turnaround.py",
     "tools/rig_sheet_compose.py",
     "tools/sheet_compose.py",

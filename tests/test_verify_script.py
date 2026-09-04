@@ -254,6 +254,11 @@ def test_verify_runs_cis_dependency_scan():
     )
 
 
+def _clean_room_count(text):
+    """ROOMS, not tokens: `python -m venv` is the node, in either language."""
+    return len(re.findall(r"-m venv", text))
+
+
 def test_verify_runs_the_package_from_a_clean_install_the_way_ci_does():
     """The leg whose whole point is catching a wheel that does not work."""
     # Read from wherever the leg lives: it moved into `.github/actions/clean-room` so
@@ -267,6 +272,46 @@ def test_verify_runs_the_package_from_a_clean_install_the_way_ci_does():
     assert re.search(r"armature[\"'\s]+check", VERIFY), (
         "verify.ps1 builds a wheel but never runs the installed command from it"
     )
+
+
+def test_the_two_implementations_of_the_packaging_leg_have_the_same_number_of_clean_rooms():
+    """The parity guard keyed on the ROOMS, not on the presence of a token.
+
+    WAVE 16, ci-packaging SEAM 3 + this domain's half of it. The three clauses above —
+    `"-m venv" in clean`, `"-m venv" in VERIFY`, a regex for `armature check` — are each
+    satisfied by ONE room, so the action grew a second one (the sdist room,
+    `clean-room/action.yml:70-72`) and `verify.ps1` kept one, with the suite green.
+    Measured by ci-packaging on `041027c` with `grep -c`: `-m venv` appears twice in the
+    action and once in `verify.ps1`; `.tar.gz` three times in the action and NOT AT ALL in
+    `verify.ps1`. A token-keyed guard cannot see either.
+
+    RED ON THIS BRANCH, deliberately: `verify.ps1` here is still the base's one-room
+    script. ci-packaging's `F-7f129472` adds the sdist room; this is the assertion that
+    holds the two implementations together once it lands, and it names which side is short.
+    """
+    action, script = _clean_room_count(clean_room_script()), _clean_room_count(VERIFY)
+    assert action == script == 2, (
+        f"the clean-room leg has {action} rooms in .github/actions/clean-room/action.yml "
+        f"and {script} in verify.ps1; wave 14 added the sdist room to one implementation "
+        f"and not the other, and every clause keyed on the TOKEN `-m venv` was satisfied "
+        f"by the room that was already there")
+
+
+def test_both_implementations_install_the_sdist_and_then_run_it():
+    """The sdist room's own clause — the one that was ABSENT, not merely uncounted.
+
+    `twine check` reads METADATA and opens no archive, so an sdist that cannot be installed
+    passes it. The room that catches that installs the `.tar.gz` with `--no-deps` and then
+    runs the shim it provides. RED ON THIS BRANCH for `verify.ps1` (ci-packaging's
+    `F-7f129472`); green for the action on both trees.
+    """
+    for impl, text in (("the clean-room action", clean_room_script()),
+                       ("verify.ps1", VERIFY)):
+        assert "--no-deps" in text and ".tar.gz" in text, (
+            f"{impl} never installs the sdist; `twine check` reads METADATA and opens no "
+            f"archive, so a broken sdist reaches PyPI with this leg green")
+        assert re.search(r"armature[\"'\s]+modules", text), (
+            f"{impl} installs the sdist and never runs it")
 
 
 def test_verify_describes_the_legs_it_actually_has():

@@ -456,6 +456,53 @@ def test_the_superseded_render_site_captures_its_status_set_too():
     assert [(fn, ln) for fn, ln, cap in sites if not cap] == [], sites
 
 
+#: The clause a plan-wide render refusal declares in its own receipt. The CLAUSE, not the
+#: prose: `tools/preview_glb.py:166` writes `{"clause": "operator_status", "declined": [...]}`
+#: and a halt reader keys on that string, never on the sentence around it.
+OPERATOR_STATUS_CLAUSE = "operator_status"
+
+
+def _refusal_clause(node):
+    """The `clause` value in a `raise X(msg, {...})`'s evidence dict, or None.
+
+    Reads the dict literal, so rewording the message cannot move it and a message that
+    happens to contain a keyword cannot forge it.
+    """
+    exc = node.exc
+    if not isinstance(exc, ast.Call):
+        return None
+    for arg in list(exc.args) + [kw.value for kw in exc.keywords]:
+        if not isinstance(arg, ast.Dict):
+            continue
+        for key, value in zip(arg.keys, arg.values):
+            if (isinstance(key, ast.Constant) and key.value == "clause"
+                    and isinstance(value, ast.Constant)):
+                return value.value
+    return None
+
+
+def test_the_plan_wide_render_gate_declares_its_clause_and_is_not_found_by_a_word():
+    """The premise the census below now rests on, both directions (wave 16).
+
+    `tools/preview_glb.py` must carry a raise whose evidence declares
+    `clause == "operator_status"`, and a raise whose MESSAGE merely contains the word
+    "declined" must not be mistaken for one — which is what the previous keying did, in a
+    way that let any module with that word in any refusal message escape the per-site
+    requirement entirely.
+    """
+    with open(os.path.join(TOOLS, "preview_glb.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    clauses = [_refusal_clause(n) for n in ast.walk(tree) if isinstance(n, ast.Raise)]
+    assert OPERATOR_STATUS_CLAUSE in clauses, sorted(c for c in clauses if c)
+
+    decoy = ast.parse(
+        'raise SomeGate("the render operator declined 2 of 4 views", {"clause": "elsewhere"})'
+    ).body[0]
+    assert "declined" in ast.unparse(decoy), "the decoy must carry the word"
+    assert _refusal_clause(decoy) != OPERATOR_STATUS_CLAUSE, (
+        "a message containing the word must not read as the operator-status clause")
+
+
 def test_every_captured_render_status_reaches_a_refusal():
     """Capturing a value nobody reads is the shape this wave exists to close.
 
@@ -478,16 +525,27 @@ def test_every_captured_render_status_reaches_a_refusal():
                      if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                      and n.func.id == "_render_status"]
             # A refusal keyed on FINISHED, wherever it is written: an `if` whose test names
-            # it and whose body raises, OR a comprehension that collects the declined views
-            # and a raise that reads it. `preview_glb` is the second shape deliberately —
-            # its shooter RETURNS the status and `gate_previews_written` refuses once over
-            # the whole plan, because a raise inside the shooter would strand a refusal
-            # below the first write (measured; see the wave-14 report).
+            # it and whose body raises, OR a plan-wide gate that refuses with the
+            # OPERATOR-STATUS CLAUSE. `preview_glb` is the second shape deliberately — its
+            # shooter RETURNS the status and `gate_previews_written` refuses once over the
+            # whole plan, because a raise inside the shooter would strand a refusal below
+            # the first write (measured; see the wave-14 report).
+            #
+            # WAVE 16: `plan_gate` used to key on the WORD "declined" appearing anywhere in
+            # the unparsed raise — a prose token in a message string. Two ways that
+            # disarms: reword `preview_glb`'s message and the plan gate vanishes, and — the
+            # dangerous direction — ANY module whose refusal message happens to contain the
+            # word escapes the `len(raises) >= n_sites` requirement entirely and passes with
+            # no status refusal at all. The clause key is the machine-readable thing the
+            # halt record carries and the thing a reader keys on, so that is what this
+            # keys on: `{"clause": "operator_status", ...}` beside a `FINISHED` test.
             raises = [n for n in ast.walk(tree) if isinstance(n, ast.If)
                       and "FINISHED" in ast.unparse(n.test)
                       and any(isinstance(b, ast.Raise) for b in n.body)]
             plan_gate = [n for n in ast.walk(tree)
-                         if isinstance(n, ast.Raise) and "declined" in ast.unparse(n)]
+                         if isinstance(n, ast.Raise)
+                         and _refusal_clause(n) == OPERATOR_STATUS_CLAUSE
+                         and "FINISHED" in ast.unparse(tree)]
             # every site's status must be CAPTURED, and the module must refuse on it
             if len(calls) < n_sites or not (len(raises) >= n_sites or plan_gate):
                 offenders.append((fn, n_sites, len(calls), len(raises), len(plan_gate)))

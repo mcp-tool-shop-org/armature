@@ -208,6 +208,7 @@ def test_no_tool_in_this_domain_raises_the_bare_base_with_an_evidence_argument()
     `raise ArmatureError(msg, {...})` is the shape that silently discards its evidence
     until `ArmatureError` gains a constructor; an AST census over `tools/**` measured
     `stage_render.py:582` as the only one in the tree, and this holds that at zero for the
+    (WAVE 16: `:597` on the merged tree, `:582` here — SEAM 15's measured table.)
     42 modules of this domain.
     """
     offenders = []
@@ -682,13 +683,24 @@ def test_the_three_evidence_dropping_classes_store_what_they_are_passed(module, 
     found exactly these three.
     """
     mod = __import__(module)
-    exc = getattr(mod, cls)("a message", {"line": "abc"})
+    receipt = {"line": "abc"}
+    exc = getattr(mod, cls)("a message", receipt)
     assert isinstance(exc, ArmatureError)
-    assert exc.evidence == {"line": "abc"}
+    # WAVE 16 (rule 5, SEAM 1 clause 2): IDENTITY, not equality. `dict(evidence)` satisfies
+    # `==` and publishes a receipt the raising line never wrote.
+    assert exc.evidence is receipt
     assert str(exc) == "a message" or str(exc).endswith("a message"), str(exc)
     assert not str(exc).startswith("("), str(exc)
-    # the one-argument form the two measure_tracking sites use today still works
-    assert getattr(mod, cls)("just a message").evidence == {}
+    # WAVE 16, rule 5 — FLIPPED from `== {}` to `is None`, and this line is the reason the
+    # coordinator routed the flip here. All three of these classes carried a normalising
+    # `__init__` (`TrackingError` and `AnchorMismatch` inherited one from
+    # `measure_tracking._CarriesEvidence`, which has zero raise sites and is deleted
+    # outright this wave); instruments-measure deleted all of them, and a bare-message
+    # refusal from a de-normalised class stores `None`, which is the honest halt record for
+    # a refusal that carried no receipt at all. Asserting `{}` here was asserting the exact
+    # thing the wave-14 base constructor was landed to separate from it. RED ON THE tests
+    # BRANCH ALONE (the constructors are still present here) and green on the merged tree.
+    assert getattr(mod, cls)("just a message").evidence is None
 
 
 def test_the_clip_read_refusal_carries_the_stream_line_it_could_not_parse(monkeypatch,

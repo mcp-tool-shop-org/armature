@@ -601,7 +601,16 @@ RECORDED_EXPORTERS = [
 #: empty selection, an exporter refusal swallowed upstream — prints its `_OK` line and exits
 #: 0 over an empty output directory, and the census written to make a writer verify its own
 #: output has never looked at the export half of the tree.
-EXPORT_READ_BACK_ROUTED = set(RECORDED_EXPORTERS)
+#:
+#: WAVE 16 — CLOSED and re-derived to EMPTY, not carried. Wave 14 landed
+#: `rig_character.gate_glb_written` at every one of the nine export sites across the eight
+#: tools, and that gate IS the read-back (`os.path.isfile` + `os.path.getsize` + the
+#: exporter's own `FINISHED` status, each raising `GateGlbWritten`). The seven skips this
+#: set gated described a hole that had already been closed; only `rig_character` — the
+#: module that holds the implementation — satisfied the two-token check that produced them.
+#: The set is derived from the property now, so a tool that loses its read-back fails
+#: rather than joining a list.
+EXPORT_READ_BACK_ROUTED = set()
 
 
 def test_the_writer_population_is_derived_and_is_the_one_recorded():
@@ -642,26 +651,92 @@ def test_the_writer_walk_does_not_count_the_exporters_introspection_call():
     assert len(prefix_matched) == 3, len(prefix_matched)
 
 
+#: The ONE implementation of the export read-back, and the module that owns it. Every
+#: exporter either performs the read-back inline or calls this; keying on the two tokens
+#: alone was keying on the shape ONE tool happens to use (wave 16).
+CANONICAL_EXPORT_GATE = ("rig_character.py", "gate_glb_written")
+
+
+def _reads_its_own_export_back(filename):
+    """`(True, how)` if this exporter asks whether the GLB reached disk — either spelling.
+
+    WAVE 16. The predicate was `"os.path.isfile(" in src and "os.path.getsize(" in src`, and
+    seven of the eight exporters skipped on it under a routed-to-a-domain reason.
+    Re-measured on `041027c` in this worktree: **all eight call
+    `rig_character.gate_glb_written`**, which IS the read-back — `rig_character.py:291`
+    `os.path.isfile(p)` and `:296` `os.path.getsize(p)`, plus the operator's own `FINISHED`
+    status, each raising `GateGlbWritten`. Wave 14 landed that gate at every export site
+    (instruments confirmed it in the wave-16 seams inbox), so the skip reasons described a
+    hole that had been closed, and only `rig_character` itself — the module that HOLDS the
+    implementation — satisfied the token check. `make_test_armature.py` and `rig_retopo.py`
+    do not contain the string `os.path.getsize(` at all and were exporting through a gate
+    that does.
+    """
+    src = read_source(filename)
+    _owner, gate = CANONICAL_EXPORT_GATE
+    if gate + "(" in src:
+        return True, f"calls {gate}()"
+    if "os.path.isfile(" in src and "os.path.getsize(" in src:
+        return True, "reads the file back inline"
+    return False, "neither"
+
+
+def test_the_canonical_export_gate_is_the_read_back_and_not_merely_a_name():
+    """The premise `_reads_its_own_export_back` rests on, measured rather than assumed.
+
+    If `gate_glb_written` stopped opening the file, every caller would keep satisfying the
+    property below by calling a gate that no longer checks anything — the disarming shape
+    this wave is about. So the implementation is read here, once, and the tokens are
+    asserted against the module that owns them.
+    """
+    owner, gate = CANONICAL_EXPORT_GATE
+    src = read_source(owner)
+    assert f"def {gate}(" in src, f"{owner} no longer defines {gate}; re-derive this premise"
+    body = src.split(f"def {gate}(", 1)[1].split("\ndef ", 1)[0]
+    assert "os.path.isfile(" in body, f"{gate} no longer asks whether the file is there"
+    assert "os.path.getsize(" in body, f"{gate} no longer asks how big it is"
+    assert "FINISHED" in body, f"{gate} no longer reads the exporter's own status"
+    assert "raise GateGlbWritten" in body, f"{gate} diagnoses without refusing"
+
+
 @pytest.mark.parametrize("filename", RECORDED_EXPORTERS)
 def test_every_exporter_asks_whether_the_glb_it_claims_to_have_written_is_there(filename):
     """The verify-your-own-output property, extended to the export half of the tree.
 
     The exported GLB is this repo's canonical deliverable; a `bpy.ops.export_scene.gltf`
     that writes nothing raises no exception the caller sees.
+
+    WAVE 16: the seven skips this test carried are DELETED, not re-routed. Each skip reason
+    asserted that its tool never asks whether the GLB reached disk; measured here, all eight
+    call the canonical gate that asks, and `EXPORT_READ_BACK_ROUTED` is empty as a result.
     """
-    src = read_source(filename)
-    reads_back = "os.path.isfile(" in src and "os.path.getsize(" in src
-    if not reads_back and filename in EXPORT_READ_BACK_ROUTED:
-        pytest.skip(
-            f"{filename} exports at {_export_call_sites(filename)} and never asks whether "
-            f"the GLB reached disk. Routed 2026-09-04 (F-b777d4a3) to the domain that owns "
-            f"the tool — instruments for author_walk and the rig_* family, core-solvers for "
-            f"lift_solve — and named in EXPORT_READ_BACK_ROUTED; this direction runs against "
-            f"this tool the moment the read-back lands.")
+    reads_back, how = _reads_its_own_export_back(filename)
     assert reads_back, (
         f"{filename} exports at {_export_call_sites(filename)} and never asks whether the "
-        f"GLB reached disk; a wrong filepath, an empty selection or a swallowed exporter "
-        f"refusal produces a success sentinel over an empty directory")
+        f"GLB reached disk — neither inline nor through "
+        f"{CANONICAL_EXPORT_GATE[0]}:{CANONICAL_EXPORT_GATE[1]}; a wrong filepath, an empty "
+        f"selection or a swallowed exporter refusal produces a success sentinel over an "
+        f"empty directory ({how})")
+
+
+def test_the_export_read_back_backlog_is_empty_and_says_so():
+    """F-b777d4a3's routing table, re-derived rather than trusted (wave 16).
+
+    `EXPORT_READ_BACK_ROUTED` was `set(RECORDED_EXPORTERS)` — every exporter — and seven of
+    the eight skipped against it. Wave 14 landed `gate_glb_written` at every export site, so
+    the backlog is empty; a tool that loses its read-back re-enters it by failing the
+    property above, not by being added to a list.
+    """
+    outstanding = sorted(f for f in RECORDED_EXPORTERS
+                         if not _reads_its_own_export_back(f)[0])
+    assert outstanding == [], outstanding
+    assert EXPORT_READ_BACK_ROUTED == set(), sorted(EXPORT_READ_BACK_ROUTED)
+    # …and the spelling that made seven of them look uncovered: only the module that HOLDS
+    # the implementation satisfies the old two-token check.
+    inline = sorted(f for f in RECORDED_EXPORTERS
+                    if "os.path.isfile(" in read_source(f)
+                    and "os.path.getsize(" in read_source(f))
+    assert inline == ["rig_character.py"], inline
 
 
 @pytest.mark.parametrize("filename", [f for f in RECORDED_RENDERERS
