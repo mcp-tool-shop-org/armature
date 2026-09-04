@@ -19,15 +19,24 @@ import json
 import os
 
 import pytest
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 import make_shotset_sheet as MSS
 import sheet_compose
+from conftest import pil_has_a_scalable_font, sheet_font
 
-pytestmark = pytest.mark.skipif(
-    not os.path.isdir(sheet_compose.FONT_DIR),
-    reason=f"no font directory at {sheet_compose.FONT_DIR}",
-)
+# These used to skip on `not os.path.isdir(sheet_compose.FONT_DIR)` — the literal
+# `C:\Windows\Fonts` — so every one of them skipped on every CI run, which is
+# ubuntu-latest. Nothing here needs Windows. The `sheet_fonts` fixture leaves the
+# module's own font resolution alone where it works and falls back to PIL's bundled
+# scalable face where there is no platform font, so the layout arithmetic these files
+# measure runs everywhere. The only remaining gate is a Pillow too old to scale its own
+# default font, which no supported version is.
+pytestmark = [
+    pytest.mark.skipif(not pil_has_a_scalable_font(),
+                       reason="this Pillow cannot produce a scalable font at all"),
+    pytest.mark.usefixtures("sheet_fonts"),
+]
 
 CELL = 1024
 
@@ -53,7 +62,7 @@ def _view(i, az, bbox=(359, 108, 664, 937), armed=True):
 
 
 def _label_px(label):
-    font = ImageFont.truetype(os.path.join(sheet_compose.FONT_DIR, "arial.ttf"), 26)
+    font = sheet_font("arial.ttf", 26)
     return ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(label, font=font)
 
 

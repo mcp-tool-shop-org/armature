@@ -193,3 +193,77 @@ def assert_gate(exc, gate_id, **expected_evidence):
             assert err.evidence[key] == want, (
                 f"[{gate_id}] evidence[{key!r}] is {err.evidence[key]!r}, expected {want!r}")
     return err.evidence
+
+
+# --------------------------------------------------------------------- sheet fonts
+
+#: The two faces `sheet_compose` asks for by name.
+SHEET_REGULAR, SHEET_BOLD = "arial.ttf", "arialbd.ttf"
+
+
+def pil_scalable_fallback(size):
+    """A scalable font PIL itself ships — no platform font, no committed binary.
+
+    `ImageFont.load_default(size)` returns a real FreeTypeFont (Aileron) from Pillow
+    10.1 onward; before that it returned a fixed-size bitmap font that `textlength`
+    cannot scale, which is why the guard below tests the returned object rather than a
+    version number.
+    """
+    from PIL import ImageFont
+
+    return ImageFont.load_default(size)
+
+
+def pil_has_a_scalable_font():
+    try:
+        from PIL import ImageDraw, Image
+
+        a = pil_scalable_fallback(20)
+        b = pil_scalable_fallback(40)
+        ruler = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        return ruler.textlength("MMMM", font=b) > ruler.textlength("MMMM", font=a)
+    except Exception:  # pragma: no cover - ancient Pillow
+        return False
+
+
+@pytest.fixture
+def sheet_fonts(monkeypatch):
+    """Let the sheet composers run on a machine with no platform fonts.
+
+    `sheet_compose.FONT_DIR` is a hard-coded Windows font directory and the two sheet test
+    modules used to skip on `not os.path.isdir(FONT_DIR)` — 23 tests that skipped on
+    EVERY CI run, because CI is `ubuntu-latest` and that directory can never exist there.
+    Nothing about them needs Windows: they compose PIL images and measure text widths,
+    and both files exist for defects found the expensive way (1153 px of label in a
+    1024 px cell that saved, opened and looked finished; a sheet cropping its own
+    measurements off the right edge).
+
+    The substitution is deliberate and narrow. If the module's own resolver produces a
+    font, it is left alone and the tests measure exactly what the module draws with. If
+    it cannot, `_font` is pointed at PIL's bundled scalable face for the duration of the
+    test — so what is exercised is the LAYOUT ARITHMETIC, which is what these files
+    measure, on every platform. Whether `sheet_compose` finds a real font, and whether it
+    refuses by name rather than substituting silently when it cannot, is that module's
+    own contract and belongs in a test of `_font`.
+    """
+    import sheet_compose
+
+    try:
+        sheet_compose._font(SHEET_REGULAR, 26)
+    except Exception:
+        monkeypatch.setattr(sheet_compose, "_font",
+                            lambda name, size: pil_scalable_fallback(size))
+    yield sheet_compose._font
+
+
+def sheet_font(name, size):
+    """The font `sheet_compose` will actually draw with, for a test that must measure it.
+
+    Resolved through the module's own `_font` rather than by rebuilding
+    `os.path.join(FONT_DIR, name)` in the test: the two must agree or a width assertion is
+    comparing one font's metrics against another's, and FONT_DIR is exactly the thing P7
+    replaces.
+    """
+    import sheet_compose
+
+    return sheet_compose._font(name, size)

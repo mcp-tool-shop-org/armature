@@ -14,15 +14,24 @@ import json
 import os
 
 import pytest
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 import sheet_compose
+from conftest import pil_has_a_scalable_font, sheet_font
 
 
-pytestmark = pytest.mark.skipif(
-    not os.path.isdir(sheet_compose.FONT_DIR),
-    reason=f"no font directory at {sheet_compose.FONT_DIR}",
-)
+# These used to skip on `not os.path.isdir(sheet_compose.FONT_DIR)` — the literal
+# `C:\Windows\Fonts` — so every one of them skipped on every CI run, which is
+# ubuntu-latest. Nothing here needs Windows. The `sheet_fonts` fixture leaves the
+# module's own font resolution alone where it works and falls back to PIL's bundled
+# scalable face where there is no platform font, so the layout arithmetic these files
+# measure runs everywhere. The only remaining gate is a Pillow too old to scale its own
+# default font, which no supported version is.
+pytestmark = [
+    pytest.mark.skipif(not pil_has_a_scalable_font(),
+                       reason="this Pillow cannot produce a scalable font at all"),
+    pytest.mark.usefixtures("sheet_fonts"),
+]
 
 
 def _panel(path, w=120, h=80):
@@ -60,7 +69,7 @@ def test_a_label_longer_than_the_panels_widens_the_sheet(tmp_path):
                   "separation   COVERAGE 0.0612   WHOLE margin 26.6px")
     sheet = _run(tmp_path, _spec(tmp_path, label=long_label))
 
-    font = ImageFont.truetype(os.path.join(sheet_compose.FONT_DIR, "arial.ttf"), 26)
+    font = sheet_font("arial.ttf", 26)
     needed = ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(long_label, font=font)
     assert sheet.width >= needed + sheet_compose.PAD, (
         f"the sheet is {sheet.width}px wide and the label needs {needed:.0f}px — it was "
@@ -70,7 +79,7 @@ def test_a_label_longer_than_the_panels_widens_the_sheet(tmp_path):
 def test_a_long_title_widens_the_sheet_too(tmp_path):
     title = "E12 GATE LOOK - the two world treatments, full size, before any upload"
     sheet = _run(tmp_path, _spec(tmp_path, title=title))
-    font = ImageFont.truetype(os.path.join(sheet_compose.FONT_DIR, "arialbd.ttf"), 44)
+    font = sheet_font("arialbd.ttf", 44)
     needed = ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(title, font=font)
     assert sheet.width >= needed + sheet_compose.PAD
 
@@ -79,7 +88,7 @@ def test_a_long_row_title_widens_the_sheet_too(tmp_path):
     row = ("A2w  -  FULL-BLEED PLATE   (floor dropped from the picture; only the shadow "
            "it catches is kept)")
     sheet = _run(tmp_path, _spec(tmp_path, row_title=row))
-    font = ImageFont.truetype(os.path.join(sheet_compose.FONT_DIR, "arialbd.ttf"), 30)
+    font = sheet_font("arialbd.ttf", 30)
     needed = ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(row, font=font)
     assert sheet.width >= needed + sheet_compose.PAD
 
