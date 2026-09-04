@@ -420,11 +420,22 @@ PROBE = textwrap.dedent(
         AS.gate_cascade_topology(wf, 0, [], B.FINAL_BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
                                  "video", expected_sources=[])
 
+    def bareimages():
+        wf = {str(200 + i): {"class_type": "LoadImage", "inputs": {}} for i in range(81)}
+        wf["400"] = {"class_type": "BatchImagesNode",
+                     "inputs": {"images": [[str(200 + i), 0] for i in range(81)]}}
+        AS.gate_slot_ceiling(wf, group_size=AS.GROUP_SIZE)
+
+    def nobatchnode():
+        AS.gate_slot_ceiling({"200": {"class_type": "LoadImage", "inputs": {}}},
+                             group_size=AS.GROUP_SIZE)
+
     out = {"asserts_active": asserts_active, "raised": {}}
     for name, fn in {"ceiling": ceiling, "order": order, "dropped": dropped,
                      "duplicated": duplicated, "paid": paid, "capraise": capraise,
                      "groupsize": groupsize, "slotorder": slotorder,
-                     "emptyframes": emptyframes}.items():
+                     "emptyframes": emptyframes, "bareimages": bareimages,
+                     "nobatchnode": nobatchnode}.items():
         try:
             fn()
             out["raised"][name] = "NO_RAISE"
@@ -576,3 +587,78 @@ def test_a_refused_build_leaves_no_output_directory(tmp_path):
         B.main([f"--uploads={p}", f"--out={out}"])
     assert not out.exists()
     assert not out.parent.exists()
+
+
+# ------------------------------------------------- the ceiling's blind spot and its id
+
+
+def _bare_images_graph(n=81):
+    """The E02 shape: one BatchImagesNode carrying a bare `images` LIST of links.
+
+    `gate_cascade_topology` refuses this outright on the NAMED group nodes; the ceiling
+    walks the WHOLE graph and counted only keys starting `images.image`, so this node
+    contributed zero slots to the measurement the ceiling is.
+    """
+    wf = {str(200 + i): {"class_type": "LoadImage", "inputs": {"image": f"{i}.png"}}
+          for i in range(n)}
+    wf["400"] = {"class_type": "BatchImagesNode",
+                 "inputs": {"images": [[str(200 + i), 0] for i in range(n)]}}
+    return wf
+
+
+def test_a_bare_images_list_is_counted_by_the_ceiling_not_read_as_zero():
+    """F-0f585645. Measured: this graph PASSED with per_node {"400": 0} and the verdict
+    "1 batch node(s), largest carries 0 slot(s), ceiling 27" — the ceiling quoting 0 as
+    its measurement of a node carrying 81 links."""
+    wf = _bare_images_graph(81)
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_slot_ceiling(wf, group_size=AS.GROUP_SIZE)
+    assert exc.value.evidence["per_node"]["400"] == 81
+    assert "more than 27" in str(exc.value)
+
+
+def test_a_bare_images_list_under_the_ceiling_is_still_reported_as_its_real_count():
+    """The count must be the node's real arity in the PASSING direction too, or the number
+    the receipt quotes is still not the thing measured."""
+    wf = _bare_images_graph(3)
+    ev = AS.gate_slot_ceiling(wf, group_size=AS.GROUP_SIZE)
+    assert ev["per_node"]["400"] == 3
+    assert "largest carries 3 slot(s)" in ev["verdict"]
+
+
+def test_the_ceiling_refuses_a_graph_carrying_no_batch_node_at_all():
+    """The sibling gates in this module refuse the empty comparison outright
+    (`gate_cascade_topology` over 0 frames: "A comparison over nothing must not report
+    agreement"). Measured: the ceiling passed a batch-node-free graph with the verdict
+    "0 batch node(s), largest carries 0 slot(s)"."""
+    wf = {str(200 + i): {"class_type": "LoadImage", "inputs": {"image": f"{i}.png"}}
+          for i in range(4)}
+    with pytest.raises(AS.AssemblyGate) as exc:
+        AS.gate_slot_ceiling(wf, group_size=AS.GROUP_SIZE)
+    assert "must not report agreement" in str(exc.value)
+    assert exc.value.evidence["per_node"] == {}
+
+
+def test_every_cascade_gate_raises_an_error_whose_id_matches_its_own_evidence():
+    """F-fb4fc1c0. Both cascade gates set ev["gate"]="CASCADE" and raised `AssemblyGate`,
+    whose class attribute is gate="ASSEMBLY" — and `stage_render` prints `exc.gate`, so a
+    Gate CASCADE failure printed a receipt line reading ASSEMBLY while the builders keyed
+    the same evidence as CASCADE_ceiling / CASCADE_topology.
+    """
+    wf, gids = _graph(81)
+    calls = [
+        lambda: AS.gate_slot_ceiling(wf, cap=99),
+        lambda: AS.gate_slot_ceiling(wf, group_size=81),
+        lambda: AS.gate_slot_ceiling(_bare_images_graph(81), group_size=AS.GROUP_SIZE),
+        lambda: AS.gate_slot_ceiling({}, group_size=AS.GROUP_SIZE),
+        lambda: AS.gate_cascade_topology(wf, 0, [], B.FINAL_BATCH_ID, B.VIDEO_ID,
+                                         B.SAVE_ID, "video", expected_sources=[]),
+        lambda: AS.gate_cascade_topology(wf, 81, gids[:1], B.FINAL_BATCH_ID, B.VIDEO_ID,
+                                         B.SAVE_ID, "video", expected_sources=_srcs(81)),
+    ]
+    for i, call in enumerate(calls):
+        with pytest.raises(AS.AssemblyGate) as exc:
+            call()
+        assert exc.value.gate == "CASCADE", f"call {i}: .gate is {exc.value.gate!r}"
+        assert exc.value.evidence["gate"] == "CASCADE", f"call {i}: evidence disagrees"
+        assert str(exc.value).startswith("[CASCADE]"), f"call {i}: {str(exc.value)[:40]!r}"
