@@ -119,6 +119,20 @@ Two consequences the original §5 did not anticipate:
 §5.3 is unchanged in intent and larger in scope: push the swarm's full stack to `origin/main`
 before the rewrite begins, not one commit.
 
+**The swarm's fifty-one commits were swept for identity defects (2026-09-04) and are clean.** All
+51 carry `mcp-tool-shop <64996768+…>` as both author and committer, and **none is GPG-signed**.
+Two things follow, both of which shrink the executor's uncertainty rather than adding to it:
+
+- **No second phantom.** The defect stays at exactly one commit. §2 does not change.
+- **The permanent cost does not grow.** Signature stripping (§6.3) still claims exactly two
+  badges, `2aefc0b` and `2c25b99`, both from 2026-08 and both on origin already.
+
+**Prediction, to be checked rather than assumed:** after the push, a fresh mirror of origin should
+report **341 commits** (290 + 51) if `main` alone is pushed and the `w5-*` branches are torn down
+rather than published. If the swarm branches are pushed too, the count is higher. Either way the
+five tag re-points in §6.4 are unaffected, because all five tags predate this stack. Re-run
+§6.1–6.2 and read the real number; do not carry 290 or 341 into the force push.
+
 ## 6. The procedure — measured, not proposed
 
 Run in a scratch mirror clone first; that is where the numbers below came from. The advisor ran
