@@ -221,7 +221,14 @@ def main(argv=None):
     # {"frames": 5} with the stale frame in the sha256 manifest and inside both arms of
     # Gate ORDER; a dump whose frame 3 and video never landed printed FETCH_OK
     # {"frames": 4} with 00000,00001,00002,00004 differenced as if consecutive.
-    landed = verify_downloads(jobs, directories=[os.path.join(a.out, "lossless")])
+    #
+    # Wave 8, F-d85dafd9: `root=a.out` as well. This tool passed the single lossless
+    # directory and left `donor<ext>` in the root unswept for exactly the reason `fetch_run`
+    # left its video tap unswept, so a re-fetch into a used --out kept a prior run's donor.
+    # The root is swept for the VIDEO suffixes only, so the four JSON records this tool
+    # writes beside it are not called strays.
+    landed = verify_downloads(jobs, directories=[os.path.join(a.out, "lossless")],
+                              root=a.out)
 
     # The frame population is the PLAN, never a directory listing.
     frames = [os.path.basename(j["out"]) for j in jobs if j["array_index"] is not None]

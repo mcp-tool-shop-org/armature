@@ -684,5 +684,5 @@ def test_both_production_call_sites_pair_the_plan_STRICTLY():
         assert "strict" in kwargs, f"{name} pairs cascade_plan with an un-strict zip"
 
     # And the pairing really does raise on a mismatched length, rather than truncating.
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"zip\(\) argument"):
         list(zip(AS.cascade_plan(81, AS.GROUP_SIZE), ["400", "401"], strict=True))

@@ -475,6 +475,115 @@ def gate_s(graph, registry_path, seed):
                                      "required to be registered")}
 
 
+def _verdict_of(row):
+    """The licence verdict on a `route_gates.components` row, in either row shape.
+
+    Wave 8's core-gates rows carry `verdict` at the top level on BOTH kinds (weight rows
+    keep `ruling` too); the pre-wave-8 shape carried it only under `ruling`. Read here so
+    this call site does not have to know which build of the module it is talking to — the
+    RULING itself is core-gates', never re-derived here.
+    """
+    return row.get("verdict") or (row.get("ruling") or {}).get("verdict")
+
+
+def load_base(path):
+    """The `--base` graph, read through THE loader, or a refusal that names the FORMAT.
+
+    Wave 8, F-562a53f1. This was a bare `json.load`, so neither wrapper unwrapping nor
+    refusal-by-name happened and two wrong-SHAPE inputs refused through the ROUTE clause
+    instead. Measured 2026-09-04 in this repo: a save-format doc (`{'nodes': [...],
+    'links': [], 'last_node_id': 1}`) raised "the baseline does not present one
+    noise-adding sampler starting at step 0 and one noise-free sampler; found {}. This tool
+    only knows the E12 two-expert split-step route" — the operator is told the ROUTE is
+    wrong when the FORMAT is wrong, and `route_gates.is_api_format` on the same doc returns
+    False, i.e. the repo already owns the sentence. A `{'prompt': {...}}`-wrapped API graph
+    carrying a correct two-expert split raised the IDENTICAL message, and that one is a
+    FALSE refusal: `load_graph` unwraps `prompt` (it is in `WRAPPER_KEYS`) and would have
+    handed back exactly the graph this tool wants.
+
+    `gate_saved_graph.main` documents the same boundary for its own `--saved` side; this is
+    that block's shape, on this tool's side of the pipeline.
+    """
+    graph = route_gates.load_graph(path)
+    if not route_gates.is_api_format(graph):
+        keys = sorted(map(str, graph)) if isinstance(graph, dict) else []
+        raise route_gates.RouteGate(
+            f"{path} is not an API-format graph: its values carry no `class_type`. Its "
+            f"top-level keys are {keys}; a `nodes` list means this is the SAVE format, and "
+            f"both formats sit side by side in this pipeline's output directories. The "
+            f"loader unwraps {list(route_gates.WRAPPER_KEYS)}, so the standard submission "
+            f"envelope is read for you — paste the api file, not the .saved.json beside it",
+            {"gate": "ROUTE", "andon": "not_an_api_format_graph",
+             "path": os.path.abspath(path), "top_level_keys": keys,
+             "unwrapped_by_load_graph": list(route_gates.WRAPPER_KEYS),
+             "clause": "not_an_api_format_graph"})
+    return graph
+
+
+def gate_base_licence(graph, path=None):
+    """Gate LICENCE · ANDON — no licence-BANNED node CLASS rides in on an operator's base.
+
+    Wave 8, F-0c05b52e. This is the ONE builder whose graph arrives as a FILE on disk, and
+    it was the only one of the nine with no banned-node-class check at all.
+    `build_animate_payload.py:420`, `build_camera_i2v_payload.py:953` and
+    `build_i2v_payload.py:458` each carry a typed tuple and refuse a graph containing one —
+    but all three build their graphs from their own constants, so that tuple guards a graph
+    nobody else touched.
+
+    Measured 2026-09-04 on the repo's own fixture `tests/fixtures/E12-w3-camera-i2v.api.json`
+    with a `DWPreprocessor` node (id 900, fed by a LoadImage at 901) spliced in:
+    `positive_prompt_from_graph` returned the prompt, `build_arm('T')` copied the node
+    through, `gate_ledger` reported "2 generation-reaching difference(s), all of them the
+    LoRA insertions", `gate_pair_tier` returned its NOT VISIBLE verdict, `gate_s` returned
+    its S evidence, and `route_gates.verify(built, frame=(1024, 576, 81))` returned "6
+    weight file(s), 2 seed(s) all pinned, 1 of 1 latent(s) checkable, 2 frame(s) checked and
+    generator-legal" — every gate green — with `built['900']['class_type']` still
+    `DWPreprocessor` in the graph written out and submitted. Gate ROUTE could not see it:
+    `components()` was keyed on weight FILENAMES and a preprocessor loads none, while
+    `RULED_COMPONENTS['dwpose']` carries verdict BANNED. That is a BANNED-tier preprocessor
+    riding a paid submission past every gate, against the repo's hardest non-negotiable.
+
+    **The census is core-gates' and is CALLED, never re-implemented here.**
+    `route_gates.ruled_node_classes(graph)` reads node `class_type` against
+    `RULED_COMPONENTS` through `RULED_COMPONENT_CLASSES` (a licence row's class aliases —
+    `DWPreprocessor` does not contain the substring "dwpose", which is why the matching is
+    a table and not a `in`), and `components(graph)` returns weight rows and class rows
+    together. So the filter below is one filter over one census: a licence row added to the
+    map tomorrow reaches this gate with no edit here, which the three typed tuples cannot
+    claim. Those tuples stay where they are — three of their five entries (`LoadVideo`,
+    `GetVideoComponents`, `SAM2`, and the two LoRA loader classes on the camera/i2v rows)
+    carry no licence row at all and are ROUTE claims about the graph the spec describes.
+    """
+    banned = [r for r in route_gates.components(graph) if _verdict_of(r) == "BANNED"]
+    ev = {"gate": "ROUTE", "andon": "banned_component_in_base",
+          "path": os.path.abspath(path) if path else None,
+          "banned": [{"kind": r.get("kind"), "file": r.get("file"),
+                      "class_type": r.get("class_type") or r.get("class"),
+                      "node_id": r.get("node_id"), "where": r.get("where"),
+                      "matched_on": r.get("matched_on")
+                      or (r.get("ruling") or {}).get("matched_on"),
+                      "licence": r.get("licence") or (r.get("ruling") or {}).get("licence"),
+                      "reason": r.get("reason") or (r.get("ruling") or {}).get("reason")}
+                     for r in banned],
+          "n_components_examined": len(route_gates.components(graph))}
+    if banned:
+        named = "; ".join(
+            f"{b['class_type'] or b['file']!r} (matched the licence map's "
+            f"{b['matched_on']!r} row — {b['licence']}: {b['reason']})"
+            for b in ev["banned"])
+        raise route_gates.RouteGate(
+            f"the baseline graph {path or ''} carries {len(banned)} component(s) the "
+            f"licence map rules BANNED: {named}. No non-commercially-licensed model, "
+            f"weight, LoRA, preprocessor or code dependency goes anywhere in this "
+            f"pipeline, experiments included, and an experiment concluded on a banned "
+            f"component is a conclusion that has to be thrown away — so it never starts. "
+            f"Nothing is built and no output directory is created",
+            dict(ev, clause="banned_component_in_base"))
+    ev["verdict"] = (f"{ev['n_components_examined']} ruled component(s) read off the "
+                     f"baseline, none BANNED")
+    return ev
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True,
@@ -486,8 +595,11 @@ def main(argv=None):
     add_spend_flags(ap)
     args = ap.parse_args(argv)
 
-    with open(args.base, encoding="utf-8") as fh:
-        base = json.load(fh)
+    base = load_base(args.base)
+    # BEFORE anything is read out of the graph and before `os.makedirs` — a BANNED tier
+    # riding an operator-supplied baseline is the one defect on this path that costs the
+    # whole arc rather than one submission.
+    base_licence = gate_base_licence(base, args.base)
 
     prompt, prompt_nodes = positive_prompt_from_graph(base)
     canon_ev = canon_spend(args.subject, prompt, no_canon=args.no_canon,
@@ -524,7 +636,8 @@ def main(argv=None):
         "attachments": inserts,
         "prompt_nodes": prompt_nodes,
         "gates": {"LEDGER": ledger, "PAIR_TIER": tier, "S": seed_ev, "ROUTE": route,
-                  "CANON": canon_ev, "CANON_graph_text": gate_canon_graph},
+                  "CANON": canon_ev, "CANON_graph_text": gate_canon_graph,
+                  "BASE_LICENCE": base_licence},
         "graph": os.path.abspath(graph_path),
         "graph_sha256": sha256_file(graph_path),
     }

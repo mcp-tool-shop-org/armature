@@ -566,7 +566,7 @@ def test_the_duplicate_clause_reaches_the_topology_gate_too():
     doc = cross_saved(table=[[6, 31, 0, 50, 0, "CONDITIONING"],
                              [6, 30, 0, 50, 0, "CONDITIONING"],
                              [7, 31, 0, 50, 1, "CONDITIONING"]])
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate, match=r"declares link .* TWICE with different"):
         GSG.link_round_trip(CROSS_API, doc)
 
 

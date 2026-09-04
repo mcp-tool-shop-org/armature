@@ -359,3 +359,199 @@ def test_every_gate_s_implementation_in_this_tree_carries_a_gate_id_and_evidence
             call()
         assert exc.value.gate != "G?", f"{call} raises a gate with no id"
         assert exc.value.evidence, f"{call} raises a gate with no evidence"
+
+
+# ---------------- the --base graph goes through the ONE loader (wave 8, F-562a53f1)
+
+
+def _cli(tmp_path, base_doc, out=None):
+    import json as _json
+
+    p = tmp_path / "base.json"
+    p.write_text(_json.dumps(base_doc), encoding="utf-8")
+    out = out or (tmp_path / "fresh" / "run")
+    return [f"--base={p}", "--arm=T", f"--out={out}", f"--seeds-registry={REGISTRY}",
+            f"--seed={SEED}", "--subject", "PERFORMER", "--no-canon"], out
+
+
+def test_a_save_format_base_is_refused_by_a_FORMAT_clause_not_a_route_clause(base,
+                                                                             tmp_path):
+    """The finding. `--base` was a bare `json.load`, so a save-format doc refused through
+    the ROUTE clause: "the baseline does not present one noise-adding sampler starting at
+    step 0 and one noise-free sampler; found {}. This tool only knows the E12 two-expert
+    split-step route" — the operator is told the ROUTE is wrong when the FORMAT is wrong,
+    while `route_gates.is_api_format` on the same doc already answers False. Both formats
+    sit side by side in this pipeline's output directories."""
+    save_doc = {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": ["x"]}],
+                "links": [], "last_node_id": 1}
+    argv, out = _cli(tmp_path, save_doc)
+    with pytest.raises(ArmatureError, match=r"not an API-format graph") as exc:
+        B.main(argv)
+    assert exc.value.evidence["clause"] == "not_an_api_format_graph"
+    assert not out.parent.exists(), "a refused build created its output directory"
+
+
+def test_a_prompt_wrapped_api_base_is_ACCEPTED(base, tmp_path):
+    """The false refusal on the other side of the same clause: the standard submission
+    envelope carries a correct two-expert split, and `load_graph` unwraps `prompt` — it is
+    in `WRAPPER_KEYS`. Before the fix this raised the identical ROUTE message."""
+    argv, out = _cli(tmp_path, {"prompt": base})
+    assert B.main(argv) == 0
+    assert (out / "E14-T-camera-i2v.api.json").exists()
+
+
+def test_the_loader_is_route_gates_load_graph_not_a_second_one(base, tmp_path):
+    """`load_base` returns the SAME object `route_gates.load_graph` does for a bare api
+    file — one loader, and the format clause is the only thing added on top."""
+    import json as _json
+
+    p = tmp_path / "base.json"
+    p.write_text(_json.dumps(base), encoding="utf-8")
+    assert B.load_base(str(p)) == route_gates.load_graph(str(p))
+
+
+# ------- no BANNED node CLASS rides in on an operator's baseline (wave 8, F-0c05b52e)
+
+
+def _with_dwpose(base):
+    """The repo's own E12 fixture with a `DWPreprocessor` spliced in, fed by a LoadImage.
+
+    `DWPreprocessor` is the exact class the served Animate template wires, and the licence
+    map rules its tier (`dwpose`) BANNED — "UNVERIFIED weights tier — treated as NO".
+    """
+    g = copy.deepcopy(base)
+    g["901"] = {"class_type": "LoadImage", "inputs": {"image": "pose.png"}}
+    g["900"] = {"class_type": "DWPreprocessor", "inputs": {"image": ["901", 0]}}
+    return g
+
+
+def test_a_banned_node_CLASS_in_the_base_halts_before_any_directory_exists(base, tmp_path):
+    """The finding, end to end. Measured 2026-09-04 on this exact splice before the gate:
+    `positive_prompt_from_graph` returned the prompt, `build_arm('T')` copied the node
+    through, `gate_ledger` reported "2 generation-reaching difference(s), all of them the
+    LoRA insertions", `gate_pair_tier` returned NOT VISIBLE, `gate_s` returned its S
+    evidence and `route_gates.verify(built, frame=(1024, 576, 81))` returned "6 weight
+    file(s), 2 seed(s) all pinned, 1 of 1 latent(s) checkable, 2 frame(s) checked and
+    generator-legal" — every gate green — with `built['900']['class_type']` still
+    `DWPreprocessor` in the graph written out and submitted.
+
+    SEAM (core-gates -> builders): the class-level census is core-gates'
+    (`route_gates.ruled_node_classes`, surfaced through `components()`), carried here rather
+    than written a second time. On a tree where that census is not present yet this test is
+    the pin that says so.
+    """
+    argv, out = _cli(tmp_path, _with_dwpose(base))
+    with pytest.raises(ArmatureError, match=r"licence map rules BANNED") as exc:
+        B.main(argv)
+    ev = exc.value.evidence
+    assert ev["gate"] == "LICENCE"
+    assert [b["class_type"] for b in ev["banned"]] == ["DWPreprocessor"]
+    assert not out.parent.exists(), "a refused build created its output directory"
+
+
+def test_the_licence_gate_reads_ONE_census_and_fires_on_every_row_shape(base,
+                                                                       monkeypatch):
+    """The call site's own half, independent of which build of `route_gates` is in front of
+    it: the gate is a filter over `components()` — core-gates' single census of weight rows
+    AND class rows — and it refuses any row the map rules BANNED, printing the map's own
+    licence and reason. Stubbing the census proves the filter, the evidence and the halt;
+    the test above proves the whole path."""
+    row = {"kind": "class", "file": None, "class_type": "DWPreprocessor", "node_id": "900",
+           "where": "graph", "verdict": "BANNED", "licence": "weights not fetched",
+           "reason": "UNVERIFIED weights tier — treated as NO", "matched_on": "dwpose"}
+    monkeypatch.setattr(route_gates, "components", lambda g: [row])
+    with pytest.raises(ArmatureError, match=r"licence map rules BANNED") as exc:
+        B.gate_base_licence(base, "some/base.json")
+    assert exc.value.evidence["banned"][0]["matched_on"] == "dwpose"
+    assert "UNVERIFIED weights tier" in str(exc.value)
+
+    # A weight row in the PRE-wave-8 shape (verdict under `ruling`) fires the same filter.
+    old = {"file": "causvid_x.safetensors", "node_id": "12", "class": "LoraLoader",
+           "where": "graph",
+           "ruling": {"verdict": "BANNED", "licence": "CC-BY-NC",
+                      "reason": "non-commercial", "matched_on": "causvid"}}
+    monkeypatch.setattr(route_gates, "components", lambda g: [old])
+    with pytest.raises(ArmatureError, match=r"licence map rules BANNED") as exc:
+        B.gate_base_licence(base, "some/base.json")
+    assert exc.value.evidence["banned"][0]["file"] == "causvid_x.safetensors"
+
+
+def test_the_clean_baseline_passes_the_licence_gate_and_the_record_carries_its_verdict(
+        base, tmp_path):
+    """The mutation that must NOT fire it: the repo's own pinned E12 baseline, and the
+    verdict lands in the payload record beside the other gates rather than only on stdout.
+    """
+    import json as _json
+
+    ev = B.gate_base_licence(base, FIXTURE)
+    assert ev["banned"] == []
+    assert "none BANNED" in ev["verdict"]
+
+    argv, out = _cli(tmp_path, base)
+    assert B.main(argv) == 0
+    record = _json.loads((out / "E14-T-payload-record.json").read_text(encoding="utf-8"))
+    assert record["gates"]["BASE_LICENCE"]["banned"] == []
+
+
+def test_every_builder_puts_its_graph_through_the_licence_census():
+    """The family, derived rather than typed.
+
+    family: derived by AST over `tools/build_*payload*.py` + `tools/gate_saved_graph.py`
+    for a call to `route_gates.verify` / `RG.verify` -> 10 sites — build_animate_payload,
+    build_assembly_payload, build_camera_i2v_payload, build_cascade_payload,
+    build_i2v_payload, build_lora_arm_payload, build_r2v_payload, build_t2v_payload,
+    gate_saved_graph (one call each). `verify()` reads `components()`, which is the census
+    that gained class rows, so every one of them refuses a licence-BANNED node class
+    without a line of its own.
+
+    `build_lora_arm_payload` needed a gate of its own anyway and is the ONE member whose
+    graph arrives as a FILE: its `verify` call runs on the graph it BUILT, after
+    `canon_spend`, so a baseline carrying a banned tier had already been read from and
+    reasoned about. `gate_base_licence` sits immediately after the `--base` load.
+    """
+    import ast
+
+    from conftest import TOOLS
+
+    population = sorted(n for n in os.listdir(TOOLS)
+                        if (n.startswith("build_") and n.endswith("payload.py"))
+                        or n == "gate_saved_graph.py")
+    assert population == [
+        "build_animate_payload.py", "build_assembly_payload.py",
+        "build_camera_i2v_payload.py", "build_cascade_payload.py",
+        "build_i2v_payload.py", "build_lora_arm_payload.py", "build_payload.py",
+        "build_r2v_payload.py", "build_t2v_payload.py",
+        "gate_saved_graph.py"], population
+
+    #: The ONE exemption, named and dated: `build_payload.py` (E02/E03/E06's VACE route)
+    #: predates `route_gates` and gates through `armature_core.gates` instead, so the
+    #: licence census does not reach it through `verify`. The reason is re-derived below
+    #: rather than asserted — the census is run on the graph it actually emits.
+    EXEMPT = {"build_payload.py"}
+    assert EXEMPT <= set(population)
+
+    for name in sorted(set(population) - EXEMPT):
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+        calls = [n for n in ast.walk(ast.parse(src))
+                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                 and n.func.attr == "verify"
+                 and isinstance(n.func.value, ast.Name)
+                 and n.func.value.id in ("route_gates", "RG")]
+        assert calls, f"{name} never puts its graph through route_gates.verify"
+
+    # The exemption's reason, checked rather than trusted: the graph `build_payload` emits
+    # is built entirely from its own module constants, so the census run over it directly
+    # must report nothing the licence map rules BANNED. If a banned weight ever reaches
+    # those constants this fails, exemption or not.
+    import build_payload as bp
+
+    wf, _meta = bp.build("B2", "E03")            # the null arm — no uploads, no reference
+    ruled = route_gates.components(wf)
+    banned = [r for r in ruled
+              if (r.get("verdict") or (r.get("ruling") or {}).get("verdict")) == "BANNED"]
+    assert ruled, "the census read no component at all off build_payload's graph"
+    assert banned == [], banned
+
+    # And the builder that reads a graph off disk checks BEFORE it builds anything.
+    src = open(os.path.join(TOOLS, "build_lora_arm_payload.py"), encoding="utf-8").read()
+    assert src.index("gate_base_licence(base") < src.index("canon_spend(")

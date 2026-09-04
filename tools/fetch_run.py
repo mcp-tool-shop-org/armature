@@ -202,7 +202,15 @@ def download(manifest_path):
     return proc
 
 
-def verify_downloads(jobs, directories=(), suffixes=(".png",)):
+#: The extensions a video tap lands under. The run ROOT is swept for these — a frame
+#: suffix set would not see them, and a root swept for `.png` would call this tool's own
+#: `urls.json` / `*_manifest.json` / `frame_order_evidence.json` strays. Compared
+#: case-INSENSITIVELY, like `SWEEP_FRAME_SUFFIXES`.
+VIDEO_SUFFIXES = (".mp4", ".webm", ".mkv")
+
+
+def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
+                     root_suffixes=VIDEO_SUFFIXES):
     """Gate FETCH · ANDON — the files on disk are the planned files, and nothing else.
 
     Three directions, and the third is wave 6's addition. Missing and zero-length bound
@@ -223,25 +231,49 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",)):
     A job is either this tool's `(url, out)` pair or `fetch_t2v_run`'s dict carrying an
     `out` key — the two fetchers share ONE andon, so it reads both plan shapes rather than
     forcing one of them to be rewritten around the other.
+
+    ⚠ **Two populations sat outside the EXTRA direction until wave 8 (F-d85dafd9).**
+
+    (1) `directories` was only the mapped frame subdirectories, and the VIDEO tap lands in
+    the run ROOT as `<run>_<index><ext>`, which is never among them. Measured 2026-09-04
+    against this rig's real run directories, read-only, by replaying each committed
+    `urls.json` plan back through this function: all 20 non-recovered runs under
+    `outputs/**` PASS a re-fetch of their own plan, and three of them —
+    `outputs/E02/runs/A0r1`, `.../A1b`, `.../A2` — hold an unplanned `*_review_8fps.mp4` in
+    the run root that `main` would report as THIS run's `video` under a green gate_FETCH.
+    `root` closes it, swept for `root_suffixes` so the tool's own JSON records are not
+    called strays. `fetch_t2v_run` left `donor<ext>` unswept for the identical reason.
+
+    (2) The suffix test was `os.path.splitext(name)[1] not in suffixes` — case SENSITIVE —
+    while both frame consumers match case-insensitively (`encode_control.py:126` and
+    `invert_frames.py:70` use `n.lower().endswith('.png')`). Measured with a stubbed run
+    directory: a stale `00099.PNG` beside two planned frames gave `extra=[]` and the
+    verdict "no unplanned file in 1 swept directory(s)", while the consumers' population
+    read `['00000.png', '00001.png', '00099.PNG']`. The andon and its consumers share one
+    population rule now.
     """
     outs = [j["out"] if isinstance(j, dict) else j[1] for j in jobs]
     planned = {os.path.abspath(o) for o in outs}
     missing = sorted(o for o in outs if not os.path.isfile(o))
     empty = sorted(o for o in outs
                    if os.path.isfile(o) and os.path.getsize(o) == 0)
+    swept = [(d, tuple(s.lower() for s in suffixes)) for d in directories]
+    if root:
+        swept.append((root, tuple(s.lower() for s in root_suffixes)))
     extra = []
-    for d in directories:
+    for d, want in swept:
         if not os.path.isdir(d):
             continue
         for name in sorted(os.listdir(d)):
             p = os.path.join(d, name)
-            if not os.path.isfile(p) or os.path.splitext(name)[1] not in suffixes:
+            if not os.path.isfile(p) or os.path.splitext(name)[1].lower() not in want:
                 continue
             if os.path.abspath(p) not in planned:
                 extra.append(p)
     ev = {"planned": len(outs), "missing": missing, "empty": empty, "extra": extra,
           "landed": len(outs) - len(missing),
-          "swept_directories": [os.path.abspath(d) for d in directories]}
+          "swept_directories": [os.path.abspath(d) for d, _ in swept],
+          "swept_suffixes": {os.path.abspath(d): list(w) for d, w in swept}}
     if missing or empty or extra:
         raise FetchHalt(
             f"{len(outs)} file(s) were planned; {len(missing)} never landed, "
@@ -290,7 +322,7 @@ def main(argv=None):
 
     download(manifest)
     mapped = sorted({os.path.join(base, sub) for sub in node_dir.values()})
-    landed = verify_downloads(jobs, directories=mapped)
+    landed = verify_downloads(jobs, directories=mapped, root=base)
 
     # Counted from the PLAN, never from the directory. The two numbers used to be computed
     # from different populations and printed beside each other, so a re-fetch into a
@@ -301,8 +333,12 @@ def main(argv=None):
         sub = os.path.basename(os.path.dirname(os.path.abspath(out)))
         if sub in got:
             got[sub] += 1
-    vids = sorted(n for n in os.listdir(base)
-                  if os.path.splitext(n)[1] in (".mp4", ".webm", ".mkv"))
+    # From the PLAN, like `got` above. This was the last population in this tool read from
+    # the directory: a bare `os.listdir(base)` filtered to the video extensions, so a prior
+    # run's video left in a re-used --out was printed as THIS run's. The video jobs are the
+    # ones the plan writes to the run root itself rather than into a mapped subdirectory.
+    vids = sorted(os.path.basename(o) for _, o in jobs
+                  if os.path.dirname(os.path.abspath(o)) == os.path.abspath(base))
     print("FETCH_RUN " + json.dumps({
         "run": a.run, "dir": base, "by_node": counts, "downloaded": got, "video": vids,
         "gate_FETCH": landed["verdict"]}))

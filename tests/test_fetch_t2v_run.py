@@ -328,3 +328,72 @@ def test_both_downloaders_shell_to_the_same_interpreter(tmp_path, monkeypatch):
     assert seen[0][0] == "pwsh"
     assert T.FetchHalt is F.FetchHalt, "one FetchHalt, not two"
     assert T.verify_downloads is F.verify_downloads, "one plan-to-disk andon, not two"
+
+
+# ---- the sweep reaches the --out ROOT too (wave 8, F-d85dafd9, the sibling's half)
+
+
+def test_a_stale_donor_video_in_the_out_root_halts(tmp_path, monkeypatch, capsys):
+    """`fetch_t2v_run` passed the single lossless directory and left `donor<ext>` in the
+    root unswept for the same reason `fetch_run` left the video tap unswept: `directories`
+    named only the mapped frame subdirectory. A re-fetch into a used `--out` therefore left
+    a prior run's donor in place, and a downstream measurement would be taken on a
+    population that is not this run while the receipt read green."""
+    out = tmp_path / "run"
+    out.mkdir(parents=True)
+    (out / "donor.webm").write_bytes(b"\x1a\x45\xdf\xa3")
+    monkeypatch.setattr(T, "download", _writer())
+    monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
+    with pytest.raises(T.FetchHalt) as exc:
+        T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={out}"])
+    assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["donor.webm"]
+    assert "FETCH_OK" not in capsys.readouterr().out
+
+
+def test_a_stale_differently_cased_frame_halts_here_too(tmp_path, monkeypatch, capsys):
+    """Case-insensitive, the way `encode_control` and `invert_frames` read the same
+    directory. One population rule across the producer andon and its consumers."""
+    out = tmp_path / "run"
+    (out / "lossless").mkdir(parents=True)
+    (out / "lossless" / "00009.PNG").write_bytes(b"\x89PNG\r\n")
+    monkeypatch.setattr(T, "download", _writer())
+    monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
+    with pytest.raises(T.FetchHalt) as exc:
+        T.main([f"--dump={_dump_of(tmp_path, 3)}", f"--out={out}"])
+    assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00009.PNG"]
+    assert "FETCH_OK" not in capsys.readouterr().out
+
+
+def test_the_tools_own_manifests_in_the_root_are_not_strays(tmp_path, monkeypatch, capsys):
+    """The mutation that must NOT fire it: this tool writes four JSON files into the root
+    it now sweeps, and a clause that called them unplanned would refuse every clean run."""
+    monkeypatch.setattr(T, "download", _writer())
+    monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
+    rc = T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={tmp_path / 'run'}"])
+    assert rc == 0
+    assert "FETCH_OK" in capsys.readouterr().out
+
+
+def test_both_fetchers_sweep_the_run_root_through_the_one_andon():
+    """family: derived by AST over every `tools/*.py` call to `verify_downloads` -> 2 sites
+    — tools/fetch_run.py, tools/fetch_t2v_run.py. Both must pass a `root`, and both must
+    reach the SAME function object (the sibling imports it rather than re-writing it)."""
+    import ast
+
+    import fetch_run as F
+    from conftest import TOOLS
+
+    sites = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+        for node in ast.walk(ast.parse(src)):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == "verify_downloads"):
+                sites.append((name, sorted(kw.arg for kw in node.keywords)))
+    assert [s[0] for s in sites] == ["fetch_run.py", "fetch_t2v_run.py"], sites
+    for name, kwargs in sites:
+        assert "root" in kwargs, f"{name} sweeps no run root"
+        assert "directories" in kwargs, f"{name} sweeps no mapped directory"
+    assert T.verify_downloads is F.verify_downloads
