@@ -132,7 +132,52 @@ SCENE_CLAUSE = ("He is dancing in a crowded, warmly lit bar, other people around
 
 
 class PayloadError(ArmatureError):
-    """The payload could not be built as specified."""
+    """The payload could not be built as specified.
+
+    Carries an evidence dict for the same reason every gate in this tree does: a halt with
+    no machine-readable record makes the next session re-derive what fired it.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+#: What each key of `--uploads` IS, so an absence is reported as an absence. Until wave 6
+#: `uploads["pose_pack"]` and `uploads["reference"]` were indexed with no guard at all
+#: (bare `KeyError: 'pose_pack'`, naming neither the file nor the flag, on the route where
+#: the pose pack IS the conditioning), and `uploads.get("pose_frames")` was worse in a
+#: quieter way: a missing key surfaced as "the pose pack declares None frames and the shot
+#: is 81" — a message about a COUNT standing in for a missing key. `build_i2v_payload:476`
+#: and `build_camera_i2v_payload:971` already guard exactly this shape; the fix was never
+#: carried to the tool the other two were derived from.
+UPLOAD_KEYS = {
+    "reference": "the server-side name of the reference image this shot is performed from",
+    "pose_pack": "the server-side name of the lossless animated WebP pose pack, which is "
+                 "this route's whole conditioning",
+    "pose_frames": "how many frames that pose pack declares, checked against the shot "
+                   "length before anything is submitted",
+}
+
+
+def upload_value(uploads, key, source=None):
+    """One entry of the upload map, or a PayloadError naming the file and the key."""
+    if key not in uploads:
+        where = f"{source} " if source else "the upload map "
+        raise PayloadError(
+            f"{where}carries no `{key}` entry: it is {UPLOAD_KEYS[key]}. Pass an "
+            f"--uploads map that names it",
+            {"clause": "missing_upload_key", "key": key,
+             "source": os.path.abspath(source) if source else None,
+             "present": sorted(uploads)})
+    return uploads[key]
+
+
+def require_uploads(uploads, source=None):
+    """Every key this route needs, checked where `--uploads` is read. Returns the map."""
+    for key in UPLOAD_KEYS:
+        upload_value(uploads, key, source)
+    return uploads
 
 
 def parse_args(argv=None):
@@ -218,8 +263,11 @@ def build(uploads, seed, negative, positive, registry, reference_fit,
                                             seed_was_explicit=seed is not None)
     profile = gates.g1_generator_legality(WIDTH, HEIGHT, length, "wan-animate")
 
-    pose_name = uploads["pose_pack"]
-    packed = uploads.get("pose_frames")
+    # Read through the guarded accessor, so a direct `build()` call refuses by name too:
+    # `main` checks the map where --uploads is read, and this is the same check one
+    # implementation deep rather than a second one.
+    pose_name = upload_value(uploads, "pose_pack")
+    packed = upload_value(uploads, "pose_frames")
     if packed != length:
         raise PayloadError(
             f"the pose pack declares {packed} frames and the shot is {length}. The "
@@ -239,7 +287,8 @@ def build(uploads, seed, negative, positive, registry, reference_fit,
               "inputs": {"text": positive, "clip": ["110", 0]}},
         "7": {"class_type": "CLIPTextEncode",
               "inputs": {"text": negative, "clip": ["110", 0]}},
-        "134": {"class_type": "LoadImage", "inputs": {"image": uploads["reference"]}},
+        "134": {"class_type": "LoadImage",
+                "inputs": {"image": upload_value(uploads, "reference")}},
     }
 
     # ONE `LoadImage` on a lossless animated WebP, not N of them into a `BatchImagesNode`.
@@ -303,7 +352,8 @@ def build(uploads, seed, negative, positive, registry, reference_fit,
                     "source": SETTINGS_SOURCE},
         "positive": positive,
         "negative": negative,
-        "reference_image": {"server_name": uploads["reference"], "fit": reference_fit},
+        "reference_image": {"server_name": upload_value(uploads, "reference"),
+                            "fit": reference_fit},
         "pose_video": {"bridge": ("1 x LoadImage on a lossless animated WebP; "
                                   "LoadImage concatenates every frame into one IMAGE "
                                   "batch (ComfyUI/nodes.py, PIL fallback)"),
@@ -384,6 +434,7 @@ def main(argv=None):
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
+    require_uploads(uploads, a.uploads)
 
     registry = None
     if a.seeds_registry:

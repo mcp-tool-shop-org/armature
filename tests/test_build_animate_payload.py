@@ -258,3 +258,57 @@ def test_the_zero_fallback_is_gone():
 
     code = [ln.split("#", 1)[0] for ln in inspect.getsource(BAP.build).splitlines()]
     assert "else 0" not in " ".join(code)
+
+
+# ------------------------------ the upload map's keys, named (wave 6, F-ec05d8dc)
+
+
+@pytest.mark.parametrize("key", ["pose_pack", "reference", "pose_frames"])
+def test_an_upload_map_missing_a_key_names_the_key_rather_than_raising_keyerror(key):
+    """`uploads["pose_pack"]` and `uploads["reference"]` were indexed with no guard, so an
+    upload map missing either produced a bare `KeyError: 'pose_pack'` naming neither the
+    file nor the flag — on the E08 Animate route, where the pose pack IS the conditioning.
+    The adjacent `uploads.get("pose_frames")` was worse in a quieter way: its absence
+    surfaced as "the pose pack declares None frames and the shot is 81", a message about a
+    COUNT standing in for a missing key. `build_i2v_payload:476` and
+    `build_camera_i2v_payload:971` guard the same shape explicitly, and the fix was never
+    carried to the tool the other two were derived from."""
+    missing = {k: v for k, v in UPLOADS_81.items() if k != key}
+    with pytest.raises(BAP.PayloadError) as exc:
+        BAP.build(missing, 2026081221, NEG, POS, E10_SEEDS, "letterbox",
+                  experiment="E10", length=81, fps=20.0)
+    assert key in str(exc.value)
+    assert exc.value.evidence["key"] == key
+
+
+def test_a_complete_upload_map_still_builds():
+    """The mutation that must NOT fire it."""
+    wf, _ = e10()
+    assert wf["200"]["inputs"]["image"] == "pack.png"
+    assert wf["134"]["inputs"]["image"] == "ref.png"
+
+
+def test_a_wrong_frame_count_still_reports_a_count_not_a_missing_key():
+    """The two messages stay distinguishable: a key that IS there and disagrees is a count
+    problem, and it must not be reported as an absence."""
+    with pytest.raises(BAP.PayloadError) as exc:
+        BAP.build(dict(UPLOADS_81, pose_frames=65), 2026081221, NEG, POS, E10_SEEDS,
+                  "letterbox", experiment="E10", length=81, fps=20.0)
+    assert "declares 65 frames" in str(exc.value)
+
+
+def test_main_names_the_file_beside_the_key(tmp_path):
+    """The message shape build_i2v_payload already uses: name the file, name the key."""
+    import json
+
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps({"reference": "ref.png", "pose_frames": 81}),
+                  encoding="utf-8")
+    neg = tmp_path / "neg.yaml"
+    neg.write_text("sample_neg_prompt: 'blurry'\n", encoding="utf-8")
+    with pytest.raises(BAP.PayloadError) as exc:
+        BAP.main(["--uploads", str(up), "--out", str(tmp_path / "fresh"),
+                  "--negative-source", str(neg), "--subject", "BLACKGUARD", "--no-canon"])
+    assert "pose_pack" in str(exc.value)
+    assert str(up) in str(exc.value)
+    assert not (tmp_path / "fresh").exists()

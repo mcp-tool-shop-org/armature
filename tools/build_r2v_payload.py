@@ -167,6 +167,28 @@ def main(argv=None):
     add_spend_flags(ap)
     a = ap.parse_args(argv)
 
+    # Each arm needs exactly one of these, and until wave 6 neither requirement was
+    # enforced or reported: both flags default to None, `--arm A1` opened `a.refs` and
+    # `--arm A2` opened `a.uploads`, and an omitted flag arrived as
+    # `TypeError: expected str, bytes or os.PathLike object, not NoneType` — no typed
+    # error, no flag named, no arm named — AFTER Gate CANON and Gate S had already passed.
+    # The check runs on the invocation itself, before anything is read.
+    # `build_camera_i2v_payload.resolve_start_frame` is the shape carried: name the flag,
+    # name what the file is for.
+    ARM_INPUT = {"A1": ("--refs", "refs",
+                        "the reference record JSON whose views become this arm's "
+                        "reference image slots"),
+                 "A2": ("--uploads", "uploads",
+                        "the frame uploads map JSON the in-graph cascade assembles the "
+                        "reference VIDEO from")}
+    flag, attr, what = ARM_INPUT[a.arm]
+    if not getattr(a, attr):
+        raise RG.RouteGate(
+            f"arm {a.arm} needs {flag}: it is {what}, and this arm cannot be built "
+            f"without it. The omission used to surface as a NoneType traceback from "
+            f"`open`, two gates later",
+            {"arm": a.arm, "flag": flag, "clause": "missing_arm_input"})
+
     out = os.path.abspath(a.out)
 
     with open(a.seeds, encoding="utf-8") as fh:
