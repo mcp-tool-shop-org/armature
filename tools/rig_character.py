@@ -227,15 +227,67 @@ class GateGlbWritten(GateFailure):
     path - carried rather than reinvented, and it lives here because every rig tool already
     imports this module. It returns the digest so the caller records the file it actually
     confirmed, rather than hashing the path a second time.
+
+    WAVE 14, F-6a9a0f72 - THE OPERAND. The class above named the status set in its own
+    docstring and its own refusal message; the gate never read one. The whole check was
+    `os.path.isfile` then `getsize == 0`, two properties a PREVIOUS run's GLB at the same
+    path satisfies. Measured: 4,004 bytes written to `<tmp>/hero_bone_heat.glb` with plain
+    Python, then `gate_glb_written(p, what='the rigged GLB')` in a process that had exported
+    nothing returned a PASS record with a sha256 - a digest, a byte count and a verdict for
+    a file that process never wrote. Nine `bpy.ops.export_scene.gltf` sites and fourteen
+    `bpy.ops.render.render` sites in `tools/` discarded their return value; the correct
+    shape sat twenty-five lines above one of them (`rig_bake.py:260`,
+    `if 'FINISHED' not in result: raise BakeEmpty(...)` on `bpy.ops.object.bake`).
+
+    So the gate now takes two REQUIRED keyword arguments and there are no defaults for
+    them - a default is exactly the hole this finding is about:
+
+    * `result` - the operator status set the export returned. Clause 1 refuses anything
+      that is not a readable set containing `FINISHED`, with the set in the evidence.
+    * `before` - `export_target_snapshot(path)` taken BEFORE the export ran. Clause 4
+      refuses a file whose size AND `mtime_ns` are unchanged, which is the previous run's
+      GLB sitting where this run's was supposed to land.
     """
 
     gate = "GLB"
 
 
-def gate_glb_written(path, *, what="the exported GLB"):
-    """`{"path", "bytes", "sha256", "verdict"}` for a GLB that reached disk, else raise."""
+def export_target_snapshot(path):
+    """What is at `path` before an export runs, so a file this run did not write is visible.
+
+    Taken BEFORE `bpy.ops.export_scene.gltf`, and read by `gate_glb_written`'s fourth
+    clause. `mtime_ns` rather than `mtime`: the float seconds a `stat` reports are rounded,
+    and two writes inside one tick would compare equal.
+    """
     p = os.path.abspath(path)
-    ev = {"gate": "GLB", "andon": "GateGlbWritten", "what": what, "path": p}
+    if not os.path.isfile(p):
+        return {"path": p, "existed": False, "bytes": None, "mtime_ns": None}
+    st = os.stat(p)
+    return {"path": p, "existed": True, "bytes": st.st_size, "mtime_ns": st.st_mtime_ns}
+
+
+def gate_glb_written(path, *, result, before, what="the exported GLB"):
+    """`{"path", "bytes", "sha256", "status", "verdict"}` for a GLB this run wrote, else raise.
+
+    `result` is the export operator's status set and `before` is
+    `export_target_snapshot(path)` taken before it ran. Both are required: see the class
+    docstring above for why neither has a default.
+    """
+    p = os.path.abspath(path)
+    try:
+        status = sorted(str(s) for s in result)
+    except TypeError:
+        status = None
+    ev = {"gate": "GLB", "andon": "GateGlbWritten", "what": what, "path": p,
+          "status": status, "before": before}
+    # CLAUSE 1 - the operator's own verdict, which this gate named and never read. The
+    # shape is `rig_bake.py`'s `if 'FINISHED' not in result` on `bpy.ops.object.bake`.
+    if status is None or "FINISHED" not in status:
+        raise GateGlbWritten(
+            f"the export of {what} to {p} did not report FINISHED; it returned "
+            f"{status!r}. `bpy.ops.export_scene.gltf` returns an operator status set and "
+            f"can return CANCELLED without raising, and an existing file at this path is "
+            f"then the PREVIOUS run's GLB", ev)
     if not os.path.isfile(p):
         raise GateGlbWritten(
             f"{what} never reached disk at {p}. `bpy.ops.export_scene.gltf` returns an "
@@ -248,8 +300,19 @@ def gate_glb_written(path, *, what="the exported GLB"):
             f"{what} at {p} is zero bytes. A file that exists and holds nothing is the "
             f"shape a cancelled export leaves behind, and every consumer downstream reads "
             f"the path rather than the size", ev)
+    # CLAUSE 4 - the weaker guard that costs nothing. A file whose size AND nanosecond
+    # mtime are both what they were before the export is the file that was already there.
+    after_mtime_ns = os.stat(p).st_mtime_ns
+    ev["after"] = {"bytes": n, "mtime_ns": after_mtime_ns}
+    if (before and before.get("existed")
+            and before.get("bytes") == n and before.get("mtime_ns") == after_mtime_ns):
+        raise GateGlbWritten(
+            f"{what} at {p} is byte-for-byte the file that was already there before this "
+            f"export ran (same size, same mtime to the nanosecond). A manifest naming its "
+            f"sha256 would describe a pairing that was never built together, and every "
+            f"downstream instrument would measure that pairing", ev)
     digest = sha256_file(p)
-    return {"path": p, "bytes": n, "sha256": digest,
+    return {"path": p, "bytes": n, "sha256": digest, "status": status,
             "verdict": f"{what} is {n:,} bytes on disk"}
 
 
@@ -730,7 +793,9 @@ def weld_seam_splits(mesh_obj):
     """
     import bmesh as _bmesh
     src = world_verts(mesh_obj)
-    diagonal = float(np.linalg.norm(src.max(0) - src.min(0)))
+    # SIBLING CARRIED under F-6a9a0f72 (wave 14). Gate SCALE, at the fourth of six
+    # bbox-diagonal derivations -- the weld distance below is a fraction of this number.
+    diagonal, _lo, _hi = subject_scale(src, "atlas_safe_weld")
     bm = _bmesh.new()
     bm.from_mesh(mesh_obj.data)
     before_v = len(bm.verts)
@@ -1118,8 +1183,13 @@ def export_rigged(ctx, probe, out_path, animated=True):
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
     dropped = sorted(set(wanted) - set(kwargs))
-    bpy.ops.export_scene.gltf(**kwargs)
-    written = gate_glb_written(out_path, what="the rigged GLB")
+    # WAVE 14, F-6a9a0f72: snapshot before, status set captured. This is the export whose
+    # manifest is the tree's central artefact -- a PASS record here names the sha256 and
+    # byte count every downstream instrument measures against.
+    before_glb = export_target_snapshot(out_path)
+    export_result = bpy.ops.export_scene.gltf(**kwargs)
+    written = gate_glb_written(out_path, result=export_result, before=before_glb,
+                               what="the rigged GLB")
 
     # Re-import into a throwaway scene and read the names a consumer would actually get.
     fresh_scene(PROBE_FPS)
@@ -1247,7 +1317,11 @@ def run_skeleton(args, out_dir, source_sha, started):
     manifest = {
         "tool": "rig_character", "tool_version": TOOL_VERSION, "mode": "skeleton",
         "tool_sha256": _tool_hashes(),
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started)),
         "elapsed_s": round(time.time() - started, 2),
         "source": {"path": args["glb"], "sha256": source_sha,
@@ -1331,7 +1405,9 @@ def main():
                          bind=args["binding"], envelope_radii=args["envelope_radii"])
         rec = {
             "tool": "rig_character", "tool_version": TOOL_VERSION, "mode": "measure-only",
-            "blender": bpy.app.version_string, "source": args["glb"],
+            # WAVE 14, F-252f399d -- see the note on the sibling manifests above.
+            "blender": blender_scene.blender_provenance(),
+            "source": args["glb"],
             "source_sha256": source_sha,
             "premise_2_pre_existing_rig": ctx["premise2"],
         "weld_on_import": ctx["weld_on_import"],
@@ -1420,7 +1496,11 @@ def main():
         "joint_ball_offset_table": ctx["offset_table"],
         "placement_ruling": ctx["placement_ruling"],
         "tool_sha256": _tool_hashes(),
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started)),
         "elapsed_s": round(time.time() - started, 2),
         "source": {"path": args["glb"], "sha256": source_sha,
@@ -1505,7 +1585,11 @@ def _write_halt(out_dir, exc, source_sha, glb):
         "exception": type(exc).__name__,
         "message": str(exc),
         "evidence": getattr(exc, "evidence", None),
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "source": {"path": glb, "sha256": source_sha},
         "outputs_not_produced": ["<name>_rigged.glb", "rig_manifest.json"],
         "note": (("Nothing downstream of the gate ran. No rigged GLB exists, no manifest "

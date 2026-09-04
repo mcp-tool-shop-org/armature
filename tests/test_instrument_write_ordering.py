@@ -539,7 +539,11 @@ def test_the_nine_tools_the_name_keyed_walk_could_not_see_are_in_the_population_
     # `gate_clip_rate` (a `gate_` name) in the same wave, so the name-keyed walk sees it too; eight remain.
     # `rig_bake`, `rig_repair`, `rig_retopo` LEFT too — instruments gave each `gate_glb_written`
     # (a `gate_` name, F-9b2d4106); five remain invisible to the name-keyed walk on the merged tree.
-    joined = ["extract_clip_frames", "make_parts_sheet", "make_rig_sheet",
+    # WAVE 14 (instruments, F-4db23b72): `make_rig_sheet` LEFT. `import_reference` was its
+    # one stranded refusal and BOTH of that function's clauses now fire above the first
+    # write, so it strands nothing; four remain. The list is what it MEASURES, and an entry
+    # that stops stranding is deleted by the commit that moves it.
+    joined = ["extract_clip_frames", "make_parts_sheet",
               "make_shotset_sheet", "preview_walk"]
     pop = derive_population()
     for name in joined:

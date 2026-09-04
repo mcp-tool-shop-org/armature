@@ -366,7 +366,13 @@ def test_a_fired_turnaround_andon_carries_the_measurement_that_fired_it():
 
 
 def test_every_turnaround_raise_site_passes_an_evidence_dict():
-    """The class being right is half of it. Five sites passed a message only."""
+    """The class being right is half of it. Five sites passed a message only.
+
+    RE-DERIVED 2026-09-04 (wave 14, instruments): 5 -> 7. The two new sites are
+    `select_engine`'s exhausted-candidates refusal (F-0bf74152) and the render operator's
+    non-FINISHED status set (F-6a9a0f72); both carry an evidence dict, which is what this
+    census is about. The number is re-measured rather than re-typed, per the wave-14 rule.
+    """
     import ast
 
     from blender_stub import read_source
@@ -376,7 +382,7 @@ def test_every_turnaround_raise_site_passes_an_evidence_dict():
              if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
              and isinstance(n.exc.func, ast.Name)
              and n.exc.func.id == "RenderTurnaroundGate"]
-    assert len(sites) == 5, [n.lineno for n in sites]
+    assert len(sites) == 7, [n.lineno for n in sites]
     bare = [n.lineno for n in sites if len(n.exc.args) < 2]
     assert bare == [], (
         f"RenderTurnaroundGate raised with a message only at lines {bare}; the halt record "

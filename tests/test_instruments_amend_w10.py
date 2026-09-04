@@ -733,6 +733,13 @@ def _counted_payload_terms(filename):
 
 #: Derived 2026-09-04: the Blender-side tools whose success payload reports a count.
 RECORDED_COUNTING_SUCCESS_LINES = [
+    # WAVE 14 (instruments, F-7e7703cb): `diagnose_bone_heat` JOINED. Its success line was
+    # `print("DIAGNOSE_BONE_HEAT_OK " + path)` -- a bare path, so it counted nothing and was
+    # outside this population; it now reports n_arms / n_arms_with_weight / best_arm from the
+    # sweep's own records. Deliberately NO refusal on an all-zero sweep (an all-zero result is
+    # a legitimate finding for a diagnostic), so it is exempt from the guard clause below for
+    # that stated reason.
+    "diagnose_bone_heat.py",
     "lift_solve.py", "make_parts_sheet.py", "make_rig_sheet.py", "preview_walk.py",
     # WAVE-12 MERGE (coordinator, 2026-09-04): `probe_subject` LEFT — its payload is now
     # `{"n_probed","n_measured","n_errors","json"}` computed from a population guarded by
@@ -747,6 +754,20 @@ RECORDED_COUNTING_SUCCESS_LINES = [
 #: refusal leaves this set, and a NEW counting success line with no guard fails loudly.
 # WAVE-12 MERGE (coordinator, 2026-09-04): EMPTY — the routed guard landed (F-5b3ead49).
 COUNTED_SUCCESS_WITHOUT_A_GUARD_ROUTED = set()
+
+#: Tools whose zero IS THE FINDING, so a refusal on it would delete the result the tool
+#: exists to produce. Named and dated 2026-09-04 (wave 14, instruments, F-7e7703cb):
+#: `diagnose_bone_heat` sweeps twelve binding arms to answer whether bone-heat binds this
+#: subject at all, and a sweep in which every arm weighted zero vertices is the exact
+#: condition it was written to investigate -- the tool is working correctly there.
+#:
+#: The exemption is checked against its REASON, not granted by name: the member's success
+#: payload must carry an explicit boolean naming the zero case, so a reader (or a scripted
+#: caller) can tell "the sweep found nothing" from "the harness failed" without opening the
+#: JSON. A counting success line that does neither -- no guard AND no flag -- still fails.
+COUNTED_SUCCESS_WHERE_ZERO_IS_THE_FINDING = {
+    "diagnose_bone_heat.py": "all_arms_weighted_nothing",
+}
 
 
 def _guards_the_count(filename, counted):
@@ -856,6 +877,23 @@ def test_a_success_line_that_reports_a_count_is_guarded_against_an_empty_one(fil
             f"cannot be 0 and a guard against an empty one would be a check that cannot "
             f"fire. Measured by `_count_is_structurally_nonzero`, not granted by hand.")
     guarded = _guards_the_count(filename, terms)
+    flag = COUNTED_SUCCESS_WHERE_ZERO_IS_THE_FINDING.get(filename)
+    if flag is not None:
+        # THE REASON, checked. The exemption holds only while the payload actually carries
+        # the boolean that separates "found nothing" from "did nothing".
+        import ast as _ast
+
+        from blender_stub import read_source as _read
+
+        tree = _ast.parse(_read(filename))
+        printed = [_ast.unparse(n) for n in _ast.walk(tree)
+                   if isinstance(n, _ast.Call) and getattr(n.func, "id", "") == "print"
+                   and "_OK" in _ast.unparse(n)]
+        assert any(flag in t for t in printed), (
+            f"{filename} is exempt because its zero is a finding, and the exemption "
+            f"requires the success line to carry {flag!r} so the two cases read "
+            f"differently. It does not.")
+        return
     if not guarded and filename in COUNTED_SUCCESS_WITHOUT_A_GUARD_ROUTED:
         pytest.skip(
             f"{filename} prints a success line reporting {terms} and no refusal in the "
@@ -907,9 +945,35 @@ def _writes_nothing():
     ("make_parts_sheet.py", "PartsSheetGate"),
 ])
 def test_a_sheet_shoot_that_wrote_no_file_raises_its_own_gate(filename, gate_name, tmp_path):
+    """WAVE 14, F-6a9a0f72: a `{'CANCELLED'}` return is now refused by the STATUS clause,
+    which runs before the file clauses -- it is the only one of the three that can tell a
+    declined render from a stale file at the same path. The file clause is exercised
+    separately below, on a FINISHED render that wrote nothing."""
     mod = load_tool(filename)
     gate = getattr(mod, gate_name)
     mod.bpy.ops.render.render.side_effect = lambda **kw: _writes_nothing()
+    path = str(tmp_path / "panel.png")
+    args = (mod.bpy.context.scene, path)
+    if filename == "make_skeleton_sheet.py":
+        args = args + (False,)
+    with pytest.raises(gate) as caught:
+        mod.shoot(*args)
+    assert caught.value.evidence["path"] == os.path.abspath(path)
+    assert caught.value.evidence["clause"] == "operator_status"
+    assert caught.value.evidence["status"] == ["CANCELLED"]
+
+
+@pytest.mark.parametrize("filename,gate_name", [
+    ("make_skeleton_sheet.py", "SkeletonSheetGate"),
+    ("make_binding_sheet.py", "BindingSheetGate"),
+    ("make_parts_sheet.py", "PartsSheetGate"),
+])
+def test_a_sheet_shoot_that_reported_finished_and_wrote_nothing_still_raises(
+        filename, gate_name, tmp_path):
+    """The F-51c5e0ef clause, kept reachable behind the new status clause."""
+    mod = load_tool(filename)
+    gate = getattr(mod, gate_name)
+    mod.bpy.ops.render.render.side_effect = lambda **kw: {"FINISHED"}
     path = str(tmp_path / "panel.png")
     args = (mod.bpy.context.scene, path)
     if filename == "make_skeleton_sheet.py":
@@ -931,7 +995,11 @@ def test_a_sheet_shoot_that_wrote_a_zero_byte_file_raises_too(filename, gate_nam
     mod = load_tool(filename)
     gate = getattr(mod, gate_name)
     path = str(tmp_path / "panel.png")
-    mod.bpy.ops.render.render.side_effect = lambda **kw: open(path, "wb").close()
+    def _empty_file(**kw):
+        open(path, "wb").close()
+        return {"FINISHED"}                 # WAVE 14: past the status clause, into the size one
+
+    mod.bpy.ops.render.render.side_effect = _empty_file
     args = (mod.bpy.context.scene, path)
     if filename == "make_skeleton_sheet.py":
         args = args + (False,)
@@ -945,7 +1013,11 @@ def test_a_sheet_shoot_that_wrote_a_real_file_returns_its_path(filename, tmp_pat
     """The other direction: the gate may not fire on the happy path."""
     mod = load_tool(filename)
     path = str(tmp_path / "panel.png")
-    mod.bpy.ops.render.render.side_effect = lambda **kw: open(path, "wb").write(b"PNG")
+    def _real_file(**kw):
+        open(path, "wb").write(b"PNG")
+        return {"FINISHED"}
+
+    mod.bpy.ops.render.render.side_effect = _real_file
     args = (mod.bpy.context.scene, path)
     if filename == "make_skeleton_sheet.py":
         args = args + (False,)
@@ -973,7 +1045,11 @@ def test_preview_glb_refuses_when_a_planned_view_never_reached_disk(tmp_path):
     empty.write_bytes(b"")
     missing = tmp_path / "c.png"
     with pytest.raises(mod.PreviewGlbGate) as caught:
-        mod.gate_previews_written([str(good), str(empty), str(missing)])
+        # WAVE 14, F-6a9a0f72: the gate now takes `(path, status)` pairs, because the
+        # operator's status set is the only clause that tells an empty directory from a
+        # stale one. A FINISHED status is passed here so the file clauses are what fires.
+        mod.gate_previews_written([(str(good), ["FINISHED"]), (str(empty), ["FINISHED"]),
+                                   (str(missing), ["FINISHED"])])
     ev = caught.value.evidence
     assert [os.path.basename(p) for p in ev["missing"]] == ["c.png"], ev
     assert [os.path.basename(p) for p in ev["empty"]] == ["b.png"], ev
@@ -986,7 +1062,7 @@ def test_preview_glb_is_satisfied_by_four_real_files(tmp_path):
     for name in ("full_a", "full_b", "head_a", "head_b"):
         p = tmp_path / (name + ".png")
         p.write_bytes(b"PNG")
-        paths.append(str(p))
+        paths.append((str(p), ["FINISHED"]))
     assert mod.gate_previews_written(paths)["planned"] == 4
 
 

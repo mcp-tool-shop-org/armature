@@ -64,8 +64,16 @@ def rt():
         # Everything that was first imported UNDER the stub goes with it. Anything else
         # would leave a module the next test can import only because Blender was faked
         # for it — the reading `armature check` exists to make honestly.
+        # WAVE 14 (instruments, F-267361f5): a `tools/` module by NAME goes too, not only
+        # `armature_core`. `render_turnaround` now imports `render_start_frame` for the one
+        # `require_frame_size`, and that module lands in `sys.modules` under the stub and
+        # stayed there — the exact leak this teardown exists to stop, one level out.
+        # `blender_stub.blender_stubbed`'s teardown already keyed on both; this is the one
+        # rule, carried rather than re-derived.
+        _tool_names = {fn[:-3] for fn in os.listdir(TOOLS) if fn.endswith(".py")}
         for name in sorted(set(sys.modules) - before):
-            if name == "armature_core" or name.startswith("armature_core."):
+            root = name.split(".", 1)[0]
+            if root == "armature_core" or root in _tool_names:
                 gone = sys.modules.pop(name, None)
                 # The registry entry is not the only binding: importing `armature_core.x`
                 # also sets `x` as an attribute of the package, and `from armature_core

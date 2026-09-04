@@ -124,6 +124,66 @@ PLATE_MIN_SEPARATION_255 = 4.0
 FRAMING_CLOUD_CAP = 1500
 
 
+#: The engine identifiers this tool will accept, in the order it tries them.
+#:
+#: WAVE 14, F-0bf74152. This module pinned the single literal `'BLENDER_EEVEE'`. The
+#: candidate list exists in the four SHEET tools precisely because that identifier is not
+#: stable across Blender versions, and their `except TypeError: continue` is this repo's own
+#: recorded evidence that an invalid enum name RAISES rather than being ignored -- so on a
+#: Blender where the other spelling is the live one, the diagnostic sheets kept working and
+#: the four tools whose pixels become control sequences and reference stacks died with an
+#: untyped `TypeError`, recorded by the halt contract as "FAILED - an unhandled error" at
+#: exit 1 naming a bpy property assignment. The order is the sheets' order, so a sheet and
+#: a render made beside each other cannot be drawn by different engines.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+def select_engine(scene, candidates=ENGINE_CANDIDATES):
+    """Set the render engine and RETURN the one actually set, else raise.
+
+    Carried from `preview_glb.select_engine` (F-bba38f1c) rather than reinvented: the loop
+    has an `else` branch, because a loop that completes without setting anything leaves the
+    render on whatever the factory settings put there with no field in any record able to
+    say so. `armature_core.blender_scene` is where the one implementation belongs and is
+    outside this domain's globs, so the lift is FILED, not done.
+    """
+    for eng in candidates:
+        try:
+            scene.render.engine = eng
+        except TypeError:
+            continue
+        return eng
+    raise RenderGate(
+        "none of the candidate render engines is valid on this Blender, so the render "
+        "would be drawn by whatever the factory settings left in place",
+        {"clause": "engine", "candidates": list(candidates),
+         "blender": bpy.app.version_string})
+
+
+def _render_status(result):
+    """The render operator's status set as a sorted list of strings, `[]` if unreadable.
+
+    WAVE 14, F-6a9a0f72. `bpy.ops.render.render(write_still=True)` returns an operator
+    STATUS SET and can return `{'CANCELLED'}` without raising -- the premise this repo
+    recorded in wave 12 and then read at none of its 14 render call sites. Every check
+    those call sites have downstream (`os.path.isfile`, `getsize`, a re-read of the pixels)
+    is a property a PREVIOUS run's file at the same path satisfies, so the operator's own
+    verdict is the only clause that distinguishes "this call drew nothing" from "an older
+    file is sitting where this call's output was supposed to land". An unreadable return is
+    `[]`, which FAILS the `'FINISHED' in ...` clause rather than passing it.
+
+    It is spelled once per tool rather than imported, because these modules share no
+    parent inside `tools/` -- `armature_core` is where one implementation belongs and it is
+    outside this domain's globs (FILED, see the wave-14 report). The census in
+    `tests/test_instruments_amend_w14.py` asserts every copy is byte-identical, so the
+    duplication cannot drift.
+    """
+    try:
+        return sorted(str(s) for s in result)
+    except TypeError:
+        return []
+
+
 class RenderGate(GateFailure):
     """A gate specific to rendering the start frame."""
 
@@ -139,8 +199,9 @@ class RenderGate(GateFailure):
 FRAME_DIVISOR = 16
 
 
-def require_frame_size(width, height):
-    """`(width, height)` if a generator would accept them, else raise `RenderGate`.
+def require_frame_size(width, height, *, who="render_start_frame",
+                       module_frame=None, gate=None, gate_id="STARTFRAME"):
+    """`(width, height)` if a generator would accept them, else raise the caller's gate.
 
     F-34a858f5, wave 12. `--width` / `--height` were bare `type=int` with no bound and
     reached `SF.silhouette_extent` and `SF.gate_whole` unvalidated. MEASURED over the real
@@ -159,14 +220,29 @@ def require_frame_size(width, height):
     reason the finding gives: this refusal is the natural place to state the generator-legal
     constraint, instead of letting an arbitrary size reach the render and be caught (or
     not) by a graph check much later.
+
+    WAVE 14, F-267361f5. `render_turnaround` — the tool that produces the PINNED shot-set,
+    where one scale across characters is the entire product — had none of this, and its
+    `--width`/`--height` reached the framing solvers unvalidated: measured on its own
+    solvers with a three-point cloud, `(0, 1024)` and `(1024, 0)` each raise a bare
+    `ZeroDivisionError` out of `startframe.silhouette_extent` AFTER
+    `scene.render.resolution_x` has been set to zero, and `(-1024, 1024)` returns the same
+    radius as `1024x1024` and only surfaces one render later inside Gate WHOLE. So this is
+    now ONE implementation with two callers, parameterised only in what it says about
+    itself — `who`, the module's own frame, and the caller's gate class — never in what it
+    checks. `armature_core.startframe` is where the one implementation belongs and is
+    outside this domain's globs, so the lift is FILED, not done.
     """
-    ev = {"gate": "STARTFRAME", "andon": "RenderGate", "width": width, "height": height,
-          "divisor": FRAME_DIVISOR, "module_frame": [WIDTH, HEIGHT]}
+    gate = gate or RenderGate
+    module_frame = list(module_frame or (WIDTH, HEIGHT))
+    ev = {"gate": gate_id, "andon": gate.__name__, "who": who,
+          "width": width, "height": height,
+          "divisor": FRAME_DIVISOR, "module_frame": module_frame}
     bad = [name for name, v in (("width", width), ("height", height))
            if not isinstance(v, int) or isinstance(v, bool) or v <= 0]
     if bad:
         ev["non_positive"] = bad
-        raise RenderGate(
+        raise gate(
             f"--width={width!r} --height={height!r}: {' and '.join(bad)} must be a "
             f"positive integer. A zero dimension divides by zero inside the silhouette "
             f"solve and reaches the halt line as an unhandled error naming a projection "
@@ -175,12 +251,12 @@ def require_frame_size(width, height):
            if v % FRAME_DIVISOR]
     if off:
         ev["not_divisible"] = off
-        raise RenderGate(
+        raise gate(
             f"--width={width} --height={height}: {' and '.join(off)} is not divisible by "
-            f"{FRAME_DIVISOR}. This tool's output is the conditioning image a generation "
-            f"is submitted with, and the model family's frame buckets are multiples of "
-            f"{FRAME_DIVISOR} (this module's own frame is {WIDTH}x{HEIGHT}); a frame it "
-            f"will not accept is better refused here than after the render", ev)
+            f"{FRAME_DIVISOR}. {who}'s output is submitted to, or conditions, a generation, "
+            f"and the model family's frame buckets are multiples of {FRAME_DIVISOR} (this "
+            f"tool's own frame is {module_frame[0]}x{module_frame[1]}); a frame it will not "
+            f"accept is better refused here than after the render", ev)
     return int(width), int(height)
 
 
@@ -448,7 +524,7 @@ def main():
     blender_scene.set_frame_rate(scene, a.fps)
     meshes, arms, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
 
-    scene.render.engine = "BLENDER_EEVEE"
+    engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
@@ -588,7 +664,19 @@ def main():
     scene.render.film_transparent = True
     scene.render.image_settings.color_mode = "RGBA"
     scene.render.filepath = rgba_path
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+    # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+    # the same path satisfies; only the operator's own verdict says whether THIS call drew
+    # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise RenderGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(rgba_path)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(rgba_path)})
 
     alpha_plane = _alpha_channel(rgba_path, width, height)
     gate_alpha = SF.gate_alpha(float((alpha_plane < 0.5).mean()), composite_rgb,
@@ -603,7 +691,19 @@ def main():
     scene.render.image_settings.color_mode = "RGB"
     flat_path = os.path.join(out, "start_frame_flat.png" if backdrop else "start_frame.png")
     scene.render.filepath = flat_path
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+    # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+    # the same path satisfies; only the operator's own verdict says whether THIS call drew
+    # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise RenderGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(flat_path)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(flat_path)})
 
     # ---- the empty plate: same camera, same lights, same floor, character hidden.
     # (An "empty plate" in the VFX sense — the background-only render. Not `--plate`.)
@@ -611,7 +711,19 @@ def main():
         o.hide_render = True
     plate_path = os.path.join(out, "empty_plate.png")
     scene.render.filepath = plate_path
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+    # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+    # the same path satisfies; only the operator's own verdict says whether THIS call drew
+    # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise RenderGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(plate_path)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(plate_path)})
     for o in subject + arms:
         o.hide_render = False
 
@@ -634,12 +746,36 @@ def main():
             o.hide_render = True
         lit_path = os.path.join(out, "shadow_lit.png")
         scene.render.filepath = lit_path
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+        # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+        # the same path satisfies; only the operator's own verdict says whether THIS call drew
+        # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(lit_path)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(lit_path)})
         for o in subject + arms:
             o.hide_render = False
         cast_path = os.path.join(out, "shadow_cast.png")
         scene.render.filepath = cast_path
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+        # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+        # the same path satisfies; only the operator's own verdict says whether THIS call drew
+        # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(cast_path)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(cast_path)})
         gob.hide_render = True
 
         ratio = SF.shadow_ratio(_pixels(cast_path, width, height),
@@ -682,7 +818,19 @@ def main():
         wire_plate_composite(scene, backdrop_for_composite)
         frame_path = os.path.join(out, "start_frame.png")
         scene.render.filepath = frame_path
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+        # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+        # the same path satisfies; only the operator's own verdict says whether THIS call drew
+        # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(frame_path)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(frame_path)})
 
         void = alpha_plane < 0.5
         sub_px = _pixels(frame_path, width, height)
@@ -739,7 +887,10 @@ def main():
                                "the world background is NO LONGER inherited — see alpha"),
             "world_background": list(composite_rgb) + [1.0],
             "key_sun_energy": 3.2, "fill_sun_energy": 1.1,
-            "engine": "BLENDER_EEVEE", "view_transform": "Standard",
+            # the engine ACTUALLY set (F-0bf74152), never the literal: this field used to
+            # assert an identifier the tool pinned without a guard, so on a Blender where
+            # the other spelling is live the record would have named an engine that raised.
+            "engine": engine, "view_transform": "Standard",
             "consequence": ("on the no-control route this frame is the model's only "
                             "picture of the world, so whatever it shows is what the prompt "
                             "must either keep or replace. What it shows is now a recorded "

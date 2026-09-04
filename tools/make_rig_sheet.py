@@ -53,6 +53,32 @@ def evaluated(ob, depsgraph):
     return v
 
 
+def require_reference_file(path):
+    """`--reference` names a readable file, refused BEFORE anything is written.
+
+    F-4db23b72, wave 14. `import_reference` was the one refusal this module stranded below
+    its first write (`os.makedirs(out_dir)`), and its argument is a path known at PARSE
+    time -- it does not read, and cannot read, anything the seven panels between the two
+    wrote. What a run naming a missing or unreadable `--reference` actually left behind was
+    `<out>/panels/` holding three figure frames and four joint insets, no `panels.json` and
+    no sheet: a half-built approval artifact rather than a refusal. The Blender import
+    stays where it is; only the clause that never needed a scene moves up.
+    """
+    if not os.path.isfile(path):
+        raise ArmatureError(
+            f"--reference={path!r} is not a file. It is the ORIGINAL textured GLB the "
+            f"texture-fidelity row is built from, and it is named on the command line, so "
+            f"this is refused before the output directory exists rather than after seven "
+            f"panels have been rendered into it")
+    try:
+        with open(path, "rb") as fh:
+            fh.read(1)
+    except OSError as exc:
+        raise ArmatureError(
+            f"--reference={path!r} cannot be read: {exc}") from exc
+    return os.path.abspath(path)
+
+
 def import_reference(path, scene, skinned):
     """The ONE render-visible mesh the reference import adds.
 
@@ -131,8 +157,11 @@ def main():
     dg.update()
     at_end = evaluated(mesh, dg)
     moved = float(np.abs(at_end - at_rest).max())
-    lo, hi = at_rest.min(0), at_rest.max(0)
-    diagonal = float(np.linalg.norm(hi - lo))
+    # SIBLING CARRIED under F-6a9a0f72 (wave 14). Gate SCALE: the arc-survived refusal on
+    # the next line compares `moved` against a fraction of this diagonal, and a NaN diagonal
+    # makes `moved <= 1e-4 * diagonal` False -- so a subject carrying a NaN reads as a
+    # subject whose arc survived.
+    diagonal, lo, hi = rc.subject_scale(at_rest, "make_rig_sheet")
     if moved <= 1e-4 * diagonal:
         raise ArmatureError(
             f"{args['glb']}: the evaluated mesh is identical at frame 1 and frame "
@@ -147,6 +176,19 @@ def main():
     # halt does not leave an empty one behind for a later run, or a reader scanning
     # `outputs/`, to read as an attempt that produced nothing. Nothing between the old site
     # and this one writes.
+    # F-4db23b72: BOTH of `import_reference`'s clauses now fire above the first byte -- the
+    # argv clause here, and the ambiguous-import `raise` inside the import itself, which is
+    # performed HERE rather than 55 lines below among the panels. Nothing about the
+    # reference ever needed a rendered panel: it needs the scene and the skinned mesh, and
+    # both exist above this line. The reference is hidden from the render immediately, so
+    # the figure and inset panels are unchanged; the fidelity row un-hides it at its own
+    # site. What this stops leaving behind is `<out>/panels/` holding seven panels, no
+    # `panels.json` and no sheet, which reads as an interrupted render rather than as a
+    # refusal.
+    reference_path = require_reference_file(args["reference"])
+    ref = import_reference(reference_path, scene, mesh)
+    ref.hide_render = True
+
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(panel_dir, exist_ok=True)
 
@@ -202,8 +244,7 @@ def main():
     # body was `if ob.type == "ARMATURE": continue`. An abandoned cleanup; removed rather
     # than completed, because the two objects this row compares are exactly the skinned
     # mesh and the reference, and a cleanup here would have had to spare both.
-    ref = import_reference(args["reference"], scene, mesh)
-    ref.hide_render = True
+    # `ref` was imported and hidden above the first write (F-4db23b72).
     fidelity = []
     after_label = args["after_label"] or (
         f"after — {len(mesh.data.polygons):,} faces, {len(mesh.data.vertices):,} verts")

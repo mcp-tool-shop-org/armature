@@ -470,27 +470,94 @@ def test_every_blender_side_tool_records_the_blender_it_ran_on():
 
     The population here is every Blender-side tool, derived by the `import bpy` walk: all
     21 emit a JSON record, if only the halt sentinel, and a recipe that does not reproduce
-    its output is not a recipe."""
+    its output is not a recipe.
+
+    WAVE 14, F-252f399d -- THE NODE. This test used to be the source-text predicate
+    `'blender_provenance()' not in src and 'bpy.app.version_string' not in src`, an OR that
+    a PARTIAL record satisfies: measured on the wave-13 tree, fourteen record sites carried
+    `blender_provenance()` (version, version_tuple, build_hash, build_date and the numpy
+    version) while TEN carried the bare `bpy.app.version_string` -- four of them
+    `rig_character`'s own manifests, the records that describe the rigged GLB and whose
+    Gate D verdict is a numerical comparison between two builds. The stricter half was a
+    parametrisation over six named files. Both are replaced by ONE walk keyed on the record
+    dicts themselves: every `"blender"` VALUE in every dict literal in the module must be
+    the `blender_provenance()` call, except inside a `raise`, where a version string is
+    refusal CONTEXT rather than a record.
+    """
     derived = blender_tools_in(TOOLS)
     assert len(derived) == 22, derived
-    missing = []
+    partial, missing = [], []
     for fn in derived:
         with open(os.path.join(TOOLS, fn), encoding="utf-8") as fh:
             src = fh.read()
-        if "blender_provenance()" not in src and "bpy.app.version_string" not in src:
+        values = _blender_field_values(src)
+        record_values = [text for text, in_raise in values if not in_raise]
+        # `stage_render` states its provenance through a backend method
+        # (`self._bs.blender_provenance()`) rather than as a `"blender"` key in a dict
+        # literal, so "records nothing" is the absence of BOTH -- the exemption is the
+        # REASON (the call is made), not a name on a list.
+        if not values and "blender_provenance()" not in src:
             missing.append(fn)
+        for text in record_values:
+            if "blender_provenance()" not in text:
+                partial.append((fn, text))
     assert missing == [], missing
+    assert partial == [], partial
 
 
-@pytest.mark.parametrize("filename", [
-    "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
-    "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py",
-])
-def test_the_six_records_the_literal_key_census_could_not_see(filename):
-    """The provenance has to be in the RECORD, not merely somewhere in the file."""
-    marker = '"blender": blender_scene.blender_provenance()'
-    with open(os.path.join(TOOLS, filename), encoding="utf-8") as fh:
-        assert marker in fh.read(), filename
+def _blender_field_values(src):
+    """`[(unparsed value, is inside a raise)]` for every `"blender": ...` in a dict literal.
+
+    Keyed on the RECORD's key, not on a substring anywhere in the module -- so a tool that
+    writes a full provenance in one manifest and a bare version string in a second is
+    visible, which is exactly the shape the OR could not see (`rig_character` carried four
+    of them).
+    """
+    tree = ast.parse(src)
+    in_raise = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Raise):
+            for child in ast.walk(node):
+                in_raise.add(id(child))
+    out = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        for k, v in zip(node.keys, node.values):
+            if isinstance(k, ast.Constant) and k.value == "blender":
+                out.append((ast.unparse(v), id(node) in in_raise))
+    return out
+
+
+def test_the_record_census_goes_red_on_a_partial_provenance():
+    """PROVE THE CENSUS RED on the shape it exists to catch (wave-8 rule 3, wave-12 rule 2):
+    a module whose record carries the bare version string rather than the full provenance.
+    The old OR returned green on exactly this input."""
+    partial = (
+        'import bpy\n'
+        'def main():\n'
+        '    return {"tool": "x", "blender": bpy.app.version_string}\n')
+    values = _blender_field_values(partial)
+    assert values == [("bpy.app.version_string", False)], values
+    assert all("blender_provenance()" not in t for t, _ in values)
+    full = (
+        'import bpy\n'
+        'from armature_core import blender_scene\n'
+        'def main():\n'
+        '    return {"tool": "x", "blender": blender_scene.blender_provenance()}\n')
+    assert _blender_field_values(full) == [
+        ("blender_scene.blender_provenance()", False)]
+
+
+def test_a_version_string_inside_a_refusal_is_not_a_record():
+    """The exemption, named and derived rather than listed: the four sheet tools'
+    exhausted-engine refusals put `bpy.app.version_string` in an EVIDENCE dict, which is
+    context for a halt and not a record of a run."""
+    refusing = (
+        'import bpy\n'
+        'def light(scene):\n'
+        '    raise RuntimeError("no engine", {"blender": bpy.app.version_string})\n')
+    assert _blender_field_values(refusing) == [("bpy.app.version_string", True)]
 
 
 # ------------------------------------------ F-bba38f1c: the engine that silently was not
@@ -509,11 +576,20 @@ def tools_with_an_engine_candidate_loop(directory=TOOLS):
     return found
 
 
+#: RE-DERIVED 2026-09-04 (wave 14, instruments, F-0bf74152): four -> nine. The guarded loop
+#: existed on the four sheet tools and on NONE of the four renderers, which each pinned the
+#: single literal `scene.render.engine = "BLENDER_EEVEE"`; `rig_bake` pinned `"CYCLES"`.
+#: All five now carry the same guarded selection. The number is re-measured, not re-typed.
+#: The stronger census -- over every ASSIGNMENT to `<scene>.render.engine` rather than over
+#: the tools that happen to have a candidate list -- lives in
+#: `tests/test_instruments_amend_w14.py::test_every_render_engine_assignment_is_guarded`,
+#: because a census of "tools that have the loop" cannot see a tool that does not.
 ENGINE_LOOPS = ["make_binding_sheet.py", "make_parts_sheet.py", "make_skeleton_sheet.py",
-                "preview_glb.py"]
+                "preview_glb.py", "preview_walk.py", "render_performer.py",
+                "render_start_frame.py", "render_turnaround.py", "rig_bake.py"]
 
 
-def test_the_engine_loop_population_is_the_four_it_was_measured_to_be():
+def test_the_engine_loop_population_is_the_nine_it_was_measured_to_be():
     assert sorted(tools_with_an_engine_candidate_loop()) == sorted(ENGINE_LOOPS)
 
 
@@ -531,18 +607,32 @@ class _RefusingScene:
         self.render = _RefusingRender()
 
 
-@pytest.mark.parametrize("filename", ENGINE_LOOPS)
-def test_the_four_engine_loops_agree_on_the_order_and_refuse_a_fall_through(filename):
-    """MEASURED 2026-09-04: the loop had no `else`, so if a future Blender renamed both
-    identifiers the `for` would complete normally, nothing would be set, and the sheet
-    would render on the factory default with no field in the record able to say so. And
-    `preview_glb` tried the two names in the OPPOSITE order to the three sheets, so on a
-    Blender where both are valid they did not agree on which engine drew them."""
-    from armature_core.errors import GateFailure
+#: `rig_bake` bakes, so its one candidate is a ray-tracer and not EEVEE. The EEVEE ORDER
+#: clause applies to the eight tools that draw a picture; the FALL-THROUGH clause applies to
+#: all nine, because that is the property (F-0bf74152, wave 14).
+EEVEE_LOOPS = [f for f in ENGINE_LOOPS if f != "rig_bake.py"]
+
+
+@pytest.mark.parametrize("filename", EEVEE_LOOPS)
+def test_the_engine_loops_agree_on_the_order(filename):
+    """MEASURED 2026-09-04: `preview_glb` tried the two names in the OPPOSITE order to the
+    three sheets, so on a Blender where both are valid they did not agree on which engine
+    drew them. Wave 14 brought the four renderers in on the same order."""
     from blender_stub import load_tool
 
     mod = load_tool(filename)
     assert mod.ENGINE_CANDIDATES == ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"), filename
+
+
+@pytest.mark.parametrize("filename", ENGINE_LOOPS)
+def test_the_engine_loops_refuse_a_fall_through(filename):
+    """MEASURED 2026-09-04: the loop had no `else`, so if a future Blender renamed both
+    identifiers the `for` would complete normally, nothing would be set, and the sheet
+    would render on the factory default with no field in the record able to say so."""
+    from armature_core.errors import GateFailure
+    from blender_stub import load_tool
+
+    mod = load_tool(filename)
     setter = getattr(mod, "select_engine", None) or mod.light_the_scene
     with pytest.raises(GateFailure,
                        match=r"none of the candidate render engines is valid"):
@@ -551,9 +641,16 @@ def test_the_four_engine_loops_agree_on_the_order_and_refuse_a_fall_through(file
 
 @pytest.mark.parametrize("filename", ENGINE_LOOPS)
 def test_the_engine_actually_set_reaches_the_record(filename):
+    """WAVE 14: `rig_bake`'s manifest reads the engine off the scene
+    (`bpy.context.scene.render.engine`) because `select_engine`'s return is local to
+    `bake()`; what the census is about is that no record states the engine as a LITERAL,
+    which is asserted for every tool by
+    `tests/test_instruments_amend_w14.py::test_the_four_renderers_record_the_engine_they_actually_set`."""
     with open(os.path.join(TOOLS, filename), encoding="utf-8") as fh:
         src = fh.read()
-    assert '"engine": engine' in src or 'stats["engine"] = select_engine' in src, filename
+    assert ('"engine": engine' in src
+            or 'stats["engine"] = select_engine' in src
+            or '"engine": bpy.context.scene.render.engine' in src), filename
 
 
 # --------------------- F-8d2b9d7d: a refusal that fires before a pixel exists leaves no dir

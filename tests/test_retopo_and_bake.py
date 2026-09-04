@@ -38,6 +38,20 @@ from blender_stub import (FakeBpy, FakeObject, blender_stubbed, load_tool,
 _Ob = FakeObject
 
 
+class _Scene:
+    """`scene.objects` and nothing else -- the population `isolate_subject` now reads.
+
+    WAVE 14, F-4392a2c1: the andon used to re-read the list the loop above it had just
+    written, so its population was bounded by the loop and it could not fire. The scene is
+    the population that answers "nothing else is visible", and it is passed in rather than
+    reached through `bpy` so a fixture can put an object in the render that is NOT in the
+    list the caller hands over -- the shape the finding named.
+    """
+
+    def __init__(self, objects=()):
+        self.objects = list(objects)
+
+
 @pytest.fixture(scope="module")
 def retopo():
     return load_tool("rig_retopo.py")
@@ -58,7 +72,7 @@ def test_isolating_a_panel_hides_every_other_mesh_not_just_the_listed_ones(retop
     shell = _Ob("outer_shell")
     a = _Ob("A_quadriflow_direct")
     orphan = _Ob("B_voxel_then_quadriflow")          # failed, never in `variants`
-    others = retopo.isolate_subject([shell, a, orphan], a)
+    others = retopo.isolate_subject(_Scene([shell, a, orphan]), [shell, a, orphan], a)
     assert a.hide_render is False
     assert shell.hide_render is True
     assert orphan.hide_render is True, (
@@ -80,7 +94,8 @@ def test_isolation_refuses_a_scene_it_could_not_isolate(retopo):
 
     a = _Ob("A_quadriflow_direct")
     with pytest.raises(retopo.ComparisonNotIsolated) as exc:
-        retopo.isolate_subject([a, _Stubborn("ghost")], a)
+        ghost = _Stubborn("ghost")
+        retopo.isolate_subject(_Scene([a, ghost]), [a, ghost], a)
     assert exc.value.gate == "ISOLATE"
     assert exc.value.evidence["still_visible"] == ["ghost"]
 
@@ -88,7 +103,7 @@ def test_isolation_refuses_a_scene_it_could_not_isolate(retopo):
 def test_isolation_refuses_to_hide_the_subject_itself(retopo):
     a = _Ob("A_quadriflow_direct")
     with pytest.raises(retopo.ComparisonNotIsolated) as exc:
-        retopo.isolate_subject([a], None)
+        retopo.isolate_subject(_Scene([a]), [a], None)
     assert exc.value.gate == "ISOLATE"
 
 

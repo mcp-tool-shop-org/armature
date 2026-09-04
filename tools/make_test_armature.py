@@ -43,7 +43,7 @@ from mathutils import Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import rig_character as rc  # noqa: E402  (the GLB write gate lives there; one copy)
-from armature_core import posearc  # noqa: E402
+from armature_core import blender_scene, posearc  # noqa: E402
 from armature_core.errors import SpecError  # noqa: E402
 
 # Joint layout in metres, origin at the feet, +Z up, facing -Y. A T-pose: the bind pose,
@@ -303,10 +303,14 @@ def main():
     verts = sum(len(o.data.vertices) for o in objs)
     tris = sum(len(p.vertices) - 2 for o in objs for p in o.data.polygons)
 
-    bpy.ops.export_scene.gltf(filepath=args.out, export_format="GLB",
-                              use_selection=False, export_yup=True,
-                              export_animations=arc is not None,
-                              export_frame_range=arc is not None)
+    # WAVE 14, F-6a9a0f72: snapshot before, status set captured. This is the tool whose
+    # own comment below states the harm the wave-12 gate did not close.
+    before_glb = rc.export_target_snapshot(args.out)
+    export_result = bpy.ops.export_scene.gltf(
+        filepath=args.out, export_format="GLB",
+        use_selection=False, export_yup=True,
+        export_animations=arc is not None,
+        export_frame_range=arc is not None)
     # F-9b2d4106. `bpy.ops.export_scene.gltf` returns an operator status set and can return
     # CANCELLED without raising - the premise F-13bd448d was closed on for the four
     # RENDERERS, never applied to the eight exporters. The harm is worse here than a missing
@@ -315,7 +319,8 @@ def main():
     # authored ground truth, `MAKE_TEST_ARMATURE_OK` would name both, and every later arc
     # comparison would be measured against a pairing that was never built together. One
     # implementation, `rig_character.gate_glb_written` - never a second copy.
-    gate_glb = rc.gate_glb_written(args.out, what="the test-subject GLB")
+    gate_glb = rc.gate_glb_written(args.out, result=export_result, before=before_glb,
+                                   what="the test-subject GLB")
 
     # Ground truth beside the mesh. This is the whole reason the subject is procedural:
     # a later experiment can project these and measure displacement rather than eyeball it.
@@ -329,7 +334,11 @@ def main():
         "gate_GLB_written": gate_glb,
         "params": {"thickness": args.thickness, "joint_scale": args.joint_scale,
                    "segments": args.segments, "fps": args.fps},
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "dimensions_xyz": dims,
         "vertices": verts,
         "triangles": tris,

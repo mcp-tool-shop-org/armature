@@ -100,6 +100,21 @@ class _Bpy:
     app = _App()
 
 
+#: WAVE 14 (instruments, F-252f399d): the measure record now writes
+#: `blender_scene.blender_provenance()` instead of the bare `bpy.app.version_string`, and
+#: that helper reads `armature_core.blender_scene`'s OWN `bpy` — the MagicMock the stub
+#: installs, whose attributes are not JSON-serialisable. `_Bpy` only ever stood in for
+#: `rig_character`'s module-level `bpy`. The provenance is stubbed here as the plain dict a
+#: real Blender would produce, so these fixtures keep testing the DISPATCH they are about.
+_PROBE_PROVENANCE = {"version": "5.2.0-probe", "version_tuple": [5, 2, 0],
+                     "build_hash": "probe", "build_date": "2026-09-04", "numpy": "2.0.0"}
+
+
+def _stub_provenance(rc, monkeypatch):
+    monkeypatch.setattr(rc.blender_scene, "blender_provenance",
+                        lambda: dict(_PROBE_PROVENANCE))
+
+
 def test_measure_only_reaches_its_own_writer(rc, tmp_path, monkeypatch):
     """The behavioural half: the documented `--measure-only` invocation writes
     `measure.json`. It used to halt before the writer with `unknown binding True`."""
@@ -122,6 +137,7 @@ def test_measure_only_reaches_its_own_writer(rc, tmp_path, monkeypatch):
 
     with blender_stubbed():
         monkeypatch.setattr(rc, "bpy", _Bpy())
+        _stub_provenance(rc, monkeypatch)
         monkeypatch.setattr(rc, "build_pass", fake_build_pass)
         monkeypatch.setattr(sys, "argv", argv)
         rc.main()
@@ -149,6 +165,7 @@ def test_the_measure_record_says_whether_anything_was_bound(rc, tmp_path, monkey
     (tmp_path / "s.glb").write_bytes(b"x")
     with blender_stubbed():
         monkeypatch.setattr(rc, "bpy", _Bpy())
+        _stub_provenance(rc, monkeypatch)
         monkeypatch.setattr(rc, "build_pass", fake_build_pass)
         monkeypatch.setattr(sys, "argv", ["blender", "-b", "-P", "x", "--",
                                           "--glb=" + str(tmp_path / "s.glb"),

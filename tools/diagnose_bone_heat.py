@@ -238,7 +238,11 @@ def main():
 
     payload = {
         "tool": "diagnose_bone_heat",
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "glb": args.glb,
         "arms": arms,
         "note": ("A DIAGNOSTIC. No arm here is a pipeline stage and none produces a rigged "
@@ -247,7 +251,32 @@ def main():
     path = os.path.join(out, "bone_heat_diagnosis.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
-    print("DIAGNOSE_BONE_HEAT_OK " + path)
+    # WAVE 14, F-7e7703cb: THE SENTINEL CARRIES THE SWEEP'S OWN SUMMARY. It used to be
+    # `print('DIAGNOSE_BONE_HEAT_OK ' + path)` -- the only thing after the token was the
+    # JSON's location, so the token was earned by reaching the end of `main` rather than by
+    # a measurable effect (the wave-12 rule). Every sibling's OK line carries counts:
+    # `probe_subject` reports n_probed/n_measured/n_errors, `probe_glb`, `rig_bake`,
+    # `preview_walk` and `check_relift` each print a JSON object with counts or verdicts.
+    # The twelve arms' numbers existed one line below the sentinel and none was in it, so a
+    # sweep in which all twelve arms weighted zero vertices -- the exact condition this
+    # diagnostic exists to investigate, and therefore a condition under which the tool is
+    # working correctly -- read identically to a run in which the harness itself failed.
+    #
+    # There is deliberately NO refusal on an all-zero sweep: an all-zero result is a
+    # legitimate finding for a diagnostic, and a gate here would delete it. The counts make
+    # the two cases read differently, which is what was missing.
+    weighted_arms = {k: v for k, v in arms.items() if v["weighted_fraction"] > 0}
+    best = max(arms.items(), key=lambda kv: kv[1]["weighted_fraction"], default=None)
+    print("DIAGNOSE_BONE_HEAT_OK " + json.dumps({
+        "tool": "diagnose_bone_heat",
+        "json": path,
+        "n_arms": len(arms),
+        "n_arms_with_weight": len(weighted_arms),
+        "best_arm": best[0] if best else None,
+        "best_weighted_fraction": (round(best[1]["weighted_fraction"], 6)
+                                   if best else None),
+        "all_arms_weighted_nothing": len(weighted_arms) == 0,
+    }))
     for name, rec in arms.items():
         print(f"  {name:<26} weighted {rec['weighted_vertices']:>7}/{rec['vertices']:<7} "
               f"({100 * rec['weighted_fraction']:6.2f}%)  empty_groups="

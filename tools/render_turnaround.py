@@ -141,6 +141,12 @@ from armature_core import blender_scene, framing  # noqa: E402
 from armature_core import startframe as SF  # noqa: E402
 from armature_core import turnaround as TA  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+# CARRIED, not copied (F-267361f5): `render_start_frame.require_frame_size` is the sibling
+# instrument's bound on `--width`/`--height`, and it is ONE implementation with two callers
+# rather than a second copy here. The same idiom as `check_relift` importing
+# `action_frame_range` from this module and `make_rig_sheet` importing
+# `make_parts_sheet.shoot`. Stage B: it belongs in `armature_core.startframe`.
+from render_start_frame import require_frame_size  # noqa: E402
 
 TOOL_VERSION = "S05.1"
 
@@ -181,6 +187,66 @@ MARGIN_PX = 2.0
 #: affect the composition; it only has to keep the whole subject in front of the lens, which
 #: Gate WHOLE's `n_behind` clause is what actually enforces.
 ORTHO_STANDOFF_SPHERES = 4.0
+
+
+#: The engine identifiers this tool will accept, in the order it tries them.
+#:
+#: WAVE 14, F-0bf74152. This module pinned the single literal `'BLENDER_EEVEE'`. The
+#: candidate list exists in the four SHEET tools precisely because that identifier is not
+#: stable across Blender versions, and their `except TypeError: continue` is this repo's own
+#: recorded evidence that an invalid enum name RAISES rather than being ignored -- so on a
+#: Blender where the other spelling is the live one, the diagnostic sheets kept working and
+#: the four tools whose pixels become control sequences and reference stacks died with an
+#: untyped `TypeError`, recorded by the halt contract as "FAILED - an unhandled error" at
+#: exit 1 naming a bpy property assignment. The order is the sheets' order, so a sheet and
+#: a render made beside each other cannot be drawn by different engines.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+def select_engine(scene, candidates=ENGINE_CANDIDATES):
+    """Set the render engine and RETURN the one actually set, else raise.
+
+    Carried from `preview_glb.select_engine` (F-bba38f1c) rather than reinvented: the loop
+    has an `else` branch, because a loop that completes without setting anything leaves the
+    render on whatever the factory settings put there with no field in any record able to
+    say so. `armature_core.blender_scene` is where the one implementation belongs and is
+    outside this domain's globs, so the lift is FILED, not done.
+    """
+    for eng in candidates:
+        try:
+            scene.render.engine = eng
+        except TypeError:
+            continue
+        return eng
+    raise RenderTurnaroundGate(
+        "none of the candidate render engines is valid on this Blender, so the render "
+        "would be drawn by whatever the factory settings left in place",
+        {"clause": "engine", "candidates": list(candidates),
+         "blender": bpy.app.version_string})
+
+
+def _render_status(result):
+    """The render operator's status set as a sorted list of strings, `[]` if unreadable.
+
+    WAVE 14, F-6a9a0f72. `bpy.ops.render.render(write_still=True)` returns an operator
+    STATUS SET and can return `{'CANCELLED'}` without raising -- the premise this repo
+    recorded in wave 12 and then read at none of its 14 render call sites. Every check
+    those call sites have downstream (`os.path.isfile`, `getsize`, a re-read of the pixels)
+    is a property a PREVIOUS run's file at the same path satisfies, so the operator's own
+    verdict is the only clause that distinguishes "this call drew nothing" from "an older
+    file is sitting where this call's output was supposed to land". An unreadable return is
+    `[]`, which FAILS the `'FINISHED' in ...` clause rather than passing it.
+
+    It is spelled once per tool rather than imported, because these modules share no
+    parent inside `tools/` -- `armature_core` is where one implementation belongs and it is
+    outside this domain's globs (FILED, see the wave-14 report). The census in
+    `tests/test_instruments_amend_w14.py` asserts every copy is byte-identical, so the
+    duplication cannot drift.
+    """
+    try:
+        return sorted(str(s) for s in result)
+    except TypeError:
+        return []
 
 
 class RenderTurnaroundGate(GateFailure):
@@ -525,7 +591,15 @@ def main():
     started = time.time()
     a = parse_args()
     out = os.path.abspath(a.out)
-    width, height = int(a.width), int(a.height)
+    # ABOVE the `scene.render.resolution_x` assignment, never below it — the ordering
+    # clause F-34a858f5 earned, and the reason it matters here is that the zero case used
+    # to reach `silhouette_extent` as a bare `ZeroDivisionError` AFTER the scene resolution
+    # had already been set to zero. The 16-divisibility clause DOES apply to this tool: its
+    # eight views are the reference stack a paid generation is conditioned on, and its own
+    # default frame (352x1024) is a multiple of 16 on both axes.
+    width, height = require_frame_size(
+        int(a.width), int(a.height), who="render_turnaround",
+        module_frame=(WIDTH, HEIGHT), gate=RenderTurnaroundGate, gate_id="TURNAROUND_FRAME")
 
     azimuths = TA.orbit_azimuths(a.views, a.azimuth_start, a.sweep)
 
@@ -540,7 +614,7 @@ def main():
             {"clause": "import", "glb": a.glb, "mesh_objects": [],
              "armatures": [o.name for o in arms]})
 
-    scene.render.engine = "BLENDER_EEVEE"
+    engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
@@ -660,7 +734,19 @@ def main():
                                                       a.elevation, az)
         path = os.path.join(out, f"{a.prefix}_{i}.png")
         scene.render.filepath = path
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
+        # size checks below are properties a PREVIOUS run's file at the same path satisfies;
+        # only the operator's own verdict says whether THIS call drew anything. Shape carried
+        # from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderTurnaroundGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(path)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(path)})
         if not os.path.isfile(path):          # pragma: no cover - Blender-side failure
             raise RenderTurnaroundGate(
                 f"view {i} rendered no file at {path}",
@@ -753,7 +839,8 @@ def main():
                                "same world, EEVEE, Standard view transform"),
             "world_linear_rgb": list(WORLD_LINEAR),
             "key_sun_energy": KEY_ENERGY, "fill_sun_energy": FILL_ENERGY,
-            "engine": "BLENDER_EEVEE", "view_transform": "Standard",
+            # the engine ACTUALLY set (F-0bf74152), never the literal.
+            "engine": engine, "view_transform": "Standard",
             "floor_drawn": False,
             "floor_why": ("a ground plane is opaque geometry and would bake a non-"
                           "transparent backdrop into the lower frame, which is the defect "

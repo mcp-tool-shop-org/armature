@@ -87,6 +87,66 @@ TARGET_Y_FRAC = 0.52
 MIN_SUBJECT_FRAC = 0.01
 
 
+#: The engine identifiers this tool will accept, in the order it tries them.
+#:
+#: WAVE 14, F-0bf74152. This module pinned the single literal `'BLENDER_EEVEE'`. The
+#: candidate list exists in the four SHEET tools precisely because that identifier is not
+#: stable across Blender versions, and their `except TypeError: continue` is this repo's own
+#: recorded evidence that an invalid enum name RAISES rather than being ignored -- so on a
+#: Blender where the other spelling is the live one, the diagnostic sheets kept working and
+#: the four tools whose pixels become control sequences and reference stacks died with an
+#: untyped `TypeError`, recorded by the halt contract as "FAILED - an unhandled error" at
+#: exit 1 naming a bpy property assignment. The order is the sheets' order, so a sheet and
+#: a render made beside each other cannot be drawn by different engines.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+def select_engine(scene, candidates=ENGINE_CANDIDATES):
+    """Set the render engine and RETURN the one actually set, else raise.
+
+    Carried from `preview_glb.select_engine` (F-bba38f1c) rather than reinvented: the loop
+    has an `else` branch, because a loop that completes without setting anything leaves the
+    render on whatever the factory settings put there with no field in any record able to
+    say so. `armature_core.blender_scene` is where the one implementation belongs and is
+    outside this domain's globs, so the lift is FILED, not done.
+    """
+    for eng in candidates:
+        try:
+            scene.render.engine = eng
+        except TypeError:
+            continue
+        return eng
+    raise RenderGate(
+        "none of the candidate render engines is valid on this Blender, so the render "
+        "would be drawn by whatever the factory settings left in place",
+        {"clause": "engine", "candidates": list(candidates),
+         "blender": bpy.app.version_string})
+
+
+def _render_status(result):
+    """The render operator's status set as a sorted list of strings, `[]` if unreadable.
+
+    WAVE 14, F-6a9a0f72. `bpy.ops.render.render(write_still=True)` returns an operator
+    STATUS SET and can return `{'CANCELLED'}` without raising -- the premise this repo
+    recorded in wave 12 and then read at none of its 14 render call sites. Every check
+    those call sites have downstream (`os.path.isfile`, `getsize`, a re-read of the pixels)
+    is a property a PREVIOUS run's file at the same path satisfies, so the operator's own
+    verdict is the only clause that distinguishes "this call drew nothing" from "an older
+    file is sitting where this call's output was supposed to land". An unreadable return is
+    `[]`, which FAILS the `'FINISHED' in ...` clause rather than passing it.
+
+    It is spelled once per tool rather than imported, because these modules share no
+    parent inside `tools/` -- `armature_core` is where one implementation belongs and it is
+    outside this domain's globs (FILED, see the wave-14 report). The census in
+    `tests/test_instruments_amend_w14.py` asserts every copy is byte-identical, so the
+    duplication cannot drift.
+    """
+    try:
+        return sorted(str(s) for s in result)
+    except TypeError:
+        return []
+
+
 class RenderGate(GateFailure):
     """A gate specific to rendering the performer for a detector."""
 
@@ -270,7 +330,7 @@ def main():
     blender_scene.set_frame_rate(scene, a.fps)
     meshes, arms, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
 
-    scene.render.engine = "BLENDER_EEVEE"
+    engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = WIDTH, HEIGHT
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = False
@@ -336,7 +396,19 @@ def main():
         blender_scene.set_scene_frame(scene, i)
         p = os.path.join(out, f"{i:05d}.png")
         scene.render.filepath = p
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
+        # size checks below are properties a PREVIOUS run's file at the same path satisfies;
+        # only the operator's own verdict says whether THIS call drew anything. Shape carried
+        # from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(p)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(p)})
         paths.append(p)
 
     # The population is the PLAN, not whatever is in the directory — the shape
@@ -381,7 +453,20 @@ def main():
         o.hide_render = True
     empty_plate = os.path.join(out, "empty_plate.png")
     scene.render.filepath = empty_plate
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
+    # size checks below are properties a PREVIOUS run's file at the same path satisfies;
+    # only the operator's own verdict says whether THIS call drew anything. Shape carried
+    # from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise RenderGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(empty_plate)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(empty_plate)})
+
     for o in meshes + arms:
         o.hide_render = False
 
@@ -396,6 +481,8 @@ def main():
                        "framed_against": frame_source,
                        "manifest": os.path.abspath(a.manifest)},
             "resolution": [WIDTH, HEIGHT], "frames": count, "fps": a.fps,
+            # the engine ACTUALLY set, from `select_engine`'s return (F-0bf74152).
+            "engine": engine,
             "unexpected_files_in_out_dir": strays,
             "unexpected_files_rule": (
                 "every file in --out whose name ends in .png, compared "
