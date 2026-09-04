@@ -166,3 +166,16 @@ def test_the_scan_would_catch_the_defect_it_was_written_for(tmp_path):
             if over and ("matrix_world" in elt or isinstance(node.elt, ast.Name)):
                 hits.append(node.lineno)
     assert hits == [2, 3], hits
+
+
+def test_no_tool_reaches_into_the_private_vertex_primitive():
+    """SEAM, wave 6 (core-solvers): `blender_scene.evaluated_world_vertices(scene, objects)`
+    is the public name and filters by render visibility itself; there is no shape that skips
+    the filter. `render_turnaround.py:553` and `render_start_frame.py:452` were the two
+    tools importing the private `_evaluated_world_vertices`, and a private primitive that
+    tools reach into is a filter waiting to be bypassed again."""
+    for filename in _tools_that_import_glb():
+        src = read_source(filename)
+        assert "_evaluated_world_vertices" not in src, (
+            f"{filename} calls the private primitive instead of "
+            f"blender_scene.evaluated_world_vertices(scene, objects)")

@@ -566,7 +566,7 @@ def main():
             f"render-visible ({[o.name for o in meshes]}); there is nothing to turn "
             f"around, and framing against hidden geometry would compose a shot of an "
             f"object the renderer will not draw")
-    verts = blender_scene._evaluated_world_vertices(subject)
+    verts = blender_scene.evaluated_world_vertices(scene, subject)
     lo = verts.min(axis=0)
     hi = verts.max(axis=0)
     target = ((lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5)
