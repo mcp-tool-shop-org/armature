@@ -201,7 +201,11 @@ def test_the_rig_sheet_is_as_wide_as_its_own_parameter_line(tmp_path):
         sys.argv = argv
 
     sheet = _I.open(os.path.join(spec["out"], "E07-rig-sheet.png"))
-    f_lab = sheet_compose.font("arial.ttf", 26)
+    # Through `sheet_font`, i.e. `sheet_compose._font` — the binding the `sheet_fonts`
+    # fixture patches — so the width is measured in the face the composer just drew
+    # with. `sheet_compose.font` is a different object and on a runner with no
+    # platform face it raises here after the sheet composed correctly (F-c707995d).
+    f_lab = sheet_font("arial.ttf", 26)
     subtitle = (f"22 named bones placed from landmarks measured on the mesh  ·  the arc is "
                 f"E03's: the +X-side arm (left), 0°→90° about +Y, "
                 f"{spec['probe']['frames']} keys at 16 fps")
@@ -229,7 +233,8 @@ def test_the_cast_sheet_is_as_wide_as_its_own_stats_label(tmp_path):
     MCS.main([f"--dir={d}", f"--names={name}", "--title=cast", f"--out={out}"])
 
     sheet = _I.open(out)
-    font_r = sheet_compose.font("arial.ttf", 24)
+    # Same binding the composer drew with; see the note above.
+    font_r = sheet_font("arial.ttf", 24)
     label = (f"{name}   -   123,456 tris, 3 mesh obj, 4 mats, 2 tex (2048, 2048 px), "
              f"2 empties, armature: 22 bones (hips, spine, chest...)")
     needed = sheet_compose.max_text_width([(label, font_r)])

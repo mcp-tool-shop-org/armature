@@ -253,6 +253,40 @@ def pil_has_a_scalable_font():
         return False
 
 
+#: Every module that draws a sheet through `sheet_compose`'s resolver, in the order the
+#: fallback is installed. `rig_sheet_compose` and `make_cast_sheet` do
+#: `from sheet_compose import font as _font`, so each holds its OWN reference bound at
+#: import — patching `sheet_compose._font` does not reach either of them.
+#: `tests/test_font_resolution.py` asserts this list against the modules in `tools/` that
+#: actually bind it, so a fourth composer joins the fixture rather than escaping it.
+SHEET_COMPOSERS = ("sheet_compose", "rig_sheet_compose", "make_cast_sheet")
+
+
+def install_sheet_font_fallback(monkeypatch):
+    """Point every composer's `_font` at PIL's bundled scalable face.
+
+    Wave 6, F-c707995d. The fixture below said it let "the sheet composers" run on a
+    machine with no platform fonts and patched `sheet_compose._font` alone. Measured by
+    simulating a fontless runner (`platform_font_dirs() -> []`, `ARMATURE_FONT_DIR` unset)
+    and running the whole suite: exactly two tests failed —
+    `test_the_rig_sheet_is_as_wide_as_its_own_parameter_line` and
+    `test_the_cast_sheet_is_as_wide_as_its_own_stats_label` — both raising
+    `sheet_compose.FontError` at `sheet_compose.py:157` through `rig_sheet_compose.py:53`
+    and `make_cast_sheet.py:44`. Both carry the module-wide
+    `pytest.mark.usefixtures("sheet_fonts")`, so the fixture was active and simply missed
+    them. It is a separate function from the fixture so a test can install it on a machine
+    that DOES have fonts and check that it reaches all three.
+    """
+    import importlib
+
+    def fallback(name, size):
+        return pil_scalable_fallback(size)
+
+    for name in SHEET_COMPOSERS:
+        monkeypatch.setattr(importlib.import_module(name), "_font", fallback)
+    return fallback
+
+
 @pytest.fixture
 def sheet_fonts(monkeypatch):
     """Let the sheet composers run on a machine with no platform fonts.
@@ -277,9 +311,9 @@ def sheet_fonts(monkeypatch):
 
     try:
         sheet_compose._font(SHEET_REGULAR, 26)
+        sheet_compose._font(SHEET_BOLD, 26)
     except Exception:
-        monkeypatch.setattr(sheet_compose, "_font",
-                            lambda name, size: pil_scalable_fallback(size))
+        install_sheet_font_fallback(monkeypatch)
     yield sheet_compose._font
 
 
