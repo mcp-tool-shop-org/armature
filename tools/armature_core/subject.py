@@ -50,7 +50,26 @@ def extent_summary(half_extent):
     if half_extent is None:
         raise SubjectExtentError(
             "half_extent is None: the subject has no geometry to measure", ev)
-    half = [float(v) for v in half_extent]
+    # · ANDON — the coercion sits ONE LINE ABOVE the guards, and the wave-14 fix that
+    # re-classed those guards into the family did not cover it. Measured 2026-09-04 in this
+    # worktree, every one of these left the `ArmatureError` family with a bare builtin:
+    # `extent_summary(3.0)` -> `TypeError: 'float' object is not iterable`;
+    # `extent_summary('abc')` and `extent_summary(('a','b','c'))` -> `ValueError: could not
+    # convert string to float: 'a'`; `extent_summary({'x':1,'y':2,'z':3})` -> `ValueError`
+    # on the KEY 'x'; `extent_summary([1, 2, None])` -> `TypeError: float() argument must
+    # be a string or a real number, not 'NoneType'`; `extent_summary(object())` ->
+    # `TypeError`. The wave-14 proofs cover None, arity-2, a negative component and
+    # NaN/Inf — none of these five. `probe_subject`'s halt handler then classified a
+    # malformed half-extent as exit 1 (an unhandled crash) with no receipt instead of
+    # exit 2 with the offending value in the evidence, which is precisely the outcome
+    # `SubjectExtentError` exists to prevent. The live producer
+    # (`blender_scene.world_bounds`) hands a triple of floats, so this is the module's
+    # stated contract not holding for the neighbouring input class, not a live escape.
+    try:
+        half = [float(v) for v in half_extent]
+    except (TypeError, ValueError) as err:
+        raise SubjectExtentError(
+            f"half_extent {half_extent!r} is not three numbers: {err}", ev) from None
     if len(half) != 3:
         raise SubjectExtentError(
             f"half_extent must have 3 components, got {len(half)}", ev)

@@ -676,11 +676,79 @@ def _readable_node(where, n, index, population):
     return n
 
 
+def _unreadable_level(where, value, expected, index=None, population=None, extra=None):
+    """Gate ROUTE's `unreadable_node`, raised for a CONTAINER rather than for an entry.
+
+    One clause across every level of the save-format walk, because a reader keyed on the
+    clause has one question — *did this walk enter everything it reported on?* — and three
+    spellings of the answer would be three things to remember. `where` names the level
+    (`"definitions"`, `"definitions.subgraphs"`) exactly as it names the blueprint for an
+    entry, and `entry_type` carries the shape that arrived.
+    """
+    ev = {"gate": "ROUTE", "andon": "RouteGate", "clause": "unreadable_node",
+          "index": index, "entry_type": type(value).__name__, "entry": repr(value),
+          "where": where, "n_nodes": population, "expected": expected}
+    if extra:
+        ev.update(extra)
+    raise RouteGate(
+        (f"this graph's {where} holds a {type(value).__name__} at index {index} "
+         f"({value!r}), which is not {expected}"
+         if index is not None else
+         f"this graph's {where} is a {type(value).__name__} ({value!r}), which is not "
+         f"{expected}") +
+        ". A licence, seed and frame walk cannot enter a container it cannot read, and "
+        "reading past it would leave every node inside it unexamined inside a graph "
+        "reported clean", ev)
+
+
 def _iter_definitions(container, visited):
-    """Every node inside `container`'s subgraph definitions, to any depth."""
-    for d in (container.get("definitions") or {}).get("subgraphs") or []:
+    """Every node inside `container`'s subgraph definitions, to any depth.
+
+    ⚠ **The walk guarded the node ARRAY and left its own CONTAINER unguarded**, one level
+    above the hole wave 14 closed in `_readable_node`. The loop header used to read
+    `for d in (container.get("definitions") or {}).get("subgraphs") or []:` and skipped a
+    non-dict definition with `continue`. Measured 2026-09-04 in this worktree on
+    save-format graphs carrying one well-formed `UNETLoader` plus a pinned `KSampler`:
+
+      * with `definitions.subgraphs` spelled as a MAPPING keyed by blueprint id, iterating
+        the dict yields its string KEYS, every one fails `isinstance(d, dict)` and is
+        `continue`d — so `components()` returned only the top-level weight and `verify()`
+        returned GREEN, with a CC-BY-NC LoRA sitting inside a blueprint the walk never
+        entered, on the last gate before a paid submission. The SAME graph with
+        `subgraphs` as a LIST raised `RouteGate` naming the weight BANNED;
+      * with `definitions` itself a non-dict truthy value (`[{"nodes": []}]`, or the string
+        `"x"`), `components()` raised a bare `AttributeError: 'list' object has no
+        attribute 'get'`. `AttributeError` is not an `ArmatureError`, so the halt
+        contract's exit-2 six-key `<TOOL>_HALT` receipt branch is bypassed and Gate ROUTE
+        refusing a shape it cannot read is recorded as an unhandled crash.
+
+    NOT MEASURED: whether Comfy's own exporter ever emits a mapping-shaped `subgraphs`. The
+    shape was constructed here; what makes it ordinary rather than exotic is the input class
+    `load_graph` documents — an operator's `--saved` file, a converter or a hand-edit
+    artifact. `None` and an absent key stay the ordinary spelling of "no blueprints" and
+    are read as such; every other shape refuses.
+
+    A non-dict DEFINITION now raises rather than being skipped, for the reason
+    `_readable_node`'s own comment gives about its array: a skipped blueprint is a
+    blueprint no clause examined, and "nothing was checkable" and "everything checked out"
+    may not be the same verdict.
+    """
+    defs = container.get("definitions")
+    if defs is not None and not isinstance(defs, dict):
+        _unreadable_level(
+            "definitions", defs, "the mapping this walk reads blueprints out of",
+            extra={"container_keys": sorted(container)})
+    subs = (defs or {}).get("subgraphs")
+    if subs is not None and not isinstance(subs, list):
+        _unreadable_level(
+            "definitions.subgraphs", subs, "a list of subgraph definitions",
+            extra={"definitions_keys": sorted(defs)})
+    subs = subs or []
+    for i, d in enumerate(subs):
         if not isinstance(d, dict):
-            continue
+            _unreadable_level(
+                "definitions.subgraphs", d, "a subgraph definition", index=i,
+                population=len(subs))
         key = id(d) if d.get("id") is None else ("id", d["id"])
         if key in visited:
             continue
@@ -1280,11 +1348,23 @@ def seeds(graph):
                         "seed_is_literal": literal, "pinned": literal})
             continue
         wv = n.get("widgets_values") or []
-        seed = wv[spec["seed"]] if len(wv) > spec["seed"] else None
+        # The save-format branch answered `seed_is_literal: True` unconditionally —
+        # including when `widgets_values` is shorter than the class's seed slot and `seed`
+        # is therefore `None` — and emitted no `seed_input_present` key at all, so the two
+        # formats' records did not answer the same question. Nothing gates on the field
+        # (`pinned` is derived independently from `control_after_generate == "fixed"`, and
+        # is correctly False on a short widget list), but the value is quoted verbatim in
+        # Gate S's own refusal message (`literal={s['seed_is_literal']}`), so an operator
+        # reading a Gate S halt on a truncated save-format sampler was told the seed is a
+        # literal beside a `seed` of None. Mirrored on the API branch above: an absent seed
+        # is not a literal one.
+        present = len(wv) > spec["seed"]
         control = wv[spec["control"]] if len(wv) > spec["control"] else None
         out.append({"node_id": n.get("id"), "class": cls, "where": where,
-                    "seed": seed, "control_after_generate": control,
-                    "seed_is_literal": True, "pinned": control == "fixed"})
+                    "seed": wv[spec["seed"]] if present else None,
+                    "control_after_generate": control,
+                    "seed_input_present": present,
+                    "seed_is_literal": present, "pinned": control == "fixed"})
     return out
 
 
@@ -1603,6 +1683,15 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
     It binds in **both** directions. An unregistered seed is the obvious clause. A
     registered list that the graph does not draw from is the second: a graph running some
     other number while a tidy list sits in the repo is the same defect wearing a receipt.
+
+    **The population it grades is stated, and an empty one refuses.** The registration
+    clause grades `live` — the seeds whose node adds noise — because the second expert of a
+    two-expert split runs `add_noise=disable` and its seed draws nothing. That filter can
+    empty the population, and the verdict then stated a property of the committed list over
+    nothing at all (measured 2026-09-04; see the andon below). A graph whose every sampler
+    declines noise is refused, and the PASS verdict now carries both counts and names the
+    exempted nodes, so a record where one sampler was exempted cannot be read as one where
+    every seed found was checked.
     """
     graph = normalise_graph(graph)
     found = seeds(graph)
@@ -1660,6 +1749,40 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
         s["adds_noise"] = adds
         if adds:
             live.append(s)
+    inert = [s for s in found if not s["adds_noise"]]
+    ev["seeds_found"] = len(found)
+    ev["seeds_noise_bearing"] = len(live)
+    ev["seeds_exempt_add_noise_disable"] = [s["node_id"] for s in inert]
+    # · ANDON — the population the `adds_noise` filter above can empty. `_seed_population_
+    # andon` supplies the third answer only when `seeds()` itself is empty; nothing bounded
+    # the case where seeds were FOUND and every one of them was exempted. Measured
+    # 2026-09-04 in this worktree on a save-format graph whose only sampler is a
+    # `KSamplerAdvanced` with `add_noise="disable"` carrying 999999999: `seeds()` returned
+    # that record, `unrecorded_seed_sources` was empty, and this function RETURNED with the
+    # verdict "0 noise-bearing seed(s), all pinned and all drawn from the committed list of
+    # 1" — a receipt asserting the committed list [7] governed the run. The spend record
+    # then cannot be told apart from one where every seed found was checked, which is the
+    # epistemic failure with no technical symptom that `GateSSeedRegistration`'s docstring
+    # says this gate exists for. Gate S's own empty-registry clause and the four sibling
+    # clauses on these two pages (`g2_completeness`, `g5_openpose_conformance`,
+    # `gate_b_batching`, `rig_gates.gate_n_names`) all refuse an empty declared population.
+    #
+    # It refuses rather than reporting: the exemption is legitimate for the SECOND expert of
+    # a two-expert split, where a live sampler is graded beside it, and a graph in which
+    # nothing draws noise at all is a graph Gate S cannot grade. `carries_no_sampler=` is
+    # not the answer for it either — that assertion is CONTRADICTED here, correctly, because
+    # the graph does carry samplers.
+    if found and not live:
+        ev["seed_clause_verdict"] = "INDETERMINATE"
+        raise RouteGate(
+            "Gate S is INDETERMINATE on this graph and therefore UNPROVEN: it found "
+            f"{len(found)} seed-bearing node(s) and every one of them declines noise "
+            "(add_noise=disable), so the registration clause would grade an EMPTY "
+            "population and then state a property of the committed list over it — " +
+            ", ".join(f"node {s['node_id']} ({s['class']}) carries seed {s['seed']}"
+                      for s in found) +
+            f", against the committed list {reg}. 'No seed was graded' and 'every seed "
+            f"was drawn from the list' are not the same verdict", ev)
     unregistered = [s for s in live if s["seed"] not in reg]
     if unregistered:
         raise RouteGate(
@@ -1667,11 +1790,18 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
                 f"node {s['node_id']} would run seed {s['seed']}" for s in unregistered) +
             f", which the committed list {reg} does not pre-register. A seed chosen after "
             f"seeing a result turns a measurement into a selection of one", ev)
+    # The verdict states the POPULATION it graded, not only the part of it that passed. It
+    # used to read "{live} noise-bearing seed(s), all pinned and all drawn from the
+    # committed list of {reg}" — a record in which one of two samplers was exempted read
+    # exactly like a record in which every seed found was checked. The leading count is
+    # unchanged, because the repo's reports and `docs/experiments/*` quote that prefix.
     ev["verdict"] = (
         f"no sampler in this graph (asserted by the caller and checked), so no seed was "
         f"drawn against the committed list of {len(reg)}" if not found else
-        f"{len(live)} noise-bearing seed(s), all pinned and all drawn from "
-        f"the committed list of {len(reg)}")
+        f"{len(live)} noise-bearing seed(s) of {len(found)} seed(s) found, all pinned and "
+        f"all drawn from the committed list of {len(reg)}"
+        + (f"; {len(inert)} exempted by add_noise=disable (node(s) "
+           + ", ".join(str(s["node_id"]) for s in inert) + ")" if inert else ""))
     return ev
 
 
@@ -1753,7 +1883,35 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         w, h, n = _frame_triple(frame)
         supplied = dict(frame_legality(w, h, n, family), source="supplied")
         legality.append(supplied)
-    ev = {"gate": "ROUTE", "andon": "RouteGate",
+    # `receipt` DECLARES what this dict is, and the two fact keys below describe THE CALL
+    # rather than which clauses ran.
+    #
+    # ⚠ **A `verify` receipt was identified downstream by its CONTENT, and one of the two
+    # content keys was conditional on a public keyword argument of this function.**
+    # `gate_saved_graph.VERIFY_RECEIPT_KEYS` is `("attribution",
+    # "carries_no_sampler_asserted")`, both required; `ev["attribution"]` was written on
+    # every path, while `ev["carries_no_sampler_asserted"]` was written inside
+    # `_seed_population_andon`, which this function calls ONLY under
+    # `if require_pinned_seeds:`. Measured 2026-09-04 in this worktree on a graph carrying
+    # one `UNETLoader` and one pinned `KSampler` at frame (832, 480, 81): with the default
+    # flag both keys were present; with `require_pinned_seeds=False` the returned evidence
+    # carried `attribution` and NOT `carries_no_sampler_asserted`. A payload record whose
+    # Gate ROUTE receipt was produced with the seed clause declared NOT CHECKED was then
+    # read by `gate_saved_graph --record` as carrying no verify receipt at all, and the run
+    # halted with `record_carries_no_verify_receipt` naming the wrong defect — a false
+    # refusal at the spend boundary. No live builder passes `require_pinned_seeds=False`
+    # today, so the exposure was latent and fail-closed; it is fixed because the key that
+    # IDENTIFIES the receipt may not depend on which clauses ran.
+    #
+    # Both keys are written here, before the first clause can raise, so every receipt this
+    # function returns — and every refusal evidence it raises — answers the same questions.
+    # `_seed_population_andon` still writes `carries_no_sampler_asserted` for its own other
+    # caller (`gate_s_registration`), with the same value.
+    ev = {"gate": "ROUTE", "andon": "RouteGate", "receipt": "verify",
+          "carries_no_sampler_asserted": bool(carries_no_sampler),
+          "require_pinned_seeds": bool(require_pinned_seeds),
+          "attribution": [dict(e) if isinstance(e, dict) else e
+                          for e in (attribution or [])],
           "components": comp, "seeds": sd, "latents": lat,
           "latents_checkable": sum(1 for l in lat if l["checkable"]),
           "frame_legality": legality}
@@ -1802,8 +1960,9 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # quotes has to be a number something checked.
     conditional = uncredited_conditional_components(comp, attribution)
     ev["conditional_components"] = conditional
-    ev["attribution"] = [dict(e) if isinstance(e, dict) else e
-                         for e in (attribution or [])]
+    # `ev["attribution"]` is written with the rest of the receipt's call-describing keys at
+    # the top of this function — see the comment there. It used to be written here, which
+    # made a receipt's identity depend on reaching this line.
     uncredited = [c for c in conditional if not c["credited"]]
     if uncredited:
         raise RouteGate(

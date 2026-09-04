@@ -45,6 +45,7 @@ repo has already paid for once.
 import os
 
 from .errors import GateFailure
+from .parts import require_finite
 from . import lift_solve as LS
 
 TOOL_VERSION = "E09.A3"
@@ -267,6 +268,32 @@ def gate_donor(motion, framing):
                     "detail": {k: v for k, v in framing.items() if k != "frames"}},
         "motion_detail": {k: v for k, v in motion.items() if k != "per_pair"},
     }
+
+    # · ANDON — the two MEASURED quantities, through the repo's one non-finite helper.
+    # Gate DONOR was the last andon in `armature_core` whose measurements never passed a
+    # finiteness test, while the same wave gave `parts.require_finite` to `shotspec`,
+    # `subject`, `rig_gates` (six quantities), `assembly`, `startframe`, `turnaround` and
+    # Gates RIGID/CADENCE for exactly this inversion. The two clauses below are `m < m_min`
+    # and `f < f_min`, and BOTH are False for a NaN. Measured 2026-09-04 in this worktree:
+    # `gate_donor({'mean': nan, ...}, {'both_ankles_in_image': nan, ...})` RETURNED with the
+    # verdict "mean consecutive-frame difference nan/255 (>= 2.0) and ankles in image on at
+    # least nan% of frames (>= 80%)" — an affirmative pass printing the NaN inside the
+    # verdict it had just asserted. `rig_gates._require_finite_measurement`'s own comment
+    # names this: the inversion is the loud one.
+    #
+    # The live producers cannot emit a NaN today — `mean_consecutive_frame_difference`
+    # differences uint8 PNG arrays through a numpy mean, `frame_paths` admits only `.png`,
+    # and `ankle_framing` guards its empty population — so this is the guard direction being
+    # unbounded rather than a live escape. The exposure is a caller, or a future producer
+    # (a record read back from a JSON motion summary), handing the gate a non-number. Gate
+    # DONOR decides whether a clip may be a baseline at all, and a pass here is the input to
+    # every rotation `lift_clip` then solves.
+    #
+    # `positive=False` on both: a mean absolute difference and a fraction of frames may
+    # legitimately be zero, and zero is what the thresholds below are for.
+    require_finite("motion.mean", m, DonorGate, ev, positive=False)
+    require_finite("framing.both_ankles_in_image", f, DonorGate, ev, positive=False)
+
     failed = []
     if m < m_min:
         failed.append(f"motion: mean consecutive-frame difference {m:.4f}/255 is below "

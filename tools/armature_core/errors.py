@@ -28,9 +28,28 @@ class ArmatureError(RuntimeError):
     normalises to `{}` because a gate builds its evidence as it measures and its clauses
     index into `ev`; a plain refusal that carries no receipt has none, and the 21-tool halt
     contract records exactly that — `"evidence": null` beside `"gate": null` is the honest
-    record for `raise ArmatureError("unknown --mode='wobble'")`, and it is asserted for
-    every tool in `tests/test_instrument_exits.py`. The defect was never the null; it was a
-    null printed while the raising line was passing a dict.
+    record for `raise ArmatureError("unknown --mode='wobble'")`. The defect was never the
+    null; it was a null printed while the raising line was passing a dict.
+
+    ⚠ **This paragraph used to cite the halt contract as the check that pins the null, and
+    that citation was wrong.** It read "and it is asserted for every tool in
+    `tests/test_instrument_exits.py`". Measured 2026-09-04 in this worktree:
+    `sentinel_violations` (:247-250) asserts `isinstance(rec["evidence"], (dict,
+    type(None)))` — it accepts **an object OR a null** on the refusal path — and demands a
+    specific dict only for `kind == "gate"`; the refusal raiser at :200 raises a bare
+    `ArmatureError`, so a halt line printing `"evidence": {}` satisfies every one of the 21
+    tools. Proven by measurement: with this constructor reverted to the pre-wave-14
+    `evidence or {}` (a pytest plugin patching the class at configure time, run over
+    `test_instrument_exits.py` + `test_gates.py` + `test_amend_w14_core_gates.py`), the
+    result was `1 failed, 422 passed, 5 skipped` — the single red was
+    `tests/test_amend_w14_core_gates.py::test_the_base_class_stores_the_evidence_it_is_given`,
+    a direct unit assertion, and the 21-tool halt census stayed green throughout.
+
+    So the property holds and is pinned, but by that unit assertion — **the pin is
+    `tests/test_amend_w14_core_gates.py::test_the_base_class_stores_the_evidence_it_is_given`**,
+    widened tree-wide over every class in this family by the wave-16 census in
+    `tests/`. A statement naming a property the cited code does not check is the repo's
+    own highest-priority shape, and this file's docstrings are the family's contract.
 
     **This is the root fix, not a licence for a bare base raise.** A refusal still names
     a class with a `clause` or a `gate`; `ArmatureError` itself is the family, and a site
@@ -256,6 +275,12 @@ class SubjectExtentError(ArmatureError):
 
     Carries an `evidence` dict like every other member of the family, so the refusal
     reaches a halt record with the offending component in it.
+
+    The re-classing covered the three GUARDS and not the `float()` coercion one line above
+    them, so five neighbouring input shapes — a bare number, a string, a triple of strings,
+    a mapping, a list holding a None — still left the family as bare `TypeError`s and
+    `ValueError`s until 2026-09-04. The coercion raises this class too now; the population
+    is every shape `extent_summary` is handed, not the subset that reaches the guards.
     """
 
 
