@@ -34,12 +34,67 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from armature_core import pngio  # noqa: E402
+from armature_core import pngio, shotspec  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
 
 class InvertError(ArmatureError):
-    """The source frames are not the kind of image this transform is defined for."""
+    """The source frames are not the kind of image this transform is defined for.
+
+    Carries an evidence dict, like every other refusal in this repo: the measurement
+    that fired it is the useful half.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+def frame_population(src, expect=None):
+    """The NUMBERED frames of `src`, in index order, and a refusal for anything else.
+
+    The twin of `encode_control.frame_population`, and it exists for the same measured
+    reason: `render_pose_sticks` writes a `strip_every{N}.png` contact sheet into the
+    directory it just filled with `NNNNN.png` frames, so a bare `*.png` listing sorts
+    the stray last and inverts it as if it were the final frame of the shot. The
+    receipt then names it as a frame, and `--expect` counts it toward the declared
+    length. `gate_b_frames.frame_paths` caught this class on 2026-08-12 and filtered;
+    a filter is right for a diagnostic and wrong here, because these files become an
+    upload — so a PNG the numbering cannot name raises and is carried as evidence.
+
+    `expect` pins the population to `shotspec.frame_names`, the spec's own names,
+    rather than to a length any five files would satisfy.
+    """
+    if not os.path.isdir(src):
+        raise InvertError(f"{src} is not a directory of frames", {"src": src})
+    pngs = sorted(n for n in os.listdir(src) if n.lower().endswith(".png"))
+    numbered = [n for n in pngs if os.path.splitext(n)[0].isdigit()]
+    unexpected = [n for n in pngs if n not in set(numbered)]
+    names = sorted(numbered, key=lambda n: int(os.path.splitext(n)[0]))
+    if unexpected:
+        raise InvertError(
+            f"{src} holds {len(unexpected)} PNG(s) that are not numbered frames "
+            f"({', '.join(unexpected[:8])}); inverting one produces an extra frame that "
+            f"the receipt then names as part of the shot",
+            {"src": src, "unexpected": unexpected, "frames": names},
+        )
+    if not names:
+        raise InvertError(
+            f"no NNNNN.png frames in {src}; there is nothing to invert",
+            {"src": src, "png_files": pngs},
+        )
+    if expect is not None:
+        want = shotspec.frame_names(expect, "png")
+        if names != want:
+            raise InvertError(
+                f"{src} holds {len(names)} frames, expected {expect} named as the spec "
+                f"names them; a short or renumbered control directory becomes a short "
+                f"batch with no error anywhere downstream",
+                {"src": src, "found": names, "expected": want,
+                 "missing": [n for n in want if n not in set(names)],
+                 "unexpected": [n for n in names if n not in set(want)]},
+            )
+    return names
 
 
 def _read_u8_gray(path):
@@ -74,14 +129,7 @@ def _read_u8_gray(path):
 
 def invert_dir(src, dst, expect=None):
     """Write `255 - x` of every PNG in `src` into `dst`. Returns the receipt dict."""
-    names = sorted(n for n in os.listdir(src) if n.lower().endswith(".png"))
-    if not names:
-        raise InvertError(f"no PNG frames in {src}; there is nothing to invert")
-    if expect is not None and len(names) != expect:
-        raise InvertError(
-            f"{src} holds {len(names)} frames, expected {expect}; a short control "
-            f"directory becomes a short batch with no error anywhere downstream"
-        )
+    names = frame_population(src, expect=expect)
 
     os.makedirs(dst, exist_ok=True)  # scripts create their own output directories
     src_h, dst_h = hashlib.sha256(), hashlib.sha256()
