@@ -28,6 +28,7 @@ import json
 import os
 
 from .errors import SpecError
+from .parts import require_finite
 
 SPEC_VERSION = 1
 
@@ -137,6 +138,20 @@ def _require_positive(mapping, key, where, note=None):
     words the same refusal on the same quantity read back out of a record.
     """
     value = mapping[key]
+    # · The positivity clause was `value <= 0`, and that comparison is **False for NaN** —
+    # so every non-finite camera number was accepted and round-tripped. Measured
+    # 2026-09-04: `normalise_spec` accepted and returned unchanged `camera.lens_mm = nan`,
+    # `lens_mm = inf`, `sensor_mm = nan`, `fit_margin = nan` and `radius = nan` (only
+    # `clip_start = nan` was caught, and by the separate `clip_start < clip_end` ordering
+    # clause, not by this one). `require_finite` runs the finiteness test FIRST and the
+    # sign test after, exactly as `parts.tightened` does — it is the repo's one non-finite
+    # helper (wave 10's rule 4) and this module had no caller of it, which is why a class
+    # of malformed value the helper exists to refuse reached a file this module's opening
+    # line calls a contract.
+    # `positive=False` here on purpose: the finiteness half is what was missing, and the
+    # sign half keeps the words it already had, so a plain 0 or -33 is refused with the
+    # message this function has always given it.
+    _require_finite_number(mapping, key, where, note=note, positive=False)
     if value <= 0:
         raise SpecError(
             f"{where}.{key} is {value}" + (f", {note}" if note else "")
@@ -145,6 +160,30 @@ def _require_positive(mapping, key, where, note=None):
             f"spec that parses either"
         )
     return value
+
+
+def _require_finite_number(mapping, key, where, note=None, positive=False):
+    """`mapping[key]` is a number a gate can compare against, or `SpecError`.
+
+    Routed through `parts.require_finite` — the repo's ONE implementation of "a verdict on
+    a non-finite number is a refusal, never a PASS" — so this module does not grow a second
+    `math.isfinite` with a different message. `positive=False` bounds finiteness only, for
+    the angles: an elevation of -8 is a camera below the subject and a sweep of -360 is an
+    orbit the other way, so sign is not the question there; **finiteness still is**, because
+    `dump_spec` would otherwise write `NaN` for an angle exactly as it did for a lens.
+    """
+    # `gate: None` + `andon` is the receipt shape a PLAIN refusal carries in this tree (the
+    # convention core-solvers is extending across walk/framing/glb this wave): SpecError is
+    # not a gate, so it names no gate id, and it says so rather than omitting the key.
+    ev = {"gate": None, "andon": "SpecError", "spec_field": f"{where}.{key}"}
+    try:
+        return require_finite(f"{where}.{key}", mapping[key], SpecError, ev,
+                              positive=positive)
+    except SpecError as err:
+        raise SpecError(
+            f"{where}.{key} is {mapping[key]!r}" + (f", {note}" if note else "")
+            + f"; it must be a finite number. {err.args[0] if err.args else ''}"
+        ) from None
 
 
 def load_spec(path):
@@ -334,6 +373,11 @@ def normalise_spec(raw, spec_path=None):
         _require_positive(cam, key, "spec.camera")
     for key in ("elevation_deg", "azimuth_start_deg", "azimuth_sweep_deg"):
         _require(cam, key, (int, float), "spec.camera")
+        # The angles are the rest of the family. Sign is not the question here — an
+        # elevation of -8 is a camera below the subject — but FINITENESS is, and it was
+        # unchecked on these three for exactly the reason it was unchecked on the five
+        # above: the type test says `float` and `float('nan')` is a float.
+        _require_finite_number(cam, key, "spec.camera", positive=False)
 
     # The same clause `depth.window` already writes for z_min/z_max. `clip_end` is read by
     # `stage_render.py:171` as a bound (`radius + sphere_r >= float(c['clip_end'])`), so a
@@ -389,8 +433,21 @@ def frame_names(count, ext):
 
 
 def dump_spec(spec, path):
+    """Write a spec file. `allow_nan=False`, which is not the stdlib default.
+
+    ⚠ **`json.dump` writes the bare token `NaN` by default, and `json.load` reads it back.**
+    Measured 2026-09-04, before `_require_positive` grew its finiteness clause: a spec whose
+    `camera.lens_mm` was NaN was accepted by `normalise_spec`, written here as the literal
+    line `"lens_mm": NaN,` and read back as nan by `normalise_spec(json.load(...))` — a full
+    write/read round trip of the file this module's opening line calls a contract, leaving a
+    file in `specs/**` that is **not RFC-8259 JSON**: any non-Python reader (a CI step, jq,
+    the site) fails on it. The loader clause is the first defence and this is the second, on
+    the direction the loader does not bound: a spec dict a caller mutated in memory after
+    `normalise_spec` returned never passes the loader again on its way to disk. `ValueError`
+    from here is the honest refusal — a non-finite value cannot reach a spec file at all.
+    """
     clean = {k: v for k, v in spec.items() if not k.startswith("_")}
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(clean, fh, indent=2, sort_keys=True)
+        json.dump(clean, fh, indent=2, sort_keys=True, allow_nan=False)
         fh.write("\n")
     return path

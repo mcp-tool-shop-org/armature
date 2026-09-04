@@ -284,7 +284,11 @@ def _run_route(tmp_path, *, flag=False, env_var=False):
 def test_gates_ROUTE_and_PAIR_survive_optimization(tmp_path, flag, env_var, label):
     """The two gates every submitted graph passes before Gates S and L arm.
 
-    `route_gates.py` carries 57 raises across Gates ROUTE and PAIR and had no `-O`
+    `route_gates.py` carries 60 raises across Gates ROUTE and PAIR (57 until wave
+    12's core-gates amend added `unreadable_node`,
+    `uncredited_conditional_component` and `attribution_entry_for`'s refusal; the
+    three have their own `-O` receipt in `tests/test_amend_w12_core_gates.py`) and
+    had no `-O`
     receipt, while G1 and the start-frame andons each had one. The clauses below are the
     ways a graph reaches a paid submission while every name-level check reads clean: an
     excluded LoRA two levels down inside a subgraph blueprint; a randomising seed; a

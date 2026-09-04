@@ -72,7 +72,36 @@ RULED_COMPONENTS = {
     # "NOT IN THIS TABLE", which is a shrug, and the point of a mirror is that naming a
     # gate-dead file in a graph halts instead of shrugging.
     "technically_color": {
-        "verdict": "ALLOWED",
+        # ⚠ **CONDITIONAL, not ALLOWED — and the difference is machine-readable now.**
+        # `docs/license-map.md:77` rules this file "YES — credit required", grounded in the
+        # API-fetched CivitAI grant matrix (`allowNoCredit: false`), and states the
+        # obligation in the map's own words: "published footage from this LoRA credits the
+        # creator — a credits-line obligation riding the disclosure note". This row
+        # mirrored that as an unconditional ALLOWED and buried CREDIT REQUIRED inside the
+        # free-text `reason`, which no clause reads. Measured 2026-09-04 before the fix:
+        # `rulings_for(...)[0]["verdict"]` was 'ALLOWED', `verify()` on a graph loading it
+        # returned a clean verdict, and `[k for k in ev if 'cred' in k.lower()]` was `[]` —
+        # so E14 arm T footage could be published uncredited with Gate ROUTE green and
+        # nothing in the record that a human reviewing the spend could read the obligation
+        # off. CLAUDE.md's licence gate names the vocabulary
+        # `COMMERCIAL: YES / NO / CONDITIONAL(<condition>)` and rules that a CONDITIONAL is
+        # a Director decision surfaced contrastively; the condition was accepted as the map
+        # already records it (coordinator ruling, delegated by the Director 2026-09-04) and
+        # becomes load-bearing HERE rather than in prose.
+        #
+        # `condition` is structured because a receipt has to be able to say what was owed
+        # and whether it was paid. `verify` refuses a graph carrying this component unless
+        # the SUBMITTING RECORD carries an `attribution` entry naming it and its creditor
+        # (clause `uncredited_conditional_component`), and builders build that entry from
+        # this row through `attribution_entry_for` rather than typing the words again.
+        "verdict": "CONDITIONAL",
+        "condition": {
+            "kind": "credit",
+            "creditor": "renderartist",
+            "source": "CivitAI 2106471",
+            "fetched": "2026-08-13",
+            "text": "Technically Color LoRA by renderartist (CivitAI)",
+        },
         "licence": "CivitAI grant matrix ['RentCivit', 'Rent', 'Image'], allowNoCredit false",
         "reason": ("E14 arm T. Third-party-service use and image-commercial both granted. "
                    "⚠ CREDIT REQUIRED: published footage from this LoRA credits renderartist. "
@@ -584,7 +613,36 @@ def _walk_nodes(graph):
             yield ("api", {"id": node_id, "type": node["class_type"],
                            "widgets_values": widgets, "inputs": inputs})
         return
-    for n in graph.get("nodes") or []:
+    for i, n in enumerate(graph.get("nodes") or []):
+        # · ANDON — the save-format branch used to yield whatever the array held, and it
+        # is the ONE of the three node sources that guarded nothing: the API branch skips
+        # a non-dict (`if not isinstance(node, dict) or "class_type" not in node`) and
+        # `_iter_definitions` skips a non-dict definition. Measured 2026-09-04 in this
+        # worktree: `components({"nodes": ["x"]})` raised
+        # `AttributeError: 'str' object has no attribute 'get'`, `{"nodes": [None]}` the
+        # same, and one stray entry beside a well-formed `UNETLoader` took the whole
+        # licence, seed and frame walk with it. `AttributeError` is not an `ArmatureError`,
+        # so the halt contract's exit-2 / `GATE_FAILURE` + `GATE_EVIDENCE` receipt branch
+        # was BYPASSED and the run was classified as an unhandled error rather than as
+        # Gate ROUTE refusing a shape it cannot read — which is exactly what `load_graph`'s
+        # docstring and `normalise_graph`'s refusal clause promise for this input class.
+        #
+        # It RAISES rather than skipping, matching `normalise_graph`'s stance that an
+        # unreadable shape is not an empty graph: a skipped node is a node no clause
+        # examined, and this file's whole argument is that "nothing was checkable" and
+        # "everything checked out" may not be the same verdict. `load_graph` reads the
+        # save-format file the cloud converted and handed back, and any operator-supplied
+        # `--saved` file; a JSON null or a string inside `nodes` is an ordinary converter
+        # or hand-edit artifact, not an exotic input.
+        if not isinstance(n, dict):
+            raise RouteGate(
+                f"this graph's save-format `nodes` array holds a "
+                f"{type(n).__name__} at index {i} ({n!r}), which is not a node. A licence, "
+                f"seed and frame walk cannot read it, and skipping it would leave a node "
+                f"no clause examined inside a graph reported clean",
+                {"gate": "ROUTE", "andon": "RouteGate", "clause": "unreadable_node",
+                 "index": i, "entry_type": type(n).__name__, "entry": repr(n),
+                 "n_nodes": len(graph.get("nodes") or [])})
         yield ("top", n)
     yield from _iter_definitions(graph, set())
 
@@ -607,7 +665,110 @@ def _iter_definitions(container, visited):
 #: Verdict precedence, strictest first. A filename that matches more than one row in
 #: `RULED_COMPONENTS` is governed by the STRICTEST match, never by whichever row happens
 #: to have been typed into the dict first.
-VERDICT_RANK = {"BANNED": 3, "EXCLUDED": 2, "ALLOWED": 1, "NOT IN THIS TABLE": 0}
+#:
+#: ⚠ **`CONDITIONAL` sits between `ALLOWED` and `EXCLUDED`**, added 2026-09-04 with the
+#: `technically_color` row above. Without a tier of its own a conditional grant and an
+#: unconditional one were the SAME OBJECT to every reader of this table, so a filename
+#: matching a conditional row and a plain allowed row could be sorted either way by
+#: whichever was typed first — the accident `rulings_for` exists to remove. It ranks below
+#: the two kills because a condition is a grant with an obligation attached, not a refusal:
+#: a BANNED or EXCLUDED row still governs a name that matches both.
+VERDICT_RANK = {"BANNED": 4, "EXCLUDED": 3, "CONDITIONAL": 2, "ALLOWED": 1,
+                "NOT IN THIS TABLE": 0}
+
+#: The verdicts that carry an obligation rather than a refusal. `verify` refuses a graph
+#: carrying one of these unless the submitting record credits it — see
+#: `uncredited_conditional_components`.
+CONDITIONAL_VERDICTS = ("CONDITIONAL",)
+
+
+def attribution_entry_for(key):
+    """The `attribution` record entry a submitting tool must carry for row `key`.
+
+    **Built FROM the row, never typed in a builder.** The words in a credit line are the
+    licence map's, and a literal retyped at the call site is a second authority that drifts
+    the first time the map is re-fetched. A builder writes
+    `attribution=[route_gates.attribution_entry_for("technically_color")]` into its payload
+    record and its provenance JSON and passes the same list to `verify`.
+
+    Raises rather than returning None for a row that carries no condition: asking for the
+    credit line of an unconditional component is a caller bug, and a silent empty entry
+    would satisfy nothing while looking like a credit.
+    """
+    rec = RULED_COMPONENTS.get(key)
+    if rec is None or not rec.get("condition"):
+        raise RouteGate(
+            f"{key!r} is not a CONDITIONAL row in RULED_COMPONENTS, so it has no credit "
+            f"line to write. An attribution entry for an unconditional component would "
+            f"satisfy no obligation while reading like one",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "attribution_for_unconditional_row", "key": key,
+             "conditional_rows": sorted(
+                 k for k, r in RULED_COMPONENTS.items() if r.get("condition"))})
+    cond = rec["condition"]
+    return {"component": key, "creditor": cond["creditor"],
+            "source": cond.get("source"), "text": cond.get("text"),
+            "kind": cond.get("kind", "credit")}
+
+
+def _credits(entry, row_key, filename):
+    """Does this attribution entry credit the component `row_key` (served as `filename`)?
+
+    The creditor must match the row's condition — an entry naming somebody else is not a
+    credit — and the component must be nameable either by the ROW KEY or by the served
+    filename, because a record written beside a graph naturally carries the filename while
+    a record written from the table carries the key. Both readings are accepted; neither
+    is guessed at.
+    """
+    if not isinstance(entry, dict):
+        return False
+    cond = RULED_COMPONENTS.get(row_key, {}).get("condition") or {}
+    creditor = str(entry.get("creditor") or "").strip().lower()
+    if not creditor or creditor != str(cond.get("creditor") or "").strip().lower():
+        return False
+    named = str(entry.get("component") or "").strip().lower()
+    if not named:
+        return False
+    return (named == row_key.lower()
+            or row_key.lower() in named
+            or (bool(filename) and named in str(filename).lower()))
+
+
+def conditional_component_keys(graph):
+    """The `RULED_COMPONENTS` row keys of every CONDITIONAL component this graph loads.
+
+    The builder-facing half of `attribution_entry_for`: a submitting tool asks the GRAPH
+    which obligations it has picked up, rather than remembering which arm carries which
+    LoRA. Arm S's graph returns `[]` and needs no entry; a future conditional row is picked
+    up without editing any builder. It refuses nothing — `verify` is the andon — because a
+    helper that both discovers and halts would put the gate somewhere other than inside the
+    function performing the irreversible step.
+    """
+    return sorted({c["ruling"]["matched_on"] for c in components(graph)
+                   if c.get("verdict") in CONDITIONAL_VERDICTS
+                   and c["ruling"].get("matched_on")})
+
+
+def uncredited_conditional_components(comp, attribution):
+    """The CONDITIONAL components in `comp` that `attribution` does not credit.
+
+    Reads the components list `components()` returns and the `attribution` list the
+    submitting record carries. A row is credited by ONE matching entry; every conditional
+    row is examined and reported, so the evidence names what was owed as well as what was
+    unpaid.
+    """
+    entries = list(attribution or [])
+    out = []
+    for c in comp:
+        if c.get("verdict") not in CONDITIONAL_VERDICTS:
+            continue
+        key = c["ruling"].get("matched_on")
+        cond = (RULED_COMPONENTS.get(key) or {}).get("condition") or {}
+        credited = any(_credits(e, key, c.get("file")) for e in entries)
+        out.append({"label": _component_label(c), "file": c.get("file"),
+                    "class_type": c.get("class_type"), "matched_on": key,
+                    "kind": c.get("kind"), "condition": cond, "credited": credited})
+    return out
 
 
 def rulings_for(filename):
@@ -1413,12 +1574,34 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
 
 
 def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=None,
-           hosted_tier=None, carries_no_sampler=False):
+           hosted_tier=None, carries_no_sampler=False, attribution=()):
     """The three questions at once. Raises on anything the record already ruled against.
 
     `allow` names component keys the caller has an explicit ruling for — it is not a skip
     flag, because a component named here still appears in the returned evidence with its
     verdict, so the report cannot omit that it ran.
+
+    `attribution` is what the SUBMITTING RECORD carries about credit: a sequence of
+    `{"component", "creditor", "source", "text"}` entries, built from the table through
+    `attribution_entry_for`. It is not a skip flag either — it cannot wave a BANNED or
+    EXCLUDED row, it only PAYS a CONDITIONAL row's stated obligation, every conditional
+    component is reported in the evidence whether credited or not, and an entry naming the
+    wrong creditor credits nothing. A graph carrying a CONDITIONAL component that this list
+    does not credit is refused with clause `uncredited_conditional_component`.
+
+    **The licence clause states three numbers, not one.** It used to say
+    `"{len(comp)} weight file(s)"` — a count of what was LOOKED AT with no count of what
+    was CLASSIFIED — so 'every component is ruled clean' and 'the table classified none of
+    them' were the same receipt. Measured 2026-09-04 on a graph loading
+    `wan2.1_vace_14B_fp16` + `wan_2.1_vae` + `some_unknown_style_v3`: the verdict read
+    "3 weight file(s), …" while all three rows read NOT IN THIS TABLE, and across the nine
+    distinct `.safetensors` names the seven `build_*_payload` tools submit the table
+    classifies ONE. Gate L's own clause on the same line already carries the shape
+    ("{checkable} of {n} latent(s) checkable"); the licence clause now carries it too, and
+    the unclassified components are named in `ev["unclassified"]`. What is NOT changed
+    here: an unclassified component is still not refused — the wave-10 pin that UNKNOWN is
+    reported rather than raised stands, and which map row governs which served filename is
+    a spec's decision. The receipt now says the question was asked.
 
     `hosted_tier` names a tier from `HOSTED_TIER_RULES` whose graph carries **no pixel
     dimension at all** — `wan2.7-r2v` takes a resolution enum, a ratio enum and an integer
@@ -1508,6 +1691,33 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             ". The licence map's ruling is that presence is presence — a bypassed node "
             "still counts, and these are not even bypassed", ev)
 
+    # · ANDON — a CONDITIONAL grant is a grant with an obligation attached, and the
+    # obligation is checked here rather than remembered. `docs/license-map.md` rules
+    # `technically_color` "YES — credit required" (`allowNoCredit: false`); this table
+    # mirrored it as an unconditional ALLOWED until 2026-09-04 and the condition survived
+    # only as prose no clause read. Placed AFTER the banned/excluded clause (a kill stays
+    # the headline) and BEFORE the receipt is composed, because the number the receipt
+    # quotes has to be a number something checked.
+    conditional = uncredited_conditional_components(comp, attribution)
+    ev["conditional_components"] = conditional
+    ev["attribution"] = [dict(e) if isinstance(e, dict) else e
+                         for e in (attribution or [])]
+    uncredited = [c for c in conditional if not c["credited"]]
+    if uncredited:
+        raise RouteGate(
+            "the graph loads " + ", ".join(
+                f"{c['label']} (CONDITIONAL: {c['condition'].get('kind', 'credit')} — "
+                f"{c['condition'].get('text') or c['condition'].get('creditor')})"
+                for c in uncredited) +
+            ", and the submitting record carries no attribution entry crediting "
+            + ", ".join(sorted({str(c["condition"].get("creditor")) for c in uncredited}))
+            + ". The licence map's grant for this component is conditional on the credit; "
+            "a spend recorded without it is a spend whose one governing clause nothing in "
+            "the record says was met. Build the entry from the row with "
+            "`route_gates.attribution_entry_for(<key>)` and pass it as attribution=",
+            dict(ev, clause="uncredited_conditional_component",
+                 uncredited_conditional=uncredited))
+
     # A waived component appears in `components` with its verdict, but the string a
     # builder stores and a provenance sheet prints is `verdict` — so the waiver is named
     # there too. A receipt that omits it is a receipt that reads clean.
@@ -1515,6 +1725,22 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                      if c["ruling"]["verdict"] == "EXCLUDED"
                      and c["ruling"].get("matched_on") in allow})
     ev["waived"] = waived
+
+    # The licence clause's own three answers, in the shape Gate L's latent clause already
+    # uses. `classified` is the population the table actually ruled on; `unclassified`
+    # NAMES the rest rather than counting them away.
+    classified = [c for c in comp if c["ruling"].get("matched_on")]
+    unclassified = [_component_label(c) for c in comp
+                    if not c["ruling"].get("matched_on")]
+    ev["components_classified"] = len(classified)
+    ev["components_unclassified"] = len(unclassified)
+    ev["unclassified"] = unclassified
+    ev["components_conditional"] = len(conditional)
+    ev["components_conditional_credited"] = sum(1 for c in conditional if c["credited"])
+    licence_phrase = (
+        f"{len(classified)} of {len(comp)} component(s) classified, "
+        f"{len(unclassified)} unclassified, "
+        f"{len(conditional)} conditional (credited)")
 
     # · ANDON — Gate PAIR. Placed after the licence clause (a banned weight stays the
     # headline) and before everything else, because every clause below is a question about
@@ -1679,7 +1905,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         tier_ev = rows[0]
         ev["hosted_frame_legality"] = tier_ev
         ev["verdict"] = (
-            f"{len(comp)} weight file(s), {seed_phrase}, hosted tier "
+            f"{licence_phrase}, {seed_phrase}, hosted tier "
             f"{hosted_tier} at {tier_ev['resolution']} {tier_ev['ratio']} "
             f"{tier_ev['duration_s']}s — enum-legal; the pixel clause is inapplicable"
             + (f"; WAIVED components {waived}" if waived else ""))
@@ -1696,7 +1922,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             f"gate then checks it against the generator's rules like any other", ev)
 
     ev["frame_legality_verdict"] = "PROVEN"
-    ev["verdict"] = (f"{len(comp)} weight file(s), {seed_phrase}, "
+    ev["verdict"] = (f"{licence_phrase}, {seed_phrase}, "
                      f"{ev['latents_checkable']} of {len(lat)} latent(s) checkable, "
                      f"{len(ev['frame_legality'])} frame(s) checked and generator-legal"
                      + (f", {len(cams)} camera trajectory(s) on the generated frame"

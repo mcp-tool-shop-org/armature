@@ -57,22 +57,29 @@ OWNED = (
 #: Every `(file, line, class)` in `OWNED` that raises a `GateFailure` subclass, measured
 #: 2026-09-04 after the wave-8 amend. Asserted by SIZE and MEMBERSHIP, so a raise added
 #: later joins this list deliberately instead of arriving unpoliced.
+#: Wave 12 (core-gates) moved five of these counts, +7 raises in total: the licence
+#: clause's CONDITIONAL tier (two RouteGate refusals plus `attribution_entry_for`'s), the
+#: save-format node walk's `unreadable_node`, and four empty-population/non-finite andons
+#: (`gate_b_batching`, `g5_openpose_conformance`, `gate_n_names`, `gate_d_determinism`).
+#: Recorded in the same commit as the raises, which is what this ratchet asks for.
 RECORDED_GATE_RAISES = {
     ("canon.py", "GateCanon"): 1,
     ("donor_gate.py", "DonorGate"): 6,
     ("gates.py", "G1GeneratorLegality"): 2,
     ("gates.py", "G2Completeness"): 2,
     ("gates.py", "G4BboxSanity"): 4,
-    ("gates.py", "G5ConventionConformance"): 1,
+    ("gates.py", "G5ConventionConformance"): 2,  # +1 w12: empty-reference refusal
     ("gates.py", "G6SubjectMotion"): 2,
-    ("gates.py", "GateBBatching"): 2,
+    ("gates.py", "GateBBatching"): 3,  # +1 w12: expectation-of-zero refusal
     ("gates.py", "GateRRoundTrip"): 4,
     ("gates.py", "GateSSeedRegistration"): 3,
-    ("rig_gates.py", "GateDDeterminism"): 2,
-    ("rig_gates.py", "GateNNames"): 1,
+    ("rig_gates.py", "GateDDeterminism"): 3,  # +1 w12: degenerate bbox_diagonal
+    ("rig_gates.py", "GateNNames"): 2,  # +1 w12: empty registry
     ("rig_gates.py", "GatePRestPose"): 12,
     ("route_gates.py", "PairGate"): 3,
-    ("route_gates.py", "RouteGate"): 32,
+    ("route_gates.py", "RouteGate"): 35,  # +3 w12: unreadable_node,
+                                          # uncredited_conditional_component,
+                                          # attribution_for_unconditional_row
 }
 
 
@@ -179,7 +186,7 @@ def test_the_derived_population_is_the_one_this_file_records():
     assert counted == RECORDED_GATE_RAISES, (
         "the gate-raise population moved. Add the new site to RECORDED_GATE_RAISES in "
         f"the same commit that adds the raise.\nderived: {sorted(counted.items())}")
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 77
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 84
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

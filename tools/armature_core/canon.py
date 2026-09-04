@@ -163,6 +163,7 @@ def load(path):
                 _raise(f"surface {s['id']} occupant.kind {kind!r} is not "
                        f"{OCCUPANT_KINDS}",
                        {"path": path, "id": s["id"], "kind": kind})
+            _check_forbidden(s["id"], occ, path)
         spatial = s.get("spatial")
         if spatial is not None:
             _check_spatial(s["id"], spatial, path)
@@ -186,7 +187,89 @@ def load(path):
             _raise(f"legal_clause {c['id']} class {cls!r} is not "
                    f"{CLAUSE_CLASSES}",
                    {"path": path, "id": c["id"]})
+    _check_blocked_additions(doc, path)
     return doc
+
+
+def _check_blocked_additions(doc, path):
+    """The doc-level REFUSAL list is validated with the same rigour as the obliging ones.
+
+    ⚠ **`load` validated the two fields that OBLIGE and neither field that REFUSES**, so a
+    malformed refusal row was dropped in silence. Surfaces get an id check, a duplicate-id
+    check, an occupant-object check, an `occupant.kind` enum check and a full spatial check;
+    `legal_clauses` get an id-and-phrase check, a duplicate check and a class enum check.
+    `blocked_additions` and `occupant.forbidden` got nothing at all — neither was mentioned
+    anywhere in `load` — and `blocked_additions()` keeps only dicts carrying a truthy
+    `phrase` (or non-empty strings) and drops everything else without a word.
+
+    Measured 2026-09-04: a doc whose `blocked_additions` is
+    `[{'id': 'b1', 'text': 'glowing red halo'}]` — the phrase under the wrong key — loaded
+    clean and `blocked_additions(doc)` returned `[]`, so the field this module's header
+    calls "a REFUSAL list, not a licence" declared a refusal that does not exist.
+
+    Bounded honestly: for that measured case the reverse direction still refused the prompt
+    on unlicensed residue, because `residue` refuses any word no licensed span covers — so
+    the silent drop is masked wherever the blocked phrase is not itself licensed. It is NOT
+    masked where this field earns its existence: a phrase a broad `legal_clauses` style row
+    already licenses, which is the only case the field can change. There, a surfaces file
+    declares a refusal, the loader accepts it, and Gate CANON reports ARMED on a payload
+    carrying exactly the text the canon refuses.
+    """
+    adds = doc.get("blocked_additions")
+    if adds is None:
+        return
+    if not isinstance(adds, list):
+        _raise(f"blocked_additions must be a list, got {type(adds).__name__}",
+               {"path": path, "clause": "blocked_additions_not_a_list",
+                "type": type(adds).__name__})
+    for i, add in enumerate(adds):
+        if isinstance(add, str):
+            if not add.strip():
+                _raise(f"blocked_additions[{i}] is an empty string, which blocks nothing",
+                       {"path": path, "clause": "blocked_addition_empty", "index": i})
+            continue
+        if not isinstance(add, dict):
+            _raise(f"blocked_additions[{i}] must be a string or an object carrying a "
+                   f"phrase, got {type(add).__name__}",
+                   {"path": path, "clause": "blocked_addition_shape", "index": i,
+                    "type": type(add).__name__})
+        phrase = add.get("phrase")
+        if not isinstance(phrase, str) or not phrase.strip():
+            _raise(
+                f"blocked_additions[{i}] (id {add.get('id')!r}) carries no string "
+                f"`phrase`: keys {sorted(add)}. A refusal row the reader drops is a "
+                f"refusal the file declares and the gate never makes — this list is a "
+                f"REFUSAL list, and it is validated the way the obliging fields are",
+                {"path": path, "clause": "blocked_addition_phrase", "index": i,
+                 "id": add.get("id"), "keys": sorted(add)})
+
+
+def _check_forbidden(sid, occ, path):
+    """`occupant.forbidden` is a list of non-empty strings, or the load refuses.
+
+    ⚠ It was read as `for word in occ.get('forbidden') or []` with **no type check**, so a
+    string written where a list belongs iterates as SINGLE CHARACTERS — every letter of it
+    becomes a forbidden word, and `_forbidden_hit` then matches almost any prompt. The
+    other direction (a number, an object) raises a `TypeError` out of `cover`, which is not
+    an `ArmatureError` and so does not reach the halt contract's typed receipt.
+    """
+    if "forbidden" not in occ or occ["forbidden"] is None:
+        return
+    words = occ["forbidden"]
+    if isinstance(words, str) or not isinstance(words, (list, tuple)):
+        _raise(
+            f"surface {sid} occupant.forbidden must be a list of words, got "
+            f"{type(words).__name__} ({words!r}). A bare string iterates as single "
+            f"CHARACTERS, so every letter of it becomes a forbidden word",
+            {"path": path, "id": sid, "clause": "forbidden_not_a_list",
+             "type": type(words).__name__})
+    for i, w in enumerate(words):
+        if not isinstance(w, str) or not w.strip():
+            _raise(
+                f"surface {sid} occupant.forbidden[{i}] is {w!r}, not a word; a refusal "
+                f"nothing can match is a refusal the file declares and the gate never makes",
+                {"path": path, "id": sid, "clause": "forbidden_word", "index": i,
+                 "value": repr(w)})
 
 
 def _check_spatial(sid, spatial, path):
@@ -416,9 +499,15 @@ def licensed_phrases(doc):
     ratified phrase both licenses and obliges; an unratified one does neither.
     `legal_clauses` rows are a different object — they carry no ratification flag at all
     and are the declared licence surface — so they are unaffected.
+
+    ⚠ **The population is `prompt_surfaces`, not `doc['surfaces']`** (2026-09-04). A
+    mesh-kind occupant is spatial-only — `prompt_surfaces`' own docstring: "they are
+    numbers, not prompt phrases" — so its phrase neither obliges the prompt (see `cover`)
+    nor licenses residue here. Reading two different populations on the two sides of the
+    router is what made a prompt covering 1 of 1 prompt surfaces refuse.
     """
     out = []
-    for s in doc["surfaces"]:
+    for s in prompt_surfaces(doc):
         if not is_ratified(s):
             continue
         occ = s.get("occupant") or {}
@@ -513,6 +602,8 @@ def cover(doc, prompt):
     hay = prompt.lower()
     ev = coverage(doc)
     ev["prompt"] = prompt
+    # The one population every forward PHRASE clause and every denominator is read over.
+    prompt_pop_ids = {s["id"] for s in prompt_surfaces(doc)}
     missing = []
     negated = []
     forbidden = []
@@ -540,6 +631,32 @@ def cover(doc, prompt):
                 forbidden.append({"surface": s["id"], "word": word,
                                   "ratified": is_ratified(s)})
         if not is_ratified(s):
+            continue
+        # ⚠ **The phrase half reads the PROMPT population, not every surface.** Two
+        # populations of surfaces exist in this module and this loop read the wrong one:
+        # `prompt_surfaces` excludes `occupant.kind == 'mesh'` with the reason on its own
+        # docstring — "Occupants of kind mesh are spatial-only and stay out — they are
+        # numbers, not prompt phrases" — and `coverage` builds every denominator from it,
+        # while this loop iterated `doc['surfaces']` directly and demanded a phrase from
+        # every ratified occupant, mesh included. Measured 2026-09-04 on a doc with a
+        # ratified prompt occupant 'black plate' (torso) and a ratified MESH occupant
+        # 'weathered bronze' (skin): `coverage` reported `prompt_surfaces: 1, ratified: 1`
+        # and `cover(doc, 'black plate')` raised "forward cover failed: ratified phrases
+        # absent: weathered bronze" — a refusal of a prompt that covers 1 of 1 prompt
+        # surfaces, quoting a phrase the same module says is not a prompt phrase.
+        # `licensed_phrases` read the same wrong population and so a mesh phrase also
+        # LICENSED residue; both now read `prompt_surfaces`, so ONE population answers
+        # what the prompt must name, what it may name, and what the numbers are counted
+        # over. The forbidden/blocked loops above deliberately keep reading EVERY surface:
+        # a refusal is a claim about the prompt, not about the occupant.
+        #
+        # No live instance exists today (no `canon/` directory in the tree; every
+        # `canon_census.CENSUS` row carries `surfaces: None`), so this is the schema the
+        # module offers the first author who records a mesh-measured surface — for whom
+        # the old reading made every spend of that subject refuse until they deleted the
+        # row or padded the prompt with a phrase that is not supposed to be in it. An
+        # andon that fires on correct work is the andon nobody keeps.
+        if s["id"] not in prompt_pop_ids:
             continue
         phrase = occ.get("phrase")
         if phrase:

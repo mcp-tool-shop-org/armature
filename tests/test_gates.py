@@ -208,9 +208,13 @@ def test_g5_red_on_zero_indexing():
 
 
 def test_g5_red_on_a_dropped_pair():
+    """`match=` added 2026-09-04 (wave 12): G5 gained a second refusal — an empty reference
+    convention — so its class name stopped being its clause and
+    `tests/test_refusal_clauses.py` caught this site. Without the match, an empty-reference
+    refusal raised for the wrong reason would satisfy a test named for a dropped pair."""
     from armature_core import openpose
 
-    with pytest.raises(G5ConventionConformance):
+    with pytest.raises(G5ConventionConformance, match=r"limb pair count 18 != 19"):
         gates.g5_openpose_conformance(18, openpose.LIMB_SEQ[:-1], 18, openpose.LIMB_SEQ)
 
 

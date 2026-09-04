@@ -164,6 +164,15 @@ RECORDED_POPULATION = frozenset({
     # (`ABClipError` is raised from exactly one site, so its name IS its clause and the
     # derivation deliberately leaves it out.)
     "ReviewClipError", "SheetPopulationError", "ShotsetSheetError", "ZoomSheetError",
+    # Joined 2026-09-04 (wave 12, core-gates), and both crossed the one-site line the same
+    # way: each gained a SECOND refusal, so its class name stopped being its clause.
+    # `G5ConventionConformance` now also refuses an empty reference convention (a
+    # conformance verdict over zero keypoints and zero limb pairs is not a verdict), and
+    # `GateNNames` now also refuses an empty registry (a "0 / 0 registered sites map to one
+    # bone each" verdict is a coverage claim about an empty population). Every
+    # `pytest.raises` on either class in this suite therefore has to name which refusal it
+    # is pinning, and this census is what found them.
+    "G5ConventionConformance", "GateNNames",
 })
 
 #: Re-derived 2026-09-04 and EMPTY. There is no class this census excuses: a class raised
@@ -196,7 +205,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # 71 + 2 + 3 = 76; instruments-measure's branch added `ReviewClipError`, `ShotsetSheetError`,
     # `ZoomSheetError` (new classes) and `SheetPopulationError` (crossed to two sites):
     # 76 + 4 = 80, MEASURED on the merged tree.
-    assert len(POLICED) == 80, sorted(POLICED)
+    assert len(POLICED) == 82, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -230,7 +239,14 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # 51 + 3 - 1 = 53. Re-pinned with the reason rather than relaxed (wave 3 section 0).
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch added one RouteGate raise site
     # (51 -> 52 on its own branch); merged = 53 + 1 = 54, MEASURED on the merged tree.
-    assert len(RAISE_SITES["RouteGate"]) == 54, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
+    #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
+    #       and `_iter_definitions` already carried and this one did not (a `None` inside
+    #       `nodes` used to leave through `AttributeError`, bypassing the halt contract).
+    #   +1  `verify`'s `uncredited_conditional_component`: a CONDITIONAL licence row is
+    #       passed only when the submitting record credits it.
+    #   +1  `attribution_entry_for`: a credit line asked for on a row that owes none.
+    assert len(RAISE_SITES["RouteGate"]) == 57, sorted(RAISE_SITES["RouteGate"])
     files = {path for path, _ in RAISE_SITES["RouteGate"]}
     # `build_lora_arm_payload.py` joined at the wave-8 merge: its new `gate_base_licence`
     # raises RouteGate on a banned node class in the operator's baseline graph.

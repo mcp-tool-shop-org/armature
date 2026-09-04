@@ -194,13 +194,24 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # a `GateFailure`, and this walk counts `GateFailure` subclasses only.
         # core-gates' branch moves `rig_gates` 12 → 15 in the same wave; the merged total is
         # re-derived on the merged tree rather than added up from two branches.
+        # WAVE 12 (core-gates, 2026-09-04), +7 and itemised rather than replaced:
+        #   gates       20 → 22  `gate_b_batching`'s expectation-of-zero refusal and
+        #                        `g5_openpose_conformance`'s empty-reference refusal.
+        #   rig_gates   15 → 17  `gate_n_names` on an empty registry, and Gate D's
+        #                        degenerate-diagonal clause (the one its three Gate P
+        #                        siblings already carried). The non-finite half of that
+        #                        family raises from `parts.require_finite`, which is a
+        #                        `parts` site and is already in this count.
+        #   route_gates 35 → 38  `unreadable_node`, `uncredited_conditional_component`,
+        #                        and `attribution_entry_for`'s refusal.
         "assembly": 18, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
-        "gates": 20, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
-        "rig_gates": 15, "route_gates": 35, "startframe": 19, "turnaround": 9, "walk": 3,
+        "gates": 22, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
+        "rig_gates": 17, "route_gates": 38, "startframe": 19, "turnaround": 9, "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
     # route_gates 34 -> 35 in the same wave; merged = 155 + 3 + 1 = 159, MEASURED on the merged tree.
-    assert sum(with_gates.values()) == 159
+    # WAVE 12 (core-gates): 159 + 7 = 166, measured on this branch.
+    assert sum(with_gates.values()) == 166
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():
