@@ -322,6 +322,26 @@ def solve_camera(all_points, end_points, azimuth_deg, elevation_deg,
     target = target_of(offset_r, offset_u)
     union = _extent(all_points, target, radius, az, el, lens_mm, sensor_mm, width, height)
     end = _extent(end_points, target, radius, az, el, lens_mm, sensor_mm, width, height)
+    # `_extent` returns None as soon as ANY point projects behind the camera, and the three
+    # bisection closures above each handle that by substituting the 99.0 sentinel. These
+    # two final calls did not (F-6a8edff0): they were indexed unguarded inside the dict
+    # literal below. The union here is measured at the target built from the LAST pass's
+    # offsets but at a `radius` solved earlier in that same pass, so the two are not
+    # guaranteed consistent, and a composition whose converged vertical offset pushes a
+    # point behind the lens returned a bare `TypeError: 'NoneType' object is not
+    # subscriptable` from the middle of a dict literal - where every other refusal in this
+    # module names what went wrong and why it matters.
+    behind = [name for name, value in (("union", union), ("end", end)) if value is None]
+    if behind:
+        raise FramingError(
+            f"the requested composition is unreachable: after {passes} pass(es) the "
+            f"{' and '.join(behind)} point cloud(s) put at least one point BEHIND the "
+            f"camera at radius {radius:.6f}, target {[round(float(v), 6) for v in target]} "
+            f"(lateral offset {offset_r:.6f}, vertical offset {offset_u:.6f}, azimuth "
+            f"{az}, elevation {el}). Requested height_frac {height_frac}, end_x_frac "
+            f"{end_x_frac}, target_y_frac {target_y_frac}: no camera on this orbit frames "
+            f"that, so the numbers below would have been read off a projection that does "
+            f"not exist")
     return {
         "target": list(target),
         "radius": radius,

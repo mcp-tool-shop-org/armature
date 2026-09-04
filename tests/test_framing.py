@@ -114,3 +114,80 @@ def test_a_straight_down_camera_raises():
     t = (0.0, 0.0, 0.0)
     with pytest.raises(framing.FramingError):
         framing.project((0.1, 0.0, 0.0), t, 3.0, 0.0, 90.0, LENS, SENSOR, W, H)
+
+
+# --- F-6a8edff0: the two final extents are guarded like every other ---------------------
+
+
+def _deep_cloud_case():
+    """A composition whose converged solution puts a union point behind the lens.
+
+    Found by sweeping depth x end-cloud offset x height_frac x target_y_frac; the fixture
+    the finding suggested (a large `height_frac` on a deep cloud) does NOT reach the
+    branch, because the radius and vertical solves are both driven by `all_points` and
+    self-correct. What reaches it is a deep union cloud whose target is pulled toward the
+    top of frame after the last radius solve.
+    """
+    body = [(0.0, 0.0, -0.5), (0.0, 0.0, 0.5), (0.2, -20.0, 0.0), (-0.2, 20.0, 0.0)]
+    end = [(0.0, 6.0, -0.5), (0.0, 6.0, 0.5)]
+    return body, end
+
+
+def test_an_unreachable_composition_raises_a_framing_error_not_a_nonetype_traceback():
+    """Measured on this tree before the fix: this exact call raised
+    `TypeError: 'NoneType' object is not subscriptable` from the middle of a dict literal.
+    `_extent` returns None as soon as any point projects behind the camera; the three
+    bisection closures each substitute the 99.0 sentinel and the two final calls indexed
+    the result unguarded, where every other refusal in this module names what went wrong.
+    """
+    body, end = _deep_cloud_case()
+    with pytest.raises(framing.FramingError, match=r"unreachable") as exc:
+        framing.solve_camera(body, end, 205.0, 6.0, LENS, SENSOR, W, H,
+                             height_frac=0.9, end_x_frac=0.5, target_y_frac=0.3,
+                             radius_bounds=(0.05, 60.0))
+    msg = str(exc.value)
+    assert "BEHIND the camera" in msg
+    assert "union" in msg
+    assert "radius" in msg and "offset" in msg
+
+
+def test_the_end_cloud_gets_the_same_refusal_and_is_named_separately(monkeypatch):
+    """The `end` half of the guard, driven by making only the LAST evaluation of the end
+    cloud fail — the shape the finding names: `x_of` solves the lateral offset at the
+    PREVIOUS pass's vertical offset, so the final `end` extent is measured at a target no
+    closure ever evaluated.
+    """
+    real = framing._extent
+    state = {"n": 0}
+
+    def counting(points, *args, **kw):
+        state["n"] += 1
+        return real(points, *args, **kw)
+
+    body = [(0.0, 0.0, -0.5), (0.0, 0.0, 0.5)]
+    monkeypatch.setattr(framing, "_extent", counting)
+    framing.solve_camera(body, body, 205.0, 6.0, LENS, SENSOR, W, H,
+                         height_frac=0.68, end_x_frac=0.5)
+    total = state["n"]                       # the last call is the `end` extent
+
+    state["n"] = 0
+
+    def fail_last(points, *args, **kw):
+        state["n"] += 1
+        if state["n"] == total:
+            return None
+        return real(points, *args, **kw)
+
+    monkeypatch.setattr(framing, "_extent", fail_last)
+    with pytest.raises(framing.FramingError, match=r"unreachable") as exc:
+        framing.solve_camera(body, body, 205.0, 6.0, LENS, SENSOR, W, H,
+                             height_frac=0.68, end_x_frac=0.5)
+    assert "end point cloud" in str(exc.value)
+
+
+def test_the_guard_does_not_fire_on_a_composition_that_is_reachable():
+    """Both directions: a solve that converges must still return its numbers."""
+    body = [(0.0, 0.0, -0.5), (0.0, 0.0, 0.5), (0.15, 0.0, 0.0), (-0.15, 0.0, 0.0)]
+    sol = framing.solve_camera(body, body, 205.0, 6.0, LENS, SENSOR, W, H,
+                               height_frac=0.68, end_x_frac=0.5)
+    assert sol["achieved"]["union_height_frac"] == pytest.approx(0.68, abs=1e-3)
