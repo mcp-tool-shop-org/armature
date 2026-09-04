@@ -862,18 +862,30 @@ def _site_key(path, fn, cls):
 def evidence_dicts_missing(key, root=None, classes=None):
     """Every raise in the `ArmatureError` family whose evidence dict omits `key`.
 
-    Returns `(offenders, examined, unreadable)`:
+    Returns `(offenders, examined, unreadable, no_evidence)`:
 
     * `offenders` — sites whose keys are fully readable and where `key` is absent. A
       genuine defect: the receipt cannot name its own andon.
-    * `examined` — raises this walk could say anything about, so a census over nothing
-      cannot read as a clean tree.
+    * `examined` — every raise of the family this walk LOOKED AT, judged or not, so a
+      census over nothing cannot read as a clean tree and the denominator cannot shrink in
+      silence.
     * `unreadable` — sites this walk CANNOT decide: a `**spread`, a parameter, or a
       `dict(x or {})` base whose incoming keys are not knowable here, and where the
       subscript writes do not supply `key`. Returned rather than silently skipped, which is
       the wave-10 correction (F-b01840fc): 10 `GateFailure` raise sites were dropped as
       `UNRESOLVED` and never counted, while the consolidation that named this the
       authoritative walk said it "resolves those shapes". It did not; it dropped them.
+    * `no_evidence` — sites that pass NO evidence argument at all. WAVE 12, F-1da3769f:
+      `if verdict == EV_NONE: continue` sat ABOVE `examined += 1`, so such a raise was not
+      an offender, not unreadable, and NOT COUNTED — it left both the numerator and the
+      denominator through the same door F-b01840fc had closed three lines lower. Measured
+      2026-09-04 over `armature_core/*.py`: 270 raises of the family, 102 of them EV_NONE
+      across 50 distinct sites, leaving `examined` at 168 with `offenders == []` and
+      `unreadable == []`. All 159 `GateFailure` raises carry a readable dict, so every one
+      of the 102 is a PLAIN refusal — and `errors.py:24` is
+      `self.evidence = evidence or {}`, so each raises a well-formed refusal whose evidence
+      dict is empty and therefore omits `gate`, the exact property this census exists to
+      police. The `assert examined >= 120` guard cleared 168 with 102 sites missing.
 
     Site identity is `(file, function, class)`, not a line number — see `_site_key`.
     """
@@ -884,7 +896,7 @@ def evidence_dicts_missing(key, root=None, classes=None):
     # since wave 10 a plain refusal in walk/framing/glb carries evidence too (`gate: None`).
     if classes is not None:
         family = {n for n in family if n in set(classes)}
-    offenders, unreadable, examined = set(), set(), 0
+    offenders, unreadable, no_evidence, examined = set(), set(), set(), 0
     for path in sorted(root.glob("*.py")):
         tree = _ast.parse(path.read_text(encoding="utf-8"))
         owner = _enclosing_function(tree)
@@ -898,16 +910,43 @@ def evidence_dicts_missing(key, root=None, classes=None):
                 continue
             fn = owner.get(node)
             keys, verdict = _evidence_keys(node, fn, tree)
-            if verdict == EV_NONE:
-                continue
+            # COUNTED FIRST (wave 12, rule 3): the denominator is every raise the walk
+            # looked at, never only the ones it could judge.
             examined += 1
+            if verdict == EV_NONE:
+                no_evidence.add(_site_key(path, fn, name))
+                continue
             if key in keys:
                 continue
             if verdict == EV_LITERAL:
                 offenders.add(_site_key(path, fn, name))
             else:
                 unreadable.add(_site_key(path, fn, name))
-    return sorted(offenders), examined, sorted(unreadable)
+    return sorted(offenders), examined, sorted(unreadable), sorted(no_evidence)
+
+
+def family_raise_count(root=None, classes=None):
+    """Every raise of the `ArmatureError` family under `root` — the DENOMINATOR.
+
+    Derived beside the census so `examined` can be asserted EQUAL to it rather than held
+    above a floor. A floor is what let 102 sites leave the census in silence: 168 clears
+    `>= 120` just as comfortably as 270 does.
+    """
+    root = CORE_DIR if root is None else _pathlib.Path(root)
+    family = _armature_error_family(TOOLS_DIR if root == CORE_DIR else root)
+    if classes is not None:
+        family = {n for n in family if n in set(classes)}
+    total = 0
+    for path in sorted(root.glob("*.py")):
+        for node in _ast.walk(_ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, _ast.Raise) or node.exc is None:
+                continue
+            func = node.exc.func if isinstance(node.exc, _ast.Call) else node.exc
+            name = (func.attr if isinstance(func, _ast.Attribute)
+                    else getattr(func, "id", ""))
+            if name in family:
+                total += 1
+    return total
 
 
 #: RE-DERIVED 2026-09-04 (wave 10, F-a30afea5) and EMPTY.
@@ -936,27 +975,140 @@ EVIDENCE_WITHOUT_GATE_ID_ROUTED = set()
 #: `ev = round_trip_report(...)`). See F-b01840fc.
 EVIDENCE_UNREADABLE_EXEMPT = set()
 
+#: WAVE 12, F-1da3769f. Raise sites that pass NO evidence argument at all — a plain refusal
+#: whose `evidence or {}` is empty and therefore omits `gate`. Named, dated 2026-09-04, and
+#: re-derived from the walk itself, the way `EVIDENCE_UNREADABLE_EXEMPT` is.
+#:
+#: 50 sites carrying 102 raises. Every one of them is a plain refusal: all 159 `GateFailure`
+#: raises in the package carry a readable dict (the ONE-judge agreement test at
+#: `tests/test_core_solver_evidence.py:266` confirms 159 == 159 under the class filter), so
+#: nothing here is a gate that lost its evidence — it is the wave-10 contract, "a plain
+#: refusal writes `gate: None` + `andon` + `clause`", realised on 9 of the 111 plain refusal
+#: sites.
+#:
+#: **Direction: CEILING, not equality, while wave 12 is in flight.** core-solvers owns
+#: extending the `gate: None` receipt to every plain refusal in walk/framing/glb, so this set
+#: is expected to shrink; a NEW no-evidence site fails here. Entries closed by a receipt are
+#: deleted by the commit that adds it.
+EVIDENCE_NO_EVIDENCE_ROUTED = {
+    "aapose.py:check_convention (ArmatureError)",
+    "aapose.py:draw_body (ArmatureError)",
+    "aapose.py:draw_hand (ArmatureError)",
+    "aapose.py:hand_frame (ArmatureError)",
+    "aapose.py:hand_stickwidth (ArmatureError)",
+    "aapose.py:mitten_hand (ArmatureError)",
+    "aapose.py:require_rig_map (ArmatureError)",
+    "aapose.py:stickwidth (ArmatureError)",
+    "binding.py:rigid_segment_weights (ArmatureError)",
+    "blender_scene.py:union_sphere (NonReiterableFrames)",
+    "framing.py:_norm (FramingError)",
+    "framing.py:camera_basis (FramingError)",
+    "framing.py:ortho_half_spans (FramingError)",
+    "framing.py:solve_camera (FramingError)",
+    "glb.py:_image_blob (MalformedGLB)",
+    "joints.py:_limb_radius (LandmarkError)",
+    "joints.py:snap_sites_to_balls (LandmarkError)",
+    "joints.py:sphere_fit (LandmarkError)",
+    "landmarks.py:_point_along (LandmarkError)",
+    "landmarks.py:_prune_discontinuities (LandmarkError)",
+    "landmarks.py:_region_runs (LandmarkError)",
+    "landmarks.py:band_profile (LandmarkError)",
+    "landmarks.py:bone_radii (LandmarkError)",
+    "landmarks.py:cross_section_radius (LandmarkError)",
+    "landmarks.py:derive (LandmarkError)",
+    "landmarks.py:facing (LandmarkError)",
+    "lift_solve.py:_bind_reference (SolveError)",
+    "lift_solve.py:_unit (SolveError)",
+    "lift_solve.py:bone_length_residuals (SolveError)",
+    "lift_solve.py:frame_from (SolveError)",
+    "lift_solve.py:sites_from_landmarks (SolveError)",
+    "lift_solve.py:solve_frame (SolveError)",
+    "openpose.py:require_drawing_convention (ArmatureError)",
+    "parts.py:assign_faces (ArmatureError)",
+    "parts.py:joint_planes (ArmatureError)",
+    "posearc.py:angle_at_frame (SpecError)",
+    "posearc.py:arc_readout (SpecError)",
+    "posearc.py:resolve_arc (SpecError)",
+    "resample.py:quat_normalise (ResampleError)",
+    "resample.py:resample_frames (ResampleError)",
+    "resample.py:sample_map (ResampleError)",
+    "shotspec.py:_require (SpecError)",
+    "shotspec.py:_require_positive (SpecError)",
+    "shotspec.py:normalise_spec (SpecError)",
+    "shotspec.py:resolve_asset (SpecError)",
+    "turnaround.py:projection_plan (TurnaroundPlanRefusal)",
+    "walk.py:__init__ (WalkError)",
+    "walk.py:_integrate_forward (WalkError)",
+    "walk.py:_phase_schedule (WalkError)",
+    "walk.py:_rot (WalkError)",
+}
+
 
 def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention():
-    """The population, before the property. Measured 2026-09-04: 222 raises of the
-    `ArmatureError` family under `armature_core`, of which 132 carry a readable dict.
-    The old walk examined `ev = {...}` assignments in functions whose raised class names
-    contained the substring "Gate", and reached 0 of the 31 offenders below."""
+    """The population, before the property.
+
+    WAVE 12, F-1da3769f: the guard was `assert examined >= 120`, a FLOOR — and a floor
+    cannot tell you the denominator shrank. 168 cleared it just as comfortably as 270 does,
+    with 102 raises leaving the census silently through the `EV_NONE` continue. It is now an
+    EQUALITY against the family raise count derived beside it, so a site that stops being
+    examined fails here rather than reducing the census's own scope.
+    """
     family = _armature_error_family(TOOLS_DIR)
     assert len(family) >= 70, sorted(family)
     for outside_the_naming_convention in ("G1GeneratorLegality", "G2Completeness",
                                           "G5ConventionConformance", "G6SubjectMotion"):
         assert outside_the_naming_convention in family
-    _, examined, _unreadable = evidence_dicts_missing("gate")
-    assert examined >= 120, (
-        f"only {examined} readable evidence dicts found in armature_core; the walk has "
-        f"stopped reaching the package and every assertion below is vacuous")
+    _, examined, _unreadable, _none = evidence_dicts_missing("gate")
+    total = family_raise_count()
+    assert examined == total, (
+        f"the walk looked at {examined} of {total} `ArmatureError`-family raises in "
+        f"armature_core; a raise it does not count is a raise it cannot police, and the "
+        f"whole census reads as a clean tree over the gap")
+    assert total == 270, (
+        f"{total} family raises in armature_core; 270 were measured on 2026-09-04. This is "
+        f"the denominator every ratio below is quoted against — re-measure it deliberately")
+
+
+def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():
+    """F-1da3769f. `if verdict == EV_NONE: continue` sat above `examined += 1`, so a raise
+    with no evidence argument was not an offender, not unreadable, and not counted.
+
+    This is the shape of F-b01840fc one door over: that finding closed sites the walk
+    returned UNRESOLVED on and "never counted", and its correction added an `unreadable`
+    list so nothing would leave the census silently. EV_NONE left by the same door, three
+    lines earlier.
+    """
+    _offenders, _examined, _unreadable, no_evidence = evidence_dicts_missing("gate")
+    assert no_evidence, (
+        "the no-evidence bucket is empty; either every plain refusal now carries a receipt "
+        "— in which case delete EVIDENCE_NO_EVIDENCE_ROUTED — or the walk has stopped "
+        "classifying")
+    new = sorted(set(no_evidence) - EVIDENCE_NO_EVIDENCE_ROUTED)
+    assert new == [], {
+        "raises no evidence at all and is not routed": new,
+        "why it matters": "errors.py:24 is `self.evidence = evidence or {}`, so the halt "
+                          "line records a null evidence value and the receipt for a "
+                          "refused stage cannot name what refused it",
+    }
+
+
+def test_the_no_evidence_sites_are_plain_refusals_and_not_gates_that_lost_their_receipt():
+    """The claim that makes the ceiling above defensible, measured rather than asserted.
+
+    If any of the 50 were a `GateFailure`, this would be a live defect in the gate receipt
+    rather than an unfinished half of the wave-10 plain-refusal contract.
+    """
+    andons = {c.split(".", 1)[1] for c in package_andons()}
+    _o, _e, _u, gate_class_none = evidence_dicts_missing("gate", classes=andons)
+    assert gate_class_none == [], (
+        "a GateFailure subclass raises with no evidence argument at all; its halt line "
+        "records `evidence: null` and the andon cannot name what fired it")
 
 
 def test_no_new_gate_raises_evidence_that_cannot_name_its_own_andon():
     """The census, per SITE. A ratchet: the 31 sites the widened walk found on 2026-09-04
     are written down above with the domain that owns each, and a 32nd fails here."""
-    offenders, _, unreadable = evidence_dicts_missing("gate")
+    offenders, _, unreadable, _none = evidence_dicts_missing("gate")
     assert set(offenders) == EVIDENCE_WITHOUT_GATE_ID_ROUTED, {
         "regressed (omit their own gate id)":
             sorted(set(offenders) - EVIDENCE_WITHOUT_GATE_ID_ROUTED),
@@ -995,23 +1147,31 @@ def test_the_census_calls_its_own_shipped_walk_on_a_tree_whose_answers_are_known
         "def by_keyword(a):\n"
         "    raise G1Legality('bad', evidence={'n': len(a)})\n\n"
         "def carries_its_id(a):\n"
-        "    raise SomeGate('bad', {'gate': 'X', 'n': len(a)})\n", encoding="utf-8")
+        "    raise SomeGate('bad', {'gate': 'X', 'n': len(a)})\n\n"
+        # WAVE 12, F-1da3769f — the FIFTH shape: no evidence argument at all. 102 of the
+        # package's 270 family raises look like this, and the walk `continue`d past every
+        # one of them before counting it.
+        "def no_evidence_at_all(a):\n"
+        "    raise SomeGate('bad')\n", encoding="utf-8")
 
-    offenders, examined, unreadable = evidence_dicts_missing("gate", root=pkg)
-    assert examined == 4, offenders
+    offenders, examined, unreadable, no_evidence = evidence_dicts_missing("gate", root=pkg)
+    assert examined == 5, (examined, offenders, no_evidence)
     assert offenders == [
         "shapes.py:assigned_then_raised (SomeGate)",
         "shapes.py:by_keyword (G1Legality)",
         "shapes.py:inline (SomeGate)",
     ], offenders
     assert unreadable == [], unreadable
+    assert no_evidence == ["shapes.py:no_evidence_at_all (SomeGate)"], no_evidence
+    # the denominator is derived beside the census and must agree with it
+    assert family_raise_count(root=pkg) == examined
 
     #: and the same tree with every id present reports nothing — a census that named a
     #: site unconditionally would be no better than one that named none.
     (pkg / "shapes.py").write_text(
         "def inline(a):\n"
         "    raise SomeGate('bad', {'gate': 'X', 'n': len(a)})\n", encoding="utf-8")
-    assert evidence_dicts_missing("gate", root=pkg) == ([], 1, [])
+    assert evidence_dicts_missing("gate", root=pkg) == ([], 1, [], [])
 
 
 def test_every_shared_gate_id_is_disambiguated_by_the_evidence_in_this_domain():
