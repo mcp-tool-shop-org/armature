@@ -114,7 +114,10 @@ def test_the_gate_passes_a_figure_with_margin_and_reports_the_smallest_one():
            "n_points": 100}
     ev = SF.gate_whole(ext, W, H, margin_px=8)
     assert ev["margins_px"]["top"] == pytest.approx(24.0)
-    assert ev["margins_px"]["bottom"] == pytest.approx(23.0)
+    # 23.0 until F-ac54143a: the far side was measured against `height - 1` while the near
+    # side used 0, so the two sides sat one pixel apart in a frame `silhouette_extent`
+    # spans as 0..height.
+    assert ev["margins_px"]["bottom"] == pytest.approx(24.0)
     assert ev["height_frac"] == pytest.approx(0.9, abs=1e-9)
 
 
@@ -499,3 +502,18 @@ class TestGateBackdrop:
                                     plate="p.png", plate_sha256="abc123"))
         assert exc.value.evidence["plate"] == "p.png"
         assert exc.value.evidence["plate_sha256"] == "abc123"
+
+
+def test_a_perfectly_centred_subject_reports_equal_margins():
+    """`silhouette_extent` produces `fx * width` / `fy * height`, so an in-frame point
+    spans the continuous range 0..width - not 0..width-1. gate_whole computed left/top
+    against 0 but right/bottom against `width - 1` / `height - 1`, so the two sides were
+    measured against frames one pixel apart, the right/bottom clearance was understated by
+    1 px, and a perfectly centred subject reported asymmetric margins (F-ac54143a).
+    `turnaround.gate_view_crop` keeps `width - 1` because its bbox is INCLUSIVE."""
+    m = 100.0
+    ext = {"x0": m, "x1": float(W) - m, "y0": m, "y1": float(H) - m,
+           "n_behind": 0, "n_points": 10}
+    ev = SF.gate_whole(ext, W, H, margin_px=8)
+    assert ev["margins_px"]["left"] == pytest.approx(ev["margins_px"]["right"])
+    assert ev["margins_px"]["top"] == pytest.approx(ev["margins_px"]["bottom"])

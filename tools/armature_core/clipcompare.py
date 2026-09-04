@@ -31,8 +31,22 @@ def _f(a):
 
 
 def frame_fidelity(src, dec):
-    """Per-frame distance between a source frame and its decoded counterpart."""
+    """Per-frame distance between a source frame and its decoded counterpart.
+
+    **`(H, W, 3)` only, and the shape is checked.** `frac_differing` reduces over the
+    CHANNEL axis, so it is a fraction of PIXELS - but on a 2-D `(H, W)` frame the same
+    expression collapsed the WIDTH axis and returned the fraction of differing ROWS under
+    the same key name: measured on a 4x100 pair with exactly one differing pixel, the 2-D
+    form reported 0.25 where the (4, 100, 3) form reported 0.0025, a 100x error with no
+    shape check and nothing in the returned dict recording which reading was taken. A
+    fidelity table over single-channel frames (a mask, an alpha or depth sequence, a luma
+    extraction) would have quoted that number beside numbers in the right unit.
+    `clipstats.luma` already refuses the same way, and `downsample` fails loudly; this
+    accepted anything. The reduction axis is now named in the returned dict as well.
+    """
     s, d = _f(src), _f(dec)
+    if s.ndim != 3 or s.shape[2] < 3:
+        raise ValueError(f"expected an (H, W, 3) frame, got shape {s.shape}")
     if s.shape != d.shape:
         raise ValueError(f"shape mismatch: source {s.shape} vs decoded {d.shape}")
     diff = np.abs(s - d)
@@ -41,6 +55,7 @@ def frame_fidelity(src, dec):
         "mean_abs": float(diff.mean()),
         "max_abs": float(diff.max()),
         "frac_differing": float((diff.sum(axis=-1) > 0).mean()),
+        "frac_differing_reduced_over": "channel axis -1; the unit is PIXELS",
     }
 
 

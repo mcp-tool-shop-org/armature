@@ -25,6 +25,12 @@ session's — E01 reports both.
 import numpy as np
 
 BACKGROUND_DEPTH = 0.0  # black = far, for pixels with no geometry
+
+#: The lowest value a GEOMETRY pixel may take, so that "farthest geometry" and "no
+#: geometry" are not the same byte. 1/255 encodes to byte 1; BACKGROUND_DEPTH encodes to
+#: byte 0. Reserving one byte costs 0.4% of the depth range and is what keeps the
+#: subject's far edge from dissolving into the void it is supposed to stand against.
+GEOMETRY_DEPTH_FLOOR = 1.0 / 255.0
 SKY_Z = 1e9  # Blender writes 1e10 into the Z pass where nothing was hit
 
 
@@ -52,11 +58,21 @@ def depth_extent(z, mask):
 
 
 def normalize_depth(z, mask, z_near, z_far):
-    """Inverse relative depth on [0, 1] — near = bright (F19).
+    """Inverse relative depth - near = bright (F19), background reserved.
 
     z_near/z_far are the window this frame is normalised against. Passing the
     frame's own extent gives per-frame normalisation; passing the shot's extent
-    gives per-shot. Background pixels get BACKGROUND_DEPTH.
+    gives per-shot.
+
+    **Geometry lands on [GEOMETRY_DEPTH_FLOOR, 1], never on the background value.** The
+    geometry pixel at `z == z_far` used to map to `(z_far - z_far)/span = 0.0`, which is
+    BACKGROUND_DEPTH, and `encode_u8` took both to byte 0: measured, `z = [[1, 2], [3,
+    1e10]]` with mask `[[1,1],[1,0]]` over (1, 3) gave bytes `[[255, 128], [0, 0]]` - the
+    farthest geometry pixel byte-identical to the void. In a depth control image that
+    dissolves the rearmost band of the silhouette into the background, and under per-shot
+    normalisation it is a band of pixels on every frame where the subject sits furthest,
+    not one pixel. So 0 is reserved for "not geometry" and the geometry range starts one
+    byte above it.
     """
     z = np.asarray(z, dtype=np.float64)
     span = float(z_far) - float(z_near)
@@ -67,6 +83,7 @@ def normalize_depth(z, mask, z_near, z_far):
         return d.astype(np.float64)
     d = (float(z_far) - z) / span
     d = np.clip(d, 0.0, 1.0)
+    d = GEOMETRY_DEPTH_FLOOR + d * (1.0 - GEOMETRY_DEPTH_FLOOR)
     return np.where(mask > 0, d, BACKGROUND_DEPTH)
 
 
