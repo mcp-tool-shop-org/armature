@@ -47,6 +47,13 @@ class CropStripError(ArmatureError):
         self.evidence = evidence or {}
 
 
+def _is_int(text):
+    """An integer token, leading sign allowed. `str.isdigit()` refuses `-4`, which is a
+    legal coordinate on a box that is later bounded against the frame."""
+    t = str(text).strip()
+    return bool(t) and (t[1:] if t[0] in "+-" else t).isdigit()
+
+
 def parse_boxes(text):
     """`"0:x0,y0,x1,y1;32:..."` -> `[(frame NUMBER, (x0, y0, x1, y1)), ...]`, or raise.
 
@@ -64,7 +71,27 @@ def parse_boxes(text):
             raise CropStripError(f"box entry {part!r} is not `<frame>:<x0,y0,x1,y1>`",
                                  {"entry": part, "supplied": text})
         idx, coords = part.split(":")
-        nums = [int(v) for v in coords.split(",")]
+        # `int(...)` was unguarded on BOTH tokens: the plausible operator typo in the flag
+        # this tool exists to RECORD escaped the one refusal shape this module promises and
+        # surfaced as `ValueError: invalid literal for int() with base 10: 'a'`, naming
+        # neither the flag nor the shape it wanted. Measured 2026-09-04. This is the escape
+        # `measure_floor._span` was given a refusal for, one tool over.
+        raw = [v.strip() for v in coords.split(",")]
+        bad = [v for v in raw if not _is_int(v)]
+        if bad:
+            raise CropStripError(
+                f"--boxes entry {part!r} has a non-numeric coordinate "
+                f"({', '.join(repr(v) for v in bad)}); it must be written "
+                f"`<frame>:<x0,y0,x1,y1>` with five integers",
+                {"entry": part, "supplied": text, "coordinates": raw,
+                 "non_numeric": bad, "expected_shape": "<frame>:<x0,y0,x1,y1>"})
+        if not _is_int(idx.strip()):
+            raise CropStripError(
+                f"--boxes entry {part!r} names a non-numeric frame ({idx.strip()!r}); the "
+                f"first field is the frame's own NUMBER, as it appears in its file name",
+                {"entry": part, "supplied": text, "frame_token": idx.strip(),
+                 "expected_shape": "<frame>:<x0,y0,x1,y1>"})
+        nums = [int(v) for v in raw]
         if len(nums) != 4:
             raise CropStripError(
                 f"box entry {part!r} needs four coordinates, got {len(nums)}",
@@ -107,6 +134,28 @@ def frame_paths(directory):
     return [by_number[n] for n in sorted(by_number)]
 
 
+def gate_box_inside(box, size, number, filename):
+    """ANDON — the crop box lies inside the frame, or raise naming the overhang.
+
+    PIL pads a box outside the image with zeros and says nothing, so the black is
+    published as native pixels and the sidecar records the box as though it had been cut.
+    """
+    x0, y0, x1, y1 = box
+    w, h = size
+    over = {"x0": max(0, -x0), "y0": max(0, -y0),
+            "x1": max(0, x1 - w), "y1": max(0, y1 - h)}
+    ev = {"gate": "BOX", "frame": number, "file": filename, "box": list(box),
+          "frame_size": [int(w), int(h)], "overhang": over}
+    if any(over.values()):
+        raise CropStripError(
+            f"box {tuple(box)} is not inside frame {number} ({filename}, {w}x{h}); it "
+            f"overhangs by {over}. PIL pads the outside with black and the sidecar would "
+            f"record the box as though it had been cut from that frame, so re-cutting "
+            f"from the record lands on the same black", ev)
+    ev["verdict"] = f"inside {w}x{h}"
+    return ev
+
+
 def build(by_number, boxes, scale, title):
     """The strip and its crop record. `boxes` is keyed by frame NUMBER.
 
@@ -131,26 +180,39 @@ def build(by_number, boxes, scale, title):
                 f"publish a still whose provenance names a frame the run does not hold",
                 {"asked": number, "lo": lo, "hi": hi, "n_frames": len(by_number),
                  "frames": sorted(by_number)[:32]})
-        im = Image.open(path).convert("RGB").crop(box)
+        src = Image.open(path).convert("RGB")
+        # ---- ANDON, before the crop: the box is INSIDE the frame it is cut from.
+        #      `Image.crop` pads a box outside the image with zeros rather than raising,
+        #      so a still that is wholly or partly black was published with a sidecar
+        #      recording the box as though it had been cut from that frame. Measured
+        #      2026-09-04 on 64x64 frames, `--boxes="0:900,900,960,960" --scale=2`:
+        #      exit 0, a tile of 14400 pure-black pixels, `CROP_STRIP ... 136x168`. The
+        #      realistic arrival is a box cut for one route's resolution applied to
+        #      another's (832x480 vs 1280x720) — part image, part padding, no refusal.
+        gate_box_inside(box, src.size, number, os.path.basename(path))
+        im = src.crop(box)
         im = im.resize((im.width * scale, im.height * scale), Image.NEAREST)
-        tiles.append((number, os.path.basename(path), box, im))
+        tiles.append((number, os.path.basename(path), box, src.size, im))
 
     gap = 8
-    width = sum(t[3].width for t in tiles) + gap * (len(tiles) + 1)
-    height = max(t[3].height for t in tiles) + LABEL_H * 2 + gap * 2
+    width = sum(t[4].width for t in tiles) + gap * (len(tiles) + 1)
+    height = max(t[4].height for t in tiles) + LABEL_H * 2 + gap * 2
     strip = Image.new("RGB", (width, height), BG)
     d = ImageDraw.Draw(strip)
     d.text((gap, 4), f"{title}   {scale}x NEAREST of native pixels   "
                      f"(crop boxes printed under each tile)", fill=FG)
     x = gap
-    for number, fname, box, im in tiles:
+    for number, fname, box, _size, im in tiles:
         strip.paste(im, (x, LABEL_H + gap))
         # The FILE's own number, five digits like the file itself — never a position.
         d.text((x, LABEL_H + gap + im.height + 2), f"f{number:05d}", fill=FG)
         d.text((x, LABEL_H + gap + im.height + 2 + 13),
                f"{box[0]},{box[1]},{box[2]},{box[3]}", fill=DIM)
         x += im.width + gap
-    return strip, [{"frame": n, "file": f, "box": list(b)} for n, f, b, _ in tiles]
+    # `frame_size` rides every crop: a later reader can then see the box was inside the
+    # frame it names, rather than only that a box was asked for.
+    return strip, [{"frame": n, "file": f, "box": list(b), "frame_size": list(sz)}
+                   for n, f, b, sz, _im in tiles]
 
 
 def main(argv=None):
@@ -163,6 +225,17 @@ def main(argv=None):
     ap.add_argument("--scale", type=int, default=3)
     ap.add_argument("--title", default="crop")
     a = ap.parse_args(argv)
+
+    # ---- ANDON, before a frame is opened: the enlargement factor is an enlargement.
+    #      `--scale=0` reached `im.resize` and died inside PIL with
+    #      `ValueError: height and width must be > 0`, naming neither the flag nor the
+    #      value, after every requested frame had been read. The module's own contract is
+    #      an enlargement "by an integer factor with NEAREST"; a factor below 1 is not one.
+    if a.scale < 1:
+        raise CropStripError(
+            f"--scale={a.scale} is not an enlargement; this tool enlarges native pixels "
+            f"by an integer factor with NEAREST, so the factor must be at least 1",
+            {"gate": "SCALE", "scale": a.scale})
 
     by_number = frames_by_number(a.frames)
     strip, record = build(by_number, parse_boxes(a.boxes), a.scale, a.title)
