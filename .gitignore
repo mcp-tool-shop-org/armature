@@ -83,7 +83,17 @@ site/.astro/
 # long-lived token `.npmrc` and `.pypirc` do — and it was not on this list.
 # `tests/test_packaging.py` derives the carriers from the registries the workflows actually
 # publish to, so a third registry brings its credential file with it.
+#
+# BOTH SPELLINGS, because the file has two and this repository is developed on the platform
+# that uses the second one. The client the comment above names decides it: measured on the
+# repo venv 2026-09-04, `requests.utils.NETRC_FILES == ('.netrc', '_netrc')` — requests tries
+# BOTH names, and `_netrc` is the Windows spelling (CLAUDE.md's environment block: this rig is
+# the only platform this repository is developed on, and every path in it is a C:/E: path).
+# Measured before this line existed, `git check-ignore -v` from a worktree: `.netrc` ->
+# `.gitignore:86` IGNORED, `_netrc` -> NOT IGNORED, `npm/_netrc` -> NOT IGNORED. A one-spelling
+# list is a backstop that is green on the spelling a maintainer here would actually create.
 .netrc
+_netrc
 *.key
 *.pem
 *.p12
