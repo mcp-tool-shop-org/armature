@@ -16,7 +16,14 @@ on:
       - "site/**"
       - "tools/**"
       - "tests/**"
-      - ".github/workflows/**"
+      # `.github/**`, not `.github/workflows/**`. Wave 6 moved the font install OUT of the
+      # two workflows and INTO `.github/actions/sheet-fonts/action.yml`, which ci.yml and
+      # release.yml both now depend on — and it moved out from under the only filter that
+      # covered it. Measured before this line changed, by evaluating the suite's own
+      # `_on_block()` over every workflow: `.github/actions/sheet-fonts/action.yml` -> NO
+      # WORKFLOW RUNS. A renamed face or a dropped `apt-get update` would have reached main
+      # green-by-absence and first surfaced in release.yml, after `release: published`.
+      - ".github/**"
       # The packaging manifests. Added at v0.2.0: without these a change to
       # pyproject.toml or the launcher could reach a tag having never been built,
       # and the first place that failure would surface is the release job — after
@@ -33,12 +40,30 @@ on:
       - "npm/**"
       - "README.pypi.md"
       - "LICENSE"
+      # The files the WORKFLOWS are built from, and the rest of what the suite opens by
+      # path. `tests/test_ci_workflows.py` derives this population by walking every
+      # `os.path.join` in `tests/**` and resolving it against the tree, so a test that
+      # starts reading a new repo file fails there — naming the file and the filter it
+      # needs — instead of being guarded by a job that never runs on it. verify.ps1 and
+      # .gitignore each have a test file of their own and matched nothing at all.
+      - "verify.ps1"
+      - ".gitignore"
+      - "specs/**"
+      - "docs/experiments/**"
+      - "docs/index/**"
   pull_request:
     paths:
       - "site/**"
       - "tools/**"
       - "tests/**"
-      - ".github/workflows/**"
+      # `.github/**`, not `.github/workflows/**`. Wave 6 moved the font install OUT of the
+      # two workflows and INTO `.github/actions/sheet-fonts/action.yml`, which ci.yml and
+      # release.yml both now depend on — and it moved out from under the only filter that
+      # covered it. Measured before this line changed, by evaluating the suite's own
+      # `_on_block()` over every workflow: `.github/actions/sheet-fonts/action.yml` -> NO
+      # WORKFLOW RUNS. A renamed face or a dropped `apt-get update` would have reached main
+      # green-by-absence and first surfaced in release.yml, after `release: published`.
+      - ".github/**"
       # The packaging manifests. Added at v0.2.0: without these a change to
       # pyproject.toml or the launcher could reach a tag having never been built,
       # and the first place that failure would surface is the release job — after
@@ -55,6 +80,17 @@ on:
       - "npm/**"
       - "README.pypi.md"
       - "LICENSE"
+      # The files the WORKFLOWS are built from, and the rest of what the suite opens by
+      # path. `tests/test_ci_workflows.py` derives this population by walking every
+      # `os.path.join` in `tests/**` and resolving it against the tree, so a test that
+      # starts reading a new repo file fails there — naming the file and the filter it
+      # needs — instead of being guarded by a job that never runs on it. verify.ps1 and
+      # .gitignore each have a test file of their own and matched nothing at all.
+      - "verify.ps1"
+      - ".gitignore"
+      - "specs/**"
+      - "docs/experiments/**"
+      - "docs/index/**"
   workflow_dispatch:
 
 concurrency:

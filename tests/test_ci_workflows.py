@@ -25,6 +25,7 @@ What each group is here to catch, measured on this tree before the fix:
   which executes a function body, so it was green on a wheel whose drawing path could not run.
 """
 
+import ast
 import os
 import re
 import shutil
@@ -424,6 +425,157 @@ def test_ci_runs_on_every_file_the_package_is_built_from(trigger):
         f"{trigger} builds nothing when these build inputs change: {missing}; the first "
         "place that surfaces is the release job, after the tag exists"
     )
+
+
+# -- the OTHER build inputs: every file the suite opens by path (F-59883264) ---------------
+#
+# The census above reads pyproject's build inputs, which is the population of "files the
+# PACKAGE is built from". The files the WORKFLOWS are built from were in no filter at all.
+# Measured by evaluating `_on_block()` / `_pattern_hits()` over every workflow before the
+# fix: `.github/actions/sheet-fonts/action.yml` -> NO WORKFLOW RUNS, `verify.ps1` -> NO
+# WORKFLOW RUNS, `.gitignore` -> NO WORKFLOW RUNS. That is a seam wave 6 opened: the font
+# install moved OUT of the two workflows INTO a composite action both now depend on, and it
+# moved out from under the only filter that covered it. The guards that would catch a break
+# all live under `tests/**`, so they do not run on the change they exist to guard.
+#
+# The population is therefore derived from the suite itself: every repo path a test module
+# names as an `os.path.join` of string literals off a path constant it defines. That is what
+# "the suite guards" means mechanically — if a test opens it, a change to it can turn the
+# suite red, and CI must run.
+
+TESTS_DIR = os.path.join(REPO, "tests")
+
+
+def _joined_relpath(node, env):
+    """`os.path.join(BASE, "a", "b")` -> `BASE/a/b`, or None if any part is not resolvable."""
+    if not isinstance(node, ast.Call):
+        return None
+    fn = node.func
+    if not (isinstance(fn, ast.Attribute) and fn.attr == "join"
+            and isinstance(fn.value, ast.Attribute) and fn.value.attr == "path"):
+        return None
+    parts = []
+    for i, arg in enumerate(node.args):
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            parts.append(arg.value)
+        elif i == 0 and isinstance(arg, ast.Name) and arg.id in env:
+            if env[arg.id]:
+                parts.append(env[arg.id])
+        else:
+            return None
+    return "/".join(p.strip("/") for p in parts if p.strip("/"))
+
+
+def paths_the_suite_guards():
+    """Every existing repo path a test module names, walked out of `tests/**` by AST.
+
+    Derivation, stated because a census whose population is typed is the defect class this
+    file keeps finding: each test module is parsed; `REPO` seeds an environment of path
+    constants; every `NAME = os.path.join(...)` of literals off a known constant extends it
+    (two passes, so a constant defined below its first use still resolves); then every
+    `os.path.join(...)` in the module is resolved the same way and kept if it exists on
+    disk. Paths that resolve through a variable filename are not resolvable this way and are
+    not claimed — this is a floor on what the suite reads, not a ceiling.
+    """
+    found = set()
+    for name in sorted(os.listdir(TESTS_DIR)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        env = {"REPO": ""}
+        for _ in range(2):
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name)):
+                    rel = _joined_relpath(node.value, env)
+                    if rel is not None:
+                        env[node.targets[0].id] = rel
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                rel = _joined_relpath(node, env)
+                if rel and os.path.exists(os.path.join(REPO, rel)):
+                    found.add(rel)
+    return sorted(found)
+
+
+#: The population as measured 2026-09-04 by the walk above. Asserted, so a test that starts
+#: reading a new repo file fails HERE — naming the file and the filter it needs — rather
+#: than reaching main green-by-absence.
+GUARDED_TODAY = [
+    ".github/actions",
+    ".github/actions/sheet-fonts/action.yml",
+    ".github/workflows",
+    ".gitignore",
+    "docs/experiments/E04-the-between-generation-floor.md",
+    "docs/index/armature.db",
+    "npm/bin/armature.mjs",
+    "npm/package.json",
+    "pyproject.toml",
+    "specs/E09-A3-seeds.json",
+    "specs/E09-seeds.json",
+    "specs/E13-prompt.json",
+    "specs/E13-seeds.json",
+    "tests",
+    "tests/blender/check_floor_material.py",
+    "tests/blender/check_ortho_convention.py",
+    "tests/blender/check_plate_composite.py",
+    "tests/blender/check_pose_arc_roundtrip.py",
+    "tests/blender/check_visibility.py",
+    "tests/blender/make_synthetic_run.py",
+    "tools",
+    "tools/armature_core",
+    "tools/armature_index.py",
+    "tools/make_test_armature.py",
+    "tools/sheet_compose.py",
+    "verify.ps1",
+]
+
+
+def test_the_guarded_path_census_is_the_one_the_suite_actually_opens():
+    """Size and membership before the property — a census that cannot grow is not one."""
+    assert paths_the_suite_guards() == GUARDED_TODAY, (
+        "the set of repo files the suite opens by path has changed; each new member needs a "
+        "push and a pull_request filter that covers it before this list is updated:\n  "
+        + "\n  ".join(sorted(set(paths_the_suite_guards()) ^ set(GUARDED_TODAY))))
+
+
+def _probe_path(rel):
+    """What a member of the population stands for when matched against a filter.
+
+    A directory the suite walks stands for the files INSIDE it — a filter covers
+    `tests/**`, never the bare string `tests` — so a directory member is probed as one file
+    under it. A file member stands for itself.
+    """
+    return rel + "/x" if os.path.isdir(os.path.join(REPO, rel)) else rel
+
+
+def _unfiltered(paths, trigger):
+    """The members of `paths` that match no pattern in ci.yml's `trigger` filter."""
+    patterns = _paths_under(trigger)
+    return [p for p in paths if not _pattern_hits(patterns, _probe_path(p))]
+
+
+@pytest.mark.parametrize("trigger", ["push", "pull_request"])
+def test_ci_runs_on_every_file_the_suite_guards(trigger):
+    """A file a test opens, that no filter covers, is a guard that cannot run on its subject."""
+    missing = _unfiltered(paths_the_suite_guards(), trigger)
+    assert missing == [], (
+        f"{trigger} runs nothing when these change, and a test in tests/ reads every one of "
+        f"them: {missing}; the guard does not run on the change it exists to guard"
+    )
+
+
+@pytest.mark.parametrize("trigger", ["push", "pull_request"])
+def test_the_trigger_census_goes_red_on_a_guarded_file_no_filter_covers(trigger):
+    """The mutation: a member added to the population without the property must fail.
+
+    A census that reports green over a population it cannot fail on is the shape this wave
+    exists to close, so the failing direction is exercised rather than assumed.
+    """
+    intruder = "no-such-directory-8481819/guarded.txt"
+    assert _unfiltered([intruder], trigger) == [intruder], (
+        f"the {trigger} filter claims to cover {intruder!r}; the check cannot fail")
 
 
 def _code_only(script):
