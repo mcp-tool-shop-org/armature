@@ -1690,6 +1690,15 @@ GUARDED_TODAY = [
     "MANIFEST.in",
     "docs/experiments/E04-the-between-generation-floor.md",
     "docs/index/armature.db",
+    # Joined at wave 10 (core-gates): `tests/test_route_gates.py` reads the licence map's
+    # table rows to check that `RULED_COMPONENTS` — which calls itself a MIRROR of that
+    # document — carries a row for every kill the map records. The licence gate is a
+    # CLAUDE.md non-negotiable, so a re-fetch that adds or retires a kill is exactly the
+    # change CI must run on. ⚠ SEAM, routed to ci-packaging: ci.yml's `push` and
+    # `pull_request` filters carry `docs/experiments/**` and `docs/index/**` and DO NOT
+    # cover this file, so `test_ci_runs_on_every_file_the_suite_guards` names it until the
+    # line `- "docs/license-map.md"` is added under both triggers.
+    "docs/license-map.md",
     "npm/bin/armature.mjs",
     "npm/package.json",
     "pyproject.toml",

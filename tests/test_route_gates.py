@@ -3,9 +3,12 @@
 Every fixture below is a graph that a name-level or top-level check would call clean.
 """
 
+import os
+import re
+
 import pytest
 
-from conftest import TOOLS  # noqa: F401
+from conftest import TOOLS, REPO  # noqa: F401
 from armature_core import canon
 from armature_core import route_gates as RG
 
@@ -1752,3 +1755,156 @@ def test_the_int_cases_every_builder_supplies_today_still_pass():
     assert len(supplied) == 1 and supplied[0]["legal"] is True
     ev = RG.verify(_frame_graph(), frame={"width": 832, "height": 480, "length": 81})
     assert [f["source"] for f in ev["frame_legality"]] == ["supplied"]
+
+
+# --- W10 routed seed: the table is a MIRROR, and what it mirrors is measured ----------
+#
+# The seed: `RULED_COMPONENTS` carries LoRA / preprocessor rows only, so the licence
+# map's Apache base weights (`wan2.1_vace_14B_fp16`, `umt5_xxl_fp16`, `wan_2.1_vae`) read
+# `NOT IN THIS TABLE` — a licence-map row and a `components()` row are two objects and
+# only one is machine-read.
+#
+# What is recorded here rather than ruled: adding ALLOWED rows for base weights is a
+# LICENCE judgement about which map row governs which served filename, and CLAUDE.md puts
+# that in "a license check recorded in the spec that introduces it". docs/license-map.md
+# is the coordinator's and read-only from this domain. So this census states what IS true
+# of the mirror today, and goes red the moment the map gains a kill the table does not
+# carry — which is the direction that costs something.
+
+LICENSE_MAP = os.path.join(REPO, "docs", "license-map.md")
+
+
+def _license_map_rows():
+    """Every markdown table row in docs/license-map.md, with its own header.
+
+    **The node this census keys on is the MAP's table rows** — the record
+    `RULED_COMPONENTS` calls itself a mirror of — parsed by tracking the most recent
+    header line, because the map's tables do not share a column layout (`| Model |
+    License | Commercial | ... |` and `| Item | Commercial | ... |` both occur).
+    """
+    header, rows = None, []
+    for line in open(LICENSE_MAP, encoding="utf-8").read().splitlines():
+        if not line.startswith("|"):
+            header = None
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if all(set(c) <= set("-: ") for c in cells):
+            continue
+        if header is None:
+            header = cells
+            continue
+        rows.append((header, cells))
+    return rows
+
+
+def _map_kills():
+    """Map rows whose Commercial column reads NO — the rows a gate must be able to fail
+    on. Keyed on the COLUMN NAMED "Commercial", resolved per table from its own header,
+    never on a fixed index."""
+    out = []
+    for header, cells in _license_map_rows():
+        low = [h.lower() for h in header]
+        if "commercial" not in low:
+            continue                      # a fit / unverified table: no verdict column
+        i = low.index("commercial")
+        if i >= len(cells):
+            continue
+        if re.search(r"\bNO\b", cells[i]):
+            out.append((cells[0], cells[i]))
+    return out
+
+
+#: Map kills with NO mirror row in `RULED_COMPONENTS`, measured 2026-09-04, each with the
+#: reason it carries no row TODAY. A RATCHET: it may only shrink, and a new unmirrored
+#: kill fails the census below rather than joining this set silently. Recorded, not ruled
+#: — the advisor owns whether each earns a row.
+UNMIRRORED_MAP_KILLS = {
+    "Depth Anything V2 Large":
+        "a depth-estimator tier. armature renders depth from geometry (channels.py), so "
+        "no served filename or node class for it has ever entered a graph — which is the "
+        "same thing that was true of `dwpose` until a served template wired "
+        "`DWPreprocessor`",
+    "Depth Anything V3 (weights)":
+        "same tier, same reason, and the map's own note that the CODE is Apache while "
+        "the WEIGHTS are CC-BY-NC is exactly the split a filename row would carry",
+    "AMASS":
+        "a mocap DATASET, not a weight file or a node class: it cannot appear in a graph "
+        "at all, and the map's ruling reaches this pipeline through the released weights "
+        "of the text-to-motion line, none of which are loadable here",
+    "Tripo":
+        "a partner SERVICE (partner/3d), refused at the provider tier rather than by a "
+        "filename — `components()` reads weight filenames and node classes and a hosted "
+        "provider is neither",
+}
+
+
+def test_the_map_kill_population_is_the_one_measured_today():
+    """SIZE and MEMBERSHIP of the derived population first, so a new kill row in the map
+    fails loudly here instead of quietly widening the gap."""
+    kills = [name for name, _ in _map_kills()]
+    assert len(kills) == 11, kills
+    for expect in ("CausVid", "OpenPose (CMU)", "DWPose / ViTPose WEIGHTS",
+                   "Depth Anything V2 Large", "AMASS"):
+        assert any(expect in k for k in kills), expect
+
+
+def _unmirrored_kills():
+    """Map kills with no `RULED_COMPONENTS` row, derived from both tables at call time
+    (so a mutated table is read, which is what makes the census provably red)."""
+    out = []
+    for name, _verdict in _map_kills():
+        low = name.lower()
+        if any(key in low for key in RG.RULED_COMPONENTS):
+            continue
+        out.append(name)
+    return out
+
+
+def test_the_mirror_census_goes_red_when_a_row_is_retired(monkeypatch):
+    """The RED direction, by mutation: drop the `causvid` row — the shape a licence-map
+    re-fetch produces when a row is renamed — and the kill it mirrors is reported as
+    unmirrored and unnamed. A census that cannot fail is not a census."""
+    rows = {k: v for k, v in RG.RULED_COMPONENTS.items() if k != "causvid"}
+    monkeypatch.setattr(RG, "RULED_COMPONENTS", rows)
+    unmirrored = _unmirrored_kills()
+    assert any("CausVid" in n for n in unmirrored), unmirrored
+    assert not any(k in n for n in unmirrored for k in UNMIRRORED_MAP_KILLS
+                   if "CausVid" in n)
+
+
+def test_every_map_kill_is_mirrored_or_named_with_its_reason():
+    """The mirror's load-bearing direction: a row the map KILLS must be one a script can
+    fail on, or be named here with why it cannot be. 7 of the 11 kills are mirrored
+    today; the four that are not are the ratchet above."""
+    unmirrored = _unmirrored_kills()
+    named = [n for n in unmirrored
+             if any(k in n for k in UNMIRRORED_MAP_KILLS)]
+    assert sorted(named) == sorted(unmirrored), (
+        "a licence-map kill has no RULED_COMPONENTS row and no recorded reason: "
+        f"{sorted(set(unmirrored) - set(named))}")
+    assert len(unmirrored) == 4, unmirrored
+
+
+def test_every_mirror_row_names_something_the_map_names():
+    """The reverse direction: the table may not invent a ruling the record does not
+    carry. Every row key appears in the map's text (measured 2026-09-04, 11 of 11)."""
+    text = open(LICENSE_MAP, encoding="utf-8").read().lower()
+    missing = [k for k in RG.RULED_COMPONENTS if k not in text]
+    assert missing == [], missing
+
+
+def test_a_base_weight_reads_not_in_this_table_and_that_is_recorded_not_silent():
+    """What the seed measured, pinned as the current state rather than dressed up: the
+    map's Apache base weights are UNKNOWN to the mirror, and `components()` says so in
+    those words rather than reporting them clean. A shrug that says it is a shrug is the
+    contract the table's own header states ("A component absent from this table is
+    UNKNOWN, which is reported, never silently treated as clean")."""
+    for filename in ("wan2.1_vace_14B_fp16.safetensors", "umt5_xxl_fp16.safetensors",
+                     "wan_2.1_vae.safetensors"):
+        assert RG.rulings_for(filename) == []
+        g = {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": filename}}}
+        comp = RG.components(g)
+        assert [c["verdict"] for c in comp] == ["NOT IN THIS TABLE"], filename
+        assert comp[0]["ruling"]["reason"] == "check docs/license-map.md"
+        # And it is not refused: `verify` halts on BANNED and EXCLUDED, not on UNKNOWN.
+        assert [c["verdict"] for c in RG.components(g)] == ["NOT IN THIS TABLE"]
