@@ -73,6 +73,26 @@ Issues = "https://github.com/mcp-tool-shop-org/armature/issues"
 [project.scripts]
 armature = "armature_core.cli:main"
 
+# WHAT THE SDIST CARRIES, MEASURED AND NOT YET DECIDED (2026-09-04). Built from this tree
+# with the repo venv: armature_studio-0.3.0.tar.gz is 609,406 bytes and 156 files — 112
+# `tests/test_*.py`, 32 armature_core modules, 6 of this build's own egg-info files, and the
+# six root documents. It carries NONE of `tests/conftest.py`, `tests/blender_stub.py`,
+# `tests/fake_backend.py`, `tests/fixtures/**`, `tests/blender/**`, or the 84 top-level
+# `tools/*.py` those tests import. Unpacked and run against its own `testpaths`: 509 tests
+# collected, 84 errors, `Interrupted: 84 errors during collection`. The same command in the
+# repo collects 2380. The wheel is complete and correct; the defect is confined to what the
+# SDIST claims to carry, and a downstream packager building from PyPI gets a suite that
+# reads as self-verifying and cannot collect.
+#
+# The 112 files are not selected by anything here: they arrive through distutils' sdist
+# `_add_defaults_optional` glob `tests/test*.py`, and the mechanism setuptools offers for
+# overriding it is MANIFEST.in — measured on a `git archive` copy of this tree, where
+# `prune tests` took the sdist to 45 files / 208,811 bytes with zero test files, and adding
+# `recursive-exclude tools/armature_studio.egg-info *` took it to 40 files / 205,772 bytes.
+# No `[tool.setuptools]` key selects sdist contents, so the fix is a file this domain does
+# not own; it is recorded here rather than left as a surprise. Whoever lands MANIFEST.in
+# should land the test that unpacks the built sdist and asserts the choice — ships no tests,
+# or ships a suite that collects.
 [tool.setuptools]
 package-dir = { "" = "tools" }
 
