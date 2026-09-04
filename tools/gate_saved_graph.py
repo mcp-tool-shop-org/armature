@@ -653,11 +653,33 @@ def main(argv=None):
     registered = read_seed_registration(a.seeds, flag="--seeds")
 
     frame = None
-    if a.frame:
-        parts = [int(v) for v in a.frame.split(",")]
-        if len(parts) != 3:
-            raise RG.RouteGate(f"--frame={a.frame!r} is not width,height,length; two out "
-                               f"of three proves nothing", {"supplied": a.frame})
+    if a.frame is not None:
+        # ---- ANDON, wave 16 (F-e6450965). This CONVERTED BEFORE IT COUNTED:
+        # `[int(v) for v in a.frame.split(",")]` ran above the arity clause, so a
+        # non-numeric component raised a bare stdlib `ValueError` with no `evidence`
+        # attribute at all - rendered by the `__main__` block below as
+        # `SAVED_ADMISSION_HALT {"error": "ValueError", ..., "evidence": null}` and exit 1,
+        # "this tool crashed", on the last gate before a paid submission. The arity case
+        # two lines down WAS a named refusal at exit 2, and its evidence was
+        # `{"supplied": a.frame}` alone - none of the gate/andon/clause keys every other
+        # raise in this file carries. Measured 2026-09-04: `--frame=832,480,eighty` ->
+        # `ValueError: invalid literal for int() with base 10: 'eighty'`.
+        #
+        # One clause for both shapes: split, COUNT, then convert. The shape is
+        # `composite_reference.parse_plate`'s, which counts its three components before
+        # reading any of them.
+        raw = [v.strip() for v in a.frame.split(",")]
+        parts = [int(v) for v in raw if v.lstrip("+-").isdigit()]
+        if len(raw) != 3 or len(parts) != 3:
+            raise RG.RouteGate(
+                f"--frame={a.frame!r} is not width,height,length: it reads as "
+                f"{raw!r}, of which {len(parts)} of {len(raw)} are integers. Two out of "
+                f"three proves nothing, and a component this tool cannot read is not a "
+                f"dimension it can hand Gate L (argparse eats leading minus signs: pass "
+                f"as --frame=832,480,81)",
+                {"gate": "SAVED_ADMISSION", "andon": "frame",
+                 "clause": "frame_not_three_integers", "flag": "--frame",
+                 "supplied": a.frame, "parts": raw, "n_integers": len(parts)})
         frame = tuple(parts)
 
     equality = round_trip(api, saved)                       # 0 — is it even our graph

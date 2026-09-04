@@ -538,3 +538,142 @@ def test_the_alpha_field_is_read_by_a_caller_and_no_longer_only_written():
     src = open(os.path.join(TOOLS, "build_i2v_payload.py"), encoding="utf-8").read()
     assert "alpha_disagrees_with_the_file" in src
     assert 'measured["alpha"]' in src or 'measured.get("alpha")' in src
+
+
+# ================================================================== F-e6450965 (panel HIGH)
+# `parts = [int(v) for v in a.frame.split(",")]` CONVERTED BEFORE IT COUNTED, so a
+# non-numeric component of `--frame` raised a bare stdlib `ValueError` on the tool that is
+# the last gate before a paid submission. Measured on the base tree:
+# `--frame=832,480,eighty` raised `ValueError: invalid literal for int() with base 10:
+# 'eighty'` with no `evidence` attribute at all, which the `__main__` block renders as
+# `SAVED_ADMISSION_HALT {"error": "ValueError", ..., "evidence": null}` and exit **1** -
+# "this tool crashed" - two lines above a named refusal at exit 2 for the wrong ARITY.
+#
+# One clause for both shapes now, with the keys every other raise in this file carries.
+# `composite_reference.parse_plate` is the shape carried: count the parts, then convert.
+
+
+def _gsg_files(tmp_path):
+    """The three files `gate_saved_graph.main` needs before it reaches `--frame`."""
+    d = tmp_path / "in"
+    d.mkdir(parents=True, exist_ok=True)
+    api = {"49": {"class_type": "WanImageToVideo",
+                  "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1}}}
+    saved = {"nodes": [{"id": 49, "type": "WanImageToVideo", "inputs": [],
+                        "widgets_values": [832, 480, 81, 1]}]}
+    for name, doc in (("api.json", api), ("saved.json", saved),
+                      ("seeds.json", {"seeds": [1]})):
+        (d / name).write_text(json.dumps(doc), encoding="utf-8")
+    return [f"--api={d / 'api.json'}", f"--saved={d / 'saved.json'}",
+            f"--seeds={d / 'seeds.json'}", f"--out={tmp_path / 'fresh' / 'rec.json'}"]
+
+
+#: `(the supplied --frame, why it is not three integers)`. Both shapes, one clause.
+BAD_FRAMES = [
+    ("832,480,eighty", "non_numeric"),
+    ("832,480", "wrong_arity"),
+    ("832,480,81,1", "wrong_arity"),
+    ("", "wrong_arity"),
+    ("832, ,81", "non_numeric"),
+]
+
+
+@pytest.mark.parametrize("supplied,why", BAD_FRAMES, ids=[f"{s!r}" for s, _ in BAD_FRAMES])
+def test_a_frame_that_is_not_three_integers_is_ONE_named_clause(tmp_path, supplied, why):
+    """Red on `832,480,eighty`: a bare `ValueError` with no evidence attribute at all. The
+    arity cases were already refused, by a `RouteGate` whose evidence was `{"supplied": …}`
+    alone - none of the `gate`/`andon`/`clause` keys every other raise in this file
+    carries."""
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.main(_gsg_files(tmp_path) + [f"--frame={supplied}"])
+    ev = exc.value.evidence
+    assert ev["clause"] == "frame_not_three_integers", ev
+    assert ev["gate"] == "SAVED_ADMISSION", ev
+    assert ev["andon"] == "frame", ev
+    assert ev["supplied"] == supplied, ev
+    assert ev["flag"] == "--frame", ev
+    assert isinstance(ev["parts"], list), ev
+
+
+def test_the_non_numeric_frame_leaves_the_process_at_the_gate_exit_code(tmp_path):
+    """The exit-code half: 2 = a gate refused, 1 = this tool crashed. A `ValueError` took
+    the crash branch and printed a null evidence on the last gate before a spend."""
+    args = _gsg_files(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, os.path.join(TOOLS, "gate_saved_graph.py"), *args,
+         "--frame=832,480,eighty"],
+        capture_output=True, text=True, cwd=os.path.dirname(TOOLS))
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    line = [ln for ln in proc.stdout.splitlines()
+            if ln.startswith("SAVED_ADMISSION_HALT ")]
+    assert line, proc.stdout
+    halt = json.loads(line[-1][len("SAVED_ADMISSION_HALT "):])
+    assert halt["error"] != "ValueError", halt
+    assert isinstance(halt["evidence"], dict), halt
+    assert halt["evidence"]["clause"] == "frame_not_three_integers", halt
+
+
+def test_a_legal_frame_gets_PAST_the_parser(tmp_path):
+    """The direction the clause must not bound. The two-node fixture above is deliberately
+    too thin to clear Gate PAIR, so the assertion is on WHICH clause fires: a legal
+    `--frame` is parsed and the admission carries on to the gates that read the graph."""
+    with pytest.raises(ArmatureError) as exc:
+        GSG.main(_gsg_files(tmp_path) + ["--frame=832,480,81"])
+    ev = exc.value.evidence or {}
+    assert ev.get("clause") != "frame_not_three_integers", ev
+
+
+# ---- the POPULATION: every operator-typed, comma-separated argv value the two admission
+# and fetch tools convert. Three parsers; two carried a typed clause before this wave.
+
+def _bad_node_map():
+    import fetch_run as FR
+    # `""` is the documented default-to-E02 path; `","` is a map that parses to nothing.
+    FR.parse_node_map(",")
+
+
+def _bad_video_nodes():
+    import fetch_run as FR
+    FR.parse_video_nodes("")
+
+
+def _bad_frame(tmp_path):
+    GSG.main(_gsg_files(tmp_path) + ["--frame=832,480,eighty"])
+
+
+COMMA_ARGV_PARSERS = [
+    ("gate_saved_graph --frame", _bad_frame, "frame_not_three_integers"),
+    ("fetch_run --node-map", lambda _tmp: _bad_node_map(), "node_map_empty"),
+    ("fetch_run --video-nodes", lambda _tmp: _bad_video_nodes(), "video_nodes_empty"),
+]
+
+
+@pytest.mark.parametrize("what,drive,clause", COMMA_ARGV_PARSERS,
+                         ids=[c for _, _, c in COMMA_ARGV_PARSERS])
+def test_every_comma_separated_argv_value_refuses_through_a_named_clause(
+        tmp_path, what, drive, clause):
+    with pytest.raises(ArmatureError) as exc:
+        drive(tmp_path)
+    ev = exc.value.evidence
+    assert isinstance(ev, dict), (what, ev)
+    assert ev.get("clause") == clause, (what, ev)
+
+
+def test_no_argv_value_in_this_tool_is_converted_before_it_is_counted():
+    """The AST half. `[int(v) for v in a.<flag>.split(",")]` is the shape that converts
+    before it counts; the last gate before a paid submission may not carry one."""
+    tree = ast.parse(open(os.path.join(TOOLS, "gate_saved_graph.py"),
+                          encoding="utf-8").read())
+    offenders = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.ListComp, ast.GeneratorExp, ast.SetComp)):
+            continue
+        elt = node.elt
+        if (isinstance(elt, ast.Call) and isinstance(elt.func, ast.Name)
+                and elt.func.id in ("int", "float")):
+            for gen in node.generators:
+                it = gen.iter
+                if (isinstance(it, ast.Call) and isinstance(it.func, ast.Attribute)
+                        and it.func.attr == "split"):
+                    offenders.append(node.lineno)
+    assert offenders == [], offenders
