@@ -189,3 +189,184 @@ def test_the_optimization_actually_took_effect(tmp_path):
     assert plain["asserts_active"] is True and plain["optimize_flag"] == 0
     assert flagged["asserts_active"] is False and flagged["optimize_flag"] >= 1
     assert env["asserts_active"] is False and env["optimize_flag"] >= 1
+
+
+ROUTE_PROBE = textwrap.dedent(
+    """
+    import json, sys
+    sys.path.insert(0, sys.argv[1])
+    from armature_core import route_gates as RG
+
+    def graph(top=(), sub=()):
+        return {"nodes": list(top),
+                "definitions": {"subgraphs": [{"id": "sg-1", "name": "T2V",
+                                               "nodes": list(sub)}]} if sub else {}}
+
+    def sampler(i, seed, control):
+        return {"id": i, "type": "KSamplerAdvanced",
+                "widgets_values": ["enable", seed, control, 4, 1, "euler", "simple",
+                                   0, 2, "enable"]}
+
+    def latent(i, w, h, n):
+        return {"id": i, "type": "EmptyHunyuanLatentVideo", "widgets_values": [w, h, n, 1]}
+
+    def loader(i, f, cls="UNETLoader"):
+        return {"id": i, "type": cls, "widgets_values": [f, "default"]}
+
+    BASE = "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"
+    EXCLUDED = "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors"
+    CLEAN = [loader(1, BASE), sampler(2, 12345, "fixed"), latent(3, 832, 480, 65)]
+
+    cases = {
+        "route_excluded_lora_hidden_in_a_subgraph": lambda: RG.verify(graph(
+            top=[latent(3, 832, 480, 65), sampler(2, 1, "fixed")],
+            sub=[loader(83, EXCLUDED, cls="LoraLoaderModelOnly")])),
+        "route_randomising_seed": lambda: RG.verify(graph(
+            top=[loader(1, BASE), sampler(2, 5, "randomize"), latent(3, 832, 480, 65)])),
+        "route_frame_legality_indeterminate": lambda: RG.verify(graph(
+            top=[loader(1, BASE), sampler(2, 7, "fixed")])),
+        "route_illegal_frame": lambda: RG.verify(graph(
+            top=[loader(1, BASE), sampler(2, 7, "fixed"), latent(3, 833, 480, 64)])),
+        "pair_unknown_conditioning_class": lambda: RG.verify(graph(
+            top=CLEAN + [{"id": 9, "type": "WanSomethingNobodyFiledToVideo"}])),
+        "pair_conditioning_against_a_model_with_no_channel": lambda: RG.verify(graph(
+            top=CLEAN + [{"id": 9, "type": "WanVaceToVideo"}])),
+        "pair_no_readable_diffusion_model_at_all": lambda: RG.verify(graph(
+            top=[sampler(2, 1, "fixed"), latent(3, 832, 480, 65),
+                 {"id": 9, "type": "WanVaceToVideo"}])),
+        "pairing_called_directly": lambda: RG.pairing(graph(
+            top=CLEAN + [{"id": 9, "type": "WanVaceToVideo"}])),
+    }
+
+    out = {"optimize_flag": sys.flags.optimize, "asserts_active": __debug__, "raised": {}}
+    for name, fn in cases.items():
+        try:
+            fn()
+            out["raised"][name] = "NO_RAISE"
+        except (RG.RouteGate, RG.PairGate) as exc:
+            out["raised"][name] = "RAISED:" + exc.gate
+        except BaseException as exc:
+            out["raised"][name] = "WRONG_ERROR:" + type(exc).__name__
+
+    # The clean graph must still PASS, or a green sweep above would be a gate that
+    # refuses everything rather than a gate that refuses the right things.
+    try:
+        ev = RG.verify(graph(top=CLEAN))
+        out["clean"] = "PASS" if ev["frame_legality"][0]["legal"] else "WRONG_VERDICT"
+    except BaseException as exc:
+        out["clean"] = "RAISED:" + type(exc).__name__
+    print("ROUTE " + json.dumps(out))
+    """
+)
+
+
+def _run_route(tmp_path, *, flag=False, env_var=False):
+    script = tmp_path / f"route_probe_{int(flag)}_{int(env_var)}.py"
+    script.write_text(ROUTE_PROBE, encoding="utf-8")
+    env = dict(os.environ)
+    env.pop("PYTHONOPTIMIZE", None)
+    if env_var:
+        env["PYTHONOPTIMIZE"] = "1"
+    cmd = [sys.executable] + (["-O"] if flag else []) + [str(script), TOOLS]
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=180)
+    assert proc.returncode == 0, proc.stderr
+    line = [l for l in proc.stdout.splitlines() if l.startswith("ROUTE ")]
+    assert line, proc.stdout + proc.stderr
+    import json
+
+    return json.loads(line[-1][len("ROUTE "):])
+
+
+@pytest.mark.parametrize(
+    "flag,env_var,label",
+    [(False, False, "plain"), (True, False, "-O"), (False, True, "PYTHONOPTIMIZE=1")],
+)
+def test_gates_ROUTE_and_PAIR_survive_optimization(tmp_path, flag, env_var, label):
+    """The two gates every submitted graph passes before Gates S and L arm.
+
+    `route_gates.py` carries 57 raises across Gates ROUTE and PAIR and had no `-O`
+    receipt, while G1 and the start-frame andons each had one. The clauses below are the
+    ways a graph reaches a paid submission while every name-level check reads clean: an
+    excluded LoRA two levels down inside a subgraph blueprint; a randomising seed; a
+    frame legality that is INDETERMINATE rather than legal; a conditioning class the
+    table has never met; and a conditioning node wired at a model with no channel for it
+    -- the pairing that produced 65 frames of nothing on 2026-08-12 with every other gate
+    green. None of them may be an `assert`.
+    """
+    res = _run_route(tmp_path, flag=flag, env_var=env_var)
+    for name, outcome in res["raised"].items():
+        assert outcome.startswith("RAISED:"), f"{label}/{name}: {outcome}"
+    assert res["raised"]["pair_unknown_conditioning_class"] == "RAISED:PAIR"
+    assert res["raised"]["route_randomising_seed"] == "RAISED:ROUTE"
+    assert res["clean"] == "PASS", f"{label}: the clean graph did not pass ({res['clean']})"
+
+
+def test_the_route_optimization_actually_took_effect(tmp_path):
+    """A green sweep under an -O that never applied is a check that cannot fail."""
+    assert _run_route(tmp_path, flag=False)["asserts_active"] is True
+    assert _run_route(tmp_path, flag=True)["asserts_active"] is False
+    assert _run_route(tmp_path, env_var=True)["asserts_active"] is False
+
+
+# ------------------------------------------- the other half: helpers may not use `assert`
+
+#: Files under `tests/` that pytest DOES rewrite, so an `assert` in them survives `-O`.
+#: `conftest.py` is a plugin and measured 2026-09-03 to be rewritten: the whole of
+#: `test_gates.py` passes under `python -O -m pytest` with `PYTHONOPTIMIZE=1`, including
+#: `test_an_evidence_free_gate_is_what_assert_gate_exists_to_refuse`, whose only signal is
+#: an `assert` inside `conftest.assert_gate` raising AssertionError.
+REWRITTEN_BY_PYTEST = ("conftest.py",)
+
+
+def _asserts_in_test_helpers():
+    """`(relpath, lineno)` for every `assert` statement in a non-rewritten tests/ module."""
+    import ast
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    found, scanned = [], []
+    for root, dirs, files in os.walk(here):
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", "fixtures")]
+        for fn in sorted(files):
+            if not fn.endswith(".py") or fn.startswith("test_") or fn in REWRITTEN_BY_PYTEST:
+                continue
+            path = os.path.join(root, fn)
+            rel = os.path.relpath(path, here).replace(os.sep, "/")
+            scanned.append(rel)
+            with open(path, encoding="utf-8") as fh:
+                tree = ast.parse(fh.read())
+            found += [(rel, n.lineno) for n in ast.walk(tree) if isinstance(n, ast.Assert)]
+    return found, scanned
+
+
+def test_no_helper_under_tests_checks_anything_with_assert():
+    """Measured on this venv: an `assert` in a test body fails under both plain pytest and
+    `python -O -m pytest`, because pytest rewrites test modules and plugins. An `assert`
+    inside an imported NON-plugin helper fails plain and PASSES under `-O` -- pytest emits
+    `PytestConfigWarning: assertions not in test modules or plugins will be ignored` and
+    carries on.
+
+    `ci.yml:107` runs `python -O -m pytest tests -q` as the mechanism proving gates still
+    raise. That leg would report green over any check added to a helper. The helpers here
+    are `fake_backend.py` and the six `tests/blender/check_*.py` scripts -- the second set
+    runs inside Blender, where nothing rewrites anything at all.
+
+    Helpers `raise`, for the same reason `tools/` does.
+    """
+    found, scanned = _asserts_in_test_helpers()
+    assert scanned, "the walk found no helper modules; it is not scanning tests/"
+    assert not found, (
+        f"assert statements in non-rewritten tests/ helpers: {found}. `-O` deletes these "
+        f"and `ci.yml`'s -O leg would report green over them. Raise instead.")
+
+
+def test_the_helper_walk_would_catch_one(tmp_path, monkeypatch):
+    """The red direction. A helper carrying an `assert` is written into a scratch tree and
+    the same walk must find it -- otherwise this is a check that cannot fail, which is the
+    class of defect the file it lives in exists to prevent."""
+    import ast
+
+    helper = tmp_path / "fake_helper.py"
+    helper.write_text("def check(x):\n    assert x, 'nope'\n", encoding="utf-8")
+    tree = ast.parse(helper.read_text(encoding="utf-8"))
+    hits = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Assert)]
+    assert hits == [2], hits

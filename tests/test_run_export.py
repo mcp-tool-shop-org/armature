@@ -167,3 +167,88 @@ def test_compensator_removes_a_run_it_did_create(tmp_path):
     stage_render.run_export(spec, str(out), backend=FakeBackend(64, 96))
     assert stage_render.delete_output_dir(str(out)) is True
     assert not out.exists()
+
+
+# ---------------------------------- the fake's contract against the real backend's
+
+def _returned_keys(path, class_name):
+    """The literal key set of the dict `render_frame` returns, read out of the source.
+
+    AST rather than a live call: the real backend's `render_frame` needs Blender, an EXR
+    on disk and a live depsgraph, so the only place the two contracts can be compared on
+    a runner is the source.
+    """
+    import ast
+
+    with open(path, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.ClassDef) and node.name == class_name):
+            continue
+        for fn in node.body:
+            if not (isinstance(fn, ast.FunctionDef) and fn.name == "render_frame"):
+                continue
+            for ret in ast.walk(fn):
+                if isinstance(ret, ast.Return) and isinstance(ret.value, ast.Dict):
+                    return {k.value for k in ret.value.keys
+                            if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+    raise AssertionError(f"no dict-returning render_frame on {class_name} in {path}")
+
+
+def _real_backend_class():
+    """The class in `stage_render` whose `render_frame` the writer actually consumes."""
+    import ast
+
+    with open(stage_render.__file__, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    names = [n.name for n in ast.walk(tree)
+             if isinstance(n, ast.ClassDef)
+             and any(isinstance(f, ast.FunctionDef) and f.name == "render_frame"
+                     for f in n.body)]
+    assert len(names) == 1, f"expected one render_frame class in stage_render, got {names}"
+    return names[0]
+
+
+def test_the_fake_backend_returns_exactly_what_the_real_one_does():
+    """The invariant: EVERY KEY THE WRITER READS IS SUPPLIED BY BOTH BACKENDS.
+
+    `FakeBackend` exists so the gate tests can drive the real `run_export` without
+    Blender. Nothing bound its return contract to the real backend's, and one key had
+    already drifted: `master_paths` was returned by `stage_render`'s backend and not by
+    the fake, and `run_export` reads it with `.get()` — so every fake-driven run wrote
+    `master_paths: null` into each per-frame record and the whole suite stayed green.
+    A rename or a relpath-base change on the real side would null it for every frame the
+    same way, and `master_paths` is the manifest's pointer back to the source EXRs.
+    """
+    real = _returned_keys(stage_render.__file__, _real_backend_class())
+    fake = _returned_keys(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_backend.py"),
+        "FakeBackend")
+
+    assert real, "read no keys off the real backend; the AST walk is broken, not clean"
+    assert fake == real, (
+        f"the two render_frame contracts have drifted — only the real backend returns "
+        f"{sorted(real - fake)}, only the fake returns {sorted(fake - real)}. Every key "
+        f"the writer reads with .get() must be supplied by both, or a fake-driven run "
+        f"writes null where a real one writes the value and no test can tell.")
+
+
+def test_every_frame_record_carries_its_master_paths(tmp_path):
+    """The other half, driven through the real write path: the key has to arrive in the
+    manifest non-null, per frame, not merely be present in a dict somewhere."""
+    spec = make_spec(tmp_path, count=5)
+    out = tmp_path / "run"
+    manifest = stage_render.run_export(spec, str(out), backend=FakeBackend(64, 96))
+
+    frames = manifest["frames"]
+    assert len(frames) == 5
+    for rec in frames:
+        paths = rec["master_paths"]
+        assert isinstance(paths, dict) and paths, (
+            f"frame {rec['frame']} carries master_paths={paths!r}; the manifest's pointer "
+            f"back to the source masters is the reproducibility link, and null is what a "
+            f"backend that stopped supplying the key writes")
+        assert set(paths) >= {"depth", "alpha"}, sorted(paths)
+
+    on_disk = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert [r["master_paths"] for r in on_disk["frames"]] == [r["master_paths"] for r in frames]
