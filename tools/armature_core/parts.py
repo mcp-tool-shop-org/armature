@@ -100,9 +100,13 @@ def gate_parts_accounting(labels, n_faces, bone_names):
     count to another count, and over an empty mesh with an empty registered list they all
     compare 0 to 0.
 
-    The evidence carries `gate` and `andon` (F-f2f42e4a): `stage_render` prints
-    `GATE_FAILURE <exc.gate>` beside `GATE_EVIDENCE <json>`, and gate ids are shared
-    across andon families, so the JSON has to name which andon pulled.
+    The evidence carries `gate` and `andon` (F-f2f42e4a): the halt contract's
+    `STAGE_RENDER_HALT` line (`stage_render.py:634`, and the same six-key shape in all
+    21 sibling tools) carries the gate id beside the evidence JSON, and gate ids are
+    shared across andon families, so the JSON has to name which andon pulled. The
+    citation used to name `GATE_FAILURE` / `GATE_EVIDENCE`, two print lines wave 12
+    deleted; corrected in passing rather than dropped, because the correction is the
+    useful part.
     """
     labels = np.asarray(labels)
     ev = {"gate": "PARTS", "andon": "GatePartsAccounting",
@@ -465,6 +469,28 @@ def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_
     mesh bbox and this module does not know the caller's units, so "big" is not a
     property this gate can rule on — what it can rule on is that the multiplicand is a
     number at all.
+
+    **And the MEASUREMENTS are checked, because they are what the clauses compare**
+    (F-5733588e, wave 14). Every finiteness guard this gate carried sat on a BOUND —
+    `bbox_diagonal` and the two fractions — and none on the three per-part numbers the
+    clauses read, which is the direction the invariant does not bound. Measured
+    2026-09-04 with clean bounds (`bbox_diagonal=1.0`, both fractions defaulted) and one
+    part whose three measurements are NaN beside one healthy part: this function RETURNED
+    with `transform_tolerance: 0.0001` and the verdict "2 parts each landed on their own
+    bone transform; figure max displacement nan". Both refusal clauses are `>`
+    comparisons, which a NaN fails in both directions, and the vacuity guard
+    `moved <= tol` is switched off by the same value because `max([nan, 0.5])` is nan and
+    `nan <= 1e-4` is False — so the guard that exists to catch "nothing moved" is
+    disabled by the same defect. `require_finite`'s own refusal message, three hundred
+    lines above, reads "A gate that returns a PASS beside a measurement that is not a
+    number certifies nothing"; this gate was the counterexample. The general rule the
+    wave-8 and wave-12 sweeps kept re-deriving one argument at a time is that the NaN
+    sweep belongs on the measurement side too — the bound is the direction the invariant
+    already covers. `lift_solve.gate_round_trip` carried the identical shape and is
+    swept in the same commit.
+
+    `positive=False` on all three: a displacement or an error of exactly 0.0 is the
+    healthiest reading any of them can take.
     """
     ev = {"gate": "RIGID", "andon": "GateRigidArrival",
           "bbox_diagonal": float(bbox_diagonal),
@@ -487,6 +513,14 @@ def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_
     if not observations:
         raise GateRigidArrival("no parts were observed under the pose; the gate would be a "
                                "check that cannot fail", ev)
+    # The measurement side of the sweep, BEFORE any bound is asked of any of them, and
+    # named per part so the refusal says which structure the bad number came from.
+    for rec in observations:
+        for _field in ("max_transform_error", "max_pair_distance_change",
+                       "max_displacement"):
+            require_finite(f"{rec.get('name')}.{_field}", rec[_field],
+                           GateRigidArrival, ev, positive=False)
+
     for rec in observations:
         if rec["max_transform_error"] > tol:
             problems.append(

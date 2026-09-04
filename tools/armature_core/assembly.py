@@ -78,18 +78,47 @@ ALLOWED_CLASSES = ("LoadImage", "BatchImagesNode", "CreateVideo", "SaveVideo")
 #: allowlist, never to be the thing standing between this graph and a credit.
 API_MARKERS = ("api", "partner")
 
+#: The MEASUREMENT behind `ALLOWED_CLASSES`, written down as data rather than as a
+#: sentence in a docstring (F-594e1792, wave 14). The module has always claimed "every
+#: one re-measured `api_node: false` with `get_node` on 2026-08-13"; this is that claim
+#: in a form a clause can read. It is not a second copy of the allowlist: the allowlist
+#: is a set of names, and this is a per-class receipt — what was measured, with what,
+#: and when. `gate_no_paid_nodes` refuses a class the graph carries that has no receipt
+#: here, which is the one direction `parts.narrowed` leaves open (a deliberate diff to
+#: `ALLOWED_CLASSES` itself, which the wave-12 docstring names as the licence clause's
+#: reason for existing and which that clause could not in fact see — see the gate).
+#:
+#: Adding a class to `ALLOWED_CLASSES` therefore costs a `get_node` measurement recorded
+#: here, in the same diff, and typing a receipt for a node nobody measured is a
+#: deliberate false statement rather than an omission. That is the honest ceiling of
+#: what a local gate can rule on: this module cannot call Comfy.
+MEASURED_FREE_CLASSES = {
+    "LoadImage": {"api_node": False, "measured_with": "get_node",
+                  "measured_on": "2026-08-13"},
+    "BatchImagesNode": {"api_node": False, "measured_with": "get_node",
+                        "measured_on": "2026-08-13"},
+    "CreateVideo": {"api_node": False, "measured_with": "get_node",
+                    "measured_on": "2026-08-13"},
+    "SaveVideo": {"api_node": False, "measured_with": "get_node",
+                  "measured_on": "2026-08-13"},
+}
+
 
 def gate_no_paid_nodes(graph, allowed=None):
     """Gate ASSEMBLY - ANDON - nothing in this graph can bill a partner credit.
 
-    Four clauses now, and the evidence shows every one of them ran:
+    Five clauses now, and the evidence shows every one of them ran, against the
+    population each one could have failed on:
 
     * a vacuity guard — an empty graph is refused rather than certified;
     * the allowlist, which may only be NARROWED by a caller (`parts.narrowed`);
     * the allowlist membership check, which binds;
     * a **licence** second opinion: every class name is read against the same
       `route_gates` tables the licence clause reads, and a class the licence map has ruled
-      BANNED or EXCLUDED is refused even when the allowlist names it.
+      BANNED or EXCLUDED is refused even when the allowlist names it. Its recall is
+      stated, not implied — see below;
+    * the **measurement** clause: every class in the graph carries a recorded
+      `api_node: false` reading in `MEASURED_FREE_CLASSES`, or it is refused.
 
     A node carrying **no** `class_type` is refused before anything is sorted. It used to
     contribute `None` to the class set, and `sorted()` then raised `TypeError: '<' not
@@ -125,12 +154,50 @@ def gate_no_paid_nodes(graph, allowed=None):
     The name-pattern markers are kept in the evidence as a reported diagnostic — they are
     cheap and they cost nothing — but they are no longer the clause that is claimed to
     stand between this graph and a credit.
+
+    **The replacement clause had the same recall as the clause it replaced: zero**
+    (F-594e1792, wave 14). The licence second opinion reads every class through
+    `route_gates.rulings_for_class`, and `RULED_COMPONENTS` carries 15 class patterns
+    across 11 rows every one of which is a LoRA or a preprocessor tier (lightx2v,
+    causvid, openpose, dwpose, technically_color, smartphonesnapshot,
+    candid_photography, 80s_fantasy, instareal, instagirl, vintage_film_grain). The
+    licence map has no partner-node row at all. Measured 2026-09-04:
+    `rulings_for_class` returns ZERO hits for all fifteen real Comfy partner class names
+    tried (Kling, Luma, Minimax, Veo, Ideogram, Recraft, Pixverse, Runway, Moonvalley,
+    Gemini, OpenAIDalle3, Stability, FluxPro, Pika, Vidu), so the second opinion can fire
+    only on a banned preprocessor or LoRA class — which `route_gates.verify` already
+    refuses on its own path — and never on a paid node, which is the class of thing this
+    gate exists for. Measured end to end in the exact scenario the paragraph above names
+    as the clause's reason for existing: with `ALLOWED_CLASSES` widened by
+    ('KlingVideoNode',), `gate_no_paid_nodes({'1': {'class_type': 'KlingVideoNode'}})`
+    RETURNED with `licence_rulings: {}` and the verdict "1 node(s) across 1 class(es),
+    all named by the allowlist, none reading as a partner class, and 0 carrying a
+    licence-map ruling (none BANNED/EXCLUDED)".
+
+    Two corrections, and the first is the one that mattered. **The verdict named two
+    licence properties nothing measured** — this repo's most expensive defect class,
+    reintroduced by the commit that closed it, on the last free-chain gate before an
+    assembly payload is submitted. `0 carrying a licence-map ruling (none
+    BANNED/EXCLUDED)` reads as a clearance and means "the map has never heard of this
+    class". It now says `0 of N class(es) are known to the licence map` and the evidence
+    carries `classes_unknown_to_the_licence_map` by name.
+
+    **And the clause got a population it can rule on**: `MEASURED_FREE_CLASSES` above.
+    A class the graph carries that has no recorded `api_node: false` measurement is
+    refused, whatever an allowlist names. That is not the licence map's job and it is not
+    a name pattern; it is the module's own claim, made checkable. Its recall on the
+    falsifying population is total — none of the fifteen partner class names carries a
+    receipt, so every one of them is refused the moment a diff widens `ALLOWED_CLASSES`
+    to admit it. The licence second opinion stays, ahead of it, with the recall it
+    actually has (a BANNED or EXCLUDED preprocessor or LoRA class), and the verdict now
+    says which population each clause ran against.
     """
     ev = {"gate": "ASSEMBLY", "andon": "AssemblyGate",
           "n_nodes": len(graph), "module_allowed": list(ALLOWED_CLASSES)}
     allowed = narrowed("allowed", allowed, ALLOWED_CLASSES, AssemblyGate, ev)
 
     if not graph:
+        ev["clause"] = "empty_graph"
         raise AssemblyGate(
             "the graph is empty, so there is nothing to clear. A gate that certifies "
             "zero nodes as free reports its strongest verdict on its weakest input, and "
@@ -143,6 +210,7 @@ def gate_no_paid_nodes(graph, allowed=None):
                "nodes_without_class_type": unnamed})
 
     if unnamed:
+        ev["clause"] = "node_without_a_class_type"
         raise AssemblyGate(
             f"node(s) {unnamed} carry no `class_type`, so what they would execute is "
             f"unknown and the allowlist cannot name them. A graph this gate cannot read is "
@@ -167,7 +235,10 @@ def gate_no_paid_nodes(graph, allowed=None):
                 refused.append(c)
     ev["licence_rulings"] = ruled
     ev["licence_refused"] = refused
+    ev["n_classes_ruled_by_the_licence_map"] = len(ruled)
+    ev["classes_unknown_to_the_licence_map"] = [c for c in classes if c not in ruled]
     if refused:
+        ev["clause"] = "licence_map_ruling"
         raise AssemblyGate(
             f"the licence map rules {refused} "
             f"{[ruled[c]['verdict'] for c in refused]}, and a class the map has ruled is "
@@ -177,23 +248,50 @@ def gate_no_paid_nodes(graph, allowed=None):
 
     unexpected = [c for c in classes if c not in allowed]
     if unexpected:
+        ev["clause"] = "class_not_named_by_the_allowlist"
         raise AssemblyGate(
             f"the assembly graph contains {unexpected}, which the allowlist does not name. "
             "This chain is supposed to cost nothing, and the way that is guaranteed is by "
             "the graph containing only classes measured `api_node: false` - not by hoping "
             "an unfamiliar class is free", ev)
 
+    # The clause with real recall on the population the licence second opinion cannot
+    # see: a class in this graph that carries no recorded `api_node: false` measurement.
+    # It runs on the classes the allowlist just admitted, which is exactly the direction
+    # `parts.narrowed` leaves open — a diff to the module constant itself.
+    unmeasured = [c for c in classes if c not in MEASURED_FREE_CLASSES]
+    ev["classes_without_a_free_measurement"] = unmeasured
+    ev["n_classes_with_a_free_measurement"] = len(classes) - len(unmeasured)
+    if unmeasured:
+        ev["clause"] = "class_without_a_recorded_free_measurement"
+        raise AssemblyGate(
+            f"the graph carries {unmeasured}, which the allowlist names but "
+            f"MEASURED_FREE_CLASSES does not: nothing in this repo records that class "
+            f"having been measured `api_node: false`. The allowlist says somebody meant "
+            f"to permit it; the measurement record says whether anybody checked what it "
+            f"costs, and a chain that is supposed to cost nothing is cleared by the "
+            f"second, not the first. Record the `get_node` measurement in the same diff "
+            f"that widens the allowlist", ev)
+
     flagged = [c for c in allowed if any(m in c.lower() for m in API_MARKERS)]
     ev["name_pattern_flagged"] = flagged
     if flagged:
+        ev["clause"] = "allowlist_name_pattern"
         raise AssemblyGate(
             f"the allowlist itself names {flagged}, which reads as a partner/API class. "
             "The allowlist is the binding clause, so widening it is the moment to look - "
             "this is that look", ev)
 
-    ev["verdict"] = (f"{len(graph)} node(s) across {len(classes)} class(es), all named by "
-                     f"the allowlist, none reading as a partner class, and "
-                     f"{len(ruled)} carrying a licence-map ruling (none BANNED/EXCLUDED)")
+    # Every noun in this sentence names a clause that ran against a population that
+    # could have failed it. `ruled` is reported as a COUNT OF WHAT THE MAP KNOWS, never
+    # as "none BANNED/EXCLUDED" over an empty set (F-594e1792).
+    ev["verdict"] = (
+        f"{len(graph)} node(s) across {len(classes)} class(es), all named by the "
+        f"allowlist, all {len(classes)} carrying a recorded api_node: false "
+        f"measurement, none reading as a partner class; "
+        f"{len(ruled)} of {len(classes)} class(es) are known to the licence map"
+        + (f" and none of those is BANNED/EXCLUDED" if ruled else
+           " (so the licence clause ruled on nothing here)"))
     return ev
 
 
