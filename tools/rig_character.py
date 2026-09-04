@@ -254,12 +254,23 @@ def gate_glb_written(path, *, what="the exported GLB"):
 
 
 def validate_sitelist():
-    """`sitelist.validate()`, with its refusal inside the `ArmatureError` family."""
+    """`sitelist.validate()`, with its refusal inside the `ArmatureError` family.
+
+    The handler is `ValueError` and nothing broader, deliberately:
+    `tests/test_rig_character_dispatch.py::test_nothing_between_the_landmark_solve_and_the
+    _manifest_catches_a_gate` holds that the ONLY broad handlers in this file are the two in
+    the `__main__` block, because a `FacingGate` caught anywhere else would never reach
+    `halt.json` or the exit code. A first draft of this wrapper caught `ArmatureError` (to
+    re-raise it) and `Exception`, and that census was right to refuse it. `sitelist.validate`
+    documents `ValueError` in its own docstring, so that is the whole surface; the
+    `isinstance` guard below keeps a typed refusal from the core intact even if it should
+    ever arrive as a `ValueError` subclass.
+    """
     try:
         sitelist.validate()
-    except ArmatureError:
-        raise
-    except Exception as exc:                                          # noqa: BLE001
+    except ValueError as exc:
+        if isinstance(exc, ArmatureError):
+            raise
         raise SiteListInvalid(
             f"the site registration table is inconsistent, so nothing built from it would "
             f"mean what its names say: {exc}",

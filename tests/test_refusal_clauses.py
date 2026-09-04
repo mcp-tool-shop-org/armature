@@ -138,6 +138,11 @@ RECORDED_POPULATION = frozenset({
     # sites in `subject_scale` — the empty-population clause and the non-finite-coordinate
     # clause — so its NAME stops being its clause and its `pytest.raises` sites need one.
     "GateSubjectDegenerate",
+    # JOINED 2026-09-04 (wave 12, instruments F-9b2d4106): `rig_character.gate_glb_written`
+    # refuses a GLB export that never reached disk and one that is zero bytes - two sites,
+    # so its NAME stops being its clause. It is the one implementation for all nine
+    # `bpy.ops.export_scene.gltf` call sites in the tree.
+    "GateGlbWritten",
     # JOINED 2026-09-04, exactly as this comment anticipated: the instruments wave-10
     # amend (F-51c5e0ef) gives `make_binding_sheet.shoot` and `make_parts_sheet.shoot`
     # the render-completeness refusal their siblings carry, so `BindingSheetGate` and
@@ -201,7 +206,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # 71 + 2 + 3 = 76; instruments-measure's branch added `ReviewClipError`, `ShotsetSheetError`,
     # `ZoomSheetError` (new classes) and `SheetPopulationError` (crossed to two sites):
     # 76 + 4 = 80, MEASURED on the merged tree.
-    assert len(POLICED) == 81, sorted(POLICED)
+    assert len(POLICED) == 82, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
