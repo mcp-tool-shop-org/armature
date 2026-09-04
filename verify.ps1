@@ -27,9 +27,12 @@
     3. the package build — `build` and `twine` installed under the SAME constraints
        `.github/actions/clean-room/action.yml` installs them under (they are the tools that
        produce the artifact, and this leg used to build with whatever the repo venv held),
-       then the wheel and sdist, `twine check` on the metadata, the wheel
-       installed into a CLEAN venv and run from THAT install, and the launcher's own
-       self-test. Added at v0.2.0, when this repo started publishing: a package that fails
+       then `dist/` CLEARED so every verdict below is about what this run built, then the
+       wheel and sdist, `twine check` on the metadata, then TWO clean rooms in the action's
+       own order — the sdist installed with `--no-deps` into its own venv and `armature
+       modules --json` run from it (the archive has to BUILD, which installing a wheel never
+       proves), then the wheel installed into a second CLEAN venv and run from THAT install —
+       and the launcher's own self-test. Added at v0.2.0, when this repo started publishing: a package that fails
        to build is a release that fails at the registry, and finding that out from a
        release job is finding it out too late to take back. The clean-install half was
        missing until it was enumerated against ci.yml — it is the leg whose whole point is
@@ -54,8 +57,8 @@
 
 .PARAMETER NoPackage
   Skip leg 3. Useful when nothing packaging-related changed; it installs `build` and `twine`
-  at CI's constraints into the repo venv and then builds, so it needs an index and it changes
-  what that venv holds. Note that the SUITE also builds an sdist (two tests in
+  at CI's constraints into the repo venv, EMPTIES `dist/` and rebuilds, so it needs an index,
+  it changes what that venv holds, and it does not preserve an artifact left there earlier. Note that the SUITE also builds an sdist (two tests in
   `tests/test_packaging.py` pin what the published archive carries), so `build` is needed by
   leg 1 as well — skipping this leg does not remove that requirement.
 
@@ -199,7 +202,7 @@ if ($NoPackage) {
     Write-Host ''
     Write-Host '──────── package build — SKIPPED (-NoPackage)' -ForegroundColor Yellow
 } else {
-    Invoke-Leg -Name 'package build (wheel + sdist + twine + clean install + launcher)' -Body {
+    Invoke-Leg -Name 'package build (wheel + sdist + twine + two clean installs + launcher)' -Body {
         Push-Location $repo
         try {
             # The toolchain CI pins, installed here for the same reason it is pinned there:
@@ -216,10 +219,93 @@ if ($NoPackage) {
             & $python -m pip install --quiet 'build>=1.5,<2' 'twine>=7,<8'
             if ($LASTEXITCODE -ne 0) { return }
 
+            # THE LEG JUDGES WHAT THIS RUN BUILT, AND NOTHING ELSE. `python -m build` does
+            # not clear `dist/`, and neither did this leg: its only `Remove-Item` calls were
+            # the two scratch rooms and the npm tarball. Measured on the main checkout
+            # 2026-09-04, `E:\AI\armature\dist` held `armature_studio-0.2.1-py3-none-any.whl`
+            # and `armature_studio-0.2.1.tar.gz` (mtime 2026-08-15) beside the 0.3.0 pair, so
+            # `twine check dist\*` issued its verdict over FOUR files, two of them a version
+            # published three weeks earlier -- a stale or half-written archive there turns the
+            # leg red for a reason that has nothing to do with the commit, which is the flake
+            # class `.github/actions/npm-clean-room/action.yml:42-49` calls "the bad kind". CI
+            # reproduces neither half (fresh checkout, empty `dist/`), so the two
+            # implementations of one leg behaved differently on the same command.
+            $dist = Join-Path $repo 'dist'
+            if (Test-Path $dist) {
+                Remove-Item (Join-Path $dist '*') -Recurse -Force -ErrorAction SilentlyContinue
+            }
+
+            # The two filenames this run must produce, read out of the manifest rather than
+            # globbed. The selection was `Get-ChildItem -Filter '*.whl' | Sort-Object
+            # LastWriteTime | Select-Object -Last 1` -- the wheel the clean room installed and
+            # probed was chosen BY TIMESTAMP and never compared against `project.version`.
+            # Measured on a scratch dist holding two wheels, the newer mtime on the older
+            # version: that expression returned `armature_studio-0.2.1-py3-none-any.whl`. The
+            # version is read the way `release.yml`'s tag gate reads it, and the distribution
+            # half is PEP 503/427 normalisation of `project.name`.
+            $meta = & $python -c "import re,tomllib;p=tomllib.load(open('pyproject.toml','rb'))['project'];print(re.sub(r'[-_.]+','_',p['name']).lower());print(p['version'])"
+            if ($LASTEXITCODE -ne 0) { return }
+            $distName = $meta[0]
+            $version = $meta[1]
+
             & $python -m build
             if ($LASTEXITCODE -ne 0) { return }
             & $python -m twine check (Join-Path $repo 'dist\*')
             if ($LASTEXITCODE -ne 0) { return }
+
+            # Refused BY NAME when an expected artifact is absent -- the same shape as the
+            # "no wheel in dist/ after the build" refusal this replaces, and now covering both
+            # halves: a build that renames or drops either one halts here rather than falling
+            # through to whatever the directory happens to hold.
+            $wheelPath = Join-Path $dist "$distName-$version-py3-none-any.whl"
+            $sdistPath = Join-Path $dist "$distName-$version.tar.gz"
+            foreach ($expected in @($wheelPath, $sdistPath)) {
+                if (-not (Test-Path $expected)) {
+                    Write-Host "  the build produced no $(Split-Path $expected -Leaf); dist/ holds:" -ForegroundColor Red
+                    Get-ChildItem $dist -ErrorAction SilentlyContinue |
+                        ForEach-Object { Write-Host "    $($_.Name)" -ForegroundColor Red }
+                    $global:LASTEXITCODE = 1
+                    return
+                }
+            }
+
+            $binDir = if ($IsWindows -eq $false) { 'bin' } else { 'Scripts' }
+            $exe = if ($IsWindows -eq $false) { '' } else { '.exe' }
+
+            # THE SDIST ROOM, mirroring `.github/actions/clean-room/action.yml:70-72` line for
+            # line and in that action's order (sdist first, then the wheel). Wave 14 added it
+            # there -- three artifacts leave this repository and the sdist was the one nothing
+            # built from -- and this script, whose DESCRIPTION claims the legs are "the same
+            # ones ci.yml runs, in the same order and with the same meaning", did not move
+            # with it: `grep -n 'tar.gz' verify.ps1` returned 0 hits while leg 3's own name
+            # already said "sdist". `pip install <sdist>` runs the backend under build
+            # isolation, so it exercises `[build-system].requires` and MANIFEST.in the way a
+            # downstream packager does, which installing a wheel cannot; its OWN venv, because
+            # a wheel already present in the other room would satisfy the requirement without
+            # the archive ever being opened. `--no-deps`, and `modules --json` rather than the
+            # wheel room's full probe, for the action's stated reason: the question here is
+            # whether the ARCHIVE builds and the command it installs runs, and the room below
+            # already resolves and exercises the runtime dependency set.
+            $sdistRoom = Join-Path ([System.IO.Path]::GetTempPath()) "armature-cleanroom-sdist-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+            try {
+                & $python -m venv $sdistRoom
+                if ($LASTEXITCODE -ne 0) { return }
+                $sdistPython = Join-Path $sdistRoom "$binDir\python$exe"
+                $sdistArmature = Join-Path $sdistRoom "$binDir\armature$exe"
+                & $sdistPython -m pip install --quiet --no-deps $sdistPath
+                if ($LASTEXITCODE -ne 0) { return }
+                if (-not (Test-Path $sdistArmature)) {
+                    Write-Host "  the sdist install provides no armature command at $sdistArmature" -ForegroundColor Red
+                    $global:LASTEXITCODE = 1
+                    return
+                }
+                & $sdistArmature modules --json > $null
+                if ($LASTEXITCODE -ne 0) { return }
+            } finally {
+                if (Test-Path $sdistRoom) {
+                    Remove-Item $sdistRoom -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
 
             # ci.yml's clean-room leg, mirrored. The wheel is installed into a venv that has
             # nothing else in it and the command is run from THAT install, never from the
@@ -230,21 +316,12 @@ if ($NoPackage) {
             # function body, so it printed "all modules resolved" and exited 0 on a wheel
             # that raised ModuleNotFoundError on first call.
             $cleanroom = Join-Path ([System.IO.Path]::GetTempPath()) "armature-cleanroom-$([guid]::NewGuid().ToString('N').Substring(0,8))"
-            $binDir = if ($IsWindows -eq $false) { 'bin' } else { 'Scripts' }
-            $exe = if ($IsWindows -eq $false) { '' } else { '.exe' }
             try {
                 & $python -m venv $cleanroom
                 if ($LASTEXITCODE -ne 0) { return }
                 $cleanPython = Join-Path $cleanroom "$binDir\python$exe"
                 $cleanArmature = Join-Path $cleanroom "$binDir\armature$exe"
-                $wheel = Get-ChildItem (Join-Path $repo 'dist') -Filter '*.whl' |
-                    Sort-Object LastWriteTime | Select-Object -Last 1
-                if (-not $wheel) {
-                    Write-Host '  no wheel in dist/ after the build' -ForegroundColor Red
-                    $global:LASTEXITCODE = 1
-                    return
-                }
-                & $cleanPython -m pip install --quiet $wheel.FullName
+                & $cleanPython -m pip install --quiet $wheelPath
                 if ($LASTEXITCODE -ne 0) { return }
                 & $cleanArmature check
                 if ($LASTEXITCODE -ne 0) { return }
