@@ -138,13 +138,14 @@ def parse_node_map(text):
                 f"--node-map entry {part!r} is not `<node id>=<directory>`; a map that "
                 f"cannot be read must halt rather than quietly leave E02's default in "
                 f"place over another experiment's graph",
-                {"clause": "node_map_entry_shape", "entry": part, "text": text})
+                {"gate": "FETCH", "andon": "FetchHalt", "clause": "node_map_entry_shape",
+                 "entry": part, "text": text})
         nid, sub = (s.strip() for s in part.split("="))
         if not nid or not sub:
             raise FetchHalt(
                 f"--node-map entry {part!r} has an empty side",
-                {"clause": "node_map_entry_empty_side", "entry": part, "text": text,
-                 "node_id": nid, "directory": sub})
+                {"gate": "FETCH", "andon": "FetchHalt", "clause": "node_map_entry_empty_side",
+                 "entry": part, "text": text, "node_id": nid, "directory": sub})
         # ---- ANDON, wave 12 (F-a72178c2). `out[nid] = sub` was last-write-wins with no
         # clause, in the function whose docstring states that a malformed map must not fall
         # back silently. Measured: `parse_node_map("301=batchprobe,301=lossless")` returned
@@ -165,7 +166,8 @@ def parse_node_map(text):
     if not out:
         raise FetchHalt(
             "--node-map parsed to nothing",
-            {"clause": "node_map_empty", "entry": None, "text": text})
+            {"gate": "FETCH", "andon": "FetchHalt", "clause": "node_map_empty",
+             "entry": None, "text": text})
     return out
 
 
@@ -181,7 +183,8 @@ def parse_video_nodes(text):
         raise FetchHalt(
             "--video-nodes parsed to nothing; a graph with no video tap is written as "
             "--video-nodes=none rather than as an empty string",
-            {"clause": "video_nodes_empty", "entry": None, "text": text})
+            {"gate": "FETCH", "andon": "FetchHalt", "clause": "video_nodes_empty",
+             "entry": None, "text": text})
     if ids == ("none",):
         return ()
     return ids
@@ -219,7 +222,9 @@ def plan(results, base, run, node_dir, video_nodes):
             f"fallback this replaces wrote every such file to one path named after the "
             f"run and printed the planned count beside it, so a clip's frames became one "
             f"file and a later measurement was taken on a run that is not the run",
-            {"unmapped": unmapped, "node_map": dict(node_dir),
+            {"gate": "FETCH", "andon": "FetchHalt",
+             "clause": "unexpected_source_node",
+             "unmapped": unmapped, "node_map": dict(node_dir),
              "video_nodes": list(video_nodes)})
 
     jobs, counts = [], {}
@@ -240,7 +245,9 @@ def plan(results, base, run, node_dir, video_nodes):
         raise FetchHalt(
             f"the plan writes {len(outs)} file(s) to {len(set(outs))} path(s); "
             f"{dupes} would be overwritten while every count still read right",
-            {"n_jobs": len(outs), "n_paths": len(set(outs)), "collisions": dupes})
+            {"gate": "FETCH", "andon": "FetchHalt", "clause": "plan_paths_collide",
+             "n_jobs": len(outs), "n_paths": len(set(outs)),
+             "collisions": dupes})
     return jobs, counts
 
 
@@ -392,14 +399,23 @@ def download(manifest_path, exits_path=None, record_urls=True):
     #
     # `int()` is kept only for values that are actually PRESENT: a null, an empty string, or
     # anything that will not parse is `unrecorded`, in a clause of its own, naming the job.
+    # Wave 16, the readability half of F-dc32fa9d. The absent-code branch used to be
+    # spelled `raise ValueError("no exit was recorded")` INSIDE this function's own `try`,
+    # caught two lines down by the same handler that catches a `code` that will not parse.
+    # It never left the loop and it was never a refusal - three jury seats read it as an
+    # untyped refusal in a file where every refusal is a typed `FetchHalt`, which is the
+    # whole reason it is written as a predicate now. The behaviour is unchanged and the
+    # test below pins that: absent, blank and unparseable codes are all `unrecorded`.
     unrecorded, failed = [], []
     for i, row in enumerate(rows):
         row = row if isinstance(row, dict) else {"out": None, "code": None, "row": row}
         job = row.get("out") or f"<row {i}, no `out` recorded>"
         code = row.get("code")
+        if code is None or (isinstance(code, str) and not code.strip()):
+            unrecorded.append({"job": job, "code": row.get("code"),
+                               "message": row.get("message")})
+            continue
         try:
-            if code is None or (isinstance(code, str) and not code.strip()):
-                raise ValueError("no exit was recorded")
             code = int(code)
         except (TypeError, ValueError):
             unrecorded.append({"job": job, "code": row.get("code"),
@@ -582,7 +598,9 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
                                "first_8_bytes": head.hex(),
                                "bytes": os.path.getsize(o)})
 
-    ev = {"planned": len(outs), "missing": missing, "empty": empty, "extra": extra,
+    ev = {"gate": "FETCH", "andon": "FetchHalt",
+          "planned": len(outs), "missing": missing, "empty": empty,
+          "extra": extra,
           "wrong_type": wrong_type, "content_checked": content_checked,
           "root_exempt_matched": exempted,
           "root_exempt_patterns": [rx.pattern for rx in root_exempt],
@@ -596,7 +614,7 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
             f"were planned by no job. The measurement taken from this directory would be "
             f"a measurement of a generation that was never retrieved, or of a population "
             f"that is not this run",
-            ev)
+            dict(ev, clause="downloaded_population_is_not_the_planned_one"))
     if wrong_type:
         raise FetchHalt(
             f"{len(wrong_type)} of the {content_checked['png']} planned .png file(s) on "

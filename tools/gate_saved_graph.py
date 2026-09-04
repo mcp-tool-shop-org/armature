@@ -495,20 +495,35 @@ def link_round_trip(api_graph, saved_graph):
 
 #: The two keys `route_gates.verify` writes into its own receipt for the two facts a
 #: builder passes it. A dict carrying BOTH is a `verify` receipt; `gate_base_licence`'s
-#: evidence carries the same `gate`/`andon` pair and neither of these, which is why the
-#: reader below keys on the FACTS and not on the gate id (wave 12's rule: key on
+#: evidence carries the same `gate`/`andon` pair and neither of these, which is why this
+#: reader kept keying on the FACTS and not on the gate id (wave 12's rule: key on
 #: behaviour, not spelling).
 VERIFY_RECEIPT_KEYS = ("attribution", "carries_no_sampler_asserted")
 
+#: The KIND `route_gates.verify` declares about its own receipt, and the value this reader
+#: matches on (wave 16, core-gates' `F-069ae942`; the key landed in `verify`'s opening
+#: evidence literal, before any clause can raise). Keyed on the VALUE, never on the key's
+#: presence — a dict carrying `receipt: "something-else"` is not a verify receipt.
+VERIFY_RECEIPT_KIND = "verify"
+
 
 def verify_receipts(doc):
-    """Every `route_gates.verify` receipt inside a payload record, found by its CONTENT.
+    """Every `route_gates.verify` receipt inside a payload record.
 
     Walks the record rather than indexing a key path, because the builders spell that path
     two different ways — `gates.ROUTE` (the assemblers, `build_lora_arm_payload`,
     `build_r2v_payload`) and `gate_ROUTE_built` (`build_i2v_payload` and its camera
     sibling) — and a reader keyed on one of them would silently find nothing in the others
     and hand the DEFAULT facts to the last gate before a spend.
+
+    **Two readings, wave 16.** A receipt now DECLARES its own kind (`receipt: "verify"`),
+    so the identity of the dict is read off a declared value rather than inferred from the
+    co-presence of two fact keys — the reading that had to be used while nothing declared
+    anything, and one that a third key set could collide with tomorrow. The content check
+    is kept as the second clause rather than replaced: a record written by an older builder
+    carries the facts and no declared kind, and a receipt that answers the two questions is
+    still a receipt this gate can read the facts off. Either reading alone admits; both are
+    recorded in `route_facts` so a reader of the record can see which one found it.
     """
     out = []
     stack = [doc]
@@ -516,7 +531,8 @@ def verify_receipts(doc):
         node = stack.pop()
         if isinstance(node, dict):
             if (node.get("gate") == "ROUTE" and node.get("andon") == "RouteGate"
-                    and all(k in node for k in VERIFY_RECEIPT_KEYS)):
+                    and (node.get("receipt") == VERIFY_RECEIPT_KIND
+                         or all(k in node for k in VERIFY_RECEIPT_KEYS))):
                 out.append(node)
             stack.extend(node.values())
         elif isinstance(node, list):
@@ -570,13 +586,32 @@ def route_facts(record_path):
     if not receipts:
         raise RG.RouteGate(
             f"--record={record_path!r} carries no `route_gates.verify` receipt: no dict in "
-            f"it holds gate=ROUTE, andon=RouteGate and both of "
+            f"it holds gate=ROUTE, andon=RouteGate and either "
+            f"`receipt: {VERIFY_RECEIPT_KIND!r}` or both of "
             f"{list(VERIFY_RECEIPT_KEYS)}. A record that does not say what the builder "
             f"asserted is a record that cannot supply this gate's facts, and defaulting "
             f"them would put an unasserted claim on the last check before a spend",
             {"gate": "ROUTE", "andon": "RouteGate",
              "clause": "record_carries_no_verify_receipt", "record": path,
              "required_keys": list(VERIFY_RECEIPT_KEYS)})
+    # ---- ANDON, wave 16. A receipt admitted on its DECLARED kind must still answer the
+    # two questions this gate reads off it; the fact keys were the identity test before,
+    # so a receipt could not be admitted without them, and adding the declared reading
+    # opens a shape where it can. A missing fact is refused by name rather than reaching
+    # the next line as a `KeyError`.
+    thin = [r for r in receipts
+            if any(k not in r for k in VERIFY_RECEIPT_KEYS)]
+    if thin:
+        raise RG.RouteGate(
+            f"--record={record_path!r} carries a receipt declaring "
+            f"`receipt: {VERIFY_RECEIPT_KIND!r}` that does not answer both of "
+            f"{list(VERIFY_RECEIPT_KEYS)}. A declared kind says what a dict IS; it does "
+            f"not supply what this gate reads off it",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "verify_receipt_missing_its_facts", "record": path,
+             "required_keys": list(VERIFY_RECEIPT_KEYS),
+             "missing": sorted({k for r in thin for k in VERIFY_RECEIPT_KEYS
+                                if k not in r})})
     asserted = sorted({bool(r["carries_no_sampler_asserted"]) for r in receipts})
     if len(asserted) != 1:
         raise RG.RouteGate(
@@ -593,7 +628,14 @@ def route_facts(record_path):
             if key not in seen:
                 seen.add(key)
                 attribution.append(entry)
+    declared = sum(1 for r in receipts if r.get("receipt") == VERIFY_RECEIPT_KIND)
     return {"record": path, "n_verify_receipts": len(receipts),
+            # which reading found them, so a record's reader can see whether the receipts
+            # declared their own kind or were recognised by the facts they carry.
+            "n_declaring_their_kind": declared,
+            "found_by": ("declared receipt kind" if declared == len(receipts) else
+                         "the two facts they carry" if declared == 0 else
+                         "a mix: some declare their kind, some are read by their facts"),
             "carries_no_sampler": asserted[0], "attribution": attribution,
             "source": ("route_gates.verify's own receipt inside the builder's payload "
                        "record; neither fact is typed at this call site")}

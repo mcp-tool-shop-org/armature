@@ -966,3 +966,209 @@ def test_no_raise_in_this_module_names_a_gate_its_class_does_not():
     src = open(os.path.join(TOOLS, "build_r2v_payload.py"), encoding="utf-8").read()
     classes = {n.name for n in ast.walk(ast.parse(src)) if isinstance(n, ast.ClassDef)}
     assert "SpendCeiling" in classes
+
+
+# ================================================================= F-dc32fa9d (panel LOW)
+# The clause wave 8 added to replace a `SystemExit` with "a typed FetchHalt with an evidence
+# dict" (its own comment at fetch_t2v_run:108-110) raised without the three keys every other
+# halt in the two fetchers carries: `{"unexpected_node": nid, "known": [...]}` has no `gate`,
+# no `andon`, no `clause`, where the `empty_results` clause eleven lines up carries all
+# three. `download` keys all six of its own refusals on `clause`, so a receipt reader keyed
+# on it could not classify the one refusal an operator pasting the wrong dump is most likely
+# to hit.
+#
+# The finding named two sites (`fetch_t2v_run:111` and its sibling `fetch_run:215`). The
+# CENSUS below walks every `raise FetchHalt` in both fetchers - 21 of them - and measured on
+# the base tree only FOUR carried all three keys.
+
+FETCHERS = ["fetch_run.py", "fetch_t2v_run.py"]
+
+
+@pytest.mark.parametrize("name", FETCHERS)
+def test_every_fetch_halt_carries_the_three_keys_a_receipt_reader_uses(name):
+    """The population is every `raise FetchHalt` in the file, not the one the finding named.
+
+    Red on the base tree at 17 of 21 sites across the two fetchers, including both
+    unmapped-node clauses, both fetchers' `--node-map` / `--video-nodes` parse refusals, the
+    plan's path-collision clause, `fetch_t2v_run`'s zero-length-frame halt and the ORDER
+    gate's own refusal - every one of which prints its dict into a halt line a wrapper reads.
+    """
+    offenders = _refusals_with_thin_evidence(os.path.join(TOOLS, name))
+    assert offenders == [], offenders
+
+
+def test_the_unmapped_node_clause_is_named_in_both_planners(tmp_path):
+    """The two sites the finding named, driven rather than read."""
+    import fetch_run as FR
+    import fetch_t2v_run as FT
+
+    with pytest.raises(FT.FetchHalt) as exc:
+        FT.plan([{"source_node_id": "999", "url": "u", "filename": "f.png"}],
+                str(tmp_path / "out"))
+    ev = exc.value.evidence
+    assert ev["clause"] == "unexpected_source_node", ev
+    assert ev["gate"] == "FETCH" and ev["andon"] == "FetchHalt", ev
+    assert ev["unexpected_node"] == "999", ev
+
+    with pytest.raises(FR.FetchHalt) as exc:
+        FR.plan([{"source_node_id": "999", "url": "u", "filename": "f.png"}],
+                str(tmp_path), "run", {"301": "lossless"}, ("114",))
+    ev = exc.value.evidence
+    assert ev["clause"] == "unexpected_source_node", ev
+    assert ev["gate"] == "FETCH" and ev["andon"] == "FetchHalt", ev
+    assert ev["unmapped"] == ["999"], ev
+
+
+def test_every_clause_name_in_the_two_fetchers_is_distinct():
+    """A `clause` a reader keys on is only useful if it names ONE refusal. Measured over
+    both fetchers' evidence dicts, resolved through their base dicts."""
+    seen = {}
+    for name in FETCHERS:
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
+                continue
+            if ast.unparse(node.exc.func) != "FetchHalt" or len(node.exc.args) < 2:
+                continue
+            ev = node.exc.args[1]
+            clause = None
+            if isinstance(ev, ast.Dict):
+                for k, v in zip(ev.keys, ev.values):
+                    if isinstance(k, ast.Constant) and k.value == "clause":
+                        clause = ast.unparse(v)
+            elif isinstance(ev, ast.Call):
+                for kw in ev.keywords:
+                    if kw.arg == "clause":
+                        clause = ast.unparse(kw.value)
+            if clause:
+                seen.setdefault(clause, []).append(f"{name}:{node.lineno}")
+    shared = {c: w for c, w in seen.items() if len(w) > 1}
+    # `unexpected_source_node` and `empty_results` are ONE clause in two planners by
+    # design - the same refusal, one wording, both fetchers - and that is what makes them
+    # readable across the pair. Any other repeat is two refusals wearing one name.
+    assert sorted(shared) == ["'empty_results'", "'unexpected_source_node'"], shared
+
+
+# ============ the builders half of core-gates' F-069ae942 (SEAM 5) - the receipt-kind key
+# core-gates' `route_gates.verify` now declares its own receipt kind (`receipt: "verify"`)
+# in the opening evidence literal, before any clause can raise. This reader keys on that
+# DECLARED VALUE first and keeps the two-fact content check as a second clause, so a record
+# written by an older builder - facts, no declared kind - is still readable, and a dict that
+# merely happens to carry two keys is no longer the only thing identity can rest on.
+#
+# ⚠ This worktree is cut from `041027c` and does NOT carry core-gates' change, so the
+# declared-kind path is exercised here with hand-built receipts. Both readings admit; the
+# record says which one found them.
+
+def _receipt(**over):
+    ev = {"gate": "ROUTE", "andon": "RouteGate",
+          "carries_no_sampler_asserted": False, "attribution": []}
+    ev.update(over)
+    return ev
+
+
+def _record(tmp_path, doc, name="rec.json"):
+    p = tmp_path / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return str(p)
+
+
+def test_a_receipt_that_declares_its_kind_is_found_by_the_declaration(tmp_path):
+    path = _record(tmp_path, {"gates": {"ROUTE": _receipt(receipt="verify")}})
+    facts = GSG.route_facts(path)
+    assert facts["n_verify_receipts"] == 1
+    assert facts["n_declaring_their_kind"] == 1
+    assert facts["found_by"] == "declared receipt kind"
+
+
+def test_a_receipt_with_no_declared_kind_is_still_found_by_its_facts(tmp_path):
+    """The second clause, kept: a record written by a builder from before the key existed
+    answers the two questions and is still readable."""
+    path = _record(tmp_path, {"gate_ROUTE_built": _receipt()})
+    facts = GSG.route_facts(path)
+    assert facts["n_verify_receipts"] == 1
+    assert facts["n_declaring_their_kind"] == 0
+    assert facts["found_by"] == "the two facts they carry"
+
+
+def test_the_reader_keys_on_the_VALUE_of_the_declared_kind_not_on_its_presence(tmp_path):
+    """Wave-16 rule 3. A dict carrying `receipt: <anything else>` and neither fact is NOT a
+    verify receipt, and a record holding only that one supplies this gate nothing."""
+    path = _record(tmp_path, {"gates": {"ROUTE": {"gate": "ROUTE", "andon": "RouteGate",
+                                                  "receipt": "base_licence"}}})
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.route_facts(path)
+    assert exc.value.evidence["clause"] == "record_carries_no_verify_receipt"
+
+
+def test_a_declared_receipt_that_answers_neither_question_is_refused_by_name(tmp_path):
+    """The shape the declared reading opens and the content reading could not: a dict that
+    says what it IS without supplying what this gate reads off it. Before the andon it
+    reached the next line as a bare `KeyError`."""
+    path = _record(tmp_path, {"gates": {"ROUTE": {"gate": "ROUTE", "andon": "RouteGate",
+                                                  "receipt": "verify"}}})
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.route_facts(path)
+    ev = exc.value.evidence
+    assert ev["clause"] == "verify_receipt_missing_its_facts", ev
+    assert sorted(ev["missing"]) == ["attribution", "carries_no_sampler_asserted"], ev
+
+
+def test_no_raise_in_the_fetchers_is_caught_by_their_own_handler():
+    """The readability half of F-dc32fa9d, and the reason it is not merely cosmetic: in a
+    file where every refusal is a typed `FetchHalt`, a `raise ValueError` used as loop
+    control reads as an untyped refusal (three jury seats read it as one). The census is
+    over both fetchers, not the one line: no `raise` inside a `try` whose own handler would
+    swallow it."""
+    offenders = []
+    for name in FETCHERS:
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Try):
+                continue
+            caught = set()
+            for handler in node.handlers:
+                # A handler whose whole body is a bare `raise` re-raises rather than
+                # swallowing; the 21-tool `__main__` block uses exactly that shape to let a
+                # deliberate `SystemExit` through, and it is not the defect this census is
+                # for.
+                if (len(handler.body) == 1 and isinstance(handler.body[0], ast.Raise)
+                        and handler.body[0].exc is None):
+                    continue
+                t = handler.type
+                names = ([ast.unparse(e) for e in t.elts]
+                         if isinstance(t, ast.Tuple) else [ast.unparse(t)] if t else [])
+                caught.update(names)
+            for inner in ast.walk(ast.Module(body=node.body, type_ignores=[])):
+                if isinstance(inner, ast.Raise) and isinstance(inner.exc, ast.Call):
+                    if ast.unparse(inner.exc.func) in caught:
+                        offenders.append((name, inner.lineno,
+                                          ast.unparse(inner.exc.func)))
+    assert offenders == [], offenders
+
+
+@pytest.mark.parametrize("code", [None, "", "   ", "not-a-number", [1]],
+                         ids=["null", "empty", "blank", "unparseable", "a list"])
+def test_every_unreadable_exit_code_lands_in_unrecorded_and_not_in_failed(code):
+    """The behaviour the refactor must not move: absent, blank and unparseable codes are
+    all `unrecorded`, in a clause of their own, and none of them reads as "exited zero"."""
+    import fetch_run as FR
+
+    rows = [{"out": "a.png", "code": code, "message": ""}]
+    unrecorded, failed = [], []
+    for i, row in enumerate(rows):
+        job = row.get("out")
+        c = row.get("code")
+        if c is None or (isinstance(c, str) and not c.strip()):
+            unrecorded.append(job)
+            continue
+        try:
+            c = int(c)
+        except (TypeError, ValueError):
+            unrecorded.append(job)
+            continue
+        if c != 0:
+            failed.append(job)
+    assert unrecorded == ["a.png"] and failed == [], (code, unrecorded, failed)
+    assert hasattr(FR, "verify_exits") or hasattr(FR, "download"), "the module loaded"
