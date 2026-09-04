@@ -20,13 +20,17 @@
        catching a wheel that does not work, and it probes the function-local dependencies
        (`draw_body`, `draw_hand`, `mean_consecutive_frame_difference`) because `armature
        check` executes no function body and was green on a wheel that could not run.
-    4. the site build: `npm ci`, then `npm audit --audit-level=high` — the dependency scan,
-       also missing until it was enumerated — then `npm run build`, which is what GitHub
-       Pages deploys.
+    4. the site build: `npm audit --package-lock-only --audit-level=high` — the dependency
+       scan, also missing until it was enumerated, and running BEFORE the install because
+       `npm ci` executes every lifecycle script in the tree it resolves — then `npm ci`,
+       then `npm run build`, which is what GitHub Pages deploys.
 
   Every leg runs even if an earlier one fails, so one invocation reports the whole
   picture rather than the first thing to break. The exit code is 0 only if all legs pass,
   and a leg that could not establish an outcome at all counts as a failure, not a pass.
+  That is recorded per COMMAND, not per leg: a command that vanishes part-way through a leg
+  leaves an earlier command's zero in $LASTEXITCODE, and a leg is a claim about every
+  command in it — so a leg whose body raised establishes no outcome and fails.
 
 .PARAMETER NoSite
   Skip leg 4. Useful when only Python changed and node_modules is cold; the site leg is
@@ -73,17 +77,32 @@ function Invoke-Leg {
     # tests/test_verify_script.py lifts this function out and drives it with an absent binary,
     # so everything it needs is defined INSIDE it — a function whose verdict depended on a
     # constant elsewhere in the file would be a function the test could only approximate.
+    # A LEG IS MANY COMMANDS, AND THE OUTCOME WAS RECORDED PER LEG. `$LASTEXITCODE` is
+    # cleared once here, so `Established` answered only "did ANYTHING in this whole leg set
+    # an exit code" — and a command that vanished MID-leg left the previous command's zero
+    # standing for the catch to read. Measured on this function: a body running an
+    # interpreter that exits 0 and THEN an absent binary recorded ExitCode 0 / PASS /
+    # Established True, while a body whose only statement was the absent binary recorded 253
+    # / FAIL. Leg 3 is the exposed one: after `& $python -m build` every remaining command
+    # runs on a CONSTRUCTED path ($cleanPython, $cleanArmature), and those paths being absent
+    # IS the defect that leg exists to catch — a wheel that installs but creates no console
+    # script makes `& $cleanArmature check` raise, the catch reads pip's zero, and the leg
+    # reports PASS with `leg raised:` printed in red above a green summary line.
+    #
+    # So a RAISED body establishes no outcome, whatever $LASTEXITCODE currently holds. The
+    # commands after the one that raised did not run, and a leg is a claim about all of them.
     $NO_OUTCOME = 253
     $global:LASTEXITCODE = $null
     $code = $null
+    $raised = $false
     try {
         & $Body
         $code = $global:LASTEXITCODE
     } catch {
         Write-Host "  leg raised: $($_.Exception.Message)" -ForegroundColor Red
-        $code = $global:LASTEXITCODE
+        $raised = $true
     }
-    $established = ($null -ne $code)
+    $established = (-not $raised) -and ($null -ne $code)
     if (-not $established) { $code = $NO_OUTCOME }
 
     $sw.Stop()
@@ -92,6 +111,7 @@ function Invoke-Leg {
         ExitCode    = $code
         Outcome     = if ($code -eq 0) { 'PASS' } else { 'FAIL' }
         Established = $established
+        Raised      = $raised
         Seconds     = [math]::Round($sw.Elapsed.TotalSeconds, 1)
     })
 }
@@ -214,16 +234,20 @@ if ($NoSite) {
     Write-Host ''
     Write-Host '──────── site build — SKIPPED (-NoSite)' -ForegroundColor Yellow
 } else {
-    Invoke-Leg -Name 'site build (npm ci + audit + build)' -Body {
+    Invoke-Leg -Name 'site build (audit + npm ci + build)' -Body {
         Push-Location (Join-Path $repo 'site')
         try {
-            npm ci
+            # ci.yml's dependency scan, verbatim, and in ci.yml's order: BEFORE the
+            # install. `npm ci` runs every lifecycle script in the resolved tree, so a scan
+            # that follows it reports a compromised dependency that has already run — here,
+            # on the rig. `--package-lock-only` reads the committed lockfile and needs no
+            # node_modules. site/ is the repo's only dependency manifest, so this is the
+            # whole scannable surface; `high` is the studio's threshold. Missing locally
+            # until the legs were enumerated against ci.yml, which meant a green local run
+            # could still be a lockfile CI then rejected.
+            npm audit --package-lock-only --audit-level=high
             if ($LASTEXITCODE -ne 0) { return }
-            # ci.yml's dependency scan, verbatim. site/ is the repo's only dependency
-            # manifest, so this is the whole scannable surface; `high` is the studio's
-            # threshold. Missing locally until the legs were enumerated against ci.yml, which
-            # meant a green local run could still be a lockfile CI then rejected.
-            npm audit --audit-level=high
+            npm ci
             if ($LASTEXITCODE -ne 0) { return }
             npm run build
         } finally { Pop-Location }
@@ -235,6 +259,8 @@ Write-Host '════════ verify' -ForegroundColor Cyan
 foreach ($r in $results) {
     $verdict = if ($r.Outcome -eq 'PASS') {
         'PASS'
+    } elseif ($r.Raised) {
+        'FAIL (a command in the leg raised — the commands after it never ran, so the leg established no outcome)'
     } elseif (-not $r.Established) {
         'FAIL (the leg established no outcome — nothing it shells out to ran)'
     } else {

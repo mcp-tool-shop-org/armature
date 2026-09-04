@@ -11,6 +11,11 @@
 #
 # `release.yml` is NOT available for this job: its filename is authenticated by
 # PyPI's Trusted Publisher OIDC and cannot be repurposed (docs/publishing.md).
+#
+# The `uses:` refs are pinned to commit SHAs within the major they already used, resolved
+# with the network on 2026-09-04; the reasoning and the method are in ci.yml's header.
+# `deploy-pages` is the step that replaces what the public sees, so a ref of its that
+# resolved at run time was the sharpest instance of the gap.
 name: pages
 
 on:
@@ -25,20 +30,37 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# `contents: read` is the whole workflow-level grant, and the two scopes that can change
+# what the public sees live on the ONE job that uses them. Both jobs used to carry all three:
+# the `build` job below runs `npm ci` over site/'s whole lockfile — every install lifecycle
+# script in the resolved tree — while holding a token able to create a Pages deployment, so a
+# compromised transitive dependency could replace the front door from a build job. ci.yml's
+# own permissions comment names this threat model and release.yml puts `id-token: write` on
+# its two publish jobs alone; this file skipped the narrowing.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
+
+      # ci.yml's dependency scan, the same command verify.ps1 runs locally, and BEFORE the
+      # install for the same reason it is first there: `npm ci` runs every lifecycle script
+      # in the resolved tree, and this job ran them under `pages: write` and `id-token:
+      # write` until those scopes moved onto the deploy job. This job had `npm ci` and `npm
+      # run build` and nothing else, while ci.yml's site-build — the job that DOES scan —
+      # was skipped on every push, so a push to main that bumped site/package-lock.json
+      # built and DEPLOYED it with no scan having run anywhere. site/ is the repo's only
+      # dependency manifest, so this is the whole scannable surface.
+      - name: scan site dependencies
+        working-directory: site
+        run: npm audit --package-lock-only --audit-level=high
 
       # `npm ci`, not `npm install`: the lockfile is committed, so the build
       # that runs here is the build verified on the rig.
@@ -46,21 +68,11 @@ jobs:
         working-directory: site
         run: npm ci
 
-      # ci.yml's dependency scan, the same command verify.ps1 runs locally. This job had
-      # `npm ci` and `npm run build` and nothing else, while ci.yml's site-build — the job
-      # that DOES scan — was skipped on every push. So a push to main that bumped
-      # site/package-lock.json built and DEPLOYED it with no scan having run anywhere, under a
-      # comment in ci.yml claiming the two builds were equivalent. site/ is the repo's only
-      # dependency manifest, so this is the whole scannable surface.
-      - name: scan site dependencies
-        working-directory: site
-        run: npm audit --audit-level=high
-
       - name: build site
         working-directory: site
         run: npm run build
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: site/dist
 
@@ -73,9 +85,16 @@ jobs:
     if: github.event.repository.private == false
     needs: build
     runs-on: ubuntu-latest
+    # A job-level block REPLACES the workflow-level grant, so this job has no `contents`
+    # scope at all — deliberately: its one step performs the deployment and never clones.
+    # (release.yml's `npm` job is the same rule in the other direction: it re-declares
+    # `contents: read` beside `id-token: write` precisely because its step 1 IS a checkout.)
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

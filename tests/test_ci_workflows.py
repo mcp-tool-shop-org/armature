@@ -25,6 +25,8 @@ What each group is here to catch, measured on this tree before the fix:
   which executes a function body, so it was green on a wheel whose drawing path could not run.
 """
 
+import ast
+import json
 import os
 import re
 import shutil
@@ -279,7 +281,7 @@ def _job_lines(text, name):
 #: asserted against this table, so a job that starts or stops checking out is a failure here
 #: rather than a silent change in what the check below covers.
 CHECKOUT_JOBS = {
-    "ci.yml": ["python-tests", "site-build"],
+    "ci.yml": ["launcher", "python-tests", "site-build"],
     "pages.yml": ["build"],
     "release.yml": ["npm", "verify"],
 }
@@ -426,6 +428,8 @@ def test_ci_runs_on_every_file_the_package_is_built_from(trigger):
     )
 
 
+
+
 def _code_only(script):
     """The script with `#` comment lines dropped -- naming a module in a comment is not
     reaching it, and this test is about what the leg RUNS."""
@@ -439,7 +443,7 @@ def test_the_clean_room_leg_reaches_every_lazily_imported_dependency():
     third-party import, the leg must CALL one of the functions that performs it. A new lazy
     dependency fails this test until the clean-room leg calls through to it.
     """
-    script = _code_only(run_script(step_containing(CI, "run it from a clean install")))
+    script = _code_only(clean_room_script())
     sites = lazy_import_call_sites()
     assert set(sites) == set(lazy_third_party_roots()), (
         f"a lazy dependency has no located call site: {sorted(set(lazy_third_party_roots()) - set(sites))}"
@@ -749,7 +753,9 @@ def test_a_third_party_action_is_pinned_to_a_commit_and_says_which_version(sourc
 # exactly one step, and that step is the repo's only dependency scan — ci.yml says so itself:
 # "The repo's only dependency manifest is site/ ... this is the whole scannable surface."
 
-SCAN = "npm audit --audit-level=high"
+#: ci.yml's own scan command, read rather than typed: the two must not drift, and the shape
+#: changed when the scan moved ahead of the install it scans.
+SCAN = run_script(step_containing(CI, "scan site dependencies")).strip()
 CHANGED = "site/package-lock.json"
 
 
@@ -869,3 +875,725 @@ def test_a_lockfile_change_is_scanned_however_it_arrives(arrival, ctx):
         f"{[f'{w}:{j}' for w, j, _ in running]} and none of them runs `{SCAN}`; a lockfile "
         "bump carrying a high-severity advisory reaches main with no scan having run on it"
     )
+
+
+# -- the scan runs BEFORE the install it scans (F-a495cc98) --------------------------------
+#
+# `npm ci` runs every lifecycle script in the resolved tree by default, so a scan that runs
+# after it reports a compromised dependency that has already had a shell on the runner —
+# in pages.yml's case with `pages: write` and `id-token: write` in the environment until the
+# permissions were narrowed. ci.yml calls site/ "the whole scannable surface" and the scan
+# "scanned rather than attested", which is true of the report and not of the ordering: the
+# gate could name the finding but not stop it from having run.
+#
+# `npm audit --package-lock-only` reads the lockfile and needs no node_modules, so the scan
+# can be the first thing that touches site/ instead of the third.
+
+#: Every place site/'s lockfile is installed, as measured 2026-09-04 by `site_jobs()` plus
+#: the local script. A fourth installer fails the census before it fails the ordering.
+LOCKFILE_INSTALLERS_TODAY = [("ci.yml", "site-build"), ("pages.yml", "build")]
+
+
+def test_the_lockfile_installer_census_is_the_jobs_in_the_files():
+    """Walked out of the workflows, never listed: `npm ci` in a job body is an installer."""
+    assert site_jobs() == LOCKFILE_INSTALLERS_TODAY, (
+        f"the jobs that install site/'s lockfile are {site_jobs()}; this file was written "
+        f"against {LOCKFILE_INSTALLERS_TODAY}")
+
+
+def _order_in(body, first, second):
+    """(index of `first`, index of `second`) inside a text, -1 where absent.
+
+    Comment lines are dropped first: the steps explain each other, so both commands appear
+    in the prose above them and a raw `find` would read the ordering off an explanation
+    rather than off what the job RUNS.
+    """
+    body = _code_only(body)
+    return body.find(first), body.find(second)
+
+
+@pytest.mark.parametrize("workflow,job", site_jobs())
+def test_the_dependency_scan_runs_before_the_install_that_executes_the_tree(workflow, job):
+    """The one control this repo has over its only dependency graph must precede the shell.
+
+    What this looks like if wrong: the audit step sits below `npm ci`, reports a
+    high-severity advisory, and every preinstall/install/postinstall in the resolved tree has
+    already run on the runner under whatever token that job holds.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    install, scan = _order_in(body, "npm ci", "npm audit")
+    assert scan != -1, f"{workflow}:{job} installs site/'s lockfile and never scans it"
+    assert scan < install, (
+        f"{workflow}:{job} runs `npm ci` at character {install} and `npm audit` at {scan}; "
+        "by the time the scan reports, every lifecycle script in the resolved tree has run")
+    assert "--package-lock-only" in body, (
+        f"{workflow}:{job} scans without `--package-lock-only`, so the scan needs the "
+        "node_modules the install creates and cannot precede it")
+
+
+def test_the_ordering_check_goes_red_on_a_body_that_scans_after_installing():
+    """The mutation: the shape the fix replaced must still fail this check.
+
+    A census that only ever sees corrected inputs proves nothing about the direction it
+    guards, so the pre-fix ordering is fed to the same comparison here.
+    """
+    before = "      - run: npm ci\n      - run: npm audit --audit-level=high\n"
+    install, scan = _order_in(before, "npm ci", "npm audit")
+    assert not (scan < install), "the ordering comparison cannot fail on the pre-fix shape"
+
+
+# -- the second direction of the permissions census (F-0f644506) --------------------------
+#
+# `test_every_checkout_job_runs_on_a_declared_token_scope` asserts only that a contents scope
+# is PRESENT. It has no direction that fails on a grant BROADER than the job's steps need,
+# and pages.yml declared `contents: read`, `pages: write` and `id-token: write` at WORKFLOW
+# level, so both jobs carried all three. The `build` job is the one that runs `npm ci` over
+# site/'s whole lockfile — every install lifecycle script in the resolved tree — and it needs
+# `contents: read` and nothing else. ci.yml's own permissions comment names this exact threat
+# model ("this is the workflow that executes the most third-party code"), and release.yml puts
+# `id-token: write` on the two publish jobs alone; pages.yml is the file that skipped the
+# narrowing. Worst realistic consequence: a compromised transitive dependency's install script
+# runs on a runner holding a token that can create a Pages deployment.
+
+#: What a job must contain for a scope beyond `contents` to be one it USES. `contents` is the
+#: read-only baseline a checkout authenticates with and is not policed for use here.
+#: Re-derive rather than extend blindly: each entry is a step that consumes the scope.
+SCOPE_MARKERS = {
+    "pages": ("actions/deploy-pages",),
+    "id-token": ("actions/deploy-pages", "gh-action-pypi-publish", "--provenance"),
+}
+BASELINE_SCOPE = "contents"
+
+
+def _scopes_in(block):
+    """{scope: level} for a `permissions:` block's own lines."""
+    return {m.group(1): m.group(2)
+            for m in re.finditer(r"(?m)^\s+([a-z-]+):\s*(read|write|none)\s*$", block or "")}
+
+
+def granted_scopes():
+    """(workflow, job, {scope: level}) for every job in every workflow, effective grant.
+
+    A job-level block REPLACES the workflow-level one, so the effective grant is the job's
+    own block where it has one and the file's block where it does not. Walked out of the
+    directory, so a fourth workflow is covered the day it lands.
+    """
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        file_level = _workflow_level_permissions(text)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if re.search(r"(?m)^    permissions:\s*$", body):
+                block = "\n".join(named_block(body, "permissions", 4))
+            else:
+                block = file_level
+            out.append((name, job, _scopes_in(block)))
+    return out
+
+
+def test_every_scope_this_repo_grants_has_a_recorded_consumer():
+    """Fail-closed: a scope nobody wrote a marker for is not silently exempt from the check."""
+    seen = {scope for _w, _j, scopes in granted_scopes() for scope in scopes}
+    assert seen, "no job in any workflow declares a permissions scope any more"
+    unknown = sorted(seen - set(SCOPE_MARKERS) - {BASELINE_SCOPE})
+    assert unknown == [], (
+        f"{unknown} is granted somewhere and has no row in SCOPE_MARKERS, so nothing says "
+        "which step consumes it and the check below would pass it by default")
+
+
+@pytest.mark.parametrize("workflow,job,scopes", granted_scopes(),
+                         ids=lambda v: v if isinstance(v, str) else "")
+def test_a_job_is_granted_only_the_scopes_its_own_steps_use(workflow, job, scopes):
+    """Least privilege, in the direction the present census does not bound.
+
+    What this looks like if wrong: the job that executes the most third-party code holds a
+    token that can replace the public front door.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    unused = [
+        scope for scope, level in sorted(scopes.items())
+        if scope != BASELINE_SCOPE and level != "none"
+        and not any(marker in body for marker in SCOPE_MARKERS[scope])
+    ]
+    assert unused == [], (
+        f"{workflow} job {job!r} is granted {unused} and runs no step that consumes "
+        f"{'it' if len(unused) == 1 else 'them'}; the scope is available to every line of "
+        "third-party code the job executes")
+
+
+def test_the_least_privilege_check_goes_red_on_an_unused_scope():
+    """The mutation: the pre-fix grant, fed to the same comparison.
+
+    pages.yml's `build` job held `pages: write` with no deploy step in it; a check that
+    cannot fail on that shape is not the check this finding asked for.
+    """
+    scopes = {"contents": "read", "pages": "write", "id-token": "write"}
+    body = "      - uses: actions/checkout@abc\n      - run: npm ci\n"
+    unused = [s for s, level in sorted(scopes.items())
+              if s != BASELINE_SCOPE and level != "none"
+              and not any(m in body for m in SCOPE_MARKERS[s])]
+    assert unused == ["id-token", "pages"], unused
+
+
+# -- the pinning law, applied to the owner it exempted (F-aac4e7ec) -----------------------
+#
+# `THIRD_PARTY` above filters `uses_refs()` with `not row[1].startswith("actions/")` — an
+# uncommented filter that removes an entire owner — and its sibling
+# `test_no_action_is_resolved_from_a_branch_ref` accepts any non-branch ref, a moving major
+# tag included. Measured before the fix: every `uses:` under `.github/` except
+# `pypa/gh-action-pypi-publish` resolved from a mutable tag, and among them were the
+# `actions/checkout` and `actions/setup-node` that run in the SAME job as
+# `npm publish --provenance` under `id-token: write`, and the `actions/deploy-pages` that
+# performs the deployment. A moved v4 tag runs new code inside the job holding the OIDC
+# minting scope, in the one step with no compensator.
+#
+# The exemption may have been a deliberate trust decision about GitHub-owned actions;
+# nothing in the workflows or in this file recorded one, so it read as a gap. It is closed
+# rather than documented: the same law, over every `uses:` in the tree.
+#
+# The population here is `uses_refs()` — walked from `.github/`, workflows and composite
+# actions alike — and it is a SUPERSET of `THIRD_PARTY`, which keeps its own two tests. The
+# overlap is deliberate: retiring the narrow pair would leave the "population may not empty
+# itself" check with nothing to say about third-party actions specifically.
+
+#: Every external action this repo uses, as measured 2026-09-04. Asserted so a new `uses:`
+#: fails HERE — naming the action and the file — rather than joining a check silently.
+EVERY_USE_TODAY = sorted({
+    ("ci.yml", "actions/checkout"),
+    ("ci.yml", "actions/setup-node"),
+    ("ci.yml", "actions/setup-python"),
+    ("pages.yml", "actions/checkout"),
+    ("pages.yml", "actions/deploy-pages"),
+    ("pages.yml", "actions/setup-node"),
+    ("pages.yml", "actions/upload-pages-artifact"),
+    ("release.yml", "actions/checkout"),
+    ("release.yml", "actions/download-artifact"),
+    ("release.yml", "actions/setup-node"),
+    ("release.yml", "actions/setup-python"),
+    ("release.yml", "actions/upload-artifact"),
+    ("release.yml", "pypa/gh-action-pypi-publish"),
+})
+
+
+def test_the_pinning_census_is_every_external_action_in_the_tree():
+    """Size and membership, before the property. `./` paths ride the checkout and are not refs."""
+    seen = sorted({(source, action) for source, action, _ref, _line in uses_refs()})
+    assert seen == EVERY_USE_TODAY, (
+        "the set of external actions under .github/ has changed; each new one needs a SHA "
+        "and a version comment before this list is updated:\n  "
+        + "\n  ".join(f"{s}: {a}" for s, a in sorted(set(seen) ^ set(EVERY_USE_TODAY))))
+
+
+@pytest.mark.parametrize("source,action,ref,line", uses_refs())
+def test_every_action_is_pinned_to_a_commit_and_says_which_version(source, action, ref, line):
+    """The law release.yml's PyPI comment states in general terms, applied generally.
+
+    "A ref that resolves at run time means the code performing the step is not the code last
+    reviewed" is a property of the ref, not of who owns the repository it points at. The
+    trailing `# vX.Y.Z` is part of the requirement: a bare hash is unreadable, and a bump is
+    reviewed by comparing the version a human can read.
+    """
+    assert re.fullmatch(r"[0-9a-f]{40}", ref), (
+        f"{source} pins {action} to {ref!r}, which is not a full commit SHA; a tag is "
+        f"re-resolved on the day the step runs — including inside the jobs that publish:\n{line}")
+    assert re.search(r"#\s*v?\d+\.\d+(\.\d+)?", line), (
+        f"{source} pins {action} to a bare hash with no version beside it; nobody can review "
+        f"a bump they cannot read:\n{line}")
+
+
+def test_the_pinning_check_goes_red_on_a_moving_major_tag():
+    """The mutation: the shape every `actions/*` line held until today.
+
+    `test_no_action_is_resolved_from_a_branch_ref` passes on `v4` — it only refuses branch
+    refs — so the direction that matters here is exercised on its own.
+    """
+    assert not re.fullmatch(r"[0-9a-f]{40}", "v4"), "a major tag reads as a pinned commit"
+    assert not re.search(r"#\s*v?\d+\.\d+(\.\d+)?", "      - uses: actions/checkout@v4"), (
+        "an unpinned line reads as carrying a reviewable version comment")
+
+
+# -- the clean-room leg, and the toolchain that builds it (F-60ab1bd7, F-7fa3017c) --------
+#
+# release.yml's verify job ran `python -m build` and `twine check dist/*` and nothing
+# installed either artifact. ci.yml's python-tests ran the same build AND a clean venv
+# install plus a probe that calls through to every function-local dependency; ci.yml's own
+# comment records why the weaker form is not enough -- `armature check` printed "all modules
+# resolved" and exited 0 on a wheel whose drawing and donor paths raised ModuleNotFoundError
+# on first call. So the artifact handed to `pypa/gh-action-pypi-publish`, the one step in
+# this repository with no compensator, was the one artifact never installed anywhere in the
+# workflow that publishes it.
+#
+# The leg now lives in `.github/actions/clean-room` and both jobs call it. The population
+# below is therefore every job that PRODUCES a distribution, walked out of the tree with
+# local composite actions expanded -- not ci.yml alone, and not a list.
+
+
+def _run_scripts_in(text):
+    """Every `run:` script in a YAML text, dedented."""
+    out, lines = [], text.splitlines()
+    for i, line in enumerate(lines):
+        if not line.strip().startswith("run:"):
+            continue
+        if line.strip() in ("run: |", "run: |-"):
+            body = block_at(lines, i)
+            pad = min((_indent(x) for x in body if x.strip()), default=0)
+            out.append("\n".join(x[pad:] for x in body))
+        else:
+            out.append(line.strip()[len("run: ") :])
+    return out
+
+
+def _local_action_scripts(ref):
+    """The run scripts of a `uses: ./path` composite action in this repository."""
+    base = os.path.join(REPO, ref[2:].replace("/", os.sep))
+    for candidate in ("action.yml", "action.yaml"):
+        path = os.path.join(base, candidate)
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fh:
+                return _run_scripts_in(fh.read())
+    raise AssertionError(f"{ref} is used but no action file exists at {base}")
+
+
+def job_scripts(workflow, job):
+    """Every script a job RUNS, including the ones inside the local actions it calls.
+
+    A step that moved into a composite action is still a step of the job; a check that reads
+    only the job body would go quiet the day a leg was lifted, which is how the trigger-path
+    hole opened one directory over.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    scripts = _run_scripts_in(body)
+    for line in body.splitlines():
+        match = re.match(r"\s*-?\s*uses:\s*(\./\S+)", line)
+        if match:
+            scripts.extend(_local_action_scripts(match.group(1)))
+    return scripts
+
+
+def clean_room_script():
+    """The one script anywhere under `.github/` that builds a clean venv.
+
+    Derived, so lifting the leg into an action (or back out of one) moves every check that
+    reads it. Exactly one is required: two would be two implementations of one gate.
+    """
+    hits = [(source, script) for source, script in _all_run_scripts() if "-m venv" in script]
+    assert len(hits) == 1, (
+        f"{len(hits)} scripts under .github/ build a clean venv; the leg that catches a "
+        f"wheel that cannot run must have one implementation: {[s for s, _ in hits]}")
+    return hits[0][1]
+
+
+def jobs_that_produce_a_distribution():
+    """(workflow, job) for every job that builds a wheel or an sdist -- walked, not listed."""
+    out = []
+    for name in workflow_files():
+        for job in job_names(_text(name)):
+            if any("-m build" in _code_only(s) for s in job_scripts(name, job)):
+                out.append((name, job))
+    return out
+
+
+#: Measured 2026-09-04. The release gate built a distribution and installed nothing.
+DISTRIBUTION_JOBS_TODAY = [("ci.yml", "python-tests"), ("release.yml", "verify")]
+
+
+def test_the_distribution_job_census_is_the_jobs_that_build_one():
+    assert jobs_that_produce_a_distribution() == DISTRIBUTION_JOBS_TODAY, (
+        f"the jobs that build a distribution are {jobs_that_produce_a_distribution()}; this "
+        f"file was written against {DISTRIBUTION_JOBS_TODAY}")
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_produce_a_distribution())
+def test_every_job_that_builds_a_distribution_runs_it_from_a_clean_install(workflow, job):
+    """A build and a metadata check are not a claim that the artifact works.
+
+    What this looks like if wrong: a wheel whose console script is missing, or whose lazy
+    imports are unsatisfiable, passes `twine check` and reaches a registry -- from the job
+    whose whole purpose is to be the last gate before that happens.
+    """
+    scripts = "\n".join(job_scripts(workflow, job))
+    assert "-m venv" in scripts, (
+        f"{workflow}:{job} builds a distribution and never installs one; `twine check` reads "
+        "the METADATA and no more")
+    assert "site-packages" in scripts, (
+        f"{workflow}:{job} installs into a clean venv without checking it imported the WHEEL; "
+        "the checkout is sitting one directory up")
+
+
+def test_the_clean_room_is_one_implementation_called_by_both():
+    """A copied leg is a second implementation of one gate, and copies fork.
+
+    `.github/actions/sheet-fonts` exists because the release gate ran the suite with no
+    font: the dependency was in one list and not the other. The packaging leg was the same
+    shape one step later -- present in ci.yml, absent from the job that publishes.
+    """
+    callers = sorted(
+        (workflow, job)
+        for workflow in workflow_files()
+        for job in job_names(_text(workflow))
+        if "./.github/actions/clean-room" in "\n".join(_job_lines(_text(workflow), job))
+    )
+    assert callers == DISTRIBUTION_JOBS_TODAY, (
+        f"the clean-room action is called by {callers}; every job that builds a distribution "
+        f"must call it, and today those are {DISTRIBUTION_JOBS_TODAY}")
+
+
+# The toolchain that produces the artifact, held to a version the way npm already is.
+
+def _install_tokens(script):
+    """Package tokens of every `pip install` / `npm install -g` line in a script."""
+    tokens = []
+    for line in _code_only(script).splitlines():
+        stripped = line.strip()
+        if "pip install" not in stripped and "npm install" not in stripped:
+            continue
+        after = stripped.split("install", 1)[1]
+        for raw in after.split():
+            token = raw.strip("'").strip('"')
+            if token.startswith("-"):
+                continue
+            # A local artifact path is not a registry resolution: `dist/*.whl` IS the thing
+            # the constraint exists to protect, and pinning a filename would be nonsense.
+            if "/" in token or token.endswith((".whl", ".tar.gz")):
+                continue
+            tokens.append(token)
+    return tokens
+
+
+def toolchain_tokens():
+    """Every package installed by a job that produces or publishes a distribution.
+
+    The population is the jobs, walked: the ones that build (above) plus the ones that hand
+    an artifact to a registry. What is installed inside them is what runs on release day.
+    """
+    jobs = set(jobs_that_produce_a_distribution())
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if "npm publish" in body or "gh-action-pypi-publish" in body:
+                jobs.add((name, job))
+    tokens = {}
+    for workflow, job in sorted(jobs):
+        for script in job_scripts(workflow, job):
+            for token in _install_tokens(script):
+                tokens.setdefault(token, []).append(f"{workflow}:{job}")
+    return tokens
+
+
+#: Installed without a version constraint, deliberately, as of 2026-09-04. None of these
+#: PRODUCES or UPLOADS the artifact: `pip` is the installer itself, and numpy/pillow/pytest
+#: are the suite's own dependencies, whose byte-stable pins (opencv, matplotlib) carry `==`
+#: where the golden frames need them. `build`, `twine` and `npm` are the three tools that
+#: make or move the artifact, and all three are constrained.
+UNCONSTRAINED_BY_DESIGN = {"pip", "numpy", "pillow", "pytest"}
+
+
+def test_the_toolchain_exemptions_are_still_installed_somewhere():
+    """An exemption for a package nobody installs is a row that stopped meaning anything."""
+    stale = sorted(UNCONSTRAINED_BY_DESIGN - set(toolchain_tokens()))
+    assert stale == [], (
+        f"{stale} is exempt from the constraint rule and is installed by no job that "
+        "produces or publishes a distribution")
+
+
+def test_every_tool_that_makes_or_moves_the_artifact_is_held_to_a_version():
+    """A tool resolved on the day is not the tool that was verified.
+
+    release.yml already says this about npm -- a breaking major lands in the publish job
+    with no local reproduction of the version that ran -- and `build` and `twine` sat in the
+    same job under the same reasoning with nothing asserting a version. A `build` release
+    that changed sdist file selection would change the published artifact between two runs
+    of the same tag.
+    """
+    tokens = toolchain_tokens()
+    unconstrained = sorted(
+        token + " (" + ", ".join(sorted(set(where))) + ")"
+        for token, where in tokens.items()
+        if not re.search(r"[=<>~^@]", token) and token not in UNCONSTRAINED_BY_DESIGN
+    )
+    assert unconstrained == [], (
+        f"these are resolved fresh in a job that produces or publishes the artifact: "
+        f"{unconstrained}")
+
+
+def test_the_constraint_check_goes_red_on_a_bare_build_tool():
+    """The mutation: the pre-fix install line, fed to the same comparison."""
+    before = "python -m pip install --upgrade build twine\n"
+    bare = [t for t in _install_tokens(before)
+            if not re.search(r"[=<>~^@]", t) and t not in UNCONSTRAINED_BY_DESIGN]
+    assert bare == ["build", "twine"], bare
+
+
+# -- the runtimes this package promises, and the ones it runs (F-e110bcf6) ----------------
+#
+# Six runtime configurations were declared and one was exercised. pyproject declared
+# `requires-python = ">=3.10"` and classifiers for 3.10 through 3.13; npm/package.json
+# declared `"node": ">=18"`. Enumerated across all three workflows: ci.yml pinned python
+# "3.13" and node 22, release.yml pinned "3.13" and "22", and there was no matrix anywhere.
+# So 3.10, 3.11, 3.12 and Node 18 were public promises nothing ran.
+#
+# The floor is the end that matters. A version BETWEEN two exercised versions is an
+# interpolation; a version BELOW the exercised floor is an extrapolation, and the failure
+# it hides is a user installing a package whose metadata promised support and hitting an
+# error the repo has never run. So the rule here is: the declared floor runs, the declared
+# ceiling runs, and nothing is claimed outside that interval.
+#
+# What moved rather than being covered: the Python floor came UP to 3.11, because two files
+# in this suite (`tests/test_ci_workflows.py` and `tests/test_packaging.py`) import
+# `tomllib`, which landed in 3.11 — the suite that would prove 3.10 cannot collect on it.
+# Narrowing a promise to what is run is the honest half of this finding's fix.
+
+with open(os.path.join(REPO, "npm", "package.json"), encoding="utf-8") as _fh:
+    NPM_PACKAGE = json.load(_fh)
+
+
+def _version_tuple(text):
+    return tuple(int(part) for part in text.strip().split(".") if part.isdigit())
+
+
+def declared_python_floor():
+    """The `requires-python` floor, e.g. `>=3.11` -> (3, 11)."""
+    spec = PYPROJECT["project"]["requires-python"]
+    match = re.search(r">=\s*(\d+\.\d+)", spec)
+    assert match, f"requires-python is {spec!r} and states no floor this check can read"
+    return _version_tuple(match.group(1))
+
+
+def classifier_pythons():
+    """Every `Programming Language :: Python :: X.Y` version claimed, as tuples."""
+    out = set()
+    for row in PYPROJECT["project"]["classifiers"]:
+        match = re.fullmatch(r"Programming Language :: Python :: (\d+\.\d+)", row)
+        if match:
+            out.add(_version_tuple(match.group(1)))
+    return out
+
+
+def declared_node_floor():
+    """The npm launcher's `engines.node` floor, e.g. `>=18` -> (18,)."""
+    spec = NPM_PACKAGE["engines"]["node"]
+    match = re.search(r">=\s*(\d+(?:\.\d+)*)", spec)
+    assert match, f"engines.node is {spec!r} and states no floor this check can read"
+    return _version_tuple(match.group(1))
+
+
+def _versions_declared_for(key):
+    """Every literal value of `<key>-version:` anywhere in the workflows.
+
+    Both forms are read: a scalar (`python-version: "3.13"`) and an inline matrix list
+    (`python-version: ["3.11", "3.13"]`). A `${{ matrix.* }}` reference is a pointer, not a
+    version, and is skipped — the list it points at is read where it is written.
+    """
+    out = set()
+    for name in workflow_files():
+        for line in _text(name).splitlines():
+            match = re.search(key + r"-version:\s*(.+?)\s*$", line)
+            if not match:
+                continue
+            value = match.group(1)
+            if "${{" in value:
+                continue
+            for piece in value.strip("[]").split(","):
+                piece = piece.strip().strip('"').strip("'")
+                if re.fullmatch(r"\d+(\.\d+)*", piece):
+                    out.add(_version_tuple(piece))
+    return out
+
+
+def test_the_declared_python_interval_is_the_one_ci_runs():
+    """Floor and ceiling both exercised, and no classifier outside them.
+
+    What this looks like if wrong: `requires-python = ">=3.10"` with a single 3.13 job — a
+    promise about four interpreters, one of which has ever been run.
+    """
+    exercised = {v for v in _versions_declared_for("python") if v[0] == 3}
+    assert exercised, "no workflow pins a python version this check can read"
+    floor, ceiling = declared_python_floor(), max(classifier_pythons())
+    assert floor in exercised, (
+        f"requires-python declares a floor of {floor} and no job runs it; the versions run "
+        f"are {sorted(exercised)}")
+    assert ceiling in exercised, (
+        f"the classifiers claim up to {ceiling} and no job runs it; the versions run are "
+        f"{sorted(exercised)}")
+    outside = sorted(v for v in classifier_pythons() if v < floor or v > ceiling)
+    assert outside == [], (
+        f"these classifiers claim versions outside the interval CI exercises: {outside}")
+    below = sorted(v for v in classifier_pythons() if v < min(exercised))
+    assert below == [], (
+        f"these classifiers are BELOW the lowest version any job runs: {below}; a version "
+        "under the exercised floor is an extrapolation, not an interpolation")
+
+
+def test_the_launchers_declared_node_floor_is_the_one_ci_runs():
+    """`engines.node` is what npm enforces at install time on a user's machine."""
+    exercised = {v for v in _versions_declared_for("node")}
+    assert exercised, "no workflow pins a node version this check can read"
+    floor = declared_node_floor()
+    assert floor in exercised, (
+        f"npm/package.json declares engines.node {NPM_PACKAGE['engines']['node']!r} and no "
+        f"job runs {floor[0]}; the versions run are {sorted(exercised)}")
+
+
+def test_the_runtime_check_goes_red_on_a_floor_nothing_runs():
+    """The mutation: the declaration this repo carried until today.
+
+    A promise of 3.10 with only a 3.13 job must fail the same comparison, or the check is
+    reporting green on the shape it was written to catch.
+    """
+    exercised = {(3, 13)}
+    assert (3, 10) not in exercised, "the floor comparison cannot fail"
+    assert sorted(v for v in {(3, 10), (3, 11)} if v < min(exercised)) == [(3, 10), (3, 11)]
+
+
+
+# -- the OTHER build inputs: every file the suite opens by path (F-59883264) ---------------
+#
+# The census above reads pyproject's build inputs, which is the population of "files the
+# PACKAGE is built from". The files the WORKFLOWS are built from were in no filter at all.
+# Measured by evaluating `_on_block()` / `_pattern_hits()` over every workflow before the
+# fix: `.github/actions/sheet-fonts/action.yml` -> NO WORKFLOW RUNS, `verify.ps1` -> NO
+# WORKFLOW RUNS, `.gitignore` -> NO WORKFLOW RUNS. That is a seam wave 6 opened: the font
+# install moved OUT of the two workflows INTO a composite action both now depend on, and it
+# moved out from under the only filter that covered it. The guards that would catch a break
+# all live under `tests/**`, so they do not run on the change they exist to guard.
+#
+# The population is therefore derived from the suite itself: every repo path a test module
+# names as an `os.path.join` of string literals off a path constant it defines. That is what
+# "the suite guards" means mechanically — if a test opens it, a change to it can turn the
+# suite red, and CI must run.
+
+TESTS_DIR = os.path.join(REPO, "tests")
+
+
+def _joined_relpath(node, env):
+    """`os.path.join(BASE, "a", "b")` -> `BASE/a/b`, or None if any part is not resolvable."""
+    if not isinstance(node, ast.Call):
+        return None
+    fn = node.func
+    if not (isinstance(fn, ast.Attribute) and fn.attr == "join"
+            and isinstance(fn.value, ast.Attribute) and fn.value.attr == "path"):
+        return None
+    parts = []
+    for i, arg in enumerate(node.args):
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            parts.append(arg.value)
+        elif i == 0 and isinstance(arg, ast.Name) and arg.id in env:
+            if env[arg.id]:
+                parts.append(env[arg.id])
+        else:
+            return None
+    return "/".join(p.strip("/") for p in parts if p.strip("/"))
+
+
+def paths_the_suite_guards():
+    """Every existing repo path a test module names, walked out of `tests/**` by AST.
+
+    Derivation, stated because a census whose population is typed is the defect class this
+    file keeps finding: each test module is parsed; `REPO` seeds an environment of path
+    constants; every `NAME = os.path.join(...)` of literals off a known constant extends it
+    (two passes, so a constant defined below its first use still resolves); then every
+    `os.path.join(...)` in the module is resolved the same way and kept if it exists on
+    disk. Paths that resolve through a variable filename are not resolvable this way and are
+    not claimed — this is a floor on what the suite reads, not a ceiling.
+    """
+    found = set()
+    for name in sorted(os.listdir(TESTS_DIR)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        env = {"REPO": ""}
+        for _ in range(2):
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name)):
+                    rel = _joined_relpath(node.value, env)
+                    if rel is not None:
+                        env[node.targets[0].id] = rel
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                rel = _joined_relpath(node, env)
+                if rel and os.path.exists(os.path.join(REPO, rel)):
+                    found.add(rel)
+    return sorted(found)
+
+
+#: The population as measured 2026-09-04 by the walk above. Asserted, so a test that starts
+#: reading a new repo file fails HERE — naming the file and the filter it needs — rather
+#: than reaching main green-by-absence.
+GUARDED_TODAY = [
+    ".github/actions",
+    ".github/actions/sheet-fonts/action.yml",
+    ".github/workflows",
+    ".gitignore",
+    "docs/experiments/E04-the-between-generation-floor.md",
+    "docs/index/armature.db",
+    "npm/bin/armature.mjs",
+    "npm/package.json",
+    "pyproject.toml",
+    "specs/E09-A3-seeds.json",
+    "specs/E09-seeds.json",
+    "specs/E13-prompt.json",
+    "specs/E13-seeds.json",
+    "tests",
+    "tests/blender/check_floor_material.py",
+    "tests/blender/check_ortho_convention.py",
+    "tests/blender/check_plate_composite.py",
+    "tests/blender/check_pose_arc_roundtrip.py",
+    "tests/blender/check_visibility.py",
+    "tests/blender/make_synthetic_run.py",
+    "tools",
+    "tools/armature_core",
+    "tools/armature_index.py",
+    "tools/make_test_armature.py",
+    "tools/sheet_compose.py",
+    "verify.ps1",
+]
+
+
+def test_the_guarded_path_census_is_the_one_the_suite_actually_opens():
+    """Size and membership before the property — a census that cannot grow is not one."""
+    assert paths_the_suite_guards() == GUARDED_TODAY, (
+        "the set of repo files the suite opens by path has changed; each new member needs a "
+        "push and a pull_request filter that covers it before this list is updated:\n  "
+        + "\n  ".join(sorted(set(paths_the_suite_guards()) ^ set(GUARDED_TODAY))))
+
+
+def _probe_path(rel):
+    """What a member of the population stands for when matched against a filter.
+
+    A directory the suite walks stands for the files INSIDE it — a filter covers
+    `tests/**`, never the bare string `tests` — so a directory member is probed as one file
+    under it. A file member stands for itself.
+    """
+    return rel + "/x" if os.path.isdir(os.path.join(REPO, rel)) else rel
+
+
+def _unfiltered(paths, trigger):
+    """The members of `paths` that match no pattern in ci.yml's `trigger` filter."""
+    patterns = _paths_under(trigger)
+    return [p for p in paths if not _pattern_hits(patterns, _probe_path(p))]
+
+
+@pytest.mark.parametrize("trigger", ["push", "pull_request"])
+def test_ci_runs_on_every_file_the_suite_guards(trigger):
+    """A file a test opens, that no filter covers, is a guard that cannot run on its subject."""
+    missing = _unfiltered(paths_the_suite_guards(), trigger)
+    assert missing == [], (
+        f"{trigger} runs nothing when these change, and a test in tests/ reads every one of "
+        f"them: {missing}; the guard does not run on the change it exists to guard"
+    )
+
+
+@pytest.mark.parametrize("trigger", ["push", "pull_request"])
+def test_the_trigger_census_goes_red_on_a_guarded_file_no_filter_covers(trigger):
+    """The mutation: a member added to the population without the property must fail.
+
+    A census that reports green over a population it cannot fail on is the shape this wave
+    exists to close, so the failing direction is exercised rather than assumed.
+    """
+    intruder = "no-such-directory-8481819/guarded.txt"
+    assert _unfiltered([intruder], trigger) == [intruder], (
+        f"the {trigger} filter claims to cover {intruder!r}; the check cannot fail")
