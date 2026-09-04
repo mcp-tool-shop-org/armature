@@ -1,5 +1,20 @@
 # THE HANDOFF — armature advisor seat, 2026-08-18
 
+> ## ⚑ Banner, 2026-09-04 — a dogfood swarm is in progress on this repo
+>
+> Since 2026-09-03 the repo has been under a coordinated health pass (dogfood swarm, run
+> `swarm-1788481819-3690` in the testing-os control plane). **§3 below is superseded** by that run's
+> state: the suite is **1781 passed / 13 skipped** (was 1359), 89 audited defects were fixed in the
+> first amend wave (merged at `a9b6aa9`, public surfaces at `066db8d`), the shot-spec contract changed
+> (no `gates` block; `asset.sha256` required), the gait model represents `stance_frac == 0.5` only, every
+> spend builder records and announces its canon verdict, the wheel declares its real runtime dependencies,
+> and `release.yml` fails closed on a non-tag dispatch. The `[Unreleased]` section of `CHANGELOG.md` is the
+> user-facing account. The second Stage A audit (79 findings, panel-rated) is triaged and awaiting the
+> Director's approval; the operational record is the run log in the testing-os control plane and the
+> continuation kickoff in the studio's memory store. Nothing here has been pushed or tagged yet; the seven
+> README translations are behind the source until the next tag, by the release-ordering rule. The
+> attribution repair (`docs/dispatches/attribution-repair.md`) is queued for the swarm's end.
+
 Supersedes the 2026-08-17 handoff (git history holds it). Written from armature's own seat at the
 close of the session that shipped **v0.3.0** and took the sibling repo `prompt-craft` from
 scaffold to published.
