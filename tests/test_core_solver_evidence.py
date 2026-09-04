@@ -268,9 +268,15 @@ def test_the_population_pin_and_the_one_evidence_judge_count_the_same_sites():
     every raise it can say anything about. They coincided at 145 on 2026-09-04 and the
     difference — if one appears — is the interesting number, so it is printed per module.
     """
-    from test_gates import evidence_dicts_missing
+    from test_gates import evidence_dicts_missing, package_andons
 
-    _, examined, unreadable = evidence_dicts_missing("gate", root=CORE)
+    # WAVE-10 MERGE (coordinator, 2026-09-04): the judge walks the whole `ArmatureError` family and, since wave 10,
+    # plain refusals in walk/framing/glb carry evidence (`gate: None`, `andon`, `clause`) — nine of
+    # them on the merged tree — while `_gate_raises` counts `GateFailure` raises only. The two
+    # walks agree on the population they SHARE, so the judge is narrowed to the andon classes
+    # here; the family-wide count stays the judge's own business.
+    andons = {c.split(".", 1)[1] for c in package_andons()}
+    _, examined, unreadable = evidence_dicts_missing("gate", root=CORE, classes=andons)
     with_gates = {m: len(_gate_raises(m)) for m in _module_names() if _gate_raises(m)}
     assert unreadable == [], unreadable
     assert examined == sum(with_gates.values()), {

@@ -545,7 +545,10 @@ import glob as _glob  # noqa: E402
 #: wave-10 frozen map. Its four sites are that domain's to convert (its amend brief carries
 #: them); this row is asserted to be a subset of the derived population so it cannot rot
 #: into an exemption for a file that no longer has the defect.
-STRING_SYSTEMEXIT_EXEMPT = {"fetch_run.py"}
+# WAVE-10 MERGE (coordinator, 2026-09-04): builders typed `fetch_run.py`'s four bare `raise SystemExit(<str>)` sites in
+# the same wave (F-af78df0f), so the exemption row EMPTIED at the merge — exactly the direction the
+# subset assertion below exists for. A file that regresses joins `found` and fails there.
+STRING_SYSTEMEXIT_EXEMPT = set()
 
 
 def _string_systemexit_sites(path):

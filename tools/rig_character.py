@@ -1318,7 +1318,7 @@ def _write_halt(out_dir, exc, source_sha, glb):
     return path
 
 
-def _halt_keysafe(value):
+def _halt_keysafe(value, _seen=None):
     """`value` with every mapping key stringified, at every depth.
 
     `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
@@ -1334,10 +1334,20 @@ def _halt_keysafe(value):
     `armature_core` is outside the instruments domain's globs, so the lift is FILED, not
     done -- see the wave-10 `skipped[]` entry for F-ce3a471d.
     """
+    # WAVE-10 MERGE (coordinator, 2026-09-04): a SELF-REFERENCING evidence dict recursed here until
+    # `RecursionError` escaped the handler — measured on the merged tree by
+    # `tests/test_instrument_exits.py` (the "circular" direction), 21 of 21. Containers already
+    # on the path are written as the literal "<circular>" instead of re-entered.
+    if _seen is None:
+        _seen = set()
+    if isinstance(value, (dict, list, tuple)):
+        if id(value) in _seen:
+            return "<circular>"
+        _seen = _seen | {id(value)}
     if isinstance(value, dict):
-        return {str(k): _halt_keysafe(v) for k, v in value.items()}
+        return {str(k): _halt_keysafe(v, _seen) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_halt_keysafe(v) for v in value]
+        return [_halt_keysafe(v, _seen) for v in value]
     return value
 
 

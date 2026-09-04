@@ -1195,10 +1195,41 @@ def _returns_an_exit_code(value):
     return isinstance(value, ast.Call)
 
 
+def _name_resolves_to_an_exit_code(name, fn):
+    """WAVE-10 MERGE (coordinator, 2026-09-04): a `return <Name>` is judged by every DIRECT assignment to
+    that name in the same function (non-descending, so a closure's `code = ...` does not count):
+    all of them must be values `_returns_an_exit_code` admits, and there must be at least one.
+    `canon_gate.main` reads `code = args.func(args)` and returns `code` after its success line;
+    `x = (wf, record); return x` is still a work product and still fails.
+    """
+    values = []
+    stack = list(fn.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            continue
+        if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            values.append(node.value)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) \
+                and node.target.id == name and node.value is not None:
+            values.append(node.value)
+        stack.extend(ast.iter_child_nodes(node))
+    return bool(values) and all(_returns_an_exit_code(v) for v in values)
+
+
+def _main_def(filename):
+    return next(n for n in _module_ast(filename).body
+                if isinstance(n, ast.FunctionDef) and n.name == "main")
+
+
 @pytest.mark.parametrize("filename", SPEND_AND_FETCH)
 def test_every_spend_and_fetch_main_returns_an_exit_code_not_a_work_product(filename):
     """The static half of the success direction, over the WHOLE derived population."""
-    bad = [ast.unparse(v) for v in _main_returns(filename) if not _returns_an_exit_code(v)]
+    fn = _main_def(filename)
+    bad = [ast.unparse(v) for v in _main_returns(filename)
+           if not (_returns_an_exit_code(v)
+                   or (isinstance(v, ast.Name) and _name_resolves_to_an_exit_code(v.id, fn)))]
     assert bad == [], (
         f"{filename}: `main()` returns {bad} under `raise SystemExit(main())`; a non-int "
         f"SystemExit code is printed to stderr and the process exits 1 on a fully "
@@ -1232,8 +1263,13 @@ def _cascade_success(tmp_path):
 
 
 def _assembly_success(tmp_path):
+    # WAVE-10 MERGE (coordinator, 2026-09-04): `build_assembly_payload` refuses above `MEASURED_FLAT_SLOT_MAX`
+    # (8 — S03 executed the flat chain at 8 slots and it died at 81; the boundary is unlocated),
+    # and Gate L requires a `4n+1` length for the wan family, so the LARGEST legal flat clip under
+    # the bound is 5 frames — that is this tool's whole happy path today (recorded for the
+    # Director). The 81-frame shape lives in the cascade fixture.
     up = tmp_path / "uploads.json"
-    up.write_text(json.dumps({f"{i:05d}.png": f"{(80 - i):064x}.png" for i in range(81)}),
+    up.write_text(json.dumps({f"{i:05d}.png": f"{(4 - i):064x}.png" for i in range(5)}),
                   encoding="utf-8")
     return ["build_assembly_payload.py", "--uploads", str(up),
             "--out", str(tmp_path / "route")]
@@ -1620,3 +1656,24 @@ def test_the_sdist_skip_asks_the_question_it_claims_to_ask(tmp_path, monkeypatch
     with pytest.raises(pytest.skip.Exception) as exc:
         _build_sdist(tmp_path / "work")
     assert "not installed" in str(exc.value)
+
+
+def test_a_name_return_is_judged_by_its_own_assignments_and_not_admitted_by_spelling():
+    """WAVE-10 MERGE (coordinator, 2026-09-04): the resolver behind the static success clause, driven
+    both ways — `code = run(); return code` is an exit code, `x = (wf, rec); return x` is a work
+    product, and a name assigned only inside a nested def resolves to nothing."""
+    import ast as _ast
+
+    def main_of(src):
+        return next(n for n in _ast.parse(src).body if isinstance(n, _ast.FunctionDef))
+
+    good = main_of("def main(argv=None):\n    code = run(argv)\n    print('X_OK')\n    return code\n")
+    assert _name_resolves_to_an_exit_code("code", good)
+    literal = main_of("def main(argv=None):\n    code = 0\n    return code\n")
+    assert _name_resolves_to_an_exit_code("code", literal)
+    bad = main_of("def main(argv=None):\n    x = (wf, record)\n    return x\n")
+    assert not _name_resolves_to_an_exit_code("x", bad)
+    nested = main_of("def main(argv=None):\n    def inner():\n        code = 0\n    return code\n")
+    assert not _name_resolves_to_an_exit_code("code", nested)
+    mixed = main_of("def main(argv=None):\n    code = run()\n    code = (a, b)\n    return code\n")
+    assert not _name_resolves_to_an_exit_code("code", mixed)

@@ -227,21 +227,23 @@ def test_the_halt_record_writers_are_the_ones_the_contract_names():
     leaving the docstring describing a tree that no longer looks like it.
     """
     shapes = {f: _block_shape(f) for f in WITH_MAIN}
-    with_finally = sorted(f for f, (fin, _) in shapes.items() if fin)
-    assert with_finally == RECORDED_HALT_RECORD_WRITERS, {
-        "appeared": sorted(set(with_finally) - set(RECORDED_HALT_RECORD_WRITERS)),
-        "vanished": sorted(set(RECORDED_HALT_RECORD_WRITERS) - set(with_finally)),
-    }
+    # WAVE-10 MERGE (coordinator, 2026-09-04): the `finally` stopped discriminating the moment instruments closed the
+    # key-serialisation escape (F-13bd448d) — every one of the 21 handlers now delivers its
+    # sentinel line and `sys.exit` from a `finally`, so THE NODE for "writes a halt record" is
+    # the record write itself, and the `finally` is asserted of all 21 as the contract's
+    # delivery guarantee.
     writes = sorted(f for f, (_, rec) in shapes.items() if rec)
     assert writes == RECORDED_HALT_RECORD_WRITERS, {
-        "writes a halt record with no `finally` protecting it":
-            sorted(set(writes) - set(with_finally)),
-        "has a `finally` and no record to protect": sorted(set(with_finally) - set(writes)),
+        "appeared": sorted(set(writes) - set(RECORDED_HALT_RECORD_WRITERS)),
+        "vanished": sorted(set(RECORDED_HALT_RECORD_WRITERS) - set(writes)),
     }
-    assert len(WITH_MAIN) - len(with_finally) == 16, (
-        "16 tools print their sentinel from a bare `except BaseException`, use no "
-        "`finally`, and write no halt record; the contract above says so of THEM, not of "
-        "all 21")
+    with_finally = sorted(f for f, (fin, _) in shapes.items() if fin)
+    assert with_finally == sorted(WITH_MAIN), {
+        "delivers its sentinel and exit outside a `finally`":
+            sorted(set(WITH_MAIN) - set(with_finally))}
+    assert len(WITH_MAIN) - len(writes) == 16, (
+        "16 tools print their sentinel and exit from the `finally` and write no halt record; "
+        "the five that write one are the rig tools the contract names")
 
 
 def test_the_block_shape_walk_can_tell_the_two_shapes_apart():

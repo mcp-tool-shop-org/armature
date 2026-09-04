@@ -288,18 +288,22 @@ def test_the_two_exemption_classes_do_not_absorb_each_other():
 # rig_parts are instruments (lift_solve is core-solvers' module and a bpy tool);
 # make_skeleton_sheet is instruments.
 REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL = {
-    "author_walk": ["gate_a_arrival", "gate_d_determinism", "gate_f_fk_agreement",
-                    "gate_n_names", "gate_objects_registered", "gate_space_is_identity"],
-    "lift_solve": ["gate_arrived", "gate_n_names", "gate_objects_registered",
-                   "gate_space_is_identity"],
+    # WAVE-10 MERGE (coordinator, 2026-09-04): instruments moved thirteen refusals above the first write across four
+    # tools (F-d47095fa): `author_walk` and `lift_solve` each CLOSED four here (measured; deleted).
+    "author_walk": ["gate_a_arrival", "gate_n_names"],
+    "lift_solve": ["gate_arrived", "gate_n_names"],
     "make_skeleton_sheet": ["gate_any_pivot_matched"],
     "render_performer": ["gate_coverage"],
-    "render_start_frame": ["gate_alpha", "gate_backdrop", "gate_whole"],
+    # WAVE-10 MERGE (coordinator, 2026-09-04): `preview_glb` JOINED — `gate_previews_written` checks that the four views
+    # reached disk (F-13bd448d) and can only run AFTER the writes; a refusal that verifies its own
+    # output is below the first write by construction. `render_start_frame.gate_whole` and three
+    # `rig_parts` refusals CLOSED (measured on the merged tree; deleted, not relaxed).
+    "preview_glb": ["gate_previews_written"],
+    "render_start_frame": ["gate_alpha", "gate_backdrop"],
     "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop",
                           "gate_whole"],
     "rig_character": ["gate_d_determinism", "gate_n_names"],
-    "rig_parts": ["gate_atlas_untouched", "gate_p_bind_pose", "gate_part_names",
-                  "gate_parts_determinism", "gate_rigid_arrival"],
+    "rig_parts": ["gate_atlas_untouched", "gate_part_names"],
 }
 
 
@@ -344,15 +348,17 @@ def test_the_bpy_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip()
     # twice under one tool (`author_walk.gate_n_names` at :552 and :604, and two more).
     # The ratchet keys on names; the site count is asserted beside it so a duplicate
     # appearing or vanishing is visible rather than silently collapsed.
-    assert sum(len(v) for v in derived.values()) == 26, sorted(derived.items())
+    # WAVE-10 MERGE (coordinator, 2026-09-04): 26 names / 29 sites -> re-measured on the merged tree after instruments moved
+    # thirteen refusals above the first write (F-d47095fa); both numbers below are the measurement.
+    assert sum(len(v) for v in derived.values()) == 17, sorted(derived.items())
     sites = 0
     for name in bpy_members:
         gates_at, writes_at = gate_and_write_lines(_source(name), name)
         if not gates_at or not writes_at:
             continue
         sites += sum(1 for ln in gates_at if ln > min(writes_at))
-    assert sites == 29, (
-        f"{sites} refusal SITES below a first write; 29 were measured on 2026-09-04")
+    assert sites == 17, (
+        f"{sites} refusal SITES below a first write; 17 were measured on 2026-09-04 (merged tree)")
 
 
 def test_a_bpy_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():

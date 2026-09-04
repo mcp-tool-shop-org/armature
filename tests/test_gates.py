@@ -378,12 +378,17 @@ RECORDED_ANDON_CLASSES = [
     "errors.G4BboxSanity", "errors.G5ConventionConformance", "errors.G6SubjectMotion",
     "errors.GateBBatching", "errors.GateCanon", "errors.GateDDeterminism",
     "errors.GateNNames", "errors.GatePRestPose", "errors.GateRRoundTrip",
-    "errors.GateSSeedRegistration", "glb.GateAtlasUntouched", "glb.ReliftMismatch",
+    "errors.GateSSeedRegistration",
+    # WAVE-10 MERGE (coordinator, 2026-09-04): `walk.WalkError` / `framing.FramingError` rejoined the `ArmatureError`
+    # family and their named andons split off as `GateFailure` subclasses (core-solvers, seam 1):
+    # 32 -> 35, re-derived on the merged tree.
+    "framing.PinnedCameraGate", "glb.GateAtlasUntouched", "glb.ReliftMismatch",
     "landmarks.FacingGate", "lift_solve.SolveGate", "parts.GatePartsAccounting",
     "parts.GatePartsDeterminism", "parts.GateRigidArrival", "resample.ResampleGate",
     "route_gates.PairGate", "route_gates.RouteGate", "startframe.AlphaGate",
     "startframe.BackdropGate", "startframe.StartFrameGate", "turnaround.TurnaroundAlphaGate",
-    "turnaround.TurnaroundCropGate", "turnaround.TurnaroundGate",
+    "turnaround.TurnaroundCropGate", "turnaround.TurnaroundGate", "walk.CadenceGate",
+    "walk.GaitGate",
 ]
 
 
@@ -854,7 +859,7 @@ def _site_key(path, fn, cls):
     return f"{path.name}:{fn.name if fn is not None else '<module>'} ({cls})"
 
 
-def evidence_dicts_missing(key, root=None):
+def evidence_dicts_missing(key, root=None, classes=None):
     """Every raise in the `ArmatureError` family whose evidence dict omits `key`.
 
     Returns `(offenders, examined, unreadable)`:
@@ -874,6 +879,11 @@ def evidence_dicts_missing(key, root=None):
     """
     root = CORE_DIR if root is None else _pathlib.Path(root)
     family = _armature_error_family(TOOLS_DIR if root == CORE_DIR else root)
+    # WAVE-10 MERGE (coordinator, 2026-09-04): `classes` narrows the walk to a subset of the family (bare class names)
+    # so a caller comparing against a `GateFailure`-only population compares like with like —
+    # since wave 10 a plain refusal in walk/framing/glb carries evidence too (`gate: None`).
+    if classes is not None:
+        family = {n for n in family if n in set(classes)}
     offenders, unreadable, examined = set(), set(), 0
     for path in sorted(root.glob("*.py")):
         tree = _ast.parse(path.read_text(encoding="utf-8"))

@@ -465,8 +465,8 @@ def test_the_png_population_rule_is_the_one_its_producer_and_consumers_use():
                     f"{rel}:{node.lineno}")
 
     assert "armature_core/donor_gate.py" not in " ".join(case_sensitive)
-    # The two survivors are carried as coordinator seeds in the instruments domains and
-    # are named here so this census reports them rather than passing over them.
-    assert sorted(case_sensitive) == ["render_performer.py:359",
-                                      "render_pose_sticks.py:178"], case_sensitive
+    # WAVE-10 MERGE (coordinator, 2026-09-04): the two survivors this list named — `render_performer.py:359`
+    # (instruments, F-ffdb6d4d) and `render_pose_sticks.py:178` (instruments-measure, F-83998c09) —
+    # both landed in wave 10, so the ratchet reads EMPTY and a new case-sensitive site fails here.
+    assert sorted(case_sensitive) == [], case_sensitive
     assert len(case_insensitive) >= 25, len(case_insensitive)

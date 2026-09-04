@@ -736,6 +736,12 @@ def _argparse_dests(node):
         if n.func.attr == "set_defaults":
             out.update(kw.arg for kw in n.keywords if kw.arg)
             continue
+        if n.func.attr == "add_subparsers":
+            # WAVE-10 MERGE (coordinator, 2026-09-04): `add_subparsers(dest=...)` creates the attribute the
+            # chosen sub-command is read from (`canon_gate.main` reads `a.cmd`).
+            out.update(kw.value.value for kw in n.keywords
+                       if kw.arg == "dest" and isinstance(kw.value, ast.Constant))
+            continue
         if n.func.attr != "add_argument":
             continue
         explicit = [kw.value.value for kw in n.keywords
@@ -879,9 +885,14 @@ def parser_population():
 
 #: Derived 2026-09-04. Size and membership before the property; a new CLI tool joins on the
 #: day it lands rather than being policed by a list somebody forgot.
+# WAVE-10 MERGE (coordinator, 2026-09-04): `build_assembly_payload`, `build_cascade_payload` and
+# `build_r2v_payload` LEFT — builders moved their argv parsing into `build_and_write(argv)` so
+# that `main` returns an exit code (F-c236304b family), and THE NODE this census keys on is the
+# module-level `main`; `compare_runs` JOINED (argparse, F-7e7a7f7d). Following the function `main`
+# delegates its argv to is a Stage B widening of the node, recorded in the run's seeds.
 RECORDED_PARSER_POPULATION = [
-    "build_assembly_payload", "build_cascade_payload", "build_lora_arm_payload",
-    "build_payload", "build_r2v_payload", "build_t2v_payload", "canon_gate",
+    "build_lora_arm_payload",
+    "build_payload", "build_t2v_payload", "canon_gate", "compare_runs",
     "composite_reference", "encode_control", "extract_clip_frames", "fetch_run",
     "fetch_t2v_run", "gate_b_frames", "gate_saved_graph", "invert_frames", "make_ab_clip",
     "make_cast_sheet", "make_crop_strip", "make_e13_sheet", "make_gate0_sheet",
@@ -898,7 +909,7 @@ def test_the_parser_population_is_every_tool_with_a_command_line():
         "appeared": sorted(set(pop) - set(RECORDED_PARSER_POPULATION)),
         "vanished": sorted(set(RECORDED_PARSER_POPULATION) - set(pop)),
     }
-    assert len(pop) == 35
+    assert len(pop) == 33  # WAVE-10 MERGE (coordinator, 2026-09-04): 35 - 3 builders + compare_runs; see RECORDED_PARSER_POPULATION
 
 
 @pytest.mark.parametrize("mod", RECORDED_PARSER_POPULATION)
