@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from PIL import Image, ImageDraw  # noqa: E402
 
 from composite_reference import parse_plate  # noqa: E402
+from measure_clip import round_or_none  # noqa: E402
 from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
                            frames_by_number, load_rgb_over_plate, require_frames)
 
@@ -226,11 +227,17 @@ def main(argv=None):
         with open(a.measurements, encoding="utf-8") as fh:
             rec = json.load(fh)
         arm = rec["arms"][0]
+        # The second, unnamed consumer of the two fields F-cd036a86 is about: a
+        # `--measurements` record from a one-frame clip carries `median: null` in both,
+        # and `round(None, 3)` killed the START-FRAME SHEET build with a bare TypeError
+        # naming no flag. `round_or_none` is `measure_clip`'s — one implementation for the
+        # two readers of the same record.
         measurements = {
             "frames": f"{arm['n_frames']}, {arm['distinct']['n_distinct']} distinct",
-            "d(frame) med": round(arm["frame_deltas"]["stats"]["median"], 3),
-            "d(luma) med": round(arm["luma"]["stats"]["median"], 3),
-            "corr to f0": round(arm["similarity_to_first"]["per_frame_correlation"][-1], 4),
+            "d(frame) med": round_or_none(arm["frame_deltas"]["stats"]["median"], 3),
+            "d(luma) med": round_or_none(arm["luma"]["stats"]["median"], 3),
+            "corr to f0": round_or_none(
+                arm["similarity_to_first"]["per_frame_correlation"][-1], 4),
             "horizon": f"found on {arm['horizon']['n_found']}/{arm['n_frames']}",
         }
 

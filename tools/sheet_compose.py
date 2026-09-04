@@ -119,14 +119,29 @@ def frames_by_number(names, *, where, what="frame(s)", exc=SheetPopulationError,
     """`{frame NUMBER: name}` off a listing, or raise naming the stray.
 
     The `make_crop_strip.frames_by_number` shape, lifted here as ONE implementation for
-    the six `require_frames` callers rather than a seventh copy — wave 12, F-e96ed69b.
-    `make_crop_strip`'s own version takes a DIRECTORY and returns paths; the sheets hold a
-    listing they have already read (and already paired with `gate_listing_pairing`), so
-    this takes the names and returns names.
+    the eight `require_frames` call sites rather than a copy per sheet — wave 12,
+    F-e96ed69b. (All eight pass `numbers=` derived from this function: `make_gate0_sheet`
+    :177/:179, `make_identity_sheet` :128, `make_lift_sheet` :228/:230/:232,
+    `make_review_clip` :161, `make_startframe_sheet` :140.)
 
-    Why it raises on a stray rather than filtering: the file it would drop — or draw — is
-    shown to the Director as a frame of this run. `make_identity_sheet._numbered_population`
-    carried this refusal alone; it now delegates here.
+    **The two functions differ in more than directory-versus-listing, and the difference is
+    the load-bearing one** (F-90c26d7b, wave 14 — this paragraph used to say the only
+    difference was the argument type). `make_crop_strip.frames_by_number` takes a DIRECTORY
+    and returns paths; it also FILTERS a non-numbered PNG out of the listing and refuses
+    only when nothing numbered survives. This one RAISES on a stray. Both behaviours are
+    deliberate and neither is the other's bug:
+
+    * here, the stray would be pasted into a sheet and shown to the Director as a frame of
+      this run, under a caption naming a frame number it does not have;
+    * there, the population is a frames directory this repo's own tools write contact
+      strips into (`render_pose_sticks` writes `strip_every<N>.png` beside its frames), so
+      raising would refuse the ordinary input — and since wave 14 the strays it drops are
+      RECORDED in the sidecar and printed on the tool's own line, rather than silently
+      narrowing a population whose whole product is provenance a later reader can re-cut
+      from.
+
+    `make_identity_sheet._numbered_population` carried this refusal alone; it now delegates
+    here.
     """
     names = list(names)
     numbered = [n for n in names if os.path.splitext(str(n))[0].isdigit()]

@@ -267,7 +267,6 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     out_dir = os.path.abspath(a.out)
-    os.makedirs(out_dir, exist_ok=True)          # scripts create their own directories
     ortho = load_set(a.ortho)
 
     if a.mode == "scale":
@@ -335,6 +334,15 @@ def main(argv=None):
         + "   texture holes on the subject are pre-known (facet's arc) and are not "
           "findings here")
 
+    # ---- the output directory is created BELOW all nine of this tool's pre-write
+    #      refusals (F-0d033bd6): `load_set` at three sites, the four `ShotsetSheetError`
+    #      raises (--mode=scale without --second, a PERSP set given to --mode=scale,
+    #      --mode=compare without --persp, two sets sharing an ortho_scale_source tag) and
+    #      `_refuse_across_elevations` at two. None of them reads anything this tool wrote,
+    #      so the wave-10 ordering rule applies unqualified: a refused run used to leave an
+    #      empty `--out` behind, which a reader scanning `outputs/` reads as a run that
+    #      produced nothing rather than one that was refused.
+    os.makedirs(out_dir, exist_ok=True)          # scripts create their own directories
     path, rules = build(sets, tags, out_dir, filename, title, subtitle)
     im = Image.open(path)
     print(f"SHOTSET_SHEET_OK {path}  {im.size[0]}x{im.size[1]}  rules={rules}")

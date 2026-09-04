@@ -154,14 +154,36 @@ def old_side_plan(old_rgba, old_is_rgba):
         f"{OLD_VOID_RGB} and written to the panel uncomposited")
 
 
+#: The statistics `survey_view` reports, in BOTH cases. The empty case returns the same
+#: keys with `None` values rather than a shorter dict — `clipstats._stats`'s shape, adopted
+#: here for the same reason (F-8da56714, wave 14).
+STAT_KEYS = ("saturation_percentiles", "low_saturation_fraction", "mean_value")
+
+
 def survey_view(rgb, mask):
-    """Locator numbers for one view: how much of the interior reads as unpainted."""
+    """Locator numbers for one view: how much of the interior reads as unpainted.
+
+    **ONE key set, both cases.** This function used to return the full record on a
+    non-empty eroded interior and `{"interior_px": 0, "note": ...}` on an empty one, and
+    the per-view summary loop in `main` indexed `n['low_saturation_fraction']['0.20']`
+    unconditionally. Measured on this branch with one view whose NEW master's maximum
+    alpha is 254: `figure_mask_new` (`rgba[..., 3] >= 255`) matched nothing, the 3px
+    erosion left nothing, the run printed `SURVEY_OK <out>` and THEN raised
+    `KeyError: 'low_saturation_fraction'` — with `survey.json` already on disk. Any
+    near-opaque authored master (a soft matte) triggers it.
+
+    That is the defect `armature_core.clipstats._stats` had removed one wave earlier
+    (F-86e9b5b9), recurring in a second module, so the fix is the same one: the keys always
+    resolve, and the value is `None` when there was no population to compute it over.
+    """
     interior = erode(mask)
     s = saturation(rgb)[interior]
     if s.size == 0:
-        return {"interior_px": 0, "note": "nothing survived erosion"}
+        return {"interior_px": 0, "note": "nothing survived erosion",
+                **{k: None for k in STAT_KEYS}}
     return {
         "interior_px": int(s.size),
+        "note": None,
         "saturation_percentiles": {
             str(p): round(float(np.percentile(s, p)), 4)
             for p in (1, 5, 10, 25, 50, 75, 95)},
@@ -169,6 +191,24 @@ def survey_view(rgb, mask):
             f"{c:.2f}": round(float((s < c).mean()), 5) for c in SAT_CUTS},
         "mean_value": round(float(rgb[interior].mean()), 2),
     }
+
+
+#: The cut the per-view summary line quotes, named once rather than typed into an f-string.
+SUMMARY_CUT = "0.20"
+
+
+def _fmt(rec, field):
+    """One view's `field` for the summary line, or `n/a` when there was nothing to measure.
+
+    A view whose eroded interior is empty has no saturation distribution and no mean
+    value; the honest line says so with a denominator (`interior_px 0`) beside it, rather
+    than a number that would read as a measurement or a KeyError that reads as a crash.
+    """
+    if rec.get(field) is None:
+        return f"n/a (interior_px {rec['interior_px']})"
+    if field == "low_saturation_fraction":
+        return f"{rec[field][SUMMARY_CUT]:.5f}"
+    return f"{rec[field]:.1f}"
 
 
 def main():
@@ -282,12 +322,18 @@ def main():
             "views": records,
         }, fh, indent=1)
 
-    print(f"SURVEY_OK {out}")
+    # ---- the summary is printed BEFORE the success token. `SURVEY_OK` used to precede
+    #      this loop, so a view with an empty eroded interior put the token a downstream
+    #      reader keys on onto stdout and THEN crashed (F-8da56714). A success line is
+    #      earned by the effect, and the effect here includes being able to report the
+    #      numbers; `n/a` is a report, a KeyError is not.
     for r in records:
         n, o = r["new"], r["old"]
-        print(f"  view {r['view']}: new sat<0.20 {n['low_saturation_fraction']['0.20']:.5f}"
-              f"  old {o['low_saturation_fraction']['0.20']:.5f}"
-              f"   | new mean value {n['mean_value']:.1f}  old {o['mean_value']:.1f}")
+        print(f"  view {r['view']}: new sat<0.20 {_fmt(n, 'low_saturation_fraction')}"
+              f"  old {_fmt(o, 'low_saturation_fraction')}"
+              f"   | new mean value {_fmt(n, 'mean_value')}"
+              f"  old {_fmt(o, 'mean_value')}")
+    print(f"SURVEY_OK {out}")
 
 
 if __name__ == "__main__":

@@ -159,6 +159,19 @@ def ffprobe_stream(path):
     return info
 
 
+def _margin(value):
+    """`min_margin` for the console line, with a WORD where a bare `0.000` misleads.
+
+    A minimum margin of exactly zero means at least one decoded frame was equidistant from
+    two or more sources — the separation the diagonal count is read off does not exist
+    there. Printed as `0.000` beside `12/12 on the diagonal` it reads as a clean decode
+    with a small number attached (F-0c850c1a).
+    """
+    if value == 0.0:
+        return "0.000 (NONE — at least one frame is equidistant from two sources)"
+    return f"{value:.3f}"
+
+
 def load_sources(frames_dir):
     paths = sorted(glob.glob(os.path.join(frames_dir, "*.png")))
     return paths, [np.asarray(Image.open(p).convert("RGB")) for p in paths]
@@ -274,8 +287,19 @@ def main(argv=None):
     print(f"gradient split   f0 top {record['gradient_split_first_frame']['mean_err_top_gradient']:.2f} "
           f"vs flat {record['gradient_split_first_frame']['mean_err_flat']:.2f}   "
           f"(mid frame {record['gradient_split_mid_frame']['frame_index']})")
+    # The console line is what a session quotes into a report, so it carries the tie facts
+    # the record has carried since wave 12 (F-0c850c1a). Measured on this branch on the
+    # walk shape `clipcompare.order_check`'s own docstring names — 8 distinct frames then a
+    # 4-frame hold, compared against an exact copy — the line read
+    # `order  12/12 on the diagonal, 0 displaced, min margin 0.000` on a clip where 5 of 12
+    # frames were AMBIGUOUS and the check could not distinguish them; a real group
+    # displacement occurring inside a tie set would have printed the same sentence.
+    # `min_margin 0.000` was the only hint and it was not labelled as one.
     print(f"order            {o['n_on_diagonal']}/{o['n']} on the diagonal, "
-          f"{o['n_displaced']} displaced, min margin {o['min_margin']:.3f}")
+          f"{o['n_displaced']} displaced, {o['n_tied']} tied"
+          + (f" in {len(o['tie_groups'])} group(s) {o['tie_groups'][:4]}"
+             if o.get("tie_groups") else "")
+          + f", min margin {_margin(o['min_margin'])}")
     print(f"MEASURE_CASCADE_OK {out}")
     return record
 

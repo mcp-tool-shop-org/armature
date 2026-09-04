@@ -67,6 +67,24 @@ DIAGNOSTIC_BONES = ("hips", "chest", "head",
                     "hip.L", "knee.L", "ankle.L", "hip.R", "knee.R", "ankle.R")
 
 
+#: The smallest destination sample count that describes a timeline. `positions(n_src,
+#: n_dst)` and `sample_interval_ratio` both divide by `n_dst - 1`.
+MIN_DST_FRAMES = 2
+
+
+class ResampleArgError(ArmatureError):
+    """A flag this tool was given is not a value it can resample with.
+
+    Carries its own `(message, evidence)` constructor: `ArmatureError` has none, so a
+    second positional argument would be swallowed into `args[1]` and never become
+    `.evidence` — the shape F-8393e66c measured on `stage_render`'s halt line this wave.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
 def parse_args(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--motion", required=True,
@@ -94,7 +112,20 @@ def main(argv=None):
     started = time.time()
     a = parse_args(argv)
     out_dir = os.path.abspath(a.out)
-    os.makedirs(out_dir, exist_ok=True)      # scripts create their own output directories
+
+    # ---- ANDON, before anything is read or written: the destination sample count is a
+    #      count of samples. `--frames=1` reached `resample.positions(n_src, 1)` and
+    #      `sample_interval_ratio = (n_src - 1) / (n_dst - 1)`, both of which divide by
+    #      `n_dst - 1`, and died with a bare ZeroDivisionError naming neither the flag nor
+    #      the value. A resampled timeline needs two endpoints to span anything at all.
+    if a.frames < MIN_DST_FRAMES:
+        raise ResampleArgError(
+            f"--frames={a.frames} is not a timeline; this tool resamples a path between "
+            f"its endpoints, so the destination needs at least {MIN_DST_FRAMES} samples "
+            f"(the index-space rule divides by n_dst - 1)",
+            {"gate": "ARGS", "andon": "ResampleArgError",
+             "clause": "destination_frame_count_below_two",
+             "frames": a.frames, "minimum": MIN_DST_FRAMES})
 
     with open(a.motion, encoding="utf-8") as fh:
         src = json.load(fh)
@@ -159,6 +190,15 @@ def main(argv=None):
 
     name = a.name or (os.path.splitext(os.path.basename(a.motion))[0] + f".{n_dst}")
     path = os.path.join(out_dir, name + ".motion.json")
+    # ---- the output directory is created BELOW every andon above it (F-6a18f6d5): the
+    #      `--frames` bound, `lift_solve.validate_motion_record(frames)`,
+    #      `resample.monotonic`, `resample.endpoints_match` and
+    #      `validate_motion_record(out_frames)`. It used to sit at the top of `main`, so a
+    #      record whose frames carry no `local` rotations raised SolveGate [SOLVE] and left
+    #      `--out` on disk, existing and empty — which a later reader, or a re-run into the
+    #      same `--out`, reads as an attempt that produced nothing rather than one that was
+    #      refused. Nothing irreversible is at stake; the ordering rule is.
+    os.makedirs(out_dir, exist_ok=True)      # scripts create their own output directories
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
 

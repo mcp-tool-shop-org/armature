@@ -40,9 +40,31 @@ FPS = re.compile(r"([\d.]+)\s+fps")
 
 
 class ClipReadError(ArmatureError):
-    """The clip's stream could not be read, so nothing downstream may quote its numbers."""
+    """The clip's stream could not be read, so nothing downstream may quote its numbers.
+
+    **Why the constructor is written out here.** F-734951dc, wave 14. This class declared
+    `gate` and defined no `__init__`, and `ArmatureError` (its base) defines none either —
+    only `GateFailure` accepts `(message, evidence)`. All three raises below pass an
+    evidence dict, and every one of them was swallowed into `args[1]`: measured on this
+    branch, `ClipReadError("no WxH in the stream line", {"line": "abc"})` gave
+    `hasattr(e, "evidence") == False` and `str(e)` equal to the 2-tuple repr. This tool's
+    `__main__` is a bare `main()`, so the refusal an operator hits most often — ffmpeg
+    reporting no video stream — surfaced as a traceback whose only text was that tuple,
+    with the `stderr_tail` saying WHY ffmpeg refused collected, passed and thrown away.
+
+    It is deliberately NOT re-based on `GateFailure` to inherit the constructor: the
+    `tools/`-wide evidence ratchet in `tests/test_gates.py` derives its population from the
+    live `GateFailure` subclass tree, so re-basing a tools-local class changes which raise
+    sites that census examines depending on what has been imported. The three lines below
+    are the cheap half; core-gates is landing the same constructor on `ArmatureError`
+    itself this wave, after which this override is redundant and harmless.
+    """
 
     gate = "CLIP_READ"
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 def probe(path):

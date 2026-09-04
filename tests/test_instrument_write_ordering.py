@@ -185,6 +185,17 @@ POPULATION_MEASURED_2026_09_04 = {
     # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`, which measures
     # the reason rather than the `imports_bpy` proxy.
     "preview_glb",
+    # JOINED 2026-09-04 by the instruments-measure wave-14 amend (F-6a18f6d5):
+    # `resample_motion.main` now raises `ResampleArgError` inline when `--frames` is below
+    # 2 (`positions` and `sample_interval_ratio` both divide by `n_dst - 1`, so `--frames=1`
+    # died with a bare ZeroDivisionError). It ALWAYS wrote; its four andons —
+    # `lift_solve.validate_motion_record` twice, `resample.monotonic`,
+    # `resample.endpoints_match` — are cross-module helpers this walk does not resolve, so
+    # `gate_and_write_lines` reported `gates: {}` for it and the tool sat outside the census
+    # entirely while its `makedirs` sat ABOVE all four. Both halves are fixed in the same
+    # commit: the refusal is visible here, and the `makedirs` moved below every andon, so
+    # the tool joins CLEAN (no refusal below its first write).
+    "resample_motion",
     "make_thesis_sheet", "measure_floor", "measure_lift",
     "pack_pose_pack", "project_pose_keypoints", "render_performer", "render_pose_sticks",
     "render_start_frame", "render_turnaround", "rig_character", "rig_parts",
@@ -539,12 +550,21 @@ def test_the_nine_tools_the_name_keyed_walk_could_not_see_are_in_the_population_
     # `gate_clip_rate` (a `gate_` name) in the same wave, so the name-keyed walk sees it too; eight remain.
     # `rig_bake`, `rig_repair`, `rig_retopo` LEFT too — instruments gave each `gate_glb_written`
     # (a `gate_` name, F-9b2d4106); five remain invisible to the name-keyed walk on the merged tree.
+    # WAVE 14 (instruments-measure, F-0d033bd6): `make_shotset_sheet` no longer STRANDS a
+    # refusal — its `os.makedirs` moved below all nine of its pre-write refusals — but it is
+    # still a member of the population and still invisible to the name-keyed walk, which is
+    # what this test is about. So the membership half keeps every one of the five names and
+    # the stranded half names the four that still strand one. The entry is corrected in
+    # place rather than deleted: "the walk could not see it" and "it strands a refusal" are
+    # two different claims, and only the second one stopped being true.
     joined = ["extract_clip_frames", "make_parts_sheet", "make_rig_sheet",
               "make_shotset_sheet", "preview_walk"]
+    strands_one_today = [n for n in joined if n != "make_shotset_sheet"]
     pop = derive_population()
     for name in joined:
         assert name in pop, f"{name} is not in the derived population"
-        assert refusals_below_the_first_write(name), name
+        assert bool(refusals_below_the_first_write(name)) == (
+            name in strands_one_today), name
         blind_gates, blind_writes = gate_and_write_lines(
             _source(name), name, by_name_only=True)
         assert not (blind_gates and blind_writes), (
