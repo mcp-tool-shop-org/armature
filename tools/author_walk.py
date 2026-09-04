@@ -77,16 +77,45 @@ TOOL_VERSION = "E08.1"
 #: real defect. The floor is recorded in the gate's own evidence every run.
 GATE_F_TOL_FRAC = 1e-4
 GATE_A_TOL_FRAC = 1e-4
-#: Frames at which Gate A also compares the evaluated MESH, not just the skeleton. Bone
-#: agreement does not prove the skin followed; a broken armature modifier would leave the
-#: bones perfect and the body behind.
-GATE_A_MESH_FRAMES = (0, 24, 47, 64)
+#: How many frames Gate A compares the evaluated MESH at, beyond the skeleton. Two is the
+#: floor because ONE of them is the rest pose, and a comparison that only ever sees the
+#: rest pose cannot fail in the direction this clause exists for.
+GATE_A_MESH_FRAMES_MIN = 2
 
 
 class WalkGate(GateFailure):
     """A gate specific to authoring the walk."""
 
     gate = "WALK"
+
+
+def mesh_sample_frames(n_frames):
+    """The frames Gate A compares the evaluated MESH at, DERIVED from the gait's length.
+
+    MEASURED 2026-09-04: this used to be the literal tuple `(0, 24, 47, 64)` — absolute
+    indices — filtered at the call site by `[f for f in GATE_A_MESH_FRAMES if f < n_frames]`.
+    The shipped defaults give 65 frames and all four ran; `--n-walk=20` gives 45 and it
+    silently became `[0, 24]`; `--n-walk=12 --n-decel=4 --n-gesture=4 --n-hold=2` gives 22
+    and it became `[0]` alone. Frame 0 is the rest pose — check_relift.py:21: it "proves
+    only that the rest pose survived" — so on a short gait the skin clause degraded to a
+    check that could not fail, and neither the gate's evidence nor the sidecar said so.
+
+    CLAUDE.md: *a global constant must not govern a local feature.* The schedule is a
+    fraction of the gait's own length, and the LAST frame is always in it: the gesture and
+    the hold are at the end, which is where a broken armature modifier is most visible.
+    """
+    n = int(n_frames)
+    frames = sorted({0, n // 3, (2 * n) // 3, n - 1}) if n >= 1 else []
+    frames = [f for f in frames if 0 <= f < n]
+    if len(frames) < GATE_A_MESH_FRAMES_MIN:
+        raise WalkGate(
+            f"a gait of {n} frame(s) cannot carry a skin comparison: the schedule reduces "
+            f"to {frames}, and a single-frame comparison is the rest pose alone. Bone "
+            f"agreement does not prove the skin followed, so this run would report a "
+            f"clause that cannot fail",
+            {"gate": "A", "n_frames": n, "frames": frames,
+             "minimum": GATE_A_MESH_FRAMES_MIN})
+    return frames
 
 
 def _sha256(path):
@@ -473,6 +502,20 @@ def gate_a_arrival(authored_heads, reimported_heads, authored_verts, reimported_
     ev["mesh_clause"] = mesh_clause
     ev["worst_mesh"] = worst_mesh
     ev["mesh_frames_checked"] = sorted(authored_verts)
+    ev["mesh_frame_schedule"] = {
+        "n_frames": len(authored_heads),
+        "frames": mesh_sample_frames(len(authored_heads)),
+        "derivation": "sorted({0, n//3, 2n//3, n-1}) over the gait's own length",
+        "minimum_distinct_frames": GATE_A_MESH_FRAMES_MIN}
+    # The andon on the direction the tolerance does not bound. A caller may hand this gate
+    # any schedule at all, so the refusal lives HERE as well as in `mesh_sample_frames`:
+    # a clause that compared one frame reports PASS on an armature modifier that never ran.
+    if len(mesh_clause) < GATE_A_MESH_FRAMES_MIN:
+        raise WalkGate(
+            f"Gate A's skin clause compared {len(mesh_clause)} frame(s) "
+            f"({sorted(mesh_clause)}); fewer than {GATE_A_MESH_FRAMES_MIN} distinct frames "
+            f"is a comparison that cannot fail in the direction the clause exists for",
+            ev)
     ev["mesh_clause_note"] = ("symmetric Hausdorff over evaluated world positions; both "
                               "directions, because a one-way check passes on an export "
                               "that dropped half the body")
@@ -535,8 +578,7 @@ def main():
     # ---- Gate F, on the pose Blender is actually holding.
     authored_heads = posed_heads(arm_obj, scene, n_frames)
     gate_f = gate_f_fk_agreement(fk, authored_heads, performer, arm_obj, diagonal)
-    authored_verts = sampled_verts(mesh_obj, scene,
-                                   [f for f in GATE_A_MESH_FRAMES if f < n_frames])
+    authored_verts = sampled_verts(mesh_obj, scene, mesh_sample_frames(n_frames))
 
     slip = walk.foot_slip(fk)
 

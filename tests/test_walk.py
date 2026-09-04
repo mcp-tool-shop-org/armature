@@ -613,3 +613,100 @@ def test_the_refused_set_still_brackets_the_only_value_that_works():
     assert min(REFUSED_STANCE_FRACTIONS) < 0.5 < max(REFUSED_STANCE_FRACTIONS)
     assert 0.6 in REFUSED_STANCE_FRACTIONS, "0.6 is the ordinary human stance fraction"
     assert walk.GaitParams().stance_frac == 0.5
+
+
+# ------------------------------------------------ Gate A's mesh-comparison schedule (w6)
+#
+# F-7c287c86. `author_walk.GATE_A_MESH_FRAMES` was the literal tuple `(0, 24, 47, 64)` —
+# ABSOLUTE frame indices — filtered at the call site by `[f for f in GATE_A_MESH_FRAMES if
+# f < n_frames]`. `n_frames` comes from `walk.build_gait` over the `--n-walk/--n-decel/
+# --n-gesture/--n-hold` flags, so a short gait silently DROPPED comparisons: 45 frames
+# leaves `[0, 24]`, and `--n-walk=12 --n-decel=4 --n-gesture=4 --n-hold=2` leaves `[0]`
+# alone — frame 0, the rest pose, which check_relift.py:21 records as proving only that
+# the rest pose survived. The clause's whole purpose (author_walk.py:81-83) is that a
+# broken armature modifier leaves the bones perfect and the body behind; a one-frame
+# rest-pose comparison cannot fail in that direction, and nothing reported the degradation.
+#
+# CLAUDE.md: a global constant must not govern a local feature. The schedule is derived
+# from the gait's own length.
+
+import blender_stub
+
+
+def _author_walk():
+    return blender_stub.load_tool("author_walk.py")
+
+
+#: Every corner of the CLI's parameter space, plus the floor `GaitParams` itself allows.
+CLI_GAITS = [
+    dict(),                                                   # the shipped defaults, 65
+    dict(n_walk=20),                                          # 45 — used to drop to [0, 24]
+    dict(n_walk=12, n_decel=4, n_gesture=4, n_hold=2),        # 22 — used to drop to [0]
+    dict(n_walk=1, n_decel=1, n_gesture=1, n_hold=1),         # the shortest legal gait
+    dict(n_walk=1, n_decel=1, n_gesture=1, n_hold=1, steps=1),
+    dict(n_walk=200, n_decel=40, n_gesture=60, n_hold=25, steps=20),
+]
+
+
+@pytest.mark.parametrize("kwargs", CLI_GAITS)
+def test_the_mesh_schedule_has_at_least_two_distinct_frames_and_ends_at_the_last(kwargs):
+    aw = _author_walk()
+    n = walk.GaitParams(**kwargs).n_frames
+    frames = aw.mesh_sample_frames(n)
+    assert len(set(frames)) >= 2, (kwargs, n, frames)
+    assert frames == sorted(set(frames)), frames
+    assert frames[-1] == n - 1, (kwargs, n, frames)
+    assert all(0 <= f < n for f in frames), (kwargs, n, frames)
+
+
+@pytest.mark.parametrize("kwargs", CLI_GAITS)
+def test_the_old_literal_schedule_would_have_degraded_where_the_derived_one_does_not(kwargs):
+    """The red direction, pinned. The superseded constant is reproduced verbatim; on the
+    short gaits it collapses to fewer than two frames while the derived schedule does not."""
+    aw = _author_walk()
+    n = walk.GaitParams(**kwargs).n_frames
+    old = [f for f in (0, 24, 47, 64) if f < n]
+    new = aw.mesh_sample_frames(n)
+    if n < 25:
+        assert len(old) < 2, (kwargs, n, old)
+    assert len(new) >= 2
+
+
+def test_a_gait_too_short_to_compare_two_frames_raises_rather_than_degrades():
+    """A single-frame skin comparison cannot fail in the direction the clause exists for,
+    so it is refused rather than reported. Gates raise; they never `assert` and take no
+    skip flag."""
+    aw = _author_walk()
+    with pytest.raises(aw.WalkGate) as exc:
+        aw.mesh_sample_frames(1)
+    assert exc.value.gate == "WALK"
+    assert exc.value.evidence["n_frames"] == 1
+    with pytest.raises(aw.WalkGate):
+        aw.mesh_sample_frames(0)
+
+
+def test_gate_a_refuses_a_run_whose_mesh_clause_saw_fewer_than_two_frames():
+    """The andon lives inside the gate that performs the comparison, not only in the
+    helper that plans it — a caller could hand it any schedule at all."""
+    aw = _author_walk()
+    heads = [{b: (0.0, 0.0, 0.0) for b in walk.GAIT_BONES} for _ in range(4)]
+    verts = {0: [(0.0, 0.0, 0.0)]}
+    with blender_stub.blender_stubbed():
+        with pytest.raises(aw.WalkGate) as exc:
+            aw.gate_a_arrival(heads, heads, verts, verts, 1.0)
+    assert exc.value.gate == "WALK"
+    assert "mesh_frames_checked" in exc.value.evidence
+
+
+def test_the_schedule_reaches_gate_a_evidence():
+    """A schedule that degraded silently is the defect; the run must be able to say which
+    frames it actually compared and against what plan."""
+    aw = _author_walk()
+    heads = [{b: (0.0, 0.0, 0.0) for b in walk.GAIT_BONES} for _ in range(9)]
+    frames = aw.mesh_sample_frames(9)
+    verts = {i: [(0.0, 0.0, 0.0)] for i in frames}
+    with blender_stub.blender_stubbed():
+        ev = aw.gate_a_arrival(heads, heads, verts, verts, 1.0)
+    assert ev["mesh_frames_checked"] == frames
+    assert ev["mesh_frame_schedule"]["n_frames"] == 9
+    assert ev["mesh_frame_schedule"]["frames"] == frames

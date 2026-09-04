@@ -19,6 +19,7 @@ non-plugin helper and `ci.yml`'s `-O` leg would report green over it
 
 import ast
 import contextlib
+import math
 import importlib.util
 import os
 import sys
@@ -48,10 +49,37 @@ def read_source(filename):
         return fh.read()
 
 
+class _BruteForceKDTree:
+    """A stand-in for `mathutils.kdtree.KDTree` — exact, and O(n*m).
+
+    `author_walk.gate_a_arrival`'s skin clause does `from mathutils import kdtree` inside
+    the function, so the clause cannot be reached at all with `mathutils` merely stubbed.
+    The real KDTree is an exact nearest-neighbour structure; over the handful of points a
+    unit test hands it, brute force returns the same answer, which is the property the
+    clause depends on.
+    """
+
+    def __init__(self, size):
+        self._pts = []
+
+    def insert(self, co, index):
+        self._pts.append((tuple(float(v) for v in co), index))
+
+    def balance(self):
+        pass
+
+    def find(self, co):
+        probe = tuple(float(v) for v in co)
+        if not self._pts:
+            return None, None, float("inf")
+        best = min(self._pts, key=lambda t: math.dist(t[0], probe))
+        return best[0], best[1], math.dist(best[0], probe)
+
+
 @contextlib.contextmanager
 def blender_stubbed():
     """`bpy`, `mathutils` and `bmesh` replaced for the duration."""
-    keys = ("bpy", "mathutils", "bmesh")
+    keys = ("bpy", "mathutils", "mathutils.kdtree", "bmesh")
     saved = {k: sys.modules.get(k) for k in keys}
     try:
         sys.modules["bpy"] = mock.MagicMock(name="bpy")
@@ -61,7 +89,11 @@ def blender_stubbed():
         mathutils.Matrix = mock.MagicMock(name="Matrix")
         mathutils.Quaternion = mock.MagicMock(name="Quaternion")
         mathutils.Euler = mock.MagicMock(name="Euler")
+        kdtree = types.ModuleType("mathutils.kdtree")
+        kdtree.KDTree = _BruteForceKDTree
+        mathutils.kdtree = kdtree
         sys.modules["mathutils"] = mathutils
+        sys.modules["mathutils.kdtree"] = kdtree
         yield
     finally:
         for k, v in saved.items():
