@@ -304,3 +304,147 @@ def test_frame_names_is_never_asked_for_a_negative_count_through_the_contract(tm
     raw.setdefault("frames", {})["count"] = -33
     with pytest.raises(SpecError, match=r"frames\.count is -33; it must be positive"):
         shotspec.normalise_spec(raw)
+
+
+# --- W10 amend: the camera block is validated like every other block ------------------
+
+
+def _with_camera(tmp_path, **cam):
+    raw = _minimal(tmp_path)
+    raw["camera"] = dict(cam)
+    return raw
+
+
+# F-e920f5a2 — a non-positive orbit radius parses, and a negative one renders the whole
+# shot from the opposite side of the subject.
+
+
+@pytest.mark.parametrize("radius", [0, 0.0, -3.0, -1])
+def test_a_non_positive_orbit_radius_is_not_a_spec_that_parses(tmp_path, radius):
+    """Measured 2026-09-04: `normalise_spec` accepted `camera={'type':'orbit','radius':0}`
+    and `radius: -3.0` and returned them unchanged. `framing.camera_position((0,0,0),
+    -3.0, 8.0, 0.0)` is exactly `camera_position((0,0,0), 3.0, -8.0, 180.0)` — azimuth+180
+    and elevation negated — a different, perfectly plausible view of the same body, and
+    nothing downstream sees it: `stage_render.py:170-174` only does `float(radius)` and a
+    `radius + sphere_r >= clip_end` test, which -3.0 passes; G4 compares the mask against
+    the projection computed from the SAME wrong camera; G1/G2/G6 are blind to camera
+    placement; and the manifest records `camera_radius_resolved: -3.0` beside per-frame
+    azimuths that are not the angles the frames were rendered at."""
+    raw = _with_camera(tmp_path, type="orbit", radius=radius)
+    with pytest.raises(SpecError, match=r"camera\.radius is .*not a distance"):
+        shotspec.normalise_spec(raw)
+
+
+def test_the_two_camera_radius_refusals_in_this_package_accept_the_same_values(tmp_path):
+    """The asymmetry was inside one package: `framing.load_pinned_camera` reads the SAME
+    quantity back out of a camera record and refuses it — `if not (radius > 0.0): raise
+    FramingError(f'{path}: camera.radius is {radius}, which is not a distance')` — while
+    the contract that writes it accepted anything non-bool. Pinned as a pair so they
+    cannot drift apart again."""
+    from armature_core import framing
+
+    # core-solvers is moving `FramingError` into the `ArmatureError` family this wave
+    # (wave-10 seam); read through the module so this pin survives that move.
+    FramingError = framing.FramingError
+
+    def framing_accepts(radius):
+        rec = {"camera": {"target": [0.0, 0.0, 0.0], "radius": radius,
+                          "elevation_deg": 8.0}}
+        path = tmp_path / f"cam_{radius}.json"
+        path.write_text(json.dumps(rec), encoding="utf-8")
+        try:
+            framing.load_pinned_camera(str(path), {"elevation_deg": 8.0})
+        except FramingError as exc:
+            assert "not a distance" in str(exc), str(exc)
+            return False
+        return True
+
+    def spec_accepts(radius):
+        try:
+            shotspec.normalise_spec(_with_camera(tmp_path, type="orbit", radius=radius))
+        except SpecError:
+            return False
+        return True
+
+    for radius in (3.0, 1, 1e-9, 0, 0.0, -0.0, -1, -3.0):
+        assert framing_accepts(radius) == spec_accepts(radius), radius
+
+
+def test_auto_is_still_the_documented_radius_and_still_parses(tmp_path):
+    """`auto` is resolved by the framing solve, not by the spec, so it is the one value
+    the positivity clause must not touch — it is also the DEFAULTS value."""
+    spec = shotspec.normalise_spec(_with_camera(tmp_path, type="orbit", radius="auto"))
+    assert spec["camera"]["radius"] == "auto"
+    assert shotspec.DEFAULTS["camera"]["radius"] == "auto"
+    assert shotspec.normalise_spec(_minimal(tmp_path))["camera"]["radius"] == "auto"
+
+
+# F-8382e442 — the camera block's numeric fields got no type check at all.
+
+
+CAMERA_POSITIVE_FIELDS = ("lens_mm", "sensor_mm", "fit_margin", "clip_start", "clip_end")
+CAMERA_ANGLE_FIELDS = ("elevation_deg", "azimuth_start_deg", "azimuth_sweep_deg")
+
+
+def test_the_camera_field_population_is_the_defaults_block_itself():
+    """The node this census keys on is `shotspec.DEFAULTS['camera']` — the block the
+    contract fills and round-trips — not a list typed into this file. Every numeric key
+    in it is covered by one of the two tables above, so a numeric field added to DEFAULTS
+    without a clause fails here."""
+    numeric = {k for k, v in shotspec.DEFAULTS["camera"].items()
+               if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    assert numeric == set(CAMERA_POSITIVE_FIELDS) | set(CAMERA_ANGLE_FIELDS)
+    assert set(shotspec.DEFAULTS["camera"]) == (
+        numeric | {"type", "target", "radius"})
+
+
+@pytest.mark.parametrize("field", CAMERA_POSITIVE_FIELDS + CAMERA_ANGLE_FIELDS)
+@pytest.mark.parametrize("wrong", ["50", "up", None, True])
+def test_every_numeric_camera_field_refuses_a_wrong_type(tmp_path, field, wrong):
+    """Measured 2026-09-04, `normalise_spec` ACCEPTED and round-tripped `lens_mm: '50'`
+    and `elevation_deg: 'up'`. The consequence is loud and arrives from the wrong layer:
+    `framing.project(...)` raises a bare TypeError out of the arithmetic at framing.py:155
+    rather than the contract whose stated job is to say a spec is well formed."""
+    raw = _with_camera(tmp_path, type="orbit", radius="auto", **{field: wrong})
+    with pytest.raises(SpecError, match=rf"camera\.{field}"):
+        shotspec.normalise_spec(raw)
+
+
+@pytest.mark.parametrize("field", CAMERA_POSITIVE_FIELDS)
+@pytest.mark.parametrize("wrong", [0, -1, -5.0])
+def test_every_positive_camera_quantity_refuses_a_non_positive_value(tmp_path, field,
+                                                                     wrong):
+    """`sensor_mm: 0` measured: `framing.project(p, target, 3.0, 0.0, 8.0, 50.0, 0.0, 832,
+    480)` raises `ZeroDivisionError: division by zero` at framing.py:155. `fit_margin: -1`
+    and `clip_start: -5` were accepted too, and `clip_end` is read by `stage_render.py:171`
+    as a bound (`radius + sphere_r >= float(c['clip_end'])`), so a negative one turns that
+    andon into a check that always fires and is not caught anywhere as malformed."""
+    raw = _with_camera(tmp_path, type="orbit", radius="auto", **{field: wrong})
+    with pytest.raises(SpecError, match=rf"camera\.{field} is {wrong}"):
+        shotspec.normalise_spec(raw)
+
+
+def test_a_clip_range_that_does_not_open_is_refused_like_the_depth_window(tmp_path):
+    """`depth.window` already refuses `z_min >= z_max` at line 248; the clip range is the
+    same object and was refused nowhere."""
+    raw = _with_camera(tmp_path, type="orbit", radius="auto",
+                       clip_start=100.0, clip_end=1.0)
+    with pytest.raises(SpecError, match=r"clip_start"):
+        shotspec.normalise_spec(raw)
+    raw = _with_camera(tmp_path, type="orbit", radius="auto",
+                       clip_start=5.0, clip_end=5.0)
+    with pytest.raises(SpecError, match=r"clip_start"):
+        shotspec.normalise_spec(raw)
+
+
+def test_the_defaults_camera_block_still_parses_unchanged(tmp_path):
+    """The green direction: the block the repo ships is well formed, and an angle may
+    still be negative or zero — an elevation of -8 is a camera below the subject, not a
+    malformed spec."""
+    spec = shotspec.normalise_spec(_minimal(tmp_path))
+    assert spec["camera"] == shotspec.DEFAULTS["camera"]
+    ok = shotspec.normalise_spec(_with_camera(
+        tmp_path, type="orbit", radius=3.0, elevation_deg=-8.0,
+        azimuth_start_deg=0, azimuth_sweep_deg=-360.0, lens_mm=35, sensor_mm=36.0,
+        fit_margin=1.15, clip_start=0.05, clip_end=1000.0))
+    assert ok["camera"]["elevation_deg"] == -8.0 and ok["camera"]["radius"] == 3.0

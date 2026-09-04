@@ -372,3 +372,101 @@ def test_a_fully_fired_clip_is_unchanged():
     f = DG.ankle_framing(_rows((0.5, 0.9), n=10))
     assert f["n_frames_considered"] == f["n_frames_detector_fired"] == 10
     assert f["both_ankles_in_image"] == 1.0
+
+
+# --- W10 amend: the frame population matches `.png` the way its 25 siblings do --------
+# (F-bc6bfa96)
+
+
+def _png(path, value=0):
+    from PIL import Image
+    Image.new("RGB", (4, 4), (value, value, value)).save(path)
+
+
+def test_the_frame_population_is_case_insensitive_like_every_other_consumer(tmp_path):
+    """Measured 2026-09-04 on a directory holding 0.png, 1.PNG, 2.png: `frame_paths`
+    returned ['0.png', '2.png'] with no complaint, so `mean_consecutive_frame_difference`
+    then differenced frame 0 against frame 2 as a CONSECUTIVE pair and the clip's motion
+    mean — the number `gate_donor` compares against DONOR_THRESHOLDS — was computed over
+    the wrong pairs."""
+    for name, value in (("0.png", 0), ("1.PNG", 40), ("2.png", 80)):
+        _png(tmp_path / name, value)
+    got = [os.path.basename(p) for p in DG.frame_paths(str(tmp_path))]
+    assert got == ["0.png", "1.PNG", "2.png"]
+
+
+def test_the_unnumbered_name_refusal_can_see_a_name_it_was_filtering_out(tmp_path):
+    """The andon's own population was being filtered before it was examined: on a
+    directory holding only 0.PNG and notanumber.PNG, `frame_paths` returned [] and the
+    unnumbered-name refusal at lines 80-88 never fired — because the name it exists to
+    catch had been dropped by the suffix test two lines above it."""
+    _png(tmp_path / "0.PNG")
+    _png(tmp_path / "notanumber.PNG")
+    with pytest.raises(DG.DonorGate, match=r"not numerically named"):
+        DG.frame_paths(str(tmp_path))
+
+
+def test_a_dropped_file_is_visible_in_the_evidence_rather_than_inferred(tmp_path):
+    """`n_total` counted the SURVIVORS of the suffix filter, so nothing in the evidence
+    said a file had been dropped. The raw directory count rides beside it."""
+    _png(tmp_path / "0.png")
+    _png(tmp_path / "notanumber.png")
+    (tmp_path / "notes.txt").write_text("x", encoding="utf-8")
+    with pytest.raises(DG.DonorGate) as exc:
+        DG.frame_paths(str(tmp_path))
+    ev = exc.value.evidence
+    assert ev["n_total"] == 2
+    assert ev["n_in_directory"] == 3
+    assert ev["n_not_png"] == 1
+
+
+def test_the_motion_mean_is_measured_over_consecutive_pairs_after_the_fix(tmp_path):
+    """The consequence the finding names, in the positive direction: with the middle
+    frame back in the population the clip differences 0-1 and 1-2 rather than 0-2, and
+    the number `gate_donor` compares against DONOR_THRESHOLDS changes."""
+    for name, value in (("0.png", 0), ("1.PNG", 40), ("2.png", 80)):
+        _png(tmp_path / name, value)
+    stats = DG.mean_consecutive_frame_difference(DG.frame_paths(str(tmp_path)))
+    assert stats["n_frames"] == 3 and stats["n_pairs"] == 2
+    assert stats["mean"] == pytest.approx(40.0)
+
+
+def test_the_png_population_rule_is_the_one_its_producer_and_consumers_use():
+    """The family census, derived by walking `tools/` for every `.png` suffix test rather
+    than typed: the node it keys on is the `endswith` call itself. `fetch_run.
+    verify_downloads` — the PRODUCER andon — was made case-insensitive at the wave-8
+    merge and its comment names `encode_control.py:126` and `invert_frames.py:70` as
+    consumers sharing one reading. Gate DONOR decides whether a clip may be a baseline at
+    all, so it was the one on the wrong side of that contract inside this package."""
+    import ast
+
+    tools = os.path.join(REPO, "tools")
+    case_sensitive, case_insensitive = [], []
+    for dirpath, _dirs, files in os.walk(tools):
+        for fname in sorted(files):
+            if not fname.endswith(".py"):
+                continue
+            path = os.path.join(dirpath, fname)
+            tree = ast.parse(open(path, encoding="utf-8").read())
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "endswith"
+                        and len(node.args) == 1
+                        and isinstance(node.args[0], ast.Constant)
+                        and node.args[0].value == ".png"):
+                    continue
+                rel = os.path.relpath(path, tools).replace("\\", "/")
+                inner = node.func.value
+                lowered = (isinstance(inner, ast.Call)
+                           and isinstance(inner.func, ast.Attribute)
+                           and inner.func.attr == "lower")
+                (case_insensitive if lowered else case_sensitive).append(
+                    f"{rel}:{node.lineno}")
+
+    assert "armature_core/donor_gate.py" not in " ".join(case_sensitive)
+    # The two survivors are carried as coordinator seeds in the instruments domains and
+    # are named here so this census reports them rather than passing over them.
+    assert sorted(case_sensitive) == ["render_performer.py:359",
+                                      "render_pose_sticks.py:178"], case_sensitive
+    assert len(case_insensitive) >= 25, len(case_insensitive)

@@ -267,6 +267,20 @@ WEIGHT_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".ta
 #: preprocessor tier, whose ComfyUI class names do not contain their row key
 #: (`DWPreprocessor` does not contain "dwpose"). Measured against the served Animate
 #: template, which wires `DWPreprocessor` and `OpenposePreprocessor`.
+#:
+#: ⚠ **The KEYS are `RULED_COMPONENTS` row keys, and nothing checked that they still name
+#: rows.** `class_patterns_for` is only ever reached through `rulings_for_class`, which
+#: iterates `RULED_COMPONENTS.items()` — so an alias entry whose key is no longer a row is
+#: never consulted and never reported. Measured 2026-09-04: on a save-format graph
+#: carrying one `DWPreprocessor`, `ruled_node_classes` returned one row (BANNED); renaming
+#: the row key "dwpose" to "dwpose_ts" while leaving the alias under "dwpose" made
+#: `ruled_node_classes` return [] and `class_patterns_for("dwpose_ts")` return only
+#: ("dwpose_ts",) — the class clause silently fell back to matching the row key literally,
+#: which is precisely the state this header describes as the defect the table was built to
+#: close. The forward direction (every row matched on its own key) was pinned in the
+#: suite; the reverse was pinned nowhere, and this table is a MIRROR of
+#: docs/license-map.md, where a re-fetch renaming or retiring a row is a normal edit.
+#: `gate_alias_table` is the mechanical form, and it runs at import and inside `verify`.
 RULED_COMPONENT_CLASSES = {
     "dwpose": ("dwpreprocessor", "dwposeestimator"),
     "openpose": ("openposepreprocessor", "openpose_preprocessor"),
@@ -629,6 +643,54 @@ def class_patterns_for(key):
                         | {str(a).lower() for a in RULED_COMPONENT_CLASSES.get(key, ())}))
 
 
+def orphaned_component_class_aliases():
+    """Alias keys in `RULED_COMPONENT_CLASSES` that name no `RULED_COMPONENTS` row.
+
+    Derived from the two tables, never typed: `set(RULED_COMPONENT_CLASSES) -
+    set(RULED_COMPONENTS)`. An orphan is unreachable — `rulings_for_class` iterates the
+    ROWS — so it is invisible in exactly the direction the class clause exists to see.
+    """
+    return sorted(set(RULED_COMPONENT_CLASSES) - set(RULED_COMPONENTS))
+
+
+def gate_alias_table():
+    """· ANDON — the class-alias table names rows that exist.
+
+    Raises rather than returning a flag, and runs where a wrong table is loudest: at
+    IMPORT (below), so a licence-map re-fetch that renames a row halts every tool that
+    reads this module, and again inside `verify`, so a table mutated at run time cannot
+    verify a graph either. The direction it bounds is the one no other clause does: the
+    forward reading (a row absent from the alias table is matched on its own name) is
+    already safe by construction, while an orphaned ALIAS is silent — the class-level
+    licence clause simply stops seeing the tier it was added for while every gate reports
+    green.
+    """
+    orphaned = orphaned_component_class_aliases()
+    if orphaned:
+        raise RouteGate(
+            "RULED_COMPONENT_CLASSES names " + ", ".join(repr(k) for k in orphaned) +
+            ", which is not a RULED_COMPONENTS row. An alias whose key names no row is "
+            "never consulted — `rulings_for_class` iterates the ROWS — so the node "
+            "classes it exists to catch (the banned preprocessor tier) contribute "
+            "nothing to `components()` and `verify()` reports the graph clean. This "
+            "table mirrors docs/license-map.md; a row renamed or retired by a re-fetch "
+            "takes its aliases with it",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "orphaned_component_class_alias",
+             "orphaned": orphaned,
+             "alias_keys": sorted(RULED_COMPONENT_CLASSES),
+             "row_keys": sorted(RULED_COMPONENTS)})
+    return {"gate": "ROUTE", "andon": "RouteGate",
+            "clause": "orphaned_component_class_alias",
+            "n_alias_keys": len(RULED_COMPONENT_CLASSES),
+            "n_rows": len(RULED_COMPONENTS),
+            "verdict": (f"every alias key names a row: "
+                        f"{len(RULED_COMPONENT_CLASSES)} of {len(RULED_COMPONENTS)}")}
+
+
+gate_alias_table()
+
+
 def rulings_for_class(class_type):
     """EVERY `RULED_COMPONENTS` row this NODE CLASS name matches, strictest first.
 
@@ -733,8 +795,7 @@ SEED_CLASS_SUFFIXES = ("Sampler", "Noise")
 #: Class-name suffixes that mark a HOSTED / partner node, whose save-format
 #: `widgets_values` this repo cannot interpret without a recorded widget-index row.
 #:
-#: ⚠ Used by `unrecorded_seed_sources` in SAVE FORMAT ONLY. In API format inputs are
-#: keyed by name and the input-name clause already answers; in save format the values are
+#: ⚠ Used by `unrecorded_seed_sources` in BOTH FORMATS. In save format the values are
 #: positional and nothing names them, so a vendor node's widget list is exactly the
 #: direction no other clause bounds — and save format is the format the cloud hands back
 #: and the one `load_graph` / `gate_saved_graph` read before submission. Measured
@@ -744,6 +805,20 @@ SEED_CLASS_SUFFIXES = ("Sampler", "Noise")
 #: 1", and node 4's 999999999 was never examined. `Wan2ReferenceVideoApi` carries a
 #: `SEED_NODES` row and so is read rather than flagged — which is what the andon asks
 #: for: a row, in the spec that arms the tier.
+#:
+#: ⚠ **It ran in save format ONLY until 2026-09-04, and API is the format every builder
+#: submits.** The clause was written `if why is None and not api and cls.endswith(...)`,
+#: on the stated ground that "in API format inputs are keyed by name and the input-name
+#: clause already answers". That ground holds only while a vendor spells its seed input
+#: exactly seed/noise_seed/rand_seed — and this repo's own hosted node namespaces every
+#: other input under `model.` (`build_r2v_payload.py:79-83` writes model.prompt /
+#: model.resolution / model.ratio / model.duration). Measured on ONE graph written in both
+#: formats — UNETLoader + WanImageToVideo + KSampler(seed 7, "fixed") + a `KlingVideoApi`
+#: with no SEED_NODES row: SAVE raised on both readers; the SAME graph in API returned
+#: `unrecorded_seed_sources() == []` and `seed_clause_verdict = "CHECKED — 1 seed(s) all
+#: pinned"`, repeated with an explicit `model.seed` of 999999999 that was never examined.
+#: In API format the reading needs no widget indices to state: a class whose name ends in
+#: Api/API with no `SEED_NODES` row.
 HOSTED_API_CLASS_SUFFIXES = ("Api", "API")
 
 
@@ -806,9 +881,21 @@ def unrecorded_seed_sources(graph):
 
     Save format names inputs too — as a list of slot dicts, converted widgets included —
     so the input-name clause now runs in both, reading each format's own spelling
-    (`_save_format_input_names`). The second save-format clause is
-    `HOSTED_API_CLASS_SUFFIXES`: a partner node whose positional widget list this repo
-    has no recorded row for, which is the KlingVideoApi shape above.
+    (`_save_format_input_names`). The third clause is `HOSTED_API_CLASS_SUFFIXES`: a
+    partner node this repo has no recorded row for, which is the KlingVideoApi shape
+    above.
+
+    ⚠ **The hosted clause ran in save format only, and API is the format every builder
+    submits.** Measured 2026-09-04 on ONE graph written in both formats — UNETLoader +
+    WanImageToVideo(832,480,81) + KSampler(seed 7, "fixed") + `KlingVideoApi` with no
+    `SEED_NODES` row: SAVE gave one row here and both `gate_s_registration(g, [7])` and
+    `verify(g, frame=(832,480,81))` raised; the SAME graph in API gave [] here, "1
+    noise-bearing seed(s), all pinned and all drawn from the committed list of 1", and
+    `seed_clause_verdict = "CHECKED — 1 seed(s) all pinned"`. Repeated with an explicit
+    `model.seed` of 999999999: API still green, that seed never examined. It now runs in
+    both, stating the reading each format supports — and the input-name clause reads a
+    key's LAST DOTTED SEGMENT, because this repo's own hosted node namespaces every input
+    under `model.`.
     """
     graph = normalise_graph(graph)
     api = is_api_format(graph)
@@ -820,16 +907,27 @@ def unrecorded_seed_sources(graph):
         names = (list(n.get("inputs") or {}) if api
                  else _save_format_input_names(n))
         why = None
-        hit = sorted({k for k in names if k in SEED_INPUT_NAMES})
+        # The LAST DOTTED SEGMENT, not the whole key: a hosted node namespaces its inputs
+        # (`model.seed`), and reading only the bare spelling made the input-name clause
+        # blind to exactly the tier the hosted clause below exists for.
+        hit = sorted({k for k in names
+                      if str(k).rsplit(".", 1)[-1] in SEED_INPUT_NAMES})
         if hit:
             why = f"carries seed-shaped input(s) {', '.join(hit)}"
         if why is None and cls.endswith(SEED_CLASS_SUFFIXES):
             why = "the class name declares a sampling or noise role"
-        if why is None and not api and cls.endswith(HOSTED_API_CLASS_SUFFIXES):
-            why = (f"it is a hosted/partner node whose save-format widgets are "
-                   f"positional and this module has no recorded widget row for "
-                   f"{cls!r}, so a seed among its {len(n.get('widgets_values') or [])} "
-                   f"widget value(s) cannot be read at all")
+        if why is None and cls.endswith(HOSTED_API_CLASS_SUFFIXES):
+            why = (
+                (f"it is a hosted/partner node with no SEED_NODES row: {cls!r} ends in "
+                 f"{HOSTED_API_CLASS_SUFFIXES}, and a partner tier that draws its own "
+                 f"noise is one this module can say nothing about — `seeds()` returns "
+                 f"nothing for it and every reader then reports green")
+                if api else
+                (f"it is a hosted/partner node whose save-format widgets are "
+                 f"positional and this module has no recorded widget row for "
+                 f"{cls!r}, so a seed among its {len(n.get('widgets_values') or [])} "
+                 f"widget value(s) cannot be read at all")
+            )
         if why:
             out.append({"node_id": n.get("id"), "class": cls, "where": where, "why": why})
     return out
@@ -1039,10 +1137,27 @@ def camera_widget_order_evidence(graph, expect):
 
 
 def _frame_triple(frame):
-    """`(width, height, length)` from a tuple or a mapping, or raise saying what arrived."""
+    """`(width, height, length)` from a tuple or a mapping, or raise saying what arrived.
+
+    ⚠ **It used to COERCE, in front of a guard whose whole job was to refuse.** Wave 8
+    added `frame_legality`'s int-type refusal with the reason written out — "a wrong TYPE
+    is a malformed question and raises" — and it could not fire on the only path a caller
+    supplies a frame, because both return paths here read `int(...)` first. Measured
+    2026-09-04: `_frame_triple((832.9, 480.4, 81))` returned `(832, 480, 81)` and
+    `_frame_triple(('832','480','81'))` returned `(832, 480, 81)` — a float truncated and
+    a string parsed, both silently, so the guard downstream saw ints on every call. A
+    builder that derived a non-integer frame (a division that did not floor) had it
+    truncated, and `verify`'s evidence and the `SAVED_ADMISSION_OK` line then quoted a
+    frame that is not the number the builder computed — while the supplied-vs-graph clash
+    clause compared the TRUNCATED value and could not see the difference either.
+
+    The values are now passed through untouched, so `frame_legality` states the ONE
+    refusal for a malformed frame. Nothing in `tools/` supplies anything but ints today
+    (read at the seven `verify(..., frame=...)` call sites).
+    """
     if isinstance(frame, dict):
         try:
-            return int(frame["width"]), int(frame["height"]), int(frame["length"])
+            return frame["width"], frame["height"], frame["length"]
         except KeyError as exc:
             raise RouteGate(
                 f"the supplied frame is missing {exc.args[0]!r}; Gate L needs all three of "
@@ -1050,7 +1165,7 @@ def _frame_triple(frame):
                 {"gate": "ROUTE", "andon": "RouteGate", "clause": "frame_triple",
                  "supplied": frame}) from None
     if isinstance(frame, (list, tuple)) and len(frame) == 3:
-        return int(frame[0]), int(frame[1]), int(frame[2])
+        return frame[0], frame[1], frame[2]
     raise RouteGate(
         f"the supplied frame {frame!r} is not (width, height, length) or a mapping "
         f"carrying those three keys",
@@ -1332,6 +1447,9 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     frame-legality clause is **INDETERMINATE — unproven — and raises**, because a check
     that cannot fail is not a check.
     """
+    # · ANDON, before anything is read — the licence clause below asks
+    # `RULED_COMPONENTS` a question, and an orphaned alias makes it the wrong question.
+    gate_alias_table()
     graph = normalise_graph(graph)
     if hosted_tier is not None and frame is not None:
         raise RouteGate(

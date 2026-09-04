@@ -3,9 +3,12 @@
 Every fixture below is a graph that a name-level or top-level check would call clean.
 """
 
+import os
+import re
+
 import pytest
 
-from conftest import TOOLS  # noqa: F401
+from conftest import TOOLS, REPO  # noqa: F401
 from armature_core import canon
 from armature_core import route_gates as RG
 
@@ -1506,3 +1509,402 @@ def test_load_graph_still_reads_a_good_file(tmp_path):
     good.write_text('{"prompt": {"3": {"class_type": "KSampler", "inputs": {"seed": 7}}}}',
                     encoding="utf-8")
     assert RG.is_api_format(RG.load_graph(str(good)))
+
+
+# --- W10 amend: the hosted clause runs in BOTH formats (F-e1a36cfc) -------------------
+#
+# Wave 8 closed the save-format half of the hosted-seed andon and left the API half open,
+# and API is the format every builder submits.
+
+
+def _hosted_seed_pair(seed_input=None):
+    """ONE graph, written in both formats: UNETLoader + WanImageToVideo + a recorded
+    KSampler + a `KlingVideoApi` node that has no `SEED_NODES` row.
+
+    `seed_input` optionally namespaces the hosted node's seed the way this repo's own
+    hosted node namespaces every other input (`build_r2v_payload.py:79-83` writes
+    `model.prompt` / `model.resolution` / `model.ratio` / `model.duration`).
+    """
+    hosted_inputs = {"model": "kling-v2", "model.resolution": "720P",
+                     "model.ratio": "16:9", "model.duration": 5}
+    if seed_input:
+        hosted_inputs[seed_input] = 999999999
+    api = {
+        "3": {"class_type": "KSampler",
+              "inputs": {"seed": 7, "control_after_generate": "fixed",
+                         "model": ["10", 0]}},
+        "4": {"class_type": "KlingVideoApi", "inputs": dict(hosted_inputs)},
+        "10": {"class_type": "UNETLoader",
+               "inputs": {"unet_name":
+                          "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"}},
+        "49": {"class_type": "WanImageToVideo",
+               "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1}},
+    }
+    save = {"nodes": [
+        {"id": 3, "type": "KSampler", "inputs": [],
+         "widgets_values": [7, "fixed", 20, 6.0, "euler", "simple", 1.0]},
+        {"id": 4, "type": "KlingVideoApi", "inputs": [],
+         "widgets_values": ["kling-v2", "720P", "16:9", 5]
+                           + ([999999999] if seed_input else [])},
+        {"id": 10, "type": "UNETLoader",
+         "widgets_values": ["wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"]},
+        {"id": 49, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]},
+    ]}
+    return {"api": api, "save": save}
+
+
+@pytest.mark.parametrize("seed_input", [None, "model.seed", "seed"])
+def test_one_graph_two_formats_gets_one_verdict_on_an_unrecorded_hosted_node(seed_input):
+    """The finding's own fixture, asserted AS A PAIR rather than as two independent
+    cases — the defect was that the two formats disagreed about one graph.
+
+    Measured 2026-09-04 before the fix, with no seed input at all: save format gave
+    `unrecorded_seed_sources` one row and both `gate_s_registration(g, [7])` and
+    `verify(g, frame=(832,480,81))` raised; the SAME graph in API format gave
+    `unrecorded_seed_sources() == []`, "1 noise-bearing seed(s), all pinned and all drawn
+    from the committed list of 1", and `seed_clause_verdict = 'CHECKED - 1 seed(s) all
+    pinned'`. Repeated with an explicit `model.seed` of 999999999: API still green, that
+    seed never examined.
+    """
+    pair = _hosted_seed_pair(seed_input)
+    verdicts = {}
+    for fmt, g in pair.items():
+        rows = RG.unrecorded_seed_sources(g)
+        assert [u["class"] for u in rows] == ["KlingVideoApi"], fmt
+        assert str(rows[0]["node_id"]) == "4", fmt
+
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.gate_s_registration(g, [7])
+        assert "KlingVideoApi" in str(exc.value), fmt
+        assert exc.value.evidence["seed_clause_verdict"] == "INDETERMINATE", fmt
+
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(g, frame=(832, 480, 81))
+        assert "KlingVideoApi" in str(exc.value), fmt
+        verdicts[fmt] = rows[0]["why"]
+
+    assert RG.is_api_format(pair["api"]) and not RG.is_api_format(pair["save"])
+    assert set(verdicts) == {"api", "save"}
+
+
+def test_a_namespaced_seed_input_is_read_by_its_last_dotted_segment():
+    """The docstring's stated ground for gating the hosted clause on `not api` was that
+    "in API format inputs are keyed by name and the input-name clause already answers".
+    That holds only while a vendor spells its seed input exactly seed/noise_seed/rand_seed
+    — and this repo's own hosted node namespaces every other input under `model.`."""
+    g = {"5": {"class_type": "SomeVendorThing",
+               "inputs": {"model.noise_seed": 12345, "model.prompt": "x"}}}
+    rows = RG.unrecorded_seed_sources(g)
+    assert [u["class"] for u in rows] == ["SomeVendorThing"]
+    assert "model.noise_seed" in rows[0]["why"]
+
+
+def test_the_hosted_clause_does_not_fire_on_a_class_that_has_a_row():
+    """The red-adjacent direction: an andon that fires on a correct graph is not one
+    anybody keeps. `Wan2ReferenceVideoApi` — the hosted node this repo actually submits —
+    ends in `Api` and carries a `SEED_NODES` row, so it is READ rather than flagged, in
+    both formats."""
+    api = {"6": {"class_type": "Wan2ReferenceVideoApi",
+                 "inputs": {"model": "wan2.7-r2v", "model.prompt": "p", "seed": 7,
+                            "model.resolution": "720P"}}}
+    save = {"nodes": [{"id": 6, "type": "Wan2ReferenceVideoApi", "inputs": [],
+                       "widgets_values": ["wan2.7-r2v", "p", "n", "720P", "16:9", 5,
+                                          7, "fixed"]}]}
+    assert RG.unrecorded_seed_sources(api) == []
+    assert RG.unrecorded_seed_sources(save) == []
+
+
+def test_no_graph_this_repo_builds_is_caught_by_the_widened_api_clause():
+    """The population that must stay green: the clean fixture at the top of this file and
+    the detector-free API graph, in both readings."""
+    assert RG.unrecorded_seed_sources(graph(top=CLEAN_TOP)) == []
+    assert RG.verify(graph(top=CLEAN_TOP))["frame_legality"][0]["legal"] is True
+
+
+# --- W10 amend: the alias table's REVERSE direction is pinned (F-62accd2c) ------------
+
+
+def test_every_alias_key_names_a_ruled_component_row():
+    """The forward direction — every row is matched on its own key — is pinned above by
+    `test_every_ruled_row_is_matched_on_its_own_key_even_with_no_alias`. This is the
+    reverse, and it was pinned nowhere.
+
+    `class_patterns_for` is only ever reached through `rulings_for_class`, which iterates
+    `RULED_COMPONENTS.items()` — so an alias entry whose key is no longer a row is never
+    consulted and never reported. `RULED_COMPONENTS` is a MIRROR of docs/license-map.md,
+    and a re-fetch renaming or retiring a row is a normal, expected edit."""
+    assert set(RG.RULED_COMPONENT_CLASSES) <= set(RG.RULED_COMPONENTS)
+    assert RG.orphaned_component_class_aliases() == []
+
+
+def test_an_orphaned_alias_is_refused_where_a_wrong_table_is_loudest(monkeypatch):
+    """The RED direction, by mutation: rename the row and the alias orphans.
+
+    Measured 2026-09-04 before the fix: on a save-format graph carrying one
+    `DWPreprocessor`, `ruled_node_classes` returned one row ('DWPreprocessor', 'BANNED');
+    renaming the `RULED_COMPONENTS` key 'dwpose' to 'dwpose_ts' while leaving the alias
+    entry under 'dwpose' made `ruled_node_classes` return [] and
+    `class_patterns_for('dwpose_ts')` return only ('dwpose_ts',) — the class clause fell
+    back to matching the row key literally, which is the exact state this table's header
+    describes as the defect it was built to close."""
+    rows = dict(RG.RULED_COMPONENTS)
+    rows["dwpose_ts"] = rows.pop("dwpose")
+    monkeypatch.setattr(RG, "RULED_COMPONENTS", rows)
+
+    assert RG.orphaned_component_class_aliases() == ["dwpose"]
+    with pytest.raises(RG.RouteGate, match=r"alias") as exc:
+        RG.gate_alias_table()
+    assert exc.value.evidence["orphaned"] == ["dwpose"]
+    assert exc.value.evidence["clause"] == "orphaned_component_class_alias"
+
+    # And a graph may not be verified while the table is orphaned — the detector tier the
+    # aliases exist for would pass unseen.
+    with pytest.raises(RG.RouteGate, match=r"alias"):
+        RG.verify(graph(top=CLEAN_TOP))
+
+
+def test_the_alias_table_is_checked_at_import_too():
+    """The module-level derivation: a wrong table is loudest where every tool reads it,
+    so the check runs at import as well as inside `verify`. Pinned behaviourally — the
+    module imported, so it ran and returned."""
+    import ast
+    import inspect as _inspect
+
+    src = _inspect.getsource(RG)
+    calls = [n for n in ast.parse(src).body
+             if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)
+             and getattr(n.value.func, "id", None) == "gate_alias_table"]
+    assert len(calls) == 1, "the import-time call is the module-level one"
+    assert RG.gate_alias_table()["verdict"].startswith("every alias key")
+
+
+def test_a_row_with_no_alias_is_still_not_orphaned():
+    """The green direction of the same reading: the table only ADDS aliases, so the many
+    rows absent from it are matched on their own names and are not members of the orphan
+    population."""
+    assert set(RG.RULED_COMPONENTS) - set(RG.RULED_COMPONENT_CLASSES)
+    assert RG.orphaned_component_class_aliases() == []
+    assert RG.rulings_for_class("DWPreprocessor")[0]["matched_on"] == "dwpose"
+
+
+# --- W10 amend: `frame_legality`'s int refusal is reachable from the supplied path -----
+# (F-ef11d857)
+
+
+def _frame_graph():
+    """A graph with NO checkable latent, so `frame=` is the only frame in play — which is
+    the path the finding is about."""
+    return graph(top=[loader(1, "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"),
+                      sampler(2, 12345, "fixed")])
+
+
+@pytest.mark.parametrize("frame", [
+    (832.9, 480, 81), ("832", "480", "81"), (832, 480.0, 81), (832, 480, True),
+    {"width": 832.9, "height": 480, "length": 81},
+])
+def test_a_frame_that_is_not_three_ints_is_refused_rather_than_coerced(frame):
+    """Wave 8 added the int-type guard at `frame_legality` with its reason written out
+    ("a wrong TYPE is a malformed question and raises") — and it could not fire on the
+    only path a caller supplies a frame, because `_frame_triple` coerced first. Measured
+    2026-09-04: `_frame_triple((832.9, 480.4, 81))` returned `(832, 480, 81)` and
+    `_frame_triple(('832','480','81'))` returned `(832, 480, 81)` — a float truncated and
+    a string parsed, both silently, so the guard downstream saw ints on every call.
+
+    The consequence: a builder that derives a non-integer frame (a division that did not
+    floor) has it silently truncated, and `verify`'s evidence and the `SAVED_ADMISSION_OK`
+    line then quote a frame that is not the number the builder computed — and the
+    supplied-vs-graph clash clause compares the TRUNCATED value, so it cannot see the
+    difference either."""
+    with pytest.raises(RG.RouteGate, match=r"is not an int") as exc:
+        RG.verify(_frame_graph(), frame=frame)
+    assert exc.value.evidence["clause"] in ("frame_type", "frame_triple")
+
+
+def test_the_coercion_is_gone_from_the_reader_itself():
+    """ONE refusal for a malformed frame, rather than a coercion in front of a guard.
+
+    The reader passes the values through untouched and `frame_legality` — which already
+    carries the refusal, and carries it for the graph-read path too — states it. So this
+    asserts the absence of the coercion (the float arrives as a float) rather than a
+    second refusal here."""
+    assert RG._frame_triple((832, 480, 81)) == (832, 480, 81)
+    assert RG._frame_triple({"width": 832, "height": 480, "length": 81}) == (832, 480, 81)
+    assert RG._frame_triple((832.9, 480, 81)) == (832.9, 480, 81)
+    assert RG._frame_triple(("832", "480", "81")) == ("832", "480", "81")
+    with pytest.raises(RG.RouteGate, match=r"is not an int") as exc:
+        RG.frame_legality(*RG._frame_triple((832.9, 480, 81)))
+    assert exc.value.evidence["clause"] == "frame_type"
+
+
+def test_the_shape_refusals_of_the_supplied_frame_are_unchanged():
+    """The clauses that were already there: a two-of-three tuple, a mapping missing a
+    key, and something that is neither."""
+    with pytest.raises(RG.RouteGate, match=r"is not \(width, height, length\)"):
+        RG.verify(_frame_graph(), frame=(832, 480))
+    with pytest.raises(RG.RouteGate, match=r"missing 'length'"):
+        RG.verify(_frame_graph(), frame={"width": 832, "height": 480})
+    with pytest.raises(RG.RouteGate, match=r"is not \(width, height, length\)"):
+        RG.verify(_frame_graph(), frame="832x480x81")
+
+
+def test_the_int_cases_every_builder_supplies_today_still_pass():
+    """Read at the seven `RG.verify(..., frame=...)` call sites: every builder in the
+    tree derives its frame as an int, so this is the population that must not move."""
+    ev = RG.verify(_frame_graph(), frame=(832, 480, 81))
+    supplied = [f for f in ev["frame_legality"] if f["source"] == "supplied"]
+    assert len(supplied) == 1 and supplied[0]["legal"] is True
+    ev = RG.verify(_frame_graph(), frame={"width": 832, "height": 480, "length": 81})
+    assert [f["source"] for f in ev["frame_legality"]] == ["supplied"]
+
+
+# --- W10 routed seed: the table is a MIRROR, and what it mirrors is measured ----------
+#
+# The seed: `RULED_COMPONENTS` carries LoRA / preprocessor rows only, so the licence
+# map's Apache base weights (`wan2.1_vace_14B_fp16`, `umt5_xxl_fp16`, `wan_2.1_vae`) read
+# `NOT IN THIS TABLE` — a licence-map row and a `components()` row are two objects and
+# only one is machine-read.
+#
+# What is recorded here rather than ruled: adding ALLOWED rows for base weights is a
+# LICENCE judgement about which map row governs which served filename, and CLAUDE.md puts
+# that in "a license check recorded in the spec that introduces it". docs/license-map.md
+# is the coordinator's and read-only from this domain. So this census states what IS true
+# of the mirror today, and goes red the moment the map gains a kill the table does not
+# carry — which is the direction that costs something.
+
+LICENSE_MAP = os.path.join(REPO, "docs", "license-map.md")
+
+
+def _license_map_rows():
+    """Every markdown table row in docs/license-map.md, with its own header.
+
+    **The node this census keys on is the MAP's table rows** — the record
+    `RULED_COMPONENTS` calls itself a mirror of — parsed by tracking the most recent
+    header line, because the map's tables do not share a column layout (`| Model |
+    License | Commercial | ... |` and `| Item | Commercial | ... |` both occur).
+    """
+    header, rows = None, []
+    for line in open(LICENSE_MAP, encoding="utf-8").read().splitlines():
+        if not line.startswith("|"):
+            header = None
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if all(set(c) <= set("-: ") for c in cells):
+            continue
+        if header is None:
+            header = cells
+            continue
+        rows.append((header, cells))
+    return rows
+
+
+def _map_kills():
+    """Map rows whose Commercial column reads NO — the rows a gate must be able to fail
+    on. Keyed on the COLUMN NAMED "Commercial", resolved per table from its own header,
+    never on a fixed index."""
+    out = []
+    for header, cells in _license_map_rows():
+        low = [h.lower() for h in header]
+        if "commercial" not in low:
+            continue                      # a fit / unverified table: no verdict column
+        i = low.index("commercial")
+        if i >= len(cells):
+            continue
+        if re.search(r"\bNO\b", cells[i]):
+            out.append((cells[0], cells[i]))
+    return out
+
+
+#: Map kills with NO mirror row in `RULED_COMPONENTS`, measured 2026-09-04, each with the
+#: reason it carries no row TODAY. A RATCHET: it may only shrink, and a new unmirrored
+#: kill fails the census below rather than joining this set silently. Recorded, not ruled
+#: — the advisor owns whether each earns a row.
+UNMIRRORED_MAP_KILLS = {
+    "Depth Anything V2 Large":
+        "a depth-estimator tier. armature renders depth from geometry (channels.py), so "
+        "no served filename or node class for it has ever entered a graph — which is the "
+        "same thing that was true of `dwpose` until a served template wired "
+        "`DWPreprocessor`",
+    "Depth Anything V3 (weights)":
+        "same tier, same reason, and the map's own note that the CODE is Apache while "
+        "the WEIGHTS are CC-BY-NC is exactly the split a filename row would carry",
+    "AMASS":
+        "a mocap DATASET, not a weight file or a node class: it cannot appear in a graph "
+        "at all, and the map's ruling reaches this pipeline through the released weights "
+        "of the text-to-motion line, none of which are loadable here",
+    "Tripo":
+        "a partner SERVICE (partner/3d), refused at the provider tier rather than by a "
+        "filename — `components()` reads weight filenames and node classes and a hosted "
+        "provider is neither",
+}
+
+
+def test_the_map_kill_population_is_the_one_measured_today():
+    """SIZE and MEMBERSHIP of the derived population first, so a new kill row in the map
+    fails loudly here instead of quietly widening the gap."""
+    kills = [name for name, _ in _map_kills()]
+    assert len(kills) == 11, kills
+    for expect in ("CausVid", "OpenPose (CMU)", "DWPose / ViTPose WEIGHTS",
+                   "Depth Anything V2 Large", "AMASS"):
+        assert any(expect in k for k in kills), expect
+
+
+def _unmirrored_kills():
+    """Map kills with no `RULED_COMPONENTS` row, derived from both tables at call time
+    (so a mutated table is read, which is what makes the census provably red)."""
+    out = []
+    for name, _verdict in _map_kills():
+        low = name.lower()
+        if any(key in low for key in RG.RULED_COMPONENTS):
+            continue
+        out.append(name)
+    return out
+
+
+def test_the_mirror_census_goes_red_when_a_row_is_retired(monkeypatch):
+    """The RED direction, by mutation: drop the `causvid` row — the shape a licence-map
+    re-fetch produces when a row is renamed — and the kill it mirrors is reported as
+    unmirrored and unnamed. A census that cannot fail is not a census."""
+    rows = {k: v for k, v in RG.RULED_COMPONENTS.items() if k != "causvid"}
+    monkeypatch.setattr(RG, "RULED_COMPONENTS", rows)
+    unmirrored = _unmirrored_kills()
+    assert any("CausVid" in n for n in unmirrored), unmirrored
+    assert not any(k in n for n in unmirrored for k in UNMIRRORED_MAP_KILLS
+                   if "CausVid" in n)
+
+
+def test_every_map_kill_is_mirrored_or_named_with_its_reason():
+    """The mirror's load-bearing direction: a row the map KILLS must be one a script can
+    fail on, or be named here with why it cannot be. 7 of the 11 kills are mirrored
+    today; the four that are not are the ratchet above."""
+    unmirrored = _unmirrored_kills()
+    named = [n for n in unmirrored
+             if any(k in n for k in UNMIRRORED_MAP_KILLS)]
+    assert sorted(named) == sorted(unmirrored), (
+        "a licence-map kill has no RULED_COMPONENTS row and no recorded reason: "
+        f"{sorted(set(unmirrored) - set(named))}")
+    assert len(unmirrored) == 4, unmirrored
+
+
+def test_every_mirror_row_names_something_the_map_names():
+    """The reverse direction: the table may not invent a ruling the record does not
+    carry. Every row key appears in the map's text (measured 2026-09-04, 11 of 11)."""
+    text = open(LICENSE_MAP, encoding="utf-8").read().lower()
+    missing = [k for k in RG.RULED_COMPONENTS if k not in text]
+    assert missing == [], missing
+
+
+def test_a_base_weight_reads_not_in_this_table_and_that_is_recorded_not_silent():
+    """What the seed measured, pinned as the current state rather than dressed up: the
+    map's Apache base weights are UNKNOWN to the mirror, and `components()` says so in
+    those words rather than reporting them clean. A shrug that says it is a shrug is the
+    contract the table's own header states ("A component absent from this table is
+    UNKNOWN, which is reported, never silently treated as clean")."""
+    for filename in ("wan2.1_vace_14B_fp16.safetensors", "umt5_xxl_fp16.safetensors",
+                     "wan_2.1_vae.safetensors"):
+        assert RG.rulings_for(filename) == []
+        g = {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": filename}}}
+        comp = RG.components(g)
+        assert [c["verdict"] for c in comp] == ["NOT IN THIS TABLE"], filename
+        assert comp[0]["ruling"]["reason"] == "check docs/license-map.md"
+        # And it is not refused: `verify` halts on BANNED and EXCLUDED, not on UNKNOWN.
+        assert [c["verdict"] for c in RG.components(g)] == ["NOT IN THIS TABLE"]

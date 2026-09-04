@@ -207,7 +207,9 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     #       and raises first. A refusal site disappearing is as much a finding as one
     #       appearing, and this census is where it shows.
     # 51 + 3 - 1 = 53. Re-pinned with the reason rather than relaxed (wave 3 section 0).
-    assert len(RAISE_SITES["RouteGate"]) == 53, sorted(RAISE_SITES["RouteGate"])
+    # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch added one RouteGate raise site
+    # (51 -> 52 on its own branch); merged = 53 + 1 = 54, MEASURED on the merged tree.
+    assert len(RAISE_SITES["RouteGate"]) == 54, sorted(RAISE_SITES["RouteGate"])
     files = {path for path, _ in RAISE_SITES["RouteGate"]}
     # `build_lora_arm_payload.py` joined at the wave-8 merge: its new `gate_base_licence`
     # raises RouteGate on a banned node class in the operator's baseline graph.

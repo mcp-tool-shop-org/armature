@@ -196,9 +196,11 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # re-derived on the merged tree rather than added up from two branches.
         "assembly": 18, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
         "gates": 20, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
-        "rig_gates": 12, "route_gates": 34, "startframe": 19, "turnaround": 9, "walk": 3,
+        "rig_gates": 15, "route_gates": 35, "startframe": 19, "turnaround": 9, "walk": 3,
     }, with_gates
-    assert sum(with_gates.values()) == 155
+    # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
+    # route_gates 34 -> 35 in the same wave; merged = 155 + 3 + 1 = 159, MEASURED on the merged tree.
+    assert sum(with_gates.values()) == 159
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():
