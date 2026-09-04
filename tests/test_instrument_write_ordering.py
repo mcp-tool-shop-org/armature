@@ -465,6 +465,56 @@ def owners_of(refusal):
     """The domains that must make the move for `refusal` \u2014 derived, never typed."""
     return sorted({owning_domain(t) for t in tools_naming(refusal)})
 
+
+class ReadBackTableViolation(Exception):
+    """One clause of the read-back table's contract, broken by the table it was handed."""
+
+
+def read_back_table_violations(readback=None, not_yet_moved=None, *, ratchet=None,
+                               source=None):
+    """The two clauses of the exemption table's contract, over TABLES PASSED IN.
+
+    WAVE 16, F-d18443ac. The red proof for F-385f2b60 re-implemented both clauses inline
+    over literals it built itself, so it never touched the checker. Measured by driving
+    both in process against the live table: with the exact placeholder the finding named
+    (`"REVIEW: not a read-back \u2014 a strand the coordinator did not move"`) restored as
+    `READBACK_REASONS['gate_r_round_trip']`'s reason, the real checker FAILED and the red
+    proof still PASSED. A red proof that cannot go red is not a proof.
+
+    So the clauses live here, taking their tables the way `stranded_by_tool` takes its
+    `source` \u2014 the checker calls this on the module constants and the red proof calls the
+    SAME function on a table carrying the placeholder. It RAISES rather than asserting,
+    because `-O` deletes an `assert` in a helper under `tests/`
+    (`test_gate_survives_optimize.py`), and this one decides whether a check ran at all.
+    """
+    readback = READBACK_REASONS if readback is None else readback
+    not_yet_moved = NOT_YET_MOVED if not_yet_moved is None else not_yet_moved
+    ratchet = REFUSALS_BELOW_THE_FIRST_WRITE if ratchet is None else ratchet
+    read_source = _source if source is None else source.__getitem__
+
+    def naming(refusal):
+        return sorted(t for t, names in ratchet.items() if refusal in names)
+
+    for refusal, (call, why) in sorted(readback.items()):
+        if not call or not why or "REVIEW" in why:
+            raise ReadBackTableViolation(
+                f"{refusal!r} is excused as a read-back with reason {why!r} and call "
+                f"{call!r}; an empty reason or a REVIEW placeholder is the self-declaring "
+                f"exemption F-385f2b60 was paid to end")
+        for tool in naming(refusal):
+            if call not in read_source(tool):
+                raise ReadBackTableViolation(
+                    f"{refusal} is excused in {tool} as a read-back performed by {call!r}, "
+                    f"and {call!r} does not appear in tools/{tool}.py; the reason names a "
+                    f"call the tool does not make")
+
+    for refusal, why in sorted(not_yet_moved.items()):
+        if not why or "REVIEW" in why:
+            raise ReadBackTableViolation(
+                f"{refusal!r} sits in the backlog with reason {why!r}; a backlog entry that "
+                f"declares nothing is the placeholder, not a reason")
+    return True
+
 #: The old name, kept as an alias for one wave so a sibling worktree importing it does not
 #: break at merge. It is the same object; the list is no longer bpy-only.
 REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL = REFUSALS_BELOW_THE_FIRST_WRITE
@@ -582,9 +632,38 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     names = sum(len(v) for v in derived.values())
     assert names == 51, sorted(derived.items())
     sites = stranded_site_count(members)
+    # WAVE 16, F-9b4d01ef: the message used to name 72 — the tests branch's own measurement,
+    # which the wave-14 merge overturned when it re-derived 27/51/69 on the merged tree and
+    # updated the constants, the `==` targets and the comment above but not this f-string.
+    # A seat landing a move read "N sites; 72 were measured" beside an assertion demanding
+    # 69 and had every reason to retype the wrong number. The message quotes the value it
+    # ASSERTS; the overturned measurement stays in the comment above, where this file keeps
+    # its corrections.
     assert sites == 69, (
-        f"{sites} refusal SITES below a first write; 72 were measured on 2026-09-04 over "
-        f"the full derived population, and the number falls as the moves land")
+        f"{sites} refusal SITES below a first write; this pin asserts 69, re-derived on the "
+        f"merged tree 2026-09-04 (see the comment above for the measurement it overturned), "
+        f"and the number falls as the moves land")
+
+
+def test_no_assertion_message_in_the_suite_quotes_a_ceiling_it_does_not_assert():
+    """F-9b4d01ef, as the POPULATION rather than as the two f-strings that carried it.
+
+    The defect is not "these two messages are stale" — it is that a failure message is the
+    thing a seat reads when a ratchet fires, and nothing in the suite compared what a
+    message CLAIMS was measured against what its own assertion demands. Walked over every
+    `tests/test_*.py`, keyed narrowly on messages that claim a measurement ("N were
+    measured", "N was the count"), so a date, a slice bound or an exit code in a message is
+    not an offender and a wave number is struck out before the numbers are read.
+
+    Derivation:
+        python -c "import sys;sys.path.insert(0,'tests');import _census_nodes as CN;\\
+        print(CN.messages_quoting_a_number_they_do_not_assert())"
+    """
+    stale = CN.messages_quoting_a_number_they_do_not_assert()
+    assert stale == [], (
+        "an assertion message names a measurement that is not the value it asserts; a seat "
+        "landing a change reads the message as the current pin and retypes the wrong "
+        f"number into the constant: {stale}")
 
 
 def test_a_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():
@@ -671,16 +750,11 @@ def test_the_read_back_table_is_read_and_says_what_it_means():
     assert set(READBACK_REASONS) & set(NOT_YET_MOVED) == set(), sorted(
         set(READBACK_REASONS) & set(NOT_YET_MOVED))
 
-    for refusal, (call, why) in sorted(READBACK_REASONS.items()):
-        assert call and why and "REVIEW" not in why, (refusal, call, why)
-        for tool in tools_naming(refusal):
-            assert call in _source(tool), (
-                f"{refusal} is excused in {tool} as a read-back performed by {call!r}, and "
-                f"{call!r} does not appear in tools/{tool}.py; the reason names a call the "
-                f"tool does not make")
+    # Clauses 2 and 3 are `read_back_table_violations`, called on the module constants —
+    # the SAME function the red proof below drives over a mutated table (F-d18443ac).
+    assert read_back_table_violations() is True
 
-    for refusal, why in sorted(NOT_YET_MOVED.items()):
-        assert why and "REVIEW" not in why, (refusal, why)
+    for refusal in sorted(NOT_YET_MOVED):
         owners = owners_of(refusal)
         assert owners and set(owners) <= RUN_DOMAINS, (refusal, owners)
 
@@ -690,10 +764,12 @@ def test_the_read_back_table_is_read_and_says_what_it_means():
     #     print(len(M.READBACK_REASONS), len(M.NOT_YET_MOVED))"
     # WAVE-14 MERGE (coordinator, 2026-09-04): 12 / 35 → 12 / 29, measured after the six names left.
     assert len(READBACK_REASONS) == 12, sorted(READBACK_REASONS)
+    # WAVE 16, F-9b4d01ef: the message named 35, which the wave-14 merge overturned when it
+    # re-derived 12 / 29 on the merged tree. Same correction as the sites message above.
     assert len(NOT_YET_MOVED) == 29, (
         f"{len(NOT_YET_MOVED)} refusals still sit below a first write without reading it "
-        f"back; 35 were measured on 2026-09-04 and the number may only fall — a move "
-        f"deletes its entry in the commit that makes it")
+        f"back; this pin asserts 29, re-derived on the merged tree 2026-09-04, and the "
+        f"number may only fall — a move deletes its entry in the commit that makes it")
 
 
 def test_the_read_back_table_check_is_red_on_a_placeholder_and_on_a_reason_that_names_nothing():
@@ -702,22 +778,72 @@ def test_the_read_back_table_check_is_red_on_a_placeholder_and_on_a_reason_that_
     Reverting F-385f2b60 means putting a `REVIEW:` placeholder back, or leaving a reason
     whose named call the tool never makes. Both are exercised here, so the check is shown to
     fail on the exact input it was written for rather than on a hypothetical.
+
+    WAVE 16, F-d18443ac — this proof used to exercise a COPY of the checker. Both
+    `pytest.raises` blocks re-implemented the clauses inline over literals the test built
+    itself, so neither ever called the assertion under test. Measured by driving both in
+    process against the live table: with the exact placeholder below restored as
+    `READBACK_REASONS['gate_r_round_trip']`'s reason, the REAL checker failed and this
+    proof still passed. It now drives `read_back_table_violations` — the function the
+    checker calls — over a COPY of the live table carrying each defect in turn, the way its
+    sibling two functions up drives `stranded_by_tool` over mutated source.
     """
-    real_call, _real_why = READBACK_REASONS["gate_r_round_trip"]
+    real_call, real_why = READBACK_REASONS["gate_r_round_trip"]
 
+    # BASELINE: the live tables satisfy the contract, or nothing below means anything.
+    assert read_back_table_violations() is True
+
+    # 1. the `REVIEW:` placeholder, restored into a COPY of the LIVE table and driven
+    #    through the real checker — the literal 34 of the 47 entries carried.
     placeholder = "REVIEW: not a read-back — a strand the coordinator did not move"
-    assert "REVIEW" in placeholder            # the literal 34 entries carried
-    with pytest.raises(AssertionError):
-        for refusal, why in {"gate_ink": placeholder}.items():
-            assert why and "REVIEW" not in why, (refusal, why)
+    assert "REVIEW" in placeholder
+    with_placeholder = dict(READBACK_REASONS)
+    with_placeholder["gate_r_round_trip"] = (real_call, placeholder)
+    with pytest.raises(ReadBackTableViolation, match="REVIEW placeholder"):
+        read_back_table_violations(readback=with_placeholder)
 
-    # …and a reason that names a call the tool does not make.
-    with pytest.raises(AssertionError):
-        for tool in tools_naming("gate_r_round_trip"):
-            assert "read_back_a_call_pack_pose_pack_never_makes" in _source(tool), tool
-    # the real one is found, or the comparison above says nothing
+    # …and in the backlog table, whose entries carry a reason and no call.
+    backlog_placeholder = dict(NOT_YET_MOVED)
+    backlog_placeholder[sorted(NOT_YET_MOVED)[0]] = placeholder
+    with pytest.raises(ReadBackTableViolation, match="placeholder, not a reason"):
+        read_back_table_violations(not_yet_moved=backlog_placeholder)
+
+    # 2. a reason that names a call the tool does not make — same table, one field moved.
+    names_nothing = dict(READBACK_REASONS)
+    names_nothing["gate_r_round_trip"] = (
+        "read_back_a_call_pack_pose_pack_never_makes", real_why)
+    with pytest.raises(ReadBackTableViolation, match="does not appear in"):
+        read_back_table_violations(readback=names_nothing)
+
+    # 3. an EMPTY reason, the third shape the clause bounds.
+    empty = dict(READBACK_REASONS)
+    empty["gate_r_round_trip"] = (real_call, "")
+    with pytest.raises(ReadBackTableViolation, match="REVIEW placeholder"):
+        read_back_table_violations(readback=empty)
+
+    # the real one is found, or the comparisons above say nothing
     for tool in tools_naming("gate_r_round_trip"):
         assert real_call in _source(tool), tool
+
+
+def test_the_read_back_checker_and_its_red_proof_are_the_same_function():
+    """F-d18443ac's own fix, asserted rather than trusted.
+
+    The shape `test_sheet_argv_smoke.py::test_the_two_walks_are_literally_the_same_function`
+    already uses: not "these two agree today", but "there is one implementation". A red
+    proof that re-implements the clause it is proving can go green over a live hole, which
+    is exactly what this file's did for two waves.
+    """
+    import inspect
+
+    checker = inspect.getsource(test_the_read_back_table_is_read_and_says_what_it_means)
+    proof = inspect.getsource(
+        test_the_read_back_table_check_is_red_on_a_placeholder_and_on_a_reason_that_names_nothing)
+    assert "read_back_table_violations(" in checker
+    assert "read_back_table_violations(" in proof
+    for text, who in ((checker, "the checker"), (proof, "the red proof")):
+        assert '"REVIEW" not in why' not in text, (
+            f"{who} re-implements the placeholder clause inline; the clause has one home")
 
 
 # ---------------------------------------- THE RED PROOF: the shape that hides from the name

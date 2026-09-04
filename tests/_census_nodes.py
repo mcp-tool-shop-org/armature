@@ -32,6 +32,7 @@ non-plugin helper and `ci.yml`'s `-O` leg would report green over it
 import ast
 import glob
 import os
+import re
 import sys
 
 TESTS = os.path.dirname(os.path.abspath(__file__))
@@ -852,4 +853,55 @@ def output_gated_tests(trees=None):
                     gated = True
             if gated:
                 out.add((mod, node.name, node.lineno))
+    return out
+
+
+# ------------------------------------------- the historical-number-in-a-message node (w16)
+
+
+#: The phrases this suite uses when an assertion message quotes an EARLIER measurement.
+HISTORICAL_PHRASES = ("were measured", "was measured", "was the count", "were the count",
+                      "was the number", "were counted")
+
+
+def messages_quoting_a_number_they_do_not_assert(trees=None):
+    """`[(module, line, asserted, quoted)]` — a message naming a ceiling it does not assert.
+
+    WAVE 16, F-9b4d01ef. Two assertions in `test_instrument_write_ordering.py` failed with
+    "N sites; 72 were measured" beside `assert sites == 69` — the tests branch's own
+    pre-merge numbers, left in the f-strings when the merge re-derived the constants, the
+    `==` targets and the comments. A seat landing a move reads the message as the current
+    pin, because that is what a failure message is for, and retypes the wrong number into
+    the constant.
+
+    Keyed narrowly on purpose: only messages that CLAIM a measurement (the phrases above)
+    are read, so a slice bound, an exit code or a date in a message is not an offender.
+    """
+    trees = test_module_trees() if trees is None else trees
+    out = []
+    for mod, tree in sorted(trees.items()):
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assert) or node.msg is None:
+                continue
+            test = node.test
+            if not (isinstance(test, ast.Compare) and len(test.ops) == 1
+                    and isinstance(test.ops[0], (ast.Eq, ast.LtE, ast.GtE))):
+                continue
+            wanted = test.comparators[0]
+            if not (isinstance(wanted, ast.Constant) and isinstance(wanted.value, int)
+                    and not isinstance(wanted.value, bool)):
+                continue
+            msg = ast.unparse(node.msg)
+            if not any(phrase in msg for phrase in HISTORICAL_PHRASES):
+                continue
+            # A wave number, a finding id and a date are not ceilings. Struck out BEFORE the
+            # numbers are read, so the census reports a stale pin and never a citation.
+            text = re.sub(r"(?i)wave[-\s]*\d+", " ", msg)
+            text = re.sub(r"(?i)F-[0-9a-f]{6,}", " ", text)
+            text = re.sub(r"\d{4}-\d{2}-\d{2}", " ", text)
+            quoted = {int(tok) for tok in re.findall(r"(?<![\w.])(\d{1,6})(?![\w.])", text)}
+            quoted -= {wanted.value}
+            quoted = {n for n in quoted if not (1 <= n <= 12 or 2020 <= n <= 2100)}
+            if quoted:
+                out.append((mod, node.lineno, wanted.value, sorted(quoted)))
     return out
