@@ -28,6 +28,23 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from armature_core.errors import ArmatureError  # noqa: E402
+
+class ZoomSheetError(ArmatureError):
+    """The zoom sheet cannot be cut as asked.
+
+    One typed refusal for this tool, carrying an evidence dict, rather than the bare
+    `SystemExit(<str>)` these checks used to raise. A bare `SystemExit` carries no
+    measurement, cannot be caught by class, and is indistinguishable at the process
+    boundary from argparse's own usage exit — which is the whole reason the repo's
+    refusals are typed.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
 
 def crop_box(cx, cy, size, width, height):
     """A `size x size` box centred on (cx, cy), shifted to stay inside the frame.
@@ -66,7 +83,10 @@ def main(argv=None):
         rec = json.load(fh)
     names = rec["keypoint_names"]
     if a.site not in names:
-        raise SystemExit(f"{a.site!r} is not one of {names}")
+        raise ZoomSheetError(
+            f"--site {a.site!r} is not one of the keypoints this record was projected "
+            f"with; the sheet would be located on a landmark nobody measured",
+            {"gate": "SITE", "site": a.site, "keypoint_names": names})
     k = names.index(a.site)
     idx = [int(v) for v in a.at.split(",") if v.strip() != ""]
 
@@ -75,12 +95,18 @@ def main(argv=None):
         path = os.path.join(a.frames, f"{i:05d}.png")
         img = cv2.imread(path)
         if img is None:
-            raise SystemExit(f"cv2 could not read {path}")
+            raise ZoomSheetError(
+                f"cv2 could not read {path}; the tile it would contribute is not a crop "
+                f"of anything",
+                {"gate": "READ", "path": path, "frame": i,
+                 "frames_dir": a.frames})
         h, w = img.shape[:2]
         if [w, h] != rec["resolution"]:
-            raise SystemExit(
+            raise ZoomSheetError(
                 f"{path} is {w}x{h} and the keypoints were projected at "
-                f"{rec['resolution']}; a crop located across resolutions points nowhere")
+                f"{rec['resolution']}; a crop located across resolutions points nowhere",
+                {"gate": "RESOLUTION", "path": path, "frame": i,
+                 "frame_size": [w, h], "projected_at": rec["resolution"]})
         cx, cy, _c = rec["body"][i][k]
         box, moved = crop_box(cx, cy, a.crop, w, h)
         cut = img[box[1]:box[3], box[0]:box[2]]

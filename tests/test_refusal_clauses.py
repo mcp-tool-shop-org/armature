@@ -140,6 +140,14 @@ RECORDED_POPULATION = frozenset({
     "StartFrameGate", "SticksGate", "TierGate", "TrackingError", "TurnaroundAlphaGate",
     "TurnaroundCropGate", "TurnaroundGate", "TurnaroundPlanRefusal", "WalkError",
     "WalkGate",
+    # Joined 2026-09-04 (wave 10, instruments-measure). The census caught the growth
+    # loudly, which is what it is for: `ReviewClipError`, `ShotsetSheetError` and
+    # `ZoomSheetError` are new typed classes replacing thirteen bare
+    # `raise SystemExit(<str>)` refusals, and `SheetPopulationError` crossed from one
+    # raise site to two when `make_lift_sheet.subject_box` stopped raising a string.
+    # (`ABClipError` is raised from exactly one site, so its name IS its clause and the
+    # derivation deliberately leaves it out.)
+    "ReviewClipError", "SheetPopulationError", "ShotsetSheetError", "ZoomSheetError",
 })
 
 #: Re-derived 2026-09-04 and EMPTY. There is no class this census excuses: a class raised
@@ -163,7 +171,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     the derivation cannot see it. The typed set is therefore checked by direction — the
     two names that ARE raised must still be policed — rather than by containment.
     """
-    assert len(POLICED) == 71, sorted(POLICED)
+    assert len(POLICED) == 75, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -440,3 +448,122 @@ def test_the_policed_population_is_large_enough_for_the_census_to_mean_something
     assert total >= 600, (
         f"only {total} policed raises found; the walk is not reaching this suite, and "
         f"an empty population would make the census above vacuous")
+
+
+# ------------------------------- a deliberate refusal is a typed error, not a `SystemExit`
+#
+# Wave 10, routed from builders. A `raise SystemExit(<str>)` carries no measurement, cannot
+# be caught by class, and at the process boundary is indistinguishable from argparse's own
+# usage exit — which is the whole reason this repo's refusals are typed and carry an
+# evidence dict. Thirteen such sites sat in the instruments-measure domain
+# (`encode_control`, `make_ab_clip`, `make_lift_sheet`, `make_shotset_sheet` x6,
+# `make_zoom_sheet` x3, `measure_smoothness` x2), each one a deliberate refusal written as
+# a string.
+#
+# THE NODE THIS CENSUS KEYS ON is the `raise` statement itself, walked by AST over every
+# `tools/*.py` — not a name pattern, not a grep for "SystemExit", and not the module's
+# import list. `raise SystemExit(main())` in a `__main__` block is a different object: its
+# argument is a Call, it is the exit convention rather than a refusal, and it is excluded by
+# looking at what is being raised rather than at the class name.
+
+import ast as _ast  # noqa: E402
+import glob as _glob  # noqa: E402
+
+#: Named, dated, and re-derived below: `fetch_run.py` is the BUILDERS domain's file in the
+#: wave-10 frozen map. Its four sites are that domain's to convert (its amend brief carries
+#: them); this row is asserted to be a subset of the derived population so it cannot rot
+#: into an exemption for a file that no longer has the defect.
+STRING_SYSTEMEXIT_EXEMPT = {"fetch_run.py"}
+
+
+def _string_systemexit_sites(path):
+    """Every `raise SystemExit(<string-valued expression>)` in one file, by AST.
+
+    A constant, an f-string, or a concatenation — the three spellings a message takes. An
+    argument that is a Call (`SystemExit(main())`) is the exit convention, not a refusal.
+    """
+    with open(path, encoding="utf-8") as fh:
+        tree = _ast.parse(fh.read())
+    out = []
+    for node in _ast.walk(tree):
+        if not (isinstance(node, _ast.Raise) and isinstance(node.exc, _ast.Call)):
+            continue
+        func = node.exc.func
+        if not (isinstance(func, _ast.Name) and func.id == "SystemExit"):
+            continue
+        if not node.exc.args:
+            continue
+        arg = node.exc.args[0]
+        if isinstance(arg, (_ast.Constant, _ast.JoinedStr, _ast.BinOp)):
+            out.append(node.lineno)
+    return out
+
+
+def _string_systemexit_census():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    found = {}
+    for path in sorted(_glob.glob(os.path.join(root, "tools", "*.py"))):
+        sites = _string_systemexit_sites(path)
+        if sites:
+            found[os.path.basename(path)] = sites
+    return found
+
+
+def test_no_tool_refuses_with_a_bare_string_system_exit():
+    """The population is walked, so a fourteenth site added tomorrow fails here."""
+    found = _string_systemexit_census()
+    offenders = {k: v for k, v in found.items() if k not in STRING_SYSTEMEXIT_EXEMPT}
+    assert offenders == {}, offenders
+
+
+def test_the_exemption_is_a_subset_of_the_population_and_still_earns_it():
+    """An exemption asserted to be a SUBSET of the derived population, and checked against
+    the REASON it is exempt — the file belongs to another domain in this wave's frozen map
+    — rather than against a proxy. When builders land their half, this set empties and the
+    assertion below is what fails, loudly, rather than the row quietly outliving the defect.
+    """
+    found = _string_systemexit_census()
+    assert STRING_SYSTEMEXIT_EXEMPT <= set(found), (sorted(STRING_SYSTEMEXIT_EXEMPT),
+                                                    sorted(found))
+
+
+def test_the_census_goes_red_on_a_module_that_refuses_with_a_string(tmp_path):
+    """The falsifiability fixture: a temp module carrying each of the three spellings, and
+    the `raise SystemExit(main())` exit convention, which must NOT be counted."""
+    p = tmp_path / "make_fourteenth_thing.py"
+    p.write_text(
+        "def a():\n"
+        "    raise SystemExit('plain')\n"
+        "def b(x):\n"
+        "    raise SystemExit(f'interpolated {x}')\n"
+        "def c(x):\n"
+        "    raise SystemExit('concatenated ' + str(x))\n"
+        "def main():\n"
+        "    return 0\n"
+        "if __name__ == '__main__':\n"
+        "    raise SystemExit(main())\n", encoding="utf-8")
+    assert _string_systemexit_sites(str(p)) == [2, 4, 6]
+
+
+def test_every_converted_refusal_carries_an_evidence_dict():
+    """The other half: a typed class is not the point on its own — the measurement that
+    fired the refusal is. Each of the six modules is exercised on the input that used to
+    reach a `SystemExit`, and the evidence dict must name its gate."""
+    import make_ab_clip
+    import make_shotset_sheet
+    import make_zoom_sheet
+
+    with pytest.raises(make_ab_clip.ABClipError) as e:
+        make_ab_clip.frame_paths(os.path.dirname(os.path.abspath(__file__)))
+    assert e.value.evidence["gate"] == "FRAMES"
+
+    with pytest.raises(make_shotset_sheet.ShotsetSheetError) as e:
+        make_shotset_sheet.load_set(os.path.dirname(os.path.abspath(__file__)))
+    assert e.value.evidence["gate"] == "MANIFEST"
+
+    # every converted class is one of this repo's own errors, catchable as a family
+    from armature_core.errors import ArmatureError
+
+    for cls in (make_ab_clip.ABClipError, make_shotset_sheet.ShotsetSheetError,
+                make_zoom_sheet.ZoomSheetError):
+        assert issubclass(cls, ArmatureError), cls

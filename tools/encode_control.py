@@ -422,7 +422,10 @@ def main(argv=None):
         return 0
 
     if not args.frames or not args.out:
-        raise SystemExit("--frames and --out are required unless --survey")
+        raise EncodeFailure(
+            "--frames and --out are required unless --survey",
+            {"gate": "ARGS", "frames": args.frames, "out": args.out,
+             "survey": bool(args.survey)})
     # ---- the ONE parser. `compose_over_named_plate`'s docstring states the contract the
     #      wave-6 sweep delivered -- "there is one refusal, one composite and one record
     #      shape" -- and the composite and the record WERE one implementation while the

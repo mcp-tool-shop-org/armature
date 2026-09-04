@@ -37,10 +37,31 @@ import argparse
 import json
 import math
 import os
+import sys
 
 from PIL import Image, ImageDraw
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from armature_core.errors import ArmatureError  # noqa: E402
+
 TOOL_VERSION = "E10.1"
+
+
+class ABClipError(ArmatureError):
+    """The A/B composite cannot be built as asked.
+
+    One typed refusal for this tool, carrying an evidence dict, rather than the bare
+    `SystemExit(<str>)` these checks used to raise. A bare `SystemExit` carries no
+    measurement, cannot be caught by class, and is indistinguishable at the process
+    boundary from argparse's own usage exit — which is the whole reason the repo's
+    refusals are typed.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
 
 
 def frame_paths(directory):
@@ -48,7 +69,12 @@ def frame_paths(directory):
     names = [n for n in os.listdir(directory)
              if n.lower().endswith(".png") and os.path.splitext(n)[0].isdigit()]
     if not names:
-        raise SystemExit(f"{directory} carries no NNNNN.png frames")
+        raise ABClipError(
+            f"{directory} carries no NNNNN.png frames; there is nothing to lay beside "
+            f"the other arm",
+            {"gate": "FRAMES", "frames_dir": directory,
+             "png_files": sorted(n for n in os.listdir(directory)
+                                 if n.lower().endswith(".png"))[:16]})
     return [os.path.join(directory, n)
             for n in sorted(names, key=lambda n: int(os.path.splitext(n)[0]))]
 
