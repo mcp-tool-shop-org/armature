@@ -93,17 +93,84 @@ def _resolve_db(explicit):
     return explicit or os.environ.get(DB_ENV) or BINDING.db_default()      # noqa: F821
 
 
+def _value_flags():
+    """The flags that CONSUME the token after them, derived from the parsers.
+
+    Keyed on the `add_argument` calls themselves — this binding's own parser below and
+    the shared CLI's, read out of `record_index.cli.main`'s source by AST — rather than
+    typed, so a value-taking flag added upstream joins the set the day it lands. An
+    option with an `action=` keyword (`store_true`) takes no value and is excluded.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    flags = set()
+    for src in (inspect.getsource(_dispatch), _shared_cli_source()):
+        if not src:
+            continue
+        try:
+            tree = ast.parse(textwrap.dedent(src))
+        except SyntaxError:                                  # pragma: no cover
+            continue
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "add_argument"):
+                continue
+            if any(kw.arg == "action" for kw in node.keywords):
+                continue
+            for arg in node.args:
+                if (isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                        and arg.value.startswith("-")):
+                    flags.add(arg.value)
+    return flags
+
+
+def _shared_cli_source():
+    """The shared CLI's own parser source, or None if it cannot be read.
+
+    Read rather than assumed: `--limit` and `--table` are the shared surface's, not this
+    binding's, and a list of them typed here would be a claim about another package.
+    """
+    import inspect
+
+    try:
+        return inspect.getsource(_cli.main)
+    except (OSError, TypeError):                             # pragma: no cover
+        return None
+
+
 def _peek_verb(argv):
-    """The first non-flag token. Read before parsing, because which parser runs
-    depends on it."""
+    """The first non-flag token that is not a flag's VALUE. Read before parsing, because
+    which parser runs depends on it.
+
+    It used to return the first token not starting with `-`, so in the
+    space-separated `--db PATH health` form the token it returned was the PATH.
+    Measured 2026-09-04: `armature_index.py --db C:/tmp/nonexistent.db health` printed
+    `error: invalid choice: 'C:/tmp/nonexistent.db' (choose from 'build','verify','q',
+    'claims','health')` and exited 1, while `--db=C:/tmp/nonexistent.db health` reached
+    the verb and printed `state INDEX_MISSING`, exit 4 — and `_print_help` advertises the
+    space form. The refusal below was written to stop exactly this class of unhelpful
+    message and produced one: an operator was told their database path is an invalid verb.
+    """
+    value_flags = _value_flags()
+    skip = False
     for a in argv:
-        if not a.startswith("-"):
-            return a
+        if skip:
+            skip = False
+            continue
+        if a.startswith("-"):
+            skip = a in value_flags          # `--db=PATH` consumes nothing after it
+            continue
+        return a
     return None
 
 
 def _print_help():
-    print("usage: %s {%s} [term] [--db PATH] [--limit N] [--table T] [--debug]"
+    # `--db=PATH`, the form the dispatcher accepts and this line used to contradict. The
+    # space form works too now, and both are pinned by tests/test_record_index_binding.py.
+    print("usage: %s {%s} [term] [--db=PATH] [--limit=N] [--table=T] [--debug]"
           % (_cli.prog_name(), ",".join(VERBS)))
     print("\nthe derived SQLite+FTS5 index over the armature record\n")
     print("verbs:")
