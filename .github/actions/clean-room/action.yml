@@ -1,5 +1,5 @@
-# The one packaging leg: build the wheel and the sdist, check the metadata, install the
-# wheel into a CLEAN venv and RUN it from that install.
+# The one packaging leg: build the wheel and the sdist, check the metadata, and install and
+# RUN each of them from its own CLEAN venv.
 #
 # WHY IT IS AN ACTION AND NOT A STEP IN EACH WORKFLOW. release.yml's verify job built both
 # artifacts and ran `twine check` on the METADATA, and nothing anywhere in that workflow
@@ -27,7 +27,7 @@
 # versions this rig has run (build 1.5.0, twine 7.0.0, measured 2026-09-04); the ceilings
 # keep a new major out of the publish path until someone runs it deliberately.
 name: clean room
-description: Build the wheel and sdist, check the metadata, and run the package from a clean install.
+description: Build the wheel and sdist, check the metadata, and run each from its own clean install.
 
 runs:
   using: composite
@@ -39,6 +39,37 @@ runs:
         python -m pip install "build>=1.5,<2" "twine>=7,<8"
         python -m build
         python -m twine check dist/*
+        # THE SDIST, BUILT FROM AND RUN. Three artifacts leave this repository and, until this
+        # line, two of them were installed before the publish: the wheel below, and the npm
+        # tarball in the sibling action. `twine check dist/*` reads METADATA and never opens
+        # either archive; release.yml uploads the whole of `dist/` and
+        # `pypa/gh-action-pypi-publish` publishes both files -- so the sdist was the third
+        # artifact, and this action's own header states the law it was written for: "the
+        # artifact handed to publish was the one artifact never installed in the workflow that
+        # publishes it."
+        #
+        # What the suite covers is CONTENTS, not buildability: `tests/test_packaging.py`
+        # unpacks a built sdist and asserts what it carries. An edit to MANIFEST.in or to
+        # `[tool.setuptools]`, or a setuptools inside the `>=77,<85` window that changes sdist
+        # file selection, ships an archive that cannot build -- with every gate in release.yml
+        # green, because nothing here builds from it. That failure lands on
+        # `pip install --no-binary :all:`, on a distro or conda-forge packager, after the
+        # version is taken on PyPI forever.
+        #
+        # `pip install <sdist>` runs the backend under build isolation, so this exercises
+        # `[build-system].requires` and MANIFEST.in the way a downstream packager does, which
+        # installing a wheel cannot. Its OWN venv, because a wheel already present in the other
+        # room would satisfy the requirement without the archive ever being opened.
+        #
+        # `--no-deps`, and `modules --json` rather than the wheel room's full probe: the
+        # question here is whether the ARCHIVE builds and the command it installs runs, and the
+        # room below already resolves and exercises the runtime dependency set. Measured on the
+        # rig 2026-09-04 against this tree's sdist -- `pip install --no-deps` exit 0,
+        # `armature modules --json` exit 0, `armature_core` imported from that venv's
+        # site-packages -- so this is a guard on a path that works today, not a repair.
+        python -m venv /tmp/cleanroom-sdist
+        /tmp/cleanroom-sdist/bin/python -m pip install --quiet --no-deps dist/*.tar.gz
+        /tmp/cleanroom-sdist/bin/armature modules --json > /dev/null
         python -m venv /tmp/cleanroom
         /tmp/cleanroom/bin/python -m pip install --quiet dist/*.whl
         /tmp/cleanroom/bin/armature check
