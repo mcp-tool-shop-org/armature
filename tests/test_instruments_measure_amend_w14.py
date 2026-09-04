@@ -592,8 +592,10 @@ def test_a_refused_motion_record_leaves_no_output_directory(tmp_path):
     src = tmp_path / "m.json"
     src.write_text(json.dumps(_motion(4, with_local=False)), encoding="utf-8")
     out = tmp_path / "resampled"
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match="carries no rotation for") as exc:
         RM.main([f"--motion={src}", "--frames=8", f"--out={out}"])
+    assert exc.value.evidence["gate"] == "SOLVE", exc.value.evidence
+    assert "hips" in exc.value.evidence["missing"], exc.value.evidence
     assert not out.exists(), "a refused run left its output directory behind"
 
 
@@ -640,12 +642,16 @@ def test_mode_scale_without_a_second_set_leaves_no_output_directory(tmp_path):
 
     ortho = tmp_path / "ortho"
     ortho.mkdir()
-    (ortho / "manifest.json").write_text(json.dumps({
-        "projection": "ORTHO", "views": [], "source": {"glb": "x.glb", "sha256": "0" * 64},
+    (ortho / "turnaround_manifest.json").write_text(json.dumps({
+        "camera": {"projection": "ORTHO", "ortho_scale": 1.0,
+                   "ortho_scale_source": "solved", "radius": 3.0, "elevation_deg": 15.0},
+        "resolution": [64, 64], "views": [],
+        "source": {"glb": "x.glb", "sha256": "0" * 64},
         "blender": {"version": "5.2"}, "tool_version": "t"}), encoding="utf-8")
     out = tmp_path / "sheet"
-    with pytest.raises(ArmatureError):
+    with pytest.raises(MSS.ShotsetSheetError, match="only one was given") as exc:
         MSS.main([f"--ortho={ortho}", f"--out={out}", "--mode=scale"])
+    assert exc.value.evidence["missing"] == "--second", exc.value.evidence
     assert not out.exists(), "a refused run left its output directory behind"
 
 
