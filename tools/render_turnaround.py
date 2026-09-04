@@ -141,6 +141,12 @@ from armature_core import blender_scene, framing  # noqa: E402
 from armature_core import startframe as SF  # noqa: E402
 from armature_core import turnaround as TA  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+# CARRIED, not copied (F-267361f5): `render_start_frame.require_frame_size` is the sibling
+# instrument's bound on `--width`/`--height`, and it is ONE implementation with two callers
+# rather than a second copy here. The same idiom as `check_relift` importing
+# `action_frame_range` from this module and `make_rig_sheet` importing
+# `make_parts_sheet.shoot`. Stage B: it belongs in `armature_core.startframe`.
+from render_start_frame import require_frame_size  # noqa: E402
 
 TOOL_VERSION = "S05.1"
 
@@ -585,7 +591,15 @@ def main():
     started = time.time()
     a = parse_args()
     out = os.path.abspath(a.out)
-    width, height = int(a.width), int(a.height)
+    # ABOVE the `scene.render.resolution_x` assignment, never below it — the ordering
+    # clause F-34a858f5 earned, and the reason it matters here is that the zero case used
+    # to reach `silhouette_extent` as a bare `ZeroDivisionError` AFTER the scene resolution
+    # had already been set to zero. The 16-divisibility clause DOES apply to this tool: its
+    # eight views are the reference stack a paid generation is conditioned on, and its own
+    # default frame (352x1024) is a multiple of 16 on both axes.
+    width, height = require_frame_size(
+        int(a.width), int(a.height), who="render_turnaround",
+        module_frame=(WIDTH, HEIGHT), gate=RenderTurnaroundGate, gate_id="TURNAROUND_FRAME")
 
     azimuths = TA.orbit_azimuths(a.views, a.azimuth_start, a.sweep)
 

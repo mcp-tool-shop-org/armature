@@ -707,3 +707,99 @@ def test_the_four_renderers_record_the_engine_they_actually_set():
         if not found:
             offenders.append((fn, None, "no engine field in any record"))
     assert offenders == [], offenders
+
+
+# ============================ F-267361f5 — the turnaround's frame size is bounded, above
+#                                            the line that assigns it to the scene
+#
+# THE OPERAND. `render_turnaround`'s `--width`/`--height` were bare `type=int` with no
+# bound: read at :528, assigned to `scene.render.resolution_x/_y` at :544, and handed
+# unvalidated to the framing solvers and to Gate WHOLE. Measured on the tool's own solvers
+# with a three-point cloud: `(0, 1024)` and `(1024, 0)` each raise a bare
+# `ZeroDivisionError` out of `armature_core.startframe.silhouette_extent` — AFTER the scene
+# resolution has been set to zero — and `(-1024, 1024)` returns the SAME radius as
+# `1024x1024`, surfacing one render later inside Gate WHOLE. `833x481` passed both.
+# `render_start_frame.require_frame_size` is the sibling's closed form; it is imported here
+# rather than copied.
+
+
+@pytest.fixture(scope="module")
+def turn():
+    return load_tool("render_turnaround.py")
+
+
+@pytest.mark.parametrize("w,h,clause", [
+    (0, 1024, "non_positive"),
+    (1024, 0, "non_positive"),
+    (-1024, 1024, "non_positive"),
+    (833, 481, "not_divisible"),
+])
+def test_the_turnaround_refuses_a_frame_size_its_solvers_cannot_take(turn, w, h, clause):
+    """RED on the operand: the flag values the finding measured.
+
+    Reverted-red: yes — on the base tree `main` does `width, height = int(a.width),
+    int(a.height)` and nothing between there and `silhouette_extent` looks at either.
+    """
+    with pytest.raises(turn.RenderTurnaroundGate) as exc:
+        turn.require_frame_size(w, h, who="render_turnaround",
+                                module_frame=(turn.WIDTH, turn.HEIGHT),
+                                gate=turn.RenderTurnaroundGate,
+                                gate_id="TURNAROUND_FRAME")
+    ev = exc.value.evidence
+    assert clause in ev, ev
+    assert ev["who"] == "render_turnaround"
+    assert ev["gate"] == "TURNAROUND_FRAME"
+    assert "--width" in str(exc.value) and "--height" in str(exc.value)
+
+
+def test_the_turnaround_default_frame_is_accepted(turn):
+    """A bound that refuses the tool's own default is not a bound, it is a bug. 352x1024
+    is a multiple of 16 on both axes."""
+    assert turn.require_frame_size(
+        turn.WIDTH, turn.HEIGHT, who="render_turnaround",
+        module_frame=(turn.WIDTH, turn.HEIGHT), gate=turn.RenderTurnaroundGate,
+    ) == (turn.WIDTH, turn.HEIGHT)
+
+
+def test_the_frame_size_refusal_runs_above_the_resolution_assignment(turn):
+    """THE ORDERING CLAUSE F-34a858f5 earned, and the half this finding is about: a check
+    below the assignment refuses a scene that has already been set to the bad number."""
+    src = read_source("render_turnaround.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    check_lines = [n.lineno for n in ast.walk(fn)
+                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                   and n.func.id == "require_frame_size"]
+    assert len(check_lines) == 1, check_lines
+    assign_lines = [n.lineno for n in ast.walk(fn)
+                    if isinstance(n, ast.Assign)
+                    and any(isinstance(t, ast.Attribute) and t.attr == "resolution_x"
+                            for tgt in n.targets
+                            for t in (tgt.elts if isinstance(tgt, ast.Tuple) else [tgt]))]
+    assert assign_lines, "render_turnaround no longer assigns scene.render.resolution_x"
+    assert check_lines[0] < min(assign_lines), (check_lines, assign_lines)
+
+
+def test_there_is_one_require_frame_size_and_two_callers():
+    """One implementation, carried — never a second copy. `armature_core.startframe` is
+    where it belongs and is outside this domain's globs, so the lift is FILED."""
+    defs = []
+    for fn in sorted(os.listdir(TOOLS)):
+        if not fn.endswith(".py"):
+            continue
+        with open(os.path.join(TOOLS, fn), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        defs += [(fn, n.lineno) for n in tree.body
+                 if isinstance(n, ast.FunctionDef) and n.name == "require_frame_size"]
+    assert defs == [("render_start_frame.py", defs[0][1] if defs else 0)], defs
+
+
+def test_the_start_frame_caller_still_gets_its_own_refusal_class(turn):
+    """Parameterising the gate must not change what the ORIGINAL caller raises."""
+    rsf = load_tool("render_start_frame.py")
+    with pytest.raises(rsf.RenderGate) as exc:
+        rsf.require_frame_size(0, 480)
+    assert exc.value.evidence["gate"] == "STARTFRAME"
+    assert exc.value.evidence["who"] == "render_start_frame"
+    assert rsf.require_frame_size(832, 480) == (832, 480)

@@ -199,8 +199,9 @@ class RenderGate(GateFailure):
 FRAME_DIVISOR = 16
 
 
-def require_frame_size(width, height):
-    """`(width, height)` if a generator would accept them, else raise `RenderGate`.
+def require_frame_size(width, height, *, who="render_start_frame",
+                       module_frame=None, gate=None, gate_id="STARTFRAME"):
+    """`(width, height)` if a generator would accept them, else raise the caller's gate.
 
     F-34a858f5, wave 12. `--width` / `--height` were bare `type=int` with no bound and
     reached `SF.silhouette_extent` and `SF.gate_whole` unvalidated. MEASURED over the real
@@ -219,14 +220,29 @@ def require_frame_size(width, height):
     reason the finding gives: this refusal is the natural place to state the generator-legal
     constraint, instead of letting an arbitrary size reach the render and be caught (or
     not) by a graph check much later.
+
+    WAVE 14, F-267361f5. `render_turnaround` — the tool that produces the PINNED shot-set,
+    where one scale across characters is the entire product — had none of this, and its
+    `--width`/`--height` reached the framing solvers unvalidated: measured on its own
+    solvers with a three-point cloud, `(0, 1024)` and `(1024, 0)` each raise a bare
+    `ZeroDivisionError` out of `startframe.silhouette_extent` AFTER
+    `scene.render.resolution_x` has been set to zero, and `(-1024, 1024)` returns the same
+    radius as `1024x1024` and only surfaces one render later inside Gate WHOLE. So this is
+    now ONE implementation with two callers, parameterised only in what it says about
+    itself — `who`, the module's own frame, and the caller's gate class — never in what it
+    checks. `armature_core.startframe` is where the one implementation belongs and is
+    outside this domain's globs, so the lift is FILED, not done.
     """
-    ev = {"gate": "STARTFRAME", "andon": "RenderGate", "width": width, "height": height,
-          "divisor": FRAME_DIVISOR, "module_frame": [WIDTH, HEIGHT]}
+    gate = gate or RenderGate
+    module_frame = list(module_frame or (WIDTH, HEIGHT))
+    ev = {"gate": gate_id, "andon": gate.__name__, "who": who,
+          "width": width, "height": height,
+          "divisor": FRAME_DIVISOR, "module_frame": module_frame}
     bad = [name for name, v in (("width", width), ("height", height))
            if not isinstance(v, int) or isinstance(v, bool) or v <= 0]
     if bad:
         ev["non_positive"] = bad
-        raise RenderGate(
+        raise gate(
             f"--width={width!r} --height={height!r}: {' and '.join(bad)} must be a "
             f"positive integer. A zero dimension divides by zero inside the silhouette "
             f"solve and reaches the halt line as an unhandled error naming a projection "
@@ -235,12 +251,12 @@ def require_frame_size(width, height):
            if v % FRAME_DIVISOR]
     if off:
         ev["not_divisible"] = off
-        raise RenderGate(
+        raise gate(
             f"--width={width} --height={height}: {' and '.join(off)} is not divisible by "
-            f"{FRAME_DIVISOR}. This tool's output is the conditioning image a generation "
-            f"is submitted with, and the model family's frame buckets are multiples of "
-            f"{FRAME_DIVISOR} (this module's own frame is {WIDTH}x{HEIGHT}); a frame it "
-            f"will not accept is better refused here than after the render", ev)
+            f"{FRAME_DIVISOR}. {who}'s output is submitted to, or conditions, a generation, "
+            f"and the model family's frame buckets are multiples of {FRAME_DIVISOR} (this "
+            f"tool's own frame is {module_frame[0]}x{module_frame[1]}); a frame it will not "
+            f"accept is better refused here than after the render", ev)
     return int(width), int(height)
 
 
