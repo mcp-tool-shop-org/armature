@@ -246,7 +246,7 @@ def compare_signatures(pinned, fresh, label=None):
     frame that is not the first (a check that only ever compared frame 0 would pass on a rest
     pose and miss the whole clip).
     """
-    ev = {"gate": "RELIFT", "label": label,
+    ev = {"gate": "RELIFT", "andon": "ReliftMismatch", "label": label,
           "n_pinned": len(pinned), "n_fresh": len(fresh)}
     if not pinned or not fresh:
         raise ReliftMismatch(

@@ -93,7 +93,8 @@ def gate_no_paid_nodes(graph, allowed=ALLOWED_CLASSES):
     unnamed = sorted(str(nid) for nid, n in graph.items() if n.get("class_type") is None)
     classes = sorted(c for c in {n.get("class_type") for n in graph.values()}
                      if c is not None)
-    ev = {"gate": "ASSEMBLY", "classes": classes, "allowed": list(allowed),
+    ev = {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+          "classes": classes, "allowed": list(allowed),
           "n_nodes": len(graph), "nodes_without_class_type": unnamed}
 
     if unnamed:
@@ -181,7 +182,8 @@ def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expecte
     """
     n = int(n_frames)
     exp = [str(s) for s in expected_sources]
-    ev = {"gate": "ASSEMBLY", "n_frames": n, "batch_node": batch_id,
+    ev = {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+          "n_frames": n, "batch_node": batch_id,
           "video_node": video_id, "save_node": save_id, "n_expected_sources": len(exp)}
     problems = []
 
@@ -310,7 +312,8 @@ def cascade_plan(n, group_size=GROUP_SIZE):
     n, group_size = int(n), int(group_size)
     if group_size < 1:
         raise CascadeGate("group size must be at least 1",
-                          {"gate": "CASCADE", "group_size": group_size})
+                          {"gate": "CASCADE", "andon": "CascadeGate",
+                           "group_size": group_size})
     return [(s, min(s + group_size, n)) for s in range(0, n, group_size)]
 
 
@@ -372,7 +375,8 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
     and `gate_cascade_topology` already refuse a comparison over nothing.
     """
     ceiling = int(MAX_SLOTS_PER_NODE)
-    ev = {"gate": "CASCADE", "module_ceiling": int(MAX_SLOTS_PER_NODE),
+    ev = {"gate": "CASCADE", "andon": "CascadeGate",
+          "module_ceiling": int(MAX_SLOTS_PER_NODE),
           "cap_requested": None if cap is None else int(cap),
           "declared_group_size": None if group_size is None else int(group_size),
           "ceiling": ceiling, "per_node": {}}
@@ -463,7 +467,8 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
     """
     n = int(n_frames)
     exp = [str(s) for s in expected_sources]
-    ev = {"gate": "CASCADE", "n_frames": n, "group_size": int(group_size),
+    ev = {"gate": "CASCADE", "andon": "CascadeGate",
+          "n_frames": n, "group_size": int(group_size),
           "group_nodes": [str(g) for g in group_ids],
           "final_node": str(final_id), "video_node": str(video_id),
           "consumer": {"node": str(consumer_id), "input": consumer_input},

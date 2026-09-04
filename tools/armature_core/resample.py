@@ -113,8 +113,8 @@ def require_rotation(m, where, tol=ORTHONORMAL_TOL):
             f"det {det:.12f}, against a tolerance of {tol:.1e}. Interpolating it would "
             f"produce a plausible pose that shears the body, and nothing downstream checks "
             f"for that",
-            {"gate": "RESAMPLE", "where": where, "orthonormality_error": worst,
-             "determinant": det, "tolerance": tol})
+            {"gate": "RESAMPLE", "andon": "ResampleGate", "where": where,
+             "orthonormality_error": worst, "determinant": det, "tolerance": tol})
     return {"orthonormality_error": worst, "determinant": det}
 
 
@@ -256,7 +256,7 @@ def monotonic(n_src, n_dst):
     """
     u = positions(n_src, n_dst)
     bad = [(k, u[k], u[k + 1]) for k in range(len(u) - 1) if not (u[k + 1] > u[k])]
-    ev = {"gate": "RESAMPLE", "n_src": n_src, "n_dst": n_dst,
+    ev = {"gate": "RESAMPLE", "andon": "ResampleGate", "n_src": n_src, "n_dst": n_dst,
           "first": u[0], "last": u[-1], "non_increasing": bad}
     if bad:
         raise ResampleGate(
@@ -341,7 +341,7 @@ def endpoints_match(src_frames, dst_frames):
     finishes. Compared as stored VALUES, because that is what the contract says.
     """
     pairs = ((0, 0, "first"), (len(src_frames) - 1, len(dst_frames) - 1, "last"))
-    ev = {"gate": "RESAMPLE", "checked": []}
+    ev = {"gate": "RESAMPLE", "andon": "ResampleGate", "checked": []}
     for si, di, label in pairs:
         s, d = src_frames[si], dst_frames[di]
         rot_bad = [b for b in s["local"]

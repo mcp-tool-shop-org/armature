@@ -111,7 +111,8 @@ def import_glb(path, *, expected_fps):
             f"NOW. Importing here would silently place the action on the wrong frames and "
             f"the render would sample a fraction of the performance — call "
             f"`set_frame_rate(scene, fps)` before importing",
-            {"scene_fps": scene_fps(), "expected_fps": expected_fps, "asset": path},
+            {"gate": "G6", "andon": "G6SubjectMotion",
+             "scene_fps": scene_fps(), "expected_fps": expected_fps, "asset": path},
         )
     before = set(bpy.data.objects.keys())
     bpy.ops.import_scene.gltf(filepath=path)

@@ -644,7 +644,8 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
         per_site[site] = d
         if d > worst["d"]:
             worst = {"site": site, "d": d}
-    ev = {"gate": "SOLVE", "tolerance": tol, "tolerance_frac_of_diagonal": tol_frac,
+    ev = {"gate": "SOLVE", "andon": "SolveGate",
+          "tolerance": tol, "tolerance_frac_of_diagonal": tol_frac,
           "bbox_diagonal": diagonal, "worst": worst, "per_site": per_site,
           "n_sites": len(per_site), "n_sites_expected": len(expected),
           "sites_expected": expected,
@@ -744,22 +745,24 @@ def validate_motion_record(frames):
     the stutter reads as the lift being noisy rather than as a frame that never arrived.
     """
     if not frames:
-        raise SolveGate("the motion record carries no frames", {"n": 0})
+        raise SolveGate("the motion record carries no frames",
+                        {"gate": "SOLVE", "andon": "SolveGate", "n": 0})
     for i, fr in enumerate(frames):
         if fr.get("frame") != i:
             raise SolveGate(
                 f"the solved frames are not a contiguous run from 0: entry {i} says frame "
                 f"{fr.get('frame')!r}. A gap filled by the neighbouring pose would play as "
                 f"a stutter and be read as detector noise",
-                {"index": i, "says": fr.get("frame"), "n": len(frames)})
+                {"gate": "SOLVE", "andon": "SolveGate",
+                 "index": i, "says": fr.get("frame"), "n": len(frames)})
         local = fr.get("local") or {}
         missing = [b for b in sitelist.ALL_NAMES if b not in local]
         if missing:
             raise SolveGate(
                 f"frame {i} carries no rotation for {missing}; a bone left out here would "
                 f"hold its previous pose while every gate downstream stayed green",
-                {"frame": i, "missing": missing})
-    return {"gate": "SOLVE", "n_frames": len(frames),
+                {"gate": "SOLVE", "andon": "SolveGate", "frame": i, "missing": missing})
+    return {"gate": "SOLVE", "andon": "SolveGate", "n_frames": len(frames),
             "verdict": f"{len(frames)} contiguous frames, all {len(sitelist.ALL_NAMES)} "
                        f"registered bones present on each"}
 
