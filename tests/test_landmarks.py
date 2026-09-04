@@ -292,3 +292,132 @@ def test_the_two_margins_ride_the_record_as_fractions_of_their_own_structures():
     assert f["foot_margin_fraction"] == pytest.approx(
         abs(f["foot_forward_extent"] - f["foot_backward_extent"])
         / (f["foot_forward_extent"] + f["foot_backward_extent"]))
+
+
+# --- F-884c0c8e: the figure's own X centreline, not the world's -----------------------
+
+
+def _put_x_literals():
+    """Every `put(...)` in `landmarks.derive` whose x coordinate is a bare numeric literal.
+
+    Derived by walking the module's own AST — the population is whatever the source
+    contains today, not a list typed into this test — so a landmark newly placed at a
+    constant world x joins it the moment it is written.
+    """
+    import ast
+    import inspect
+
+    src = inspect.getsource(landmarks)
+    out = []
+    for node in ast.walk(ast.parse(src)):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "put" and len(node.args) >= 2):
+            continue
+        point = node.args[1]
+        if not isinstance(point, ast.Tuple) or not point.elts:
+            continue
+        x = point.elts[0]
+        if isinstance(x, ast.Constant) and isinstance(x.value, (int, float)):
+            name = node.args[0]
+            label = name.value if isinstance(name, ast.Constant) else ast.unparse(name)
+            out.append((label, x.value, node.lineno))
+    return out
+
+
+def test_no_landmark_is_placed_at_a_literal_world_x():
+    """Census, derived by AST over landmarks.py.
+
+    Nine landmarks — crotch, neck_base, head_base, head_top, shoulder_line, spine_base,
+    chest_base, nose, nose_tip — were written at the literal world x = 0.0 while every
+    limb landmark was measured off the mesh, so the whole torso and head chain silently
+    assumed the subject arrives centred on the world axis (F-884c0c8e). The module's own
+    docstring says a global constant must not govern a local feature; a world coordinate
+    typed into a placement is exactly that.
+    """
+    assert _put_x_literals() == [], (
+        "landmarks placed at a literal world x: " + repr(_put_x_literals()))
+
+
+def test_the_literal_world_x_census_goes_red_on_a_reintroduced_constant():
+    """Prove the census can fail: the same AST walk over a source that puts one back."""
+    import ast
+
+    mutated = (
+        "def derive(v):\n"
+        "    def put(name, point, prov):\n"
+        "        pass\n"
+        "    put('crotch', (0.0, 1.0, 2.0), 'MEASURED')\n"
+        "    put('hip_L', (cx, cy, cz), 'MEASURED')\n"
+    )
+    found = []
+    for node in ast.walk(ast.parse(mutated)):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "put" and len(node.args) >= 2
+                and isinstance(node.args[1], ast.Tuple)
+                and isinstance(node.args[1].elts[0], ast.Constant)):
+            found.append(node.args[0].value)
+    assert found == ["crotch"], "the census would not have caught the reintroduced literal"
+
+
+def _shifted(dx):
+    return synthetic_figure() + np.array([dx, 0.0, 0.0])
+
+
+@pytest.mark.parametrize("dx", [0.0, 0.02, 0.05, 0.08])
+def test_the_torso_chain_tracks_the_figure_not_the_world_origin(dx):
+    """Measured before the fix on this fixture: at dx = 0.02 / 0.05 / 0.08 on a 1.000-tall
+    figure, crotch / spine_base / chest_base / neck_base / head_base / head_top /
+    shoulder_line / nose all stayed at x = +0.0000 while hip_L and hip_R moved with the
+    mesh, so the `hips` bone head was dislocated from the midpoint of its own two children
+    by exactly the offset — invisible to Gate N (names), Gate P (rest pose against itself)
+    and Gate D (which reproduces the same wrong skeleton).
+    """
+    m = landmarks.derive(_shifted(dx), n_bands=100)["landmarks"]
+    hip_mid = 0.5 * (m["hip_L"][0] + m["hip_R"][0])
+    hip_half = 0.5 * abs(m["hip_L"][0] - m["hip_R"][0])
+    for name in ("crotch", "spine_base", "chest_base", "neck_base", "head_base",
+                 "head_top", "shoulder_line", "nose"):
+        assert abs(m[name][0] - hip_mid) < 0.25 * hip_half, (
+            f"{name} sits at x={m[name][0]:.4f}; this figure's own centreline is at "
+            f"x={hip_mid:.4f} (dx={dx})")
+
+
+@pytest.mark.parametrize("dx", [0.02, 0.05, 0.08])
+def test_the_head_is_measured_about_its_own_axis_not_the_world_axis(dx):
+    """`head_half` was `max(abs(head[:,0].max()), abs(head[:,0].min()))` — a half-width
+    about the WORLD origin. Measured before the fix: ear_L / ear_R came back at ±0.0808 at
+    dx=0, ±0.1283 at dx=0.05 and ±0.1568 at dx=0.08, a head up to 1.94× too wide with both
+    ears symmetric about the world axis rather than about the skull — and aapose reads
+    ear_R / ear_L as keypoints 16 / 17, so the pose stick that conditions a generation is
+    drawn that wide too.
+    """
+    base = landmarks.derive(synthetic_figure(), n_bands=100)["landmarks"]
+    moved = landmarks.derive(_shifted(dx), n_bands=100)["landmarks"]
+    w0 = base["ear_L"][0] - base["ear_R"][0]
+    w1 = moved["ear_L"][0] - moved["ear_R"][0]
+    assert abs(w1 - w0) < 0.05 * abs(w0), (
+        f"ear separation {w1:.4f} at dx={dx} against {w0:.4f} at dx=0")
+    for name in ("ear_L", "ear_R", "eye_L", "eye_R"):
+        assert abs((moved[name][0] - base[name][0]) - dx) < 0.02, (
+            f"{name} did not travel with the mesh: {base[name][0]:.4f} -> "
+            f"{moved[name][0]:.4f} for dx={dx}")
+
+
+@pytest.mark.parametrize("dx", [0.02, 0.05, 0.08])
+def test_the_limbs_still_land_on_their_own_limb_when_the_figure_is_off_centre(dx):
+    """`side_picker` split left from right on `c["cx"] > 0`, the same world-origin test,
+    and the foot slab was split the same way. Both now split about the measured
+    centreline, so the sides do not swap and the picker does not starve."""
+    m = landmarks.derive(_shifted(dx), n_bands=100)["landmarks"]
+    for side, sign in (("L", +1), ("R", -1)):
+        for joint in ("shoulder", "elbow", "wrist", "hand_end"):
+            assert abs(m[f"{joint}_{side}"][0] - (dx + sign * ARM_X)) < 2.0 * ARM_R
+        for joint in ("hip", "knee", "ankle", "toe"):
+            assert abs(m[f"{joint}_{side}"][0] - (dx + sign * LEG_X)) < 2.5 * LEG_R
+
+
+def test_the_measured_centreline_rides_the_record():
+    """The premise that used to be silent is now a measurement a report can read."""
+    r = landmarks.derive(_shifted(0.05), n_bands=100)["regions"]
+    assert abs(r["x_centreline"] - 0.05) < 0.02
+    assert abs(r["x_head_centreline"] - 0.05) < 0.02
