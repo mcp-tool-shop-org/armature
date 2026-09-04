@@ -1128,7 +1128,6 @@ def export_rigged(ctx, probe, out_path, animated=True):
     reimported = sorted(b.name for a in arms for b in a.data.bones)
     gate_n_post = rig_gates.gate_n_names(reimported, sitelist.ALL_NAMES,
                                          "the re-imported exported GLB")
-    _ = written
 
     # MEASURED 2026-08-11, and it was a gate silently not running. Selecting the re-imported
     # subject by `type == "MESH"` returns TWO objects: `geometry_0` and an `Icosphere` — the
@@ -1165,6 +1164,10 @@ def export_rigged(ctx, probe, out_path, animated=True):
         "reimported_actions": actions,
         "gate_n_post": gate_n_post, "gate_obj": gate_obj,
         "gate_p_round_trip": gate_p_round_trip,
+        # F-9b2d4106: the export reached disk and is not zero bytes, recorded rather than
+        # assumed. The re-import below it would raise on an ABSENT file, but not on an
+        # empty one, and nothing published the byte count it confirmed.
+        "gate_glb_written": written,
     }
 
 
