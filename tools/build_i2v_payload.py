@@ -320,7 +320,8 @@ def declares_native_fit(fit):
     return str(fit or "").strip().lower().startswith(NATIVE_FIT_WORD)
 
 
-def start_image_record(start_frame, server_name, width, height, fit, why=None):
+def start_image_record(start_frame, server_name, width, height, fit, why=None, *,
+                       declares_alpha=None):
     """The `start_image` block of an i2v payload record — ONE implementation, two routes.
 
     Wave 12, F-d979ec52. This shape existed twice and only one copy carried the comparison.
@@ -356,6 +357,17 @@ def start_image_record(start_frame, server_name, width, height, fit, why=None):
     arrived; this refuses one that arrived and disagreed. A diagnostic and a gate are
     different objects, and the object this route needed on the whole of its conditioning,
     one step before an irreversible spend, was the gate.
+
+    **The SECOND correction, wave 16 (F-71ffdbfb).** `measured["alpha"]` was the same shape
+    one field over: computed by `png_header`, written into every record, and read by
+    nothing (measured by grep over `tools/`, `docs/` and `verify.ps1`, 2026-09-04). A flat
+    RGB grey plate authored at the generation's exact size — the E11 baked-grey-void shape
+    the Director's 2026-08-12 ruling exists to stop — was accepted with `alpha: False`
+    recorded and nothing printed. `declares_alpha` is the route's own statement of which
+    half of that ruling this file is: the authored RGBA master (`True`) or the recorded RGB
+    composite (`False`). The file must be what the route says it is, in both directions,
+    and a route that declares nothing is refused — a default that disarms a clause is the
+    clause's deletion, not a default.
     """
     measured = start_frame["image"]
     agrees = [measured["width"], measured["height"]] == [width, height]
@@ -395,6 +407,56 @@ def start_image_record(start_frame, server_name, width, height, fit, why=None):
              "measured": [measured["width"], measured["height"]],
              "generation_frame": [width, height],
              "path": start_frame.get("path"), "sha256": start_frame.get("sha256")})
+    # ---- ANDON, wave 16 (F-71ffdbfb). `measured["alpha"]` - the field that makes the
+    # Director's 2026-08-12 alpha ruling machine-readable - was computed, written into
+    # every i2v payload record, and READ BY NOTHING: the identical shape wave 14 corrected
+    # one field over in this same dict. Measured by grep over the tree 2026-09-04, the
+    # `alpha` produced by `png_header` occurred at its own line and at no other site under
+    # `tools/`, `docs/` or `verify.ps1`. Measured end to end: a FLAT RGB grey plate authored
+    # at the generation's exact size - the E11 baked-grey-void shape the ruling exists to
+    # stop - was ACCEPTED with `measured.alpha: False` recorded and nothing printed.
+    #
+    # The ruling has two halves and the clause reads both. The authored master carries a
+    # real alpha channel; **the RGB composite each route submits is a deliberate, recorded
+    # choice**, because video VAEs are RGB and raw transparency cannot reach the model. So
+    # the route DECLARES which of the two `--start-frame` names, and the file must be it -
+    # a submitted composite that still carries the channel is transparency reaching an RGB
+    # VAE, and an authored master that arrives flattened is the grey void arriving by
+    # accident. Both directions refuse; a route's silence refuses too, because a default
+    # that disarms a clause is not a default, it is the clause's deletion.
+    measured_alpha = bool(measured.get("alpha"))
+    if declares_alpha is None:
+        raise PayloadError(
+            f"this route wrote a `start_image` block without declaring what it submits: "
+            f"`declares_alpha` is the route's own statement that {start_frame.get('path')!r} "
+            f"is the authored RGBA master (True) or the recorded RGB composite (False). "
+            f"The file measures alpha={measured_alpha}, and a silence read as agreement "
+            f"with whatever the file happened to be is the ruling made unenforceable",
+            {"gate": "PAYLOAD", "andon": "start_frame",
+             "clause": "alpha_declaration_missing", "flag": "--start-frame",
+             "declares_alpha": None, "measured_alpha": measured_alpha,
+             "alpha_source": measured.get("alpha_source"),
+             "path": start_frame.get("path"), "sha256": start_frame.get("sha256")})
+    if bool(declares_alpha) != measured_alpha:
+        was = ("an authored RGBA master" if declares_alpha
+               else "the recorded RGB composite")
+        raise PayloadError(
+            f"the route declares this start frame is {was} and the file says otherwise: "
+            f"alpha={measured_alpha}"
+            + (f" (read off its {measured.get('alpha_source')})" if measured_alpha
+               else " (no alpha channel and no tRNS chunk)")
+            + f", colour type {measured.get('color_type')!r}. Video VAEs are RGB and raw "
+            f"transparency cannot reach the model, so a submitted composite that still "
+            f"carries the channel is not the artifact the record names; and a master that "
+            f"arrives flattened is the grey previz void arriving by accident, which is the "
+            f"defect the Director's 2026-08-12 ruling exists to stop. Composite the master "
+            f"over its named plate before uploading, or state what this file is",
+            {"gate": "PAYLOAD", "andon": "start_frame",
+             "clause": "alpha_disagrees_with_the_file", "flag": "--start-frame",
+             "declares_alpha": bool(declares_alpha), "measured_alpha": measured_alpha,
+             "alpha_source": measured.get("alpha_source"),
+             "color_type": measured.get("color_type"),
+             "path": start_frame.get("path"), "sha256": start_frame.get("sha256")})
     rec = {
         "server_name": server_name,
         # ---- the LOCAL artifact, which these records could not name until wave 10.
@@ -413,6 +475,11 @@ def start_image_record(start_frame, server_name, width, height, fit, why=None):
         # what the sentence above CLAIMS, so a reader of the record can see which clause
         # ran: a native declaration is gated, any other is recorded and not gated.
         "fit_declares_native": declares_native_fit(fit),
+        # ---- and the alpha half of the same ruling, ARMED (wave 16, F-71ffdbfb). What the
+        # route says this artifact is, and whether the file agrees. The comparison is a
+        # refusal above; these two lines are what a reader of the record sees of it.
+        "alpha_declared": bool(declares_alpha),
+        "alpha_agrees_with_the_file": bool(declares_alpha) == bool(measured.get("alpha")),
         "generation_frame": [width, height],
     }
     if why:
@@ -567,6 +634,13 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
         "start_image": start_image_record(
             start_frame, start_name, WIDTH, HEIGHT,
             fit=f"native — authored at {WIDTH}x{HEIGHT}",
+            # What this route SUBMITS, declared rather than discovered (wave 16,
+            # F-71ffdbfb). The Director's 2026-08-12 ruling: the master is authored RGBA
+            # and the RGB composite the route uploads is a deliberate, recorded choice.
+            # `--start-frame` names the uploaded file, so this route declares the
+            # composite; a file that still carries the channel is refused above, because
+            # raw transparency cannot reach an RGB video VAE.
+            declares_alpha=False,
             why=("no letterbox and no centre-crop: the frame is rendered at the "
                  "generation's own size, so nothing resamples it. E08 measured what a "
                  "mismatched aspect costs on the other route — WanAnimateToVideo kept 204 "

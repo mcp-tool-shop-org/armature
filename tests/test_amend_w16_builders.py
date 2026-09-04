@@ -339,3 +339,202 @@ def test_no_tool_in_the_tree_reads_a_seed_registration_by_bare_index():
 def test_the_one_reader_is_the_one_place_that_names_the_key():
     hits = _seeds_reads(os.path.join(TOOLS, "build_assembly_payload.py"))
     assert hits, "the reader must be the site that names the key"
+
+
+# ================================================================== F-71ffdbfb (panel HIGH)
+# `alpha = color in (4, 6)` was written into every i2v payload record and READ BY NOTHING -
+# the identical shape wave 14 corrected one field over in the same dict
+# (`fit_agrees_with_the_file`) - and it was WRONG in one direction: a palette PNG carrying
+# transparency through a tRNS chunk read `alpha: False`, which this module's own
+# `_PNG_COLOR_TYPES` comment already said was possible.
+#
+# The law it makes machine-readable (the Director's ruling 2026-08-12) has two halves: the
+# authored master carries alpha, and **the RGB composite each route submits is a deliberate,
+# recorded choice**, because video VAEs are RGB and raw transparency cannot reach the model.
+# `--start-frame` is the file this route UPLOADS, so the honest declaration on both i2v
+# routes is `declares_alpha=False` - the recorded composite - and the andon fires in both
+# directions: a file that disagrees with what the route declares refuses, and a route that
+# declares nothing refuses too (a default may not disarm a clause).
+
+import build_camera_i2v_payload as CAM                                   # noqa: E402
+import build_i2v_payload as W1                                           # noqa: E402
+
+
+def _chunk(tag, payload):
+    return (struct.pack(">I", len(payload)) + tag + payload
+            + struct.pack(">I", zlib.crc32(tag + payload) & 0xFFFFFFFF))
+
+
+def _png_bytes(w, h, color_type, *, trns=None):
+    """A minimal, valid-enough PNG: real IHDR, optional tRNS, one IDAT, IEND.
+
+    `png_header` reads the IHDR by `struct` and walks the chunk list; nothing decodes the
+    pixels, so the IDAT payload only has to be present.
+    """
+    doc = (b"\x89PNG\r\n\x1a\n"
+           + _chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, color_type, 0, 0, 0)))
+    if color_type == 3:
+        doc += _chunk(b"PLTE", b"\x00\x00\x00\xff\xff\xff")
+    if trns is not None:
+        doc += _chunk(b"tRNS", trns)
+    doc += _chunk(b"IDAT", zlib.compress(b"\x00" * (w * h + h)))
+    doc += _chunk(b"IEND", b"")
+    return doc
+
+
+def _write_png(tmp_path, name, w, h, color_type, *, trns=None):
+    p = tmp_path / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(_png_bytes(w, h, color_type, trns=trns))
+    return str(p)
+
+
+#: `(what the file is, colour type, tRNS payload, the alpha the reader must report,
+#:   where it read it from)`. Colour types 0, 2 and 3 may ALL carry a tRNS chunk; 4 and 6
+#: carry the channel itself; 0 and 2 without one are opaque. That is the whole population
+#: of PNG transparency, from the format spec, and the reader is graded against all of it.
+PNG_ALPHA_POPULATION = [
+    ("grayscale, opaque", 0, None, False, None),
+    ("grayscale + tRNS", 0, b"\x00\x00", True, "tRNS"),
+    ("rgb, opaque", 2, None, False, None),
+    ("rgb + tRNS", 2, b"\x00\x00\x00\x00\x00\x00", True, "tRNS"),
+    ("palette, opaque", 3, None, False, None),
+    ("palette + tRNS", 3, b"\x00\xff", True, "tRNS"),
+    ("grayscale_alpha", 4, None, True, "color_type"),
+    ("rgba", 6, None, True, "color_type"),
+]
+
+
+@pytest.mark.parametrize("what,ctype,trns,alpha,source", PNG_ALPHA_POPULATION,
+                         ids=[c[0].replace(" ", "_").replace(",", "")
+                              for c in PNG_ALPHA_POPULATION])
+def test_the_png_reader_reports_alpha_for_every_shape_the_format_allows(
+        tmp_path, what, ctype, trns, alpha, source):
+    """Red on `palette + tRNS`, `rgb + tRNS` and `grayscale + tRNS`: `color in (4, 6)`
+    cannot see a tRNS chunk, and the module's own `_PNG_COLOR_TYPES` comment said so
+    ("3 is a palette, which may carry transparency through a tRNS chunk") while the line
+    below it answered False."""
+    head = CAM.png_header(_write_png(tmp_path, "p.png", 8, 8, ctype, trns=trns))
+    assert head["alpha"] is alpha, (what, head)
+    assert head["alpha_source"] == source, (what, head)
+
+
+def _resolved(tmp_path, name, color_type, *, trns=None, size=(1024, 576)):
+    return CAM.resolve_start_frame(
+        _write_png(tmp_path, name, size[0], size[1], color_type, trns=trns), None)
+
+
+def test_a_route_that_declares_nothing_about_alpha_is_REFUSED(tmp_path):
+    """Rule 3: a default may not disarm a clause. `declares_alpha` has no permissive
+    default - a caller that says nothing about the artifact it is submitting cannot have
+    its silence read as agreement with whatever the file turned out to be."""
+    ev = _resolved(tmp_path, "plate.png", 2)
+    with pytest.raises(W1.PayloadError) as exc:
+        W1.start_image_record(ev, "server.png", 1024, 576,
+                              fit="native - authored at 1024x576")
+    e = exc.value.evidence
+    assert e["clause"] == "alpha_declaration_missing", e
+    assert e["measured_alpha"] is False, e
+
+
+def test_a_start_frame_carrying_alpha_where_the_route_records_a_COMPOSITE_refuses(tmp_path):
+    """The direction the Director's ruling names: raw transparency cannot reach an RGB
+    video VAE, so a route that records a submitted composite may not submit a file that
+    still carries the channel. Red on the base tree: `measured.alpha` was recorded as True
+    and nothing refused."""
+    ev = _resolved(tmp_path, "master.png", 6)
+    with pytest.raises(W1.PayloadError) as exc:
+        W1.start_image_record(ev, "server.png", 1024, 576,
+                              fit="native - authored at 1024x576", declares_alpha=False)
+    e = exc.value.evidence
+    assert e["clause"] == "alpha_disagrees_with_the_file", e
+    assert e["declares_alpha"] is False and e["measured_alpha"] is True, e
+    assert e["alpha_source"] == "color_type", e
+
+
+def test_a_palette_start_frame_with_tRNS_is_caught_by_the_same_clause(tmp_path):
+    """The member the old reader could not see at all: `color in (4, 6)` answered False for
+    a palette carrying transparency, so this file passed the arming clause as well as the
+    reader."""
+    ev = _resolved(tmp_path, "pal.png", 3, trns=b"\x00\xff")
+    with pytest.raises(W1.PayloadError) as exc:
+        W1.start_image_record(ev, "server.png", 1024, 576,
+                              fit="native - authored at 1024x576", declares_alpha=False)
+    assert exc.value.evidence["alpha_source"] == "tRNS"
+
+
+def test_a_route_that_declares_an_authored_master_refuses_a_flattened_plate(tmp_path):
+    """The other direction, so the clause is not a one-way test: a route declaring the
+    authored RGBA master and handed a flat RGB plate - the E11 baked-grey-void shape - is
+    refused by the same clause with the declaration in the evidence."""
+    ev = _resolved(tmp_path, "flat.png", 2)
+    with pytest.raises(W1.PayloadError) as exc:
+        W1.start_image_record(ev, "server.png", 1024, 576,
+                              fit="native - authored at 1024x576", declares_alpha=True)
+    e = exc.value.evidence
+    assert e["clause"] == "alpha_disagrees_with_the_file", e
+    assert e["declares_alpha"] is True and e["measured_alpha"] is False, e
+
+
+def test_the_agreeing_composite_still_builds_and_the_record_says_which_clause_ran(tmp_path):
+    ev = _resolved(tmp_path, "ok.png", 2)
+    rec = W1.start_image_record(ev, "server.png", 1024, 576,
+                                fit="native - authored at 1024x576", declares_alpha=False)
+    assert rec["alpha_declared"] is False
+    assert rec["alpha_agrees_with_the_file"] is True
+    assert rec["measured"]["alpha"] is False
+    assert rec["measured"]["alpha_source"] is None
+
+
+def test_the_i2v_builder_refuses_a_transparent_start_frame_and_writes_nothing(tmp_path):
+    """The gate is inside `build`, through the one `start_image_record` both routes share,
+    so an in-process caller cannot route past it."""
+    rgba = W1.resolve_start_frame(
+        _write_png(tmp_path, "rgba.png", W1.WIDTH, W1.HEIGHT, 6))
+    out = tmp_path / "fresh" / "run"
+    with pytest.raises(W1.PayloadError) as exc:
+        W1.build({"start_frame": "s.png"}, None, "neg", "pos", [1], start_frame=rgba)
+    assert exc.value.evidence["clause"] == "alpha_disagrees_with_the_file"
+    assert not out.exists()
+
+
+# ---- the POPULATION: every caller of the one `start_image_record`.
+
+def _start_image_record_calls(path):
+    tree = ast.parse(open(path, encoding="utf-8").read())
+    out = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call)
+                and ((isinstance(node.func, ast.Attribute)
+                      and node.func.attr == "start_image_record")
+                     or (isinstance(node.func, ast.Name)
+                         and node.func.id == "start_image_record"))):
+            out.append((node.lineno, {k.arg for k in node.keywords}))
+    return out
+
+
+def test_every_route_that_writes_a_start_image_block_declares_what_it_submits():
+    """The census the finding's `read by NOTHING` grep is the mirror of: the field is read
+    now, so every writer must declare. Two callers today - `build_i2v_payload.build` and
+    `build_camera_i2v_payload.build` - and a third added without a declaration goes red
+    here rather than in a paid submission."""
+    callers = {}
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        calls = _start_image_record_calls(os.path.join(TOOLS, name))
+        if calls:
+            callers[name] = calls
+    assert sorted(callers) == ["build_camera_i2v_payload.py", "build_i2v_payload.py"], \
+        callers
+    for name, calls in callers.items():
+        for lineno, kwargs in calls:
+            assert "declares_alpha" in kwargs, (name, lineno, kwargs)
+
+
+def test_the_alpha_field_is_read_by_a_caller_and_no_longer_only_written():
+    """`fit_agrees_with_the_file`'s sibling defect, closed the same way: the value is an
+    argument to a refusal now, not a line in a record nothing opens."""
+    src = open(os.path.join(TOOLS, "build_i2v_payload.py"), encoding="utf-8").read()
+    assert "alpha_disagrees_with_the_file" in src
+    assert 'measured["alpha"]' in src or 'measured.get("alpha")' in src
