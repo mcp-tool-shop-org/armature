@@ -591,3 +591,103 @@ def test_arming_the_diagnostic_by_keyword_is_refused_rather_than_honoured():
     with pytest.raises(TypeError) as exc:
         LS.round_trip_report(rest, obs, solved, DIAGONAL, raise_on_fail=True)
     assert "gate_round_trip" in str(exc.value)
+
+
+# --- F-1831f75d: the gate compares the population it claims ---------------------------
+
+#: The four registered landmarks that are a bone TAIL only and never a bone head. Derived
+#: from the registration below rather than typed, and asserted against it, so a change to
+#: `sitelist.BONES` moves this set instead of stranding it.
+def _tail_only_sites():
+    heads = {b.head for b in sitelist.BONES}
+    return sorted(s for s in LS.SITE_FROM_LANDMARK if s not in heads)
+
+
+def test_the_tail_only_population_is_what_it_was_measured_to_be():
+    """The premise of the case below, derived from `sitelist.BONES` and measured today.
+
+    `fk_sites` skips any site absent from `rest`, and `site_owner_bones` registers a site
+    through a bone's head OR tail — so a rest table that omits a tail-only site loses it
+    from the comparison silently, while a head site would surface elsewhere.
+    """
+    assert _tail_only_sites() == ["hand_end_L", "hand_end_R", "toe_L", "toe_R"]
+
+
+def test_the_report_states_the_population_it_covered():
+    rest = synthetic_rest()
+    obs = observed_from(rest, motion(LIMB_MOTION))
+    solved = LS.solve_frame(rest, obs)
+    ev = LS.round_trip_report(rest, obs, solved, DIAGONAL)
+    assert ev["n_sites"] == ev["n_sites_expected"] == len(LS.SITE_FROM_LANDMARK)
+    assert ev["sites_expected"] == sorted(LS.SITE_FROM_LANDMARK)
+    assert ev["sites_not_placed_by_fk"] == [] and ev["sites_not_observed"] == []
+    assert ev["population_complete"] is True
+    assert f"of {len(LS.SITE_FROM_LANDMARK)} sites" in ev["verdict"]
+
+
+def test_the_round_trip_gate_refuses_a_shrunk_population_and_names_it():
+    """Measured on this tree before the fix: dropping the four tail-only landmarks from
+    the rest table took the comparison from 19 sites to 15 and the gate still returned
+    `within_tolerance` True with the verdict `max 1.799e-16 over 15 sites` — a green
+    certificate over a population that had quietly lost the extremities, which is where a
+    lift is most likely to be wrong.
+    """
+    rest = synthetic_rest()
+    obs = observed_from(rest, motion(LIMB_MOTION))
+    solved = LS.solve_frame(rest, obs)
+
+    # `solve_frame` refuses a rest table missing a registered site, so the shrink is
+    # applied where the gate actually reads it: `gate_round_trip` takes `rest` as its own
+    # argument and re-derives nothing, and `fk_sites` skips any site absent from it.
+    shrunk = {k: v for k, v in rest.items() if k != "hand_end_L"}
+    report = LS.round_trip_report(shrunk, obs, solved, DIAGONAL)
+    assert "hand_end_L" in report["sites_not_placed_by_fk"]
+    assert report["n_sites"] < report["n_sites_expected"]
+    assert report["population_complete"] is False
+
+    with pytest.raises(LS.SolveGate, match=r"hand_end_L") as exc:
+        LS.gate_round_trip(shrunk, obs, solved, DIAGONAL)
+    assert "different claim" in str(exc.value)
+    assert exc.value.evidence["sites_not_placed_by_fk"] == ["hand_end_L"]
+    # And the gate is not merely always-raising: the full table still passes.
+    assert LS.gate_round_trip(rest, obs, solved, DIAGONAL)["population_complete"] is True
+
+
+def test_the_round_trip_gate_refuses_an_observation_that_lost_a_site():
+    """The other half of the population: a site the solve places and the observation does
+    not carry used to be a bare `KeyError` from inside the loop."""
+    rest = synthetic_rest()
+    obs = observed_from(rest, motion(LIMB_MOTION))
+    solved = LS.solve_frame(rest, obs)
+    thin = {k: v for k, v in obs.items() if k != "toe_R"}
+    with pytest.raises(LS.SolveGate, match=r"toe_R") as exc:
+        LS.gate_round_trip(rest, thin, solved, DIAGONAL)
+    assert exc.value.evidence["sites_not_observed"] == ["toe_R"]
+
+
+def test_the_gate_docstring_does_not_name_a_caller_that_does_not_exist():
+    """It said "the synthetic path ... is the function it calls" while no tool implements
+    that path: both production sites call the DIAGNOSTIC. Derived by walking `tools/`."""
+    import ast
+    import inspect
+    import os
+
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "tools")
+    callers = []
+    for dirpath, _dirs, files in os.walk(root):
+        for fn in sorted(files):
+            if not fn.endswith(".py"):
+                continue
+            full = os.path.join(dirpath, fn)
+            with open(full, encoding="utf-8") as fh:
+                src = fh.read()
+            for node in ast.walk(ast.parse(src)):
+                if isinstance(node, ast.Call):
+                    f = node.func
+                    name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+                    if name == "gate_round_trip":
+                        callers.append(os.path.relpath(full, root).replace(os.sep, "/"))
+    assert callers == [], f"a tool now calls the gate: {callers}; update the docstring"
+    doc = inspect.getdoc(LS.gate_round_trip)
+    assert "tests/test_lift_solve.py" in doc or "No tool implements" in doc
