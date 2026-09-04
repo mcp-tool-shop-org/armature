@@ -415,9 +415,27 @@ PROBE = textwrap.dedent(
 )
 
 
-def _run(tmp_path, *, flag=False, env_var=False):
+#: The andons the PROBE above exercises, pinned. WAVE 14, F-509a012b: the `-O` survival test
+#: was `for name, outcome in res['raised'].items(): assert outcome == 'RAISED'` with nothing
+#: before or after it, so an EMPTY `raised` dict passed all three parametrised legs — and the
+#: population is a hand-typed dict on ONE line of a 90-line embedded source literal, the
+#: easiest thing in this file to edit by accident. `tests/test_cascade.py` carried the
+#: byte-identical body; the two sibling probes in the same wave
+#: (`test_amend_w12_core_solvers.py:797` asserts `len(res['raised']) == 16`,
+#: `test_amend_w6_andons.py:326` asserts `set(res['raised']) == set(expected)`) guard, so the
+#: omission was an asymmetry rather than a house style.
+#:
+#: Written down here rather than parsed out of the PROBE deliberately: deriving the
+#: expectation FROM the literal would make a dropped name drop out of the expectation too,
+#: which is exactly the regression this pins against. `ci.yml`'s `python -O -m pytest` leg is
+#: the repo's whole mechanism for showing that gates still raise when asserts are deleted.
+EXPECTED_ANDONS = ("bare", "empty", "noclass", "paid", "short", "transposed", "twice",
+                   "unwired")
+
+
+def _run(tmp_path, *, flag=False, env_var=False, probe=None):
     script = tmp_path / f"as_probe_{int(flag)}_{int(env_var)}.py"
-    script.write_text(PROBE, encoding="utf-8")
+    script.write_text(PROBE if probe is None else probe, encoding="utf-8")
     env = dict(os.environ)
     env.pop("PYTHONOPTIMIZE", None)
     if env_var:
@@ -436,8 +454,34 @@ def _run(tmp_path, *, flag=False, env_var=False):
 )
 def test_every_assembly_andon_survives_optimization(tmp_path, flag, env_var, label):
     res = _run(tmp_path, flag=flag, env_var=env_var)
+    # Size and membership BEFORE the property (wave 14, F-509a012b): without this line the
+    # loop below is vacuous over an empty dict and the leg proves nothing.
+    assert sorted(res["raised"]) == sorted(EXPECTED_ANDONS), {
+        "not exercised by the probe": sorted(set(EXPECTED_ANDONS) - set(res["raised"])),
+        "exercised and not pinned": sorted(set(res["raised"]) - set(EXPECTED_ANDONS))}
     for name, outcome in res["raised"].items():
         assert outcome == "RAISED", f"{label}/{name}: {outcome}"
+
+
+def test_the_optimization_leg_is_red_when_the_probe_stops_exercising_an_andon(tmp_path):
+    """Rule 3 on the operand the finding named: the PROBE's own dict, one line short.
+
+    The dict at the bottom of `PROBE` is one line of an embedded source literal; dropping a
+    name from it narrows what the `-O` leg proves and, before this wave, changed nothing that
+    any assertion could see. Here the mutated probe is run for real and the membership line
+    is shown to fail on it.
+    """
+    dropped = PROBE.replace('"noclass": noclass}', "}").replace(
+        '"empty": empty,\n', "")
+    assert dropped != PROBE, "the probe's dispatch dict did not change; nothing is proven"
+    res = _run(tmp_path, probe=dropped)
+    assert sorted(res["raised"]) != sorted(EXPECTED_ANDONS), sorted(res["raised"])
+    with pytest.raises(AssertionError):
+        assert sorted(res["raised"]) == sorted(EXPECTED_ANDONS)
+    # …and the pre-wave-14 body is shown GREEN over the same narrowed run, or the comparison
+    # says nothing about what the guard added.
+    for name, outcome in res["raised"].items():
+        assert outcome == "RAISED", (name, outcome)
 
 
 def test_the_optimization_actually_took_effect(tmp_path):
