@@ -521,3 +521,88 @@ def test_a_perfectly_centred_subject_reports_equal_margins():
     ev = SF.gate_whole(ext, W, H, margin_px=8)
     assert ev["margins_px"]["left"] == pytest.approx(ev["margins_px"]["right"])
     assert ev["margins_px"]["top"] == pytest.approx(ev["margins_px"]["bottom"])
+
+
+# ------------------------------------------------- wave 10: a NaN is a refusal, not a PASS
+
+
+NOT_A_NUMBER = [float("nan"), float("inf"), -float("inf")]
+
+
+@pytest.mark.parametrize("bad", NOT_A_NUMBER)
+def test_gate_alpha_refuses_a_transparent_fraction_that_is_not_a_number(bad):
+    """F-90122505. THE ALPHA LAW's gate decided on `<= 0.0` and `>= 1.0`, and a NaN makes
+    BOTH False — so it fell through both saturated bounds the docstring argues have to
+    bind together, and landed on the verdict line. Measured before the fix:
+    `gate_alpha(float('nan'), (0.1, 0.1, 0.1), 'why')` RETURNED, with the verdict 'alpha
+    authored; nan of the frame is transparent'. A measurement that is not a number is
+    exactly what a mean over an empty selection produces, and this gate's whole job is to
+    certify the frame that conditions the generation.
+    """
+    with pytest.raises(SF.AlphaGate, match=r"not a finite") as exc:
+        SF.gate_alpha(bad, (0.1, 0.1, 0.1), "why")
+    ev = exc.value.evidence
+    assert "verdict" not in ev
+    assert ev["gate"] == "ALPHA" and ev["andon"] == "AlphaGate"
+
+
+def test_gate_alpha_still_binds_on_the_two_saturated_directions_it_was_built_for():
+    """The companion: the new clause must not have displaced the old ones."""
+    with pytest.raises(SF.AlphaGate, match=r"NO transparent pixels"):
+        SF.gate_alpha(0.0, (0.1, 0.1, 0.1), "why")
+    with pytest.raises(SF.AlphaGate, match=r"ENTIRELY transparent"):
+        SF.gate_alpha(1.0, (0.1, 0.1, 0.1), "why")
+    assert "0.2960" in SF.gate_alpha(0.296, (0.1, 0.1, 0.1), "why")["verdict"]
+
+
+@pytest.mark.parametrize("field", ["void_vs_plate_255", "plate_vs_flat_255",
+                                   "transparent_fraction"])
+@pytest.mark.parametrize("bad", NOT_A_NUMBER)
+def test_gate_backdrop_refuses_a_measurement_that_is_not_a_number(field, bad):
+    """The same door on Gate BACKDROP, whose two inputs are means taken 'over the master's
+    transparent region only' — a region that is EMPTY in precisely the baked-void case the
+    gate exists to catch, and a 0/0 mean is a NaN. Measured before the fix:
+    `gate_backdrop(float('nan'), float('nan'), 0.5, 'why', tol_255=1.0,
+    min_separation_255=5.0)` returned the verdict 'the plate is behind the performer:
+    nan/255 from the plate, nan/255 from the flat fallback it replaces'.
+    """
+    ok = dict(void_vs_plate_255=0.4, plate_vs_flat_255=61.0, transparent_fraction=0.296,
+              why="the picked bar still", tol_255=2.0, min_separation_255=4.0)
+    with pytest.raises(SF.BackdropGate, match=r"not a finite") as exc:
+        SF.gate_backdrop(**dict(ok, **{field: bad}))
+    assert "verdict" not in exc.value.evidence
+    assert exc.value.evidence["gate"] == "BACKDROP"
+
+
+@pytest.mark.parametrize("bad", NOT_A_NUMBER)
+def test_gate_backdrop_refuses_a_tolerance_that_is_not_a_number(bad):
+    ok = dict(void_vs_plate_255=0.4, plate_vs_flat_255=61.0, transparent_fraction=0.296,
+              why="the picked bar still", tol_255=2.0, min_separation_255=4.0)
+    for field in ("tol_255", "min_separation_255"):
+        with pytest.raises(SF.BackdropGate, match=r"not a finite"):
+            SF.gate_backdrop(**dict(ok, **{field: bad}))
+
+
+@pytest.mark.parametrize("side", ["x0", "x1", "y0", "y1"])
+@pytest.mark.parametrize("bad", NOT_A_NUMBER)
+def test_gate_whole_refuses_an_extent_that_is_not_a_number(side, bad):
+    """The third gate in this module with the same shape, swept because the rule is about
+    the shape and not about the two functions the finding named: `short = {side: m for ...
+    if m < margin_px}` is empty when every margin is NaN, so a silhouette extent that came
+    back non-finite passed Gate WHOLE with the verdict 'whole silhouette in frame; smallest
+    margin nan px'."""
+    ext = {"x0": 300.0, "x1": 520.0, "y0": 24.0, "y1": 456.0, "n_behind": 0,
+           "n_points": 100}
+    ext[side] = bad
+    with pytest.raises(SF.StartFrameGate, match=r"not a finite") as exc:
+        SF.gate_whole(ext, W, H, margin_px=8)
+    assert "verdict" not in exc.value.evidence
+
+
+def test_gate_whole_still_passes_and_still_fires_on_finite_extents():
+    """The companion, both directions, so the sweep above cannot pass on a dead gate."""
+    ok = {"x0": 300.0, "x1": 520.0, "y0": 24.0, "y1": 456.0, "n_behind": 0,
+          "n_points": 100}
+    assert SF.gate_whole(ok, W, H, margin_px=8)["verdict"].startswith("whole silhouette")
+    with pytest.raises(SF.StartFrameGate, match=r"does not clear the frame border"):
+        SF.gate_whole(dict(ok, x0=-4.0), W, H, margin_px=8)

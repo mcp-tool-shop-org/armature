@@ -542,3 +542,140 @@ def test_the_loosened_tolerance_would_have_hidden_a_real_difference():
     b["chest"]["positions"] = [[v + 1e-5 for v in p] for p in b["chest"]["positions"]]
     with pytest.raises(parts.GatePartsDeterminism, match=r"vertices differ"):
         parts.gate_parts_determinism(a, b, 1.069)
+
+
+# ------------------------------------------------------- wave 10: the two ways past the
+# ------------------------------------------------------- "may only TIGHTEN" guard
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), 0.0, -1.0])
+@pytest.mark.parametrize("keyword", ["epsilon_frac", "rigidity_frac"])
+def test_rigid_refuses_a_tolerance_that_is_not_a_positive_finite_number(keyword, bad):
+    """F-e982d505, half (1). `_tightened` refused on `value > owned`, and `nan > 1e-4` is
+    False — so a NaN was accepted AS A TIGHTENING and every comparison below it then read
+    False in both directions. Measured before the fix: `gate_rigid_arrival([_obs('a',
+    xform=1e-3, pair=0.0, disp=0.5)], 1.0, epsilon_frac=float('nan'))` RETURNED, with
+    `transform_tolerance` nan and the verdict '1 parts each landed on their own bone
+    transform', where the same call at the module default raises. Zero and negative are the
+    same door one step further: they are not above the owned value either.
+    """
+    with pytest.raises(parts.GateRigidArrival, match=r"not a finite positive") as exc:
+        parts.gate_rigid_arrival([_obs("a", xform=1e-3)], 1.0, **{keyword: bad})
+    ev = exc.value.evidence
+    assert "verdict" not in ev
+    assert ev["gate"] == "RIGID" and ev["andon"] == "GateRigidArrival"
+    assert repr(ev[keyword]) == repr(float(bad))
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 0.0, -1.0])
+def test_determinism_refuses_a_length_fraction_that_is_not_positive_and_finite(bad):
+    """The same door on Gate D. Measured before the fix: `gate_parts_determinism(a, b, 1.0,
+    length_frac=float('nan'))` returned the verdict '3 parts identical across two builds'
+    while its own evidence recorded a `worst` delta far above the module's tolerance."""
+    a, b = _fp(), _fp()
+    b["chest"]["positions"] = [[v + 99.0 for v in p] for p in b["chest"]["positions"]]
+    with pytest.raises(parts.GatePartsDeterminism,
+                       match=r"not a finite positive") as exc:
+        parts.gate_parts_determinism(a, b, 1.0, length_frac=bad)
+    assert "verdict" not in exc.value.evidence
+    assert exc.value.evidence["gate"] == "D"
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), 0.0, -1.0])
+def test_both_gates_refuse_a_bbox_diagonal_that_cannot_scale_a_tolerance(bad):
+    """F-e982d505, half (2). `bbox_diagonal` multiplies every tolerance in this module and
+    was not checked at all. Measured before the fix on an observation set that raises at
+    bbox_diagonal 1.0: at 1e6 the gate PASSED with transform_tolerance 100.0, and at nan it
+    PASSED with transform_tolerance nan — so the loosening direction wave 8 closed on
+    `epsilon_frac` stayed fully open one argument over, and `rig_parts.py` passes this one
+    from a measurement (`ctx['diagonal']`) rather than from a constant.
+
+    A merely LARGE diagonal (1e6, the wrong-units case) is deliberately NOT in this sweep
+    and is pinned as passing two tests below: a subject really can be metres across, this
+    module cannot know the caller's units, and a guard that refused "big" would be a
+    different defect wearing this one's name.
+    """
+    obs = [_obs("a", xform=1e-3)]
+    with pytest.raises(parts.GateRigidArrival, match=r"not a finite positive") as exc:
+        parts.gate_rigid_arrival(obs, bad)
+    assert "verdict" not in exc.value.evidence
+    assert repr(exc.value.evidence["bbox_diagonal"]) == repr(float(bad))
+
+    a, b = _fp(), _fp()
+    b["chest"]["positions"] = [[v + 99.0 for v in p] for p in b["chest"]["positions"]]
+    with pytest.raises(parts.GatePartsDeterminism, match=r"not a finite positive"):
+        parts.gate_parts_determinism(a, b, bad)
+
+
+def test_the_same_inputs_still_raise_at_the_module_default():
+    """The companion the sweep above needs, or it could pass on a gate that never fires."""
+    with pytest.raises(parts.GateRigidArrival, match=r"did not arrive whole"):
+        parts.gate_rigid_arrival([_obs("a", xform=1e-3)], 1.0)
+    a, b = _fp(), _fp()
+    b["chest"]["positions"] = [[v + 99.0 for v in p] for p in b["chest"]["positions"]]
+    with pytest.raises(parts.GatePartsDeterminism, match=r"vertices differ"):
+        parts.gate_parts_determinism(a, b, 1.0)
+
+
+def test_a_bbox_diagonal_that_is_merely_large_is_not_refused_for_being_unusual():
+    """The guard bounds non-finite and non-positive, not "big" — a subject really can be
+    metres across, and a gate that refused that would be a different defect."""
+    assert parts.gate_rigid_arrival([_obs("a")], 12.5)["verdict"].startswith("1 parts")
+
+
+# ------------------------------------------------- wave 10: Gate D on a zero-vertex part
+
+
+def test_determinism_refuses_a_zero_vertex_part_in_its_own_words():
+    """F-03955683. `np.abs(...).max()` over an empty array raises `ValueError: zero-size
+    array to reduction operation maximum which has no identity` — untyped, so it carries no
+    gate id, no evidence and no andon name, and the halt contract records it as 'FAILED — an
+    unhandled error' rather than as Gate D firing. A delta of 0.0 over a part with no
+    geometry would be the other wrong answer: it would read as agreement.
+    """
+    empty = {"n_verts": 0, "n_faces": 0, "positions": np.zeros((0, 3))}
+    with pytest.raises(parts.GatePartsDeterminism) as exc:
+        parts.gate_parts_determinism({"p": empty}, {"p": dict(empty)}, 1.0)
+    ev = exc.value.evidence
+    assert ev["gate"] == "D" and ev["andon"] == "GatePartsDeterminism"
+    assert ev["empty_parts"] == ["p"]
+    assert "verdict" not in ev
+
+
+def test_the_zero_vertex_refusal_is_not_the_numpy_error_wearing_a_gate_name():
+    """The fixture that would pass if the code merely propagated numpy's error: assert the
+    class AND that the message is this module's, not the reduction's."""
+    empty = {"n_verts": 0, "n_faces": 0, "positions": np.zeros((0, 3))}
+    with pytest.raises(parts.GatePartsDeterminism) as exc:
+        parts.gate_parts_determinism({"p": empty}, {"p": dict(empty)}, 1.0)
+    assert "zero-size array" not in str(exc.value)
+    assert isinstance(exc.value, GateFailure)
+
+
+def test_a_part_with_geometry_beside_an_empty_one_still_names_the_empty_one():
+    a = _fp()
+    b = _fp()
+    a["void"] = {"n_verts": 0, "n_faces": 0, "positions": np.zeros((0, 3))}
+    b["void"] = {"n_verts": 0, "n_faces": 0, "positions": np.zeros((0, 3))}
+    with pytest.raises(parts.GatePartsDeterminism) as exc:
+        parts.gate_parts_determinism(a, b, 1.069)
+    assert exc.value.evidence["empty_parts"] == ["void"]
+
+
+# ------------------------------------------------- wave 10: the one finite-number helper
+
+
+def test_require_finite_writes_the_offending_value_into_the_caller_s_own_evidence():
+    """The helper the four gate modules share (`startframe`, `resample`, `lift_solve` and
+    this one), rather than four copies of `math.isfinite`. It raises the CALLER's andon
+    class, so each module keeps its own gate id."""
+    ev = {"gate": "RIGID"}
+    with pytest.raises(parts.GateRigidArrival) as exc:
+        parts.require_finite("x", float("nan"), parts.GateRigidArrival, ev)
+    assert exc.value.evidence["x"] != exc.value.evidence["x"]      # NaN is not itself
+    assert parts.require_finite("x", 0.0, parts.GateRigidArrival, ev,
+                                positive=False) == 0.0
+    with pytest.raises(parts.GateRigidArrival):
+        parts.require_finite("x", 0.0, parts.GateRigidArrival, ev)
+    with pytest.raises(parts.GateRigidArrival):
+        parts.require_finite("x", float("inf"), parts.GateRigidArrival, ev, positive=False)

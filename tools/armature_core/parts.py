@@ -26,6 +26,8 @@ is what the accounting gate checks. The collar is duplication layered on top, co
 separately, so the two can never be confused in the record.
 """
 
+import math
+
 import numpy as np
 
 from .binding import segment_distance
@@ -300,11 +302,59 @@ RIGID_RIGIDITY_FRAC = 1e-5
 DETERMINISM_LENGTH_FRAC = 1e-6
 
 
+def require_finite(name, value, gate_cls, ev, positive=True):
+    """`float(value)` if it is a number a gate can compare against, else raise `gate_cls`.
+
+    **The one implementation of wave 10's rule 4** — a verdict on a non-finite number is a
+    refusal, never a PASS — shared by the four gate-bearing modules that compare a
+    measurement: this one, `startframe.gate_alpha`/`gate_backdrop`, `resample.
+    require_rotation` and `lift_solve.gate_round_trip`. It raises the CALLER's own andon
+    class and writes into the caller's own evidence dict, so each module keeps its gate id
+    and its evidence; nothing here is a second copy of `math.isfinite` with a different
+    message.
+
+    **Why the direction matters.** `nan > x` and `nan < x` are BOTH False, so a NaN walks
+    through every comparison a gate makes, in both directions at once, and lands on the
+    verdict line — measured 2026-09-04 on `_tightened` below (`float('nan') > 1e-4` is
+    False, so a NaN was accepted as a *tightening*), on `startframe.gate_alpha` (a full
+    PASS verdict reading "nan of the frame is transparent") and on `gate_backdrop`. An
+    infinity is the same shape one step over: it satisfies a `<=` bound or fails it
+    silently depending on sign, and neither answer is a measurement.
+
+    `positive=False` bounds finiteness only, for quantities that may legitimately be zero
+    or negative (a transparent fraction, a mean absolute difference). The default also
+    refuses zero and negatives, which is what a tolerance, a fraction of a diagonal, or a
+    length scale has to be.
+
+    The natural long-term home for this is `armature_core/errors.py`, beside `GateFailure`;
+    that file is another domain's in the wave-10 frozen map, so the helper lives here (with
+    `_tightened`, the repo's settled "the module owns the bound" shape) and is imported by
+    the other three rather than copied.
+    """
+    v = float(value)
+    if not math.isfinite(v) or (positive and v <= 0.0):
+        ev[name] = v
+        raise gate_cls(
+            f"{name}={v!r} is not a finite "
+            f"{'positive ' if positive else ''}number, so it cannot be compared against. "
+            f"A NaN fails EVERY comparison in both directions — `nan > x` and `nan < x` "
+            f"are both False — so it does not fire a bound, it walks past every bound and "
+            f"lands on the verdict line. A gate that returns a PASS beside a measurement "
+            f"that is not a number certifies nothing", ev)
+    return v
+
+
 def _tightened(name, requested, owned, gate_cls, ev):
-    """`requested` if it only tightens `owned`, else raise. None means "use the module's"."""
+    """`requested` if it only tightens `owned`, else raise. None means "use the module's".
+
+    Wave 10, F-e982d505: the comparison below is `value > float(owned)`, and `float('nan')
+    > 1e-4` is False — so a NaN, an infinity of the wrong sign, a zero and a negative all
+    read as tightenings and were accepted. `require_finite` runs first, and it refuses
+    them by name.
+    """
     if requested is None:
         return float(owned)
-    value = float(requested)
+    value = require_finite(name, requested, gate_cls, ev)
     if value > float(owned):
         raise gate_cls(
             f"a caller asked this gate to run with {name}={value:.3e}, above the module's "
@@ -329,6 +379,17 @@ def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_
     `rigidity_frac` were keywords any caller could raise; they now default to None, meaning
     `RIGID_TRANSFORM_FRAC` and `RIGID_RIGIDITY_FRAC`, and a value ABOVE either raises. See
     `_tightened`.
+
+    **And `bbox_diagonal` is checked, because it multiplies both of them** (F-e982d505).
+    Wave 8 closed the loosening direction on the two fractions and left it fully open one
+    argument over: measured 2026-09-04 on an observation set that raises at
+    `bbox_diagonal=1.0`, the same call PASSED at `bbox_diagonal=1e6` with
+    `transform_tolerance` 100.0 and PASSED at `bbox_diagonal=float('nan')` with
+    `transform_tolerance` nan. Non-finite and non-positive are refused here by name. A
+    merely LARGE diagonal is not, and cannot be: `rig_parts.py:338` measures it off the
+    mesh bbox and this module does not know the caller's units, so "big" is not a
+    property this gate can rule on — what it can rule on is that the multiplicand is a
+    number at all.
     """
     ev = {"gate": "RIGID", "andon": "GateRigidArrival",
           "bbox_diagonal": float(bbox_diagonal),
@@ -337,6 +398,7 @@ def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_
           "transform_frac_requested": epsilon_frac,
           "rigidity_frac_requested": rigidity_frac,
           "parts": observations}
+    require_finite("bbox_diagonal", bbox_diagonal, GateRigidArrival, ev)
     eps = _tightened("epsilon_frac", epsilon_frac, RIGID_TRANSFORM_FRAC,
                      GateRigidArrival, ev)
     rig = _tightened("rigidity_frac", rigidity_frac, RIGID_RIGIDITY_FRAC,
@@ -411,12 +473,25 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=None):
     **The tolerance fraction is this module's, not the caller's.** `length_frac` was a
     keyword defaulting to 1e-6 that any caller could raise; it now defaults to None,
     meaning `DETERMINISM_LENGTH_FRAC`, and a value ABOVE that raises. See `_tightened`.
+    Wave 10 (F-e982d505): a NaN read as a tightening and `bbox_diagonal` was unchecked —
+    measured, `gate_parts_determinism(a, b, 1.0, length_frac=float('nan'))` returned the
+    verdict "1 parts identical across two builds" while its own evidence recorded
+    `worst {"part": "p", "delta": 99.0}`. Both are refused by `require_finite` now.
+
+    **A part carrying no vertices is refused rather than compared** (F-03955683).
+    `np.abs(...).max()` over an empty array raises numpy's untyped `ValueError: zero-size
+    array to reduction operation maximum which has no identity`, which carries no gate id,
+    no evidence and no andon name, so the halt contract records Gate D firing as "FAILED —
+    an unhandled error". Returning 0.0 for such a part would be the other wrong answer: a
+    delta of zero over geometry that does not exist reads as agreement.
     """
     shared = sorted(set(a) & set(b))
     ev = {"gate": "D", "andon": "GatePartsDeterminism",
           "module_length_frac": DETERMINISM_LENGTH_FRAC,
           "length_frac_requested": length_frac,
+          "bbox_diagonal": float(bbox_diagonal),
           "n_parts_a": len(a), "n_parts_b": len(b), "n_parts_compared": len(shared)}
+    require_finite("bbox_diagonal", bbox_diagonal, GatePartsDeterminism, ev)
     frac = _tightened("length_frac", length_frac, DETERMINISM_LENGTH_FRAC,
                       GatePartsDeterminism, ev)
     tol = frac * float(bbox_diagonal)
@@ -435,6 +510,20 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=None):
             f"so the geometry comparison this gate exists for ran over nothing: only in "
             f"first {sorted(set(a) - set(b))[:8]}, only in second "
             f"{sorted(set(b) - set(a))[:8]}", ev)
+
+    empty = sorted(n for n in shared
+                   if len(np.asarray(a[n]["positions"])) == 0
+                   or len(np.asarray(b[n]["positions"])) == 0)
+    if empty:
+        ev["empty_parts"] = empty
+        raise GatePartsDeterminism(
+            f"{len(empty)} part(s) carry no vertices on one or both sides "
+            f"({empty[:8]}), so there is no geometry to compare and the comparison this "
+            f"gate exists for would run over an empty array. `.max()` over one is numpy's "
+            f"untyped error, and a delta of 0.0 over one would read as agreement — a "
+            f"determinism andon certifying a part that does not exist. Gate PARTS accounts "
+            f"every face earlier in `rig_parts.build_pass`, so a part with no geometry "
+            f"reaching here is itself the finding", ev)
 
     if set(a) != set(b):
         problems.append(f"part sets differ: only in first {sorted(set(a) - set(b))[:8]}, "
