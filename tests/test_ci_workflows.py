@@ -3061,3 +3061,145 @@ def test_the_pipeline_census_sees_the_spellings_it_was_not_written_against():
     ]
     for script in green:
         assert _signalling_pipelines(script) == [], f"flagged wrongly: {script!r}"
+
+
+# -- a workflow does not cancel a step it cannot take back (F-d43de3e8) -------------------
+#
+# `concurrency.cancel-in-progress` is WORKFLOW-level: a second push cancels the first run
+# wherever it is, including inside the step that performs the act. pages.yml carried `true`
+# over a job whose one step is `actions/deploy-pages` -- the step this file's own header
+# calls "the step that replaces what the public sees" -- so two quick site pushes could leave
+# a Pages deployment cancelled part-way, the live site on the older build, and the cancelled
+# run GREY rather than red: a deploy that did not happen with nothing reporting a failure.
+# release.yml already sets `false` on the workflow whose steps cannot be taken back, and no
+# comment in pages.yml recorded a decision either way.
+#
+# A job-level `concurrency:` block does NOT close this: workflow-level cancellation cancels
+# the whole run regardless, which is why the setting has to be decided where it is written.
+#
+# This is a deliberate-deviation question, not a rule violation. The studio Actions rule
+# mandates the concurrency block with `cancel-in-progress: true`, and GitHub's own Pages
+# guidance is the documented exception. So the rule below is the studio's, with the exception
+# stated in terms of the ACT rather than the filename: a workflow that performs something
+# irreversible queues, everything else cancels.
+#
+# THE NODE THIS CENSUS KEYS ON: the STEP that performs the act, in either spelling. A
+# published npm package is `run: npm publish` (a script), a PyPI upload and a Pages deploy
+# are `uses:` a third-party action. A census that recognised only `uses:` would pass on
+# release.yml's npm job, and one that read only `run:` would pass on both of the others.
+
+#: Acts with no compensator, by what they DO. `git push` is here for the tag half: a pushed
+#: tag is what release.yml's whole gate ordering exists to protect.
+IRREVERSIBLE_RUN_TOKENS = (
+    "npm publish", "twine upload", "gh release create", "git push", "docker push",
+)
+IRREVERSIBLE_ACTIONS = ("actions/deploy-pages", "gh-action-pypi-publish")
+
+
+def irreversible_steps(text):
+    """Every step in a workflow that performs an act with no compensator, both spellings."""
+    found = []
+    for source in _run_scripts_in(text):
+        for token in IRREVERSIBLE_RUN_TOKENS:
+            if token in _code_only(source):
+                found.append(token)
+    for line in text.splitlines():
+        match = re.search(r"uses:\s*(\S+)", line)
+        if not match:
+            continue
+        for action in IRREVERSIBLE_ACTIONS:
+            if action in match.group(1):
+                found.append(action)
+    return sorted(set(found))
+
+
+def cancel_in_progress(text):
+    """The workflow-level `cancel-in-progress` value, or None if the block does not set one."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.rstrip() != "concurrency:":
+            continue
+        for entry in block_at(lines, i):
+            match = re.match(r"\s*cancel-in-progress:\s*(\S+)", entry)
+            if match:
+                return match.group(1).strip().lower() == "true"
+        return None
+    return None
+
+
+#: Re-derived 2026-09-04 (wave 12). Equality, so a workflow that starts publishing something
+#: joins the requirement on the day the step lands.
+RECORDED_IRREVERSIBLE_WORKFLOWS = {
+    "ci.yml": [],
+    "pages.yml": ["actions/deploy-pages"],
+    "release.yml": ["gh-action-pypi-publish", "npm publish"],
+}
+
+
+def test_the_irreversible_step_census_is_the_acts_in_the_files():
+    """Size and membership before the property, in both spellings.
+
+    release.yml is the proof that both halves of the walk are live: its PyPI upload is a
+    `uses:` and its npm publish is a `run:`, and a census that read one of the two would
+    still have looked green here.
+    """
+    got = {name: irreversible_steps(_text(name)) for name in workflow_files()}
+    assert got == RECORDED_IRREVERSIBLE_WORKFLOWS, got
+
+
+@pytest.mark.parametrize("workflow", workflow_files())
+def test_every_workflow_states_a_concurrency_decision(workflow):
+    """The studio rule's block is mandatory, and a missing value is not a decision."""
+    assert cancel_in_progress(_text(workflow)) is not None, (
+        f"{workflow} has no workflow-level `cancel-in-progress`; the studio Actions rule "
+        "requires the concurrency block, and an unset value is whatever GitHub defaults to"
+    )
+
+
+@pytest.mark.parametrize("workflow", workflow_files())
+def test_a_workflow_that_cannot_take_a_step_back_queues_rather_than_cancels(workflow):
+    """The property: irreversible work queues; everything else cancels, per the studio rule."""
+    text = _text(workflow)
+    acts = irreversible_steps(text)
+    cancels = cancel_in_progress(text)
+    if acts:
+        assert cancels is False, (
+            f"{workflow} performs {acts} and cancels itself in progress; a second push "
+            "cancels the first run wherever it is, and a cancelled run is grey rather than "
+            "red -- the act did not happen and nothing reports a failure"
+        )
+    else:
+        assert cancels is True, (
+            f"{workflow} takes nothing back and does not cancel in progress; the studio "
+            "Actions rule mandates `cancel-in-progress: true` where it is safe, and CI "
+            "minutes spent on a superseded commit are minutes"
+        )
+
+
+def test_the_concurrency_census_reads_both_spellings_and_the_setting_itself():
+    """The hidden spellings, driven through the real functions on synthetic workflows."""
+    as_action = (
+        "name: x\nconcurrency:\n  group: g\n  cancel-in-progress: true\njobs:\n"
+        "  deploy:\n    steps:\n      - uses: actions/deploy-pages@abc123 # v4.0.5\n"
+    )
+    as_script = (
+        "name: x\nconcurrency:\n  group: g\n  cancel-in-progress: true\njobs:\n"
+        "  publish:\n    steps:\n      - name: publish\n        run: |\n"
+        "          npm publish --provenance\n"
+    )
+    commented = (
+        "name: x\nconcurrency:\n  group: g\n  cancel-in-progress: true\njobs:\n"
+        "  safe:\n    steps:\n      - name: safe\n        run: |\n"
+        "          # npm publish is what release.yml does\n"
+        "          echo nothing\n"
+    )
+    no_block = (
+        "name: x\njobs:\n  safe:\n    steps:\n      - name: s\n        run: echo nothing\n"
+    )
+    assert irreversible_steps(as_action) == ["actions/deploy-pages"]
+    assert irreversible_steps(as_script) == ["npm publish"]
+    assert irreversible_steps(commented) == [], (
+        "naming an act in a comment is not performing it")
+    assert cancel_in_progress(as_action) is True
+    assert cancel_in_progress(as_script.replace("true", "false")) is False
+    assert cancel_in_progress(no_block) is None
