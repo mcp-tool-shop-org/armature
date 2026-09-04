@@ -38,7 +38,7 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig_character as rc                                            # noqa: E402
 import rig_parts as rp                                                # noqa: E402
-from armature_core import landmarks, sitelist                         # noqa: E402
+from armature_core import blender_scene, landmarks, sitelist          # noqa: E402
 from armature_core.errors import GateFailure                          # noqa: E402
 
 
@@ -46,6 +46,12 @@ class QuadriflowDeclined(GateFailure):
     """QuadriFlow returned CANCELLED and changed nothing."""
 
     gate = "QUADRIFLOW"
+
+
+class ComparisonNotIsolated(GateFailure):
+    """A comparison panel could not be reduced to the one variant it claims to show."""
+
+    gate = "ISOLATE"
 
 
 class NoRetopoProduced(GateFailure):
@@ -251,6 +257,42 @@ def smallest_limb_radius(ob):
     return smallest[0], float(smallest[1]), {k: float(v) for k, v in named.items()}
 
 
+def isolate_subject(objects, subject):
+    """Hide every object but `subject` from the render, and refuse if that did not hold.
+
+    MEASURED 2026-09-04: `render_comparison` hid objects by iterating the `variants` list
+    it was handed -- `for _, other in variants: other.hide_render = other is not ob` -- so
+    an object ABSENT from that list was never touched. The two variants were then disposed
+    of asymmetrically: a dead `variant_a` was removed, a dead `variant_b` was neither
+    removed nor hidden. Both arms are wrapped in `except Exception` that records a FAILED
+    result and continues, so a failed B -- a duplicate of the outer shell at the identical
+    transform -- stayed render-visible and was drawn into every panel of every region, on
+    top of the variant each panel claims to show. The tool then wrote `panels.json`,
+    printed `RETOPO_OK` and exited 0.
+
+    The andon is on the direction the invariant does not bound: not "the listed objects are
+    hidden" but "nothing else is visible". Same shape as
+    `rig_character.gate_objects_registered`.
+    """
+    for ob in objects:
+        ob.hide_render = ob is not subject
+    still = [o.name for o in objects if o is not subject and o.hide_render is not True]
+    if still:
+        raise ComparisonNotIsolated(
+            f"{len(still)} object(s) are still in the render beside the panel's subject "
+            f"{getattr(subject, 'name', subject)!r}: {still}. Every panel would be a "
+            f"composite of the variant it names and something else",
+            {"gate": "ISOLATE", "subject": getattr(subject, "name", None),
+             "still_visible": still})
+    if subject is None or subject.hide_render:
+        raise ComparisonNotIsolated(
+            f"the panel's own subject {getattr(subject, 'name', subject)!r} is hidden from "
+            f"render; the panel would be empty",
+            {"gate": "ISOLATE", "subject": getattr(subject, "name", None),
+             "still_visible": []})
+    return [o.name for o in objects if o is not subject]
+
+
 def render_comparison(scene, variants, out_dir, diagonal, centre):
     """Full figure plus the three regions that decide it: a sculpted ball, a hand, a foot."""
     light_the_scene(scene)
@@ -268,8 +310,10 @@ def render_comparison(scene, variants, out_dir, diagonal, centre):
     for region, target, oscale, azim in regions:
         panels = []
         for label, ob in variants:
-            for _, other in variants:
-                other.hide_render = other is not ob
+            # Everything render-visible in the SCENE, not only the objects in `variants`:
+            # a failed variant never reaches this list and used to be drawn into every
+            # panel, on top of the one being shown.
+            isolate_subject([o for o in bpy.data.objects if o.type == "MESH"], ob)
             ortho_camera(scene, f"cam_{label}_{region}", Vector(target), oscale,
                          (700, 1150) if region == "figure" else (700, 700), azim)
             path = os.path.join(out_dir, f"{label}_{region}.png".replace(" ", "_"))
@@ -355,27 +399,46 @@ def main():
     bpy.ops.export_scene.gltf(filepath=shell_path, export_format="GLB", use_selection=True,
                               export_apply=False, export_yup=True)
 
+    # SYMMETRIC. MEASURED 2026-09-04: the superseded shape removed a dead A and did
+    # nothing at all about a dead B, and B is a duplicate of the outer shell at the
+    # identical transform -- so it stayed render-visible and was composited into every
+    # panel. Both arms go through one loop, before any panel is shot.
+    labels = {
+        "A_quadriflow_direct":
+            lambda: f"A — QuadriFlow direct, "
+                    f"{results['A_quadriflow_direct']['faces']:,} faces",
+        "B_voxel_then_quadriflow":
+            lambda: f"B — voxel then QuadriFlow, "
+                    f"{results['B_voxel_then_quadriflow']['quads']:,} quads"}
     columns = [(f"input — outer shell, {shell_stats['faces']:,} tris", ob)]
-    if "A_quadriflow_direct" in live:
-        columns.append((f"A — QuadriFlow direct, "
-                        f"{results['A_quadriflow_direct']['faces']:,} faces", variant_a))
-    else:
-        bpy.data.objects.remove(variant_a, do_unlink=True)
-    if "B_voxel_then_quadriflow" in live:
-        columns.append((f"B — voxel then QuadriFlow, "
-                        f"{results['B_voxel_then_quadriflow']['quads']:,} quads", variant_b))
+    removed = []
+    for name, obj in (("A_quadriflow_direct", variant_a),
+                      ("B_voxel_then_quadriflow", variant_b)):
+        if name in live:
+            columns.append((labels[name](), obj))
+        else:
+            removed.append(obj.name)
+            bpy.data.objects.remove(obj, do_unlink=True)
     rows = render_comparison(scene, columns, os.path.join(out_dir, "panels"), diagonal,
                              (lo, hi))
 
     manifest = {
         "tool": "rig_retopo", "started": started, "source_glb": args["glb"],
+        "blender": blender_scene.blender_provenance(),
+        "variants_removed_before_the_sheet": removed,
         "source_sha256": rc.sha256_file(args["glb"]), "diagonal": diagonal,
+        # The ruling, restated in neutral prose. MEASURED 2026-09-04: this field carried
+        # the Director's conversational sentence verbatim, copied into every
+        # retopo_manifest.json the tool writes -- against the standing rule that public
+        # surfaces carry decisions and facts in neutral prose and never quotations from
+        # chat. The date, the subject and the verdict are what a record needs.
         "licence": {
-            "ruling": "Director 2026-08-11: 'it's not fit for the pipeline, as it isn't "
-                      "non-commercial safe.'",
+            "ruling": ("Director ruling 2026-08-11: QuadRemesher (Exoside) is struck from "
+                       "the pipeline on commercial-safety grounds"),
             "struck": "QuadRemesher (Exoside) — not enabled, not measured, no licence row",
-            "used": "Blender 5.2 built-ins only (voxel_remesh, quadriflow_remesh) — GPL, "
-                    "COMMERCIAL: YES, and no per-rig entitlement is involved",
+            "used": ("Blender built-ins only (mesh.voxel_remesh, mesh.quadriflow_remesh) "
+                     "— GPL, COMMERCIAL: YES, and no per-rig entitlement is involved. "
+                     "Which build ran is recorded under `blender`, not asserted here"),
         },
         "target_faces": args["target_faces"],
         "quadriflow_scale": {

@@ -28,6 +28,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig_character as rc                                            # noqa: E402
+from armature_core import blender_scene                               # noqa: E402
 from armature_core.errors import GateFailure                          # noqa: E402
 
 #: Bake resolution. The Director's deliverable atlas.
@@ -71,13 +72,44 @@ def parse_args():
     return vars(p.parse_args(argv))
 
 
+class ImportEmpty(GateFailure):
+    """An import brought in no usable mesh, or more than one and no way to choose."""
+
+    gate = "IMPORT"
+
+
 def _import(path, name):
-    before = set(bpy.data.objects)
+    """The one render-visible mesh `path` brings in, renamed.
+
+    MEASURED 2026-09-04, two defects in four lines. (a) The refusal was the BASE
+    `GateFailure` with no evidence dict, so `gate` fell through to the class default and
+    `halt.json` recorded `"gate": "G?"` with `"evidence": {}` -- a halt whose record cannot
+    say which andon pulled, in a file that already defined two properly-tagged subclasses.
+    (b) The population was a SET (`set(bpy.data.objects) - before`) and the choice was
+    `new[0]`: iteration order over a set follows the objects' identity hashes and is not
+    stable across processes. More than one mesh is the NORM here, because Blender's glTF
+    importer adds the `glTF_not_exported` Icosphere, so WHICH mesh got baked was not
+    reproducible from the recorded inputs -- and neither the manifest nor the BAKE andon
+    named it. `_import` is called twice per run, for the source and the retopo target.
+
+    Selection is now render visibility and an ambiguous result RAISES, the way
+    `rig_character.build_pass` and `lift_solve.pick_subject` already refuse it. Order is
+    the scene's own object order, not a set's.
+    """
+    before = {o.name for o in bpy.data.objects}
     bpy.ops.import_scene.gltf(filepath=path)
-    new = [o for o in set(bpy.data.objects) - before if o.type == "MESH"]
-    if not new:
-        raise GateFailure(f"no mesh imported from {path}")
-    ob = new[0]
+    added = [o for o in bpy.data.objects if o.name not in before]
+    meshes = [o for o in added if o.type == "MESH"]
+    visible = blender_scene.render_visible_meshes(bpy.context.scene, meshes)
+    if len(visible) != 1:
+        raise ImportEmpty(
+            f"{path} contributed {len(visible)} render-visible mesh object(s); exactly one "
+            f"is needed and guessing would bake an object nobody asked about",
+            {"path": path,
+             "objects_added": [o.name for o in added],
+             "mesh_objects": [o.name for o in meshes],
+             "render_visible": [o.name for o in visible]})
+    ob = visible[0]
     ob.name = ob.data.name = name
     return ob
 
@@ -217,6 +249,10 @@ def main():
     rc.fresh_scene(16)
     source = _import(args["source"], "source_original")
     target = _import(args["retopo"], "retopo_clean")
+    subject_selection = {
+        "how": ("the one RENDER-VISIBLE mesh each import contributed; an ambiguous import "
+                "raises rather than indexing into an unordered set"),
+        "source_original": source.name, "retopo_clean": target.name}
 
     cage = args["max_deviation"] * CAGE_PER_DEVIATION
     uv_rec = unwrap(target, BAKE_MARGIN, args["atlas"])
@@ -245,6 +281,8 @@ def main():
 
     manifest = {
         "tool": "rig_bake", "started": started,
+        "blender": blender_scene.blender_provenance(),
+        "subject_selection": subject_selection,
         "inputs": {"retopo": args["retopo"], "source": args["source"],
                    "source_sha256": rc.sha256_file(args["source"]),
                    "retopo_sha256": rc.sha256_file(args["retopo"])},
