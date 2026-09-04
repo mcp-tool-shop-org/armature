@@ -10,6 +10,7 @@ wave-12 rule, earned because wave 10's censuses recognised a refusal by the name
 """
 
 import ast
+import json
 import math
 import os
 import sys
@@ -771,3 +772,241 @@ def test_the_refusal_fires_before_the_scene_resolution_is_assigned():
     assert checks, "main no longer refuses its frame size"
     assert assigns, "main no longer assigns a render resolution"
     assert min(checks) < min(assigns), (checks, assigns)
+
+
+# =================================================================== F-61671cb3 (HIGH)
+#
+# `sitelist.validate()` audits the module's own registration table, so it cannot fire on
+# today's unmodified sitelist — it is reachable exactly in the situation it exists for, a
+# session editing the site list. What that session then saw, measured through the two
+# `__main__` handlers: `RIG_CHARACTER_HALT {"outcome": "FAILED \u2014 an unhandled error",
+# "gate": null, "evidence": null}` at exit **1**, and the same for `RIG_PARTS_HALT`.
+# `ValueError` is outside the `ArmatureError` family, so the repo's own registration
+# validator refusing was classified as a crash in the rigging code.
+
+
+def test_a_sitelist_refusal_answers_a_typed_refusal_and_names_its_clause(monkeypatch):
+    rc = _rig_character()
+    problems = ["duplicate bone name 'hips'", "'spine' names parent 'chest' which does "
+                "not precede it"]
+
+    def boom():
+        raise ValueError("sitelist registration is inconsistent: " + "; ".join(problems))
+
+    monkeypatch.setattr(rc.sitelist, "validate", boom)
+    with pytest.raises(rc.SiteListInvalid) as exc:
+        rc.validate_sitelist()
+    ev = exc.value.evidence
+    assert ev["source"] == "sitelist.validate"
+    assert ev["clause"] == "site_registration_invalid"
+    assert ev["gate"] is None
+    assert ev["raised"] == "ValueError"
+    assert "site registration table" in str(exc.value)
+
+
+@pytest.mark.parametrize("filename", ["rig_character.py", "rig_parts.py"])
+def test_the_sitelist_refusal_reaches_the_halt_line_as_a_refusal_not_a_crash(filename):
+    """The receipt, driven through the tool's own `__main__` handler: exit 2 and the
+    REFUSED outcome, where the base answered 1 and "FAILED — an unhandled error"."""
+    rc = _rig_character()
+
+    def raiser():
+        raise rc.SiteListInvalid("the site registration is inconsistent",
+                                 {"gate": None, "clause": "site_registration_invalid",
+                                  "source": "sitelist.validate", "problems": ["x"]})
+
+    code, escaped = blender_stub.exit_code_of_main_block(filename, raiser=raiser)
+    assert escaped is None, escaped
+    assert code == 2, code
+
+
+def test_a_typed_refusal_from_the_core_passes_through_untouched(monkeypatch):
+    """Forward compatibility with core-solvers' half (a typed `SiteListError` in
+    `armature_core.sitelist`, in flight this wave): the wrapper re-types only what is NOT
+    already in the `ArmatureError` family, so their class reaches the halt line as itself
+    rather than being wrapped a second time."""
+    from armature_core.errors import ArmatureError
+
+    class _TheirTypedRefusal(ArmatureError):
+        pass
+
+    rc = _rig_character()
+
+    def boom():
+        raise _TheirTypedRefusal("theirs")
+
+    monkeypatch.setattr(rc.sitelist, "validate", boom)
+    with pytest.raises(_TheirTypedRefusal):
+        rc.validate_sitelist()
+
+
+@pytest.mark.parametrize("filename", ["rig_character.py", "rig_parts.py"])
+def test_both_rig_writers_call_the_wrapper_and_not_the_bare_validator(filename):
+    """Keyed on the CALL, so a future edit that goes back to the bare validator is seen."""
+    tree = ast.parse(read_source(filename))
+    bare = [n.lineno for n in ast.walk(tree)
+            if isinstance(n, ast.Call)
+            and ast.unparse(n.func) == "sitelist.validate"
+            and not _inside(tree, n, "validate_sitelist")]
+    assert bare == [], (
+        f"{filename} calls sitelist.validate directly at {bare}; a ValueError from there "
+        f"is recorded as an unhandled error at exit 1")
+
+
+def _inside(tree, node, func_name):
+    for fn in ast.walk(tree):
+        if (isinstance(fn, ast.FunctionDef) and fn.name == func_name
+                and fn.lineno <= node.lineno <= (fn.end_lineno or fn.lineno)):
+            return True
+    return False
+
+
+def test_a_sitelist_refusal_still_passes_when_the_table_is_sound():
+    """A gate that refuses everything is not a gate: today's registration validates."""
+    rc = _rig_character()
+    assert rc.validate_sitelist() is None
+
+
+@pytest.mark.parametrize("filename", ["rig_character.py", "rig_parts.py"])
+def test_a_genuine_crash_still_answers_one_so_the_two_outcomes_stay_distinguishable(
+        filename):
+    """The contrast that makes the fix a fix. A `ValueError` — which is what
+    `sitelist.validate` raised, and what the base recorded for it — is a crash and still
+    answers 1 with "FAILED — an unhandled error". What changed is that the registration
+    validator's refusal is no longer one of those."""
+    def raiser():
+        raise ValueError("something in the rigging arithmetic actually broke")
+
+    code, escaped = blender_stub.exit_code_of_main_block(filename, raiser=raiser)
+    assert escaped is None, escaped
+    assert code == 1, code
+
+
+# ================================================================= F-586822bf (MEDIUM)
+#
+# Wave 10 moved `json.dumps` inside a try/except/finally so a sentinel that cannot
+# serialise no longer deletes `sys.exit` — but the sentinel's CONSTRUCTION still sat above
+# that guard, and so did `traceback.print_exc()`. The contract's clause "`sys.exit` reached
+# on every path" was therefore still false, and the census that certifies it drives only
+# shapes that fail inside the guarded CALL.
+
+WITH_MAIN = sorted(f for f in blender_stub.blender_tools()
+                   if blender_stub.main_block(f) is not None)
+
+
+class _KeyWhoseStrRaises:
+    """An evidence KEY `_halt_keysafe` cannot stringify. `json.dumps(default=str)` applies
+    `default` to VALUES only, and `_halt_keysafe` calls `str(k)` on every key — above the
+    guard, on the base."""
+
+    def __hash__(self):
+        return 7
+
+    def __eq__(self, other):
+        return self is other
+
+    def __str__(self):
+        raise RuntimeError("this key cannot be stringified")
+
+    __repr__ = __str__
+
+
+def _deeply_nested(depth=6000):
+    """Non-cyclic nesting deeper than the recursion limit — `_halt_keysafe`'s cycle guard
+    (which writes `<circular>`) cannot see this, because nothing repeats."""
+    node = {"leaf": 1}
+    for _ in range(depth):
+        node = {"n": node}
+    return node
+
+
+ESCAPE_SHAPES = [
+    pytest.param(lambda: {_KeyWhoseStrRaises(): 1}, id="a-key-whose-str-raises"),
+    pytest.param(_deeply_nested, id="six-thousand-levels-of-nesting"),
+]
+
+
+@pytest.mark.parametrize("filename", WITH_MAIN)
+@pytest.mark.parametrize("build_evidence", ESCAPE_SHAPES)
+def test_no_failure_inside_the_handler_can_delete_the_sentinel_or_the_exit_code(
+        filename, build_evidence, capsys):
+    """MEASURED on the base over all 21: `code=None`, the exception escaping the handler,
+    and ZERO sentinel lines printed — `blender -b -P` reporting exit 0 on a fired andon."""
+    from armature_core.errors import GateFailure
+
+    class _Fired(GateFailure):
+        gate = "PROBE"
+
+    def raiser():
+        raise _Fired("an andon fired", build_evidence())
+
+    code, escaped = blender_stub.exit_code_of_main_block(filename, raiser=raiser)
+    assert escaped is None, f"{filename}: {escaped!r} escaped the handler"
+    assert code == 2, f"{filename}: exit {code!r}"
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if "_HALT " in ln]
+    assert len(lines) == 1, lines
+    payload = json.loads(lines[0].split("_HALT ", 1)[1])
+    assert sorted(payload) == ["error", "evidence", "gate", "message", "outcome", "tool"]
+    assert payload["outcome"] == "HALTED — a gate fired"
+
+
+@pytest.mark.parametrize("filename", WITH_MAIN)
+def test_the_ordinary_halt_still_carries_its_message_and_evidence(filename, capsys):
+    """A guard that swallowed the real sentinel would satisfy the test above and destroy
+    the contract. The ordinary path must still publish the exception's own message and its
+    key-stringified evidence."""
+    from armature_core.errors import GateFailure
+
+    class _Fired(GateFailure):
+        gate = "PROBE"
+
+    def raiser():
+        raise _Fired("the measurement that stopped the run", {(1, 2): "tuple key"})
+
+    code, escaped = blender_stub.exit_code_of_main_block(filename, raiser=raiser)
+    assert escaped is None and code == 2
+    line = [ln for ln in capsys.readouterr().out.splitlines() if "_HALT " in ln][0]
+    payload = json.loads(line.split("_HALT ", 1)[1])
+    assert payload["message"] == "[PROBE] the measurement that stopped the run"
+    assert payload["gate"] == "PROBE"
+    assert payload["evidence"] == {"(1, 2)": "tuple key"}
+
+
+@pytest.mark.parametrize("filename", WITH_MAIN)
+def test_the_sentinel_construction_sits_inside_the_guarded_region(filename):
+    """The structural half, keyed on the nodes that can fail rather than on their spelling:
+    `str(exc)`, `_halt_keysafe(...)`, `getattr(exc, "gate", ...)` and `traceback.print_exc()`
+    must all sit inside a `try` within the handler, and the handler must reach `sys.exit`
+    from a `finally`."""
+    tree = ast.parse(read_source(filename))
+    handler = next(
+        h for node in ast.walk(tree) if isinstance(node, ast.Try)
+        for h in node.handlers
+        if h.name == "exc" and any(isinstance(n, ast.Call)
+                                   and ast.unparse(n.func).endswith("sys.exit")
+                                   for n in ast.walk(h)))
+    guarded = set()
+    finallies = []
+    for node in ast.walk(handler):
+        if isinstance(node, ast.Try):
+            if node.finalbody:
+                finallies.append(node)
+            for stmt in node.body:
+                for n in ast.walk(stmt):
+                    guarded.add(id(n))
+    risky = []
+    for node in ast.walk(handler):
+        if not isinstance(node, ast.Call):
+            continue
+        name = ast.unparse(node.func)
+        is_risky = (name in ("str", "_halt_keysafe", "getattr")
+                    or name.endswith("print_exc"))
+        if is_risky and id(node) not in guarded:
+            risky.append((node.lineno, name))
+    assert risky == [], (
+        f"{filename}: these can raise and sit OUTSIDE the handler's guarded region, so a "
+        f"failure in one deletes both the sentinel line and `sys.exit`: {risky}")
+    assert finallies, f"{filename}: the handler reaches sys.exit from no `finally`"
+    exits = [n for f in finallies for stmt in f.finalbody for n in ast.walk(stmt)
+             if isinstance(n, ast.Call) and ast.unparse(n.func).endswith("sys.exit")]
+    assert exits, f"{filename}: `sys.exit` is not delivered from a `finally`"

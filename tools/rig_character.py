@@ -173,6 +173,58 @@ def subject_scale(source, where):
     return diagonal, lo, hi
 
 
+class SiteListInvalid(ArmatureError):
+    """The site registration table itself is inconsistent - a refusal, not a crash.
+
+    F-61671cb3, wave 12. `sitelist.validate()` audits this repo's own literal registration
+    table (duplicate names, forward parents, head == tail, the `site` flags against
+    `E01_SITES`, the count of 18), so on an unmodified sitelist it CANNOT fire. It is
+    reachable in exactly the situation it exists for: a session editing the site list -
+    which is the case `rig_character` and `rig_parts` invoke it to catch.
+
+    What that session saw, MEASURED 2026-09-04 by driving both `__main__` handlers with a
+    `ValueError` carrying a real sitelist message: `RIG_CHARACTER_HALT {"outcome": "FAILED
+    - an unhandled error", "gate": null, "evidence": null}` at exit **1**, and the identical
+    shape for `RIG_PARTS_HALT`. `ValueError` is outside the `ArmatureError` family, so the
+    three-outcome branch classified the repo's own registration validator refusing as a
+    crash in the rigging code. That is F-c3f86abc's harm inverted: that finding removed a
+    crash being recorded as a fired gate; this one removes a deliberate refusal being
+    recorded as an unhandled error - and the `halt.json` the five rig writers produce said
+    the same, sending a session that had just edited `sitelist.py` to the rigging
+    arithmetic instead of to the table it had edited.
+
+    A refusal with no gate behind it, so a bare `ArmatureError` and not a `GateFailure`:
+    the halt contract answers 2 and "REFUSED - the tool declined to proceed" for both, and
+    the three-outcome vocabulary is what distinguishes them.
+
+    The cleanest home for this is `armature_core.sitelist` itself, raising a typed refusal
+    so no caller needs a wrapper at all; that module is another domain's in the frozen map
+    and the change is in flight there (SEAM 1, core-solvers). `validate_sitelist` below
+    re-types only what is NOT already in the `ArmatureError` family, so their class reaches
+    the halt line as itself the moment it lands.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+def validate_sitelist():
+    """`sitelist.validate()`, with its refusal inside the `ArmatureError` family."""
+    try:
+        sitelist.validate()
+    except ArmatureError:
+        raise
+    except Exception as exc:                                          # noqa: BLE001
+        raise SiteListInvalid(
+            f"the site registration table is inconsistent, so nothing built from it would "
+            f"mean what its names say: {exc}",
+            {"gate": None, "andon": "SiteListInvalid",
+             "clause": "site_registration_invalid",
+             "source": "sitelist.validate", "raised": type(exc).__name__,
+             "problems": str(exc)}) from exc
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -1206,7 +1258,7 @@ def _tool_hashes():
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    sitelist.validate()
+    validate_sitelist()
 
     started = time.time()
     source_sha = sha256_file(args["glb"])
@@ -1463,14 +1515,46 @@ if __name__ == "__main__":
         main()
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
-        traceback.print_exc()
+        # THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12). Wave 10 moved `json.dumps`
+        # inside a try/except/finally so a sentinel that cannot serialise could no longer
+        # delete `sys.exit` — but the sentinel's CONSTRUCTION stayed ABOVE that guard, and
+        # so did `traceback.print_exc()`. MEASURED 2026-09-04 by driving
+        # `blender_stub.exit_code_of_main_block` over all 21 WITH_MAIN tools with a
+        # `GateFailure` whose evidence carried (a) a key whose `__str__` raises and (b) 6000
+        # levels of non-cyclic nesting: 21 of 21 returned code None, with `RuntimeError` /
+        # `RecursionError` escaping the handler and ZERO sentinel lines printed — which is
+        # `blender -b -P` reporting exit 0 on a fired andon, the E07 failure this contract
+        # exists to end.
+        #
+        # Stated plainly: neither trigger is reachable from today's raise sites (an AST scan
+        # of all 21 finds no non-string-literal evidence key, and every `raise` passes an
+        # already-materialised f-string, so `str(exc)` cannot fail). The measured defect was
+        # in the CLAIM `tests/test_instrument_exits.py` makes about this block — that any
+        # secondary failure in a handler still yields a sentinel and an exit code — and the
+        # claim is made TRUE here rather than weakened there.
+        #
+        # Everything below that can fail is inside the guard. What is above it cannot:
+        # `isinstance` on an exception, `type(exc).__name__`, and a `json.dumps` of six
+        # values that are already strings or None.
         _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
-        _detail = getattr(exc, "evidence", None)
+        _outcome = halt_outcome(exc)
         _sentinel = {
-            "tool": "rig_character", "outcome": halt_outcome(exc),
-            "gate": getattr(exc, "gate", None),
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+            "tool": "rig_character", "outcome": _outcome, "gate": None,
+            "error": type(exc).__name__,
+            "message": "the halt line could not be built", "evidence": None}
+        _line = json.dumps(_sentinel)
+        try:
+            traceback.print_exc()
+            _detail = getattr(exc, "evidence", None)
+            _sentinel = {
+                "tool": "rig_character", "outcome": _outcome,
+                "gate": getattr(exc, "gate", None),
+                "error": type(exc).__name__, "message": str(exc),
+                "evidence": (_halt_keysafe(_detail)
+                             if isinstance(_detail, dict) else None)}
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            pass
         try:
             _args = parse_args()
             try:
@@ -1481,18 +1565,13 @@ if __name__ == "__main__":
                 _sha = None
             _write_halt(os.path.abspath(_args["out"]), exc, _sha, _args["glb"])
         except BaseException:                                         # noqa: BLE001
-            # The halt record is a courtesy; the sentinel and the exit code are the contract.
-            traceback.print_exc()
-        finally:
-            # The sentinel line may not be deleted by a failure to serialise the sentinel:
-            # a `TypeError` raised HERE would leave the `finally` before `sys.exit`. The
-            # fallback carries only values that are already strings.
+            # The halt record is a courtesy; the sentinel and the exit code are
+            # the contract. Even this diagnostic is guarded (F-586822bf):
+            # nothing in this handler may reach the `finally` before `sys.exit`.
             try:
-                _line = json.dumps(_sentinel, default=str)
+                traceback.print_exc()
             except BaseException:                                     # noqa: BLE001
-                _line = json.dumps({
-                    "tool": _sentinel["tool"], "outcome": _sentinel["outcome"],
-                    "gate": None, "error": _sentinel["error"],
-                    "message": _sentinel["message"], "evidence": None})
+                pass
+        finally:
             print("RIG_CHARACTER_HALT " + _line)
             sys.exit(_code)
