@@ -55,7 +55,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # same fix. Wave 6: the sibling's implementation is imported rather than re-written.
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
-from fetch_run import FetchHalt, verify_downloads  # noqa: E402,F401
+from fetch_run import (  # noqa: E402,F401
+    FetchHalt, PNG_SIGNATURE, verify_downloads)
 
 TOOL_VERSION = "E09.A3"
 

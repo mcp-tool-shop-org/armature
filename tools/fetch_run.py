@@ -77,6 +77,18 @@ VIDEO_NODES = ("114",)
 #: the operator's input reaches the command string.
 MANIFEST_ENV = "ARMATURE_FETCH_MANIFEST"
 
+#: Where each parallel job writes its OWN exit code, and the variable the command string
+#: reads that path out of — for the same reason the manifest path is in the environment:
+#: nothing derived from the operator's input is interpolated into the command.
+EXITS_ENV = "ARMATURE_FETCH_EXITS"
+EXITS_NAME = "download_exits.json"
+
+#: The eight bytes every PNG begins with. `--fail-with-body` writes an HTTP error body to
+#: the `-o` path, so "present and non-empty" is satisfied by a 35-byte JSON refusal; the
+#: content clause in `verify_downloads` is what tells the two apart. Read from the format
+#: spec, the same source `build_camera_i2v_payload.png_header` reads its IHDR layout from.
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\x0a"
+
 
 class FetchHalt(GateFailure):
     """A retrieval did not happen, or did not happen the way the plan says.
@@ -196,33 +208,104 @@ def plan(results, base, run, node_dir, video_nodes):
     return jobs, counts
 
 
-def download(manifest_path):
-    """pwsh + curl, with the manifest path in the environment and the exit code inspected.
+def download(manifest_path, exits_path=None):
+    """pwsh + curl, with each job's own exit code recorded where this process can read it.
 
     The command string below is a CONSTANT. Nothing derived from `--run`, `--root` or the
     dump is interpolated into it, which is the whole fix for the quoting defect: an
     apostrophe in a run name used to close the single-quoted literal and turn the rest of
     the line into separate PowerShell statements.
+
+    ⚠ **Why the exit is recorded per job rather than read off the process** (wave 12,
+    F-ef81516f). The refusal below used to be `if proc.returncode != 0`, under a
+    `ForEach-Object -Parallel` block. MEASURED ON THIS RIG 2026-09-04:
+
+        pwsh -NoProfile -Command '$j = @(1,2); $j | ForEach-Object -Parallel
+            { cmd.exe /c "exit 22" } -ThrottleLimit 12'          -> process exit 0
+
+    A native non-zero exit inside a `-Parallel` runspace does not reach the pwsh process
+    code, so every curl in a fetch could fail and this tool would print FETCH_RUN_OK. The
+    sibling `fetch_t2v_run`'s `foreach ($x in $j)` shape exits 1 on the identical inner
+    command — the two fetchers' identically-worded gates disagreed about whether they could
+    fire at all. This is not the closed F-61771e61 ("the returncode is never inspected");
+    the inspection existed and was structurally unreachable.
+
+    And the backstop did not cover the gap it left: curl runs `--fail-with-body`, which
+    writes the HTTP error body to the `-o` path, so three planned frames replaced by 35-byte
+    `{"error":"AccessDenied","code":403}` bodies gave `missing=[] empty=[] extra=[]` and a
+    green verdict. `verify_downloads` carries a content clause now.
+
+    So each runspace records its own `$LASTEXITCODE` and curl's message into a JSON array,
+    and this process reads it. Measured with the new shape and `cmd.exe /c "exit 22"` in
+    curl's place: process exit 0, record `[{"out":…,"code":22,"message":"boom"}]`. **A
+    missing or short record is a refusal too** — a gate whose evidence never arrived has not
+    run, which is the exact shape this finding is about.
     """
+    manifest_abs = os.path.abspath(manifest_path)
+    exits_abs = os.path.abspath(
+        exits_path or os.path.join(os.path.dirname(manifest_abs), EXITS_NAME))
     ps = (
         f"$j = Get-Content -LiteralPath $env:{MANIFEST_ENV} -Raw | ConvertFrom-Json; "
-        "$j | ForEach-Object -Parallel "
-        "{ curl.exe -sS -L --fail-with-body -o $_.out -- $_.url } "
-        "-ThrottleLimit 12"
+        "$r = $j | ForEach-Object -Parallel "
+        "{ $o = & curl.exe -sS -L --fail-with-body -o $_.out -- $_.url 2>&1; "
+        "[pscustomobject]@{ out = $_.out; url = $_.url; code = $LASTEXITCODE; "
+        "message = ($o | Out-String).Trim() } } "
+        "-ThrottleLimit 12; "
+        f"ConvertTo-Json -InputObject @($r) -Depth 3 | "
+        f"Set-Content -LiteralPath $env:{EXITS_ENV} -Encoding utf8"
     )
     env = dict(os.environ)
-    env[MANIFEST_ENV] = os.path.abspath(manifest_path)
+    env[MANIFEST_ENV] = manifest_abs
+    env[EXITS_ENV] = exits_abs
+    with open(manifest_abs, encoding="utf-8") as fh:
+        planned = json.load(fh)
     proc = subprocess.run(["pwsh", "-NoProfile", "-Command", ps],
                           capture_output=True, text=True, env=env)
+    base = {"gate": "FETCH", "andon": "FetchHalt", "process_returncode": proc.returncode,
+            # the key wave 8's halt carried; kept so a reader of an older receipt and a
+            # reader of this one are looking at the same field name
+            "returncode": proc.returncode,
+            "exits_record": exits_abs, "planned": len(planned),
+            "stdout": (proc.stdout or "")[-2000:], "stderr": (proc.stderr or "")[-2000:]}
+    # The process code is still read: it catches pwsh itself failing to start, or the
+    # command string failing to parse. It is no longer the only thing read.
     if proc.returncode != 0:
         raise FetchHalt(
-            f"the downloader exited {proc.returncode}. Nothing was compared to the plan "
-            f"below this line before this gate existed, so the run reported FETCH_RUN "
+            f"the downloader process exited {proc.returncode}. Nothing was compared to the "
+            f"plan below this line before this gate existed, so the run reported FETCH_RUN "
             f"with an empty directory",
-            {"returncode": proc.returncode,
-             "stdout": (proc.stdout or "")[-2000:],
-             "stderr": (proc.stderr or "")[-2000:]})
-    return proc
+            dict(base, clause="downloader_process_exit_nonzero"))
+    if not os.path.isfile(exits_abs):
+        raise FetchHalt(
+            f"the downloader recorded no per-job exit at {exits_abs!r}. Its `-Parallel` "
+            f"block does not propagate a native non-zero exit to the process code — "
+            f"measured on this rig — so with no record there is nothing that could have "
+            f"observed a failed curl, and a green line here would mean only that pwsh ran",
+            dict(base, clause="downloader_exits_unobserved"))
+    with open(exits_abs, encoding="utf-8") as fh:
+        rows = json.load(fh)
+    rows = rows if isinstance(rows, list) else [rows]
+    if len(rows) != len(planned):
+        raise FetchHalt(
+            f"the downloader recorded {len(rows)} job exit(s) for {len(planned)} planned "
+            f"download(s). The record is not evidence about this plan, and the clause that "
+            f"reads it would be deciding on a population that is not the one fetched",
+            dict(base, clause="downloader_exits_incomplete", recorded=len(rows)))
+    failed = [r for r in rows if int(r.get("code") or 0) != 0]
+    if failed:
+        raise FetchHalt(
+            f"{len(failed)} of {len(rows)} download(s) exited non-zero: "
+            + "; ".join(f"{os.path.basename(str(r.get('out')))} -> {r.get('code')} "
+                        f"{str(r.get('message') or '')[:120]}" for r in failed[:5])
+            + ". The pwsh process itself exited "
+            f"{proc.returncode}, because a native non-zero exit inside a -Parallel runspace "
+            f"does not reach it; without this record every curl in a fetch could fail under "
+            f"a printed FETCH_RUN_OK",
+            dict(base, clause="downloader_job_exit_nonzero", failed=failed))
+    return proc, {"gate": "FETCH", "clause": "downloader_job_exits",
+                  "record": exits_abs, "jobs": len(rows),
+                  "verdict": f"{len(rows)} download(s), each recording its own exit, "
+                             f"all zero"}
 
 
 #: The extensions a video tap lands under. The run ROOT is swept for these — a frame
@@ -333,7 +416,30 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
                 exempted.append(p)
                 continue
             extra.append(p)
+    # ---- ANDON, wave 12 (F-ef81516f). "Present and non-empty" is satisfied by an HTTP
+    # error body: curl runs `--fail-with-body`, which WRITES the body to the `-o` path.
+    # Measured before this clause: three planned frames replaced by 35-byte
+    # `{"error":"AccessDenied","code":403}` bodies returned missing=[], empty=[], extra=[]
+    # and the verdict "3 planned file(s), all present and non-empty" — and a measurement
+    # taken from that directory is a measurement of a paid generation that was never
+    # retrieved. The clause binds only what the PLAN named: a `.png` output must begin with
+    # the PNG signature. Suffixes this tool has no signature for are counted, not judged.
+    wrong_type, content_checked = [], {"png": 0}
+    for o in outs:
+        if os.path.splitext(o)[1].lower() != ".png" or not os.path.isfile(o):
+            continue
+        if os.path.getsize(o) == 0:
+            continue          # the `empty` clause below names that better than this one
+        content_checked["png"] += 1
+        with open(o, "rb") as fh:
+            head = fh.read(8)
+        if head != PNG_SIGNATURE:
+            wrong_type.append({"out": os.path.abspath(o), "expected": "png",
+                               "first_8_bytes": head.hex(),
+                               "bytes": os.path.getsize(o)})
+
     ev = {"planned": len(outs), "missing": missing, "empty": empty, "extra": extra,
+          "wrong_type": wrong_type, "content_checked": content_checked,
           "root_exempt_matched": exempted,
           "root_exempt_patterns": [rx.pattern for rx in root_exempt],
           "landed": len(outs) - len(missing),
@@ -347,7 +453,18 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
             f"a measurement of a generation that was never retrieved, or of a population "
             f"that is not this run",
             ev)
-    ev["verdict"] = (f"{len(outs)} planned file(s), all present and non-empty, and no "
+    if wrong_type:
+        raise FetchHalt(
+            f"{len(wrong_type)} of the {content_checked['png']} planned .png file(s) on "
+            f"disk are not the content type the plan asked for: "
+            + "; ".join(f"{os.path.basename(w['out'])} begins {w['first_8_bytes']!r} "
+                        f"({w['bytes']} bytes)" for w in wrong_type[:5])
+            + ". curl runs --fail-with-body, so an HTTP error body lands at the -o path and "
+              "satisfies `present and non-empty`. A measurement taken from this directory "
+              "would be a measurement of a generation that was never retrieved",
+            dict(ev, clause="downloaded_body_is_not_the_planned_type"))
+    ev["verdict"] = (f"{len(outs)} planned file(s), all present and non-empty, "
+                     f"{content_checked['png']} of them PNG-signature checked, and no "
                      f"unplanned file in {len(ev['swept_directories'])} swept directory(s)"
                      + (f"; {len(exempted)} derived artifact(s) of this run's own were "
                         f"tolerated by name: "
@@ -388,7 +505,7 @@ def main(argv=None):
     with open(manifest, "w", encoding="utf-8") as fh:
         json.dump([{"url": u, "out": os.path.abspath(o)} for u, o in jobs], fh, indent=1)
 
-    download(manifest)
+    _proc, gate_exits = download(manifest)
     mapped = sorted({os.path.join(base, sub) for sub in node_dir.values()})
     landed = verify_downloads(jobs, directories=mapped, root=base,
                               root_exempt=derived_root_artifacts(a.run))
@@ -413,7 +530,7 @@ def main(argv=None):
     # derives both directions of the census. The tree spelled this four ways before.
     print("FETCH_RUN_OK " + json.dumps({
         "run": a.run, "dir": base, "by_node": counts, "downloaded": got, "video": vids,
-        "gate_FETCH": landed["verdict"]}))
+        "gate_FETCH": landed["verdict"], "gate_EXITS": gate_exits["verdict"]}))
     return 0
 
 

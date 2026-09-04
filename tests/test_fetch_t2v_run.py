@@ -168,7 +168,7 @@ def _run_main(tmp_path, monkeypatch, ev):
         for j in jobs:
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             with open(j["out"], "wb") as fh:
-                fh.write(b"\x89PNG\r\n")
+                fh.write(T.PNG_SIGNATURE)
 
     monkeypatch.setattr(T, "download", fake_download)
     monkeypatch.setattr(T, "order_evidence", lambda out: ev)
@@ -244,7 +244,7 @@ def _writer(skip=(), monkeypatch=None):
                 continue
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             with open(j["out"], "wb") as fh:
-                fh.write(b"\x89PNG\r\n")
+                fh.write(T.PNG_SIGNATURE)
     return fake_download
 
 
