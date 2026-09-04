@@ -194,6 +194,21 @@ def shoot(scene, path):
     scene.render.image_settings.color_mode = "RGB"
     scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
+    # THE WRITER VERIFIES ITS OWN OUTPUT (F-51c5e0ef). `bpy.ops.render.render` returns
+    # an operator status set and can return `{'CANCELLED'}` WITHOUT raising; this
+    # function discarded it, and no code path in this tool ever opened a rendered file
+    # again -- so `panels.json` was a manifest of paths that may not exist, printed
+    # under a success sentinel, and a stale file left at the path by an earlier run put
+    # the previous run's panel into the sheet the Director is asked to approve. The
+    # shape is `preview_walk.py:196-206`'s, carried here rather than reinvented.
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        raise PartsSheetGate(
+            f"the render operator returned without writing "
+            f"{os.path.basename(path)}; the panel does not exist or is zero bytes, and "
+            f"the sheet would name a file that is not there",
+            {"path": os.path.abspath(path),
+             "exists": os.path.isfile(path),
+             "bytes": os.path.getsize(path) if os.path.isfile(path) else None})
     return path
 
 

@@ -449,3 +449,348 @@ def test_every_handler_carries_the_keysafe_helper(filename):
     assert "_halt_keysafe(" in read_source(filename).split(
         'if __name__ == "__main__":')[-1], (
         f"{filename} defines the helper but its handler does not use it")
+
+
+# --------------------------------------------------------------------------------------
+# F-13bd448d + F-51c5e0ef -- a writer verifies its own output before it claims success
+# --------------------------------------------------------------------------------------
+#
+# `bpy.ops.render.render(write_still=True)` returns an operator status set and can return
+# `{'CANCELLED'}` without raising. Four tools discarded it and then printed a success
+# sentinel over a directory that may hold nothing: `preview_glb` (four views, and its only
+# downstream consumer `make_cast_sheet` reads the stats JSON rather than the PNGs, so a run
+# that wrote zero images leaves no failing consumer anywhere) and the three sheet tools --
+# `make_skeleton_sheet`, whose 14 `shoot()` calls name 28 PNG paths that go straight into
+# `panels.json`, being the sheet the Director approves the skeleton on. `make_rig_sheet`
+# imports `make_parts_sheet.shoot`, so it is a fifth caller of the same fix.
+
+
+def _render_call_sites(filename):
+    """Line numbers of every `bpy.ops.render.render(...)` call in the file."""
+    tree = ast.parse(read_source(filename))
+    return sorted(node.lineno for node in ast.walk(tree)
+                  if isinstance(node, ast.Call)
+                  and ast.unparse(node.func) == "bpy.ops.render.render")
+
+
+def _calls_named(filename, names):
+    """`{callee: [names passed as its first positional argument]}` for `names`."""
+    tree = ast.parse(read_source(filename))
+    out = {n: [] for n in names}
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id in out and node.args
+                and isinstance(node.args[0], ast.Name)):
+            out[node.func.id].append(node.args[0].id)
+    return out
+
+
+def _render_output_names(filename):
+    """Every variable name assigned to `scene.render.filepath` -- the file a render writes."""
+    tree = ast.parse(read_source(filename))
+    names = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if (isinstance(target, ast.Attribute) and target.attr == "filepath"
+                    and isinstance(node.value, ast.Name)):
+                names.add(node.value.id)
+    return names
+
+
+#: Derived 2026-09-04 by AST over `blender_tools()` for `bpy.ops.render.render` call sites.
+#: Equality, so a tool that starts rendering cannot skip this census in the same commit.
+RECORDED_RENDERERS = [
+    "make_binding_sheet.py", "make_parts_sheet.py", "make_skeleton_sheet.py",
+    "preview_glb.py", "preview_walk.py", "render_performer.py",
+    "render_start_frame.py", "render_turnaround.py",
+]
+
+#: The ONE exemption, keyed on its REASON rather than on a proxy, and re-derived below
+#: rather than trusted: this tool never asks whether the file exists because it OPENS every
+#: render it takes, and an absent file raises there instead.
+READ_BACK_EXEMPT = {
+    "render_start_frame.py": ("_pixels", "_alpha_channel"),
+}
+
+
+def test_the_renderer_population_is_derived_and_is_the_one_recorded():
+    derived = sorted(f for f in BLENDER_TOOLS if _render_call_sites(f))
+    assert derived == RECORDED_RENDERERS, {
+        "appeared": sorted(set(derived) - set(RECORDED_RENDERERS)),
+        "vanished": sorted(set(RECORDED_RENDERERS) - set(derived))}
+    assert set(READ_BACK_EXEMPT) <= set(derived), sorted(READ_BACK_EXEMPT)
+
+
+@pytest.mark.parametrize("filename", [f for f in RECORDED_RENDERERS
+                                      if f not in READ_BACK_EXEMPT])
+def test_every_renderer_asks_whether_the_file_it_claims_to_have_written_is_there(filename):
+    """MEASURED 2026-09-04, render-call sites against existence checks per file:
+    preview_glb 1/0, make_skeleton_sheet 1/0, make_binding_sheet 1/0, make_parts_sheet 1/0,
+    against preview_walk (isfile+getsize over the plan), render_performer (the same shape
+    over `paths`) and render_turnaround (a view that wrote no file raises)."""
+    src = read_source(filename)
+    assert "os.path.isfile(" in src and "os.path.getsize(" in src, (
+        f"{filename} renders at {_render_call_sites(filename)} and never asks whether a "
+        f"single pixel reached disk; a cancelled render, a full disk or a permission "
+        f"error produces a success sentinel over an empty directory")
+
+
+def test_the_read_back_exemption_holds_for_the_reason_it_states():
+    """Rule 4 of wave 8: an exemption is re-derived, not trusted. `render_start_frame` is
+    exempt only if EVERY path it renders to is later opened by one of the named readers."""
+    for filename, readers in READ_BACK_EXEMPT.items():
+        written = _render_output_names(filename)
+        assert written, filename
+        read_back = set()
+        for names in _calls_named(filename, readers).values():
+            read_back.update(names)
+        assert written <= read_back, {
+            "file": filename, "rendered_but_never_opened": sorted(written - read_back)}
+
+
+def _writes_nothing():
+    """A `bpy.ops.render.render` that returns `{'CANCELLED'}` and writes no file — the
+    operator behaviour the four tools discarded."""
+    return {"CANCELLED"}
+
+
+@pytest.mark.parametrize("filename,gate_name", [
+    ("make_skeleton_sheet.py", "SkeletonSheetGate"),
+    ("make_binding_sheet.py", "BindingSheetGate"),
+    ("make_parts_sheet.py", "PartsSheetGate"),
+])
+def test_a_sheet_shoot_that_wrote_no_file_raises_its_own_gate(filename, gate_name, tmp_path):
+    mod = load_tool(filename)
+    gate = getattr(mod, gate_name)
+    mod.bpy.ops.render.render.side_effect = lambda **kw: _writes_nothing()
+    path = str(tmp_path / "panel.png")
+    args = (mod.bpy.context.scene, path)
+    if filename == "make_skeleton_sheet.py":
+        args = args + (False,)
+    with pytest.raises(gate) as caught:
+        mod.shoot(*args)
+    assert caught.value.evidence["path"] == os.path.abspath(path)
+    assert caught.value.evidence["exists"] is False
+
+
+@pytest.mark.parametrize("filename,gate_name", [
+    ("make_skeleton_sheet.py", "SkeletonSheetGate"),
+    ("make_binding_sheet.py", "BindingSheetGate"),
+    ("make_parts_sheet.py", "PartsSheetGate"),
+])
+def test_a_sheet_shoot_that_wrote_a_zero_byte_file_raises_too(filename, gate_name,
+                                                              tmp_path):
+    """A cancelled render can also leave the empty file Blender opened."""
+    mod = load_tool(filename)
+    gate = getattr(mod, gate_name)
+    path = str(tmp_path / "panel.png")
+    mod.bpy.ops.render.render.side_effect = lambda **kw: open(path, "wb").close()
+    args = (mod.bpy.context.scene, path)
+    if filename == "make_skeleton_sheet.py":
+        args = args + (False,)
+    with pytest.raises(gate, match="zero bytes"):
+        mod.shoot(*args)
+
+
+@pytest.mark.parametrize("filename", ["make_skeleton_sheet.py", "make_binding_sheet.py",
+                                      "make_parts_sheet.py"])
+def test_a_sheet_shoot_that_wrote_a_real_file_returns_its_path(filename, tmp_path):
+    """The other direction: the gate may not fire on the happy path."""
+    mod = load_tool(filename)
+    path = str(tmp_path / "panel.png")
+    mod.bpy.ops.render.render.side_effect = lambda **kw: open(path, "wb").write(b"PNG")
+    args = (mod.bpy.context.scene, path)
+    if filename == "make_skeleton_sheet.py":
+        args = args + (False,)
+    assert mod.shoot(*args) == path
+
+
+def test_make_rig_sheet_renders_through_the_sibling_it_imports():
+    """The family carry, pinned: `make_rig_sheet` has no render call of its own and must not
+    grow one — it renders through `make_parts_sheet.shoot`, so one fix covers both."""
+    assert _render_call_sites("make_rig_sheet.py") == []
+    rig, parts = load_tool("make_rig_sheet.py"), load_tool("make_parts_sheet.py")
+    assert rig.shoot.__name__ == parts.shoot.__name__ == "shoot"
+    assert rig.shoot.__module__.endswith("make_parts_sheet"), rig.shoot.__module__
+
+
+def test_preview_glb_refuses_when_a_planned_view_never_reached_disk(tmp_path):
+    """F-13bd448d. `add_camera_render` discarded the operator's status and nothing
+    afterwards read the four paths back: `<name>_stats.json` is written from measurements
+    taken off the scene, and `PREVIEW_GLB_OK` printed, over a directory that may be empty.
+    """
+    mod = load_tool("preview_glb.py")
+    good = tmp_path / "a.png"
+    good.write_bytes(b"PNG")
+    empty = tmp_path / "b.png"
+    empty.write_bytes(b"")
+    missing = tmp_path / "c.png"
+    with pytest.raises(mod.PreviewGlbGate) as caught:
+        mod.gate_previews_written([str(good), str(empty), str(missing)])
+    ev = caught.value.evidence
+    assert [os.path.basename(p) for p in ev["missing"]] == ["c.png"], ev
+    assert [os.path.basename(p) for p in ev["empty"]] == ["b.png"], ev
+    assert ev["planned"] == 3, ev
+
+
+def test_preview_glb_is_satisfied_by_four_real_files(tmp_path):
+    mod = load_tool("preview_glb.py")
+    paths = []
+    for name in ("full_a", "full_b", "head_a", "head_b"):
+        p = tmp_path / (name + ".png")
+        p.write_bytes(b"PNG")
+        paths.append(str(p))
+    assert mod.gate_previews_written(paths)["planned"] == 4
+
+
+def test_preview_glb_main_gates_the_paths_its_renders_returned():
+    """The wiring, not just the helper: `add_camera_render` must RETURN the path it wrote,
+    and `main` must hand the collected list to the gate — a gate nothing calls is not a
+    gate, which is the class this repo has shipped four times."""
+    src = read_source("preview_glb.py")
+    tree = ast.parse(src)
+    fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    returns = [ast.unparse(n.value) for n in ast.walk(fns["add_camera_render"])
+               if isinstance(n, ast.Return) and n.value is not None]
+    assert returns, "add_camera_render returns nothing, so the plan cannot be the list " \
+                    "the render wrote against"
+    called = [ast.unparse(n.func) for n in ast.walk(fns["main"]) if isinstance(n, ast.Call)]
+    assert "gate_previews_written" in called
+
+
+# --------------------------------------------------------------------------------------
+# F-d47095fa -- a refused run leaves no empty output directory behind (the bpy half)
+# --------------------------------------------------------------------------------------
+#
+# `tests/test_instrument_write_ordering.py` states its bpy exemption as "the tool writes the
+# artefact that its later gates then measure, so the directory must exist before the gate
+# can run" and implements it as `imports_bpy(name)` -- a PROXY, and broader than the reason.
+# Measured 2026-09-04 by pairing each tool's first `os.makedirs` in `main()` against the
+# first call that actually produces BYTES: thirteen named refusals sit between the two
+# across four of the exempted tools, and not one of them needs the directory.
+#
+# The census below keys on the REASON instead: the node is the first byte-producing call,
+# and a refusal is stranded only if it sits strictly between the directory's creation and
+# that call. A tool whose gates genuinely measure what it wrote has no refusal in that
+# window and passes without being exempted at all.
+
+#: Calls that put bytes on disk. Named rather than inferred (this walk is blind to any
+#: writer it cannot name), and extended one level: a call to a function DEFINED in the same
+#: module whose own body writes counts as a write at the call site -- which is how the sheet
+#: tools write, through `shoot()`, and `preview_glb` through `add_camera_render()`.
+BYTE_PRODUCING_CALLS = (
+    "bpy.ops.export_scene.gltf", "bpy.ops.render.render", "bpy.ops.wm.save_as_mainfile",
+    "json.dump", "pngio.write_png", "np.save", "shutil.copy", "shutil.copyfile",
+)
+
+
+def _is_byte_producer(node):
+    if not isinstance(node, ast.Call):
+        return False
+    called = ast.unparse(node.func)
+    if called in BYTE_PRODUCING_CALLS:
+        return True
+    if (called == "open" and len(node.args) > 1
+            and isinstance(node.args[1], ast.Constant)
+            and "w" in str(node.args[1].value)):
+        return True
+    return (isinstance(node.func, ast.Attribute)
+            and node.func.attr in ("write", "writelines", "savefig", "save"))
+
+
+def write_window(filename):
+    """`(first_makedirs_line, first_byte_line)` in the tool's module-level `main()`."""
+    src = read_source(filename)
+    tree = ast.parse(src)
+    module_fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    writers = {name for name, node in module_fns.items()
+               if any(_is_byte_producer(x) for x in ast.walk(node))}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "") == "make_parts_sheet":
+            writers.update(a.asname or a.name for a in node.names)
+    main = module_fns.get("main")
+    if main is None:
+        return None, None
+    byte_lines, dir_lines = [], []
+    for node in ast.walk(main):
+        if _is_byte_producer(node):
+            byte_lines.append(node.lineno)
+        elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+              and node.func.id in writers and node.func.id != "main"):
+            byte_lines.append(node.lineno)
+        if isinstance(node, ast.Call) and ast.unparse(node.func) == "os.makedirs":
+            dir_lines.append(node.lineno)
+    return (min(dir_lines) if dir_lines else None,
+            min(byte_lines) if byte_lines else None)
+
+
+def stranded_refusals(filename):
+    """Refusal lines that sit between the output directory's creation and the first byte.
+
+    The refusal population is the sibling census's own `gate_and_write_lines` -- carried,
+    not reimplemented, so the two files cannot disagree about what a refusal is.
+    """
+    import test_instrument_write_ordering as WO
+
+    makedirs, first_byte = write_window(filename)
+    if makedirs is None or first_byte is None:
+        return []
+    gates, _writes = WO.gate_and_write_lines(read_source(filename), filename[:-3])
+    return sorted(line for line in gates if makedirs < line < first_byte)
+
+
+#: Derived 2026-09-04: every Blender tool whose `main()` both creates its output directory
+#: and writes bytes. Equality, so a tool that starts doing both joins this census loudly.
+RECORDED_DIR_AND_WRITE = [
+    "author_walk.py", "check_relift.py", "diagnose_bone_heat.py", "lift_solve.py",
+    "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
+    "make_skeleton_sheet.py", "make_test_armature.py", "preview_glb.py", "preview_walk.py",
+    "probe_glb.py", "probe_subject.py", "render_performer.py", "render_start_frame.py",
+    "render_turnaround.py", "rig_bake.py", "rig_character.py", "rig_parts.py",
+    "rig_repair.py", "rig_retopo.py",
+]
+
+
+def test_the_write_ordering_population_is_derived_and_is_the_one_recorded():
+    derived = sorted(f for f in BLENDER_TOOLS if all(write_window(f)))
+    assert derived == RECORDED_DIR_AND_WRITE, {
+        "appeared": sorted(set(derived) - set(RECORDED_DIR_AND_WRITE)),
+        "vanished": sorted(set(RECORDED_DIR_AND_WRITE) - set(derived))}
+
+
+@pytest.mark.parametrize("filename", RECORDED_DIR_AND_WRITE)
+def test_no_refusal_sits_between_the_output_directory_and_the_first_byte(filename):
+    """MEASURED 2026-09-04, thirteen stranded refusals across four tools:
+    lift_solve (makedirs 295, first byte 325; 307, 310, 315),
+    author_walk (542 / 597; 552, 555, 576, 580, 586),
+    rig_parts (480 / 512; 490, 492, 499, 503),
+    render_start_frame (459 / 532; 472).
+
+    A run refused by one of those leaves an empty output directory behind, which a reader
+    scanning `outputs/` -- or a re-run into the same `--out` -- reads as an attempt that
+    produced nothing rather than one that was refused."""
+    stranded = stranded_refusals(filename)
+    makedirs, first_byte = write_window(filename)
+    assert stranded == [], (
+        f"{filename}: makedirs at {makedirs}, first byte at {first_byte}, and refusals at "
+        f"{stranded} in between — none of them needs the directory")
+
+
+def test_the_stranding_census_goes_red_on_a_member_with_the_defect(tmp_path, monkeypatch):
+    """Rule 3: prove it can fail, on a member added to the walked tree."""
+    probe = tmp_path / "probe_order.py"
+    probe.write_text(
+        "import bpy\n"
+        "import json\n"
+        "import os\n"
+        "def main():\n"
+        "    os.makedirs(out, exist_ok=True)\n"
+        "    gate_something(x)\n"
+        "    with open(path, 'w') as fh:\n"
+        "        json.dump({}, fh)\n", encoding="utf-8")
+    import blender_stub
+    monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
+    assert write_window("probe_order.py") == (5, 7)
+    assert stranded_refusals("probe_order.py") == [6]

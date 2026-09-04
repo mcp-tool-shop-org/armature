@@ -125,6 +125,11 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 RECORDED_POPULATION = frozenset({
     "CropStripError", "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate",
     "PreviewWalkGate",
+    # JOINED 2026-09-04, exactly as this comment anticipated: the instruments wave-10
+    # amend (F-51c5e0ef) gives `make_binding_sheet.shoot` and `make_parts_sheet.shoot`
+    # the render-completeness refusal their siblings carry, so `BindingSheetGate` and
+    # `PartsSheetGate` each reach a second raise site and stop being their own clause.
+    "BindingSheetGate", "PartsSheetGate",
     "AlphaGate", "ArmatureError", "AssemblyGate", "BackdropGate", "BakeEmpty",
     "CascadeGate", "ClipReadError", "ClipShapeError", "CompareError",
     "ComparisonNotIsolated", "CompositorWiring", "DetectionGate", "DonorGate",
@@ -163,7 +168,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     the derivation cannot see it. The typed set is therefore checked by direction — the
     two names that ARE raised must still be policed — rather than by containment.
     """
-    assert len(POLICED) == 71, sorted(POLICED)
+    assert len(POLICED) == 73, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

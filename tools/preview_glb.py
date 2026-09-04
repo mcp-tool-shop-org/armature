@@ -98,8 +98,44 @@ def add_camera_render(name_suffix, center, radius, azim_deg, elev_deg, res, out_
     look_at(cam, center)
     scn.camera = cam
     scn.render.resolution_x, scn.render.resolution_y = res
-    scn.render.filepath = os.path.join(out_dir, f"{args.name}_{name_suffix}.png")
+    path = os.path.join(out_dir, f"{args.name}_{name_suffix}.png")
+    scn.render.filepath = path
     bpy.ops.render.render(write_still=True)
+    # RETURN the path, so the plan `gate_previews_written` measures is the list
+    # the render actually wrote against rather than a second list built beside it.
+    return path
+
+
+
+def gate_previews_written(paths):
+    """Every planned view exists on disk and is not zero bytes, or the preview halts.
+
+    F-13bd448d. `bpy.ops.render.render(write_still=True)` returns an operator status set and
+    can return `{'CANCELLED'}` WITHOUT raising; `add_camera_render` discarded it, and nothing
+    afterwards read the four paths back -- `<name>_stats.json` is written from measurements
+    taken off the SCENE, and the success sentinel was printed over a directory that may hold
+    nothing. This tool is also the one whose output nothing downstream reads
+    (`make_cast_sheet.py` consumes the stats JSON, not the PNGs), so a run that wrote zero
+    images left no failing consumer anywhere and the operator discovered the four missing
+    previews by opening the directory.
+
+    The shape is `preview_walk.py:196-206`'s -- missing AND zero-byte, over the PLAN --
+    carried rather than reinvented.
+    """
+    missing = [p for p in paths if not os.path.isfile(p)]
+    empty = [p for p in paths
+             if p not in missing and os.path.getsize(p) == 0]
+    if missing or empty:
+        raise PreviewGlbGate(
+            f"the preview is not complete: {len(missing)} of {len(paths)} views were never "
+            f"written {[os.path.basename(p) for p in missing[:8]]} and {len(empty)} are "
+            f"zero bytes {[os.path.basename(p) for p in empty[:8]]}",
+            {"planned": len(paths),
+             "paths": [os.path.abspath(p) for p in paths],
+             "missing": [os.path.abspath(p) for p in missing],
+             "empty": [os.path.abspath(p) for p in empty]})
+    return {"planned": len(paths), "missing": [], "empty": [],
+            "verdict": f"all {len(paths)} planned views exist and are non-empty"}
 
 
 def main():
@@ -180,10 +216,14 @@ def main():
     # directory is created here so a halt does not leave an empty one behind for a later
     # run to read as a used one.
     os.makedirs(args.out, exist_ok=True)
-    add_camera_render("full_a", center, radius, 30, 10, (640, 960), args.out, args)
-    add_camera_render("full_b", center, radius, 210, 10, (640, 960), args.out, args)
-    add_camera_render("head_a", head_c, head_r, 30, 6, (512, 512), args.out, args)
-    add_camera_render("head_b", head_c, head_r, 210, 6, (512, 512), args.out, args)
+    written = [
+        add_camera_render("full_a", center, radius, 30, 10, (640, 960), args.out, args),
+        add_camera_render("full_b", center, radius, 210, 10, (640, 960), args.out, args),
+        add_camera_render("head_a", head_c, head_r, 30, 6, (512, 512), args.out, args),
+        add_camera_render("head_b", head_c, head_r, 210, 6, (512, 512), args.out, args),
+    ]
+    stats["gate_PREVIEW_GLB"] = gate_previews_written(written)
+    stats["views"] = [os.path.abspath(p) for p in written]
 
     with open(os.path.join(args.out, f"{args.name}_stats.json"), "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)

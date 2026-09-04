@@ -539,7 +539,6 @@ def main():
     started = time.time()
     args = parse_args()
     out_path = os.path.abspath(args.out)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)  # scripts make their own dirs
 
     source_sha = _sha256(args.glb)
 
@@ -592,6 +591,14 @@ def main():
         "export_animation_mode": "ACTIONS", "export_skins": True,
         "export_def_bones": False, "export_apply": False, "export_materials": "EXPORT",
     }
+    # THE DIRECTORY IS CREATED HERE, immediately above the first byte (F-d47095fa).
+    # It used to sit at line 542 of `main()`, with 5 named refusal(s) stranded between
+    # the two (552, 555, 576, 580, 586) -- none of which needs the directory. A run refused by any of
+    # them left an empty output directory behind, which a reader scanning `outputs/` or
+    # a re-run into the same `--out` reads as an attempt that produced nothing rather
+    # than one that was refused. Pinned by `tests/test_instruments_amend_w10.py::
+    # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`.
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)  # scripts make their own dirs
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
     bpy.ops.export_scene.gltf(**kwargs)

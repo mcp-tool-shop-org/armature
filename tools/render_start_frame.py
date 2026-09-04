@@ -452,11 +452,6 @@ def main():
     if verts.shape[0] == 0:
         raise RenderGate("the subject evaluates to no vertices at this frame", {})
 
-    # Every refusal above this line can fire before a single pixel exists; the output
-    # directory is created HERE so a halt does not leave an empty one behind for a
-    # later run to read as a used one (F-8d2b9d7d). Nothing between the old site and
-    # this one writes.
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     cloud = [tuple(map(float, p)) for p in verts]
     solve_cloud = SF.framing_cloud(cloud, cap=FRAMING_CLOUD_CAP)
 
@@ -525,6 +520,14 @@ def main():
     if a.shadow_layer:
         gob.hide_render = True
 
+    # THE DIRECTORY IS CREATED HERE, immediately above the first byte (F-d47095fa).
+    # It used to sit at line 455 of `main()`, with 1 named refusal(s) stranded between
+    # the two (472) -- none of which needs the directory. A run refused by any of
+    # them left an empty output directory behind, which a reader scanning `outputs/` or
+    # a re-run into the same `--out` reads as an attempt that produced nothing rather
+    # than one that was refused. Pinned by `tests/test_instruments_amend_w10.py::
+    # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     rgba_path = os.path.join(out, "start_frame_rgba.png")
     scene.render.film_transparent = True
     scene.render.image_settings.color_mode = "RGBA"

@@ -477,7 +477,6 @@ def observe_under_pose(ctx):
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
     sitelist.validate()
     started = time.time()
     source_sha = sha256_file(args["glb"])
@@ -507,6 +506,14 @@ def main():
               "export_yup": True, "export_animations": True, "export_frame_range": True,
               "export_animation_mode": "ACTIONS", "export_def_bones": False,
               "export_apply": False, "export_materials": "EXPORT"}
+    # THE DIRECTORY IS CREATED HERE, immediately above the first byte (F-d47095fa).
+    # It used to sit at line 480 of `main()`, with 4 named refusal(s) stranded between
+    # the two (490, 492, 499, 503) -- none of which needs the directory. A run refused by any of
+    # them left an empty output directory behind, which a reader scanning `outputs/` or
+    # a re-run into the same `--out` reads as an attempt that produced nothing rather
+    # than one that was refused. Pinned by `tests/test_instruments_amend_w10.py::
+    # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`.
+    os.makedirs(out_dir, exist_ok=True)
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
     bpy.ops.export_scene.gltf(**kwargs)
