@@ -256,25 +256,115 @@ def _job_lines(text, name):
     raise AssertionError(f"no job named {name}")
 
 
-@pytest.mark.parametrize("workflow", ["release.yml", "ci.yml"])
-def test_a_job_that_checks_out_declares_contents_read(workflow):
+# ---------------------------------------------------------- the checkout token, everywhere
+#
+# Wave 6, F-bc7bdca3. This check was one loop with two `continue`s and one assert, and
+# nothing counted what the loop examined. Measured by instrumenting its own helpers over
+# both parametrised workflows: release.yml resolves verify -> skipped (inherits), pypi ->
+# skipped (no checkout), npm -> ASSERTED; ci.yml has NO workflow-level `permissions:` block
+# at all and BOTH of its checkout jobs took the "inherits the workflow-level grant" branch.
+# So the `ci.yml` parameter passed having asserted on zero jobs, and one job out of five
+# across the two files was ever opened.
+#
+# The premise of that branch was false for ci.yml: there is nothing to inherit. Those jobs
+# run on whatever the repository or organisation default token permission happens to be —
+# the very thing a `contents: read` declaration exists to pin. And `pages.yml`, a third
+# workflow whose `build` job also checks out, was not in the parametrised list at all.
+#
+# What replaces it enumerates the workflow files from disk, enumerates the checkout jobs in
+# them, asserts that census, and then requires every one of those jobs to have a STATED
+# contents scope — its own or a workflow-level block the file actually declares.
+
+#: Every job that runs `actions/checkout`, per workflow file. Enumerated from the files and
+#: asserted against this table, so a job that starts or stops checking out is a failure here
+#: rather than a silent change in what the check below covers.
+CHECKOUT_JOBS = {
+    "ci.yml": ["python-tests", "site-build"],
+    "pages.yml": ["build"],
+    "release.yml": ["npm", "verify"],
+}
+
+
+def workflow_files():
+    return sorted(n for n in os.listdir(WORKFLOWS) if n.endswith((".yml", ".yaml")))
+
+
+def _checkout_jobs(text):
+    return sorted(name for name in job_names(text)
+                  if "actions/checkout" in "\n".join(_job_lines(text, name)))
+
+
+def _declares_contents_read(body):
+    return re.search(r"(?m)^\s+contents:\s*read\s*$", body) is not None
+
+
+def test_the_workflow_census_is_the_files_on_disk():
+    """A fourth workflow added later joins these checks rather than escaping them."""
+    assert workflow_files() == sorted(CHECKOUT_JOBS), (
+        f"{WORKFLOWS} holds {workflow_files()}; the checks below cover "
+        f"{sorted(CHECKOUT_JOBS)}")
+
+
+@pytest.mark.parametrize("workflow", sorted(CHECKOUT_JOBS))
+def test_the_checkout_job_census_is_the_jobs_in_the_file(workflow):
+    """What the permissions check below examines, counted before it examines it."""
+    assert _checkout_jobs(_text(workflow)) == CHECKOUT_JOBS[workflow]
+
+
+@pytest.mark.parametrize("workflow", sorted(CHECKOUT_JOBS))
+def test_every_job_that_checks_out_has_a_stated_contents_scope(workflow):
     """A job-level `permissions:` block REPLACES the workflow-level grant; it does not add.
 
     So a job that declares only `id-token: write` has no `contents` scope at all, and its
     `actions/checkout` authenticates the clone with a token that cannot read a private
-    repository. Jobs with no `permissions:` block of their own inherit and are not at issue.
+    repository. A job with no block of its own inherits — but only if the FILE declares a
+    workflow-level block; where it does not, the job runs on the repository or organisation
+    default, which is exactly the thing `contents: read` exists to state.
+
+    What this looks like if wrong: the loop `continue`s past every job and the parametrised
+    case reports green having opened nothing. Hence `examined`, asserted against the census.
     """
     text = _text(workflow)
-    for name in job_names(text):
+    workflow_level = re.search(r"(?m)^permissions:\s*$", text) is not None
+    workflow_grant = "\n".join(named_block(text, "permissions", 0)) if workflow_level else ""
+
+    examined, ungoverned = [], []
+    for name in _checkout_jobs(text):
+        examined.append(name)
         body = "\n".join(_job_lines(text, name))
-        if "actions/checkout" not in body:
-            continue
-        if re.search(r"(?m)^    permissions:\s*$", body) is None:
-            continue  # inherits the workflow-level grant
-        assert re.search(r"(?m)^\s+contents:\s*read\s*$", body), (
-            f"{workflow} job {name!r} narrows its own permissions and then checks out; "
-            "the checkout token has no contents scope"
-        )
+        if re.search(r"(?m)^    permissions:\s*$", body) is not None:
+            if not _declares_contents_read("\n".join(named_block(body, "permissions", 4))):
+                ungoverned.append(
+                    f"{name}: narrows its own permissions without `contents: read`, so the "
+                    f"checkout token has no contents scope")
+        elif not workflow_level:
+            ungoverned.append(
+                f"{name}: checks out with no permissions block of its own and no "
+                f"workflow-level block in {workflow} to inherit, so the clone runs on the "
+                f"repository or organisation default token permission")
+        elif not _declares_contents_read(workflow_grant):
+            ungoverned.append(
+                f"{name}: inherits a workflow-level block that does not grant "
+                f"`contents: read`")
+
+    assert examined == CHECKOUT_JOBS[workflow], (
+        f"{workflow}: examined {examined}, census says {CHECKOUT_JOBS[workflow]}; a "
+        f"parametrised case that opens no job proves nothing")
+    assert ungoverned == [], f"{workflow}:\n  " + "\n  ".join(ungoverned)
+
+
+def test_a_narrowing_job_permissions_block_still_grants_contents_read():
+    """The one job the old loop did reach, kept as its own fixture: release.yml's `npm`
+    job declares `id-token: write` for trusted publishing and must re-declare
+    `contents: read` beside it, because the block replaces rather than adds."""
+    body = "\n".join(_job_lines(RELEASE, "npm"))
+    assert re.search(r"(?m)^    permissions:\s*$", body), "the npm job stopped narrowing"
+    block = "\n".join(named_block(body, "permissions", 4))
+    assert _declares_contents_read(block), (
+        f"the npm job narrows its permissions and then checks out:\n{block}")
+    assert re.search(r"(?m)^\s+id-token:\s*write\s*$", block), (
+        "the npm job no longer asks for id-token: write; this fixture is reading the "
+        "wrong job")
 
 
 def test_the_pypi_publish_reports_the_same_way_on_a_rerun_as_npm_does():
