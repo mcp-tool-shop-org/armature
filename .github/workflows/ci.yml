@@ -272,3 +272,12 @@ jobs:
       - name: launcher self-test
         working-directory: npm
         run: npm test
+
+      # `npm test` runs the launcher out of the CHECKOUT and consults neither `bin`, `files`
+      # nor the tarball. The npm package is published irreversibly by release.yml and, until
+      # this wave, was the one artifact never installed anywhere in this repository — the
+      # exact shape `.github/actions/clean-room` exists to close on the wheel side. Measured
+      # with the `bin` map pointed at a typo: `npm test` green, `npm pack` green, install
+      # green, and no `armature` command anywhere. Both node versions run it, because
+      # `engines.node` is enforced at install time on a user's machine.
+      - uses: ./.github/actions/npm-clean-room

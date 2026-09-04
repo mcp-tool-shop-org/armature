@@ -77,6 +77,12 @@ jobs:
       # calls through to every function-local dependency; `dist/` is left for the upload
       # step below.
       - uses: ./.github/actions/clean-room
+      # The npm package's half of the same leg, and for the same reason: the `npm` job below
+      # runs `npm publish --provenance --access public`, and the only thing that had ever
+      # been run was `node bin/armature.mjs --node-selftest` out of the checkout. A `bin`
+      # map that resolves to nothing installs cleanly and provides no command, and a version
+      # on the registry is taken forever.
+      - uses: ./.github/actions/npm-clean-room
       - name: The version in the tag must equal the version in the package
         # A tag that disagrees with the metadata publishes a version nobody asked for.
         #

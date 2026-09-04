@@ -481,8 +481,10 @@ def trigger_population():
 RECORDED_TRIGGER_POPULATION = [
     # `clean-room` joined at the wave-8 merge: ci-packaging lifted the clean-install leg into a
     # composite action called by ci.yml and release.yml (F-60ab1bd7); this census saw it
-    # appear, which is the direction it exists for.
-    ".github/actions/clean-room/action.yml", ".github/actions/sheet-fonts/action.yml",
+    # appear, which is the direction it exists for. `npm-clean-room` joined at wave 10 the
+    # same way (F-3729edd4) — the npm package's half of that leg — and the census saw it too.
+    ".github/actions/clean-room/action.yml", ".github/actions/npm-clean-room/action.yml",
+    ".github/actions/sheet-fonts/action.yml",
     ".gitignore", "HANDOFF.md", "LICENSE", "MANIFEST.in", "README.md", "README.pypi.md",
     "pyproject.toml", "verify.ps1",
 ]
@@ -501,6 +503,7 @@ def test_the_trigger_population_is_derived_from_what_ci_and_the_suite_actually_c
     # beside the font step); this pin is the typed half the derived census above exists to
     # catch, and it caught this one at the merge.
     assert _local_action_files() == [".github/actions/clean-room/action.yml",
+                                     ".github/actions/npm-clean-room/action.yml",
                                      ".github/actions/sheet-fonts/action.yml"]
     assert {"verify.ps1", ".gitignore"} <= set(_repo_root_files_the_suite_reads())
     #: the two enumerators must agree: `action_files()` walks `.github/actions/` off the
@@ -1414,6 +1417,12 @@ def _install_tokens(script):
             # the constraint exists to protect, and pinning a filename would be nonsense.
             if "/" in token or token.endswith((".whl", ".tar.gz")):
                 continue
+            # Nor is a runner-side variable. `npm install --prefix "$PREFIX" "$TARBALL"` in
+            # `.github/actions/npm-clean-room` expands to a scratch directory and to the
+            # tarball just packed — the same "local artifact" exemption one substitution
+            # later, and a `$` can never begin a package name.
+            if token.startswith("$"):
+                continue
             tokens.append(token)
     return tokens
 
@@ -1764,3 +1773,150 @@ def test_the_trigger_census_goes_red_on_a_guarded_file_no_filter_covers(trigger)
     intruder = "no-such-directory-8481819/guarded.txt"
     assert _unfiltered([intruder], trigger) == [intruder], (
         f"the {trigger} filter claims to cover {intruder!r}; the check cannot fail")
+
+
+# -- the npm half of the clean room (wave 10, F-3729edd4) ---------------------------------
+#
+# The Python wheel is built, installed into a clean venv and RUN from that install before it
+# is published; `.github/actions/clean-room/action.yml` exists because "the artifact handed to
+# publish was the one artifact never installed in the workflow that publishes it". The npm
+# package is published irreversibly in the same workflow and was never packed, never
+# installed and never run from an install anywhere in this repository. Its only coverage was
+# `npm test` — `node bin/armature.mjs --node-selftest` — run from the CHECKOUT, which consults
+# neither `bin` nor `files` nor the tarball.
+#
+# Measured 2026-09-04 on a scratch copy of npm/ with the `bin` map pointed at
+# `bin/armature.msj`: `npm test` printed `armature launcher ok` and exited 0, `npm pack`
+# produced the same four-file tarball, and `npm install --prefix <scratch> <tarball>` reported
+# `added 1 package` while creating NO `node_modules/.bin` at all — the command the package
+# exists to install did not exist, with every gate in the workflow green.
+#
+# THE NODE THIS CENSUS KEYS ON: `npm pack` inside a run script of a job, with local composite
+# actions expanded. It does not key on the job's name, and it deliberately does not key on
+# `npm test`, because running the launcher out of the checkout is exactly the coverage that
+# was green on the defect.
+
+
+def _job_needs(text, job):
+    """The job names in a job's `needs:` key — scalar or inline list."""
+    for line in _job_lines(text, job):
+        stripped = line.strip()
+        if stripped.startswith("needs:"):
+            value = stripped[len("needs:") :].strip()
+            return [
+                piece.strip().strip("[]").strip("\"'")
+                for piece in value.split(",")
+                if piece.strip().strip("[]")
+            ]
+    return []
+
+
+def npm_pack_jobs():
+    """(workflow, job) for every job that packs the npm package — walked, never listed."""
+    out = []
+    for name in workflow_files():
+        for job in job_names(_text(name)):
+            if any("npm pack" in _code_only(s) for s in job_scripts(name, job)):
+                out.append((name, job))
+    return out
+
+
+def npm_publish_jobs():
+    """(workflow, job) for every job that hands the npm package to the registry."""
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            if "npm publish" in _code_only("\n".join(_job_lines(text, job))):
+                out.append((name, job))
+    return out
+
+
+#: Measured 2026-09-04. Before this wave `npm_pack_jobs()` was EMPTY — the census's own red
+#: proof — while `npm_publish_jobs()` was already this.
+NPM_PACK_JOBS_TODAY = [("ci.yml", "launcher"), ("release.yml", "verify")]
+NPM_PUBLISH_JOBS_TODAY = [("release.yml", "npm")]
+
+
+def test_the_npm_pack_and_publish_censuses_are_the_jobs_in_the_files():
+    """Size and membership before the property, both directions."""
+    assert npm_pack_jobs() == NPM_PACK_JOBS_TODAY, (
+        f"the jobs that pack the npm package are {npm_pack_jobs()}; this file was written "
+        f"against {NPM_PACK_JOBS_TODAY}")
+    assert npm_publish_jobs() == NPM_PUBLISH_JOBS_TODAY, (
+        f"the jobs that publish the npm package are {npm_publish_jobs()}; this file was "
+        f"written against {NPM_PUBLISH_JOBS_TODAY}")
+
+
+def npm_clean_room_script():
+    """The one script anywhere under `.github/` that packs the npm package.
+
+    Derived, so lifting the leg into an action (or back out of one) moves every check that
+    reads it. Exactly one is required: two would be two implementations of one gate, which
+    is how the font dependency and the packaging leg both forked.
+    """
+    hits = [(source, script) for source, script in _all_run_scripts()
+            if "npm pack" in _code_only(script)]
+    assert len(hits) == 1, (
+        f"{len(hits)} scripts under .github/ pack the npm package; the leg that catches a "
+        f"`bin`/`files` defect must have one implementation: {[s for s, _ in hits]}")
+    return hits[0][1]
+
+
+def _runs_the_installed_shim(script):
+    """True when a script packs the package, installs THE TARBALL into a scratch prefix, and
+    invokes the shim npm created there.
+
+    All three clauses matter and each has a measured failure: `npm test` does none of them;
+    packing without installing proves only that a tarball can be written; installing without
+    invoking `node_modules/.bin/armature` is the exact state measured above, where npm
+    reported `added 1 package` and created no bin directory at all.
+    """
+    code = _code_only(script)
+    return (
+        "npm pack" in code
+        and re.search(r"npm\s+(install|i)\b[^\n]*--prefix", code) is not None
+        and "node_modules/.bin/armature" in code
+        and "--node-selftest" in code
+    )
+
+
+def test_the_npm_package_is_run_from_a_clean_install_before_it_is_published():
+    """A published version is taken forever; a `bin` map nothing resolves is silent.
+
+    What this looks like if wrong: `@mcptoolshop/armature-studio@X.Y.Z` lands on the
+    registry, provenance attested, and `npx armature` provides no command.
+    """
+    assert _runs_the_installed_shim(npm_clean_room_script()), (
+        "the npm leg does not pack, install and run the package from its tarball:\n"
+        + npm_clean_room_script())
+
+
+@pytest.mark.parametrize("workflow,job", npm_publish_jobs())
+def test_every_job_that_publishes_the_npm_package_is_gated_by_the_pack_and_install_leg(workflow, job):
+    """The gate must be upstream of the irreversible step, not beside it."""
+    packers = {j for w, j in npm_pack_jobs() if w == workflow}
+    reachable = set(_job_needs(_text(workflow), job)) | {job}
+    assert packers & reachable, (
+        f"{workflow}:{job} publishes the npm package and neither it nor any job it needs "
+        f"({sorted(reachable)}) packs and installs the tarball first; the jobs that do are "
+        f"{sorted(packers)}")
+
+
+def test_the_npm_clean_room_check_goes_red_on_the_coverage_this_repo_had():
+    """The mutation set: three scripts that must NOT satisfy the predicate.
+
+    A check that cannot fail is not a check, so the shapes measured green-on-the-defect are
+    fed to the same predicate the leg is judged by.
+    """
+    assert not _runs_the_installed_shim("npm test"), (
+        "`npm test` reads as a clean install; it runs bin/armature.mjs out of the checkout")
+    assert not _runs_the_installed_shim("npm pack\nnode bin/armature.mjs --node-selftest"), (
+        "packing and then running the CHECKOUT reads as a clean install")
+    assert not _runs_the_installed_shim(
+        'npm pack\nnpm install --prefix "$RUNNER_TEMP/x" ./pkg.tgz'), (
+        "installing without invoking node_modules/.bin/armature reads as a clean install; "
+        "that is the exact state where npm reported `added 1 package` and made no bin")
+    assert not _runs_the_installed_shim(
+        '# npm pack\n# npm install --prefix x\n# node_modules/.bin/armature --node-selftest'), (
+        "a commented-out leg reads as a leg that runs")
