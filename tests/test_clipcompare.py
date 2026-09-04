@@ -143,3 +143,25 @@ def test_downsampling_preserves_gross_layout():
     f = _frames(1, h=64, w=64)[0]
     d = CC.downsample(f, step=8)
     assert d.shape == (8, 8, 3)
+
+
+def test_a_two_dimensional_frame_raises_rather_than_changing_the_unit():
+    """`frac_differing` reduces over the CHANNEL axis, so it is a fraction of PIXELS. On a
+    2-D (H, W) frame the same expression collapsed the WIDTH axis and returned the fraction
+    of differing ROWS under the same key name: measured on a 4x100 pair with exactly one
+    differing pixel, 0.25 against the 3-channel form's 0.0025 - a 100x error, silently, with
+    no shape check and nothing in the returned dict recording which reading was taken
+    (F-4c233305). `clipstats.luma` already refuses the same way."""
+    a2 = np.zeros((4, 100), dtype=np.uint8)
+    b2 = a2.copy()
+    b2[1, 50] = 255
+    with pytest.raises(ValueError) as exc:
+        CC.frame_fidelity(a2, b2)
+    assert "(H, W, 3)" in str(exc.value)
+
+    a3 = np.zeros((4, 100, 3), dtype=np.uint8)
+    b3 = a3.copy()
+    b3[1, 50, :] = 255
+    ev = CC.frame_fidelity(a3, b3)
+    assert ev["frac_differing"] == pytest.approx(1.0 / 400.0)
+    assert "PIXELS" in ev["frac_differing_reduced_over"]

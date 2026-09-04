@@ -114,7 +114,12 @@ def test_depth_direction_near_is_bright(tmp_path):
     row = img[55]  # inside the box (rows 20..90); the ramp spans columns 10..60
     near_px, far_px = int(row[10]), int(row[60])
     assert near_px > far_px, f"near {near_px} should be brighter than far {far_px}"
-    assert near_px == 255 and far_px == 0
+    # far_px was 0 until F-aa0ca08b: the farthest GEOMETRY pixel encoded to the same byte
+    # as the background, so the rearmost band of the silhouette dissolved into the void.
+    # Byte 0 is now reserved for "not geometry" and geometry starts one byte above it.
+    assert near_px == 255 and far_px == 1
+    bg = int(np.array(Image.open(out / "depth_perframe" / "00000.png"))[0, 0])
+    assert bg == 0 and bg != far_px, "background and farthest geometry must differ"
     assert list(row[10:61]) == sorted(row[10:61], reverse=True), "the ramp is monotonic"
 
 

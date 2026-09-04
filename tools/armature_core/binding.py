@@ -34,7 +34,10 @@ own measured radius, so a band expressed in `u` scales with the subject instead 
 this one. A length in metres here would be a global constant governing a local feature.
 
 Weights sum to exactly 1 on every vertex by construction, which is what keeps skinning the
-identity at the bind pose and is the property Gate P reads.
+identity at the bind pose. That sum is **not** what Gate P reads: `rig_gates.gate_p_*`
+compare rest-pose world-space vertex positions, the round-tripped positions, and whether
+the evaluation is live - none of them looks at a weight sum. The diagnostics below say so
+in the dict itself, so no manifest line can quote a constant as corroboration.
 """
 
 import numpy as np
@@ -93,7 +96,12 @@ def rigid_segment_weights(verts, bones, radii, blend_band=BLEND_BAND):
                  "vertices_rigid": int(n), "vertices_blended": 0, "blended_fraction": 0.0,
                  "vertices_with_any_weight": int(n), "weight_sum_min": 1.0,
                  "weight_sum_max": 1.0, "vertices_with_weight": {only: int(n)},
-                 "vertices_dominated": {only: int(n)}, "bones_with_no_vertices": []})
+                 "vertices_dominated": {only: int(n)}, "bones_with_no_vertices": [],
+                 "invariant_by_construction": ["weight_sum_min", "weight_sum_max",
+                                               "vertices_with_any_weight"],
+                 "invariant_by_construction_note": (
+                     "these three are fixed by the assignment rule, not measured; the "
+                     "single-bone branch hard-codes 1.0 outright.")})
 
     order = np.argpartition(u, 1, axis=1)[:, :2]
     first = u[np.arange(n), order[:, 0]]
@@ -144,5 +152,19 @@ def rigid_segment_weights(verts, bones, radii, blend_band=BLEND_BAND):
         "vertices_with_weight": counts,
         "vertices_dominated": dominated,
         "bones_with_no_vertices": sorted(k for k, v in counts.items() if v == 0),
+        # weight_sum_min / weight_sum_max / vertices_with_any_weight cannot take any other
+        # value: w2 = 1.0 - w1 with w1 in [0.5, 1.0) sums to exactly 1.0 in IEEE754
+        # (Sterbenz), the rigid branch is 1.0 + 0.0, and i1 != i2 always. Measured over
+        # 200 random 500-vertex clouds against a 4-bone chain, the set of distinct
+        # (min, max) pairs is exactly {(1.0, 1.0)}. Labelled here so no report can quote
+        # them as corroboration that the partition of unity holds - a check that cannot
+        # fail is not a check.
+        "invariant_by_construction": ["weight_sum_min", "weight_sum_max",
+                                      "vertices_with_any_weight"],
+        "invariant_by_construction_note": (
+            "these three are fixed by the assignment rule (w1 + w2 == 1.0 exactly in "
+            "IEEE754 by Sterbenz, i1 != i2 always), not measured. A real measurement of "
+            "the partition of unity is the weight sum AS WRITTEN INTO THE GLB after "
+            "export, where the value can differ."),
     }
     return weights, diagnostics

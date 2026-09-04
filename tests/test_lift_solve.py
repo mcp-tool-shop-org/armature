@@ -154,7 +154,7 @@ def test_position_round_trip_is_exact_for_limb_motion():
     authored = motion(LIMB_MOTION, root=(0.02, -0.03, 0.01))
     obs = observed_from(rest, authored)
     solved = LS.solve_frame(rest, obs)
-    ev = LS.round_trip_report(rest, obs, solved, DIAGONAL)   # raises on failure
+    ev = LS.gate_round_trip(rest, obs, solved, DIAGONAL)   # the andon; it raises
     assert ev["worst"]["d"] < LS.ROUND_TRIP_TOL_FRAC * DIAGONAL
 
 
@@ -166,7 +166,7 @@ def test_position_round_trip_is_exact_under_a_whole_body_rotation():
                       root=(-0.04, 0.06, 0.02))
     obs = observed_from(rest, authored)
     solved = LS.solve_frame(rest, obs)
-    LS.round_trip_report(rest, obs, solved, DIAGONAL)
+    LS.gate_round_trip(rest, obs, solved, DIAGONAL)
 
 
 def test_rotations_are_recovered_exactly_for_limb_motion():
@@ -235,7 +235,7 @@ def test_the_torso_solve_is_a_projection_and_the_pelvis_is_still_exact():
     authored = motion(dict(LIMB_MOTION, **{"chest": euler(0.0, 0.0, 9.0)}))
     obs = observed_from(rest, authored)
     solved = LS.solve_frame(rest, obs)
-    ev = LS.round_trip_report(rest, obs, solved, DIAGONAL, raise_on_fail=False)
+    ev = LS.round_trip_report(rest, obs, solved, DIAGONAL)
 
     for site in ("hip_L", "hip_R"):
         assert ev["per_site"][site] < LS.ROUND_TRIP_TOL_FRAC * DIAGONAL, (
@@ -272,7 +272,7 @@ def test_a_mirrored_reading_is_visible_in_the_round_trip_but_only_partly():
                  ("ankle_L", "ankle_R"), ("toe_L", "toe_R"), ("ear_L", "ear_R")):
         swapped[a], swapped[b] = obs[b], obs[a]
     solved = LS.solve_frame(rest, swapped)
-    ev = LS.round_trip_report(rest, swapped, solved, DIAGONAL, raise_on_fail=False)
+    ev = LS.round_trip_report(rest, swapped, solved, DIAGONAL)
     assert ev["worst"]["d"] > 100.0 * LS.ROUND_TRIP_TOL_FRAC * DIAGONAL, ev["worst"]
 
 
@@ -348,12 +348,12 @@ def test_the_round_trip_gate_can_actually_fail():
     rest = synthetic_rest()
     obs = observed_from(rest, motion(LIMB_MOTION))
     solved = LS.solve_frame(rest, obs)
-    LS.round_trip_report(rest, obs, solved, DIAGONAL)          # clean first
+    LS.gate_round_trip(rest, obs, solved, DIAGONAL)          # clean first
 
     solved["local"]["elbow.L"] = LS.mat_mul(
         LS.axis_angle((0.0, 1.0, 0.0), 1e-3), solved["local"]["elbow.L"])
     with pytest.raises(LS.SolveGate) as exc:
-        LS.round_trip_report(rest, obs, solved, DIAGONAL)
+        LS.gate_round_trip(rest, obs, solved, DIAGONAL)
     assert exc.value.gate == "SOLVE"
     assert exc.value.evidence["worst"]["site"] in ("wrist_L", "hand_end_L")
 
@@ -382,7 +382,7 @@ PROBE = textwrap.dedent(
         LS.axis_angle((0.0, 1.0, 0.0), 1e-3), solved["local"]["elbow.L"])
     out = {"optimize_flag": sys.flags.optimize, "asserts_active": __debug__}
     try:
-        LS.round_trip_report(rest, obs, solved, DIAGONAL)
+        LS.gate_round_trip(rest, obs, solved, DIAGONAL)
         out["outcome"] = "NO_RAISE"
     except LS.SolveGate:
         out["outcome"] = "GATE_RAISED"
@@ -543,3 +543,44 @@ def test_fk_agrees_with_the_banked_walk_kinematics():
                               ("wrist_L", "wrist_L"), ("hand_end_L", "hand_end_L")):
         d = LS._norm(LS._sub(tuple(theirs[their_key]), mine[my_key]))
         assert d < 1e-12, f"{their_key}: my FK and walk.forward_kinematics differ by {d}"
+
+
+# ------------------------------------- the gate and the diagnostic are two functions
+
+
+def test_the_gate_accepts_no_argument_that_suppresses_its_raise():
+    """`round_trip_report` carried `raise_on_fail=True`, and every non-test call site in
+    the tree passed False (`lift_clip.py:276`, `measure_lift.py:334`) - so the only paths
+    that ever armed the andon were the tests, and a keyword that turns an andon into a
+    return value is a skip flag whatever it is called. F-95a5029e."""
+    import inspect
+
+    banned = [p for p in inspect.signature(LS.gate_round_trip).parameters
+              if any(w in p.lower() for w in ("raise", "skip", "force", "ignore",
+                                              "strict", "enforce", "warn", "soft",
+                                              "disable", "allow"))]
+    assert banned == [], f"the gate accepts {banned}, which could suppress its raise"
+
+
+def test_the_diagnostic_measures_and_the_gate_halts_on_the_same_input():
+    rest = synthetic_rest()
+    obs = observed_from(rest, motion(LIMB_MOTION))
+    solved = LS.solve_frame(rest, obs)
+    assert LS.round_trip_report(rest, obs, solved, DIAGONAL)["within_tolerance"] is True
+
+    solved["local"]["elbow.L"] = LS.mat_mul(
+        LS.axis_angle((0.0, 1.0, 0.0), 1e-3), solved["local"]["elbow.L"])
+    ev = LS.round_trip_report(rest, obs, solved, DIAGONAL)      # measures, never raises
+    assert ev["within_tolerance"] is False
+    with pytest.raises(LS.SolveGate):                            # the andon on the same input
+        LS.gate_round_trip(rest, obs, solved, DIAGONAL)
+
+
+def test_arming_the_diagnostic_by_keyword_is_refused_rather_than_honoured():
+    """An old call that asked for the andon must not quietly receive a diagnostic."""
+    rest = synthetic_rest()
+    obs = observed_from(rest, motion(LIMB_MOTION))
+    solved = LS.solve_frame(rest, obs)
+    with pytest.raises(TypeError) as exc:
+        LS.round_trip_report(rest, obs, solved, DIAGONAL, raise_on_fail=True)
+    assert "gate_round_trip" in str(exc.value)

@@ -602,20 +602,28 @@ def fk_sites(rest, solved):
 # ---------------------------------------------------------------------- the checks
 
 def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
-                      raise_on_fail=True):
-    """Does the solve reproduce the positions it was solved from? · ANDON
+                      raise_on_fail=False):
+    """Does the solve reproduce the positions it was solved from? - DIAGNOSTIC.
 
-    **This raises**, inside the module that did the solve, rather than returning a verdict
-    for a shell chain to walk past. It is the one check that is a gate here: a solver that
-    does not invert its own model is broken, and everything downstream would be quoted
-    against a wrong pose while every other number looked reasonable.
+    **This never raises on the measurement.** It was one function with a `raise_on_fail`
+    keyword defaulting to True, and every non-test call site in the tree passed False
+    (`lift_clip.py:276`, `measure_lift.py:334`) - so the only paths that ever armed the
+    andon were the tests, and a keyword that turns an andon into a return value is a skip
+    flag whatever it is called. The two behaviours are now two functions: this one
+    measures, `gate_round_trip` below halts, and no caller can disarm the second by
+    keyword because it has no keyword to pass.
 
-    The tolerance is a fraction of the character's own bbox diagonal. `raise_on_fail` is
-    NOT a skip flag — it exists so the *measurement* path can report a residual against a
-    real detector, where the observation comes from another body and a residual is the
-    thing being measured rather than a defect. The gate is armed on the synthetic path,
-    which is the one whose invariant is exactness.
+    `raise_on_fail` survives only to REFUSE: passing True raises `TypeError` naming the
+    gate, so an old call cannot quietly get a diagnostic where it asked for an andon.
+
+    The tolerance is a fraction of the character's own bbox diagonal. `within_tolerance`
+    is the reading the measurement path wants when the observation comes from another body
+    and the residual is the thing being measured rather than a defect.
     """
+    if raise_on_fail:
+        raise TypeError(
+            "round_trip_report is a diagnostic and cannot be armed; call "
+            "gate_round_trip(rest, obs, solved, diagonal[, tol_frac]) - it has no flag")
     got = fk_sites(rest, solved)
     tol = tol_frac * diagonal
     per_site, worst = {}, {"site": None, "d": 0.0}
@@ -628,16 +636,33 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
             worst = {"site": site, "d": d}
     ev = {"gate": "SOLVE", "tolerance": tol, "tolerance_frac_of_diagonal": tol_frac,
           "bbox_diagonal": diagonal, "worst": worst, "per_site": per_site,
-          "n_sites": len(per_site),
+          "n_sites": len(per_site), "within_tolerance": bool(worst["d"] <= tol),
           "note": ("distance between each observed site and where the solved rotations "
                    "put it; exact by construction when the observation came from this "
                    "rig's own kinematics inside this model")}
-    if raise_on_fail and worst["d"] > tol:
+    ev["verdict"] = f"max {worst['d']:.3e} over {len(per_site)} sites (tolerance {tol:.3e})"
+    return ev
+
+
+def gate_round_trip(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC):
+    """Gate SOLVE - ANDON - the solve reproduces the positions it was solved from.
+
+    **No flag, no environment escape, no `assert`.** It raises inside the module that did
+    the solve rather than returning a verdict for a shell chain to walk past: a solver
+    that does not invert its own model is broken, and everything downstream would be
+    quoted against a wrong pose while every other number looked reasonable.
+
+    The synthetic path is the one whose invariant is exactness, and this is the function
+    it calls. The measurement path - where the observation comes from another body, so a
+    residual is the thing being measured - calls `round_trip_report` by name.
+    """
+    ev = round_trip_report(rest, obs, solved, diagonal, tol_frac)
+    if ev["worst"]["d"] > ev["tolerance"]:
         raise SolveGate(
             f"the solve does not reproduce the positions it was solved from: "
-            f"{worst['d']:.12f} at site {worst['site']!r} against a tolerance of "
-            f"{tol:.12f}. This is an inversion defect, never a number to tune toward", ev)
-    ev["verdict"] = f"max {worst['d']:.3e} over {len(per_site)} sites (tolerance {tol:.3e})"
+            f"{ev['worst']['d']:.12f} at site {ev['worst']['site']!r} against a tolerance "
+            f"of {ev['tolerance']:.12f}. This is an inversion defect, never a number to "
+            f"tune toward", ev)
     return ev
 
 

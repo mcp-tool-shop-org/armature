@@ -177,3 +177,31 @@ def test_the_assignment_is_deterministic():
     b, _ = _weights(pts)
     for name in a:
         assert np.array_equal(a[name], b[name])
+
+
+# ------------------------------------------- diagnostics that cannot take another value
+
+
+def test_the_constant_diagnostics_are_labelled_as_constants():
+    """`weight_sum_min`, `weight_sum_max` and `vertices_with_any_weight` cannot take any
+    other value: `w2 = 1.0 - w1` with `w1` in [0.5, 1.0) sums to exactly 1.0 in IEEE754
+    (Sterbenz), the rigid branch is 1.0 + 0.0, and `i1 != i2` always. A manifest line
+    quoting `weight_sum_min == 1.0` read as corroboration that the partition of unity
+    holds and provided none - a check that cannot fail is not a check (F-93520b33)."""
+    rng = np.random.default_rng(7)
+    _, diag = _weights(rng.uniform(-2.0, 4.0, size=(500, 3)))
+    assert set(diag["invariant_by_construction"]) == {
+        "weight_sum_min", "weight_sum_max", "vertices_with_any_weight"}
+    assert "not measured" in diag["invariant_by_construction_note"]
+    for key in diag["invariant_by_construction"]:
+        assert key in diag
+
+
+def test_the_labelled_diagnostics_really_are_constant_across_random_clouds():
+    """The measurement behind the label rather than the claim alone."""
+    pairs = set()
+    for seed in range(40):
+        rng = np.random.default_rng(seed)
+        _, diag = _weights(rng.uniform(-2.0, 4.0, size=(200, 3)))
+        pairs.add((diag["weight_sum_min"], diag["weight_sum_max"]))
+    assert pairs == {(1.0, 1.0)}

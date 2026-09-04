@@ -446,6 +446,14 @@ def gate_whole(extent, width, height, margin_px):
     per side either way, because "it passed" and "it passed by one pixel" are different
     facts about a composition and the second one is a warning.
 
+    **Both sides are measured in the coordinate space `silhouette_extent` produces.** That
+    function returns `fx * width` / `fy * height`, so an in-frame point spans the
+    continuous range 0..width, not 0..width-1. The far-side margins were computed against
+    `width - 1` / `height - 1` - one pixel apart from the near sides - which understated
+    the right/bottom clearance by 1 px and made `margins_px` asymmetric for a perfectly
+    centred subject. `turnaround.gate_view_crop` keeps `width - 1` because its input is an
+    INCLUSIVE integer pixel bbox, which is a different space.
+
     **It binds on both directions of the same edge.** Too large is the failure this exists
     for (a cropped character conditioning the whole clip); too *small* is not caught here
     and is not silent — the figure's height fraction is reported and the Director sees the
@@ -456,8 +464,8 @@ def gate_whole(extent, width, height, margin_px):
         "extent_px": {k: extent[k] for k in ("x0", "x1", "y0", "y1")},
         "n_points": extent.get("n_points"), "n_behind": extent.get("n_behind"),
         "margins_px": {
-            "left": extent["x0"], "right": (width - 1) - extent["x1"],
-            "top": extent["y0"], "bottom": (height - 1) - extent["y1"]},
+            "left": extent["x0"], "right": float(width) - extent["x1"],
+            "top": extent["y0"], "bottom": float(height) - extent["y1"]},
         "height_frac": (extent["y1"] - extent["y0"]) / float(height),
         "width_frac": (extent["x1"] - extent["x0"]) / float(width),
     }

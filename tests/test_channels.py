@@ -10,9 +10,13 @@ def test_depth_near_is_bright():
     z = np.array([[2.0, 3.5, 5.0]])
     mask = np.ones((1, 3), dtype=np.uint8)
     d = ch.normalize_depth(z, mask, 2.0, 5.0)
+    f = ch.GEOMETRY_DEPTH_FLOOR
     assert d[0, 0] == pytest.approx(1.0)
-    assert d[0, 2] == pytest.approx(0.0)
-    assert d[0, 1] == pytest.approx(0.5)
+    # These two moved with F-aa0ca08b, deliberately. The far end of the GEOMETRY range was
+    # pinned here at 0.0 - the same value `normalize_depth` writes for "no geometry" and the
+    # same byte `encode_u8` produces for it. Geometry now starts one byte above background.
+    assert d[0, 2] == pytest.approx(f)
+    assert d[0, 1] == pytest.approx(f + 0.5 * (1.0 - f))
 
 
 def test_depth_background_is_black_not_near():
@@ -145,3 +149,24 @@ def test_per_shot_compresses_relative_to_per_frame():
     d_ps = ch.normalize_depth(z, mask, 1.0, 6.0)      # wider shot window
     assert d_ps[0, 0] < d_pf[0, 0]     # nearest surface darker under per-shot
     assert d_ps[0, -1] > d_pf[0, -1]   # farthest surface lighter under per-shot
+
+
+def test_the_farthest_geometry_pixel_does_not_encode_to_the_background_byte():
+    """The geometry pixel at `z == z_far` mapped to `(z_far - z_far)/span = 0.0`, which is
+    BACKGROUND_DEPTH, and `encode_u8` took both to byte 0: the rearmost band of the
+    silhouette dissolved into the void it is supposed to stand against, on every frame
+    where the subject sits furthest under per-shot normalisation."""
+    z = np.array([[1.0, 2.0], [3.0, 1e10]])
+    mask = np.array([[1, 1], [1, 0]], dtype=np.uint8)
+    b = ch.encode_u8(ch.normalize_depth(z, mask, 1.0, 3.0))
+    assert b[1, 1] == 0, "background must keep byte 0"
+    assert b[1, 0] != b[1, 1], (
+        "the farthest geometry pixel and the void encode to the same byte")
+    assert b[1, 0] == 1 and b[0, 0] == 255
+
+
+def test_the_geometry_floor_costs_one_byte_and_no_more():
+    z = np.linspace(2.0, 5.0, 256).reshape(1, 256)
+    mask = np.ones((1, 256), dtype=np.uint8)
+    b = ch.encode_u8(ch.normalize_depth(z, mask, 2.0, 5.0))
+    assert int(b.min()) == 1 and int(b.max()) == 255

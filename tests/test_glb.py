@@ -97,7 +97,7 @@ def test_the_gate_does_not_care_about_image_ORDER(tmp_path):
     one, two = ATLAS, ATLAS[::-1]
     a = _glb(str(tmp_path / "src.glb"), one, images=2)
     b = _glb(str(tmp_path / "out.glb"), two, images=2)
-    assert glb.gate_atlas_untouched(a, b)["verdict"].startswith("2 embedded")
+    assert glb.gate_atlas_untouched(a, b)["verdict"].startswith("2 of 2 embedded")
 
 
 def test_a_file_that_is_not_a_glb_raises_rather_than_returning_nothing(tmp_path):
@@ -105,3 +105,48 @@ def test_a_file_that_is_not_a_glb_raises_rather_than_returning_nothing(tmp_path)
     bad.write_bytes(b"this is not a container")
     with pytest.raises(ValueError):
         glb.read_chunks(str(bad))
+
+
+def _glb_mixed(path, blob, data_payload):
+    """A GLB carrying one bufferView image (hashable) and one data-URI image (not)."""
+    binary = blob + b"\x00" * (-len(blob) % 4)
+    js = json.dumps({
+        "asset": {"version": "2.0"},
+        "buffers": [{"byteLength": len(binary)}],
+        "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": len(blob)}],
+        "images": [{"bufferView": 0, "mimeType": "image/png", "name": "atlas"},
+                   {"uri": "data:image/png;base64," + data_payload,
+                    "mimeType": "image/png", "name": "decal"}],
+    }).encode("utf-8")
+    js += b" " * (-len(js) % 4)
+    total = 12 + 8 + len(js) + 8 + len(binary)
+    with open(path, "wb") as fh:
+        fh.write(struct.pack("<III", glb.GLB_MAGIC, 2, total))
+        fh.write(struct.pack("<II", len(js), glb.CHUNK_JSON))
+        fh.write(js)
+        fh.write(struct.pack("<II", len(binary), glb.CHUNK_BIN))
+        fh.write(binary)
+    return path
+
+
+def test_an_unhashable_source_image_is_not_certified_by_silence(tmp_path):
+    """`embedded_images` sets sha256=None for a data URI or an external uri, and the
+    vacuity guard fired only when NO image was hashable - a PARTIAL exclusion was silent.
+    Measured: a pair each carrying one identical bufferView image and one data-URI image
+    that DIFFERED passed with "1 embedded image(s) byte-identical through the route", a
+    count rather than a coverage (F-ac4bdb63)."""
+    a = _glb_mixed(str(tmp_path / "src.glb"), ATLAS, "AAAA")
+    b = _glb_mixed(str(tmp_path / "out.glb"), ATLAS, "BBBBCCCC")
+    with pytest.raises(glb.GateAtlasUntouched) as exc:
+        glb.gate_atlas_untouched(a, b)
+    assert "cannot be hashed" in str(exc.value)
+    assert exc.value.evidence["n_images_in_source"] == 2
+    assert exc.value.evidence["n_source_images_hashable"] == 1
+
+
+def test_the_verdict_states_coverage_not_only_a_count(tmp_path):
+    a = _glb(str(tmp_path / "src.glb"), ATLAS, images=2)
+    b = _glb(str(tmp_path / "out.glb"), ATLAS, images=2)
+    v = glb.gate_atlas_untouched(a, b)["verdict"]
+    assert v.startswith("2 of 2 embedded")
+    assert "0 unhashable" in v

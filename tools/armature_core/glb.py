@@ -86,7 +86,18 @@ def embedded_images(path):
 
 
 def gate_atlas_untouched(source_path, export_path):
-    """Gate ATLAS · ANDON — every embedded image arrives byte for byte."""
+    """Gate ATLAS - ANDON - every embedded image arrives byte for byte.
+
+    `embedded_images` sets `sha256=None` for an image stored as a data URI or an external
+    uri, and this gate can only compare the hashes it has. The vacuity guard fired only
+    when NO image was hashable, so a PARTIAL exclusion was silent: measured 2026-09-03 on
+    a pair of GLBs each carrying one identical bufferView image and one data-URI image
+    that DIFFERED between them, the gate passed with "1 embedded image(s) byte-identical
+    through the route" - a count, not a coverage. The promise this gate exists for is
+    "the atlas survives with zero re-bake"; certifying it over a subset without saying so
+    is the shape of receipt this repo pays for. So an unhashable source image now raises,
+    and the verdict states coverage as N of M.
+    """
     before = embedded_images(source_path)
     after = embedded_images(export_path)
     ev = {"source": source_path, "export": export_path,
@@ -101,20 +112,32 @@ def gate_atlas_untouched(source_path, export_path):
     out_hashes = sorted(i["sha256"] for i in after if i["sha256"])
     ev["source_hashes"] = src_hashes
     ev["export_hashes"] = out_hashes
+    unhashable = [{"index": i["index"], "storage": i.get("storage"), "name": i.get("name")}
+                  for i in before if not i["sha256"]]
+    ev["n_images_in_source"] = len(before)
+    ev["n_source_images_hashable"] = len(src_hashes)
+    ev["source_images_not_hashable"] = unhashable
 
     if not src_hashes:
         problems.append("the source carries no embedded image to compare, so this gate "
                         "would be a check that cannot fail")
+    elif unhashable:
+        problems.append(
+            f"{len(unhashable)} of {len(before)} source image(s) cannot be hashed "
+            f"(storage: {sorted({u['storage'] for u in unhashable})}), so 'the atlas "
+            f"survives with zero re-bake' cannot be checked for them and a PASS would "
+            f"certify the promise over a subset without saying so")
     missing = [h for h in src_hashes if h not in out_hashes]
     if missing:
         problems.append(f"{len(missing)} source image(s) do not appear byte-identical in "
-                        f"the export — the texture was re-encoded or resampled")
+                        f"the export - the texture was re-encoded or resampled")
 
     if problems:
         raise GateAtlasUntouched(
             "the texture atlas did not survive the route unchanged: " + "; ".join(problems),
             ev)
-    ev["verdict"] = f"{len(src_hashes)} embedded image(s) byte-identical through the route"
+    ev["verdict"] = (f"{len(src_hashes)} of {len(before)} embedded image(s) byte-identical "
+                     f"through the route, 0 unhashable")
     return ev
 
 

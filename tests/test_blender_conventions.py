@@ -61,7 +61,10 @@ def test_depth_direction_the_nearer_plane_is_brighter(synthetic):
         f"NEAR plane (lower, {lower.mean():.1f}) should be much brighter than "
         f"FAR plane (upper, {upper.mean():.1f})"
     )
-    assert lower.max() == 255 and upper.min() == 0
+    # upper.min() was 0 until F-aa0ca08b: the farthest GEOMETRY pixel encoded to the same
+    # byte as the background. Byte 0 is now reserved for "not geometry".
+    assert lower.max() == 255 and upper.min() == 1
+    assert depth[np.logical_not(mask)].max() == 0, "background must keep byte 0"
 
 
 def test_vertical_orientation_row_zero_is_the_top_of_the_scene(synthetic):
