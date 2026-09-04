@@ -434,3 +434,106 @@ def test_no_gate_in_this_tool_raises_an_andon_whose_id_is_not_its_own():
               and n.exc.func.id.startswith("Gate")}
     assert "GatePRestPose" in raised
     assert raised <= {"GateNNames", "GatePRestPose", "GateFailure"}, raised
+
+
+# --- routed family (core-gates, wave 8): a threshold the CALLER can loosen -------------
+
+
+def _threshold_keyword_defaults():
+    """Every gate function in `parts.py` whose signature declares a numeric tolerance
+    default a caller could raise.
+
+    Derived by AST over the module: any parameter whose name ends in `_frac`, `_tol`,
+    `tol`, `eps` or `threshold` and whose default is a numeric literal. That is the shape
+    core-gates removed from four rig gates in the same wave; the population here is
+    whatever the source declares, not a list typed into this test.
+    """
+    import ast
+    import inspect
+
+    hits = []
+    for node in ast.walk(ast.parse(inspect.getsource(parts))):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        args = node.args.args + node.args.kwonlyargs
+        defaults = ([None] * (len(node.args.args) - len(node.args.defaults))
+                    + list(node.args.defaults) + list(node.args.kw_defaults))
+        for arg, default in zip(args, defaults):
+            name = arg.arg
+            looks_like_tolerance = (name.endswith(("_frac", "_tol", "tol", "eps"))
+                                    or "threshold" in name)
+            if (looks_like_tolerance and isinstance(default, ast.Constant)
+                    and isinstance(default.value, (int, float))
+                    and not isinstance(default.value, bool)):
+                hits.append((node.name, name, default.value))
+    return hits
+
+
+def test_no_gate_here_takes_a_loosenable_tolerance_default():
+    """Census. `gate_rigid_arrival(epsilon_frac=1e-4, rigidity_frac=1e-5)` and
+    `gate_parts_determinism(length_frac=1e-6)` declared the tolerance as a caller argument
+    — the shape `assembly.gate_slot_ceiling` already refuses for `cap`: a bound the caller
+    supplies is a bound the caller can raise. Neither production site passed one
+    (`rig_parts.py:490` and `:503` both take the defaults), so the freedom bought nothing
+    and only the loosening direction was unbounded.
+    """
+    assert _threshold_keyword_defaults() == [], _threshold_keyword_defaults()
+
+
+def test_the_threshold_census_goes_red_on_a_reintroduced_default():
+    """Prove it can fail: the same walk over a source that declares one."""
+    import ast
+
+    mutated = "def gate_x(a, b, length_frac=1e-6):\n    return a\n"
+    hits = []
+    for node in ast.walk(ast.parse(mutated)):
+        if isinstance(node, ast.FunctionDef):
+            for arg, default in zip(node.args.args[-len(node.args.defaults):],
+                                    node.args.defaults):
+                if arg.arg.endswith("_frac") and isinstance(default, ast.Constant):
+                    hits.append((node.name, arg.arg, default.value))
+    assert hits == [("gate_x", "length_frac", 1e-6)]
+
+
+def test_the_module_owns_the_tolerances_and_a_caller_may_only_tighten():
+    ev = parts.gate_rigid_arrival([_obs("a"), _obs("b", disp=0.0)], 1.069)
+    assert ev["transform_frac"] == parts.RIGID_TRANSFORM_FRAC
+    assert ev["rigidity_frac"] == parts.RIGID_RIGIDITY_FRAC
+    tighter = parts.gate_rigid_arrival([_obs("a")], 1.069,
+                                       epsilon_frac=parts.RIGID_TRANSFORM_FRAC / 10.0)
+    assert tighter["transform_frac"] < parts.RIGID_TRANSFORM_FRAC
+
+    ev = parts.gate_parts_determinism(_fp(), _fp(), 1.069)
+    assert ev["length_frac"] == parts.DETERMINISM_LENGTH_FRAC
+    assert parts.gate_parts_determinism(
+        _fp(), _fp(), 1.069,
+        length_frac=parts.DETERMINISM_LENGTH_FRAC / 10.0)["length_frac"] < \
+        parts.DETERMINISM_LENGTH_FRAC
+
+
+def test_a_caller_that_loosens_a_tolerance_is_refused_by_each_gate():
+    """Both directions, on both gates. A gate whose tolerance grows with the deviation it
+    is measuring cannot see the deviation."""
+    with pytest.raises(parts.GateRigidArrival, match=r"may only TIGHTEN") as exc:
+        parts.gate_rigid_arrival([_obs("a")], 1.069,
+                                 epsilon_frac=parts.RIGID_TRANSFORM_FRAC * 10.0)
+    assert exc.value.evidence["module_transform_frac"] == parts.RIGID_TRANSFORM_FRAC
+
+    with pytest.raises(parts.GateRigidArrival, match=r"may only TIGHTEN"):
+        parts.gate_rigid_arrival([_obs("a")], 1.069,
+                                 rigidity_frac=parts.RIGID_RIGIDITY_FRAC * 10.0)
+
+    with pytest.raises(parts.GatePartsDeterminism, match=r"may only TIGHTEN") as exc:
+        parts.gate_parts_determinism(_fp(), _fp(), 1.069,
+                                     length_frac=parts.DETERMINISM_LENGTH_FRAC * 10.0)
+    assert exc.value.evidence["module_length_frac"] == parts.DETERMINISM_LENGTH_FRAC
+
+
+def test_the_loosened_tolerance_would_have_hidden_a_real_difference():
+    """What the freedom actually bought: the deviation the default catches, waved through
+    by a fraction ten times larger — which is why the gate has to own it."""
+    a = _fp()
+    b = _fp()
+    b["chest"]["positions"] = [[v + 1e-5 for v in p] for p in b["chest"]["positions"]]
+    with pytest.raises(parts.GatePartsDeterminism, match=r"vertices differ"):
+        parts.gate_parts_determinism(a, b, 1.069)

@@ -286,7 +286,35 @@ class GateRigidArrival(GateFailure):
     gate = "RIGID"
 
 
-def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=1e-4, rigidity_frac=1e-5):
+#: The tolerances Gate RIGID and Gate D own, as fractions of the subject's own bbox
+#: diagonal — never as lengths in metres. **This module owns them; a caller may only
+#: TIGHTEN.** Carried from core-gates' wave-8 threshold-ARGUMENT sweep (which removed the
+#: same keywords from four rig gates) and from `assembly.gate_slot_ceiling`'s `cap` clause,
+#: which is the shape this repo already settled on: a bound the caller supplies is a bound
+#: the caller can raise, and a gate whose tolerance grows with the defect it is measuring
+#: cannot see the defect. Neither production call site passes one — `rig_parts.py:490` and
+#: `rig_parts.py:503` both take the defaults — so the freedom bought nothing and the
+#: loosening direction was unbounded.
+RIGID_TRANSFORM_FRAC = 1e-4
+RIGID_RIGIDITY_FRAC = 1e-5
+DETERMINISM_LENGTH_FRAC = 1e-6
+
+
+def _tightened(name, requested, owned, gate_cls, ev):
+    """`requested` if it only tightens `owned`, else raise. None means "use the module's"."""
+    if requested is None:
+        return float(owned)
+    value = float(requested)
+    if value > float(owned):
+        raise gate_cls(
+            f"a caller asked this gate to run with {name}={value:.3e}, above the module's "
+            f"own {float(owned):.3e}. It may only TIGHTEN: a tolerance the caller supplies "
+            f"is a tolerance the caller can loosen, and a gate whose tolerance grows with "
+            f"the deviation it is measuring cannot see the deviation", ev)
+    return value
+
+
+def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_frac=None):
     """Gate RIGID · ANDON — per part: posed == bone transform applied to rest, and rigid.
 
     `observations` is one record per part with `name`, `max_transform_error` (max distance
@@ -296,12 +324,27 @@ def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=1e-4, rigidity_
     calls for, computed from the armature rather than from the mesh.
 
     The evidence carries `gate` and `andon` (F-f2f42e4a) — see `gate_parts_accounting`.
+
+    **The tolerance fractions are this module's, not the caller's.** `epsilon_frac` and
+    `rigidity_frac` were keywords any caller could raise; they now default to None, meaning
+    `RIGID_TRANSFORM_FRAC` and `RIGID_RIGIDITY_FRAC`, and a value ABOVE either raises. See
+    `_tightened`.
     """
-    tol = epsilon_frac * float(bbox_diagonal)
-    rig_tol = rigidity_frac * float(bbox_diagonal)
     ev = {"gate": "RIGID", "andon": "GateRigidArrival",
-          "transform_tolerance": tol, "rigidity_tolerance": rig_tol,
-          "bbox_diagonal": float(bbox_diagonal), "parts": observations}
+          "bbox_diagonal": float(bbox_diagonal),
+          "module_transform_frac": RIGID_TRANSFORM_FRAC,
+          "module_rigidity_frac": RIGID_RIGIDITY_FRAC,
+          "transform_frac_requested": epsilon_frac,
+          "rigidity_frac_requested": rigidity_frac,
+          "parts": observations}
+    eps = _tightened("epsilon_frac", epsilon_frac, RIGID_TRANSFORM_FRAC,
+                     GateRigidArrival, ev)
+    rig = _tightened("rigidity_frac", rigidity_frac, RIGID_RIGIDITY_FRAC,
+                     GateRigidArrival, ev)
+    tol = eps * float(bbox_diagonal)
+    rig_tol = rig * float(bbox_diagonal)
+    ev["transform_frac"], ev["rigidity_frac"] = eps, rig
+    ev["transform_tolerance"], ev["rigidity_tolerance"] = tol, rig_tol
     problems = []
 
     if not observations:
@@ -340,7 +383,7 @@ class GatePartsDeterminism(GateFailure):
     gate = "D"
 
 
-def gate_parts_determinism(a, b, bbox_diagonal, length_frac=1e-6):
+def gate_parts_determinism(a, b, bbox_diagonal, length_frac=None):
     """Gate D · ANDON — a second build produced the same parts.
 
     `a` and `b` map part name to {"n_verts", "n_faces", "positions"} where positions is a
@@ -364,11 +407,20 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=1e-6):
     andons — `errors.GateDDeterminism` (E07's rig determinism) and this one — so a
     receipt line reading "[D] two builds produced different parts" is ambiguous by id and
     the evidence is what disambiguates it.
+
+    **The tolerance fraction is this module's, not the caller's.** `length_frac` was a
+    keyword defaulting to 1e-6 that any caller could raise; it now defaults to None,
+    meaning `DETERMINISM_LENGTH_FRAC`, and a value ABOVE that raises. See `_tightened`.
     """
-    tol = length_frac * float(bbox_diagonal)
     shared = sorted(set(a) & set(b))
-    ev = {"gate": "D", "andon": "GatePartsDeterminism", "tolerance": tol,
+    ev = {"gate": "D", "andon": "GatePartsDeterminism",
+          "module_length_frac": DETERMINISM_LENGTH_FRAC,
+          "length_frac_requested": length_frac,
           "n_parts_a": len(a), "n_parts_b": len(b), "n_parts_compared": len(shared)}
+    frac = _tightened("length_frac", length_frac, DETERMINISM_LENGTH_FRAC,
+                      GatePartsDeterminism, ev)
+    tol = frac * float(bbox_diagonal)
+    ev["length_frac"], ev["tolerance"] = frac, tol
     problems = []
 
     if not a or not b:
