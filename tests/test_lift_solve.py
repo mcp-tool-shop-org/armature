@@ -166,7 +166,12 @@ def test_position_round_trip_is_exact_under_a_whole_body_rotation():
                       root=(-0.04, 0.06, 0.02))
     obs = observed_from(rest, authored)
     solved = LS.solve_frame(rest, obs)
-    LS.round_trip_report(rest, obs, solved, DIAGONAL)
+    # Assert on the residual rather than leaning on `raise_on_fail=True`, which is a
+    # keyword default in another module: the measurement path is documented to flip it,
+    # and a test whose only signal is "a call in another file happened to raise" passes
+    # with zero signal on an arbitrarily wrong solve. Mirrors the sibling above.
+    ev = LS.round_trip_report(rest, obs, solved, DIAGONAL)
+    assert ev["worst"]["d"] < LS.ROUND_TRIP_TOL_FRAC * DIAGONAL
 
 
 def test_rotations_are_recovered_exactly_for_limb_motion():

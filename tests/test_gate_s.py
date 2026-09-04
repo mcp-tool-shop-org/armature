@@ -29,7 +29,7 @@ import textwrap
 
 import pytest
 
-from conftest import REPO, TOOLS
+from conftest import REPO, TOOLS, repo_file
 
 sys.path.insert(0, TOOLS)
 
@@ -38,13 +38,24 @@ from armature_core import gates  # noqa: E402
 from armature_core.errors import GateSSeedRegistration  # noqa: E402
 
 SPEC = os.path.join(REPO, "docs", "experiments", "E04-the-between-generation-floor.md")
-HAVE_E02_UPLOADS = os.path.isfile("outputs/E02/uploads_depth_pershot.json")
+
+# The upload guard that used to stand here read `os.path.isfile("outputs/...")` — resolved
+# against the caller's working directory, not the repo — and decided the whole
+# through-the-builder half of this file. The maps are committed under
+# `tests/fixtures/uploads/` and conftest resolves them, so those tests now ride every run.
 
 # The bases E04's two conditions re-run. C-bright's is A0.json, NOT A1a.json: A1a ran
 # before the lossless tap existed and carries no node 302.
 E04_BASE = {"C-bright": "A0", "C-dark": "A1b"}
-HAVE_E02_PAYLOADS = all(
-    os.path.isfile(f"outputs/E02/payloads/{b}.json") for b in E04_BASE.values())
+
+#: The built payloads themselves are ~9.5 KB of gitignored output and are NOT committed —
+#: unlike the name maps, they are the thing under test's own product. The guard stays, but
+#: anchored on the repo and printing the absolute path, so a misfire is visible in the log
+#: rather than reading as "this repo has no run in it".
+E02_PAYLOAD_PATHS = {a: repo_file(f"outputs/E02/payloads/{b}.json")
+                     for a, b in E04_BASE.items()}
+HAVE_E02_PAYLOADS = all(os.path.isfile(p) for p in E02_PAYLOAD_PATHS.values())
+MISSING_PAYLOADS = sorted(p for p in E02_PAYLOAD_PATHS.values() if not os.path.isfile(p))
 
 
 # ------------------------------------------------------- the gate function, in isolation
@@ -95,7 +106,6 @@ def test_a_seed_that_is_not_an_int_raises(bad):
 
 # ----------------------------------------------------------------- the gate, in the tool
 
-@pytest.mark.skipif(not HAVE_E02_UPLOADS, reason="E02 upload records are gitignored output")
 def test_build_refuses_an_unregistered_seed():
     with pytest.raises(GateSSeedRegistration):
         bp.build("C-bright", "E04", seed=654654950714626)
@@ -118,7 +128,6 @@ def test_gate_S_fires_before_anything_is_read_from_disk(monkeypatch):
         bp.build("C-bright", "E04", seed=111)
 
 
-@pytest.mark.skipif(not HAVE_E02_UPLOADS, reason="E02 upload records are gitignored output")
 def test_the_seed_reaches_the_payload_and_the_meta_records_the_verdict():
     """A gate whose verdict is not written down cannot be audited after the fact."""
     seed = bp.E04_SEEDS[3]
@@ -129,7 +138,6 @@ def test_the_seed_reaches_the_payload_and_the_meta_records_the_verdict():
     assert meta["gate_S"]["registry_index"] == 3
 
 
-@pytest.mark.skipif(not HAVE_E02_UPLOADS, reason="E02 upload records are gitignored output")
 def test_each_seed_writes_to_its_own_output_names():
     """Six submissions of one arm must not overwrite each other on the server."""
     prefixes = set()
@@ -141,8 +149,8 @@ def test_each_seed_writes_to_its_own_output_names():
 
 # ------------------------------------------------- E04 really is E02's conditions re-run
 
-@pytest.mark.skipif(not (HAVE_E02_UPLOADS and HAVE_E02_PAYLOADS),
-                    reason="E02 payloads are gitignored output")
+@pytest.mark.skipif(not HAVE_E02_PAYLOADS,
+                    reason=f"E02 payloads are gitignored output; absent: {MISSING_PAYLOADS}")
 @pytest.mark.parametrize("arm", sorted(E04_BASE))
 @pytest.mark.parametrize("seed", bp.E04_SEEDS)
 def test_an_E04_payload_differs_from_its_E02_base_ONLY_in_the_seed(arm, seed):
@@ -154,7 +162,7 @@ def test_an_E04_payload_differs_from_its_E02_base_ONLY_in_the_seed(arm, seed):
     three output-name strings that have to differ or the runs would collide.
     """
     wf, _ = bp.build(arm, "E04", seed=seed)
-    with open(f"outputs/E02/payloads/{E04_BASE[arm]}.json", encoding="utf-8") as fh:
+    with open(E02_PAYLOAD_PATHS[arm], encoding="utf-8") as fh:
         base = json.load(fh)
 
     assert set(wf) == set(base), "E04 changed the graph shape"
@@ -175,7 +183,6 @@ def test_an_E04_payload_differs_from_its_E02_base_ONLY_in_the_seed(arm, seed):
                {k: v for k, v in base[nid]["inputs"].items() if k != "filename_prefix"}
 
 
-@pytest.mark.skipif(not HAVE_E02_UPLOADS, reason="E02 upload records are gitignored output")
 def test_the_two_conditions_differ_ONLY_in_which_control_they_carry():
     """At one seed, C-bright and C-dark must differ by the control and nothing else."""
     seed = bp.E04_SEEDS[1]

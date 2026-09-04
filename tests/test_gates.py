@@ -45,10 +45,27 @@ def test_g1_red_on_frame_count_not_4n_plus_1():
     assert "4n+1" in str(exc.value)
 
 
-@pytest.mark.parametrize("count", [80, 81 + 1, 34, 35, 36])
+# The sweep's own population. `81 + 1` sat here and evaluated to 82, whose residue is 2 —
+# so the four values covered residues {0, 2, 3} and the accept branch below never ran once.
+# 81 is the legal 4n+1 value that arm needs.
+G1_RESIDUE_SWEEP = [80, 81, 34, 35, 36]
+
+
+def test_the_residue_sweep_actually_covers_every_residue():
+    """The guard on the sweep. A parametrisation that lost its 4n+1 value turns the
+    accept branch below into a branch that cannot run, and a branch that cannot run
+    cannot fail — the test would keep its name and stop making its claim."""
+    assert {c % 4 for c in G1_RESIDUE_SWEEP} == {0, 1, 2, 3}
+
+
+@pytest.mark.parametrize("count", G1_RESIDUE_SWEEP)
 def test_g1_only_accepts_the_right_residue(count):
     if count % 4 == 1:
-        gates.g1_generator_legality(512, 768, count, "wan-vace")
+        profile = gates.g1_generator_legality(512, 768, count, "wan-vace")
+        # Not merely "it did not raise": the accepted count must be accepted for the
+        # stated reason, on the modulus and residue the profile itself declares.
+        assert profile.frame_modulus == 4 and profile.frame_residue == 1
+        assert count % profile.frame_modulus == profile.frame_residue
     else:
         with pytest.raises(G1GeneratorLegality):
             gates.g1_generator_legality(512, 768, count, "wan-vace")
