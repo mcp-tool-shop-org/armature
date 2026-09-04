@@ -27,6 +27,81 @@ DETERMINISM_WEIGHT_TOL = 1e-6
 DETERMINISM_ANGLE_TOL = 1e-6
 
 
+def _require_numeric(name, value, gate_cls, ev):
+    """The clause `require_finite` cannot carry: the value is a NUMBER at all.
+
+    `parts.require_finite` opens with `float(value)`, so a diagonal that is not numeric is
+    destroyed by that coercion before the helper can refuse it — the receipt-shaped defect
+    F-8a5683e0 names one line further out. Measured 2026-09-04 on the base tree:
+    `gate_p_rest_pose(a, a, None)` raised `TypeError: float() argument must be a string or
+    a real number, not 'NoneType'` and `gate_p_rest_pose(a, a, 'x')` raised `ValueError:
+    could not convert string to float`. Neither is an `ArmatureError`, so
+    `rig_character`'s halt handler classified a malformed argument as an unhandled crash
+    and wrote no receipt at all on its halt line — the exact exit this page closed for the
+    empty-array case in the same function. (The receipt is the six-key `<TOOL>_HALT` line
+    every tool emits; the `GATE_FAILURE` / `GATE_EVIDENCE` pair this page's older comments
+    name was deleted at the wave-12 merge.)
+
+    `world_bounds` returning None is the plausible producer; today's two call sites
+    (`rig_character.py:1050/:1194`) pass a computed float, so what this costs today is the
+    receipt rather than the verdict. It refuses `bool` for the reason `shotspec` refuses a
+    boolean radius: `True` is an `int`, and a flag is not a length. It ACCEPTS numpy's
+    scalar types, which are what `np.linalg.norm` hands a caller that forgets the `float()`.
+
+    Separate from `require_finite` rather than inside it: that helper is core-solvers' and
+    is shared by four modules, and this clause is about a TYPE, not about a comparison.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float, np.floating,
+                                                         np.integer)):
+        ev[name] = repr(value)
+        raise gate_cls(
+            f"{name}={value!r} is a {type(value).__name__}, not a number this gate can "
+            f"scale a tolerance by. A gate cannot compare against it and it cannot even "
+            f"be coerced, so without this clause the refusal arrives as a stdlib "
+            f"TypeError from inside the evidence dict — an unhandled crash naming no "
+            f"gate, in place of a receipt naming this one",
+            ev)
+    return value
+
+
+def _require_finite_measurement(name, values, gate_cls, ev):
+    """Refuse a non-finite MEASURED quantity by index, through the one non-finite helper.
+
+    ⚠ **Wave 12 guarded every THRESHOLD on this page and none of the MEASUREMENTS.**
+    The shared helper runs on `bbox_diagonal` four times here, so the number a gate
+    compares *against* is always finite — and every number a gate compares was left
+    unchecked. That is the wrong operand: a NaN threshold makes a comparison unanswerable,
+    but a NaN *observation* makes every comparison False in both directions and lands on
+    the verdict line as agreement. Measured 2026-09-04 on the base tree, one NaN in the
+    bound array: `gate_p_rest_pose` returned `verdict: 'rest pose preserved'` with
+    `max_displacement: nan` (`d[i] > threshold` is False); `gate_p_evaluation_is_live`
+    returned "the deform is live" on the same input (`d.max() <= threshold` is False);
+    `gate_d_determinism` returned "two builds agree on bones and hierarchy" for a bone
+    whose tail is `[nan, nan, nan]` in the second build, with `worst_bone_delta` recording
+    a delta of **0.0** — the receipt actively stating there was no difference; the same for
+    a NaN roll and for a weight vector `[nan, 1.0]` against `[0.0, 1.0]`.
+
+    The producing input is the one Gate D's own page already names as reachable: a GLB
+    carrying a non-finite vertex position, representable in glTF's float32 and passed
+    through by the importer. The three andons that exist to catch a silent collapse then
+    report green over it.
+
+    This is not a second implementation of the family — it locates the first offending
+    entry and hands THAT value to `parts.require_finite`, so the refusal carries the one
+    message, the one paragraph and the caller's own andon class, with the index and the
+    population beside it. `positive=False`: a displacement, a roll delta and a weight
+    delta may legitimately be zero.
+    """
+    arr = np.asarray(values, dtype=np.float64).ravel()
+    bad = np.flatnonzero(~np.isfinite(arr))
+    if bad.size:
+        i = int(bad[0])
+        ev[f"{name}_non_finite"] = {"first_index": i, "n_non_finite": int(bad.size),
+                                    "population": int(arr.size)}
+        require_finite(f"{name}[{i}]", arr[i], gate_cls, ev, positive=False)
+    return arr
+
+
 def gate_n_names(observed, registered, where):
     """Gate N · ANDON — every registered site is a bone with exactly that name, and the
     rig carries nothing that was not registered.
@@ -120,7 +195,6 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
     ev = {"gate": "P", "andon": "GatePRestPose",
           "epsilon_frac": epsilon_frac,
           "epsilon_source": "rig_gates.REST_POSE_EPSILON_FRAC",
-          "bbox_diagonal": float(bbox_diagonal),
           "n_source": int(a.shape[0]) if a.ndim == 2 else None,
           "n_bound": int(b.shape[0]) if b.ndim == 2 else None}
 
@@ -141,8 +215,18 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
     # zero and negatives by name with the value in the evidence — one implementation
     # across the four clauses on this page and the four `parts`/`startframe`/`lift_solve`
     # callers, never a second `math.isfinite`.
+    _require_numeric("bbox_diagonal", bbox_diagonal, GatePRestPose, ev)
     bbox_diagonal = require_finite("bbox_diagonal", bbox_diagonal, GatePRestPose, ev,
                                   positive=False)
+    # · The evidence dict is built AFTER this refusal, never before it. `ev` used to open
+    # with `"bbox_diagonal": float(bbox_diagonal)`, so a NON-NUMERIC diagonal was destroyed
+    # by that `float()` on the way into the receipt rather than refused by the gate.
+    # Measured 2026-09-04: `gate_p_rest_pose(a, a, None)` raised `TypeError: float()
+    # argument must be a string or a real number, not 'NoneType'` and `'x'` raised
+    # `ValueError`. Neither is an `ArmatureError`, so `rig_character`'s halt handler
+    # classified it an unhandled crash with no receipt at all — the exact exit this page
+    # closed for the empty-array case. `gate_d_determinism` already had the order right.
+    ev["bbox_diagonal"] = bbox_diagonal
     if not (bbox_diagonal > 0):
         raise GatePRestPose(
             f"bbox diagonal is {bbox_diagonal}; the threshold is a fraction of the mesh's "
@@ -151,6 +235,11 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
         )
 
     d = np.linalg.norm(b - a, axis=1)
+    # · ANDON — on the MEASUREMENT, which is the operand the threshold guard above does
+    # not cover. `d[i] > threshold` is False for a NaN displacement, so a vertex whose
+    # position is not a number reported "rest pose preserved" with `max_displacement: nan`
+    # in the receipt beside it. See `_require_finite_measurement`.
+    _require_finite_measurement("displacement", d, GatePRestPose, ev)
     threshold = epsilon_frac * float(bbox_diagonal)
     i = int(np.argmax(d))
     ev.update({
@@ -221,7 +310,7 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
           "shape_source": list(raw_a.shape), "shape_roundtrip": list(raw_b.shape),
           "epsilon_frac": epsilon_frac,
           "epsilon_source": "rig_gates.REST_POSE_EPSILON_FRAC",
-          "max_probe": int(max_probe), "bbox_diagonal": float(bbox_diagonal),
+          "max_probe": int(max_probe),
           "compared_at": "float32 — glTF's storage precision"}
     # · ANDON — the two input guards `gate_p_rest_pose` writes, in its order. An empty
     # array reaches `np.unique` intact and comes back empty, both `setdiff1d` calls are
@@ -233,8 +322,11 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
                 f"expected a non-empty (N, 3) vertex array for the {label}, got "
                 f"{arr.shape}", ev)
     # · ANDON — the same half-covered quantity as `gate_p_rest_pose`'s: `inf > 0` passes.
+    _require_numeric("bbox_diagonal", bbox_diagonal, GatePRestPose, ev)
     bbox_diagonal = require_finite("bbox_diagonal", bbox_diagonal, GatePRestPose, ev,
                                   positive=False)
+    # · As `gate_p_rest_pose`: the coerced value enters the receipt after the refusal.
+    ev["bbox_diagonal"] = bbox_diagonal
     if not (bbox_diagonal > 0):
         raise GatePRestPose(f"bbox diagonal is {bbox_diagonal}; no threshold can be derived",
                             ev)
@@ -287,6 +379,10 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
         ref = against.astype(np.float64)
         for chunk in np.array_split(pts, max(1, len(pts) // 256 + 1)):
             d = np.linalg.norm(chunk[:, None, :] - ref[None, :, :], axis=2).min(axis=1)
+            # · ANDON — the same MEASUREMENT guard, and this accumulator swallows a NaN
+            # twice over: `max(worst, nan)` returns `worst` (because `nan > worst` is
+            # False), so the deviation never even reaches the `worst > threshold` test.
+            _require_finite_measurement("deviation", d, GatePRestPose, ev)
             worst = max(worst, float(d.max()))
     ev.update({"threshold": threshold, "max_deviation": worst})
 
@@ -330,7 +426,6 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
     b = np.asarray(probe_world, dtype=np.float64)
     ev = {"gate": "P", "andon": "GatePRestPose",
           "min_frac": min_frac, "min_frac_source": "rig_gates.LIVENESS_MIN_FRAC",
-          "bbox_diagonal": float(bbox_diagonal),
           "n_rest": int(a.shape[0]) if a.ndim == 2 else None,
           "n_probe": int(b.shape[0]) if b.ndim == 2 else None}
     if a.shape != b.shape:
@@ -345,9 +440,11 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
     #
     # (a) An empty array reached `float(d.max())` and raised a bare `ValueError: zero-size
     # array to reduction operation maximum which has no identity`. A ValueError is not an
-    # `ArmatureError`, so the halt contract's exit-2 branch and the `GATE_FAILURE` /
-    # `GATE_EVIDENCE` receipt lines every census reads were bypassed and the run exited 1
-    # with a stdlib traceback naming no gate.
+    # `ArmatureError`, so the halt contract's exit-2 branch and the receipt every census
+    # reads were bypassed and the run exited 1 with a stdlib traceback naming no gate.
+    # (Citation corrected 2026-09-04: the receipt is the six-key `<TOOL>_HALT` line, not
+    # the `GATE_FAILURE` / `GATE_EVIDENCE` pair this comment used to name — those two
+    # lines were deleted at the wave-12 merge.)
     #
     # (b) With `bbox_diagonal == 0` the floor is `min_frac * 0.0 == 0.0`, so
     # `d.max() <= threshold` is False for any non-zero float noise and this andon reported
@@ -359,8 +456,11 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
     # infinite floor makes `d.max() <= threshold` True for every real displacement, so the
     # liveness andon would fire on a mesh that DID move — an andon that fails on correct
     # work, which is the andon nobody keeps.
+    _require_numeric("bbox_diagonal", bbox_diagonal, GatePRestPose, ev)
     bbox_diagonal = require_finite("bbox_diagonal", bbox_diagonal, GatePRestPose, ev,
                                   positive=False)
+    # · As `gate_p_rest_pose`: the coerced value enters the receipt after the refusal.
+    ev["bbox_diagonal"] = bbox_diagonal
     if not (bbox_diagonal > 0):
         raise GatePRestPose(
             f"bbox diagonal is {bbox_diagonal}; the liveness floor is a fraction of the "
@@ -369,6 +469,10 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
         )
 
     d = np.linalg.norm(b - a, axis=1)
+    # · ANDON — the same MEASUREMENT guard, and here the inversion is the loud one:
+    # `d.max() <= threshold` is False for a NaN, so a probe that measured nothing at all
+    # reported "the deform is live". See `_require_finite_measurement`.
+    _require_finite_measurement("displacement", d, GatePRestPose, ev)
     threshold = min_frac * float(bbox_diagonal)
     ev.update({"threshold": threshold, "max_displacement": float(d.max()),
                "mean_displacement": float(d.mean()),
@@ -464,6 +568,7 @@ def gate_d_determinism(a, b, bbox_diagonal):
     # reproduce its output, with the andon that exists to catch exactly that reporting
     # green. The weight clause still binds either way (its tolerance is a constant); what
     # went vacuous is the bone geometry, which on the skeleton route is the whole quantity.
+    _require_numeric("bbox_diagonal", bbox_diagonal, GateDDeterminism, ev)
     bbox_diagonal = require_finite("bbox_diagonal", bbox_diagonal, GateDDeterminism, ev,
                                   positive=False)
     ev["bbox_diagonal"] = bbox_diagonal
@@ -502,12 +607,22 @@ def gate_d_determinism(a, b, bbox_diagonal):
         ba, bb = a["bones"][name], b["bones"][name]
         for q in ("head", "tail"):
             d = float(np.linalg.norm(np.array(ba[q]) - np.array(bb[q])))
+            # · ANDON — on the MEASUREMENT. `d > worst["delta"]` and `d > tol` are BOTH
+            # False for a NaN, so a bone whose tail is `[nan, nan, nan]` in the second
+            # build produced no problem AND left `worst_bone_delta` reading
+            # `{'bone': None, 'quantity': None, 'delta': 0.0}` — a determinism receipt
+            # affirmatively recording a zero difference between two rigs that differ.
+            require_finite(f"{name}.{q}_delta", d, GateDDeterminism, ev, positive=False)
             if d > worst["delta"]:
                 worst = {"bone": name, "quantity": q, "delta": d}
             if d > tol:
                 problems.append(f"{name}.{q} moved {d:.3e} (> {tol:.3e})")
-        if abs(ba["roll"] - bb["roll"]) > angle_tol:
-            problems.append(f"{name}.roll differs by {abs(ba['roll'] - bb['roll']):.3e}")
+        # · ANDON — the roll is the same operand one field over: `abs(nan - x)` is nan and
+        # `nan > angle_tol` is False, so a non-finite roll agreed with every other roll.
+        d_roll = abs(float(ba["roll"]) - float(bb["roll"]))
+        require_finite(f"{name}.roll_delta", d_roll, GateDDeterminism, ev, positive=False)
+        if d_roll > angle_tol:
+            problems.append(f"{name}.roll differs by {d_roll:.3e}")
         if ba["parent"] != bb["parent"]:
             problems.append(f"{name}.parent {ba['parent']!r} vs {bb['parent']!r}")
         if ba["use_deform"] != bb["use_deform"]:
@@ -527,6 +642,11 @@ def gate_d_determinism(a, b, bbox_diagonal):
             problems.append(f"weight array for {g!r}: shape {x.shape} vs {y.shape}")
             continue
         d = np.abs(x - y)
+        # · ANDON — the weight half of the same operand. Measured on `[0.0, 1.0]` against
+        # `[nan, 1.0]`: `m > weight_tol` False, `m > worst_w["max_abs"]` False, verdict
+        # "two builds agree on bones, hierarchy and weights" with `worst_weight_delta`
+        # reading `{'group': None, 'max_abs': 0.0}`.
+        _require_finite_measurement(f"weight_delta[{g}]", d, GateDDeterminism, ev)
         m = float(d.max()) if d.size else 0.0
         if m > worst_w["max_abs"]:
             worst_w = {"group": g, "max_abs": m, "n_differing": int((d > weight_tol).sum())}

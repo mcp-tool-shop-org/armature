@@ -18,6 +18,8 @@ import math
 
 import pytest
 
+from armature_core.errors import ArmatureError, SubjectExtentError
+
 from armature_core.subject import extent_summary
 
 # E01, measured: half-extents. The sword's numbers are back-derived from the extents
@@ -84,5 +86,10 @@ def test_degenerate_axis_reports_rather_than_raising():
     "bad", [None, (1.0, 2.0), (1.0, 2.0, 3.0, 4.0), (1.0, -2.0, 3.0)]
 )
 def test_malformed_input_raises(bad):
-    with pytest.raises(ValueError):
+    """The type moved from `ValueError` to the family on 2026-09-04 (F-89eb81a9): a bare
+    `ValueError` is not an `ArmatureError`, so `probe_subject`'s halt handler classified
+    these three deliberate refusals exit 1 (unhandled crash) rather than exit 2."""
+    with pytest.raises(SubjectExtentError) as exc:
         extent_summary(bad)
+    assert "half_extent" in str(exc.value)
+    assert issubclass(SubjectExtentError, ArmatureError)

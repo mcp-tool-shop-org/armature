@@ -79,11 +79,18 @@ REGISTERED_BONES = frozenset(ALL_NAMES)
 def _raise(message, evidence=None):
     """The module's one andon. Every refusal in this file goes through it.
 
-    The evidence names its own gate and andon here rather than at forty call sites:
-    `stage_render` prints `GATE_FAILURE <exc.gate>` and `GATE_EVIDENCE <json>` as two
-    separate lines, so a reader holding only the JSON half of a halt record had no id at
-    all — and ids are shared across andon families, so the prose half is not enough
-    either. One injection, not forty copies that can drift.
+    The evidence names its own gate and andon here rather than at forty call sites: a
+    reader holding only the JSON half of a halt record had no id at all — and ids are
+    shared across andon families, so the prose half is not enough either. One injection,
+    not forty copies that can drift.
+
+    ⚠ **Citation corrected 2026-09-04 (wave 14).** This paragraph read "`stage_render`
+    prints `GATE_FAILURE <exc.gate>` and `GATE_EVIDENCE <json>` as two separate lines".
+    Those two lines were DELETED at the wave-12 merge: every tool now emits one six-key
+    `<TOOL>_HALT` line carrying `tool`, `outcome`, `gate`, `error`, `evidence` and the
+    run, and a second uppercase token per tool failed the success/halt pairing census.
+    The argument is unchanged and stronger — the id and the evidence ride ONE line now,
+    and it is this injection that puts the id on it.
     """
     ev = dict(evidence or {})
     ev["gate"] = GateCanon.gate

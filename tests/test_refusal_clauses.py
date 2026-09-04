@@ -163,7 +163,12 @@ RECORDED_POPULATION = frozenset({
     "PairingGate", "PayloadError", "ProjectGate", "ReferenceGate", "ReliftMismatch",
     "RenderGate", "RenderTurnaroundGate", "ResampleError", "ResampleGate", "RouteGate",
     "SkeletonSheetGate", "SmoothnessInputError", "SolveError", "SolveGate", "SpecError",
-    "StartFrameGate", "SticksGate", "TierGate", "TrackingError", "TurnaroundAlphaGate",
+    "StartFrameGate", "SticksGate",
+    # WAVE 14 (core-gates, F-89eb81a9): `subject.extent_summary`'s three refusals were
+    # bare `ValueError`s and are now this family class, so the discriminator this module
+    # exists to BE reports a malformed subject as a refusal the halt contract can read.
+    "SubjectExtentError",
+    "TierGate", "TrackingError", "TurnaroundAlphaGate",
     "TurnaroundCropGate", "TurnaroundGate", "TurnaroundPlanRefusal", "WalkError",
     "WalkGate",
     # Joined 2026-09-04 (wave 10, instruments-measure). The census caught the growth
@@ -271,7 +276,13 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # stream with nothing comparing them. Two raise sites: an fps ffprobe could not parse,
     # and one outside tolerance.
     # WAVE-12 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(POLICED) == 91, sorted(POLICED)
+    # WAVE 14 (core-gates, F-89eb81a9): 91 -> 92. `subject.SubjectExtentError` is the new
+    # member — `extent_summary`'s three refusals (None, wrong arity, a negative component)
+    # were bare `ValueError`s, which are not `ArmatureError`s, so `probe_subject`'s halt
+    # handler classified a deliberate refusal exit 1 (unhandled crash) instead of exit 2.
+    # Three raise sites plus the non-finite clause, so it crosses the two-site threshold
+    # the derivation uses. MEASURED on this branch; the coordinator re-measures at merge.
+    assert len(POLICED) == 92, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -333,7 +344,15 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # 58 + 3 + 1 = 62 on this branch. Re-pinned with the arithmetic rather than replaced
     # (wave 3 section 0); ⚠ sibling branches move it too and the coordinator re-measures
     # the merged number, as at waves 10 and 12.
-    assert len(RAISE_SITES["RouteGate"]) == 62, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 14 (core-gates, F-74787978): 58 -> 59. `verify` gains `orphan_attribution` —
+    # the CONVERSE of the conditional clause, which nothing checked: every credit the
+    # record carries must name a component the graph actually loads, or the provenance
+    # JSON and the public disclosure surface publish a credit to a creator whose weights
+    # were never loaded. F-b44c880d MOVED `unreadable_node` out of the top-level loop and
+    # into `_readable_node`, shared with `_iter_definitions`' recursion — one raise site
+    # before, one after, so it moves this count by nothing.
+    # WAVE-14 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(RAISE_SITES["RouteGate"]) == 63, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside

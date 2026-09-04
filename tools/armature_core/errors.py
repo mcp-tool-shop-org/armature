@@ -8,20 +8,54 @@ an environment variable. A `raise` is not.
 
 
 class ArmatureError(RuntimeError):
-    """Base for every error this tool raises deliberately."""
+    """Base for every error this tool raises deliberately.
+
+    ⚠ **The base took the evidence argument and threw it away.** Until 2026-09-04 this
+    class had no `__init__` at all, so `RuntimeError.__init__(*args)` absorbed a second
+    positional argument into `args[1]` and no attribute called `evidence` existed on the
+    instance. `GateFailure` below defined the two-argument constructor for its own
+    subtree and every other branch of the family — `SpecError`, `LandmarkError`,
+    `NotInsideBlender`, and the plain-refusal classes the other modules derive straight
+    from this class — silently did not have it. Measured on the base tree: a site raising
+    `ArmatureError(msg, {...})` printed `"evidence": null` in its halt record, because
+    the handler reads `getattr(exc, "evidence", None)`. The halt line therefore said the
+    refusal carried no receipt while the raising line was passing one.
+
+    The constructor lives here now, in the shape every subclass already used, so the
+    receipt survives whatever branch of the family a refusal is raised from.
+
+    **It stores WHAT IS PASSED, and does not invent a dict when nothing is.** `GateFailure`
+    normalises to `{}` because a gate builds its evidence as it measures and its clauses
+    index into `ev`; a plain refusal that carries no receipt has none, and the 21-tool halt
+    contract records exactly that — `"evidence": null` beside `"gate": null` is the honest
+    record for `raise ArmatureError("unknown --mode='wobble'")`, and it is asserted for
+    every tool in `tests/test_instrument_exits.py`. The defect was never the null; it was a
+    null printed while the raising line was passing a dict.
+
+    **This is the root fix, not a licence for a bare base raise.** A refusal still names
+    a class with a `clause` or a `gate`; `ArmatureError` itself is the family, and a site
+    that raises the family names nothing about which andon pulled.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence
 
 
 class GateFailure(ArmatureError):
     """A gate fired. The run halts here; the caller reports evidence and stops.
 
     Subclasses carry the gate id so a report can name which andon pulled.
+
+    Keeps its own `evidence or {}` normalisation: a gate's clauses index into `ev` while
+    they measure, so an absent receipt is an empty one here. The base's constructor (see
+    above) stores what it is passed and normalises nothing.
     """
 
     gate = "G?"
 
     def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+        super().__init__(message, evidence or {})
 
     def __str__(self):  # pragma: no cover - formatting only
         base = super().__str__()
@@ -208,6 +242,21 @@ class GateDDeterminism(GateFailure):
 
 class SpecError(ArmatureError):
     """The shot spec is malformed, incomplete, or names something unknown."""
+
+
+class SubjectExtentError(ArmatureError):
+    """A subject's half-extent triple is not something proportions can be read from.
+
+    `subject.extent_summary` refused three shapes with a bare `ValueError` — None, the
+    wrong arity, a negative component — and a `ValueError` is not an `ArmatureError`, so
+    `probe_subject`'s halt handler classified a deliberate refusal as exit 1 (an
+    unhandled crash) rather than exit 2. The module is the one that answers *what is this
+    asset*, and E01's whole lesson is that the answer was believed without being
+    measured; a refusal from it has to arrive as a refusal.
+
+    Carries an `evidence` dict like every other member of the family, so the refusal
+    reaches a halt record with the offending component in it.
+    """
 
 
 class LandmarkError(ArmatureError):

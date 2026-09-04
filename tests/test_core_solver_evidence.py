@@ -208,16 +208,27 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         #                        `parts` site and is already in this count.
         #   route_gates 35 → 38  `unreadable_node`, `uncredited_conditional_component`,
         #                        and `attribution_entry_for`'s refusal.
+        # WAVE 14 (core-gates, 2026-09-04), +2 and itemised rather than replaced:
+        #   gates       22 → 23  Gate S's declared-but-empty registry (F-b4706738).
+        #   route_gates 38 → 39  `verify`'s `orphan_attribution` (F-74787978).
+        #   rig_gates   17 → 17  unchanged: wave 14's four measurement guards and the
+        #                        non-numeric-diagonal clause raise from
+        #                        `parts.require_finite` and from `_require_numeric`, a
+        #                        module helper rather than a `gate_*` body, so they are
+        #                        `parts` sites or outside this walk's population — the
+        #                        same accounting the w12 note makes for `require_finite`.
         "assembly": 20, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
-        "gates": 22, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
-        "rig_gates": 17, "route_gates": 38, "startframe": 19, "turnaround": 9, "walk": 3,
+        "gates": 23, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
+        "rig_gates": 17, "route_gates": 39, "startframe": 19, "turnaround": 9, "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
     # route_gates 34 -> 35 in the same wave; merged = 155 + 3 + 1 = 159, MEASURED on the merged tree.
     # WAVE-12 MERGE (coordinator, 2026-09-04): core-solvers assembly 18 -> 20 (+2) and core-gates
     # gates 20 -> 22, rig_gates 15 -> 17, route_gates 35 -> 38 (+7) on different modules; merged
     # 159 + 2 + 7 = 168, MEASURED on the merged tree.
-    assert sum(with_gates.values()) == 168
+    # WAVE 14 (core-gates, 2026-09-04): gates +1, route_gates +1 -> 170, MEASURED on this
+    # branch. The coordinator re-measures at the merge, as at waves 10 and 12.
+    assert sum(with_gates.values()) == 170
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():
