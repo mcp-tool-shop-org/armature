@@ -113,6 +113,31 @@ def _require(mapping, key, kind, where):
     return value
 
 
+def _require_positive(mapping, key, where):
+    """A count, a rate or a pixel dimension is a POSITIVE number, and the type test
+    alone did not say so.
+
+    Measured 2026-09-04: `normalise_spec` accepted `frames={"count": 0, "fps": 0}` and
+    `frames={"count": -33, "fps": -24}` and returned them unchanged. This function
+    already checks sign and ordering elsewhere — `depth.window` requires z_min < z_max,
+    `camera.radius` refuses a bool — so the omission was inconsistent rather than a
+    stated position. A zero frame count is caught later by G1 ("frame count must be
+    positive") and a zero fps by `blender_scene.import_glb`'s frame-rate andon, so a run
+    fails closed either way; what was missing is that the refusal came from the render
+    layer instead of from the contract whose whole job is to say a spec is well formed,
+    and `frame_names(-33, "png")` returns `[]` in between — an empty plan that reads as
+    "nothing to render" rather than as a malformed spec.
+    """
+    value = mapping[key]
+    if value <= 0:
+        raise SpecError(
+            f"{where}.{key} is {value}; it must be positive. A spec that parses is not "
+            f"a spec that may run, but a non-positive count, rate or dimension is not a "
+            f"spec that parses either"
+        )
+    return value
+
+
 def load_spec(path):
     with open(path, "r", encoding="utf-8") as fh:
         raw = json.load(fh)
@@ -183,10 +208,14 @@ def normalise_spec(raw, spec_path=None):
     res = _require(spec, "resolution", dict, "spec")
     _require(res, "width", int, "spec.resolution")
     _require(res, "height", int, "spec.resolution")
+    _require_positive(res, "width", "spec.resolution")
+    _require_positive(res, "height", "spec.resolution")
 
     frames = _require(spec, "frames", dict, "spec")
     _require(frames, "count", int, "spec.frames")
     _require(frames, "fps", int, "spec.frames")
+    _require_positive(frames, "count", "spec.frames")
+    _require_positive(frames, "fps", "spec.frames")
 
     channels = _require(spec, "channels", list, "spec")
     if not channels:

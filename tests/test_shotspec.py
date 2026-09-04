@@ -245,3 +245,58 @@ def test_a_boolean_camera_radius_is_not_a_number(tmp_path):
     with pytest.raises(SpecError) as exc:
         shotspec.normalise_spec(raw)
     assert "radius" in str(exc.value)
+
+
+# --- W8 amend: the contract says a spec is well formed, so it checks SIGN (F-7834031b)
+#
+# `_require(res, "width", int, ...)`, height, `frames.count` and `frames.fps` validated
+# TYPE only. Measured 2026-09-04: normalise_spec accepted frames={"count": 0, "fps": 0}
+# and frames={"count": -33, "fps": -24} and returned them unchanged. The same function
+# already checks sign and ordering elsewhere (depth.window z_min < z_max, camera.radius
+# bool-vs-number), so the omission was inconsistent rather than a stated position. A
+# zero frame count is caught later by G1 and a zero fps by blender_scene's frame-rate
+# andon, so a run fails closed - what was lost is that the refusal came from the render
+# layer instead of from the contract that exists to say a spec is well formed, and
+# shotspec.frame_names(-33, "png") returns [] in between.
+
+
+@pytest.mark.parametrize("field,value", [
+    ("count", 0), ("count", -1), ("count", -33), ("fps", 0), ("fps", -24)])
+def test_a_non_positive_frame_field_is_refused_by_the_contract(tmp_path, field, value):
+    raw = _minimal(tmp_path)
+    raw.setdefault("frames", {})[field] = value
+    with pytest.raises(SpecError) as exc:
+        shotspec.normalise_spec(raw)
+    assert f"spec.frames.{field}" in str(exc.value)
+    assert str(value) in str(exc.value)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("width", 0), ("height", 0), ("width", -16), ("height", -832)])
+def test_a_non_positive_resolution_field_is_refused_by_the_contract(tmp_path, field, value):
+    raw = _minimal(tmp_path)
+    raw.setdefault("resolution", {})[field] = value
+    with pytest.raises(SpecError) as exc:
+        shotspec.normalise_spec(raw)
+    assert f"spec.resolution.{field}" in str(exc.value)
+
+
+def test_the_positive_values_this_repo_actually_renders_still_pass(tmp_path):
+    """The other direction: 1 is the smallest legal frame count and must not be caught
+    by the clause that refuses 0."""
+    raw = _minimal(tmp_path)
+    raw.setdefault("frames", {}).update({"count": 1, "fps": 1})
+    raw.setdefault("resolution", {}).update({"width": 1, "height": 1})
+    spec = shotspec.normalise_spec(raw)
+    assert spec["frames"]["count"] == 1 and spec["resolution"]["width"] == 1
+
+
+def test_frame_names_is_never_asked_for_a_negative_count_through_the_contract(tmp_path):
+    """The consequence the finding names: between the accepted spec and G1,
+    `frame_names(-33, "png")` returns [] - an empty plan that reads as 'nothing to
+    render' rather than as a malformed spec."""
+    assert shotspec.frame_names(-33, "png") == []
+    raw = _minimal(tmp_path)
+    raw.setdefault("frames", {})["count"] = -33
+    with pytest.raises(SpecError):
+        shotspec.normalise_spec(raw)
