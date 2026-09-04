@@ -217,3 +217,44 @@ def test_a_config_with_no_negative_assignment_halts_rather_than_inventing_one(tm
     with pytest.raises(BAP.PayloadError) as exc:
         BAP.read_negative(str(src))
     assert "not retyped from memory" in str(exc.value)
+
+
+# ------------------------------------------------------------------ the seed default
+#
+# Wave 3, F-8898e2da. `seed_used = seed if seed is not None else (sorted(registry)[0] if
+# registry else 0)` sat BELOW Gate S, which refuses a non-int first. Measured:
+# `gates.gate_s_seed_registration(None, [2026081201, 2026081202], "E08",
+# seed_was_explicit=False)` raises "[S] seed must be an int, got NoneType", with or without
+# a registry — so the fallback was dead code and the documented invocation
+# (`[--seed=2026081201]`, i.e. optional) always halted. The dead `else 0` branch was worse
+# than dead: it read as a working default and would have silently picked seed 0 if the
+# ordering were ever changed.
+
+
+def test_omitting_the_seed_builds_on_the_first_registered_seed():
+    """The invocation the usage block documents. It halted on a message about NoneType."""
+    wf, meta = BAP.build(UPLOADS_65, None, NEG, POS, E08_SEEDS, "letterbox")
+    assert meta["seed"] == sorted(E08_SEEDS)[0]
+    assert wf["3"]["inputs"]["seed"] == sorted(E08_SEEDS)[0]
+    assert meta["gate_S"]["seed_was_explicit"] is False
+
+
+def test_omitting_the_seed_with_no_registry_names_the_missing_flag():
+    """The other half: with no registry there is no committed number to default to, and
+    Gate S refuses a varied one. The halt must say THAT rather than 'got NoneType'."""
+    with pytest.raises(BAP.PayloadError) as exc:
+        BAP.build(UPLOADS_65, None, NEG, POS, None, "letterbox")
+    assert "--seed" in str(exc.value)
+    assert "--seeds-registry" in str(exc.value)
+
+
+def test_the_zero_fallback_is_gone():
+    """`else 0` would have shipped an unregistered seed the moment the ordering changed.
+
+    Read off the executable lines only — the comment above the fix quotes the old
+    expression on purpose, and a substring check over the whole source would be a check
+    that fires on its own documentation."""
+    import inspect
+
+    code = [ln.split("#", 1)[0] for ln in inspect.getsource(BAP.build).splitlines()]
+    assert "else 0" not in " ".join(code)

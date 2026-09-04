@@ -496,3 +496,73 @@ def test_the_default_wave_is_still_the_one_the_shipped_run_used():
     """The label is now a parameter; the run that already happened must keep its name."""
     _, meta = built()
     assert meta["wave"] == B.WAVE == 3
+
+
+import hashlib  # noqa: E402
+
+
+# ------------------------------------------------------------------ the seed default
+
+
+def test_omitting_the_seed_builds_on_the_first_registered_seed():
+    """Wave 3, F-8898e2da. Gate S refuses a non-int before the fallback below it could
+    ever run, so the documented optional --seed always halted."""
+    _, meta = built(seed=None)
+    assert meta["seed"] == sorted(E11_SEEDS)[0]
+    assert meta["gate_S"]["seed_was_explicit"] is False
+
+
+def test_omitting_the_seed_with_no_registry_names_the_missing_flag():
+    with pytest.raises(B.PayloadError) as exc:
+        built(seed=None, registry=None)
+    assert "--seed" in str(exc.value)
+
+
+# ------------------------------------------------------------------ the start frame hash
+#
+# Wave 3, F-d342f393. `--start-frame-sha256` defaulted to None and was threaded through
+# `ledger_against_wave1` only to be STORED as ev["start_frame"]["wave_3_local_sha256"]. It
+# appeared in no comparison and in no problems.append condition, so the sha256 of the
+# re-authored start frame — the single load-bearing control input of an i2v route, and the
+# artifact the alpha ruling governs — was an optional operator-typed string riding the
+# record unverified, reading as null when omitted. CLAUDE.md requires every generation to
+# record control-input hashes.
+
+
+def test_the_start_frame_hash_is_computed_from_the_file_not_typed(tmp_path):
+    f = tmp_path / "start.png"
+    f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"pixels")
+    ev = B.resolve_start_frame(str(f), None)
+    assert ev["sha256"] == hashlib.sha256(f.read_bytes()).hexdigest()
+    assert ev["source"] == "hashed_in_tool"
+
+
+def test_omitting_the_start_frame_raises(tmp_path):
+    """A value nothing checks is worse than an absent one; the flag is now required and
+    the tool reads the artifact rather than accepting a typed value."""
+    with pytest.raises(B.PayloadError) as exc:
+        B.resolve_start_frame(None, None)
+    assert "--start-frame" in str(exc.value)
+
+
+def test_a_declared_hash_that_disagrees_with_the_file_raises(tmp_path):
+    """The mutation that proves the cross-check can fire: an operator-typed sha that is not
+    the file's. Before this, a typed value was simply stored."""
+    f = tmp_path / "start.png"
+    f.write_bytes(b"pixels")
+    with pytest.raises(B.PayloadError) as exc:
+        B.resolve_start_frame(str(f), "0" * 64)
+    assert "does not hash to" in str(exc.value)
+
+
+def test_a_declared_hash_that_agrees_is_recorded_as_confirmed(tmp_path):
+    f = tmp_path / "start.png"
+    f.write_bytes(b"pixels")
+    digest = hashlib.sha256(b"pixels").hexdigest()
+    ev = B.resolve_start_frame(str(f), digest)
+    assert ev["source"] == "hashed_in_tool_and_confirmed_against_the_declared_value"
+
+
+def test_a_missing_start_frame_file_raises(tmp_path):
+    with pytest.raises(B.PayloadError):
+        B.resolve_start_frame(str(tmp_path / "nope.png"), None)

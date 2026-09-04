@@ -3,7 +3,8 @@ r"""build_i2v_payload — E11's `WanImageToVideo` graph, built in this repo.
 
     python tools\build_i2v_payload.py --uploads=<uploads.json> --out=<dir>
            --negative-source=<wan22_shared_config.py> --seeds-registry=specs\E11-seeds.json
-           --e08-record=<E08-probe-payload-record.json> [--seed=2026081231]
+           --e08-record=<E08-probe-payload-record.json>
+           [--seed=2026081231 | --seeds-registry=specs\\E11-seeds.json]
 
 The no-control route. A render of the performer is the first frame, a prompt describes the
 shot, and **nothing else conditions the generation** — no pose sticks, no reference image,
@@ -246,9 +247,22 @@ def pin_against_e08(positive, negative, e08_record_path):
 def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
           length=LENGTH, fps=FPS):
     """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists."""
-    gate_s = gates.gate_s_seed_registration(seed, registry, experiment,
+    # The default is resolved BEFORE Gate S, not after it. The old order put
+    # `seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)`
+    # BELOW a gate that refuses a non-int first, so the fallback was dead code and the
+    # usage block's optional `--seed` always halted on a message about NoneType — an
+    # operator following the documented invocation got a halt naming the wrong problem.
+    # The `else 0` branch was worse than dead: it read as a working default and would have
+    # shipped an unregistered seed the moment the ordering changed.
+    if seed is None and not registry:
+        raise PayloadError(
+            "no --seed and no --seeds-registry: this experiment pre-registered no seeds, "
+            "so there is no committed number to default to, and Gate S refuses a seed "
+            "varied without a registration. Pass --seeds-registry with the experiment's "
+            "committed list, or pass --seed with a number that is on it")
+    seed_used = seed if seed is not None else sorted(registry)[0]
+    gate_s = gates.gate_s_seed_registration(seed_used, registry, experiment,
                                             seed_was_explicit=seed is not None)
-    seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)
     profile = gates.g1_generator_legality(WIDTH, HEIGHT, length, "wan-i2v")
 
     steps = TRAJECTORY["steps"]["value"]
