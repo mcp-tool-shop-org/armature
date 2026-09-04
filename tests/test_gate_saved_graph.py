@@ -407,31 +407,59 @@ def _wrapped_case(tmp_path, wrapper):
     return d
 
 
-@pytest.mark.parametrize("wrapper", ["prompt", "output", "some_surface_nobody_mapped"])
-def test_a_wrapped_saved_file_is_refused_by_name_not_by_a_stdlib_key(tmp_path, wrapper):
-    """`load_graph` unwraps `workflow_json` and `workflow` and returns anything else as the
-    wrapper dict, so `round_trip`'s first statement raised a bare `KeyError: 'nodes'` with
-    no gate id and no evidence — while Gate ROUTE and Gate S both return GREEN verdicts
-    over zero nodes on the same doc, because `_iter_nodes` reads a wrapper-key doc as no
-    nodes. The KeyError was the only thing standing between a wrapped file and a
-    SAVED_ADMISSION_OK over a graph nothing examined."""
+#: Wrapper keys that are NOT in the loader's unwrap list, computed rather than typed:
+#: core-gates owns that list (wave 6 publishes `route_gates.WRAPPER_KEYS` and adds
+#: `prompt` to it), and a fixture that hard-coded a key which later became recognised
+#: would test the opposite of what it says.
+UNRECOGNISED_WRAPPERS = [w for w in ("prompt", "output", "some_surface_nobody_mapped")
+                         if w not in GSG.UNWRAPPED_BY_LOAD_GRAPH]
+
+
+@pytest.mark.parametrize("wrapper", UNRECOGNISED_WRAPPERS)
+def test_a_wrapped_saved_file_is_refused_by_a_gate_not_by_a_stdlib_key(tmp_path, wrapper):
+    """`load_graph` unwraps a known key list and returns anything else as the wrapper dict,
+    so `round_trip`'s first statement raised a bare `KeyError: 'nodes'` with no gate id and
+    no evidence — while Gate ROUTE and Gate S both return GREEN verdicts over zero nodes on
+    the same doc, because `_iter_nodes` reads a wrapper-key doc as no nodes. The KeyError
+    was the only thing standing between a wrapped file and a SAVED_ADMISSION_OK over a
+    graph nothing examined.
+
+    SEAM: which layer refuses is core-gates' to decide — its wave-6 `load_graph` refuses an
+    unrecognised mapping by name itself, and this tool's own boundary check refuses
+    whatever the loader hands back without a `nodes` list. This fixture pins the invariant
+    both must keep: a RouteGate, and no output directory."""
     d = _wrapped_case(tmp_path, wrapper)
     out = tmp_path / "fresh" / "admission.json"
-    with pytest.raises(RG.RouteGate) as exc:
+    with pytest.raises(RG.RouteGate):
         GSG.main([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
                   f"--seeds={d / 'seeds.json'}", f"--out={out}"])
-    assert "save-format graph" in str(exc.value)
-    assert wrapper in str(exc.value) or wrapper in exc.value.evidence["top_level_keys"]
-    assert exc.value.evidence["unwrapped_by_load_graph"]
     assert not out.parent.exists(), "a refused admission created its output directory"
 
 
-def test_the_wrappers_load_graph_does_unwrap_still_admit(tmp_path):
-    """The mutation that must NOT fire it: the two keys `load_graph` unwraps."""
+def test_an_api_format_graph_passed_as_saved_is_refused_by_name(tmp_path):
+    """The doc that reaches THIS tool's boundary check whichever loader is in front of it:
+    a mapping the loader recognises and hands back, that is simply not save format. The
+    halt says the argument is not a save-format graph rather than naming a dict key."""
     import json as _json
 
+    d = _wrapped_case(tmp_path, "workflow")
+    api_as_saved = d / "api-as-saved.json"
+    api_as_saved.write_text((d / "g.api.json").read_text(encoding="utf-8"),
+                            encoding="utf-8")
+    out = tmp_path / "fresh" / "admission.json"
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.main([f"--saved={api_as_saved}", f"--api={d / 'g.api.json'}",
+                  f"--seeds={d / 'seeds.json'}", f"--out={out}"])
+    assert "save-format graph" in str(exc.value)
+    assert exc.value.evidence["top_level_keys"] == ["49"]
+    assert exc.value.evidence["unwrapped_by_load_graph"]
+    assert not out.parent.exists(), "a refused admission created its output directory"
+    assert _json.loads(api_as_saved.read_text(encoding="utf-8"))
+
+
+def test_the_wrappers_load_graph_does_unwrap_still_admit(tmp_path):
+    """The mutation that must NOT fire it: every key the loader unwraps."""
     for wrapper in GSG.UNWRAPPED_BY_LOAD_GRAPH:
         d = _wrapped_case(tmp_path / wrapper, wrapper)
         loaded = RG.load_graph(str(d / "g.saved.json"))
         assert [n["id"] for n in loaded["nodes"]] == [49]
-        assert _json.loads((d / "g.saved.json").read_text(encoding="utf-8")).keys()

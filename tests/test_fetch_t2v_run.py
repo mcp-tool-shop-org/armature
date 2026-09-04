@@ -136,7 +136,10 @@ def test_a_downloader_that_exits_nonzero_raises_with_its_output(tmp_path, monkey
 
 
 def test_a_source_node_this_graph_does_not_emit_halts():
-    with pytest.raises(SystemExit):
+    """Wave 6, F-e3af7342: this raised a bare `SystemExit`, which carries no gate id, no
+    evidence dict, and walks straight past any caller catching `GateFailure`. The sibling
+    `fetch_run.plan` raises a typed FetchHalt for the same clause."""
+    with pytest.raises(T.FetchHalt):
         T.plan([{"source_node_id": 99, "filename": "a.png", "url": "u"}], "out")
 
 
@@ -209,5 +212,119 @@ def test_a_zero_length_frame_still_halts(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(T, "order_evidence", lambda out: _ev(E09_ARRAY, E09_HASH))
     with pytest.raises(T.FetchHalt) as exc:
         T.main([f"--dump={dump}", f"--out={tmp_path / 'run'}"])
-    assert "zero-length" in str(exc.value)
+    # Wave 6: the zero-length clause now fires inside the shared `verify_downloads` andon,
+    # above the sha256 manifest rather than below it, so the halt names the planned file.
+    assert "zero length" in str(exc.value)
+    assert [os.path.basename(p) for p in exc.value.evidence["empty"]] == ["00000.png"]
     assert "FETCH_OK" not in capsys.readouterr().out
+
+
+# ------------------------------------- the plan-to-disk andon (wave 6, F-7e59f719/F-e3af7342)
+
+
+def _dump_of(tmp_path, n_frames=3, video=False):
+    results = [{"source_node_id": 70, "filename": f"{i:064x}.png", "url": f"u{i}"}
+               for i in range(n_frames)]
+    if video:
+        results.append({"source_node_id": 81, "filename": "clip.mp4", "url": "uv"})
+    dump = tmp_path / "dump.json"
+    dump.write_text(json.dumps({"results": results}), encoding="utf-8")
+    return dump
+
+
+def _writer(skip=(), monkeypatch=None):
+    def fake_download(jobs):
+        for j in jobs:
+            if os.path.basename(j["out"]) in skip:
+                continue
+            os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
+            with open(j["out"], "wb") as fh:
+                fh.write(b"\x89PNG\r\n")
+    return fake_download
+
+
+def test_a_stale_frame_from_a_previous_run_halts_rather_than_being_counted(
+        tmp_path, monkeypatch, capsys):
+    """The finding. `frames` came from `os.listdir(lossless)`, so a 4-frame dump fetched
+    into an --out whose lossless/ already held one 00009.png from an earlier, longer run
+    printed FETCH_OK {"frames": 5} and returned 0 — with the stale frame in the sha256
+    manifest, differenced by BOTH arms of Gate ORDER, and `_hash_name` falling back to its
+    local basename for it, so the hash-sorted arm was a mix of cloud hashes and filenames."""
+    out = tmp_path / "run"
+    (out / "lossless").mkdir(parents=True)
+    (out / "lossless" / "00009.png").write_bytes(b"\x89PNG\r\n")
+    monkeypatch.setattr(T, "download", _writer())
+    monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
+    with pytest.raises(T.FetchHalt) as exc:
+        T.main([f"--dump={_dump_of(tmp_path, 4)}", f"--out={out}"])
+    assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00009.png"]
+    assert "FETCH_OK" not in capsys.readouterr().out
+
+
+def test_a_planned_frame_that_never_landed_halts(tmp_path, monkeypatch, capsys):
+    """Measured on today's tree: frame index 3 never landing printed FETCH_OK
+    {"frames": 4} with 00000,00001,00002,00004 differenced AS IF CONSECUTIVE and Gate
+    ORDER reporting a healthy 1.75x."""
+    monkeypatch.setattr(T, "download", _writer(skip=("00003.png",)))
+    monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
+    with pytest.raises(T.FetchHalt) as exc:
+        T.main([f"--dump={_dump_of(tmp_path, 5)}", f"--out={tmp_path / 'run'}"])
+    assert [os.path.basename(p) for p in exc.value.evidence["missing"]] == ["00003.png"]
+    assert "FETCH_OK" not in capsys.readouterr().out
+
+
+def test_the_video_job_that_never_landed_halts(tmp_path, monkeypatch, capsys):
+    """The VIDEO job was never checked at all — not for presence, not for length."""
+    monkeypatch.setattr(T, "download", _writer(skip=("donor.mp4",)))
+    monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
+    with pytest.raises(T.FetchHalt) as exc:
+        T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={tmp_path / 'run'}"])
+    assert [os.path.basename(p) for p in exc.value.evidence["missing"]] == ["donor.mp4"]
+    assert "FETCH_OK" not in capsys.readouterr().out
+
+
+def test_a_complete_fetch_still_prints_fetch_ok(tmp_path, monkeypatch, capsys):
+    """The mutation that must NOT fire any of the three clauses."""
+    monkeypatch.setattr(T, "download", _writer())
+    monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
+    rc = T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={tmp_path / 'run'}"])
+    assert rc == 0
+    line = json.loads(capsys.readouterr().out.split("FETCH_OK ", 1)[1])
+    assert line["frames"] == 3
+
+
+def test_the_frame_population_comes_from_the_plan(tmp_path, monkeypatch):
+    """`frames` is built from `plan()`, never from a directory listing."""
+    monkeypatch.setattr(T, "download", _writer())
+    monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
+    out = tmp_path / "run"
+    T.main([f"--dump={_dump_of(tmp_path, 3)}", f"--out={out}"])
+    manifest = json.loads((out / "lossless_manifest.json").read_text(encoding="utf-8"))
+    assert sorted(manifest) == ["00000.png", "00001.png", "00002.png"]
+
+
+def test_an_unexpected_source_node_raises_a_typed_halt_with_evidence():
+    """It raised `SystemExit` with a bare string where the sibling `fetch_run.plan` raises
+    a typed FetchHalt with an evidence dict — and a SystemExit walks straight past any
+    caller catching GateFailure."""
+    with pytest.raises(T.FetchHalt) as exc:
+        T.plan([{"source_node_id": 99, "filename": "a.png", "url": "u"}], "out")
+    assert exc.value.evidence["unexpected_node"] == "99"
+    assert exc.value.evidence["known"] == [T.LOSSLESS_NODE, T.VIDEO_NODE]
+
+
+def test_both_downloaders_shell_to_the_same_interpreter(tmp_path, monkeypatch):
+    """The comment above `download` claims "Same fix, same day, as fetch_run.py's" while
+    one shelled to `powershell` (Windows PowerShell 5.1) and the other to `pwsh` (the only
+    cross-platform one). A claim of sameness is checked here rather than asserted there,
+    and the two tools now share ONE FetchHalt and ONE plan-to-disk andon."""
+    import fetch_run as F
+
+    seen = []
+    monkeypatch.setattr(T.subprocess, "run",
+                        lambda cmd, **kw: (seen.append(list(cmd)),
+                                           subprocess.CompletedProcess(cmd, 0, "", ""))[1])
+    T.download(_jobs(tmp_path, 1))
+    assert seen[0][0] == "pwsh"
+    assert T.FetchHalt is F.FetchHalt, "one FetchHalt, not two"
+    assert T.verify_downloads is F.verify_downloads, "one plan-to-disk andon, not two"
