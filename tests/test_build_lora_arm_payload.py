@@ -288,3 +288,63 @@ def test_the_emitted_graph_must_carry_the_text_the_gate_checked(base):
     with pytest.raises(GateCanon) as exc:
         B.gate_canon_text_is_in_graph("phrases pasted in to get past the refusal", built)
     assert exc.value.evidence["clause"] == "gated_text_is_not_shipped_text"
+
+
+# ---------------------- Gate S names its own gate id and evidence (wave 6, F-62e3a586)
+
+
+def test_gate_s_raises_the_typed_gate_with_evidence_on_an_unregistered_seed(base):
+    """Both raises constructed the BASE `GateFailure` with no second argument, so
+    `evidence` was `{}` and the class attribute `gate` was errors.py's placeholder `"G?"`.
+    Measured: `gate_s({}, <registry>, 99)` gave `e.gate == 'G?'`, `e.evidence == {}` and
+    `str(e)` beginning `[G?] Gate S:` — the message says Gate S while the receipt says G?.
+    `GateSSeedRegistration` (gate = "S") exists for exactly this clause and is what the two
+    other implementations use: `route_gates.gate_s_registration` and
+    `build_r2v_payload.gate_seed_registered` both raise with an evidence dict. This is the
+    arm that spends E14's two generations, and its halt carried no machine-readable record
+    of which seed, which registry or which samplers fired it."""
+    from armature_core.errors import GateSSeedRegistration
+
+    built, _ = B.build_arm(base, "T")
+    built["60"]["inputs"]["noise_seed"] = 99
+    with pytest.raises(GateSSeedRegistration) as exc:
+        B.gate_s(built, REGISTRY, 99)
+    assert exc.value.gate == "S"
+    assert exc.value.evidence["seed"] == 99
+    assert exc.value.evidence["registry"] == os.path.abspath(REGISTRY)
+    assert SEED in exc.value.evidence["registered"]
+
+
+def test_gate_s_raises_the_typed_gate_when_a_live_sampler_carries_another_seed(base):
+    """The second raise site: the seed IS registered, and a noise-adding sampler carries a
+    different one. The evidence must name the samplers that fired it."""
+    from armature_core.errors import GateSSeedRegistration
+
+    built, _ = B.build_arm(base, "T")
+    built["60"]["inputs"]["noise_seed"] = SEED + 1
+    with pytest.raises(GateSSeedRegistration) as exc:
+        B.gate_s(built, REGISTRY, SEED)
+    assert exc.value.gate == "S"
+    assert exc.value.evidence["seed"] == SEED
+    assert exc.value.evidence["noise_adding_samplers"]
+
+
+def test_every_gate_s_implementation_in_this_tree_carries_a_gate_id_and_evidence(base):
+    """The family census. Three Gate S implementations, and the receipt must be
+    unambiguous in all three."""
+    import build_r2v_payload as R
+
+    built, _ = B.build_arm(base, "T")
+    built["60"]["inputs"]["noise_seed"] = 99
+    raisers = [
+        lambda: B.gate_s(built, REGISTRY, 99),
+        lambda: R.gate_seed_registered(99, [SEED]),
+        lambda: route_gates.gate_s_registration(
+            {"50": {"class_type": "KSamplerAdvanced",
+                    "inputs": {"add_noise": "enable", "noise_seed": 99}}}, [SEED]),
+    ]
+    for call in raisers:
+        with pytest.raises(GateFailure) as exc:
+            call()
+        assert exc.value.gate != "G?", f"{call} raises a gate with no id"
+        assert exc.value.evidence, f"{call} raises a gate with no evidence"

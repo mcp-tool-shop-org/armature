@@ -173,6 +173,80 @@ def round_trip(api_graph, saved_graph):
     return {"n_values_compared": len(checked), "all_equal": True, "values": checked}
 
 
+#: The wrapper keys `route_gates.load_graph` unwraps. Read off the loader where it
+#: publishes them, so a widening there is reported here rather than re-typed: core-gates
+#: owns the ONE loader (wave 6), and this tool refuses by name whatever it hands back
+#: without a `nodes` list.
+UNWRAPPED_BY_LOAD_GRAPH = tuple(getattr(RG, "WRAPPER_KEYS", ("workflow_json", "workflow")))
+
+
+def link_table(saved_graph):
+    """`{link_id: (origin_node_id, origin_slot)}` off the saved file's OWN link table.
+
+    Save format records every edge twice: once as a `link` id on the target socket, and
+    once in the top-level `links` array as
+    `[id, origin_node, origin_slot, target_node, target_slot, type]`. Until 2026-09-04
+    `link_round_trip` read only the first of those, so `slot.get("link") is not None` was
+    satisfied by ANY link id and the array was never resolved anywhere in this module.
+    Measured on a `WanCameraImageToVideo` fixture: an as-built save and one with its two
+    same-type CONDITIONING links CROSSED produced byte-identical output from both gates.
+
+    Returns `None` when the file declares no table at all — the caller decides, because a
+    file with no links needs none and a file with links needs one.
+    """
+    raw = saved_graph.get("links")
+    if raw is None:
+        return None
+    table = {}
+    for entry in raw:
+        if isinstance(entry, dict):
+            lid = entry.get("id")
+            origin, slot = entry.get("origin_id"), entry.get("origin_slot")
+        elif isinstance(entry, (list, tuple)) and len(entry) >= 3:
+            lid, origin, slot = entry[0], entry[1], entry[2]
+        else:
+            raise RG.RouteGate(
+                f"the saved file's link table carries an entry this tool cannot read: "
+                f"{entry!r}. A table that is skipped is a table that vouches for nothing, "
+                f"and the origin of every link in this file would go unchecked",
+                {"entry": entry, "n_entries": len(raw)})
+        if lid is None or origin is None:
+            raise RG.RouteGate(
+                f"the saved file's link table entry {entry!r} names no link id or no "
+                f"origin node", {"entry": entry, "n_entries": len(raw)})
+        table[str(lid)] = (str(origin), slot)
+    return table
+
+
+def _origin_problems(node_id, name, link_id, ours, table, saved_by_id):
+    """Where a link COMES FROM, compared to where we built it coming from.
+
+    Four clauses, each its own sentence in the halt: no table to resolve against, a link
+    id the table does not carry, an origin node the saved file never declares, and an
+    origin node/slot that is not the one we wired.
+    """
+    if table is None:
+        return [f"node {node_id}.{name} carries link {link_id!r} and the saved file "
+                f"declares no link table, so where that link comes from cannot be "
+                f"resolved and no origin in this file is checkable"]
+    if str(link_id) not in table:
+        return [f"node {node_id}.{name}: link {link_id!r} is not in the saved file's own "
+                f"link table ({sorted(table)}), so it resolves to nothing"]
+    origin, origin_slot = table[str(link_id)]
+    problems = []
+    if origin not in saved_by_id:
+        problems.append(
+            f"node {node_id}.{name}: link {link_id!r} names origin node {origin}, which "
+            f"the saved file does not declare")
+    want_node, want_slot = str(ours[0]), ours[1]
+    if origin != want_node or origin_slot != want_slot:
+        problems.append(
+            f"node {node_id}.{name}: we wired it from node {want_node} slot {want_slot!r}, "
+            f"and the saved file's link {link_id!r} comes from node {origin} slot "
+            f"{origin_slot!r}")
+    return problems
+
+
 def link_round_trip(api_graph, saved_graph):
     """Every socket we wired is wired there, and every socket we left empty is empty there.
 
@@ -193,8 +267,20 @@ def link_round_trip(api_graph, saved_graph):
     verdict, and the value round trip returned `all_equal: True` beside it, because it
     skips list-valued inputs as links. Both checks passed a graph the cloud would execute
     with a conditioning link gone.
+
+    **The link IDS are resolved against the saved file's own table, and that is the second
+    correction.** Until 2026-09-04 the only thing read off a saved socket was
+    `slot.get("link") is not None`, so `we_linked and they_linked` was satisfied by any
+    link id at all and `saved_graph["links"]` was resolved nowhere in this module. Measured
+    on a `WanCameraImageToVideo` fixture built from this repo's own CAMERA_API shape: the
+    as-built save (`positive` <- 6 from node 30, `negative` <- 7 from node 31) and one with
+    the two CROSSED, table and all, returned EQUAL values from both gates — 13 values
+    compared, all_equal, and the identical `links` list. A conditioning swap, a reference
+    video re-pointed at another node, and a link naming a node the file does not declare
+    were all invisible on the last gate before credits are spent.
     """
     saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
+    table = link_table(saved_graph)
     wired, empty, problems = [], [], []
     for node_id, node in api_graph.items():
         s = saved_by_id.get(str(node_id))
@@ -225,6 +311,8 @@ def link_round_trip(api_graph, saved_graph):
                                 f"left it empty")
             elif we_linked:
                 wired.append(f"{node_id}.{name}")
+                problems.extend(_origin_problems(node_id, name, slot.get("link"), ours,
+                                                 table, saved_by_id))
             else:
                 empty.append(f"{node_id}.{name}")
     if problems:
@@ -258,6 +346,25 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     saved = RG.load_graph(a.saved)
+    # Refuse by NAME at the boundary. `load_graph` unwraps a known key list and hands back
+    # anything else as the wrapper dict, and `round_trip`'s first statement then raised a
+    # bare `KeyError: 'nodes'` — no gate id, no evidence, a stdlib key name standing in for
+    # a sentence. What makes it load-bearing rather than merely ugly, measured 2026-09-04:
+    # on the SAME wrapped doc `RG.verify` returns "0 weight file(s), 0 seed(s) all pinned,
+    # 0 of 0 latent(s) checkable" and `RG.gate_s_registration` returns "0 noise-bearing
+    # seed(s), all pinned", because `_iter_nodes` reads a wrapper-key doc as no nodes. The
+    # KeyError was the only thing between a wrapped file and a SAVED_ADMISSION_OK over a
+    # graph nothing examined. `round_trip`'s indexing stays strict below this line.
+    if not isinstance(saved, dict) or not isinstance(saved.get("nodes"), list):
+        keys = sorted(saved) if isinstance(saved, dict) else []
+        raise RG.RouteGate(
+            f"{a.saved} is not a save-format graph: it carries no `nodes` list. Its "
+            f"top-level keys are {keys}; the loader unwraps "
+            f"{list(UNWRAPPED_BY_LOAD_GRAPH)} and hands anything else back as the wrapper "
+            f"it found. Paste the workflow itself, not the tool result around it",
+            {"path": os.path.abspath(a.saved), "top_level_keys": keys,
+             "unwrapped_by_load_graph": list(UNWRAPPED_BY_LOAD_GRAPH),
+             "clause": "not_a_save_format_graph"})
     with open(a.api, encoding="utf-8") as fh:
         api = json.load(fh)
     with open(a.seeds, encoding="utf-8") as fh:

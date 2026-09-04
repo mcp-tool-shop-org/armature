@@ -478,12 +478,16 @@ def main(argv=None):
     add_spend_flags(ap)
     a = ap.parse_args(argv)
 
-    # Unlike the other spend builders, `--canon-prompt` here IS the shipped string: it is
-    # handed to `build_graph` below, so the text the router checks and the text the graph
-    # carries are the same object and there is no divergence to refuse.
-    prompt = a.canon_prompt or (PROMPT_A3 if a.profile == "reference" else PROBE_PROMPT)
-    canon_ev = canon_spend(a.subject, prompt, no_canon=a.no_canon, out_dir=a.out)
-    os.makedirs(a.out, exist_ok=True)        # scripts create their own output directories
+    # `--canon-prompt` has ONE meaning across all seven spend builders: it is the text the
+    # router is asked to check, cross-checked against the text this payload SHIPS, and it
+    # can do nothing but refuse. Until wave 6 this builder alone read it as a prompt
+    # OVERRIDE (`prompt = a.canon_prompt or ...`), so an operator who learned the flag on
+    # r2v or i2v — where passing it can only raise — silently changed the text the paid
+    # generation was made from, with every gate green and the shared help string still
+    # describing a check. The profile is the only thing that decides the prompt.
+    prompt = PROMPT_A3 if a.profile == "reference" else PROBE_PROMPT
+    canon_ev = canon_spend(a.subject, prompt, no_canon=a.no_canon, out_dir=a.out,
+                           canon_prompt=a.canon_prompt)
     with open(a.seeds, encoding="utf-8") as fh:
         reg = json.load(fh)
     registered = reg["seeds"]
@@ -498,6 +502,12 @@ def main(argv=None):
     if not gate_l["legal"]:
         raise RG.RouteGate(f"Gate L on the actual graph: {gate_l['problems']}", gate_l)
 
+    # Below the last in-tool gate. `os.makedirs` used to sit directly under `canon_spend`
+    # and ABOVE Gates ROUTE, S and L, so a build refused by Gate S left an empty run
+    # directory beside real ones under `outputs/E09/route2`, to be read later as a run that
+    # happened. build_payload.py states the invariant and the other five builders were
+    # moved below their last gate on 2026-09-03; this was the sixth.
+    os.makedirs(a.out, exist_ok=True)        # scripts create their own output directories
     graph_path = os.path.join(a.out, f"E09-B2-{a.tag}-t2v.api.json")
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(graph, fh, indent=2, ensure_ascii=False)

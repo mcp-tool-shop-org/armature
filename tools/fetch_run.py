@@ -202,20 +202,56 @@ def download(manifest_path):
     return proc
 
 
-def verify_downloads(jobs):
-    """Gate FETCH · ANDON — every planned file is on disk and is not zero-length."""
-    missing = sorted(o for _, o in jobs if not os.path.isfile(o))
-    empty = sorted(o for _, o in jobs
+def verify_downloads(jobs, directories=(), suffixes=(".png",)):
+    """Gate FETCH · ANDON — the files on disk are the planned files, and nothing else.
+
+    Three directions, and the third is wave 6's addition. Missing and zero-length bound
+    the direction where the cloud's counts read right over an empty directory. The EXTRA
+    direction bounds the opposite one: `main` used to count the mapped directory with
+    `os.listdir` while `counts` counted the plan, and printed both numbers side by side
+    with nothing comparing them. Measured 2026-09-04 with the downloader stubbed — a
+    3-frame dump fetched into a run directory whose `lossless/` already held a stale
+    `00099.png` printed `by_node {"302": 3}` beside `downloaded {"lossless": 4}` under a
+    green `gate_FETCH`. The stray is not hypothetical downstream: `encode_control` and
+    `invert_frames` build their frame populations with a bare listdir over this directory.
+
+    `directories` is the mapped subdirectories the plan writes into; a file there carrying
+    one of `suffixes` that no job planned raises. Directories are supplied by the caller
+    rather than derived from the jobs, so a mapped directory the plan never wrote into is
+    still swept.
+
+    A job is either this tool's `(url, out)` pair or `fetch_t2v_run`'s dict carrying an
+    `out` key — the two fetchers share ONE andon, so it reads both plan shapes rather than
+    forcing one of them to be rewritten around the other.
+    """
+    outs = [j["out"] if isinstance(j, dict) else j[1] for j in jobs]
+    planned = {os.path.abspath(o) for o in outs}
+    missing = sorted(o for o in outs if not os.path.isfile(o))
+    empty = sorted(o for o in outs
                    if os.path.isfile(o) and os.path.getsize(o) == 0)
-    ev = {"planned": len(jobs), "missing": missing, "empty": empty,
-          "landed": len(jobs) - len(missing)}
-    if missing or empty:
+    extra = []
+    for d in directories:
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            p = os.path.join(d, name)
+            if not os.path.isfile(p) or os.path.splitext(name)[1] not in suffixes:
+                continue
+            if os.path.abspath(p) not in planned:
+                extra.append(p)
+    ev = {"planned": len(outs), "missing": missing, "empty": empty, "extra": extra,
+          "landed": len(outs) - len(missing),
+          "swept_directories": [os.path.abspath(d) for d in directories]}
+    if missing or empty or extra:
         raise FetchHalt(
-            f"{len(jobs)} file(s) were planned; {len(missing)} never landed and "
-            f"{len(empty)} are zero length. The measurement taken from this directory "
-            f"would be a measurement of a generation that was never retrieved",
+            f"{len(outs)} file(s) were planned; {len(missing)} never landed, "
+            f"{len(empty)} are zero length and {len(extra)} file(s) in the run directory "
+            f"were planned by no job. The measurement taken from this directory would be "
+            f"a measurement of a generation that was never retrieved, or of a population "
+            f"that is not this run",
             ev)
-    ev["verdict"] = f"{len(jobs)} planned file(s), all present and non-empty"
+    ev["verdict"] = (f"{len(outs)} planned file(s), all present and non-empty, and no "
+                     f"unplanned file in {len(ev['swept_directories'])} swept directory(s)")
     return ev
 
 
@@ -253,12 +289,18 @@ def main(argv=None):
         json.dump([{"url": u, "out": os.path.abspath(o)} for u, o in jobs], fh, indent=1)
 
     download(manifest)
-    landed = verify_downloads(jobs)
+    mapped = sorted({os.path.join(base, sub) for sub in node_dir.values()})
+    landed = verify_downloads(jobs, directories=mapped)
 
-    got = {}
-    for nid, sub in node_dir.items():
-        d = os.path.join(base, sub)
-        got[sub] = len([n for n in os.listdir(d) if n.endswith(".png")]) if os.path.isdir(d) else 0
+    # Counted from the PLAN, never from the directory. The two numbers used to be computed
+    # from different populations and printed beside each other, so a re-fetch into a
+    # non-cleaned run directory disagreed with itself in a green receipt and nobody was
+    # asked to compare them. The stray that made that possible now raises above this line.
+    got = {sub: 0 for sub in node_dir.values()}
+    for _, out in jobs:
+        sub = os.path.basename(os.path.dirname(os.path.abspath(out)))
+        if sub in got:
+            got[sub] += 1
     vids = sorted(n for n in os.listdir(base)
                   if os.path.splitext(n)[1] in (".mp4", ".webm", ".mkv"))
     print("FETCH_RUN " + json.dumps({

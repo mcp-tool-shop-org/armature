@@ -531,8 +531,8 @@ def test_a_within_group_slot_swap_is_caught_by_the_index_gate():
     Two slots swapped INSIDE a group keeps every count and every group order right."""
     names = _names(81)
     wf, gids = B.build(names)
-    plan = [(gid, start) for (start, _), gid in zip(AS.cascade_plan(81, AS.GROUP_SIZE),
-                                                    gids)]
+    plan = [(gid, start, stop) for (start, stop), gid
+            in zip(AS.cascade_plan(81, AS.GROUP_SIZE), gids)]
     assert B.gate_slot_frame_index(wf, names, plan, B.FIRST_IMAGE_ID)["verdict"]
 
     gi = wf[gids[1]]["inputs"]
@@ -662,3 +662,24 @@ def test_every_cascade_gate_raises_an_error_whose_id_matches_its_own_evidence():
         assert exc.value.gate == "CASCADE", f"call {i}: .gate is {exc.value.gate!r}"
         assert exc.value.evidence["gate"] == "CASCADE", f"call {i}: evidence disagrees"
         assert str(exc.value).startswith("[CASCADE]"), f"call {i}: {str(exc.value)[:40]!r}"
+
+
+# ---------------- the group's span is the population (wave 6, F-de2bc940)
+
+
+def test_a_group_with_its_tail_slots_dropped_is_refused():
+    """A contiguous truncation could not fire the old gate at any length: dropping N keys
+    also shortened the loop by N, so the group read clean and the verdict still said
+    "81 frame(s) checked"."""
+    names = _names(81)
+    wf, gids = B.build(names)
+    plan = [(gid, start, stop) for (start, stop), gid
+            in zip(AS.cascade_plan(81, AS.GROUP_SIZE), gids)]
+    assert B.gate_slot_frame_index(wf, names, plan, B.FIRST_IMAGE_ID)["slots_inspected"] == 81
+
+    gi = wf[gids[1]]["inputs"]
+    for k in sorted(int(key.rsplit("image", 1)[1]) for key in gi)[-4:]:
+        gi.pop(f"images.image{k}")
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.gate_slot_frame_index(wf, names, plan, B.FIRST_IMAGE_ID)
+    assert gids[1] in str(exc.value)

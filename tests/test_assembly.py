@@ -473,7 +473,7 @@ def test_the_slot_index_gate_catches_a_permuted_slot_that_topology_calls_clean()
     expected = [str(B.FIRST_IMAGE_ID + i) for i in range(6)]
     assert AS.gate_batch_topology(wf, 6, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
                                   expected_sources=expected)["verdict"]
-    assert B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0)], B.FIRST_IMAGE_ID)["verdict"]
+    assert B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0, 6)], B.FIRST_IMAGE_ID)["verdict"]
 
     bi = wf[str(B.BATCH_ID)]["inputs"]
     bi["images.image0"], bi["images.image1"] = bi["images.image1"], bi["images.image0"]
@@ -485,7 +485,7 @@ def test_the_slot_index_gate_catches_a_permuted_slot_that_topology_calls_clean()
         AS.gate_batch_topology(wf, 6, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
                                expected_sources=expected)
     with pytest.raises(AS.AssemblyGate) as exc:
-        B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0)], B.FIRST_IMAGE_ID)
+        B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0, 6)], B.FIRST_IMAGE_ID)
     assert "slot 0" in str(exc.value)
 
 
@@ -504,3 +504,66 @@ def test_a_refused_build_leaves_no_output_directory(tmp_path):
         B.main(["--uploads", str(up), "--out", str(out)])
     assert not out.exists()
     assert not out.parent.exists()
+
+
+# ------------------- the gate's population is the PLAN, not the graph (wave 6, F-de2bc940)
+
+
+def _six():
+    names = [f"{i:064x}.png" for i in range(6)]
+    return names, B.build(names)
+
+
+def test_the_span_is_the_population_so_a_vacuous_shape_cannot_pass():
+    """`slots = [k for k in inputs if k.startswith("images.image")]` took the population
+    from whatever dotted keys HAPPENED to exist while the verdict was built from
+    `len(names)`. Measured on a 6-frame assembly graph: the batch replaced by a bare
+    `images` LIST -> PASS, "6 frame(s) checked" (zero slots inspected); the tail dropped so
+    only image0..2 remain -> PASS, "6 frame(s) checked" (three inspected); the batch node
+    REMOVED from the graph outright -> PASS, "6 frame(s) checked" (nothing inspected,
+    because `graph.get(str(nid)) or {}` turns an absent node into an empty loop). A
+    contiguous truncation cannot fire the old gate at ANY length, because dropping N keys
+    also shortens the loop by N.
+
+    All three are caught upstream by `gate_batch_topology` at every production call site
+    today — the severity is that the gate cannot stand on its own while its verdict says
+    it can, and it is exported in `build_cascade_payload.__all__` for exactly that use.
+    """
+    names, wf = _six()
+    plan = [(B.BATCH_ID, 0, 6)]
+    assert B.gate_slot_frame_index(wf, names, plan, B.FIRST_IMAGE_ID)["verdict"]
+
+    bare = json.loads(json.dumps(wf))
+    bare[str(B.BATCH_ID)]["inputs"] = {"images": [[str(B.FIRST_IMAGE_ID + i), 0]
+                                                  for i in range(6)]}
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.gate_slot_frame_index(bare, names, plan, B.FIRST_IMAGE_ID)
+    assert "images" in str(exc.value)
+
+    truncated = json.loads(json.dumps(wf))
+    for k in range(3, 6):
+        truncated[str(B.BATCH_ID)]["inputs"].pop(f"images.image{k}")
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.gate_slot_frame_index(truncated, names, plan, B.FIRST_IMAGE_ID)
+    assert "images.image3" in str(exc.value) or "slot 3" in str(exc.value)
+
+    gone = json.loads(json.dumps(wf))
+    gone.pop(str(B.BATCH_ID))
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.gate_slot_frame_index(gone, names, plan, B.FIRST_IMAGE_ID)
+    assert "BatchImagesNode" in str(exc.value) or str(B.BATCH_ID) in str(exc.value)
+
+
+def test_a_node_of_the_wrong_class_in_the_slot_plan_is_refused():
+    names, wf = _six()
+    wf[str(B.BATCH_ID)]["class_type"] = "CreateVideo"
+    with pytest.raises(AS.AssemblyGate) as exc:
+        B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0, 6)], B.FIRST_IMAGE_ID)
+    assert "BatchImagesNode" in str(exc.value)
+
+
+def test_the_verdict_reports_what_was_inspected_not_the_length_of_the_clip():
+    names, wf = _six()
+    ev = B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0, 6)], B.FIRST_IMAGE_ID)
+    assert ev["slots_inspected"] == 6
+    assert "6 slot(s) inspected" in ev["verdict"]

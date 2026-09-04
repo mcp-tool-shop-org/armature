@@ -126,9 +126,11 @@ def frame_source_ids(names, first_image_id):
 def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
     """Gate ASSEMBLY · ANDON — batch slot k holds the upload name of the frame at k.
 
-    `slot_plan` is `[(batch_node_id, first_frame_index), …]` in group order; slot `k` of
-    that node must resolve to a `LoadImage` carrying `names[first_frame_index + k]`. The
-    flat chain passes one entry; the cascade passes one per group.
+    `slot_plan` is `[(batch_node_id, first_frame_index, stop_frame_index), …]` in group
+    order — the `(start, stop)` spans `cascade_plan` already produced, which every caller
+    holds. Slot `k` of that node must resolve to a `LoadImage` carrying
+    `names[first_frame_index + k]`, for every k in the span. The flat chain passes one
+    entry; the cascade passes one per group.
 
     **The andon is on the direction the invariant does not bound.** `gate_batch_topology`
     and `gate_cascade_topology` check slot NAMES, source DISTINCTNESS and source CLASS, and
@@ -136,17 +138,50 @@ def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
     index to a frame index, so two slots swapped inside a batch leaves every count, every
     name and every group order correct and the clip out of sequence — the same defect
     `fetch_t2v_run.py` exists to catch on the way back, with no equivalent on the way out.
+
+    **The population is the PLAN, and that is wave 6's correction.** Until 2026-09-04 the
+    loop ran over `[k for k in inputs if k.startswith("images.image")]` — whatever dotted
+    keys HAPPENED to exist on the node — while the verdict was built from `len(names)`, a
+    number describing the clip rather than the inspection. Measured on a 6-frame assembly
+    graph: the batch replaced by a bare `images` list PASSED with "6 frame(s) checked"
+    having inspected zero slots; the tail dropped so only `image0..2` survived PASSED with
+    the same verdict having inspected three; the batch node REMOVED from the graph
+    entirely PASSED having inspected nothing, because `graph.get(str(nid)) or {}` turns an
+    absent node into an empty inputs dict and an empty loop. A contiguous truncation could
+    not fire it at any length, because dropping N keys also shortened the loop by N. The
+    only missing-slot shape that fired it was a HOLE. All three vacuous shapes are caught
+    upstream by `gate_batch_topology`, which runs first at every production call site
+    today — but this gate is exported for standalone use, and a verdict naming a property
+    no code checked is this repo's named worst class.
     """
     ev = {"gate": "ASSEMBLY_slot_frame_index", "n_frames": len(names),
           "first_image_id": int(first_image_id),
-          "slot_plan": [[str(nid), int(start)] for nid, start in slot_plan]}
-    problems = []
-    for nid, start in slot_plan:
-        node = graph.get(str(nid)) or {}
+          "slot_plan": [[str(nid), int(start), int(stop)] for nid, start, stop in slot_plan]}
+    problems, inspected = [], 0
+    for nid, start, stop in slot_plan:
+        span = int(stop) - int(start)
+        node = graph.get(str(nid))
+        if node is None:
+            problems.append(f"node {nid} is not in the graph at all, so its {span} slot(s) "
+                            f"were never inspected — an absent node used to read as an "
+                            f"empty loop and pass")
+            continue
+        if node.get("class_type") != "BatchImagesNode":
+            problems.append(f"node {nid} is a {node.get('class_type')!r}, not a "
+                            f"BatchImagesNode; there are no slots on it to inspect")
+            continue
         inputs = node.get("inputs") or {}
-        slots = [k for k in inputs if k.startswith("images.image")]
-        for k in range(len(slots)):
+        want_keys = {f"images.image{k}" for k in range(span)}
+        got_keys = {k for k in inputs if k == "images" or k.startswith("images.image")}
+        if got_keys != want_keys:
+            problems.append(
+                f"node {nid} carries dotted keys {sorted(got_keys)}, and the plan puts "
+                f"{span} frame(s) ({sorted(want_keys)}) on it. A bare `images` list or a "
+                f"truncated tail used to SHORTEN the loop rather than fail it")
+            continue
+        for k in range(span):
             frame = int(start) + k
+            inspected += 1
             link = inputs.get(f"images.image{k}")
             src = str(link[0]) if isinstance(link, list) and len(link) == 2 else None
             loader = graph.get(src) if src else None
@@ -156,13 +191,15 @@ def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
                 problems.append(
                     f"node {nid} slot {k} resolves to {got!r} via {src!r}; frame {frame} "
                     f"of the clip is {want!r}")
+    ev["slots_inspected"] = inspected
     if problems:
         ev["problems"] = problems
         raise AS.AssemblyGate(
             "a batch slot does not hold the frame the clip's order puts there: "
             + "; ".join(problems[:6]) + (" …" if len(problems) > 6 else ""), ev)
     ev["verdict"] = (f"every slot across {len(slot_plan)} batch node(s) holds the upload "
-                     f"name of its own frame index, {len(names)} frame(s) checked")
+                     f"name of its own frame index, {inspected} slot(s) inspected against "
+                     f"a clip of {len(names)} frame(s)")
     return ev
 
 #: Node ids. Kept away from 1..99 so the graph reads as its own thing beside E02's, which
@@ -230,7 +267,8 @@ def main(argv=None):
     ordered_ids = frame_source_ids(names, FIRST_IMAGE_ID)
     gate_topo = AS.gate_batch_topology(wf, len(names), BATCH_ID, VIDEO_ID, SAVE_ID,
                                        expected_sources=ordered_ids)
-    gate_index = gate_slot_frame_index(wf, names, [(BATCH_ID, 0)], FIRST_IMAGE_ID)
+    gate_index = gate_slot_frame_index(wf, names, [(BATCH_ID, 0, len(names))],
+                                      FIRST_IMAGE_ID)
     # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no
     # noise-bearing node at all, so the seed clause has nothing to decide and saying so is
     # honest where a green "0 seeds, all pinned" would be the vacuous shape the E13

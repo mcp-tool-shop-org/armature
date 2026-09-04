@@ -185,3 +185,44 @@ def test_every_command_shape_is_byte_identical_across_run_names(tmp_path, stub_d
         dump = _dump(tmp_path, [_result("302", 0)])
         F.main([f"--dump={dump}", f"--run={name}", f"--root={tmp_path / 'runs'}"])
     assert stub_download[0]["cmd"] == stub_download[1]["cmd"]
+
+
+# ------------------------------------------- the stray-file direction (wave 6, F-28661db4)
+
+
+def test_a_stale_frame_in_a_mapped_directory_halts_rather_than_being_counted(
+        tmp_path, stub_download, capsys):
+    """`got[sub] = len(os.listdir(d))` counted the DIRECTORY while `counts` counted the
+    PLAN, and nothing compared them. Measured on today's tree: a 3-frame dump fetched into
+    a run directory whose `lossless/` already held one stale `00099.png` printed
+    FETCH_RUN {"by_node": {"302": 3}, "downloaded": {"lossless": 4}, "gate_FETCH": "3
+    planned file(s), all present and non-empty"} — two counts that disagree, side by side,
+    in a green receipt. `encode_control` and `invert_frames` build their frame populations
+    with a bare listdir over exactly this directory."""
+    root = tmp_path / "runs"
+    (root / "r" / "lossless").mkdir(parents=True)
+    (root / "r" / "lossless" / "00099.png").write_bytes(b"\x89PNG")
+    dump = _dump(tmp_path, [_result("302", i) for i in range(3)])
+    with pytest.raises(F.FetchHalt) as exc:
+        F.main([f"--dump={dump}", "--run=r", f"--root={root}"])
+    ev = exc.value.evidence
+    assert ev["planned"] == 3
+    assert [os.path.basename(p) for p in ev["extra"]] == ["00099.png"]
+    assert "FETCH_RUN" not in capsys.readouterr().out
+
+
+def test_the_printed_download_counts_come_from_the_plan_not_from_the_directory(
+        tmp_path, stub_download, capsys):
+    """The two numbers in the receipt can no longer disagree, because there is only one."""
+    dump = _dump(tmp_path, [_result("302", i) for i in range(3)]
+                 + [_result("301", i) for i in range(2)])
+    F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
+    line = json.loads(capsys.readouterr().out.split("FETCH_RUN ", 1)[1])
+    assert line["by_node"] == {"302": 3, "301": 2}
+    assert line["downloaded"] == {"lossless": 3, "batchprobe": 2}
+
+
+def test_a_clean_run_still_passes_the_stray_clause(tmp_path, stub_download):
+    """The mutation that must NOT fire it: nothing in the directory but the plan."""
+    dump = _dump(tmp_path, [_result("302", i) for i in range(2)])
+    assert F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"]) == 0

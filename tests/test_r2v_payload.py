@@ -480,3 +480,53 @@ def test_the_single_node_evidence_shape_is_unchanged():
     assert ev["hosted_frame_legality"]["legal"] is True
     assert ev["hosted_frame_legality"]["resolution"] == "720P"
     assert len(ev["hosted_frame_legality_nodes"]) == 1
+
+
+# ------------------------------- the per-arm input flags (wave 6, F-9df9774e)
+
+import os                                                             # noqa: E402
+from conftest import REPO                                             # noqa: E402
+
+
+def _r2v_args(tmp_path, arm, *extra):
+    return ["--arm", arm, "--seed", str(SEEDS[0]),
+            "--seeds", os.path.join(REPO, "specs", "E13-seeds.json"),
+            "--prompt-file", os.path.join(REPO, "specs", "E13-prompt.json"),
+            "--out", str(tmp_path / "fresh"), "--subject", "BLACKGUARD", "--no-canon",
+            *extra]
+
+
+@pytest.mark.parametrize("arm,flag", [("A1", "--refs"), ("A2", "--uploads")])
+def test_an_arm_run_without_its_input_flag_names_the_flag(tmp_path, arm, flag):
+    """Both flags default to None and each is required by exactly one arm, but neither
+    requirement was enforced or reported. Measured on today's tree with a registered seed
+    and the committed specs: both forms raise `TypeError: expected str, bytes or
+    os.PathLike object, not NoneType` — no typed error, no flag named, no arm named — and
+    the halt arrives AFTER Gate CANON and Gate S have already passed, so the operator's
+    first signal that the invocation was incomplete is a stdlib traceback on the
+    credit-spending E13 route. The sibling `build_camera_i2v_payload.resolve_start_frame`
+    raises a typed error naming the flag and saying why for exactly this shape."""
+    with pytest.raises(RG.RouteGate) as exc:
+        B.main(_r2v_args(tmp_path, arm))
+    assert flag in str(exc.value)
+    assert exc.value.evidence["arm"] == arm
+    assert exc.value.evidence["flag"] == flag
+    assert not (tmp_path / "fresh").exists()
+
+
+@pytest.mark.parametrize("arm,flag", [("A1", "--uploads"), ("A2", "--refs")])
+def test_the_other_arms_flag_does_not_satisfy_the_requirement(tmp_path, arm, flag):
+    """The mutation that must not make it green: supplying the wrong arm's flag."""
+    with pytest.raises(RG.RouteGate):
+        B.main(_r2v_args(tmp_path, arm, flag, str(tmp_path / "whatever.json")))
+
+
+def test_the_check_runs_before_gate_canon_and_gate_s(tmp_path):
+    """It fires on the incomplete invocation itself, before anything is read and before
+    the gates that would otherwise report first."""
+    with pytest.raises(RG.RouteGate) as exc:
+        B.main(["--arm", "A1", "--seed", "999999",
+                "--seeds", os.path.join(REPO, "specs", "E13-seeds.json"),
+                "--prompt-file", os.path.join(REPO, "specs", "E13-prompt.json"),
+                "--out", str(tmp_path / "fresh")])
+    assert "--refs" in str(exc.value)

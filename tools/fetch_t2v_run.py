@@ -49,7 +49,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from armature_core.errors import GateFailure  # noqa: E402
+# ONE FetchHalt and ONE plan-to-disk andon across the two fetchers, not two of each.
+# `fetch_run` already carried both; this file carried a second exception class with the
+# same gate id and no plan-to-disk check at all, under a comment claiming the two were the
+# same fix. Wave 6: the sibling's implementation is imported rather than re-written.
+from fetch_run import FetchHalt, verify_downloads  # noqa: E402,F401
 
 TOOL_VERSION = "E09.A3"
 
@@ -58,20 +62,11 @@ VIDEO_NODE = "81"
 
 #: The environment variable the downloader reads the manifest path out of. The command
 #: string is a constant; nothing derived from `--out` or from the dump is interpolated
-#: into it. Same fix, same day, as `fetch_run.py`'s.
+#: into it. Same fix, same day, as `fetch_run.py`'s — and as of wave 6 the same
+#: INTERPRETER too: this file shelled to `powershell` (Windows PowerShell 5.1) while the
+#: sibling shelled to `pwsh` (PowerShell 7, the only cross-platform one) directly under a
+#: comment asserting they were the same.
 MANIFEST_ENV = "ARMATURE_FETCH_MANIFEST"
-
-
-class FetchHalt(GateFailure):
-    """A retrieval did not happen, or the frames on disk are not vouched for.
-
-    **The andon is on the direction the invariant does not bound.** Every count here is
-    derived from the dump, which describes what the cloud produced and says nothing about
-    the local disk or about the ORDER of what landed. So the counts can all read right
-    while the clip is shuffled, empty, or a directory of error bodies.
-    """
-
-    gate = "FETCH"
 
 
 def plan(results, out):
@@ -88,8 +83,13 @@ def plan(results, out):
             jobs.append({"url": r["url"], "cloud_name": r["filename"], "array_index": None,
                          "out": os.path.join(out, f"donor{ext}")})
         else:
-            raise SystemExit(f"unexpected source node {nid}; this graph emits only "
-                             f"{LOSSLESS_NODE} (lossless) and {VIDEO_NODE} (video)")
+            # `fetch_run.plan` raises a typed FetchHalt with an evidence dict for this
+            # exact clause. A SystemExit here left no machine-readable record and walked
+            # straight past any caller catching GateFailure.
+            raise FetchHalt(
+                f"unexpected source node {nid}; this graph emits only "
+                f"{LOSSLESS_NODE} (lossless) and {VIDEO_NODE} (video)",
+                {"unexpected_node": nid, "known": [LOSSLESS_NODE, VIDEO_NODE]})
     return jobs
 
 
@@ -115,7 +115,7 @@ def download(jobs):
           "{ curl.exe -sS -L --fail-with-body -o $x.out -- $x.url }")
     env = dict(os.environ)
     env[MANIFEST_ENV] = os.path.abspath(tmp)
-    proc = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+    proc = subprocess.run(["pwsh", "-NoProfile", "-Command", ps],
                           capture_output=True, text=True, env=env)
     if proc.returncode != 0:
         raise FetchHalt(
@@ -213,8 +213,18 @@ def main(argv=None):
                   fh, indent=2)
     download(jobs)
 
-    frames = sorted(f for f in os.listdir(os.path.join(a.out, "lossless"))
-                    if f.endswith(".png"))
+    # Gate FETCH · ANDON, carried from `fetch_run.verify_downloads` rather than written a
+    # second time. This tool had NO plan-to-disk check: the frame population came from
+    # `os.listdir`, nothing compared it to `plan()` in either direction, and the VIDEO job
+    # was never checked at all. Measured 2026-09-04 with `download` stubbed: a 4-frame dump
+    # fetched into an --out whose lossless/ held one stale 00009.png printed FETCH_OK
+    # {"frames": 5} with the stale frame in the sha256 manifest and inside both arms of
+    # Gate ORDER; a dump whose frame 3 and video never landed printed FETCH_OK
+    # {"frames": 4} with 00000,00001,00002,00004 differenced as if consecutive.
+    landed = verify_downloads(jobs, directories=[os.path.join(a.out, "lossless")])
+
+    # The frame population is the PLAN, never a directory listing.
+    frames = [os.path.basename(j["out"]) for j in jobs if j["array_index"] is not None]
     manifest = {}
     for f in frames:
         p = os.path.join(a.out, "lossless", f)
@@ -240,7 +250,8 @@ def main(argv=None):
         "frames": len(frames), "out": a.out,
         "array_order_mean_diff": order["array_order_mean_diff"],
         "hash_sorted_mean_diff": order["hash_sorted_mean_diff"],
-        "ratio": order["ratio"], "gate_ORDER": order["verdict"]}))
+        "ratio": order["ratio"], "gate_ORDER": order["verdict"],
+        "gate_FETCH": landed["verdict"]}))
     return 0
 
 
