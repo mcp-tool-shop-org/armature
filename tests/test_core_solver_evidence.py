@@ -184,11 +184,21 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     assert with_gates == {
         # rig_gates 11 → 12 and route_gates 32 → 34 at the wave-8 merge: core-gates' branch
         # added Gate P's truncation refusal and the class-level licence refusals.
-        "assembly": 18, "blender_scene": 4, "canon": 1, "donor_gate": 6, "gates": 20,
-        "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 7, "resample": 4,
-        "rig_gates": 12, "route_gates": 34, "startframe": 19, "turnaround": 9,
+        #
+        # WAVE 10, re-derived on this branch 2026-09-04 (never hand-edited from a merge):
+        #   framing 0 → 6   `PinnedCameraGate`, the pinned-camera andon split off
+        #                   `FramingError` when that class rejoined the ArmatureError family
+        #   walk    0 → 3   `GaitGate` (1) + `CadenceGate` (2), the same split on `walk.py`
+        #   parts   7 → 8   Gate D's zero-vertex refusal (F-03955683)
+        # `glb` is unchanged at 4: `MalformedGLB` rejoined the family but is a REFUSAL, not
+        # a `GateFailure`, and this walk counts `GateFailure` subclasses only.
+        # core-gates' branch moves `rig_gates` 12 → 15 in the same wave; the merged total is
+        # re-derived on the merged tree rather than added up from two branches.
+        "assembly": 18, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
+        "gates": 20, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
+        "rig_gates": 12, "route_gates": 34, "startframe": 19, "turnaround": 9, "walk": 3,
     }, with_gates
-    assert sum(with_gates.values()) == 145
+    assert sum(with_gates.values()) == 155
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():
@@ -297,3 +307,133 @@ def test_the_census_goes_red_on_a_raise_that_cannot_name_its_andon():
              if (g is not None and g != gid) or (a is not None and a != cname)]
     assert wrong == [("GoodGate", "WRONG", "SloppyGate")], wrong
     assert by_line["GoodGate"][0] >= {"gate", "andon"}
+
+
+# ------------------------------- wave 10: every refusal reaches the repo's own root error
+
+
+TOOLS_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "tools")
+
+
+def _class_graph(tools_root):
+    """`{class name: [base names]}` for every `class` statement under `tools/`.
+
+    THE NODE THIS CENSUS KEYS ON is the **class hierarchy**, not a name pattern and not a
+    file list: the property being asserted ("this refusal is one of ours") is a property of
+    what a class DERIVES FROM, so the population is derived from `ClassDef.bases` and the
+    edges are followed to their root. `tools/superseded/` is excluded — it is the failure
+    museum, not the pipeline.
+    """
+    graph = {}
+    for root, _dirs, files in os.walk(tools_root):
+        if "superseded" in root.replace("\\", "/").split("/"):
+            continue
+        for fname in sorted(files):
+            if not fname.endswith(".py"):
+                continue
+            with open(os.path.join(root, fname), encoding="utf-8") as fh:
+                tree = ast.parse(fh.read())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    graph.setdefault(node.name, []).extend(
+                        b.id if isinstance(b, ast.Name)
+                        else getattr(b, "attr", "?") for b in node.bases)
+    return graph
+
+
+def _raised_names(tools_root):
+    """Every class NAME raised from at least one site under `tools/`."""
+    names = set()
+    for root, _dirs, files in os.walk(tools_root):
+        if "superseded" in root.replace("\\", "/").split("/"):
+            continue
+        for fname in sorted(files):
+            if not fname.endswith(".py"):
+                continue
+            with open(os.path.join(root, fname), encoding="utf-8") as fh:
+                tree = ast.parse(fh.read())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
+                    n = (getattr(node.exc.func, "id", None)
+                         or getattr(node.exc.func, "attr", None))
+                    if n:
+                        names.add(n)
+    return names
+
+
+def _reaches(name, graph, root="ArmatureError", depth=0):
+    """Does `name` reach `root` by following `class` bases inside the tree?"""
+    if name == root:
+        return True
+    if depth > 12 or name not in graph:
+        return False
+    return any(_reaches(b, graph, root, depth + 1) for b in graph[name])
+
+
+def outside_the_family(tools_root=None, graph=None):
+    """Every class defined AND raised under `tools/` that does not reach `ArmatureError`."""
+    tools_root = TOOLS_ROOT if tools_root is None else tools_root
+    graph = _class_graph(tools_root) if graph is None else graph
+    raised = _raised_names(tools_root)
+    return sorted(n for n in raised if n in graph and not _reaches(n, graph))
+
+
+def test_every_refusal_class_this_tree_raises_reaches_the_repo_s_own_root_error():
+    """F-0d621185 and F-ba21426c. The ONE halt contract on every tool discriminates three
+    outcomes by `isinstance`: `GateFailure` -> "HALTED — a gate fired", exit 2;
+    `ArmatureError` -> "REFUSED", exit 2; anything else -> "FAILED — an unhandled error",
+    exit 1. A refusal class defined outside that tree is therefore RECORDED AS A CRASH, and
+    `evidence_dicts_missing` — the walk `test_every_gate_raise_carries_both_its_id_and_its
+    _andon` is judged by — filters on family membership and never examines it.
+
+    Measured on the wave-10 base (cd2d941) by the walk above: three classes were outside,
+    with 30 raise sites between them —
+    `walk.WalkError(ValueError)` (12), `framing.FramingError(ValueError)` (12) and
+    `glb.MalformedGLB(ValueError)` (6). Replaying `author_walk.py:712-725`'s handler over
+    `gate_stance_frac_is_modelled(0.4)` printed outcome "FAILED — an unhandled error",
+    gate null, exit 1, while the evidence dict it carried said gate "GAIT".
+    """
+    assert outside_the_family() == []
+
+
+def test_the_family_census_goes_red_on_a_refusal_raised_outside_the_tree(tmp_path):
+    """Prove it can fail: a synthetic module adding a MEMBER WITHOUT the property.
+
+    Nothing in the real tree is weakened to demonstrate it — the walk is pointed at a
+    directory holding one file.
+    """
+    (tmp_path / "rogue.py").write_text(
+        "class ArmatureError(RuntimeError):\n    pass\n\n"
+        "class Ours(ArmatureError):\n    pass\n\n"
+        "class Rogue(ValueError):\n    pass\n\n"
+        "def a():\n    raise Ours('fine')\n\n"
+        "def b():\n    raise Rogue('outside the family')\n",
+        encoding="utf-8")
+    assert outside_the_family(str(tmp_path)) == ["Rogue"]
+
+
+def test_the_two_dual_based_andons_are_both_kinds_of_refusal_at_once():
+    """The shape the rebase uses, asserted at runtime rather than read off the source.
+
+    `walk.GaitGate` / `walk.CadenceGate` / `framing.PinnedCameraGate` derive from BOTH the
+    module's own refusal class and `GateFailure`, so every existing `except WalkError` /
+    `except FramingError` call site and every `pytest.raises(walk.WalkError)` in this suite
+    keeps catching them, while the halt contract now reads them as gates rather than as
+    crashes.
+    """
+    from armature_core import framing, glb, walk
+    from armature_core.errors import ArmatureError
+
+    for cls, own, gate in ((walk.GaitGate, walk.WalkError, "GAIT"),
+                           (walk.CadenceGate, walk.WalkError, "CADENCE"),
+                           (framing.PinnedCameraGate, framing.FramingError, "PIN")):
+        assert issubclass(cls, own)
+        assert issubclass(cls, GateFailure)
+        assert cls.gate == gate
+        assert str(cls("why", {"gate": gate})).startswith(f"[{gate}] ")
+
+    for cls in (walk.WalkError, framing.FramingError, glb.MalformedGLB):
+        assert issubclass(cls, ArmatureError)
+        assert not issubclass(cls, GateFailure)
+        assert cls("m", {"k": 1}).evidence == {"k": 1}

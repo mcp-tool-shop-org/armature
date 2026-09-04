@@ -88,6 +88,7 @@ import math
 
 from .errors import ArmatureError, GateFailure
 from . import sitelist
+from .parts import require_finite, tightened
 
 TOOL_VERSION = "E09.1"
 
@@ -607,11 +608,20 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
 
     **This never raises on the measurement.** It was one function with a `raise_on_fail`
     keyword defaulting to True, and every non-test call site in the tree passed False
-    (`lift_clip.py:276`, `measure_lift.py:334`) - so the only paths that ever armed the
+    (`lift_clip.py:275`, `measure_lift.py:481`) - so the only paths that ever armed the
     andon were the tests, and a keyword that turns an andon into a return value is a skip
     flag whatever it is called. The two behaviours are now two functions: this one
     measures, `gate_round_trip` below halts, and no caller can disarm the second by
     keyword because it has no keyword to pass.
+
+    **The two call-site anchors above are `lift_clip.py:275` and `measure_lift.py:481`**,
+    re-derived by grep 2026-09-04 (F-8cd65665). Both docstrings said `lift_clip.py:276`;
+    this one said `measure_lift.py:334` and `gate_round_trip`'s said `measure_lift.py:468`
+    for the SAME two call sites, so the pair disagreed with each other and all four were
+    wrong — the recorded-count-measured-on-a-
+    branch shape, a number that moved at a merge and was never re-derived, presented as a
+    grep result. `tests/test_lift_solve.py` now derives the anchors from `tools/` and
+    asserts these docstrings name them, so the fifth stale one cannot be written.
 
     `raise_on_fail` survives only to REFUSE: passing True raises `TypeError` naming the
     gate, so an old call cannot quietly get a diagnostic where it asked for an andon.
@@ -661,7 +671,7 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
     return ev
 
 
-def gate_round_trip(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC):
+def gate_round_trip(rest, obs, solved, diagonal, tol_frac=None):
     """Gate SOLVE - ANDON - the solve reproduces the positions it was solved from.
 
     **No flag, no environment escape, no `assert`.** It raises inside the module that did
@@ -670,8 +680,8 @@ def gate_round_trip(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC):
     quoted against a wrong pose while every other number looked reasonable.
 
     The synthetic path is the one whose invariant is exactness, and this is the function
-    it calls. **No tool implements that path**: grep finds `lift_clip.py:276` and
-    `measure_lift.py:468`, both on the DIAGNOSTIC `round_trip_report`, and this gate's only
+    it calls. **No tool implements that path**: grep finds `lift_clip.py:275` and
+    `measure_lift.py:481`, both on the DIAGNOSTIC `round_trip_report`, and this gate's only
     callers are `tests/test_lift_solve.py` and `tests/test_amend_w3_andons.py`. The
     docstring used to name a caller that does not exist in the tree; corrected here rather
     than deleted, because the correction is the useful part (F-1831f75d).
@@ -687,7 +697,22 @@ def gate_round_trip(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC):
     `turnaround.gate_set_distinct`, `assembly.gate_batch_topology`, `gate_slot_ceiling`);
     this is that guard. `round_trip_report` keeps reporting the partial set, because that
     is the measurement path.
+
+    **The tolerance is this module's, and so is the diagonal it multiplies** (F-8cd65665,
+    wave 10). `tol_frac` was a plain keyword defaulting to `ROUND_TRIP_TOL_FRAC` with no
+    tightening guard — precisely "a number to tune toward", in the loosening direction,
+    which the paragraph above says this gate does not have — and `diagonal`, which
+    multiplies it, was not checked for finiteness or sign at all. The docstring cited four
+    sibling gates as the pattern it followed for its POPULATION guard without following
+    them on the tolerance; it follows them now, through `parts.tightened`, so the rule has
+    one implementation rather than a fifth copy. `round_trip_report` keeps its plain
+    keyword: it is the diagnostic, and its `within_tolerance` is a reading, not a verdict.
     """
+    guard = {"gate": "SOLVE", "andon": "SolveGate",
+             "module_tol_frac": ROUND_TRIP_TOL_FRAC, "tol_frac_requested": tol_frac,
+             "bbox_diagonal": diagonal}
+    require_finite("bbox_diagonal", diagonal, SolveGate, guard)
+    tol_frac = tightened("tol_frac", tol_frac, ROUND_TRIP_TOL_FRAC, SolveGate, guard)
     ev = round_trip_report(rest, obs, solved, diagonal, tol_frac)
     if not ev["population_complete"]:
         raise SolveGate(

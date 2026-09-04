@@ -52,6 +52,7 @@ than about the algebra. `resample_frames` short-circuits at `t == 0.0` for that 
 import math
 
 from .errors import ArmatureError, GateFailure
+from .parts import require_finite, tightened
 
 TOOL_VERSION = "E10.1"
 
@@ -93,7 +94,7 @@ def is_rotation(m, tol=ORTHONORMAL_TOL):
     return (worst <= tol and abs(det - 1.0) <= tol), worst, det
 
 
-def require_rotation(m, where, tol=ORTHONORMAL_TOL):
+def require_rotation(m, where, tol=None):
     """· ANDON — the input really is a rotation, checked before it is believed.
 
     Put on the direction the invariant does not bound: nothing upstream of this module
@@ -105,7 +106,27 @@ def require_rotation(m, where, tol=ORTHONORMAL_TOL):
     It raises rather than repairing. Orthonormalising here would erase the evidence that
     the record arrived broken, and the repair would be indistinguishable in the output from
     a record that was fine.
+
+    **The bound is this module's; a caller may only TIGHTEN it** (F-1c6683f0, wave 10).
+    `tol` was a plain keyword defaulting to `ORTHONORMAL_TOL` with no guard, so one keyword
+    could void the claim `ORTHONORMAL_TOL`'s own comment makes: the value sits deliberately
+    between measured float64 noise (~3e-15) and a real defect ("orders of magnitude
+    larger"), which is what makes the gate unable to fire on correct work and unable to
+    stay silent on the failure it exists for. A caller-supplied bound is a bound the caller
+    can raise, and this gate decides whether a motion record's matrices may be believed. It
+    now defaults to None, meaning the module's, and a value ABOVE it — or a non-finite or
+    non-positive one — raises. Verified by grep at the time of the change: no call site
+    anywhere in `tools/` or `tests/` passed `tol`, so the freedom bought nothing.
+
+    This is the third instance of the same shape; the first two were closed on
+    `parts.gate_rigid_arrival` / `gate_parts_determinism` and `assembly.gate_slot_ceiling`,
+    and `parts.tightened` is that implementation, imported rather than re-written.
+    `is_rotation` keeps its plain `tol` keyword: it RETURNS rather than gating, so it is a
+    diagnostic knob and not an andon a caller can widen.
     """
+    ev = {"gate": "RESAMPLE", "andon": "ResampleGate", "where": where,
+          "module_tolerance": ORTHONORMAL_TOL, "tolerance_requested": tol}
+    tol = tightened("tol", tol, ORTHONORMAL_TOL, ResampleGate, ev)
     ok, worst, det = is_rotation(m, tol)
     if not ok:
         raise ResampleGate(

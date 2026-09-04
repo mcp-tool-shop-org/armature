@@ -38,9 +38,12 @@ THE DERIVATION (wave 8's rule — a census may not type its own population):
 Both halves come from one `ast.walk` of every module in the tree: `ClassDef` names for the
 first, `Raise` nodes for the second. Nothing is typed but the recorded answer the derivation
 is asserted against, which is what makes a new member fail loudly here on the day it lands.
-`FramingError` and `WalkError` are the proof that the old premise was the wrong one: both
-derive from `ValueError`, not `ArmatureError`, so a class-hierarchy walk rooted at the repo
-root class would still have missed 11 clauseless sites.
+`FramingError` and `WalkError` were the proof that the old premise was the wrong one: on
+the wave-10 base both derived from `ValueError`, not `ArmatureError`, so a class-hierarchy
+walk rooted at the repo root class would still have missed 11 clauseless sites. (Wave 10
+rebased them, and `glb.MalformedGLB`, onto `ArmatureError` — see
+`test_two_policed_classes_do_not_descend_from_the_repo_root_error`. The derivation did not
+have to change, which is the point: it never depended on the hierarchy.)
 
 The bar is deliberately zero: a leaf class exists for most of these refusals, and where it
 does not, the message is what the refusal is named for.
@@ -111,11 +114,15 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: wave-8 amend, counted by AST at its tip on 2026-09-04; its `GateObjects` (1 site),
 #: `BindingSheetGate` (1) and `PartsSheetGate` (1) are deliberately absent, and join the
 #: day a second raise site does;
-#: `MalformedGLB` arrives with core-solvers' (6 sites in `glb.py`, `read_chunks` and
-#: `_image_blob`). `MalformedGLB` subclasses `ValueError`, which is why the predicate is
-#: "defined under tools/ and raised from more than one site" and not "an `ArmatureError`
-#: subclass": the hierarchy rule would not see it, exactly as it does not see
-#: `FramingError` and `WalkError`. Core-solvers' `NonReiterableFrames` is deliberately
+#: `MalformedGLB` arrives with core-solvers' (13 sites in `glb.py` after wave 10 —
+#: `read_chunks` and `_image_blob`). It subclassed `ValueError` on the wave-10 base, which
+#: is why the predicate is "defined under tools/ and raised from more than one site" and
+#: not "an `ArmatureError` subclass": the hierarchy rule would not have seen it, exactly as
+#: it did not see `FramingError` and `WalkError`. Wave 10 rebased all three; the predicate
+#: is unchanged, because it never keyed on the hierarchy.
+#: Wave 10 also adds `CadenceGate` (2 sites in `walk.py`) and `PinnedCameraGate` (6 in
+#: `framing.py`); `walk.GaitGate` has ONE raise site, so it is deliberately absent and
+#: joins the day a second one is written. Core-solvers' `NonReiterableFrames` is deliberately
 #: absent — one raise site, so the class IS its clause. `CropStripError` arrives with
 #: instruments-measure's (7 sites in `make_crop_strip.py`, whose refusals were `SystemExit`
 #: on this branch). `RenderTurnaroundGate` is unaffected by being
@@ -123,6 +130,7 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: its raise count, never on its bases, which is the whole reason `FramingError` and
 #: `WalkError` are policed at all.
 RECORDED_POPULATION = frozenset({
+    "CadenceGate", "PinnedCameraGate",
     "CropStripError", "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate",
     "PreviewWalkGate",
     "AlphaGate", "ArmatureError", "AssemblyGate", "BackdropGate", "BakeEmpty",
@@ -163,7 +171,11 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     the derivation cannot see it. The typed set is therefore checked by direction — the
     two names that ARE raised must still be policed — rather than by containment.
     """
-    assert len(POLICED) == 71, sorted(POLICED)
+    # 71 -> 73 in wave 10: `CadenceGate` (2 sites in `walk.py`) and `PinnedCameraGate`
+    # (6 in `framing.py`) are the two andons split off `WalkError` / `FramingError` when
+    # the family was rebased on `ArmatureError`. `walk.GaitGate` is raised ONCE and is
+    # deliberately not here; both parents keep more than one raise site and stay policed.
+    assert len(POLICED) == 73, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -220,13 +232,43 @@ def _class_bases(path):
 def test_two_policed_classes_do_not_descend_from_the_repo_root_error():
     """Why the population is not a class-hierarchy walk rooted at `ArmatureError`.
 
-    `FramingError` and `WalkError` subclass `ValueError`. A census deriving its population
-    from the repo's own error tree would police neither, and 11 clauseless sites would stay
-    invisible for the second wave running.
+    **Corrected in place 2026-09-04, wave 10 (F-0d621185, F-ba21426c).** This test asserted
+    `_class_bases(...)["FramingError"] == ["ValueError"]` and the same for `WalkError`. That
+    was true and it was the defect, not the justification: a refusal class outside the
+    `ArmatureError` tree is recorded by every tool's halt contract as an unhandled crash at
+    exit 1, and `evidence_dicts_missing` — which filters on family membership — examined 0
+    of their 24 raises. Core-solvers rebased all three members of that family
+    (`walk.WalkError`, `framing.FramingError`, `glb.MalformedGLB`) onto `ArmatureError` in
+    wave 10, so the old assertion now pins a defect rather than a premise.
+
+    **The reason the population here is still NOT a hierarchy walk survives the fix, and it
+    is now stated as the general claim rather than as three names.** A class-hierarchy
+    census answers "is this one of our errors"; THIS census answers "can a
+    `pytest.raises(X)` in the suite tell one refusal from another", and the second is a
+    property of how often a class is raised, not of what it inherits from. The historical
+    proof is kept below: on the wave-10 base those three classes really did sit outside the
+    hierarchy and a rooted walk would have missed 24 sites — which is why the derivation
+    was written this way, and why it did not have to change when they moved.
     """
-    assert _class_bases(os.path.join(CORE, "framing.py"))["FramingError"] == ["ValueError"]
-    assert _class_bases(os.path.join(CORE, "walk.py"))["WalkError"] == ["ValueError"]
-    assert {"FramingError", "WalkError"} <= POLICED
+    bases = dict(_class_bases(os.path.join(CORE, "framing.py")))
+    bases.update(_class_bases(os.path.join(CORE, "walk.py")))
+    bases.update(_class_bases(os.path.join(CORE, "glb.py")))
+    assert bases["FramingError"] == ["ArmatureError"]
+    assert bases["WalkError"] == ["ArmatureError"]
+    assert bases["MalformedGLB"] == ["ArmatureError"]
+    assert {"FramingError", "WalkError", "MalformedGLB"} <= POLICED
+
+    # The derivation's independence from the hierarchy, proven on a source that HAS a class
+    # outside it — the shape the tree carried until wave 10 — rather than on the tree.
+    outside = _class_bases_from_source(
+        "class Rogue(ValueError):\n    pass\n")
+    assert outside["Rogue"] == ["ValueError"]
+
+
+def _class_bases_from_source(source):
+    tree = ast.parse(source)
+    return {node.name: [b.id for b in node.bases if isinstance(b, ast.Name)]
+            for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
 
 
 def _enclosing_functions(tree):

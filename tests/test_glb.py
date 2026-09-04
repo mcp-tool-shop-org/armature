@@ -101,9 +101,14 @@ def test_the_gate_does_not_care_about_image_ORDER(tmp_path):
 
 
 def test_a_file_that_is_not_a_glb_raises_rather_than_returning_nothing(tmp_path):
+    """The class moved from a bare `ValueError` to `MalformedGLB` (F-b725f541): every
+    refusal in `read_chunks` is the same "this container cannot be read" refusal, and three
+    of them were nameless — which also put them outside the `ArmatureError` family the halt
+    contract discriminates on. The clause is pinned as well, because `MalformedGLB` is now
+    raised from thirteen sites and a bare class name cannot tell them apart."""
     bad = tmp_path / "bad.glb"
     bad.write_bytes(b"this is not a container")
-    with pytest.raises(ValueError):
+    with pytest.raises(glb.MalformedGLB, match=r"not a GLB \(magic"):
         glb.read_chunks(str(bad))
 
 
@@ -318,19 +323,29 @@ def test_a_bufferView_with_no_byteLength_is_named(tmp_path):
 
 def test_a_truncated_bin_chunk_is_refused_by_the_reader(tmp_path):
     """`fh.read(length)` returns what is there. A chunk header declaring more than the
-    file holds gave a silently short BIN chunk, and every slice off it was then short."""
+    file holds gave a silently short BIN chunk, and every slice off it was then short.
+
+    **The header total is honest here and the CHUNK lies** — corrected 2026-09-04 with
+    F-b725f541. The original fixture declared a header `total` of `12 + 8 + len(js) + 8 +
+    4096` over a file holding 16 bytes of BIN, so it carried TWO defects at once; the new
+    `declared_total` clause catches that one first and this test would have gone green on a
+    different refusal than the one its name claims. An internally inconsistent container
+    whose top-level length is correct is what isolates the short-body clause, and the
+    stale-`total` case gets its own test below.
+    """
     js = json.dumps(_one_view_doc(0, 16, 0)).encode("utf-8")
     js += b" " * (-len(js) % 4)
     path = str(tmp_path / "trunc.glb")
     with open(path, "wb") as fh:
-        fh.write(struct.pack("<III", glb.GLB_MAGIC, 2, 12 + 8 + len(js) + 8 + 4096))
+        fh.write(struct.pack("<III", glb.GLB_MAGIC, 2, 12 + 8 + len(js) + 8 + 16))
         fh.write(struct.pack("<II", len(js), glb.CHUNK_JSON))
         fh.write(js)
         fh.write(struct.pack("<II", 4096, glb.CHUNK_BIN))
         fh.write(b"\x00" * 16)
-    with pytest.raises(glb.MalformedGLB) as exc:
+    with pytest.raises(glb.MalformedGLB, match=r"the container is truncated") as exc:
         glb.read_chunks(path)
     assert "4096" in str(exc.value) and "16" in str(exc.value)
+    assert exc.value.evidence["clause"] == "short_chunk_body"
 
 
 def test_a_well_formed_container_still_reads(tmp_path):
@@ -391,3 +406,108 @@ def test_the_container_read_census_goes_red_on_an_unguarded_reader():
     derived = _functions_subscripting(mutated, {"views", "binary"})
     assert derived == {"_image_blob", "sneaky"}
     assert derived != {"_image_blob"}, "the census would not have caught the extra reader"
+
+
+# ------------------------- wave 10: the other side of the `if`, and the header's two lies
+
+
+def _glb_bytes(js_dict, binary, total=None, version=2):
+    """The raw bytes of a GLB, so a test can cut them anywhere it likes."""
+    js = json.dumps(js_dict).encode("utf-8")
+    js += b" " * (-len(js) % 4)
+    body = (struct.pack("<II", len(js), glb.CHUNK_JSON) + js
+            + struct.pack("<II", len(binary), glb.CHUNK_BIN) + binary)
+    if total is None:
+        total = 12 + len(body)
+    return struct.pack("<III", glb.GLB_MAGIC, version, total) + body
+
+
+def _write(path, blob):
+    with open(path, "wb") as fh:
+        fh.write(blob)
+    return str(path)
+
+
+BLOB4 = b"\x01\x02\x03\x04"
+DOC4 = {"asset": {"version": "2.0"},
+        "buffers": [{"byteLength": 4}],
+        "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 4}],
+        "images": [{"bufferView": 0, "mimeType": "image/png", "name": "atlas"}]}
+
+
+def test_the_intact_control_still_hashes_its_blob(tmp_path):
+    """The direction all three refusals below must not break: this container is fine."""
+    p = _write(tmp_path / "ok.glb", _glb_bytes(DOC4, BLOB4))
+    assert glb.embedded_images(p)[0]["sha256"] == hashlib.sha256(BLOB4).hexdigest()
+
+
+def test_a_file_that_ends_mid_chunk_header_raises_instead_of_breaking_out(tmp_path):
+    """F-b725f541. The same truncation raised on one side of an `if` and was silent on the
+    other: a short chunk BODY raised `MalformedGLB`, a short chunk HEADER took a bare
+    `break` and `read_chunks` returned what it had. Measured on the wave-10 base with the
+    final 12 bytes (the BIN header and its 4-byte payload) removed: it returned normally
+    with `binary == b""` — an empty BIN chunk indistinguishable from a GLB that genuinely
+    embeds nothing — while removing only the last 2 bytes raised.
+
+    The header's `total` is rewritten to the truncated size so this fixture isolates the
+    short-header branch rather than passing on the `declared_total` clause.
+    """
+    whole = _glb_bytes(DOC4, BLOB4)
+    cut = whole[:-12] + b"\x00\x00\x00"      # 3 of the 8 bytes a chunk header needs
+    cut = struct.pack("<III", glb.GLB_MAGIC, 2, len(cut)) + cut[12:]
+    p = _write(tmp_path / "cut.glb", cut)
+    with pytest.raises(glb.MalformedGLB, match=r"ends mid-chunk-header") as exc:
+        glb.read_chunks(p)
+    ev = exc.value.evidence
+    assert ev["clause"] == "short_chunk_header"
+    assert ev["bytes_read"] == 3 and ev["bytes_required"] == 8
+
+
+def test_a_header_total_that_disagrees_with_the_file_is_refused(tmp_path):
+    """The second unchecked value out of the same 12 bytes. Measured on the wave-10 base:
+    a GLB whose `total` stopped just after the JSON chunk returned `binary = b""` from a
+    100-byte file with no raise, because `while fh.tell() < total` simply never reached the
+    BIN chunk. Under-declaring truncates the document silently; over-declaring is what a
+    real truncation looks like from the outside."""
+    whole = _glb_bytes(DOC4, BLOB4)
+    short_total = len(whole) - 12
+    under = struct.pack("<III", glb.GLB_MAGIC, 2, short_total) + whole[12:]
+    with pytest.raises(glb.MalformedGLB, match=r"declares a total length") as exc:
+        glb.read_chunks(_write(tmp_path / "under.glb", under))
+    assert exc.value.evidence["clause"] == "declared_total_disagrees"
+    assert exc.value.evidence["declared_total"] == short_total
+    assert exc.value.evidence["file_size"] == len(whole)
+
+    over = struct.pack("<III", glb.GLB_MAGIC, 2, len(whole) + 4096) + whole[12:]
+    with pytest.raises(glb.MalformedGLB, match=r"declares a total length"):
+        glb.read_chunks(_write(tmp_path / "over.glb", over))
+
+
+def test_a_version_one_container_is_refused_by_name(tmp_path):
+    """The third. `version` was unpacked at the top of `read_chunks` and never compared to
+    2, so a glTF-1.0-era binary — a DIFFERENT chunk layout — was accepted and misread. A
+    reader that produces a plausible wrong answer is the one failure this module exists to
+    make impossible."""
+    p = _write(tmp_path / "v1.glb", _glb_bytes(DOC4, BLOB4, version=1))
+    with pytest.raises(glb.MalformedGLB, match=r"version 1 and this reader understands 2"
+                       ) as exc:
+        glb.read_chunks(p)
+    assert exc.value.evidence["clause"] == "unsupported_version"
+
+
+def test_every_refusal_this_reader_makes_is_one_named_class(tmp_path):
+    """The family, derived rather than listed: no `raise` statement anywhere in `glb.py`
+    names a class other than this module's own three.
+
+    Before F-b725f541 three of them were bare `ValueError`s — shorter than a header, wrong
+    magic, no JSON chunk — which is the same refusal wearing no name, and outside the
+    `ArmatureError` family the halt contract discriminates on.
+    """
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(glb))
+    raised = sorted({(getattr(n.exc.func, "id", None) or getattr(n.exc.func, "attr", None))
+                     for n in ast.walk(tree)
+                     if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)})
+    assert raised == ["GateAtlasUntouched", "MalformedGLB", "ReliftMismatch"], raised

@@ -79,9 +79,15 @@ PROBE = textwrap.dedent(
         b[1, 50] = 255
         CC.frame_fidelity(a, b)
 
-    CASES = {"stance_frac_constructor": (stance_frac_constructor, "WalkError"),
+    # "WalkError" -> "GaitGate" in wave 10 (F-0d621185): the stance-fraction andon now
+    # raises a class that is a `GateFailure` as well as a `WalkError`, so the halt contract
+    # records it as a gate firing at exit 2 instead of as an unhandled crash at exit 1. The
+    # name is pinned rather than the base, exactly as this file's own comment demands —
+    # accepting `WalkError` here would now accept the parent and stop proving which andon
+    # pulled.
+    CASES = {"stance_frac_constructor": (stance_frac_constructor, "GaitGate"),
              "stance_frac_mutated_after_construction":
-                 (stance_frac_mutated_after_construction, "WalkError"),
+                 (stance_frac_mutated_after_construction, "GaitGate"),
              "round_trip_gate": (round_trip_gate, "SolveGate"),
              "arming_the_diagnostic": (arming_the_diagnostic, "TypeError"),
              "frame_fidelity_shape": (frame_fidelity_shape, "ValueError")}

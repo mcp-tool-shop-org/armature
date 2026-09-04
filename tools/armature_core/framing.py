@@ -20,11 +20,55 @@ trade is in `solve_camera`'s signature, not buried in it.
 import json
 import math
 
+from .errors import ArmatureError, GateFailure
+
 WORLD_UP = (0.0, 0.0, 1.0)
 
 
-class FramingError(ValueError):
-    """The shot could not be framed as asked."""
+class FramingError(ArmatureError):
+    """The shot could not be framed as asked.
+
+    Carries an `evidence` dict the way `armature_core.errors.GateFailure` does, because a
+    refusal that reaches a receipt as a sentence and nothing else is the shape
+    `tests/conftest.assert_gate` exists to refuse — "a gate raised with no measurement is a
+    well-formed, silent object". Measured on the wave-10 base: none of this module's 12
+    raises passed a second argument, so `getattr(exc, "evidence", None)` was None in every
+    halt line this module could produce, and an operator reading the receipt could not see
+    which field disagreed or by how much without re-running.
+
+    **It used to subclass `ValueError`** (F-ba21426c, corrected 2026-09-04), which put all
+    12 sites outside the family the ONE halt contract discriminates on: every one was
+    recorded as "FAILED — an unhandled error" with gate null at exit 1, and
+    `evidence_dicts_missing` examined none of them. The same defect `walk.WalkError` and
+    `glb.MalformedGLB` carried; all three were rebased together, the family being derived
+    by an AST walk of the class hierarchy under `tools/` rather than by naming the ones
+    somebody noticed.
+
+    **A refusal's evidence names `gate` explicitly as `None`.** Now that this class is in
+    the family, `tests/test_gates.evidence_dicts_missing` examines every raise here that
+    carries a dict, and it asks for `gate` and `andon`. A refusal is not an andon and has
+    no gate id, so the honest answer is written down rather than left absent: the receipt
+    line reads "REFUSED" with `gate` null and the class name under `andon`, which is a
+    different fact from the crash line it used to read (outcome "FAILED", `gate` null
+    because nothing knew what had happened).
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+class PinnedCameraGate(FramingError, GateFailure):
+    """Gate PIN · ANDON — a pinned camera record disagrees with what the caller projects at.
+
+    `load_pinned_camera`'s docstring already called this the andon rather than optional
+    discipline; it now raises as one, so the halt contract records exit 2 and "a gate
+    fired" rather than a crash. It keeps `FramingError` in its bases, so every existing
+    `except FramingError` and every `pytest.raises(FramingError)` in the suite still
+    catches it.
+    """
+
+    gate = "PIN"
 
 
 def _sub(a, b):
@@ -182,40 +226,59 @@ def load_pinned_camera(path, expect):
     already pass it positionally and the invariant is about presence, not spelling.
     """
     if not expect:
-        raise FramingError(
+        raise PinnedCameraGate(
             f"{path}: load_pinned_camera was called with no expectation to check against "
             f"({expect!r}). Pinning a camera skips the framing solve and therefore skips "
             f"its gate; a record pinned at a different azimuth, elevation or lens projects "
             f"a plausible view of the same body from somewhere else and every downstream "
             f"check passes on it. This argument is the andon, not optional discipline, so "
-            f"there is no shape of it that means 'do not check'")
+            f"there is no shape of it that means 'do not check'",
+            {"gate": "PIN", "andon": "PinnedCameraGate", "record": path,
+             "expect": expect, "clause": "empty_expectation"})
 
     with open(path, "r", encoding="utf-8") as fh:
         rec = json.load(fh)
     cam = rec.get("camera")
     if not isinstance(cam, dict) or "target" not in cam or "radius" not in cam:
-        raise FramingError(
+        raise PinnedCameraGate(
             f"{path} carries no camera.target/camera.radius to pin to; its top-level keys "
-            f"are {sorted(rec)[:12]}")
+            f"are {sorted(rec)[:12]}",
+            {"gate": "PIN", "andon": "PinnedCameraGate", "record": path,
+             "top_level_keys": sorted(rec)[:12],
+             "camera_keys": sorted(cam) if isinstance(cam, dict) else None,
+             "clause": "no_camera_block"})
     target = cam["target"]
     if not (isinstance(target, (list, tuple)) and len(target) == 3):
-        raise FramingError(f"{path}: camera.target is not a 3-vector: {target!r}")
+        raise PinnedCameraGate(
+            f"{path}: camera.target is not a 3-vector: {target!r}",
+            {"gate": "PIN", "andon": "PinnedCameraGate", "record": path,
+             "field": "target", "got": target, "clause": "target_not_a_3_vector"})
     radius = float(cam["radius"])
     if not (radius > 0.0):
-        raise FramingError(f"{path}: camera.radius is {radius}, which is not a distance")
+        raise PinnedCameraGate(
+            f"{path}: camera.radius is {radius}, which is not a distance",
+            {"gate": "PIN", "andon": "PinnedCameraGate", "record": path,
+             "field": "radius", "got": radius, "clause": "radius_not_a_distance"})
 
     for field, ours in sorted(expect.items()):
         theirs = cam.get(field)
         if theirs is None:
-            raise FramingError(
+            raise PinnedCameraGate(
                 f"{path}: the pinned camera does not record {field}, so it cannot be shown "
                 f"to match the {ours} this caller projects at. A camera that agrees by "
-                f"silence is not a camera that agrees")
+                f"silence is not a camera that agrees",
+                {"gate": "PIN", "andon": "PinnedCameraGate", "record": path,
+                 "field": field, "expected": ours, "got": None,
+                 "recorded_fields": sorted(cam), "clause": "field_absent"})
         if abs(float(theirs) - float(ours)) > 1e-9:
-            raise FramingError(
+            raise PinnedCameraGate(
                 f"{path}: the pinned camera's {field} is {theirs} and this caller projects "
                 f"at {ours}. The result would be a plausible view of the same body from "
-                f"somewhere else, and every downstream check passes on that")
+                f"somewhere else, and every downstream check passes on that",
+                {"gate": "PIN", "andon": "PinnedCameraGate", "record": path,
+                 "field": field, "expected": float(ours), "got": float(theirs),
+                 "difference": abs(float(theirs) - float(ours)), "tolerance": 1e-9,
+                 "clause": "field_disagrees"})
     return tuple(float(v) for v in target), radius
 
 
@@ -238,7 +301,10 @@ def _bisect(f, lo, hi, want, iters=80):
     if (flo - want) * (fhi - want) > 0:
         raise FramingError(
             f"the requested framing is not reachable between {lo} and {hi}: the value "
-            f"runs {flo:.4f}..{fhi:.4f} and {want:.4f} is outside it")
+            f"runs {flo:.4f}..{fhi:.4f} and {want:.4f} is outside it",
+            {"gate": None, "andon": "FramingError",
+             "clause": "composition_unreachable",
+             "search_bounds": [lo, hi], "value_range": [flo, fhi], "wanted": want})
     for _ in range(iters):
         mid = 0.5 * (lo + hi)
         if (f(lo) - want) * (f(mid) - want) <= 0:

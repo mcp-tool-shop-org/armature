@@ -306,7 +306,10 @@ def test_every_refusal_added_in_this_amend_survives_optimization(tmp_path, flag,
         "parts_determinism_disjoint": "GatePartsDeterminism",
         "parts_accounting_empty": "GatePartsAccounting",
         "turn_empty_set": "TurnaroundGate",
-        "walk_cadence": "WalkError",
+        # "WalkError" -> "CadenceGate" in wave 10 (F-0d621185): the cadence andon is now a
+        # `GateFailure` subclass carrying gate id "CADENCE", so the receipt names the andon
+        # that pulled. `walk_missing_landmark` is a plain refusal and stays on the parent.
+        "walk_cadence": "CadenceGate",
         "walk_missing_landmark": "WalkError",
         "facing_tie": "FacingGate",
         "facing_head_outvotes": "FacingGate",

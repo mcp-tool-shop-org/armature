@@ -184,3 +184,43 @@ def test_the_midpoint_is_derived_from_the_span_it_is_given():
         assert r["midpoint_deg"] == pytest.approx(0.5 * (start + end))
         assert r["is_the_midpoint"] is True
         assert r["midpoint_frame_exact"] == pytest.approx(16.0, abs=1e-9)
+
+
+# --------------------------- wave 10: a record field that cannot be False is not evidence
+
+
+def test_the_monotonic_flag_is_labelled_as_an_invariant_rather_than_read_as_a_measurement():
+    """F-93f0e38f. `arc_readout` returned `"monotonic": True` as a literal beside eleven
+    fields computed from the arc. Nothing measures it — `angle_at_frame` is linear in the
+    frame index by construction, so it takes the same value when the arc is what it claims
+    and when it is anything else, which is the "grade an arm only on what it can move" law
+    and a placeholder shaped like evidence in a record the E03 report quotes.
+
+    The repo already had the right shape one module over, so it is carried rather than
+    re-invented: `binding.rigid_segment_weights` returns `invariant_by_construction` naming
+    the three fields that cannot take another value, "so no report can quote a constant as
+    corroboration".
+    """
+    for count, start, end in ((33, 0.0, 90.0), (17, 90.0, 0.0), (9, 0.0, 90.0)):
+        rec = posearc.arc_readout(ARC, count, start, end)
+        assert rec["monotonic"] is True
+        assert "monotonic" in rec["invariant_by_construction"]
+        assert "linear in the frame index" in rec["invariant_by_construction_note"]
+
+
+def test_every_labelled_invariant_is_a_key_the_record_actually_carries():
+    """The label is only worth having if it names real fields — the same subset check
+    `binding`'s siblings get, so a renamed field cannot leave the note pointing at nothing.
+    """
+    rec = posearc.arc_readout(ARC, 33, 0.0, 90.0)
+    assert set(rec["invariant_by_construction"]) <= set(rec)
+
+
+def test_the_fields_beside_it_can_still_take_more_than_one_value():
+    """The direction that makes the label mean something: the rest of this record IS
+    measured, so labelling `monotonic` is a statement about one field and not a shrug at
+    the record."""
+    a = posearc.arc_readout(ARC, 33, 0.0, 90.0)
+    b = posearc.arc_readout(ARC, 33, 0.0, 120.0)
+    assert a["crossing_frame_exact"] != b["crossing_frame_exact"]
+    assert a["is_the_midpoint"] and not b["is_the_midpoint"]

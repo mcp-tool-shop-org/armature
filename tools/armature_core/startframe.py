@@ -38,6 +38,7 @@ import numpy as np
 
 from . import framing
 from .errors import GateFailure
+from .parts import require_finite
 
 
 class StartFrameGate(GateFailure):
@@ -109,13 +110,25 @@ def gate_alpha(transparent_fraction, composite_rgb, why, master_path=None):
 
     `transparent_fraction` is a measured number, so this function stays free of bpy and can
     be tested against every value it can take, including the two that matter: 0 and 1.
+
+    **And the third value, which is neither** (F-90122505). The two clauses below are
+    `<= 0.0` and `>= 1.0`, and a NaN makes BOTH False: measured 2026-09-04,
+    `gate_alpha(float('nan'), (0.1, 0.1, 0.1), 'why')` RETURNED with the verdict "alpha
+    authored; nan of the frame is transparent". The docstring above argues the andon has
+    to bind on both saturated directions because each is silent in the other's presence;
+    a NaN is silent in both, and it is exactly what a mean over an empty selection
+    produces. `require_finite` refuses it before either bound is asked.
     """
     ev = {"gate": "ALPHA", "andon": "AlphaGate", "master": master_path,
+          "composite_linear_rgb_raw": list(composite_rgb)}
+    require_finite("transparent_fraction", transparent_fraction, AlphaGate, ev,
+                   positive=False)
+    ev.update({
           "transparent_fraction": float(transparent_fraction),
           "opaque_fraction": 1.0 - float(transparent_fraction),
           "composite_linear_rgb": list(composite_rgb), "composite_why": why,
           "note": ("the world background is alpha=0 and the floor plane is geometry, so an "
-                   "opaque floor beneath a transparent void is the expected shape")}
+                   "opaque floor beneath a transparent void is the expected shape")})
     if not why:
         raise AlphaGate(
             "the composite colour was named but not explained. A choice nobody wrote down "
@@ -325,15 +338,32 @@ def gate_backdrop(void_vs_plate_255, plate_vs_flat_255, transparent_fraction, wh
 
     Both are measured quantities, so this function stays free of bpy and of any image
     library and can be tested against every value it can take.
+
+    **Including the value that is not a quantity at all** (F-90122505). Both clauses below
+    are one-sided comparisons — `< min_separation_255` and `> tol_255` — and a NaN reads
+    False in both: measured 2026-09-04, `gate_backdrop(float('nan'), float('nan'), 0.5,
+    'why', tol_255=1.0, min_separation_255=5.0)` returned the verdict "the plate is behind
+    the performer: nan/255 from the plate, nan/255 from the flat fallback it replaces".
+    Both inputs are means taken over the master's transparent region ONLY, and that region
+    is empty in precisely the baked-void case this gate exists to catch, so 0/0 is the
+    ordinary way to reach here with a NaN rather than an exotic one. The two tolerances are
+    checked as well, because a non-finite bound is a bound nothing can fail.
     """
     ev = {"gate": "BACKDROP", "andon": "BackdropGate",
-          "plate": plate, "plate_sha256": plate_sha256,
+          "plate": plate, "plate_sha256": plate_sha256}
+    for _name, _v, _pos in (("void_vs_plate_255", void_vs_plate_255, False),
+                            ("plate_vs_flat_255", plate_vs_flat_255, False),
+                            ("transparent_fraction", transparent_fraction, False),
+                            ("tol_255", tol_255, False),
+                            ("min_separation_255", min_separation_255, False)):
+        require_finite(_name, _v, BackdropGate, ev, positive=_pos)
+    ev.update({
           "void_vs_plate_255": float(void_vs_plate_255),
           "plate_vs_flat_255": float(plate_vs_flat_255),
           "tol_255": float(tol_255), "min_separation_255": float(min_separation_255),
           "transparent_fraction": float(transparent_fraction), "why": why,
           "measured_over": ("the master's transparent region only — the part of the frame "
-                            "the performer and the floor do not occupy")}
+                            "the performer and the floor do not occupy")})
     if not why:
         raise BackdropGate(
             "the plate was named but not explained. A backdrop nobody wrote down a reason "
@@ -462,10 +492,24 @@ def gate_whole(extent, width, height, margin_px):
     for (a cropped character conditioning the whole clip); too *small* is not caught here
     and is not silent — the figure's height fraction is reported and the Director sees the
     frame. The andon is placed where nothing else looks.
+
+    **A non-finite extent is refused before either direction is asked** (wave 10, rule 4;
+    swept here because the rule is about the shape, not about the two functions
+    F-90122505 names). `short = {side: m for side, m in ... if m < margin_px}` is EMPTY
+    when every margin is a NaN, so an extent that came back non-finite — a degenerate
+    camera, a projection through zero — passed this gate with the verdict "whole
+    silhouette in frame; smallest margin nan px". `margin_px` is checked too: a
+    non-finite border is a border nothing can fail to clear.
     """
     ev = {
         "gate": "WHOLE", "andon": "StartFrameGate",
         "margin_px": margin_px, "resolution": [width, height],
+    }
+    for _side in ("x0", "x1", "y0", "y1"):
+        require_finite("extent_" + _side, extent[_side], StartFrameGate, ev,
+                       positive=False)
+    require_finite("margin_px", margin_px, StartFrameGate, ev, positive=False)
+    ev.update({
         "extent_px": {k: extent[k] for k in ("x0", "x1", "y0", "y1")},
         "n_points": extent.get("n_points"), "n_behind": extent.get("n_behind"),
         "margins_px": {
@@ -473,7 +517,7 @@ def gate_whole(extent, width, height, margin_px):
             "top": extent["y0"], "bottom": float(height) - extent["y1"]},
         "height_frac": (extent["y1"] - extent["y0"]) / float(height),
         "width_frac": (extent["x1"] - extent["x0"]) / float(width),
-    }
+    })
     if extent.get("n_behind"):
         raise StartFrameGate(
             f"{extent['n_behind']} of {extent['n_points']} silhouette points are behind "

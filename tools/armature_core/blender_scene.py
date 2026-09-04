@@ -322,6 +322,24 @@ def world_bounds(objects, scene=None):
 
     Pass `scene` and this filters by render visibility itself; omit it and the caller
     carries that obligation. See `_points_to_measure`.
+
+    **Omitting `scene` is the naive measurement, and it is indistinguishable from
+    forgetting to pass one** (F-08b5c1b8, measured 2026-09-04). With `scene` omitted this
+    routes through `_points_to_measure`'s `return _evaluated_world_vertices(objects)` and is
+    behaviourally IDENTICAL to `unfiltered_world_bounds`: under the bpy stub with
+    `_evaluated_world_vertices` monkeypatched to record its argument, `world_bounds(["decoy",
+    "real"])` and `unfiltered_world_bounds(["decoy", "real"])` returned the same triple and
+    were handed the same object list. So a deliberately naive row and a forgotten `scene=`
+    read the same way to a reader — and to the census that polices naive measurement, which
+    keys on the private name `_evaluated_world_vertices` appearing in a tool's source, a
+    name this spelling never mentions.
+
+    **The name a deliberately naive measurement uses is `unfiltered_world_bounds`.** The
+    guard on the other spelling is a suite-side ban on `world_bounds(...)` called without
+    `scene=` outside this module (tests' wave-10 census), not a refusal here: three
+    call sites in other domains still omit it and the signature cannot tighten until they
+    move. `tests/test_blender_scene_pure.py` pins the two functions as behaviourally the
+    same today, so nobody re-derives that as a difference.
     """
     return _sphere(_points_to_measure(objects, scene))
 
@@ -329,11 +347,21 @@ def world_bounds(objects, scene=None):
 def unfiltered_world_bounds(objects):
     """`world_bounds` over the objects AS GIVEN — the deliberately naive measurement.
 
-    A public name for the one thing that must not be filtered: `probe_subject` reports the
-    naive bounds beside the filtered ones so a session can see what the glTF importer's
-    hidden decoy would have done to the framing, and `tests/blender/check_visibility.py`
-    pins that the two differ. Naming it here keeps that row honest AND keeps tools out of
-    the private primitive, which `tests/test_render_visibility.py` bans.
+    A public name for the one thing that must not be filtered: a session compares the naive
+    bounds against the filtered ones to see what the glTF importer's hidden decoy would have
+    done to the framing.
+
+    **Its caller, corrected in place 2026-09-04** (F-08b5c1b8). This docstring said
+    "`probe_subject` reports the naive bounds beside the filtered ones". Measured by grep
+    across `tools/` and `tests/` on the wave-10 base: the ONLY call site of this name in the
+    tree was `tests/blender/check_visibility.py:71`, and `tools/probe_subject.py:75` still
+    read `naive = blender_scene.world_bounds(meshes)` — so the named production consumer did
+    not use the name, and the docstring asserted a relationship the tree did not have.
+    `check_visibility.py` pins that the filtered and naive bounds differ; the instruments
+    domain is routing `probe_subject` onto this name in the same wave.
+
+    Naming it here keeps that row honest AND keeps tools out of the private primitive, which
+    `tests/test_render_visibility.py` bans.
     """
     return _sphere(_evaluated_world_vertices(objects))
 

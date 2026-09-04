@@ -115,10 +115,17 @@ def encode_normal(n_cam, mask):
     return np.where(m[..., None], rgb, np.uint8(0))
 
 
-def _erode3(binary):
-    """3x3 binary erosion, numpy only (scipy is not in Blender's python)."""
+def _erode3(binary, border=False):
+    """3x3 binary erosion, numpy only (scipy is not in Blender's python).
+
+    `border` is what lies OUTSIDE the frame, and it is the whole of the border policy this
+    module now states once (F-3d03d8bf). `False` reads the outside as background, so any
+    mask pixel on the outermost row or column survives as a boundary pixel; `True` reads it
+    as more of the same subject, so a pixel there is a boundary pixel only if an IN-FRAME
+    neighbour is background. `silhouette` passes `True`; see its docstring for why.
+    """
     m = np.asarray(binary, dtype=bool)
-    padded = np.pad(m, 1, mode="constant", constant_values=False)
+    padded = np.pad(m, 1, mode="constant", constant_values=bool(border))
     out = np.ones_like(m, dtype=bool)
     h, w = m.shape
     for dy in range(3):
@@ -128,8 +135,31 @@ def _erode3(binary):
 
 
 def silhouette(mask):
+    """The mask's boundary — WITHOUT the frame border (F-3d03d8bf).
+
+    **The three terms `derive_edge` ORs together used to disagree about the frame border.**
+    `_neighbour_max` and `_neighbour_min_dot` each build an `edge` mask and exclude it, with
+    the comment "do not compare across the frame border"; this function was
+    `m & ~_erode3(m)` with `_erode3` padding False, so every mask pixel on the outermost row
+    or column was marked as a geometric edge. Measured on the wave-10 base, on a 6x6 mask
+    whose subject fills the bottom three rows: `silhouette(m)[-1].sum()` was 6 — a full row
+    of edge pixels drawn along the image boundary, where no geometric discontinuity exists.
+
+    **The policy, decided once and stated here: the frame border is NOT a silhouette.** The
+    edge channel is a control input, so this difference is drawn into the picture that
+    conditions a generation, and a straight line across the bottom of the frame is a
+    statement to the model that the body ENDS there. It does not — the crop ends there. That
+    is the same failure `startframe.gate_whole` exists to keep out of a conditioning image,
+    one channel over, and a subject reaching the frame edge (feet at the bottom of a
+    full-body plate) is the ordinary case rather than the exotic one.
+
+    What is outside the frame is unknown, not empty, so the erosion pads with the subject
+    (`border=True`) and a pixel on the border is a boundary pixel only when an in-frame
+    neighbour is background. A figure that ENDS inside the frame is unaffected: its boundary
+    is a real discontinuity and every pixel of it is still marked.
+    """
     m = np.asarray(mask) > 0
-    return np.logical_and(m, np.logical_not(_erode3(m)))
+    return np.logical_and(m, np.logical_not(_erode3(m, border=True)))
 
 
 def _neighbour_max(values, mask):
@@ -177,6 +207,14 @@ def derive_edge(z, n_cam, mask, depth_rel_threshold, normal_angle_deg):
 
     Returns (uint8 image, diagnostics). The image is near-binary by construction
     (F22): every pixel is 0 or 255.
+
+    **All three terms agree about the frame border and none of them draws one**
+    (F-3d03d8bf). `_neighbour_max` and `_neighbour_min_dot` exclude it because `np.roll`
+    wraps, so an un-excluded comparison would compare the top row against the bottom one;
+    `silhouette` excludes it because the crop is not a discontinuity in the subject. The
+    two reasons are different and the policy is the same, which is why it is written down
+    in one place instead of inferred from three implementations. `silhouette_px` in the
+    diagnostics therefore counts real silhouette and not the length of the crop.
     """
     m = np.asarray(mask) > 0
     z = np.asarray(z, dtype=np.float64)
