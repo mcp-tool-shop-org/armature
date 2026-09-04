@@ -730,3 +730,71 @@ def test_the_content_clause_only_binds_what_the_plan_NAMED(tmp_path):
     ev = F.verify_downloads([("https://example.invalid/x", str(p))], directories=[])
     assert ev["wrong_type"] == []
     assert ev["content_checked"] == {"png": 0}
+
+
+# ============================================================ wave 12, F-a72178c2
+# `out[nid] = sub` was a last-write-wins assignment with no duplicate clause, in a function
+# whose own docstring states the law: "A malformed map must not fall back to the default:
+# the caller would get E02's mapping applied to somebody else's graph ... and the only
+# symptom would be a directory of files with the wrong names." Measured in this worktree:
+# `parse_node_map("301=batchprobe,301=lossless")` returned `{"301": "lossless"}` with no
+# halt — the batchprobe half discarded unexamined, a clip's frames landing in a directory
+# named for another tap, and every count in the receipt reading right because `got` and
+# `vids` are both derived from the plan. The same shape one door over IS refused:
+# `gate_saved_graph.link_table` raises on a link id declared twice with different origins,
+# on the reasoning that "which one a socket resolves to is an accident of array order".
+
+
+def test_a_repeated_node_id_in_the_map_HALTS(tmp_path):
+    with pytest.raises(F.FetchHalt, match=r"names node 301 twice") as exc:
+        F.parse_node_map("301=batchprobe,301=lossless")
+    ev = exc.value.evidence
+    assert ev["clause"] == "node_map_duplicate_id"
+    assert ev["duplicates"] == {"301": ["batchprobe", "lossless"]}
+
+
+def test_a_node_id_repeated_with_the_SAME_directory_also_HALTS():
+    """Idempotence is not the question. The map is an operator's statement about a graph,
+    and a statement made twice is a statement one of whose halves was not read."""
+    with pytest.raises(F.FetchHalt, match=r"names node 71 twice"):
+        F.parse_node_map("41=startprobe,71=lossless,71=lossless")
+
+
+def test_a_map_naming_each_node_ONCE_still_parses():
+    """The mutation that must not fire it."""
+    assert F.parse_node_map("41=startprobe,71=lossless") == {
+        "41": "startprobe", "71": "lossless"}
+
+
+def test_the_sibling_clause_this_one_was_derived_from_still_refuses(tmp_path):
+    """family: keyed on BEHAVIOUR — a mapping built by assignment in a loop, where a
+    repeated key silently keeps the last spelling — across this domain's parsers. Two
+    sites: `fetch_run.parse_node_map` (this fix) and `gate_saved_graph.link_table`, which
+    already refuses. `fetch_run.parse_video_nodes` builds a SET, where a repeat cannot
+    discard anything, so it is not a member."""
+    import gate_saved_graph as G
+    from armature_core import route_gates as RG
+
+    with pytest.raises(RG.RouteGate, match=r"declares link .* TWICE with different"):
+        G.link_table({"links": [[1, "10", 0, "20", 0, "IMAGE"],
+                                [1, "11", 0, "20", 0, "IMAGE"]]})
+
+
+# ============================================================ wave 12, F-4421d98f (this fetcher's half)
+
+
+def test_an_empty_results_array_is_REFUSED_BY_NAME_here_too(tmp_path):
+    """The sibling's clause, one wording, both planners. `fetch_run` reached
+    `FileNotFoundError` on `urls.json` one step later than `fetch_t2v_run` reached its
+    `IndexError`, for the same reason: the loop that creates the directories never ran."""
+    with pytest.raises(F.FetchHalt, match=r"carries no results") as exc:
+        F.plan([], str(tmp_path / "runs" / "r"), "r", F.NODE_DIR, F.VIDEO_NODES)
+    assert exc.value.evidence["clause"] == "empty_results"
+
+
+def test_an_empty_dump_leaves_no_run_directory_here_either(tmp_path):
+    dump = _dump(tmp_path, [])
+    run_root = tmp_path / "runs"
+    with pytest.raises(F.FetchHalt, match=r"carries no results"):
+        F.main([f"--dump={dump}", "--run=r", f"--root={run_root}"])
+    assert not (run_root / "r").exists()

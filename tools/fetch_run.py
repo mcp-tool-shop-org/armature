@@ -140,6 +140,22 @@ def parse_node_map(text):
                 f"--node-map entry {part!r} has an empty side",
                 {"clause": "node_map_entry_empty_side", "entry": part, "text": text,
                  "node_id": nid, "directory": sub})
+        # ---- ANDON, wave 12 (F-a72178c2). `out[nid] = sub` was last-write-wins with no
+        # clause, in the function whose docstring states that a malformed map must not fall
+        # back silently. Measured: `parse_node_map("301=batchprobe,301=lossless")` returned
+        # {"301": "lossless"} with no halt, so a clip's frames landed in a directory named
+        # for another tap while every count in the receipt read right — `got` and `vids` are
+        # both derived from the plan, so nothing downstream could see it. The same shape one
+        # door over is already refused: `gate_saved_graph.link_table` raises on a link id
+        # declared twice, because which one a socket resolves to is an accident of order.
+        if nid in out:
+            raise FetchHalt(
+                f"--node-map names node {nid} twice, as {out[nid]!r} and {sub!r}. Which "
+                f"directory that tap's frames land in would be an accident of the order the "
+                f"pairs were typed in, and the only symptom would be a directory of files "
+                f"with the wrong names under counts that all read right",
+                {"gate": "FETCH", "andon": "FetchHalt", "clause": "node_map_duplicate_id",
+                 "node_id": nid, "duplicates": {nid: [out[nid], sub]}, "text": text})
         out[nid] = sub
     if not out:
         raise FetchHalt(
@@ -173,6 +189,21 @@ def plan(results, base, run, node_dir, video_nodes):
     distinct by construction, and that property is asserted before returning: the defect
     this replaces produced N jobs sharing one path while `counts` read N.
     """
+    # ---- ANDON, wave 12 (F-4421d98f). An operator pastes a dump for a job that has
+    # returned nothing yet. `plan` returned `([], {})`, `main` then wrote `urls.json` into a
+    # directory the (empty) job loop never created, and the tool died `FileNotFoundError`
+    # with `evidence: null` — a crash where a clause belongs, on the one input an operator
+    # is most likely to produce by accident. The sibling `fetch_t2v_run` reached an
+    # `IndexError` one step earlier and left a half-built run directory behind. One clause,
+    # one wording, both planners; it raises before anything is created.
+    if not results:
+        raise FetchHalt(
+            "the dump carries no results at all. A job that has returned nothing is not a "
+            "run to fetch, and continuing would leave a directory a later session reads as "
+            "a run that happened",
+            {"gate": "FETCH", "andon": "FetchHalt", "clause": "empty_results",
+             "n_results": 0, "run": run, "base": os.path.abspath(base)})
+
     named = set(node_dir) | set(video_nodes)
     unmapped = sorted({str(r["source_node_id"]) for r in results
                        if str(r["source_node_id"]) not in named})
