@@ -19,6 +19,8 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 
 import build_payload as bp  # noqa: E402
+from armature_core import assembly as AS  # noqa: E402
+from armature_core import route_gates as RG  # noqa: E402
 
 # Recorded in outputs/E02/payloads/*.meta.json from the runs that were actually submitted.
 E02_PINNED_SHA256 = {
@@ -260,7 +262,11 @@ def test_an_E06_arm_that_lost_its_reference_is_caught_by_the_existing_gate():
     for i in range(33):
         wf[str(200 + i)] = {"class_type": "LoadImage", "inputs": {"image": f"{i}.png"}}
     with pytest.raises(bp.PayloadError, match="expects it present"):
-        bp.verify_topology(wf, "D1", use_control=True, expects_reference=True)
+        # `control_names` is required on a control arm since wave 10 (F-6cbb7b35): the
+        # slot->frame andon's population is the clip's frame order, which lives in the
+        # upload map and not in the graph.
+        bp.verify_topology(wf, "D1", use_control=True, expects_reference=True,
+                           control_names=[f"{i}.png" for i in range(33)])
 
 
 def _control_dir(tmp_path, name, distinct):
@@ -394,3 +400,187 @@ def test_the_record_says_which_branch_the_control_check_took(tmp_path, monkeypat
     assert control["source_dir_present"] is False
     assert control["source_dir_distinct_images"] is None
     assert "at least one distinct server name" in control["comparison"]
+
+
+# =======================================================================================
+# wave 10 — the control ORDER, and the licence clause that never reached this builder
+# =======================================================================================
+#
+# F-6cbb7b35 (panel: CRITICAL) and F-9ee7536d (panel: HIGH). Both are about a population
+# this tool read and never checked: the temporal order of the control batch, and the graph
+# it emits.
+
+
+def _pointed_at_map(tmp_path, monkeypatch, mapping, *, distinct=33, name="m.json"):
+    """Point E03/B1 at a synthetic upload map with a local control dir that matches it."""
+    up = tmp_path / name
+    up.write_text(json.dumps(mapping), encoding="utf-8")
+    _arm_pointed_at(monkeypatch, "E03", "B1", uploads=str(up),
+                    source_dir=_control_dir(tmp_path, name.replace(".json", "_dir"),
+                                            distinct))
+    return up
+
+
+def test_an_UNPADDED_upload_map_is_refused_rather_than_sorted(tmp_path, monkeypatch):
+    """The measured defect. A 33-entry map keyed `0.png`..`32.png` was ACCEPTED and the
+    frame order came back `['0.png', '1.png', '10.png', '11.png', ...]` — `10.png` in slot
+    2 — because `keys = sorted(control)` sorts unpadded names lexicographically. Every
+    count in every gate still read right: 33 keys, 33 slots, 33 distinct sources.
+
+    The clause is `build_assembly_payload.frame_order`, imported rather than re-written.
+    """
+    _pointed_at_map(tmp_path, monkeypatch,
+                    {f"{i}.png": f"name{i}.png" for i in range(33)}, name="unpadded.json")
+    with pytest.raises(bp.PayloadError, match="not a zero-padded frame name"):
+        bp.build("B1", "E03")
+
+
+def test_a_NON_FRAME_key_is_refused_rather_than_absorbed_as_a_frame(tmp_path, monkeypatch):
+    """32 real frames plus one `reference.png` used to be accepted as 33 frames, the
+    non-frame key sorting last and becoming frame 32. The count clause (33 == 33) cannot
+    see it and neither can `verify_topology`."""
+    mapping = {f"{i:05d}": f"name{i}.png" for i in range(32)}
+    mapping["reference.png"] = "ref.png"
+    _pointed_at_map(tmp_path, monkeypatch, mapping, name="stray.json")
+    with pytest.raises(bp.PayloadError, match="not a zero-padded frame name"):
+        bp.build("B1", "E03")
+
+
+def test_a_GAP_in_the_frame_indices_is_refused(tmp_path, monkeypatch):
+    """Every key well formed, the count reading right, and every frame after the hole off
+    by one. The second half of the clause, and it fails for a different reason than the
+    first — so both halves are exercised."""
+    mapping = {f"{i:05d}": f"name{i}.png" for i in range(34) if i != 7}
+    _pointed_at_map(tmp_path, monkeypatch, mapping, name="gap.json")
+    with pytest.raises(bp.PayloadError, match="are not 0"):
+        bp.build("B1", "E03")
+
+
+def test_the_carried_refusal_keeps_the_siblings_evidence_and_names_where_it_came_from(
+        tmp_path, monkeypatch):
+    """The clause is imported, not copied. The receipt has to say so, and it has to keep
+    the gate's own evidence dict rather than degrading to a message."""
+    _pointed_at_map(tmp_path, monkeypatch,
+                    {f"{i}.png": f"n{i}.png" for i in range(33)}, name="carry.json")
+    with pytest.raises(bp.PayloadError) as exc:
+        bp.build("B1", "E03")
+    ev = exc.value.evidence
+    assert ev["carried_from"] == "build_assembly_payload.frame_order"
+    assert ev["gate"] == "ASSEMBLY"
+    assert ev["malformed"], "the sibling's measurement must survive the carry"
+    assert isinstance(exc.value.__cause__, AS.AssemblyGate)
+
+
+def test_a_WELL_FORMED_map_still_builds(tmp_path, monkeypatch):
+    """The mutation that must NOT fire the clause: the shape every map on this rig uses."""
+    _pointed_at_map(tmp_path, monkeypatch,
+                    {f"{i:05d}": f"name{i}.png" for i in range(33)}, name="good.json")
+    _wf, meta = bp.build("B1", "E03")
+    assert meta["control"]["frame_keys"] == [f"{i:05d}" for i in range(33)]
+
+
+# ---- the slot -> frame andon (the direction verify_topology's other clauses do not bound)
+
+
+def _control_graph(names):
+    """An E02/E03-shaped control graph: N LoadImage + batch + probe + lossless tap."""
+    wf = {
+        "49": {"class_type": "WanVaceToVideo", "inputs": {"control_video": ["300", 0]}},
+        "302": {"class_type": "SaveImage", "inputs": {"images": ["8", 0]}},
+        "8": {"class_type": "VAEDecode", "inputs": {}},
+        "300": {"class_type": "BatchImagesNode",
+                "inputs": {f"images.image{i}": [str(200 + i), 0]
+                           for i in range(len(names))}},
+        "301": {"class_type": "SaveImage", "inputs": {"images": ["300", 0]}},
+    }
+    for i, n in enumerate(names):
+        wf[str(200 + i)] = {"class_type": "LoadImage", "inputs": {"image": n}}
+    return wf
+
+
+def test_a_PERMUTED_batch_link_is_refused_by_the_slot_to_frame_andon():
+    """Two links swapped inside the batch leaves every clause above it correct: 33 dotted
+    keys named `images.image0..32`, 33 distinct source nodes, `control_video` fed by the
+    batch, the probe wired. The clip ships out of sequence and no count changes."""
+    names = [f"{i:05d}.png" for i in range(33)]
+    wf = _control_graph(names)
+    wf["300"]["inputs"]["images.image3"], wf["300"]["inputs"]["images.image9"] = (
+        wf["300"]["inputs"]["images.image9"], wf["300"]["inputs"]["images.image3"])
+    with pytest.raises(bp.PayloadError, match="does not hold the frame"):
+        bp.verify_topology(wf, "B1", use_control=True, expects_reference=False,
+                           control_names=names)
+
+
+def test_the_slot_to_frame_andon_passes_the_graph_the_builder_actually_emits():
+    """The mutation that must not fire it — the real thing, unpermuted."""
+    names = [f"{i:05d}.png" for i in range(33)]
+    assert bp.verify_topology(_control_graph(names), "B1", use_control=True,
+                              expects_reference=False, control_names=names) is True
+
+
+def test_a_control_arm_verified_without_its_frame_order_is_REFUSED_not_skipped():
+    """A caller allowed to omit `control_names` holds a skip flag for the andon: the gate
+    would inspect nothing and return green. This is the population clause."""
+    names = [f"{i:05d}.png" for i in range(33)]
+    with pytest.raises(bp.PayloadError, match="without .control_names"):
+        bp.verify_topology(_control_graph(names), "B1", use_control=True,
+                           expects_reference=False)
+
+
+# ---- Gate ROUTE reaches this builder now (F-9ee7536d)
+
+
+def test_the_builder_records_gate_ROUTEs_evidence_on_every_arm():
+    """This was the only one of the nine builders that never called `route_gates.verify`,
+    so E02/E03/E04/E06's payload records carried no licence evidence at all."""
+    for exp, arm in (("E02", "A1a"), ("E02", "A2"), ("E03", "B1"), ("E06", "D2"),
+                     ("E04", "C-bright")):
+        _wf, meta = bp.build(arm, exp)
+        route = meta["gate_ROUTE_built"]
+        assert route["gate"] == "ROUTE"
+        assert [c["file"] for c in route["components"]] == [
+            "wan2.1_vace_14B_fp16.safetensors", "wan_2.1_vae.safetensors",
+            "umt5_xxl_fp16.safetensors"], route["components"]
+        assert route["seed_clause_verdict"].startswith("CHECKED")
+        assert "wan-vace" in route["generator_family_note"]
+
+
+def test_a_licence_BANNED_node_CLASS_in_the_emitted_graph_is_refused(monkeypatch):
+    """The class-level licence clause wave 8 gave `route_gates`, reaching this builder for
+    the first time. Measured before the fix: splicing a `DWPreprocessor` node into the
+    emitted graph was accepted by `verify_topology` without comment, while
+    `route_gates.ruled_node_classes` reads that same class as BANNED.
+
+    The graph is built entirely from module constants, so the node is spliced in at the
+    only seam a future edit would come through — between `verify_topology` and Gate ROUTE.
+    """
+    real = bp.verify_topology
+
+    def splice(wf, *a, **k):
+        out = real(wf, *a, **k)
+        wf["999"] = {"class_type": "DWPreprocessor", "inputs": {"image": ["200", 0]}}
+        return out
+
+    monkeypatch.setattr(bp, "verify_topology", splice)
+    with pytest.raises(RG.RouteGate, match="BANNED"):
+        bp.build("B1", "E03")
+
+
+def test_gate_ROUTE_adds_evidence_and_not_nodes():
+    """`verify` may not move the bytes an already-reported experiment was submitted on.
+    The pin at the top of this file says so for E02; this says why it still holds."""
+    wf, _meta = bp.build("A1a", "E02")
+    before = json.dumps(wf, sort_keys=True)
+    RG.verify(wf, family="wan", frame=(bp.WIDTH, bp.HEIGHT, bp.LENGTH))
+    assert json.dumps(wf, sort_keys=True) == before
+
+
+def test_the_success_line_is_the_halt_sentinels_prefix_with_OK(tmp_path, capsys):
+    """One success convention across the 13 CPU tools: `<PREFIX>_OK `, the same PREFIX the
+    `__main__` block prints on a halt. This tool printed a bare `BUILD_PAYLOAD ` line."""
+    rc = bp.main(["--experiment=E03", "--arm=B1", f"--out={tmp_path / 'p' / 'B1.json'}",
+                  "--subject=BLACKGUARD", "--no-canon"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert len([ln for ln in out.splitlines()
+                if ln.startswith("BUILD_PAYLOAD_OK ")]) == 1
