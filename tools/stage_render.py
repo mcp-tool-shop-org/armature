@@ -216,7 +216,12 @@ class BlenderBackend:
         scene_frame = None
         if st["animation"] == "per_frame":
             scene_frame = bs.set_scene_frame(st["scene"], index)
-        signature = bs.evaluated_geometry_signature(st["meshes"])
+        # `scene=` passed, so the render-visibility filtering happens inside the reader
+        # rather than depending on this caller having filtered `meshes` in `prepare`. The
+        # bare form is the spelling `tests/test_render_visibility.py` bans, and it is the
+        # spelling this line carried: correct only because of a fact a reader has to go and
+        # check, and wrong the day the two drift.
+        signature = bs.evaluated_geometry_signature(st["meshes"], scene=st["scene"])
 
         c = spec["camera"]
         az = bs.orbit_azimuth(index, count, c["azimuth_start_deg"], c["azimuth_sweep_deg"])
@@ -233,7 +238,8 @@ class BlenderBackend:
             if st["need_normal"] else None
         )
         cam_rot = np.array(st["cam"].matrix_world.to_3x3().normalized(), dtype=np.float64)
-        projected = bs.projected_bbox_px(st["cam"], st["meshes"], st["width"], st["height"])
+        projected = bs.projected_bbox_px(st["cam"], st["meshes"], st["width"],
+                                         st["height"], scene=st["scene"])
 
         return {
             "z": z,
@@ -467,8 +473,16 @@ def run_export(spec, out_dir, backend=None):
                    "tolerance_px": gates.G4_TOLERANCE_PX,
                    "tolerance_source": gates.G4_TOLERANCE_SOURCE,
                    "max_delta_px": max((max(r["g4_deltas_px"]) for r in per_frame), default=None)},
-            "G5": {"verdict": "NOT RUN — pose was not emitted"}
-            if "pose" not in requested else {"verdict": "PASS"},
+            # G5 is NEVER "PASS" here, and the branch that said so could not be
+            # reached: `pose` in `channels` is refused by
+            # `openpose.require_drawing_convention()` above — before the output directory
+            # exists — so this tool emits no skeleton for `gates.g5_openpose_conformance`
+            # to conform-check, and the verdict recorded a gate that had not run. A
+            # verdict beside a gate nobody called is a placeholder shaped like evidence.
+            # When a pose route lands here it calls that gate and records ITS return.
+            "G5": {"verdict": "NOT RUN — this tool does not emit pose; "
+                              "openpose.require_drawing_convention refuses the channel",
+                   "gate_called": None},
             "G6": {
                 "verdict": "PASS" if spec["subject"]["animation"] == "per_frame" else "N/A",
                 "detail": g6_detail,
@@ -501,18 +515,114 @@ def _parse_argv(argv):
     return args
 
 
-def main(argv=None):
-    if argv is None:
-        argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
-    args = _parse_argv(argv)
-    spec = shotspec.load_spec(args["spec"])
-    if "asset" in args:
-        spec["asset"]["path"] = args["asset"]
+def _halt_keysafe(value, _seen=None):
+    """`value` with every mapping key stringified, at every depth.
+
+    `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
+    `numpy.int64` key raises `TypeError` from inside a halt handler, the new exception
+    leaves the whole `try` statement, `sys.exit` never runs -- and `blender -b -P` then
+    exits **0** on a fired andon, with no sentinel line at all. Measured 2026-09-04 against
+    all 21 Blender-side handlers; this is the 22nd tool joining the same contract.
+
+    A container already on the path is written as the literal "<circular>" rather than
+    re-entered: a self-referencing evidence dict recursed until `RecursionError` escaped.
+
+    STAGE B: this is the ninth copy of a helper that belongs in `armature_core.errors`
+    beside the halt vocabulary. `armature_core` is outside this domain's globs, so the
+    lift is FILED, not done -- see this amend's `skipped[]` entry.
+    """
+    if _seen is None:
+        _seen = set()
+    if isinstance(value, (dict, list, tuple)):
+        if id(value) in _seen:
+            return "<circular>"
+        _seen = _seen | {id(value)}
+    if isinstance(value, dict):
+        return {str(k): _halt_keysafe(v, _seen) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_halt_keysafe(v, _seen) for v in value]
+    return value
+
+
+def halt_sentinel(exc):
+    """The six-key halt record for one exception. ONE construction, two callers.
+
+    THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (a
+    mistyped flag, a spec that names a hidden-mesh asset); anything else is a crash.
+    Recording a crash as "a gate fired" is a false record.
+    """
+    return {
+        "tool": "stage_render",
+        "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                    else "REFUSED — the tool declined to proceed"
+                    if isinstance(exc, ArmatureError)
+                    else "FAILED — an unhandled error"),
+        "gate": getattr(exc, "gate", None),
+        "error": type(exc).__name__,
+        "message": str(exc),
+        "evidence": (_halt_keysafe(getattr(exc, "evidence", None))
+                     if isinstance(getattr(exc, "evidence", None), dict) else None),
+    }
+
+
+def print_halt(exc):
+    """Print exactly one `STAGE_RENDER_HALT <json>` line for `exc`. Never raises.
+
+    The sentinel is the contract and it may not be deleted by a failure to serialise the
+    sentinel itself -- the fallback line carries only values that are already strings, so
+    it cannot fail in turn.
+    """
     try:
+        rec = halt_sentinel(exc)
+        line = json.dumps(rec, default=str)
+    except BaseException:                                             # noqa: BLE001
+        line = json.dumps({
+            "tool": "stage_render",
+            "outcome": "FAILED — an unhandled error",
+            "gate": None, "error": type(exc).__name__, "message": str(exc),
+            "evidence": None})
+    print("STAGE_RENDER_HALT " + line, flush=True)
+
+
+def main(argv=None):
+    """Export one shot spec. Returns 0 on success and 2 on any deliberate refusal.
+
+    **The handler covers the whole body, not `run_export` alone.** It used to wrap
+    `run_export` in `except GateFailure` and nothing else: `_parse_argv`,
+    `shotspec.load_spec` and every `SpecError` inside `BlenderBackend.prepare` (no mesh
+    objects; every mesh hidden from render; no evaluated geometry; clip_end closer than the
+    subject) sat OUTSIDE any handler, and `NotInsideBlender` with them. `SpecError` is not
+    a `GateFailure` -- measured -- so all of those propagated, and under `blender -b -P` a
+    propagating exception exits **0**. Measured 2026-09-04: `--spec=nope.json` ->
+    FileNotFoundError escaped; `--out=x` alone -> SpecError escaped; `-spec=x` -> SpecError
+    escaped. A PowerShell chain or CI step reading `$LASTEXITCODE` read "the control
+    sequence was exported" and moved to the submission step.
+    """
+    try:
+        if argv is None:
+            argv = (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv
+                    else sys.argv[1:])
+        args = _parse_argv(argv)
+        spec = shotspec.load_spec(args["spec"])
+        if "asset" in args:
+            spec["asset"]["path"] = args["asset"]
         manifest = run_export(spec, args["out"])
-    except GateFailure as exc:
-        print("GATE_FAILURE", exc.gate, str(exc), flush=True)
-        print("GATE_EVIDENCE", json.dumps(exc.evidence, default=str), flush=True)
+    except ArmatureError as exc:
+        # The two lines this repo's evidence-id discipline keys on, kept: a reader holding
+        # only the JSON needs the gate id, and `GATE_EVIDENCE` is where the measurement is.
+        if isinstance(exc, GateFailure):
+            print("GATE_FAILURE", exc.gate, str(exc), flush=True)
+            print("GATE_EVIDENCE", json.dumps(_halt_keysafe(exc.evidence), default=str),
+                  flush=True)
+        # ...and the six-key line the 21 siblings deliver, so an existing reader can parse
+        # this tool's halt without a second parser.
+        print_halt(exc)
+        return 2
+    except OSError as exc:
+        # A spec path that is not there is a refusal, not a crash: the operator mistyped a
+        # flag. It reached no gate, so it carries no gate id.
+        print_halt(exc)
         return 2
     print("EXPORT_OK", json.dumps({
         "run_dir": os.path.abspath(args["out"]),
@@ -523,4 +633,26 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # THE HALT CONTRACT — the shape all 21 Blender-side tools carry, on the 22nd.
+    # `blender -b -P` exits **0** when the script's exception propagates (E07, measured
+    # three times), so a halt that does not exit deliberately is reported as a success.
+    # This tool is invisible to `blender_stub.blender_tools()` because that census keys on
+    # a MODULE-LEVEL `import bpy` and this module imports its backend lazily inside
+    # `BlenderBackend.__init__` — deliberately, so the gate tests can drive the real write
+    # path outside Blender. The re-keying of that population is the tests domain's half;
+    # the handler is this one's.
+    #
+    # A deliberate refusal exits 2; a crash exits 1. The sentinel line and `sys.exit` are
+    # both delivered from a `finally`, so neither is deleted by a secondary failure.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:                                      # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        try:
+            print_halt(exc)
+        finally:
+            sys.exit(_code)
