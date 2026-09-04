@@ -731,9 +731,23 @@ def _gate_and_write_lines(src, what):
     return gates_at, writes_at
 
 
-@pytest.mark.parametrize("name", SPEND_BUILDER_MODULES)
+@pytest.mark.parametrize("name", BUILDERS)
 def test_every_spend_builder_rules_on_canon_before_it_writes_anything(name):
-    """Ordering, read off the source because most of these mains need Blender-adjacent
+    """WAVE 8, F-f8c00be2 — parametrized over BUILDERS, not `SPEND_BUILDER_MODULES`.
+
+    The law here is "a refused spend leaves nothing behind". The population was
+    `sorted(set(BUILDERS) - TEXTLESS_ASSEMBLERS)` — seven builders — while NINE write.
+    The two assemblers' exemption is from Gate CANON, on the ground that they ship no
+    prompt for a canon router to check; that is a different law from this one, and it was
+    silently borrowed. Measured 2026-09-04 with this file's own `_gate_and_write_lines`:
+    both assemblers DO run in-tool refusals and DO write — `build_assembly_payload` gates
+    at 266, 268, 270 and 278 and first writes at 308; `build_cascade_payload` gates at
+    153-171 and first writes at 210 — so both order correctly today and no live defect
+    follows. What follows is that either could grow an `os.makedirs` above its last
+    refusal and leave an empty run directory beside real ones, read later as a run that
+    happened, with no test in the population to notice.
+
+    Ordering, read off the source because most of these mains need Blender-adjacent
     inputs to reach their write. Every in-tool refusal main() runs — the canon gate and
     every `gate_*` / `route_gates.verify` / `frame_legality` call beside it — must come
     before the first `os.makedirs` or `open(..., "w")` in that function: the gate fires
@@ -762,7 +776,7 @@ def _write_before_the_first_gate(src, what):
     return "".join(lines)
 
 
-@pytest.mark.parametrize("name", SPEND_BUILDER_MODULES)
+@pytest.mark.parametrize("name", BUILDERS)
 def test_the_ordering_check_goes_red_when_a_write_moves_above_the_gate(name):
     """The falsifiability fixture for the check above, on each builder's real source.
 
