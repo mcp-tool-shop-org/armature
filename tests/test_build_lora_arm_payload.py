@@ -445,7 +445,8 @@ def test_a_banned_node_CLASS_in_the_base_halts_before_any_directory_exists(base,
     with pytest.raises(ArmatureError, match=r"licence map rules BANNED") as exc:
         B.main(argv)
     ev = exc.value.evidence
-    assert ev["gate"] == "LICENCE"
+    assert ev["gate"] == "ROUTE" and ev["andon"] == "RouteGate"
+    assert ev["clause"] == "banned_component_in_base"
     assert [b["class_type"] for b in ev["banned"]] == ["DWPreprocessor"]
     assert not out.parent.exists(), "a refused build created its output directory"
 

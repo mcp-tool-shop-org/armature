@@ -555,7 +555,10 @@ def gate_base_licence(graph, path=None):
     carry no licence row at all and are ROUTE claims about the graph the spec describes.
     """
     banned = [r for r in route_gates.components(graph) if _verdict_of(r) == "BANNED"]
-    ev = {"gate": "ROUTE", "andon": "banned_component_in_base",
+    # `gate` is the raising class's id and `andon` its name (the evidence contract every
+    # census reads); the clause names this check. Aligned at the wave-8 merge — the first
+    # draft put the clause under `andon` and its test expected a gate id no class carries.
+    ev = {"gate": "ROUTE", "andon": "RouteGate", "clause": "banned_component_in_base",
           "path": os.path.abspath(path) if path else None,
           "banned": [{"kind": r.get("kind"), "file": r.get("file"),
                       "class_type": r.get("class_type") or r.get("class"),

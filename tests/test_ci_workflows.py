@@ -483,8 +483,8 @@ RECORDED_TRIGGER_POPULATION = [
     # composite action called by ci.yml and release.yml (F-60ab1bd7); this census saw it
     # appear, which is the direction it exists for.
     ".github/actions/clean-room/action.yml", ".github/actions/sheet-fonts/action.yml",
-    ".gitignore", "HANDOFF.md", "LICENSE", "README.md", "README.pypi.md", "pyproject.toml",
-    "verify.ps1",
+    ".gitignore", "HANDOFF.md", "LICENSE", "MANIFEST.in", "README.md", "README.pypi.md",
+    "pyproject.toml", "verify.ps1",
 ]
 
 
@@ -1685,6 +1685,9 @@ GUARDED_TODAY = [
     ".github/actions/sheet-fonts/action.yml",
     ".github/workflows",
     ".gitignore",
+    # MANIFEST.in joined with the sdist fix-up (wave 8): tests/test_packaging.py opens it by
+    # path, and a packaging input is a CI input — it is on both triggers.
+    "MANIFEST.in",
     "docs/experiments/E04-the-between-generation-floor.md",
     "docs/index/armature.db",
     "npm/bin/armature.mjs",

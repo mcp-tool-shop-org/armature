@@ -349,7 +349,9 @@ RECORDED_FRAME_TOOLS = [
 #: and records it"); when that lands, the tool either routes through the shared refusal or
 #: its builder returns a mapping, and it drops out of `offenders` on its own. SUBSET
 #: assertion, so this can only shrink, and a SEVENTEENTH offender fails here immediately.
-POSITIONAL_INDEXING_ROUTED = {"make_crop_strip"}
+#: EMPTIED at the wave-8 merge: instruments-measure keyed `make_crop_strip` by frame number
+#: (F-c2c56a6b), and this census refused to keep an exemption for a defect that is gone.
+POSITIONAL_INDEXING_ROUTED = set()
 
 
 def test_the_frame_indexing_population_is_derived_and_has_not_grown_silently():

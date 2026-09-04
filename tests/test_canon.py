@@ -313,7 +313,9 @@ def test_a_shape_with_no_nodes_at_all_raises_rather_than_returning_empty():
         C.texts_from_api_graph({"last_node_id": 12, "version": 0.4})
     assert exc.value.evidence["clause"] == "unrecognised_graph"
     with pytest.raises(GateCanon,
-                       match=r"\[CANON\] a graph must be an object, got list; an"):
+                       # re-pointed at the wave-8 merge: `texts_from_api_graph` reads through the
+                       # ONE loader now, so the refusal on a list is route_gates' and fires first.
+                       match=r"\[CANON\] \[ROUTE\] this is not a graph this module can read"):
         C.texts_from_api_graph(["not", "a", "graph"])
 
 

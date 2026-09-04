@@ -52,6 +52,7 @@ on:
       # from now builds the package; tests/test_ci_workflows.py reads the list out
       # of pyproject, so a rename moves the requirement with it.
       - "pyproject.toml"
+      - "MANIFEST.in"
       - "npm/**"
       - "README.pypi.md"
       - "LICENSE"
@@ -98,6 +99,7 @@ on:
       # from now builds the package; tests/test_ci_workflows.py reads the list out
       # of pyproject, so a rename moves the requirement with it.
       - "pyproject.toml"
+      - "MANIFEST.in"
       - "npm/**"
       - "README.pypi.md"
       - "LICENSE"
