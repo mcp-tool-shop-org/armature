@@ -11,6 +11,15 @@ shares one orthographic scale, so a millimetre of character is the same number o
 every panel of that row, and the joint insets are true 1:1. Resizing here to make a row fit
 would silently destroy both properties.
 
+**Every value on the subtitle is read from the run (2026-09-03).** The line carried three
+values out of `spec['probe']` and two typed as literals beside them — `22 named bones` and
+`0°→90° about +Y` — with no way for a reader to tell which half was measured.
+Both are in the record already: `len(armature_core.sitelist.BONES)` is 22, and
+`rig_character`'s probe dict writes `start_deg`, `end_deg`, `axis` and `sign`. Wave 3
+rewrote this exact line for the new width computation and left them. A value the record does
+not carry now prints `NOT RECORDED`, the same rule `make_gate0_sheet` and
+`make_startframe_sheet` carry, rather than a plausible number beside a measured one.
+
 **The sheet is as wide as its longest line of text, too.** `W` was the widest PANEL ROW and
 ignored every string drawn on it — while the subtitle below is a ~150-character line carrying
 the arm, the arc range, the key count and the fps. `sheet_compose` computes exactly this and
@@ -28,13 +37,72 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sheet_compose  # noqa: E402
-from sheet_compose import font as _font  # noqa: E402
+from armature_core import sitelist  # noqa: E402
 from sheet_compose import max_text_width  # noqa: E402
 
 BG, INK, SUB = (22, 22, 24), (238, 238, 240), (166, 166, 172)
 
+#: What a value the record does not carry prints, instead of a plausible number.
+MISSING = "NOT RECORDED"
+
 #: Kept as a name for callers; the search is `sheet_compose.font_search_paths()`.
 FONT_DIR = sheet_compose.FONT_DIR
+
+
+def _font(name, size):
+    """The face, resolved at CALL time through `sheet_compose`'s one implementation.
+
+    This was `from sheet_compose import font as _font`, which binds the function OBJECT at
+    import: the two composers that did it held a different callable from the one
+    `sheet_compose` itself calls, so a substitution installed on the module reached
+    `sheet_compose` and neither composer. There is one typeface resolver in this repo and
+    this reads it every time.
+    """
+    return sheet_compose._font(name, size)
+
+
+def _probe_value(probe, key):
+    v = (probe or {}).get(key)
+    return MISSING if v is None else v
+
+
+def bone_count(spec):
+    """How many named bones the sheet depicts, and where that number came from.
+
+    The spec's own count wins; `sitelist.BONES` is the fallback and is NAMED as one, so a
+    reader can tell a number read off this run from the repo's default.
+    """
+    for key in ("bone_count", "n_bones"):
+        if isinstance(spec.get(key), int):
+            return spec[key], "from the spec"
+        if isinstance((spec.get("probe") or {}).get(key), int):
+            return spec["probe"][key], "from the spec"
+    return len(sitelist.BONES), "armature_core.sitelist.BONES"
+
+
+def arc_phrase(probe):
+    """`start°→end° about <axis>` out of the probe, or NOT RECORDED.
+
+    The literal `0°→90° about +Y` was E03's arc typed into a tool that is
+    handed the real one: `rig_character` records `start_deg`, `end_deg`, `axis` and `sign`.
+    """
+    probe = probe or {}
+    start, end, axis = probe.get("start_deg"), probe.get("end_deg"), probe.get("axis")
+    if start is None or end is None or axis is None:
+        return MISSING
+    sign = probe.get("sign")
+    prefix = {1: "+", -1: "-"}.get(sign, "")
+    return f"{start:g}°→{end:g}° about {prefix}{axis}"
+
+
+def subtitle_text(spec):
+    """The parameter line under the title — every value from the run, or NOT RECORDED."""
+    p = spec.get("probe") or {}
+    n_bones, source = bone_count(spec)
+    return (f"{n_bones} named bones ({source}) placed from landmarks measured on the mesh"
+            f"  ·  the arc: the +X-side arm ({_probe_value(p, 'which_arm_is_on_plus_x')}"
+            f"), {arc_phrase(p)}, {_probe_value(p, 'frames')} keys at "
+            f"{_probe_value(p, 'fps')} fps")
 
 
 def over(body_path, bones_path, alpha=0.92):
@@ -63,11 +131,8 @@ def main():
             ("The authored arc, body only", row_b),
             (f"At 1:1 — the deforming joints, character's {spec['side']} side", row_c)]
 
-    p = spec["probe"]
     title_text = "E07 — the skeleton on the performer"
-    subtitle = (f"22 named bones placed from landmarks measured on the mesh  ·  the arc is "
-                f"E03's: the +X-side arm ({p['which_arm_is_on_plus_x']}), 0°→90° about +Y, "
-                f"{p['frames']} keys at {p['fps']} fps")
+    subtitle = subtitle_text(spec)
 
     # As wide as the widest ROW **or the longest line of text** — sheet_compose's rule,
     # carried across at last. The numbers are what a cropped sheet loses first.

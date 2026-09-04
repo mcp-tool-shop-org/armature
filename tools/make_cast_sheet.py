@@ -21,7 +21,14 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from sheet_compose import font as _font  # noqa: E402
+def _font(name, size):
+    """The face, resolved at CALL time through `sheet_compose`'s one implementation —
+    `from sheet_compose import font as _font` bound the function OBJECT at import, so this
+    module held a different callable from the one `sheet_compose` itself calls."""
+    import sheet_compose
+
+    return sheet_compose._font(name, size)
+
 from sheet_compose import max_text_width  # noqa: E402
 
 FULL_H = 440
