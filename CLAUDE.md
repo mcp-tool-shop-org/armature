@@ -297,6 +297,12 @@ assets    consumed from E:\AI\training\... and E:\AI\facet\... — READ ONLY, ne
   are RGB and raw transparency cannot reach the model. A grey previz void is never again an
   accidental part of any submitted input. (The grey letterbox pads on E08's reference are
   the standing suspect for its washed bands — same disease.)
+- **Commits use the configured git identity.** Never pass `-c user.name` or `-c user.email` on a
+  commit command, in any worktree. The rig's global config already holds the correct identity;
+  retyping it per call is how a transposed digit put an unrelated GitHub account on this repo's
+  **public** contributor graph on 2026-08-10, where it stayed three weeks until the Director saw
+  it. Removing it costs a full-history rewrite (`docs/dispatches/attribution-repair.md`). If a
+  worktree has no identity, fix the config once.
 - **argparse eats leading minus signs** — use `--views=-30,0,30`.
 - **Scripts create their own output directories.** Two facet runs died on this.
 - Big binaries (renders, videos, GLBs) stay out of git — `outputs/` is ignored. The record is
