@@ -172,14 +172,16 @@ def test_gate_l_accepts_the_lengths_this_route_is_documented_at():
 
 
 def test_gate_s_raises_on_a_seed_the_committed_list_does_not_carry():
-    with pytest.raises(E.GateSSeedRegistration):
+    with pytest.raises(E.GateSSeedRegistration,
+                       match=r"\[S\] seed 1234 is not in E11's pre-registered list of 3"):
         built(seed=1234)
 
 
 def test_gate_s_raises_when_a_seed_is_varied_with_no_registry_at_all():
     """An experiment that pre-registered nothing may not vary its seed — the clause that
     stops a `--seed` flag turning every unregistered experiment into a shoppable one."""
-    with pytest.raises(E.GateSSeedRegistration):
+    with pytest.raises(E.GateSSeedRegistration,
+                       match=r"\[S\] E11 has no pre-registered seed list, so its seed may"):
         built(seed=2026081231, registry=None)
 
 

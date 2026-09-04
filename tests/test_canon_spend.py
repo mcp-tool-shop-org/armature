@@ -69,7 +69,8 @@ def test_an_existing_directory_is_not_deleted_on_refuse(tmp_path):
     out.mkdir()
     marker = out / "kept.txt"
     marker.write_text("stay", encoding="utf-8")
-    with pytest.raises(GateCanon):
+    with pytest.raises(GateCanon,
+                       match=r"\[CANON\] no subject: a spend with no census id has no"):
         C.gate_write(None, COVERED, out_dir=str(out),
                      census=TEST_CENSUS, search_roots=[FIXTURES])
     assert marker.read_text(encoding="utf-8") == "stay"

@@ -476,7 +476,8 @@ def test_a_hinge_hint_parallel_to_its_bone_raises_rather_than_guessing():
 
 
 def test_a_short_landmark_list_raises():
-    with pytest.raises(LS.SolveError):
+    with pytest.raises(LS.SolveError,
+                       match=r"expected 33 world landmarks, got 30; a partial landmark"):
         LS.sites_from_landmarks([(0.0, 0.0, 0.0)] * 30)
 
 
@@ -514,7 +515,8 @@ def test_a_missing_bone_on_one_frame_raises():
 
 
 def test_an_empty_motion_record_raises():
-    with pytest.raises(LS.SolveGate):
+    with pytest.raises(LS.SolveGate,
+                       match=r"\[SOLVE\] the motion record carries no frames"):
         LS.validate_motion_record([])
 
 
@@ -579,7 +581,7 @@ def test_the_diagnostic_measures_and_the_gate_halts_on_the_same_input():
         LS.axis_angle((0.0, 1.0, 0.0), 1e-3), solved["local"]["elbow.L"])
     ev = LS.round_trip_report(rest, obs, solved, DIAGONAL)      # measures, never raises
     assert ev["within_tolerance"] is False
-    with pytest.raises(LS.SolveGate):                            # the andon on the same input
+    with pytest.raises(LS.SolveGate, match=r"\[SOLVE\] the solve does not reproduce the positions it was"):                            # the andon on the same input
         LS.gate_round_trip(rest, obs, solved, DIAGONAL)
 
 

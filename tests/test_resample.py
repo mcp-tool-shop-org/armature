@@ -54,9 +54,11 @@ def test_a_stalled_map_is_what_the_monotonic_gate_would_catch():
 
 
 def test_resampling_to_fewer_than_two_samples_refuses():
-    with pytest.raises(RS.ResampleError):
+    with pytest.raises(RS.ResampleError,
+                       match=r"resampling to 1 samples would discard the performance"):
         RS.sample_map(65, 1)
-    with pytest.raises(RS.ResampleError):
+    with pytest.raises(RS.ResampleError,
+                       match=r"a 1-sample record carries no interval to resample over"):
         RS.sample_map(1, 81)
 
 
@@ -164,7 +166,8 @@ def test_resampling_halts_on_a_record_whose_matrices_are_not_rotations():
     a, b = LS.IDENTITY, rot_z(90.0)
     avg = tuple(tuple(0.5 * (a[i][j] + b[i][j]) for j in range(3)) for i in range(3))
     frames = [frame(0, {"a": LS.IDENTITY}), frame(1, {"a": avg})]
-    with pytest.raises(RS.ResampleGate):
+    with pytest.raises(RS.ResampleGate,
+                       match=r"worst \|M\^T M - I\| entry 5\.000e-01, det 0\.500000000000"):
         RS.resample_frames(frames, 5)
 
 

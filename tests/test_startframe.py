@@ -57,7 +57,8 @@ def test_a_cloud_under_the_cap_is_returned_whole():
 
 
 def test_an_empty_cloud_raises_rather_than_framing_the_origin():
-    with pytest.raises(SF.StartFrameGate):
+    with pytest.raises(SF.StartFrameGate,
+                       match=r"\[WHOLE\] no vertices to frame; a camera solved against"):
         SF.framing_cloud([])
 
 
@@ -102,7 +103,7 @@ def test_a_point_behind_the_camera_is_counted_not_projected():
 def test_all_points_behind_the_camera_raises():
     target = (0.0, 0.0, 0.0)
     behind = framing.camera_position(target, 8.0, EL, AZ)
-    with pytest.raises(SF.StartFrameGate):
+    with pytest.raises(SF.StartFrameGate, match=r"\[WHOLE\] every one of 1 points is behind the camera; there"):
         _extent_of([behind], target)
 
 
@@ -140,7 +141,8 @@ def test_the_gate_fires_on_a_body_cut_by_any_border(side, ext):
 def test_the_gate_fires_when_anything_is_behind_the_camera():
     ext = {"x0": 300.0, "x1": 520.0, "y0": 24.0, "y1": 456.0, "n_behind": 3,
            "n_points": 100}
-    with pytest.raises(SF.StartFrameGate):
+    with pytest.raises(SF.StartFrameGate,
+                       match=r"\[WHOLE\] 3 of 100 silhouette points are behind the camera"):
         SF.gate_whole(ext, W, H, margin_px=8)
 
 
@@ -160,7 +162,8 @@ def test_the_landmark_cloud_can_pass_while_the_silhouette_does_not():
     silhouette = landmarks + [(0.0, 0.0, 1.75), (0.0, 0.0, -0.2)]   # skull cap, heels
     ext = SF.silhouette_extent(silhouette, sol["target"], sol["radius"], AZ, EL,
                                LENS, SENSOR, W, H)
-    with pytest.raises(SF.StartFrameGate):
+    with pytest.raises(SF.StartFrameGate,
+                       match=r"\[WHOLE\] the performer's silhouette does not clear the"):
         SF.gate_whole(ext, W, H, margin_px=8)
 
 
@@ -211,7 +214,7 @@ class TestCompositeColour:
 
     @pytest.mark.parametrize("bad", ["0.1,0.2", "0.1,0.2,0.3,0.4", "0.1,dim,0.3", ","])
     def test_a_malformed_colour_halts(self, bad):
-        with pytest.raises(SF.AlphaGate):
+        with pytest.raises(SF.AlphaGate, match=r"\[ALPHA\] the composite colour"):
             SF.composite_colour(bad)
 
 
@@ -346,7 +349,7 @@ class TestCoverFit:
 
     @pytest.mark.parametrize("ax,ay", [(-0.1, 0.5), (0.5, 1.1), (2.0, 0.0)])
     def test_an_anchor_outside_the_range_halts(self, ax, ay):
-        with pytest.raises(SF.BackdropGate):
+        with pytest.raises(SF.BackdropGate, match=r"\[BACKDROP\] anchor_"):
             SF.cover_fit(1248, 832, 1024, 576, anchor_x=ax, anchor_y=ay)
 
     def test_the_band_map_follows_the_anchor(self):
@@ -362,12 +365,13 @@ class TestCoverFit:
 
     @pytest.mark.parametrize("sw,sh", [(0, 480), (832, 0), (-1, 480), (832, -1)])
     def test_a_degenerate_source_halts(self, sw, sh):
-        with pytest.raises(SF.BackdropGate):
+        with pytest.raises(SF.BackdropGate, match=r"\[BACKDROP\] degenerate plate of"):
             SF.cover_fit(sw, sh, 1024, 576)
 
     @pytest.mark.parametrize("w,h", [(0, 576), (1024, 0)])
     def test_a_degenerate_target_halts(self, w, h):
-        with pytest.raises(SF.BackdropGate):
+        with pytest.raises(SF.BackdropGate,
+                           match=r"\[BACKDROP\] degenerate target frame of"):
             SF.cover_fit(832, 480, w, h)
 
 
@@ -493,7 +497,7 @@ class TestGateBackdrop:
         to find out what it compared against."""
         ev = SF.gate_backdrop(**dict(self.OK, tol_255=0.5, min_separation_255=60.0))
         assert ev["tol_255"] == 0.5 and ev["min_separation_255"] == 60.0
-        with pytest.raises(SF.BackdropGate):
+        with pytest.raises(SF.BackdropGate, match=r"\[BACKDROP\] behind the performer the submitted composite"):
             SF.gate_backdrop(**dict(self.OK, tol_255=0.3))
 
     def test_the_evidence_carries_the_plate_even_when_it_raises(self):

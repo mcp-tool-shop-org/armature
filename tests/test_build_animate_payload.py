@@ -103,7 +103,8 @@ def test_the_e08_pack_still_fits_the_e08_shot():
 # --------------------------------------------------------------------------- the gates
 
 def test_gate_L_refuses_a_frame_count_off_the_four_n_plus_one_form():
-    with pytest.raises(G.G1GeneratorLegality):
+    with pytest.raises(G.G1GeneratorLegality,
+                       match=r"\[G1\] frame is not legal for generator 'wan-animate'"):
         BAP.build(dict(UPLOADS_81, pose_frames=80), 2026081221, NEG, POS, E10_SEEDS,
                   "letterbox", experiment="E10", length=80, fps=20.0)
 
@@ -128,13 +129,15 @@ def test_gate_ROUTE_would_go_red_past_the_trained_horizon():
 
 
 def test_gate_S_refuses_a_seed_the_committed_list_does_not_carry():
-    with pytest.raises(G.GateSSeedRegistration):
+    with pytest.raises(G.GateSSeedRegistration,
+                       match=r"\[S\] seed 2026089999 is not in E10's pre-registered list"):
         BAP.build(UPLOADS_81, 2026089999, NEG, POS, E10_SEEDS, "letterbox",
                   experiment="E10", length=81, fps=20.0)
 
 
 def test_gate_S_refuses_any_chosen_seed_when_nothing_was_pre_registered():
-    with pytest.raises(G.GateSSeedRegistration):
+    with pytest.raises(G.GateSSeedRegistration,
+                       match=r"\[S\] E10 has no pre-registered seed list, so its seed may"):
         BAP.build(UPLOADS_81, 2026081221, NEG, POS, None, "letterbox",
                   experiment="E10", length=81, fps=20.0)
 

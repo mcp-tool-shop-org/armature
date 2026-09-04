@@ -337,29 +337,33 @@ def test_smootherstep_clamps_and_is_symmetric():
 
 
 def test_unknown_axis_raises():
-    with pytest.raises(walk.WalkError):
+    with pytest.raises(walk.WalkError, match=r"unknown axis 'W'; expected 'X', 'Y' or 'Z'"):
         walk._rot("W", 10.0)
 
 
 def test_a_performer_without_the_measurements_raises():
     thin = {k: v for k, v in LANDMARKS.items() if k != "ankle_L"}
-    with pytest.raises(walk.WalkError):
+    with pytest.raises(walk.WalkError,
+                       match=r"the landmark table is missing \['ankle_L'\]; the gait"):
         walk.Performer(thin, FACING_Y_SIGN, LEFT_X_SIGN)
 
 
 def test_an_unmeasured_facing_sign_raises():
     """`facing_y_sign` is a MEASURED +/-1 out of the rig manifest. A 0.0 or a 0.98 means
     somebody passed a raw dot product, and the whole gait's handedness would be a guess."""
-    with pytest.raises(walk.WalkError):
+    with pytest.raises(walk.WalkError,
+                       match=r"facing_y_sign=0\.0 left_x_sign=1\.0; both are measured"):
         walk.Performer(LANDMARKS, 0.0, LEFT_X_SIGN)
-    with pytest.raises(walk.WalkError):
+    with pytest.raises(walk.WalkError,
+                       match=r"facing_y_sign=-1\.0 left_x_sign=0\.87; both are measured"):
         walk.Performer(LANDMARKS, -1.0, 0.87)
 
 
 def test_a_zero_length_phase_raises():
-    with pytest.raises(walk.WalkError):
+    with pytest.raises(walk.WalkError,
+                       match=r"every phase must be at least one frame long"):
         walk.GaitParams(n_decel=0)
-    with pytest.raises(walk.WalkError):
+    with pytest.raises(walk.WalkError, match=r"a walk needs at least one step"):
         walk.GaitParams(steps=0)
 
 
@@ -792,7 +796,8 @@ def test_a_gait_too_short_to_compare_two_frames_raises_rather_than_degrades():
         aw.mesh_sample_frames(1)
     assert exc.value.gate == "WALK"
     assert exc.value.evidence["n_frames"] == 1
-    with pytest.raises(aw.WalkGate):
+    with pytest.raises(aw.WalkGate,
+                       match=r"\[WALK\] a gait of 0 frame\(s\) cannot carry a skin"):
         aw.mesh_sample_frames(0)
 
 

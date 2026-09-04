@@ -127,7 +127,7 @@ def test_the_scale_spans_the_longer_axis_in_world_units():
 def test_a_non_positive_scale_raises_rather_than_collapsing_the_frame(bad):
     """A zero span projects every point to the frame centre. The render saves, opens, is
     the right size, and carries a perfectly valid alpha channel."""
-    with pytest.raises(framing.FramingError):
+    with pytest.raises(framing.FramingError, match=r"ortho_scale is"):
         framing.ortho_half_spans(bad, 512, 512)
 
 
@@ -313,7 +313,8 @@ def test_one_pixel_of_contact_is_enough():
     """A gate written against a fraction of the border, or against "several" pixels, would
     admit the first millimetre of an amputation — which is the whole of it on a cell the
     sheet then repeats eight times."""
-    with pytest.raises(TA.TurnaroundCropGate):
+    with pytest.raises(TA.TurnaroundCropGate,
+                       match=r"\[CROP\] view 0: the subject reaches the frame border on"):
         TA.gate_view_crop(0, (0, 500, 500, 600), W, H)
 
 
@@ -349,7 +350,8 @@ def test_the_gate_reads_a_non_square_frame_on_the_right_axes():
     square fixture in this file — which is what the Task-C preset is."""
     ev = TA.gate_view_crop(0, (10, 10, 340, 1000), 352, 1024)
     assert ev["clearance_px"] == {"left": 10, "right": 11, "top": 10, "bottom": 23}
-    with pytest.raises(TA.TurnaroundCropGate):
+    with pytest.raises(TA.TurnaroundCropGate,
+                       match=r"\[CROP\] view 0: the subject reaches the frame border on"):
         TA.gate_view_crop(0, (10, 10, 351, 1000), 352, 1024)
 
 

@@ -58,7 +58,8 @@ def test_two_orderings_that_agree_do_not_print_fetch_ok():
 def test_a_hash_order_that_is_tighter_than_the_array_order_halts():
     """The inverted case: the array order is the WORSE ordering. Nothing in the old code
     could tell this apart from the good one."""
-    with pytest.raises(T.FetchHalt):
+    with pytest.raises(T.FetchHalt,
+                       match=r"\[FETCH\] FETCH_ORDER_UNVOUCHED: differencing the"):
         T.gate_order_evidence(_ev(5.314, 0.703))
 
 
@@ -75,7 +76,8 @@ def test_the_boundary_is_the_sign_of_the_comparison_not_an_invented_floor():
     may not carry a magnitude: a pass condition invented while looking at the results it
     judges is the thing CLAUDE.md forbids. Just above 1 passes; just below refuses."""
     assert T.gate_order_evidence(_ev(1.0, 1.0001))["ratio"] > 1.0
-    with pytest.raises(T.FetchHalt):
+    with pytest.raises(T.FetchHalt,
+                       match=r"\[FETCH\] FETCH_ORDER_UNVOUCHED: differencing the"):
         T.gate_order_evidence(_ev(1.0, 0.9999))
 
 
@@ -139,7 +141,8 @@ def test_a_source_node_this_graph_does_not_emit_halts():
     """Wave 6, F-e3af7342: this raised a bare `SystemExit`, which carries no gate id, no
     evidence dict, and walks straight past any caller catching `GateFailure`. The sibling
     `fetch_run.plan` raises a typed FetchHalt for the same clause."""
-    with pytest.raises(T.FetchHalt):
+    with pytest.raises(T.FetchHalt,
+                       match=r"\[FETCH\] unexpected source node 99; this graph emits only"):
         T.plan([{"source_node_id": 99, "filename": "a.png", "url": "u"}], "out")
 
 
@@ -182,7 +185,8 @@ def test_main_prints_fetch_ok_when_the_order_evidence_supports_the_order(
 def test_main_does_not_print_fetch_ok_on_an_unvouched_order(tmp_path, monkeypatch, capsys):
     """The whole finding in one fixture: the frames are all present and non-empty, every
     count is right, and the only thing wrong is that the order cannot be vouched for."""
-    with pytest.raises(T.FetchHalt):
+    with pytest.raises(T.FetchHalt,
+                       match=r"\[FETCH\] FETCH_ORDER_UNVOUCHED: differencing the"):
         _run_main(tmp_path, monkeypatch, _ev(2.0, 2.0))
     assert "FETCH_OK" not in capsys.readouterr().out
 
@@ -191,7 +195,8 @@ def test_the_evidence_file_is_still_written_when_the_order_gate_fires(
         tmp_path, monkeypatch):
     """The halt must leave the evidence behind. A gate that deletes what fired it makes
     the next session re-run a paid generation to see it."""
-    with pytest.raises(T.FetchHalt):
+    with pytest.raises(T.FetchHalt,
+                       match=r"\[FETCH\] FETCH_ORDER_UNVOUCHED: differencing the"):
         _run_main(tmp_path, monkeypatch, _ev(2.0, 2.0))
     p = tmp_path / "run" / "frame_order_evidence.json"
     assert p.exists()

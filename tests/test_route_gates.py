@@ -121,7 +121,8 @@ def test_an_illegal_frame_stops_the_route():
 
 
 def test_an_unknown_generator_family_raises_rather_than_assuming_wan():
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] no recorded frame rules for generator family"):
         RG.frame_legality(832, 480, 65, family="a-model-nobody-recorded")
 
 
@@ -205,7 +206,8 @@ def test_gate_s_refuses_an_unregistered_seed():
 
 def test_gate_s_refuses_an_empty_registration():
     """An experiment that pre-registered nothing may not vary its seed at all."""
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] Gate S: no seed list was pre-registered, so no"):
         RG.gate_s_registration(api_graph(), [])
 
 
@@ -606,7 +608,7 @@ def test_gate_pair_goes_RED_on_the_exact_wave_2_graph():
         "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"]
 
     # and the whole gate now refuses the graph, where before it admitted it
-    with pytest.raises(RG.PairGate):
+    with pytest.raises(RG.PairGate, match=r"\[PAIR\] node 50 is WanCameraImageToVideo, which requires a"):
         RG.verify(g, frame=(832, 480, 65))
 
 
@@ -858,7 +860,7 @@ def test_a_latent_suffixed_conditioning_class_halts_too():
     g = graph(top=[loader(1, "wan2.2_t2v_high_noise.safetensors"),
                    {"id": 5, "type": "SomeVendorImageToVideoLatent", "widgets_values": []},
                    sampler(2, 1, "fixed"), latent(3, 832, 480, 65)])
-    with pytest.raises(RG.PairGate):
+    with pytest.raises(RG.PairGate, match=r"\[PAIR\] conditioning class\(es\)"):
         RG.pairing(g)
 
 
@@ -889,7 +891,7 @@ def test_a_non_integer_dimension_raises_the_gates_own_error():
     with pytest.raises(RG.RouteGate) as exc:
         RG.frame_legality("832", 480, 65)
     assert "832" in str(exc.value)
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate, match=r"\[ROUTE\] length True is not an int \(bool\); Gate L compares"):
         RG.frame_legality(832, 480, True)
 
 
@@ -984,7 +986,8 @@ def test_a_shape_this_module_cannot_read_raises_rather_than_walking_zero_nodes()
 def test_is_api_format_refuses_an_unreadable_shape_instead_of_answering_false():
     """Answering False sent the caller down the save-format branch to walk a `nodes`
     list that does not exist, which is where the zero-population pass came from."""
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] this is not a graph this module can read: a dict"):
         RG.is_api_format({"foo": 1})
     assert RG.is_api_format(_banned_api()) is True
     assert RG.is_api_format(graph(top=CLEAN_TOP)) is False
@@ -1111,7 +1114,8 @@ def test_a_graph_with_no_seed_at_all_is_indeterminate_rather_than_all_pinned():
     with pytest.raises(RG.RouteGate) as exc:
         RG.verify(g)
     assert "UNPROVEN" in str(exc.value)
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] the seed clause is INDETERMINATE on this graph"):
         RG.gate_s_registration(g, [7])
 
     # the assertion is available, and it is CHECKED rather than obeyed
@@ -1132,7 +1136,7 @@ def test_the_no_sampler_assertion_is_refused_when_the_graph_carries_one():
     with pytest.raises(RG.RouteGate) as exc:
         RG.verify(g, carries_no_sampler=True)
     assert "checked, not obeyed" in str(exc.value)
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate, match=r"\[ROUTE\] the caller asserted this graph carries no sampler"):
         RG.gate_s_registration(g, [7], carries_no_sampler=True)
     # and the ordinary graph still passes
     assert "1 seed(s) all pinned" in RG.verify(g)["verdict"]

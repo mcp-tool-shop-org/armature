@@ -92,7 +92,8 @@ def test_the_gate_itself_passes_on_the_measured_numbers(measured):
         min_separation_255=measured["gate_constants"]["min_separation_255"])
     assert "the plate is behind the performer" in ev["verdict"]
 
-    with pytest.raises(SF.BackdropGate):
+    with pytest.raises(SF.BackdropGate,
+                       match=r"\[BACKDROP\] behind the performer the submitted composite"):
         SF.gate_backdrop(
             void_vs_plate_255=measured["unwired_void_vs_plate_255"],
             plate_vs_flat_255=measured["plate_vs_flat_255"],

@@ -74,9 +74,10 @@ def test_the_shift_formula_is_the_flow_shift():
 
 
 def test_a_degenerate_split_raises_rather_than_running_one_expert():
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] the shifted sigma never falls below the boundary"):
         B.boundary_step(40, 12.0, 0.0)      # low-noise expert would never run
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate, match=r"\[ROUTE\] the shifted sigma is below the boundary 1\.01 from"):
         B.boundary_step(40, 12.0, 1.01)     # high-noise expert would never run
 
 
@@ -121,7 +122,8 @@ def test_all_three_admission_gates_pass_on_the_built_graph():
 
 def test_an_unregistered_seed_is_refused_by_the_admission_path():
     graph, _ = B.build_graph(123456789, profile="derived")
-    with pytest.raises(RG.RouteGate):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] Gate S: node 50 would run seed 123456789, which"):
         RG.gate_s_registration(graph, SEEDS["seeds"])
 
 

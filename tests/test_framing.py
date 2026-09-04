@@ -104,7 +104,8 @@ def test_an_unreachable_framing_raises_rather_than_returning_its_nearest_miss():
     """A solver that silently returns a bound looks like it succeeded. This is the
     difference between a shot that is framed and a shot that is merely rendered."""
     body = [(0.0, 0.0, -0.5), (0.0, 0.0, 0.5)]
-    with pytest.raises(framing.FramingError):
+    with pytest.raises(framing.FramingError,
+                       match=r"the requested framing is not reachable between 20\.0 and"):
         framing.solve_camera(body, body, 205.0, 6.0, LENS, SENSOR, W, H,
                              height_frac=0.68, end_x_frac=0.5,
                              radius_bounds=(20.0, 40.0))
@@ -112,5 +113,6 @@ def test_an_unreachable_framing_raises_rather_than_returning_its_nearest_miss():
 
 def test_a_straight_down_camera_raises():
     t = (0.0, 0.0, 0.0)
-    with pytest.raises(framing.FramingError):
+    with pytest.raises(framing.FramingError,
+                       match=r"the camera is looking straight up or down; the up vector"):
         framing.project((0.1, 0.0, 0.0), t, 3.0, 0.0, 90.0, LENS, SENSOR, W, H)

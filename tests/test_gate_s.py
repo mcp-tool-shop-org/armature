@@ -107,7 +107,8 @@ def test_a_seed_that_is_not_an_int_raises(bad):
 # ----------------------------------------------------------------- the gate, in the tool
 
 def test_build_refuses_an_unregistered_seed():
-    with pytest.raises(GateSSeedRegistration):
+    with pytest.raises(GateSSeedRegistration,
+                       match=r"\[S\] seed 654654950714626 is not in E04's pre-registered"):
         bp.build("C-bright", "E04", seed=654654950714626)
 
 
@@ -124,7 +125,8 @@ def test_gate_S_fires_before_anything_is_read_from_disk(monkeypatch):
     arms["C-bright"] = dict(arms["C-bright"], uploads="no/such/file.json")
     monkeypatch.setitem(bp.EXPERIMENTS, "E04", dict(cfg, arms=arms))
 
-    with pytest.raises(GateSSeedRegistration):
+    with pytest.raises(GateSSeedRegistration,
+                       match=r"\[S\] seed 111 is not in E04's pre-registered list of 6"):
         bp.build("C-bright", "E04", seed=111)
 
 

@@ -38,7 +38,8 @@ def test_g1_red_on_width_not_divisible_by_16():
 
 
 def test_g1_red_on_height_not_divisible_by_16():
-    with pytest.raises(G1GeneratorLegality):
+    with pytest.raises(G1GeneratorLegality,
+                       match=r"\[G1\] frame is not legal for generator 'wan-vace'"):
         gates.g1_generator_legality(512, 770, 33, "wan-vace")
 
 
@@ -72,7 +73,7 @@ def test_g1_only_accepts_the_right_residue(count):
         assert profile.frame_modulus == 4 and profile.frame_residue == 1
         assert count % profile.frame_modulus == profile.frame_residue
     else:
-        with pytest.raises(G1GeneratorLegality):
+        with pytest.raises(G1GeneratorLegality, match=r"\[G1\] frame is not legal for generator 'wan-vace': frame"):
             gates.g1_generator_legality(512, 768, count, "wan-vace")
 
 
@@ -86,7 +87,8 @@ def test_g1_red_on_unknown_generator():
 
 
 def test_g1_red_on_bool_masquerading_as_int():
-    with pytest.raises(G1GeneratorLegality):
+    with pytest.raises(G1GeneratorLegality,
+                       match=r"\[G1\] frame is not legal for generator 'wan-vace': width"):
         gates.g1_generator_legality(True, 768, 33, "wan-vace")
 
 
@@ -137,7 +139,8 @@ def test_g2_red_on_a_zero_length_frame(tmp_path):
 
 def test_g2_red_on_a_missing_directory(tmp_path):
     names = [f"{i:05d}.png" for i in range(3)]
-    with pytest.raises(G2Completeness):
+    with pytest.raises(G2Completeness,
+                       match=r"\[G2\] export is incomplete: edge: directory missing"):
         gates.g2_completeness(str(tmp_path), {"edge": names}, 3)
 
 
@@ -168,7 +171,8 @@ def test_g4_red_on_an_empty_mask():
 
 
 def test_g4_red_when_nothing_projects():
-    with pytest.raises(G4BboxSanity):
+    with pytest.raises(G4BboxSanity,
+                       match=r"\[G4\] frame 0: no mesh vertex projects into the frame, so"):
         gates.g4_bbox_sanity(0, (10, 10, 20, 20), None, 128, 128)
 
 
@@ -237,7 +241,8 @@ def test_wan_fun_control_rejects_the_same_near_misses_as_vace():
 
     for w, h, n in ((480, 832, 32), (470, 832, 33), (480, 830, 33)):
         for gen in ("wan-vace", "wan-fun-control"):
-            with pytest.raises(G1GeneratorLegality):
+            with pytest.raises(G1GeneratorLegality,
+                               match=r"\[G1\] frame is not legal for generator 'wan-"):
                 g1_generator_legality(w, h, n, gen)
 
 

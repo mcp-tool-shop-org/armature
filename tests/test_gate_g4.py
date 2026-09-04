@@ -83,7 +83,7 @@ def test_the_retired_key_is_refused_at_every_value_including_the_committed_one(t
     for value in (2, 0, -5, True, "off", None, float("inf")):
         spec = _spec(tmp_path)
         spec["gates"] = {"g4_tolerance_px": value}
-        with pytest.raises(SpecError):
+        with pytest.raises(SpecError, match=r"delete the row from the spec\. \(spec\.gates\.g4_tolerance_px"):
             shotspec.normalise_spec(spec)
 
 
@@ -129,7 +129,7 @@ def test_g4_fires_on_facets_own_defect_at_the_constants_value():
     [300, 300, 363, 363]; against the fixture tests/test_gates.py actually carries they are
     [180, 60, 182, 0]. The size of the miss is not the point — that a 182-px disagreement
     used to pass at a spec-supplied 100000 is."""
-    with pytest.raises(G4BboxSanity):
+    with pytest.raises(G4BboxSanity, match=r"\[G4\] frame 7: mask bbox \(0, 0, 750, 700\) disagrees with"):
         gates.g4_bbox_sanity(7, (0, 0, 750, 700), (180, 60, 568, 700), 752, 752)
 
 
@@ -163,5 +163,5 @@ def test_a_four_number_bbox_still_compares_all_four_edges():
 
     assert g4_bbox_sanity(0, (10, 10, 500, 500), (10, 10, 500, 500), 832, 480) \
         == [0, 0, 0, 0]
-    with pytest.raises(G4BboxSanity):
+    with pytest.raises(G4BboxSanity, match=r"\[G4\] frame 0: mask bbox \(10, 10, 500, 500\) disagrees with"):
         g4_bbox_sanity(0, (10, 10, 500, 500), (10, 10, 500, 990), 832, 480)

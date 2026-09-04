@@ -107,7 +107,8 @@ def test_a_repainted_view_raises_even_though_the_file_is_a_valid_png(tmp_path):
     arr = np.asarray(Image.open(kit / "turn_2.png")).copy()
     arr[4, 3, :3] = (255, 0, 0)
     Image.fromarray(arr, mode="RGBA").save(kit / "turn_2.png")
-    with pytest.raises(CR.ReferenceGate):
+    with pytest.raises(CR.ReferenceGate,
+                       match=r"\. The manifest is the authority for what this kit is, and"):
         CR.main([f"--kit={kit}", "--views=turn_2", f"--out={tmp_path / 'o'}"])
 
 

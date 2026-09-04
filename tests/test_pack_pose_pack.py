@@ -49,7 +49,8 @@ def test_the_gate_would_actually_fire_on_a_lossy_pack(tmp_path):
     imgs[0].save(dst, format="WEBP", save_all=True, append_images=imgs[1:],
                  lossless=False, quality=60, duration=62, loop=0)
     back = PP.read_pack(dst)
-    with pytest.raises(GateRRoundTrip):
+    with pytest.raises(GateRRoundTrip,
+                       match=r"\[R\] the encode/decode round trip is not lossless: frame"):
         from armature_core import gates
         gates.gate_r_round_trip(frames, back)
 

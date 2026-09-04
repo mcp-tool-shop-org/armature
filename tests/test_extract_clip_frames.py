@@ -45,7 +45,8 @@ def test_a_bitrate_cannot_be_mistaken_for_a_dimension():
 
 
 def test_a_line_with_no_dimensions_is_refused_rather_than_defaulted():
-    with pytest.raises(X.ClipReadError):
+    with pytest.raises(X.ClipReadError,
+                       match=r"no WxH in the stream line: 'Stream #0:0: Video: h264"):
         X.probe.__wrapped__ if False else _probe_from(
             "Stream #0:0: Video: h264 (High), yuv420p, 2996 kb/s")
 

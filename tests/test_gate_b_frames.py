@@ -67,7 +67,8 @@ def test_a_directory_with_no_numbered_frames_raises_rather_than_passing_empty(tm
 def test_a_short_pack_is_caught_by_the_count_andon(tmp_path):
     """The conditioning node pads a short pose video by repeating its last frame, silently."""
     from armature_core import gates
-    with pytest.raises(GateBBatching):
+    with pytest.raises(GateBBatching,
+                       match=r"BatchImagesNode bound only part of its auto-grow list"):
         gates.gate_b_batching(81, 80)
 
 

@@ -72,7 +72,8 @@ def test_the_rejected_check_could_not_fire():
         assert output_frames(batch) == 33
     # ...while the implemented check separates them.
     gate_b_batching(33, 33)
-    with pytest.raises(GateBBatching):
+    with pytest.raises(GateBBatching,
+                       match=r"BatchImagesNode bound only part of its auto-grow list"):
         gate_b_batching(33, 1)
 
 
@@ -111,9 +112,10 @@ def test_the_two_siblings_in_this_file_close_the_same_hole():
     from armature_core.errors import G1GeneratorLegality, GateSSeedRegistration
     from armature_core.gates import g1_generator_legality, gate_s_seed_registration
 
-    with pytest.raises(G1GeneratorLegality):
+    with pytest.raises(G1GeneratorLegality,
+                       match=r"\[G1\] unknown generator profile 'wan'; no legality"):
         g1_generator_legality(True, 480, 33, "wan")
-    with pytest.raises(GateSSeedRegistration):
+    with pytest.raises(GateSSeedRegistration, match=r"\[S\] seed must be an int, got bool \(True\); a seed that is"):
         gate_s_seed_registration(True, [1, 2], "E-probe", False)
-    with pytest.raises(GateBBatching):
+    with pytest.raises(GateBBatching, match=r"\[B\] batch image count is not a count: True; the batch was"):
         gate_b_batching(1, True)

@@ -95,7 +95,7 @@ def test_a_ragged_last_group_is_the_plan_not_an_error():
 
 
 def test_a_group_size_of_zero_raises_rather_than_looping():
-    with pytest.raises(AS.AssemblyGate):
+    with pytest.raises(AS.AssemblyGate, match=r"\[CASCADE\] group size must be at least 1"):
         AS.cascade_plan(81, 0)
 
 
@@ -140,7 +140,7 @@ def test_a_group_size_edited_up_past_the_ceiling_raises(group):
     """
     wf, gids = _graph(81, group_size=group)
     assert _gates(wf, gids, group=group)["verdict"], "topology alone sees nothing wrong"
-    with pytest.raises(AS.AssemblyGate):
+    with pytest.raises(AS.AssemblyGate, match=r"\[CASCADE\] batch node\(s\) \[\('400'"):
         AS.gate_slot_ceiling(wf)
     with pytest.raises(AS.AssemblyGate) as exc:                 # the builders' shape
         AS.gate_slot_ceiling(wf, cap=max(group, 1))
@@ -260,7 +260,7 @@ def test_a_partner_node_in_the_cascade_is_caught_by_the_allowlist():
     and bill 106-211 credits."""
     wf, _ = _graph(4, group_size=2)
     wf["500"] = {"class_type": "Wan2ReferenceVideoApi", "inputs": {"seed": 1}}
-    with pytest.raises(AS.AssemblyGate):
+    with pytest.raises(AS.AssemblyGate, match=r"\[ASSEMBLY\] the assembly graph contains"):
         AS.gate_no_paid_nodes(wf)
 
 
@@ -540,7 +540,8 @@ def test_a_within_group_slot_swap_is_caught_by_the_index_gate():
     # Wave-3 merge (coordinator): the topology gate now carries the slot-k-is-frame-k clause
     # (core-solvers, P3 side A) alongside this builder's `gate_slot_frame_index` (side B) —
     # both refuse the swap. Consolidating one clause out of two gates is a Stage B item.
-    with pytest.raises(AS.AssemblyGate):
+    with pytest.raises(AS.AssemblyGate,
+                       match=r"\[CASCADE\] group 401 slot images\.image0 is bound to"):
         _gates(wf, gids)
     with pytest.raises(AS.AssemblyGate) as exc:
         B.gate_slot_frame_index(wf, names, plan, B.FIRST_IMAGE_ID)
@@ -583,7 +584,8 @@ def test_a_refused_build_leaves_no_output_directory(tmp_path):
     p = tmp_path / "uploads.json"
     p.write_text(json.dumps(uploads), encoding="utf-8")
     out = tmp_path / "fresh" / "route"
-    with pytest.raises(AS.AssemblyGate):
+    with pytest.raises(AS.AssemblyGate,
+                       match=r"\[ASSEMBLY\] the upload map carries 81 frames but only 1"):
         B.main([f"--uploads={p}", f"--out={out}"])
     assert not out.exists()
     assert not out.parent.exists()

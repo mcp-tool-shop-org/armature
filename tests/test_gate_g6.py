@@ -68,7 +68,8 @@ def _spec(tmp_path, animation, count=9):
 def test_run_export_halts_on_a_static_subject_in_per_frame_mode(tmp_path):
     spec = _spec(tmp_path, "per_frame")
     backend = FakeBackend(64, 96, moves=False)  # the honest default: the box never moves
-    with pytest.raises(G6SubjectMotion):
+    with pytest.raises(G6SubjectMotion,
+                       match=r"the authored performance did not reach the render\. Every"):
         stage_render.run_export(spec, str(tmp_path / "run"), backend=backend)
 
 

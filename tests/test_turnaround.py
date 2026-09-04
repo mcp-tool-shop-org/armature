@@ -70,7 +70,8 @@ def test_a_closed_sweep_does_not_render_view_zero_twice():
 
 
 def test_a_turnaround_of_no_views_raises():
-    with pytest.raises(TA.TurnaroundGate):
+    with pytest.raises(TA.TurnaroundGate,
+                       match=r"\[TURN\] a turnaround of 0 view\(s\) is not a turnaround"):
         TA.orbit_azimuths(0, 270.0, 360.0)
 
 
@@ -116,7 +117,8 @@ def test_the_boundary_between_them_is_one_count():
     """(254, 255) passes, (255, 255) does not. The gate is on the extremum, not a
     threshold somebody could move by a count when they did not like the result."""
     assert TA.gate_view_alpha(1, 254, 255, 0.0001)["verdict"]
-    with pytest.raises(TA.TurnaroundAlphaGate):
+    with pytest.raises(TA.TurnaroundAlphaGate,
+                       match=r"it is a baked void with a fourth channel\."):
         TA.gate_view_alpha(1, 255, 255, 0.0)
 
 

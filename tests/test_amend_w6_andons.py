@@ -115,7 +115,8 @@ def test_load_pinned_camera_refuses_to_run_with_no_expectation(tmp_path):
     with pytest.raises(FramingError) as exc:
         framing.load_pinned_camera(path, None)
     assert "andon" in str(exc.value) or "no expectation" in str(exc.value)
-    with pytest.raises(FramingError):
+    with pytest.raises(FramingError,
+                       match=r"load_pinned_camera was called with no expectation to"):
         framing.load_pinned_camera(path, {})
 
 
