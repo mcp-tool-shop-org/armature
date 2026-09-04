@@ -39,8 +39,19 @@ def probe_one(path):
 
     rec["bytes"] = os.path.getsize(path)
     scene = blender_scene.reset_scene()
-    meshes, armatures, info = blender_scene.import_glb(path)
+    # SEAM, wave 6 (core-solvers F-abcb06a8): `import_glb` takes `expected_fps` as a
+    # REQUIRED keyword-only argument, because glTF key times are in SECONDS and the
+    # importer resolves them against whatever rate the scene carries at that moment. This
+    # tool measures a subject's EXTENT, not its timing, so it has no rate of its own to
+    # assert; the scene's own rate is passed so the omission is a recorded choice rather
+    # than a silent one, and the record says which rate was in force.
+    expected_fps = int(blender_scene.scene_fps())
+    meshes, armatures, info = blender_scene.import_glb(path, expected_fps=expected_fps)
     rec["import"] = info
+    rec["expected_fps"] = expected_fps
+    rec["expected_fps_source"] = (
+        "the scene's own rate: this probe measures extent, not timing, so it asserts no "
+        "rate of its own")
 
     visible = blender_scene.render_visible_meshes(scene, meshes)
     rec["mesh_objects_all"] = [o.name for o in meshes]

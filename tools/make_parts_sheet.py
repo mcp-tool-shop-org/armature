@@ -36,9 +36,79 @@ FULL_W, FULL_H = 820, 1240
 INSET = 620
 INSET_HEIGHT_FRACTION = 0.20
 ARC_FRAMES = (17, rig_character.PROBE_FRAMES)
-#: The joints the Director rules on, in the order he reads them.
-INSET_JOINTS = (("shoulder", "shoulder.L"), ("elbow", "elbow.L"),
-                ("wrist", "wrist.L"), ("hip", "hip.L"))
+#: The joints the Director rules on, in the order he reads them. `(panel label, joint)` --
+#: the SIDE is appended at run time from `articulated_side`, never pinned here.
+INSET_JOINTS = (("shoulder", "shoulder"), ("elbow", "elbow"),
+                ("wrist", "wrist"), ("hip", "hip"))
+
+#: The joints whose displacement decides which arm the arc moved. The hip is excluded: the
+#: probe arc rotates a shoulder, so a hip on either side stays put and would only dilute
+#: the measurement.
+SIDE_PROBE_JOINTS = ("shoulder", "elbow", "wrist")
+
+
+def side_word(side):
+    """"L" -> "LEFT". The word a caption prints, from the side the run measured."""
+    return {"L": "LEFT", "R": "RIGHT"}[side]
+
+
+def articulated_side(arm_obj, scene, rest_frame, posed_frame,
+                     joints=SIDE_PROBE_JOINTS):
+    """Which arm the authored arc actually moves, MEASURED on this rig.
+
+    THE ONE IMPLEMENTATION. `make_binding_sheet` and `make_rig_sheet` import it from here,
+    the way they already import `light_the_scene` / `ortho_camera` / `shoot`;
+    `make_skeleton_sheet` derives its own side from the landmark dict it already holds.
+
+    MEASURED 2026-09-04: these three sheets pinned `shoulder.L / elbow.L / wrist.L / hip.L`
+    and captioned "the character's LEFT arm", while `rig_character.author_probe` chooses
+    `shoulder.{side}` from `landmarks.facing.left_x_sign` against
+    `sitelist.PROBE_ARC_SIDE_X_SIGN` -- which arm lies on +X is a property of the mesh, not
+    of the letter in the generator's bone name. Nothing raised when the two disagreed,
+    because each sheet's liveness andon is satisfied by the OTHER arm moving. On a subject
+    whose +X arm is the right one, four 1:1 insets showed the joints that did not move.
+
+    Returns the side and both displacements, so the record can say what it measured.
+    """
+    names = {side: [f"{j}.{side}" for j in joints
+                    if f"{j}.{side}" in arm_obj.pose.bones]
+             for side in ("L", "R")}
+    if not names["L"] or not names["R"]:
+        raise ArmatureError(
+            f"the armature does not name both sides of {list(joints)}: "
+            f"L={names['L']} R={names['R']}. Which arm the arc moves cannot be measured, "
+            f"and a sheet that guessed would caption the wrong limb")
+
+    def heads(frame):
+        scene.frame_set(frame)
+        bpy.context.view_layer.update()
+        return {n: (arm_obj.matrix_world @ arm_obj.pose.bones[n].head).copy()
+                for side in ("L", "R") for n in names[side]}
+
+    rest, posed = heads(rest_frame), heads(posed_frame)
+    disp = {side: max((posed[n] - rest[n]).length for n in names[side])
+            for side in ("L", "R")}
+    hi = "L" if disp["L"] >= disp["R"] else "R"
+    lo = "R" if hi == "L" else "L"
+    ev = {"rest_frame": rest_frame, "posed_frame": posed_frame,
+          "joints": list(joints), "displacement": disp,
+          "bones": {side: names[side] for side in ("L", "R")}}
+
+    if disp[hi] <= 0.0:
+        raise ArmatureError(
+            f"neither arm moved between frames {rest_frame} and {posed_frame} "
+            f"(L={disp['L']:.3e} R={disp['R']:.3e}); there is no articulated side for the "
+            f"insets to be about. {ev}")
+    # Bounded as a fraction of the WINNER'S OWN displacement, not by a metric constant: a
+    # global constant must not govern a local feature.
+    if disp[lo] > 0.5 * disp[hi]:
+        raise ArmatureError(
+            f"both arms move across the arc (L={disp['L']:.3e} R={disp['R']:.3e}); there "
+            f"is no single articulated side, and picking one silently is how a caption "
+            f"stops describing the picture. {ev}")
+    ev["side"] = hi
+    ev["side_word"] = side_word(hi)
+    return ev
 
 
 def parse_args():
@@ -159,8 +229,11 @@ def main():
             f"{rig_character.PROBE_FRAMES}. The authored arc did not survive the round trip, "
             f"and a sheet built from this would read as 'this route does not move'")
 
-    targets = {label: tuple(arm_obj.matrix_world @ arm_obj.pose.bones[bone].head)
-               for label, bone in INSET_JOINTS}
+    side_rec = articulated_side(arm_obj, scene, 1, rig_character.PROBE_FRAMES)
+    side = side_rec["side"]
+    targets = {label: tuple(arm_obj.matrix_world
+                            @ arm_obj.pose.bones[f"{joint}.{side}"].head)
+               for label, joint in INSET_JOINTS}
 
     full_scale = height * 1.10
     panels = {}
@@ -185,9 +258,10 @@ def main():
         "filename": "E07-parts-armature.png",
         "title": args.title,
         "subtitle": ("17 rigid parts, bone-parented, no deformation anywhere   ·   the arc is "
-                     f"E03's: the character's LEFT arm, 0°→90° about +Y, {last} keys at 16 "
-                     f"fps   ·   insets are 1:1 at frame {last}, on the joints under "
-                     "articulation"),
+                     f"E03's: the character's {side_rec['side_word']} arm, 0°→90° about "
+                     f"+Y, {last} keys at 16 fps   ·   insets are 1:1 at frame {last}, on "
+                     "the joints under articulation"),
+        "articulated_side": side_rec,
         "rows": [
             {"title": "The figure through the arc",
              "panels": [{"body": panels["f1"], "label": "frame 1 — rest"},

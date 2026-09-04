@@ -26,7 +26,8 @@ from mathutils import Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig_character as rc                                            # noqa: E402
 from armature_core.errors import ArmatureError                        # noqa: E402
-from make_parts_sheet import light_the_scene, ortho_camera, shoot     # noqa: E402
+from make_parts_sheet import (articulated_side, light_the_scene,      # noqa: E402
+                              ortho_camera, shoot)
 
 
 def parse_args():
@@ -100,10 +101,16 @@ def main():
     dg.update()
     bones = {b.name: (arm.matrix_world @ b.head) for b in arm.pose.bones}
     height = hi[2] - lo[2]
-    insets = [("shoulder", bones["shoulder.L"], height * 0.20, 0.0),
-              ("elbow", bones["elbow.L"], height * 0.16, 0.0),
-              ("wrist", bones["wrist.L"], height * 0.16, 0.0),
-              ("hip", bones["hip.L"], height * 0.20, 0.0)]
+    # Which arm the arc moves is MEASURED here too -- ONE implementation, imported from
+    # `make_parts_sheet` beside the staging triple this file already takes from there.
+    side_rec = articulated_side(arm, scene, 1, 33)
+    side = side_rec["side"]
+    scene.frame_set(33)
+    dg.update()
+    insets = [("shoulder", bones[f"shoulder.{side}"], height * 0.20, 0.0),
+              ("elbow", bones[f"elbow.{side}"], height * 0.16, 0.0),
+              ("wrist", bones[f"wrist.{side}"], height * 0.16, 0.0),
+              ("hip", bones[f"hip.{side}"], height * 0.20, 0.0)]
 
     light_the_scene(scene)
     centre = Vector((0.5 * (lo[0] + hi[0]), 0.0, lo[2] + 0.5 * height))
@@ -160,8 +167,10 @@ def main():
     spec = {"title": args["title"],
             "subtitle": (f"one skinned mesh, {len(mesh.data.vertices):,} verts, "
                          f"{len(mesh.data.polygons):,} faces, bone-heat weights normalised "
-                         f"to 1.0 · the arc is E03's: the character's LEFT arm, 0°→90° "
+                         f"to 1.0 · the arc is E03's: the character's "
+                         f"{side_rec['side_word']} arm, 0°→90° "
                          f"about +Y, 33 keys at 16 fps"),
+            "articulated_side": side_rec,
             "out": out_dir, "filename": "E07-rig-armature.png", "rows": rows}
     with open(os.path.join(out_dir, "panels.json"), "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
