@@ -102,6 +102,79 @@ CREATE_VIDEO_FPS_RANGE = (1.0, 120.0)
 FRAME_KEY = re.compile(r"^[0-9]{5}(\.png)?$", re.IGNORECASE)
 
 
+class SeedRegistrationError(ArmatureError):
+    """The committed seed registration is not a list of seeds this tool can read.
+
+    A refusal about the OPERAND an operator supplied, not about a graph, so it carries no
+    gate of its own beyond the `PAYLOAD` id the builders' own operand refusals use. It
+    defines no `__init__`: the base stores what it is passed (wave 16, rule 5).
+    """
+
+
+def read_seed_registration(path, *, flag="--seeds"):
+    """The committed seed list, READ through clauses rather than indexed.
+
+    Wave 16, F-0682bd00. Every tool in this tree that reads a committed registration read
+    it the same two ways and neither was a clause. Six sites indexed the document bare
+    (`json.load(fh)["seeds"]` in `build_animate_payload`, `build_camera_i2v_payload`,
+    `build_i2v_payload`, `build_r2v_payload`, `build_t2v_payload` and `gate_saved_graph`),
+    so a registration JSON with no `seeds` key raised a stdlib `KeyError` naming a key and
+    nothing else; `build_lora_arm_payload` carried the DISARMING form,
+    `registry.get("seeds") or []`, which turns the same file into an empty list and then
+    reports the operator's seed as unregistered rather than the file as unreadable — a
+    default that answers a question the reader never asked.
+
+    Measured 2026-09-04 as a subprocess against `{"seeds": []}`: `build_t2v_payload`
+    printed `BUILD_T2V_HALT {"error": "IndexError", "message": "list index out of range",
+    "evidence": null}` and exited **1** — the code its own `__main__` block reserves for
+    "this tool crashed" — for an operator supplying an emptied registration file.
+
+    **Emptiness is not this reader's clause.** A caller that was given an explicit `--seed`
+    is not defaulting to anything and has nothing to index; the caller that DOES default
+    raises `no_seed_and_no_registration`, the clause `build_animate_payload`,
+    `build_i2v_payload` and `build_camera_i2v_payload` already carried before their
+    `sorted(registry)[0]`. One reader, one wording, every caller.
+
+    One implementation, eight callers — the same rule `gate_create_video_fps` above states.
+    """
+    ev = {"gate": "PAYLOAD", "andon": "seed_registration", "flag": flag,
+          "path": os.path.abspath(path)}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except OSError as exc:
+        raise SeedRegistrationError(
+            f"{flag} {path!r} cannot be opened ({exc.__class__.__name__}: {exc}). The "
+            f"committed registration is the list git timestamps ahead of the artifacts it "
+            f"governs, and a seed that is not read off it is a number nobody can hold this "
+            f"run to",
+            dict(ev, clause="registration_missing", error=exc.__class__.__name__)) from exc
+    except json.JSONDecodeError as exc:
+        raise SeedRegistrationError(
+            f"{flag} {path!r} is not readable JSON ({exc}). A registration this tool "
+            f"cannot parse is not a registration it can check a seed against",
+            dict(ev, clause="registration_unreadable", error=str(exc))) from exc
+    if not isinstance(doc, dict):
+        raise SeedRegistrationError(
+            f"{flag} {path!r} is a {type(doc).__name__}, not a JSON object with a `seeds` "
+            f"key. The registration's shape is part of what is committed",
+            dict(ev, clause="registration_not_a_mapping", read_as=type(doc).__name__))
+    if "seeds" not in doc:
+        raise SeedRegistrationError(
+            f"{flag} {path!r} declares no `seeds` key; it carries {sorted(doc)}. The bare "
+            f"index this replaces raised a stdlib KeyError naming the key and nothing "
+            f"else — no flag, no file, no receipt",
+            dict(ev, clause="registration_no_seeds_key", keys=sorted(doc)))
+    seeds = doc["seeds"]
+    if not isinstance(seeds, list):
+        raise SeedRegistrationError(
+            f"{flag} {path!r} declares `seeds` as a {type(seeds).__name__}, not a list. A "
+            f"membership test against a non-list is a question with an accidental answer",
+            dict(ev, clause="registration_seeds_not_a_list",
+                 read_as=type(seeds).__name__))
+    return seeds
+
+
 def gate_create_video_fps(fps):
     """Gate ROUTE - ANDON: `CreateVideo.fps` is inside the contract the record states.
 

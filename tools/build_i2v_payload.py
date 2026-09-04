@@ -93,7 +93,8 @@ from armature_core import route_gates  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
-from build_assembly_payload import gate_create_video_fps  # noqa: E402
+from build_assembly_payload import (  # noqa: E402
+    gate_create_video_fps, read_seed_registration)
 
 import build_animate_payload as E08  # noqa: E402  - the prompt's source of record
 
@@ -683,8 +684,10 @@ def main(argv=None):
 
     registry = None
     if a.seeds_registry:
-        with open(a.seeds_registry, encoding="utf-8") as fh:
-            registry = json.load(fh)["seeds"]
+        # ONE reader, eight callers (wave 16, F-0682bd00). The bare `json.load(fh)["seeds"]`
+        # this replaces raised a stdlib KeyError naming a key and nothing else on a
+        # registration with no `seeds` key.
+        registry = read_seed_registration(a.seeds_registry, flag="--seeds-registry")
 
     if not a.negative_source:
         raise PayloadError(

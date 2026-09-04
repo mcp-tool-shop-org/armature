@@ -33,6 +33,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates as RG  # noqa: E402
+from build_assembly_payload import read_seed_registration  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
@@ -646,8 +647,10 @@ def main(argv=None):
     # `--api` gets the MIRROR of that boundary, which it never had: it was a bare
     # `json.load` with no format check at all, two lines below a `--saved` refused by name.
     api = _as_api_graph(RG.load_graph(a.api), path=a.api)
-    with open(a.seeds, encoding="utf-8") as fh:
-        registered = json.load(fh)["seeds"]
+    # ONE reader, eight callers (wave 16, F-0682bd00): the bare index this replaces
+    # raised a stdlib KeyError on a registration with no `seeds` key, on the last gate
+    # before a paid submission.
+    registered = read_seed_registration(a.seeds, flag="--seeds")
 
     frame = None
     if a.frame:

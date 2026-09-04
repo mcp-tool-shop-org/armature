@@ -63,6 +63,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates  # noqa: E402
+from build_assembly_payload import read_seed_registration  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateCanon, GateFailure, GateSSeedRegistration)
@@ -458,9 +459,11 @@ def gate_s(graph, registry_path, seed):
     `route_gates.gate_s_registration` and `build_r2v_payload.gate_seed_registered` both
     raise with an evidence dict.
     """
-    with open(registry_path, encoding="utf-8") as fh:
-        registry = json.load(fh)
-    registered = registry.get("seeds") or []
+    # ONE reader, eight callers (wave 16, F-0682bd00). `registry.get("seeds") or []` was
+    # the DISARMING form of the same defect: a registration with no `seeds` key became an
+    # empty list, and this gate then reported the operator's seed as unregistered rather
+    # than the file as unreadable — a default answering a question the reader never asked.
+    registered = read_seed_registration(registry_path, flag="--seeds-registry")
     live = [(nid, n["inputs"].get("noise_seed")) for nid, n in graph.items()
             if isinstance(n, dict) and n.get("class_type") == "KSamplerAdvanced"
             and (n.get("inputs") or {}).get("add_noise") == "enable"]

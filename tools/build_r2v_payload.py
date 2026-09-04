@@ -44,6 +44,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import build_cascade_payload as CASCADE  # noqa: E402
+from build_assembly_payload import read_seed_registration  # noqa: E402
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
@@ -258,8 +259,9 @@ def build_and_write(argv=None):
 
     out = os.path.abspath(a.out)
 
-    with open(a.seeds, encoding="utf-8") as fh:
-        registration = json.load(fh)
+    # ONE reader, eight callers (wave 16, F-0682bd00): the bare `registration["seeds"]`
+    # below used to raise a stdlib KeyError on a registration with no `seeds` key.
+    registered = read_seed_registration(a.seeds, flag="--seeds")
     with open(a.prompt_file, encoding="utf-8") as fh:
         prompt_spec = json.load(fh)
     # The SHIPPED prompt is what is gated. `--canon-prompt` used to be gated in its place
@@ -269,7 +271,7 @@ def build_and_write(argv=None):
     canon_ev = canon_spend(a.subject, prompt_spec["prompt"], no_canon=a.no_canon,
                            out_dir=out, canon_prompt=a.canon_prompt)
 
-    gate_seed = gate_seed_registered(a.seed, registration["seeds"])
+    gate_seed = gate_seed_registered(a.seed, registered)
 
     refs = ref_record = upload_names = frame_order = None
     if a.arm == "A1":
