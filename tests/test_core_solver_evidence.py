@@ -184,11 +184,21 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     assert with_gates == {
         # rig_gates 11 → 12 and route_gates 32 → 34 at the wave-8 merge: core-gates' branch
         # added Gate P's truncation refusal and the class-level licence refusals.
-        "assembly": 18, "blender_scene": 4, "canon": 1, "donor_gate": 6, "gates": 20,
-        "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 7, "resample": 4,
-        "rig_gates": 12, "route_gates": 34, "startframe": 19, "turnaround": 9,
+        #
+        # WAVE 10, re-derived on this branch 2026-09-04 (never hand-edited from a merge):
+        #   framing 0 → 6   `PinnedCameraGate`, the pinned-camera andon split off
+        #                   `FramingError` when that class rejoined the ArmatureError family
+        #   walk    0 → 3   `GaitGate` (1) + `CadenceGate` (2), the same split on `walk.py`
+        #   parts   7 → 8   Gate D's zero-vertex refusal (F-03955683)
+        # `glb` is unchanged at 4: `MalformedGLB` rejoined the family but is a REFUSAL, not
+        # a `GateFailure`, and this walk counts `GateFailure` subclasses only.
+        # core-gates' branch moves `rig_gates` 12 → 15 in the same wave; the merged total is
+        # re-derived on the merged tree rather than added up from two branches.
+        "assembly": 18, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
+        "gates": 20, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
+        "rig_gates": 12, "route_gates": 34, "startframe": 19, "turnaround": 9, "walk": 3,
     }, with_gates
-    assert sum(with_gates.values()) == 145
+    assert sum(with_gates.values()) == 155
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

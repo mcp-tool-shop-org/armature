@@ -281,3 +281,56 @@ def test_the_gate_is_not_an_assert():
                encoding="utf-8").read()
     for line in src.splitlines():
         assert not line.strip().startswith("assert "), line
+
+
+# ---------------------------------- wave 10: the module owns ORTHONORMAL_TOL, not a caller
+
+
+def _sheared():
+    """A 3x3 that is NOT a rotation at the module's tolerance, and only just.
+
+    `1e-3` is the "orders of magnitude larger than float64 noise" band `ORTHONORMAL_TOL`'s
+    own comment describes — a real defect, not a rounding artefact.
+    """
+    return [[1.0, 1e-3, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+
+def test_a_caller_cannot_widen_the_rotation_gate_to_get_a_legacy_record_through():
+    """F-1c6683f0, the third instance of the caller-loosenable gate tolerance and the one
+    on the andon that decides whether a motion record's matrices may be believed.
+
+    `ORTHONORMAL_TOL`'s comment says the value sits deliberately between measured float64
+    noise (~3e-15) and a real defect, so "the gate cannot fire on correct work and cannot
+    stay silent on the failure it exists for" — a claim about the module's number that one
+    keyword could void. Both directions are asserted: the same matrix that raises at the
+    default must still raise when a caller asks for 1e-3, rather than being returned.
+    """
+    m = _sheared()
+    with pytest.raises(RS.ResampleGate, match=r"not a rotation"):
+        RS.require_rotation(m, "frame 0")
+    with pytest.raises(RS.ResampleGate, match=r"may only TIGHTEN") as exc:
+        RS.require_rotation(m, "frame 0", tol=1e-3)
+    assert exc.value.evidence["module_tolerance"] == RS.ORTHONORMAL_TOL
+    assert exc.value.evidence["tol"] == 1e-3
+
+
+def test_the_rotation_gate_still_accepts_a_caller_that_tightens():
+    ev = RS.require_rotation([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                             "frame 0", tol=RS.ORTHONORMAL_TOL / 100.0)
+    assert ev["orthonormality_error"] == 0.0
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -float("inf"), 0.0, -1.0])
+def test_the_rotation_gate_refuses_a_tolerance_that_is_not_a_positive_finite_number(bad):
+    """`nan > ORTHONORMAL_TOL` is False, so a NaN would have read as a tightening and then
+    made `worst <= tol` False in both directions."""
+    with pytest.raises(RS.ResampleGate, match=r"not a finite positive"):
+        RS.require_rotation(_sheared(), "frame 0", tol=bad)
+
+
+def test_is_rotation_keeps_its_plain_keyword_because_it_returns_rather_than_gating():
+    """The diagnostic knob is deliberately NOT guarded: it hands back a verdict for a
+    caller to read, and a caller that reads a looser answer has not disarmed an andon."""
+    ok, worst, _det = RS.is_rotation(_sheared(), tol=1e-2)
+    assert ok and worst > RS.ORTHONORMAL_TOL
+    assert RS.is_rotation(_sheared())[0] is False

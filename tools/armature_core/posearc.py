@@ -178,6 +178,22 @@ def arc_readout(arc, count, start_deg, end_deg):
         "end_deg": end_deg,
         "frames": count,
         "monotonic": True,
+        # F-93f0e38f. `monotonic` sat here as a literal beside eleven fields computed from
+        # the arc, and nothing measures it: `angle_at_frame` is linear in the frame index
+        # by construction, so the value is True for every possible input and takes the same
+        # value when the arc is what it claims and when it is anything else. "Grade an arm
+        # only on what it can move" — a field that cannot be False is not a measurement,
+        # and the E03 report quotes this record. It is LABELLED rather than deleted,
+        # because the property is real and a reader wants to know it holds; the label says
+        # who guarantees it. The shape is `binding.rigid_segment_weights`', carried rather
+        # than re-invented.
+        "invariant_by_construction": ["monotonic"],
+        "invariant_by_construction_note": (
+            "`monotonic` is a property of the formula, not of this arc: `angle_at_frame` "
+            "is linear in the frame index, so it is True for every arc this module can "
+            "build and no code checks it. A real measurement of monotonicity would be "
+            "taken on the angles read back OUT of the rendered performance, where the "
+            "value can differ."),
         "note": (
             "The readout is the arc's REGISTERED readout angle, not 'passes horizontal'. "
             "A T-pose arm begins horizontal, so the spec's stated readout is 0 for every "

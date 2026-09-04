@@ -693,3 +693,110 @@ def test_the_gate_docstring_does_not_name_a_caller_that_does_not_exist():
     assert callers == [], f"a tool now calls the gate: {callers}; update the docstring"
     doc = inspect.getdoc(LS.gate_round_trip)
     assert "tests/test_lift_solve.py" in doc or "No tool implements" in doc
+
+
+# ------------------------- wave 10: Gate SOLVE owns its tolerance and its multiplicand
+
+
+def _round_trip_inputs():
+    """A rest table, an observation and a solve that agree — the passing direction, built
+    from this file's own fixtures so the guards below are exercised on the same inputs the
+    exactness tests use."""
+    rest = synthetic_rest()
+    authored = motion(LIMB_MOTION, root=(0.02, -0.03, 0.01))
+    obs = observed_from(rest, authored)
+    return rest, obs, LS.solve_frame(rest, obs)
+
+
+def test_gate_solve_refuses_a_caller_that_loosens_its_exactness_claim():
+    """F-8cd65665. `tol_frac` was a plain keyword any caller could raise, on a gate whose
+    own docstring says "No flag, no environment escape, no assert" and "This is an
+    inversion defect, never a number to tune toward" — and a caller-supplied `tol_frac` is
+    exactly a number to tune toward, in the loosening direction. Wave 8 removed the same
+    shape from four rig gates; this gate's docstring cited four of them by name for its
+    POPULATION guard without following them on the tolerance.
+
+    Both directions, or the fixture would pass on a gate that never fires."""
+    rest, obs, solved = _round_trip_inputs()
+    with pytest.raises(LS.SolveGate, match=r"may only TIGHTEN") as exc:
+        LS.gate_round_trip(rest, obs, solved, DIAGONAL, tol_frac=1e-3)
+    assert exc.value.evidence["module_tol_frac"] == LS.ROUND_TRIP_TOL_FRAC
+    assert LS.gate_round_trip(rest, obs, solved, DIAGONAL)["within_tolerance"]
+    tighter = LS.gate_round_trip(rest, obs, solved, DIAGONAL,
+                                 tol_frac=LS.ROUND_TRIP_TOL_FRAC / 10.0)
+    assert tighter["tolerance_frac_of_diagonal"] < LS.ROUND_TRIP_TOL_FRAC
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 0.0, -1.0])
+def test_gate_solve_refuses_a_tolerance_or_a_diagonal_that_is_not_a_number(bad):
+    """`diagonal` multiplies the tolerance and was not checked at all — the same open door
+    wave 10 closed one argument over on `parts.gate_rigid_arrival`."""
+    rest, obs, solved = _round_trip_inputs()
+    with pytest.raises(LS.SolveGate, match=r"not a finite positive"):
+        LS.gate_round_trip(rest, obs, solved, DIAGONAL, tol_frac=bad)
+    with pytest.raises(LS.SolveGate, match=r"not a finite positive"):
+        LS.gate_round_trip(rest, obs, solved, bad)
+
+
+def test_the_diagnostic_keeps_its_plain_keyword():
+    """`round_trip_report` returns a reading rather than deciding, so its `tol_frac` is a
+    knob and not an andon a caller can widen."""
+    rest, obs, solved = _round_trip_inputs()
+    assert LS.round_trip_report(rest, obs, solved, DIAGONAL,
+                                tol_frac=1e-3)["tolerance_frac_of_diagonal"] == 1e-3
+
+
+# ---------------------------- wave 10: the docstrings' call-site anchors are derived
+
+
+def test_the_two_docstrings_name_the_call_sites_the_tree_actually_has():
+    """F-8cd65665's folded-in half. `round_trip_report`'s docstring named
+    "lift_clip.py:276, measure_lift.py:334" and `gate_round_trip`'s named
+    "lift_clip.py:276 and measure_lift.py:468" for the SAME two call sites — so the pair
+    disagreed with itself and all four anchors were wrong. Both presented the numbers as a
+    grep result ("grep finds ..."), which is the recorded-count-measured-on-a-branch shape:
+    a number that moved at a merge and was never re-derived, while a reader chasing
+    measure_lift.py:334 lands on unrelated code.
+
+    Derived here rather than typed: the anchors come from an AST walk of `tools/` for calls
+    to `round_trip_report`, and the docstrings must name exactly those `file:line` pairs.
+    The fifth stale anchor now fails on the day it is written.
+    """
+    import ast
+    import os
+    import re
+
+    tools = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "tools")
+    sites = set()
+    for root, _dirs, files in os.walk(tools):
+        if "superseded" in root.replace("\\", "/").split("/"):
+            continue
+        for fname in sorted(files):
+            if not fname.endswith(".py") or fname == "lift_solve.py":
+                continue
+            path = os.path.join(root, fname)
+            with open(path, encoding="utf-8") as fh:
+                tree = ast.parse(fh.read())
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Call)
+                        and (getattr(node.func, "attr", None)
+                             or getattr(node.func, "id", None)) == "round_trip_report"):
+                    sites.add(f"{fname}:{node.lineno}")
+
+    assert sites == {"lift_clip.py:275", "measure_lift.py:481"}, sorted(sites)
+
+    docs = LS.round_trip_report.__doc__ + LS.gate_round_trip.__doc__
+    for doc in (LS.round_trip_report.__doc__, LS.gate_round_trip.__doc__):
+        for anchor in sites:
+            assert anchor in doc, (anchor, doc[:200])
+
+    #: The wrong anchors the two docstrings used to CLAIM. They are still written down,
+    #: because this repo corrects in place with the measurement rather than deleting — so
+    #: the census cannot simply ban them. It bans an anchor that is neither derived nor
+    #: recorded as corrected, which is what a fifth stale one would be.
+    corrected = {"lift_clip.py:276", "measure_lift.py:334", "measure_lift.py:468"}
+    mentioned = set(re.findall(r"[A-Za-z_]+[.]py:[0-9]+", docs))
+    unexplained = mentioned - sites - corrected
+    assert unexplained == set(), sorted(unexplained)
+    assert corrected <= mentioned, "the correction record was deleted rather than kept"

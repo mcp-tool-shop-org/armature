@@ -344,24 +344,34 @@ def require_finite(name, value, gate_cls, ev, positive=True):
     return v
 
 
-def _tightened(name, requested, owned, gate_cls, ev):
+def tightened(name, requested, owned, gate_cls, ev):
     """`requested` if it only tightens `owned`, else raise. None means "use the module's".
 
     Wave 10, F-e982d505: the comparison below is `value > float(owned)`, and `float('nan')
     > 1e-4` is False — so a NaN, an infinity of the wrong sign, a zero and a negative all
     read as tightenings and were accepted. `require_finite` runs first, and it refuses
     them by name.
+
+    **Public in wave 10 because two more gates needed exactly this** (F-1c6683f0 on
+    `resample.require_rotation`, F-8cd65665 on `lift_solve.gate_round_trip`) — one
+    implementation, imported, rather than a third and a fourth copy of the same paragraph.
+    `_tightened` remains as this module's own spelling.
     """
     if requested is None:
         return float(owned)
     value = require_finite(name, requested, gate_cls, ev)
     if value > float(owned):
+        ev[name] = value
         raise gate_cls(
             f"a caller asked this gate to run with {name}={value:.3e}, above the module's "
             f"own {float(owned):.3e}. It may only TIGHTEN: a tolerance the caller supplies "
             f"is a tolerance the caller can loosen, and a gate whose tolerance grows with "
             f"the deviation it is measuring cannot see the deviation", ev)
     return value
+
+
+#: This module's own spelling of the shared helper above.
+_tightened = tightened
 
 
 def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_frac=None):
