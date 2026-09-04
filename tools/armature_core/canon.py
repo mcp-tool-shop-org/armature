@@ -28,8 +28,19 @@ of them create an output directory. The escape is census-backed
 ``no_canon=True`` on a subject that HAS surfaces is refused.
 
 Both directions. Forward: every ratified occupant phrase occurs in the
-prompt, un-negated. Reverse: armed whenever legal_clauses is declared
-(schema 1 requires the key). Residue after licensed spans refuses.
+prompt, un-negated, and no forbidden word or blocked addition occurs.
+Reverse: armed whenever legal_clauses is declared (schema 1 requires the
+key). Residue after licensed spans refuses.
+
+``blocked_additions`` is a REFUSAL list, not a licence. Until 2026-09-03 its
+only behaviour was the opposite: its phrases were collected into
+``licensed_phrases`` and stripped from the prompt before the reverse
+direction looked for leftovers, so the field permitted exactly the text its
+name says is blocked. It occurred in no other module, test, doc or data
+file, so nothing settled the reading and the name decides it.
+
+An empty prompt is refused for the same reason ``None`` is: both directions
+pass on one having examined zero characters.
 """
 
 from __future__ import annotations
@@ -50,7 +61,6 @@ SPATIAL_KINDS = ("bone", "material", "region")
 OCCUPANT_KINDS = ("prompt", "bare", "mesh")
 CLAUSE_CLASSES = ("style", "framing")
 NEGATION = re.compile(r"\b(no|not|without|lacking)\b", re.I)
-SLEEVE = re.compile(r"\bsleeve(?!less)\b", re.I)
 STOP = re.compile(
     r"\b(a|an|the|with|and|or|of|on|in|at|to|for|from|by|as|"
     r"his|her|its|their|this|that|each)\b",
@@ -260,16 +270,34 @@ def is_ratified(s):
     return bool(occ.get("ratified"))
 
 
+def has_phrase(s):
+    """Does this surface's occupant carry text the router can actually check?"""
+    occ = s.get("occupant") or {}
+    return bool(occ.get("phrase"))
+
+
 def coverage(doc):
-    """Occupancy and ratification as numbers. Diagnostics. They gate nothing."""
+    """Occupancy and ratification as numbers. Diagnostics. They gate nothing.
+
+    `ratified` counts only occupants that carry a PHRASE. `is_named` is True for an
+    occupant of kind 'bare', which carries nothing checkable, so a doc whose ratified
+    occupants were all bare satisfied `require_canon`'s tripwire — "zero ratified
+    prompt occupants: a check that cannot fail is not a check" — while giving the
+    forward direction nothing to look for. The bare ones are still counted, beside it,
+    under `ratified_bare`: they are a real state of the file and dropping them from the
+    numbers would hide them rather than classify them.
+    """
     ps = prompt_surfaces(doc)
     named = [s for s in ps if is_named(s)]
-    ratified = [s for s in ps if is_ratified(s) and is_named(s)]
+    ratified = [s for s in ps if is_ratified(s) and has_phrase(s)]
+    bare = [s for s in ps if is_ratified(s) and is_named(s) and not has_phrase(s)]
     n = len(ps)
     return {
         "prompt_surfaces": n,
         "named": len(named),
         "ratified": len(ratified),
+        "ratified_bare": len(bare),
+        "ratified_bare_ids": [s["id"] for s in bare],
         "holes": [s["id"] for s in ps if s.get("occupant") is None],
         "unratified_ids": [s["id"] for s in named if not is_ratified(s)],
         "named_coverage": (len(named) / n) if n else None,
@@ -289,6 +317,28 @@ def _negated_at(haystack, index):
     return bool(NEGATION.search(window))
 
 
+def blocked_additions(doc):
+    """Phrases the doc REFUSES — checked in `cover`, never licensed.
+
+    ⚠ **The field used to do the opposite of its name.** `licensed_phrases` collected
+    every `blocked_additions[*].phrase` and `residue` stripped them from the prompt
+    before the reverse direction looked for leftovers, so the field's only behaviour in
+    the whole repo was to permit exactly the text it says is blocked. Measured
+    2026-09-03 on a doc with `blocked_additions=[{'phrase': 'glowing red halo'}]`:
+    `licensed_phrases` returned that phrase and `cover(doc, 'black plate glowing red
+    halo')` returned COVERED with residue []. The field appears in no other module, no
+    test, no doc and no data file, so nothing settled which reading was intended and the
+    name decides it: blocked means blocked.
+    """
+    out = []
+    for add in doc.get("blocked_additions") or []:
+        if isinstance(add, dict) and add.get("phrase"):
+            out.append({"id": add.get("id"), "phrase": add["phrase"]})
+        elif isinstance(add, str) and add.strip():
+            out.append({"id": None, "phrase": add})
+    return out
+
+
 def licensed_phrases(doc):
     """Spans the reverse direction treats as licensed."""
     out = []
@@ -297,9 +347,6 @@ def licensed_phrases(doc):
         phrase = occ.get("phrase")
         if phrase:
             out.append(phrase)
-    for add in doc.get("blocked_additions") or []:
-        if isinstance(add, dict) and add.get("phrase"):
-            out.append(add["phrase"])
     for c in doc["legal_clauses"]:
         if c.get("phrase"):
             out.append(c["phrase"])
@@ -322,11 +369,33 @@ def residue(prompt, doc):
     return WORD.findall(text)
 
 
+def _forbidden_hit(word, hay):
+    """A forbidden word, matched as a stem with an optional plural.
+
+    ⚠ A bare `\\b<word>\\b` fires on 'gauntlet' and NOT on 'gauntlets', so a canon that
+    forbids a garment feature passed any prompt naming it in the plural and Gate CANON
+    reported COVERED (measured 2026-09-03). `(?:e?s)?` before the closing boundary
+    catches both plural forms and still cannot match inside a longer word: 'sleeveless'
+    fails the trailing boundary exactly as it did before, which is why the hand-written
+    `SLEEVE = \\bsleeve(?!less)\\b` special case was inert — the boundary was already
+    doing that work — and is now deleted rather than kept as a second mechanism.
+    """
+    return re.search(r"\b" + re.escape(word.lower()) + r"(?:e?s)?\b", hay) is not None
+
+
 def cover(doc, prompt):
     """Both directions. Raises. Evidence always carries coverage numbers."""
     if prompt is None:
         _raise("no prompt: the router has nothing to cover",
                {"clause": "missing_prompt", **coverage(doc)})
+    if not str(prompt).strip():
+        # An empty prompt is no prompt — the argument the None clause above already
+        # makes. Both directions pass vacuously on one: the forward loop finds every
+        # phrase absent only if a phrase exists to look for, and `residue('')` is []
+        # for ANY doc, so the reverse direction examines zero characters.
+        _raise("empty prompt: the router has nothing to cover, and both directions "
+               "would pass having examined zero characters",
+               {"clause": "empty_prompt", "prompt": prompt, **coverage(doc)})
     hay = prompt.lower()
     ev = coverage(doc)
     ev["prompt"] = prompt
@@ -345,14 +414,13 @@ def cover(doc, prompt):
             elif _negated_at(hay, idx):
                 negated.append({"surface": s["id"], "phrase": phrase})
         for word in occ.get("forbidden") or []:
-            if word.lower() == "sleeve":
-                if SLEEVE.search(hay):
-                    forbidden.append({"surface": s["id"], "word": word})
-            elif re.search(r"\b" + re.escape(word.lower()) + r"\b", hay):
+            if _forbidden_hit(word, hay):
                 forbidden.append({"surface": s["id"], "word": word})
+    blocked = [b for b in blocked_additions(doc) if _find_phrase(hay, b["phrase"]) >= 0]
     ev["missing"] = missing
     ev["negated"] = negated
     ev["forbidden"] = forbidden
+    ev["blocked"] = blocked
     leftover = residue(prompt, doc)
     ev["residue"] = leftover
     ev["clause"] = "cover"
@@ -372,6 +440,14 @@ def cover(doc, prompt):
         _raise(
             "forward cover failed: forbidden words present: "
             + ", ".join(f["word"] for f in forbidden),
+            ev,
+        )
+    if blocked:
+        ev["clause"] = "blocked_addition"
+        _raise(
+            "forward cover failed: blocked additions present: "
+            + ", ".join(repr(b["phrase"]) for b in blocked)
+            + ". blocked_additions names text this canon refuses; it is not a licence",
             ev,
         )
     if leftover:
@@ -428,7 +504,11 @@ def require_canon(
     if ev["ratified"] == 0:
         _raise(
             f"subject {subject!r} has a surfaces file and zero ratified prompt "
-            f"occupants — a check that cannot fail is not a check",
+            f"occupants CARRYING A PHRASE"
+            + (f" ({ev['ratified_bare']} ratified occupant(s) are kind='bare' and carry "
+               f"nothing the router can check: {ev['ratified_bare_ids']})"
+               if ev["ratified_bare"] else "")
+            + " — a check that cannot fail is not a check",
             {"subject": subject, "path": doc.get("_path"),
              "clause": "unratified_only", **ev},
         )
@@ -439,21 +519,57 @@ def require_canon(
     return covered
 
 
+#: Wrapper keys a graph can arrive under. `route_gates.load_graph` unwraps the first
+#: two; `prompt` is the standard submission envelope.
+GRAPH_WRAPPER_KEYS = ("prompt", "workflow_json", "workflow")
+
+
 def texts_from_api_graph(graph):
     """String inputs named text/prompt/positive on an API-format graph.
 
     Used when a builder inherits its prompt from a baseline graph (E14)
     and has no local constant. Negative prompts tend to be shorter
     quality lists; callers that need one string take the longest.
+
+    ⚠ **"No text here" and "I did not recognise this shape" are different answers.**
+    The guard used to be `graph.values() if all(isinstance(v, dict) for v in
+    graph.values()) else []`, so ONE non-dict top-level key emptied the result:
+    measured 2026-09-03, a bare API graph returned its prompt, the same graph plus
+    `last_node_id=12` returned [], and the standard `{'prompt': <graph>}` wrapper
+    returned []. A caller could not tell the two apart, and the prompt it then hands
+    Gate CANON is what the whole check is about. Known wrappers are unwrapped, non-dict
+    siblings are skipped rather than fatal, and a shape carrying no node-like value at
+    all raises instead of reporting an empty prompt.
     """
-    if not isinstance(graph, dict):
-        return []
-    nodes = graph.values() if all(isinstance(v, dict) for v in graph.values()) else []
+    doc = graph
+    if isinstance(doc, dict):
+        for key in GRAPH_WRAPPER_KEYS:
+            inner = doc.get(key)
+            if isinstance(inner, dict) and any(
+                    isinstance(v, dict) and ("inputs" in v or "class_type" in v)
+                    for v in inner.values()):
+                doc = inner
+                break
+    if not isinstance(doc, dict):
+        _raise(
+            f"a graph must be an object, got {type(graph).__name__}; an unrecognised "
+            f"shape is not an empty prompt",
+            {"clause": "unrecognised_graph", "type": type(graph).__name__},
+        )
+    nodes = [v for v in doc.values()
+             if isinstance(v, dict) and ("inputs" in v or "class_type" in v)]
+    if not nodes:
+        _raise(
+            "no node-shaped value in this graph, so no prompt could be read from it. "
+            "That is not the same as a graph carrying no text, and a spend must not "
+            "proceed on the difference",
+            {"clause": "unrecognised_graph", "top_level_keys": sorted(map(str, doc))},
+        )
     out = []
     for node in nodes:
-        if not isinstance(node, dict):
-            continue
         inputs = node.get("inputs") or {}
+        if not isinstance(inputs, dict):
+            continue
         for key in ("text", "prompt", "positive"):
             val = inputs.get(key)
             if isinstance(val, str) and val.strip():
