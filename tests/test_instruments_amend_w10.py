@@ -357,3 +357,95 @@ def test_the_pairing_checker_goes_red_on_a_tool_with_no_success_token_at_all(tmp
     monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
     assert halt_prefix("probe_ok.py") == "PROBE_OK"
     assert success_tokens("probe_ok.py") == {}
+
+
+# --------------------------------------------------------------------------------------
+# The halt-handler escape routed from the tests domain (panel CRITICAL there)
+# --------------------------------------------------------------------------------------
+#
+# `json.dumps(..., default=str)` applies `default` to VALUES only. A key that is not a
+# string, int, float, bool or None -- a tuple, a `numpy.int64` -- raises `TypeError` from
+# inside the `except` block, which leaves the whole `try` statement with `sys.exit` never
+# reached. Under `blender -b -P` that is exit **0**: a fired andon reported as a success,
+# and no sentinel line at all. MEASURED 2026-09-04 against all 21 handlers: 21 of 21
+# escaped with `code=None`.
+#
+# Two evidence dicts in this tree already key on things that are not strings by nature --
+# per-frame maps keyed by frame index and per-joint maps keyed by a `(bone, axis)` pair --
+# so this is a shape the andons are one refactor away from producing, not a hypothetical.
+
+
+def _nonstring_key_raiser():
+    """A fired gate whose evidence keys are a tuple and a `numpy.int64`."""
+    import numpy as np
+
+    from armature_core.errors import GateFailure
+
+    class _Gate(GateFailure):
+        gate = "PROBE"
+
+    def raiser():
+        raise _Gate("a gate fired", {("hip", "z"): 1.5, np.int64(7): "frame 7",
+                                     "measured": 1})
+
+    return raiser
+
+
+@pytest.mark.parametrize("filename", [f for f in BLENDER_TOOLS if main_block(f) is not None])
+def test_a_non_string_keyed_evidence_dict_does_not_delete_the_exit_code(filename, tmp_path,
+                                                                       capsys):
+    """The handler serialises its own keys, and `sys.exit` runs whatever happens.
+
+    The contract is unchanged by the fix: still exactly one `<STEM>_HALT <json>` line, still
+    exactly six keys, still exit 2 for a fired gate. What changes is that a `TypeError` in
+    the sentinel's own serialisation can no longer swallow the halt.
+    """
+    argv = ["blender", "-b", "-P", filename, "--", "--glb=nope.glb",
+            "--out=" + str(tmp_path / "out")]
+    code, escaped = exit_code_of_main_block(filename, raiser=_nonstring_key_raiser(),
+                                            argv=argv)
+    out = capsys.readouterr().out
+    assert escaped is None, (
+        f"{filename}: {escaped!r} escaped the handler because the sentinel could not be "
+        f"serialised; `sys.exit` never ran and `blender -b -P` reports success")
+    assert code == 2, f"{filename}: exit code {code!r}, contract says 2 for a fired gate"
+
+    stem = filename[:-3].upper()
+    lines = [l for l in out.splitlines() if l.split(" ", 1)[0] == stem + "_HALT"]
+    assert len(lines) == 1, f"{filename}: {len(lines)} sentinel line(s)\n{out}"
+    rec = json.loads(lines[0][len(stem) + len("_HALT"):])
+    assert set(rec) == {"tool", "outcome", "gate", "error", "message", "evidence"}, rec
+    assert rec["outcome"] == "HALTED — a gate fired", rec
+    assert rec["gate"] == "PROBE", rec
+    assert isinstance(rec["evidence"], dict), rec
+    assert all(isinstance(k, str) for k in rec["evidence"]), rec["evidence"]
+    assert rec["evidence"]["measured"] == 1, rec["evidence"]
+    assert len(rec["evidence"]) == 3, (
+        f"{filename}: the two non-string-keyed entries must survive as stringified keys, "
+        f"not be dropped: {rec['evidence']}")
+
+
+def test_the_keysafe_helper_stringifies_keys_at_every_depth():
+    """The helper itself, on the shape `default=str` cannot reach: keys, not values, and
+    keys nested inside lists and inner dicts."""
+    import numpy as np
+
+    mod = load_tool("preview_glb.py")
+    got = mod._halt_keysafe({("hip", "z"): {np.int64(3): "x"}, "rows": [{(1, 2): "y"}]})
+    assert json.loads(json.dumps(got, default=str)) == {
+        "('hip', 'z')": {"3": "x"}, "rows": [{"(1, 2)": "y"}]}
+
+
+@pytest.mark.parametrize("filename", [f for f in BLENDER_TOOLS if main_block(f) is not None])
+def test_every_handler_carries_the_keysafe_helper(filename):
+    """The family census. One implementation per tool today (21 copies, recorded as a
+    Stage B lift into `armature_core.errors` under `skipped[]`), so the property has to be
+    asserted of every member rather than of one shared function.
+    """
+    mod = load_tool(filename)
+    assert callable(getattr(mod, "_halt_keysafe", None)), (
+        f"{filename} has no `_halt_keysafe`; its sentinel cannot serialise a "
+        f"non-string-keyed evidence dict and the halt escapes")
+    assert "_halt_keysafe(" in read_source(filename).split(
+        'if __name__ == "__main__":')[-1], (
+        f"{filename} defines the helper but its handler does not use it")
