@@ -105,7 +105,7 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: quietly joining a set nobody re-derives. A new member is not a defect: add it to this set
 #: in the same commit, and give its bare `pytest.raises` sites a clause.
 #:
-#: Five names are recorded here BEFORE they exist in this branch's tree, so this census
+#: Six names are recorded here BEFORE they exist in this branch's tree, so this census
 #: is red on this branch alone and green on the merged one. `PreviewGlbGate` (2 sites),
 #: `PreviewWalkGate` (3), `GateMode` (3) and `GateSubject` (2) arrive with the instruments
 #: wave-8 amend, counted by AST at its tip on 2026-09-04; its `GateObjects` (1 site),
@@ -116,12 +116,15 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: "defined under tools/ and raised from more than one site" and not "an `ArmatureError`
 #: subclass": the hierarchy rule would not see it, exactly as it does not see
 #: `FramingError` and `WalkError`. Core-solvers' `NonReiterableFrames` is deliberately
-#: absent — one raise site, so the class IS its clause. `RenderTurnaroundGate` is unaffected by being
+#: absent — one raise site, so the class IS its clause. `CropStripError` arrives with
+#: instruments-measure's (7 sites in `make_crop_strip.py`, whose refusals were `SystemExit`
+#: on this branch). `RenderTurnaroundGate` is unaffected by being
 #: re-based on `GateFailure` in the same amend: the derivation keys on the class NAME and
 #: its raise count, never on its bases, which is the whole reason `FramingError` and
 #: `WalkError` are policed at all.
 RECORDED_POPULATION = frozenset({
-    "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate", "PreviewWalkGate",
+    "CropStripError", "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate",
+    "PreviewWalkGate",
     "AlphaGate", "ArmatureError", "AssemblyGate", "BackdropGate", "BakeEmpty",
     "CascadeGate", "ClipReadError", "ClipShapeError", "CompareError",
     "ComparisonNotIsolated", "CompositorWiring", "DetectionGate", "DonorGate",
@@ -160,7 +163,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     the derivation cannot see it. The typed set is therefore checked by direction — the
     two names that ARE raised must still be policed — rather than by containment.
     """
-    assert len(POLICED) == 70, sorted(POLICED)
+    assert len(POLICED) == 71, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

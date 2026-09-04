@@ -847,7 +847,10 @@ def test_the_repo_still_has_an_action_to_hold_to_the_pin():
         "test and its siblings have no subject and should be retired deliberately, not "
         "left reporting green"
     )
-    assert len(ALL_USES) == 16, [(r[0], r[1]) for r in ALL_USES]
+    #: 16 on this branch; 18 on the merged tree, where ci-packaging's new `launcher` job
+    #: adds a checkout and a setup-node. Recorded as the merged number, so this assertion
+    #: is red here and green there — the same treatment every incoming population gets.
+    assert len(ALL_USES) == 18, [(r[0], r[1]) for r in ALL_USES]
     assert len(THIRD_PARTY) == 1, [(r[0], r[1]) for r in THIRD_PARTY]
     assert THIRD_PARTY[0][1] == "pypa/gh-action-pypi-publish", THIRD_PARTY
 

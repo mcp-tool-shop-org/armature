@@ -27,6 +27,7 @@ delegates to `gate_pairing`) and `sheet_compose.require_frames` (carried out of
 the family by being listed.
 """
 
+import ast
 import json
 import os
 import sys
@@ -232,28 +233,215 @@ def test_a_detection_record_of_another_length_is_not_indexed_positionally(tmp_pa
 # --------------------------------------------------------------------- the census
 
 
-def test_every_sheet_that_indexes_a_listing_asks_for_the_check(tmp_path):
-    """The population may not grow silently: a sheet that takes `--frames` and indexes a
-    directory listing routes through the shared refusal, or this fails naming it."""
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    expected = ("make_gate0_sheet", "make_identity_sheet", "make_lift_sheet",
-                "make_review_clip", "make_startframe_sheet", "make_thesis_sheet")
-    without = []
-    for mod in expected:
-        src = open(os.path.join(root, "tools", f"{mod}.py"), encoding="utf-8").read()
-        if "require_frames" not in src:
-            without.append(mod)
-    assert without == [], without
+# WAVE 8, F-3bfcabfc — both censuses used to enumerate hard-coded tuples: a six-name
+# `expected` and a five-name loop, under a docstring reading "The population may not grow
+# silently". Neither could fail on a sheet not already typed into it. Derived from the tree
+# on 2026-09-04, the tools that take `--frames` AND enumerate a directory with `os.listdir`
+# number FIFTEEN — nine of them outside the census, and one of those nine is the live case:
+# `make_crop_strip.frame_paths` sorts a listing and `build` indexes it with `paths[idx]`
+# where `idx` came from `--boxes=<frame>:x0,y0,x1,y1`, so a frame NUMBER is used as a
+# listing POSITION. A crop strip labelled "frame 32" then shows a different frame whenever
+# the listing is not 0..N-1 — the defect the pairing law closed for six sheets, on a tool
+# the law never reached.
+
+TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 
 
-def test_no_sheet_still_carries_the_silent_continue(tmp_path):
-    """The literal mechanism: `if fi >= len(...): continue` in a tile loop."""
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def _calls(tree, name):
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if called == name:
+                out.append(node)
+    return out
+
+
+def _listing_builders(tree):
+    """`{function: 'keyed' | 'positional'}` for every function that lists a directory.
+
+    'keyed' means the function hands back a MAPPING built from the frame number
+    (`{int(stem): path for ...}`), where a lookup by frame number is a lookup by NAME and
+    cannot be a position. 'positional' means it hands back a sequence, where indexing it
+    with a frame number is the defect this file exists for.
+    """
+    out = {}
+    for fn in ast.walk(tree):
+        if isinstance(fn, ast.FunctionDef) and _calls(fn, "listdir"):
+            keyed = any(isinstance(n, ast.DictComp) and "int" in ast.dump(n.key)
+                        for n in ast.walk(fn))
+            out[fn.name] = "keyed" if keyed else "positional"
+    return out
+
+
+def _positional_indexing(tree):
+    """Every `name[...]` where `name` holds a POSITIONAL listing.
+
+    A small dataflow rather than a list of variable names: a name holds a listing when it
+    is assigned from an `os.listdir` expression or from a call to one of the builders
+    above, and a function PARAMETER holds one when a builder's result is passed into that
+    position — which is how `make_crop_strip.build(frame_paths(...), ...)` reaches its
+    `paths` argument.
+    """
+    builders = _listing_builders(tree)
+    if not builders:
+        return []
+    funcs = {f.name: f for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)}
+    holds = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            if isinstance(node.value, ast.Call):
+                called = getattr(node.value.func, "id",
+                                 getattr(node.value.func, "attr", ""))
+                if called in builders:
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            holds[target.id] = builders[called]
+            if _calls(ast.Module(body=[node], type_ignores=[]), "listdir"):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        holds.setdefault(target.id, "positional")
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id in funcs):
+            for i, arg in enumerate(node.args):
+                called = getattr(getattr(arg, "func", None), "id", None)
+                if called in builders:
+                    params = funcs[node.func.id].args.args
+                    if i < len(params):
+                        holds[params[i].arg] = builders[called]
+    out = []
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
+                and holds.get(node.value.id) == "positional"):
+            out.append((node.lineno, node.value.id))
+    return sorted(out)
+
+
+def frame_indexing_tools():
+    """THE DERIVATION: every tool that takes `--frames` and enumerates a directory."""
+    out = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(TOOLS, name), encoding="utf-8") as fh:
+            src = fh.read()
+        if "--frames" not in src:
+            continue
+        tree = ast.parse(src)
+        if _listing_builders(tree):
+            out.append(name[:-3])
+    return out
+
+
+#: Derived 2026-09-04. Equality, so a sixteenth tool joins the census the day it lands.
+RECORDED_FRAME_TOOLS = [
+    "encode_control", "invert_frames", "lift_clip", "make_crop_strip", "make_gate0_sheet",
+    "make_identity_sheet", "make_lift_sheet", "make_pick_sheet", "make_plate",
+    "make_review_clip", "make_startframe_sheet", "make_thesis_sheet", "measure_arm",
+    "measure_clip", "pack_pose_pack",
+]
+
+#: Named, dated, and checked against the clause it rests on. `make_crop_strip` indexes a
+#: sorted listing with a number that came from `--boxes`, and its only guard is a LENGTH
+#: check (`if idx >= len(paths): raise ...`) — which cannot tell frame 32 from position 32.
+#: Routed to the instruments-measure domain in this wave ("`--boxes` keys by frame NUMBER
+#: and records it"); when that lands, the tool either routes through the shared refusal or
+#: its builder returns a mapping, and it drops out of `offenders` on its own. SUBSET
+#: assertion, so this can only shrink, and a SEVENTEENTH offender fails here immediately.
+POSITIONAL_INDEXING_ROUTED = {"make_crop_strip"}
+
+
+def test_the_frame_indexing_population_is_derived_and_has_not_grown_silently():
+    """Size and membership before the property. The old census typed six names into a
+    tuple; the tree carries fifteen tools that take `--frames` and list a directory."""
+    pop = frame_indexing_tools()
+    assert pop == RECORDED_FRAME_TOOLS, {
+        "appeared": sorted(set(pop) - set(RECORDED_FRAME_TOOLS)),
+        "vanished": sorted(set(RECORDED_FRAME_TOOLS) - set(pop)),
+    }
+    assert POSITIONAL_INDEXING_ROUTED <= set(pop)
+
+
+def test_every_tool_that_indexes_a_listing_by_frame_number_asks_for_the_check():
+    """The property. A tool in the population is compliant when it routes through the
+    shared refusal, or when it never uses a frame number as a POSITION at all — because
+    it consumes the listing in order, or because its builder hands back a mapping keyed by
+    the frame number, which is what `make_pick_sheet` and `make_plate` do."""
+    offenders = {}
+    for mod in frame_indexing_tools():
+        with open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        routed = bool(_calls(tree, "require_frames")
+                      or _calls(tree, "gate_listing_pairing"))
+        indexing = _positional_indexing(tree)
+        if not routed and indexing:
+            offenders[mod] = indexing
+    new = sorted(set(offenders) - POSITIONAL_INDEXING_ROUTED)
+    assert not new, (
+        f"these tools index a positional listing with a frame number and route through "
+        f"neither require_frames nor gate_listing_pairing: "
+        f"{ {m: offenders[m] for m in new} }")
+    assert set(offenders) <= POSITIONAL_INDEXING_ROUTED, sorted(offenders)
+
+
+def test_the_exemptions_clause_is_the_state_it_was_recorded_for():
+    """Rule 4: an exemption is checked against its REASON, not merely listed. If
+    `make_crop_strip` stops indexing positionally, or starts routing, it leaves
+    `offenders` on its own and this test says the record is stale."""
+    with open(os.path.join(TOOLS, "make_crop_strip.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    still_broken = (not _calls(tree, "require_frames")
+                    and not _calls(tree, "gate_listing_pairing")
+                    and bool(_positional_indexing(tree)))
+    assert still_broken or "make_crop_strip" not in POSITIONAL_INDEXING_ROUTED, (
+        "make_crop_strip no longer indexes a positional listing by frame number; remove "
+        "it from POSITIONAL_INDEXING_ROUTED in the same commit, or the next tool to "
+        "regress inherits an exemption written for a defect that is gone")
+
+
+def test_the_positional_indexing_detector_can_see_the_defect_and_not_the_fix(tmp_path):
+    """Rule 3: the derivation is driven against a tree whose answers are known. Three
+    synthetic tools — a sorted list indexed by a frame number (the defect), the same tool
+    with a mapping keyed by that number (the fix `make_pick_sheet` already carries), and
+    one that only iterates."""
+    broken = ast.parse(
+        "import os\n"
+        "def frame_paths(d):\n"
+        "    return sorted(os.listdir(d))\n"
+        "def build(paths, idx):\n"
+        "    return paths[idx]\n"
+        "def main():\n"
+        "    build(frame_paths('x'), 32)\n")
+    keyed = ast.parse(
+        "import os\n"
+        "def frame_paths(d):\n"
+        "    return {int(n.split('.')[0]): n for n in os.listdir(d)}\n"
+        "def build(paths, idx):\n"
+        "    return paths[idx]\n"
+        "def main():\n"
+        "    build(frame_paths('x'), 32)\n")
+    iterating = ast.parse(
+        "import os\n"
+        "def frame_paths(d):\n"
+        "    return sorted(os.listdir(d))\n"
+        "def main():\n"
+        "    return [n for n in frame_paths('x')]\n")
+    assert _positional_indexing(broken) == [(5, "paths")]
+    assert _listing_builders(keyed) == {"frame_paths": "keyed"}
+    assert _positional_indexing(keyed) == []
+    assert _positional_indexing(iterating) == []
+
+
+def test_no_sheet_still_carries_the_silent_continue():
+    """The literal mechanism: `if fi >= len(...): continue` in a tile loop.
+
+    Over the DERIVED population, not the five names this loop used to hold — a sheet that
+    grew the skip after the wave-6 fix would have joined nothing."""
     offenders = []
-    for mod in ("make_gate0_sheet", "make_lift_sheet", "make_review_clip",
-                "make_startframe_sheet", "make_thesis_sheet"):
-        lines = open(os.path.join(root, "tools", f"{mod}.py"),
-                     encoding="utf-8").read().splitlines()
+    for mod in frame_indexing_tools():
+        with open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
         for i, line in enumerate(lines):
             stripped = line.strip()
             # an `if` STATEMENT, not the prose that records the defect above it
