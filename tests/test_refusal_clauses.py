@@ -133,6 +133,14 @@ RECORDED_POPULATION = frozenset({
     "CadenceGate", "PinnedCameraGate",
     "CropStripError", "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate",
     "PreviewWalkGate",
+    # JOINED 2026-09-04, exactly as this comment anticipated: the instruments wave-10
+    # amend (F-51c5e0ef) gives `make_binding_sheet.shoot` and `make_parts_sheet.shoot`
+    # the render-completeness refusal their siblings carry, so `BindingSheetGate` and
+    # `PartsSheetGate` each reach a second raise site and stop being their own clause.
+    "BindingSheetGate", "PartsSheetGate",
+    # And `ReliftWindow` (3 sites in `check_relift.py`), the wave-10 andon that derives the
+    # compared window from each GLB's own keyed action range instead of from `--frames`.
+    "ReliftWindow",
     "AlphaGate", "ArmatureError", "AssemblyGate", "BackdropGate", "BakeEmpty",
     "CascadeGate", "ClipReadError", "ClipShapeError", "CompareError",
     "ComparisonNotIsolated", "CompositorWiring", "DetectionGate", "DonorGate",
@@ -175,7 +183,10 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # (6 in `framing.py`) are the two andons split off `WalkError` / `FramingError` when
     # the family was rebased on `ArmatureError`. `walk.GaitGate` is raised ONCE and is
     # deliberately not here; both parents keep more than one raise site and stay policed.
-    assert len(POLICED) == 73, sorted(POLICED)
+    # WAVE-10 MERGE (coordinator, 2026-09-04): instruments' branch added `BindingSheetGate`,
+    # `PartsSheetGate` (each reached a second raise site) and `ReliftWindow` (3 sites):
+    # 71 + 2 + 3 = 76, MEASURED on the merged tree.
+    assert len(POLICED) == 76, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

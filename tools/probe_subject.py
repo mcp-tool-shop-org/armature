@@ -60,7 +60,11 @@ def probe_one(path):
     rec["mesh_objects_excluded"] = [o.name for o in meshes if o not in visible]
     rec["armature_names"] = [o.name for o in armatures]
 
-    bounds = blender_scene.world_bounds(visible)
+    # `scene=` is passed even though `visible` is already a `render_visible_meshes`
+    # result: the filter is idempotent, and the call then states which of the two
+    # measurements this is instead of leaving that to the reader of the argument
+    # (F-328aaea2). `world_bounds` with `scene` omitted IS the naive measurement.
+    bounds = blender_scene.world_bounds(visible, scene=scene)
     if bounds is None:
         rec["error"] = "no render-visible geometry to measure"
         return rec
@@ -72,7 +76,15 @@ def probe_one(path):
 
     # Reported because it is the E01 defect made visible rather than merely avoided:
     # what the naive `type == "MESH"` selection would have concluded on this asset.
-    naive = blender_scene.world_bounds(meshes)
+    # `unfiltered_world_bounds` BY NAME, not `world_bounds` on an unfiltered list.
+    # MEASURED 2026-09-04 (F-328aaea2): the naive row and the filtered row were the same
+    # call with a different argument, so a later sweep giving `world_bounds` its scene at
+    # every call site (or a default scene) would silently turn this line into a second
+    # copy of the filtered one -- and the record would keep publishing a field labelled
+    # `naive_type_mesh_selection` whose numbers are the filtered ones, with no test able
+    # to see it. `blender_scene.unfiltered_world_bounds` exists for exactly this row and
+    # names this file in its own docstring; its only caller was a rig-only script.
+    naive = blender_scene.unfiltered_world_bounds(meshes)
     if naive is not None:
         rec["naive_type_mesh_selection"] = {
             "bbox_half_extent": [float(v) for v in naive[1]],
@@ -149,7 +161,30 @@ def main():
     out_path = os.path.join(out_dir, "subject_extents.json")
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
-    print("PROBE_SUBJECT " + json.dumps({"json": out_path, "n": len(records)}))
+    print("PROBE_SUBJECT_OK " + json.dumps({"json": out_path, "n": len(records)}))
+
+
+def _halt_keysafe(value):
+    """`value` with every mapping key stringified, at every depth.
+
+    `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
+    `numpy.int64` key raises `TypeError` from inside the halt handler below, the new
+    exception leaves the whole `try` statement, `sys.exit` never runs -- and `blender -b -P`
+    then exits **0** on a fired andon, with no sentinel line at all. MEASURED 2026-09-04
+    against all 21 handlers: 21 of 21 escaped that way. Pinned by
+    `tests/test_instruments_amend_w10.py`.
+
+    STAGE B: this belongs in `armature_core.errors` beside the halt vocabulary, as one
+    implementation with 21 call sites (together with `halt_outcome`, which lives in
+    `rig_character.py` today and is inlined as a ternary in the other twenty).
+    `armature_core` is outside the instruments domain's globs, so the lift is FILED, not
+    done -- see the wave-10 `skipped[]` entry for F-ce3a471d.
+    """
+    if isinstance(value, dict):
+        return {str(k): _halt_keysafe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_halt_keysafe(v) for v in value]
+    return value
 
 
 if __name__ == "__main__":
@@ -173,7 +208,8 @@ if __name__ == "__main__":
         from armature_core.errors import ArmatureError, GateFailure
         traceback.print_exc()
         _detail = getattr(exc, "evidence", None)
-        print("PROBE_SUBJECT_HALT " + json.dumps({
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _sentinel = {
             "tool": "probe_subject",
             "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
                         else "REFUSED — the tool declined to proceed"
@@ -181,5 +217,18 @@ if __name__ == "__main__":
                         else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
             "error": type(exc).__name__, "message": str(exc),
-            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+        # The sentinel and the exit code are the contract, and NEITHER may be deleted by a
+        # failure to serialise the sentinel itself. `_code` is computed before anything that
+        # can raise and delivered from a `finally`; the fallback line carries only values
+        # that are already strings, so it cannot fail in turn.
+        try:
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            _line = json.dumps({
+                "tool": _sentinel["tool"], "outcome": _sentinel["outcome"], "gate": None,
+                "error": _sentinel["error"], "message": _sentinel["message"],
+                "evidence": None})
+        finally:
+            print("PROBE_SUBJECT_HALT " + _line)
+            sys.exit(_code)

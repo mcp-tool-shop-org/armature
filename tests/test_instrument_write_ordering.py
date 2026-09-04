@@ -195,10 +195,23 @@ POPULATION_MEASURED_2026_09_04 = {
     "author_walk", "build_animate_payload", "build_assembly_payload",
     "build_camera_i2v_payload", "build_cascade_payload", "build_i2v_payload",
     "build_lora_arm_payload", "build_payload", "build_r2v_payload", "build_t2v_payload",
+    # JOINED 2026-09-04 by the instruments wave-10 amend (F-6ee68fc0): `check_relift.main`
+    # now calls `gate_relift_window` over each GLB's own keyed action range, so it
+    # gates-and-writes where before it only wrote. Its makedirs already sits one line above
+    # the record it writes, so nothing is stranded.
+    "check_relift",
     "composite_reference", "fetch_t2v_run", "fit_reference", "gate_b_frames",
     "gate_saved_graph", "lift_clip", "lift_solve", "make_ab_clip", "make_crop_strip",
     "make_gate0_sheet", "make_identity_sheet", "make_lift_sheet", "make_pick_sheet",
     "make_plate", "make_review_clip", "make_skeleton_sheet", "make_startframe_sheet",
+    # JOINED 2026-09-04 by the instruments wave-10 amend (F-13bd448d): `preview_glb.main`
+    # now calls `gate_previews_written` over the four paths its renders returned, so it
+    # gates-and-writes where before it only wrote. It is a `bpy` tool and lands in the
+    # first exempt class; the ordering itself is pinned by
+    # `tests/test_instruments_amend_w10.py::
+    # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`, which measures
+    # the reason rather than the `imports_bpy` proxy.
+    "preview_glb",
     "make_thesis_sheet", "measure_floor", "measure_lift",
     "pack_pose_pack", "project_pose_keypoints", "render_performer", "render_pose_sticks",
     "render_start_frame", "render_turnaround", "rig_character", "rig_parts",

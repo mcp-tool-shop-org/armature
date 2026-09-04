@@ -9,7 +9,7 @@ Four findings land here:
   the outer shell at the identical transform — stayed render-visible and was drawn into
   every panel of every region, on top of the variant each panel claims to show. Both arms
   are wrapped in `except Exception`, so the failure is reachable in ordinary use, and the
-  tool then wrote `panels.json`, printed `RETOPO_OK` and exited 0.
+  tool then wrote `panels.json`, printed `RIG_RETOPO_OK` and exited 0.
 * **F-b73739c1** — neither tool recorded the Blender it ran on, and `rig_retopo`'s manifest
   asserted one instead (`"Blender 5.2 built-ins only"` as a literal). The version is
   load-bearing for exactly these two: `QUADRIFLOW_SCALE`, `extract_outer_shell`'s pinned

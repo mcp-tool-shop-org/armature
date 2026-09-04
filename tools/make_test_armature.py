@@ -371,6 +371,42 @@ def main():
         print(f"  wrist_r f000={[round(v, 4) for v in wrist0]} -> "
               f"f{args.frames - 1:03d}={[round(v, 4) for v in wristN]}")
 
+    # THE SUCCESS SENTINEL (F-161b09fc). Everything above is human prose; this file
+    # printed no uppercase token at all, so a caller following the repo's own rule --
+    # "verify a success sentinel in the output, never the exit code alone"
+    # (docs/experiments/E07-the-skeleton.md:202-205) -- had nothing to match on the one
+    # tool that builds the synthetic subject GLB and the `.joints.json` authored ground
+    # truth every arc comparison is measured against.
+    print("MAKE_TEST_ARMATURE_OK " + json.dumps({
+        "glb": os.path.abspath(args.out),
+        "joints": os.path.abspath(os.path.splitext(args.out)[0] + ".joints.json"),
+        "verts": verts, "tris": tris, "dims": list(dims),
+        "pose_arc": args.pose_arc if arc is not None else None,
+        "frames": args.frames if arc is not None else None}))
+
+
+def _halt_keysafe(value):
+    """`value` with every mapping key stringified, at every depth.
+
+    `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
+    `numpy.int64` key raises `TypeError` from inside the halt handler below, the new
+    exception leaves the whole `try` statement, `sys.exit` never runs -- and `blender -b -P`
+    then exits **0** on a fired andon, with no sentinel line at all. MEASURED 2026-09-04
+    against all 21 handlers: 21 of 21 escaped that way. Pinned by
+    `tests/test_instruments_amend_w10.py`.
+
+    STAGE B: this belongs in `armature_core.errors` beside the halt vocabulary, as one
+    implementation with 21 call sites (together with `halt_outcome`, which lives in
+    `rig_character.py` today and is inlined as a ternary in the other twenty).
+    `armature_core` is outside the instruments domain's globs, so the lift is FILED, not
+    done -- see the wave-10 `skipped[]` entry for F-ce3a471d.
+    """
+    if isinstance(value, dict):
+        return {str(k): _halt_keysafe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_halt_keysafe(v) for v in value]
+    return value
+
 
 if __name__ == "__main__":
     # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
@@ -393,7 +429,8 @@ if __name__ == "__main__":
         from armature_core.errors import ArmatureError, GateFailure
         traceback.print_exc()
         _detail = getattr(exc, "evidence", None)
-        print("MAKE_TEST_ARMATURE_HALT " + json.dumps({
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _sentinel = {
             "tool": "make_test_armature",
             "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
                         else "REFUSED — the tool declined to proceed"
@@ -401,5 +438,18 @@ if __name__ == "__main__":
                         else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
             "error": type(exc).__name__, "message": str(exc),
-            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+        # The sentinel and the exit code are the contract, and NEITHER may be deleted by a
+        # failure to serialise the sentinel itself. `_code` is computed before anything that
+        # can raise and delivered from a `finally`; the fallback line carries only values
+        # that are already strings, so it cannot fail in turn.
+        try:
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            _line = json.dumps({
+                "tool": _sentinel["tool"], "outcome": _sentinel["outcome"], "gate": None,
+                "error": _sentinel["error"], "message": _sentinel["message"],
+                "evidence": None})
+        finally:
+            print("MAKE_TEST_ARMATURE_HALT " + _line)
+            sys.exit(_code)

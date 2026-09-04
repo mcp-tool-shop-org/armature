@@ -239,11 +239,34 @@ def main():
     path = os.path.join(out, "bone_heat_diagnosis.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
-    print("DIAGNOSIS_OK " + path)
+    print("DIAGNOSE_BONE_HEAT_OK " + path)
     for name, rec in arms.items():
         print(f"  {name:<26} weighted {rec['weighted_vertices']:>7}/{rec['vertices']:<7} "
               f"({100 * rec['weighted_fraction']:6.2f}%)  empty_groups="
               f"{rec['n_empty_groups']}/{rec['groups_created']}")
+
+
+def _halt_keysafe(value):
+    """`value` with every mapping key stringified, at every depth.
+
+    `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
+    `numpy.int64` key raises `TypeError` from inside the halt handler below, the new
+    exception leaves the whole `try` statement, `sys.exit` never runs -- and `blender -b -P`
+    then exits **0** on a fired andon, with no sentinel line at all. MEASURED 2026-09-04
+    against all 21 handlers: 21 of 21 escaped that way. Pinned by
+    `tests/test_instruments_amend_w10.py`.
+
+    STAGE B: this belongs in `armature_core.errors` beside the halt vocabulary, as one
+    implementation with 21 call sites (together with `halt_outcome`, which lives in
+    `rig_character.py` today and is inlined as a ternary in the other twenty).
+    `armature_core` is outside the instruments domain's globs, so the lift is FILED, not
+    done -- see the wave-10 `skipped[]` entry for F-ce3a471d.
+    """
+    if isinstance(value, dict):
+        return {str(k): _halt_keysafe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_halt_keysafe(v) for v in value]
+    return value
 
 
 if __name__ == "__main__":
@@ -267,7 +290,8 @@ if __name__ == "__main__":
         from armature_core.errors import ArmatureError, GateFailure
         traceback.print_exc()
         _detail = getattr(exc, "evidence", None)
-        print("DIAGNOSE_BONE_HEAT_HALT " + json.dumps({
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _sentinel = {
             "tool": "diagnose_bone_heat",
             "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
                         else "REFUSED — the tool declined to proceed"
@@ -275,5 +299,18 @@ if __name__ == "__main__":
                         else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
             "error": type(exc).__name__, "message": str(exc),
-            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+        # The sentinel and the exit code are the contract, and NEITHER may be deleted by a
+        # failure to serialise the sentinel itself. `_code` is computed before anything that
+        # can raise and delivered from a `finally`; the fallback line carries only values
+        # that are already strings, so it cannot fail in turn.
+        try:
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            _line = json.dumps({
+                "tool": _sentinel["tool"], "outcome": _sentinel["outcome"], "gate": None,
+                "error": _sentinel["error"], "message": _sentinel["message"],
+                "evidence": None})
+        finally:
+            print("DIAGNOSE_BONE_HEAT_HALT " + _line)
+            sys.exit(_code)

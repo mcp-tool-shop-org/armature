@@ -98,8 +98,44 @@ def add_camera_render(name_suffix, center, radius, azim_deg, elev_deg, res, out_
     look_at(cam, center)
     scn.camera = cam
     scn.render.resolution_x, scn.render.resolution_y = res
-    scn.render.filepath = os.path.join(out_dir, f"{args.name}_{name_suffix}.png")
+    path = os.path.join(out_dir, f"{args.name}_{name_suffix}.png")
+    scn.render.filepath = path
     bpy.ops.render.render(write_still=True)
+    # RETURN the path, so the plan `gate_previews_written` measures is the list
+    # the render actually wrote against rather than a second list built beside it.
+    return path
+
+
+
+def gate_previews_written(paths):
+    """Every planned view exists on disk and is not zero bytes, or the preview halts.
+
+    F-13bd448d. `bpy.ops.render.render(write_still=True)` returns an operator status set and
+    can return `{'CANCELLED'}` WITHOUT raising; `add_camera_render` discarded it, and nothing
+    afterwards read the four paths back -- `<name>_stats.json` is written from measurements
+    taken off the SCENE, and the success sentinel was printed over a directory that may hold
+    nothing. This tool is also the one whose output nothing downstream reads
+    (`make_cast_sheet.py` consumes the stats JSON, not the PNGs), so a run that wrote zero
+    images left no failing consumer anywhere and the operator discovered the four missing
+    previews by opening the directory.
+
+    The shape is `preview_walk.py:196-206`'s -- missing AND zero-byte, over the PLAN --
+    carried rather than reinvented.
+    """
+    missing = [p for p in paths if not os.path.isfile(p)]
+    empty = [p for p in paths
+             if p not in missing and os.path.getsize(p) == 0]
+    if missing or empty:
+        raise PreviewGlbGate(
+            f"the preview is not complete: {len(missing)} of {len(paths)} views were never "
+            f"written {[os.path.basename(p) for p in missing[:8]]} and {len(empty)} are "
+            f"zero bytes {[os.path.basename(p) for p in empty[:8]]}",
+            {"planned": len(paths),
+             "paths": [os.path.abspath(p) for p in paths],
+             "missing": [os.path.abspath(p) for p in missing],
+             "empty": [os.path.abspath(p) for p in empty]})
+    return {"planned": len(paths), "missing": [], "empty": [],
+            "verdict": f"all {len(paths)} planned views exist and are non-empty"}
 
 
 def main():
@@ -180,16 +216,43 @@ def main():
     # directory is created here so a halt does not leave an empty one behind for a later
     # run to read as a used one.
     os.makedirs(args.out, exist_ok=True)
-    add_camera_render("full_a", center, radius, 30, 10, (640, 960), args.out, args)
-    add_camera_render("full_b", center, radius, 210, 10, (640, 960), args.out, args)
-    add_camera_render("head_a", head_c, head_r, 30, 6, (512, 512), args.out, args)
-    add_camera_render("head_b", head_c, head_r, 210, 6, (512, 512), args.out, args)
+    written = [
+        add_camera_render("full_a", center, radius, 30, 10, (640, 960), args.out, args),
+        add_camera_render("full_b", center, radius, 210, 10, (640, 960), args.out, args),
+        add_camera_render("head_a", head_c, head_r, 30, 6, (512, 512), args.out, args),
+        add_camera_render("head_b", head_c, head_r, 210, 6, (512, 512), args.out, args),
+    ]
+    stats["gate_PREVIEW_GLB"] = gate_previews_written(written)
+    stats["views"] = [os.path.abspath(p) for p in written]
 
     with open(os.path.join(args.out, f"{args.name}_stats.json"), "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)
-    print("PREVIEW_OK " + json.dumps({"name": args.name, "engine": stats["engine"],
+    print("PREVIEW_GLB_OK " + json.dumps({"name": args.name, "engine": stats["engine"],
                                       "triangles": tris}))
     return 0
+
+
+def _halt_keysafe(value):
+    """`value` with every mapping key stringified, at every depth.
+
+    `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
+    `numpy.int64` key raises `TypeError` from inside the halt handler below, the new
+    exception leaves the whole `try` statement, `sys.exit` never runs -- and `blender -b -P`
+    then exits **0** on a fired andon, with no sentinel line at all. MEASURED 2026-09-04
+    against all 21 handlers: 21 of 21 escaped that way. Pinned by
+    `tests/test_instruments_amend_w10.py`.
+
+    STAGE B: this belongs in `armature_core.errors` beside the halt vocabulary, as one
+    implementation with 21 call sites (together with `halt_outcome`, which lives in
+    `rig_character.py` today and is inlined as a ternary in the other twenty).
+    `armature_core` is outside the instruments domain's globs, so the lift is FILED, not
+    done -- see the wave-10 `skipped[]` entry for F-ce3a471d.
+    """
+    if isinstance(value, dict):
+        return {str(k): _halt_keysafe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_halt_keysafe(v) for v in value]
+    return value
 
 
 if __name__ == "__main__":
@@ -216,7 +279,8 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         _detail = getattr(exc, "evidence", None)
-        print("PREVIEW_GLB_HALT " + json.dumps({
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _sentinel = {
             "tool": "preview_glb",
             "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
                         else "REFUSED — the tool declined to proceed"
@@ -224,5 +288,18 @@ if __name__ == "__main__":
                         else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
             "error": type(exc).__name__, "message": str(exc),
-            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+        # The sentinel and the exit code are the contract, and NEITHER may be deleted by a
+        # failure to serialise the sentinel itself. `_code` is computed before anything that
+        # can raise and delivered from a `finally`; the fallback line carries only values
+        # that are already strings, so it cannot fail in turn.
+        try:
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            _line = json.dumps({
+                "tool": _sentinel["tool"], "outcome": _sentinel["outcome"], "gate": None,
+                "error": _sentinel["error"], "message": _sentinel["message"],
+                "evidence": None})
+        finally:
+            print("PREVIEW_GLB_HALT " + _line)
+            sys.exit(_code)

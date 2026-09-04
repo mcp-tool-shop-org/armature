@@ -194,10 +194,32 @@ def shoot(scene, path):
     scene.render.image_settings.color_mode = "RGB"
     scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
+    # THE WRITER VERIFIES ITS OWN OUTPUT (F-51c5e0ef). `bpy.ops.render.render` returns
+    # an operator status set and can return `{'CANCELLED'}` WITHOUT raising; this
+    # function discarded it, and no code path in this tool ever opened a rendered file
+    # again -- so `panels.json` was a manifest of paths that may not exist, printed
+    # under a success sentinel, and a stale file left at the path by an earlier run put
+    # the previous run's panel into the sheet the Director is asked to approve. The
+    # shape is `preview_walk.py:196-206`'s, carried here rather than reinvented.
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        raise PartsSheetGate(
+            f"the render operator returned without writing "
+            f"{os.path.basename(path)}; the panel does not exist or is zero bytes, and "
+            f"the sheet would name a file that is not there",
+            {"path": os.path.abspath(path),
+             "exists": os.path.isfile(path),
+             "bytes": os.path.getsize(path) if os.path.isfile(path) else None})
     return path
 
 
-def world_bounds(objs):
+def corner_bounds(objs):
+    """(lo, hi) corners over the objects' UNEVALUATED mesh vertices, in world space.
+
+    Renamed from `world_bounds` 2026-09-04 (F-328aaea2): it shadowed
+    `blender_scene.world_bounds`, which returns a (center, half_extent, radius) triple
+    over EVALUATED geometry and filters by render visibility when it is given the scene.
+    Two different measurements under one name is how a visibility obligation gets lost.
+    """
     lo = np.array([1e18, 1e18, 1e18])
     hi = -lo.copy()
     for ob in objs:
@@ -245,7 +267,7 @@ def main():
 
     scene.frame_set(1)
     bpy.context.view_layer.update()
-    lo, hi = world_bounds(visible)
+    lo, hi = corner_bounds(visible)
     height = float(hi[2] - lo[2])
     centre = Vector(((lo + hi) / 2.0).tolist())
     at_rest = all_world_verts(visible)
@@ -310,8 +332,31 @@ def main():
     path = os.path.join(out, "panels.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
-    print("PANELS_OK " + json.dumps({"panels": path, "max_displacement": moved,
+    print("MAKE_PARTS_SHEET_OK " + json.dumps({"panels": path, "max_displacement": moved,
                                      "parts_rendered": len(visible)}))
+
+
+def _halt_keysafe(value):
+    """`value` with every mapping key stringified, at every depth.
+
+    `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
+    `numpy.int64` key raises `TypeError` from inside the halt handler below, the new
+    exception leaves the whole `try` statement, `sys.exit` never runs -- and `blender -b -P`
+    then exits **0** on a fired andon, with no sentinel line at all. MEASURED 2026-09-04
+    against all 21 handlers: 21 of 21 escaped that way. Pinned by
+    `tests/test_instruments_amend_w10.py`.
+
+    STAGE B: this belongs in `armature_core.errors` beside the halt vocabulary, as one
+    implementation with 21 call sites (together with `halt_outcome`, which lives in
+    `rig_character.py` today and is inlined as a ternary in the other twenty).
+    `armature_core` is outside the instruments domain's globs, so the lift is FILED, not
+    done -- see the wave-10 `skipped[]` entry for F-ce3a471d.
+    """
+    if isinstance(value, dict):
+        return {str(k): _halt_keysafe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_halt_keysafe(v) for v in value]
+    return value
 
 
 if __name__ == "__main__":
@@ -335,7 +380,8 @@ if __name__ == "__main__":
         from armature_core.errors import ArmatureError, GateFailure
         traceback.print_exc()
         _detail = getattr(exc, "evidence", None)
-        print("MAKE_PARTS_SHEET_HALT " + json.dumps({
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _sentinel = {
             "tool": "make_parts_sheet",
             "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
                         else "REFUSED — the tool declined to proceed"
@@ -343,5 +389,18 @@ if __name__ == "__main__":
                         else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
             "error": type(exc).__name__, "message": str(exc),
-            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+        # The sentinel and the exit code are the contract, and NEITHER may be deleted by a
+        # failure to serialise the sentinel itself. `_code` is computed before anything that
+        # can raise and delivered from a `finally`; the fallback line carries only values
+        # that are already strings, so it cannot fail in turn.
+        try:
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            _line = json.dumps({
+                "tool": _sentinel["tool"], "outcome": _sentinel["outcome"], "gate": None,
+                "error": _sentinel["error"], "message": _sentinel["message"],
+                "evidence": None})
+        finally:
+            print("MAKE_PARTS_SHEET_HALT " + _line)
+            sys.exit(_code)

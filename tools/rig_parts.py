@@ -477,7 +477,6 @@ def observe_under_pose(ctx):
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
     sitelist.validate()
     started = time.time()
     source_sha = sha256_file(args["glb"])
@@ -507,6 +506,14 @@ def main():
               "export_yup": True, "export_animations": True, "export_frame_range": True,
               "export_animation_mode": "ACTIONS", "export_def_bones": False,
               "export_apply": False, "export_materials": "EXPORT"}
+    # THE DIRECTORY IS CREATED HERE, immediately above the first byte (F-d47095fa).
+    # It used to sit at line 480 of `main()`, with 4 named refusal(s) stranded between
+    # the two (490, 492, 499, 503) -- none of which needs the directory. A run refused by any of
+    # them left an empty output directory behind, which a reader scanning `outputs/` or
+    # a re-run into the same `--out` reads as an attempt that produced nothing rather
+    # than one that was refused. Pinned by `tests/test_instruments_amend_w10.py::
+    # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`.
+    os.makedirs(out_dir, exist_ok=True)
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
     bpy.ops.export_scene.gltf(**kwargs)
@@ -569,8 +576,31 @@ def main():
     path = os.path.join(out_dir, "parts_manifest.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2, default=str)
-    print("PARTS_OK " + json.dumps({"glb": out_glb, "sha256": manifest["output"]["sha256"],
+    print("RIG_PARTS_OK " + json.dumps({"glb": out_glb, "sha256": manifest["output"]["sha256"],
                                     "manifest": path, "parts": len(ctx["parts"])}))
+
+
+def _halt_keysafe(value):
+    """`value` with every mapping key stringified, at every depth.
+
+    `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
+    `numpy.int64` key raises `TypeError` from inside the halt handler below, the new
+    exception leaves the whole `try` statement, `sys.exit` never runs -- and `blender -b -P`
+    then exits **0** on a fired andon, with no sentinel line at all. MEASURED 2026-09-04
+    against all 21 handlers: 21 of 21 escaped that way. Pinned by
+    `tests/test_instruments_amend_w10.py`.
+
+    STAGE B: this belongs in `armature_core.errors` beside the halt vocabulary, as one
+    implementation with 21 call sites (together with `halt_outcome`, which lives in
+    `rig_character.py` today and is inlined as a ternary in the other twenty).
+    `armature_core` is outside the instruments domain's globs, so the lift is FILED, not
+    done -- see the wave-10 `skipped[]` entry for F-ce3a471d.
+    """
+    if isinstance(value, dict):
+        return {str(k): _halt_keysafe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_halt_keysafe(v) for v in value]
+    return value
 
 
 if __name__ == "__main__":
@@ -604,7 +634,7 @@ if __name__ == "__main__":
                         else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
             "error": type(exc).__name__, "message": str(exc),
-            "evidence": _detail if isinstance(_detail, dict) else None}
+            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
         try:
             _a = parse_args()
             _d = os.path.abspath(_a["out"])
@@ -616,5 +646,15 @@ if __name__ == "__main__":
             # The halt record is a courtesy; the sentinel and the exit code are the contract.
             traceback.print_exc()
         finally:
-            print("RIG_PARTS_HALT " + json.dumps(_sentinel, default=str))
+            # The sentinel line may not be deleted by a failure to serialise the sentinel:
+            # a `TypeError` raised HERE would leave the `finally` before `sys.exit`. The
+            # fallback carries only values that are already strings.
+            try:
+                _line = json.dumps(_sentinel, default=str)
+            except BaseException:                                     # noqa: BLE001
+                _line = json.dumps({
+                    "tool": _sentinel["tool"], "outcome": _sentinel["outcome"],
+                    "gate": None, "error": _sentinel["error"],
+                    "message": _sentinel["message"], "evidence": None})
+            print("RIG_PARTS_HALT " + _line)
             sys.exit(_code)

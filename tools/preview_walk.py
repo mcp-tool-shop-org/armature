@@ -156,7 +156,7 @@ def main():
     c = spec["camera"]
     bounds = (blender_scene.world_bounds_over_frames(scene, subject, count)
               if spec["subject"]["animation"] == "per_frame"
-              else blender_scene.world_bounds(subject))
+              else blender_scene.world_bounds(subject, scene=scene))
     if bounds is None:
         raise PreviewWalkGate(
             f"{asset} has no evaluated geometry to frame",
@@ -198,7 +198,12 @@ def main():
     missing = [f for f in planned if not os.path.isfile(os.path.join(a.out, f))]
     empty = [f for f in planned
              if f not in missing and os.path.getsize(os.path.join(a.out, f)) == 0]
-    strays = sorted(set(os.listdir(a.out)) - set(planned))
+    # The SAME population as `render_performer.py`'s (F-ffdb6d4d): `.png`
+    # case-insensitively, minus the plan. This took the whole listing with no suffix
+    # filter at all, so the two renderers reported different things about the same kind
+    # of directory. A diagnostic in both: `strays` gates nothing.
+    strays = sorted(f for f in os.listdir(a.out)
+                    if f.lower().endswith(".png") and f not in set(planned))
     if missing or empty:
         raise PreviewWalkGate(
             f"the preview is not complete: {len(missing)} of {count} frames were never "
@@ -209,6 +214,11 @@ def main():
         "tool": "preview_walk", "blender": blender_scene.blender_provenance(),
         "out": os.path.abspath(a.out), "frames": len(planned), "resolution": [w, h],
         "unexpected_files_in_out_dir": strays,
+        "unexpected_files_rule": (
+            "every file in --out whose name ends in .png, compared case-INSENSITIVELY, "
+            "that the plan did not name. A DIAGNOSTIC: it gates nothing, and a stray "
+            "cannot make the frame-completeness check pass or fail. The sibling renderer "
+            "render_performer.py derives the same population"),
         "asset": asset, "asset_sha256": sha, "camera_position": [round(v, 6) for v in pos],
         "camera_target": [round(v, 6) for v in cam_solution["target"]],
         "camera_target_source": cam_solution["target_source"],
@@ -219,6 +229,29 @@ def main():
                                                 if o not in subject],
         "import": info}))
     return 0
+
+
+def _halt_keysafe(value):
+    """`value` with every mapping key stringified, at every depth.
+
+    `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
+    `numpy.int64` key raises `TypeError` from inside the halt handler below, the new
+    exception leaves the whole `try` statement, `sys.exit` never runs -- and `blender -b -P`
+    then exits **0** on a fired andon, with no sentinel line at all. MEASURED 2026-09-04
+    against all 21 handlers: 21 of 21 escaped that way. Pinned by
+    `tests/test_instruments_amend_w10.py`.
+
+    STAGE B: this belongs in `armature_core.errors` beside the halt vocabulary, as one
+    implementation with 21 call sites (together with `halt_outcome`, which lives in
+    `rig_character.py` today and is inlined as a ternary in the other twenty).
+    `armature_core` is outside the instruments domain's globs, so the lift is FILED, not
+    done -- see the wave-10 `skipped[]` entry for F-ce3a471d.
+    """
+    if isinstance(value, dict):
+        return {str(k): _halt_keysafe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_halt_keysafe(v) for v in value]
+    return value
 
 
 if __name__ == "__main__":
@@ -240,7 +273,8 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         _detail = getattr(exc, "evidence", None)
-        print("PREVIEW_WALK_HALT " + json.dumps({
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _sentinel = {
             "tool": "preview_walk",
             "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
                         else "REFUSED — the tool declined to proceed"
@@ -248,5 +282,18 @@ if __name__ == "__main__":
                         else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
             "error": type(exc).__name__, "message": str(exc),
-            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+        # The sentinel and the exit code are the contract, and NEITHER may be deleted by a
+        # failure to serialise the sentinel itself. `_code` is computed before anything that
+        # can raise and delivered from a `finally`; the fallback line carries only values
+        # that are already strings, so it cannot fail in turn.
+        try:
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            _line = json.dumps({
+                "tool": _sentinel["tool"], "outcome": _sentinel["outcome"], "gate": None,
+                "error": _sentinel["error"], "message": _sentinel["message"],
+                "evidence": None})
+        finally:
+            print("PREVIEW_WALK_HALT " + _line)
+            sys.exit(_code)
