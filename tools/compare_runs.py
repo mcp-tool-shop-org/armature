@@ -60,6 +60,7 @@ count are now reported as separate, separately named quantities with the channel
 beside them.
 """
 
+import argparse
 import hashlib
 import json
 import os
@@ -110,8 +111,13 @@ def compare_channel(dir_a, dir_b):
         "n_frames_with_any_pixel_difference": 0,
         "n_frames_with_byte_difference": 0,
         "worst_frame": None,
-        "shape_mismatch": [],
     }
+    # A LOCAL accumulator, not a record key. `rec["shape_mismatch"]` was initialised to
+    # `[]`, appended to, and then RAISED on whenever it was non-empty, so every record a
+    # caller can read carried the empty list and no other value was reachable — the
+    # placeholder-shaped-like-evidence the wave-8 correction removed from `verdict_inputs`
+    # and left one level down. The evidence dict on the refusal carries the measurement.
+    shape_mismatch = []
     only_a = sorted(set(names_a) - set(names_b))
     only_b = sorted(set(names_b) - set(names_a))
     if names_a != names_b:
@@ -142,7 +148,7 @@ def compare_channel(dir_a, dir_b):
             rec["n_frames_with_byte_difference"] += 1
         a, b = _load(pa), _load(pb)
         if a.shape != b.shape:
-            rec["shape_mismatch"].append({"frame": name, "a": list(a.shape), "b": list(b.shape)})
+            shape_mismatch.append({"frame": name, "a": list(a.shape), "b": list(b.shape)})
             continue
         d = np.abs(a - b)
         rec["frames_compared"] += 1
@@ -170,31 +176,31 @@ def compare_channel(dir_a, dir_b):
         npx += int(d.size)
     # ---- ANDON. Not on a difference — on having compared nothing, which reports as a
     #      perfect zero and is indistinguishable from a run that reproduced.
-    if rec["shape_mismatch"]:
+    if shape_mismatch:
         # ---- ANDON. The other half of the same refusal: every shared name exists on
         #      both sides, and some of them were never comparable. The pixel verdict was
         #      computed over the rest and read exactly like a run that reproduced.
         raise CompareError(
-            f"{len(rec['shape_mismatch'])} of the {len(shared)} shared frame(s) between "
+            f"{len(shape_mismatch)} of the {len(shared)} shared frame(s) between "
             f"{dir_a} and {dir_b} differ in SHAPE and were never compared "
-            f"({', '.join(m['frame'] for m in rec['shape_mismatch'][:6])}); the pixel "
+            f"({', '.join(m['frame'] for m in shape_mismatch[:6])}); the pixel "
             f"verdict would be read over the {rec['frames_compared']} that remained",
             {"dir_a": dir_a, "dir_b": dir_b,
              "frames_a": len(names_a), "frames_b": len(names_b),
              "frames_compared": rec["frames_compared"],
-             "shape_mismatch": rec["shape_mismatch"][:8],
-             "n_shape_mismatch": len(rec["shape_mismatch"])},
+             "shape_mismatch": shape_mismatch[:8],
+             "n_shape_mismatch": len(shape_mismatch)},
         )
     if rec["frames_compared"] == 0:
         raise CompareError(
             f"nothing was compared between {dir_a} and {dir_b}: "
             f"{len(names_a)} PNG(s) on the a side, {len(names_b)} on the b side, "
-            f"{len(shared)} shared name(s), {len(rec['shape_mismatch'])} of those "
+            f"{len(shared)} shared name(s), {len(shape_mismatch)} of those "
             f"shape-mismatched. A zero difference over zero pixels is not a measurement",
             {"dir_a": dir_a, "dir_b": dir_b,
              "names_a": names_a[:32], "names_b": names_b[:32],
              "shared": shared[:32], "frames_compared": 0,
-             "shape_mismatch": rec["shape_mismatch"][:8]},
+             "shape_mismatch": shape_mismatch[:8]},
         )
     rec["mean_abs_diff_per_sample"] = (total / npx) if npx else None
     return rec
@@ -262,17 +268,42 @@ def compare_runs(run_a, run_b):
 
 
 def main(argv=None):
-    argv = argv if argv is not None else sys.argv[1:]
-    args = {}
-    for token in argv:
-        key, _, value = token[2:].partition("=")
-        args[key] = value
-    report = compare_runs(args["a"], args["b"])
-    if "out" in args:
-        os.makedirs(os.path.dirname(os.path.abspath(args["out"])), exist_ok=True)
-        with open(args["out"], "w", encoding="utf-8") as fh:
+    """G3's comparison, driven from the command line.
+
+    **The parser was hand-rolled** as `for token in argv: key, _, value =
+    token[2:].partition("=")` — the first two characters removed from every token whatever
+    its shape, unknown keys accepted in silence, and the report written only `if "out" in
+    args`. Measured 2026-09-04 against the rig's own E02 runs: `--outt=<path>` printed a
+    clean `COMPARE {...}`, exited 0 and wrote no file; `--help` died with `KeyError: 'a'`,
+    so the tool could not answer for its own usage; and `--a <path>` — the space form every
+    sibling in this domain accepts — read `''` and died in `os.listdir` naming no flag.
+
+    argparse gives `--help`, refuses an unknown flag with exit 2, and accepts both forms.
+    `--out` stays optional, and the success line says which of the two happened rather than
+    leaving a reader to infer a report exists.
+    """
+    ap = argparse.ArgumentParser(
+        description="compare two run directories pixel by pixel (G3's instrument)")
+    ap.add_argument("--a", required=True, help="the first run directory")
+    ap.add_argument("--b", required=True, help="the second run directory")
+    ap.add_argument("--out", default=None,
+                    help="where to write the JSON report; omitted, none is written and "
+                         "the OK line says so")
+    args = ap.parse_args(argv)
+
+    report = compare_runs(args.a, args.b)
+    written = None
+    if args.out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+        with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(report, fh, indent=2)
-    print("COMPARE " + json.dumps(report["verdict_inputs"]))
+        written = os.path.abspath(args.out)
+    # The success sentinel rides AFTER the report is on disk, and names it: a verdict line
+    # that printed whether or not anything was written is how a mistyped flag read as a
+    # completed comparison.
+    print("COMPARE_RUNS_OK " + json.dumps(
+        dict(report["verdict_inputs"],
+             report=written or "no report written (--out not given)")))
     return 0
 
 
