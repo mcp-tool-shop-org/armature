@@ -60,7 +60,11 @@ def probe_one(path):
     rec["mesh_objects_excluded"] = [o.name for o in meshes if o not in visible]
     rec["armature_names"] = [o.name for o in armatures]
 
-    bounds = blender_scene.world_bounds(visible)
+    # `scene=` is passed even though `visible` is already a `render_visible_meshes`
+    # result: the filter is idempotent, and the call then states which of the two
+    # measurements this is instead of leaving that to the reader of the argument
+    # (F-328aaea2). `world_bounds` with `scene` omitted IS the naive measurement.
+    bounds = blender_scene.world_bounds(visible, scene=scene)
     if bounds is None:
         rec["error"] = "no render-visible geometry to measure"
         return rec
@@ -72,7 +76,15 @@ def probe_one(path):
 
     # Reported because it is the E01 defect made visible rather than merely avoided:
     # what the naive `type == "MESH"` selection would have concluded on this asset.
-    naive = blender_scene.world_bounds(meshes)
+    # `unfiltered_world_bounds` BY NAME, not `world_bounds` on an unfiltered list.
+    # MEASURED 2026-09-04 (F-328aaea2): the naive row and the filtered row were the same
+    # call with a different argument, so a later sweep giving `world_bounds` its scene at
+    # every call site (or a default scene) would silently turn this line into a second
+    # copy of the filtered one -- and the record would keep publishing a field labelled
+    # `naive_type_mesh_selection` whose numbers are the filtered ones, with no test able
+    # to see it. `blender_scene.unfiltered_world_bounds` exists for exactly this row and
+    # names this file in its own docstring; its only caller was a rig-only script.
+    naive = blender_scene.unfiltered_world_bounds(meshes)
     if naive is not None:
         rec["naive_type_mesh_selection"] = {
             "bbox_half_extent": [float(v) for v in naive[1]],

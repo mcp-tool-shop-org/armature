@@ -355,8 +355,15 @@ def main():
     empty = [p for p in paths
              if p not in missing and os.path.getsize(p) == 0]
     planned_names = {os.path.basename(p) for p in paths}
+    # `.lower().endswith` and not `.endswith` (F-ffdb6d4d). MEASURED 2026-09-04: this
+    # test was case-SENSITIVE while the consumers that list frames downstream
+    # (`encode_control.py:126`, `invert_frames.py:70`) match case-INSENSITIVELY, so a
+    # frame arriving as `.PNG` -- an operator copy, a tool from another pipeline -- was
+    # absent from this record (which then said nothing unexpected was in the directory)
+    # while a consumer picked it up and encoded it into the clip. The sibling renderer
+    # `preview_walk` now derives the same population.
     strays = sorted(f for f in os.listdir(out)
-                    if f.endswith(".png") and f not in planned_names
+                    if f.lower().endswith(".png") and f not in planned_names
                     and f != "empty_plate.png")
     if missing or empty:
         raise RenderGate(
@@ -390,6 +397,12 @@ def main():
                        "manifest": os.path.abspath(a.manifest)},
             "resolution": [WIDTH, HEIGHT], "frames": count, "fps": a.fps,
             "unexpected_files_in_out_dir": strays,
+            "unexpected_files_rule": (
+                "every file in --out whose name ends in .png, compared "
+                "case-INSENSITIVELY, that the plan did not name, minus empty_plate.png. "
+                "A DIAGNOSTIC: it gates nothing, and a stray cannot make the "
+                "frame-completeness check pass or fail. The sibling renderer "
+                "preview_walk.py derives the same population"),
             "floor_drawn": bool(a.floor),
             "camera": {
                 "azimuth_deg": AZIMUTH_DEG, "elevation_deg": ELEVATION_DEG,

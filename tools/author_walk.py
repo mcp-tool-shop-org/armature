@@ -593,7 +593,7 @@ def main():
     }
     # THE DIRECTORY IS CREATED HERE, immediately above the first byte (F-d47095fa).
     # It used to sit at line 542 of `main()`, with 5 named refusal(s) stranded between
-    # the two (552, 555, 576, 580, 586) -- none of which needs the directory. A run refused by any of
+    # the two (552, 555, 576, 580, 586) -- none of which needs it. A run refused by any of
     # them left an empty output directory behind, which a reader scanning `outputs/` or
     # a re-run into the same `--out` reads as an attempt that produced nothing rather
     # than one that was refused. Pinned by `tests/test_instruments_amend_w10.py::

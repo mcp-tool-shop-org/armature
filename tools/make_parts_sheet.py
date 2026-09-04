@@ -212,7 +212,14 @@ def shoot(scene, path):
     return path
 
 
-def world_bounds(objs):
+def corner_bounds(objs):
+    """(lo, hi) corners over the objects' UNEVALUATED mesh vertices, in world space.
+
+    Renamed from `world_bounds` 2026-09-04 (F-328aaea2): it shadowed
+    `blender_scene.world_bounds`, which returns a (center, half_extent, radius) triple
+    over EVALUATED geometry and filters by render visibility when it is given the scene.
+    Two different measurements under one name is how a visibility obligation gets lost.
+    """
     lo = np.array([1e18, 1e18, 1e18])
     hi = -lo.copy()
     for ob in objs:
@@ -260,7 +267,7 @@ def main():
 
     scene.frame_set(1)
     bpy.context.view_layer.update()
-    lo, hi = world_bounds(visible)
+    lo, hi = corner_bounds(visible)
     height = float(hi[2] - lo[2])
     centre = Vector(((lo + hi) / 2.0).tolist())
     at_rest = all_world_verts(visible)

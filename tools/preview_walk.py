@@ -156,7 +156,7 @@ def main():
     c = spec["camera"]
     bounds = (blender_scene.world_bounds_over_frames(scene, subject, count)
               if spec["subject"]["animation"] == "per_frame"
-              else blender_scene.world_bounds(subject))
+              else blender_scene.world_bounds(subject, scene=scene))
     if bounds is None:
         raise PreviewWalkGate(
             f"{asset} has no evaluated geometry to frame",
@@ -198,7 +198,12 @@ def main():
     missing = [f for f in planned if not os.path.isfile(os.path.join(a.out, f))]
     empty = [f for f in planned
              if f not in missing and os.path.getsize(os.path.join(a.out, f)) == 0]
-    strays = sorted(set(os.listdir(a.out)) - set(planned))
+    # The SAME population as `render_performer.py`'s (F-ffdb6d4d): `.png`
+    # case-insensitively, minus the plan. This took the whole listing with no suffix
+    # filter at all, so the two renderers reported different things about the same kind
+    # of directory. A diagnostic in both: `strays` gates nothing.
+    strays = sorted(f for f in os.listdir(a.out)
+                    if f.lower().endswith(".png") and f not in set(planned))
     if missing or empty:
         raise PreviewWalkGate(
             f"the preview is not complete: {len(missing)} of {count} frames were never "
@@ -209,6 +214,11 @@ def main():
         "tool": "preview_walk", "blender": blender_scene.blender_provenance(),
         "out": os.path.abspath(a.out), "frames": len(planned), "resolution": [w, h],
         "unexpected_files_in_out_dir": strays,
+        "unexpected_files_rule": (
+            "every file in --out whose name ends in .png, compared case-INSENSITIVELY, "
+            "that the plan did not name. A DIAGNOSTIC: it gates nothing, and a stray "
+            "cannot make the frame-completeness check pass or fail. The sibling renderer "
+            "render_performer.py derives the same population"),
         "asset": asset, "asset_sha256": sha, "camera_position": [round(v, 6) for v in pos],
         "camera_target": [round(v, 6) for v in cam_solution["target"]],
         "camera_target_source": cam_solution["target_source"],

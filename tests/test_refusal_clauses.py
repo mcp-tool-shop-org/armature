@@ -130,6 +130,9 @@ RECORDED_POPULATION = frozenset({
     # the render-completeness refusal their siblings carry, so `BindingSheetGate` and
     # `PartsSheetGate` each reach a second raise site and stop being their own clause.
     "BindingSheetGate", "PartsSheetGate",
+    # And `ReliftWindow` (3 sites in `check_relift.py`), the wave-10 andon that derives the
+    # compared window from each GLB's own keyed action range instead of from `--frames`.
+    "ReliftWindow",
     "AlphaGate", "ArmatureError", "AssemblyGate", "BackdropGate", "BakeEmpty",
     "CascadeGate", "ClipReadError", "ClipShapeError", "CompareError",
     "ComparisonNotIsolated", "CompositorWiring", "DetectionGate", "DonorGate",
@@ -168,7 +171,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     the derivation cannot see it. The typed set is therefore checked by direction — the
     two names that ARE raised must still be policed — rather than by containment.
     """
-    assert len(POLICED) == 73, sorted(POLICED)
+    assert len(POLICED) == 74, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

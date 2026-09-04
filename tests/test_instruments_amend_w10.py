@@ -794,3 +794,306 @@ def test_the_stranding_census_goes_red_on_a_member_with_the_defect(tmp_path, mon
     monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
     assert write_window("probe_order.py") == (5, 7)
     assert stranded_refusals("probe_order.py") == [6]
+
+
+# --------------------------------------------------------------------------------------
+# F-6ee68fc0 -- the stale-pin instrument samples a window derived from the assets
+# --------------------------------------------------------------------------------------
+#
+# `--frames` defaulted to the literal 65 and `main` passed that same number to BOTH
+# `signatures` calls, which built their lists with `for i in range(frames)`. So
+# `len(pinned_sigs) == len(fresh_sigs) == a.frames` for every input pair that exists, and
+# `armature_core.glb.compare_signatures`' opening clause -- "frame counts differ ... A lift
+# that dropped or gained a frame is not the same performance however well the frames it
+# kept agree" -- was structurally unreachable from its ONLY production caller.
+# `tests/test_check_relift.py:44-51` exercised it synthetically, so the suite was green over
+# a clause no run could reach.
+
+
+def _relift():
+    return load_tool("check_relift.py")
+
+
+def test_the_window_is_measured_off_the_asset_not_off_the_flag():
+    mod = _relift()
+    w = mod.keyed_window("a.glb", (1.0, 65.0), 65)
+    assert w["keyed_frames"] == 65 and w["sampled"] == 65
+    short = mod.keyed_window("b.glb", (1.0, 40.0), 65)
+    assert short["keyed_frames"] == 40, short
+    assert short["sampled"] == 40, "a request may not sample past the last key"
+    assert mod.keyed_window("c.glb", None, 65)["keyed_frames"] == 0
+
+
+def test_two_glbs_that_key_different_windows_refuse():
+    """The dropped-frame case, in the tool that exists to notice it. A re-solve producing
+    40 frames against a 65-frame pin used to be compared as 65-vs-65 with frames 40..64
+    held at the last key on BOTH sides — and if the shared 40 agreed the record said
+    `n_frames_compared: 65`, `n_frames_differing: 0`, "all 65 frames identical"."""
+    mod = _relift()
+    pinned = mod.keyed_window("pinned.glb", (1.0, 65.0), 40)
+    fresh = mod.keyed_window("fresh.glb", (1.0, 40.0), 40)
+    with pytest.raises(mod.ReliftWindow) as caught:
+        mod.gate_relift_window(pinned, fresh, 40)
+    assert caught.value.evidence["clause"] == "ranges_differ"
+    assert caught.value.gate == "RELIFT"
+
+
+def test_a_request_that_overruns_the_performance_refuses():
+    """The second half, recorded in this repo by a sibling instrument:
+    `render_start_frame.action_frame_range`'s docstring states that `frame_set` past the end
+    of an action "holds the last pose and renders it without complaint", and
+    render_start_frame refuses on exactly that. check_relift performed no such check."""
+    mod = _relift()
+    w = mod.keyed_window("x.glb", (1.0, 40.0), 65)
+    with pytest.raises(mod.ReliftWindow) as caught:
+        mod.gate_relift_window(w, dict(w, glb="y.glb"), 65)
+    ev = caught.value.evidence
+    assert ev["clause"] == "request_overruns_the_performance"
+    assert ev["shared_keyed_frames"] == 40 and ev["requested_frames"] == 65
+
+
+def test_a_pair_with_no_keyed_action_refuses_rather_than_agreeing_about_a_still():
+    mod = _relift()
+    w = mod.keyed_window("x.glb", None, 8)
+    with pytest.raises(mod.ReliftWindow) as caught:
+        mod.gate_relift_window(w, dict(w, glb="y.glb"), 8)
+    assert caught.value.evidence["clause"] == "no_keyed_action"
+
+
+def test_the_window_gate_passes_a_legal_request_and_records_both_ranges():
+    """The other direction — a gate that cannot pass is not a gate either."""
+    mod = _relift()
+    a = mod.keyed_window("pinned.glb", (1.0, 65.0), 65)
+    b = mod.keyed_window("fresh.glb", (1.0, 65.0), 65)
+    ev = mod.gate_relift_window(a, b, 65)
+    assert ev["clause"] is None and ev["shared_keyed_frames"] == 65
+    assert ev["pinned"]["action_frame_range"] == [1.0, 65.0]
+    assert ev["fresh"]["action_frame_range"] == [1.0, 65.0]
+
+
+def test_the_window_gate_is_reached_from_mains_own_path(tmp_path, monkeypatch, capsys):
+    """Not only from a hand-built pair: `main` must call it, on the real argv path, before
+    any verdict is computed. A gate nothing calls is not a gate."""
+    import sys as _sys
+
+    pinned = tmp_path / "pinned.glb"
+    pinned.write_bytes(b"glTF-pinned")
+    fresh = tmp_path / "fresh.glb"
+    fresh.write_bytes(b"glTF-fresh")
+    out = tmp_path / "rec.json"
+    argv = ["blender", "-b", "-P", "check_relift.py", "--",
+            f"--pinned={pinned}", f"--fresh={fresh}", f"--out={out}", "--frames=40"]
+    mod = load_tool("check_relift.py", argv=argv)
+
+    def fake_signatures(glb, frames, fps):
+        span = (1.0, 65.0) if glb == str(pinned) else (1.0, 40.0)
+        window = mod.keyed_window(glb, span, frames)
+        return [("sig", i) for i in range(window["sampled"])], window
+
+    monkeypatch.setattr(mod, "signatures", fake_signatures)
+    saved = list(_sys.argv)
+    try:
+        _sys.argv = list(argv)
+        with pytest.raises(mod.ReliftWindow) as caught:
+            mod.main()
+    finally:
+        _sys.argv = saved
+    assert caught.value.evidence["clause"] == "ranges_differ"
+    assert not out.exists(), "a refused comparison may not leave a record behind"
+
+
+def test_a_legal_run_records_the_window_beside_the_verdict(tmp_path, monkeypatch):
+    """The record says what was compared and over what — `gate_RELIFT.window`."""
+    import sys as _sys
+
+    pinned = tmp_path / "pinned.glb"
+    pinned.write_bytes(b"glTF-pinned")
+    fresh = tmp_path / "fresh.glb"
+    fresh.write_bytes(b"glTF-pinned")
+    out = tmp_path / "rec.json"
+    argv = ["blender", "-b", "-P", "check_relift.py", "--",
+            f"--pinned={pinned}", f"--fresh={fresh}", f"--out={out}", "--frames=40"]
+    mod = load_tool("check_relift.py", argv=argv)
+
+    def fake_signatures(glb, frames, fps):
+        window = mod.keyed_window(glb, (1.0, 40.0), frames)
+        return [("sig", i) for i in range(window["sampled"])], window
+
+    monkeypatch.setattr(mod, "signatures", fake_signatures)
+    monkeypatch.setattr(mod.blender_scene, "blender_provenance",
+                        lambda: {"version": "stub"})
+    saved = list(_sys.argv)
+    try:
+        _sys.argv = list(argv)
+        assert mod.main() == 0
+    finally:
+        _sys.argv = saved
+    rec = json.loads(out.read_text(encoding="utf-8"))
+    assert rec["gate_RELIFT"]["window"]["shared_keyed_frames"] == 40
+    assert rec["gate_RELIFT"]["window"]["pinned"]["action_frame_range"] == [1.0, 40.0]
+    assert rec["gate_RELIFT"]["n_frames_compared"] == 40
+
+
+def test_check_relift_carries_the_siblings_frame_range_reader_rather_than_a_second_copy():
+    """family: the keyed-span reader exists once, in `render_start_frame`, and is imported
+    — the same idiom as `make_rig_sheet` importing `make_parts_sheet.shoot`."""
+    src = read_source("check_relift.py")
+    assert "from render_start_frame import action_frame_range" in src
+    assert "def action_frame_range" not in src, "a second implementation, not a carry"
+
+
+# --------------------------------------------------------------------------------------
+# F-328aaea2 -- the naive measurement is called by its own name
+# --------------------------------------------------------------------------------------
+#
+# `probe_subject` reported its deliberately-naive row with the SAME call as its filtered
+# row -- `blender_scene.world_bounds(visible)` at one line and
+# `blender_scene.world_bounds(meshes)` at another -- so the two were distinguishable only
+# by which list was passed. `blender_scene.unfiltered_world_bounds` exists for this row and
+# names `probe_subject` in its own docstring, but its only caller was
+# `tests/blender/check_visibility.py`, a rig-only script. A later sweep giving
+# `world_bounds` its scene at every call site would have turned the naive line into a second
+# copy of the filtered one, and the record would have kept publishing a field labelled
+# `naive_type_mesh_selection` whose numbers are the filtered ones.
+
+
+def unfiltered_world_bounds_calls(filename):
+    """`world_bounds(...)` calls with no `scene=` keyword — the naive measurement's shape.
+
+    Keyed on the CALL and its keywords, not on a spelling: `world_bounds` filters by render
+    visibility when it is given the scene and does not when it is not, so `scene=` is the
+    node the property lives on. `unfiltered_world_bounds` is the sanctioned public name for
+    a row that must NOT be filtered and is therefore not counted here.
+    """
+    tree = ast.parse(read_source(filename))
+    out = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        called = ast.unparse(node.func)
+        if called.rsplit(".", 1)[-1] != "world_bounds":
+            continue
+        if any(k.arg == "scene" for k in node.keywords):
+            continue
+        if len(node.args) >= 2:            # positional scene
+            continue
+        out.append((node.lineno, ast.unparse(node)))
+    return out
+
+
+#: The two case/visibility sites that are NOT in this domain's globs, measured 2026-09-04
+#: and named rather than silently excluded: `tools/stage_render.py:155`
+#: (`bs.world_bounds(meshes)`, scene omitted) is filed in this wave's `skipped[]`.
+OUT_OF_DOMAIN_WORLD_BOUNDS = ("stage_render.py",)
+
+
+@pytest.mark.parametrize("filename", BLENDER_TOOLS)
+def test_no_blender_tool_measures_through_the_unfiltered_shape_of_world_bounds(filename):
+    naive = unfiltered_world_bounds_calls(filename)
+    assert naive == [], (
+        f"{filename}: {naive} calls `world_bounds` with `scene` omitted, which is the "
+        f"NAIVE measurement. Pass `scene=` where the row should be filtered, or call "
+        f"`blender_scene.unfiltered_world_bounds` where it deliberately should not")
+
+
+def test_probe_subject_reports_the_naive_row_by_its_public_name():
+    src = read_source("probe_subject.py")
+    assert "blender_scene.unfiltered_world_bounds(meshes)" in src
+    assert "blender_scene.world_bounds(visible, scene=scene)" in src
+
+
+@pytest.mark.parametrize("filename", BLENDER_TOOLS)
+def test_no_blender_tool_defines_its_own_world_bounds(filename):
+    """`make_parts_sheet` defined `world_bounds(objs)` returning (lo, hi) corners over
+    UNEVALUATED vertices, shadowing the module function that returns a
+    (center, half_extent, radius) triple over evaluated geometry and filters when given the
+    scene. Two different measurements under one name is how a visibility obligation gets
+    lost; it is `corner_bounds` now."""
+    tree = ast.parse(read_source(filename))
+    shadows = [n.lineno for n in tree.body
+               if isinstance(n, ast.FunctionDef) and n.name == "world_bounds"]
+    assert shadows == [], f"{filename}:{shadows} shadows blender_scene.world_bounds"
+
+
+def test_the_world_bounds_census_goes_red_on_a_member_with_the_naive_shape(tmp_path,
+                                                                          monkeypatch):
+    probe = tmp_path / "probe_bounds.py"
+    probe.write_text(
+        "from armature_core import blender_scene\n"
+        "def run(scene, meshes):\n"
+        "    return blender_scene.world_bounds(meshes)\n", encoding="utf-8")
+    import blender_stub
+    monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
+    assert unfiltered_world_bounds_calls("probe_bounds.py") == [
+        (3, "blender_scene.world_bounds(meshes)")]
+
+
+# --------------------------------------------------------------------------------------
+# F-ffdb6d4d -- the two renderers report the same population for the same directory
+# --------------------------------------------------------------------------------------
+#
+# `render_performer.py:359` built its stray list with a case-SENSITIVE `.endswith(".png")`
+# while `preview_walk.py:201` took the whole listing with no suffix filter at all, and the
+# consumers that list frames downstream (`encode_control.py:126`, `invert_frames.py:70`)
+# match case-INSENSITIVELY. A frame arriving as `.PNG` was therefore absent from
+# `render_performer`'s `unexpected_files_in_out_dir` -- the record said nothing unexpected
+# was in the directory -- while a consumer picked it up and encoded it into the clip.
+
+
+def case_sensitive_png_tests(filename):
+    """`x.endswith(".png")` sites whose receiver is not lower-cased first."""
+    tree = ast.parse(read_source(filename))
+    out = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "endswith" and node.args):
+            continue
+        arg = node.args[0]
+        if not (isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                and arg.value.lower().endswith(".png")):
+            continue
+        receiver = ast.unparse(node.func.value)
+        if not receiver.endswith(".lower()"):
+            out.append((node.lineno, ast.unparse(node)))
+    return out
+
+
+#: The two `.png` sites outside this domain's globs, measured 2026-09-04 and named rather
+#: than silently excluded: `tools/render_pose_sticks.py:178` (instruments-measure, Gate
+#: COUNT) and `tools/armature_core/donor_gate.py:79` (core-gates, `frame_paths`). Both are
+#: being aligned in the same wave; this domain's half is the two renderers below.
+OUT_OF_DOMAIN_PNG_SITES = ("render_pose_sticks.py", "armature_core/donor_gate.py")
+
+
+@pytest.mark.parametrize("filename", BLENDER_TOOLS)
+def test_every_png_population_in_this_domain_is_taken_case_insensitively(filename):
+    bad = case_sensitive_png_tests(filename)
+    assert bad == [], (
+        f"{filename}: {bad} match `.png` case-sensitively while the consumers that list "
+        f"frames downstream do not, so the two sides can disagree about one directory")
+
+
+def test_the_two_renderers_derive_the_same_stray_population():
+    """The pair, stated as the property rather than as two separate spellings."""
+    for filename in ("render_performer.py", "preview_walk.py"):
+        src = read_source(filename)
+        assert 'f.lower().endswith(".png")' in src, filename
+        assert "unexpected_files_rule" in src, (
+            f"{filename} records a stray list without saying how its population is derived")
+
+
+def test_a_stray_png_with_an_upper_case_extension_is_named_by_render_performer(tmp_path):
+    """Behavioural, on the expression the tool actually evaluates: a directory holding
+    `STRAY.PNG` beside the planned frames must have it named."""
+    out = tmp_path
+    for name in ("00000.png", "00001.png", "empty_plate.png", "STRAY.PNG", "notes.txt"):
+        (out / name).write_bytes(b"PNG")
+    planned_names = {"00000.png", "00001.png"}
+    strays = sorted(f for f in os.listdir(out)
+                    if f.lower().endswith(".png") and f not in planned_names
+                    and f != "empty_plate.png")
+    assert strays == ["STRAY.PNG"], strays
+    old = sorted(f for f in os.listdir(out)
+                 if f.endswith(".png") and f not in planned_names
+                 and f != "empty_plate.png")
+    assert old == [], "the superseded case-sensitive test could not see it"
