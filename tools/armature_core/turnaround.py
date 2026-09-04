@@ -337,40 +337,86 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
 PIXEL_COMPARE_STRIDE = 8
 
 
-def _pixel_pairs(view_records):
-    """`(n_compared, identical_adjacent_pairs, adjacent_mean_abs_distances)`.
+def _read_plane(view_index, px, ev):
+    """One record's `pixels` as a strided float plane, or a typed refusal.
+
+    `np.asarray(px, dtype=np.float64)` raises whatever numpy raises — a `ValueError` on a
+    ragged list, a `TypeError` on a string — and none of those is in the `ArmatureError`
+    family, so the 21-tool halt contract records the render tool as "FAILED — an unhandled
+    error" at exit 1 with no gate id, no clause and no evidence, after the eight views are
+    already on disk. What happened is Gate TURN declining to read an input; that is a
+    refusal at exit 2 (F-e207fd20, wave 16).
+    """
+    try:
+        import numpy as np
+    except ImportError:                         # pragma: no cover - numpy is a hard dep
+        ev["clause"] = "numpy_unavailable"
+        raise TurnaroundGate(
+            "a view record carries `pixels` and numpy is not importable, so the pixel "
+            "clause cannot run. A gate that cannot read its input does not return a "
+            "verdict about it", ev)
+    try:
+        a = np.asarray(px, dtype=np.float64)
+    except (TypeError, ValueError) as exc:
+        ev["clause"] = "pixels_unreadable"
+        ev["unreadable_view"] = int(view_index)
+        ev["unreadable_reason"] = f"{type(exc).__name__}: {exc}"
+        raise TurnaroundGate(
+            f"view {view_index} carries a `pixels` value numpy cannot read as an array "
+            f"({type(exc).__name__}: {exc}). The pixel clause is what stands between this "
+            f"gate and a set of eight renders of one picture, and an input it cannot read "
+            f"is refused rather than skipped", ev)
+    if a.ndim < 2:
+        ev["clause"] = "pixels_not_a_plane"
+        ev["unreadable_view"] = int(view_index)
+        ev["pixels_shape"] = list(a.shape)
+        raise TurnaroundGate(
+            f"view {view_index} carries a `pixels` value of shape {list(a.shape)}, which "
+            f"is not an (H, W[, C]) plane. It used to be passed through unstrided and "
+            f"compared anyway", ev)
+    return a[::PIXEL_COMPARE_STRIDE, ::PIXEL_COMPARE_STRIDE, ...]
+
+
+def _pixel_pairs(view_records, ev):
+    """`(n_views_carrying_pixels, identical_pairs, distances, pairs_skipped_for_shape)`.
 
     Adjacent pairs, because a turnaround is an ordered orbit and a camera that stopped
     moving stops between neighbours; the full N-squared comparison would cost eight times
     as much to answer the same question. `numpy` is imported lazily so this module keeps
     its "no bpy, no hard numeric dependency at import" shape for callers that only want
     `orbit_azimuths`.
+
+    **Two populations, counted separately** (F-1935e0e1 / F-e207fd20, wave 16). This
+    returned `compared` — the number of view RECORDS carrying a plane — and the caller
+    spent that number in the sentence "distinct in PIXELS over {compared} of {n} view(s)",
+    which is a claim about COMPARISONS PERFORMED. They are not the same population:
+    `distances` accumulates only for adjacent pairs where both planes are present AND
+    their strided shapes match. Measured with eight 64x64x4 planes and view 3 re-rendered
+    at 72x64: `n_views_compared_in_pixels: 8`, verdict "...distinct in PIXELS over 8 of 8
+    view(s)", while `adjacent_pixel_distances` carried 5 of the 7 adjacent pairs and view
+    3 was compared to nothing at all. The one view a camera failed to advance to is
+    exactly the view whose plane can come back a different size, and its two pairs were
+    dropped from the comparison while the verdict reported them as compared.
     """
     planes = []
-    for rec in view_records:
+    for i, rec in enumerate(view_records):
         px = rec.get("pixels")
-        if px is None:
-            planes.append(None)
-            continue
-        try:
-            import numpy as np
-        except ImportError:                     # pragma: no cover - numpy is a hard dep
-            return 0, [], []
-        a = np.asarray(px, dtype=np.float64)
-        planes.append(a[::PIXEL_COMPARE_STRIDE, ::PIXEL_COMPARE_STRIDE, ...]
-                      if a.ndim >= 2 else a)
-    compared = sum(1 for p in planes if p is not None)
-    identical, distances = [], []
+        planes.append(None if px is None else _read_plane(i, px, ev))
+    identical, distances, skipped = [], [], []
     for i in range(1, len(planes)):
         a, b = planes[i - 1], planes[i]
-        if a is None or b is None or getattr(a, "shape", None) != getattr(b, "shape", None):
+        if a is None or b is None:
+            continue
+        if getattr(a, "shape", None) != getattr(b, "shape", None):
+            skipped.append({"pair": [i - 1, i],
+                            "shapes": [list(a.shape), list(b.shape)]})
             continue
         import numpy as np
         d = float(np.abs(a - b).mean())
         distances.append(d)
         if d == 0.0:
             identical.append([i - 1, i])
-    return compared, identical, distances
+    return sum(1 for p in planes if p is not None), identical, distances, skipped
 
 
 def gate_set_distinct(view_records, expected):
@@ -408,11 +454,23 @@ def gate_set_distinct(view_records, expected):
     Director's eye reads a magnitude rather than the word "distinct".
 
     **And where the clause cannot run, the verdict says so.** A caller that hands digest-
-    only records gets `n_views_compared_in_pixels: 0` and a verdict that states the pixel
+    only records gets `n_views_carrying_pixels: 0` and a verdict that states the pixel
     comparison did not happen, rather than a sentence that reads as though it did. A
     verdict names only clauses that ran against a population that could fail them.
-    `render_turnaround.py` builds the records and does not yet attach `pixels`; that
-    caller is another domain's and the seam is posted.
+
+    **The population the pixel verdict is quoted over is ADJACENT PAIRS, not view
+    records** (F-1935e0e1 / F-e207fd20, wave 16). The evidence carried
+    `n_views_compared_in_pixels` — a count of records carrying a plane — and the verdict
+    spent it in "distinct in PIXELS over {n} of {m} view(s)", which is a claim about
+    comparisons performed. The evidence now carries `n_views_carrying_pixels`,
+    `n_adjacent_pairs`, `n_adjacent_pairs_compared` and
+    `n_adjacent_pairs_skipped_for_shape` as four separate numbers, the verdict is phrased
+    over the pair count, and the two ways a pair used to vanish silently are refusals with
+    their own clauses: `views_without_pixels` (a partly-attached set) and
+    `adjacent_pair_shapes_differ` (a view whose plane came back a different size — the
+    plausible shape for the one view a camera failed to advance to). A `pixels` value
+    numpy cannot read is `pixels_unreadable`, a typed refusal at exit 2 rather than
+    whatever `np.asarray` raises at exit 1.
     """
     ev = {"gate": "TURN", "andon": "TurnaroundGate",
           "expected": int(expected), "observed": len(view_records)}
@@ -443,12 +501,50 @@ def gate_set_distinct(view_records, expected):
             "camera did not move between them. Every per-view check passes on this set — "
             "the files are RGBA, the count is right, the figure is in all of them", ev)
 
-    compared, identical, distances = _pixel_pairs(view_records)
-    ev["n_views_compared_in_pixels"] = compared
+    carrying, identical, distances, skipped = _pixel_pairs(view_records, ev)
+    n_pairs = max(len(view_records) - 1, 0)
+    ev["n_views_carrying_pixels"] = carrying
+    ev["n_adjacent_pairs"] = n_pairs
+    ev["n_adjacent_pairs_compared"] = len(distances)
+    ev["n_adjacent_pairs_skipped_for_shape"] = len(skipped)
+    ev["adjacent_pairs_skipped_for_shape"] = skipped[:12]
     ev["n_pairs_identical_in_pixels"] = len(identical)
     ev["pairs_identical_in_pixels"] = identical[:12]
     ev["adjacent_pixel_distances"] = [round(d, 9) for d in distances]
     ev["min_adjacent_pixel_distance"] = min(distances) if distances else None
+
+    # A set where SOME records carry a plane is refused rather than partly compared: the
+    # views that carry none are the ones nothing rules on, and a verdict quoting a
+    # magnitude over the rest reads as a verdict over the set. Measured (F-e207fd20) on a
+    # set where only even-indexed views carried a plane: `compared == 4`, `distances ==
+    # []`, and the verdict branch — keyed on `compared` rather than on `distances` —
+    # called `min([])`, raising an untyped `ValueError` from inside the gate.
+    if carrying and carrying != len(view_records):
+        ev["clause"] = "views_without_pixels"
+        ev["views_without_pixels"] = [i for i, r in enumerate(view_records)
+                                      if r.get("pixels") is None]
+        raise TurnaroundGate(
+            f"{carrying} of {len(view_records)} view records carry `pixels`. The pixel "
+            f"clause is the one that can see a camera which advanced by a rounding error, "
+            f"and a partly-attached set gets it on some views and not others — so the "
+            f"views that carry nothing are exactly the ones no clause rules on, while the "
+            f"verdict quotes a magnitude and reads as a verdict over the set. Attach the "
+            f"plane for every view or for none", ev)
+
+    # A pair dropped for a shape mismatch is refused, not silently skipped: the view whose
+    # plane came back a different size is the plausible one for a camera that failed to
+    # advance, and dropping its two pairs removes it from the only clause that could see
+    # that (F-1935e0e1).
+    if skipped:
+        ev["clause"] = "adjacent_pair_shapes_differ"
+        raise TurnaroundGate(
+            f"{len(skipped)} of {n_pairs} adjacent pair(s) carry planes of different "
+            f"shapes ({[k['shapes'] for k in skipped[:4]]}), so they cannot be compared in "
+            f"pixels. A turnaround's views are one camera orbiting one subject at one "
+            f"resolution; a view whose plane is a different size is either a different "
+            f"render or a different subject, and either way the pair is dropped from the "
+            f"comparison rather than passing it", ev)
+
     if identical:
         ev["clause"] = "views_identical_in_pixels"
         raise TurnaroundGate(
@@ -459,11 +555,15 @@ def gate_set_distinct(view_records, expected):
             f"than by zero writes {len(digests)} different digests over one picture. "
             f"Every per-view check passes on this set", ev)
 
-    if compared:
+    # Keyed on `distances`, the population `min` is taken over, never on the count of
+    # records carrying a plane (F-e207fd20): the two are different numbers, and the
+    # branch that spends `min(distances)` has to be the branch that knows it is non-empty.
+    if distances:
         ev["verdict"] = (
             f"{len(digests)} distinct views by sha256, as many as were asked for, and "
-            f"distinct in PIXELS over {compared} of {len(digests)} view(s): closest "
-            f"adjacent pair {min(distances):.6g} mean absolute difference")
+            f"distinct in PIXELS over {len(distances)} of {n_pairs} adjacent pair(s) "
+            f"({carrying} of {len(digests)} view(s) carried a plane): closest adjacent "
+            f"pair {min(distances):.6g} mean absolute difference")
     else:
         ev["verdict"] = (
             f"{len(digests)} distinct views by sha256, as many as were asked for; pixel "

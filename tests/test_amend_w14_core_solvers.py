@@ -437,12 +437,18 @@ def test_gate_turn_refuses_eight_byte_distinct_copies_of_one_view():
 
 
 def test_gate_turn_passes_a_set_whose_views_really_differ():
+    # WAVE 16 (core-solvers, F-1935e0e1): `n_views_compared_in_pixels` counted view
+    # RECORDS and was spent in a sentence about comparisons performed. The two populations
+    # are separate keys now, and the verdict is quoted over the ADJACENT PAIRS.
     rng = np.random.default_rng(3)
     records = [_view(i, rng.normal(128.0, 40.0, (32, 32, 3))) for i in range(8)]
     ev = turnaround.gate_set_distinct(records, 8)
     assert ev["n_pairs_identical_in_pixels"] == 0
-    assert ev["n_views_compared_in_pixels"] == 8
-    assert "distinct in PIXELS over 8 of 8" in ev["verdict"]
+    assert ev["n_views_carrying_pixels"] == 8
+    assert ev["n_adjacent_pairs_compared"] == 7
+    assert ev["n_adjacent_pairs_skipped_for_shape"] == 0
+    assert "distinct in PIXELS over 7 of 7 adjacent pair(s)" in ev["verdict"]
+    assert "8 of 8 view(s) carried a plane" in ev["verdict"]
     assert ev["min_adjacent_pixel_distance"] > 0.0
 
 
@@ -452,7 +458,8 @@ def test_gate_turn_verdict_says_so_when_no_view_carried_pixels():
     'distinct'."""
     ev = turnaround.gate_set_distinct(
         [{"view": i, "sha256": f"{i:064x}"} for i in range(8)], 8)
-    assert ev["n_views_compared_in_pixels"] == 0
+    assert ev["n_views_carrying_pixels"] == 0            # was n_views_compared_in_pixels
+    assert ev["n_adjacent_pairs_compared"] == 0
     assert "NOT compared" in ev["verdict"]
 
 

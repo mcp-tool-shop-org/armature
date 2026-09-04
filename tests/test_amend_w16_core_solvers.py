@@ -38,7 +38,7 @@ if TESTS not in sys.path:
 
 import blender_stub  # noqa: E402
 
-from armature_core import (aapose, assembly, turnaround)  # noqa: E402
+from armature_core import aapose, assembly, turnaround  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 #: The twenty-one modules the core-solvers domain owns, from the frozen wave-16 domain map.
@@ -386,3 +386,129 @@ def test_a_sixth_drawing_constant_cannot_be_added_silently(tmp_path):
         assert ev["constants_outside_the_record"] == ["SIXTH_DRAWING_CONSTANT"], ev
     finally:
         sys.modules.pop("_aapose_scratch", None)
+
+
+# ============================================== F-e207fd20 and F-1935e0e1 (Gate TURN)
+#
+# `_pixel_pairs` returned `compared` = the number of view RECORDS carrying a plane, and
+# `gate_set_distinct` spent that number in "distinct in PIXELS over {compared} of {n}
+# view(s)" — a claim about COMPARISONS PERFORMED — and keyed the branch that calls
+# `min(distances)` on it. The two are different populations: `distances` accumulates only
+# for ADJACENT pairs where both planes are present and their strided shapes match.
+#
+# The population the verdict rules on is adjacent PAIRS. The proofs drive both members the
+# record count cannot see: a set where every record carries a plane and pairs are still
+# dropped (unequal shapes), and a set where only some records carry one.
+
+
+def _turn_view(i, plane=None):
+    rec = {"view": i, "sha256": f"{i:064x}"}
+    if plane is not None:
+        rec["pixels"] = plane
+    return rec
+
+
+def _distinct_planes(n, shape=(64, 64, 4), seed=11):
+    rng = np.random.default_rng(seed)
+    return [rng.normal(128.0, 40.0, shape) for _ in range(n)]
+
+
+def test_a_view_whose_plane_is_a_different_size_is_refused_not_absorbed():
+    """The finding's operand, and the member outside the record-count walk: EVERY record
+    carries a plane, so `compared == 8`, and two of the seven adjacent pairs are still
+    dropped.
+
+    Measured on `041027c` with eight 64x64x4 planes and view 3 re-rendered at 72x64:
+    `n_views_compared_in_pixels: 8` and verdict "...distinct in PIXELS over 8 of 8
+    view(s): closest adjacent pair 1 mean absolute difference", while
+    `adjacent_pixel_distances` carried 5 entries of 7 and view 3 was compared to nothing.
+    """
+    planes = _distinct_planes(8)
+    planes[3] = np.random.default_rng(4).normal(128.0, 40.0, (72, 64, 4))
+    records = [_turn_view(i, p) for i, p in enumerate(planes)]
+    with pytest.raises(turnaround.TurnaroundGate) as exc:
+        turnaround.gate_set_distinct(records, 8)
+    ev = exc.value.evidence
+    assert ev["clause"] == "adjacent_pair_shapes_differ", ev
+    assert ev["n_views_carrying_pixels"] == 8, ev
+    assert ev["n_adjacent_pairs"] == 7, ev
+    assert ev["n_adjacent_pairs_compared"] == 5, ev
+    assert ev["n_adjacent_pairs_skipped_for_shape"] == 2, ev
+    assert [k["pair"] for k in ev["adjacent_pairs_skipped_for_shape"]] == [[2, 3], [3, 4]]
+
+
+def test_a_partly_attached_set_is_refused_rather_than_partly_compared():
+    """Operand (a) from the finding: only even-indexed views carry a plane, so
+    `compared == 4` and `distances == []`. The verdict branch was keyed on `compared`, so
+    it called `min([])` and raised `ValueError: min() iterable argument is empty` — not in
+    the `ArmatureError` family, so the 21-tool halt contract records the render tool as
+    "FAILED — an unhandled error" at exit 1, after the eight views are already on disk.
+    """
+    planes = _distinct_planes(8)
+    records = [_turn_view(i, planes[i] if i % 2 == 0 else None) for i in range(8)]
+    with pytest.raises(turnaround.TurnaroundGate) as exc:
+        turnaround.gate_set_distinct(records, 8)
+    ev = exc.value.evidence
+    assert ev["clause"] == "views_without_pixels", ev
+    assert ev["n_views_carrying_pixels"] == 4, ev
+    assert ev["views_without_pixels"] == [1, 3, 5, 7], ev
+
+
+def test_the_untyped_valueerror_is_gone_from_both_directions():
+    """Both operands the finding measured, asserted on the FAMILY rather than on a
+    message: whatever fires, it is a refusal the halt contract can classify."""
+    planes = _distinct_planes(8)
+    partial = [_turn_view(i, planes[i] if i % 2 == 0 else None) for i in range(8)]
+    unequal = [_turn_view(i, np.random.default_rng(i).normal(
+        128.0, 40.0, (64 + i, 64, 4))) for i in range(8)]
+    for records, why in ((partial, "partial attachment"), (unequal, "unequal shapes")):
+        with pytest.raises(turnaround.TurnaroundGate) as exc:
+            turnaround.gate_set_distinct(records, 8)
+        assert isinstance(exc.value, ArmatureError), why
+        assert exc.value.gate == "TURN", why
+        assert exc.value.evidence.get("clause"), why
+
+
+@pytest.mark.parametrize("bad, clause", [
+    ("not an array", "pixels_unreadable"),
+    ([[1, 2], [3]], "pixels_unreadable"),
+    (np.zeros(16), "pixels_not_a_plane"),
+])
+def test_a_pixels_value_numpy_cannot_read_as_a_plane_is_a_typed_refusal(bad, clause):
+    """`np.asarray` raises whatever numpy raises, and none of it is in the family. A gate
+    that cannot read its input refuses at exit 2 naming the view."""
+    planes = _distinct_planes(8)
+    records = [_turn_view(i, planes[i]) for i in range(8)]
+    records[5]["pixels"] = bad
+    with pytest.raises(turnaround.TurnaroundGate) as exc:
+        turnaround.gate_set_distinct(records, 8)
+    ev = exc.value.evidence
+    assert ev["clause"] == clause, ev
+    assert ev["unreadable_view"] == 5, ev
+
+
+def test_the_verdict_is_quoted_over_the_pairs_it_compared():
+    """The sentence names the population each number belongs to: pairs compared out of
+    pairs available, and views carrying a plane out of views."""
+    records = [_turn_view(i, p) for i, p in enumerate(_distinct_planes(8))]
+    ev = turnaround.gate_set_distinct(records, 8)
+    assert ev["n_views_carrying_pixels"] == 8
+    assert ev["n_adjacent_pairs"] == 7
+    assert ev["n_adjacent_pairs_compared"] == 7
+    assert ev["n_adjacent_pairs_skipped_for_shape"] == 0
+    assert "over 7 of 7 adjacent pair(s)" in ev["verdict"], ev["verdict"]
+    assert "8 of 8 view(s) carried a plane" in ev["verdict"], ev["verdict"]
+    assert "n_views_compared_in_pixels" not in ev, (
+        "the key whose name claimed comparisons and counted records is gone")
+
+
+def test_the_digest_only_diagnostic_path_still_says_it_ruled_on_bytes_only():
+    """Rule 4: the clause is armed by its caller this wave, and where no caller attaches a
+    plane the verdict says the pixel comparison did not happen rather than reading as
+    though it did."""
+    ev = turnaround.gate_set_distinct(
+        [_turn_view(i) for i in range(8)], 8)
+    assert ev["n_views_carrying_pixels"] == 0
+    assert ev["n_adjacent_pairs_compared"] == 0
+    assert ev["min_adjacent_pixel_distance"] is None
+    assert "NOT compared" in ev["verdict"]
