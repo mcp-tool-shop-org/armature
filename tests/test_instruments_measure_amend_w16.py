@@ -164,3 +164,77 @@ def test_the_zero_raise_site_base_is_gone():
     assert not hasattr(MT, "_CarriesEvidence")
     assert MT.TrackingError.__bases__ == (ArmatureError,)
     assert MT.AnchorMismatch.__bases__ == (ArmatureError,)
+
+
+# ===========================================================================
+# F-f98407d9 — the three `SpecError` refusals carry evidence NOW
+# ===========================================================================
+
+
+def test_the_stage_render_halt_line_carries_the_flag_of_a_mistyped_token(capsys, tmp_path):
+    """THE OPERAND: the PRINTED `STAGE_RENDER_HALT` line for `--sepc=`, parsed back.
+
+    Measured on the base tree: `stage_render.main(['--sepc=x','--out=y'])` raised
+    `SpecError` with `evidence: None`, so the halt line printed `"evidence": null` for a
+    mistyped flag on a spend-adjacent tool and a CI or PowerShell chain routing the failure
+    had to regex the prose to learn which flag was rejected and what the known set was. The
+    docstring beside the raises asserted a blocker — "until `ArmatureError` gains the
+    `(message, evidence=None)` constructor" — that the wave-14 merge had already removed.
+
+    The population is the parser's THREE refusals, not this one: `not_a_flag`,
+    `unknown_flag` and `missing_required` are each driven below.
+    """
+    from blender_stub import exit_code_of_main_block
+
+    out = str(tmp_path / "run")
+
+    def raiser():
+        import stage_render
+        return stage_render.main(["--sepc=x", f"--out={out}"])
+
+    code, escaped = exit_code_of_main_block(
+        "stage_render.py", raiser=raiser,
+        argv=["blender", "-b", "-P", "stage_render.py", "--", "--sepc=x", f"--out={out}"])
+    assert escaped is None, escaped
+    assert code == 2, code
+
+    printed = capsys.readouterr().out
+    lines = [l for l in printed.splitlines()
+             if l.split(" ", 1)[0] == "STAGE_RENDER_HALT"]
+    assert len(lines) == 1, printed
+    rec = json.loads(lines[0][len("STAGE_RENDER_HALT"):].strip())
+
+    assert rec["evidence"] is not None, rec
+    ev = rec["evidence"]
+    assert ev["clause"] == "unknown_flag", ev
+    assert ev["andon"] == "SpecError" and ev["gate"] is None, ev
+    assert ev["key"] == "sepc" and ev["token"] == "--sepc=x", ev
+    assert "spec" in ev["known"] and "asset" in ev["known"], ev
+    assert rec["outcome"].startswith("REFUSED"), rec
+    assert not rec["message"].startswith("("), rec["message"]
+
+
+@pytest.mark.parametrize("argv,clause,key,token", [
+    (["not-a-flag", "--out=x"], "not_a_flag", None, "not-a-flag"),
+    (["--sepc=x", "--out=y"], "unknown_flag", "sepc", "--sepc=x"),
+    (["--out=y"], "missing_required", "spec", None),
+])
+def test_each_of_the_parsers_three_refusals_names_its_clause(argv, clause, key, token):
+    """The POPULATION: all three sites of `_parse_argv`, not the one the finding drove.
+
+    Red on `not_a_flag` and `missing_required` too — neither is the site the halt-line
+    fixture above exercises, and both carried `evidence: None` on the base tree.
+    """
+    import stage_render
+    from armature_core.errors import SpecError
+
+    with pytest.raises(SpecError, match=r"stage_render takes") as exc:
+        stage_render._parse_argv(argv)
+    ev = exc.value.evidence
+    assert ev is not None, "the refusal carries no receipt"
+    assert ev["clause"] == clause, ev
+    assert ev["andon"] == "SpecError" and ev["gate"] is None, ev
+    assert ev["key"] == key and ev["token"] == token, ev
+    assert set(ev["known"]) == set(stage_render.KNOWN_FLAGS), ev
+    # the message keeps saying it too — a human reads the line as well
+    assert "stage_render takes" in str(exc.value)
