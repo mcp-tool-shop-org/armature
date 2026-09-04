@@ -106,14 +106,15 @@ def _require(mapping, key, kind, where):
         raise SpecError(f"{where}: missing required key {key!r}")
     value = mapping[key]
     if not isinstance(value, kind) or isinstance(value, bool) and kind is not bool:
+        named = (kind.__name__ if isinstance(kind, type)
+                 else " or ".join(k.__name__ for k in kind))
         raise SpecError(
-            f"{where}.{key}: expected {getattr(kind, '__name__', kind)}, "
-            f"got {type(value).__name__}"
+            f"{where}.{key}: expected {named}, got {type(value).__name__}"
         )
     return value
 
 
-def _require_positive(mapping, key, where):
+def _require_positive(mapping, key, where, note=None):
     """A count, a rate or a pixel dimension is a POSITIVE number, and the type test
     alone did not say so.
 
@@ -127,11 +128,19 @@ def _require_positive(mapping, key, where):
     layer instead of from the contract whose whole job is to say a spec is well formed,
     and `frame_names(-33, "png")` returns `[]` in between — an empty plan that reads as
     "nothing to render" rather than as a malformed spec.
+
+    ⚠ **The camera block was outside it until 2026-09-04**, though this docstring's own
+    argument covers it word for word. Measured: `normalise_spec` accepted and
+    round-tripped `lens_mm: '50'`, `elevation_deg: 'up'`, `sensor_mm: 0`,
+    `fit_margin: -1`, `clip_start: -5` with `clip_end: -1`, and `radius: -3.0`. `note`
+    exists for the radius, whose refusal is worded the way `framing.load_pinned_camera`
+    words the same refusal on the same quantity read back out of a record.
     """
     value = mapping[key]
     if value <= 0:
         raise SpecError(
-            f"{where}.{key} is {value}; it must be positive. A spec that parses is not "
+            f"{where}.{key} is {value}" + (f", {note}" if note else "")
+            + f"; it must be positive. A spec that parses is not "
             f"a spec that may run, but a non-positive count, rate or dimension is not a "
             f"spec that parses either"
         )
@@ -286,6 +295,56 @@ def normalise_spec(raw, spec_path=None):
             raise SpecError(
                 "spec.camera.target must be 'bbox_center' or a 3-number [x, y, z]"
             )
+
+    # An orbit RADIUS is a distance, and a non-positive one is not a spec that parses.
+    #
+    # ⚠ Measured 2026-09-04: `camera={'type':'orbit','radius':-3.0}` was accepted and
+    # returned unchanged, and it renders the whole shot from the opposite side of the
+    # subject — `framing.camera_position((0,0,0), -3.0, 8.0, 0.0)` is exactly
+    # `camera_position((0,0,0), 3.0, -8.0, 180.0)`, azimuth+180 and elevation negated.
+    # Nothing downstream sees it: `stage_render.py:170-174` only does `float(radius)` and
+    # a `radius + sphere_r >= clip_end` test, which -3.0 passes; G4 compares the mask
+    # against the projection computed from the SAME wrong camera so the deltas agree;
+    # G1/G2/G6 are blind to camera placement; and the manifest then records
+    # `camera_radius_resolved: -3.0` beside per-frame azimuths that are not the angles the
+    # frames were rendered at — a recipe that does not reproduce its output, every gate
+    # green. The asymmetry was inside this package: `framing.load_pinned_camera`
+    # (framing.py:203-204) reads the SAME quantity back out of a camera record and refuses
+    # it, in the words reused here.
+    if radius != "auto":
+        _require_positive(cam, "radius", "spec.camera", note="which is not a distance")
+
+    # The rest of the camera block's numbers. `_require` was called on name, generator,
+    # asset.path, resolution.width/height and frames.count/fps — and on nothing under
+    # `camera` except `type` (a string equality), `target` (shape) and `radius`
+    # (bool-ness). Measured 2026-09-04, every one of these was accepted and round-tripped:
+    # `lens_mm: '50'`, `elevation_deg: 'up'`, `sensor_mm: 0`, `fit_margin: -1`,
+    # `clip_start: -5` with `clip_end: -1`. The consequences are loud rather than silent
+    # and that is the objection: `framing.project(p, target, 3.0, 0.0, 8.0, 50.0, 0.0,
+    # 832, 480)` with `sensor_mm=0` raises `ZeroDivisionError: division by zero` at
+    # framing.py:155 and a string `lens_mm` a bare `TypeError` out of the same arithmetic,
+    # so the refusal arrives from the render layer rather than from the contract whose
+    # stated job is to say a spec is well formed.
+    #
+    # The split is the one `_require_positive`'s docstring draws: a lens, a sensor, a fit
+    # margin and a clip plane are POSITIVE quantities; an angle is not — an elevation of
+    # -8 is a camera below the subject and a sweep of -360 is an orbit the other way.
+    for key in ("lens_mm", "sensor_mm", "fit_margin", "clip_start", "clip_end"):
+        _require(cam, key, (int, float), "spec.camera")
+        _require_positive(cam, key, "spec.camera")
+    for key in ("elevation_deg", "azimuth_start_deg", "azimuth_sweep_deg"):
+        _require(cam, key, (int, float), "spec.camera")
+
+    # The same clause `depth.window` already writes for z_min/z_max. `clip_end` is read by
+    # `stage_render.py:171` as a bound (`radius + sphere_r >= float(c['clip_end'])`), so a
+    # range that does not open turns that andon into a check that always fires, and
+    # nothing anywhere catches it as a malformed value.
+    if not cam["clip_start"] < cam["clip_end"]:
+        raise SpecError(
+            f"spec.camera.clip_start is {cam['clip_start']} and clip_end is "
+            f"{cam['clip_end']}; the near plane must be in front of the far one or the "
+            f"camera has no depth range at all"
+        )
 
     if spec_path:
         spec.setdefault("_spec_path", os.path.abspath(spec_path))
