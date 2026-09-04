@@ -43,8 +43,5 @@
     "samples": 1,
     "filter_size": 0.01,
     "film_transparent": true
-  },
-  "gates": {
-    "g4_tolerance_px": 2
   }
 }
