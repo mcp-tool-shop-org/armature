@@ -331,17 +331,22 @@ def test_a_foreign_working_directory_cannot_arm_or_disarm_an_output_gated_guard(
     that took the three anchor tests into `measure_tracking.py:133` on a directory that is
     not this repo's.
     """
-    decoy = tmp_path / "outputs" / "E02" / "runs"
-    decoy.mkdir(parents=True)
+    # WAVE-16 MERGE (coordinator, 2026-09-04): the first cut assumed the repo carries NO `outputs/E02/runs`; the main
+    # checkout DOES (gitignored rig artifacts). The scratch cwd is now built in the OPPOSITE state
+    # from the repo's, so the two spellings disagree on every rig and the fixture measures the
+    # operand (the cwd) in both directions.
+    repo_has_runs = os.path.isdir(os.path.join(repo_file("outputs/E02"), "runs"))
+    (tmp_path / "outputs" / "E02").mkdir(parents=True)
+    if not repo_has_runs:
+        (tmp_path / "outputs" / "E02" / "runs").mkdir()
     monkeypatch.chdir(tmp_path)
 
     anchored = os.path.isdir(os.path.join(repo_file("outputs/E02"), "runs"))
     bare = os.path.isdir(os.path.join("outputs/E02", "runs"))
-    assert bare is True, "the decoy must be visible to the spelling that was replaced"
-    assert anchored is os.path.isdir(
-        os.path.join(repo_file("outputs/E02"), "runs")), "the anchor is cwd-independent"
+    assert bare is (not repo_has_runs), "the scratch cwd must show the spelling that was replaced the opposite state"
+    assert anchored is repo_has_runs, "the anchor is cwd-independent"
     assert anchored != bare, (
-        "on this rig the repo has no E02 runs and the scratch cwd does; if these agree the "
+        "the anchored and the bare spelling agree on a cwd built to disagree with the repo; the "
         "fixture is not measuring what it was written to measure")
 
 

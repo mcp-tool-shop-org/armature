@@ -2378,7 +2378,57 @@ def paths_the_suite_guards():
                 rel = _joined_relpath(node, env)
                 if rel and os.path.exists(os.path.join(REPO, rel)):
                     found.add(rel)
-    return sorted(found)
+    # WAVE-16 MERGE (coordinator, 2026-09-04): a path git IGNORES exists on this checkout (rig artifacts under
+    # `outputs/`) and is opened by a test, but no commit can ever carry a change to it, so no
+    # trigger filter can run on it — it is not a file the suite guards in the sense this census
+    # measures. Partitioned into its own derived category (`paths_the_suite_opens_but_git_ignores`)
+    # rather than dropped: the wave-16 tests amend anchored `E02_ROOT` through `conftest.repo_file`
+    # and the walk found `outputs/E02/runs` for the first time.
+    return sorted(found - set(_git_ignored(found)))
+
+
+def _git_ignored(paths):
+    """The members of `paths` that `git check-ignore` says are ignored — asked of git, not typed."""
+    paths = sorted(paths)
+    if not paths:
+        return []
+    # NUL-terminated both ways (`-z`): text-mode stdin on Windows turns "\n" into "\r\n" and
+    # git then echoes the path quoted with the CR inside it — measured on the first cut.
+    proc = subprocess.run(["git", "-C", REPO, "check-ignore", "--stdin", "-z"],
+                          input=b"\0".join(x.encode("utf-8") for x in paths) + b"\0",
+                          capture_output=True)
+    # exit 0: some ignored; 1: none ignored; 128 with "not a git repository" is a synthetic
+    # tree under tmp_path (the red proofs build one) and ignores nothing; anything else is a
+    # git failure worth seeing.
+    err = proc.stderr.decode("utf-8", "replace")
+    if proc.returncode == 128 and "not a git repository" in err:
+        return []
+    assert proc.returncode in (0, 1), err
+    return sorted(x.decode("utf-8") for x in proc.stdout.split(b"\0") if x)
+
+
+def paths_the_suite_opens_but_git_ignores():
+    """The partition the walk above sets aside: repo paths a test opens that git ignores."""
+    found = set()
+    for name in sorted(os.listdir(TESTS_DIR)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        env = {"REPO": ""}
+        for _ in range(2):
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name)):
+                    rel = _joined_relpath(node.value, env)
+                    if rel is not None:
+                        env[node.targets[0].id] = rel
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                rel = _joined_relpath(node, env)
+                if rel and os.path.exists(os.path.join(REPO, rel)):
+                    found.add(rel)
+    return _git_ignored(found)
 
 
 #: The population as measured 2026-09-04 by the walk above. Asserted, so a test that starts
@@ -2629,6 +2679,19 @@ def test_ci_runs_on_every_file_the_suite_guards(trigger):
         f"{trigger} runs nothing when these change, and a test in tests/ reads every one of "
         f"them: {missing}; the guard does not run on the change it exists to guard"
     )
+
+
+def test_a_gitignored_path_a_test_opens_is_partitioned_not_filtered():
+    """WAVE-16 MERGE (coordinator, 2026-09-04): the partition is DERIVED from git and asserted non-empty on a checkout
+    that carries rig artifacts, so the category cannot silently become the whole census's blind spot.
+    On a fresh worktree (no `outputs/`) the walk finds nothing to partition and the census is the
+    same list — both directions are stated here."""
+    ignored = paths_the_suite_opens_but_git_ignores()
+    for rel in ignored:
+        assert subprocess.run(["git", "-C", REPO, "check-ignore", "-q", rel]).returncode == 0, rel
+        assert rel not in paths_the_suite_guards(), rel
+    if os.path.isdir(os.path.join(REPO, "outputs", "E02", "runs")):
+        assert "outputs/E02/runs" in ignored, ignored
 
 
 @pytest.mark.parametrize("trigger", ["push", "pull_request"])

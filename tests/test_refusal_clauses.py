@@ -606,7 +606,10 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     third one is a table with a reason per entry rather than a silence.
     """
     defined = _family_classes_defined_under_tools()
-    assert len(defined) == 120, len(defined)
+    # WAVE-16 MERGE (coordinator, 2026-09-04): 120 (tests' branch) → 125 on the merged tree — builders +2 (`SeedRegistrationError`,
+    # `SpendCeiling`), instruments +1 (`ArcDidNotSurvive`), instruments-measure +2 −1 (`PickSheetError`,
+    # `E13SheetError`; `_CarriesEvidence` gone). Measured, never summed.
+    assert len(defined) == 125, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
@@ -643,15 +646,17 @@ def test_the_delegated_edge_sees_the_three_classes_the_literal_walk_could_not():
                     sites.setdefault(_raised_name(node), set()).add((rel, node.lineno))
         return sites
 
+    # WAVE-16 MERGE (coordinator, 2026-09-04): the site LINES below are re-measured through `RAISE_SITES` itself —
+    # instruments-measure deleted 27 four-line constructors and every line below each moved
+    # (`pack_pose_pack.py` 115 → 111, 164 → 160).
     old = literal_sites_only(TOOLS)
     for name in ("MakeSheetError", "PosePackError", "AnalyzeP3Error"):
         assert old.get(name, set()) == set(), (name, sorted(old.get(name, ())))
         assert RAISE_SITES[name], name
 
-    assert sorted(RAISE_SITES["PosePackError"]) == [
-        ("pack_pose_pack.py", 115), ("pack_pose_pack.py", 164)]
-    assert sorted(RAISE_SITES["MakeSheetError"]) == [("make_sheet.py", 52)]
-    assert sorted(RAISE_SITES["AnalyzeP3Error"]) == [("analyze_p3.py", 172)]
+    assert sorted(RAISE_SITES["PosePackError"]) == [("pack_pose_pack.py", 111), ("pack_pose_pack.py", 160)]
+    assert sorted(RAISE_SITES["MakeSheetError"]) == [("make_sheet.py", 48)]
+    assert sorted(RAISE_SITES["AnalyzeP3Error"]) == [("analyze_p3.py", 168)]
     # `PlateError` had ONE literal site and gains two delegated ones, so the edge moves a
     # class across the threshold as well as into the census.
     assert len(old.get("PlateError", ())) == 1 and len(RAISE_SITES["PlateError"]) == 3

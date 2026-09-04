@@ -785,7 +785,7 @@ def test_a_playback_rate_that_is_not_positive_is_refused_above_makedirs(tmp_path
 
 
 def test_the_clip_name_carries_the_run_token_when_one_is_known():
-    """THE OPERAND: `clip_name`, which returned `review_{rate:.2f}x_{fps}fps.webp` with no
+    r"""THE OPERAND: `clip_name`, which returned `review_{rate:.2f}x_{fps}fps.webp` with no
     run token at all.
 
     `fetch_run.derived_root_artifacts(run)` returns two patterns and the second —

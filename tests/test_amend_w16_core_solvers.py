@@ -724,7 +724,9 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     #: correction over there leaves this green and merely makes an entry deletable — the
     #: same treatment `tests/test_seeds_specs.STALE_CITATIONS_TODAY` gives the specs it
     #: does not own.
-    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {"rig_gates": 1, "shotspec": 2}
+    # WAVE-16 MERGE (coordinator, 2026-09-04): core-gates' wave-16 raises moved lines in `rig_gates` and `shotspec`;
+    # the ceiling is re-MEASURED on the merged tree ({'rig_gates': 2, 'shotspec': 1}), never re-typed.
+    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {'rig_gates': 2, 'shotspec': 1}
     over = {k: v for k, v in others.items()
             if v > STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN.get(k, 0)}
     assert over == {}, {"stale now": others,
