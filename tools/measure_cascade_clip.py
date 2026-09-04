@@ -175,7 +175,6 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     paths, sources = load_sources(a.frames)
     h, w, _ = sources[0].shape
@@ -207,6 +206,14 @@ def main(argv=None):
 
     with open(a.clip, "rb") as fh:
         clip_sha = hashlib.sha256(fh.read()).hexdigest()
+
+    # ---- the output directory is created only once every in-tool andon above has fired
+    #      (the shape clauses and the rate clause). A refused run that has already made its
+    #      directory leaves an empty one behind, which a later reader -- or a re-run into
+    #      the same --out -- reads as an attempt that produced nothing rather than one that
+    #      was refused. The COUNT clause below deliberately writes its record before it
+    #      raises, so the directory must exist by then and not before.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     record = {
         "tool": "measure_cascade_clip", "tool_version": TOOL_VERSION,

@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core.errors import ArmatureError  # noqa: E402
 from composite_reference import parse_plate  # noqa: E402
 from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
-                           load_rgb_over_plate, require_frames)
+                           frames_by_number, load_rgb_over_plate, require_frames)
 
 MARGIN = 10
 LABEL_H = 20
@@ -77,17 +77,14 @@ def _numbered_population(cdir, channel):
     Director as a frame of this run.
     """
     pngs = sorted(n for n in os.listdir(cdir) if n.lower().endswith(".png"))
-    numbered = [n for n in pngs if os.path.splitext(n)[0].isdigit()]
-    unexpected = [n for n in pngs if n not in set(numbered)]
-    names = sorted(numbered, key=lambda n: int(os.path.splitext(n)[0]))
-    if unexpected:
-        raise IdentitySheetError(
-            f"{cdir} holds {len(unexpected)} PNG(s) that are not numbered frames "
-            f"({', '.join(unexpected[:8])}); a stray sorts into the population and is "
-            f"drawn as a tile of the run under a caption naming a frame",
-            {"channel_dir": cdir, "channel": channel, "unexpected": unexpected,
-             "frames": names})
-    return names, {int(os.path.splitext(n)[0]): os.path.join(cdir, n) for n in names}
+    # The refusal is now `sheet_compose.frames_by_number` -- ONE implementation for the six
+    # `require_frames` callers, lifted there by the wave-12 amend rather than kept as a
+    # sixth copy of the same walk. The evidence keys this sheet's own reader expects
+    # (`channel_dir`, `channel`) ride through as extra evidence.
+    by_name = frames_by_number(pngs, where=cdir, what="frames", exc=IdentitySheetError,
+                               evidence={"channel_dir": cdir, "channel": channel})
+    names = [by_name[n] for n in sorted(by_name)]
+    return names, {n: os.path.join(cdir, by_name[n]) for n in sorted(by_name)}
 
 
 def rows_for(run_dir, plates, frames, tile_h=360, channel="normal",
