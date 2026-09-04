@@ -27,9 +27,16 @@ graph contains; the rulings about what may run are the Director's and the adviso
 
 import json
 
+from .canon import GRAPH_WRAPPER_KEYS
 from .errors import GateFailure
 
 TOOL_VERSION = "E09.1"
+
+#: The wrapper keys `normalise_graph` (and therefore every gate here, and `load_graph`)
+#: unwraps, published under this module's own name so a caller outside the package reads
+#: the SAME list the loader uses instead of re-typing a subset of it. It is
+#: `canon.GRAPH_WRAPPER_KEYS` — one tuple, two names, no second implementation.
+WRAPPER_KEYS = GRAPH_WRAPPER_KEYS
 
 #: Generator constraints, per model family, from the spec that first used each. Wan's are
 #: the ones E02 and E08 measured: both dimensions divisible by 16, frame count of the form
@@ -352,6 +359,7 @@ def families_of(filename):
 
 def model_weights(graph):
     """Every DIFFUSION-model weight file the graph loads, with the families it matches."""
+    graph = normalise_graph(graph)
     out = []
     for where, n in _iter_nodes(graph):
         if n.get("type") not in MODEL_LOADER_CLASSES:
@@ -372,6 +380,7 @@ def pairing(graph):
     model this gate can read. "Nothing to check" and "everything checked out" are different
     verdicts here for the same reason they are in `verify`.
     """
+    graph = normalise_graph(graph)
     loaded = model_weights(graph)
     present = sorted({fam for w in loaded for fam in w["families"]})
     cond = [(str(n.get("id")), n.get("type")) for _, n in _iter_nodes(graph)
@@ -427,14 +436,82 @@ class RouteGate(GateFailure):
     gate = "ROUTE"
 
 
+def _shape_of(doc):
+    """`'api'`, `'save'`, or `None` when this mapping is neither. Decides nothing."""
+    if not isinstance(doc, dict):
+        return None
+    if isinstance(doc.get("nodes"), list):
+        return "save"
+    if any(isinstance(v, dict) and "class_type" in v for v in doc.values()):
+        return "api"
+    return None
+
+
+def normalise_graph(graph):
+    """THE loader. Every gate in this module reads its graph through this one function.
+
+    Returns the graph in the shape the walk understands — API format (node-id keyed,
+    `class_type` per value) or save format (a `nodes` list) — unwrapping a submission
+    envelope named in `canon.GRAPH_WRAPPER_KEYS` when it finds one, and RAISING
+    `RouteGate` on a mapping it cannot recognise at all.
+
+    ⚠ **"This graph has no nodes" and "I cannot read this shape" were the same answer,
+    and the second one arrived under a green receipt.** Measured 2026-09-03 on the
+    standard ComfyUI submission envelope `{"prompt": <api graph>}` wrapping a graph that
+    loads `causvid_x.safetensors` (BANNED, CC-BY-NC) and a `KSamplerAdvanced` at
+    noise_seed 999999: bare, `verify(g, frame=(832, 480, 81))` raised naming the banned
+    file; wrapped, `components()`, `seeds()` and `latents()` all returned `[]` and
+    `verify` returned "0 weight file(s), 0 seed(s) all pinned, 0 of 0 latent(s)
+    checkable, 1 frame(s) checked and generator-legal", with pairing reporting "0
+    conditioning node(s) paired against 0 model file(s)". `gate_s_registration(wrapped,
+    [7])` likewise reported every seed pinned and registered. Gate ROUTE reported a graph
+    clean on licence, seeds and pairing having read zero nodes.
+
+    This is verbatim the fix wave 3 applied to `canon.texts_from_api_graph` — "'No text
+    here' and 'I did not recognise this shape' are different answers" — carried into the
+    module where the spend gates live, as ONE loader rather than a second implementation:
+    the wrapper-key tuple is `canon.GRAPH_WRAPPER_KEYS`, so the comment beside it and the
+    behaviour here cannot drift apart again.
+    """
+    doc = graph
+    for _ in range(len(GRAPH_WRAPPER_KEYS) + 1):
+        if _shape_of(doc) is not None:
+            return doc
+        inner = None
+        if isinstance(doc, dict):
+            inner = next((doc[k] for k in GRAPH_WRAPPER_KEYS
+                          if isinstance(doc.get(k), dict)), None)
+        if inner is None:
+            break
+        doc = inner
+    raise RouteGate(
+        f"this is not a graph this module can read: a {type(doc).__name__} that is "
+        f"neither API format (node-id keyed values carrying `class_type`) nor save "
+        f"format (a `nodes` list), and that carries no wrapper key from "
+        f"{list(GRAPH_WRAPPER_KEYS)}. A shape that cannot be read is not an empty "
+        f"graph, and every clause of this module would otherwise report its "
+        f"zero-population verdict as a pass",
+        {"gate": "ROUTE", "type": type(doc).__name__,
+         "top_level_keys": sorted(map(str, doc)) if isinstance(doc, dict) else None,
+         "wrapper_keys": list(GRAPH_WRAPPER_KEYS)})
+
+
 def is_api_format(graph):
-    """API format is node-id keyed with `class_type`; save format has a `nodes` array."""
-    if isinstance(graph.get("nodes"), list):
-        return False
-    return any(isinstance(v, dict) and "class_type" in v for v in graph.values())
+    """API format is node-id keyed with `class_type`; save format has a `nodes` array.
+
+    Reads through `normalise_graph`, so an unrecognised shape raises here too rather
+    than answering `False` and sending the caller down the save-format branch to walk a
+    `nodes` list that does not exist.
+    """
+    return _shape_of(normalise_graph(graph)) == "api"
 
 
 def _iter_nodes(graph):
+    """Every node in the graph, read through `normalise_graph`. See `_walk_nodes`."""
+    return _walk_nodes(normalise_graph(graph))
+
+
+def _walk_nodes(graph):
     """Every node in the graph, INCLUDING the ones inside subgraph definitions.
 
     The clause that matters. A served template can present four nodes at the top level and
@@ -460,7 +537,7 @@ def _iter_nodes(graph):
     definition ids stands against a blueprint that references itself: the gate before a
     spend must halt or answer, never hang.
     """
-    if is_api_format(graph):
+    if _shape_of(graph) == "api":
         for node_id, node in graph.items():
             if not isinstance(node, dict) or "class_type" not in node:
                 continue
@@ -492,6 +569,7 @@ def _iter_definitions(container, visited):
 
 def components(graph):
     """Every weight file the graph loads, with the repo's ruling on each."""
+    graph = normalise_graph(graph)
     out = []
     for where, n in _iter_nodes(graph):
         for v in (n.get("widgets_values") or []):
@@ -535,6 +613,7 @@ def seeds(graph):
     key from the link. (`gate_s_registration` did fail closed on the same graph, so this
     was confined to `verify`'s pinned clause and its verdict string.)
     """
+    graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
     for where, n in _iter_nodes(graph):
@@ -572,6 +651,7 @@ def latents(graph):
     checkable ones, because a list whose entries answer nothing is the shape the E08 defect
     wore.
     """
+    graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
     for where, n in _iter_nodes(graph):
@@ -602,6 +682,7 @@ def cameras(graph):
     number. These records are reported separately from the latents so that Gate L's count of
     "frames checked" cannot be inflated by a node that sizes no frame at all.
     """
+    graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
     for where, n in _iter_nodes(graph):
@@ -639,6 +720,7 @@ def camera_widget_order_evidence(graph, expect):
     disagreement halts, because on an API-format graph there is nothing positional to
     confirm and the honest answer there is `not_applicable`, not `PASS`.
     """
+    graph = normalise_graph(graph)
     ev = {"check": "camera widget order (empirical second reading)", "expect": dict(expect),
           "nodes": []}
     if is_api_format(graph):
@@ -782,6 +864,7 @@ def hosted_enums(graph):
     in the evidence, so a two-shot hosted graph could carry an out-of-contract resolution,
     ratio or duration under a green Gate L receipt.
     """
+    graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
     for _where, n in _iter_nodes(graph):
@@ -845,6 +928,7 @@ def gate_s_registration(graph, registered):
     registered list that the graph does not draw from is the second: a graph running some
     other number while a tidy list sits in the repo is the same defect wearing a receipt.
     """
+    graph = normalise_graph(graph)
     found = seeds(graph)
     reg = list(registered or [])
     ev = {"gate": "S", "registered": reg, "seeds": found}
@@ -933,6 +1017,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     frame-legality clause is **INDETERMINATE — unproven — and raises**, because a check
     that cannot fail is not a check.
     """
+    graph = normalise_graph(graph)
     if hosted_tier is not None and frame is not None:
         raise RouteGate(
             "verify() was given both a hosted tier and a pixel frame; they are two answers "
@@ -1163,11 +1248,23 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
 
 
 def load_graph(path):
-    """A save-format graph from disk, tolerating a tool-result wrapper around the JSON."""
+    """A graph from disk, read through the one loader.
+
+    ⚠ **This function used to unwrap `workflow_json` and `workflow` and NOT `prompt` —
+    the standard submission envelope.** A file left inside that envelope was returned
+    whole, and every clause of `verify` then reported its zero-population verdict as a
+    pass (the measurement is on `normalise_graph`). `gate_saved_graph.round_trip` died
+    on the same file with `KeyError: 'nodes'`, which is a crash rather than a wrong
+    answer and so the good kind of latent bug.
+
+    The unwrap list is now `WRAPPER_KEYS` (== `canon.GRAPH_WRAPPER_KEYS`) and it is read
+    through `normalise_graph`, so a file whose shape this module cannot read raises
+    `RouteGate` naming the top-level keys instead of being handed on as an empty graph.
+    """
     with open(path, encoding="utf-8") as fh:
         raw = fh.read()
     doc = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
-    for key in ("workflow_json", "workflow"):
-        if isinstance(doc.get(key), dict):
-            return doc[key]
-    return doc
+    try:
+        return normalise_graph(doc)
+    except RouteGate as exc:
+        raise RouteGate(f"{path}: {exc}", dict(exc.evidence or {}, path=str(path))) from None

@@ -6,6 +6,7 @@ Every fixture below is a graph that a name-level or top-level check would call c
 import pytest
 
 from conftest import TOOLS  # noqa: F401
+from armature_core import canon
 from armature_core import route_gates as RG
 
 
@@ -915,3 +916,90 @@ def test_an_unparseable_frame_form_raises_rather_than_defaulting_to_wans(monkeyp
     with pytest.raises(RG.RouteGate) as exc:
         RG.frame_legality(832, 480, 65, family="nonsense")
     assert "frame_form" in str(exc.value)
+
+
+# =====================================================================================
+# W6 amend — the wrapped-graph shape, one loader (F-c0ff220c, F-e9aa7390)
+# =====================================================================================
+
+
+def _banned_api():
+    """An API graph that loads a BANNED weight and pins a randomisable-looking seed."""
+    return {
+        "3": {"class_type": "KSamplerAdvanced",
+              "inputs": {"add_noise": "enable", "noise_seed": 999999, "model": ["11", 0]}},
+        "10": {"class_type": "UNETLoader",
+               "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}},
+        "11": {"class_type": "LoraLoaderModelOnly",
+               "inputs": {"lora_name": "causvid_x.safetensors", "model": ["10", 0]}},
+    }
+
+
+@pytest.mark.parametrize("key", list(canon.GRAPH_WRAPPER_KEYS))
+def test_every_wrapper_key_the_tuple_names_is_unwrapped_by_the_one_loader(key):
+    """`canon.GRAPH_WRAPPER_KEYS` names three keys and `load_graph` unwrapped the LAST
+    two — `prompt`, the standard submission envelope, was precisely the one it did not
+    unwrap, while the comment beside the tuple implied it was handled."""
+    inner = _banned_api()
+    assert RG.normalise_graph({key: inner}) is inner
+
+
+def test_the_wrapper_key_list_is_the_one_canon_publishes():
+    assert RG.WRAPPER_KEYS is canon.GRAPH_WRAPPER_KEYS
+
+
+@pytest.mark.parametrize("reader", ["verify", "components", "seeds", "gate_s"])
+def test_a_wrapped_graph_is_not_read_as_an_empty_one(reader):
+    """THE clause. Measured 2026-09-03: wrapped in the standard `{"prompt": ...}`
+    envelope, `components()`, `seeds()` and `latents()` all returned [] and `verify`
+    returned "0 weight file(s), 0 seed(s) all pinned, ... 1 frame(s) checked and
+    generator-legal" on a graph loading a CC-BY-NC weight. A banned file would have been
+    submitted under a green receipt."""
+    wrapped = {"prompt": _banned_api()}
+    if reader == "verify":
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(wrapped, frame=(832, 480, 81))
+        assert "causvid" in str(exc.value)
+    elif reader == "components":
+        assert [c["file"] for c in RG.components(wrapped)] == \
+            ["wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors", "causvid_x.safetensors"]
+    elif reader == "seeds":
+        assert [s["seed"] for s in RG.seeds(wrapped)] == [999999]
+    else:
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.gate_s_registration(wrapped, [7])
+        assert "999999" in str(exc.value)
+
+
+def test_a_shape_this_module_cannot_read_raises_rather_than_walking_zero_nodes():
+    """"This graph has no nodes" and "I cannot read this shape" were the same answer."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components({"last_node_id": 12, "extra": {"not": "a node"}})
+    assert "neither API format" in str(exc.value)
+    ev = exc.value.evidence
+    assert ev["top_level_keys"] == ["extra", "last_node_id"]
+    assert ev["wrapper_keys"] == list(RG.WRAPPER_KEYS)
+
+
+def test_is_api_format_refuses_an_unreadable_shape_instead_of_answering_false():
+    """Answering False sent the caller down the save-format branch to walk a `nodes`
+    list that does not exist, which is where the zero-population pass came from."""
+    with pytest.raises(RG.RouteGate):
+        RG.is_api_format({"foo": 1})
+    assert RG.is_api_format(_banned_api()) is True
+    assert RG.is_api_format(graph(top=CLEAN_TOP)) is False
+
+
+def test_load_graph_unwraps_the_submission_envelope_and_refuses_by_name(tmp_path):
+    import json as _json
+
+    p = tmp_path / "saved.json"
+    p.write_text(_json.dumps({"prompt": _banned_api()}), encoding="utf-8")
+    assert sorted(RG.load_graph(str(p))) == ["10", "11", "3"]
+
+    bad = tmp_path / "bad.json"
+    bad.write_text(_json.dumps({"last_node_id": 4}), encoding="utf-8")
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.load_graph(str(bad))
+    assert "bad.json" in str(exc.value)
+    assert exc.value.evidence["path"].endswith("bad.json")
