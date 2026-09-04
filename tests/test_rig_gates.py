@@ -314,3 +314,97 @@ def test_gate_d_still_claims_weights_when_it_actually_compared_some():
     ev = rig_gates.gate_d_determinism(_fp(), _fp(), DIAGONAL)
     assert ev["verdict"] == "two builds agree on bones, hierarchy and weights"
     assert ev["n_weight_groups_compared"] > 0
+
+
+# --- W8 amend: Gate P's probe may not report a pass over a population it never read
+# --- (F-ee3a9228), and no rig gate takes a tolerance from its caller (F-7c74c1ec).
+
+import inspect  # noqa: E402  (placed with the block it serves)
+
+
+def _ten_odd_positions():
+    """Ten source positions, a round trip in which every one of them differs, and the
+    LAST one in the gate's own sort order moved 50.0 units.
+
+    The gate compares structured float32 records through `np.setdiff1d`, which returns
+    them sorted, and the truncation keeps the FIRST `max_probe` of that order — so a
+    deviation parked at the end is exactly what a truncated probe cannot see."""
+    base = np.array([[float(i), 0.0, 0.0] for i in range(10)], dtype=np.float32)
+    moved = base + np.float32(0.5)          # every position differs
+    moved[-1, 0] += np.float32(50.0)        # the worst one, last in sort order
+    return base, moved
+
+
+def test_round_trip_refuses_a_probe_it_could_not_finish_instead_of_passing_it():
+    """The whole population, or a refusal — never a pass verdict computed over a prefix.
+
+    Measured 2026-09-04 before the fix: with `max_probe=3` this call returned
+    `verdict='positions agree within 0.000100000'`, `max_deviation=9.99e-07`,
+    `positions_only_in_source=10`, `probe_truncated_at=3` — while the position moved
+    50.0 units sat outside the probe window and was never measured.
+    `tools/rig_character.py:881` calls this clause on a subject whose own docstring
+    records 149,643 unique positions, so the truncated branch is reachable in production
+    and its verdict was 'positions agree'."""
+    base, moved = _ten_odd_positions()
+    with pytest.raises(GatePRestPose) as exc:
+        rig_gates.gate_p_round_trip_positions(base, moved, DIAGONAL, max_probe=3)
+    ev = exc.value.evidence
+    assert ev["probe_truncated_at"] == 3
+    assert ev["probe_population"] == 10
+    assert ev["probe_unexamined"] == 7
+    assert "verdict" not in ev
+    assert "agree" not in str(exc.value)
+
+
+def test_round_trip_still_measures_the_whole_population_when_it_fits():
+    """The other half: the refusal is about the probe window, not about odd positions.
+    Under the default window these same ten are measured and the 50.0 outlier fires the
+    ordinary deviation clause — so the new refusal has not swallowed the old one."""
+    base, moved = _ten_odd_positions()
+    with pytest.raises(GatePRestPose) as exc:
+        rig_gates.gate_p_round_trip_positions(base, moved, DIAGONAL)
+    ev = exc.value.evidence
+    assert "probe_truncated_at" not in ev
+    assert ev["max_deviation"] > 49.0
+    assert "moved the surface" in str(exc.value)
+
+
+def test_gate_p_takes_no_tolerance_argument():
+    """The structural half, mirroring `test_g4_takes_no_tolerance_argument`. A number a
+    gate compares against may not arrive from the caller: measured 2026-09-04,
+    `gate_p_rest_pose(a, collapsed, 1.0, epsilon_frac=1e9)` returned
+    verdict='rest pose preserved' on a mesh with a vertex 1.0 from where it started."""
+    assert list(inspect.signature(rig_gates.gate_p_rest_pose).parameters) == [
+        "source_world", "bound_world", "bbox_diagonal"]
+    assert list(inspect.signature(rig_gates.gate_p_evaluation_is_live).parameters) == [
+        "rest_world", "probe_world", "bbox_diagonal"]
+    params = inspect.signature(rig_gates.gate_p_round_trip_positions).parameters
+    assert list(params) == ["source", "roundtrip", "bbox_diagonal", "max_probe"]
+    # `max_probe` survives because it is no longer a threshold a caller can widen past:
+    # exceeding it REFUSES (the test above). It is keyword-only so a caller states it.
+    assert params["max_probe"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_gate_d_takes_no_tolerance_argument():
+    """Measured 2026-09-04: `gate_d_determinism(fa, fb, 1.0, length_frac=1e9,
+    weight_tol=1e9, angle_tol=1e9)` returned 'two builds agree on bones, hierarchy and
+    weights' on a rig whose bone tail had moved 4.0 and whose weights went 0 -> 1."""
+    assert list(inspect.signature(rig_gates.gate_d_determinism).parameters) == [
+        "a", "b", "bbox_diagonal"]
+
+
+def test_no_rig_gate_can_be_widened_by_a_keyword_the_caller_supplies():
+    """The behavioural half of the two pins above, derived rather than typed: every
+    public `gate_*` in `rig_gates` is walked and its threshold-shaped parameter names
+    are asserted absent, so a gate added later joins this check automatically."""
+    banned = {"epsilon_frac", "length_frac", "weight_tol", "angle_tol", "min_frac",
+              "tolerance", "tol", "threshold"}
+    gates_here = {name: fn for name, fn in vars(rig_gates).items()
+                  if name.startswith("gate_") and inspect.isfunction(fn)}
+    assert set(gates_here) == {"gate_n_names", "gate_p_rest_pose",
+                               "gate_p_round_trip_positions",
+                               "gate_p_evaluation_is_live", "gate_d_determinism"}
+    offenders = {name: sorted(banned & set(inspect.signature(fn).parameters))
+                 for name, fn in gates_here.items()
+                 if banned & set(inspect.signature(fn).parameters)}
+    assert not offenders, offenders
