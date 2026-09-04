@@ -2461,8 +2461,24 @@ GUARDED_TODAY = [
     "tools/armature_core/glb.py",
     "tools/armature_core/walk.py",
     "tools/armature_index.py",
+    # WAVE 16 (builders): five more sources joined, all opened by path by this wave's
+    # censuses — the `PayloadError.__init__`/duplicate-method walk over the domain's owned
+    # modules, the `["seeds"]`-reader walk, the `--frame` conversion walk, the r2v
+    # gate-id walk and the two fetchers' `FetchHalt` key walk. Every one is under
+    # `tools/**`, which both triggers already carry, so none of them is a trigger gap and
+    # `UNFILTERED_PENDING` stays empty. (The list is SORTED; these sit here for that
+    # reason, not by topic.)
+    "tools/build_assembly_payload.py",
+    "tools/build_i2v_payload.py",
     "tools/build_payload.py",
+    "tools/build_r2v_payload.py",
+    "tools/build_t2v_payload.py",
     "tools/fetch_run.py",
+    # `fetch_t2v_run.py` is NOT here: the wave-16 fetcher census joins its path from a
+    # variable (`for name in FETCHERS`), which this walk deliberately does not resolve —
+    # "a floor on what the suite reads, not a ceiling". Recorded so the absence is a
+    # measurement rather than an oversight.
+    "tools/gate_saved_graph.py",
     "tools/make_crop_strip.py",
     "tools/make_test_armature.py",
     "tools/render_pose_sticks.py",

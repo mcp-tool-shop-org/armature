@@ -376,14 +376,15 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # into `_readable_node`, shared with `_iter_definitions`' recursion — one raise site
     # before, one after, so it moves this count by nothing.
     # WAVE-14 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    # WAVE 16 (builders): 63 -> 61 on this branch, MEASURED — the first time this number
-    # has gone DOWN. +1 `gate_saved_graph.link_round_trip`'s `duplicate_socket_name`
-    # (F-04fdd395); -3 in `build_r2v_payload`, where three raises moved off the bare
-    # `RouteGate` onto the classes whose own id the evidence names (F-f85c37f0): one to
-    # `errors.GateSSeedRegistration` and two to the new `SpendCeiling`. A raise that leaves
-    # this count because it became MORE specific is the fix working, not the census
-    # shrinking.
-    assert len(RAISE_SITES["RouteGate"]) == 61, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 16 (builders): 63 -> 62 on this branch, MEASURED — the first time this number
+    # has gone DOWN. +2 in `gate_saved_graph`: `link_round_trip`'s `duplicate_socket_name`
+    # (F-04fdd395) and `route_facts`' `verify_receipt_missing_its_facts`, the andon on the
+    # shape core-gates' declared receipt kind opens (SEAM 5); -3 in `build_r2v_payload`,
+    # where three raises moved off the bare `RouteGate` onto the classes whose own id the
+    # evidence names (F-f85c37f0): one to `errors.GateSSeedRegistration` and two to the new
+    # `SpendCeiling`. A raise that leaves this count because it became MORE specific is the
+    # fix working, not the census shrinking.
+    assert len(RAISE_SITES["RouteGate"]) == 62, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside
