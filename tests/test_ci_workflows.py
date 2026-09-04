@@ -1427,11 +1427,20 @@ def _install_tokens(script):
     return tokens
 
 
-def toolchain_tokens():
-    """Every package installed by a job that produces or publishes a distribution.
+#: The build backend is not installed by any workflow line: `python -m build` resolves
+#: `[build-system].requires` into an isolated environment of its own. Until wave 10 that put
+#: the ONE tool that applies MANIFEST.in and selects sdist contents outside a census whose
+#: whole subject is "what runs on release day" (F-fbf7020c).
+BACKEND_SOURCE = "pyproject.toml:[build-system].requires"
 
-    The population is the jobs, walked: the ones that build (above) plus the ones that hand
-    an artifact to a registry. What is installed inside them is what runs on release day.
+
+def toolchain_tokens():
+    """Every package a distribution's production or publication resolves.
+
+    Two populations, both walked: the JOBS that build (above) plus the ones that hand an
+    artifact to a registry, read for what they install — and `[build-system].requires`, read
+    out of pyproject, because the backend is resolved by `python -m build` itself and appears
+    in no install line anywhere.
     """
     jobs = set(jobs_that_produce_a_distribution())
     for name in workflow_files():
@@ -1445,14 +1454,18 @@ def toolchain_tokens():
         for script in job_scripts(workflow, job):
             for token in _install_tokens(script):
                 tokens.setdefault(token, []).append(f"{workflow}:{job}")
+    for requirement in PYPROJECT["build-system"]["requires"]:
+        tokens.setdefault(requirement.strip(), []).append(BACKEND_SOURCE)
     return tokens
 
 
 #: Installed without a version constraint, deliberately, as of 2026-09-04. None of these
 #: PRODUCES or UPLOADS the artifact: `pip` is the installer itself, and numpy/pillow/pytest
 #: are the suite's own dependencies, whose byte-stable pins (opencv, matplotlib) carry `==`
-#: where the golden frames need them. `build`, `twine` and `npm` are the three tools that
-#: make or move the artifact, and all three are constrained.
+#: where the golden frames need them. `build`, `twine`, `npm` and `setuptools` are the four
+#: tools that make or move the artifact, and all four are constrained — `setuptools` since
+#: wave 10, when the census learned to read the backend that PRODUCES the artifact and not
+#: only the tools that invoke it.
 UNCONSTRAINED_BY_DESIGN = {"pip", "numpy", "pillow", "pytest"}
 
 
@@ -2086,3 +2099,83 @@ def test_the_build_ordering_check_goes_red_on_the_order_this_repo_had():
     assert not _runs_pytest(before[0]), (
         "a `pip install ... pytest ...` line reads as a step that runs the suite")
     assert _runs_pytest(before[1])
+
+
+# -- the backend that MAKES the artifact (wave 10, F-fbf7020c) ----------------------------
+#
+# `requires = ["setuptools>=68", "wheel"]` had no upper bound, so the tool that actually
+# produces the wheel and the sdist was resolved fresh from the index on release day, inside
+# the isolated environment `python -m build` creates. The clean-room action pins `build` and
+# `twine` under a header calling them "the two tools that PRODUCE the artifact published
+# irreversibly", and release.yml pins `npm@^11.5.1` for the same stated reason. setuptools is
+# the third tool in that sentence — it is what applies MANIFEST.in and selects sdist contents
+# — and it was the one left unbounded, in the one file no census read.
+#
+# Measured on this tree 2026-09-04: `python -m build` resolved setuptools into
+# `build-env-b1ne98lw` and then again into `build-env-uqzn12d8` — a fresh resolution per
+# invocation — and the wheel it produced carries `Generator: setuptools (84.0.0)`.
+#
+# THE NODE THIS CENSUS KEYS ON: `[build-system].requires` in pyproject.toml, read as data.
+# `toolchain_tokens()` walked workflow install lines only, so it could see every tool that
+# INVOKES the build and none of the tool that performs it.
+
+
+def build_backend_requirements():
+    """`[build-system].requires` — what `python -m build` installs into its isolated env."""
+    return list(PYPROJECT["build-system"]["requires"])
+
+
+def _has_a_ceiling(spec):
+    """True when a specifier bounds the version from ABOVE.
+
+    A floor is not a pin. `setuptools>=68` carries a constraint character and no ceiling at
+    all, which is exactly why the older check — whose predicate is "any of [=<>~^@]" — would
+    have read it as held to a version the day it joined the population.
+    """
+    return bool(re.search(r"(<|==|~=|\^)\s*\d", spec))
+
+
+def test_the_backend_that_produces_the_artifact_is_in_the_toolchain_population():
+    """The census must contain the tool that MAKES the artifact, not only its callers."""
+    tokens = toolchain_tokens()
+    backend = [t for t in tokens if t.startswith("setuptools")]
+    assert backend, (
+        f"the toolchain census is {sorted(tokens)} and none of it is the build backend; "
+        f"`[build-system].requires` is {build_backend_requirements()} and it is what applies "
+        "MANIFEST.in and selects sdist contents")
+    assert any(BACKEND_SOURCE in where for where in tokens.values()), (
+        f"no token in the census is sourced from {BACKEND_SOURCE!r}")
+
+
+def test_every_tool_that_makes_or_moves_the_artifact_is_bounded_from_above():
+    """A new major of the build backend must not arrive by itself on release day.
+
+    What this looks like if wrong: setuptools changes sdist file selection or metadata
+    handling between two runs of the SAME tag and — with nothing in CI opening the sdist —
+    the difference reaches PyPI unexamined; or the build simply fails inside the release job,
+    after `release: published` has fired and both registries are waiting.
+    """
+    tokens = toolchain_tokens()
+    unbounded = sorted(
+        token + " (" + ", ".join(sorted(set(where))) + ")"
+        for token, where in tokens.items()
+        if not _has_a_ceiling(token) and token not in UNCONSTRAINED_BY_DESIGN
+    )
+    assert unbounded == [], (
+        f"these can pick up a new major on the day the step runs, in a job that produces or "
+        f"publishes the artifact: {unbounded}")
+
+
+def test_the_ceiling_check_goes_red_on_the_requires_this_repo_had():
+    """The mutation: `["setuptools>=68", "wheel"]`, fed to the same predicate.
+
+    Both members must fail it — the floor-only one because a floor is not a ceiling, and the
+    bare one because it carries no constraint at all — or the check is green on the shape it
+    was written to catch.
+    """
+    before = ["setuptools>=68", "wheel"]
+    assert [spec for spec in before if not _has_a_ceiling(spec)] == before
+    assert _has_a_ceiling("setuptools>=70.1,<85")
+    assert _has_a_ceiling("build>=1.5,<2")
+    assert _has_a_ceiling("npm@^11.5.1")
+    assert _has_a_ceiling("matplotlib==3.11.1")

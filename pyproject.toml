@@ -1,5 +1,25 @@
+# THE TOOL THAT MAKES THE ARTIFACT, HELD TO A VERSION LIKE THE ONES THAT MOVE IT.
+# `.github/actions/clean-room/action.yml` pins `build>=1.5,<2` and `twine>=7,<8` under a
+# header calling them "the two tools that PRODUCE the artifact published irreversibly", and
+# release.yml pins `npm@^11.5.1` saying `@latest` means the code running on release day is
+# not the code that was verified. setuptools is the third tool in that sentence — it is what
+# applies MANIFEST.in and SELECTS SDIST CONTENTS — and `setuptools>=68` bounded nothing
+# above, so `python -m build` resolved it fresh from the index into its own isolated
+# environment on release day. Measured 2026-09-04 on this tree: two invocations of one
+# `python -m build` resolved into two different `build-env-*` directories, and the wheel
+# carries `Generator: setuptools (84.0.0)`. Ceiling `<85` keeps the next major out of the
+# publish path until someone runs it deliberately; `tests/test_ci_workflows.py` reads this
+# line into the toolchain census, which until wave 10 could see every tool that INVOKES the
+# build and not the one that performs it.
+#
+# `wheel` is gone rather than bounded: setuptools has carried its own `bdist_wheel` since
+# 70.1, which the floor now guarantees, so the entry resolved a package the backend never
+# used — dead weight that was still fetched fresh on release day. Re-measured after the
+# change: `python -m build` produces the same wheel and sdist, and `twine check` passes.
+#
+# The floor is 70.1 and not 68 for that reason: below it the entry was load-bearing.
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=70.1,<85"]
 build-backend = "setuptools.build_meta"
 
 [project]
