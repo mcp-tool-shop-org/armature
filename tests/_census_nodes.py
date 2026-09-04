@@ -706,3 +706,150 @@ def spend_and_fetch_tools():
         and ((n.startswith("build_") and "payload" in n)
              or n.startswith("fetch_")
              or n in ("canon_gate.py", "gate_saved_graph.py")))
+
+
+# --------------------------------------------------- the output-gated guard node (wave 16)
+#
+# `outputs/` is gitignored, so a handful of tests can only run on a rig that has the run on
+# disk. Each is guarded by a module-level constant that resolves a path under `outputs/` and
+# a boolean derived from it. NOTHING enumerated that population, which is how the fifth such
+# guard was written as a bare relative path four waves after the first four were anchored
+# (F-269878af), and how the worktree/main skip delta had to be re-measured by three
+# consecutive waves instead of read off the suite (F-665cd590).
+
+TESTS_DIR = TESTS
+
+
+def test_module_trees():
+    """`{test module name: ast.Module}` for every `tests/test_*.py`."""
+    out = {}
+    for path in sorted(glob.glob(os.path.join(TESTS_DIR, "test_*.py"))):
+        with open(path, encoding="utf-8") as fh:
+            out[os.path.basename(path)[:-3]] = ast.parse(fh.read())
+    return out
+
+
+def _names_an_output_path(node):
+    """The `outputs/...` string constants anywhere inside an expression."""
+    found = []
+    for n in ast.walk(node):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str):
+            text = n.value.replace("\\", "/")
+            if text == "outputs" or text.startswith("outputs/"):
+                found.append(n.value)
+    return found
+
+
+def _is_repo_anchored(node):
+    """The expression resolves against the REPO root, not against `os.getcwd()`.
+
+    Two spellings, both live in this suite: `conftest.repo_file("outputs/E02")` and
+    `os.path.join(REPO, "outputs", ...)`. A bare `"outputs/E02"` is neither.
+    """
+    for n in ast.walk(node):
+        if isinstance(n, ast.Call) and called_name(n) == "repo_file":
+            return True
+        if isinstance(n, ast.Name) and n.id in ("REPO", "TESTS", "FIXTURES"):
+            return True
+        if isinstance(n, ast.Attribute) and n.attr in ("REPO", "TESTS", "FIXTURES"):
+            return True
+    return False
+
+
+def output_path_constants(trees=None):
+    """`{(module, constant): (paths named, repo-anchored?)}` over every `tests/test_*.py`.
+
+    The POPULATION of guards that decide whether a test can see a gitignored run. Derived
+    from the tree, so a sixth cannot land unenumerated the way the fifth did.
+    """
+    trees = test_module_trees() if trees is None else trees
+    out = {}
+    for mod, tree in trees.items():
+        for node in tree.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            paths = _names_an_output_path(node.value)
+            if not paths:
+                continue
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    out[(mod, target.id)] = (tuple(paths), _is_repo_anchored(node.value))
+    return out
+
+
+def output_gated_names(trees=None):
+    """`{(module, name)}` — the path constants AND every module-level name derived from one.
+
+    `HAVE_E02 = os.path.isdir(os.path.join(E02_ROOT, "runs"))` is a guard even though it
+    names no string: it is the boolean the `skipif` reads. Resolved to a fixed point so a
+    guard two assignments away from the path still counts.
+    """
+    trees = test_module_trees() if trees is None else trees
+    names = {key for key in output_path_constants(trees)}
+    grew = True
+    while grew:
+        grew = False
+        for mod, tree in trees.items():
+            local = {n for (m, n) in names if m == mod}
+            for node in tree.body:
+                if not isinstance(node, ast.Assign):
+                    continue
+                reads = {n.id for n in ast.walk(node.value) if isinstance(n, ast.Name)}
+                if not (reads & local):
+                    continue
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and (mod, target.id) not in names:
+                        names.add((mod, target.id))
+                        grew = True
+    return names
+
+
+def output_gated_tests(trees=None):
+    """`{(module, test name, line)}` — every test a gitignored `outputs/` run can skip.
+
+    Both spellings of the guard: a `@pytest.mark.skipif` whose condition reads an output
+    guard name, and a `pytest.skip(...)` reached from a helper the test calls. The second
+    is why `test_aapose_convention.py`'s three are here at all — they carry no decorator.
+    """
+    trees = test_module_trees() if trees is None else trees
+    guards = output_gated_names(trees)
+    out = set()
+    for mod, tree in trees.items():
+        local = {n for (m, n) in guards if m == mod}
+        skipping = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            reads = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+            skips = any(isinstance(c, ast.Call) and called_name(c) == "skip"
+                        for c in ast.walk(node))
+            if skips and (reads & local):
+                skipping.add(node.name)
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not node.name.startswith("test_"):
+                continue
+            gated = False
+            for dec in node.decorator_list:
+                # THREE spellings of the same decorator, all live in this suite:
+                # `@pytest.mark.skipif(not GUARD, ...)`, a module-level
+                # `needs_bank = pytest.mark.skipif(...)` applied as a bare `@needs_bank`
+                # (`test_build_t2v_payload_a3`, `test_donor_gate`), and no decorator at all
+                # — a helper that calls `pytest.skip` (`test_aapose_convention`).
+                if isinstance(dec, ast.Name) and (mod, dec.id) in guards:
+                    gated = True
+                    continue
+                if not isinstance(dec, ast.Call) or called_name(dec) != "skipif":
+                    continue
+                if {n.id for n in ast.walk(dec) if isinstance(n, ast.Name)} & local:
+                    gated = True
+            reachable = skipping | {"skip"}
+            if any(isinstance(c, ast.Call) and called_name(c) in reachable
+                   for c in ast.walk(node)):
+                if ({n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+                        & (skipping | local)):
+                    gated = True
+            if gated:
+                out.add((mod, node.name, node.lineno))
+    return out

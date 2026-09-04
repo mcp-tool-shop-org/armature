@@ -150,6 +150,16 @@ def test_each_seed_writes_to_its_own_output_names():
 
 
 # ------------------------------------------------- E04 really is E02's conditions re-run
+#
+# WAVE 16, F-665cd590. The 12 collected items below (4 arms x 3 seeds) are 12 of the 15
+# skips that separate a fresh worktree from a checkout carrying `outputs/`; the other 3 are
+# `test_measure_tracking.py:211/219/228`. That delta is now PINNED BY PATH rather than
+# re-measured — `tests/test_measure_tracking.py::
+# test_the_worktree_to_checkout_skip_delta_is_read_off_the_suite_not_re_measured` derives
+# the population from the guards themselves and multiplies this function out by its own
+# parametrize arguments, so adding a seed here moves the pin without anybody typing a
+# number. The standing seed that attributed the delta to "12 test_gate_s + 3
+# test_aapose_convention" is wrong: the aapose trio skips in BOTH trees.
 
 @pytest.mark.skipif(not HAVE_E02_PAYLOADS,
                     reason=f"E02 payloads are gitignored output; absent: {MISSING_PAYLOADS}")
