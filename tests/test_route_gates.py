@@ -1167,3 +1167,122 @@ def test_a_scheduler_picker_is_not_mistaken_for_an_unrecorded_seed_source():
                 "inputs": {"width": 832, "height": 480, "length": 81}}}
     assert RG.unrecorded_seed_sources(g) == []
     assert RG.verify(g)["seed_clause_verdict"] == "CHECKED — 1 seed(s) all pinned"
+
+
+# --- WAVE 8, F-f4f61b9c: the seed andon had one format, and the paid path reads the other
+
+# Every fixture in the seed-population block above is API format. There was no SAVE-format
+# fixture anywhere in this suite for this andon, and `unrecorded_seed_sources` gates its
+# input-name half behind `if api:` (route_gates.py:667). Measured 2026-09-04 on ONE graph
+# expressed both ways — a UNETLoader, a pinned KSamplerAdvanced, an EmptyHunyuanLatentVideo,
+# and a node of class `SeedGeneratorAdvanced` carrying a seed input with no SEED_NODES row
+# (it ends in neither `Sampler` nor `Noise`, so the class-name half cannot see it either):
+#
+#   API format   unrecorded_seed_sources names node 55; verify() raises
+#                "[ROUTE] the seed clause is INDETERMINATE"; gate_s_registration raises.
+#   SAVE format  unrecorded_seed_sources returns []; verify() returns
+#                seed_clause_verdict "CHECKED — 1 seed(s) all pinned"; gate_s_registration
+#                returns "1 noise-bearing seed(s), all pinned and all drawn from the
+#                committed list of 1".
+#
+# Save format is the format `gate_saved_graph` reads, and `gate_saved_graph` is the LAST
+# check before a paid submission on the `--saved` admission path. So the run's recorded
+# seed would not be the seed that ran, under a green Gate S.
+#
+# The save-format signal exists and needs no new table: a converted widget input appears in
+# the node's `inputs` LIST with a `name` field, which is what these fixtures carry.
+
+_TWIN_UNET = "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"
+
+
+def _seed_twin_api(with_unrecorded=True):
+    g = {
+        "10": {"class_type": "UNETLoader", "inputs": {"unet_name": _TWIN_UNET}},
+        "3": {"class_type": "KSamplerAdvanced",
+              "inputs": {"add_noise": "enable", "noise_seed": 7, "model": ["10", 0]}},
+        "40": {"class_type": "EmptyHunyuanLatentVideo",
+               "inputs": {"width": 832, "height": 480, "length": 81}},
+    }
+    if with_unrecorded:
+        g["55"] = {"class_type": "SeedGeneratorAdvanced", "inputs": {"seed": 999999999}}
+    return g
+
+
+def _seed_twin_save(with_unrecorded=True):
+    """The same graph as `_seed_twin_api`, in the format a saved workflow file carries.
+
+    `widgets_values` is POSITIONAL, so KSamplerAdvanced's three SEED_NODES indices —
+    add_noise 0, seed 1, control 2 — are "enable", 7, "fixed". Node 55's seed is a
+    CONVERTED WIDGET: in save format that is an entry in the `inputs` list carrying a
+    `name`, which is the signal the API branch reads off the inputs mapping.
+    """
+    nodes = [
+        {"id": 10, "type": "UNETLoader", "widgets_values": [_TWIN_UNET], "inputs": []},
+        {"id": 3, "type": "KSamplerAdvanced",
+         "widgets_values": ["enable", 7, "fixed", 20, 8.0, "euler", "simple", 0, 10000,
+                            "disable"],
+         "inputs": [{"name": "model", "type": "MODEL", "link": 1}]},
+        {"id": 40, "type": "EmptyHunyuanLatentVideo",
+         "widgets_values": [832, 480, 81, 1], "inputs": []},
+    ]
+    if with_unrecorded:
+        nodes.append(
+            {"id": 55, "type": "SeedGeneratorAdvanced", "widgets_values": [999999999],
+             "inputs": [{"name": "seed", "type": "INT", "widget": {"name": "seed"},
+                         "link": None}]})
+    return {"nodes": nodes, "links": [[1, 10, 0, 3, 0, "MODEL"]]}
+
+
+def test_the_two_formats_really_are_the_same_graph():
+    """The premise of every assertion below, checked rather than assumed. If the twins
+    disagreed about their weights, their pinned seed or their latent, a difference in the
+    seed andon would say nothing about the andon."""
+    api, save = _seed_twin_api(), _seed_twin_save()
+    assert RG.is_api_format(api) is True
+    assert RG.is_api_format(save) is False
+    assert [c["file"] for c in RG.components(api)] == [c["file"] for c in RG.components(save)]
+    assert [(s["class"], s["seed"], s["pinned"]) for s in RG.seeds(api)] \
+        == [(s["class"], s["seed"], s["pinned"]) for s in RG.seeds(save)]
+    assert len(RG.latents(api)) == len(RG.latents(save))
+
+
+def test_the_clean_twin_passes_in_both_formats():
+    """The direction the fix must not break: with the unrecorded node removed, both
+    formats verify, and both report the SAME seed verdict. Without this, the andon could
+    satisfy the tests below by refusing every saved graph ever handed to it."""
+    api, save = _seed_twin_api(False), _seed_twin_save(False)
+    assert RG.unrecorded_seed_sources(api) == []
+    assert RG.unrecorded_seed_sources(save) == []
+    assert RG.verify(api)["seed_clause_verdict"] == RG.verify(save)["seed_clause_verdict"]
+    assert "1 seed(s) all pinned" in RG.verify(save)["seed_clause_verdict"]
+
+
+@pytest.mark.parametrize("fmt,build", [("api", _seed_twin_api), ("save", _seed_twin_save)])
+def test_an_unrecorded_seed_source_is_named_in_both_formats(fmt, build):
+    """The andon's own population question, asked of the format the paid path reads."""
+    found = RG.unrecorded_seed_sources(build())
+    assert [u["class"] for u in found] == ["SeedGeneratorAdvanced"], (
+        f"{fmt} format: the node whose seed nothing records was not named. In save format "
+        f"the converted widget is an entry in the node's `inputs` LIST carrying "
+        f"name='seed'; reading only the API mapping leaves the format that Gate S "
+        f"actually admits unpoliced.")
+    assert str(found[0]["node_id"]) == "55"
+
+
+@pytest.mark.parametrize("fmt,build", [("api", _seed_twin_api), ("save", _seed_twin_save)])
+def test_verify_is_indeterminate_on_the_unrecorded_seed_source_in_both_formats(fmt, build):
+    with pytest.raises(RG.RouteGate,
+                       match=r"\[ROUTE\] the seed clause is INDETERMINATE") as exc:
+        RG.verify(build())
+    assert "SeedGeneratorAdvanced" in str(exc.value), fmt
+
+
+@pytest.mark.parametrize("fmt,build", [("api", _seed_twin_api), ("save", _seed_twin_save)])
+def test_gate_s_refuses_the_unrecorded_seed_source_in_both_formats(fmt, build):
+    """`gate_saved_graph` reads save format and is the last check before a paid
+    submission. A saved workflow whose seed is produced by an unrecorded class must not
+    pass Gate S reporting every seed pinned — the run's recorded seed would not be the
+    seed that ran."""
+    with pytest.raises(RG.RouteGate, match=r"SEED_NODES") as exc:
+        RG.gate_s_registration(build(), [7])
+    assert "SeedGeneratorAdvanced" in str(exc.value), fmt

@@ -105,10 +105,12 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: quietly joining a set nobody re-derives. A new member is not a defect: add it to this set
 #: in the same commit, and give its bare `pytest.raises` sites a clause.
 #:
-#: Three names are recorded here BEFORE they exist in this branch's tree, so this census
-#: is red on this branch alone and green on the merged one. `PreviewGlbGate` and
-#: `PreviewWalkGate` arrive with the instruments wave-8 amend (measured in that worktree
-#: 2026-09-04: 2 raise sites in `tools/preview_glb.py`, 3 in `tools/preview_walk.py`);
+#: Five names are recorded here BEFORE they exist in this branch's tree, so this census
+#: is red on this branch alone and green on the merged one. `PreviewGlbGate` (2 sites),
+#: `PreviewWalkGate` (3), `GateMode` (3) and `GateSubject` (2) arrive with the instruments
+#: wave-8 amend, counted by AST at its tip on 2026-09-04; its `GateObjects` (1 site),
+#: `BindingSheetGate` (1) and `PartsSheetGate` (1) are deliberately absent, and join the
+#: day a second raise site does;
 #: `MalformedGLB` arrives with core-solvers' (6 sites in `glb.py`, `read_chunks` and
 #: `_image_blob`). `MalformedGLB` subclasses `ValueError`, which is why the predicate is
 #: "defined under tools/ and raised from more than one site" and not "an `ArmatureError`
@@ -119,7 +121,7 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: its raise count, never on its bases, which is the whole reason `FramingError` and
 #: `WalkError` are policed at all.
 RECORDED_POPULATION = frozenset({
-    "MalformedGLB", "PreviewGlbGate", "PreviewWalkGate",
+    "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate", "PreviewWalkGate",
     "AlphaGate", "ArmatureError", "AssemblyGate", "BackdropGate", "BakeEmpty",
     "CascadeGate", "ClipReadError", "ClipShapeError", "CompareError",
     "ComparisonNotIsolated", "CompositorWiring", "DetectionGate", "DonorGate",
@@ -158,7 +160,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     the derivation cannot see it. The typed set is therefore checked by direction — the
     two names that ARE raised must still be policed — rather than by containment.
     """
-    assert len(POLICED) == 68, sorted(POLICED)
+    assert len(POLICED) == 70, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
