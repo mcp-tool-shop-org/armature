@@ -264,23 +264,29 @@ RECORDED_CONVENTION = {
         [0, 13], [13, 14], [14, 15], [15, 16],
         [0, 17], [17, 18], [18, 19], [19, 20],
     ],
+    "keypoint_count": 20,
     "hand_keypoint_count": 21,
     "limb_brightness": 0.6,
     "hand_joint_color": [0, 0, 255],
     "default_threshold": 0.5,
+    "hand_eps": 0.01,
 }
 
 #: sha256 over `json.dumps(RECORDED_CONVENTION, sort_keys=True, separators=(",", ":"))`.
 #: Recomputed only in a commit that deliberately re-records the convention.
 #:
-#: Recomputed 2026-09-04 (F-d59fab92, wave 14) in the commit that added
-#: `hand_joint_color` and `default_threshold` to the record — the deliberate, visible act
-#: the block above says a re-record has to be. Previous value
-#: 0967b4a45e34abc99d85a36fb58f6ead399a37fbbfdc2424738c1b746339d79c, over the eleven-field
-#: record; the two new fields transcribe `draw_handpose_new`'s joint colour and
-#: `draw_aapose_by_meta_new`'s default threshold from the same banked source as the rest.
+#: Recomputed 2026-09-04 (F-33d53180, wave 16) in the commit that added `hand_eps` and
+#: `keypoint_count` to the record — the deliberate, visible act the block above says a
+#: re-record has to be. Previous value
+#: 90489445a74fe61343136677d99515256e663290c5ae49a27d5c06748eff84f5, over the thirteen-
+#: field record. `hand_eps` transcribes `draw_handpose_new`'s eps guard on hand
+#: coordinates; `keypoint_count` is `len(KEYPOINT_NAMES)` written down because
+#: `KEYPOINT_COUNT` is read by `draw_body` and the derivation below therefore requires it
+#: to have a recorded value. Before this, the previous value
+#: 0967b4a45e34abc99d85a36fb58f6ead399a37fbbfdc2424738c1b746339d79c stood over the
+#: eleven-field record (F-d59fab92, wave 14).
 RECORDED_CONVENTION_SHA256 = (
-    "90489445a74fe61343136677d99515256e663290c5ae49a27d5c06748eff84f5")
+    "81bfaea17933bcf87daa22e425965a3892bdccbddf667ea648374f8e8d814266")
 
 #: Where the fetched source is banked when a session has fetched it. Git-ignored by design.
 BANKED_SOURCE = os.path.join(
@@ -500,18 +506,103 @@ def _compare_against_record(label, keypoint_count, limb_seq, palette, record):
     return problems
 
 
-#: Which `RECORDED_CONVENTION` fields `check_convention` actually compares, written down
-#: so the coverage is a quantity a provenance record carries rather than a claim in a
-#: docstring (F-d59fab92). `source_path`, `source_commit` and `recorded` are provenance
+#: The functions in this module that put pixels on a canvas. They are the DEFINITION of
+#: "a drawing constant": a module-level constant one of them reads decides what is drawn,
+#: whatever it is called and whenever it was added.
+PIXEL_WRITERS = ("blank_canvas", "draw_body", "draw_hand", "draw_frame", "stickwidth",
+                 "hand_stickwidth")
+
+
+def drawing_constants():
+    """Every module-level constant one of `PIXEL_WRITERS` reads, derived from this file.
+
+    **The class, not the instance** (F-33d53180, wave 16). Wave 14 closed four named
+    constants by typing four names into `_compare_drawing_constants` — whose docstring
+    then called them "The four module constants that decide what pixels are drawn". A
+    fifth already existed: `HAND_EPS`, read by `draw_hand` at every hand limb and every
+    hand joint dot, in neither the record nor the comparison and therefore outside
+    `RECORDED_CONVENTION_SHA256` and outside Gate CONV. Measured 2026-09-04 with
+    `HAND_EPS` set to 0.9 — which skips every hand stroke and every hand dot on a
+    normalised coordinate — `check_convention(len(KEYPOINT_NAMES), LIMB_SEQ, PALETTE)`
+    returned `verdict: PASS` with the unchanged detail line.
+
+    A hand-typed list cannot see the constant nobody thought to add to it, so the list is
+    gone: the population is read off the module's own AST, and a sixth drawing constant
+    joins Gate CONV on the day it is written. The record field for a constant is its name
+    lower-cased; a constant with no such field is refused by `check_convention` rather
+    than silently uncompared.
+
+    The stickwidth divisor is the remaining drawing quantity outside this derivation: it
+    is the literal `200` inside `stickwidth`/`hand_stickwidth` and not a named constant,
+    so an AST walk over reads cannot see it. It is pinned numerically by
+    `tests/test_aapose_convention.py`, which is stated here rather than left for a reader
+    to assume.
+    """
+    import ast
+
+    with open(os.path.abspath(__file__).replace(".pyc", ".py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    module_level = set()
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id.isupper():
+                    module_level.add(target.id)
+    read = set()
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name in PIXEL_WRITERS:
+            for sub in ast.walk(node):
+                if (isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load)
+                        and sub.id in module_level):
+                    read.add(sub.id)
+    return tuple(sorted(read))
+
+
+#: The record fields that decide what is drawn but are not read by a pixel writer under
+#: their own name: the keypoint NAMES (the convention's naming, compared by
+#: `_compare_against_record`) and the banked source's hash (the provenance clause that
+#: keeps `SOURCE` and the record equal). Everything else in the compared set is derived.
+NON_DRAWING_FIELDS_COMPARED = ("keypoint_names", "source_sha256")
+
+#: Which `RECORDED_CONVENTION` fields `check_convention` actually compares — DERIVED, so
+#: the coverage is a measurement of this module rather than a list somebody remembered to
+#: extend (F-33d53180). `source_path`, `source_commit` and `recorded` are provenance
 #: strings the message quotes and are the record's remaining three fields.
-RECORD_FIELDS_COMPARED = (
-    "keypoint_names", "limb_seq", "palette", "hand_edges", "hand_keypoint_count",
-    "limb_brightness", "hand_joint_color", "default_threshold", "source_sha256",
-)
+RECORD_FIELDS_COMPARED = tuple(sorted(
+    {c.lower() for c in drawing_constants()} | set(NON_DRAWING_FIELDS_COMPARED)))
+
+
+#: Why a reader should care that a given constant moved, appended to the problem line.
+#: A note is prose about a field; the COMPARISON is derived, so a field with no note is
+#: compared exactly the same way.
+WHY_IT_DECIDES_PIXELS = {
+    "limb_brightness": " — this is the literal every limb polygon is filled with",
+    "default_threshold": " — points below it are skipped entirely",
+    "hand_eps": " — every hand limb and every hand joint dot is drawn only where both "
+                "coordinates exceed it, so raising it on a normalised coordinate erases "
+                "the hands",
+    "keypoint_count": " — the body loop's length",
+}
+
+
+def _canonical(v):
+    """A comparable, JSON-shaped reading of a constant or a recorded value.
+
+    Tuples and lists compare as lists and numbers as floats, so `(0, 0, 255)` and
+    `[0, 0, 255]` are the same colour and `21` and `21.0` are the same count — the
+    difference between a Python literal and its JSON transcription is not a drift.
+    """
+    if isinstance(v, (list, tuple)):
+        return [_canonical(x) for x in v]
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return float(v)
+    return v
 
 
 def _compare_drawing_constants(record):
-    """The four module constants that decide what pixels are drawn, against the record.
+    """Every constant `drawing_constants()` derives, against its recorded value.
 
     F-d59fab92, wave 14. `RECORDED_CONVENTION` carried nine fields and
     `check_convention` compared five of them; `hand_keypoint_count` and `limb_brightness`
@@ -532,23 +623,21 @@ def _compare_drawing_constants(record):
     green and the provenance quoting the edited value beside a PASS.
     """
     problems = []
-    if int(HAND_KEYPOINT_COUNT) != int(record["hand_keypoint_count"]):
-        problems.append(
-            f"module tables: hand_keypoint_count {HAND_KEYPOINT_COUNT} != recorded "
-            f"{record['hand_keypoint_count']}")
-    if float(LIMB_BRIGHTNESS) != float(record["limb_brightness"]):
-        problems.append(
-            f"module tables: limb_brightness {LIMB_BRIGHTNESS} != recorded "
-            f"{record['limb_brightness']} — this is the literal every limb polygon is "
-            f"filled with")
-    if [int(c) for c in HAND_JOINT_COLOR] != [int(c) for c in record["hand_joint_color"]]:
-        problems.append(
-            f"module tables: hand_joint_color {tuple(HAND_JOINT_COLOR)} != recorded "
-            f"{tuple(record['hand_joint_color'])}")
-    if float(DEFAULT_THRESHOLD) != float(record["default_threshold"]):
-        problems.append(
-            f"module tables: default_threshold {DEFAULT_THRESHOLD} != recorded "
-            f"{record['default_threshold']} — points below it are skipped entirely")
+    for name in drawing_constants():
+        field = name.lower()
+        if field not in record:
+            # The clause that closes the class: a drawing constant with no recorded
+            # value. `check_convention` refuses on this before it compares anything, so
+            # reaching it here means the record was edited between the two.
+            problems.append(
+                f"module tables: {field} is read by {', '.join(PIXEL_WRITERS)} and has no "
+                f"recorded value, so nothing compares it")
+            continue
+        got, want = _canonical(globals()[name]), _canonical(record[field])
+        if got != want:
+            problems.append(
+                f"module tables: {field} {got} != recorded {want}"
+                + WHY_IT_DECIDES_PIXELS.get(field, ""))
     if SOURCE["sha256"] != record["source_sha256"]:
         problems.append(
             f"the module's SOURCE hash {SOURCE['sha256'][:16]} is not the record's "
@@ -608,6 +697,22 @@ def check_convention(keypoint_count, limb_seq, palette):
     **It raises `ConventionError`, and both refusals carry a receipt** (F-d0de0c2d).
     """
     record = RECORDED_CONVENTION
+    outside = [c for c in drawing_constants() if c.lower() not in record]
+    if outside:
+        raise ConventionError(
+            f"{outside} are read by this module's pixel writers "
+            f"({', '.join(PIXEL_WRITERS)}) and have no recorded value, so Gate CONV "
+            f"cannot compare them and the digest does not pin them. A constant that "
+            f"decides what is drawn and sits outside the record is the shape `HAND_EPS` "
+            f"had: edited, the gate returns PASS and the run's provenance quotes that "
+            f"PASS beside the edited value on the frames the video model obeys. Record "
+            f"the value from the banked source and recompute "
+            f"RECORDED_CONVENTION_SHA256 in the same commit",
+            {"gate": None, "andon": "ConventionError",
+             "clause": "drawing_constant_outside_the_record",
+             "constants_outside_the_record": outside,
+             "pixel_writers": list(PIXEL_WRITERS),
+             "recorded_fields": sorted(record)})
     digest = recorded_convention_digest(record)
     if digest != RECORDED_CONVENTION_SHA256:
         raise ConventionError(

@@ -267,3 +267,122 @@ def test_a_reading_past_the_window_is_reported_advisory_rather_than_assumed_curr
     assert assembly.measurement_age_days({}, today=datetime.date(2026, 9, 4)) == (None,
                                                                                  None)
     assert assembly.measurement_age_days(None)[0] is None
+
+
+# ====================================================================== F-33d53180
+#
+# Gate CONV's coverage was a list of four names typed into `_compare_drawing_constants`,
+# whose docstring called them "The four module constants that decide what pixels are
+# drawn". A fifth already existed: `HAND_EPS`, read by `draw_hand` at every hand limb and
+# every hand joint dot, in neither `RECORDED_CONVENTION` nor the comparison — so outside
+# `RECORDED_CONVENTION_SHA256` and outside the gate.
+#
+# The population is not "four constants" and not "five". It is every module-level constant
+# this module's PIXEL WRITERS read, derived from the module's own AST — so the proofs below
+# drive both the instance (`HAND_EPS`) and the class (a constant that exists nowhere in this
+# repo, added to a scratch copy of the module).
+
+
+def test_hand_eps_is_in_the_record_and_gate_conv_fires_when_it_moves(monkeypatch):
+    """The fifth constant the four-name list could not see.
+
+    Measured on `041027c` with `HAND_EPS` set to 0.9 — which skips every hand stroke and
+    every hand dot on a normalised coordinate — `check_convention(len(KEYPOINT_NAMES),
+    LIMB_SEQ, PALETTE)` returned `verdict: PASS`, the unchanged detail line,
+    `n_fields_compared: 9`, `n_fields_in_record: 13`.
+    """
+    assert aapose.RECORDED_CONVENTION["hand_eps"] == aapose.HAND_EPS
+    monkeypatch.setattr(aapose, "HAND_EPS", 0.9)
+    with pytest.raises(aapose.ConventionError) as exc:
+        aapose.check_convention(aapose.KEYPOINT_COUNT, aapose.LIMB_SEQ, aapose.PALETTE)
+    ev = exc.value.evidence
+    assert ev["clause"] == "convention_nonconformance", ev
+    assert any("hand_eps" in p for p in ev["problems"]), ev["problems"]
+
+
+@pytest.mark.parametrize("const, bad", [
+    ("HAND_EPS", 0.9),
+    ("KEYPOINT_COUNT", 18),
+    ("LIMB_BRIGHTNESS", 1.0),
+    ("HAND_KEYPOINT_COUNT", 18),
+    ("HAND_JOINT_COLOR", (255, 0, 0)),
+    ("DEFAULT_THRESHOLD", 0.0),
+    ("HAND_EDGES", ((0, 1),)),
+    ("LIMB_SEQ", ((2, 3),)),
+])
+def test_gate_conv_fires_on_every_constant_the_derivation_finds(const, bad, monkeypatch):
+    """The wave-14 parametrize widened to the DERIVED population rather than to five
+    names. `PALETTE` is the ninth and is driven by `_compare_against_record` as well, so
+    it is covered twice and left out of this table to keep each case single-clause."""
+    assert const in aapose.drawing_constants(), aapose.drawing_constants()
+    monkeypatch.setattr(aapose, const, bad)
+    with pytest.raises(aapose.ConventionError) as exc:
+        aapose.check_convention(aapose.KEYPOINT_COUNT, aapose.LIMB_SEQ, aapose.PALETTE)
+    problems = exc.value.evidence["problems"]
+    assert any(const.lower() in p.lower() for p in problems), problems
+
+
+def test_the_compared_set_is_derived_from_the_module_not_typed():
+    """Coverage as a measurement of this module. Every derived drawing constant has a
+    recorded value and rides `RECORD_FIELDS_COMPARED`; nothing is a hand-typed name."""
+    derived = aapose.drawing_constants()
+    assert "HAND_EPS" in derived, derived
+    for name in derived:
+        assert name.lower() in aapose.RECORDED_CONVENTION, name
+        assert name.lower() in aapose.RECORD_FIELDS_COMPARED, name
+    assert set(aapose.RECORD_FIELDS_COMPARED) == (
+        {n.lower() for n in derived} | set(aapose.NON_DRAWING_FIELDS_COMPARED))
+    v = aapose.check_convention(aapose.KEYPOINT_COUNT, aapose.LIMB_SEQ, aapose.PALETTE)
+    assert v["n_fields_compared"] == len(aapose.RECORD_FIELDS_COMPARED)
+    assert v["fields_compared"] == sorted(aapose.RECORD_FIELDS_COMPARED)
+
+
+def test_the_digest_pins_the_record_as_written_after_the_deliberate_re_record():
+    import hashlib as _h
+    import json as _j
+
+    blob = _j.dumps(aapose.RECORDED_CONVENTION, sort_keys=True,
+                    separators=(",", ":")).encode("utf-8")
+    assert _h.sha256(blob).hexdigest() == aapose.RECORDED_CONVENTION_SHA256
+    assert aapose.RECORDED_CONVENTION_SHA256 != (
+        "90489445a74fe61343136677d99515256e663290c5ae49a27d5c06748eff84f5"), (
+        "the record grew two fields and the pin was not recomputed")
+
+
+def test_a_sixth_drawing_constant_cannot_be_added_silently(tmp_path):
+    """The CLASS, proven on a member that exists nowhere in this repo.
+
+    A scratch copy of the module gains a module-level constant and a read of it inside
+    `draw_hand`. Nobody has typed its name anywhere, so a four-name list — or a nine-name
+    one — cannot see it. The derivation finds it and `check_convention` refuses
+    `drawing_constant_outside_the_record` before it compares anything.
+    """
+    import importlib.util
+
+    src = io.open(os.path.join(CORE, "aapose.py"), encoding="utf-8").read()
+    # The copy is imported as a standalone module, so the package-relative import has to
+    # be spelled absolutely. Nothing else about the source changes but the sixth constant.
+    src = src.replace("from .errors import ArmatureError",
+                      "from armature_core.errors import ArmatureError", 1)
+    src = src.replace("\nHAND_EPS = 0.01\n",
+                      "\nHAND_EPS = 0.01\nSIXTH_DRAWING_CONSTANT = 3\n", 1)
+    src = src.replace("    H, W = canvas.shape[:2]\n    sw = hand_stickwidth(H, W, stickwidth_type)\n",
+                      "    H, W = canvas.shape[:2]\n    sw = hand_stickwidth(H, W, stickwidth_type)"
+                      " + 0 * SIXTH_DRAWING_CONSTANT\n", 1)
+    assert "SIXTH_DRAWING_CONSTANT = 3" in src and src.count("SIXTH_DRAWING_CONSTANT") == 2
+
+    scratch = tmp_path / "aapose_scratch.py"
+    scratch.write_text(src, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("_aapose_scratch", str(scratch))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["_aapose_scratch"] = mod
+    try:
+        spec.loader.exec_module(mod)
+        assert "SIXTH_DRAWING_CONSTANT" in mod.drawing_constants(), mod.drawing_constants()
+        with pytest.raises(mod.ConventionError) as exc:
+            mod.check_convention(mod.KEYPOINT_COUNT, mod.LIMB_SEQ, mod.PALETTE)
+        ev = exc.value.evidence
+        assert ev["clause"] == "drawing_constant_outside_the_record", ev
+        assert ev["constants_outside_the_record"] == ["SIXTH_DRAWING_CONSTANT"], ev
+    finally:
+        sys.modules.pop("_aapose_scratch", None)
