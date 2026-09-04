@@ -20,6 +20,7 @@ source with no plate named, and composites over the named plate when there is on
 parametrized rather than written four times so a new producer joins it by being listed.
 """
 
+import ast
 import json
 import os
 import sys
@@ -120,15 +121,88 @@ def test_a_named_plate_makes_the_composite_the_choice_it_records(name, tmp_path)
     run(tmp_path, PLATE)
 
 
-def test_no_producer_of_a_submitted_input_decodes_with_imread_color(tmp_path):
+# WAVE 8, F-be95e51f — the two censuses in this file typed their populations and read
+# their property as a substring. `'compose_over_named_plate' in src` is satisfied by the
+# comment that explains the call: measured 2026-09-04, fit_reference, make_plate,
+# pack_pose_pack and encode_control each carry the token two or three times and each has
+# exactly ONE real call site (fit_reference:186, make_plate:211, pack_pose_pack:115,
+# encode_control:209), so deleting the call and leaving the prose kept the test green. The
+# sibling census iterated a typed five-module tuple rather than deriving which tools take
+# part in the law at all.
+
+ALPHA_HELPER = "compose_over_named_plate"
+TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TOOLS = os.path.join(TOOLS, "tools")
+
+
+def _calls(tree, name):
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if called == name:
+                out.append(node.lineno)
+    return sorted(out)
+
+
+def _defines(tree, name):
+    return any(isinstance(n, ast.FunctionDef) and n.name == name for n in ast.walk(tree))
+
+
+def _imports(tree, name):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and any(a.name == name for a in node.names):
+            return True
+        if isinstance(node, ast.Import) and any(a.name == name for a in node.names):
+            return True
+    return False
+
+
+def alpha_law_tools():
+    """THE DERIVATION: every tool that takes part in the alpha law.
+
+    Two ways in, both read off the tree rather than typed: a module that IMPORTS (or
+    defines) `compose_over_named_plate`, and a module that decodes an image
+    alpha-aware — `cv2.IMREAD_UNCHANGED` is the only way a fourth channel enters at all,
+    so a producer that reads that way is one this law governs whether or not it has
+    adopted the helper yet.
+    """
+    out = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(TOOLS, name), encoding="utf-8") as fh:
+            src = fh.read()
+        tree = ast.parse(src)
+        if _imports(tree, ALPHA_HELPER) or _defines(tree, ALPHA_HELPER) \
+                or "IMREAD_UNCHANGED" in src:
+            out.append(name[:-3])
+    return out
+
+
+#: Derived 2026-09-04. Equality, so a fifth producer joins the law's census the day it
+#: imports the helper or reads a fourth channel.
+RECORDED_ALPHA_TOOLS = ["composite_reference", "encode_control", "fit_reference",
+                        "make_plate", "pack_pose_pack"]
+
+
+def test_the_alpha_law_population_is_derived_and_has_not_grown_silently():
+    pop = alpha_law_tools()
+    assert pop == RECORDED_ALPHA_TOOLS, {
+        "appeared": sorted(set(pop) - set(RECORDED_ALPHA_TOOLS)),
+        "vanished": sorted(set(RECORDED_ALPHA_TOOLS) - set(pop)),
+    }
+
+
+def test_no_producer_of_a_submitted_input_decodes_with_imread_color():
     """The census. `cv2.IMREAD_COLOR` returns 3-channel BGR and drops the 4th silently —
-    the exact mechanism, and it may not come back into any of these files."""
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    the exact mechanism, and it may not come back into any of these files. Over the
+    DERIVED population now, not the five names that used to be typed here."""
     offenders = []
-    for mod in ("fit_reference", "make_plate", "composite_reference", "encode_control",
-                "pack_pose_pack"):
-        src = open(os.path.join(root, "tools", f"{mod}.py"), encoding="utf-8").read()
-        # named in a comment or docstring is how the defect is RECORDED; called is the bug
+    for mod in alpha_law_tools():
+        with open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8") as fh:
+            src = fh.read()
         for line in src.splitlines():
             stripped = line.strip()
             # naming it in prose is how the defect is RECORDED; DECODING with it is the bug
@@ -210,10 +284,47 @@ def test_the_law_survives_python_optimize(tmp_path):
     assert "RAISED" in out.stdout, out.stderr
 
 
-def test_the_shared_law_is_one_implementation(tmp_path):
-    """Not four copies: the three tools that lacked it call the module that had it."""
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    for mod in ("fit_reference", "make_plate", "pack_pose_pack", "encode_control"):
-        src = open(os.path.join(root, "tools", f"{mod}.py"), encoding="utf-8").read()
-        assert "compose_over_named_plate" in src, mod
+def test_the_shared_law_is_one_implementation():
+    """Not four copies: the tools that lacked it CALL the module that had it.
+
+    Asserted as an `ast.Call`, over the derived population. `'compose_over_named_plate'
+    in src` was satisfied by the comment above the call — and a producer that reverted to
+    parsing its own `--alpha-over` while keeping the name in prose satisfied it too. One
+    module is exempt and the exemption is checked, not stated: `composite_reference`
+    DEFINES the helper, and a definition is not a call.
+    """
+    without = {}
+    for mod in alpha_law_tools():
+        with open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        if _defines(tree, ALPHA_HELPER):
+            assert not _calls(tree, ALPHA_HELPER) or mod == "composite_reference"
+            continue
+        sites = _calls(tree, ALPHA_HELPER)
+        if not sites:
+            without[mod] = "names it, never calls it" if _imports(tree, ALPHA_HELPER) \
+                else "reads a fourth channel and never goes through the law"
+    assert without == {}, (
+        f"these producers do not CALL {ALPHA_HELPER}: {without}. The alpha ruling is that "
+        f"an authored input carries alpha and the RGB composite is a RECORDED choice; a "
+        f"producer that drops the fourth channel silently is the thing the law forbids.")
     assert callable(CREF.compose_over_named_plate)
+    assert _defines(ast.parse(open(os.path.join(TOOLS, "composite_reference.py"),
+                                   encoding="utf-8").read()), ALPHA_HELPER)
+
+
+def test_the_call_site_check_is_not_satisfied_by_the_comment_above_the_call():
+    """Rule 3, on the exact substitution that used to pass: a module naming the helper in
+    a docstring and a comment, and calling nothing."""
+    prose_only = ast.parse(
+        '"""Composites through compose_over_named_plate, as the law requires."""\n'
+        "from composite_reference import compose_over_named_plate\n"
+        "def main(arr):\n"
+        "    # compose_over_named_plate(arr, plate, label='x')\n"
+        "    return arr[:, :, :3]\n")
+    real = ast.parse(
+        "from composite_reference import compose_over_named_plate\n"
+        "def main(arr):\n"
+        "    return compose_over_named_plate(arr, 'plate', label='x')\n")
+    assert _imports(prose_only, ALPHA_HELPER) and _calls(prose_only, ALPHA_HELPER) == []
+    assert _calls(real, ALPHA_HELPER) == [3]
