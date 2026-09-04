@@ -125,26 +125,19 @@ def add_camera_render(name_suffix, center, radius, azim_deg, elev_deg, res, out_
     path = os.path.join(out_dir, f"{args.name}_{name_suffix}.png")
     scn.render.filepath = path
     render_result = bpy.ops.render.render(write_still=True)
-    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
-    # size checks below are properties a PREVIOUS run's file at the same path satisfies;
-    # only the operator's own verdict says whether THIS call drew anything. Shape carried
-    # from `rig_bake.py`'s `if 'FINISHED' not in result`.
-    _status = _render_status(render_result)
-    if "FINISHED" not in _status:
-        raise PreviewGlbGate(
-            f"the render operator did not report FINISHED for "
-            f"{os.path.basename(path)}; it returned {_status!r}, and any file at "
-            f"that path is then the previous run's",
-            {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(path)})
-    # RETURN the path, so the plan `gate_previews_written` measures is the list
-    # the render actually wrote against rather than a second list built beside it.
-    return path
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, RETURNED beside the path so
+    # `gate_previews_written` refuses on it. It is not refused here, deliberately: this
+    # tool's post-write verification is one gate over the whole PLAN, and a second raise
+    # inside the shooter would strand a refusal below the first write that the
+    # write-ordering ratchet would then have to carry under a name of its own.
+    return path, _render_status(render_result)
 
 
 
-def gate_previews_written(paths):
-    """Every planned view exists on disk and is not zero bytes, or the preview halts.
+def gate_previews_written(written):
+    """Every planned view was drawn, exists on disk and is not zero bytes, or halt.
+
+    `written` is the list of `(path, status)` pairs `add_camera_render` returns.
 
     F-13bd448d. `bpy.ops.render.render(write_still=True)` returns an operator status set and
     can return `{'CANCELLED'}` WITHOUT raising; `add_camera_render` discarded it, and nothing
@@ -157,7 +150,22 @@ def gate_previews_written(paths):
 
     The shape is `preview_walk.py:196-206`'s -- missing AND zero-byte, over the PLAN --
     carried rather than reinvented.
+
+    WAVE 14, F-6a9a0f72: the docstring above says the operator can return CANCELLED without
+    raising and this gate read no status set -- it read the FILES, which is a property a
+    PREVIOUS run's four PNGs at the same paths satisfy. The status clause runs FIRST, and
+    it is the only one of the three that can tell an empty directory from a stale one.
     """
+    paths = [p for p, _ in written]
+    declined = [(os.path.basename(p), st) for p, st in written if "FINISHED" not in st]
+    if declined:
+        raise PreviewGlbGate(
+            f"the render operator declined {len(declined)} of {len(written)} views: "
+            f"{declined}. It returns a status set and can return CANCELLED without "
+            f"raising, so any file at those paths is a previous run's",
+            {"clause": "operator_status", "declined": declined,
+             "planned": len(written),
+             "paths": [os.path.abspath(p) for p in paths]})
     missing = [p for p in paths if not os.path.isfile(p)]
     empty = [p for p in paths
              if p not in missing and os.path.getsize(p) == 0]
@@ -259,7 +267,8 @@ def main():
         add_camera_render("head_b", head_c, head_r, 210, 6, (512, 512), args.out, args),
     ]
     stats["gate_PREVIEW_GLB"] = gate_previews_written(written)
-    stats["views"] = [os.path.abspath(p) for p in written]
+    stats["views"] = [os.path.abspath(p) for p, _ in written]
+    stats["render_status"] = {os.path.basename(p): st for p, st in written}
 
     with open(os.path.join(args.out, f"{args.name}_stats.json"), "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)
