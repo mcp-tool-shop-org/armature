@@ -147,3 +147,79 @@ def test_the_seed_registry_readers_hand_the_list_to_gate_s():
     assert len(loaders) >= 5, (
         f"only {loaders} both read a seeds list and run a seed gate; the docstring's "
         f"surviving claim about `seeds` needs re-measuring")
+
+
+# ---- the SPECS' own copy of the paragraph says what is true (wave 8, F-6c5c537b)
+#
+# The wave-6 correction landed in this file's docstring and in
+# `test_only_seeds_is_read_by_a_tool` above, and the eight `specs/*seeds.json` files kept
+# the original sentence verbatim inside `ceiling.why_machine_readable`: "no tool under
+# tools/ read the key, while `seeds` and `allocation` — its machine-readable siblings — are
+# both consumed and gated", closing "and the number a submission step can count against sits
+# beside it". A session reading the spec that governs the one unrecoverable resource in this
+# repo was told the credit ceiling is machine-enforced. It is not: no tool reads `ceiling`
+# from a seeds spec at all.
+
+FALSIFIED_CLAUSE = "machine-readable siblings"
+CORRECTION_MARK = "CORRECTION, 2026-09-04"
+
+
+@pytest.mark.parametrize("path", SEED_SPECS, ids=os.path.basename)
+def test_every_spec_carries_the_correction_rather_than_the_original_claim_alone(path):
+    """Correct in place, with the measurement that overturned the claim — never a quiet
+    delete. The original sentence stays; the correction stands beside it."""
+    why = _load(path)["ceiling"]["why_machine_readable"]
+    assert FALSIFIED_CLAUSE in why, (
+        "the original claim was deleted rather than corrected; the correction is more "
+        "useful than the original and both belong in the record")
+    assert CORRECTION_MARK in why, (
+        f"{os.path.basename(path)} still carries the wave-3 claim with no correction "
+        f"beside it")
+    assert "`allocation` has no reader at all" in why
+    assert "no tool reads `ceiling` from a seeds spec" in why
+
+
+def test_the_specs_correction_agrees_with_the_tree_it_describes():
+    """The claim and the measurement, taken here rather than trusted. If a builder starts
+    counting against `ceiling.submissions`, this test fails and the eight paragraphs are
+    rewritten with it — which is the point of pinning a claim about code to a walk.
+
+    family: derived by walking every module under `tools/` (the package included,
+    `superseded/` excluded) for `x["k"]` / `x.get("k")` over the three seed-spec keys ->
+    `seeds` 6 modules, `allocation` 0, `ceiling` 0.
+    """
+    readers = {key: [] for key in SEED_SPEC_KEYS}
+    for path, src in _tool_sources():
+        keys = _subscript_and_get_keys(src)
+        for key in SEED_SPEC_KEYS:
+            if key in keys:
+                readers[key].append(os.path.basename(path))
+
+    assert readers["allocation"] == [], readers["allocation"]
+    # `ceiling` IS subscripted under tools/ — by `armature_core.assembly`'s CASCADE slot
+    # gate and the builders passing that one, which has nothing to do with a seeds spec.
+    # The claim the specs make is narrower and is checked as such: no module that reads a
+    # seeds registry also reads a `ceiling` key.
+    seeds_readers = set(readers["seeds"])
+    assert seeds_readers, "no tool reads `seeds`; this walk is not reaching tools/"
+    both = sorted(seeds_readers & set(readers["ceiling"]))
+    assert both == [], (
+        f"{both} now read BOTH a seeds list and a `ceiling` key; the eight specs' "
+        f"correction says nothing counts against ceiling.submissions and it is stale")
+
+    # And every CITATION in the paragraph resolves: a report may not contain a placeholder
+    # shaped like evidence, and `<file>.py:<line>` is exactly that shape. Each cited line
+    # must exist and must be the line that reads the key.
+    import re
+
+    why = _load(SEED_SPECS[0])["ceiling"]["why_machine_readable"]
+    cited = re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)\b", why)
+    assert len(cited) == 7, cited
+    for name, lineno in cited:
+        path = os.path.join(TOOLS, name)
+        assert os.path.isfile(path), f"{name} is cited and does not exist"
+        lines = open(path, encoding="utf-8").read().splitlines()
+        assert 1 <= int(lineno) <= len(lines), f"{name}:{lineno} is past the end of the file"
+        assert "seeds" in lines[int(lineno) - 1], (
+            f"{name}:{lineno} is cited as a `seeds` reader and reads "
+            f"{lines[int(lineno) - 1].strip()!r}")
