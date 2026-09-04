@@ -1377,7 +1377,8 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             "the graph loads " + ", ".join(
                 f"{_component_label(c)} ({c['ruling']['verdict']}: "
                 f"{c['ruling']['reason']})"
-                + (" [this filename also matches "
+                + (f" [this {'class name' if c.get('kind') == 'class' else 'filename'}"
+                   f" also matches "
                    + ", ".join(f"{m['matched_on']}={m['verdict']}"
                                for m in c["ruling"]["matches"][1:]) + "]"
                    if len(c["ruling"].get("matches") or []) > 1 else "")
