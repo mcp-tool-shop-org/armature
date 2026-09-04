@@ -756,14 +756,22 @@ PROBE = _tw.dedent(
         "lift_solve_arming": (lift_solve_arming, "SolveError"),
     }
 
-    out = {"asserts_active": asserts_active, "raised": {}}
+    # WAVE 16 (F-a64f4f47): the probe records the MRO, not the SPELLING. Keyed on the name,
+    # what this proved was "the class named X was raised" — so a refusal re-classed onto a
+    # SUBCLASS of the recorded name, behaviour and halt contract unchanged, turned three
+    # parametrised legs red and was closed by retyping a string (see the entry at :746).
+    # Family membership, which the halt contract actually classifies on, was asserted for
+    # none of the 16.
+    out = {"asserts_active": asserts_active, "raised": {}, "mro": {}}
     for name, (fn, want) in CASES.items():
         try:
             fn()
             out["raised"][name] = "NO_RAISE"
+            out["mro"][name] = []
         except BaseException as exc:
-            got = type(exc).__name__
-            out["raised"][name] = "RAISED" if got == want else "WRONG_ERROR:" + got
+            mro = [c.__name__ for c in type(exc).__mro__]
+            out["mro"][name] = mro
+            out["raised"][name] = "RAISED" if want in mro else "WRONG_ERROR:" + mro[0]
     print("AMEND12 " + json.dumps(out))
     """
 )
@@ -797,6 +805,41 @@ def test_every_refusal_this_amend_added_survives_optimization(tmp_path, flag, en
     assert len(res["raised"]) == 16, res["raised"]
     for name, outcome in res["raised"].items():
         assert outcome == "RAISED", f"{label}/{name}: {outcome}"
+    # WAVE 16, F-a64f4f47 — the property these files call load-bearing, asserted for all 16
+    # rather than for none. The 21-tool halt contract classifies a refusal on the
+    # `ArmatureError` FAMILY, which is why a bare builtin here was recorded as "FAILED — an
+    # unhandled error" at exit 1 where the honest record is "REFUSED" at exit 2 (the comment
+    # at :746 and w3:91-95 both name this as the reason). A departure from the family now
+    # goes red; a subclass re-class that keeps the contract stays green.
+    for name, mro in res["mro"].items():
+        assert "ArmatureError" in mro, (
+            f"{label}/{name} raised {mro[0]}, which is outside the ArmatureError family; the "
+            f"halt record for it reads 'FAILED - an unhandled error' at exit 1, not a "
+            f"refusal at exit 2. MRO: {mro}")
+
+
+def test_the_probe_is_keyed_on_the_family_and_not_on_the_spelling(tmp_path):
+    """F-a64f4f47's own fix, shown in both directions on the classes the probe recorded.
+
+    A refusal re-classed onto a SUBCLASS of the recorded name keeps the behaviour and the
+    halt contract, and must stay green; one re-classed OUT of the family must go red. Driven
+    against the real MRO the probe returned — the same list the assertion above reads — so
+    this is not a second implementation of the comparison.
+    """
+    res = _run_probe(tmp_path)
+    for name, want in (("png_zero_dimension", "PngWriteError"),
+                       ("walk_phase_too_short", "WalkError"),
+                       ("conv_module_tables_drifted", "ConventionError")):
+        mro = res["mro"][name]
+        assert want in mro and "ArmatureError" in mro, (name, mro)
+    # a subclass of the recorded name satisfies the membership test the probe now applies…
+    hypothetical = ["PngWriteErrorSubclass"] + res["mro"]["png_zero_dimension"]
+    assert "PngWriteError" in hypothetical and hypothetical[0] != "PngWriteError"
+    # …and the old keying — `type(exc).__name__ == want` — would have called it WRONG_ERROR.
+    assert hypothetical[0] != "PngWriteError"
+    # A builtin fails BOTH clauses, which is the departure the family clause exists to catch.
+    builtin = [c.__name__ for c in TypeError.__mro__]
+    assert "PngWriteError" not in builtin and "ArmatureError" not in builtin, builtin
 
 
 def test_the_optimization_actually_took_effect(tmp_path):

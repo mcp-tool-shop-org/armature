@@ -261,13 +261,16 @@ PROBE = textwrap.dedent(
         "union_single_use_iterator": union_single_use_iterator,
     }
 
-    out = {"asserts_active": asserts_active, "raised": {}}
+    # WAVE 16 (F-a64f4f47): the MRO rides beside the name. See the note on `expected` below.
+    out = {"asserts_active": asserts_active, "raised": {}, "mro": {}}
     for name, fn in CASES.items():
         try:
             fn()
             out["raised"][name] = "NO_RAISE"
+            out["mro"][name] = []
         except BaseException as exc:
             out["raised"][name] = type(exc).__name__
+            out["mro"][name] = [c.__name__ for c in type(exc).__mro__]
     print("AMEND6 " + json.dumps(out))
     """
 )
@@ -324,9 +327,20 @@ def test_every_refusal_added_in_this_amend_survives_optimization(tmp_path, flag,
     }
     res = _run_probe(tmp_path, flag=flag, env_var=env_var)
     assert set(res["raised"]) == set(expected), res["raised"]
+    # WAVE 16, F-a64f4f47. Keyed on `==` the spelling, what this proved was "the class named
+    # X was raised". The comment at :320-322 names family membership as the reason a builtin
+    # here is recorded as a crash at exit 1 rather than a refusal at exit 2, and this file
+    # mentioned `ArmatureError` nowhere — so the load-bearing half was asserted for none of
+    # its eleven. The wanted class must be IN the MRO (a subclass re-class that preserves
+    # the halt contract stays green) and `ArmatureError` must be in it too.
     for name, want in expected.items():
-        assert res["raised"][name] == want, (
-            f"{label}/{name}: expected {want}, got {res['raised'][name]}")
+        mro = res["mro"][name]
+        assert want in mro, (
+            f"{label}/{name}: expected {want} or a subclass of it, got MRO {mro}")
+        assert "ArmatureError" in mro, (
+            f"{label}/{name} raised {mro[0]}, outside the ArmatureError family; the halt "
+            f"record reads 'FAILED - an unhandled error' at exit 1, not a refusal at exit "
+            f"2. MRO: {mro}")
 
 
 def test_the_optimization_actually_took_effect(tmp_path):
