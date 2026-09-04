@@ -3,8 +3,9 @@
   "name": "E03-static",
   "generator": "wan-vace",
   "asset": {
-    "path": "E:\\AI\\armature-E03\\outputs\\E03\\subject\\wire_t030_armraise.glb",
-    "note": "Generated, not obtained: tools/make_test_armature.py --pose-arc=arm_r_raise --thickness=0.030 --frames=33 --fps=16 --arc-start-deg=0 --arc-end-deg=90. Licence-clean by construction; no row in docs/license-map.md because nothing was acquired. Ground truth for every frame is in the .joints.json sidecar beside it."
+    "path": "outputs/E03/subject/wire_t030_armraise.glb",
+    "note": "Generated, not obtained: tools/make_test_armature.py --pose-arc=arm_r_raise --thickness=0.030 --frames=33 --fps=16 --arc-start-deg=0 --arc-end-deg=90. Licence-clean by construction; no row in docs/license-map.md because nothing was acquired. Ground truth for every frame is in the .joints.json sidecar beside it.",
+    "sha256": "6a9baa87aae8b7ef7e0ed6bac5b48b06a7e74ef81f630d8bf4e2ec1ed4070300"
   },
   "subject": {
     "animation": "static"

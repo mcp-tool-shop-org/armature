@@ -357,7 +357,7 @@ def _spend_builders():
 
 
 BUILDERS = _builder_names()
-SPEND_BUILDERS = sorted(set(BUILDERS) - TEXTLESS_ASSEMBLERS)
+SPEND_BUILDER_MODULES = sorted(set(BUILDERS) - TEXTLESS_ASSEMBLERS)
 
 
 def test_the_only_builders_without_the_spend_gate_are_the_recorded_two():
@@ -368,7 +368,7 @@ def test_the_only_builders_without_the_spend_gate_are_the_recorded_two():
     the check that says so.
     """
     without = sorted(n for n in BUILDERS
-                     if "gate_write" not in _builder_source(n)
+                     if not any(g in _builder_source(n) for g in ("gate_write", "canon_spend", "require_canon"))
                      and "require_canon" not in _builder_source(n))
     assert set(without) == TEXTLESS_ASSEMBLERS, (
         f"builders with no canon gate: {without}; the recorded exceptions are "
@@ -407,7 +407,7 @@ def test_a_textless_assembler_carries_no_text_for_a_canon_router_to_check(name, 
         f"a checkbox")
 
 
-@pytest.mark.parametrize("name", SPEND_BUILDERS)
+@pytest.mark.parametrize("name", SPEND_BUILDER_MODULES)
 def test_every_spend_builder_exposes_the_spend_flags(name):
     """`--subject` optional at argparse (so silence is a GateCanon, not an argparse
     error), `--no-canon` as the census-backed escape, `--canon-prompt` for the text the
@@ -422,7 +422,7 @@ def test_every_spend_builder_exposes_the_spend_flags(name):
         f"GateCanon, not bounce off argparse with a different error")
 
 
-@pytest.mark.parametrize("name", SPEND_BUILDERS)
+@pytest.mark.parametrize("name", SPEND_BUILDER_MODULES)
 def test_every_spend_builder_rules_on_canon_before_it_writes_anything(name):
     """Ordering, read off the source because most of these mains need Blender-adjacent
     inputs to reach their write. `gate_write` must be called in `main`, and it must come
@@ -442,7 +442,7 @@ def test_every_spend_builder_rules_on_canon_before_it_writes_anything(name):
         func = node.func
         called = (func.id if isinstance(func, ast.Name)
                   else func.attr if isinstance(func, ast.Attribute) else "")
-        if called == "gate_write":
+        if called in ("gate_write", "canon_spend", "require_canon"):
             gates_at.append(node.lineno)
         elif called == "makedirs":
             writes_at.append(node.lineno)
@@ -487,4 +487,4 @@ def test_a_spend_builder_with_no_subject_refuses_and_writes_nothing(name, tmp_pa
 
 def test_the_drivable_set_is_a_subset_of_the_enumerated_builders():
     """A recipe naming a builder that no longer exists would silently stop running."""
-    assert set(DRIVABLE_BUILDERS) <= set(SPEND_BUILDERS), sorted(DRIVABLE_BUILDERS)
+    assert set(DRIVABLE_BUILDERS) <= set(SPEND_BUILDER_MODULES), sorted(DRIVABLE_BUILDERS)

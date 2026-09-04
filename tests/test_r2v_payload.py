@@ -32,7 +32,6 @@ REFS = [f"{i:064x}.png" for i in range(4)]
 SEEDS = [2026081351, 2026081352]
 
 
-
 # ---------------------------------------------------------------------------------------
 # P2 / P3 seam adapter (swarm wave 3, health-amend-a) — TEST-LOCAL, never in the tools.
 #
@@ -55,36 +54,6 @@ SEEDS = [2026081351, 2026081352]
 #     the parameter, keep exercising the clauses they were written for.
 #
 # Owner of its deletion: the coordinator, in the commit that merges the two branches.
-
-
-@pytest.fixture(autouse=True)
-def _pair_seam_adapter(monkeypatch):
-    import inspect
-
-    from armature_core import assembly as _AS
-
-    def adapt(fname, derive=None):
-        fn = getattr(_AS, fname)
-        params = inspect.signature(fn).parameters
-
-        def shim(*a, _fn=fn, _params=params, _derive=derive, **kw):
-            for key in ("group_size", "expected_sources"):
-                if key in kw and key not in _params:
-                    kw.pop(key)
-            need = _params.get("expected_sources")
-            if (need is not None and need.default is inspect.Parameter.empty
-                    and "expected_sources" not in kw and _derive is not None):
-                kw["expected_sources"] = _derive(*a)
-            return _fn(*a, **kw)
-
-        monkeypatch.setattr(_AS, fname, shim)
-
-    def _ids(graph, n_frames, *rest):
-        return [str(200 + i) for i in range(int(n_frames))]
-
-    adapt("gate_slot_ceiling")
-    adapt("gate_batch_topology", _ids)
-    adapt("gate_cascade_topology", _ids)
 
 
 def _a1(seed=SEEDS[0], **kw):
@@ -429,7 +398,7 @@ def test_a2_refuses_a_group_above_the_module_ceiling(tmp_path):
         B.main([f"--arm=A2", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
                 f"--prompt-file={prompt}", f"--uploads={up}",
                 f"--out={tmp_path / 'route'}", "--group=81", *_CANON_ESCAPE])
-    assert f"more than {AS.MAX_SLOTS_PER_NODE}" in str(exc.value)
+    assert f"ceiling {AS.MAX_SLOTS_PER_NODE}" in str(exc.value)
 
 
 def test_a2_records_the_slot_to_frame_index_gate(tmp_path):

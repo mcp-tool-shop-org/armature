@@ -117,13 +117,13 @@ jobs:
       # Two publish jobs, one re-run, two different verdicts is a red that carries no
       # information. `skip-existing` makes them say the same thing.
       #
-      # `@release/v1` is a BRANCH ref: it resolves at run time, so the code that performs the
-      # publish is not the code that was last reviewed. Pinning it to a commit SHA (with the
-      # version in a trailing comment, the way ci.yml justifies its opencv and matplotlib
-      # pins) is outstanding — NOT YET RESOLVED here, because resolving a SHA needs the
-      # network and a plausible-looking hash with a version beside it would be a placeholder
-      # shaped like evidence.
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      # Pinned to a commit SHA, not the `@release/v1` BRANCH ref it carried until 2026-09-04: a
+      # branch resolves at run time, so the code performing the publish would not be the code
+      # last reviewed. The SHA was resolved with `gh api` against the action's latest release
+      # (tag v1.14.2, an annotated tag dereferenced to its commit), the same day and with the
+      # network — never typed from memory, because a plausible-looking hash with a version
+      # beside it would be a placeholder shaped like evidence. Bump deliberately, by re-resolving.
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           skip-existing: true
 

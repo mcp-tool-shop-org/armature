@@ -59,7 +59,7 @@ TOOL_VERSION = "S03.2"
 #: The only shape a frame key in an upload map may take. Zero padded to five digits, so a
 #: lexicographic sort of the keys IS the numeric order — the property the ordering rule
 #: assumed and never checked.
-FRAME_KEY = re.compile(r"^[0-9]{5}\.png$")
+FRAME_KEY = re.compile(r"^[0-9]{5}(\.png)?$")
 
 
 def frame_order(uploads):
@@ -85,10 +85,23 @@ def frame_order(uploads):
             f"order is taken from a sort of these keys, and an unpadded name sorts "
             f"lexicographically (10.png before 2.png) while a key that is not a frame at "
             f"all is absorbed as one. Both shuffle or lengthen the clip with every count "
-            f"in every gate still reading right. Keys must match 00000.png..NNNNN.png",
+            f"in every gate still reading right. Keys must match 00000..NNNNN or 00000.png..NNNNN.png",
             ev)
+    # Wave-3 merge (coordinator, 2026-09-04): every upload map on this rig — eleven E02/E03
+    # files — is keyed by the bare zero-padded index (`00000`), while the cascade route keys
+    # its maps `00000.png`. The defect this gate exists for is UNPADDED names sorting
+    # lexicographically; the five zero-padded digits catch that in either shape, so both are
+    # accepted — but one map must use one shape, because `00000` sorts before `00000.png`
+    # and a mixed map has no single order to check.
+    suffixes = {".png" if str(k).endswith(".png") else "" for k in keys}
+    if len(suffixes) > 1:
+        raise AS.AssemblyGate(
+            f"the upload map mixes bare frame keys (00000) with .png-suffixed ones "
+            f"(00000.png); a mixed map has no single sort order. Use one shape throughout",
+            {**ev, "suffixes": sorted(suffixes)})
+    suffix = next(iter(suffixes)) if suffixes else ""
     ordered = sorted(keys)
-    want = [f"{i:05d}.png" for i in range(len(keys))]
+    want = [f"{i:05d}{suffix}" for i in range(len(keys))]
     missing = [w for w in want if w not in uploads]
     ev["missing"] = missing
     if ordered != want:

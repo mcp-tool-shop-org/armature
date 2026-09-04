@@ -26,7 +26,6 @@ from armature_core import assembly as AS
 from conftest import TOOLS
 
 
-
 # ---------------------------------------------------------------------------------------
 # P2 / P3 seam adapter (swarm wave 3, health-amend-a) — TEST-LOCAL, never in the tools.
 #
@@ -49,36 +48,6 @@ from conftest import TOOLS
 #     the parameter, keep exercising the clauses they were written for.
 #
 # Owner of its deletion: the coordinator, in the commit that merges the two branches.
-
-
-@pytest.fixture(autouse=True)
-def _pair_seam_adapter(monkeypatch):
-    import inspect
-
-    from armature_core import assembly as _AS
-
-    def adapt(fname, derive=None):
-        fn = getattr(_AS, fname)
-        params = inspect.signature(fn).parameters
-
-        def shim(*a, _fn=fn, _params=params, _derive=derive, **kw):
-            for key in ("group_size", "expected_sources"):
-                if key in kw and key not in _params:
-                    kw.pop(key)
-            need = _params.get("expected_sources")
-            if (need is not None and need.default is inspect.Parameter.empty
-                    and "expected_sources" not in kw and _derive is not None):
-                kw["expected_sources"] = _derive(*a)
-            return _fn(*a, **kw)
-
-        monkeypatch.setattr(_AS, fname, shim)
-
-    def _ids(graph, n_frames, *rest):
-        return [str(200 + i) for i in range(int(n_frames))]
-
-    adapt("gate_slot_ceiling")
-    adapt("gate_batch_topology", _ids)
-    adapt("gate_cascade_topology", _ids)
 
 
 def _names(n):
@@ -501,13 +470,20 @@ def test_the_slot_index_gate_catches_a_permuted_slot_that_topology_calls_clean()
     slots leaves every count right and the clip out of sequence."""
     names = [f"{i:064x}.png" for i in range(6)]
     wf = B.build(names)
-    assert AS.gate_batch_topology(wf, 6, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)["verdict"]
+    expected = [str(B.FIRST_IMAGE_ID + i) for i in range(6)]
+    assert AS.gate_batch_topology(wf, 6, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                                  expected_sources=expected)["verdict"]
     assert B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0)], B.FIRST_IMAGE_ID)["verdict"]
 
     bi = wf[str(B.BATCH_ID)]["inputs"]
     bi["images.image0"], bi["images.image1"] = bi["images.image1"], bi["images.image0"]
-    assert AS.gate_batch_topology(wf, 6, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID)["verdict"], (
-        "topology alone must still see nothing wrong — that is the point of the new gate")
+    # Wave-3 merge (coordinator): the topology gate gained the slot-k-is-frame-k clause on the
+    # core-solvers branch (P3 side A) while this builder grew `gate_slot_frame_index` (side B),
+    # so BOTH now refuse the permutation. One clause in two gates is a Stage B consolidation
+    # item; until then the test states the merged truth rather than the pre-merge one.
+    with pytest.raises(AS.AssemblyGate):
+        AS.gate_batch_topology(wf, 6, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
+                               expected_sources=expected)
     with pytest.raises(AS.AssemblyGate) as exc:
         B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0)], B.FIRST_IMAGE_ID)
     assert "slot 0" in str(exc.value)

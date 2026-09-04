@@ -31,7 +31,6 @@ from armature_core import assembly as AS
 from conftest import TOOLS
 
 
-
 # ---------------------------------------------------------------------------------------
 # P2 / P3 seam adapter (swarm wave 3, health-amend-a) — TEST-LOCAL, never in the tools.
 #
@@ -54,36 +53,6 @@ from conftest import TOOLS
 #     the parameter, keep exercising the clauses they were written for.
 #
 # Owner of its deletion: the coordinator, in the commit that merges the two branches.
-
-
-@pytest.fixture(autouse=True)
-def _pair_seam_adapter(monkeypatch):
-    import inspect
-
-    from armature_core import assembly as _AS
-
-    def adapt(fname, derive=None):
-        fn = getattr(_AS, fname)
-        params = inspect.signature(fn).parameters
-
-        def shim(*a, _fn=fn, _params=params, _derive=derive, **kw):
-            for key in ("group_size", "expected_sources"):
-                if key in kw and key not in _params:
-                    kw.pop(key)
-            need = _params.get("expected_sources")
-            if (need is not None and need.default is inspect.Parameter.empty
-                    and "expected_sources" not in kw and _derive is not None):
-                kw["expected_sources"] = _derive(*a)
-            return _fn(*a, **kw)
-
-        monkeypatch.setattr(_AS, fname, shim)
-
-    def _ids(graph, n_frames, *rest):
-        return [str(200 + i) for i in range(int(n_frames))]
-
-    adapt("gate_slot_ceiling")
-    adapt("gate_batch_topology", _ids)
-    adapt("gate_cascade_topology", _ids)
 
 
 def _names(n):
@@ -347,7 +316,6 @@ def test_the_record_names_the_cap_as_inferred_rather_than_measured(tmp_path):
 # ------------------------------------------------- the andons survive optimization
 
 
-
 # ------------------------------------------------- frame ORDER inside a group (P3)
 
 
@@ -558,7 +526,11 @@ def test_a_within_group_slot_swap_is_caught_by_the_index_gate():
 
     gi = wf[gids[1]]["inputs"]
     gi["images.image0"], gi["images.image1"] = gi["images.image1"], gi["images.image0"]
-    assert _gates(wf, gids)["verdict"], "the topology gate must still see nothing wrong"
+    # Wave-3 merge (coordinator): the topology gate now carries the slot-k-is-frame-k clause
+    # (core-solvers, P3 side A) alongside this builder's `gate_slot_frame_index` (side B) —
+    # both refuse the swap. Consolidating one clause out of two gates is a Stage B item.
+    with pytest.raises(AS.AssemblyGate):
+        _gates(wf, gids)
     with pytest.raises(AS.AssemblyGate) as exc:
         B.gate_slot_frame_index(wf, names, plan, B.FIRST_IMAGE_ID)
     assert "slot 0" in str(exc.value)
@@ -577,7 +549,7 @@ def test_a_group_above_the_module_ceiling_is_refused_end_to_end(tmp_path):
     p.write_text(json.dumps(uploads), encoding="utf-8")
     with pytest.raises(AS.AssemblyGate) as exc:
         B.main([f"--uploads={p}", f"--out={tmp_path / 'route'}", "--group=81"])
-    assert f"more than {AS.MAX_SLOTS_PER_NODE}" in str(exc.value)
+    assert f"ceiling {AS.MAX_SLOTS_PER_NODE}" in str(exc.value)
 
 
 def test_a_group_at_the_module_ceiling_still_builds(tmp_path):
