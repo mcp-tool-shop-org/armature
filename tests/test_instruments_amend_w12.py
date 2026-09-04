@@ -1165,12 +1165,20 @@ def test_every_gltf_export_is_read_back_before_the_run_claims_it(filename):
 def test_make_test_armature_refuses_a_missing_or_empty_export(tmp_path):
     mta = load_tool("make_test_armature.py")
     absent = tmp_path / "nope.glb"
+    # WAVE 14, F-6a9a0f72: `result` and `before` became REQUIRED keyword arguments of the
+    # gate (a default is the hole the finding is about), so these calls pass a FINISHED
+    # status set and a fresh snapshot in order to reach the clauses this test is about.
+    # The status-set clause and the stale-target clause have their own fixtures in
+    # `tests/test_instruments_amend_w14.py`.
+    ok = {"FINISHED"}
     with pytest.raises(mta.rc.GateGlbWritten, match="never reached disk"):
-        mta.rc.gate_glb_written(str(absent))
+        mta.rc.gate_glb_written(str(absent), result=ok,
+                                before=mta.rc.export_target_snapshot(str(absent)))
     empty = tmp_path / "empty.glb"
+    before_empty = mta.rc.export_target_snapshot(str(empty))
     empty.write_bytes(b"")
     with pytest.raises(mta.rc.GateGlbWritten, match="zero bytes"):
-        mta.rc.gate_glb_written(str(empty))
+        mta.rc.gate_glb_written(str(empty), result=ok, before=before_empty)
 
 
 def test_make_test_armature_accepts_a_real_export_and_returns_its_digest(tmp_path):
@@ -1178,7 +1186,8 @@ def test_make_test_armature_accepts_a_real_export_and_returns_its_digest(tmp_pat
     mta = load_tool("make_test_armature.py")
     real = tmp_path / "real.glb"
     real.write_bytes(b"glTF\x02\x00\x00\x00")
-    rec = mta.rc.gate_glb_written(str(real))
+    rec = mta.rc.gate_glb_written(str(real), result={"FINISHED"},
+                                  before=mta.rc.export_target_snapshot(str(real) + ".absent"))
     assert rec["bytes"] == 8
     assert len(rec["sha256"]) == 64
     assert rec["verdict"]
@@ -1217,12 +1226,18 @@ def test_the_retopo_manifest_derives_its_glb_paths_and_shas_from_one_population(
 
 def test_rig_retopo_refuses_a_missing_or_empty_export(tmp_path):
     rr = load_tool("rig_retopo.py")
+    ok = {"FINISHED"}                    # WAVE 14, F-6a9a0f72 -- see the note above
+    snap = rr.rc.export_target_snapshot
+    absent = str(tmp_path / "nope.glb")
     with pytest.raises(rr.rc.GateGlbWritten, match="never reached disk"):
-        rr.rc.gate_glb_written(str(tmp_path / "nope.glb"))
+        rr.rc.gate_glb_written(absent, result=ok, before=snap(absent))
     empty = tmp_path / "empty.glb"
+    before_empty = snap(str(empty))
     empty.write_bytes(b"")
     with pytest.raises(rr.rc.GateGlbWritten, match="zero bytes"):
-        rr.rc.gate_glb_written(str(empty))
+        rr.rc.gate_glb_written(str(empty), result=ok, before=before_empty)
     real = tmp_path / "real.glb"
+    before_real = snap(str(real))
     real.write_bytes(b"glTF")
-    assert rr.rc.gate_glb_written(str(real))["bytes"] == 4
+    assert rr.rc.gate_glb_written(str(real), result=ok,
+                                  before=before_real)["bytes"] == 4

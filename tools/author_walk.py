@@ -681,10 +681,16 @@ def main():
     os.makedirs(os.path.dirname(out_path), exist_ok=True)  # scripts make their own dirs
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
-    bpy.ops.export_scene.gltf(**kwargs)
+    # WAVE 14, F-6a9a0f72: the target is snapshotted BEFORE the export and the operator's
+    # status set is CAPTURED, so a declined export over a previous run's GLB is refused
+    # rather than hashed. Both are required arguments of the gate.
+    before_glb = rig_character.export_target_snapshot(out_path)
+    export_result = bpy.ops.export_scene.gltf(**kwargs)
     # F-9b2d4106, family carry: the exporter can return CANCELLED without raising. One
     # implementation, `rig_character.gate_glb_written` - never a second copy.
-    gate_glb = rig_character.gate_glb_written(out_path, what="the authored walk GLB")
+    gate_glb = rig_character.gate_glb_written(
+        out_path, result=export_result, before=before_glb,
+        what="the authored walk GLB")
 
     # ---- Gate A, on a fresh import of what was just written. Same fps andon again: the
     # re-import is where the seconds-to-frames conversion happens a second time.

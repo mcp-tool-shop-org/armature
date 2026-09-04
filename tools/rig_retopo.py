@@ -374,8 +374,9 @@ def main():
 
     scene, ob = import_subject(args["glb"])
     src = rc.world_verts(ob)
-    lo, hi = src.min(0), src.max(0)
-    diagonal = float(np.linalg.norm(hi - lo))
+    # SIBLING CARRIED under F-6a9a0f72 (wave 14). Gate SCALE: the voxel size and every
+    # deviation figure in the comparison manifest are fractions of this number.
+    diagonal, lo, hi = rc.subject_scale(src, "rig_retopo")
 
     smallest_name, smallest_r, all_radii = smallest_limb_radius(ob)
     voxel = args["voxel"] if args["voxel"] else smallest_r * VOXEL_PER_SMALLEST_RADIUS
@@ -437,27 +438,36 @@ def main():
             continue
         path = os.path.join(out_dir, f"{name}.glb")
         _select_only(obj)
-        bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True,
-                                  export_apply=False, export_yup=True)
+        # WAVE 14, F-6a9a0f72: snapshot before, status set captured.
+        before_glb = rc.export_target_snapshot(path)
+        export_result = bpy.ops.export_scene.gltf(
+            filepath=path, export_format="GLB", use_selection=True,
+            export_apply=False, export_yup=True)
         # F-9b2d4106: the variants recorded a sha, which raises on an absent file, but
         # nothing refused a ZERO-BYTE export. One implementation for all three exports in
         # this file, `rig_character.gate_glb_written`.
-        written = rc.gate_glb_written(path, what=f"the {name} retopo GLB")
+        written = rc.gate_glb_written(path, result=export_result, before=before_glb,
+                                      what=f"the {name} retopo GLB")
         results[name]["glb"] = written["path"]
         results[name]["sha256"] = written["sha256"]
         results[name]["bytes"] = written["bytes"]
 
     shell_path = os.path.join(out_dir, "outer_shell.glb")
     _select_only(ob)
-    bpy.ops.export_scene.gltf(filepath=shell_path, export_format="GLB", use_selection=True,
-                              export_apply=False, export_yup=True)
+    # WAVE 14, F-6a9a0f72: snapshot before, status set captured.
+    before_shell = rc.export_target_snapshot(shell_path)
+    shell_result = bpy.ops.export_scene.gltf(
+        filepath=shell_path, export_format="GLB", use_selection=True,
+        export_apply=False, export_yup=True)
     # F-21d6e3ac. This manifest published `outer_shell_glb` as a BARE STRING while the two
     # variant exports twelve lines above each recorded a sha and the input recorded
     # `source_sha256` - the asymmetry was inside one manifest. The outer shell is not
     # incidental: it is the INPUT both retopo arms are compared against and the object every
     # comparison panel is shot from, so a later session re-reading the manifest to reproduce
     # the comparison could not tell whether the shell on disk is the shell the run used.
-    shell_written = rc.gate_glb_written(shell_path, what="the outer-shell GLB")
+    shell_written = rc.gate_glb_written(shell_path, result=shell_result,
+                                        before=before_shell,
+                                        what="the outer-shell GLB")
 
     # SYMMETRIC. MEASURED 2026-09-04: the superseded shape removed a dead A and did
     # nothing at all about a dead B, and B is a duplicate of the outer shell at the

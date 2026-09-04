@@ -131,8 +131,11 @@ def main():
     dg.update()
     at_end = evaluated(mesh, dg)
     moved = float(np.abs(at_end - at_rest).max())
-    lo, hi = at_rest.min(0), at_rest.max(0)
-    diagonal = float(np.linalg.norm(hi - lo))
+    # SIBLING CARRIED under F-6a9a0f72 (wave 14). Gate SCALE: the arc-survived refusal on
+    # the next line compares `moved` against a fraction of this diagonal, and a NaN diagonal
+    # makes `moved <= 1e-4 * diagonal` False -- so a subject carrying a NaN reads as a
+    # subject whose arc survived.
+    diagonal, lo, hi = rc.subject_scale(at_rest, "make_rig_sheet")
     if moved <= 1e-4 * diagonal:
         raise ArmatureError(
             f"{args['glb']}: the evaluated mesh is identical at frame 1 and frame "

@@ -168,7 +168,10 @@ def main():
     ob = visible[0]
     ob.name = ob.data.name = "performer_repaired"
     src = rc.world_verts(ob)
-    diagonal = float(np.linalg.norm(src.max(0) - src.min(0)))
+    # SIBLING CARRIED under F-6a9a0f72 (wave 14). Gate SCALE, on the tool whose EXPECTED
+    # input is a broken mesh -- the weld distance below is a fraction of this number, and a
+    # NaN weld distance welds nothing while every manifold statistic beside it reads normal.
+    diagonal, _lo, _hi = rc.subject_scale(src, "rig_repair")
 
     extraction = extract_and_weld(ob, diagonal)
     shell_faces = extraction["faces"]
@@ -205,11 +208,15 @@ def main():
     ob.select_set(True)
     bpy.context.view_layer.objects.active = ob
     out_glb = os.path.join(out_dir, "performer_repaired.glb")
-    bpy.ops.export_scene.gltf(filepath=out_glb, export_format="GLB", use_selection=True,
-                              export_apply=False, export_yup=True,
-                              export_image_format="AUTO")
+    # WAVE 14, F-6a9a0f72: snapshot before, status set captured, both handed to the gate.
+    before_glb = rc.export_target_snapshot(out_glb)
+    export_result = bpy.ops.export_scene.gltf(
+        filepath=out_glb, export_format="GLB", use_selection=True,
+        export_apply=False, export_yup=True,
+        export_image_format="AUTO")
     # F-9b2d4106, family carry: one implementation, `rig_character.gate_glb_written`.
-    gate_glb = rc.gate_glb_written(out_glb, what="the repaired GLB")
+    gate_glb = rc.gate_glb_written(out_glb, result=export_result, before=before_glb,
+                                   what="the repaired GLB")
 
     manifest = {
         "tool": "rig_repair", "started": started, "blender": bpy.app.version_string,

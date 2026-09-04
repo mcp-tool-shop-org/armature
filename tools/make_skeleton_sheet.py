@@ -56,6 +56,30 @@ INSET_JOINTS = ("shoulder", "elbow", "wrist", "hip", "knee", "ankle")
 ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
 
 
+def _render_status(result):
+    """The render operator's status set as a sorted list of strings, `[]` if unreadable.
+
+    WAVE 14, F-6a9a0f72. `bpy.ops.render.render(write_still=True)` returns an operator
+    STATUS SET and can return `{'CANCELLED'}` without raising -- the premise this repo
+    recorded in wave 12 and then read at none of its 14 render call sites. Every check
+    those call sites have downstream (`os.path.isfile`, `getsize`, a re-read of the pixels)
+    is a property a PREVIOUS run's file at the same path satisfies, so the operator's own
+    verdict is the only clause that distinguishes "this call drew nothing" from "an older
+    file is sitting where this call's output was supposed to land". An unreadable return is
+    `[]`, which FAILS the `'FINISHED' in ...` clause rather than passing it.
+
+    It is spelled once per tool rather than imported, because these modules share no
+    parent inside `tools/` -- `armature_core` is where one implementation belongs and it is
+    outside this domain's globs (FILED, see the wave-14 report). The census in
+    `tests/test_instruments_amend_w14.py` asserts every copy is byte-identical, so the
+    duplication cannot drift.
+    """
+    try:
+        return sorted(str(s) for s in result)
+    except TypeError:
+        return []
+
+
 class SkeletonSheetGate(GateFailure):
     """The approval sheet cannot be composed as an approval sheet."""
 
@@ -243,7 +267,19 @@ def shoot(scene, path, transparent):
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA" if transparent else "RGB"
     scene.render.filepath = path
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
+    # size checks below are properties a PREVIOUS run's file at the same path satisfies;
+    # only the operator's own verdict says whether THIS call drew anything. Shape carried
+    # from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise SkeletonSheetGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(path)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(path)})
     # THE WRITER VERIFIES ITS OWN OUTPUT (F-51c5e0ef). `bpy.ops.render.render` returns
     # an operator status set and can return `{'CANCELLED'}` WITHOUT raising; this
     # function discarded it, and no code path in this tool ever opened a rendered file
@@ -286,9 +322,10 @@ def main():
     mesh_obj = visible[0]
 
     source = rig_character.world_verts(mesh_obj)
-    lo, hi = source.min(axis=0), source.max(axis=0)
+    # SIBLING CARRIED under F-6a9a0f72 (wave 14). Gate SCALE: `measure_joint_balls` DIVIDES
+    # by this diagonal, and this is the sheet the Director approves the skeleton on.
+    diagonal, lo, hi = rig_character.subject_scale(source, "make_skeleton_sheet")
     height = float(hi[2] - lo[2])
-    diagonal = float(((hi - lo) ** 2).sum() ** 0.5)
     centre = Vector(((lo + hi) / 2.0).tolist())
 
     lm = landmarks.derive(source, n_bands=args.bands)

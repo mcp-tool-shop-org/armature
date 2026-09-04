@@ -395,9 +395,13 @@ def main():
     # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`.
     os.makedirs(os.path.dirname(out_path), exist_ok=True)  # scripts make their own dirs
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
-    bpy.ops.export_scene.gltf(**{k: v for k, v in wanted.items() if k in props})
+    # WAVE 14, F-6a9a0f72: snapshot before, status set captured, both handed to the gate.
+    before_glb = rig_character.export_target_snapshot(out_path)
+    export_result = bpy.ops.export_scene.gltf(
+        **{k: v for k, v in wanted.items() if k in props})
     # F-9b2d4106, family carry: one implementation, `rig_character.gate_glb_written`.
-    gate_glb = rig_character.gate_glb_written(out_path, what="the lifted GLB")
+    gate_glb = rig_character.gate_glb_written(
+        out_path, result=export_result, before=before_glb, what="the lifted GLB")
 
     # ---- the re-import is where the seconds-to-frames conversion happens a second time.
     scene2 = rig_character.fresh_scene(a.fps)

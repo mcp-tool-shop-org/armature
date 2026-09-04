@@ -535,9 +535,12 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
-    bpy.ops.export_scene.gltf(**kwargs)
+    # WAVE 14, F-6a9a0f72: snapshot before, status set captured, both handed to the gate.
+    before_glb = rig_character.export_target_snapshot(out_glb)
+    export_result = bpy.ops.export_scene.gltf(**kwargs)
     # F-9b2d4106, family carry: refused before Gate ATLAS reads the file back.
-    gate_glb = rig_character.gate_glb_written(out_glb, what="the parts GLB")
+    gate_glb = rig_character.gate_glb_written(
+        out_glb, result=export_result, before=before_glb, what="the parts GLB")
 
     gate_atlas = glb.gate_atlas_untouched(args["glb"], out_glb)
 

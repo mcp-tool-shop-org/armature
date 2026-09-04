@@ -124,6 +124,30 @@ PLATE_MIN_SEPARATION_255 = 4.0
 FRAMING_CLOUD_CAP = 1500
 
 
+def _render_status(result):
+    """The render operator's status set as a sorted list of strings, `[]` if unreadable.
+
+    WAVE 14, F-6a9a0f72. `bpy.ops.render.render(write_still=True)` returns an operator
+    STATUS SET and can return `{'CANCELLED'}` without raising -- the premise this repo
+    recorded in wave 12 and then read at none of its 14 render call sites. Every check
+    those call sites have downstream (`os.path.isfile`, `getsize`, a re-read of the pixels)
+    is a property a PREVIOUS run's file at the same path satisfies, so the operator's own
+    verdict is the only clause that distinguishes "this call drew nothing" from "an older
+    file is sitting where this call's output was supposed to land". An unreadable return is
+    `[]`, which FAILS the `'FINISHED' in ...` clause rather than passing it.
+
+    It is spelled once per tool rather than imported, because these modules share no
+    parent inside `tools/` -- `armature_core` is where one implementation belongs and it is
+    outside this domain's globs (FILED, see the wave-14 report). The census in
+    `tests/test_instruments_amend_w14.py` asserts every copy is byte-identical, so the
+    duplication cannot drift.
+    """
+    try:
+        return sorted(str(s) for s in result)
+    except TypeError:
+        return []
+
+
 class RenderGate(GateFailure):
     """A gate specific to rendering the start frame."""
 
@@ -588,7 +612,19 @@ def main():
     scene.render.film_transparent = True
     scene.render.image_settings.color_mode = "RGBA"
     scene.render.filepath = rgba_path
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+    # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+    # the same path satisfies; only the operator's own verdict says whether THIS call drew
+    # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise RenderGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(rgba_path)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(rgba_path)})
 
     alpha_plane = _alpha_channel(rgba_path, width, height)
     gate_alpha = SF.gate_alpha(float((alpha_plane < 0.5).mean()), composite_rgb,
@@ -603,7 +639,19 @@ def main():
     scene.render.image_settings.color_mode = "RGB"
     flat_path = os.path.join(out, "start_frame_flat.png" if backdrop else "start_frame.png")
     scene.render.filepath = flat_path
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+    # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+    # the same path satisfies; only the operator's own verdict says whether THIS call drew
+    # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise RenderGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(flat_path)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(flat_path)})
 
     # ---- the empty plate: same camera, same lights, same floor, character hidden.
     # (An "empty plate" in the VFX sense — the background-only render. Not `--plate`.)
@@ -611,7 +659,19 @@ def main():
         o.hide_render = True
     plate_path = os.path.join(out, "empty_plate.png")
     scene.render.filepath = plate_path
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+    # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+    # the same path satisfies; only the operator's own verdict says whether THIS call drew
+    # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise RenderGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(plate_path)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(plate_path)})
     for o in subject + arms:
         o.hide_render = False
 
@@ -634,12 +694,36 @@ def main():
             o.hide_render = True
         lit_path = os.path.join(out, "shadow_lit.png")
         scene.render.filepath = lit_path
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+        # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+        # the same path satisfies; only the operator's own verdict says whether THIS call drew
+        # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(lit_path)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(lit_path)})
         for o in subject + arms:
             o.hide_render = False
         cast_path = os.path.join(out, "shadow_cast.png")
         scene.render.filepath = cast_path
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+        # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+        # the same path satisfies; only the operator's own verdict says whether THIS call drew
+        # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(cast_path)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(cast_path)})
         gob.hide_render = True
 
         ratio = SF.shadow_ratio(_pixels(cast_path, width, height),
@@ -682,7 +766,19 @@ def main():
         wire_plate_composite(scene, backdrop_for_composite)
         frame_path = os.path.join(out, "start_frame.png")
         scene.render.filepath = frame_path
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
+        # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
+        # the same path satisfies; only the operator's own verdict says whether THIS call drew
+        # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(frame_path)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(frame_path)})
 
         void = alpha_plane < 0.5
         sub_px = _pixels(frame_path, width, height)

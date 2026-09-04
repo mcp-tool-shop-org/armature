@@ -282,10 +282,15 @@ def main():
     target.select_set(True)
     bpy.context.view_layer.objects.active = target
     out_glb = os.path.join(out_dir, "performer_retopo_textured.glb")
-    bpy.ops.export_scene.gltf(filepath=out_glb, export_format="GLB", use_selection=True,
-                              export_apply=False, export_yup=True, export_image_format="AUTO")
+    # WAVE 14, F-6a9a0f72: snapshot before, status set captured. The `'FINISHED' not in
+    # result` shape is this file's own, twenty-five lines above (`bpy.ops.object.bake`).
+    before_glb = rc.export_target_snapshot(out_glb)
+    export_result = bpy.ops.export_scene.gltf(
+        filepath=out_glb, export_format="GLB", use_selection=True,
+        export_apply=False, export_yup=True, export_image_format="AUTO")
     # F-9b2d4106, family carry: one implementation, `rig_character.gate_glb_written`.
-    gate_glb = rc.gate_glb_written(out_glb, what="the baked, retopologised GLB")
+    gate_glb = rc.gate_glb_written(out_glb, result=export_result, before=before_glb,
+                                   what="the baked, retopologised GLB")
 
     manifest = {
         "tool": "rig_bake", "started": started,

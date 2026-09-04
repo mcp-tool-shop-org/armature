@@ -87,6 +87,30 @@ TARGET_Y_FRAC = 0.52
 MIN_SUBJECT_FRAC = 0.01
 
 
+def _render_status(result):
+    """The render operator's status set as a sorted list of strings, `[]` if unreadable.
+
+    WAVE 14, F-6a9a0f72. `bpy.ops.render.render(write_still=True)` returns an operator
+    STATUS SET and can return `{'CANCELLED'}` without raising -- the premise this repo
+    recorded in wave 12 and then read at none of its 14 render call sites. Every check
+    those call sites have downstream (`os.path.isfile`, `getsize`, a re-read of the pixels)
+    is a property a PREVIOUS run's file at the same path satisfies, so the operator's own
+    verdict is the only clause that distinguishes "this call drew nothing" from "an older
+    file is sitting where this call's output was supposed to land". An unreadable return is
+    `[]`, which FAILS the `'FINISHED' in ...` clause rather than passing it.
+
+    It is spelled once per tool rather than imported, because these modules share no
+    parent inside `tools/` -- `armature_core` is where one implementation belongs and it is
+    outside this domain's globs (FILED, see the wave-14 report). The census in
+    `tests/test_instruments_amend_w14.py` asserts every copy is byte-identical, so the
+    duplication cannot drift.
+    """
+    try:
+        return sorted(str(s) for s in result)
+    except TypeError:
+        return []
+
+
 class RenderGate(GateFailure):
     """A gate specific to rendering the performer for a detector."""
 
@@ -336,7 +360,19 @@ def main():
         blender_scene.set_scene_frame(scene, i)
         p = os.path.join(out, f"{i:05d}.png")
         scene.render.filepath = p
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
+        # size checks below are properties a PREVIOUS run's file at the same path satisfies;
+        # only the operator's own verdict says whether THIS call drew anything. Shape carried
+        # from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(p)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(p)})
         paths.append(p)
 
     # The population is the PLAN, not whatever is in the directory — the shape
@@ -381,7 +417,20 @@ def main():
         o.hide_render = True
     empty_plate = os.path.join(out, "empty_plate.png")
     scene.render.filepath = empty_plate
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
+    # size checks below are properties a PREVIOUS run's file at the same path satisfies;
+    # only the operator's own verdict says whether THIS call drew anything. Shape carried
+    # from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise RenderGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(empty_plate)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(empty_plate)})
+
     for o in meshes + arms:
         o.hide_render = False
 

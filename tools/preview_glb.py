@@ -27,6 +27,30 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
 
 
+def _render_status(result):
+    """The render operator's status set as a sorted list of strings, `[]` if unreadable.
+
+    WAVE 14, F-6a9a0f72. `bpy.ops.render.render(write_still=True)` returns an operator
+    STATUS SET and can return `{'CANCELLED'}` without raising -- the premise this repo
+    recorded in wave 12 and then read at none of its 14 render call sites. Every check
+    those call sites have downstream (`os.path.isfile`, `getsize`, a re-read of the pixels)
+    is a property a PREVIOUS run's file at the same path satisfies, so the operator's own
+    verdict is the only clause that distinguishes "this call drew nothing" from "an older
+    file is sitting where this call's output was supposed to land". An unreadable return is
+    `[]`, which FAILS the `'FINISHED' in ...` clause rather than passing it.
+
+    It is spelled once per tool rather than imported, because these modules share no
+    parent inside `tools/` -- `armature_core` is where one implementation belongs and it is
+    outside this domain's globs (FILED, see the wave-14 report). The census in
+    `tests/test_instruments_amend_w14.py` asserts every copy is byte-identical, so the
+    duplication cannot drift.
+    """
+    try:
+        return sorted(str(s) for s in result)
+    except TypeError:
+        return []
+
+
 class PreviewGlbGate(GateFailure):
     """The preview could not be composed, or could not be composed reproducibly."""
 
@@ -100,7 +124,19 @@ def add_camera_render(name_suffix, center, radius, azim_deg, elev_deg, res, out_
     scn.render.resolution_x, scn.render.resolution_y = res
     path = os.path.join(out_dir, f"{args.name}_{name_suffix}.png")
     scn.render.filepath = path
-    bpy.ops.render.render(write_still=True)
+    render_result = bpy.ops.render.render(write_still=True)
+    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
+    # size checks below are properties a PREVIOUS run's file at the same path satisfies;
+    # only the operator's own verdict says whether THIS call drew anything. Shape carried
+    # from `rig_bake.py`'s `if 'FINISHED' not in result`.
+    _status = _render_status(render_result)
+    if "FINISHED" not in _status:
+        raise PreviewGlbGate(
+            f"the render operator did not report FINISHED for "
+            f"{os.path.basename(path)}; it returned {_status!r}, and any file at "
+            f"that path is then the previous run's",
+            {"clause": "operator_status", "status": _status,
+             "path": os.path.abspath(path)})
     # RETURN the path, so the plan `gate_previews_written` measures is the list
     # the render actually wrote against rather than a second list built beside it.
     return path

@@ -183,6 +183,30 @@ MARGIN_PX = 2.0
 ORTHO_STANDOFF_SPHERES = 4.0
 
 
+def _render_status(result):
+    """The render operator's status set as a sorted list of strings, `[]` if unreadable.
+
+    WAVE 14, F-6a9a0f72. `bpy.ops.render.render(write_still=True)` returns an operator
+    STATUS SET and can return `{'CANCELLED'}` without raising -- the premise this repo
+    recorded in wave 12 and then read at none of its 14 render call sites. Every check
+    those call sites have downstream (`os.path.isfile`, `getsize`, a re-read of the pixels)
+    is a property a PREVIOUS run's file at the same path satisfies, so the operator's own
+    verdict is the only clause that distinguishes "this call drew nothing" from "an older
+    file is sitting where this call's output was supposed to land". An unreadable return is
+    `[]`, which FAILS the `'FINISHED' in ...` clause rather than passing it.
+
+    It is spelled once per tool rather than imported, because these modules share no
+    parent inside `tools/` -- `armature_core` is where one implementation belongs and it is
+    outside this domain's globs (FILED, see the wave-14 report). The census in
+    `tests/test_instruments_amend_w14.py` asserts every copy is byte-identical, so the
+    duplication cannot drift.
+    """
+    try:
+        return sorted(str(s) for s in result)
+    except TypeError:
+        return []
+
+
 class RenderTurnaroundGate(GateFailure):
     """The turnaround could not be composed at all.
 
@@ -660,7 +684,19 @@ def main():
                                                       a.elevation, az)
         path = os.path.join(out, f"{a.prefix}_{i}.png")
         scene.render.filepath = path
-        bpy.ops.render.render(write_still=True)
+        render_result = bpy.ops.render.render(write_still=True)
+        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
+        # size checks below are properties a PREVIOUS run's file at the same path satisfies;
+        # only the operator's own verdict says whether THIS call drew anything. Shape carried
+        # from `rig_bake.py`'s `if 'FINISHED' not in result`.
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderTurnaroundGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(path)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(path)})
         if not os.path.isfile(path):          # pragma: no cover - Blender-side failure
             raise RenderTurnaroundGate(
                 f"view {i} rendered no file at {path}",
