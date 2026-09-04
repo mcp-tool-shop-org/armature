@@ -170,3 +170,104 @@ def test_render_comparison_hands_the_scene_to_the_isolation(retopo):
     assert len(calls) == 1, "the isolation is reached by more than one call site now"
     first = calls[0].args[0]
     assert isinstance(first, ast.Name) and first.id == "scene", ast.unparse(calls[0])
+
+
+# ======================================================= F-94657d8e — the two sides of a
+#                                                          determinism claim
+#
+# THE OPERAND. `check_relift.main` checked only `os.path.isfile` for each of `--pinned` and
+# `--fresh`; nothing anywhere compared the two paths. The wave-13 auditor drove the tool's
+# own pure functions with ONE window and ONE signature list on both sides and got
+# `clause: None`, `n_frames_differing: 0`, "all 65 frames of evaluated geometry identical",
+# and `bytes_identical: true` — the strongest PASS the instrument can print, from a
+# comparison of one decode against itself. The operand is IDENTITY OF FILE; the fixtures
+# below name one file through two spellings, which is the shape an operator produces (the
+# two GLBs live one directory apart).
+
+
+@pytest.fixture(scope="module")
+def relift():
+    return load_tool("check_relift.py")
+
+
+def _relift_argv(pinned, fresh, out):
+    return ["blender", "-b", "-P", "check_relift.py", "--",
+            f"--pinned={pinned}", f"--fresh={fresh}", f"--out={out}"]
+
+
+def _a_glb(path, payload=b"glTF\x02\x00\x00\x00"):
+    path.write_bytes(payload)
+    return str(path)
+
+
+def test_the_same_path_twice_is_refused_before_either_glb_is_imported(relift, tmp_path):
+    """RED on the operand the finding named: `--pinned` and `--fresh` naming one file.
+
+    Reverted-red: yes — without the clause `main` walks past both `isfile` checks and
+    reaches `signatures()`, which is where the stubbed `bpy` takes over.
+    """
+    glb = _a_glb(tmp_path / "b2.glb")
+    out = tmp_path / "rec" / "relift.json"
+    with blender_stubbed():
+        with pytest.raises(relift.ReliftSelfComparison) as exc:
+            _run_main(relift, glb, glb, out)
+    assert exc.value.gate == "RELIFT_SIDES"
+    assert exc.value.evidence["compared_on"].startswith("os.path.samefile")
+    assert not out.parent.exists(), "the refusal fired after the record directory was made"
+
+
+def _run_main(mod, pinned, fresh, out):
+    saved = list(sys.argv)
+    try:
+        sys.argv = _relift_argv(pinned, fresh, out)
+        return mod.main()
+    finally:
+        sys.argv = saved
+
+
+def test_a_dot_slash_alias_of_the_same_file_is_the_same_file(relift, tmp_path, monkeypatch):
+    """The hidden spelling (wave-12 rule 2). A string comparison of the two flags would
+    pass this; `os.path.samefile` is the operand that does not."""
+    _a_glb(tmp_path / "b2.glb")
+    monkeypatch.chdir(tmp_path)
+    with blender_stubbed():
+        with pytest.raises(relift.ReliftSelfComparison) as exc:
+            _run_main(relift, "b2.glb", os.path.join(".", "b2.glb"),
+                      str(tmp_path / "rec" / "relift.json"))
+    assert exc.value.evidence["pinned_realpath"] == exc.value.evidence["fresh_realpath"]
+
+
+def test_two_byte_identical_glbs_from_two_files_are_not_refused(relift, tmp_path):
+    """The direction that must NOT be refused, and the reason the clause is not a sha
+    compare: two byte-identical GLBs produced by two independent solves are the strongest
+    determinism result there is. The run proceeds past the gate and dies in the stubbed
+    importer, which is proof enough that RELIFT_SIDES let it through."""
+    p = _a_glb(tmp_path / "pinned.glb")
+    f = _a_glb(tmp_path / "fresh.glb")
+    assert open(p, "rb").read() == open(f, "rb").read()
+    with blender_stubbed():
+        with pytest.raises(Exception) as exc:
+            _run_main(relift, p, f, str(tmp_path / "rec" / "relift.json"))
+    assert not isinstance(exc.value, relift.ReliftSelfComparison), (
+        "a byte-identical pair from two files was refused; that deletes the finding the "
+        "tool exists to make")
+
+
+def test_the_record_carries_a_realpath_for_each_side(relift):
+    """A reader of the JSON must be able to see the two sides were two files."""
+    src = read_source("check_relift.py")
+    assert '"realpath": os.path.realpath(a.pinned)' in src
+    assert '"realpath": os.path.realpath(a.fresh)' in src
+
+
+def test_the_self_comparison_clause_is_not_keyed_on_the_digests(relift):
+    """The clause that must NOT be written. `pinned_sha == fresh_sha` is a RECORD field
+    (`bytes_identical`), never a refusal."""
+    src = read_source("check_relift.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    raises = [n for n in ast.walk(fn) if isinstance(n, ast.Raise)]
+    for r in raises:
+        text = ast.unparse(r)
+        assert "pinned_sha" not in text and "fresh_sha" not in text, text

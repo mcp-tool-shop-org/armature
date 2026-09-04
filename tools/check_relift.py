@@ -62,6 +62,30 @@ def _sha256(path):
     return h.hexdigest()
 
 
+class ReliftSelfComparison(GateFailure):
+    """`--pinned` and `--fresh` name ONE file, so the comparison has no two sides.
+
+    F-94657d8e, wave 14, measured on this tool's own pure functions with one window and one
+    signature list used for both sides: `gate_relift_window(w, dict(w), 65)` returns
+    `clause: None`; `compare_signatures(sigs, list(sigs))` returns `n_frames_compared: 65,
+    n_frames_differing: 0` and the verdict "all 65 frames of evaluated geometry identical";
+    and `bytes_identical` is `pinned_sha == fresh_sha`, so it is true as well. Every gate
+    green, and `what_this_settles` then publishes "whether the E09 lift solver is
+    deterministic" off a comparison of one decode against itself. The two GLBs this tool is
+    run on live one directory apart.
+
+    The refusal is on IDENTITY OF FILE (`os.path.samefile`, so a `./`-prefixed alias, a
+    relative path and a symlink are all caught) and never on content: two byte-identical
+    GLBs produced by two independent solves are the strongest determinism result there is,
+    and refusing them would delete the finding this tool exists to make. The sibling clause
+    is `measure_floor.check_runs` — "a pair of a run with itself is bit-identical by
+    construction and would be published as a zero floor" — carried here rather than
+    reinvented, on the one instrument whose whole output is a claim about determinism.
+    """
+
+    gate = "RELIFT_SIDES"
+
+
 class ReliftWindow(GateFailure):
     """The two GLBs do not present the same performance to compare over.
 
@@ -254,6 +278,25 @@ def main():
     for p in (a.pinned, a.fresh):
         if not os.path.isfile(p):
             raise ArmatureError(f"no such GLB: {p}")
+    # BEFORE either GLB is imported, and on identity of FILE rather than on content
+    # (F-94657d8e). `os.path.samefile` compares the filesystem's own identity, so
+    # `--pinned=x.glb --fresh=./x.glb`, a relative/absolute pair, a hard link and a symlink
+    # are all one file; `pinned_sha == fresh_sha` is deliberately NOT the test, because two
+    # byte-identical GLBs from two independent solves are the result this tool exists to
+    # find. Both paths were confirmed to be files on the loop above, so `samefile` cannot
+    # raise here.
+    if os.path.samefile(a.pinned, a.fresh):
+        raise ReliftSelfComparison(
+            f"--pinned and --fresh name the same file "
+            f"({os.path.realpath(a.pinned)}); a comparison of a decode with itself reports "
+            f"every frame identical and every byte identical by construction, and this "
+            f"tool's record would publish that as the verdict that the E09 lift solver is "
+            f"deterministic",
+            {"gate": "RELIFT_SIDES", "andon": "ReliftSelfComparison",
+             "pinned": os.path.abspath(a.pinned), "fresh": os.path.abspath(a.fresh),
+             "pinned_realpath": os.path.realpath(a.pinned),
+             "fresh_realpath": os.path.realpath(a.fresh),
+             "compared_on": "os.path.samefile (identity of file, never content)"})
 
     if a.frames < 1:
         raise ArmatureError(f"--frames={a.frames}: there is nothing to compare")
@@ -271,8 +314,15 @@ def main():
         "tool": "check_relift", "tool_version": TOOL_VERSION,
         "blender": blender_scene.blender_provenance(),
         "label": a.label,
-        "pinned": {"path": os.path.abspath(a.pinned), "sha256": pinned_sha},
-        "fresh": {"path": os.path.abspath(a.fresh), "sha256": fresh_sha},
+        # `realpath` beside the sha so a READER can see the two sides were two files
+        # (F-94657d8e): a record whose only identity evidence is a pair of equal digests
+        # cannot be told apart from a record of one file compared with itself.
+        "pinned": {"path": os.path.abspath(a.pinned), "sha256": pinned_sha,
+                   "realpath": os.path.realpath(a.pinned)},
+        "fresh": {"path": os.path.abspath(a.fresh), "sha256": fresh_sha,
+                  "realpath": os.path.realpath(a.fresh)},
+        "sides_are_distinct_files": (
+            "refused before either import by gate RELIFT_SIDES, on os.path.samefile"),
         "bytes_identical": pinned_sha == fresh_sha,
         "frames": a.frames, "fps": a.fps,
         "frames_source": ("--frames, checked against both GLBs' own keyed action ranges by "
