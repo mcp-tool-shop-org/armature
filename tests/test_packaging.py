@@ -1098,3 +1098,65 @@ def test_the_credential_file_of_every_registry_this_repo_publishes_to_is_ignored
     assert missing == [], (
         f"a registry credential could ride a `git add -A` in: {missing}; the registries "
         f"published to are {registries_published_to()}")
+
+
+# ------------------------------------------------ what the sdist carries (wave 8, F-4c607d79)
+#
+# Coordinator fix-up at the wave-8 merge: no frozen domain owned MANIFEST.in, so ci-packaging
+# recorded the measurement in pyproject.toml and the file landed here with this test. The
+# decision the file makes: the sdist ships NO tests and no experiment records — the suite runs
+# from the repo, where its fixtures and the rig's assets exist. What this looks like if the
+# code were wrong in the specific way this check exists to catch: the default `tests/test*.py`
+# glob puts 112 test files into the archive with none of what they import, and the unpacked
+# archive reads as self-verifying and cannot collect.
+
+
+def _build_sdist(tmp_path):
+    """Build the sdist from the repo into tmp_path and return the unpacked root."""
+    import tarfile
+
+    out = tmp_path / "dist"
+    proc = subprocess.run(
+        [sys.executable, "-m", "build", "--sdist", "--outdir", str(out), REPO],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=REPO,
+    )
+    if proc.returncode != 0:
+        pytest.skip(f"python -m build is not available or failed here:\n{proc.stderr[-1500:]}")
+    archives = sorted(out.glob("*.tar.gz"))
+    assert len(archives) == 1, [a.name for a in archives]
+    with tarfile.open(archives[0]) as tf:
+        names = tf.getnames()
+        tf.extractall(tmp_path / "unpacked", filter="data")
+    root = next((tmp_path / "unpacked").iterdir())
+    return root, names
+
+
+def test_the_sdist_ships_no_tests_and_says_so_in_manifest(tmp_path):
+    """The choice MANIFEST.in makes is asserted on the artifact, not on the file's text."""
+    manifest = os.path.join(REPO, "MANIFEST.in")
+    assert os.path.exists(manifest), "MANIFEST.in is the only mechanism that overrides the default tests/test*.py glob"
+    root, names = _build_sdist(tmp_path)
+    shipped_tests = [n for n in names if "/tests/" in n or n.endswith("/tests")]
+    assert shipped_tests == [], (
+        "the sdist carries test files it cannot collect (they import tools/*.py and fixtures "
+        f"the archive does not ship): {shipped_tests[:8]}")
+    for sub in ("specs", "docs", "site", "npm", "outputs"):
+        assert not (root / sub).exists(), f"{sub}/ is not part of the distribution"
+    # Measured at the merge: with `package-dir = {"" = "tools"}` setuptools GENERATES the
+    # sdist's own `tools/armature_studio.egg-info/SOURCES.txt` during the build, so an
+    # egg-info under tools/ is the archive's metadata, not a stale copy. The
+    # `recursive-exclude` line in MANIFEST.in guards a leftover LOCAL build tree only; the
+    # generated one is re-added by setuptools itself and is not asserted against here.
+
+
+def test_the_sdist_still_carries_the_package_the_wheel_installs(tmp_path):
+    """The other direction: pruning must not cut into the package itself."""
+    root, names = _build_sdist(tmp_path)
+    core = root / "tools" / "armature_core"
+    assert core.is_dir(), "tools/armature_core is the package"
+    shipped = {p.name for p in core.glob("*.py")}
+    on_disk = {p for p in os.listdir(CORE) if p.endswith(".py")}
+    assert shipped == on_disk, (f"modules on disk but not in the sdist: {sorted(on_disk - shipped)}; "
+                               f"in the sdist but not on disk: {sorted(shipped - on_disk)}")
+    for doc in ("pyproject.toml", "README.pypi.md", "LICENSE"):
+        assert (root / doc).exists(), f"{doc} is named by pyproject and must ship"

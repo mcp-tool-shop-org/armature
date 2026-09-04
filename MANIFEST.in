@@ -1,0 +1,19 @@
+# What the sdist carries — decided 2026-09-04 (wave 8, coordinator fix-up for F-4c607d79).
+#
+# Measured before this file existed: the sdist carried 112 `tests/test_*.py` selected by
+# distutils' default `tests/test*.py` glob and NONE of `tests/conftest.py`, `tests/blender_stub.py`,
+# `tests/fixtures/**`, or the 84 top-level `tools/*.py` those tests import — 509 collected,
+# 84 collection errors from the unpacked archive. A suite that reads as self-verifying and
+# cannot collect is a false record. The wheel is the product; the suite is run from the repo
+# (`verify.ps1`, `ci.yml`), where its fixtures and the rig's assets exist.
+#
+# Decision: the sdist ships NO tests and NO experiment records. The test that pins this
+# choice unpacks the built sdist and asserts it (tests/test_packaging.py).
+prune tests
+prune specs
+prune docs
+prune site
+prune npm
+prune outputs
+recursive-exclude tools/armature_studio.egg-info *
+global-exclude *.pyc
