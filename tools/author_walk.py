@@ -682,6 +682,9 @@ def main():
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
     bpy.ops.export_scene.gltf(**kwargs)
+    # F-9b2d4106, family carry: the exporter can return CANCELLED without raising. One
+    # implementation, `rig_character.gate_glb_written` - never a second copy.
+    gate_glb = rig_character.gate_glb_written(out_path, what="the authored walk GLB")
 
     # ---- Gate A, on a fresh import of what was just written. Same fps andon again: the
     # re-import is where the seconds-to-frames conversion happens a second time.
@@ -719,7 +722,8 @@ def main():
         "foot_slip": slip,
         "gates": {"fps_ordering": {"verdict": "PASS", "detail": "import_glb(expected_fps)"},
                   "N_pre": gate_n_pre, "N_post": gate_n_post, "OBJ": gate_obj,
-                  "SPACE": gate_space, "D": gate_d, "F": gate_f, "A": gate_a},
+                  "SPACE": gate_space, "D": gate_d, "F": gate_f, "A": gate_a,
+                  "GLB_written": gate_glb},
         "ground_truth": [
             {"frame": r["frame"], "scene_frame": g["scene_frame"],
              "phase_name": g["phase_name"], "gait_speed": g["gait_speed"],

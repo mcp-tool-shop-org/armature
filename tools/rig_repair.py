@@ -208,9 +208,12 @@ def main():
     bpy.ops.export_scene.gltf(filepath=out_glb, export_format="GLB", use_selection=True,
                               export_apply=False, export_yup=True,
                               export_image_format="AUTO")
+    # F-9b2d4106, family carry: one implementation, `rig_character.gate_glb_written`.
+    gate_glb = rc.gate_glb_written(out_glb, what="the repaired GLB")
 
     manifest = {
         "tool": "rig_repair", "started": started, "blender": bpy.app.version_string,
+        "gate_GLB_written": gate_glb,
         "thesis": ("repair the shell rather than resample it -- the voxel route reaches a "
                    "clean manifold by destroying the face, and this reaches the same "
                    "manifold while touching 0.40% of the faces"),

@@ -212,6 +212,22 @@ POPULATION_MEASURED_2026_09_04 = {
     # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`, which measures
     # the reason rather than the `imports_bpy` proxy.
     "preview_glb",
+    # JOINED 2026-09-04 by the instruments wave-12 amend (F-5b3ead49): `probe_subject.main`
+    # now calls `require_openable` before the population is built and
+    # `require_something_measured` before its OK line, so it gates-and-writes where before
+    # it only wrote. It is a `bpy` tool; its ordering is pinned by
+    # `tests/test_instruments_amend_w12.py::
+    # test_no_refusal_is_stranded_below_the_output_directory_in_any_of_the_eleven`'s
+    # population test, which measures the reason rather than the `imports_bpy` proxy, and
+    # `os.makedirs` sits below both refusals.
+    "probe_subject",
+    # JOINED 2026-09-04 by the instruments wave-12 amend (F-9b2d4106): all four now call
+    # `rig_character.gate_glb_written` after `bpy.ops.export_scene.gltf`, which returns an
+    # operator status set and can return CANCELLED without raising. They gate-and-write
+    # where before they only wrote. All four are `bpy` tools; the ordering itself is pinned
+    # by `tests/test_instruments_amend_w12.py`'s window census, which measures the reason
+    # rather than the `imports_bpy` proxy.
+    "make_test_armature", "rig_bake", "rig_repair", "rig_retopo",
     "make_thesis_sheet", "measure_floor", "measure_lift",
     "pack_pose_pack", "project_pose_keypoints", "render_performer", "render_pose_sticks",
     "render_start_frame", "render_turnaround", "rig_character", "rig_parts",
@@ -290,9 +306,16 @@ def test_the_two_exemption_classes_do_not_absorb_each_other():
 REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL = {
     # WAVE-10 MERGE (coordinator, 2026-09-04): instruments moved thirteen refusals above the first write across four
     # tools (F-d47095fa): `author_walk` and `lift_solve` each CLOSED four here (measured; deleted).
-    "author_walk": ["gate_a_arrival", "gate_n_names"],
-    "lift_solve": ["gate_arrived", "gate_n_names"],
+    # WAVE 12 (instruments, F-9b2d4106): `gate_glb_written` joins eight entries across six
+    # tools, and it is the EXEMPTION'S OWN REASON rather than an excuse — it reads back the
+    # GLB the export just wrote, so it cannot run before that write any more than
+    # `preview_glb.gate_previews_written` can run before its four renders.
+    # `bpy.ops.export_scene.gltf` returns an operator status set and can return CANCELLED
+    # without raising; nothing in the tree refused a zero-byte export before this wave.
+    "author_walk": ["gate_a_arrival", "gate_glb_written", "gate_n_names"],
+    "lift_solve": ["gate_arrived", "gate_glb_written", "gate_n_names"],
     "make_skeleton_sheet": ["gate_any_pivot_matched"],
+    "make_test_armature": ["gate_glb_written"],
     "render_performer": ["gate_coverage"],
     # WAVE-10 MERGE (coordinator, 2026-09-04): `preview_glb` JOINED — `gate_previews_written` checks that the four views
     # reached disk (F-13bd448d) and can only run AFTER the writes; a refusal that verifies its own
@@ -306,7 +329,10 @@ REFUSALS_BELOW_THE_FIRST_WRITE_IN_A_BPY_TOOL = {
     # commit that moved them. `os.makedirs` left the top of `main` and is now created per
     # branch below the last refusal, so Gate D and Gate N both sit ABOVE the first write on
     # every route. Deleted here, as this ratchet's own rule requires, rather than relaxed.
-    "rig_parts": ["gate_atlas_untouched", "gate_part_names"],
+    "rig_bake": ["gate_glb_written"],
+    "rig_parts": ["gate_atlas_untouched", "gate_glb_written", "gate_part_names"],
+    "rig_repair": ["gate_glb_written"],
+    "rig_retopo": ["gate_glb_written"],
 }
 
 
@@ -353,19 +379,23 @@ def test_the_bpy_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip()
     # appearing or vanishing is visible rather than silently collapsed.
     # WAVE-10 MERGE (coordinator, 2026-09-04): 26 names / 29 sites -> re-measured on the merged tree after instruments moved
     # thirteen refusals above the first write (F-d47095fa); both numbers below are the measurement.
-    # WAVE 12 (instruments, F-244b2ad5): 17 names / 17 sites -> 15 / 15. `rig_character`'s
-    # `gate_d_determinism` and `gate_n_names` both moved above the first write when
-    # `os.makedirs` left the top of `main`; re-measured, not relaxed.
-    assert sum(len(v) for v in derived.values()) == 15, sorted(derived.items())
+    # WAVE 12 (instruments): 17 names / 17 sites -> 22 / 23. `rig_character`'s
+    # `gate_d_determinism` and `gate_n_names` both moved ABOVE the first write when
+    # `os.makedirs` left the top of `main` (F-244b2ad5, -2); `gate_glb_written` joined
+    # eight entries across six tools (F-9b2d4106, +7 names because `rig_parts` already
+    # listed two). Both numbers are re-measured, not relaxed; the site count exceeds the
+    # name count because `author_walk.gate_n_names` appears at two lines under one tool.
+    assert sum(len(v) for v in derived.values()) == 22, sorted(derived.items())
     sites = 0
     for name in bpy_members:
         gates_at, writes_at = gate_and_write_lines(_source(name), name)
         if not gates_at or not writes_at:
             continue
         sites += sum(1 for ln in gates_at if ln > min(writes_at))
-    assert sites == 15, (
-        f"{sites} refusal SITES below a first write; 15 were measured on 2026-09-04 "
-        f"(wave 12, after rig_character's two moved above its first write)")
+    assert sites == 23, (
+        f"{sites} refusal SITES below a first write; 23 were measured on 2026-09-04 "
+        f"(wave 12, after rig_character's two moved above its first write and "
+        f"`gate_glb_written` landed on the eight glTF exporters)")
 
 
 def test_a_bpy_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():

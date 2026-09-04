@@ -209,6 +209,50 @@ class SiteListInvalid(ArmatureError):
         self.evidence = evidence or {}
 
 
+class GateGlbWritten(GateFailure):
+    """Gate GLB - an exported GLB reached disk and is not zero bytes.
+
+    F-9b2d4106, wave 12. `bpy.ops.export_scene.gltf(...)` has the same property
+    `bpy.ops.render.render` has and that F-13bd448d was closed for on the four RENDERERS:
+    it returns an operator STATUS SET and can return `{'CANCELLED'}` without raising. An
+    AST scan pairing every `bpy.ops.export_scene.gltf` call site against a later existence
+    or size check found eight tools that export a GLB, of which six at least materialise
+    the file afterwards (`os.path.getsize`, `sha256_file`, or a re-import - each of which
+    raises on an absent file) and two - `make_test_armature.py` and `rig_retopo.py`'s outer
+    shell - did neither. NONE of the eight refused a ZERO-BYTE export: the six record the
+    byte count as a number and never compare it, where the renderer family raises on
+    `getsize(p) == 0`.
+
+    The shape is `preview_glb.gate_previews_written`'s - missing AND zero-byte, naming the
+    path - carried rather than reinvented, and it lives here because every rig tool already
+    imports this module. It returns the digest so the caller records the file it actually
+    confirmed, rather than hashing the path a second time.
+    """
+
+    gate = "GLB"
+
+
+def gate_glb_written(path, *, what="the exported GLB"):
+    """`{"path", "bytes", "sha256", "verdict"}` for a GLB that reached disk, else raise."""
+    p = os.path.abspath(path)
+    ev = {"gate": "GLB", "andon": "GateGlbWritten", "what": what, "path": p}
+    if not os.path.isfile(p):
+        raise GateGlbWritten(
+            f"{what} never reached disk at {p}. `bpy.ops.export_scene.gltf` returns an "
+            f"operator status set and can return CANCELLED without raising, so a run that "
+            f"exported nothing would otherwise name this file in its own record", ev)
+    n = os.path.getsize(p)
+    ev["bytes"] = n
+    if n == 0:
+        raise GateGlbWritten(
+            f"{what} at {p} is zero bytes. A file that exists and holds nothing is the "
+            f"shape a cancelled export leaves behind, and every consumer downstream reads "
+            f"the path rather than the size", ev)
+    digest = sha256_file(p)
+    return {"path": p, "bytes": n, "sha256": digest,
+            "verdict": f"{what} is {n:,} bytes on disk"}
+
+
 def validate_sitelist():
     """`sitelist.validate()`, with its refusal inside the `ArmatureError` family."""
     try:
@@ -1064,6 +1108,7 @@ def export_rigged(ctx, probe, out_path, animated=True):
     kwargs = {k: v for k, v in wanted.items() if k in props}
     dropped = sorted(set(wanted) - set(kwargs))
     bpy.ops.export_scene.gltf(**kwargs)
+    written = gate_glb_written(out_path, what="the rigged GLB")
 
     # Re-import into a throwaway scene and read the names a consumer would actually get.
     fresh_scene(PROBE_FPS)
@@ -1072,6 +1117,7 @@ def export_rigged(ctx, probe, out_path, animated=True):
     reimported = sorted(b.name for a in arms for b in a.data.bones)
     gate_n_post = rig_gates.gate_n_names(reimported, sitelist.ALL_NAMES,
                                          "the re-imported exported GLB")
+    _ = written
 
     # MEASURED 2026-08-11, and it was a gate silently not running. Selecting the re-imported
     # subject by `type == "MESH"` returns TWO objects: `geometry_0` and an `Icosphere` — the

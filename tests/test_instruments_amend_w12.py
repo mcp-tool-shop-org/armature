@@ -437,9 +437,12 @@ STRANDED_ON_THE_WAVE_12_BASE = {
     "rig_repair.py": 3, "rig_retopo.py": 4,
 }
 
+#: The same key: the tools that carry the halt contract today are the ones this domain
+#: owns, so a Blender tool joining the population from another domain does not make this
+#: census red about a file nobody here can edit.
 WRITE_ORDERED_TOOLS = sorted(
     f for f in blender_stub.blender_tools()
-    if os.path.isfile(os.path.join(TOOLS, f)))
+    if os.path.isfile(os.path.join(TOOLS, f)) and "_HALT " in read_source(f))
 
 
 #: Calls that put bytes on disk, carried verbatim from
@@ -890,8 +893,15 @@ def test_a_genuine_crash_still_answers_one_so_the_two_outcomes_stay_distinguisha
 # on every path" was therefore still false, and the census that certifies it drives only
 # shapes that fail inside the guarded CALL.
 
+#: Every tool that carries the halt contract TODAY, keyed on the objective property the
+#: contract is about — the module prints a `<STEM>_HALT` line — rather than on a count or a
+#: list. `blender_stub.blender_tools()` is being re-keyed this wave to include
+#: `tools/stage_render.py`, whose handler is another domain's and is in flight; keying on
+#: the literal means this census asks the question of a tool the day its handler lands and
+#: not before, with no edit here.
 WITH_MAIN = sorted(f for f in blender_stub.blender_tools()
-                   if blender_stub.main_block(f) is not None)
+                   if blender_stub.main_block(f) is not None
+                   and "_HALT " in read_source(f))
 
 
 class _KeyWhoseStrRaises:
@@ -1010,3 +1020,209 @@ def test_the_sentinel_construction_sits_inside_the_guarded_region(filename):
     exits = [n for f in finallies for stmt in f.finalbody for n in ast.walk(stmt)
              if isinstance(n, ast.Call) and ast.unparse(n.func).endswith("sys.exit")]
     assert exits, f"{filename}: `sys.exit` is not delivered from a `finally`"
+
+
+# =================================================================== F-5b3ead49 (HIGH)
+#
+# The tool prints its success sentinel and exits 0 on a run in which it opened nothing.
+# `probe_one` returns `{"error": "file not found"}` for a path that is not a file and
+# `{"error": "no render-visible geometry to measure"}` for a GLB that contributes nothing
+# visible; `main` inspected neither, and the sentinel's `n` was `len(records)` — the count
+# of ARGUMENTS, not of subjects measured.
+
+
+def _probe_subject():
+    return load_tool("probe_subject.py")
+
+
+def test_a_named_but_absent_glb_is_refused_before_the_population_is_built(tmp_path):
+    ps = _probe_subject()
+    with pytest.raises(ps.ArmatureError) as exc:
+        ps.require_openable([str(tmp_path / "nope.glb")])
+    assert "nope.glb" in str(exc.value)
+
+
+def test_the_refusal_names_every_missing_path_not_only_the_first(tmp_path):
+    ps = _probe_subject()
+    real = tmp_path / "real.glb"
+    real.write_bytes(b"glTF")
+    with pytest.raises(ps.ArmatureError) as exc:
+        ps.require_openable([str(real), str(tmp_path / "a.glb"),
+                             str(tmp_path / "b.glb")])
+    message = str(exc.value)
+    assert "a.glb" in message and "b.glb" in message
+    assert "real.glb" not in message
+
+
+def test_a_population_of_real_files_is_accepted(tmp_path):
+    """A gate that refuses everything is not a gate."""
+    ps = _probe_subject()
+    real = tmp_path / "real.glb"
+    real.write_bytes(b"glTF")
+    assert ps.require_openable([str(real)]) == [str(real)]
+
+
+def test_the_success_line_counts_subjects_measured_not_arguments_given():
+    """`probe_glb.py:317` already prints its whole summary in its own OK line; the honest
+    shape existed one file over. The census keys on the CALL that builds the sentinel."""
+    src = read_source("probe_subject.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    printed = [n for n in ast.walk(fn)
+               if isinstance(n, ast.Call) and ast.unparse(n.func) == "print"
+               and "_OK" in ast.unparse(n)]
+    assert printed, "probe_subject no longer prints a sentinel"
+    payload = ast.unparse(printed[0])
+    assert "summary" in payload, (
+        f"the sentinel is not derived from the records: {payload}")
+    assert "len(records)" not in payload, (
+        f"the sentinel still counts ARGUMENTS; a run naming two typo'd paths reported "
+        f"`n: 2` having opened nothing: {payload}")
+    # and the effect is asserted beside the token: the OK line may not be reached at all
+    # unless something was measured.
+    guards = [ast.unparse(n.func) for n in ast.walk(fn) if isinstance(n, ast.Call)]
+    assert "require_something_measured" in guards, guards
+    assert "require_openable" in guards, guards
+
+
+def test_the_summary_counts_are_derived_from_the_records_themselves():
+    ps = _probe_subject()
+    records = [{"path": "a", "exists": True, "summary": {}},
+               {"path": "b", "exists": False, "error": "file not found"},
+               {"path": "c", "exists": True, "error": "no render-visible geometry"}]
+    summary = ps.probe_summary(records)
+    assert summary == {"n_probed": 3, "n_measured": 1, "n_errors": 2}
+
+
+def test_a_run_that_measured_nothing_refuses_rather_than_printing_the_ok_line():
+    """SUCCESS census (SEAM 0): `<PREFIX>_OK` is earned by a measurable effect. A record
+    whose every row is an error is not a probe that succeeded."""
+    ps = _probe_subject()
+    records = [{"path": "a", "exists": True,
+                "error": "no render-visible geometry to measure"}]
+    with pytest.raises(ps.ArmatureError, match="measured 0 of 1"):
+        ps.require_something_measured(records)
+    assert ps.require_something_measured(
+        [{"path": "a", "exists": True, "summary": {}}]) is None
+
+
+# =================================================================== F-9b2d4106 (HIGH)
+# =================================================================== F-21d6e3ac (MEDIUM)
+#
+# `bpy.ops.export_scene.gltf` has the property `bpy.ops.render.render` has — it returns an
+# operator status set and can return `{'CANCELLED'}` without raising — which is the whole
+# premise of the closed F-13bd448d, applied to the four RENDERERS only. Eight tools export
+# a GLB; six at least materialise the file afterwards, two do neither, and NONE of the
+# eight refused a ZERO-BYTE export, where the renderer family raises on `getsize(p) == 0`.
+
+
+def _gltf_exporters():
+    """Every Blender tool that exports a GLB, derived by the CALL rather than by a list."""
+    out = {}
+    for filename in blender_stub.blender_tools():
+        tree = ast.parse(read_source(filename))
+        lines = [n.lineno for n in ast.walk(tree)
+                 if isinstance(n, ast.Call)
+                 and ast.unparse(n.func) == "bpy.ops.export_scene.gltf"]
+        if lines:
+            out[filename] = sorted(lines)
+    return out
+
+
+def test_the_exporter_population_is_the_one_recorded_and_is_derived_by_the_call():
+    assert sorted(_gltf_exporters()) == [
+        "author_walk.py", "lift_solve.py", "make_test_armature.py", "rig_bake.py",
+        "rig_character.py", "rig_parts.py", "rig_repair.py", "rig_retopo.py"]
+
+
+@pytest.mark.parametrize("filename", sorted(_gltf_exporters()))
+def test_every_gltf_export_is_read_back_before_the_run_claims_it(filename):
+    """The wave-10 read-back census derives its population from `bpy.ops.render.render`,
+    so exporters are outside it by construction. This is the same property keyed on the
+    other operator: after every export, the file must be materialised — by a
+    `gate_glb_written`-style refusal, a `getsize`, or a `sha256_file`, each of which raises
+    on an absent file — before the run's own record names it."""
+    src = read_source(filename)
+    tree = ast.parse(src)
+    fns = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    readers = ("gate_glb_written", "getsize", "sha256_file", "_sha256", "isfile")
+    unchecked = []
+    for lineno in _gltf_exporters()[filename]:
+        owner = next((f for f in fns.values()
+                      if f.lineno <= lineno <= (f.end_lineno or f.lineno)), None)
+        after = [n for n in ast.walk(owner or tree)
+                 if isinstance(n, ast.Call) and n.lineno > lineno
+                 and ast.unparse(n.func).split(".")[-1] in readers]
+        if not after:
+            unchecked.append(lineno)
+    assert unchecked == [], (
+        f"{filename}: the export(s) at {unchecked} are never read back. "
+        f"`bpy.ops.export_scene.gltf` returns an operator status set and can return "
+        f"CANCELLED without raising, so the run names a file it never confirmed exists")
+
+
+def test_make_test_armature_refuses_a_missing_or_empty_export(tmp_path):
+    mta = load_tool("make_test_armature.py")
+    absent = tmp_path / "nope.glb"
+    with pytest.raises(mta.rc.GateGlbWritten, match="never reached disk"):
+        mta.rc.gate_glb_written(str(absent))
+    empty = tmp_path / "empty.glb"
+    empty.write_bytes(b"")
+    with pytest.raises(mta.rc.GateGlbWritten, match="zero bytes"):
+        mta.rc.gate_glb_written(str(empty))
+
+
+def test_make_test_armature_accepts_a_real_export_and_returns_its_digest(tmp_path):
+    """A gate that refuses everything is not a gate."""
+    mta = load_tool("make_test_armature.py")
+    real = tmp_path / "real.glb"
+    real.write_bytes(b"glTF\x02\x00\x00\x00")
+    rec = mta.rc.gate_glb_written(str(real))
+    assert rec["bytes"] == 8
+    assert len(rec["sha256"]) == 64
+    assert rec["verdict"]
+
+
+def test_the_ground_truth_sidecar_is_bound_to_the_mesh_it_was_authored_with():
+    """The harm the finding names is worse than a missing file: `.joints.json` is
+    rewritten unconditionally, so a cancelled export into a path that already holds an
+    OLDER GLB leaves a stale mesh beside fresh authored ground truth and
+    `MAKE_TEST_ARMATURE_OK` names both."""
+    src = read_source("make_test_armature.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    called = [ast.unparse(n.func) for n in ast.walk(fn) if isinstance(n, ast.Call)]
+    assert any(c.endswith("gate_glb_written") for c in called), called
+    assert '"glb_sha256"' in src or "'glb_sha256'" in src, (
+        "the sidecar does not carry the digest of the GLB it was authored beside")
+
+
+def test_the_retopo_manifest_derives_its_glb_paths_and_shas_from_one_population():
+    """F-21d6e3ac: `outer_shell_glb` was a bare string in a manifest where every other GLB
+    carries a sha — and the outer shell is the INPUT both arms are compared against and the
+    object every comparison panel is shot from. A third export must not be able to join
+    without one."""
+    src = read_source("rig_retopo.py")
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "main")
+    called = [ast.unparse(n.func) for n in ast.walk(fn) if isinstance(n, ast.Call)]
+    assert any(c.endswith("gate_glb_written") for c in called), called
+    assert '"outer_shell_sha256"' in src, (
+        "the manifest still publishes a path to a GLB it neither hashed nor confirmed "
+        "exists, in a file where every other GLB carries a sha")
+
+
+def test_rig_retopo_refuses_a_missing_or_empty_export(tmp_path):
+    rr = load_tool("rig_retopo.py")
+    with pytest.raises(rr.rc.GateGlbWritten, match="never reached disk"):
+        rr.rc.gate_glb_written(str(tmp_path / "nope.glb"))
+    empty = tmp_path / "empty.glb"
+    empty.write_bytes(b"")
+    with pytest.raises(rr.rc.GateGlbWritten, match="zero bytes"):
+        rr.rc.gate_glb_written(str(empty))
+    real = tmp_path / "real.glb"
+    real.write_bytes(b"glTF")
+    assert rr.rc.gate_glb_written(str(real))["bytes"] == 4

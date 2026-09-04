@@ -410,13 +410,25 @@ def main():
         _select_only(obj)
         bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True,
                                   export_apply=False, export_yup=True)
-        results[name]["glb"] = path
-        results[name]["sha256"] = rc.sha256_file(path)
+        # F-9b2d4106: the variants recorded a sha, which raises on an absent file, but
+        # nothing refused a ZERO-BYTE export. One implementation for all three exports in
+        # this file, `rig_character.gate_glb_written`.
+        written = rc.gate_glb_written(path, what=f"the {name} retopo GLB")
+        results[name]["glb"] = written["path"]
+        results[name]["sha256"] = written["sha256"]
+        results[name]["bytes"] = written["bytes"]
 
     shell_path = os.path.join(out_dir, "outer_shell.glb")
     _select_only(ob)
     bpy.ops.export_scene.gltf(filepath=shell_path, export_format="GLB", use_selection=True,
                               export_apply=False, export_yup=True)
+    # F-21d6e3ac. This manifest published `outer_shell_glb` as a BARE STRING while the two
+    # variant exports twelve lines above each recorded a sha and the input recorded
+    # `source_sha256` - the asymmetry was inside one manifest. The outer shell is not
+    # incidental: it is the INPUT both retopo arms are compared against and the object every
+    # comparison panel is shot from, so a later session re-reading the manifest to reproduce
+    # the comparison could not tell whether the shell on disk is the shell the run used.
+    shell_written = rc.gate_glb_written(shell_path, what="the outer-shell GLB")
 
     # SYMMETRIC. MEASURED 2026-09-04: the superseded shape removed a dead A and did
     # nothing at all about a dead B, and B is a duplicate of the outer shell at the
@@ -471,7 +483,11 @@ def main():
         "smallest_limb_radius": {"bone": smallest_name, "radius": smallest_r},
         "limb_radii": all_radii,
         "outer_shell_extraction": extraction, "outer_shell_stats": shell_stats,
-        "variants": results, "outer_shell_glb": shell_path,
+        "variants": results,
+        "outer_shell_glb": shell_written["path"],
+        "outer_shell_sha256": shell_written["sha256"],
+        "outer_shell_bytes": shell_written["bytes"],
+        "gate_GLB_written": {"outer_shell": shell_written},
         "sheet_rows": rows,
     }
     with open(os.path.join(out_dir, "retopo_manifest.json"), "w", encoding="utf-8") as fh:

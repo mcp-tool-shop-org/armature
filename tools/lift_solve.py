@@ -396,6 +396,8 @@ def main():
     os.makedirs(os.path.dirname(out_path), exist_ok=True)  # scripts make their own dirs
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     bpy.ops.export_scene.gltf(**{k: v for k, v in wanted.items() if k in props})
+    # F-9b2d4106, family carry: one implementation, `rig_character.gate_glb_written`.
+    gate_glb = rig_character.gate_glb_written(out_path, what="the lifted GLB")
 
     # ---- the re-import is where the seconds-to-frames conversion happens a second time.
     scene2 = rig_character.fresh_scene(a.fps)
@@ -426,7 +428,8 @@ def main():
                                        "detail": "import_glb(expected_fps)"},
                       "MOTION_RECORD": gate_record,
                       "N_pre": gate_n_pre, "N_post": gate_n_post, "OBJ": gate_obj,
-                      "SPACE": gate_space, "ARRIVED": gate_a},
+                      "SPACE": gate_space, "ARRIVED": gate_a,
+                      "GLB_written": gate_glb},
             "elapsed_s": time.time() - started,
         }, fh, indent=2)
 

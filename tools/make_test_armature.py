@@ -42,6 +42,7 @@ from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import rig_character as rc  # noqa: E402  (the GLB write gate lives there; one copy)
 from armature_core import posearc  # noqa: E402
 from armature_core.errors import SpecError  # noqa: E402
 
@@ -306,11 +307,26 @@ def main():
                               use_selection=False, export_yup=True,
                               export_animations=arc is not None,
                               export_frame_range=arc is not None)
+    # F-9b2d4106. `bpy.ops.export_scene.gltf` returns an operator status set and can return
+    # CANCELLED without raising - the premise F-13bd448d was closed on for the four
+    # RENDERERS, never applied to the eight exporters. The harm is worse here than a missing
+    # file: the `.joints.json` beside it is rewritten UNCONDITIONALLY, so a cancelled export
+    # into a path that already holds an OLDER GLB would leave a stale mesh beside fresh
+    # authored ground truth, `MAKE_TEST_ARMATURE_OK` would name both, and every later arc
+    # comparison would be measured against a pairing that was never built together. One
+    # implementation, `rig_character.gate_glb_written` - never a second copy.
+    gate_glb = rc.gate_glb_written(args.out, what="the test-subject GLB")
 
     # Ground truth beside the mesh. This is the whole reason the subject is procedural:
     # a later experiment can project these and measure displacement rather than eyeball it.
     side = {
         "generator": os.path.basename(__file__),
+        # The sidecar is BOUND to the mesh it was authored beside: a reader can tell
+        # whether the GLB on disk is the one this ground truth describes (F-9b2d4106).
+        "glb": os.path.abspath(args.out),
+        "glb_sha256": gate_glb["sha256"],
+        "glb_bytes": gate_glb["bytes"],
+        "gate_GLB_written": gate_glb,
         "params": {"thickness": args.thickness, "joint_scale": args.joint_scale,
                    "segments": args.segments, "fps": args.fps},
         "blender": bpy.app.version_string,

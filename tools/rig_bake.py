@@ -284,9 +284,12 @@ def main():
     out_glb = os.path.join(out_dir, "performer_retopo_textured.glb")
     bpy.ops.export_scene.gltf(filepath=out_glb, export_format="GLB", use_selection=True,
                               export_apply=False, export_yup=True, export_image_format="AUTO")
+    # F-9b2d4106, family carry: one implementation, `rig_character.gate_glb_written`.
+    gate_glb = rc.gate_glb_written(out_glb, what="the baked, retopologised GLB")
 
     manifest = {
         "tool": "rig_bake", "started": started,
+        "gate_GLB_written": gate_glb,
         "blender": blender_scene.blender_provenance(),
         "subject_selection": subject_selection,
         "inputs": {"retopo": args["retopo"], "source": args["source"],

@@ -32,6 +32,64 @@ from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.subject import extent_summary  # noqa: E402
 
 
+def require_openable(paths):
+    """`paths` if every one is a file, else raise - BEFORE the population is built.
+
+    F-5b3ead49, wave 12. `probe_one` returned `{"exists": False, "error": "file not
+    found"}` for a path that is not a file, `main` never inspected it, and the sentinel's
+    `n` was `len(records)` - the count of ARGUMENTS. MEASURED:
+    `probe_subject.py -- --out=<tmp> --glb=nope.glb --glb=also_missing.glb` printed
+    `PROBE_SUBJECT_OK {"json": ".../subject_extents.json", "n": 2}`, `main()` returned
+    None, `raise SystemExit(main())` exited 0, and the written record carried two
+    `"error": "file not found"` rows the sentinel did not mention.
+
+    That is the rule E07 earned - "verify a success sentinel in the output, never the exit
+    code alone" - answered with a sentinel saying two subjects were probed when zero were
+    opened. `check_relift.py:185-187` already refuses outright on `not os.path.isfile(p)`;
+    this is the same refusal, in the tool whose record marks premise 6 ("the subject is a
+    character") MEASURED.
+
+    Distinct from the closed F-f3cd559e, which stopped EMPTY `--glb` values from joining
+    the population: a named-but-absent path still did.
+    """
+    missing = [p for p in paths if not os.path.isfile(p)]
+    if missing:
+        raise ArmatureError(
+            f"{len(missing)} of {len(paths)} named GLB(s) are not files: {missing}. Each "
+            f"would have joined the probed population as an error row while the success "
+            f"sentinel counted it as a subject probed, and a record whose rows are all "
+            f"errors is not a measurement of anything")
+    return paths
+
+
+def probe_summary(records):
+    """`n_probed` / `n_measured` / `n_errors`, derived from the records themselves.
+
+    Carried from `probe_glb.py:305-311`, which already builds its whole summary out of the
+    records and prints it in its own OK line - the honest shape existed one file over.
+    """
+    return {"n_probed": len(records),
+            "n_measured": sum(1 for r in records if "error" not in r),
+            "n_errors": sum(1 for r in records if "error" in r)}
+
+
+def require_something_measured(records):
+    """Refuse a run whose every row is an error, before the success sentinel is printed.
+
+    The SUCCESS rule: `<PREFIX>_OK` is earned by a measurable effect, not by reaching the
+    end of `main`. An import that contributes no render-visible mesh produces
+    `{"error": "no render-visible geometry to measure"}`, which `require_openable` above
+    cannot see - the file exists, it simply carries nothing this tool can measure.
+    """
+    summary = probe_summary(records)
+    if summary["n_probed"] and not summary["n_measured"]:
+        raise ArmatureError(
+            f"this run measured 0 of {summary['n_probed']} subject(s); every row is an "
+            f"error: {[r.get('error') for r in records]}. A PROBE_SUBJECT_OK line here "
+            f"would report subjects probed that were never opened")
+    return None
+
+
 def probe_one(path):
     rec = {"path": path, "exists": os.path.isfile(path)}
     if not rec["exists"]:
@@ -149,19 +207,26 @@ def parse_argv(argv, *, known=("out", "glb")):
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     out_dir, paths = parse_argv(argv)
-    os.makedirs(out_dir, exist_ok=True)
+    # F-5b3ead49: refused before the population is built, and before the directory exists.
+    require_openable(paths)
 
     records = [probe_one(p) for p in paths]
+    require_something_measured(records)
+    summary = probe_summary(records)
     payload = {
         "tool": "probe_subject",
         "blender": bpy.app.version_string,
         "n_files": len(records),
+        "summary": summary,
         "files": records,
     }
+    os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "subject_extents.json")
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
-    print("PROBE_SUBJECT_OK " + json.dumps({"json": out_path, "n": len(records)}))
+    # The OK line reports what was OPENED, not what was named: `n_probed`, `n_measured`
+    # and `n_errors` come from the records, the way `probe_glb.py:317` already does.
+    print("PROBE_SUBJECT_OK " + json.dumps(dict(summary, json=out_path)))
 
 
 def _halt_keysafe(value, _seen=None):

@@ -536,6 +536,8 @@ def main():
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
     bpy.ops.export_scene.gltf(**kwargs)
+    # F-9b2d4106, family carry: refused before Gate ATLAS reads the file back.
+    gate_glb = rig_character.gate_glb_written(out_glb, what="the parts GLB")
 
     gate_atlas = glb.gate_atlas_untouched(args["glb"], out_glb)
 
@@ -583,6 +585,7 @@ def main():
         "bone_lengths": ctx["bone_lengths"],
         "probe_action": probe,
         "gates": {"PARTS_accounting": ctx["accounting"],
+                  "GLB_written": gate_glb,
                   "N_parts_pre_export": gate_names_pre,
                   "N_parts_post_export": gate_names_post,
                   "P_bind_pose": gate_p,
