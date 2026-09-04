@@ -133,8 +133,13 @@ def _drive(ref, ref_name):
     """
     script = re.sub(r"(?m)^python ", f'"{sys.executable}" '.replace("\\", "/"), TAG_SCRIPT)
     env = dict(os.environ, GITHUB_REF=ref, GITHUB_REF_NAME=ref_name)
+    # The script goes to bash on STDIN, not as a `-c` argument: on Windows a Git-Bash
+    # `bash.exe` re-parses the process command line, and the step's own nested quotes
+    # (`python -c "import tomllib;print(...)"`) arrive mangled — measured 2026-09-04 as
+    # `syntax error near unexpected token`. stdin carries the bytes verbatim on every platform.
     return subprocess.run(
-        [shutil.which("bash"), "-c", script],
+        [shutil.which("bash"), "-s"],
+        input=script,
         cwd=REPO,
         capture_output=True,
         text=True,

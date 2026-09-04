@@ -56,11 +56,18 @@ quad_facing_plus_x("FAR_UPPER", -0.5, 0.4, 0.0, 0.4)
 glb = os.path.join(OUT, "synthetic.glb")
 bpy.ops.export_scene.gltf(filepath=glb, export_format="GLB", use_selection=False)
 
+# The spec contract requires `asset.sha256` (wave 3: a spec that pins no bytes asserts nothing
+# about what it was written against). The synthetic asset was exported one line up, so its
+# hash is measured here, from the file, rather than typed.
+import hashlib  # noqa: E402
+with open(glb, "rb") as fh:
+    glb_sha256 = hashlib.sha256(fh.read()).hexdigest()
+
 spec = shotspec.normalise_spec({
     "spec_version": 1,
     "name": "E01-conventions",
     "generator": "wan-vace",
-    "asset": {"path": glb},
+    "asset": {"path": glb, "sha256": glb_sha256},
     "resolution": {"width": 64, "height": 96},
     "frames": {"count": 5, "fps": 16},
     "channels": ["depth", "normal", "mask", "edge"],
