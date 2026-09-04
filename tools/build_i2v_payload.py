@@ -179,7 +179,22 @@ DELTA_FROM_E08 = [
 
 
 class PayloadError(ArmatureError):
-    """The payload could not be built as specified."""
+    """The payload could not be built as specified.
+
+    Carries an optional evidence dict, the way `GateFailure` does. Wave 8 (F-bc806f79):
+    `ledger_against_wave1` built a full evidence dict, wrote it into the payload record on
+    the PASSING path, and then raised with a message and nothing else — so the failing
+    measurement, the one worth having, reached no record at all. Four modules define this
+    class; all four take the dict now.
+
+    ⚠ Four identical implementations of three lines is three lines too many: the single one
+    belongs beside `GateFailure` in `armature_core/errors.py`. That file is not this
+    domain's to edit, so the duplication is RECORDED here rather than hidden.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 def parse_args(argv=None):
