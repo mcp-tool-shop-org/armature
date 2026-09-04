@@ -182,3 +182,25 @@ def test_the_module_docstring_is_a_raw_string():
     with warnings.catch_warnings():
         warnings.simplefilter("error", SyntaxWarning)
         compile(src, M8.__file__, "exec")
+
+
+# ----------------------------------------------------- P10: the route gate's own words
+
+def test_the_route_gate_line_is_printed_verbatim_from_the_record():
+    """Gate ROUTE's verdict now states which clauses ran — a skipped seed clause reads
+    'NOT CHECKED for pinning', and waived components are listed. Shortening or re-deriving
+    either here would put back the literal this panel was corrected for."""
+    verdict = ("3 node(s) checked; 2 seed(s) NOT CHECKED for pinning "
+               "(require_pinned_seeds=False); WAIVED components ['clip_vision']")
+    rec = _record(gate_ROUTE_built={"verdict": verdict,
+                                    "seed_clause_verdict": "NOT CHECKED"})
+    lines = _lines(rec)
+    assert verdict in _find(lines, "Gate ROUTE")
+    assert "NOT CHECKED" in _find(lines, "  seed clause")
+
+
+def test_a_record_with_no_route_gate_says_so_rather_than_implying_one_ran():
+    lines = _lines(_record())
+    assert M8.MISSING in _find(lines, "Gate ROUTE")
+    assert M8.MISSING in _find(lines, "  seed clause")
+    assert M8.MISSING in _find(lines, "Gate S")

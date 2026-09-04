@@ -131,3 +131,41 @@ def test_this_machine_resolves_a_face_and_says_where_it_came_from():
         pytest.skip(f"no permitted face on this machine: {e}")
     assert os.path.isfile(path)
     assert SC.font(("arial.ttf"), 26).path == path
+
+
+def test_font_dir_is_no_longer_consulted_at_all(monkeypatch):
+    """The tests domain's contract for P7: with `FONT_DIR` pointed at a directory that does
+    not exist, `_font` must still resolve — because the constant is not what resolution
+    reads. It is kept only as a name for callers that still reference it."""
+    monkeypatch.setattr(SC, "FONT_DIR", os.path.join("Z:", "nowhere", "Fonts"))
+    monkeypatch.delenv(SC.FONT_ENV, raising=False)
+    try:
+        f = SC._font("arial.ttf", 26)
+    except SC.FontError as e:
+        pytest.skip(f"no permitted face on this machine: {e}")
+    assert os.path.isfile(f.path)
+    assert "nowhere" not in f.path
+
+
+def test_the_private_font_helper_keeps_its_signature():
+    """`sheet_compose._font(name, size)` is the entry point the sheet tests resolve
+    through; the search moved underneath it, the call shape did not."""
+    import inspect
+
+    assert list(inspect.signature(SC._font).parameters) == ["name", "size"]
+    assert list(inspect.signature(SC.font).parameters) == ["name", "size"]
+
+
+def test_all_three_composers_resolve_through_the_one_implementation():
+    """P7 is 'fix the family, not the instance': rig_sheet_compose carried the same
+    constant and make_cast_sheet inlined two absolute paths with no constant at all, so
+    the FONT_DIR guard could not even reach it."""
+    import make_cast_sheet
+    import rig_sheet_compose
+
+    assert rig_sheet_compose._font is SC.font
+    assert make_cast_sheet._font is SC.font
+    for mod in (rig_sheet_compose, make_cast_sheet):
+        src = open(mod.__file__, encoding="utf-8").read()
+        body = src.split('"""', 2)[-1]
+        assert "Windows" not in body or "Fonts" not in body

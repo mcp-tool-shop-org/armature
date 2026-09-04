@@ -114,6 +114,13 @@ def provenance_lines(rec, prompt_id=None, seeds_file=None, gates=None):
         f"shift {sampler.get('shift', MISSING)}",
         f"frame               {wh}x{_get(rec, 'length')} @ {_get(rec, 'fps')} fps",
         f"Gate L              {_get(rec, 'gate_L', 'verdict')}",
+        f"Gate S              {_get(rec, 'gate_S', 'verdict')}",
+        # Gate ROUTE's verdict now states which clauses actually ran — a skipped seed
+        # clause reads "NOT CHECKED for pinning", and waived components are listed. Both
+        # are printed verbatim from the record: re-deriving or shortening them here would
+        # put back exactly the literal this panel was corrected for.
+        f"Gate ROUTE          {_get(rec, 'gate_ROUTE_built', 'verdict')}",
+        f"  seed clause       {_get(rec, 'gate_ROUTE_built', 'seed_clause_verdict')}",
         f"payload sha256      {str(sha)[:48] if sha else MISSING}",
         f"control             {_get(rec, 'pose_video', 'declared_frames')} frames, "
         f"convention {_get(rec, 'pose_video', 'convention')}",

@@ -21,6 +21,19 @@ frames and *before* the manifest, because the manifest is what makes a run look
 finished. G4 runs inside the per-frame loop. All of them `raise`; none of them is an
 `assert` (deleted by -O / PYTHONOPTIMIZE=1) and none takes a skip argument.
 
+**No number a gate compares against arrives through this tool.** G4's tolerance used to:
+`g4_tol = spec['gates']['g4_tolerance_px']`, passed straight into `g4_bbox_sanity` with
+no range check, no type check and no record of the value used. `normalise_spec` validated
+nothing under `gates` — measured 2026-09-03, `g4_tolerance_px: 100000` was accepted and
+the gate then did not fire on facet's own recorded defect, so a spec with one extra zero
+would have rendered and submitted a control sequence whose mask was not the subject, with
+a full per-frame `g4_deltas_px` record and a manifest that looked finished. Note the
+asymmetry that made it invisible: too-SMALL values still fired, so the only unbounded
+direction was the one that DISARMED the gate. The constant now lives in
+`gates.G4_TOLERANCE_PX`, `g4_bbox_sanity` takes no tolerance argument at all, a spec that
+still names the key is refused by `normalise_spec`, and the manifest reads the value and
+its provenance back off the gate rather than restating them.
+
 Nothing here is chained behind a shell operator, because a chain can walk past a
 failing exit code.
 
@@ -56,84 +69,6 @@ from armature_core.errors import (  # noqa: E402
 )
 
 TOOL_VERSION = "E01.1"
-
-#: The largest G4 tolerance any frame will accept, as a fraction of its SHORTER axis. A
-#: global constant must not govern a local feature: what reads as a tight sanity margin on
-#: 832x480 is most of a 64px test frame. Two pixels is the floor, because that is what every
-#: committed spec carries and the projected bbox is exact for a polygonal mesh.
-G4_TOLERANCE_MAX_FRAC = 0.02
-G4_TOLERANCE_FLOOR_PX = 2
-
-#: The symbol `armature_core.gates` is expected to publish as the tolerance's one owner
-#: (P4). While it is absent the spec's value is used — and bounded either way.
-G4_TOLERANCE_SYMBOL = "G4_TOLERANCE_PX"
-
-
-class G4ToleranceError(SpecError):
-    """The G4 tolerance is not a number of pixels this frame's sanity check can use.
-
-    **The andon is on the direction the invariant does not bound.** Too-SMALL values
-    already fire — `g4_bbox_sanity` raises when the boxes disagree by more than the
-    tolerance, so `-5` or `True` makes it fire on everything. The unbounded direction is
-    the one that DISARMS the gate, and nothing checked it: measured 2026-09-03, a spec
-    identical to the committed ones except `g4_tolerance_px: 100000` was accepted by
-    `load_spec`, and G4 at that value did not raise on facet's own recorded defect. `inf`
-    behaved the same. The run would have completed with a full per-frame `g4_deltas_px`
-    record and a manifest that looked finished.
-    """
-
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
-
-def g4_tolerance_limit(width, height):
-    """The largest tolerance this frame will accept, in pixels."""
-    return max(G4_TOLERANCE_FLOOR_PX,
-               int(round(G4_TOLERANCE_MAX_FRAC * min(int(width), int(height)))))
-
-
-def resolve_g4_tolerance(spec, width, height):
-    """`(tolerance_px, source)` for this run, bounded, with the source named.
-
-    The gate owns the value where it declares one (P4's seam) and a spec may not move it;
-    where it does not, the spec's value is used and bounded exactly the same way. Either
-    branch records where the number came from, so a run cannot quote a tolerance whose
-    origin is unstated.
-    """
-    owned = getattr(gates, G4_TOLERANCE_SYMBOL, None)
-    declared = (spec.get("gates") or {}).get("g4_tolerance_px")
-    if owned is not None:
-        if declared is not None and declared != owned:
-            raise G4ToleranceError(
-                f"the spec declares g4_tolerance_px={declared!r} and "
-                f"armature_core.gates.{G4_TOLERANCE_SYMBOL} owns {owned!r}; the gate's "
-                f"tolerance is not a spec-level dial",
-                {"declared": declared, "owned": owned,
-                 "source": f"armature_core.gates.{G4_TOLERANCE_SYMBOL}"})
-        tol, source = owned, f"armature_core.gates.{G4_TOLERANCE_SYMBOL}"
-    else:
-        tol, source = declared, "spec.gates.g4_tolerance_px"
-
-    limit = g4_tolerance_limit(width, height)
-    ev = {"value": tol, "source": source, "limit_px": limit,
-          "resolution": [int(width), int(height)],
-          "max_frac_of_shorter_axis": G4_TOLERANCE_MAX_FRAC}
-    if isinstance(tol, bool) or not isinstance(tol, int):
-        raise G4ToleranceError(
-            f"g4_tolerance_px is {tol!r} ({type(tol).__name__}); the tolerance is a whole "
-            f"number of pixels, and a bool or a float (inf included) is not one", ev)
-    if tol < 0:
-        raise G4ToleranceError(f"g4_tolerance_px is {tol}; a negative margin is not one", ev)
-    if tol > limit:
-        raise G4ToleranceError(
-            f"g4_tolerance_px is {tol} on a {int(width)}x{int(height)} frame, above the "
-            f"{limit}px this frame permits ({G4_TOLERANCE_MAX_FRAC:.0%} of its shorter "
-            f"axis). A tolerance that large disarms G4: the run would finish with a full "
-            f"per-frame g4_deltas_px record and a manifest that looks finished, on frames "
-            f"whose channel rendered the wrong thing", ev)
-    return tol, source
-
 
 #: Directories written per requested channel. `depth` produces both normalisations
 #: plus their difference; which one ships is not this tool's decision (P3).
@@ -337,11 +272,6 @@ def run_export(spec, out_dir, backend=None):
     # ---- G1 · ANDON — generator legality. First statement; nothing exists yet.
     profile = gates.g1_generator_legality(width, height, count, spec["generator"])
 
-    # ---- G4's tolerance, resolved and BOUNDED here — before the backend is prepared and
-    #      before the output directory exists, because a tolerance that disarms the gate
-    #      must not be discovered inside the render loop that it would let through.
-    g4_tol, g4_tol_source = resolve_g4_tolerance(spec, width, height)
-
     requested = list(spec["channels"])
     if "pose" in requested:
         # Not a soft warning: emitting a skeleton needs a convention this repo has
@@ -383,10 +313,12 @@ def run_export(spec, out_dir, backend=None):
         mask = ch.mask_from_alpha(alpha)
         mask_bbox = ch.bbox_of(mask)
 
-        # ---- G4 · bbox sanity, inside the loop that writes the frame
-        deltas = gates.g4_bbox_sanity(
-            i, mask_bbox, f["projected_bbox"], g4_tol, width, height
-        )
+        # ---- G4 · bbox sanity, inside the loop that writes the frame.
+        #      **No tolerance argument.** One used to be read out of the spec here and
+        #      handed over unvalidated; the number lives in `gates.G4_TOLERANCE_PX` and no
+        #      caller may widen it, this one included. The module docstring records what a
+        #      settable one cost.
+        deltas = gates.g4_bbox_sanity(i, mask_bbox, f["projected_bbox"], width, height)
 
         rec = {
             "frame": i,
@@ -524,9 +456,11 @@ def run_export(spec, out_dir, backend=None):
         "gates": {
             "G1": {"verdict": "PASS", "profile": profile.as_dict()},
             "G2": {"verdict": "PASS", "detail": g2_detail},
-            "G4": {"verdict": "PASS", "tolerance_px": g4_tol,
-                   "tolerance_source": g4_tol_source,
-                   "tolerance_limit_px": g4_tolerance_limit(width, height),
+            # The tolerance is READ BACK from the gate that used it, so the manifest
+            # cannot name a number the run did not actually check against.
+            "G4": {"verdict": "PASS",
+                   "tolerance_px": gates.G4_TOLERANCE_PX,
+                   "tolerance_source": gates.G4_TOLERANCE_SOURCE,
                    "max_delta_px": max((max(r["g4_deltas_px"]) for r in per_frame), default=None)},
             "G5": {"verdict": "NOT RUN — pose was not emitted"}
             if "pose" not in requested else {"verdict": "PASS"},

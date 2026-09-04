@@ -1,158 +1,133 @@
-"""G4's tolerance: who owns it, and which direction of it is bounded.
+"""G4's tolerance is not something this tool can reach — the call site's half of P4.
 
-`run_export` did `g4_tol = spec['gates']['g4_tolerance_px']` and passed it straight into
-`gates.g4_bbox_sanity` with nothing between — no range check, no type check, no record of
-the value used. `shotspec.normalise_spec` `_require`s name, generator, asset.path,
-resolution, frames, channels and depth.window, and nothing under `gates`: the key is a plain
-`_merge` of DEFAULTS with the file.
+`run_export` did `g4_tol = spec['gates']['g4_tolerance_px']` and passed it into
+`gates.g4_bbox_sanity` with nothing between: no range check, no type check, no record of the
+value used. `shotspec.normalise_spec` `_require`d name, generator, asset.path, resolution,
+frames, channels and depth.window, and nothing under `gates` — the key was a plain `_merge`
+of DEFAULTS with the file.
 
 Measured 2026-09-03: a spec identical to the committed ones except
 `"gates": {"g4_tolerance_px": 100000}` was ACCEPTED by `load_spec`, and `g4_bbox_sanity` at
 that value did not raise on facet's own recorded defect — a 751-px mask around a 388-px
-projected mesh, deltas [300, 300, 363, 363]. `inf` behaves the same.
+projected mesh. `inf` behaved the same. Note the asymmetry that kept it invisible: too-SMALL
+values (`True`, `-5`) still fired, so the only unbounded direction was the one that DISARMED
+the gate — "put the andon on the direction the invariant does not bound", unapplied to G4's
+own tolerance.
 
-Note the asymmetry, which is the whole finding: too-SMALL values (`True`, `-5`) still fire,
-so the only unbounded direction is the one that DISARMS the gate. "Put the andon on the
-direction the invariant does not bound", unapplied to G4's own tolerance. All five committed
-specs carry 2, so this was a latent hole rather than a live wrong number.
+The number now lives in `gates.G4_TOLERANCE_PX` and `g4_bbox_sanity` takes no tolerance
+argument, so this file tests what remains true of the CALLER: it passes no tolerance, it can
+no longer be handed one through a spec, and the manifest reads the value and its provenance
+back off the gate instead of restating them. The constant's own bounds and the spec refusal
+are core-gates' tests.
 """
 
-import math
+import inspect
 import os
 
 import pytest
 
 import stage_render
-from armature_core import gates
-from armature_core.errors import ArmatureError, G4BboxSanity
+from armature_core import gates, shotspec
+from armature_core.errors import G4BboxSanity, SpecError
 from fake_backend import FakeBackend, make_spec
 
 
-def _spec(tmp_path, tol, **kw):
+def _spec(tmp_path, **kw):
+    """`make_spec` with the asset digest pinned.
+
+    Pinned here rather than in `fake_backend.make_spec`: that helper is shared with the
+    tests domain, and a spec whose asset is unpinned is refused by `normalise_spec`.
+    Adding the field is inert against a schema that does not require it.
+    """
     spec = make_spec(tmp_path, **kw)
-    spec["gates"] = {"g4_tolerance_px": tol}
+    spec["asset"]["sha256"] = shotspec.sha256_file(spec["asset"]["path"])
     return spec
 
 
-# --------------------------------------------------------------- the unbounded direction
+# ------------------------------------------------------- the caller cannot widen it
 
 
-def test_a_loosened_tolerance_is_refused_before_any_frame_renders(tmp_path):
-    """THE fixture. 100000 px on a 64x96 frame disarms G4 entirely, and the run would
-    complete with a full per-frame g4_deltas_px record and a manifest that looks finished."""
+def test_the_gate_takes_no_tolerance_argument_from_any_caller():
+    """The structural half. A settable tolerance is a skip flag wearing a parameter's
+    clothes, and this is the assertion that keeps one from growing back."""
+    params = list(inspect.signature(gates.g4_bbox_sanity).parameters)
+    assert params == ["frame_index", "mask_bbox", "projected_bbox", "width", "height"]
+
+
+def test_stage_render_reads_no_gate_number_out_of_the_spec():
+    """Read as text rather than behaviour, because the defect was one subscript: any
+    reintroduction of `spec['gates'][...]` here puts the dial straight back."""
+    src = open(stage_render.__file__, encoding="utf-8").read()
+    body = src.split('"""', 2)[-1]           # skip the module docstring, which recounts it
+    assert "g4_tolerance_px" not in body
+    assert 'spec["gates"]' not in body and "spec['gates']" not in body
+
+
+def test_a_spec_that_still_carries_the_retired_key_never_renders(tmp_path):
+    """End to end through the real write path: the refusal arrives before the backend is
+    prepared and before the output directory exists."""
+    spec = _spec(tmp_path)
+    spec["gates"] = {"g4_tolerance_px": 100000}
     backend = FakeBackend(64, 96, lie_about_bbox=True)
-    with pytest.raises(ArmatureError) as e:
-        stage_render.run_export(_spec(tmp_path, 100000), str(tmp_path / "run"),
-                                backend=backend)
+
+    with pytest.raises(SpecError) as e:
+        stage_render.run_export(spec, str(tmp_path / "run"), backend=backend)
+    assert "g4_tolerance_px" in str(e.value)
     assert backend.prepared is False
     assert not (tmp_path / "run").exists()
-    assert e.value.evidence["value"] == 100000
-    assert e.value.evidence["resolution"] == [64, 96]
 
 
-def test_an_infinite_tolerance_is_refused(tmp_path):
-    with pytest.raises(ArmatureError):
-        stage_render.run_export(_spec(tmp_path, float("inf")), str(tmp_path / "run"),
-                                backend=FakeBackend(64, 96))
+def test_the_retired_key_is_refused_at_every_value_including_the_committed_one(tmp_path):
+    """Not "an out-of-range value is refused" — the KEY is refused. A spec carrying the
+    old default would otherwise read as blessed while the number it names is inert."""
+    for value in (2, 0, -5, True, "off", None, float("inf")):
+        spec = _spec(tmp_path)
+        spec["gates"] = {"g4_tolerance_px": value}
+        with pytest.raises(SpecError):
+            shotspec.normalise_spec(spec)
 
 
-def test_a_bool_is_not_an_integer_number_of_pixels(tmp_path):
-    """`True == 1` in Python, so a bool would sail through an `isinstance(v, int)` check
-    and print as `True` in the manifest."""
-    with pytest.raises(ArmatureError):
-        stage_render.run_export(_spec(tmp_path, True), str(tmp_path / "run"),
-                                backend=FakeBackend(64, 96))
+# ------------------------------------------------------------------- what is recorded
 
 
-def test_a_negative_tolerance_is_refused(tmp_path):
-    with pytest.raises(ArmatureError):
-        stage_render.run_export(_spec(tmp_path, -5), str(tmp_path / "run"),
-                                backend=FakeBackend(64, 96))
-
-
-def test_a_non_numeric_tolerance_is_refused(tmp_path):
-    with pytest.raises(ArmatureError):
-        stage_render.run_export(_spec(tmp_path, "2"), str(tmp_path / "run"),
-                                backend=FakeBackend(64, 96))
-
-
-def test_the_bound_is_derived_from_the_frame_not_from_a_global_constant(tmp_path):
-    """A global constant must not govern a local feature: what counts as a loose tolerance
-    on a 64px frame is not what counts as one on 832x480."""
-    small = stage_render.g4_tolerance_limit(64, 96)
-    large = stage_render.g4_tolerance_limit(832, 480)
-    assert large > small
-    assert stage_render.resolve_g4_tolerance(_spec(tmp_path, large), 832, 480)[0] == large
-    with pytest.raises(ArmatureError):
-        stage_render.resolve_g4_tolerance(_spec(tmp_path, large + 1), 832, 480)
-
-
-# ----------------------------------------------------------------------- who owns it
-
-
-def test_the_gate_owns_the_tolerance_when_it_declares_one(tmp_path, monkeypatch):
-    """P4's seam: `armature_core.gates.G4_TOLERANCE_PX` is the single source of truth, and
-    the spec may not move it."""
-    monkeypatch.setattr(gates, "G4_TOLERANCE_PX", 3, raising=False)
-    tol, source = stage_render.resolve_g4_tolerance(_spec(tmp_path, 3), 832, 480)
-    assert tol == 3
-    assert source.endswith("G4_TOLERANCE_PX")
-
-
-def test_the_bound_applies_to_the_gates_own_constant_too(tmp_path, monkeypatch):
-    """Ownership is not exemption: a constant that disarms the gate on this frame is
-    refused wherever it came from."""
-    monkeypatch.setattr(gates, "G4_TOLERANCE_PX", 100000, raising=False)
-    spec = make_spec(tmp_path)
-    spec.pop("gates", None)
-    with pytest.raises(ArmatureError):
-        stage_render.resolve_g4_tolerance(spec, 832, 480)
-
-
-def test_a_spec_that_disagrees_with_the_gates_constant_is_refused(tmp_path, monkeypatch):
-    monkeypatch.setattr(gates, "G4_TOLERANCE_PX", 2, raising=False)
-    with pytest.raises(ArmatureError) as e:
-        stage_render.resolve_g4_tolerance(_spec(tmp_path, 1), 64, 96)
-    assert e.value.evidence["declared"] == 1
-    assert e.value.evidence["owned"] == 2
-
-
-def test_without_a_gate_constant_the_spec_value_is_used_and_still_bounded(tmp_path, monkeypatch):
-    monkeypatch.delattr(gates, "G4_TOLERANCE_PX", raising=False)
-    tol, source = stage_render.resolve_g4_tolerance(_spec(tmp_path, 2), 64, 96)
-    assert tol == 2
-    assert source.startswith("spec")
-
-
-# ------------------------------------------------------------------- what gets recorded
-
-
-def test_the_manifest_records_the_tolerance_and_where_it_came_from(tmp_path):
-    """A loosened run must say so on its face, rather than looking like every other run."""
-    manifest = stage_render.run_export(_spec(tmp_path, 2), str(tmp_path / "run"),
+def test_the_manifest_quotes_the_tolerance_the_gate_actually_used(tmp_path):
+    """Read back off the gate, not restated here: a manifest that names a number the run
+    did not check against is a placeholder shaped like evidence."""
+    manifest = stage_render.run_export(_spec(tmp_path), str(tmp_path / "run"),
                                        backend=FakeBackend(64, 96))
     g4 = manifest["gates"]["G4"]
-    assert g4["tolerance_px"] == 2
-    assert g4["tolerance_source"]
-    assert manifest["spec"]["gates"]["g4_tolerance_px"] == 2
+    assert g4["verdict"] == "PASS"
+    assert g4["tolerance_px"] == gates.G4_TOLERANCE_PX
+    assert g4["tolerance_source"] == gates.G4_TOLERANCE_SOURCE
+    assert "gates" not in manifest["spec"]
 
 
-# ------------------------------------------- the direction the gate's own test never took
+def test_the_per_frame_deltas_are_still_recorded(tmp_path):
+    """The record the gate's evidence is read from must survive the signature change."""
+    manifest = stage_render.run_export(_spec(tmp_path), str(tmp_path / "run"),
+                                       backend=FakeBackend(64, 96))
+    assert len(manifest["frames"]) == 9
+    assert all(len(r["g4_deltas_px"]) == 4 for r in manifest["frames"])
+    assert manifest["gates"]["G4"]["max_delta_px"] is not None
 
 
-def test_g4_does_not_fire_on_facets_defect_at_a_loosened_tolerance():
-    """Why the bound has to exist at all. This is the failure G4 was written for — facet's
-    751-px mask around a 388-px projected mesh — and at 100000 the gate is silent."""
-    deltas = gates.g4_bbox_sanity(7, (0, 0, 750, 700), (180, 60, 568, 700), 100000, 752, 752)
-    # Measured here rather than quoted: the audit finding described these deltas as
-    # [300, 300, 363, 363]; against the fixture `tests/test_gates.py` actually carries they
-    # are [180, 60, 182, 0]. The size of the miss is not the point — that a 182-px
-    # disagreement passes is.
-    assert deltas == [180, 60, 182, 0]
+# ---------------------------------------------------- the gate still fires downstream
 
 
-def test_g4_fires_on_facets_defect_at_a_tolerance_this_frame_permits():
-    """And the same defect against the largest tolerance a 752x752 frame will now accept."""
-    limit = stage_render.g4_tolerance_limit(752, 752)
+def test_g4_still_fires_through_the_real_write_path(tmp_path):
+    """The guard the other way: none of this may have disarmed the gate it is protecting."""
+    with pytest.raises(G4BboxSanity) as e:
+        stage_render.run_export(_spec(tmp_path), str(tmp_path / "run"),
+                                backend=FakeBackend(64, 96, lie_about_bbox=True))
+    assert e.value.evidence["frame"] == 0
+    assert e.value.evidence["tolerance_px"] == gates.G4_TOLERANCE_PX
+
+
+def test_g4_fires_on_facets_own_defect_at_the_constants_value():
+    """The failure G4 was written for — facet's 751-px mask around a 388-px projected mesh.
+    Measured here rather than quoted: the audit finding described these deltas as
+    [300, 300, 363, 363]; against the fixture tests/test_gates.py actually carries they are
+    [180, 60, 182, 0]. The size of the miss is not the point — that a 182-px disagreement
+    used to pass at a spec-supplied 100000 is."""
     with pytest.raises(G4BboxSanity):
-        gates.g4_bbox_sanity(7, (0, 0, 750, 700), (180, 60, 568, 700), limit, 752, 752)
+        gates.g4_bbox_sanity(7, (0, 0, 750, 700), (180, 60, 568, 700), 752, 752)
