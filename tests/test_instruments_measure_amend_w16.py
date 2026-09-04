@@ -238,3 +238,89 @@ def test_each_of_the_parsers_three_refusals_names_its_clause(argv, clause, key, 
     assert set(ev["known"]) == set(stage_render.KNOWN_FLAGS), ev
     # the message keeps saying it too — a human reads the line as well
     assert "stage_render takes" in str(exc.value)
+
+
+# ===========================================================================
+# F-981fe49d — the OTHER divisor in the same block: `--fps-src`
+# ===========================================================================
+
+
+def _motion(n=4):
+    """A motion record `lift_solve.validate_motion_record` accepts — every bone in
+    `sitelist.ALL_NAMES` present at identity. Same shape as the wave-14 fixture."""
+    from armature_core import sitelist
+
+    frames = []
+    for i in range(n):
+        frames.append({"frame": i, "root": [0.0, 0.0, float(i)],
+                       "local": {b: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+                                 for b in sitelist.ALL_NAMES}})
+    return {"tool": "test", "frames": frames}
+
+
+@pytest.mark.parametrize("fps_src", ["0", "-16", "0.0", "-0.5"])
+def test_a_source_rate_that_is_not_positive_is_refused_by_name(tmp_path, fps_src):
+    """THE OPERAND, and the population: wave 14 gated `--frames` because `positions` and
+    `sample_interval_ratio` divide by `n_dst - 1`, and left `--fps-src` — the OTHER divisor
+    in the same `resample` block — ungated.
+
+    Measured on the base tree, on a 4-frame record that passes every gate:
+    `--fps-src=0` raised a bare `ZeroDivisionError` at `(n_src - 1) / a.fps_src`, untyped,
+    so the `__main__` handler classified it exit 1 ("an unhandled error") rather than the
+    exit 2 a deliberate refusal earns, and the message named neither the flag nor the value.
+    `--fps-src=-16` ran to completion, printed `RESAMPLE_MOTION_OK` and WROTE the record
+    with `fps_dst_true_tempo: -37.333`, `span_s_first_to_last_sample: -0.1875` and
+    `clip_s_src_frames_over_fps: -0.25` — a library-ready motion record carrying a negative
+    true-tempo rate under a green success line, on the one field whose stated purpose is to
+    pick the generator's frame rate.
+
+    Red on `-16` and on `-0.5`, which are OUTSIDE the zero the naive guard would catch.
+    """
+    import resample_motion as RM
+
+    src = tmp_path / "m.json"
+    src.write_text(json.dumps(_motion(4)), encoding="utf-8")
+    out = tmp_path / ("resampled_" + fps_src.replace(".", "p").replace("-", "neg"))
+    with pytest.raises(RM.ResampleArgError, match=r"--fps-src") as exc:
+        RM.main([f"--motion={src}", "--frames=8", f"--out={out}", f"--fps-src={fps_src}"])
+    ev = exc.value.evidence
+    assert ev is not None, "the refusal carries no receipt"
+    assert ev["clause"] == "source_rate_not_positive", ev
+    assert ev["gate"] == "ARGS" and ev["andon"] == "ResampleArgError", ev
+    assert ev["fps_src"] == float(fps_src), ev
+    # and NOTHING was written: the andon sits in the same block as `--frames`, above the read
+    assert not out.exists(), "a refused run left its output directory behind"
+
+
+def test_a_non_finite_source_rate_is_refused_too(tmp_path):
+    """`nan` and `inf` are the shapes a `> 0` comparison does not bound the same way:
+    `float('nan') > 0` is False (so nan is caught by the same clause) but `inf > 0` is True
+    and would pass a positivity test while making every derived duration zero."""
+    import resample_motion as RM
+
+    src = tmp_path / "m.json"
+    src.write_text(json.dumps(_motion(4)), encoding="utf-8")
+    for spelling in ("nan", "inf"):
+        out = tmp_path / ("r_" + spelling)
+        with pytest.raises(RM.ResampleArgError, match=r"--fps-src") as exc:
+            RM.main([f"--motion={src}", "--frames=8", f"--out={out}",
+                     f"--fps-src={spelling}"])
+        assert exc.value.evidence["clause"] in (
+            "source_rate_not_positive", "source_rate_not_finite"), exc.value.evidence
+        assert not out.exists()
+
+
+def test_a_positive_source_rate_still_resamples(tmp_path, capsys):
+    """Grade the arm only on what it can move: the gate must not refuse a legal rate."""
+    import resample_motion as RM
+
+    src = tmp_path / "m.json"
+    src.write_text(json.dumps(_motion(4)), encoding="utf-8")
+    out = tmp_path / "ok"
+    assert RM.main([f"--motion={src}", "--frames=8", f"--out={out}",
+                    "--fps-src=20"]) == 0
+    assert "RESAMPLE_MOTION_OK" in capsys.readouterr().out
+    rec = json.loads((out / "m.8.motion.json").read_text(encoding="utf-8"))
+    assert rec["resample"]["fps_src"] == 20.0
+    assert rec["resample"]["fps_dst_true_tempo"] > 0
+    assert rec["resample"]["span_s_first_to_last_sample"] > 0

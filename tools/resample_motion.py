@@ -47,6 +47,7 @@ Prints `RESAMPLE_MOTION_OK`.
 import argparse
 import hashlib
 import json
+import math
 import os
 import sys
 import time
@@ -125,6 +126,37 @@ def main(argv=None):
             {"gate": "ARGS", "andon": "ResampleArgError",
              "clause": "destination_frame_count_below_two",
              "frames": a.frames, "minimum": MIN_DST_FRAMES})
+
+    # ---- ANDON, the same block, the OTHER divisor (F-981fe49d, wave 16). `--frames` was
+    #      gated in wave 14 because `positions` and `sample_interval_ratio` divide by
+    #      `n_dst - 1`; `--fps-src` divides three of the same block's derived quantities
+    #      and was left open. Measured on the base tree, on a 4-frame record that passes
+    #      every gate: `--fps-src=0` raised a bare `ZeroDivisionError` at
+    #      `(n_src - 1) / a.fps_src` — untyped, so the `__main__` handler classified it
+    #      exit 1 ("an unhandled error") rather than the exit 2 a deliberate refusal earns,
+    #      and the message named neither the flag nor the value. `--fps-src=-16` ran to
+    #      COMPLETION, printed `RESAMPLE_MOTION_OK` and wrote the record with
+    #      `fps_dst_true_tempo: -37.333`, `span_s_first_to_last_sample: -0.1875` and
+    #      `clip_s_src_frames_over_fps: -0.25`; `--fps-src=nan` wrote NaN into all three.
+    #      `fps_dst_true_tempo` exists so a later tool or operator can pick the generator's
+    #      frame rate from it, so a negative or NaN value there is read out of a file the
+    #      record says reproduced cleanly.
+    #
+    #      The clause is `> 0` AND finite, in that order, because the two directions are
+    #      different: `nan > 0` is False and is caught here, while `inf > 0` is True and
+    #      would pass a positivity test while making every derived duration zero.
+    if not math.isfinite(a.fps_src) or a.fps_src <= 0:
+        raise ResampleArgError(
+            f"--fps-src={a.fps_src} is not a sampling rate; the source's rate divides "
+            f"three quantities in the record this tool writes "
+            f"(fps_dst_true_tempo, span_s_first_to_last_sample, "
+            f"clip_s_src_frames_over_fps), and a rate that is zero, negative or non-finite "
+            f"puts a value no reader can use into the field whose whole purpose is to pick "
+            f"the generator's frame rate",
+            {"gate": "ARGS", "andon": "ResampleArgError",
+             "clause": ("source_rate_not_finite" if not math.isfinite(a.fps_src)
+                        else "source_rate_not_positive"),
+             "fps_src": a.fps_src, "minimum_exclusive": 0.0})
 
     with open(a.motion, encoding="utf-8") as fh:
         src = json.load(fh)
