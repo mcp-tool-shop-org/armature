@@ -72,6 +72,13 @@ on:
       - "specs/**"
       - "docs/experiments/**"
       - "docs/index/**"
+      # The licence map. `docs/license-map.md` is the verified map the repo's licence gate
+      # is written against, and the suite now OPENS it by path: core-gates' licence-table
+      # census parses its rows and resolves the Commercial column against
+      # `RULED_COMPONENTS`. A re-fetch that adds or retires a kill is exactly the change CI
+      # must run on — the licence gate is a CLAUDE.md non-negotiable, and a guard that does
+      # not run on the change it guards is the shape this filter list exists to close.
+      - "docs/license-map.md"
   pull_request:
     paths:
       - "site/**"
@@ -119,6 +126,13 @@ on:
       - "specs/**"
       - "docs/experiments/**"
       - "docs/index/**"
+      # The licence map. `docs/license-map.md` is the verified map the repo's licence gate
+      # is written against, and the suite now OPENS it by path: core-gates' licence-table
+      # census parses its rows and resolves the Commercial column against
+      # `RULED_COMPONENTS`. A re-fetch that adds or retires a kill is exactly the change CI
+      # must run on — the licence gate is a CLAUDE.md non-negotiable, and a guard that does
+      # not run on the change it guards is the shape this filter list exists to close.
+      - "docs/license-map.md"
   workflow_dispatch:
 
 concurrency:

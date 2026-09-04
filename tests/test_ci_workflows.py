@@ -2407,3 +2407,26 @@ def test_the_ref_clause_check_goes_red_on_the_condition_pages_had():
         "github.ref": "refs/heads/topic",
         "github.event.repository.private": False,
     }) is True, "the pre-fix condition reads as refusing a branch dispatch"
+
+
+# -- the licence map is a CI input (wave 10, seam from core-gates) ------------------------
+#
+# `docs/license-map.md` is the verified map this repo's licence gate is written against, and
+# the suite now OPENS it by path: core-gates' licence-table census parses its rows and
+# resolves the Commercial column against `RULED_COMPONENTS`. `paths_the_suite_guards()` picks
+# that up by AST the day the census lands, but the FILTER is in this domain's file, so the
+# requirement is pinned here as well — a re-fetch that adds or retires a kill is exactly the
+# change CI must run on, and a guard that does not run on the change it guards is the shape
+# the trigger census exists to close.
+
+
+@pytest.mark.parametrize("trigger", ["push", "pull_request"])
+def test_ci_runs_on_the_licence_map(trigger):
+    """The licence gate is a non-negotiable, so its map is a build input like any other."""
+    licence_map = "docs/license-map.md"
+    assert os.path.isfile(os.path.join(REPO, licence_map)), (
+        f"{licence_map} no longer exists; this requirement and the census that reads it must "
+        "be retired deliberately, not left green")
+    assert _pattern_hits(_paths_under(trigger), licence_map), (
+        f"{trigger} builds nothing when {licence_map} changes, and the suite reads it by "
+        f"path; the filters are {_paths_under(trigger)}")
