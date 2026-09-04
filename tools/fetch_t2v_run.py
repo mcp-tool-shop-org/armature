@@ -19,6 +19,25 @@ onward on the way in, and the same 7.6x discriminator is recomputed here and wri
 them. The discriminator is not decoration — it is the only evidence in the run directory
 that the order is right, and a clip whose two orderings agree closely is a clip this tool
 says so about rather than one it silently blesses.
+
+--------------------------------------------------------------------------------
+What the discriminator DOES, recorded because for one arc it did nothing
+
+Until 2026-09-03 the ratio was computed, written to `frame_order_evidence.json`, printed
+inside the FETCH_OK line — and compared to nothing. No threshold, no raise. The
+zero-length-frame check three lines below it raises, so the file already knew the
+difference between reporting and gating; a shuffled clip would have been written, FETCH_OK
+printed, and the ratio near 1.0 noticed only if a human opened the JSON.
+
+**The choice made, and the one deliberately not made.** A numeric floor was refused: no
+calibrated floor for this ratio has been measured on any provider, and inventing one here
+would be a pass condition picked while looking at the results it judges. What the order
+rule claims is DIRECTIONAL — if the array order is the temporal order, differencing it
+gives a SMALLER number than differencing a hash-sorted permutation of the same frames. So
+the boundary is the sign of that comparison and nothing else: `ratio > 1` is the claim,
+`ratio <= 1` contradicts it, and an undefined ratio (all frames identical) decides
+nothing. Anything but the first raises `FETCH_ORDER_UNVOUCHED` and FETCH_OK is not
+printed. E09's measured 0.703 vs 5.314 is reported as a magnitude, never graded.
 """
 
 import argparse
@@ -30,10 +49,29 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from armature_core.errors import GateFailure  # noqa: E402
+
 TOOL_VERSION = "E09.A3"
 
 LOSSLESS_NODE = "70"
 VIDEO_NODE = "81"
+
+#: The environment variable the downloader reads the manifest path out of. The command
+#: string is a constant; nothing derived from `--out` or from the dump is interpolated
+#: into it. Same fix, same day, as `fetch_run.py`'s.
+MANIFEST_ENV = "ARMATURE_FETCH_MANIFEST"
+
+
+class FetchHalt(GateFailure):
+    """A retrieval did not happen, or the frames on disk are not vouched for.
+
+    **The andon is on the direction the invariant does not bound.** Every count here is
+    derived from the dump, which describes what the cloud produced and says nothing about
+    the local disk or about the ORDER of what landed. So the counts can all read right
+    while the clip is shuffled, empty, or a directory of error bodies.
+    """
+
+    gate = "FETCH"
 
 
 def plan(results, out):
@@ -56,16 +94,70 @@ def plan(results, out):
 
 
 def download(jobs):
+    """curl, behind a `--` terminator, with the manifest path in the environment.
+
+    Two defects lived in the old three lines. A url read straight out of an
+    operator-pasted dump sat in OPTION position with no terminator, so an entry beginning
+    with a dash was read by curl as a flag — and both `-o` and `-K` (read a config file)
+    are reachable that way; the sibling `fetch_run.py` already had the terminator. And the
+    manifest path was interpolated into a single-quoted PowerShell literal, so an
+    apostrophe anywhere in `--out` closed the literal and the remainder parsed as separate
+    statements. The command string below is a CONSTANT.
+    """
     for j in jobs:
         os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
     manifest = [{"url": j["url"], "out": os.path.abspath(j["out"])} for j in jobs]
     tmp = os.path.join(os.path.dirname(jobs[0]["out"]), "_urls.json")
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh)
-    ps = (f"$j = Get-Content '{os.path.abspath(tmp)}' -Raw | ConvertFrom-Json; "
-          f"foreach ($x in $j) {{ curl.exe -sSL -o $x.out $x.url }}")
-    subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
+    ps = (f"$j = Get-Content -LiteralPath $env:{MANIFEST_ENV} -Raw | ConvertFrom-Json; "
+          "foreach ($x in $j) "
+          "{ curl.exe -sS -L --fail-with-body -o $x.out -- $x.url }")
+    env = dict(os.environ)
+    env[MANIFEST_ENV] = os.path.abspath(tmp)
+    proc = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                          capture_output=True, text=True, env=env)
+    if proc.returncode != 0:
+        raise FetchHalt(
+            f"the downloader exited {proc.returncode}; the frames this run would be "
+            f"measured on are not on disk",
+            {"returncode": proc.returncode,
+             "stdout": (proc.stdout or "")[-2000:],
+             "stderr": (proc.stderr or "")[-2000:]})
     os.remove(tmp)
+    return proc
+
+
+def gate_order_evidence(ev):
+    """Gate ORDER · ANDON — the discriminator must point the way the order rule claims.
+
+    The boundary is the SIGN of the comparison and not a magnitude: see the module
+    docstring for why no floor is invented here. Raises `FETCH_ORDER_UNVOUCHED` rather
+    than letting `main` print FETCH_OK over an order this tool cannot vouch for.
+    """
+    array_mean = ev["results_array_order"]["mean"]
+    hash_mean = ev["hash_sorted_order"]["mean"]
+    ratio = (hash_mean / array_mean) if array_mean else None
+    g = {"gate": "ORDER", "array_order_mean_diff": array_mean,
+         "hash_sorted_mean_diff": hash_mean, "ratio": ratio,
+         "boundary_is": (
+             "the sign of the comparison, not a magnitude. No calibrated floor for this "
+             "ratio has been measured on any provider, and a threshold invented while "
+             "looking at the result it judges is the pass condition CLAUDE.md forbids. "
+             "ratio > 1 is the order rule’s own directional claim; ratio <= 1 "
+             "contradicts it; an undefined ratio decides nothing. E09 measured 0.703 vs "
+             "5.314 (7.6x) and that magnitude is reported, never graded")}
+    if ratio is None or not (ratio > 1.0):
+        raise FetchHalt(
+            "FETCH_ORDER_UNVOUCHED: differencing the results-array order gives "
+            f"{array_mean!r} and differencing a hash-sorted permutation of the same "
+            f"frames gives {hash_mean!r}. The array order is not the tighter one, so "
+            f"this run’s temporal order has no evidence behind it and FETCH_OK is "
+            f"not printed. The frames and the evidence file are left on disk",
+            g)
+    g["verdict"] = (f"the results-array order differences {ratio:.3g}x tighter than a "
+                    f"hash-sorted permutation of the same frames")
+    return g
 
 
 def order_evidence(out):
@@ -137,14 +229,18 @@ def main(argv=None):
 
     empty = [f for f, m in manifest.items() if m["bytes"] == 0]
     if empty:
-        raise SystemExit(f"FETCH_HALT zero-length frames: {empty}")
+        raise FetchHalt(f"FETCH_HALT zero-length frames: {empty}",
+                        {"zero_length": empty, "frames": len(frames)})
+
+    # The evidence file is already on disk above, so a halt here leaves the measurement
+    # that fired it behind rather than making the next session re-fetch to see it.
+    order = gate_order_evidence(ev)
 
     print("FETCH_OK " + json.dumps({
         "frames": len(frames), "out": a.out,
-        "array_order_mean_diff": ev["results_array_order"]["mean"],
-        "hash_sorted_mean_diff": ev["hash_sorted_order"]["mean"],
-        "ratio": (ev["hash_sorted_order"]["mean"] / ev["results_array_order"]["mean"]
-                  if ev["results_array_order"]["mean"] else None)}))
+        "array_order_mean_diff": order["array_order_mean_diff"],
+        "hash_sorted_mean_diff": order["hash_sorted_mean_diff"],
+        "ratio": order["ratio"], "gate_ORDER": order["verdict"]}))
     return 0
 
 
