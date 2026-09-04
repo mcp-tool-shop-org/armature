@@ -116,8 +116,32 @@ with open(os.path.join(REPO, "pyproject.toml"), "rb") as _fh:
 TAG_STEP = step_containing(RELEASE, "The version in the tag must equal")
 TAG_SCRIPT = run_script(TAG_STEP)
 
+def _bash():
+    r"""The bash that can run the workflow's own shell here.
+
+    On Windows `shutil.which("bash")` can resolve to `C:\Windows\System32\bash.exe`, the WSL
+    launcher: it runs a Linux userland that cannot see `sys.executable`'s Windows path, and it
+    reads a CRLF-translated stdin as `case ... in<CR>`. Git for Windows' bash shares this
+    filesystem and is preferred; with only the WSL launcher present the tests skip by name
+    rather than fail for a reason that has nothing to do with the gate. On a POSIX runner
+    this is simply /bin/bash.
+    """
+    if os.name == "nt":
+        for candidate in (r"C:\Program Files\Git\bin\bash.exe",
+                          r"C:\Program Files\Git\usr\bin\bash.exe"):
+            if os.path.isfile(candidate):
+                return candidate
+        found = shutil.which("bash")
+        if found and "system32" in found.lower():
+            return None
+        return found
+    return shutil.which("bash")
+
+
+BASH = _bash()
+
 needs_shell = pytest.mark.skipif(
-    shutil.which("bash") is None, reason="no bash to run the workflow's own shell with"
+    BASH is None, reason="no bash that shares this filesystem to run the workflow's own shell with"
 )
 needs_node = pytest.mark.skipif(
     shutil.which("node") is None, reason="the gate reads npm/package.json through node"
@@ -133,17 +157,21 @@ def _drive(ref, ref_name):
     """
     script = re.sub(r"(?m)^python ", f'"{sys.executable}" '.replace("\\", "/"), TAG_SCRIPT)
     env = dict(os.environ, GITHUB_REF=ref, GITHUB_REF_NAME=ref_name)
-    # The script goes to bash on STDIN, not as a `-c` argument: on Windows a Git-Bash
-    # `bash.exe` re-parses the process command line, and the step's own nested quotes
-    # (`python -c "import tomllib;print(...)"`) arrive mangled — measured 2026-09-04 as
-    # `syntax error near unexpected token`. stdin carries the bytes verbatim on every platform.
-    return subprocess.run(
-        [shutil.which("bash"), "-s"],
-        input=script,
+    # The script goes to bash on STDIN as BYTES with LF endings — not as a `-c` argument and
+    # not through a text-mode pipe. On Windows the process command line re-quotes the step's
+    # own nested `python -c "..."` (measured 2026-09-04 as `syntax error near unexpected
+    # token`), and a text-mode pipe translates every newline to CRLF, which bash reads as
+    # `in<CR>`. Bytes on stdin carry the script verbatim on every platform.
+    proc = subprocess.run(
+        [BASH, "-s"],
+        input=script.replace("\r\n", "\n").encode("utf-8"),
         cwd=REPO,
         capture_output=True,
-        text=True,
         env=env,
+    )
+    return subprocess.CompletedProcess(
+        proc.args, proc.returncode,
+        proc.stdout.decode("utf-8", "replace"), proc.stderr.decode("utf-8", "replace"),
     )
 
 
