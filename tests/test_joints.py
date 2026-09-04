@@ -195,3 +195,41 @@ def test_a_spread_of_offsets_reads_as_the_subject():
 def test_the_ruling_says_so_when_nothing_matched():
     r = joints.verdict({"elbow_L": {"matched": False, "offset": 0.0}})
     assert "NO BALLS MATCHED" in r["ruling"]
+
+
+def test_a_single_matched_ball_rules_neither_hypothesis():
+    """F-41134b38. `verdict` guarded `not matched` but not `len(matched) == 1`. With one
+    entry `spread = offs.max() / offs.min()` is 1.0 and
+    `residual_after_removing_common_translation_max` is 0.0 BY CONSTRUCTION — measured,
+    both, on a one-entry table — so `spread > 3.0` is False and the ruling was
+    unconditionally THE INSTRUMENT. A single offset cannot be near-uniform or not: the two
+    hypotheses the function exists to separate are indistinguishable at n=1, which is the
+    'grade an arm only on what it can move' law. The thin-evidence case is exactly where
+    the reader was told to go check the overlay projector.
+    """
+    r = joints.verdict(_table_from_offsets({"elbow_L": (0.0, 0.0, 0.074)}))
+    assert not r["ruling"].startswith("THE INSTRUMENT")
+    assert not r["ruling"].startswith("THE SUBJECT")
+    assert "not separable" in r["ruling"]
+    assert r["n_matched"] == 1
+    # The numbers stay: the offset is the evidence, only the ruling is withheld.
+    assert r["offset_max"] == pytest.approx(0.074)
+
+
+def test_the_degenerate_ruling_is_reached_at_every_n_below_two():
+    """The population where the discriminator is defined starts at two."""
+    for n in (0, 1):
+        table = _table_from_offsets({f"j{i}": (0.0, 0.0, 0.01 * (i + 1))
+                                     for i in range(n)})
+        r = joints.verdict(table)
+        assert "THE INSTRUMENT" not in r["ruling"] and "THE SUBJECT" not in r["ruling"]
+    two = joints.verdict(_table_from_offsets({"a": (0.0, 0.0, 0.004),
+                                              "b": (0.0, 0.0, 0.074)}))
+    assert two["ruling"].startswith("THE SUBJECT")
+
+
+def test_two_identical_offsets_still_read_as_the_instrument():
+    """The other side of the boundary: at n=2 the spread IS a measurement of something,
+    and a uniform pair is the instrument hypothesis it was written for."""
+    r = joints.verdict(_table_from_offsets({"a": (0.0, 0.0, 0.02), "b": (0.0, 0.0, 0.02)}))
+    assert r["ruling"].startswith("THE INSTRUMENT")
