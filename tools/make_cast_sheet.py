@@ -5,12 +5,24 @@ python make_cast_sheet.py --dir <preview_out> --names a,b,c --title "..." --out 
 
 Diagnostic presentation tool, not a pipeline gate. Dailies standard: uniform panel
 scale across rows, labels readable at review distance, no internal gate states.
+
+Two things carried across from `sheet_compose`, which had already paid for both: the sheet
+is as wide as its longest LABEL as well as its widest row (the stats line is the whole
+point of this sheet and was the first thing cropped), and the typeface is resolved through
+an explicit search that raises when nothing is found rather than through two absolute
+`C:\\Windows\\Fonts` literals that a POSIX runner turns into relative strings.
 """
 import argparse
 import json
 import os
+import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from sheet_compose import font as _font  # noqa: E402
+from sheet_compose import max_text_width  # noqa: E402
 
 FULL_H = 440
 HEAD_H = 440
@@ -21,16 +33,16 @@ INK = (20, 20, 24)
 SUB = (90, 90, 100)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", required=True)
     ap.add_argument("--names", required=True, help="comma-separated subject names, row order")
     ap.add_argument("--title", required=True)
     ap.add_argument("--out", required=True)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    font_b = ImageFont.truetype(r"C:\Windows\Fonts\arialbd.ttf", 30)
-    font_r = ImageFont.truetype(r"C:\Windows\Fonts\arial.ttf", 24)
+    font_b = _font("arialbd.ttf", 30)
+    font_r = _font("arial.ttf", 24)
 
     rows = []
     for name in [n.strip() for n in args.names.split(",") if n.strip()]:
@@ -49,7 +61,12 @@ def main():
                  f"{st['empties']} empties, {arm_txt}")
         rows.append((panels, label))
 
-    row_w = max(sum(p.width for p in panels) + PAD * 5 for panels, _ in rows)
+    # As wide as the widest row **or the longest string drawn on it** — the stats label is
+    # this sheet's whole payload and was cropped from the right, which is where the numbers
+    # sit. sheet_compose.max_text_width is the one implementation.
+    text_w = max_text_width([(args.title, font_b)] + [(lab, font_r) for _, lab in rows])
+    row_w = max(max(sum(p.width for p in panels) + PAD * 5 for panels, _ in rows),
+                int(PAD + text_w + PAD))
     title_h = 74
     sheet = Image.new("RGB", (row_w, title_h + sum(FULL_H + LABEL_H + PAD * 2 for _ in rows)), BG)
     d = ImageDraw.Draw(sheet)
@@ -62,8 +79,11 @@ def main():
             x += p.width + PAD
         d.text((PAD, y + FULL_H + 10), label, font=font_r, fill=SUB)
         y += FULL_H + LABEL_H + PAD * 2
+    out_dir = os.path.dirname(os.path.abspath(args.out))
+    os.makedirs(out_dir, exist_ok=True)  # scripts create their own output directories
     sheet.save(args.out)
-    print("SHEET_OK", args.out, sheet.size)
+    print("SHEET_OK", args.out, sheet.size, f"font={font_r.path}")
+    return args.out
 
 
 if __name__ == "__main__":

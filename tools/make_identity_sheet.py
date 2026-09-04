@@ -28,11 +28,30 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from armature_core.errors import ArmatureError  # noqa: E402
+
 MARGIN = 10
 LABEL_H = 20
 BG = (18, 18, 20)
 FG = (235, 235, 235)
 DIM = (140, 140, 150)
+
+
+class IdentitySheetError(ArmatureError):
+    """The sheet cannot show what it was asked to show, and would not have said so.
+
+    `if fi >= len(names): continue` dropped every requested index past the end of the
+    directory and there was no guard on an empty row, so a 2-frame run asked for
+    frames 0, 8, 16 and 24 produced a one-tile sheet, printed IDENTITY_SHEET and exited
+    0. The panel the Director is asked "is this the same man?" on must not quietly show
+    fewer angles than were requested.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 def _load_rgb(path):
@@ -51,7 +70,8 @@ def _fit(im, h):
     return im.resize((max(1, round(im.width * s)), h), Image.LANCZOS), s
 
 
-def build(run_dir, plates, frames, tile_h=360, channel="normal"):
+def rows_for(run_dir, plates, frames, tile_h=360, channel="normal"):
+    """The sheet's rows, or raise naming what the run does not carry."""
     rows = []
 
     plate_tiles = []
@@ -59,19 +79,44 @@ def build(run_dir, plates, frames, tile_h=360, channel="normal"):
         im = _load_rgb(p)
         t, s = _fit(im, tile_h)
         plate_tiles.append((t, f"{os.path.basename(p)}  {im.width}x{im.height} @{s:.2f}x"))
+    if not plate_tiles:
+        raise IdentitySheetError(
+            "no reference plates were given; the sheet's question is a comparison and "
+            "half of it would be missing", {"plates": list(plates)})
     rows.append(("CANDIDATE REFERENCE PLATES  -  is this the same man?", plate_tiles))
 
-    mesh_tiles = []
     cdir = os.path.join(run_dir, channel)
+    if not os.path.isdir(cdir):
+        raise IdentitySheetError(
+            f"{cdir} is not a directory; the {channel!r} channel of this run was never "
+            f"written", {"run_dir": run_dir, "channel": channel, "channel_dir": cdir})
     names = sorted(n for n in os.listdir(cdir) if n.endswith(".png"))
+    # ---- every requested index must EXIST. Dropping one silently shows the Director
+    #      fewer angles than were asked for, on the panel where identity is judged.
+    missing = [fi for fi in frames if fi >= len(names) or fi < 0]
+    if missing or not names:
+        raise IdentitySheetError(
+            f"{cdir} holds {len(names)} frame(s) and frame(s) {missing} were requested; "
+            f"a sheet built from whichever of them happen to exist shows fewer angles "
+            f"than were asked for and says nothing about it",
+            {"channel_dir": cdir, "n_frames": len(names),
+             "requested": list(frames), "missing_indices": missing})
+
+    mesh_tiles = []
     for fi in frames:
-        if fi >= len(names):
-            continue
         im = _load_rgb(os.path.join(cdir, names[fi]))
         t, s = _fit(im, tile_h)
         az = 360.0 * fi / len(names)
         mesh_tiles.append((t, f"f{fi:03d}  az {az:.0f}d  @{s:.2f}x"))
-    rows.append((f"THE MESH, {os.path.basename(run_dir)}  -  {channel} channel, 33-frame orbit", mesh_tiles))
+    # The orbit length is the RUN's, not a literal 33. The azimuth beside each tile was
+    # already computed from len(names), so the label used to contradict its own row.
+    rows.append((f"THE MESH, {os.path.basename(run_dir)}  -  {channel} channel, "
+                 f"{len(names)}-frame orbit", mesh_tiles))
+    return rows
+
+
+def build(run_dir, plates, frames, tile_h=360, channel="normal"):
+    rows = rows_for(run_dir, plates, frames, tile_h=tile_h, channel=channel)
 
     width = MARGIN
     for _, tiles in rows:
