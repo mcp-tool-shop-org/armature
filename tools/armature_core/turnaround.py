@@ -337,48 +337,40 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
 PIXEL_COMPARE_STRIDE = 8
 
 
-def _read_plane(view_index, px, ev):
-    """One record's `pixels` as a strided float plane, or a typed refusal.
+def _read_plane(view_index, px):
+    """`(strided_plane, None)` for one record's `pixels`, or `(None, reason)`.
 
-    `np.asarray(px, dtype=np.float64)` raises whatever numpy raises — a `ValueError` on a
-    ragged list, a `TypeError` on a string — and none of those is in the `ArmatureError`
-    family, so the 21-tool halt contract records the render tool as "FAILED — an unhandled
-    error" at exit 1 with no gate id, no clause and no evidence, after the eight views are
-    already on disk. What happened is Gate TURN declining to read an input; that is a
-    refusal at exit 2 (F-e207fd20, wave 16).
+    **It reports; it does not raise.** `np.asarray(px, dtype=np.float64)` raises whatever
+    numpy raises — a `ValueError` on a ragged list, a `TypeError` on a string — and none
+    of those is in the `ArmatureError` family, so the 21-tool halt contract records the
+    render tool as "FAILED — an unhandled error" at exit 1 with no gate id, no clause and
+    no evidence, after the eight views are already on disk. What happened is Gate TURN
+    declining to read an input, which is a refusal at exit 2 (F-e207fd20, wave 16).
+
+    The refusal is raised by `gate_set_distinct`, not here, because the evidence dict a
+    gate raise carries has to be a literal the andon census can read in the same function
+    (`tests/test_core_solver_evidence.evidence_dicts_missing`); a helper handed an `ev`
+    parameter is a raise site that walk reports as `unreadable`.
     """
     try:
         import numpy as np
     except ImportError:                         # pragma: no cover - numpy is a hard dep
-        ev["clause"] = "numpy_unavailable"
-        raise TurnaroundGate(
-            "a view record carries `pixels` and numpy is not importable, so the pixel "
-            "clause cannot run. A gate that cannot read its input does not return a "
-            "verdict about it", ev)
+        return None, {"view": int(view_index), "clause": "numpy_unavailable",
+                      "why": "numpy is not importable"}
     try:
         a = np.asarray(px, dtype=np.float64)
     except (TypeError, ValueError) as exc:
-        ev["clause"] = "pixels_unreadable"
-        ev["unreadable_view"] = int(view_index)
-        ev["unreadable_reason"] = f"{type(exc).__name__}: {exc}"
-        raise TurnaroundGate(
-            f"view {view_index} carries a `pixels` value numpy cannot read as an array "
-            f"({type(exc).__name__}: {exc}). The pixel clause is what stands between this "
-            f"gate and a set of eight renders of one picture, and an input it cannot read "
-            f"is refused rather than skipped", ev)
+        return None, {"view": int(view_index), "clause": "pixels_unreadable",
+                      "why": f"{type(exc).__name__}: {exc}"}
     if a.ndim < 2:
-        ev["clause"] = "pixels_not_a_plane"
-        ev["unreadable_view"] = int(view_index)
-        ev["pixels_shape"] = list(a.shape)
-        raise TurnaroundGate(
-            f"view {view_index} carries a `pixels` value of shape {list(a.shape)}, which "
-            f"is not an (H, W[, C]) plane. It used to be passed through unstrided and "
-            f"compared anyway", ev)
-    return a[::PIXEL_COMPARE_STRIDE, ::PIXEL_COMPARE_STRIDE, ...]
+        return None, {"view": int(view_index), "clause": "pixels_not_a_plane",
+                      "why": f"shape {list(a.shape)} is not an (H, W[, C]) plane",
+                      "shape": list(a.shape)}
+    return a[::PIXEL_COMPARE_STRIDE, ::PIXEL_COMPARE_STRIDE, ...], None
 
 
-def _pixel_pairs(view_records, ev):
-    """`(n_views_carrying_pixels, identical_pairs, distances, pairs_skipped_for_shape)`.
+def _pixel_pairs(view_records):
+    """`(carrying, identical_pairs, distances, pairs_skipped_for_shape, unreadable)`.
 
     Adjacent pairs, because a turnaround is an ordered orbit and a camera that stopped
     moving stops between neighbours; the full N-squared comparison would cost eight times
@@ -398,10 +390,16 @@ def _pixel_pairs(view_records, ev):
     exactly the view whose plane can come back a different size, and its two pairs were
     dropped from the comparison while the verdict reported them as compared.
     """
-    planes = []
+    planes, unreadable = [], []
     for i, rec in enumerate(view_records):
         px = rec.get("pixels")
-        planes.append(None if px is None else _read_plane(i, px, ev))
+        if px is None:
+            planes.append(None)
+            continue
+        plane, why = _read_plane(i, px)
+        if why is not None:
+            unreadable.append(why)
+        planes.append(plane)
     identical, distances, skipped = [], [], []
     for i in range(1, len(planes)):
         a, b = planes[i - 1], planes[i]
@@ -416,7 +414,8 @@ def _pixel_pairs(view_records, ev):
         distances.append(d)
         if d == 0.0:
             identical.append([i - 1, i])
-    return sum(1 for p in planes if p is not None), identical, distances, skipped
+    return (sum(1 for p in planes if p is not None), identical, distances, skipped,
+            unreadable)
 
 
 def gate_set_distinct(view_records, expected):
@@ -501,8 +500,22 @@ def gate_set_distinct(view_records, expected):
             "camera did not move between them. Every per-view check passes on this set — "
             "the files are RGBA, the count is right, the figure is in all of them", ev)
 
-    carrying, identical, distances, skipped = _pixel_pairs(view_records, ev)
+    carrying, identical, distances, skipped, unreadable = _pixel_pairs(view_records)
     n_pairs = max(len(view_records) - 1, 0)
+    if unreadable:
+        first = unreadable[0]
+        ev["clause"] = first["clause"]
+        ev["unreadable_view"] = first["view"]
+        ev["unreadable_reason"] = first["why"]
+        ev["unreadable_views"] = unreadable
+        if "shape" in first:
+            ev["pixels_shape"] = first["shape"]
+        raise TurnaroundGate(
+            f"view {first['view']} carries a `pixels` value this gate cannot read as a "
+            f"plane ({first['why']}). The pixel clause is what stands between this gate "
+            f"and a set of {len(view_records)} renders of one picture, and an input it "
+            f"cannot read is refused rather than skipped — `np.asarray` raises a bare "
+            f"builtin, which the halt contract records as a crash at exit 1", ev)
     ev["n_views_carrying_pixels"] = carrying
     ev["n_adjacent_pairs"] = n_pairs
     ev["n_adjacent_pairs_compared"] = len(distances)

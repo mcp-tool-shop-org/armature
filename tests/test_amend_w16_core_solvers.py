@@ -39,7 +39,7 @@ if TESTS not in sys.path:
 
 import blender_stub  # noqa: E402
 
-from armature_core import aapose, assembly, turnaround  # noqa: E402
+from armature_core import aapose, assembly, startframe, turnaround  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 #: The twenty-one modules the core-solvers domain owns, from the frozen wave-16 domain map.
@@ -374,19 +374,19 @@ def test_a_sixth_drawing_constant_cannot_be_added_silently(tmp_path):
 
     scratch = tmp_path / "aapose_scratch.py"
     scratch.write_text(src, encoding="utf-8")
+    # Executed WITHOUT registering in `sys.modules`: the scratch copy imports
+    # `armature_core.errors` absolutely and needs no entry, and an installer that mutates
+    # `sys.modules` is an ordering hazard `tests/test_packaging.py`'s derived census
+    # (rightly) refuses to let a test add without a pair to exercise its teardown.
     spec = importlib.util.spec_from_file_location("_aapose_scratch", str(scratch))
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["_aapose_scratch"] = mod
-    try:
-        spec.loader.exec_module(mod)
-        assert "SIXTH_DRAWING_CONSTANT" in mod.drawing_constants(), mod.drawing_constants()
-        with pytest.raises(mod.ConventionError) as exc:
-            mod.check_convention(mod.KEYPOINT_COUNT, mod.LIMB_SEQ, mod.PALETTE)
-        ev = exc.value.evidence
-        assert ev["clause"] == "drawing_constant_outside_the_record", ev
-        assert ev["constants_outside_the_record"] == ["SIXTH_DRAWING_CONSTANT"], ev
-    finally:
-        sys.modules.pop("_aapose_scratch", None)
+    spec.loader.exec_module(mod)
+    assert "SIXTH_DRAWING_CONSTANT" in mod.drawing_constants(), mod.drawing_constants()
+    with pytest.raises(mod.ConventionError) as exc:
+        mod.check_convention(mod.KEYPOINT_COUNT, mod.LIMB_SEQ, mod.PALETTE)
+    ev = exc.value.evidence
+    assert ev["clause"] == "drawing_constant_outside_the_record", ev
+    assert ev["constants_outside_the_record"] == ["SIXTH_DRAWING_CONSTANT"], ev
 
 
 # ============================================== F-e207fd20 and F-1935e0e1 (Gate TURN)
@@ -782,3 +782,99 @@ def test_every_recorded_correction_names_the_live_anchor_beside_the_wrong_one():
             stem, f"{name}:{lineno}",
             "is exempted as a CORRECTION and the module names no live "
             f"`{name}::<symbol>` anchor beside it, so it still reads as a live citation")
+
+
+# ====================================================================== F-69733981
+#
+# `sitelist.SiteListError` stated the population its re-classing argument rests on:
+# "`validate()` is called by three production Blender tools". Measured — two direct and one
+# through a wrapper, and only one of the three line numbers was right. A stated population
+# that the tree does not have is how a later session re-deriving it distrusts the whole
+# paragraph.
+
+
+def _direct_callers_of(func_name, module_alias):
+    """`{basename: {enclosing symbol}}` for every `<alias>.<func>()` call under `tools/`."""
+    import ast
+
+    out = {}
+    for root, _dirs, files in os.walk(TOOLS):
+        if "superseded" in root.replace("\\", "/").split("/"):
+            continue
+        for fname in sorted(f for f in files if f.endswith(".py")):
+            path = os.path.join(root, fname)
+            tree = ast.parse(io.open(path, encoding="utf-8").read())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                fn = node.func
+                if (isinstance(fn, ast.Attribute) and fn.attr == func_name
+                        and getattr(fn.value, "id", None) == module_alias):
+                    holder = _holder_of(path, node.lineno)
+                    out.setdefault(fname, set()).add(
+                        holder.name if holder else "<module>")
+    return out
+
+
+def test_the_sitelist_refusal_states_the_caller_population_the_tree_has():
+    """Derived, not typed: the docstring must name the symbols the AST finds.
+
+    Measured 2026-09-04 — `project_pose_keypoints.py:229` was right;
+    `rig_character.py:1135` is a docstring line and the real call is inside
+    `validate_sitelist`; `rig_parts.py:480` is `db = np.linalg.norm(...)` and
+    `grep -n validate tools/rig_parts.py` returns ONE line, a call to the WRAPPER.
+    """
+    direct = _direct_callers_of("validate", "sitelist")
+    assert direct == {"rig_character.py": {"validate_sitelist"},
+                      "project_pose_keypoints.py": {"main"}}, direct
+
+    doc = io.open(os.path.join(CORE, "sitelist.py"), encoding="utf-8").read()
+    doc = doc.split("class SiteListError")[1].split("STRUCTURAL")[0]
+    flat = " ".join(doc.split())
+    # The overstated sentence is KEPT — this repo corrects in place with the measurement
+    # rather than deleting — but only inside the quotation that records it as wrong.
+    assert flat.count("three production Blender tools") == 1, flat[:400]
+    assert 'This read "called by three production Blender tools' in flat, (
+        "the overstated population is still asserted rather than quoted and corrected")
+    assert "TWO direct" in flat and "ONE indirect" in flat, flat[:400]
+    for anchor in ("rig_character.py::validate_sitelist",
+                   "project_pose_keypoints.py::main", "rig_parts.py::main"):
+        assert anchor in doc, anchor
+
+    # and the wrapper, so "one through the wrapper" is the tree's word too
+    wrapper = _direct_callers_of("validate_sitelist", "rig_character")
+    assert wrapper == {"rig_parts.py": {"main"}}, wrapper
+
+
+# ====================================================================== F-dc4cf57e
+#
+# `startframe.gate_whole` said, in the present tense and with a domain hand-off attached,
+# that `render_start_frame.py:142-143` declares `--width`/`--height` as `type=int` with no
+# positivity bound and that "the parser half is filed for that domain". Both halves are
+# false on the merged tree: the anchor drifted onto a docstring line about the render
+# engine, and the bound was added in wave 12 as F-34a858f5.
+
+
+def test_the_start_frame_parser_bound_exists_and_the_docstring_says_so():
+    """The claim and its anchor, both re-measured. `require_frame_size` is the symbol; a
+    bare `--width=0` is refused there, so the sentence that filed it as open is stale."""
+    import ast
+
+    src = io.open(os.path.join(TOOLS, "render_start_frame.py"), encoding="utf-8").read()
+    tree = ast.parse(src)
+    fn = [n for n in ast.walk(tree)
+          if isinstance(n, ast.FunctionDef) and n.name == "require_frame_size"]
+    assert len(fn) == 1, "the closed parser half's symbol is gone; re-derive this"
+    body = ast.get_source_segment(src, fn[0])
+    assert "v <= 0" in body and "isinstance(v, bool)" in body, body[:400]
+
+    flat = " ".join(startframe.gate_whole.__doc__.split())
+    assert flat.count("the parser half is filed for that domain") == 1, (
+        "the closed finding is asserted somewhere other than inside the quotation that "
+        "records it as closed")
+    assert 'It read: "`tools/render_start_frame.py:142-143`' in flat, (
+        "the corrected sentence is not quoted, so a reader cannot see what changed")
+    assert "render_start_frame.py::require_frame_size" in flat, flat[-600:]
+    assert "F-34a858f5" in flat, "the correction does not name what closed it"
+    assert "this gate refuses regardless of who calls it" in flat, (
+        "the part of the paragraph that is still true was deleted with the part that was not")
