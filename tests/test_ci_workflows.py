@@ -519,17 +519,35 @@ def sheet_font_action_faces():
     return match.group(1).split()
 
 
-@pytest.mark.parametrize("alias", sorted(__import__("sheet_compose").FONT_ALIASES))
+def composer_font_aliases():
+    """`sheet_compose.FONT_ALIASES`, parsed out of the source rather than imported.
+
+    `sheet_compose` imports PIL at module level. Importing it here would mean a checkout
+    without Pillow could not COLLECT this file at all — and this file holds the tag gate, the
+    pinning census and the permissions census, none of which have anything to do with fonts.
+    A guard that cannot be collected is a guard that is not running.
+    """
+    import ast
+
+    with open(os.path.join(REPO, "tools", "sheet_compose.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "FONT_ALIASES" for t in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError("sheet_compose no longer declares FONT_ALIASES")
+
+
+@pytest.mark.parametrize("alias", sorted(composer_font_aliases()))
 def test_the_font_action_supplies_a_face_for_every_alias_the_composers_need(alias):
     """Read out of `sheet_compose.FONT_ALIASES`, not written here.
 
     Adding a third alias to the composers, or renaming a fallback face, moves this
     requirement with it instead of leaving the action installing a face nobody resolves.
     """
-    import sheet_compose
-
     installed = sheet_font_action_faces()
-    faces = sheet_compose.FONT_ALIASES[alias]
+    faces = composer_font_aliases()[alias]
     assert any(face in installed for face in faces), (
         f"the sheet-fonts action installs {installed} and none of them is one of "
         f"{list(faces)}, so `{alias}` resolves on a Linux runner only if the image happened "
