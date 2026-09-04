@@ -69,11 +69,29 @@ def test_a_record_silent_about_an_angle_is_refused(tmp_path):
     assert "silence" in str(exc.value)
 
 
-def test_no_expectation_means_no_comparison(tmp_path):
-    """`expect=None` is the escape hatch, so it is tested rather than assumed absent."""
+def test_there_is_no_escape_hatch_from_the_expectation(tmp_path):
+    """REPLACES `test_no_expectation_means_no_comparison`, which pinned `expect=None` as
+    "the escape hatch" and asserted the comparison was skipped (F-abcb06a8).
+
+    This test was not weakened to make a fix green — it asserted the exact behaviour the
+    finding is about. The docstring one file over already said "expect is not optional
+    discipline, it is the andon" while the signature defaulted it to None and the
+    comparison read `(expect or {}).items()`, so the andon was disarmed by a caller who
+    typed less. Wave 3 removed the identical shape from `assembly.gate_batch_topology`.
+    The camera below disagrees on azimuth by 180 degrees: under the old signature it
+    loaded silently.
+    """
     cam = dict(CAM, azimuth_deg=45.0)
-    target, radius = framing.load_pinned_camera(write(tmp_path, cam))
-    assert radius == pytest.approx(CAM["radius"])
+    p = write(tmp_path, cam)
+    with pytest.raises(TypeError):
+        framing.load_pinned_camera(p)
+    for empty in (None, {}):
+        with pytest.raises(FramingError) as exc:
+            framing.load_pinned_camera(p, empty)
+        assert "no expectation" in str(exc.value)
+    with pytest.raises(FramingError) as exc:
+        framing.load_pinned_camera(p, EXPECT)
+    assert "45.0" in str(exc.value)
 
 
 def test_a_record_with_no_camera_block_raises(tmp_path):
@@ -91,7 +109,7 @@ def test_a_record_with_no_camera_block_raises(tmp_path):
 ])
 def test_a_malformed_target_raises(tmp_path, bad):
     with pytest.raises(FramingError) as exc:
-        framing.load_pinned_camera(write(tmp_path, dict(CAM, **bad)), None)
+        framing.load_pinned_camera(write(tmp_path, dict(CAM, **bad)), EXPECT)
     assert "3-vector" in str(exc.value)
 
 
@@ -99,7 +117,7 @@ def test_a_malformed_target_raises(tmp_path, bad):
 def test_a_nonpositive_radius_raises(tmp_path, radius):
     """Zero would put the camera inside the subject and every projection behind it."""
     with pytest.raises(FramingError) as exc:
-        framing.load_pinned_camera(write(tmp_path, dict(CAM, radius=radius)), None)
+        framing.load_pinned_camera(write(tmp_path, dict(CAM, radius=radius)), EXPECT)
     assert "not a distance" in str(exc.value)
 
 

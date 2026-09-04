@@ -58,10 +58,18 @@ def set_frame_rate(scene, fps):
     return scene
 
 
-def import_glb(path, expected_fps=None):
+def import_glb(path, *, expected_fps):
     """Import a GLB and return (mesh_objects, armature_objects, info).
 
-    `expected_fps` makes the ordering requirement executable rather than a comment.
+    `expected_fps` makes the ordering requirement executable rather than a comment. It is
+    **keyword-only and required** (F-abcb06a8): the signature used to be
+    `import_glb(path, expected_fps=None)`, so a caller that omitted it skipped the check
+    below entirely and the import proceeded at whatever rate the scene carried.
+    `probe_subject.py:42` did exactly that, immediately after `reset_scene()` (factory
+    settings, 24 fps) - harmless there because it reads geometry, and proof that nothing
+    anywhere required a caller to arm the andon. Wave 3 removed the identical shape from
+    `assembly.gate_batch_topology` by making `expected_sources` required and keyword-only;
+    this is the same removal. An optional keyword IS a skip flag.
 
     MEASURED 2026-08-10, and it cost a full debugging pass: importing at Blender's default
     24 fps a 33-key action authored and exported at 16 fps lands the keys on frames 1..49.
@@ -75,7 +83,7 @@ def import_glb(path, expected_fps=None):
     The andon is here, inside the function performing the import, because this is the last
     moment the mistake is still cheap.
     """
-    if expected_fps is not None and int(scene_fps()) != int(expected_fps):
+    if int(scene_fps()) != int(expected_fps):
         raise G6SubjectMotion(
             f"scene frame rate is {scene_fps()} fps but the shot is {expected_fps} fps, and "
             f"the glTF importer maps key times (seconds) to frames using the rate it finds "
