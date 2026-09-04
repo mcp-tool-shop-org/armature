@@ -29,7 +29,7 @@ import numpy as np  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
 import rig_character  # noqa: E402
-from armature_core import blender_scene  # noqa: E402
+from armature_core import blender_scene, parts  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 FULL_W, FULL_H = 820, 1240
@@ -45,6 +45,12 @@ INSET_JOINTS = (("shoulder", "shoulder"), ("elbow", "elbow"),
 #: probe arc rotates a shoulder, so a hip on either side stays put and would only dilute
 #: the measurement.
 SIDE_PROBE_JOINTS = ("shoulder", "elbow", "wrist")
+
+#: The liveness floor, as a FRACTION of the subject's own bbox diagonal rather than as a
+#: length in metres (F-8958f574; CLAUDE.md, "a global constant must not govern a local
+#: feature"). Carried from `make_rig_sheet`'s `1e-4 * diagonal`, which is the same andon on
+#: the same quantity and was already written this way -- one number, not two that can drift.
+ARC_FLOOR_FRACTION = 1e-4
 
 
 def _render_status(result):
@@ -112,11 +118,25 @@ def articulated_side(arm_obj, scene, rest_frame, posed_frame,
     rest, posed = heads(rest_frame), heads(posed_frame)
     disp = {side: max((posed[n] - rest[n]).length for n in names[side])
             for side in ("L", "R")}
-    hi = "L" if disp["L"] >= disp["R"] else "R"
-    lo = "R" if hi == "L" else "L"
     ev = {"rest_frame": rest_frame, "posed_frame": posed_frame,
           "joints": list(joints), "displacement": disp,
           "bones": {side: names[side] for side in ("L", "R")}}
+
+    # WAVE 16, F-4dc96644 -- THE FOURTH SWEEP of `nan >= nan is False`, and the one
+    # implementation of which arm the arc moves. MEASURED with disp = {"L": nan, "R": nan}:
+    # `nan >= nan` is False so `hi` was "R"; `nan <= 0.0` is False, so the no-arm-moved
+    # clause did not fire; `nan > 0.5 * nan` is False, so the both-arms clause did not fire
+    # either -- and this function RETURNED side "R" with no refusal, captioning four 1:1
+    # insets about a limb it never measured. That is exactly the harm the docstring above
+    # says it was written to end. The comparison is BOUNDED BEFORE IT IS MADE, through
+    # `armature_core.parts.require_finite`, the repo's one implementation of wave 10's rule
+    # 4 -- `positive=False`, because a displacement may legitimately be zero and the
+    # no-arm-moved clause below is what rules on that.
+    for _side in ("L", "R"):
+        disp[_side] = parts.require_finite(f"displacement[{_side}]", disp[_side],
+                                           ArmatureError, ev, positive=False)
+    hi = "L" if disp["L"] >= disp["R"] else "R"
+    lo = "R" if hi == "L" else "L"
 
     if disp[hi] <= 0.0:
         raise ArmatureError(
@@ -135,6 +155,59 @@ def articulated_side(arm_obj, scene, rest_frame, posed_frame,
     return ev
 
 
+def arc_liveness(measured, name, at_rest, where):
+    """The bounded liveness measurement the three dailies sheets rule on.
+
+    Returns `{name: the finite measurement, "bbox_diagonal", "floor_fraction", "floor",
+    "displacement_over_diagonal", ...}` plus `(diagonal, lo, hi)`, or RAISES.
+
+    ONE implementation with three callers -- the shape `articulated_side`,
+    `light_the_scene`, `ortho_camera` and `shoot` already have in this module. It does the
+    two things all three copies got wrong and NOT the raise: each sheet keeps its own
+    refusal, in its own words, at the line where its own arc died. Each caller also passes
+    the displacement IT measures, because the three do not agree on that and this function
+    does not make them: `make_parts_sheet` and `make_binding_sheet` take the max vertex
+    TRAVEL, `make_rig_sheet` the max per-component absolute difference.
+
+    WAVE 16, F-4dc96644 -- the fourth sweep of `nan >= nan is False`. All three copies
+    compared `moved` with no finiteness refusal on it. With one NaN vertex in the POSED
+    array `moved` is NaN, `nan <= floor` is False in both directions, the run proceeds, and
+    `max_displacement` / `max_vertex_motion` is published as NaN in the sheet's spec and in
+    its `*_OK` sentinel. `make_rig_sheet`'s own comment said only that `subject_scale`
+    guards a NaN DIAGONAL -- and `subject_scale` is taken on the REST array, so the posed
+    frame, which is where the arc is measured, was examined by no clause in any of the
+    three. `measured` goes through `armature_core.parts.require_finite`, the repo's one
+    implementation of wave 10's rule 4, with `positive=False`: a displacement may
+    legitimately be zero, and the floor clause at each call site is what rules on that.
+
+    WAVE 16, F-8958f574 -- the floor. Two of the three copies bounded a measured
+    displacement with `1e-6`, an absolute length in metres, where the third bounded it as
+    `1e-4 * diagonal` and carried a comment saying so. CLAUDE.md rules the direction: a
+    global constant must not govern a local feature. On a subject authored at a small unit
+    scale a real arc below 1e-6 m read as "this route does not move" and the sheet was
+    refused; on a large-unit subject, float32 round-trip noise above 1e-6 m read as a
+    surviving arc -- both on the sheets the Director approves the binding on. The floor is
+    `ARC_FLOOR_FRACTION` of the subject's OWN bbox diagonal at all three sites now, and the
+    diagonal, the fraction, the floor and the ratio all ride the record, so the number the
+    Director reads is a fraction rather than a metre.
+    """
+    ev = {"clause": "arc_did_not_survive", "where": where, "measurement": name,
+          "rest_frame": 1, "posed_frame": rig_character.PROBE_FRAMES}
+    # `subject_scale` is Gate SCALE: it refuses a non-finite REST array and a diagonal that
+    # is not a positive number, and it is the one place in this repo a bbox diagonal is
+    # derived. It is what makes the floor below a fraction of something real. A NaN in the
+    # rest frame is ITS refusal (`GateSubjectDegenerate`, gate SCALE); a NaN in the measured
+    # displacement is this one. Two andons, two ids, two places to send a session.
+    diagonal, lo, hi = rig_character.subject_scale(at_rest, where)
+    ev.update({"bbox_diagonal": diagonal, "floor_fraction": ARC_FLOOR_FRACTION,
+               "floor": ARC_FLOOR_FRACTION * diagonal})
+    moved = parts.require_finite(name, measured, ArmatureError, ev, positive=False)
+    ev[name] = moved
+    ev["displacement_over_diagonal"] = moved / diagonal
+    ev["survived"] = bool(moved > ev["floor"])
+    return ev, diagonal, lo, hi
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     p = argparse.ArgumentParser()
@@ -148,6 +221,24 @@ def parse_args():
 #: across `make_skeleton_sheet`, `make_binding_sheet`, `make_parts_sheet` and
 #: `preview_glb` -- `preview_glb` used to try them the other way round.
 ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
+class ArcDidNotSurvive(ArmatureError):
+    """The authored arc is not present in the re-imported subject. A refusal, not a crash.
+
+    WAVE 16 (F-4dc96644 + F-8958f574). The three dailies sheets each raised the BARE
+    `ArmatureError` here, which `armature_core/errors.py` rules against in its own words --
+    "a site that raises the family names nothing about which andon pulled" -- and which
+    `tests/test_instruments_measure_amend_w14.py` polices for the whole tree. That was
+    tolerable while the raise carried no receipt; it is not now that it carries the
+    diagonal, the floor, the fraction and the measurement, because a reader of the halt
+    line has to be able to tell WHICH clause wrote them.
+
+    NOT a `GateFailure`: no gate ran. The halt handlers classify it as REFUSED at exit 2,
+    which is what these three raises already did, and `evidence["clause"]` is
+    `arc_did_not_survive` at all three sites. ONE class, three raise sites -- the sheets
+    import it beside `arc_liveness`, `articulated_side` and the staging triple.
+    """
 
 
 class PartsSheetGate(GateFailure):
@@ -309,12 +400,23 @@ def main():
 
     scene.frame_set(rig_character.PROBE_FRAMES)
     bpy.context.view_layer.update()
-    moved = float(np.linalg.norm(all_world_verts(visible) - at_rest, axis=1).max())
-    if moved <= 1e-6:
-        raise ArmatureError(
+    # ONE implementation of the MEASUREMENT and the BOUND (`arc_liveness`, above in this
+    # module, three callers; F-4dc96644 + F-8958f574, wave 16); the refusal stays here, in
+    # this sheet's own words. `arc_liveness` refuses a non-finite displacement -- a NaN in
+    # the posed array made `moved` NaN and `nan <= 1e-6` False, so the run proceeded and
+    # published `max_displacement: NaN` -- and it derives the floor as a fraction of the
+    # subject's OWN bbox diagonal instead of the 1e-6 metres that used to stand here.
+    arc, _diagonal, _slo, _shi = arc_liveness(
+        float(np.linalg.norm(all_world_verts(visible) - at_rest, axis=1).max()),
+        "max_displacement", at_rest, "make_parts_sheet")
+    if arc["max_displacement"] <= arc["floor"]:
+        raise ArcDidNotSurvive(
             f"{args.glb}: the parts are identical at frame 1 and frame "
-            f"{rig_character.PROBE_FRAMES}. The authored arc did not survive the round trip, "
-            f"and a sheet built from this would read as 'this route does not move'")
+            f"{rig_character.PROBE_FRAMES} (max {arc['max_displacement']:.3e}, "
+            f"{arc['displacement_over_diagonal']:.3e} of this subject's own bbox diagonal "
+            f"{arc['bbox_diagonal']:.6f}). The authored arc did not survive the round "
+            f"trip, and a sheet built from this would read as 'this route does not move'",
+            dict(arc, glb=args.glb))
 
     side_rec = articulated_side(arm_obj, scene, 1, rig_character.PROBE_FRAMES)
     side = side_rec["side"]
@@ -374,8 +476,11 @@ def main():
     path = os.path.join(out, "panels.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
-    print("MAKE_PARTS_SHEET_OK " + json.dumps({"panels": path, "max_displacement": moved,
-                                     "parts_rendered": len(visible)}))
+    print("MAKE_PARTS_SHEET_OK " + json.dumps(
+        {"panels": path, "max_displacement": arc["max_displacement"],
+         "displacement_over_diagonal": arc["displacement_over_diagonal"],
+         "bbox_diagonal": arc["bbox_diagonal"],
+         "parts_rendered": len(visible)}))
 
 
 def _halt_keysafe(value, _seen=None):

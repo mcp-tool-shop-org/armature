@@ -505,3 +505,222 @@ def test_the_gate_sees_the_planes_and_the_manifest_does_not():
     assert (isinstance(views_value, ast.Call)
             and getattr(views_value.func, "id", None) == "manifest_views"), (
         ast.unparse(views_value))
+
+
+# ============================== F-4dc96644 + F-8958f574 — the NaN family, fourth sweep
+#
+# THE POPULATION: the FOUR instrument sites that compare a MEASURED displacement, named in
+# full because three sweeps closed the family elsewhere and left these open —
+#
+#   1. `make_parts_sheet.articulated_side`   (the ONE implementation of which arm the arc
+#      moves; imported by `make_binding_sheet` and `make_rig_sheet`)
+#   2. `make_parts_sheet` main's liveness andon        (was `moved <= 1e-6`)
+#   3. `make_binding_sheet.render_arm`'s liveness andon (was `moved <= 1e-6`)
+#   4. `make_rig_sheet`'s liveness andon                (was `moved <= 1e-4 * diagonal`)
+#
+# Sites 2–4 were three copies of one clause and are now ONE implementation,
+# `make_parts_sheet.gate_arc_survived`, with three callers — so the operand is reachable at
+# every site rather than at the one a fixture happened to be written for.
+#
+# The member OUTSIDE the old walk, for each: the POSED array. `subject_scale` (wave 14) is
+# taken on `at_rest`, and `make_rig_sheet`'s own comment says it guards a NaN DIAGONAL —
+# so the frame the arc is measured AT was examined by no clause in any of the four.
+#
+# THE FLOOR (F-8958f574) rides the same fixtures: two of the three copies bounded a metre
+# where the third bounded a fraction of the subject's own size.
+
+
+@pytest.fixture(scope="module")
+def mps16():
+    return load_tool("make_parts_sheet.py")
+
+
+def _nan_arm(moving="L"):
+    """`test_sheet_sides._Arm` with a NaN in the posed head of every side-probe bone.
+
+    Both sides, which is the shape the finding measured: `disp = {'L': nan, 'R': nan}`.
+    """
+    arm = _Arm(moving)
+    for name in SIDE_PROBE_BONES:
+        x = arm.bones[name]._heads[33][0]
+        arm.bones[name]._heads[33] = (x, float("nan"), 0.0)
+    return arm
+
+
+def test_articulated_side_refuses_a_nan_displacement_instead_of_answering_R(mps16):
+    """RED on the operand the finding named, at the site it named.
+
+    Reverted-red: yes. Measured on the base tree with `disp = {'L': nan, 'R': nan}`:
+    `nan >= nan` is False so `hi` became 'R'; `nan <= 0.0` is False so the no-arm-moved
+    clause did not fire; `nan > 0.5 * nan` is False so the both-arms clause did not fire —
+    and the function RETURNED `{'side': 'R', 'side_word': 'RIGHT', ...}`, which captions
+    four 1:1 insets about a limb it never measured. That is the harm its own docstring says
+    it was written to end.
+    """
+    arm = _nan_arm()
+    with blender_stubbed():
+        with pytest.raises(mps16.ArmatureError) as exc:
+            mps16.articulated_side(arm, _Scene(arm), 1, 33)
+    assert "not a finite" in str(exc.value)
+    ev = exc.value.evidence
+    assert ev is not None, "the refusal carries the receipt require_finite wrote into"
+    assert [k for k in ev if k.startswith("displacement[")], sorted(ev)
+
+
+def test_articulated_side_still_answers_a_subject_that_moves(mps16):
+    """A gate that refuses everything is not a gate. The bounded path is unchanged."""
+    arm = _Arm("R")
+    with blender_stubbed():
+        rec = mps16.articulated_side(arm, _Scene(arm), 1, 33)
+    assert rec["side"] == "R"
+    assert math.isfinite(rec["displacement"]["L"])
+    assert math.isfinite(rec["displacement"]["R"])
+
+
+def _cube(scale=1.0):
+    """Eight corners of a cube — a subject with a real, finite bbox diagonal."""
+    return np.array([[x, y, z] for x in (0.0, scale) for y in (0.0, scale)
+                     for z in (0.0, scale)], dtype=np.float64)
+
+
+def test_the_liveness_measurement_refuses_a_non_finite_displacement(mps16):
+    """RED on the operand for sites 2, 3 and 4 at once: the measured displacement.
+
+    `at_rest` is finite, so `subject_scale`'s clause — the ONLY finiteness refusal these
+    three sites had — passes; the NaN is in the POSED frame, which is the population none
+    of the three examined.
+
+    Reverted-red: yes. On the base tree each of the three clauses is `if moved <= <floor>`
+    with `moved = nan`, `nan <= x` is False, the run proceeds, and the sheet's spec and its
+    `*_OK` sentinel publish `max_displacement` / `max_vertex_motion` as NaN.
+    """
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(mps16.ArmatureError) as exc:
+            mps16.arc_liveness(bad, "max_vertex_motion", _cube(), "make_rig_sheet")
+        assert "not a finite" in str(exc.value), bad
+        assert exc.value.evidence["where"] == "make_rig_sheet"
+
+
+def test_the_liveness_floor_is_a_fraction_of_the_subject_and_not_a_metre(mps16):
+    """F-8958f574, on the direction the constant did not bound.
+
+    A subject a thousand times smaller has a floor a thousand times smaller. A real arc of
+    5e-7 m on a 1e-3 m cube (diagonal 1.73e-3, floor 1.73e-7) is LIVE, where the old
+    `moved <= 1e-6` refused it and the sheet never got built; float round-trip noise of
+    5e-6 m on a 1000 m cube (diagonal 1.73e3, floor 0.173) is DEAD, where the old
+    `moved <= 1e-6` accepted it and the sheet read as an arc that survived.
+
+    Reverted-red: yes, both halves, at `make_parts_sheet` and `make_binding_sheet` — the
+    two copies that bounded metres. `make_rig_sheet` already bounded a fraction and is
+    green on both trees, which is why the finding named it as the shape to carry.
+    """
+    alive, _d, _lo, _hi = mps16.arc_liveness(
+        5e-7, "max_displacement", _cube(1e-3), "make_parts_sheet")
+    assert alive["floor"] < 5e-7 < 1e-6, alive["floor"]
+    assert alive["survived"] is True
+    dead, _d, _lo, _hi = mps16.arc_liveness(
+        5e-6, "max_displacement", _cube(1000.0), "make_parts_sheet")
+    assert dead["floor"] > 5e-6 > 1e-6, dead["floor"]
+    assert dead["survived"] is False
+
+
+def test_the_liveness_record_reads_as_a_fraction_and_names_its_floor(mps16):
+    """The record the Director reads: a ratio and the subject's own size, not a metre."""
+    rec, diagonal, lo, hi = mps16.arc_liveness(
+        0.0, "max_displacement", _cube(2.0), "make_parts_sheet")
+    assert rec["clause"] == "arc_did_not_survive"
+    assert rec["where"] == "make_parts_sheet"
+    assert rec["floor_fraction"] == mps16.ARC_FLOOR_FRACTION
+    assert rec["floor"] == pytest.approx(mps16.ARC_FLOOR_FRACTION * rec["bbox_diagonal"])
+    assert rec["displacement_over_diagonal"] == 0.0
+    assert rec["survived"] is False
+    assert diagonal == pytest.approx(2.0 * 3 ** 0.5)
+    assert list(lo) == [0.0, 0.0, 0.0] and list(hi) == [2.0, 2.0, 2.0]
+
+
+def test_a_non_finite_rest_frame_is_still_gate_scale_and_not_this_clause(mps16):
+    """The two refusals stay distinguishable: a NaN in the REST array is Gate SCALE's
+    (`GateSubjectDegenerate`), a NaN in the measured displacement is this clause's. Two
+    andons never share one id, and a session sent to the wrong one loses the afternoon."""
+    bad_rest = _cube(1.0)
+    bad_rest[3][1] = float("nan")
+    with pytest.raises(mps16.rig_character.GateSubjectDegenerate) as exc:
+        mps16.arc_liveness(0.30, "max_displacement", bad_rest, "make_parts_sheet")
+    assert exc.value.gate == "SCALE"
+
+
+#: The four sites of this sweep, named — the `family:` line as data. Sites 2-4 are the
+#: three callers of the one measurement; each keeps its OWN refusal, in its own words, at
+#: the line where its own arc died.
+NAN_SWEEP_SITES = {
+    "make_parts_sheet.py": ("articulated_side", "arc_liveness"),
+    "make_binding_sheet.py": ("arc_liveness",),
+    "make_rig_sheet.py": ("arc_liveness",),
+}
+
+
+def test_every_one_of_the_four_sites_bounds_its_measurement_before_comparing_it():
+    """THE POPULATION, read off the tree: no dailies sheet compares a displacement it has
+    not bounded, no copy of the measurement has been reintroduced, and every floor
+    comparison is against `arc["floor"]` rather than a literal length.
+
+    Reverted-red: yes — the base tree carries `moved <= 1e-6` twice and
+    `moved <= 1e-4 * diagonal` once, none of them behind `require_finite`.
+    """
+    for filename, expected in NAN_SWEEP_SITES.items():
+        src = read_source(filename)
+        for token in expected:
+            assert f"{token}(" in src, (filename, token)
+        # AST, not a grep: a comment that RECORDS the old constant is the correction the
+        # repo asks for, and a text scan cannot tell it from the constant itself.
+        bare = []
+        for node in ast.walk(ast.parse(src)):
+            if not isinstance(node, ast.Compare):
+                continue
+            for op, right in zip(node.ops, node.comparators):
+                # `<= 0.0` is exempt and is not a tolerance: zero displacement is the
+                # exact boundary "nothing moved at all", which needs no scale to state
+                # (`articulated_side`'s neither-arm-moved clause).
+                if (isinstance(op, (ast.LtE, ast.Lt))
+                        and isinstance(right, ast.Constant)
+                        and isinstance(right.value, float) and right.value != 0.0):
+                    bare.append((node.lineno, ast.unparse(node)))
+        assert bare == [], (
+            f"{filename} compares against a bare float again; a global constant must not "
+            f"govern a local feature: {bare}")
+        assert 'arc["floor"]' in src or "arc['floor']" in src, filename
+    # The measurement and the bound exist ONCE. A fourth copy is the defect this
+    # consolidation removed; the three RAISES are deliberately not consolidated.
+    bodies = [f for f in os.listdir(TOOLS)
+              if f.endswith(".py") and "def arc_liveness(" in read_source(f)]
+    assert bodies == ["make_parts_sheet.py"], bodies
+
+
+def test_each_sheet_keeps_its_own_refusal_at_its_own_site():
+    """The raise is NOT consolidated, on purpose: an andon lives inside the tool performing
+    the step (CLAUDE.md), and `make_binding_sheet.render_arm` is a refusing function in the
+    write-ordering census only while it raises in its own body."""
+    for filename, fn in (("make_parts_sheet.py", "main"),
+                         ("make_binding_sheet.py", "render_arm"),
+                         ("make_rig_sheet.py", "main")):
+        tree = ast.parse(read_source(filename))
+        target = next((n for n in ast.walk(tree)
+                       if isinstance(n, ast.FunctionDef) and n.name == fn), None)
+        assert target is not None, (filename, fn)
+        raises = [n for n in ast.walk(target) if isinstance(n, ast.Raise)]
+        own = [r for r in raises if "did not survive the round" in ast.unparse(r)]
+        assert own, f"{filename}:{fn} no longer raises its own liveness refusal"
+        # And it names its own andon rather than the family: `errors.py` rules that a site
+        # raising the bare `ArmatureError` "names nothing about which andon pulled", and
+        # these three raises now carry a receipt a reader has to be able to attribute.
+        assert all("ArcDidNotSurvive" in ast.unparse(r) for r in own), [
+            ast.unparse(r) for r in own]
+
+
+def test_the_helper_is_reached_through_require_finite_and_not_a_second_isfinite():
+    """`parts.require_finite` is the ONE non-finite helper (wave 10's rule 4). A hand-rolled
+    `math.isnan` beside it is a second implementation with a different message."""
+    body = _fn_source("make_parts_sheet.py", "arc_liveness")
+    assert "parts.require_finite(" in body
+    for hand_rolled in ("math.isnan", "math.isinf", "np.isnan", "np.isfinite"):
+        assert hand_rolled not in body, hand_rolled
