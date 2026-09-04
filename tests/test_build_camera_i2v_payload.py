@@ -293,8 +293,12 @@ def test_81_frames_is_legal_and_is_the_cards_trained_horizon():
 
 def test_the_ledger_passes_when_the_breaks_broke_and_the_trajectory_held(w1_path):
     ev = B.ledger_against_wave1("a different positive entirely", UPLOADS, 81, w1_path())
-    assert ev["positive"]["differs"] is True
-    assert ev["trajectory"]["held_agrees"] is True
+    # Wave 8, F-bc806f79: `positive.differs` and `trajectory.held_agrees` were assertions on
+    # fields that could only ever read True in a record that reaches disk — replaced with
+    # the values that vary. Asserting the two prompt hashes differ, and that the two sides
+    # of the held comparison are equal, is the same claim on evidence that can go both ways.
+    assert ev["positive"]["sha256_wave_3"] != ev["positive"]["sha256_wave_1"]
+    assert ev["trajectory"]["held_this_wave"] == ev["trajectory"]["held_wave_1"]
     assert ev["trajectory"]["moved_on_purpose"] == []
     assert all(v["differs"] for v in ev["breaks_verified"].values())
     assert set(ev["deliberate_breaks"]) == {
@@ -307,7 +311,8 @@ def test_the_ledger_lets_an_authorised_trajectory_break_through(w1_path):
     ev = B.ledger_against_wave1("a different positive entirely", UPLOADS, 81, w1_path(),
                                 trajectory_overrides=CATALOG)
     assert ev["trajectory"]["moved_on_purpose"] == ["cfg", "sampler_name"]
-    assert ev["trajectory"]["held_agrees"] is True
+    assert ev["trajectory"]["held_this_wave"] == ev["trajectory"]["held_wave_1"]
+    assert "cfg" not in ev["trajectory"]["held_this_wave"]
     assert "moved on cfg, sampler_name" in ev["verdict"]
 
 
@@ -567,3 +572,85 @@ def test_a_declared_hash_that_agrees_is_recorded_as_confirmed(tmp_path):
 def test_a_missing_start_frame_file_raises(tmp_path):
     with pytest.raises(B.PayloadError, match=r"is not a file, so there is nothing to hash"):
         B.resolve_start_frame(str(tmp_path / "nope.png"), None)
+
+
+# ------- the ledger's record carries values that can vary (wave 8, F-bc806f79)
+
+
+def test_the_halt_carries_the_measurement_that_fired_it(w1_path):
+    """`ev` was built, filled, and then NOT attached to the raise — `raise PayloadError(…)`
+    took a message and nothing else — so the failing measurement never reached a record at
+    all, while the passing one was written straight into `meta['gate_LEDGER_W3']`. The
+    numbers are only interesting when the gate fires."""
+    drifted = {k: {"value": v["value"]} for k, v in W1.TRAJECTORY.items()}
+    drifted["cfg"] = {"value": 6.0}
+    with pytest.raises(B.PayloadError, match=r"not the one the ruling describes") as exc:
+        B.ledger_against_wave1("new positive", UPLOADS, 81, w1_path(trajectory=drifted))
+    ev = exc.value.evidence
+    assert ev["gate"] == "LEDGER_W3"
+    assert ev["problems"], "the halt names no problem"
+    assert ev["trajectory"]["held_this_wave"]["cfg"] != ev["trajectory"]["held_wave_1"]["cfg"]
+    assert ev["trajectory"]["held_wave_1"]["cfg"] == 6.0
+
+
+def test_the_record_carries_no_field_that_could_only_read_true(w1_path):
+    """`ev['trajectory']['held_agrees'] = held == w1_held` and
+    `ev['positive']['differs'] = isinstance(w1_pos, str) and w1_pos != positive` were both
+    CONSTANT in any record that reaches disk: the very next clause appends a problem on the
+    negation, and the function raises on any problem, so `ev` existed only when each read
+    True. Both were written into the payload record as `meta['gate_LEDGER_W3']`, where a
+    later session would read them as evidence a comparison was made. They are replaced by
+    the values that vary — the two sides of the held comparison, beside the two prompt
+    hashes that were already there."""
+    ev = B.ledger_against_wave1("a different positive entirely", UPLOADS, 81, w1_path())
+    assert "held_agrees" not in ev["trajectory"]
+    assert "differs" not in ev["positive"]
+    assert ev["trajectory"]["held_this_wave"] == ev["trajectory"]["held_wave_1"]
+    assert ev["positive"]["sha256_wave_3"] != ev["positive"]["sha256_wave_1"]
+
+
+def test_breaks_verified_differs_is_NOT_in_that_class(w1_path):
+    """The boolean that is correctly a boolean and stays. Its problem clause is guarded by
+    `theirs is not None`, so it can legitimately read False in a record that reaches disk —
+    when wave 1's record lacks the key it is compared against. That is a comparison that
+    can go both ways, which is exactly what the other two could not do."""
+    ev = B.ledger_against_wave1("a different positive entirely", UPLOADS, 81,
+                                w1_path(length=None))
+    assert ev["breaks_verified"]["length"]["wave_1"] is None
+    assert ev["breaks_verified"]["length"]["differs"] is True
+    assert ev["breaks_verified"]["width"]["differs"] is True
+
+
+def test_every_payload_error_in_this_tree_can_carry_its_evidence():
+    """family: derived by AST over `tools/*.py` for a `class PayloadError` definition ->
+    4 sites — build_animate_payload.py, build_camera_i2v_payload.py, build_i2v_payload.py,
+    build_payload.py. All four take an optional evidence dict now, so a halt in any of them
+    can carry the measurement that fired it rather than a sentence alone.
+
+    NOTE: four identical three-line `__init__`s is four implementations of one thing; the
+    single one belongs beside `GateFailure` in `armature_core/errors.py`, which is
+    core-gates' file. Recorded as an out-of-domain item rather than solved here.
+    """
+    import ast
+
+    from conftest import TOOLS
+
+    derived = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+        for node in ast.parse(src).body:
+            if isinstance(node, ast.ClassDef) and node.name == "PayloadError":
+                derived.append(name)
+    assert derived == ["build_animate_payload.py", "build_camera_i2v_payload.py",
+                       "build_i2v_payload.py", "build_payload.py"], derived
+
+    import importlib
+
+    for name in derived:
+        mod = importlib.import_module(name[:-3])
+        err = mod.PayloadError("a message", {"gate": "X", "measured": 1})
+        assert err.evidence == {"gate": "X", "measured": 1}, name
+        assert mod.PayloadError("a message").evidence == {}, name
+        assert str(err) == "a message", name

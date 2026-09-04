@@ -108,6 +108,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates as RG  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
+from armature_core.errors import (  # noqa: E402
+    ArmatureError, GateFailure)
 from canon_gate import canon_line, canon_spend  # noqa: E402
 
 TOOL_VERSION = "E09.2"
@@ -614,6 +616,15 @@ def negative_source():
 
 
 if __name__ == "__main__":
+    # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
+    # disagreed three ways on how a refusal leaves the process: three carried this block,
+    # two exited 2 unconditionally (so a programming error was indistinguishable from a
+    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
+    # operator as a raw traceback with exit 1 and no machine-readable evidence.
+    #
+    # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `BUILD_T2V_HALT`
+    # sentinel below, never on the code alone.
     try:
         raise SystemExit(main())
     except SystemExit:
@@ -625,4 +636,4 @@ if __name__ == "__main__":
         print("BUILD_T2V_HALT " + json.dumps({
             "error": type(exc).__name__, "message": str(exc),
             "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2)
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

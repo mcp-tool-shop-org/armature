@@ -463,3 +463,190 @@ def test_the_wrappers_load_graph_does_unwrap_still_admit(tmp_path):
         d = _wrapped_case(tmp_path / wrapper, wrapper)
         loaded = RG.load_graph(str(d / "g.saved.json"))
         assert [n["id"] for n in loaded["nodes"]] == [49]
+
+
+# ------------------- the value round trip compares EXACTLY (wave 8, F-a3c3daf8)
+
+#: A `Wan2ReferenceVideoApi` node in this repo's own API shape — the hosted tier whose
+#: widget row `WIDGET_INDEX` carries, and the one class here that pins a seed as a literal
+#: rather than a link. Built from the table's own row so the fixture cannot drift from it.
+REF_API = {
+    "80": {"class_type": "Wan2ReferenceVideoApi",
+           "inputs": {"model": "wan2.7-r2v", "model.prompt": "a prompt",
+                      "model.negative_prompt": "a negative", "model.resolution": "720P",
+                      "model.ratio": "16:9", "model.duration": 5,
+                      "seed": 2026081351, "watermark": False}},
+}
+
+
+def ref_saved(seed=2026081351, watermark=False):
+    """The converted shape: `control_after_generate` inserted at 7, watermark at 8."""
+    return {"nodes": [
+        {"id": 80, "type": "Wan2ReferenceVideoApi", "inputs": [],
+         "widgets_values": ["wan2.7-r2v", "a prompt", "a negative", "720P", "16:9", 5,
+                            seed, "fixed", watermark]},
+    ]}
+
+
+def test_the_reference_tier_round_trips_when_nothing_moved():
+    """The mutation that must NOT fire the exact comparison: a faithful save."""
+    ev = GSG.round_trip(REF_API, ref_saved())
+    assert ev["all_equal"] is True
+    assert ev["n_values_compared"] == 8
+
+
+def test_a_64_bit_seed_that_moved_by_one_is_caught():
+    """The finding. The predicate carried a `float()` clause, and `float()` on an integer
+    above 2**53 loses the low bits: measured, built 18446744073709551615 against saved
+    18446744073709551614 gave `got == value` False and `float(got) == float(value)` True,
+    so `same` was True and the function returned n_values_compared=3, all_equal=True with
+    {'input': 'seed', 'built': ...615, 'saved': ...614, 'equal': True} in its own evidence.
+    ComfyUI seeds are 64-bit, so the last gate before a paid submission would report every
+    value round-tripped while the seed the cloud executes is not the seed the record names.
+    """
+    built = 2 ** 64 - 1
+    api = {"80": dict(REF_API["80"], inputs=dict(REF_API["80"]["inputs"], seed=built))}
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.round_trip(api, ref_saved(seed=built - 1))
+    assert "80.seed" in str(exc.value)
+    assert str(built) in str(exc.value)
+
+
+def test_a_bool_saved_as_an_int_is_not_read_as_equal():
+    """The second half of the same predicate. `False` built against `0` saved compared
+    equal under both clauses; `True` against `1` still does under plain `==`. The two
+    spellings do not mean the same thing to every converter, and a round trip that
+    re-typed a switch is a change this gate exists to see."""
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.round_trip(REF_API, ref_saved(watermark=0))
+    assert "80.watermark" in str(exc.value)
+
+    api = {"80": dict(REF_API["80"], inputs=dict(REF_API["80"]["inputs"], watermark=True))}
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.round_trip(api, ref_saved(watermark=1))
+    assert "80.watermark" in str(exc.value)
+
+
+def test_an_int_and_the_same_value_as_a_float_still_compare_equal():
+    """The bound on the fix: dropping `float()` must not start refusing a converter that
+    wrote `832.0` where we pinned `832` — plain `==` compares int against float EXACTLY in
+    Python, which is the property the widening clause was standing in for."""
+    api = {"49": {"class_type": "WanAnimateToVideo",
+                  "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1,
+                             "continue_motion_max_frames": 5, "video_frame_offset": 0}}}
+    sv = {"nodes": [{"id": 49, "type": "WanAnimateToVideo", "inputs": [],
+                     "widgets_values": [832.0, 480, 81, 1, 5, 0]}]}
+    assert GSG.round_trip(api, sv)["all_equal"] is True
+
+
+# ------------- the link table is checked against ITSELF (wave 8, F-c78a122c)
+
+
+def test_a_link_id_declared_twice_with_different_origins_halts():
+    """The finding, one level below the crossed-links family. `table[str(lid)] = (...)` was
+    a last-write-wins assignment with no duplicate clause, so a file declaring link 6 first
+    from the NEGATIVE encoder and then from the positive resolved to whichever entry came
+    last and discarded the other unexamined. Measured on this fixture before the clause:
+    {'n_links': 2, 'links': ['50.negative', '50.positive'], ...} with no halt — a file that
+    is ambiguous about where its conditioning comes from, admitted by the last gate before
+    credits are spent."""
+    doc = cross_saved(table=[[6, 31, 0, 50, 0, "CONDITIONING"],
+                             [6, 30, 0, 50, 0, "CONDITIONING"],
+                             [7, 31, 0, 50, 1, "CONDITIONING"]])
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_table(doc)
+    assert "6" in str(exc.value)
+    ev = exc.value.evidence
+    assert ev["link_id"] == "6"
+    assert sorted(map(list, ev["origins"])) == [["30", 0], ["31", 0]]
+    assert ev["andon"] == "duplicate_link_id"
+
+
+def test_the_duplicate_clause_reaches_the_topology_gate_too():
+    doc = cross_saved(table=[[6, 31, 0, 50, 0, "CONDITIONING"],
+                             [6, 30, 0, 50, 0, "CONDITIONING"],
+                             [7, 31, 0, 50, 1, "CONDITIONING"]])
+    with pytest.raises(RG.RouteGate, match=r"declares link .* TWICE with different"):
+        GSG.link_round_trip(CROSS_API, doc)
+
+
+def test_a_link_id_repeated_with_the_SAME_origin_is_not_a_defect():
+    """The mutation that must NOT fire it: a converter that wrote the same edge twice says
+    nothing ambiguous, and a clause that refused it would refuse a faithful file."""
+    doc = cross_saved(table=[[6, 30, 0, 50, 0, "CONDITIONING"],
+                             [6, 30, 0, 50, 0, "CONDITIONING"],
+                             [7, 31, 0, 50, 1, "CONDITIONING"]])
+    assert GSG.link_round_trip(CROSS_API, doc)["n_links"] == 2
+
+
+# ------------- BOTH graph arguments read through the ONE loader (wave 8, F-4c5f67de)
+
+
+def test_a_wrapped_api_file_is_unwrapped_rather_than_dying_on_a_stdlib_key(tmp_path):
+    """`--api` was a bare `json.load` with no format check at all, two lines below a
+    `--saved` that goes through `RG.load_graph` and is refused BY NAME. Measured before the
+    fix: an api file wrapped as {'prompt': {...}} — the standard submission envelope, and a
+    shape the loader knows how to unwrap — raised `KeyError: 'class_type'` out of
+    `round_trip`, reported as SAVED_ADMISSION_HALT with "error": "KeyError", "message":
+    "'class_type'" — a stdlib key name standing in for a sentence, on the last gate before
+    a paid submission."""
+    import json as _json
+
+    d = _wrapped_case(tmp_path, "workflow")
+    api = _json.loads((d / "g.api.json").read_text(encoding="utf-8"))
+    (d / "g.api.json").write_text(_json.dumps({"prompt": api}), encoding="utf-8")
+
+    # The unwrap itself, at the level that used to die: both exported comparisons read the
+    # envelope and find the graph inside it.
+    saved_doc = _json.loads((d / "g.saved.json").read_text(encoding="utf-8"))
+    assert GSG.round_trip({"prompt": api}, saved_doc)["all_equal"] is True
+    assert GSG.link_round_trip({"prompt": api}, saved_doc)["n_links"] == 0
+
+    # And through `main`: whatever this one-node fixture halts on downstream, it is a NAMED
+    # gate carrying evidence, never `KeyError: 'class_type'` with a dict key for a sentence.
+    out = tmp_path / "fresh" / "admission.json"
+    with pytest.raises(Exception) as exc:
+        GSG.main([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
+                  f"--seeds={d / 'seeds.json'}", f"--out={out}"])
+    assert not isinstance(exc.value, (KeyError, TypeError)), exc.value
+    assert exc.value.evidence.get("gate"), exc.value
+    assert "class_type" not in str(exc.value)
+
+
+def test_a_save_format_file_passed_as_api_is_refused_by_a_named_format_clause(tmp_path):
+    """The mirror of the `--saved` boundary block. Measured before the fix: a save-format
+    doc passed as `--api` raised `TypeError: list indices must be integers or slices, not
+    str` out of `round_trip`."""
+    d = _wrapped_case(tmp_path, "workflow")
+    swapped = d / "saved-as-api.json"
+    swapped.write_text((d / "g.saved.json").read_text(encoding="utf-8"), encoding="utf-8")
+    out = tmp_path / "fresh" / "admission.json"
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.main([f"--saved={d / 'g.saved.json'}", f"--api={swapped}",
+                  f"--seeds={d / 'seeds.json'}", f"--out={out}"])
+    assert "API-format graph" in str(exc.value)
+    assert exc.value.evidence["clause"] == "not_an_api_format_graph"
+    assert not out.parent.exists(), "a refused admission created its output directory"
+
+
+@pytest.mark.parametrize("wrapper", ["workflow", "prompt"])
+def test_round_trip_and_link_round_trip_normalise_their_own_saved_argument(wrapper):
+    """The divergence the wave-6 loader left behind, live for any direct caller (the tests
+    are the only ones today, and the pipeline's next tool need not be). Measured before the
+    fix: `round_trip({'workflow': <save doc>}, ...)` and the identical read inside
+    `link_round_trip` each raised a bare `KeyError: 'nodes'`, while `route_gates`'
+    `normalise_graph` unwraps both wrappers to a readable save-format graph. Two exported
+    functions and the module's own loader disagreed on the same input."""
+    assert GSG.round_trip(CROSS_API, {wrapper: cross_saved()})["all_equal"] is True
+    assert GSG.link_round_trip(CROSS_API, {wrapper: cross_saved()})["n_links"] == 2
+
+
+def test_an_api_format_doc_passed_as_the_saved_argument_is_refused_by_name():
+    """The direct-call mirror of the `main` boundary block: a mapping the loader recognises
+    and hands back, that is simply not save format. Before the fix this was
+    `KeyError: 'nodes'` from both functions."""
+    for fn in (GSG.round_trip, GSG.link_round_trip):
+        with pytest.raises(RG.RouteGate) as exc:
+            fn(CROSS_API, CROSS_API)
+        assert "save-format graph" in str(exc.value)
+        assert exc.value.evidence["clause"] == "not_a_save_format_graph"

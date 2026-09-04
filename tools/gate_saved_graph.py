@@ -33,6 +33,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates as RG  # noqa: E402
+from armature_core.errors import (  # noqa: E402
+    ArmatureError, GateFailure)
 
 TOOL_VERSION = "E10.1"
 
@@ -125,8 +127,97 @@ WIDGET_INDEX = {
 }
 
 
+def _same_value(got, value):
+    """Exact equality for a pinned widget value. No widening, in either direction.
+
+    ⚠ **The predicate used to be `got == value or (isinstance(got, (int, float)) and
+    isinstance(value, (int, float)) and float(got) == float(value))`, and that `float()`
+    clause makes two integers above 2**53 compare EQUAL when they are not.** Measured
+    2026-09-04: built 18446744073709551615 against saved 18446744073709551614 gives
+    `got == value` False and `float(got) == float(value)` True, so `same` was True; driven
+    through `round_trip` on a `Wan2ReferenceVideoApi` node built from this module's own
+    `WIDGET_INDEX` row it returned n_values_compared=3, all_equal=True, carrying
+    `{'input': 'seed', 'built': ...615, 'saved': ...614, 'equal': True}` in its own
+    evidence list. ComfyUI seeds are 64-bit and `specs/E09-seeds.json` records a served
+    seed of 923510416338945, so the range is not hypothetical; a route pinning a 64-bit
+    seed would get "every value round-tripped" from the last gate before a paid submission
+    while the cloud executed a different number from the one the record names.
+
+    Plain `==` needs no widening clause to do the job the widening clause was standing in
+    for: Python compares `int` against `float` EXACTLY (`832 == 832.0` is True and
+    `2**64 - 1 == float(2**64 - 1)` is False), so a converter that wrote `832.0` where we
+    pinned `832` still round-trips.
+
+    `bool` is guarded explicitly because `True == 1` and `False == 0` under `==`, so the
+    two spellings are indistinguishable to a comparison that does not ask. No float widget
+    in `WIDGET_INDEX` is served at a tolerance today, so none is granted one here; a widget
+    that genuinely needs one gets it by NAME, never by a blanket coercion.
+    """
+    if isinstance(got, bool) != isinstance(value, bool):
+        return False
+    return got == value
+
+
+def _as_saved_graph(doc, path=None):
+    """A save-format graph, read through THE loader, or a refusal that names the format.
+
+    Wave 8, F-4c5f67de. `round_trip` and `link_round_trip` each opened with
+    `{str(n["id"]): n for n in saved_graph["nodes"]}` — a direct read that DISAGREED with
+    `route_gates.normalise_graph` on the same input. Measured 2026-09-04:
+    `round_trip({'workflow': <save doc>}, ...)` and `round_trip({'prompt': <save doc>}, ...)`
+    each raised a bare `KeyError: 'nodes'`, and so did an API-format doc passed as the saved
+    argument, while `normalise_graph` unwraps both wrappers to a readable save-format graph.
+    Two exported functions and the module's own loader answered differently about one file.
+
+    So both functions normalise their own argument here, and the boundary block `main` has
+    carried since 2026-09-03 becomes this one implementation rather than a second.
+    """
+    doc = RG.normalise_graph(doc)
+    if not isinstance(doc, dict) or not isinstance(doc.get("nodes"), list):
+        keys = sorted(map(str, doc)) if isinstance(doc, dict) else []
+        where = f"{path} is" if path else "the saved graph argument is"
+        raise RG.RouteGate(
+            f"{where} not a save-format graph: it carries no `nodes` list. Its "
+            f"top-level keys are {keys}; the loader unwraps "
+            f"{list(UNWRAPPED_BY_LOAD_GRAPH)} and hands anything else back as the wrapper "
+            f"it found. Paste the workflow itself, not the tool result around it",
+            {"gate": "SAVED_ADMISSION", "andon": "not_a_save_format_graph",
+             "path": os.path.abspath(path) if path else None, "top_level_keys": keys,
+             "unwrapped_by_load_graph": list(UNWRAPPED_BY_LOAD_GRAPH),
+             "clause": "not_a_save_format_graph"})
+    return doc
+
+
+def _as_api_graph(doc, path=None):
+    """An API-format graph, read through THE loader, or a refusal that names the format.
+
+    The mirror of `_as_saved_graph`, and the clause `--api` never had. Measured 2026-09-04
+    before it existed: an api file wrapped as `{'prompt': {...}}` — the standard submission
+    envelope, and a shape the loader knows how to unwrap — raised `KeyError: 'class_type'`
+    out of `round_trip`; an api file in SAVE format raised `TypeError: list indices must be
+    integers or slices, not str`. Both surfaced as SAVED_ADMISSION_HALT with a stdlib key
+    or type name standing in for a sentence, on the last gate before a paid submission.
+    """
+    doc = RG.normalise_graph(doc)
+    if not RG.is_api_format(doc):
+        keys = sorted(map(str, doc)) if isinstance(doc, dict) else []
+        where = f"{path} is" if path else "the api graph argument is"
+        raise RG.RouteGate(
+            f"{where} not an API-format graph: its values carry no `class_type`. Its "
+            f"top-level keys are {keys}; a `nodes` list means this is the SAVE format and "
+            f"the two arguments are the wrong way round. The loader unwraps "
+            f"{list(UNWRAPPED_BY_LOAD_GRAPH)}, so a submission envelope is read for you",
+            {"gate": "SAVED_ADMISSION", "andon": "not_an_api_format_graph",
+             "path": os.path.abspath(path) if path else None, "top_level_keys": keys,
+             "unwrapped_by_load_graph": list(UNWRAPPED_BY_LOAD_GRAPH),
+             "clause": "not_an_api_format_graph"})
+    return doc
+
+
 def round_trip(api_graph, saved_graph):
     """Every pinned value we wrote, found again in the saved file. Raises on any mismatch."""
+    api_graph = _as_api_graph(api_graph)
+    saved_graph = _as_saved_graph(saved_graph)
     saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
     checked, problems = [], []
     for node_id, node in api_graph.items():
@@ -156,9 +247,7 @@ def round_trip(api_graph, saved_graph):
                                 f"saved node has {len(wv)} widgets")
                 continue
             got = wv[i]
-            same = got == value or (
-                isinstance(got, (int, float)) and isinstance(value, (int, float))
-                and float(got) == float(value))
+            same = _same_value(got, value)
             checked.append({"node": node_id, "input": name, "built": value, "saved": got,
                             "equal": bool(same)})
             if not same:
@@ -193,6 +282,19 @@ def link_table(saved_graph):
 
     Returns `None` when the file declares no table at all — the caller decides, because a
     file with no links needs none and a file with links needs one.
+
+    ⚠ **The table used to be built by a last-write-wins assignment with no duplicate
+    clause**, so a file whose own `links` array declared the same link id twice with
+    different origins resolved to whichever entry came last and discarded the other
+    unexamined. Measured 2026-09-04 on a `WanImageToVideo` fixture in this repo's own API
+    shape (30 = positive encoder, 31 = negative, 49 the conditioning node): a links array
+    of `[[6,'31',0,49,0],[6,'30',0,49,0],[7,'31',0,49,1]]` — link 6 declared first from the
+    NEGATIVE encoder, then from the positive — returned `{'n_links': 2, 'links':
+    ['49.negative','49.positive'], 'optional_sockets_empty_in_both': []}` with no halt.
+    This is the crossed-links family one level down: the table is resolved now, but its
+    internal consistency was not, so a file that is AMBIGUOUS about where its conditioning
+    comes from was admitted by the last gate before credits are spent. A repeat that agrees
+    with itself is not a defect and is admitted.
     """
     raw = saved_graph.get("links")
     if raw is None:
@@ -214,7 +316,19 @@ def link_table(saved_graph):
             raise RG.RouteGate(
                 f"the saved file's link table entry {entry!r} names no link id or no "
                 f"origin node", {"entry": entry, "n_entries": len(raw)})
-        table[str(lid)] = (str(origin), slot)
+        resolved = (str(origin), slot)
+        prior = table.get(str(lid))
+        if prior is not None and prior != resolved:
+            raise RG.RouteGate(
+                f"the saved file's link table declares link {lid!r} TWICE with different "
+                f"origins — node {prior[0]} slot {prior[1]!r} and node {resolved[0]} slot "
+                f"{resolved[1]!r}. Which one a socket carrying that id resolves to is an "
+                f"accident of array order, and a file that is ambiguous about where its "
+                f"conditioning comes from is not a file this gate can vouch for",
+                {"gate": "SAVED_ADMISSION", "andon": "duplicate_link_id",
+                 "link_id": str(lid), "origins": [list(prior), list(resolved)],
+                 "n_entries": len(raw), "clause": "duplicate_link_id"})
+        table[str(lid)] = resolved
     return table
 
 
@@ -278,7 +392,13 @@ def link_round_trip(api_graph, saved_graph):
     compared, all_equal, and the identical `links` list. A conditioning swap, a reference
     video re-pointed at another node, and a link naming a node the file does not declare
     were all invisible on the last gate before credits are spent.
+
+    Both arguments are read through THE loader (`_as_api_graph` / `_as_saved_graph`), so a
+    wrapped or wrong-way-round doc is refused by a named format clause rather than by a
+    stdlib `KeyError` — see `_as_saved_graph`.
     """
+    api_graph = _as_api_graph(api_graph)
+    saved_graph = _as_saved_graph(saved_graph)
     saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
     table = link_table(saved_graph)
     wired, empty, problems = [], [], []
@@ -355,18 +475,14 @@ def main(argv=None):
     # seed(s), all pinned", because `_iter_nodes` reads a wrapper-key doc as no nodes. The
     # KeyError was the only thing between a wrapped file and a SAVED_ADMISSION_OK over a
     # graph nothing examined. `round_trip`'s indexing stays strict below this line.
-    if not isinstance(saved, dict) or not isinstance(saved.get("nodes"), list):
-        keys = sorted(saved) if isinstance(saved, dict) else []
-        raise RG.RouteGate(
-            f"{a.saved} is not a save-format graph: it carries no `nodes` list. Its "
-            f"top-level keys are {keys}; the loader unwraps "
-            f"{list(UNWRAPPED_BY_LOAD_GRAPH)} and hands anything else back as the wrapper "
-            f"it found. Paste the workflow itself, not the tool result around it",
-            {"path": os.path.abspath(a.saved), "top_level_keys": keys,
-             "unwrapped_by_load_graph": list(UNWRAPPED_BY_LOAD_GRAPH),
-             "clause": "not_a_save_format_graph"})
-    with open(a.api, encoding="utf-8") as fh:
-        api = json.load(fh)
+    #
+    # Wave 8, F-4c5f67de: the block is `_as_saved_graph` now — ONE implementation, shared
+    # with `round_trip` and `link_round_trip`, which used to read `saved_graph["nodes"]`
+    # directly and disagree with the loader about the same file.
+    saved = _as_saved_graph(saved, path=a.saved)
+    # `--api` gets the MIRROR of that boundary, which it never had: it was a bare
+    # `json.load` with no format check at all, two lines below a `--saved` refused by name.
+    api = _as_api_graph(RG.load_graph(a.api), path=a.api)
     with open(a.seeds, encoding="utf-8") as fh:
         registered = json.load(fh)["seeds"]
 
@@ -421,6 +537,15 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
+    # disagreed three ways on how a refusal leaves the process: three carried this block,
+    # two exited 2 unconditionally (so a programming error was indistinguishable from a
+    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
+    # operator as a raw traceback with exit 1 and no machine-readable evidence.
+    #
+    # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `SAVED_ADMISSION_HALT`
+    # sentinel below, never on the code alone.
     try:
         raise SystemExit(main())
     except SystemExit:
@@ -432,4 +557,4 @@ if __name__ == "__main__":
         print("SAVED_ADMISSION_HALT " + json.dumps({
             "error": type(exc).__name__, "message": str(exc),
             "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2)
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

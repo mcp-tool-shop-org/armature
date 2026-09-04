@@ -226,3 +226,77 @@ def test_a_clean_run_still_passes_the_stray_clause(tmp_path, stub_download):
     """The mutation that must NOT fire it: nothing in the directory but the plan."""
     dump = _dump(tmp_path, [_result("302", i) for i in range(2)])
     assert F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"]) == 0
+
+
+# ---- the sweep reaches the run ROOT, and matches the way its consumers do (wave 8, F-d85dafd9)
+
+
+def test_a_stale_video_in_the_run_root_halts(tmp_path, stub_download, capsys):
+    """The EXTRA direction swept only the MAPPED subdirectories, and the video tap lands in
+    the run ROOT as `<run>_<index><ext>` — the one population this tool still read from the
+    directory rather than from the plan. Measured 2026-09-04 by replaying every committed
+    `urls.json` plan through `verify_downloads` on this rig's real run directories: all 20
+    non-recovered runs under `outputs/**` PASS a re-fetch of their own plan, and three of
+    them (`outputs/E02/runs/A0r1`, `.../A1b`, `.../A2`) hold an unplanned
+    `*_review_8fps.mp4` in the run root that `main` would print as THIS run's `video` under
+    a green gate_FETCH."""
+    root = tmp_path / "runs"
+    (root / "r").mkdir(parents=True)
+    (root / "r" / "someone_elses_review_8fps.mp4").write_bytes(b"\x00\x00\x00 ftyp")
+    dump = _dump(tmp_path, [_result("302", i) for i in range(2)])
+    with pytest.raises(F.FetchHalt) as exc:
+        F.main([f"--dump={dump}", "--run=r", f"--root={root}"])
+    ev = exc.value.evidence
+    assert [os.path.basename(p) for p in ev["extra"]] == ["someone_elses_review_8fps.mp4"]
+    assert "FETCH_RUN" not in capsys.readouterr().out
+
+
+def test_a_stale_differently_cased_png_in_a_mapped_directory_halts(
+        tmp_path, stub_download, capsys):
+    """The suffix test was `os.path.splitext(name)[1] not in suffixes` — case SENSITIVE —
+    while both frame consumers match case-insensitively (`encode_control.py:126` and
+    `invert_frames.py:70` both use `n.lower().endswith('.png')`). Measured with a stubbed
+    run directory: a stale `00099.PNG` beside two planned frames gave `extra=[]` and the
+    verdict "no unplanned file in 1 swept directory(s)", while the consumers' population
+    read `['00000.png', '00001.png', '00099.PNG']`. The andon and its consumers now share
+    ONE population rule."""
+    root = tmp_path / "runs"
+    (root / "r" / "lossless").mkdir(parents=True)
+    (root / "r" / "lossless" / "00099.PNG").write_bytes(b"\x89PNG")
+    dump = _dump(tmp_path, [_result("302", i) for i in range(2)])
+    with pytest.raises(F.FetchHalt) as exc:
+        F.main([f"--dump={dump}", "--run=r", f"--root={root}"])
+    assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00099.PNG"]
+    assert "FETCH_RUN" not in capsys.readouterr().out
+
+
+def test_the_printed_video_list_comes_from_the_plan_not_from_a_listdir(
+        tmp_path, stub_download, capsys):
+    """`vids` was a bare `os.listdir(base)` filtered to .mp4/.webm/.mkv — the last
+    population in this tool read from the directory instead of the plan, and the reason a
+    prior run's video could be reported as this one's."""
+    dump = _dump(tmp_path, [_result("302", i) for i in range(2)]
+                 + [_result("114", 0, ext=".mp4")])
+    F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
+    line = json.loads(capsys.readouterr().out.split("FETCH_RUN ", 1)[1])
+    assert line["video"] == ["r_00000.mp4"]
+
+
+def test_a_clean_run_with_a_video_and_a_manifest_still_passes(tmp_path, stub_download):
+    """The mutation that must NOT fire it: the run root carries the PLANNED video and the
+    tool's own `urls.json`, and neither is a stray."""
+    dump = _dump(tmp_path, [_result("302", i) for i in range(2)]
+                 + [_result("114", 0, ext=".mp4")])
+    assert F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"]) == 0
+
+
+def test_the_extension_match_is_case_insensitive_at_the_function_level(tmp_path):
+    """The unit form of the same clause, so the rule is pinned where it lives."""
+    d = tmp_path / "lossless"
+    d.mkdir()
+    planned = d / "00000.png"
+    planned.write_bytes(b"\x89PNG")
+    (d / "00099.PNG").write_bytes(b"\x89PNG")
+    with pytest.raises(F.FetchHalt) as exc:
+        F.verify_downloads([("u", str(planned))], directories=[str(d)])
+    assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00099.PNG"]

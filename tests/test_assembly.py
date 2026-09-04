@@ -567,3 +567,201 @@ def test_the_verdict_reports_what_was_inspected_not_the_length_of_the_clip():
     ev = B.gate_slot_frame_index(wf, names, [(B.BATCH_ID, 0, 6)], B.FIRST_IMAGE_ID)
     assert ev["slots_inspected"] == 6
     assert "6 slot(s) inspected" in ev["verdict"]
+
+
+# ------------- the plan must COVER the clip (wave 8, F-ad45bc42)
+
+
+def _cascade81():
+    """The real 81-frame cascade graph and its full, correct slot plan.
+
+    `build_cascade_payload.build` is the production constructor; `AS.cascade_plan` is what
+    both production call sites pair with the group ids. Deriving the fixture from them
+    rather than typing spans keeps this test measuring the shipped shapes.
+    """
+    import build_cascade_payload as C
+
+    names = [f"{i:064x}.png" for i in range(81)]
+    wf, gids = C.build(names, fps=16.0, group_size=AS.GROUP_SIZE)
+    plan = [(gid, start, stop) for (start, stop), gid
+            in zip(AS.cascade_plan(len(names), AS.GROUP_SIZE), gids, strict=True)]
+    return C, names, wf, plan
+
+
+def test_the_full_plan_still_passes_and_says_what_it_inspected():
+    """The mutation that must NOT fire the coverage clause: the plan the production call
+    sites actually build."""
+    C, names, wf, plan = _cascade81()
+    ev = C.gate_slot_frame_index(wf, names, plan, C.FIRST_IMAGE_ID)
+    assert ev["slots_inspected"] == 81
+    assert ev["frames_in_clip"] == 81
+    assert "81 slot(s) inspected against a clip of 81 frame(s)" in ev["verdict"]
+
+
+@pytest.mark.parametrize("keep,inspected", [(0, 0), (1, 27), (2, 54)])
+def test_a_plan_that_does_not_cover_the_clip_is_refused(keep, inspected):
+    """The finding. The gate took its population from the caller's `slot_plan` and imposed
+    no clause requiring that plan to cover the clip, so it returned a PASS verdict having
+    inspected any number of slots INCLUDING ZERO — while the verdict string printed both
+    numbers side by side ("{inspected} slot(s) inspected against a clip of {len(names)}
+    frame(s)") with nothing comparing them.
+
+    Measured 2026-09-04 on this exact 81-frame graph before the clause: `slot_plan=[]`
+    returned "every slot across 0 batch node(s) holds the upload name of its own frame
+    index, 0 slot(s) inspected against a clip of 81 frame(s)"; a one-group plan returned
+    the same green sentence at 27 of 81; and a plan ONE GROUP SHORT — the shape an
+    un-strict `zip` produces — returned it at 54 of 81.
+
+    The two-group case is the reachable one: both production call sites build the plan
+    through a `zip` of `cascade_plan(...)` against the group-id list, and `build_r2v_payload`
+    is the arm that spends.
+    """
+    C, names, wf, plan = _cascade81()
+    with pytest.raises(AS.AssemblyGate) as exc:
+        C.gate_slot_frame_index(wf, names, plan[:keep], C.FIRST_IMAGE_ID)
+    ev = exc.value.evidence
+    assert ev["frames_planned"] == inspected
+    assert ev["frames_in_clip"] == 81
+    assert len(ev["frames_never_planned"]) > 0
+    assert "does not cover the clip" in str(exc.value)
+
+
+def test_a_plan_with_a_hole_in_the_middle_is_refused():
+    """A gap between two spans: every slot the plan names holds its own frame, and 27
+    frames of the clip were never looked at."""
+    C, names, wf, plan = _cascade81()
+    holed = [plan[0], plan[2]]
+    with pytest.raises(AS.AssemblyGate) as exc:
+        C.gate_slot_frame_index(wf, names, holed, C.FIRST_IMAGE_ID)
+    assert exc.value.evidence["frames_never_planned"][0] == 27
+    assert any("not contiguous" in p for p in exc.value.evidence["coverage_problems"])
+
+
+def test_a_plan_that_covers_a_frame_twice_is_refused():
+    """The other direction. Two spans over the same frames is not a clip this gate can
+    vouch for either, and it used to inspect 108 slots against a clip of 81 and pass."""
+    C, names, wf, plan = _cascade81()
+    doubled = list(plan) + [plan[0]]
+    with pytest.raises(AS.AssemblyGate) as exc:
+        C.gate_slot_frame_index(wf, names, doubled, C.FIRST_IMAGE_ID)
+    assert exc.value.evidence["frames_planned_twice"]
+
+
+def test_a_plan_that_runs_past_the_end_of_the_clip_is_refused():
+    C, names, wf, plan = _cascade81()
+    over = list(plan[:-1]) + [(plan[-1][0], plan[-1][1], 200)]
+    with pytest.raises(AS.AssemblyGate) as exc:
+        C.gate_slot_frame_index(wf, names, over, C.FIRST_IMAGE_ID)
+    assert exc.value.evidence["frames_planned_past_the_clip"]
+
+
+def test_both_production_call_sites_pair_the_plan_STRICTLY():
+    """The un-strict `zip` is what silently produced a short plan. Both call sites pass
+    `strict=True` now, so the pairing raises rather than truncating.
+
+    family: derived by AST over every `tools/*.py` call to `AS.cascade_plan` paired with a
+    group-id list under `zip` -> 2 sites — tools/build_cascade_payload.py,
+    tools/build_r2v_payload.py (the third reader, tools/build_assembly_payload.py, does not
+    zip: it plans one batch node).
+    """
+    import ast
+
+    sites = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name) and node.func.id == "zip"):
+                continue
+            if "cascade_plan" not in ast.get_source_segment(src, node):
+                continue
+            sites.append((name, [kw.arg for kw in node.keywords]))
+    assert [s[0] for s in sites] == ["build_cascade_payload.py", "build_r2v_payload.py"], sites
+    for name, kwargs in sites:
+        assert "strict" in kwargs, f"{name} pairs cascade_plan with an un-strict zip"
+
+    # And the pairing really does raise on a mismatched length, rather than truncating.
+    with pytest.raises(ValueError, match=r"zip\(\) argument"):
+        list(zip(AS.cascade_plan(81, AS.GROUP_SIZE), ["400", "401"], strict=True))
+
+
+# ---- the .png case family's last builders site (wave 8, F-d85dafd9, routed by the
+# ---- coordinator from instruments-measure)
+#
+# `frame_order` is the one site in this domain where the suffix belongs to an upload KEY
+# rather than to a directory listing, and it was the last one still comparing case
+# SENSITIVELY. Measured on this branch before the fix:
+#
+#   all `00000.png`  -> OK
+#   all `00000.PNG`  -> AssemblyGate "4 key(s) that are not a zero-padded frame name"
+#   mixed png/PNG    -> AssemblyGate, same clause, naming the two .PNG keys
+#   bare `00000`     -> OK
+#
+# The `.PNG` map REFUSED, so nothing unsafe was admitted — but it refused through the wrong
+# clause, telling an operator their keys are not zero-padded frame names when they are, and
+# it made this gate's population rule disagree with every consumer of the same frames
+# (`encode_control.py:126` and `invert_frames.py:70` both `n.lower().endswith('.png')`) and
+# with both fetchers, whose EXTRA andon now lower-cases too.
+#
+# The shape classification takes each key's suffix VERBATIM rather than normalising it,
+# because the invariant this gate exists for is SORT ORDER: '.PNG' sorts before '.png' in
+# ASCII, so a map mixing the two cases genuinely has no single order and must still refuse —
+# now through the mixed-shape clause, which is the sentence that describes it.
+
+
+def _map(keys):
+    return {k: f"server_{i}.png" for i, k in enumerate(keys)}
+
+
+def test_an_upload_map_keyed_with_an_uppercase_suffix_is_a_frame_map():
+    """The population rule, agreeing with the consumers and with both fetchers."""
+    keys = [f"{i:05d}.PNG" for i in range(4)]
+    assert B.frame_order(_map(keys)) == sorted(keys)
+
+
+def test_the_lowercase_and_bare_shapes_are_unchanged():
+    """The mutations that must NOT change: the eleven E02/E03 maps on this rig are keyed
+    bare, and the cascade route keys its maps `00000.png`."""
+    assert B.frame_order(_map([f"{i:05d}.png" for i in range(4)])) == \
+        [f"{i:05d}.png" for i in range(4)]
+    assert B.frame_order(_map([f"{i:05d}" for i in range(4)])) == \
+        [f"{i:05d}" for i in range(4)]
+
+
+def test_a_map_mixing_the_two_CASES_refuses_through_the_mixed_shape_clause():
+    """It must still refuse — '.PNG' sorts before '.png', so a mixed-case map has no single
+    order — but through the clause that names the real defect, not through 'these are not
+    zero-padded frame names'."""
+    keys = ["00000.PNG", "00001.png", "00002.PNG", "00003.png"]
+    with pytest.raises(AS.AssemblyGate, match=r"mixes") as exc:
+        B.frame_order(_map(keys))
+    assert sorted(exc.value.evidence["suffixes"]) == [".PNG", ".png"]
+
+
+def test_a_key_that_really_is_malformed_still_halts_on_the_malformed_clause():
+    """The boundary on the fix: widening the SUFFIX's case must not widen anything else."""
+    for bad in ("0.png", "00000.jpg", "frame_00000.png", "00000.png.bak"):
+        with pytest.raises(AS.AssemblyGate, match=r"not a zero-padded frame name"):
+            B.frame_order(_map([bad] + [f"{i:05d}.png" for i in range(1, 4)]))
+
+
+def test_the_png_case_rule_is_the_same_one_its_consumers_use():
+    """family: derived by grep over tools/ for a `.png` suffix test -> 5 sites —
+    fetch_run.py (verify_downloads, the EXTRA andon), fetch_t2v_run.py (same function,
+    imported not re-written), build_payload.py (`_distinct_source_frames`),
+    encode_control.py:126 and invert_frames.py:70 (the consumers), plus this one,
+    build_assembly_payload.py:96, which is the only member keyed on an upload KEY rather
+    than a directory listing. SIBLING CARRIED: `fetch_run.verify_downloads`'s lower-cased
+    comparison, settled with instruments-measure this wave. Every member treats a
+    differently-cased suffix as the same population."""
+    import fetch_run as F
+
+    assert B.FRAME_KEY.match("00000.PNG"), "this gate's own population rule is narrower"
+    assert F.verify_downloads is __import__("fetch_t2v_run").verify_downloads
+
+    for name, line in (("encode_control.py", 126), ("invert_frames.py", 70)):
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read().splitlines()
+        assert ".lower()" in src[line - 1], f"{name}:{line} no longer lower-cases"

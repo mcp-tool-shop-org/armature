@@ -62,6 +62,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
+from armature_core.errors import (  # noqa: E402
+    ArmatureError, GateFailure)
 from build_assembly_payload import (  # noqa: E402
     FRAME_KEY, frame_order, frame_source_ids, gate_slot_frame_index)
 
@@ -159,8 +161,12 @@ def main(argv=None):
     gate_topo = AS.gate_cascade_topology(wf, len(names), group_ids, FINAL_BATCH_ID,
                                          VIDEO_ID, SAVE_ID, "video", group_size=a.group,
                                          expected_sources=list(ordered_ids))
+    # `strict=True`: an un-strict zip truncates to the shorter of the two, so a plan one
+    # group short is silently produced and `gate_slot_frame_index` used to return its green
+    # sentence having inspected 54 of 81 slots (wave 8, F-ad45bc42). The gate carries its
+    # own coverage clause now; this is the pairing refusing to build the short plan at all.
     slot_plan = [(gid, start, stop) for (start, stop), gid
-                 in zip(AS.cascade_plan(len(names), a.group), group_ids)]
+                 in zip(AS.cascade_plan(len(names), a.group), group_ids, strict=True)]
     gate_index = gate_slot_frame_index(wf, names, slot_plan, FIRST_IMAGE_ID)
     # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no
     # noise-bearing node at all, so the seed clause has nothing to decide, and a green
@@ -229,4 +235,24 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
+    # disagreed three ways on how a refusal leaves the process: three carried this block,
+    # two exited 2 unconditionally (so a programming error was indistinguishable from a
+    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
+    # operator as a raw traceback with exit 1 and no machine-readable evidence.
+    #
+    # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `BUILD_CASCADE_HALT`
+    # sentinel below, never on the code alone.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("BUILD_CASCADE_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

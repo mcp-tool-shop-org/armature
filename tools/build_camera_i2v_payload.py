@@ -316,7 +316,22 @@ PROMPT_DOMINANCE = {"min_ratio": 3.0}
 
 
 class PayloadError(ArmatureError):
-    """The payload could not be built as specified."""
+    """The payload could not be built as specified.
+
+    Carries an optional evidence dict, the way `GateFailure` does. Wave 8 (F-bc806f79):
+    `ledger_against_wave1` built a full evidence dict, wrote it into the payload record on
+    the PASSING path, and then raised with a message and nothing else — so the failing
+    measurement, the one worth having, reached no record at all. Four modules define this
+    class; all four take the dict now.
+
+    ⚠ Four identical implementations of three lines is three lines too many: the single one
+    belongs beside `GateFailure` in `armature_core/errors.py`. That file is not this
+    domain's to edit, so the duplication is RECORDED here rather than hidden.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 def parse_args(argv=None):
@@ -592,11 +607,18 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
     w1_vals = {k: (v or {}).get("value") for k, v in w1_traj.items()}
     held = {k: v for k, v in traj.items() if k not in overrides}
     w1_held = {k: v for k, v in w1_vals.items() if k not in overrides}
+    # ⚠ `held_agrees: held == w1_held` used to sit here, and it could not read False in any
+    # record that reaches disk: the very next clause appends a problem on the negation, and
+    # this function raises on any problem, so `ev` — and therefore the record — existed only
+    # when the comparison was True. A later session reading `meta['gate_LEDGER_W3']` would
+    # take it as evidence a comparison was made. The two SIDES are recorded instead; they
+    # vary, and a reader can do the comparison the field was standing in for.
     ev["trajectory"] = {
         "this_wave": traj, "wave_1": w1_vals,
         "moved_on_purpose": sorted(overrides),
         "held": sorted(held),
-        "held_agrees": held == w1_held,
+        "held_this_wave": held,
+        "held_wave_1": w1_held,
         "role": ("the fields not named in an override are what this wave holds against "
                  "wave 1; the named ones are its lever")}
     if held != w1_held:
@@ -619,7 +641,9 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
         "sha256_wave_3": hashlib.sha256(positive.encode("utf-8")).hexdigest(),
         "sha256_wave_1": (hashlib.sha256(w1_pos.encode("utf-8")).hexdigest()
                           if isinstance(w1_pos, str) else None),
-        "differs": isinstance(w1_pos, str) and w1_pos != positive,
+        # `differs` used to sit here and was constant for the same reason `held_agrees`
+        # was: the clauses below raise unless wave 1's positive is a str AND differs. The
+        # two hashes are already the varying record of that comparison.
         "words_wave_3": word_count(positive),
         "words_wave_1": word_count(w1_pos) if isinstance(w1_pos, str) else None,
         "note": ("the prompt surgery rides UNCHANGED from wave 2 — it has never been "
@@ -634,8 +658,12 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
             "report described two levers")
 
     if problems:
+        # The evidence rides the HALT, not only the pass. It was built, filled, and then
+        # dropped on the floor here, so the failing measurement — the interesting one —
+        # reached no record at all.
         raise PayloadError("wave 3's payload is not the one the ruling describes: "
-                           + "; ".join(problems))
+                           + "; ".join(problems),
+                           dict(ev, problems=problems))
     moved = sorted(overrides)
     ev["verdict"] = (
         f"{len(DELIBERATE_BREAKS)} deliberate breaks verified as actual; "

@@ -53,6 +53,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # `fetch_run` already carried both; this file carried a second exception class with the
 # same gate id and no plan-to-disk check at all, under a comment claiming the two were the
 # same fix. Wave 6: the sibling's implementation is imported rather than re-written.
+from armature_core.errors import (  # noqa: E402
+    ArmatureError, GateFailure)
 from fetch_run import FetchHalt, verify_downloads  # noqa: E402,F401
 
 TOOL_VERSION = "E09.A3"
@@ -221,7 +223,14 @@ def main(argv=None):
     # {"frames": 5} with the stale frame in the sha256 manifest and inside both arms of
     # Gate ORDER; a dump whose frame 3 and video never landed printed FETCH_OK
     # {"frames": 4} with 00000,00001,00002,00004 differenced as if consecutive.
-    landed = verify_downloads(jobs, directories=[os.path.join(a.out, "lossless")])
+    #
+    # Wave 8, F-d85dafd9: `root=a.out` as well. This tool passed the single lossless
+    # directory and left `donor<ext>` in the root unswept for exactly the reason `fetch_run`
+    # left its video tap unswept, so a re-fetch into a used --out kept a prior run's donor.
+    # The root is swept for the VIDEO suffixes only, so the four JSON records this tool
+    # writes beside it are not called strays.
+    landed = verify_downloads(jobs, directories=[os.path.join(a.out, "lossless")],
+                              root=a.out)
 
     # The frame population is the PLAN, never a directory listing.
     frames = [os.path.basename(j["out"]) for j in jobs if j["array_index"] is not None]
@@ -256,4 +265,24 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
+    # disagreed three ways on how a refusal leaves the process: three carried this block,
+    # two exited 2 unconditionally (so a programming error was indistinguishable from a
+    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
+    # operator as a raw traceback with exit 1 and no machine-readable evidence.
+    #
+    # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `FETCH_T2V_HALT`
+    # sentinel below, never on the code alone.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("FETCH_T2V_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

@@ -53,13 +53,25 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
+from armature_core.errors import (  # noqa: E402
+    ArmatureError, GateFailure)
 
 TOOL_VERSION = "S03.2"
 
 #: The only shape a frame key in an upload map may take. Zero padded to five digits, so a
 #: lexicographic sort of the keys IS the numeric order — the property the ordering rule
 #: assumed and never checked.
-FRAME_KEY = re.compile(r"^[0-9]{5}(\.png)?$")
+#: An upload map key: five zero-padded digits, optionally suffixed `.png`.
+#:
+#: The suffix is matched case-INSENSITIVELY (wave 8, F-d85dafd9, routed from
+#: instruments-measure). This was the `.png` case family's last builders site and the
+#: only member keyed on an upload KEY rather than a directory listing. Measured before
+#: the widening: a map keyed `00000.PNG` refused with "4 key(s) that are not a
+#: zero-padded frame name" — safe, but through the wrong clause, telling an operator
+#: their keys are not zero-padded frame names when they are, while every consumer of the
+#: same frames (`encode_control.py:126`, `invert_frames.py:70`) and both fetchers'
+#: EXTRA andon (`fetch_run.verify_downloads`, carried here) read `.PNG` as a frame.
+FRAME_KEY = re.compile(r"^[0-9]{5}(\.png)?$", re.IGNORECASE)
 
 
 def frame_order(uploads):
@@ -93,11 +105,18 @@ def frame_order(uploads):
     # lexicographically; the five zero-padded digits catch that in either shape, so both are
     # accepted — but one map must use one shape, because `00000` sorts before `00000.png`
     # and a mixed map has no single order to check.
-    suffixes = {".png" if str(k).endswith(".png") else "" for k in keys}
+    #
+    # Each key's suffix VERBATIM, not normalised. Widening the case above must not reach
+    # this line: the invariant here is SORT ORDER, and '.PNG' sorts before '.png' in ASCII,
+    # so a map mixing the two cases genuinely has no single order and must still refuse —
+    # through the mixed-shape clause below, which is the sentence that describes it. Taking
+    # the suffix verbatim also keeps `want` reconstructing the operator's own key spelling.
+    suffixes = {str(k)[5:] for k in keys}
     if len(suffixes) > 1:
         raise AS.AssemblyGate(
-            f"the upload map mixes bare frame keys (00000) with .png-suffixed ones "
-            f"(00000.png); a mixed map has no single sort order. Use one shape throughout",
+            f"the upload map mixes frame-key shapes {sorted(suffixes)!r} (bare 00000, "
+            f".png-suffixed, or a differently-CASED suffix); a mixed map has no single "
+            f"sort order, and '.PNG' sorts before '.png'. Use one shape throughout",
             {**ev, "suffixes": sorted(suffixes)})
     suffix = next(iter(suffixes)) if suffixes else ""
     ordered = sorted(keys)
@@ -154,9 +173,56 @@ def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
     today — but this gate is exported for standalone use, and a verdict naming a property
     no code checked is this repo's named worst class.
     """
-    ev = {"gate": "ASSEMBLY_slot_frame_index", "n_frames": len(names),
-          "first_image_id": int(first_image_id),
+    ev = {"gate": "ASSEMBLY_slot_frame_index", "andon": "slot_frame_index",
+          "n_frames": len(names), "first_image_id": int(first_image_id),
           "slot_plan": [[str(nid), int(start), int(stop)] for nid, start, stop in slot_plan]}
+
+    # ---- COVERAGE, wave 8 (F-ad45bc42). The population came from the CALLER's plan and no
+    # clause required that plan to cover the clip, so the gate returned a PASS verdict
+    # having inspected any number of slots INCLUDING ZERO — and the verdict string printed
+    # both numbers side by side with nothing comparing them. Measured 2026-09-04 on the
+    # real 81-frame cascade graph from `build_cascade_payload.build(names, fps=16.0,
+    # group_size=AS.GROUP_SIZE)` (3 group nodes): the full plan returned "…81 slot(s)
+    # inspected against a clip of 81 frame(s)"; `slot_plan=[]` returned "every slot across
+    # 0 batch node(s) holds the upload name of its own frame index, 0 slot(s) inspected
+    # against a clip of 81 frame(s)"; a ONE-GROUP plan returned the same green sentence at
+    # 27 of 81; and a plan ONE GROUP SHORT — the shape an un-strict `zip` produces —
+    # returned it at 54 of 81. No clause fired in any of the three. Both production call
+    # sites build the plan through a `zip` (`build_cascade_payload.py:163`,
+    # `build_r2v_payload.py:254`), which truncates to the shorter of `cascade_plan(...)` and
+    # the group-id list rather than raising; both pass `strict=True` now, and this clause is
+    # the andon that does not depend on them doing so.
+    covered, overlapping, gaps = set(), set(), []
+    cursor = 0
+    for nid, start, stop in slot_plan:
+        start, stop = int(start), int(stop)
+        if stop <= start:
+            gaps.append(f"node {nid} is planned an empty or reversed span [{start}, {stop})")
+        if start != cursor:
+            gaps.append(f"node {nid}'s span starts at {start}, and the plan's previous "
+                        f"span ended at {cursor}; the plan is not contiguous")
+        for frame in range(start, stop):
+            (overlapping if frame in covered else covered).add(frame)
+        cursor = max(cursor, stop)
+    missing = sorted(set(range(len(names))) - covered)
+    outside = sorted(f for f in covered if f >= len(names))
+    if gaps or missing or overlapping or outside:
+        ev.update({"frames_planned": len(covered), "frames_in_clip": len(names),
+                   "frames_never_planned": missing[:12],
+                   "frames_planned_twice": sorted(overlapping)[:12],
+                   "frames_planned_past_the_clip": outside[:12],
+                   "coverage_problems": gaps})
+        raise AS.AssemblyGate(
+            f"the slot plan does not cover the clip: {len(covered)} of {len(names)} "
+            f"frame(s) are planned onto a batch node"
+            + (f", {len(missing)} never ({missing[:6]}…)" if missing else "")
+            + (f", {len(overlapping)} twice" if overlapping else "")
+            + (f", {len(outside)} past the end of the clip" if outside else "")
+            + ("; " + "; ".join(gaps[:4]) if gaps else "")
+            + ". A gate whose population is the caller's plan reports what it inspected, "
+              "not what the clip needed, and a swap inside an unplanned group ships as an "
+              "out-of-order clip", ev)
+
     problems, inspected = [], 0
     for nid, start, stop in slot_plan:
         span = int(stop) - int(start)
@@ -192,6 +258,11 @@ def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
                     f"node {nid} slot {k} resolves to {got!r} via {src!r}; frame {frame} "
                     f"of the clip is {want!r}")
     ev["slots_inspected"] = inspected
+    ev["frames_in_clip"] = len(names)
+    if inspected != len(names):
+        problems.append(f"{inspected} slot(s) were inspected against a clip of "
+                        f"{len(names)} frame(s); the two numbers are the gate's whole "
+                        f"claim and they must be the same number")
     if problems:
         ev["problems"] = problems
         raise AS.AssemblyGate(
@@ -325,4 +396,24 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
+    # disagreed three ways on how a refusal leaves the process: three carried this block,
+    # two exited 2 unconditionally (so a programming error was indistinguishable from a
+    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
+    # operator as a raw traceback with exit 1 and no machine-readable evidence.
+    #
+    # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `BUILD_ASSEMBLY_HALT`
+    # sentinel below, never on the code alone.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("BUILD_ASSEMBLY_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

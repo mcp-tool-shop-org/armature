@@ -67,6 +67,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
+from armature_core import canon as C  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
@@ -134,9 +135,20 @@ SCENE_CLAUSE = ("He is dancing in a crowded, warmly lit bar, other people around
 class PayloadError(ArmatureError):
     """The payload could not be built as specified.
 
-    Carries an evidence dict for the same reason every gate in this tree does: a halt with
-    no machine-readable record makes the next session re-derive what fired it.
+    Carries an optional evidence dict, the way `GateFailure` does. Wave 8 (F-bc806f79):
+    `ledger_against_wave1` built a full evidence dict, wrote it into the payload record on
+    the PASSING path, and then raised with a message and nothing else — so the failing
+    measurement, the one worth having, reached no record at all. Four modules define this
+    class; all four take the dict now.
+
+    ⚠ Four identical implementations of three lines is three lines too many: the single one
+    belongs beside `GateFailure` in `armature_core/errors.py`. That file is not this
+    domain's to edit, so the duplication is RECORDED here rather than hidden.
     """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
     def __init__(self, message, evidence=None):
         super().__init__(message)
@@ -232,14 +244,35 @@ def identity_clause(path=TWIN_PROMPT_JSON):
     original = text
     log = []
     for phrase, reason in IDENTITY_DROPS:
-        if phrase not in text:
+        # ⚠ This was `phrase not in text` followed by
+        # `text.replace(", " + phrase, "").replace(phrase + ", ", "")` — a bare substring
+        # edit with no word boundary, the same class core-gates closed in
+        # `canon._find_phrase` (routed here 2026-09-04, F-138c009c's family): 'cape' matched
+        # inside 'landscape'. A drop of a short single-word phrase — cape, helm, arm, hood,
+        # mask, the form a surfaces file names an occupant with — would cut a hole in the
+        # middle of an unrelated word and the change log would record a drop that did not
+        # happen the way it says.
+        #
+        # Located through `canon._find_phrase`, which is the ONE matcher (core-gates owns
+        # it; no second implementation here), so presence and removal cannot disagree and
+        # the boundary rule arrives with the module rather than being re-derived.
+        low = text.lower()
+        idx = C._find_phrase(low, phrase.lower())
+        if idx < 0:
             raise PayloadError(
-                f"the identity clause no longer contains {phrase!r}, so this shot's "
-                f"recorded drop cannot be applied. The clause has changed under the "
-                f"experiment and the change log would be describing a different string")
-        text = text.replace(", " + phrase, "").replace(phrase + ", ", "")
+                f"the identity clause no longer contains {phrase!r} as a whole phrase, so "
+                f"this shot's recorded drop cannot be applied. The clause has changed under "
+                f"the experiment and the change log would be describing a different string",
+                {"phrase": phrase, "clause_sha256":
+                    hashlib.sha256(original.encode("utf-8")).hexdigest()})
+        before, after = text[:idx], text[idx + len(phrase):]
+        if before.rstrip().endswith(","):
+            before = before.rstrip()[:-1]
+        elif after.lstrip().startswith(","):
+            after = after.lstrip()[1:]
+        text = re.sub(r"\s+", " ", (before + " " + after)).replace(" ,", ",")
         log.append({"dropped": phrase, "reason": reason})
-    return text.strip().strip(","), original, log
+    return text.strip().strip(",").strip(), original, log
 
 
 def build(uploads, seed, negative, positive, registry, reference_fit,
