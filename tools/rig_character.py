@@ -67,6 +67,45 @@ PROBE_START_DEG = 0.0
 PROBE_END_DEG = 90.0
 
 
+#: Gate P's round-trip probe cap, passed EXPLICITLY at the call site rather than inherited
+#: from `rig_gates.gate_p_round_trip_positions`' declared default. MEASURED 2026-09-04
+#: (F-2d1fd05e): the call passed three positional arguments, so the cap was taken silently.
+#: This subject comes back from a glTF round trip as 399,140 source vertices against
+#: 399,903 exported, with 149,643 unique positions -- an order of magnitude above the cap.
+#: When the cap bites, the gate sets `probe_truncated_at`, keeps `pts[:max_probe]` (numpy's
+#: lexicographic order, i.e. the smallest-x positions) and still reaches its pass verdict;
+#: a repo-wide grep for `probe_truncated_at` returned exactly one hit, the gate's own write.
+#: The value is unchanged from the inherited default so this fix moves no measurement; what
+#: changes is that the choice is stated here and the flag is READ BACK below.
+ROUND_TRIP_MAX_PROBE = 20000
+
+
+class GateObjects(GateFailure):
+    """Gate OBJ - the export would carry an object nobody registered.
+
+    MEASURED 2026-09-04 (F-2ef09fa0): the refusal raised the bare `ArmatureError`, so the
+    object table the gate had just assembled -- every object with its type, collections and
+    effective render visibility, i.e. exactly the "whether it originates in the file or in
+    Blender's importer" the docstring says the gate records rather than assumes -- was
+    neither passed nor returned on the raising path. `_write_halt` then wrote `"gate": "?"`
+    and `"evidence": {}`, in the tool that produces the rigged GLB.
+    """
+
+    gate = "OBJ"
+
+
+class GateSubject(GateFailure):
+    """The subject cannot be identified without guessing which mesh is the character."""
+
+    gate = "SUBJECT"
+
+
+class GateMode(GateFailure):
+    """A named route this tool does not have."""
+
+    gate = "MODE"
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -397,11 +436,12 @@ def gate_objects_registered(scene, subject, armature):
               "verdict": (f"{len(seen)} object(s) in the scene, none unregistered and "
                           f"render-visible" if not strays else "STRAY OBJECTS")}
     if strays:
-        raise ArmatureError(
+        raise GateObjects(
             f"the export would carry {len(strays)} object(s) nobody registered: "
             f"{[o['name'] for o in strays]}. Gate N refuses an unregistered bone; an "
             f"unregistered object is the same defect one level up, and one already leaked "
-            f"into a delivered GLB.")
+            f"into a delivered GLB.",
+            record)
     return record
 
 
@@ -445,8 +485,9 @@ def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_mult
                            "1.0 units tall, which is a global constant governing a local "
                            "feature and is recorded as such")
         else:
-            raise ArmatureError(
-                f"unknown --envelope-radii={envelope_radii!r}; known: measured, default")
+            raise GateMode(
+                f"unknown --envelope-radii={envelope_radii!r}; known: measured, default",
+                {"envelope_radii": envelope_radii, "known": ["measured", "default"]})
         _parent_to(mesh_obj, arm_obj, "ARMATURE_ENVELOPE")
         rec = {
             "binding": "envelope", "operator": "parent_set(ARMATURE_ENVELOPE)",
@@ -473,7 +514,8 @@ def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_mult
                "weight_quantisation": RIGID_WEIGHT_QUANTISATION,
                "radii_source": "measured cross-section (landmarks.bone_radii)"}
     else:
-        raise ArmatureError(f"unknown binding {mode!r}; known: auto, envelope, rigid")
+        raise GateMode(f"unknown binding {mode!r}; known: auto, envelope, rigid",
+                       {"binding": mode, "known": ["auto", "envelope", "rigid"]})
     return time.time() - t0, rec
 
 
@@ -559,10 +601,12 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
     if len(meshes) != 1:
-        raise ArmatureError(
+        raise GateSubject(
             f"expected exactly one mesh object in the subject, found {len(meshes)}: "
             f"{[o.name for o in meshes]}. Which one carries the character is a question "
-            f"this tool will not answer by picking the biggest"
+            f"this tool will not answer by picking the biggest",
+            {"glb": glb_path, "mesh_objects": [o.name for o in meshes],
+             "armatures": [o.name for o in armatures]}
         )
     mesh_obj = meshes[0]
     weld = weld_seam_splits(mesh_obj)
@@ -830,6 +874,52 @@ def deformation_diagnostics(ctx, probe):
 # ----------------------------------------------------------------------- export
 
 
+def qualify_truncated_round_trip(ev):
+    """Gate P's round-trip evidence, with a truncated probe SAID rather than buried.
+
+    MEASURED 2026-09-04 (F-2d1fd05e). `rig_gates.gate_p_round_trip_positions` caps the
+    nearest-neighbour probe at `max_probe`; when the cap bites it writes
+    `probe_truncated_at` into the evidence, keeps `pts[:max_probe]` — `np.unique`'s
+    lexicographic order, i.e. the smallest-x positions — and still reaches the verdict
+    `"positions agree within <threshold>"`. A repo-wide grep for `probe_truncated_at`
+    returned exactly one hit: the gate's own write. No tool, no test and no doc read it.
+    `rig_character` embeds the whole evidence dict into the manifest under
+    `gates.P_rest_pose_round_trip`, so the key IS in the file when it fires — sitting
+    beside an unqualified pass verdict, with neither the printed OK line nor the manifest's
+    summary fields mentioning it.
+
+    This does not re-run the comparison and does not move a measurement. It rewrites the
+    verdict so a reader cannot mistake a comparison made over a prefix of the difference
+    set for a comparison made over all of it — the `NOT YET RUN` convention this file
+    already uses three times in the same manifest, applied to a partial clause.
+
+    ROUTED, and landed in the same wave: core-gates' half of this finding makes Gate P
+    REFUSE a probe it cannot finish rather than return a truncated pass, so on the merged
+    tree this function is the second line and should never fire — a truncated comparison
+    arrives here as a `GatePRestPose` halt carrying `probe_truncated_at`, and the halt
+    contract exits 2 with the evidence. It stays because the shape it guards against (a
+    partial clause reaching a manifest wearing an unqualified verdict) is the one this
+    file's manifest is read for, and a gate that changes its mind later must not silently
+    re-open it.
+    """
+    if not isinstance(ev, dict) or "probe_truncated_at" not in ev:
+        return ev
+    rec = dict(ev)
+    cap = rec["probe_truncated_at"]
+    differing = (int(rec.get("positions_only_in_source", 0))
+                 + int(rec.get("positions_only_in_roundtrip", 0)))
+    rec["verdict_before_qualification"] = rec.get("verdict")
+    rec["verdict"] = (
+        f"TRUNCATED — the nearest-neighbour probe compared at most {cap} of the "
+        f"{differing} differing position(s), taken in lexicographic order, so "
+        f"{rec.get('max_deviation')} is the worst deviation over that PREFIX and not over "
+        f"the difference set. This clause is NOT a pass over the whole surface.")
+    rec["probe_truncated_reason"] = (
+        f"max_probe={cap} was passed explicitly by rig_character "
+        f"(ROUND_TRIP_MAX_PROBE); the difference set is larger than the cap")
+    return rec
+
+
 def export_rigged(ctx, probe, out_path, animated=True):
     """Export, then Gate N on the RE-IMPORTED result. Raises before any manifest exists.
 
@@ -872,14 +962,20 @@ def export_rigged(ctx, probe, out_path, animated=True):
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     visible = blender_scene.render_visible_meshes(bpy.context.scene, meshes)
     if len(visible) != 1:
-        raise ArmatureError(
+        raise GateSubject(
             f"the re-imported export presents {len(visible)} render-visible mesh object(s) "
             f"({[o.name for o in visible]}, from {[o.name for o in meshes]}); Gate P's "
             f"round-trip clause cannot say which one is the subject, and guessing would "
-            f"make it report on geometry nobody asked about"
+            f"make it report on geometry nobody asked about",
+            {"glb": out_path, "mesh_objects_all": [o.name for o in meshes],
+             "mesh_objects_render_visible": [o.name for o in visible]}
         )
-    gate_p_round_trip = rig_gates.gate_p_round_trip_positions(
-        ctx["source"], world_verts(visible[0]), ctx["diagonal"])
+    # `max_probe` passed EXPLICITLY — see ROUND_TRIP_MAX_PROBE for why the choice is stated
+    # here rather than inherited from the gate's declared default.
+    gate_p_round_trip = qualify_truncated_round_trip(
+        rig_gates.gate_p_round_trip_positions(
+            ctx["source"], world_verts(visible[0]), ctx["diagonal"],
+            max_probe=ROUND_TRIP_MAX_PROBE))
     actions = [a.name for a in bpy.data.actions]
     return {
         "export_kwargs": {k: v for k, v in kwargs.items() if k != "filepath"},
@@ -1080,7 +1176,8 @@ def main():
         run_skeleton(args, out_dir, source_sha, started)
         return
     if args["mode"] != "full":
-        raise ArmatureError(f"unknown --mode={args['mode']!r}; known: skeleton, full")
+        raise GateMode(f"unknown --mode={args['mode']!r}; known: skeleton, full",
+                       {"mode": args["mode"], "known": ["skeleton", "full"]})
 
     # Two full builds from the same input. The second is the one kept; Gate D compares.
     mode = args["binding"]
@@ -1161,69 +1258,104 @@ def main():
                                   "manifest": path}))
 
 
+def halt_outcome(exc):
+    """Which of the three things happened — the wave-8 halt contract's vocabulary.
+
+    MEASURED 2026-09-04 (F-c3f86abc): `_write_halt` hard-coded `"outcome": "HALTED — a
+    gate fired"` with no branch, and every refusal in this 1229-line file raised a bare
+    `ArmatureError`, so `getattr(exc, "gate", "?")` wrote `"?"` for every halt this tool
+    could produce. Driving the file's own `__main__` block with `ValueError("a bug, not a
+    gate")` and with `ArmatureError("the export would carry 1 object(s) nobody
+    registered")` produced records differing only in `"exception"`: both said an andon
+    fired, both exited 1. A crash in the rigging code wrote a record asserting a gate
+    stopped the run, beside a note explaining that gates after the one that fired are NOT
+    YET RUN — about a run in which no gate fired at all.
+
+    Three states, because there are three. A typed `GateFailure` is an andon that names
+    itself; a bare `ArmatureError` is a deliberate refusal with no andon behind it (an
+    unknown flag, an unknown `--mode=`); anything else is a crash.
+    """
+    if isinstance(exc, GateFailure):
+        return "HALTED — a gate fired"
+    if isinstance(exc, ArmatureError):
+        return "REFUSED — the tool declined to proceed"
+    return "FAILED — an unhandled error"
+
+
 def _write_halt(out_dir, exc, source_sha, glb):
-    """Record a fired andon where the run can be read back, then re-raise.
+    """Record what stopped the run where it can be read back.
 
     A gate that halts and leaves nothing behind makes the executor the only witness. The
     evidence dict each gate carries is the measurement that stopped the run, so it is
     written beside the outputs the run did not produce — and the process still exits
     non-zero, because a halt that returns success is not a halt.
     """
+    outcome = halt_outcome(exc)
+    gate = getattr(exc, "gate", None)
     rec = {
         "tool": "rig_character", "tool_version": TOOL_VERSION,
-        "outcome": "HALTED — a gate fired",
-        "gate": getattr(exc, "gate", "?"),
+        "outcome": outcome,
+        "gate": gate,
         "exception": type(exc).__name__,
         "message": str(exc),
-        "evidence": getattr(exc, "evidence", {}),
+        "evidence": getattr(exc, "evidence", None),
         "blender": bpy.app.version_string,
         "source": {"path": glb, "sha256": source_sha},
         "outputs_not_produced": ["<name>_rigged.glb", "rig_manifest.json"],
-        "note": ("Nothing downstream of the gate ran. No rigged GLB exists, no manifest "
-                 "was written, and no export was attempted. Gates after the one that "
-                 "fired are NOT YET RUN, not passed."),
+        "note": (("Nothing downstream of the gate ran. No rigged GLB exists, no manifest "
+                  "was written, and no export was attempted. Gates after the one that "
+                  "fired are NOT YET RUN, not passed.") if gate is not None else
+                 ("The run stopped here. No rigged GLB exists, no manifest was written, "
+                  "and no export was attempted. No gate is named because none fired: "
+                  "every gate is NOT YET RUN, not passed and not failed.")),
     }
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "halt.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(rec, fh, indent=2, default=str)
-    print("HALT " + json.dumps({"gate": rec["gate"], "record": path}))
     return path
 
 
 if __name__ == "__main__":
+    # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
+    # `tests/test_instruments_amend_w8.py`). `blender -b -P` exits **0** when the script's
+    # exception propagates (E07, measured three times: rig_character.py, rig_parts.py,
+    # author_walk.py), so a halt that does not exit deliberately is reported as a success.
+    #
+    # THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    # itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (an
+    # unknown flag, an unknown `--mode=`); anything else is a crash. Recording a crash as
+    # "a gate fired" is a false record — F-c3f86abc measured `rig_character` writing one.
+    # A deliberate refusal exits 2; a crash exits 1.
+    #
+    # `_write_halt` carries the same three-state vocabulary onto disk. The exit code is
+    # computed BEFORE anything that can fail and delivered from a `finally`: `parse_args`
+    # raises on an unknown flag and `sha256_file` on a mistyped path, and that second
+    # exception used to leave the whole `try` statement with `sys.exit` never reached.
     try:
         main()
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
         traceback.print_exc()
-        # MEASURED AGAIN 2026-08-11: this clause caught only GateFailure, so an ordinary
-        # AttributeError propagated out and Blender exited **0** -- the very hazard the
-        # comment below describes, in the file that describes it. Every exit is non-zero.
-        #
-        # MEASURED AGAIN 2026-09-04, and it was the same hazard one layer in: the halt
-        # record below re-parses `sys.argv` and re-hashes the GLB INSIDE this `except`
-        # block. `parse_args` raises ArmatureError on an unknown flag or a missing
-        # `--glb`/`--out`, and `sha256_file` raises FileNotFoundError on a mistyped path --
-        # both ordinary mistakes, and `main()` parses argv first, so the failing re-parse
-        # is GUARANTEED for a bad flag. That second exception left the whole `try`
-        # statement and `sys.exit` never ran. The exit code is now computed BEFORE anything
-        # that can fail and delivered from a `finally`, which is the shape rig_bake.py:292,
-        # rig_parts.py:576, rig_repair.py:236 and rig_retopo.py:428 already use.
-        _code = 2 if isinstance(exc, GateFailure) else 1
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _detail = getattr(exc, "evidence", None)
+        _sentinel = {
+            "tool": "rig_character", "outcome": halt_outcome(exc),
+            "gate": getattr(exc, "gate", None),
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": _detail if isinstance(_detail, dict) else None}
         try:
             _args = parse_args()
-            _write_halt(os.path.abspath(_args["out"]), exc,
-                        sha256_file(_args["glb"]), _args["glb"])
+            try:
+                # A mistyped `--glb` is an ordinary mistake and used to delete the whole
+                # halt record with a FileNotFoundError raised inside this block.
+                _sha = sha256_file(_args["glb"])
+            except BaseException:                                     # noqa: BLE001
+                _sha = None
+            _write_halt(os.path.abspath(_args["out"]), exc, _sha, _args["glb"])
         except BaseException:                                         # noqa: BLE001
-            # The halt record is a courtesy; the exit code is the contract.
+            # The halt record is a courtesy; the sentinel and the exit code are the contract.
             traceback.print_exc()
-            print("RIG_CHARACTER_HALT_RECORD_NOT_WRITTEN " + json.dumps(
-                {"error": type(exc).__name__, "message": str(exc),
-                 "gate": getattr(exc, "gate", None)}, default=str))
         finally:
-            # MEASURED 2026-08-11: letting the exception propagate out of a `-b -P` script
-            # prints the traceback and Blender still exits **0**. A caller reading the exit
-            # code — a shell chain, a CI step, a later session's `if ($LASTEXITCODE -eq 0)` —
-            # would see the halt as a success. A halt that returns success is not a halt.
+            print("RIG_CHARACTER_HALT " + json.dumps(_sentinel, default=str))
             sys.exit(_code)

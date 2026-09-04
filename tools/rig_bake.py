@@ -309,23 +309,49 @@ def main():
 
 
 if __name__ == "__main__":
+    # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
+    # `tests/test_instruments_amend_w8.py`). `blender -b -P` exits **0** when the script's
+    # exception propagates (E07, measured three times: rig_character.py, rig_parts.py,
+    # author_walk.py), so a halt that does not exit deliberately is reported as a success.
+    #
+    # THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    # itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (an
+    # unknown flag, an unknown `--mode=`); anything else is a crash. Recording a crash as
+    # "a gate fired" is a false record — F-c3f86abc measured `rig_character` writing one.
+    # A deliberate refusal exits 2; a crash exits 1.
+    #
+    # The record on disk carries the same three-state vocabulary. The exit code is computed
+    # BEFORE anything that can fail and delivered from a `finally`: re-parsing argv or
+    # re-hashing the GLB inside this block can raise a SECOND exception, which used to leave
+    # the whole `try` statement with `sys.exit` never reached (measured 2026-09-04).
     try:
         main()
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
+
+        from armature_core.errors import ArmatureError, GateFailure
         traceback.print_exc()
-        gate = getattr(exc, "gate", None)
+        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _detail = getattr(exc, "evidence", None)
+        _sentinel = {
+            "tool": "rig_bake",
+            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                        else "REFUSED — the tool declined to proceed"
+                        if isinstance(exc, ArmatureError)
+                        else "FAILED — an unhandled error"),
+            "gate": getattr(exc, "gate", None),
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": _detail if isinstance(_detail, dict) else None}
         try:
-            a = parse_args()
-            d = os.path.abspath(a["out"])
-            os.makedirs(d, exist_ok=True)
-            with open(os.path.join(d, "halt.json"), "w", encoding="utf-8") as fh:
-                json.dump({"tool": "rig_bake",
-                           "outcome": ("HALTED — a gate fired" if gate
-                                       else "FAILED — an unhandled error"),
-                           "gate": gate or "n/a", "exception": type(exc).__name__,
-                           "message": str(exc), "evidence": getattr(exc, "evidence", {}),
-                           "traceback": traceback.format_exc()}, fh, indent=2, default=str)
-            print(("HALT " if gate else "ERROR ") + json.dumps({"gate": gate or "n/a"}))
+            _a = parse_args()
+            _d = os.path.abspath(_a["out"])
+            os.makedirs(_d, exist_ok=True)
+            with open(os.path.join(_d, "halt.json"), "w", encoding="utf-8") as fh:
+                json.dump(dict(_sentinel, traceback=traceback.format_exc()), fh,
+                          indent=2, default=str)
+        except BaseException:                                         # noqa: BLE001
+            # The halt record is a courtesy; the sentinel and the exit code are the contract.
+            traceback.print_exc()
         finally:
-            sys.exit(2 if gate else 1)
+            print("RIG_BAKE_HALT " + json.dumps(_sentinel, default=str))
+            sys.exit(_code)

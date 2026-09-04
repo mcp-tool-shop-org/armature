@@ -326,3 +326,56 @@ def test_the_alpha_andon_names_itself_because_its_gate_id_is_shared():
         TA.gate_view_alpha(0, 255, 255, 0.0)
     assert exc.value.evidence["andon"] == "TurnaroundAlphaGate"
     assert exc.value.evidence["gate"] == exc.value.gate == "ALPHA"
+
+
+# ===========================================================================================
+# Wave 8 (appended block). F-99b7b59a: the one andon class that was not a GateFailure.
+# ===========================================================================================
+
+
+def test_the_turnaround_andon_is_a_gate_failure_that_names_itself():
+    """MEASURED 2026-09-04: `class RenderTurnaroundGate(ArmatureError)` was the only andon
+    class among the 21 Blender-side tools that did not derive from `GateFailure` and did
+    not declare a gate id (13 of the other 14 declare one). `ArmatureError.__init__` is
+    `RuntimeError`'s, so it takes no evidence dict, and all five raise sites passed a
+    message only -- so this file's handler, which prints `getattr(exc, "gate", None)` and
+    the evidence, emitted `"gate": null, "evidence": null` for every halt it could
+    produce. An eight-view turnaround halted and the log named no andon."""
+    from armature_core.errors import ArmatureError, GateFailure
+    from blender_stub import load_tool
+
+    rtmod = load_tool("render_turnaround.py")
+    cls = rtmod.RenderTurnaroundGate
+    assert issubclass(cls, GateFailure), cls.__mro__
+    assert issubclass(cls, ArmatureError)
+    assert cls.gate not in (None, "G?"), cls.gate
+    assert cls.gate == "TURNAROUND"
+
+
+def test_a_fired_turnaround_andon_carries_the_measurement_that_fired_it():
+    from blender_stub import load_tool
+
+    rtmod = load_tool("render_turnaround.py")
+    exc = rtmod.RenderTurnaroundGate("view 3 rendered no file", {"clause": "write",
+                                                                "view": 3})
+    assert isinstance(exc.evidence, dict) and exc.evidence, exc.evidence
+    assert exc.evidence["view"] == 3
+    assert str(exc).startswith("[TURNAROUND]"), str(exc)
+
+
+def test_every_turnaround_raise_site_passes_an_evidence_dict():
+    """The class being right is half of it. Five sites passed a message only."""
+    import ast
+
+    from blender_stub import read_source
+
+    tree = ast.parse(read_source("render_turnaround.py"))
+    sites = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
+             and isinstance(n.exc.func, ast.Name)
+             and n.exc.func.id == "RenderTurnaroundGate"]
+    assert len(sites) == 5, [n.lineno for n in sites]
+    bare = [n.lineno for n in sites if len(n.exc.args) < 2]
+    assert bare == [], (
+        f"RenderTurnaroundGate raised with a message only at lines {bare}; the halt record "
+        f"then carries no measurement")

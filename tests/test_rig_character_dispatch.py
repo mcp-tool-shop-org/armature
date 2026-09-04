@@ -278,3 +278,124 @@ def test_every_manifest_records_the_facing_dict_whole():
     assert len(writes) >= 4, len(writes)
     assert src.count('"facing": ctx["landmarks"]["facing"]') >= 3, (
         "a manifest no longer records the facing dict as landmarks returns it")
+
+
+# ===========================================================================================
+# Wave 8 (appended block). F-2ef09fa0, F-c3f86abc, F-2d1fd05e.
+# ===========================================================================================
+
+from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+from blender_stub import FakeCollection, FakeObject  # noqa: E402
+
+
+class _FakeScene:
+    """Enough of a scene for `gate_objects_registered`: it reads `scene.objects` and each
+    object's `hide_render` / `users_collection`."""
+
+    def __init__(self, objects):
+        self.objects = list(objects)
+
+
+def test_gate_obj_raises_a_typed_andon_that_keeps_its_evidence(rc):
+    """F-2ef09fa0. The gate assembles `record` -- every object with its type, collections
+    and effective render visibility -- and the raising path used to discard it, raising a
+    bare `ArmatureError` with the message only. `ArmatureError` has no `evidence`
+    attribute, so `_write_halt` wrote `"gate": "?"` and `"evidence": {}` and the gate id
+    the discarded record names never reached the halt file."""
+    coll = FakeCollection()
+    subject = FakeObject("geometry_0", collection=coll)
+    armature = FakeObject("performer_rig", kind="ARMATURE", collection=coll)
+    stray = FakeObject("Icosphere", collection=coll)
+    scene = _FakeScene([subject, armature, stray])
+
+    with pytest.raises(GateFailure, match=r"object\(s\) nobody registered") as caught:
+        rc.gate_objects_registered(scene, subject, armature)
+
+    exc = caught.value
+    assert exc.gate == "OBJ", exc.gate
+    assert isinstance(exc.evidence, dict) and exc.evidence, exc.evidence
+    names = [o["name"] for o in exc.evidence["strays"]]
+    assert names == ["Icosphere"], exc.evidence["strays"]
+    assert {o["name"] for o in exc.evidence["objects"]} == {
+        "geometry_0", "performer_rig", "Icosphere"}
+    assert exc.evidence["registered"] == sorted({"geometry_0", "performer_rig"})
+
+
+def test_gate_obj_passes_and_returns_its_record_when_nothing_strays(rc):
+    """A gate that cannot pass is not a gate either. A hidden decoy is not a stray."""
+    coll = FakeCollection()
+    hidden = FakeCollection(name="glTF_not_exported", hide_render=True)
+    subject = FakeObject("geometry_0", collection=coll)
+    armature = FakeObject("performer_rig", kind="ARMATURE", collection=coll)
+    decoy = FakeObject("Icosphere", collection=hidden)
+    record = rc.gate_objects_registered(_FakeScene([subject, armature, decoy]),
+                                        subject, armature)
+    assert record["gate"] == "OBJ"
+    assert record["strays"] == []
+
+
+def test_halt_outcome_tells_the_three_apart(rc):
+    """F-c3f86abc. Driving the file's own `__main__` block with `ValueError('a bug, not a
+    gate')` and with `ArmatureError('the export would carry 1 object(s) nobody
+    registered')` produced records differing only in `"exception"`: both said an andon
+    fired, both exited 1."""
+    class _Gate(GateFailure):
+        gate = "OBJ"
+
+    assert rc.halt_outcome(_Gate("x", {})) == "HALTED — a gate fired"
+    assert rc.halt_outcome(ArmatureError("x")) == (
+        "REFUSED — the tool declined to proceed")
+    assert rc.halt_outcome(ValueError("a bug, not a gate")) == (
+        "FAILED — an unhandled error")
+    assert "gate fired" not in rc.halt_outcome(ValueError("a bug, not a gate"))
+
+
+def test_the_halt_record_of_a_crash_does_not_claim_a_gate_fired(rc, tmp_path, monkeypatch):
+    """The record on disk, not merely the vocabulary function."""
+    monkeypatch.setattr(rc.bpy.app, "version_string", "5.2.0", raising=False)
+    for exc, outcome, gate in (
+            (ValueError("a bug, not a gate"), "FAILED — an unhandled error", None),
+            (ArmatureError("unknown --mode='wobble'"),
+             "REFUSED — the tool declined to proceed", None)):
+        out = tmp_path / type(exc).__name__
+        rc._write_halt(str(out), exc, None, "nope.glb")
+        with open(out / "halt.json", encoding="utf-8") as fh:
+            rec = json.load(fh)
+        assert rec["outcome"] == outcome, rec
+        assert rec["gate"] is gate, rec
+        assert "a gate fired" not in rec["outcome"]
+        assert "Gates after the one that fired" not in rec["note"], rec["note"]
+
+
+def test_the_round_trip_cap_is_a_stated_choice_at_the_call_site():
+    """F-2d1fd05e. `gate_p_round_trip_positions(source, roundtrip, diagonal)` took its
+    declared `max_probe=20000` implicitly. The choice is now named at the call site."""
+    tree = ast.parse(read_source("rig_character.py"))
+    calls = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "gate_p_round_trip_positions"]
+    assert len(calls) == 1, calls
+    kwargs = {k.arg for k in calls[0].keywords}
+    assert "max_probe" in kwargs, (
+        "the probe cap is inherited from the gate's default rather than stated here")
+
+
+def test_a_truncated_probe_cannot_reach_the_manifest_as_an_unqualified_pass(rc):
+    """The flag was written by the gate and read by nothing: a repo-wide grep for
+    `probe_truncated_at` returned exactly one hit, the gate's own write, while
+    `rig_character` embedded the whole evidence dict into the manifest beside a pass
+    verdict."""
+    truncated = {"gate": "P", "verdict": "positions agree within 0.000004",
+                 "probe_truncated_at": 20000,
+                 "positions_only_in_source": 149643,
+                 "positions_only_in_roundtrip": 0,
+                 "max_deviation": 1e-07}
+    out = rc.qualify_truncated_round_trip(truncated)
+    assert out["verdict"].startswith("TRUNCATED"), out["verdict"]
+    assert "positions agree within" not in out["verdict"]
+    assert out["verdict_before_qualification"] == truncated["verdict"]
+    assert out["probe_truncated_at"] == 20000
+
+    # and an untruncated evidence dict is returned untouched
+    whole = {"gate": "P", "verdict": "the exported surface is the source surface"}
+    assert rc.qualify_truncated_round_trip(whole) is whole

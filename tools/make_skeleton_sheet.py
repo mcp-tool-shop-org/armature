@@ -50,6 +50,12 @@ AFTER_RGB = (0.10, 0.85, 1.00)    # the placement measured off the sculpted ball
 INSET_JOINTS = ("shoulder", "elbow", "wrist", "hip", "knee", "ankle")
 
 
+#: The engine identifiers this tool will accept, in the order it tries them. One order
+#: across `make_skeleton_sheet`, `make_binding_sheet`, `make_parts_sheet` and
+#: `preview_glb` -- `preview_glb` used to try them the other way round.
+ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+
+
 class SkeletonSheetGate(GateFailure):
     """The approval sheet cannot be composed as an approval sheet."""
 
@@ -177,12 +183,29 @@ def overlay_from_marks(marks, height, rgb, tag):
 
 
 def light_the_scene(scene):
-    for eng in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
+    """Light the sheet, and RETURN the render engine actually set.
+
+    MEASURED 2026-09-04 (F-bba38f1c): this loop had no `else`, so if a future Blender
+    renamed both identifiers the `for` would complete normally, nothing would be set, and
+    the sheet would render on whatever the factory settings left in place -- with no field
+    in `panels.json` able to reveal it. Four copies of the loop existed and `preview_glb`
+    tried the two names in the OPPOSITE order, so on a Blender where both are valid the
+    preview and the sheets did not agree on which engine drew them. One order now, and the
+    engine that was set is written into the record.
+    """
+    engine = None
+    for eng in ENGINE_CANDIDATES:
         try:
             scene.render.engine = eng
-            break
         except TypeError:
             continue
+        engine = eng
+        break
+    if engine is None:
+        raise SkeletonSheetGate(
+            "none of the candidate render engines is valid on this Blender, so the sheet "
+            "would be drawn by whatever the factory settings left in place",
+            {"candidates": list(ENGINE_CANDIDATES), "blender": bpy.app.version_string})
     scene.view_settings.view_transform = "Standard"
     world = bpy.data.worlds.new("w")
     scene.world = world
@@ -197,6 +220,7 @@ def light_the_scene(scene):
         ob = bpy.data.objects.new(name, data)
         scene.collection.objects.link(ob)
         ob.rotation_euler = tuple(math.radians(a) for a in rot)
+    return engine
 
 
 def ortho_camera(scene, name, target, azim_deg, ortho_scale, res):
@@ -258,7 +282,7 @@ def main():
     balls, _ = rig_character.measure_joint_balls(mesh_obj, diagonal)
     after_marks, table = joints.snap_sites_to_balls(lm, balls)
 
-    light_the_scene(scene)
+    engine = light_the_scene(scene)
     ov_before = overlay_from_marks(before_marks, height, BEFORE_RGB, "before")
     ov_after = overlay_from_marks(after_marks, height, AFTER_RGB, "after")
 
@@ -298,6 +322,9 @@ def main():
                                      after=bones_a)
 
     spec = {
+        "tool": "make_skeleton_sheet",
+        "blender": blender_scene.blender_provenance(),
+        "engine": engine,
         "out": out,
         "filename": "E07-skeleton-approval.png",
         "title": "E07 — the skeleton, for approval",
@@ -325,12 +352,16 @@ def main():
 
 
 if __name__ == "__main__":
-    # CARRIED from `check_relift.py:123` — the minimal form of the handler eleven sibling
-    # Blender tools already carry — rather than written a second time. `blender -b -P`
-    # exits **0** when the script's exception propagates (E07, measured three times:
-    # rig_character.py:1134, rig_parts.py:126, author_walk.py:13), so without this every
-    # refusal in this file halted Blender with status 0 and a caller reading
-    # `$LASTEXITCODE` walked past it. A halt that returns success is not a halt.
+    # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
+    # `tests/test_instruments_amend_w8.py`). `blender -b -P` exits **0** when the script's
+    # exception propagates (E07, measured three times: rig_character.py, rig_parts.py,
+    # author_walk.py), so a halt that does not exit deliberately is reported as a success.
+    #
+    # THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    # itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (an
+    # unknown flag, an unknown `--mode=`); anything else is a crash. Recording a crash as
+    # "a gate fired" is a false record — F-c3f86abc measured `rig_character` writing one.
+    # A deliberate refusal exits 2; a crash exits 1.
     try:
         raise SystemExit(main())
     except SystemExit:
@@ -340,9 +371,14 @@ if __name__ == "__main__":
 
         from armature_core.errors import ArmatureError, GateFailure
         traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
+        _detail = getattr(exc, "evidence", None)
         print("MAKE_SKELETON_SHEET_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
+            "tool": "make_skeleton_sheet",
+            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                        else "REFUSED — the tool declined to proceed"
+                        if isinstance(exc, ArmatureError)
+                        else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
         sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

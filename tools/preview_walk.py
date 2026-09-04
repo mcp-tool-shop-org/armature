@@ -27,6 +27,23 @@ import bpy  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
 from armature_core import blender_scene, framing, shotspec  # noqa: E402
+from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+
+
+class PreviewWalkGate(GateFailure):
+    """The preview could not be composed, or did not complete.
+
+    MEASURED 2026-09-04 (F-1aee25e2): this file's three refusals raised the bare
+    `RuntimeError`, which carries no `gate` and no evidence dict, so the measurement that
+    stopped the run was discarded at the raise. The handler then printed
+    `PREVIEW_WALK_HALT {"error": ..., "message": ...}` — no gate, no evidence — and called
+    `sys.exit(1)` unconditionally, where the twenty siblings discriminate. Of the 21
+    Blender-side tools this was the only one whose exit code could not tell a fired andon
+    from a crash, in the tool whose whole purpose is to be looked at before a credit is
+    spent.
+    """
+
+    gate = "PREVIEW"
 
 
 def parse_args():
@@ -77,7 +94,6 @@ def resolve_camera(spec, bounds, width, height):
 def main():
     a = parse_args()
     spec = shotspec.load_spec(a.spec)
-    os.makedirs(a.out, exist_ok=True)          # scripts create their own output directories
 
     fps = spec["frames"]["fps"]
     count = spec["frames"]["count"]
@@ -129,9 +145,11 @@ def main():
     # foot sinking through the ground.
     subject = blender_scene.render_visible_meshes(scene, meshes)
     if not subject:
-        raise RuntimeError(
+        raise PreviewWalkGate(
             f"{asset} imported {len(meshes)} mesh object(s) and none is render-visible "
-            f"({[o.name for o in meshes]}); there is nothing to preview")
+            f"({[o.name for o in meshes]}); there is nothing to preview",
+            {"asset": asset, "mesh_objects_all": [o.name for o in meshes],
+             "mesh_objects_render_visible": []})
     zs = [(o.matrix_world @ Vector(c)).z for o in subject for c in o.bound_box]
     gob.location = (0.0, 0.0, min(zs))
 
@@ -140,7 +158,16 @@ def main():
               if spec["subject"]["animation"] == "per_frame"
               else blender_scene.world_bounds(subject))
     if bounds is None:
-        raise RuntimeError(f"{asset} has no evaluated geometry to frame")
+        raise PreviewWalkGate(
+            f"{asset} has no evaluated geometry to frame",
+            {"asset": asset, "subject": [o.name for o in subject],
+             "animation": spec["subject"]["animation"], "frames": count})
+
+    # Every refusal above this line can fire before a single pixel exists; the output
+    # directory is created HERE so a halt does not leave an empty one behind for a later
+    # run to read as a used one (F-8d2b9d7d). Nothing between the old site and this one
+    # writes.
+    os.makedirs(a.out, exist_ok=True)          # scripts create their own output directories
     cam_solution = resolve_camera(spec, bounds, int(spec["resolution"]["width"]),
                                   int(spec["resolution"]["height"]))
     target = Vector(cam_solution["target"])
@@ -173,10 +200,13 @@ def main():
              if f not in missing and os.path.getsize(os.path.join(a.out, f)) == 0]
     strays = sorted(set(os.listdir(a.out)) - set(planned))
     if missing or empty:
-        raise RuntimeError(
+        raise PreviewWalkGate(
             f"the preview is not complete: {len(missing)} of {count} frames were never "
-            f"written {missing[:8]} and {len(empty)} are zero bytes {empty[:8]}")
+            f"written {missing[:8]} and {len(empty)} are zero bytes {empty[:8]}",
+            {"out": os.path.abspath(a.out), "planned": count,
+             "missing": missing, "empty": empty, "unexpected_files_in_out_dir": strays})
     print("PREVIEW_WALK_OK " + json.dumps({
+        "tool": "preview_walk", "blender": blender_scene.blender_provenance(),
         "out": os.path.abspath(a.out), "frames": len(planned), "resolution": [w, h],
         "unexpected_files_in_out_dir": strays,
         "asset": asset, "asset_sha256": sha, "camera_position": [round(v, 6) for v in pos],
@@ -192,13 +222,31 @@ def main():
 
 
 if __name__ == "__main__":
+    # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
+    # `tests/test_instruments_amend_w8.py`). `blender -b -P` exits **0** when the script's
+    # exception propagates (E07, measured three times: rig_character.py, rig_parts.py,
+    # author_walk.py), so a halt that does not exit deliberately is reported as a success.
+    #
+    # THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    # itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (an
+    # unknown flag, an unknown `--mode=`); anything else is a crash. Recording a crash as
+    # "a gate fired" is a false record — F-c3f86abc measured `rig_character` writing one.
+    # A deliberate refusal exits 2; a crash exits 1.
     try:
         raise SystemExit(main())
     except SystemExit:
         raise
-    except BaseException as exc:  # noqa: BLE001
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
         import traceback
         traceback.print_exc()
-        print("PREVIEW_WALK_HALT " + json.dumps({"error": type(exc).__name__,
-                                                 "message": str(exc)}))
-        sys.exit(1)
+        _detail = getattr(exc, "evidence", None)
+        print("PREVIEW_WALK_HALT " + json.dumps({
+            "tool": "preview_walk",
+            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                        else "REFUSED — the tool declined to proceed"
+                        if isinstance(exc, ArmatureError)
+                        else "FAILED — an unhandled error"),
+            "gate": getattr(exc, "gate", None),
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

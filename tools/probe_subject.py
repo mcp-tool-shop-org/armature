@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 
 from armature_core import blender_scene  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.subject import extent_summary  # noqa: E402
 
 
@@ -81,17 +82,61 @@ def probe_one(path):
     return rec
 
 
-def main():
-    argv = sys.argv[sys.argv.index("--") + 1:]
+def parse_argv(argv, *, known=("out", "glb")):
+    """`--out=<dir>` once and `--glb=<path>` one or more times. Anything else RAISES.
+
+    MEASURED 2026-09-04 (F-f3cd559e). The loop this replaces was
+
+        key, _, value = token[2:].partition("=")
+        if key == "out": out_dir = value
+        elif key == "glb": globs.append(value)
+
+    which silently ignores what it does not recognise and silently ADMITS empty paths into
+    the probed population. Measured on those lines verbatim: `--out=d --glb=a.glb --glb
+    b.glb` (the space form) yields `['a.glb', '', '']` -- `--glb` alone gives key "glb"
+    with value "", and `'b.glb'[2:]` is ALSO "glb", so the bare path contributes a second
+    "" -- and the summary then reports `n_files` 3 for two files named. `--gbl=b.glb` (a
+    typo) is dropped without a word; a bare positional adds another ""; `--help` is
+    swallowed and the tool probes anyway. Each "" reaches `probe_one`, which records
+    `{{"path": "", "exists": false, "clause_A_loads": false}}` -- a phantom member of a
+    denominator that every number this tool exists to produce is computed over.
+
+    `rig_character.parse_args` and `rig_parts.parse_args` already refuse an unknown token
+    by name; this is that shape, carried.
+    """
     out_dir, paths = None, []
     for token in argv:
-        key, _, value = token[2:].partition("=")
+        if not token.startswith("--"):
+            raise ArmatureError(
+                f"unexpected argument {token!r}: every value is attached to its flag with "
+                f"'=' ({' '.join('--' + k + '=<value>' for k in known)}). The space form "
+                f"is not accepted, because `token[2:]` on a bare path silently produced a "
+                f"second empty member of the probed population")
+        key, sep, value = token[2:].partition("=")
+        key = key.replace("-", "_")
+        if key not in known:
+            raise ArmatureError(
+                f"unknown argument {token!r}; known: {sorted(known)}")
+        if not sep or not value:
+            raise ArmatureError(
+                f"{token!r} carries no value; an empty --{key} would join the population "
+                f"as a file that does not exist and be counted in every denominator")
         if key == "out":
+            if out_dir is not None:
+                raise ArmatureError(
+                    f"--out given twice ({out_dir!r} then {value!r}); one run writes one "
+                    f"record")
             out_dir = value
-        elif key == "glb":
+        else:
             paths.append(value)
     if not out_dir or not paths:
-        raise SystemExit("usage: -- --out=<dir> --glb=<path> [--glb=<path> ...]")
+        raise ArmatureError("usage: -- --out=<dir> --glb=<path> [--glb=<path> ...]")
+    return out_dir, paths
+
+
+def main():
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    out_dir, paths = parse_argv(argv)
     os.makedirs(out_dir, exist_ok=True)
 
     records = [probe_one(p) for p in paths]
@@ -108,12 +153,16 @@ def main():
 
 
 if __name__ == "__main__":
-    # CARRIED from `check_relift.py:123` — the minimal form of the handler eleven sibling
-    # Blender tools already carry — rather than written a second time. `blender -b -P`
-    # exits **0** when the script's exception propagates (E07, measured three times:
-    # rig_character.py:1134, rig_parts.py:126, author_walk.py:13), so without this every
-    # refusal in this file halted Blender with status 0 and a caller reading
-    # `$LASTEXITCODE` walked past it. A halt that returns success is not a halt.
+    # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
+    # `tests/test_instruments_amend_w8.py`). `blender -b -P` exits **0** when the script's
+    # exception propagates (E07, measured three times: rig_character.py, rig_parts.py,
+    # author_walk.py), so a halt that does not exit deliberately is reported as a success.
+    #
+    # THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    # itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (an
+    # unknown flag, an unknown `--mode=`); anything else is a crash. Recording a crash as
+    # "a gate fired" is a false record — F-c3f86abc measured `rig_character` writing one.
+    # A deliberate refusal exits 2; a crash exits 1.
     try:
         raise SystemExit(main())
     except SystemExit:
@@ -123,9 +172,14 @@ if __name__ == "__main__":
 
         from armature_core.errors import ArmatureError, GateFailure
         traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
+        _detail = getattr(exc, "evidence", None)
         print("PROBE_SUBJECT_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
+            "tool": "probe_subject",
+            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                        else "REFUSED — the tool declined to proceed"
+                        if isinstance(exc, ArmatureError)
+                        else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
         sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

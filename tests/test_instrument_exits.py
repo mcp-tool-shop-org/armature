@@ -25,9 +25,10 @@ import pytest
 
 from blender_stub import blender_tools, exit_code_of_main_block, main_block
 
-#: `preview_glb.py` is a library of preview helpers with no `__main__` block; it is not
-#: invoked as a script and so has no exit code to be wrong about.
-NO_MAIN_BLOCK = ("preview_glb.py",)
+#: EMPTY, re-derived 2026-09-04 (F-7e64c103): `preview_glb.py` now carries the handler,
+#: so line 40's exemption assertion no longer holds with the old value. Exact codes and
+#: sentinel shape: `tests/test_instruments_amend_w8.py`.
+NO_MAIN_BLOCK = ()
 
 WITH_MAIN = [f for f in blender_tools() if main_block(f) is not None]
 

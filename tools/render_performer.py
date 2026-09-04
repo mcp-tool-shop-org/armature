@@ -159,7 +159,23 @@ def gate_coverage(paths, empty_plate, min_frac=MIN_SUBJECT_FRAC):
     exists to catch is not a check. The plate is the same camera, the same lights and the
     same floor with the character hidden, rendered once because none of those move, so the
     difference is the subject and nothing else.
+
+    **The gate owns its threshold; a caller may only tighten it.** ROUTED 2026-09-04 from
+    core-gates' threshold-argument family (the same shape they applied to four rig gates):
+    a tolerance the caller can LOOSEN is a gate the caller can switch off, one keyword at a
+    time, with the record still reporting that the gate ran and passed. `MIN_SUBJECT_FRAC`
+    is a decision about what a picture of the performer IS, and it belongs to the gate.
+    Passing a smaller `min_frac` (a stricter bar) is allowed and recorded; passing a larger
+    one raises here, before a single pixel is read.
     """
+    if min_frac > MIN_SUBJECT_FRAC:
+        raise RenderGate(
+            f"gate_coverage was asked to accept {min_frac} where its own floor is "
+            f"{MIN_SUBJECT_FRAC}. A caller may TIGHTEN this gate and may not loosen it: "
+            f"what counts as a picture of the performer is the gate's decision, not the "
+            f"caller's, and a loosened threshold leaves a record saying the gate passed",
+            {"gate": "COVERAGE", "requested_min_fraction": min_frac,
+             "gate_floor": MIN_SUBJECT_FRAC})
     base = _pixels(empty_plate)
     per_frame, worst = [], {"frame": None, "frac": 1.0}
     for i, p in enumerate(paths):
@@ -189,7 +205,6 @@ def main():
     started = time.time()
     a = parse_args()
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     if not (a.motion or a.lift):
         raise RenderGate(
@@ -298,6 +313,12 @@ def main():
                 "sit at", {"glb": a.glb, "mesh_objects": [o.name for o in meshes]})
         gob.location = (0.0, 0.0, min(zs))
 
+    # Every refusal above this line can fire before a single pixel exists; the output
+    # directory is created HERE so a halt does not leave an empty one behind for a
+    # later run to read as a used one (F-8d2b9d7d). Nothing between the old site and
+    # this one writes.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
+
     cam_data = bpy.data.cameras.new("performer_cam")
     cam_data.lens, cam_data.sensor_fit, cam_data.sensor_width = LENS_MM, "AUTO", SENSOR_MM
     cam_data.clip_start, cam_data.clip_end = 0.01, 100.0
@@ -318,10 +339,34 @@ def main():
         bpy.ops.render.render(write_still=True)
         paths.append(p)
 
-    written = sorted(f for f in os.listdir(out) if f.startswith("0") and f.endswith(".png"))
-    if len(written) != count:
+    # The population is the PLAN, not whatever is in the directory — the shape
+    # `preview_walk.py:167` carries, under a comment naming this exact failure. MEASURED
+    # 2026-09-04 (F-ed1dfdb5) on the superseded two lines
+    #
+    #     written = sorted(f for f in os.listdir(out) if f.startswith("0") ...)
+    #     if len(written) != count: raise RenderGate(f"wrote {len(written)} frames ...")
+    #
+    # a 16-frame run into an `--out` already holding a stale `00099.png`, with `00007.png`
+    # never written, gives `len(written) == 16 == count` and the gate does NOT fire; and a
+    # 16-frame run into a directory holding 33 stale frames prints "wrote 33 frames" about
+    # a run that wrote 16. A zero-byte frame passed either way, because nothing read
+    # `getsize`. `paths` is built two lines above and is the list the render wrote against.
+    missing = [p for p in paths if not os.path.isfile(p)]
+    empty = [p for p in paths
+             if p not in missing and os.path.getsize(p) == 0]
+    planned_names = {os.path.basename(p) for p in paths}
+    strays = sorted(f for f in os.listdir(out)
+                    if f.endswith(".png") and f not in planned_names
+                    and f != "empty_plate.png")
+    if missing or empty:
         raise RenderGate(
-            f"wrote {len(written)} frames and the performance is {count}", {"out": out})
+            f"the performance is not complete: {len(missing)} of {count} frames were "
+            f"never written {[os.path.basename(p) for p in missing[:8]]} and "
+            f"{len(empty)} are zero bytes {[os.path.basename(p) for p in empty[:8]]}",
+            {"out": out, "planned": count,
+             "missing": [os.path.basename(p) for p in missing],
+             "empty": [os.path.basename(p) for p in empty],
+             "unexpected_files_in_out_dir": strays})
 
     # ---- the empty plate the coverage andon measures against: same camera, same lights,
     # same floor, character hidden. One frame, because none of those move.
@@ -344,6 +389,7 @@ def main():
                        "framed_against": frame_source,
                        "manifest": os.path.abspath(a.manifest)},
             "resolution": [WIDTH, HEIGHT], "frames": count, "fps": a.fps,
+            "unexpected_files_in_out_dir": strays,
             "floor_drawn": bool(a.floor),
             "camera": {
                 "azimuth_deg": AZIMUTH_DEG, "elevation_deg": ELEVATION_DEG,
@@ -376,6 +422,16 @@ def main():
 
 
 if __name__ == "__main__":
+    # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
+    # `tests/test_instruments_amend_w8.py`). `blender -b -P` exits **0** when the script's
+    # exception propagates (E07, measured three times: rig_character.py, rig_parts.py,
+    # author_walk.py), so a halt that does not exit deliberately is reported as a success.
+    #
+    # THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    # itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (an
+    # unknown flag, an unknown `--mode=`); anything else is a crash. Recording a crash as
+    # "a gate fired" is a false record — F-c3f86abc measured `rig_character` writing one.
+    # A deliberate refusal exits 2; a crash exits 1.
     try:
         raise SystemExit(main())
     except SystemExit:
@@ -383,8 +439,14 @@ if __name__ == "__main__":
     except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
         import traceback
         traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
+        _detail = getattr(exc, "evidence", None)
         print("RENDER_PERFORMER_HALT " + json.dumps({
+            "tool": "render_performer",
+            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                        else "REFUSED — the tool declined to proceed"
+                        if isinstance(exc, ArmatureError)
+                        else "FAILED — an unhandled error"),
+            "gate": getattr(exc, "gate", None),
             "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
         sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

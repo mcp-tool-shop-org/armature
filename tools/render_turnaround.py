@@ -183,8 +183,23 @@ MARGIN_PX = 2.0
 ORTHO_STANDOFF_SPHERES = 4.0
 
 
-class RenderTurnaroundGate(ArmatureError):
-    """The turnaround could not be composed at all."""
+class RenderTurnaroundGate(GateFailure):
+    """The turnaround could not be composed at all.
+
+    MEASURED 2026-09-04 (F-99b7b59a): this derived from `ArmatureError`, which carries no
+    `gate` attribute and whose `__init__` takes no evidence dict. It was the only andon
+    class among the 21 Blender-side tools that was not a `GateFailure` (13 of the other 14
+    declare a gate id), and all five of its raise sites passed a message only — so this
+    file's own handler, which prints `getattr(exc, "gate", None)` and the evidence dict,
+    emitted `"gate": null, "evidence": null` for every halt it could produce. An eight-view
+    turnaround halted and the log named no gate, leaving a reader to reconstruct which of
+    five refusals fired from free text.
+
+    One id rather than five: every site here is the same andon — the turnaround could not
+    be composed — and the evidence dict below says WHICH clause, with its measurement.
+    """
+
+    gate = "TURNAROUND"
 
 
 def parse_args():
@@ -444,7 +459,10 @@ def solve_radius_for_height(cloud, target, azimuths, elevation_deg, lens_mm, sen
     else:                                     # pragma: no cover - unreachable in practice
         raise RenderTurnaroundGate(
             f"no orbit radius up to {hi:g} draws the subject at or below "
-            f"{height_frac:g} of the frame height")
+            f"{height_frac:g} of the frame height",
+            {"clause": "orbit radius", "grew_to": float(hi),
+             "height_frac": float(height_frac), "tallest_at_hi": float(tallest(hi)),
+             "azimuths": list(azimuths)})
     for _ in range(80):
         mid = 0.5 * (lo + hi)
         if tallest(mid) > height_frac:
@@ -490,7 +508,10 @@ def solve_ortho_scale_for_height(cloud, target, radius, azimuths, elevation_deg,
     else:                                     # pragma: no cover - unreachable in practice
         raise RenderTurnaroundGate(
             f"no ortho_scale up to {hi:g} draws the subject at or below {height_frac:g} "
-            f"of the frame height")
+            f"of the frame height",
+            {"clause": "ortho_scale", "grew_to": float(hi),
+             "height_frac": float(height_frac), "tallest_at_hi": float(tallest(hi)),
+             "azimuths": list(azimuths)})
     for _ in range(80):
         mid = 0.5 * (lo + hi)
         if tallest(mid) > height_frac:
@@ -504,7 +525,6 @@ def main():
     started = time.time()
     a = parse_args()
     out = os.path.abspath(a.out)
-    os.makedirs(out, exist_ok=True)           # scripts create their own output directories
     width, height = int(a.width), int(a.height)
 
     azimuths = TA.orbit_azimuths(a.views, a.azimuth_start, a.sweep)
@@ -515,7 +535,10 @@ def main():
     blender_scene.set_frame_rate(scene, a.fps)
     meshes, arms, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
     if not meshes:
-        raise RenderTurnaroundGate(f"{a.glb} imported no mesh objects; nothing to render")
+        raise RenderTurnaroundGate(
+            f"{a.glb} imported no mesh objects; nothing to render",
+            {"clause": "import", "glb": a.glb, "mesh_objects": [],
+             "armatures": [o.name for o in arms]})
 
     scene.render.engine = "BLENDER_EEVEE"
     scene.render.resolution_x, scene.render.resolution_y = width, height
@@ -565,7 +588,16 @@ def main():
             f"{a.glb} imported {len(meshes)} mesh object(s) and none of them is "
             f"render-visible ({[o.name for o in meshes]}); there is nothing to turn "
             f"around, and framing against hidden geometry would compose a shot of an "
-            f"object the renderer will not draw")
+            f"object the renderer will not draw",
+            {"clause": "render visibility", "glb": a.glb,
+             "mesh_objects_all": [o.name for o in meshes],
+             "mesh_objects_render_visible": []})
+
+    # Every refusal above this line can fire before a single pixel exists; the output
+    # directory is created HERE so a halt does not leave an empty one behind for a
+    # later run to read as a used one (F-8d2b9d7d). Nothing between the old site and
+    # this one writes.
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     verts = blender_scene.evaluated_world_vertices(scene, subject)
     lo = verts.min(axis=0)
     hi = verts.max(axis=0)
@@ -623,7 +655,10 @@ def main():
         scene.render.filepath = path
         bpy.ops.render.render(write_still=True)
         if not os.path.isfile(path):          # pragma: no cover - Blender-side failure
-            raise RenderTurnaroundGate(f"view {i} rendered no file at {path}")
+            raise RenderTurnaroundGate(
+                f"view {i} rendered no file at {path}",
+                {"clause": "write", "view": i, "azimuth_deg": az, "path": path,
+                 "views_written": [v["path"] for v in views]})
 
         m = _alpha_stats(path, width, height)
         extent = SF.silhouette_extent(cloud, target, radius, az, a.elevation, a.lens,
@@ -751,13 +786,16 @@ def main():
 
 
 if __name__ == "__main__":
-    # CARRIED VERBATIM from `render_start_frame.py:766` — the sibling this file already
-    # inherits its staging from — because this was the ONE gating renderer with a bare
-    # `main()`. `blender -b -P` exits **0** when the script's exception propagates (E07,
-    # measured three times: rig_character.py:1134, rig_parts.py:126, author_walk.py:13),
-    # so every andon in this file — RenderTurnaroundGate, Gate ALPHA, Gate TURN, Gate
-    # WHOLE, Gate CROP — halted Blender with status 0 and the only witness was the ABSENCE
-    # of `RENDER_TURNAROUND_OK`. A halt that returns success is not a halt.
+    # THE HALT CONTRACT — one shape across all 21 Blender-side tools (wave 8; pinned by
+    # `tests/test_instruments_amend_w8.py`). `blender -b -P` exits **0** when the script's
+    # exception propagates (E07, measured three times: rig_character.py, rig_parts.py,
+    # author_walk.py), so a halt that does not exit deliberately is reported as a success.
+    #
+    # THREE outcomes, not two. A typed `GateFailure` is an andon that fired and names
+    # itself; a bare `ArmatureError` is a deliberate refusal with no gate behind it (an
+    # unknown flag, an unknown `--mode=`); anything else is a crash. Recording a crash as
+    # "a gate fired" is a false record — F-c3f86abc measured `rig_character` writing one.
+    # A deliberate refusal exits 2; a crash exits 1.
     try:
         raise SystemExit(main())
     except SystemExit:
@@ -765,9 +803,14 @@ if __name__ == "__main__":
     except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
         import traceback
         traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
+        _detail = getattr(exc, "evidence", None)
         print("RENDER_TURNAROUND_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
+            "tool": "render_turnaround",
+            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                        else "REFUSED — the tool declined to proceed"
+                        if isinstance(exc, ArmatureError)
+                        else "FAILED — an unhandled error"),
             "gate": getattr(exc, "gate", None),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+            "error": type(exc).__name__, "message": str(exc),
+            "evidence": _detail if isinstance(_detail, dict) else None}, default=str))
         sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
