@@ -310,3 +310,87 @@ def test_the_distinct_name_check_binds_in_BOTH_directions(tmp_path, monkeypatch)
                     source_dir=_control_dir(tmp_path, "static", 1))
     with pytest.raises(bp.PayloadError, match="33 distinct server name"):
         bp.build("B3", "E03")
+
+
+# ------ the control directory has three states, not two (wave 8, F-42aed00f)
+
+
+def test_the_local_control_count_distinguishes_absent_from_empty(tmp_path):
+    """`return len(digests) or None` collapsed three different states of the local control
+    directory into ONE sentinel. Measured directly before the fix: a directory that exists
+    and is empty returned None, a directory that does not exist returned None,
+    `source_dir=None` returned None, and a directory holding only non-PNG files returned
+    None. The caller branches on `expected is None` and degrades to "at least one distinct
+    server name" there, so every one of those states silently lost the distinct-frame
+    binding the surrounding comment says exists precisely so a collapsed batch cannot pass.
+    """
+    assert bp._distinct_source_frames(None) is None
+    assert bp._distinct_source_frames(str(tmp_path / "never-rendered")) is None
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert bp._distinct_source_frames(str(empty)) == 0
+
+    no_pngs = tmp_path / "no_pngs"
+    no_pngs.mkdir()
+    (no_pngs / "notes.txt").write_text("not a frame", encoding="utf-8")
+    assert bp._distinct_source_frames(str(no_pngs)) == 0
+
+    assert bp._distinct_source_frames(_control_dir(tmp_path, "moving33", 33)) == 33
+    assert bp._distinct_source_frames(_control_dir(tmp_path, "held", 1)) == 1
+
+
+def test_a_named_but_empty_control_directory_refuses_rather_than_degrading(
+        tmp_path, monkeypatch):
+    """The failure the collapse admitted: an arm whose `source_dir` is present but holds no
+    frames (cleaned up, moved, renamed, or converted out of `.png`) took the `expected is
+    None` branch, where the check is only `got < 1`. All 33 uploads mapping to ONE server
+    name would have been admitted — the exact collapsed batch the check exists to catch —
+    and the payload record read the same either way."""
+    empty = tmp_path / "cleaned_up"
+    empty.mkdir()
+    collapsed = tmp_path / "uploads_collapsed.json"
+    collapsed.write_text(json.dumps({f"{i:05d}": "same.png" for i in range(33)}))
+    _arm_pointed_at(monkeypatch, "E03", "B1", uploads=str(collapsed),
+                    source_dir=str(empty))
+    with pytest.raises(bp.PayloadError, match="holds no `.png` frames at all"):
+        bp.build("B1", "E03")
+
+
+def test_the_empty_directory_clause_does_not_fire_on_a_directory_that_has_frames(
+        tmp_path, monkeypatch):
+    """The mutation that must NOT fire it. Same arm, same uploads, one real frame in the
+    directory — the held-pose arm this check was written not to refuse."""
+    held = tmp_path / "uploads_held.json"
+    held.write_text(json.dumps({f"{i:05d}": "same.png" for i in range(33)}))
+    _arm_pointed_at(monkeypatch, "E03", "B1", uploads=str(held),
+                    source_dir=_control_dir(tmp_path, "held_one", 1))
+    _wf, meta = bp.build("B1", "E03")
+    assert meta["control"]["distinct_images"] == 1
+
+
+def test_the_record_says_which_branch_the_control_check_took(tmp_path, monkeypatch):
+    """The record could not say whether the check bound at 33 or degraded to 1.
+    `meta['control']` carried `distinct_images = len(set(control_names))` — the SERVER-name
+    count, i.e. the unchecked side — and never the locally measured expectation nor whether
+    the directory was readable at all. On this rig E02's A1b row already runs on the
+    degraded branch (`control_480x832_inverted/depth_pershot` is absent), and nothing in its
+    payload record says so."""
+    ok = tmp_path / "uploads_moving.json"
+    ok.write_text(json.dumps({f"{i:05d}": f"name{i}.png" for i in range(33)}))
+    _arm_pointed_at(monkeypatch, "E03", "B1", uploads=str(ok),
+                    source_dir=_control_dir(tmp_path, "moving_rec", 33))
+    _wf, meta = bp.build("B1", "E03")
+    control = meta["control"]
+    assert control["source_dir_present"] is True
+    assert control["source_dir_distinct_images"] == 33
+    assert control["comparison"] == "33 distinct server name(s) == 33 distinct local image(s)"
+
+    # And the degraded branch says it is degraded, in the record, with its own words.
+    _arm_pointed_at(monkeypatch, "E03", "B1", uploads=str(ok),
+                    source_dir=str(tmp_path / "never-rendered"))
+    _wf, meta = bp.build("B1", "E03")
+    control = meta["control"]
+    assert control["source_dir_present"] is False
+    assert control["source_dir_distinct_images"] is None
+    assert "at least one distinct server name" in control["comparison"]

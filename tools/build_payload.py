@@ -263,7 +263,24 @@ EXPERIMENTS = {
 
 
 def _distinct_source_frames(source_dir):
-    """How many distinct images the LOCAL control directory holds, or None if absent."""
+    """How many distinct images the LOCAL control directory holds — an INT, or None.
+
+    Three states, and they are distinguishable now:
+
+    * `None` — there is no directory to bind against: `source_dir` is None, or the path
+      does not exist. The caller has no local expectation and says so in the record.
+    * `0` — the directory IS there and holds no `.png` at all. The caller REFUSES.
+    * a positive int — the expectation the upload count is compared against.
+
+    ⚠ **`return len(digests) or None` collapsed the first two into one sentinel**, and the
+    caller's `expected is None` branch degrades the check to "at least one distinct server
+    name". Measured 2026-09-04: a directory that exists and is empty returned None, a
+    directory that does not exist returned None, `source_dir=None` returned None, and a
+    directory holding only non-PNG files returned None. So an arm whose frames had been
+    cleaned up, moved, renamed or converted out of `.png` silently lost the distinct-frame
+    binding the comment in `_load_uploads` says exists precisely so a collapsed batch
+    cannot pass — all 33 uploads mapping to ONE server name would have been admitted.
+    """
     if not source_dir or not os.path.isdir(source_dir):
         return None
     digests = set()
@@ -271,7 +288,7 @@ def _distinct_source_frames(source_dir):
         if n.lower().endswith(".png"):
             with open(os.path.join(source_dir, n), "rb") as fh:
                 digests.add(hashlib.sha256(fh.read()).hexdigest())
-    return len(digests) or None
+    return len(digests)
 
 
 def _load_uploads(arm="A1a", experiment="E02"):
@@ -301,18 +318,42 @@ def _load_uploads(arm="A1a", experiment="E02"):
     # compared. It binds in both directions: a moving control that collapsed on upload
     # raises, and a static arm that did NOT collapse raises too, because it would not be the
     # arm it claims to be. Caught here rather than by Gate B after a spend.
-    expected = _distinct_source_frames(arm_cfg.get("source_dir"))
+    #
+    # Which of the three branches ran is RECORDED, because until 2026-09-04 a payload
+    # record read the same whether the check bound at 33 or degraded to 1: `meta['control']`
+    # carried the distinct SERVER-name count — the unchecked side — and never the locally
+    # measured expectation nor whether the directory was readable at all.
+    source_dir = arm_cfg.get("source_dir")
+    expected = _distinct_source_frames(source_dir)
     got = len(set(names))
+    if expected == 0:
+        raise PayloadError(
+            f"{source_dir} is present and holds no `.png` frames at all, so the number of "
+            f"distinct images this arm's control was rendered as is unknown and the "
+            f"{got} distinct server name(s) in the upload map are bound to nothing. A "
+            f"directory whose frames were cleaned up, moved, renamed or converted is not "
+            f"an arm with one held pose, and a check that cannot tell them apart is the "
+            f"one that lets a collapsed batch through"
+        )
     if expected is None:
         if got < 1:
             raise PayloadError("no uploaded control frames at all")
+        comparison = (f"{got} distinct server name(s) >= 1 — DEGRADED: {source_dir!r} is "
+                      f"not on this rig, so nothing local bounds the batch. The check is "
+                      f"'at least one distinct server name' and no more")
     elif got != expected:
         raise PayloadError(
             f"{LENGTH} uploaded frames map to {got} distinct server name(s), but "
-            f"{arm_cfg['source_dir']} holds {expected} distinct image(s); the batch the "
+            f"{source_dir} holds {expected} distinct image(s); the batch the "
             f"sampler receives would not be the control that was rendered"
         )
-    return keys, names, ref
+    else:
+        comparison = (f"{got} distinct server name(s) == {expected} distinct local "
+                      f"image(s)")
+    control_check = {"source_dir_present": expected is not None,
+                     "source_dir_distinct_images": expected,
+                     "comparison": comparison}
+    return keys, names, ref, control_check
 
 
 def build(arm, experiment="E02", seed=None):
@@ -341,9 +382,9 @@ def build(arm, experiment="E02", seed=None):
     NEGATIVE_TEXT = arm_cfg.get("negative", cfg["negative"])
     use_control = arm_cfg["uploads"] is not None
     if use_control:
-        keys, control_names, ref_name = _load_uploads(arm, experiment)
+        keys, control_names, ref_name, control_check = _load_uploads(arm, experiment)
     else:
-        keys, control_names, ref_name = [], [], None
+        keys, control_names, ref_name, control_check = [], [], None, {}
         if cfg["reference"]:
             path, key = cfg["reference"]
             with open(path, encoding="utf-8") as fh:
@@ -438,6 +479,11 @@ def build(arm, experiment="E02", seed=None):
             "normalization": arm_cfg["normalization"],
             "polarity": arm_cfg["polarity"],
             "distinct_images": len(set(control_names)),
+            # `distinct_images` above is the SERVER-name count — the side the check is
+            # comparing, not the side it compares against. These three say which branch of
+            # `_load_uploads` ran, so a reader of this record can tell a check that bound
+            # at 33 from one that degraded to "at least one".
+            **control_check,
             "frame_keys": keys,
             "server_names": control_names,
         },
