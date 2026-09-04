@@ -35,13 +35,16 @@ from mathutils import Vector  # noqa: E402
 import rig_character  # noqa: E402
 from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+from make_parts_sheet import articulated_side, side_word  # noqa: E402,F401
 
 FULL_W, FULL_H = 780, 1180
 INSET = 560
 INSET_HEIGHT_FRACTION = 0.24
 ARC_FRAMES = (17, rig_character.PROBE_FRAMES)
-INSET_JOINTS = (("shoulder", "shoulder.L"), ("elbow", "elbow.L"),
-                ("hand", "wrist.L"), ("hip", "hip.L"))
+#: `(panel label, joint)` -- the SIDE is appended at run time from `articulated_side`,
+#: never pinned here.
+INSET_JOINTS = (("shoulder", "shoulder"), ("elbow", "elbow"),
+                ("hand", "wrist"), ("hip", "hip"))
 
 
 def parse_args():
@@ -152,14 +155,21 @@ def render_arm(glb, tag, out_dir, targets=None):
 
     # The posed bone positions at the last frame — identical across arms, so both rows share
     # one camera per joint. Computed from the FIRST arm and passed to the second.
+    # Which arm the arc moves is MEASURED, not pinned: `rig_character.author_probe` binds
+    # the probe to the +X side, and which of this character's arms that is comes out of
+    # `landmarks.facing`. ONE implementation, imported from `make_parts_sheet` beside the
+    # staging triple.
+    side_rec = articulated_side(arm_obj, scene, 1, rig_character.PROBE_FRAMES)
     if targets is None:
         targets = {}
-        for label, bone in INSET_JOINTS:
+        for label, joint in INSET_JOINTS:
+            bone = f"{joint}.{side_rec['side']}"
             targets[label] = tuple(arm_obj.matrix_world @ arm_obj.pose.bones[bone].head)
 
     full_scale = height * 1.10
     inset_scale = height * INSET_HEIGHT_FRACTION
-    out = {"targets": targets, "max_displacement": moved, "panels": {}}
+    out = {"targets": targets, "max_displacement": moved,
+           "articulated_side": side_rec, "panels": {}}
 
     for frame in (1,) + tuple(ARC_FRAMES):
         scene.frame_set(frame)
@@ -193,8 +203,10 @@ def main():
         "filename": "E07-binding-comparison.png",
         "title": "E07 — the two bindings, for the Director's eye",
         "subtitle": (f"(a) {args.a_label}   ·   (b) {args.b_label}   ·   the arc is E03's: "
-                     f"the character's LEFT arm, 0°→90° about +Y, {last} keys at 16 fps   ·   "
+                     f"the character's {a['articulated_side']['side_word']} arm, "
+                     f"0°→90° about +Y, {last} keys at 16 fps   ·   "
                      f"insets are 1:1 at frame {last}, identical camera in both rows"),
+        "articulated_side": {"a": a["articulated_side"], "b": b["articulated_side"]},
         "rows": [
             {"title": "Rest pose — frame 1",
              "panels": [{"body": a["panels"]["f1"], "label": f"(a) {args.a_label}"},
@@ -225,4 +237,24 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # CARRIED from `check_relift.py:123` — the minimal form of the handler eleven sibling
+    # Blender tools already carry — rather than written a second time. `blender -b -P`
+    # exits **0** when the script's exception propagates (E07, measured three times:
+    # rig_character.py:1134, rig_parts.py:126, author_walk.py:13), so without this every
+    # refusal in this file halted Blender with status 0 and a caller reading
+    # `$LASTEXITCODE` walked past it. A halt that returns success is not a halt.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+
+        from armature_core.errors import ArmatureError, GateFailure
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("MAKE_BINDING_SHEET_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "gate": getattr(exc, "gate", None),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

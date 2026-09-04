@@ -33,6 +33,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig_character as rc                                            # noqa: E402
+from armature_core import blender_scene                               # noqa: E402
 import rig_parts as rp                                                # noqa: E402
 from armature_core.errors import GateFailure                          # noqa: E402
 
@@ -145,9 +146,21 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
 
-    rc.fresh_scene(16)
+    scene = rc.fresh_scene(16)
     bpy.ops.import_scene.gltf(filepath=args["glb"])
-    ob = [o for o in bpy.data.objects if o.type == "MESH"][0]
+    # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
+    # object index 0 is depends on file order, and the glTF importer routinely adds a
+    # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
+    # comment records picking once. Selection is render visibility and an ambiguous
+    # result RAISES, the shape rig_character.build_pass and rig_bake._import use.
+    meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    visible = blender_scene.render_visible_meshes(scene, meshes)
+    if len(visible) != 1:
+        raise ArmatureError(
+            f"{args['glb']} presents {len(visible)} render-visible mesh object(s) "
+            f"{[o.name for o in visible]} (all meshes {[o.name for o in meshes]}); "
+            f"the repair would run on whichever one file order put first")
+    ob = visible[0]
     ob.name = ob.data.name = "performer_repaired"
     src = rc.world_verts(ob)
     diagonal = float(np.linalg.norm(src.max(0) - src.min(0)))

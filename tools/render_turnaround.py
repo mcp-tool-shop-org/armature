@@ -140,7 +140,7 @@ from mathutils import Vector  # noqa: E402
 from armature_core import blender_scene, framing  # noqa: E402
 from armature_core import startframe as SF  # noqa: E402
 from armature_core import turnaround as TA  # noqa: E402
-from armature_core.errors import ArmatureError  # noqa: E402
+from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "S05.1"
 
@@ -549,8 +549,24 @@ def main():
     # lower frame with exactly the kind of baked, non-transparent backdrop this tool exists
     # to stop shipping — and `turn_final`, the set this stands beside, has none either.
 
-    subject = [o for o in meshes]
-    verts = blender_scene._evaluated_world_vertices(subject)
+    # `render_visible_meshes` and not `type == "MESH"` — CARRIED from
+    # `render_start_frame.py:435`, the sibling this file already inherits its staging
+    # from. Blender's glTF importer drops a 42-vertex Icosphere of world radius 1.0 into
+    # a hidden `glTF_not_exported` collection; measuring it inflates the bbox, the orbit
+    # target, the framing cloud and therefore the solved radius / shared `ortho_scale`.
+    # NO gate below can see that: Gate WHOLE reads the same inflated cloud, and Gate CROP
+    # reads the rendered alpha, which a hide_render decoy never reaches — a figure drawn
+    # too SMALL moves away from every border, so CROP passes more easily, not less.
+    # E02-report.md:34 measured the decoy turning a 3.23:1 figure into a 1.05:1 near-cube.
+    subject = blender_scene.render_visible_meshes(scene, meshes)
+    excluded = [o.name for o in meshes if o not in subject]
+    if not subject:
+        raise RenderTurnaroundGate(
+            f"{a.glb} imported {len(meshes)} mesh object(s) and none of them is "
+            f"render-visible ({[o.name for o in meshes]}); there is nothing to turn "
+            f"around, and framing against hidden geometry would compose a shot of an "
+            f"object the renderer will not draw")
+    verts = blender_scene.evaluated_world_vertices(scene, subject)
     lo = verts.min(axis=0)
     hi = verts.max(axis=0)
     target = ((lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5)
@@ -653,7 +669,8 @@ def main():
         "numpy": np.__version__,
         "source": {"glb": os.path.abspath(a.glb), "sha256": _sha256(a.glb),
                    "bytes": os.path.getsize(a.glb)},
-        "import_info": info,
+        "import_info": dict(info, subject_render_visible=[o.name for o in subject],
+                            subject_excluded_not_render_visible=excluded),
         "resolution": [width, height],
         "camera": {
             "type": "orbit", "n_views": int(a.views),
@@ -734,4 +751,23 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # CARRIED VERBATIM from `render_start_frame.py:766` — the sibling this file already
+    # inherits its staging from — because this was the ONE gating renderer with a bare
+    # `main()`. `blender -b -P` exits **0** when the script's exception propagates (E07,
+    # measured three times: rig_character.py:1134, rig_parts.py:126, author_walk.py:13),
+    # so every andon in this file — RenderTurnaroundGate, Gate ALPHA, Gate TURN, Gate
+    # WHOLE, Gate CROP — halted Blender with status 0 and the only witness was the ABSENCE
+    # of `RENDER_TURNAROUND_OK`. A halt that returns success is not a halt.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("RENDER_TURNAROUND_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "gate": getattr(exc, "gate", None),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

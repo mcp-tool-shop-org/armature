@@ -325,3 +325,109 @@ def test_the_parts_gates_name_their_andon_on_the_passing_path_too():
     assert ev["gate"] == "D" and ev["andon"] == "GatePartsDeterminism"
     ok = parts.gate_parts_accounting(np.array([0, 0, 1, 2, 2]), 5, NAMES)
     assert ok["gate"] == "PARTS" and ok["andon"] == "GatePartsAccounting"
+
+
+# ---------------------------------------------------- Gate P raises Gate P's andon (w6)
+#
+# F-e0251035. The bind-pose clause raised `GateNNames` — `gate = "N"` — for a failure whose
+# message says bone parenting moved the parts, whose evidence dict is `gate_p`, whose
+# threshold is `rig_gates.REST_POSE_EPSILON_FRAC`, and whose result the manifest records
+# under `gates.P_bind_pose`. `rig_parts.py`'s `__main__` handler reads
+# `getattr(exc, "gate", None)` into `halt.json` and the printed HALT line, so the only
+# machine-readable record of a wrong bone-parent inverse named the NAMES gate — sending the
+# next session to `sitelist` instead of to the parent-inverse arithmetic.
+#
+# Family: enumerated every `raise Gate<Something>(` across `tools/*.py`. Inside this domain
+# this was the only class/id mismatch; the two bare `GateFailure` raises in
+# `build_lora_arm_payload.py` are builders' domain and are filed there.
+
+from armature_core.errors import GateNNames, GatePRestPose
+from blender_stub import load_tool
+
+
+class _Vert:
+    def __init__(self, co):
+        self.co = co
+
+
+class _Part:
+    def __init__(self, verts):
+        self.data = self
+        self.vertices = [_Vert(v) for v in verts]
+
+
+CUBE = [(0.0, 0.0, 0.0), (0.1, 0.0, 0.0), (0.0, 0.1, 0.0), (0.0, 0.0, 0.1)]
+
+
+def _rig_parts():
+    return load_tool("rig_parts.py")
+
+
+def test_a_displaced_part_raises_gate_P_with_its_measurement():
+    rp = _rig_parts()
+    part = _Part(CUBE)
+    moved = np.array(CUBE, dtype=np.float64) + np.array([0.0, 0.0, 0.5])
+    with pytest.raises(GatePRestPose) as exc:
+        rp.gate_p_bind_pose({"chest": part}, {"chest": moved}, 1.0)
+    assert exc.value.gate == "P"
+    ev = exc.value.evidence
+    assert ev["gate"] == "P"
+    assert ev["max_displacement"] == pytest.approx(0.5)
+    assert ev["threshold"] > 0.0
+    assert ev["per_part"]["chest"] == pytest.approx(0.5)
+    assert ev["bbox_diagonal"] == 1.0
+
+
+def test_the_bind_pose_clause_no_longer_raises_the_names_gate():
+    """The red direction of the mis-typing itself: a run that used to record gate "N" for
+    a parent-inverse defect must not do so any more."""
+    rp = _rig_parts()
+    part = _Part(CUBE)
+    moved = np.array(CUBE, dtype=np.float64) + np.array([0.0, 0.0, 0.5])
+    with pytest.raises(GatePRestPose) as exc:
+        rp.gate_p_bind_pose({"chest": part}, {"chest": moved}, 1.0)
+    assert not isinstance(exc.value, GateNNames)
+    assert exc.value.gate != "N"
+
+
+def test_a_part_that_did_not_move_passes_and_says_so():
+    """A gate that refuses everything is not a gate."""
+    rp = _rig_parts()
+    part = _Part(CUBE)
+    ev = rp.gate_p_bind_pose({"chest": part},
+                             {"chest": np.array(CUBE, dtype=np.float64)}, 1.0)
+    assert ev["gate"] == "P"
+    assert ev["max_displacement"] == pytest.approx(0.0)
+    assert "left every part where it was built" in ev["verdict"]
+
+
+def test_the_threshold_is_a_fraction_of_the_subjects_own_diagonal():
+    """A global constant must not govern a local feature: the same displacement passes on a
+    large subject and fires on a small one."""
+    rp = _rig_parts()
+    part = _Part(CUBE)
+    from armature_core import rig_gates
+
+    d = 4.0 * rig_gates.REST_POSE_EPSILON_FRAC
+    nudged = np.array(CUBE, dtype=np.float64) + np.array([0.0, 0.0, d])
+    with pytest.raises(GatePRestPose):
+        rp.gate_p_bind_pose({"chest": part}, {"chest": nudged}, 1.0)
+    ev = rp.gate_p_bind_pose({"chest": part}, {"chest": nudged}, 100.0)
+    assert ev["verdict"]
+
+
+def test_no_gate_in_this_tool_raises_an_andon_whose_id_is_not_its_own():
+    """The family census. Every `raise Gate<X>(` in rig_parts must name the gate the
+    surrounding code is about; the evidence dict carries the id so a halt record cannot be
+    ambiguous about which andon pulled."""
+    import ast
+
+    from blender_stub import read_source
+
+    tree = ast.parse(read_source("rig_parts.py"))
+    raised = {n.exc.func.id for n in ast.walk(tree)
+              if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
+              and isinstance(n.exc.func, ast.Name)
+              and n.exc.func.id.startswith("Gate")}
+    assert "GatePRestPose" in raised
+    assert raised <= {"GateNNames", "GatePRestPose", "GateFailure"}, raised

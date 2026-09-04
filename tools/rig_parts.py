@@ -45,7 +45,8 @@ from mathutils import Matrix, Vector  # noqa: E402
 
 import rig_character  # noqa: E402
 from armature_core import glb, joints, landmarks, parts, rig_gates, sitelist  # noqa: E402
-from armature_core.errors import ArmatureError, GateFailure, GateNNames  # noqa: E402
+from armature_core.errors import (ArmatureError, GateFailure,          # noqa: E402
+                                  GateNNames, GatePRestPose)
 
 TOOL_VERSION = "1.0.0"
 
@@ -394,6 +395,43 @@ def build_pass(args, label):
             "bbox_lo": lo.tolist(), "bbox_hi": hi.tolist()}
 
 
+def gate_p_bind_pose(part_objs, at_bind, diagonal):
+    """Gate P - ANDON: bone parenting left every part where it was built.
+
+    MEASURED 2026-09-04: this clause raised `GateNNames`, whose `gate` attribute is "N",
+    for a failure that is Gate P. The message says bone parenting moved the parts at the
+    bind pose, the evidence dict is `gate_p`, the threshold is
+    `rig_gates.REST_POSE_EPSILON_FRAC`, and the manifest records the result under
+    `gates.P_bind_pose`. The consequence is not cosmetic: the `__main__` handler reads
+    `getattr(exc, "gate", None)` and writes it into `halt.json` and the printed HALT line,
+    so the only machine-readable record of a wrong bone-parent inverse said "N" -- sending
+    the next session to `sitelist` and the registered-name list instead of to the
+    parent-inverse arithmetic at rig_parts.py:284-297, which is where the defect is.
+
+    `at_bind` maps part name -> world positions at frame 1; the comparison is against each
+    part's own LOCAL coordinates, which are what it was built with. Bounded as a fraction
+    of the subject's own bbox diagonal, not in metres.
+    """
+    ev = {"gate": "P", "per_part": {}, "verdict": None}
+    worst = 0.0
+    for name, ob in part_objs.items():
+        local = np.array([list(v.co) for v in ob.data.vertices], dtype=np.float64)
+        d = float(np.linalg.norm(at_bind[name] - local, axis=1).max())
+        ev["per_part"][name] = d
+        worst = max(worst, d)
+    threshold = rig_gates.REST_POSE_EPSILON_FRAC * diagonal
+    ev.update({"max_displacement": worst, "threshold": threshold,
+               "threshold_frac_of_diagonal": rig_gates.REST_POSE_EPSILON_FRAC,
+               "bbox_diagonal": float(diagonal)})
+    if worst > threshold:
+        raise GatePRestPose(
+            f"bone parenting moved the parts at the bind pose: max {worst:.9f} > "
+            f"{threshold:.9f}. The parent inverse is wrong and every part has jumped",
+            ev)
+    ev["verdict"] = "bone parenting left every part where it was built"
+    return ev
+
+
 def gate_part_names(part_objs, where):
     """N-analog: every registered deforming segment is a part, and nothing else is."""
     registered = [b.name for b in sitelist.BONES if b.deform]
@@ -458,21 +496,7 @@ def main():
     ctx["scene"].frame_set(1)
     bpy.context.view_layer.update()
     at_bind = {n: part_world_verts(ob) for n, ob in ctx["parts"].items()}
-    gate_p = {"per_part": {}, "verdict": None}
-    worst = 0.0
-    for name, ob in ctx["parts"].items():
-        local = np.array([list(v.co) for v in ob.data.vertices], dtype=np.float64)
-        d = float(np.linalg.norm(at_bind[name] - local, axis=1).max())
-        gate_p["per_part"][name] = d
-        worst = max(worst, d)
-    threshold = rig_gates.REST_POSE_EPSILON_FRAC * ctx["diagonal"]
-    gate_p.update({"max_displacement": worst, "threshold": threshold})
-    if worst > threshold:
-        raise GateNNames(
-            f"bone parenting moved the parts at the bind pose: max {worst:.9f} > "
-            f"{threshold:.9f}. The parent inverse is wrong and every part has jumped",
-            gate_p)
-    gate_p["verdict"] = "bone parenting left every part where it was built"
+    gate_p = gate_p_bind_pose(ctx["parts"], at_bind, ctx["diagonal"])
 
     probe = rig_character.author_probe(ctx)
     observations = observe_under_pose(ctx)

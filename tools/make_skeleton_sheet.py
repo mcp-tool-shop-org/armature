@@ -29,6 +29,8 @@ from mathutils import Vector  # noqa: E402
 
 import rig_character  # noqa: E402
 from armature_core import joints, landmarks, sitelist  # noqa: E402
+from armature_core import blender_scene  # noqa: E402
+from armature_core.errors import GateFailure  # noqa: E402
 
 FULL_W, FULL_H = 900, 1360
 INSET = 620
@@ -46,6 +48,77 @@ AFTER_RGB = (0.10, 0.85, 1.00)    # the placement measured off the sculpted ball
 #: The six joints the insets show, in body order. One side only — the panels are already
 #: six wide, and the offset table in the report carries both sides.
 INSET_JOINTS = ("shoulder", "elbow", "wrist", "hip", "knee", "ankle")
+
+
+class SkeletonSheetGate(GateFailure):
+    """The approval sheet cannot be composed as an approval sheet."""
+
+    gate = "SKELETON_SHEET"
+
+
+def snap_census(table):
+    """(n_matched, n_snappable) over `joints.snap_sites_to_balls`' table."""
+    return sum(1 for r in table.values() if r.get("matched")), len(table)
+
+
+def gate_any_pivot_matched(table):
+    """ANDON - at least one limb pivot moved onto a sculpted ball.
+
+    When NOTHING matched, every inset's Before and After panel is the same picture and the
+    sheet is six identical pairs under a caption about pivots being moved: the most
+    reassuring possible appearance for a total failure of the measurement this sheet
+    exists to show. That is not an approval artifact, so it is refused rather than
+    rendered. Raises; no `assert`, no skip flag.
+    """
+    n_matched, n_snappable = snap_census(table)
+    ev = {"gate": "SKELETON_SHEET", "n_matched": n_matched, "n_snappable": n_snappable,
+          "unmatched": sorted(k for k, r in table.items() if not r.get("matched"))}
+    if n_snappable and n_matched == 0:
+        raise SkeletonSheetGate(
+            f"no ball was matched for any of the {n_snappable} snappable sites, so every "
+            f"inset's Before and After panel is the SAME picture. A sheet of identical "
+            f"pairs reads as 'these pivots were already correct', which is the opposite "
+            f"of what happened", ev)
+    return ev
+
+
+def inset_panel_label(joint, site, table):
+    """The panel's label, which says when its two rows are the same picture."""
+    if table.get(site, {}).get("matched"):
+        return joint
+    return f"{joint} - NO BALL MATCHED, heuristic placement"
+
+
+def inset_record(joint, site, table, *, body, before, after):
+    """One inset's entry, carrying `matched` and the unmatched reason into panels.json.
+
+    The sheet used to read only `after` and the offset fraction, so `matched` and `reason`
+    never reached the emitted spec and an unmatched joint was indistinguishable from a
+    joint that had needed no correction.
+    """
+    rec = table.get(site, {})
+    out = {"body": body, "before": before, "after": after,
+           "site": site,
+           "matched": bool(rec.get("matched")),
+           "label": inset_panel_label(joint, site, table),
+           "offset_frac": rec.get("offset_as_fraction_of_segment")}
+    if not out["matched"] and rec.get("reason"):
+        out["reason"] = rec["reason"]
+    return out
+
+
+def sheet_subtitle(table, side):
+    """The subtitle, built from the run's own measurements rather than typed out.
+
+    MEASURED 2026-09-04: the superseded literal read "22 named bones - every limb pivot
+    moved onto the mannequin's own sculpted ball-joint". The count was correct on this
+    sitelist and is latent drift; the second clause was an unconditional assertion about a
+    measurement that reports per-site whether it succeeded.
+    """
+    n_matched, n_snappable = snap_census(table)
+    return (f"{len(sitelist.BONES)} named bones · {n_matched} of {n_snappable} limb "
+            f"pivots moved onto the mannequin's own sculpted ball-joint · insets are "
+            f"1:1, character's {side} side, same camera in both rows")
 
 
 def parse_args():
@@ -158,7 +231,21 @@ def main():
 
     scene = rig_character.fresh_scene(rig_character.PROBE_FPS)
     bpy.ops.import_scene.gltf(filepath=args.glb)
-    mesh_obj = [o for o in bpy.data.objects if o.type == "MESH"][0]
+    # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
+    # object index 0 is depends on file order, and the glTF importer routinely adds a
+    # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
+    # comment records picking once. Selection is render visibility and an ambiguous
+    # result RAISES, the shape rig_character.build_pass and rig_bake._import use.
+    meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    visible = blender_scene.render_visible_meshes(scene, meshes)
+    if len(visible) != 1:
+        raise SkeletonSheetGate(
+            f"{args.glb} presents {len(visible)} render-visible mesh object(s); the sheet "
+            f"cannot decide which one is the character",
+            {"gate": "SKELETON_SHEET", "glb": args.glb,
+             "render_visible": [o.name for o in visible],
+             "all_meshes": [o.name for o in meshes]})
+    mesh_obj = visible[0]
 
     source = rig_character.world_verts(mesh_obj)
     lo, hi = source.min(axis=0), source.max(axis=0)
@@ -198,6 +285,7 @@ def main():
     # only thing that moves between the two rows is the pivot.
     side = "L" if lm["facing"]["left_x_sign"] > 0 else "R"
     inset_scale = height * INSET_HEIGHT_FRACTION
+    gate_snap = gate_any_pivot_matched(table)
     insets = {}
     for joint in INSET_JOINTS:
         site = f"{joint}_{side}"
@@ -206,16 +294,16 @@ def main():
                                  (INSET, INSET), ov_before)
         _, bones_a = render(f"inset_{joint}_after", target, 0.0, inset_scale,
                             (INSET, INSET), ov_after)
-        insets[joint] = {"body": body_b, "before": bones_b, "after": bones_a,
-                         "offset_frac": table[site]["offset_as_fraction_of_segment"]}
+        insets[joint] = inset_record(joint, site, table, body=body_b, before=bones_b,
+                                     after=bones_a)
 
     spec = {
         "out": out,
         "filename": "E07-skeleton-approval.png",
         "title": "E07 — the skeleton, for approval",
-        "subtitle": ("22 named bones · every limb pivot moved onto the mannequin's own "
-                     f"sculpted ball-joint · insets are 1:1, character's {side} side, "
-                     "same camera in both rows"),
+        "subtitle": sheet_subtitle(table, side),
+        "gate_SKELETON_SHEET": gate_snap,
+        "joint_snap_table": {f"{j}_{side}": table[f"{j}_{side}"] for j in INSET_JOINTS},
         "rows": [
             {"title": "The figure, with the skeleton in place",
              "panels": [{"body": full["front"][0], "overlay": full["front"][1],
@@ -224,10 +312,10 @@ def main():
                          "label": "side"}]},
             {"title": "Before — pivots placed by proportion",
              "panels": [{"body": insets[j]["body"], "overlay": insets[j]["before"],
-                         "label": j} for j in INSET_JOINTS]},
+                         "label": insets[j]["label"]} for j in INSET_JOINTS]},
             {"title": "After — pivots placed on the sculpted ball",
              "panels": [{"body": insets[j]["body"], "overlay": insets[j]["after"],
-                         "label": j} for j in INSET_JOINTS]},
+                         "label": insets[j]["label"]} for j in INSET_JOINTS]},
         ],
     }
     path = os.path.join(out, "panels.json")
@@ -237,4 +325,24 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # CARRIED from `check_relift.py:123` — the minimal form of the handler eleven sibling
+    # Blender tools already carry — rather than written a second time. `blender -b -P`
+    # exits **0** when the script's exception propagates (E07, measured three times:
+    # rig_character.py:1134, rig_parts.py:126, author_walk.py:13), so without this every
+    # refusal in this file halted Blender with status 0 and a caller reading
+    # `$LASTEXITCODE` walked past it. A halt that returns success is not a halt.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+
+        from armature_core.errors import ArmatureError, GateFailure
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("MAKE_SKELETON_SHEET_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "gate": getattr(exc, "gate", None),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

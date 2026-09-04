@@ -38,6 +38,8 @@ import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 
 from armature_core import landmarks, sitelist  # noqa: E402
+from armature_core import blender_scene  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
 
 
 def parse_args():
@@ -54,7 +56,20 @@ def load(glb):
     scene = bpy.context.scene
     scene.render.fps, scene.render.fps_base = 16, 1.0
     bpy.ops.import_scene.gltf(filepath=glb)
-    return scene, [o for o in bpy.data.objects if o.type == "MESH"][0]
+    # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
+    # object index 0 is depends on file order, and the glTF importer routinely adds a
+    # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
+    # comment records picking once. Selection is render visibility and an ambiguous
+    # result RAISES, the shape rig_character.build_pass and rig_bake._import use.
+    meshes = [o for o in bpy.data.objects if o.type == "MESH"]
+    visible = blender_scene.render_visible_meshes(scene, meshes)
+    if len(visible) != 1:
+        raise ArmatureError(
+            f"{glb} presents {len(visible)} render-visible mesh object(s) "
+            f"{[o.name for o in visible]} (all meshes {[o.name for o in meshes]}); "
+            f"which one carries the character is not a question this tool answers by "
+            f"taking index 0")
+    return scene, visible[0]
 
 
 def world_verts(ob):
@@ -232,4 +247,24 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # CARRIED from `check_relift.py:123` — the minimal form of the handler eleven sibling
+    # Blender tools already carry — rather than written a second time. `blender -b -P`
+    # exits **0** when the script's exception propagates (E07, measured three times:
+    # rig_character.py:1134, rig_parts.py:126, author_walk.py:13), so without this every
+    # refusal in this file halted Blender with status 0 and a caller reading
+    # `$LASTEXITCODE` walked past it. A halt that returns success is not a halt.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+
+        from armature_core.errors import ArmatureError, GateFailure
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("DIAGNOSE_BONE_HEAT_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "gate": getattr(exc, "gate", None),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

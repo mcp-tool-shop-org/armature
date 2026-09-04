@@ -449,7 +449,7 @@ def main():
              "action_range": list(span)})
 
     # ---- the silhouette: every evaluated world vertex the renderer is about to draw.
-    verts = blender_scene._evaluated_world_vertices(subject)
+    verts = blender_scene.evaluated_world_vertices(scene, subject)
     if verts.shape[0] == 0:
         raise RenderGate("the subject evaluates to no vertices at this frame", {})
     cloud = [tuple(map(float, p)) for p in verts]

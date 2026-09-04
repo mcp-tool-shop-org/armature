@@ -23,6 +23,7 @@ names say; this reports which sites are findable, not that a map exists.
 
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -54,14 +55,45 @@ SITES = {
     "ear.R": (("ear",), "R"),
 }
 
-LEFT_TOKENS = ("left", "_l", ".l", "l_", "lft", "lf_")
-RIGHT_TOKENS = ("right", "_r", ".r", "r_", "rgt", "rt_")
+#: Side markers, matched as whole NAME TOKENS rather than as substrings or as a last
+#: character. MEASURED 2026-09-04: the superseded rule was
+#:
+#:     left  = any(t in low for t in ("left", "_l", ".l", "l_", "lft", "lf_")) or low.endswith("l")
+#:     right = any(t in low for t in ("right", "_r", ".r", "r_", "rgt", "rt_")) or low.endswith("r")
+#:
+#: `mixamorig:LeftShoulder` set BOTH flags -- it contains "left" and ends in "r" -- and
+#: returned None, so an industry-standard rig read as sideless. `Shoulder` returned "R",
+#: `ear` returned "R", `heel` returned "L", and `upper_arm.L` returned None because
+#: "upper_arm" contains the substring "r_". This is the instrument behind E01's headline
+#: count and `P2b_all_18_sites_named` is read straight off it, so a donor GLB naming its
+#: sites perfectly was recorded in the repo as missing them.
+LEFT_TOKENS = ("l", "left", "lft", "lf")
+RIGHT_TOKENS = ("r", "right", "rgt", "rt")
+
+#: Split on separators AND camelCase, so `LeftShoulder`, `left_shoulder`, `shoulder.L` and
+#: `DEF-upper_arm.R` all present their side marker as a token of its own.
+_TOKEN_SPLIT = re.compile(
+    r"[^A-Za-z0-9]+"                 # : - _ . and friends
+    r"|(?<=[a-z0-9])(?=[A-Z])"       # LeftShoulder -> Left | Shoulder
+    r"|(?<=[A-Z])(?=[A-Z][a-z])"     # IKLeftArm    -> IK | Left | Arm
+)
+
+
+def name_tokens(name):
+    """The name's tokens, lowercased. `mixamorig:LeftUpLeg` -> [mixamorig, left, up, leg]."""
+    return [t.lower() for t in _TOKEN_SPLIT.split(name) if t]
 
 
 def _side_of(name):
-    low = name.lower()
-    left = any(t in low for t in LEFT_TOKENS) or low.endswith("l")
-    right = any(t in low for t in RIGHT_TOKENS) or low.endswith("r")
+    """"L", "R", or None when the name marks no side or marks both.
+
+    A side marker must BE a token. A last character is not a boundary: `Shoulder`,
+    `heel`, `Collar` and `Femur` name no side, and reporting one for them is how a
+    symmetric rig produced a half-named verdict.
+    """
+    tokens = set(name_tokens(name))
+    left = bool(tokens & set(LEFT_TOKENS))
+    right = bool(tokens & set(RIGHT_TOKENS))
     if left and not right:
         return "L"
     if right and not left:
@@ -201,4 +233,24 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # CARRIED from `check_relift.py:123` — the minimal form of the handler eleven sibling
+    # Blender tools already carry — rather than written a second time. `blender -b -P`
+    # exits **0** when the script's exception propagates (E07, measured three times:
+    # rig_character.py:1134, rig_parts.py:126, author_walk.py:13), so without this every
+    # refusal in this file halted Blender with status 0 and a caller reading
+    # `$LASTEXITCODE` walked past it. A halt that returns success is not a halt.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+
+        from armature_core.errors import ArmatureError, GateFailure
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("PROBE_GLB_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "gate": getattr(exc, "gate", None),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

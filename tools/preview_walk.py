@@ -38,6 +38,42 @@ def parse_args():
     return ap.parse_args(argv)
 
 
+def resolve_camera(spec, bounds, width, height):
+    """`camera.target` and `camera.radius`, resolved the way `stage_render` resolves them.
+
+    MEASURED 2026-09-04: this file used to re-derive both fields two lines apart --
+    `Vector((0, 0, 0))` for the `bbox_center` sentinel and a bare `float(c["radius"])` --
+    while `stage_render.BlenderBackend.prepare` resolves the sentinel to the MEASURED bbox
+    centre and handles `"auto"` through `blender_scene.auto_radius`. Both are the shotspec
+    DEFAULTS (`shotspec.DEFAULTS["camera"]`), so this was the default path, not an edge
+    case: `specs/E01-anchor.json` and `specs/E02-control-blackguard.json` aimed the preview
+    at the world origin and then raised `ValueError: could not convert string to float:
+    'auto'`. The module docstring's claim -- "one implementation, so the preview cannot
+    drift from the render" -- is now true of the arithmetic rather than of the intent.
+
+    `bounds` is `blender_scene.world_bounds`'s triple; `width`/`height` are the SHOT
+    resolution, not the scaled preview, because that is what the render solves against.
+    """
+    c = spec["camera"]
+    center, _half, sphere_r = bounds
+    if c["target"] == "bbox_center":
+        target = tuple(float(v) for v in center)
+        target_source = "measured bbox centre"
+    else:
+        target = tuple(float(v) for v in c["target"])
+        target_source = "spec.camera.target (pinned)"
+
+    radius = c["radius"]
+    if radius == "auto":
+        radius = blender_scene.auto_radius(sphere_r, c["lens_mm"], c["sensor_mm"],
+                                           width, height, c["fit_margin"])
+        radius_source = "auto (fitted to the subject's bounding sphere)"
+    else:
+        radius_source = "spec.camera.radius (pinned)"
+    return {"target": target, "target_source": target_source,
+            "radius": float(radius), "radius_source": radius_source}
+
+
 def main():
     a = parse_args()
     spec = shotspec.load_spec(a.spec)
@@ -86,12 +122,29 @@ def main():
                        [(0, 1, 2, 3)])
     gob = bpy.data.objects.new("ground", ground)
     scene.collection.objects.link(gob)
-    zs = [(o.matrix_world @ Vector(c)).z for o in meshes for c in o.bound_box]
+    # Same filter as `stage_render.py:138` and `render_start_frame.py:435`: the floor's
+    # height is a MEASUREMENT of the subject, and the glTF importer's hidden radius-1.0
+    # Icosphere sits at the origin, so an unfiltered `min(zs)` drops the floor a metre
+    # below a character standing on it -- in the one preview whose purpose is showing a
+    # foot sinking through the ground.
+    subject = blender_scene.render_visible_meshes(scene, meshes)
+    if not subject:
+        raise RuntimeError(
+            f"{asset} imported {len(meshes)} mesh object(s) and none is render-visible "
+            f"({[o.name for o in meshes]}); there is nothing to preview")
+    zs = [(o.matrix_world @ Vector(c)).z for o in subject for c in o.bound_box]
     gob.location = (0.0, 0.0, min(zs))
 
     c = spec["camera"]
-    target = Vector(c["target"]) if c["target"] != "bbox_center" else Vector((0, 0, 0))
-    radius = float(c["radius"])
+    bounds = (blender_scene.world_bounds_over_frames(scene, subject, count)
+              if spec["subject"]["animation"] == "per_frame"
+              else blender_scene.world_bounds(subject))
+    if bounds is None:
+        raise RuntimeError(f"{asset} has no evaluated geometry to frame")
+    cam_solution = resolve_camera(spec, bounds, int(spec["resolution"]["width"]),
+                                  int(spec["resolution"]["height"]))
+    target = Vector(cam_solution["target"])
+    radius = cam_solution["radius"]
     cam_data = bpy.data.cameras.new("preview_cam")
     cam_data.lens = float(c["lens_mm"])
     cam_data.sensor_fit = "AUTO"
@@ -111,12 +164,29 @@ def main():
         scene.render.filepath = os.path.join(a.out, f"{i:05d}.png")
         bpy.ops.render.render(write_still=True)
 
-    n = len([f for f in os.listdir(a.out) if f.endswith(".png")])
-    if n != count:
-        raise RuntimeError(f"rendered {n} preview frames, expected {count}")
+    # The population is the PLAN, not whatever is in the directory. A bare
+    # `listdir(...*.png)` counts strays as successes and cannot say WHICH frame is missing;
+    # `shotspec.frame_names` is the same list the render writes against.
+    planned = shotspec.frame_names(count, "png")
+    missing = [f for f in planned if not os.path.isfile(os.path.join(a.out, f))]
+    empty = [f for f in planned
+             if f not in missing and os.path.getsize(os.path.join(a.out, f)) == 0]
+    strays = sorted(set(os.listdir(a.out)) - set(planned))
+    if missing or empty:
+        raise RuntimeError(
+            f"the preview is not complete: {len(missing)} of {count} frames were never "
+            f"written {missing[:8]} and {len(empty)} are zero bytes {empty[:8]}")
     print("PREVIEW_WALK_OK " + json.dumps({
-        "out": os.path.abspath(a.out), "frames": n, "resolution": [w, h],
+        "out": os.path.abspath(a.out), "frames": len(planned), "resolution": [w, h],
+        "unexpected_files_in_out_dir": strays,
         "asset": asset, "asset_sha256": sha, "camera_position": [round(v, 6) for v in pos],
+        "camera_target": [round(v, 6) for v in cam_solution["target"]],
+        "camera_target_source": cam_solution["target_source"],
+        "camera_radius": round(cam_solution["radius"], 6),
+        "camera_radius_source": cam_solution["radius_source"],
+        "subject_render_visible": [o.name for o in subject],
+        "subject_excluded_not_render_visible": [o.name for o in meshes
+                                                if o not in subject],
         "import": info}))
     return 0
 

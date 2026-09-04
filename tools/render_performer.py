@@ -285,7 +285,17 @@ def main():
                            [(0, 1, 2, 3)])
         gob = bpy.data.objects.new("ground", ground)
         scene.collection.objects.link(gob)
-        zs = [(o.matrix_world @ Vector(c)).z for o in meshes for c in o.bound_box]
+        # Same filter as render_start_frame.py:435 and render_turnaround: the ground
+        # plane's height is a MEASUREMENT of the subject, and the glTF importer's hidden
+        # radius-1.0 Icosphere sits at the origin, so an unfiltered `min(zs)` puts the
+        # floor a metre under a character standing on it and nothing reports the gap.
+        zs = [(o.matrix_world @ Vector(c)).z
+              for o in blender_scene.render_visible_meshes(scene, meshes)
+              for c in o.bound_box]
+        if not zs:
+            raise RenderGate(
+                "the GLB imported no render-visible mesh, so the floor has no height to "
+                "sit at", {"glb": a.glb, "mesh_objects": [o.name for o in meshes]})
         gob.location = (0.0, 0.0, min(zs))
 
     cam_data = bpy.data.cameras.new("performer_cam")
