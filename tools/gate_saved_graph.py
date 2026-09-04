@@ -393,6 +393,18 @@ def link_round_trip(api_graph, saved_graph):
     video re-pointed at another node, and a link naming a node the file does not declare
     were all invisible on the last gate before credits are spent.
 
+    **The saved node's own socket table is refused when it is ambiguous, and that is the
+    third correction** (wave 16, F-04fdd395). `saved_slots` was a last-write-wins dict
+    comprehension with no duplicate clause, so a node declaring one input socket name twice
+    kept the LAST entry and the earlier declaration was never visited. Measured 2026-09-04
+    on a `WanImageToVideo` fixture in this repo's own API shape: node 49 declaring
+    `positive` from the NEGATIVE encoder and again from the positive returned
+    `{'n_links': 2, 'links': ['49.negative','49.positive']}` with no halt, beside an
+    all_equal `round_trip` — a clean topology verdict over a file that declares three
+    sockets and was examined for two. `link_table` above refuses a duplicate link id and
+    `fetch_run.parse_node_map` a duplicate node id for the same reason; this table is the
+    third member of that family.
+
     Both arguments are read through THE loader (`_as_api_graph` / `_as_saved_graph`), so a
     wrapped or wrong-way-round doc is refused by a named format clause rather than by a
     stdlib `KeyError` — see `_as_saved_graph`.
@@ -406,7 +418,43 @@ def link_round_trip(api_graph, saved_graph):
         s = saved_by_id.get(str(node_id))
         if s is None:
             continue                                  # `round_trip` already raised on this
-        saved_slots = {slot.get("name"): slot for slot in (s.get("inputs") or [])}
+        # ---- ANDON, wave 16 (F-04fdd395). The THIRD name-keyed table in this domain, and
+        # the one that was not given the clause. This was a last-write-wins dict
+        # comprehension with no duplicate clause, so a saved node declaring the same input
+        # socket name twice kept only the LAST entry and the earlier one was never visited
+        # by `_origin_problems`. Measured 2026-09-04 on a `WanImageToVideo` fixture in this
+        # repo's own API shape (30 = positive encoder, 31 = negative, 49 = the conditioning
+        # node): node 49 declaring `[positive<-7, positive<-6, negative<-7]` against a table
+        # of `[[6,'30',0,49,0],[7,'31',0,49,1]]` returned `{'n_links': 2, 'links':
+        # ['49.negative','49.positive'], 'optional_sockets_empty_in_both': []}` with no halt
+        # and `round_trip` all_equal beside it — a clean topology verdict over a file that
+        # declares three sockets and was examined for two, on the last gate before a paid
+        # submission. `link_table` (:322) already refuses a duplicate LINK ID and
+        # `fetch_run.parse_node_map` (:162) a duplicate NODE ID, both citing the same
+        # reason and each other; this is that family's third member.
+        #
+        # An agreeing repeat is refused too, unlike `link_table`'s clause. A link id
+        # declared twice from one origin resolves to that origin either way; a node input
+        # slot declared twice is a shape no converter emits, and the receipt's own
+        # `n_links` counts fewer sockets than the file declares whatever the links say.
+        saved_slots = {}
+        for slot in (s.get("inputs") or []):
+            slot_name = slot.get("name")
+            if slot_name in saved_slots:
+                raise RG.RouteGate(
+                    f"the saved file's node {node_id} declares the input socket "
+                    f"{slot_name!r} TWICE, carrying link {saved_slots[slot_name].get('link')!r} "
+                    f"and link {slot.get('link')!r}. Which one this comparison resolves is "
+                    f"an accident of array order, the other is never visited, and a file "
+                    f"that is ambiguous about where its conditioning comes from is not a "
+                    f"file this gate can vouch for",
+                    {"gate": "SAVED_ADMISSION", "andon": "duplicate_socket_name",
+                     "clause": "duplicate_socket_name", "node": str(node_id),
+                     "name": slot_name,
+                     "links": [saved_slots[slot_name].get("link"), slot.get("link")],
+                     "n_sockets_declared": len(s.get("inputs") or []),
+                     "declared_names": [x.get("name") for x in (s.get("inputs") or [])]})
+            saved_slots[slot_name] = slot
         names = list(saved_slots) + [n for n in node["inputs"] if n not in saved_slots]
         for name in names:
             ours = node["inputs"].get(name)
