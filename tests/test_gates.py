@@ -1211,6 +1211,239 @@ def test_every_family_class_stores_the_evidence_it_is_passed():
     }
 
 
+# ------------------------------------- the census, TREE-WIDE (wave 16, rule 5, F-9aa7974e)
+#
+# `_family_classes_defined_in_core()` iterates `CORE_DIR.glob("*.py")` only. Measured in this
+# worktree: `_armature_error_family(TOOLS_DIR)` yields 120 NAMES and `tools/**` holds 125
+# class DEFINITIONS of them across 71 modules (three names are defined twice —
+# `DetectionGate`, `PayloadError`, `RenderGate`). The core-only walk reached 51 of them and
+# 0 of the 74 definitions outside `armature_core/`, which are precisely the classes whose
+# halt lines the 21-tool contract prints. `tests/test_amend_w14_merge.py`'s own docstring
+# says "the evidence census walks `armature_core` only, so the suite was green" about
+# exactly this hole, and closed that one instance by hand-writing three tests for one class
+# in one tool.
+#
+# THE CONTRACT (core-gates, SEAM 1, wave 16 rule 5), three clauses, one exemption:
+#   1. `E("m").evidence is None` — a bare message carries NO receipt. `"evidence": null`.
+#   2. `E("m", d).evidence is d` — IDENTITY, not equality. No `or {}`, no `dict(evidence)`.
+#   3. `GateFailure` and its whole subtree keep `evidence or {}`, because a gate builds `ev`
+#      as it measures and its clauses index into it. It is the ONLY `__init__` in the family
+#      allowed to normalise, and its subclasses define none of their own.
+
+#: Family classes under `tools/**` the tree-wide walk cannot INSTANTIATE. Named and dated
+#: 2026-09-04 (wave 16), and DERIVED — the walk files every failure here rather than letting
+#: it fall out silently, which is the half of `F-9aa7974e` that is about the population and
+#: not about the property. EMPTY today: all 125 definitions import under
+#: `blender_stub.blender_stubbed()`, the Blender-side ones included.
+TREE_WIDE_UNIMPORTABLE = {}
+
+
+def _family_classes_defined_under(root):
+    """`{module path relative to `root`: {class names}}` for every family class under it."""
+    family = _armature_error_family(TOOLS_DIR)
+    out = {}
+    for path in sorted(_pathlib.Path(root).rglob("*.py")):
+        if "superseded" in path.parts or "__pycache__" in path.parts:
+            continue
+        try:
+            tree = _ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:                                             # pragma: no cover
+            continue
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.ClassDef) and node.name in family:
+                rel = path.relative_to(root).as_posix()
+                out.setdefault(rel, set()).add(node.name)
+    return out
+
+
+def _live_family_classes(root=None):
+    """`({"<rel>::<Class>": class}, {failure: why})` — every importable member of the family.
+
+    Imported inside ONE `blender_stubbed()` block, whose teardown pops every module first
+    imported under the stub out of `sys.modules` AND off the `armature_core` package's
+    attributes. The class OBJECTS survive by strong reference (the same arrangement
+    `conftest._STUB_IMPORTED` uses), so the census reads real classes without leaving a
+    stub-bound module behind for `tests/test_cli.py::_probe` to read as `ok`.
+    """
+    import importlib
+    import importlib.util
+
+    from blender_stub import blender_stubbed
+
+    root = TOOLS_DIR if root is None else _pathlib.Path(root)
+    defined = _family_classes_defined_under(root)
+    live, failed = {}, {}
+    with blender_stubbed():
+        for rel, names in sorted(defined.items()):
+            path = root / rel
+            dotted = rel[:-3].replace("/", ".")
+            try:
+                if root == TOOLS_DIR:
+                    mod = importlib.import_module(dotted)
+                else:
+                    spec = importlib.util.spec_from_file_location(
+                        "_family_census_" + dotted.replace(".", "_"), path)
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+            except Exception as exc:                                    # noqa: BLE001
+                failed[rel] = f"{type(exc).__name__}: {exc}"
+                continue
+            for name in sorted(names):
+                obj = getattr(mod, name, None)
+                if obj is None:
+                    failed[f"{rel}::{name}"] = "not an attribute of the imported module"
+                else:
+                    live[f"{rel}::{name}"] = obj
+    return live, failed
+
+
+def test_the_evidence_census_walks_the_whole_tree_and_not_one_directory():
+    """The POPULATION half of F-9aa7974e (wave-16 rule 1).
+
+    The walk must reach every family class DEFINED under `tools/**`, and the ones it cannot
+    instantiate must be named in a dated table rather than dropping out. Pinned `==` on the
+    derivation itself, not on a count a sibling domain can move: a class added anywhere
+    under `tools/` joins on the day it lands.
+    """
+    defined = _family_classes_defined_under(TOOLS_DIR)
+    live, failed = _live_family_classes()
+
+    assert failed == TREE_WIDE_UNIMPORTABLE, {
+        "cannot be instantiated and is not named": {
+            k: v for k, v in failed.items() if k not in TREE_WIDE_UNIMPORTABLE},
+        "named as unimportable and imports now (delete the entry)":
+            sorted(set(TREE_WIDE_UNIMPORTABLE) - set(failed))}
+    expected = {f"{rel}::{n}" for rel, names in defined.items() for n in names
+                if rel not in failed and f"{rel}::{n}" not in failed}
+    assert set(live) == expected, {
+        "defined by the walk and never instantiated": sorted(expected - set(live)),
+        "instantiated and not defined by the walk": sorted(set(live) - expected)}
+
+    # The old walk is a strict SUBSET, and the gap is the thing the finding is about.
+    core_only = {f"armature_core/{stem}.py::{n}"
+                 for stem, names in _family_classes_defined_in_core().items()
+                 for n in names}
+    assert core_only < set(live), sorted(core_only - set(live))
+    assert len(live) > 2 * len(core_only), (
+        f"the tree-wide walk reached {len(live)} of the family and the core-only walk "
+        f"reached {len(core_only)}; if these are close the widening did not happen")
+
+
+def test_every_family_class_tree_wide_keeps_the_dict_it_was_handed():
+    """Clause 2 of the contract, over all 125 — and by IDENTITY, not by equality.
+
+    `E("m", d).evidence is d`: the dict the raising line built is the dict the halt handler
+    reads. `dict(evidence)` and `evidence or {}` both satisfy equality and both break the
+    contract, which is why this asserts `is`.
+    """
+    live, _failed = _live_family_classes()
+    assert live, "the census instantiated nothing; it is not measuring the family"
+    sentinel = {"measured": 1, "threshold": 2}
+    dropped = {}
+    for qualified, cls in sorted(live.items()):
+        try:
+            got = cls("a refusal", sentinel).evidence
+        except Exception as err:                                        # noqa: BLE001
+            dropped[qualified] = f"cannot take (message, evidence): {type(err).__name__}"
+            continue
+        if got is not sentinel:
+            dropped[qualified] = (
+                "a COPY" if got == sentinel else repr(got))
+    assert dropped == {}, {
+        "handed an evidence dict and does not store THAT dict": dropped,
+        "why it matters": "the halt handler records `getattr(exc, 'evidence', None)`; a "
+                          "class that copies or replaces it publishes a receipt the raising "
+                          "line never wrote",
+    }
+
+
+def test_no_family_class_outside_the_gate_failure_subtree_normalises_a_bare_message():
+    """Clauses 1 and 3, and rule 5's structural half — over the whole tree.
+
+    A plain refusal carrying no receipt must record `"evidence": null`, and a gate that
+    measured nothing must record `{}`. Those are the two things wave 14's base constructor
+    was landed to separate, and reading one as the other is unrecoverable from the halt
+    record. `GateFailure` and its subtree are the ONE exemption, and the structural form of
+    that is: outside the subtree, no class defines an `__init__` at all — inheritance
+    already gives it the two-argument shape.
+
+    RED ON THIS BRANCH by construction and expected green on the merged tree. Measured here
+    on `041027c`: 45 non-`GateFailure` members return `{}` for a bare message, 44 of them
+    defining their own normalising `__init__` and two more
+    (`measure_tracking.TrackingError`, `.AnchorMismatch`) inheriting one from
+    `_CarriesEvidence`. Rule 5 deletes all of them this wave — core-solvers 10
+    (`armature_core`, SEAM 4), instruments-measure 27 plus the `_CarriesEvidence` class
+    (SEAM 5), builders 4 `PayloadError`s (SEAM 10), instruments 1
+    (`rig_character.SiteListInvalid`, SEAM 6). `ArmatureError`'s own `__init__` stays: it is
+    the contract, and it does not normalise.
+    """
+    from armature_core.errors import ArmatureError, GateFailure
+
+    live, _failed = _live_family_classes()
+    normalising, own_init = {}, []
+    for qualified, cls in sorted(live.items()):
+        gate = issubclass(cls, GateFailure)
+        bare = cls("a refusal").evidence
+        if gate:
+            assert bare == {}, (qualified, bare)
+        elif bare is not None:
+            normalising[qualified] = repr(bare)
+        if "__init__" in vars(cls) and not gate and cls is not ArmatureError:
+            own_init.append(qualified)
+
+    assert normalising == {}, {
+        "a plain refusal that invents an empty receipt": normalising,
+        "why it matters": 'a reader takes `"evidence": {}` in a halt record as "a gate '
+                          'measured nothing and printed an empty receipt" when it is in '
+                          'fact "a plain refusal that carried no receipt at all"',
+    }
+    assert own_init == [], (
+        "these define their own `__init__` outside the `GateFailure` subtree; inheritance "
+        f"already gives them the two-argument shape and any override can only drift: "
+        f"{own_init}")
+
+
+def test_the_tree_wide_census_goes_red_on_a_tools_side_class_the_core_walk_cannot_see():
+    """RED on a member OUTSIDE the old walk (wave-16 rule 2), which is the whole finding.
+
+    A synthetic `tools/`-shaped root holds one class with a normalising `__init__` — the
+    `stage_render:582` shape, one directory out from `armature_core/`. The tree-wide walk
+    must find it and report it; the core-only walk, reconstructed here, must not see it at
+    all. If both saw it the comparison would be with itself.
+    """
+    from armature_core.errors import ArmatureError
+
+    root = _pathlib.Path(__import__("tempfile").mkdtemp())
+    (root / "armature_core").mkdir()
+    (root / "armature_core" / "errors.py").write_text(
+        "class ArmatureError(RuntimeError):\n"
+        "    def __init__(self, message, evidence=None):\n"
+        "        super().__init__(message)\n"
+        "        self.evidence = evidence\n", encoding="utf-8")
+    (root / "make_synthetic_sheet.py").write_text(
+        "from armature_core.errors import ArmatureError\n"
+        "class SheetPopulationError(ArmatureError):\n"
+        "    def __init__(self, message, evidence=None):\n"
+        "        super().__init__(message)\n"
+        "        self.evidence = evidence or {}\n", encoding="utf-8")
+
+    defined = _family_classes_defined_under(root)
+    assert "make_synthetic_sheet.py" in defined, sorted(defined)
+    live, failed = _live_family_classes(root)
+    assert failed == {}, failed
+    cls = live["make_synthetic_sheet.py::SheetPopulationError"]
+    assert cls("m").evidence == {}, "the probe class does not carry the defect"
+    assert "__init__" in vars(cls)
+
+    # the CORE-ONLY walk, reconstructed: it globs one directory and cannot reach a tool.
+    core_only = sorted(p.name for p in (root / "armature_core").glob("*.py"))
+    assert core_only == ["errors.py"], core_only
+    assert not any(p.name == "make_synthetic_sheet.py"
+                   for p in (root / "armature_core").glob("*.py"))
+    # and the real base is the honest one, or the probe proves nothing about normalising
+    assert ArmatureError("m").evidence is None
+
+
 def test_the_evidence_a_family_class_stores_is_the_object_the_halt_line_reads():
     """Rule 3 on the census above, on the shape it exists to catch.
 

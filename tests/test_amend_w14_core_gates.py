@@ -545,12 +545,32 @@ def test_the_base_class_stores_the_evidence_it_is_given():
     dict in `args[1]` and no `evidence` attribute existed — a halt handler reading
     `getattr(exc, 'evidence', None)` printed `"evidence": null` while the raising line was
     passing a receipt. `GateFailure` defined the constructor for its own subtree only."""
-    assert ArmatureError("m", {"k": 1}).evidence == {"k": 1}
+    receipt = {"k": 1}
+    assert ArmatureError("m", receipt).evidence is receipt
     for cls in (SpecError, SubjectExtentError, GatePRestPose, RG.RouteGate):
-        assert cls("m", {"k": 2}).evidence == {"k": 2}
-    # It stores what is PASSED and invents nothing: a plain refusal carrying no receipt
-    # records `"evidence": null`, which is what the 21-tool halt contract asserts. Only
-    # `GateFailure` normalises, because its clauses index into `ev` while they measure.
+        assert cls("m", receipt).evidence is receipt
+    # WAVE 16, F-738053cc — the comment that used to sit here stated a FAMILY-WIDE rule and
+    # the four assertions beneath it were a two-class sample (two plain refusals, two
+    # gates). It read: "It stores what is PASSED and invents nothing … Only `GateFailure`
+    # normalises, because its clauses index into `ev` while they measure." Measured on the
+    # absent path across the whole family in this worktree on `041027c`: of the 125 family
+    # class definitions under `tools/**`, 9 return None and 116 return `{}` — and 45 of
+    # those 116 are NOT in the `GateFailure` subtree. Forty-four define their own
+    # normalising `__init__` (10 in `armature_core`: `blender_scene` x2, `clipcompare`,
+    # `clipstats`, `framing`, `glb`, `lift_solve`, `pngio`, `sitelist`, `walk`; 28 in
+    # instruments-measure's tools; 4 `PayloadError`s; `rig_character.SiteListInvalid`), and
+    # `measure_tracking.TrackingError` / `.AnchorMismatch` inherit one from
+    # `_CarriesEvidence`. So the general claim was false of 45 measured classes, and
+    # `tests/test_core_solver_evidence.py:522-524` asserted of three of them that they are
+    # `not issubclass(GateFailure)` and then checked only the PASSED path, two lines from
+    # where the same file could have caught it.
+    #
+    # The rule is now asserted over the DERIVED family rather than narrated over a sample:
+    # `tests/test_gates.py::test_no_family_class_outside_the_gate_failure_subtree_
+    # normalises_a_bare_message` walks all 125 and names every member that breaks it, and
+    # rule 5 deletes the 44 constructors this wave. What stays here is the base's own
+    # contract, which is what this test is for — including clause 2 as IDENTITY, since
+    # `dict(evidence)` satisfies equality and breaks the contract.
     assert ArmatureError("m").evidence is None
     assert SpecError("m").evidence is None
     assert GatePRestPose("m").evidence == {}

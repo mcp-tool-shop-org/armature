@@ -518,7 +518,19 @@ def test_the_two_dual_based_andons_are_both_kinds_of_refusal_at_once():
         assert cls.gate == gate
         assert str(cls("why", {"gate": gate})).startswith(f"[{gate}] ")
 
+    receipt = {"k": 1}
     for cls in (walk.WalkError, framing.FramingError, glb.MalformedGLB):
         assert issubclass(cls, ArmatureError)
         assert not issubclass(cls, GateFailure)
-        assert cls("m", {"k": 1}).evidence == {"k": 1}
+        # WAVE 16, F-738053cc + rule 5. This loop established that all three are OUTSIDE the
+        # `GateFailure` subtree and then checked only the PASSED path — two lines from where
+        # it could have caught that all three normalised a bare message to `{}` anyway,
+        # which is the one thing the exemption is supposed to distinguish. Both directions
+        # now, and the passed one by IDENTITY: `dict(evidence)` satisfies `==` and publishes
+        # a receipt the raising line never wrote. RED ON THIS BRANCH until core-solvers'
+        # SEAM 4 deletion merges (their `-10` constructors include all three).
+        assert cls("m", receipt).evidence is receipt
+        assert cls("m").evidence is None, (
+            f"{cls.__name__} is outside the `GateFailure` subtree and invents an empty "
+            f"receipt for a bare message; the halt record then reads as a gate that "
+            f"measured nothing instead of a refusal that carried nothing")

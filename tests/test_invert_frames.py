@@ -196,6 +196,17 @@ def test_cli_writes_a_receipt_beside_the_output(src, tmp_path, capsys):
 # `{}` on every one of them, while `frame_population`'s three refusals in the same file all
 # carried one. Measured 2026-09-04: `InvertError('x').evidence == {}`.
 #
+# WAVE 16 (rule 5, SEAM 1) — that last measurement is OVERTURNED, and the correction is left
+# here rather than the sentence being deleted. `InvertError` carried a normalising
+# `__init__` (`self.evidence = evidence or {}`); instruments-measure deleted it, so the
+# class inherits the base's two-argument shape and `InvertError('x').evidence` is now
+# `None`. The distinction is the point: `null` is "a plain refusal that carried no receipt
+# at all" and `{}` is "a gate measured nothing and printed an empty receipt", and reading
+# one as the other is unrecoverable from a halt record. This is a COMMENT and carries no
+# assertion; the family-wide pin is
+# `tests/test_gates.py::test_no_family_class_outside_the_gate_failure_subtree_normalises_a_
+# bare_message`.
+#
 # The first of the five is the alpha-law-adjacent one — the refusal that exists because
 # inverting opacity is not a polarity flip. A halt on a control directory reached the run
 # record with nothing machine-readable behind it; a human reading stderr still got the mode
