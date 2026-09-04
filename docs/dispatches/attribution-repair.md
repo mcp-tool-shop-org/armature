@@ -86,6 +86,39 @@ the swarm is running.** Clear all three of these first, then proceed:
 
 If any of the three is unmet, **halt and report**. Do not improvise past this gate.
 
+### 5a. AMENDMENT 2026-09-04 — the §5 measurement above is superseded
+
+The paragraph above was measured at 2026-09-03 20:35 and was already stale within hours. It is
+left standing rather than deleted, because the shape of the error is the lesson: **a precondition
+measured against a moving run expires faster than the document that carries it.** Re-measure §5
+yourself at execution time; do not inherit either block.
+
+Re-measured 2026-09-04 01:50:
+
+| | 2026-09-03 (above) | 2026-09-04 (now) |
+|---|---|---|
+| wave | `w1-*` | **`w5-*`** |
+| worktrees | 6 | **7** (`w5-instruments-measure` is new) |
+| worktree head | `1789360` | **`066db8d`**, 0 ahead of main, 1 behind |
+| local `main` | `956ed0c` | **`d152380`** |
+| `main` ahead of `origin/main` | 1 commit | **51 commits, all unpushed** |
+| `origin/main` | `1789360` | **`1789360` — unchanged** |
+
+Two consequences the original §5 did not anticipate:
+
+1. **The swarm is merging into `main` continuously.** Waves 3 through 5 landed roughly fifty
+   commits, including this dispatch's own base. The rewrite in §6 will re-parent every one of
+   them. That is not a new hazard — it is the same hazard, now fifty times larger — and it is
+   why §5.1 stands unchanged.
+2. **`origin/main` has not moved since 2026-08-18.** The §6.2 scratch-run numbers (290 commits,
+   5 tags, tree `1f2c70e7…`) were measured against origin and are therefore still exact. They
+   describe the remote, not this working tree. **They will stop being exact the moment the swarm's
+   fifty commits are pushed.** Re-run §6.1–6.2 against origin after the push and before the force
+   push; do not carry today's table into a different remote.
+
+§5.3 is unchanged in intent and larger in scope: push the swarm's full stack to `origin/main`
+before the rewrite begins, not one commit.
+
 ## 6. The procedure — measured, not proposed
 
 Run in a scratch mirror clone first; that is where the numbers below came from. The advisor ran
