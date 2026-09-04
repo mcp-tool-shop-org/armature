@@ -79,6 +79,67 @@ def composite_over(rgba, plate):
     return np.clip(np.rint(rgb * a + bg * (1.0 - a)), 0, 255).astype(np.uint8)
 
 
+def compose_over_named_plate(arr, plate, *, label, exc, extra_evidence=None,
+                             channel_order="RGB"):
+    """The Director's authored-RGBA law (2026-08-12), in ONE place, for every producer.
+
+    `arr` is a decoded image array of 3 or 4 channels in whatever order the caller's
+    decoder produced — `channel_order` names it for the RECORD only, because
+    `composite_over`'s arithmetic is order-agnostic as long as `plate` is in the same
+    order (pass BGR to a cv2 caller, RGB to a PIL one).
+
+    Returns `(rgb, record)`. A 4th channel with **no plate named** raises `exc`: the RGB
+    composite a route submits is a deliberate, recorded choice, and dropping the channel
+    makes it an accidental one. That is not a style preference — a grey previz void bled
+    through E11's frame 0, and `fit_reference` was measured on 2026-09-03 deriving a
+    letterbox pad from the RGB sitting *under* alpha=0, on the reference image two paid
+    runs submitted.
+
+    This function exists because the law was implemented twice and missing three times.
+    `encode_control.read_frames`, `fit_reference`, `make_plate` and `pack_pose_pack` all
+    call it; there is one refusal, one composite and one record shape.
+    """
+    a = np.asarray(arr)
+    if a.ndim == 3 and a.shape[2] == 4:
+        lo, hi = int(a[..., 3].min()), int(a[..., 3].max())
+        ev = dict(extra_evidence or {}, alpha_present=True, alpha_min=lo, alpha_max=hi,
+                  channel_order=channel_order, source_channels=4)
+        if plate is None:
+            raise exc(
+                f"{label} carries an alpha channel (extrema {lo}, {hi}) and no plate was "
+                f"named. The RGB composite a route submits is a deliberate, recorded "
+                f"choice (the Director, 2026-08-12) — pass --alpha-over=R,G,B to make it "
+                f"one. Dropping the channel would submit whatever RGB the author made "
+                f"invisible", ev)
+        rgb = composite_over(a.astype(np.uint8), plate)
+        record = {
+            "source_channels": 4, "channel_order": channel_order,
+            "alpha_present": True, "alpha_min": lo, "alpha_max": hi,
+            "alpha_disposition": (
+                f"composited straight-alpha over the named plate "
+                f"{tuple(int(v) for v in plate)} ({channel_order})"),
+        }
+        return rgb, record
+    if a.ndim == 3 and a.shape[2] == 3:
+        return a, {"source_channels": 3, "channel_order": channel_order,
+                   "alpha_present": False, "alpha_min": None, "alpha_max": None,
+                   "alpha_disposition": "no alpha channel in the source"}
+    raise exc(f"{label}: array shape {list(a.shape)} is neither a 3- nor a 4-channel "
+              f"frame, so there is no alpha disposition to record",
+              dict(extra_evidence or {}, shape=list(a.shape), alpha_present=None))
+
+
+def parse_plate(text, exc, flag="--alpha-over"):
+    """`R,G,B` of a named plate, or None. Raises `exc` on anything else."""
+    if text is None or text == "":
+        return None
+    parts = [t.strip() for t in str(text).split(",")]
+    if len(parts) != 3 or not all(t.isdigit() and 0 <= int(t) <= 255 for t in parts):
+        raise exc(f"{flag} takes three 0-255 integers, e.g. {flag}=0,0,0; got {text!r}",
+                  {"supplied": text})
+    return tuple(int(t) for t in parts)
+
+
 def gate_pin(path, manifest_sha):
     """Gate PIN · ANDON — this file is the manifest's file."""
     got = sha256_file(path)

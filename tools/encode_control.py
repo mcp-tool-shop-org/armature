@@ -45,6 +45,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates, shotspec  # noqa: E402
+from composite_reference import compose_over_named_plate  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
 FFMPEG = os.environ.get(
@@ -202,18 +203,14 @@ def read_frames(frames_dir, invert=False, expect=None, alpha_over=None):
             )
         if has_alpha:
             alpha_seen = True
-            if alpha_over is None:
-                raise EncodeFailure(
-                    f"{path}: mode {mode!r} carries alpha, and no plate was named. The "
-                    f"RGB composite a route submits is a deliberate, recorded choice "
-                    f"(Director, 2026-08-12) — pass --alpha-over=R,G,B to make it one",
-                    {"frame": n, "mode": mode, "dtype": a.dtype.name,
-                     "alpha_present": True},
-                )
-            plate = np.asarray(alpha_over, dtype=np.float64).reshape(1, 1, 3)
-            al = a[..., 3:4].astype(np.float64) / 255.0
-            a = np.rint(a[..., :3].astype(np.float64) * al + plate * (1.0 - al))
-            a = np.clip(a, 0, 255).astype(np.uint8)
+            # ---- ANDON. The refusal and the composite that used to live here are now
+            #      `composite_reference.compose_over_named_plate`: the same law was
+            #      implemented twice and missing three times, so there is one of it.
+            a, _rec = compose_over_named_plate(
+                a, alpha_over,
+                label=f"{path}: mode {mode!r}", exc=EncodeFailure,
+                extra_evidence={"frame": n, "mode": mode, "dtype": a.dtype.name},
+                channel_order="RGB")
         elif a.ndim == 2:
             a = np.repeat(a[..., None], 3, axis=2)
         elif a.ndim == 3 and a.shape[2] == 3:

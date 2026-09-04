@@ -54,6 +54,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+from composite_reference import (  # noqa: E402
+    compose_over_named_plate, parse_plate)
+
+
+class PosePackError(ArmatureError):
+    """The pack cannot be built honestly — the authored-RGBA law, chiefly.
+
+    These frames ARE the submitted control batch, so `im.convert("RGB")` on an RGBA stick
+    render silently submitted whatever RGB sat under alpha. Same law, same implementation
+    as `fit_reference`, `make_plate` and `encode_control`.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 TOOL_VERSION = "E08.1"
 
@@ -63,6 +78,9 @@ def parse_args(argv=None):
     ap.add_argument("--frames", required=True, help="directory of NNNNN.png stick frames")
     ap.add_argument("--out", required=True)
     ap.add_argument("--fps", type=int, default=16)
+    ap.add_argument("--alpha-over", default=None,
+                    help="R,G,B of the plate an RGBA stick frame is composited over. "
+                         "Without it an alpha channel is a refusal, not a silent drop")
     ap.add_argument("--name", default="E08_pose_sticks")
     ap.add_argument("--format", default="apng", choices=("apng", "webp"),
                     help="apng is the default because Comfy Cloud's upload endpoint "
@@ -86,12 +104,20 @@ def frame_paths(directory):
             for n in sorted(names, key=lambda s: int(os.path.splitext(s)[0]))]
 
 
-def load_frames(paths):
+def load_frames(paths, alpha_over=None):
     from PIL import Image
     out = []
     for p in paths:
         with Image.open(p) as im:
-            out.append(np.array(im.convert("RGB"), dtype=np.uint8))
+            has_alpha = im.mode in ("RGBA", "LA", "PA")
+            arr = np.array(im.convert("RGBA") if has_alpha else im.convert("RGB"))
+        # ---- ANDON. One implementation of the authored-RGBA law.
+        rgb, _rec = compose_over_named_plate(
+            arr, alpha_over, label=os.path.abspath(p), exc=PosePackError,
+            extra_evidence={"frame": os.path.basename(p), "mode": im.mode,
+                            "tool": "pack_pose_pack"},
+            channel_order="RGB")
+        out.append(np.ascontiguousarray(rgb, dtype=np.uint8))
     shapes = {a.shape for a in out}
     if len(shapes) != 1:
         raise ArmatureError(
@@ -136,7 +162,7 @@ def main(argv=None):
     os.makedirs(out_dir, exist_ok=True)
 
     paths = frame_paths(a.frames)
-    frames = load_frames(paths)
+    frames = load_frames(paths, alpha_over=parse_plate(a.alpha_over, PosePackError))
     ext = "apng.png" if a.format == "apng" else "webp"
     dst = os.path.join(out_dir, f"{a.name}.{ext}")
     write_pack(frames, dst, a.fps, a.format)

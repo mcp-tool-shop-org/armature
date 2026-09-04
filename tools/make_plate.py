@@ -21,6 +21,14 @@ ruled must arrive whole, while a padded BACKDROP puts invented bands into the co
 image. This repo has that disease on file twice. So the overhang is cropped, and what was
 cropped is in the provenance in both source and resized pixels.
 
+**The source's alpha is a choice, and the record says which one (2026-09-03).** The read was
+`cv2.IMREAD_COLOR`, which returns 3-channel BGR and drops a 4th channel with no refusal and
+no record — so an authored RGBA still became a plate whose RGB was whatever sat under
+alpha=0, in the image the generation is conditioned on. Same defect, same fix, same
+implementation as `fit_reference`, `encode_control` and `pack_pose_pack`:
+`composite_reference.compose_over_named_plate` refuses a 4-channel source unless
+`--alpha-over=R,G,B` names the plate, and the disposition rides the sidecar.
+
 **The plate is a DERIVED image and the record says so.** Source path and hash, derived path
 and hash, the full transform, and the caller's stated reason all ride the sidecar. The
 source is opened read-only and never written to.
@@ -44,8 +52,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import startframe as SF  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+from composite_reference import (  # noqa: E402
+    compose_over_named_plate, parse_plate)
 
-TOOL_VERSION = "E12.1"
+TOOL_VERSION = "E12.2"
+
+
+class PlateError(ArmatureError):
+    """The plate cannot be derived honestly — the authored-RGBA law, chiefly."""
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 def parse_args(argv=None):
@@ -68,6 +86,9 @@ def parse_args(argv=None):
     ap.add_argument("--source-note", default=None,
                     help="free text about the source's own provenance, e.g. a photograph's "
                          "owner and date")
+    ap.add_argument("--alpha-over", default=None,
+                    help="R,G,B of the plate an RGBA source is composited over. Without "
+                         "it an alpha channel is a refusal, not a silent drop")
     ap.add_argument("--anchor", default="centre",
                     help="where the cover crop sits: top | centre | bottom, or a pair "
                          "x,y of fractions in 0..1. Only a band of the target frame is ever "
@@ -177,9 +198,20 @@ def main(argv=None):
     out_dir = os.path.abspath(a.out)
     os.makedirs(out_dir, exist_ok=True)          # scripts create their own output directories
 
-    img = cv2.imread(src_path, cv2.IMREAD_COLOR)
-    if img is None:
-        raise ArmatureError(f"cv2 could not read {src_path}")
+    # UNCHANGED, not COLOR: a 4th channel must reach the law below rather than being
+    # dropped by the decoder before anything can refuse it.
+    raw = cv2.imread(src_path, cv2.IMREAD_UNCHANGED)
+    if raw is None:
+        raise PlateError(f"cv2 could not read {src_path}", {"src": src_path})
+    if raw.ndim == 2:
+        raw = cv2.cvtColor(raw, cv2.COLOR_GRAY2BGR)
+    plate_rgb = parse_plate(a.alpha_over, PlateError)
+    plate_bgr = tuple(plate_rgb[::-1]) if plate_rgb is not None else None
+    # ---- ANDON. One implementation of the authored-RGBA law.
+    img, alpha_record = compose_over_named_plate(
+        raw, plate_bgr, label=os.path.abspath(src_path), exc=PlateError,
+        extra_evidence={"src": os.path.abspath(src_path), "tool": "make_plate"},
+        channel_order="BGR")
     sh, sw = img.shape[:2]
 
     anchor = parse_anchor(a.anchor)
