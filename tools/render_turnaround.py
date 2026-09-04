@@ -140,7 +140,7 @@ from mathutils import Vector  # noqa: E402
 from armature_core import blender_scene, framing  # noqa: E402
 from armature_core import startframe as SF  # noqa: E402
 from armature_core import turnaround as TA  # noqa: E402
-from armature_core.errors import ArmatureError  # noqa: E402
+from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "S05.1"
 
@@ -734,4 +734,23 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # CARRIED VERBATIM from `render_start_frame.py:766` — the sibling this file already
+    # inherits its staging from — because this was the ONE gating renderer with a bare
+    # `main()`. `blender -b -P` exits **0** when the script's exception propagates (E07,
+    # measured three times: rig_character.py:1134, rig_parts.py:126, author_walk.py:13),
+    # so every andon in this file — RenderTurnaroundGate, Gate ALPHA, Gate TURN, Gate
+    # WHOLE, Gate CROP — halted Blender with status 0 and the only witness was the ABSENCE
+    # of `RENDER_TURNAROUND_OK`. A halt that returns success is not a halt.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("RENDER_TURNAROUND_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "gate": getattr(exc, "gate", None),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)

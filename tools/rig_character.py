@@ -1129,14 +1129,33 @@ if __name__ == "__main__":
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
         traceback.print_exc()
-        _args = parse_args()
         # MEASURED AGAIN 2026-08-11: this clause caught only GateFailure, so an ordinary
         # AttributeError propagated out and Blender exited **0** -- the very hazard the
         # comment below describes, in the file that describes it. Every exit is non-zero.
-        _write_halt(os.path.abspath(_args["out"]), exc,
-                    sha256_file(_args["glb"]), _args["glb"])
-        # MEASURED 2026-08-11: letting the exception propagate out of a `-b -P` script
-        # prints the traceback and Blender still exits **0**. A caller reading the exit
-        # code — a shell chain, a CI step, a later session's `if ($LASTEXITCODE -eq 0)` —
-        # would see the halt as a success. A halt that returns success is not a halt.
-        sys.exit(2 if isinstance(exc, GateFailure) else 1)
+        #
+        # MEASURED AGAIN 2026-09-04, and it was the same hazard one layer in: the halt
+        # record below re-parses `sys.argv` and re-hashes the GLB INSIDE this `except`
+        # block. `parse_args` raises ArmatureError on an unknown flag or a missing
+        # `--glb`/`--out`, and `sha256_file` raises FileNotFoundError on a mistyped path --
+        # both ordinary mistakes, and `main()` parses argv first, so the failing re-parse
+        # is GUARANTEED for a bad flag. That second exception left the whole `try`
+        # statement and `sys.exit` never ran. The exit code is now computed BEFORE anything
+        # that can fail and delivered from a `finally`, which is the shape rig_bake.py:292,
+        # rig_parts.py:576, rig_repair.py:236 and rig_retopo.py:428 already use.
+        _code = 2 if isinstance(exc, GateFailure) else 1
+        try:
+            _args = parse_args()
+            _write_halt(os.path.abspath(_args["out"]), exc,
+                        sha256_file(_args["glb"]), _args["glb"])
+        except BaseException:                                         # noqa: BLE001
+            # The halt record is a courtesy; the exit code is the contract.
+            traceback.print_exc()
+            print("RIG_CHARACTER_HALT_RECORD_NOT_WRITTEN " + json.dumps(
+                {"error": type(exc).__name__, "message": str(exc),
+                 "gate": getattr(exc, "gate", None)}, default=str))
+        finally:
+            # MEASURED 2026-08-11: letting the exception propagate out of a `-b -P` script
+            # prints the traceback and Blender still exits **0**. A caller reading the exit
+            # code — a shell chain, a CI step, a later session's `if ($LASTEXITCODE -eq 0)` —
+            # would see the halt as a success. A halt that returns success is not a halt.
+            sys.exit(_code)

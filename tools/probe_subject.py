@@ -97,4 +97,24 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # CARRIED from `check_relift.py:123` — the minimal form of the handler eleven sibling
+    # Blender tools already carry — rather than written a second time. `blender -b -P`
+    # exits **0** when the script's exception propagates (E07, measured three times:
+    # rig_character.py:1134, rig_parts.py:126, author_walk.py:13), so without this every
+    # refusal in this file halted Blender with status 0 and a caller reading
+    # `$LASTEXITCODE` walked past it. A halt that returns success is not a halt.
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
+        import traceback
+
+        from armature_core.errors import ArmatureError, GateFailure
+        traceback.print_exc()
+        detail = getattr(exc, "evidence", None)
+        print("PROBE_SUBJECT_HALT " + json.dumps({
+            "error": type(exc).__name__, "message": str(exc),
+            "gate": getattr(exc, "gate", None),
+            "evidence": detail if isinstance(detail, dict) else None}, default=str))
+        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
