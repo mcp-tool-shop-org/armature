@@ -23,7 +23,8 @@ parser**. So this file keys on two nodes and says so:
 The refusal direction is pinned beside it: a malformed `--sheet-plate` raises the sheet's
 own typed error and leaves nothing on disk.
 
-WAVE 12 — the parser node now covers all 36 command-line tools, and the walk is ONE walk.
+WAVE 12 — the parser node now covers every command-line tool, and the walk is ONE walk.
+WAVE 16 — "every" finally means every: 36 -> 67 (F-beeab1d0, below).
 
 * **F-1c9d39e2** — this file carried a SECOND implementation of "a flag that is read and
   never declared" which resolved no cross-module helper, no `set_defaults` and no
@@ -143,6 +144,12 @@ def _success_tokens(path):
 TREES = CN.module_trees()
 HELPERS = CN.flag_helpers(TREES)
 
+#: The tool-keyed population, WITHOUT `armature_core` shadowing a basename. `module_trees`
+#: is keyed by basename and `armature_core/lift_solve.py` claimed `lift_solve` there, so
+#: `tools/lift_solve.py` — five declared flags, all five read — was walked as the solver,
+#: which has no `main`, and reported "no command line" (F-beeab1d0).
+TOOL_TREES = CN.tool_trees()
+
 
 def _parser_census():
     """`{module: (path, declared dests, namespace attrs read)}` over every `tools/*.py`.
@@ -155,21 +162,144 @@ def _parser_census():
     out = {}
     for path in sorted(glob.glob(os.path.join(REPO, "tools", "*.py"))):
         mod = os.path.basename(path)[:-3]
-        out[mod] = (path, CN.declared_flags(TREES[mod], mod, HELPERS),
-                    set(CN.namespace_reads(TREES[mod])))
+        out[mod] = (path, CN.declared_flags(TOOL_TREES[mod], mod, HELPERS),
+                    set(CN.namespace_reads(TOOL_TREES[mod])))
     return out
 
 
 PARSERS = _parser_census()
 
-#: Every `tools/*.py` with a command line — the census's OWN population, 36 on 2026-09-04,
+#: Every `tools/*.py` with a command line — the census's OWN population, 67 on 2026-09-04,
 #: derived and asserted in `tests/test_sheet_pairing.py`. The undeclared-flag property below
 #: runs over all of it; until wave 12 it ran over the five plate sheets only.
-CLI_TOOLS = CN.parser_population(TREES)
+#
+# WAVE 16, F-beeab1d0: 36 -> 67. The census kept a module only when `namespace_reads` found
+# `a = ap.parse_args(argv)` — an `ast.Attribute` call. 31 tools write `a = parse_args(argv)`
+# instead (a module-level helper holds the parser), four of those return `vars(...)` and
+# read their flags as subscripts, and one hands `_dispatch` to a shared runner. All 31 were
+# outside the gate-0 property AND outside the `--help` smoke; `tools/build_i2v_payload.py`
+# and all four renderers among them. The population is now asserted against the tools that
+# call `add_argument(`, so a tool cannot leave the census by changing its idiom.
+CLI_TOOLS = CN.parser_population(TOOL_TREES)
 
 #: Derived population: every module that READS `sheet_plate` off its own argparse
 #: namespace. The read is the node — `make_gate0_sheet` had the read and not the flag.
 PLATE_SHEETS = {m: v[0] for m, v in PARSERS.items() if "sheet_plate" in v[2]}
+
+
+def test_the_parser_population_is_every_tool_that_declares_an_argument():
+    """The census's population, asserted against the thing the census is ABOUT.
+
+    WAVE 16, F-beeab1d0. `CLI_TOOLS` was whatever `namespace_reads` happened to reach, and
+    what it reached was one idiom: `a = ap.parse_args(argv)`. 31 of the 67 tools that call
+    `add_argument(` factor their parser into a module-level helper and write
+    `a = parse_args(argv)`; the walk could not see the bare `ast.Name` call, so they were
+    outside the undeclared-flag property AND outside the `--help` smoke — three payload
+    builders and all four renderers among them. A population derived from the idiom cannot
+    notice a tool leaving it. This one is derived from `add_argument(`, which is what a
+    parser IS, so a tool can only leave the census by ceasing to have a command line.
+    """
+    declared_one = CN.tools_calling_add_argument()
+    assert sorted(CLI_TOOLS) == sorted(declared_one), {
+        "declares a flag, census cannot see it": sorted(set(declared_one) - set(CLI_TOOLS)),
+        "in the census, declares nothing": sorted(set(CLI_TOOLS) - set(declared_one)),
+    }
+    assert len(CLI_TOOLS) == 67, len(CLI_TOOLS)
+
+
+def test_the_solver_no_longer_shadows_the_tool_of_the_same_name():
+    """`module_trees` is keyed by BASENAME and exactly one basename is claimed twice.
+
+    Measured 2026-09-04: `armature_core/lift_solve.py` was parsed last and won the key, so
+    every tool-keyed census walked the solver — which has no `main` — and reported
+    `tools/lift_solve.py` as having no command line while it declares 5 flags and reads all
+    5. Pinned by name so a second collision cannot land quietly.
+    """
+    assert CN.colliding_basenames() == ["lift_solve"], CN.colliding_basenames()
+    assert CN.cli_body(TOOL_TREES["lift_solve"]) is not None
+    assert CN.cli_body(CN.module_trees(include_core=False)["lift_solve"]) is not None
+    assert set(CN.namespace_reads(TOOL_TREES["lift_solve"])) == {
+        "fps", "glb", "manifest", "motion", "out"}
+
+
+def test_the_widened_walk_sees_a_flag_the_old_one_could_not_and_the_old_one_is_shown_blind():
+    """RED on a member OUTSIDE the subset the old walk reached (wave-16 rule 2).
+
+    The old walk bound a namespace only from an `ast.Attribute` call, so the renderer
+    idiom was invisible to it. Both directions on the same source: the widened walk reports
+    the undeclared read, and the pre-wave-16 binding is shown returning nothing at all — if
+    it could see it, this comparison would be with itself.
+    """
+    def old_reads(tree):
+        """The pre-wave-16 binding, verbatim: `ast.Attribute` calls only, one body."""
+        body = CN.cli_body(tree)
+        if body is None:
+            return {}
+        ns = set()
+        for node in CN.walk_scope(body):
+            if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
+                    and isinstance(node.value.func, ast.Attribute)
+                    and node.value.func.attr in ("parse_args", "parse_known_args")):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        ns.add(target.id)
+        out = {}
+        for node in CN.walk_scope(body):
+            if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                    and node.value.id in ns):
+                out.setdefault(node.attr, node.lineno)
+        return out
+
+    src = (
+        "import argparse\n"
+        "def parse_args(argv=None):\n"
+        "    ap = argparse.ArgumentParser()\n"
+        "    ap.add_argument('--views', default='0,90')\n"
+        "    return ap.parse_args(argv)\n"
+        "def main(argv=None):\n"
+        "    a = parse_args(argv)\n"
+        "    return render(a.views, a.ortho_scale)\n")
+    tree = ast.parse(src)
+    helpers = CN.flag_helpers({"render_synthetic": tree})
+    assert old_reads(tree) == {}, (
+        "the pre-wave-16 binding must be blind to `a = parse_args(argv)`; if it sees it "
+        "there is nothing to widen")
+    assert set(CN.namespace_reads(tree)) == {"views", "ortho_scale"}
+    assert sorted(CN.undeclared_flags(tree, "render_synthetic", helpers)) == ["ortho_scale"]
+
+    # the dict spelling, which four Blender-side tools use: `vars(p.parse_args(argv))`
+    dict_src = (
+        "import argparse\n"
+        "def parse_args(argv=None):\n"
+        "    p = argparse.ArgumentParser()\n"
+        "    p.add_argument('--glb', required=True)\n"
+        "    return vars(p.parse_args(argv))\n"
+        "def main(argv=None):\n"
+        "    args = parse_args(argv)\n"
+        "    return rig(args['glb'], args['fps'])\n")
+    dtree = ast.parse(dict_src)
+    dhelpers = CN.flag_helpers({"rig_synthetic": dtree})
+    assert old_reads(dtree) == {}
+    assert set(CN.namespace_reads(dtree)) == {"glb", "fps"}
+    assert sorted(CN.undeclared_flags(dtree, "rig_synthetic", dhelpers)) == ["fps"]
+
+
+def test_the_census_goes_red_on_a_REAL_renderer_given_an_undeclared_flag():
+    """The same proof on a member of the population, not on a synthetic module.
+
+    `render_turnaround` is one of the 31 the old walk could not see. Its source is read,
+    one undeclared read is spliced into its CLI body, and the widened census must report
+    exactly that flag — while the pre-wave-16 walk reports nothing, on the same bytes.
+    """
+    with open(os.path.join(REPO, "tools", "render_turnaround.py"), encoding="utf-8") as fh:
+        src = fh.read()
+    assert CN.undeclared_flags(ast.parse(src), "render_turnaround", HELPERS) == {}, (
+        "baseline: the real renderer declares every flag it reads")
+    marker = "def main():\n"
+    assert src.count(marker) == 1, "the splice point moved; re-derive it"
+    spliced = src.replace(marker, marker + "    _probe = a.no_such_flag\n", 1)
+    assert sorted(CN.undeclared_flags(ast.parse(spliced), "render_turnaround",
+                                      HELPERS)) == ["no_such_flag"]
 
 
 def test_the_plate_parsing_population_is_the_one_this_file_claims():
@@ -262,7 +392,7 @@ def test_the_deleted_walk_is_the_one_that_reported_six_correct_modules():
 
     disagree = {}
     for mod, (_path, _dec, _read) in sorted(PARSERS.items()):
-        tree = TREES[mod]
+        tree = TOOL_TREES[mod]
         old = sorted(old_read(tree) - old_declared(tree))
         new = sorted(CN.undeclared_flags(tree, mod, HELPERS))
         if old != new:
@@ -279,7 +409,7 @@ def test_the_deleted_walk_is_the_one_that_reported_six_correct_modules():
 
 @pytest.mark.parametrize("module", sorted(CLI_TOOLS))
 def test_every_flag_a_tool_reads_is_a_flag_its_parser_declares(module):
-    """The gate-0 regression, stated as a property of the parser — over ALL 36 tools.
+    """The gate-0 regression, stated as a property of the parser — over ALL 67 tools.
 
     `--sheet-plate` was READ and never DECLARED, so every invocation died in `main` with
     an `AttributeError` naming no flag. Any other undeclared read is the same defect.
@@ -427,14 +557,18 @@ def test_the_argv_smoke_population_is_the_plate_parsing_population():
     assert set(SHEETS) == set(PLATE_SHEETS)
 
 
-# ------------------------------------ the 31 with no success fixture, COUNTED not ignored
+# ------------------------------------ the 62 with no success fixture, COUNTED not ignored
 #
-# WAVE 12, F-fae3fad4, rule 3. The end-to-end `main(argv)` leg covers 5 of the 36 tools with
+# WAVE 12, F-fae3fad4, rule 3. The end-to-end `main(argv)` leg covers 5 of the tools with
 # a command line. That gap was invisible: the file's docstring frames `main(argv)` as one of
 # its two nodes and says nothing about which tools it reaches. It is now a category with a
 # size and a membership, so it can only shrink deliberately — and every member still gets
 # the cheapest end-to-end argv exercise there is, `--help`, which builds the real parser in
 # a real process and would have died on a parser that cannot be constructed at all.
+#
+# WAVE 16, F-beeab1d0: 31 -> 62, because the population went 36 -> 67. The ceiling is
+# re-derived, never re-typed: `len(set(CN.parser_population(CN.tool_trees())) - set(SHEETS))`
+# reads 62 on 2026-09-04 in this worktree.
 
 
 NO_SUCCESS_FIXTURE = sorted(set(CLI_TOOLS) - set(SHEETS))
@@ -455,39 +589,97 @@ CPYTHON_CLI_TOOLS = _cpython_cli_tools()
 
 
 def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
-    """31 of 36 on 2026-09-04. A fixture added moves a tool out of this set and into the
+    """62 of 67 on 2026-09-04. A fixture added moves a tool out of this set and into the
     parametrized success leg above; nothing may move the other way."""
     assert set(NO_SUCCESS_FIXTURE) | set(SHEETS) == set(CLI_TOOLS)
     assert set(SHEETS) <= set(CLI_TOOLS), sorted(set(SHEETS) - set(CLI_TOOLS))
-    assert len(NO_SUCCESS_FIXTURE) <= 31, (
+    assert len(NO_SUCCESS_FIXTURE) <= 62, (
         f"{len(NO_SUCCESS_FIXTURE)} command-line tools have no end-to-end success fixture; "
-        f"31 was the count on 2026-09-04 and it may only fall: {NO_SUCCESS_FIXTURE}")
+        f"62 was the count on 2026-09-04 and it may only fall: {NO_SUCCESS_FIXTURE}")
 
 
 def test_the_blender_side_of_the_cli_population_is_the_one_that_cannot_be_driven_here():
-    """The exemption, keyed on its REASON and re-derived — never a typed list."""
+    """The exemption, keyed on its REASON and re-derived — never a typed list.
+
+    WAVE 16: 1 -> 17, because the population that could reach this exemption at all went
+    36 -> 67. Every one of the sixteen that joined is a Blender tool by
+    `blender_reach` — `render_turnaround` and the three other renderers among them, which
+    means their `--help` is still not driven in a real process. That is stated rather than
+    hidden: their exit contract is asserted in `tests/test_instrument_exits.py`, under the
+    stub, and the reason they are here is a property of the module, not a name on a list.
+    """
     from blender_stub import blender_reach
 
     excluded = sorted(set(CLI_TOOLS) - set(CPYTHON_CLI_TOOLS))
-    assert excluded == ["make_test_armature"], excluded
+    assert excluded == [
+        "author_walk", "check_relift", "diagnose_bone_heat", "lift_solve",
+        "make_binding_sheet", "make_parts_sheet", "make_rig_sheet", "make_skeleton_sheet",
+        "make_test_armature", "preview_glb", "preview_walk", "render_performer",
+        "render_start_frame", "render_turnaround", "rig_bake", "rig_repair",
+        "rig_retopo"], excluded
     for module in excluded:
         assert blender_reach(module + ".py"), module
+    assert len(CPYTHON_CLI_TOOLS) == 50, len(CPYTHON_CLI_TOOLS)
+
+
+def _module_scope_imports_this_interpreter_cannot_resolve(module):
+    """`{name}` a tool imports at MODULE SCOPE that this interpreter has no spec for.
+
+    The second exemption from the `--help` smoke, derived the same way as the Blender one:
+    keyed on the reason, never on a name. `tools/armature_index.py` imports `record_index`
+    at module scope — a sibling working copy at `E:\\AI\\record-index`, not a dependency of
+    this venv (`tests/test_record_index_binding.py` states the same fact and skips on the
+    same condition). With it on `PYTHONPATH` the tool is driven like every other; without
+    it, `--help` dies in the import and the skip says which module was missing.
+    """
+    import importlib.util
+
+    path = os.path.join(REPO, "tools", module + ".py")
+    with open(path, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    missing = set()
+    for node in tree.body:
+        names = []
+        if isinstance(node, ast.Import):
+            names = [a.name.split(".")[0] for a in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names = [node.module.split(".")[0]]
+        for name in names:
+            try:
+                if importlib.util.find_spec(name) is None:
+                    missing.add(name)
+            except (ImportError, ValueError):
+                missing.add(name)
+    return missing
 
 
 @pytest.mark.parametrize("module", CPYTHON_CLI_TOOLS)
 def test_every_command_line_tool_builds_its_parser_in_a_real_process(module):
-    """The weakest END-TO-END direction, run over all 36 rather than over five.
+    """The weakest END-TO-END direction, run over all 50 rather than over five.
 
     `--help` is argparse's own path: the module is imported as `__main__`, the parser is
     constructed, every `add_argument` runs, and the process exits 0. It cannot see a flag
     that is read and never declared — the static property above is what sees that — but it
     does see a parser that cannot be built, a module-scope failure, and a tool whose
     `--help` exits non-zero, none of which any test reached for 31 of these tools.
+
+    WAVE 16, F-beeab1d0: 35 -> 50 members. `tools/build_i2v_payload.py`,
+    `tools/build_camera_i2v_payload.py`, `tools/build_animate_payload.py`,
+    `tools/pack_pose_pack.py` and eleven more had never had their parser constructed by any
+    test. The subprocess now CARRIES the caller's `PYTHONPATH` rather than replacing it, so
+    a sibling working copy the operator has on the path is on the tool's path too.
     """
+    missing = _module_scope_imports_this_interpreter_cannot_resolve(module)
+    if missing:
+        pytest.skip(f"tools/{module}.py imports {sorted(missing)} at module scope and this "
+                    f"interpreter has no spec for it; put it on PYTHONPATH to drive --help")
+    inherited = os.environ.get("PYTHONPATH", "")
+    tools_path = os.path.join(REPO, "tools")
     proc = subprocess.run(
         [sys.executable, os.path.join(REPO, "tools", module + ".py"), "--help"],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
-        env=dict(os.environ, PYTHONPATH=os.path.join(REPO, "tools")),
+        env=dict(os.environ, PYTHONPATH=os.pathsep.join(
+            [tools_path] + ([inherited] if inherited else []))),
         cwd=os.path.join(REPO, "tools"))
     assert proc.returncode == 0, (
         f"tools/{module}.py --help exited {proc.returncode}:\n{proc.stdout}\n{proc.stderr}")

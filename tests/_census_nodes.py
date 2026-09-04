@@ -58,11 +58,58 @@ def read_source(name):
 
 
 def module_trees(include_core=True):
-    """`{module name: ast.Module}` for `tools/*.py` (and `tools/armature_core/*.py`)."""
+    """`{module name: ast.Module}` for `tools/*.py` (and `tools/armature_core/*.py`).
+
+    Keyed by BASENAME, and one basename is claimed twice: `lift_solve` exists as both
+    `tools/lift_solve.py` (the Blender-side CLI) and `tools/armature_core/lift_solve.py`
+    (the pure solver). Measured 2026-09-04 in this worktree: the core module was parsed
+    LAST and won the key, so every tool-keyed census that looked up `TREES["lift_solve"]`
+    — `parser_population`, `declared_flags`, `namespace_reads` — walked the solver, which
+    has no `main` at all. `tools/lift_solve.py` therefore reported "no command line" while
+    declaring 5 flags and reading all 5 off its namespace, and sat outside the
+    undeclared-flag property and the `--help` smoke alike. The tool wins its own basename
+    now; `tool_trees()` below is the collision-free population for anything tool-keyed, and
+    `test_sheet_pairing.py` pins the collision by name so a second one cannot land quietly.
+    """
     out = {}
-    for path in tool_paths(include_core=include_core):
+    paths = sorted(glob.glob(os.path.join(TOOLS, "armature_core", "*.py"))) if include_core else []
+    paths += sorted(glob.glob(os.path.join(TOOLS, "*.py")))
+    for path in paths:
         with open(path, encoding="utf-8") as fh:
             out[os.path.basename(path)[:-3]] = ast.parse(fh.read())
+    return out
+
+
+def tool_trees():
+    """`{module name: ast.Module}` for `tools/*.py` ONLY — no `armature_core` shadowing."""
+    out = {}
+    for path in sorted(glob.glob(os.path.join(TOOLS, "*.py"))):
+        with open(path, encoding="utf-8") as fh:
+            out[os.path.basename(path)[:-3]] = ast.parse(fh.read())
+    return out
+
+
+def colliding_basenames():
+    """Module basenames claimed by BOTH `tools/` and `tools/armature_core/`."""
+    tools = {os.path.basename(p)[:-3] for p in glob.glob(os.path.join(TOOLS, "*.py"))}
+    core = {os.path.basename(p)[:-3]
+            for p in glob.glob(os.path.join(TOOLS, "armature_core", "*.py"))}
+    return sorted(tools & core)
+
+
+def tools_calling_add_argument():
+    """Every `tools/*.py` that declares a command-line argument — the parser POPULATION.
+
+    The census's own population must be derived from the thing it is about (a parser),
+    never from the idiom a tool happens to use to reach one. `parser_population()` is
+    asserted against this set, so a tool cannot leave the census by moving its parser into
+    a helper (which is exactly what 31 of them had done — F-beeab1d0).
+    """
+    out = []
+    for path in sorted(glob.glob(os.path.join(TOOLS, "*.py"))):
+        with open(path, encoding="utf-8") as fh:
+            if "add_argument(" in fh.read():
+                out.append(os.path.basename(path)[:-3])
     return out
 
 
@@ -104,12 +151,123 @@ def cli_body(tree):
             if not (isinstance(st, ast.Expr) and isinstance(st.value, ast.Constant))]
     if len(body) > 3:
         return fn
+    # WAVE 16 (F-beeab1d0): a parser HELPER is never the delegate. A short `main` that reads
+    # `a = parse_args(argv)` and hands the result on has one module-local call, and the hop
+    # used to land inside `parse_args` — which holds the parser and none of the reads, so the
+    # census reported the tool as reading nothing. That is the exact false emptiness this
+    # docstring's last paragraph records, arriving through the wrapper rule instead of
+    # through the node choice. The delegate is the function that holds the BODY.
+    helpers = parser_helpers(tree)
     called = {c.func.id for c in ast.walk(fn)
               if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
-              and c.func.id in named}
+              and c.func.id in named and c.func.id not in helpers}
     if len(called) == 1:
         return named[next(iter(called))]
     return fn
+
+
+def parser_helpers(tree):
+    """`{name: "attr" | "dict"}` — module-level functions that RETURN a parsed namespace.
+
+    The repo's DOMINANT argparse idiom, and the one `cli_body`'s one-hop rule does not
+    reach: 31 of the 67 tools that call `add_argument(` factor their parser into a
+    module-level helper and write `a = parse_args(argv)` in the body — a bare `ast.Name`
+    call, where the walk below used to look only for an `ast.Attribute` call spelled
+    `ap.parse_args(argv)`. Keyed on what the helper DOES (it parses), never on the name
+    `parse_args`, so a helper called `_cli` or `read_argv` joins on the day it lands.
+
+    The value says how the caller reads the result. `"attr"` is a `Namespace` and its
+    flags are attribute reads; `"dict"` is `vars(p.parse_args(argv))` — four Blender-side
+    tools (`make_rig_sheet`, `rig_bake`, `rig_repair`, `rig_retopo`) return that, and their
+    flags are constant-string subscripts. Same defect, same census, two spellings.
+
+    Keyed on the RETURN, not on "contains a `parse_args` call anywhere". `build_and_write`
+    in the three wave-10 builders parses argv too, but it goes on to gate and write and
+    returns none of it — it is the CLI body, and treating it as a parser helper dropped all
+    three out of the population (measured 2026-09-04 while writing this).
+    """
+    def _is_parse(node):
+        return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("parse_args", "parse_known_args"))
+
+    out = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        # names this function binds from a parse — `render_turnaround.parse_args` binds `a`,
+        # decorates it with `a.ortho_scale_text = ...`, and returns the NAME, not the call
+        local = _namespace_bindings(node, {})
+        for n in ast.walk(node):
+            if not isinstance(n, ast.Return) or n.value is None:
+                continue
+            value, kind = n.value, "attr"
+            if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                    and value.func.id == "vars" and value.args):
+                value, kind = value.args[0], "dict"
+            if _is_parse(value) or (isinstance(value, ast.Name)
+                                    and local.get(value.id) == "attr"):
+                out[node.name] = kind
+                break
+    return out
+
+
+def _namespace_bindings(fn, helpers):
+    """`{local name: "attr"|"dict"}` for every name in `fn` bound to a parsed namespace."""
+    ns = {}
+    for node in walk_scope(fn):
+        if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)):
+            continue
+        func = node.value.func
+        if isinstance(func, ast.Attribute) and func.attr in ("parse_args",
+                                                             "parse_known_args"):
+            kind = "attr"
+        elif isinstance(func, ast.Name) and func.id in helpers and func.id != fn.name:
+            kind = helpers[func.id]
+        else:
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                ns[target.id] = kind
+            elif isinstance(target, ast.Tuple):
+                for elt in target.elts:
+                    if isinstance(elt, ast.Name):
+                        ns[elt.id] = kind
+                        break
+    return ns
+
+
+def cli_bodies(tree):
+    """Every scope that holds this tool's command line — usually one, sometimes two.
+
+    `cli_body` is the anchor and stays the anchor. The second edge is the DISPATCH idiom:
+    a `main` that parses nothing itself and hands a module-local function to a shared
+    runner — `tools/armature_index.py`'s `return _cli.run_contract(_dispatch, argv, ...)`,
+    where `_dispatch` builds the parser, parses argv and reads six flags off it. A census
+    anchored on `main` alone sees no parser there at all. The edge is deliberately narrow
+    — it opens ONLY when the CLI body binds no namespace of its own, and only to a
+    module-local function passed BY NAME as an argument that does bind one — because the
+    wide version (any module-local function passed as any argument) pulls in sibling
+    scopes and re-invents the six false positives `test_sheet_argv_smoke.py` records.
+    """
+    body = cli_body(tree)
+    if body is None:
+        return []
+    helpers = parser_helpers(tree)
+    if _namespace_bindings(body, helpers):
+        return [body]
+    named = {n.name: n for n in tree.body
+             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    out = []
+    for node in walk_scope(body):
+        if not isinstance(node, ast.Call):
+            continue
+        for arg in list(node.args) + [kw.value for kw in node.keywords]:
+            if not (isinstance(arg, ast.Name) and arg.id in named):
+                continue
+            fn = named[arg.id]
+            if fn is not body and fn not in out and _namespace_bindings(fn, helpers):
+                out.append(fn)
+    return out or [body]
 
 
 def walk_scope(fn):
@@ -195,51 +353,99 @@ def visible_functions(tree, mod):
     return vis
 
 
-def declared_flags(tree, mod, helpers):
-    """Everything the CLI body's parser can put on the namespace, helper calls resolved.
+def _namespace_writes(fn, ns):
+    """Attributes the code ITSELF puts on a bound namespace — `a.x = ...`.
 
-    Keyed on `cli_body`, not on the name `main` (F-0e0709b2): the three wave-10 builders
-    declare their flags inside `build_and_write(argv)`.
+    `set_defaults(x=...)`'s hand-rolled twin, and a real declaration: after
+    `tools/render_turnaround.py:325` runs `a.ortho_scale_text = _pinned_text(argv)` inside
+    its own parser helper, the attribute is on the namespace as surely as any
+    `add_argument` put it there. Reading it downstream is not the gate-0 defect, and a
+    census that called it one would be reporting a correct module.
     """
-    body = cli_body(tree)
-    if body is None:
+    out = set()
+    for node in walk_scope(fn):
+        targets = (node.targets if isinstance(node, ast.Assign)
+                   else [node.target] if isinstance(node, (ast.AnnAssign, ast.AugAssign))
+                   else [])
+        for target in targets:
+            if (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                    and ns.get(target.value.id) == "attr"):
+                out.add(target.attr)
+            if (isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name)
+                    and ns.get(target.value.id) == "dict"
+                    and isinstance(target.slice, ast.Constant)
+                    and isinstance(target.slice.value, str)):
+                out.add(target.slice.value)
+    return out
+
+
+def declared_flags(tree, mod, helpers):
+    """Everything the tool's parser can put on the namespace, helper calls resolved.
+
+    Keyed on `cli_bodies`, not on the name `main` (F-0e0709b2): the three wave-10 builders
+    declare their flags inside `build_and_write(argv)`, and `armature_index` declares its
+    six inside the `_dispatch` it hands to a shared runner.
+
+    The helper resolution is TRANSITIVE over module-local functions that contribute flags
+    (F-beeab1d0): `build_animate_payload.main` calls `parse_args(argv)`, and `parse_args`
+    calls `add_spend_flags(ap)` from `armature_core.canon` — one hop reaches the local
+    helper and stops, so the three canon flags read in `main` looked undeclared. Only
+    functions that themselves declare a flag or return a parsed namespace are followed, so
+    an unrelated local call cannot widen the declared set and mask a real undeclared read.
+    """
+    bodies = cli_bodies(tree)
+    if not bodies:
         return set()
-    out = argparse_dests(body)
+    parsers = parser_helpers(tree)
+    named = {n.name: n for n in tree.body
+             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    vis = visible_functions(tree, mod)
+    out = set()
     for node in tree.body:  # a parser built at module level
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             out |= argparse_dests(node)
-    vis = visible_functions(tree, mod)
-    for node in ast.walk(body):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+    seen, stack = set(), list(bodies)
+    while stack:
+        fn = stack.pop()
+        if fn.name in seen:
+            continue
+        seen.add(fn.name)
+        out |= argparse_dests(fn)
+        out |= _namespace_writes(fn, _namespace_bindings(fn, parsers))
+        for node in ast.walk(fn):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                continue
             name = node.func.id
-            if name != body.name and vis.get(name) in helpers:
+            if vis.get(name) in helpers:
                 out |= helpers[vis[name]]
+            local = named.get(name)
+            if (local is not None and name not in seen
+                    and (name in parsers or argparse_dests(local))):
+                stack.append(local)
     return out
 
 
 def namespace_reads(tree):
-    """`{attribute: first line}` read off whatever `parse_args` returned, in the CLI body."""
-    body = cli_body(tree)
-    if body is None:
-        return {}
-    ns = set()
-    for node in walk_scope(body):
-        if (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
-                and isinstance(node.value.func, ast.Attribute)
-                and node.value.func.attr in ("parse_args", "parse_known_args")):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    ns.add(target.id)
-                elif isinstance(target, ast.Tuple):
-                    for elt in target.elts:
-                        if isinstance(elt, ast.Name):
-                            ns.add(elt.id)
-                            break
+    """`{flag: first line}` read off whatever `parse_args` returned, in the CLI bodies.
+
+    Two spellings of the read, because the tools use two: `a.frames_dir` off a
+    `Namespace`, and `args["frames_dir"]` off the `vars(...)` dict four Blender-side tools
+    return. Both are "a flag this tool reads"; a walk that saw only the first left those
+    four outside the property that exists to catch a flag read and never declared.
+    """
     out = {}
-    for node in walk_scope(body):
-        if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-                and node.value.id in ns):
-            out.setdefault(node.attr, node.lineno)
+    parsers = parser_helpers(tree)
+    for body in cli_bodies(tree):
+        ns = _namespace_bindings(body, parsers)
+        for node in walk_scope(body):
+            if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                    and ns.get(node.value.id) == "attr"):
+                out.setdefault(node.attr, node.lineno)
+            elif (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
+                    and ns.get(node.value.id) == "dict"
+                    and isinstance(node.slice, ast.Constant)
+                    and isinstance(node.slice.value, str)):
+                out.setdefault(node.slice.value, node.lineno)
     return out
 
 
@@ -250,8 +456,13 @@ def undeclared_flags(tree, mod, helpers):
 
 
 def parser_population(trees=None):
-    """Every `tools/*.py` whose CLI body reads a `parse_args` namespace."""
-    trees = module_trees() if trees is None else trees
+    """Every `tools/*.py` whose CLI body reads a `parse_args` namespace.
+
+    Defaults to `tool_trees()`, never to `module_trees()`: the latter is keyed by basename
+    and `armature_core/lift_solve.py` shadowed `tools/lift_solve.py` there. Callers that
+    pass their own dict get what they passed.
+    """
+    trees = tool_trees() if trees is None else trees
     return sorted(mod for mod in trees
                   if os.path.exists(os.path.join(TOOLS, mod + ".py"))
                   and namespace_reads(trees[mod]))
