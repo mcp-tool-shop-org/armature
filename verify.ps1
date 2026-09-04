@@ -11,7 +11,10 @@
        duplicate. A gate implemented as an `assert` is DELETED by the optimizer, and 87
        of facet's andons turned out to be removable by an environment variable. Running
        the suite a second time under `-O` is what proves this repo's gates raise.
-    3. the package build — the wheel and sdist, `twine check` on the metadata, the wheel
+    3. the package build — `build` and `twine` installed under the SAME constraints
+       `.github/actions/clean-room/action.yml` installs them under (they are the tools that
+       produce the artifact, and this leg used to build with whatever the repo venv held),
+       then the wheel and sdist, `twine check` on the metadata, the wheel
        installed into a CLEAN venv and run from THAT install, and the launcher's own
        self-test. Added at v0.2.0, when this repo started publishing: a package that fails
        to build is a release that fails at the registry, and finding that out from a
@@ -37,8 +40,11 @@
   the slow one. A run with -NoSite is NOT a full verify and says so in its summary.
 
 .PARAMETER NoPackage
-  Skip leg 3. Useful when nothing packaging-related changed; it shells out to `build` and
-  `twine`, which a bare checkout may not have installed.
+  Skip leg 3. Useful when nothing packaging-related changed; it installs `build` and `twine`
+  at CI's constraints into the repo venv and then builds, so it needs an index and it changes
+  what that venv holds. Note that the SUITE also builds an sdist (two tests in
+  `tests/test_packaging.py` pin what the published archive carries), so `build` is needed by
+  leg 1 as well — skipping this leg does not remove that requirement.
 
 .EXAMPLE
   pwsh -NoProfile -File .\verify.ps1
@@ -171,6 +177,20 @@ if ($NoPackage) {
     Invoke-Leg -Name 'package build (wheel + sdist + twine + clean install + launcher)' -Body {
         Push-Location $repo
         try {
+            # The toolchain CI pins, installed here for the same reason it is pinned there:
+            # `build` and `twine` are what PRODUCE the artifact, and this leg built with
+            # whatever the repo venv happened to hold. Measured 2026-09-04: the venv held
+            # build 1.5.0 and twine 7.0.0 — inside CI's window, so the divergence was latent,
+            # which is the state in which nobody notices it. A `pip install -U build` past 2.0
+            # on the rig would make this leg select sdist contents differently from CI, and a
+            # green local run would then assert something CI never ran — precisely the
+            # equivalence the DESCRIPTION sells. The specifiers are read out of
+            # `.github/actions/clean-room/action.yml` by
+            # `tests/test_verify_script.py::test_verify_builds_the_artifact_with_the_toolchain_the_clean_room_action_pins`,
+            # so raising either constraint there moves this line with it.
+            & $python -m pip install --quiet 'build>=1.5,<2' 'twine>=7,<8'
+            if ($LASTEXITCODE -ne 0) { return }
+
             & $python -m build
             if ($LASTEXITCODE -ne 0) { return }
             & $python -m twine check (Join-Path $repo 'dist\*')

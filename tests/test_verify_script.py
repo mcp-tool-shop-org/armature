@@ -33,7 +33,14 @@ import pytest
 
 from conftest import REPO
 
-from test_ci_workflows import CI, clean_room_script, run_script, step_containing
+from test_ci_workflows import (
+    CI,
+    _has_a_ceiling,
+    _install_tokens,
+    clean_room_script,
+    run_script,
+    step_containing,
+)
 
 VERIFY_PATH = os.path.join(REPO, "verify.ps1")
 with open(VERIFY_PATH, encoding="utf-8") as _fh:
@@ -445,3 +452,71 @@ def test_the_local_scan_is_the_lockfile_only_form_ci_uses():
     assert scan in VERIFY, (
         f"ci.yml runs {scan!r} and verify.ps1 does not; a green local run is then a weaker "
         "claim than the green CI run its DESCRIPTION equates it to")
+
+
+# -- the parity claim, at the level of the TOOL (wave 10, F-da6b0457) ----------------------
+#
+# The DESCRIPTION says "the legs are the same ones `.github/workflows/ci.yml` runs, in the
+# same order and with the same meaning, so a green local run and a green CI run are the same
+# claim". Leg 3 called `& $python -m build` and `& $python -m twine check` against whatever
+# the repo venv happened to hold; the CI leg it mirrors installs `build>=1.5,<2` and
+# `twine>=7,<8` first. Measured 2026-09-04: the repo venv holds build 1.5.0 and twine 7.0.0 —
+# inside CI's window, so the divergence was latent rather than live, which is exactly the
+# state in which nobody notices it.
+#
+# Neither existing check could see it. `toolchain_tokens()` walked `job_scripts()` over
+# `workflow_files()` only, and the mirror test below asserted `-m venv` and `armature check`
+# appear in both texts — the SHAPE of the leg, not the toolchain that produces the artifact
+# it inspects. A `pip install -U build` past 2.0 on the rig would make the local leg select
+# sdist contents differently from CI, and a green local run would then assert something CI
+# never ran.
+#
+# THE NODE THIS CENSUS KEYS ON: the install tokens of the clean-room ACTION's own script,
+# read at run time. Nothing is typed here, so raising either constraint in the action moves
+# this requirement with it rather than leaving the local leg pinned to yesterday's window.
+
+
+def clean_room_install_tokens():
+    """The package specifiers `.github/actions/clean-room` installs before it builds."""
+    return sorted(set(_install_tokens(clean_room_script())))
+
+
+def _missing_from(text, tokens):
+    return [token for token in tokens if token not in text]
+
+
+def test_the_clean_room_pins_a_toolchain_this_check_can_compare():
+    """The census's own premise: an empty token list would make the comparison vacuous."""
+    tokens = clean_room_install_tokens()
+    assert tokens, (
+        "the clean-room action installs nothing this check can read; the comparison below "
+        "would pass on any verify.ps1 at all")
+    unbounded = [t for t in tokens if not _has_a_ceiling(t)]
+    assert unbounded == [], (
+        f"the clean-room action installs {unbounded} without an upper bound, so pinning "
+        "verify.ps1 to it would pin it to nothing")
+
+
+def test_verify_builds_the_artifact_with_the_toolchain_the_clean_room_action_pins():
+    """The DESCRIPTION equates a green local run to a green CI run; the tools must match.
+
+    What this looks like if wrong: `pip install -U build` on the rig takes the local leg past
+    the constraint CI holds, sdist file selection changes underneath it, and the local run
+    asserts a packaging outcome CI has never produced — while claiming to be the same claim.
+    """
+    missing = _missing_from(VERIFY, clean_room_install_tokens())
+    assert missing == [], (
+        f"verify.ps1 builds the package without installing {missing}, which "
+        f".github/actions/clean-room/action.yml installs before it builds; the DESCRIPTION "
+        "equates the two runs and the toolchain that PRODUCES the artifact is what differs")
+
+
+def test_the_toolchain_parity_check_goes_red_on_the_leg_this_repo_had():
+    """The mutation: leg 3 as it stood, building against whatever the venv held."""
+    before = "& $python -m build\n& $python -m twine check (Join-Path $repo 'dist\\*')"
+    assert _missing_from(before, clean_room_install_tokens()) == clean_room_install_tokens(), (
+        "the pre-fix leg reads as installing the pinned toolchain; the check cannot fail")
+    # And the near-miss that matters: the right tools at the WRONG constraint.
+    forked = "& $python -m pip install 'build' 'twine'"
+    assert _missing_from(forked, clean_room_install_tokens()), (
+        "an unconstrained local install reads as matching CI's pinned one")

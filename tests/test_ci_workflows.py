@@ -1437,6 +1437,12 @@ def _install_tokens(script):
 #: whole subject is "what runs on release day" (F-fbf7020c).
 BACKEND_SOURCE = "pyproject.toml:[build-system].requires"
 
+#: `verify.ps1`'s DESCRIPTION says a green local run and a green CI run are the same claim,
+#: and leg 3 produces a wheel and an sdist. That makes it a third place the artifact is
+#: PRODUCED, and it was in no census at all: `toolchain_tokens()` walked `job_scripts()` over
+#: `workflow_files()` only (F-da6b0457).
+LOCAL_VERIFY_SOURCE = "verify.ps1"
+
 
 def toolchain_tokens():
     """Every package a distribution's production or publication resolves.
@@ -1460,6 +1466,9 @@ def toolchain_tokens():
                 tokens.setdefault(token, []).append(f"{workflow}:{job}")
     for requirement in PYPROJECT["build-system"]["requires"]:
         tokens.setdefault(requirement.strip(), []).append(BACKEND_SOURCE)
+    with open(os.path.join(REPO, LOCAL_VERIFY_SOURCE), encoding="utf-8") as fh:
+        for token in _install_tokens(fh.read()):
+            tokens.setdefault(token, []).append(LOCAL_VERIFY_SOURCE)
     return tokens
 
 
