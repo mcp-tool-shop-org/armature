@@ -1060,3 +1060,106 @@ def test_a_filename_matching_nothing_is_still_reported_as_not_in_this_table():
     rec = RG.components(_loads("some_unruled_style.safetensors"))[1]
     assert rec["ruling"]["verdict"] == "NOT IN THIS TABLE"
     assert rec["ruling"]["matches"] == []
+
+
+# --- the seed clause had no "nothing was checkable" answer (F-61768a9f) --------------
+
+
+def _unrecorded_sampler_api():
+    """SamplerCustomAdvanced fed by RandomNoise — the shape E13 met, one tier over."""
+    return {
+        "10": {"class_type": "UNETLoader",
+               "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}},
+        "25": {"class_type": "RandomNoise", "inputs": {"noise_seed": 123456789}},
+        "13": {"class_type": "SamplerCustomAdvanced",
+               "inputs": {"noise": ["25", 0], "model": ["10", 0]}},
+        "40": {"class_type": "EmptyHunyuanLatentVideo",
+               "inputs": {"width": 832, "height": 480, "length": 81}},
+    }
+
+
+def test_a_sampler_class_with_no_seed_row_halts_instead_of_reporting_every_seed_pinned():
+    """Measured 2026-09-03: seeds() returned [], verify reported "0 seed(s) all pinned"
+    and gate_s_registration reported "0 noise-bearing seed(s), all pinned and all drawn
+    from the committed list of 1" — while the seed that would run was 123456789 and the
+    committed list was [7]."""
+    g = _unrecorded_sampler_api()
+    assert RG.seeds(g) == []
+    found = RG.unrecorded_seed_sources(g)
+    # `RandomNoise` is caught by BOTH clauses (a `noise_seed` input, and a class name
+    # ending in `Noise`). `SamplerCustomAdvanced` is caught by neither — it ends in
+    # `Advanced` and its inputs are links — which is recorded rather than papered over:
+    # the seed itself lives on the noise node, and that is the node the andon names.
+    assert {u["class"] for u in found} == {"RandomNoise"}
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert "INDETERMINATE" in str(exc.value) or "no SEED_NODES row" in str(exc.value)
+    assert "RandomNoise" in str(exc.value)
+    assert exc.value.evidence["seed_clause_verdict"] == "INDETERMINATE"
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(g, [7])
+    assert "SEED_NODES" in str(exc.value)
+
+
+def test_a_graph_with_no_seed_at_all_is_indeterminate_rather_than_all_pinned():
+    g = {"10": {"class_type": "UNETLoader",
+                "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}},
+         "40": {"class_type": "EmptyHunyuanLatentVideo",
+                "inputs": {"width": 832, "height": 480, "length": 81}}}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert "UNPROVEN" in str(exc.value)
+    with pytest.raises(RG.RouteGate):
+        RG.gate_s_registration(g, [7])
+
+    # the assertion is available, and it is CHECKED rather than obeyed
+    ev = RG.verify(g, carries_no_sampler=True)
+    assert "all pinned" not in ev["verdict"]
+    assert ev["seed_clause_verdict"].startswith("CHECKED")
+    assert RG.gate_s_registration(g, [7], carries_no_sampler=True)["verdict"] \
+        .startswith("no sampler")
+
+
+def test_the_no_sampler_assertion_is_refused_when_the_graph_carries_one():
+    g = {"10": {"class_type": "UNETLoader",
+                "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}},
+         "3": {"class_type": "KSamplerAdvanced",
+               "inputs": {"add_noise": "enable", "noise_seed": 7, "model": ["10", 0]}},
+         "40": {"class_type": "EmptyHunyuanLatentVideo",
+                "inputs": {"width": 832, "height": 480, "length": 81}}}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g, carries_no_sampler=True)
+    assert "checked, not obeyed" in str(exc.value)
+    with pytest.raises(RG.RouteGate):
+        RG.gate_s_registration(g, [7], carries_no_sampler=True)
+    # and the ordinary graph still passes
+    assert "1 seed(s) all pinned" in RG.verify(g)["verdict"]
+
+
+def test_the_verdict_string_never_says_all_pinned_over_zero_seeds():
+    """The phrase is what a spend meta stores and a provenance sheet prints."""
+    g = {"10": {"class_type": "UNETLoader",
+                "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}},
+         "40": {"class_type": "EmptyHunyuanLatentVideo",
+                "inputs": {"width": 832, "height": 480, "length": 81}}}
+    ev = RG.verify(g, carries_no_sampler=True)
+    assert "0 seed(s) all pinned" not in ev["verdict"]
+    ev2 = RG.verify(g, require_pinned_seeds=False)
+    assert "all pinned" not in ev2["verdict"]
+    assert ev2["seed_clause_verdict"] == "NOT CHECKED (require_pinned_seeds=False)"
+
+
+def test_a_scheduler_picker_is_not_mistaken_for_an_unrecorded_seed_source():
+    """`KSamplerSelect` picks a scheduler and carries no seed; an andon that fires on a
+    correct graph is not one anybody keeps."""
+    g = {"10": {"class_type": "UNETLoader",
+                "inputs": {"unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"}},
+         "9": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+         "3": {"class_type": "KSamplerAdvanced",
+               "inputs": {"add_noise": "enable", "noise_seed": 7, "model": ["10", 0]}},
+         "40": {"class_type": "EmptyHunyuanLatentVideo",
+                "inputs": {"width": 832, "height": 480, "length": 81}}}
+    assert RG.unrecorded_seed_sources(g) == []
+    assert RG.verify(g)["seed_clause_verdict"] == "CHECKED — 1 seed(s) all pinned"

@@ -624,6 +624,95 @@ def components(graph):
 SEED_INPUTS = {"KSampler": "seed", "KSamplerAdvanced": "noise_seed",
                "Wan2ReferenceVideoApi": "seed"}
 
+#: Input names that ARE a seed, whatever class carries them, and class-name suffixes that
+#: declare a sampling or noise role. Used only by `unrecorded_seed_sources` — the andon
+#: that answers "this table does not know that class" instead of answering "no seeds".
+SEED_INPUT_NAMES = ("seed", "noise_seed", "rand_seed")
+SEED_CLASS_SUFFIXES = ("Sampler", "Noise")
+
+
+def unrecorded_seed_sources(graph):
+    """Nodes that look like they carry a seed and have NO `SEED_NODES` row.
+
+    ⚠ **A class absent from `SEED_NODES` used to disarm Gate S in the affirmative.**
+    `seeds()` returns [] for it, and both readers then reported green. Measured
+    2026-09-03 on an API graph wiring `SamplerCustomAdvanced` fed by `RandomNoise` at
+    `noise_seed=123456789`: `seeds()` returned [], `verify(g, family="wan")` reported
+    "0 seed(s) all pinned" with `seed_clause_verdict = "CHECKED — 0 seed(s) all pinned"`,
+    and `gate_s_registration(g, [7])` reported "0 noise-bearing seed(s), all pinned and
+    all drawn from the committed list of 1" — while the seed that would actually run was
+    123456789 and the committed list was [7].
+
+    That is the shape the E13 halt-era executor refused to record as a pass, and the
+    remedy taken then was to add one row to `SEED_NODES` — which is exactly what the
+    `LATENT_NODES` note says is not a fix: "Adding a class to this table fixes one graph;
+    it does not fix the shape of that failure." So the shape is fixed here instead, the
+    way Gate L and Gate PAIR already answer: "nothing was checkable" is a third answer,
+    and it raises.
+
+    Detection is by the thing being read, not by a vendor prefix: in API format an inputs
+    key named `seed`/`noise_seed`/`rand_seed` on a class with no row; in EITHER format a
+    class name ending in `Sampler` or `Noise` with no row. `endswith` rather than a
+    substring on purpose — `KSamplerSelect` picks a scheduler and carries no seed, and an
+    andon that fires on a correct graph is not one anybody keeps.
+    """
+    graph = normalise_graph(graph)
+    api = is_api_format(graph)
+    out = []
+    for where, n in _iter_nodes(graph):
+        cls = n.get("type")
+        if not isinstance(cls, str) or cls in SEED_NODES:
+            continue
+        why = None
+        if api:
+            hit = sorted(k for k in (n.get("inputs") or {}) if k in SEED_INPUT_NAMES)
+            if hit:
+                why = f"carries seed-shaped input(s) {', '.join(hit)}"
+        if why is None and cls.endswith(SEED_CLASS_SUFFIXES):
+            why = "the class name declares a sampling or noise role"
+        if why:
+            out.append({"node_id": n.get("id"), "class": cls, "where": where, "why": why})
+    return out
+
+
+def _seed_population_andon(graph, found, ev, carries_no_sampler):
+    """The third answer, shared by `verify`'s seed clause and `gate_s_registration`.
+
+    Raises unless the seed population is one this module can honestly describe. The
+    caller may assert `carries_no_sampler=True` — and that assertion is CHECKED, not
+    obeyed: it raises if a seed or an unrecorded seed source turns up under it, which is
+    what keeps it from being a skip flag.
+    """
+    unrecorded = unrecorded_seed_sources(graph)
+    ev["unrecorded_seed_sources"] = unrecorded
+    ev["carries_no_sampler_asserted"] = bool(carries_no_sampler)
+    if unrecorded:
+        ev["seed_clause_verdict"] = "INDETERMINATE"
+        raise RouteGate(
+            "the seed clause is INDETERMINATE: " + "; ".join(
+                f"node {u['node_id']} is {u['class']}, which has no SEED_NODES row and "
+                f"{u['why']}" for u in unrecorded) +
+            ". `seeds()` reports nothing for such a class and every reader then reports "
+            "green — the affirmative form of the failure Gate S exists to prevent. Add "
+            "the class's row in the spec that first arms the tier", ev)
+    if carries_no_sampler:
+        if found:
+            ev["seed_clause_verdict"] = "CONTRADICTED"
+            raise RouteGate(
+                f"the caller asserted this graph carries no sampler and it carries "
+                f"{len(found)} seed-bearing node(s): " + ", ".join(
+                    f"node {s['node_id']} ({s['class']})" for s in found) +
+                ". The assertion is checked, not obeyed", ev)
+        return
+    if not found:
+        ev["seed_clause_verdict"] = "INDETERMINATE"
+        raise RouteGate(
+            "the seed clause is INDETERMINATE on this graph and therefore UNPROVEN: it "
+            "found no seed at all, and 'no seed was found' and 'every seed is pinned' "
+            "are not the same verdict — the second is what this module used to print. "
+            "Pass carries_no_sampler=True if the graph really carries none (the "
+            "assertion is checked), or add the sampler class's SEED_NODES row", ev)
+
 
 def seeds(graph):
     """Every seed in the graph and whether it is pinned.
@@ -948,7 +1037,7 @@ def hosted_frame_legality(resolution, ratio, duration, tier):
             "problems": problems, "legal": not problems}
 
 
-def gate_s_registration(graph, registered):
+def gate_s_registration(graph, registered, *, carries_no_sampler=False):
     """Gate S · ANDON — every seed about to run was pre-registered in a committed list.
 
     E04's andon, and it guards a failure with no technical symptom at all: every other gate
@@ -963,6 +1052,10 @@ def gate_s_registration(graph, registered):
     found = seeds(graph)
     reg = list(registered or [])
     ev = {"gate": "S", "registered": reg, "seeds": found}
+    # · ANDON — the third answer. See `_seed_population_andon`: a sampler class with no
+    # SEED_NODES row makes `seeds()` return [] and this function then reported "0
+    # noise-bearing seed(s), all pinned and all drawn from the committed list".
+    _seed_population_andon(graph, found, ev, carries_no_sampler)
     if not reg:
         raise RouteGate(
             "Gate S: no seed list was pre-registered, so no seed may be varied at all. "
@@ -1008,13 +1101,16 @@ def gate_s_registration(graph, registered):
                 f"node {s['node_id']} would run seed {s['seed']}" for s in unregistered) +
             f", which the committed list {reg} does not pre-register. A seed chosen after "
             f"seeing a result turns a measurement into a selection of one", ev)
-    ev["verdict"] = (f"{len(live)} noise-bearing seed(s), all pinned and all drawn from "
-                     f"the committed list of {len(reg)}")
+    ev["verdict"] = (
+        f"no sampler in this graph (asserted by the caller and checked), so no seed was "
+        f"drawn against the committed list of {len(reg)}" if not found else
+        f"{len(live)} noise-bearing seed(s), all pinned and all drawn from "
+        f"the committed list of {len(reg)}")
     return ev
 
 
 def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=None,
-           hosted_tier=None):
+           hosted_tier=None, carries_no_sampler=False):
     """The three questions at once. Raises on anything the record already ruled against.
 
     `allow` names component keys the caller has an explicit ruling for — it is not a skip
@@ -1122,12 +1218,29 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # the provenance sheet. Measured 2026-09-03 on a graph whose only sampler carries
     # control_after_generate='randomize'. A record may not assert a property nobody
     # checked, so the skip is named in the verdict rather than hidden by it.
-    ev["seed_clause_verdict"] = (
-        f"CHECKED — {len(sd)} seed(s) all pinned" if require_pinned_seeds
-        else "NOT CHECKED (require_pinned_seeds=False)")
-    seed_phrase = (f"{len(sd)} seed(s) all pinned" if require_pinned_seeds
-                   else f"{len(sd)} seed(s) NOT CHECKED for pinning "
-                        f"(require_pinned_seeds=False)")
+    if require_pinned_seeds:
+        # · ANDON — the third answer the other three clauses in this file already have
+        # (Gate L latent, Gate L hosted, Gate PAIR). A sampler class absent from
+        # SEED_NODES makes `seeds()` return [] and this clause used to print "0 seed(s)
+        # all pinned" over it. See `_seed_population_andon`.
+        _seed_population_andon(graph, sd, ev, carries_no_sampler)
+    elif carries_no_sampler:
+        raise RouteGate(
+            "verify() was given carries_no_sampler=True with require_pinned_seeds=False; "
+            "one asserts a property of the graph and the other says nobody looked, and "
+            "the assertion would go unchecked", dict(ev, seeds=sd))
+
+    if not require_pinned_seeds:
+        ev["seed_clause_verdict"] = "NOT CHECKED (require_pinned_seeds=False)"
+        seed_phrase = (f"{len(sd)} seed(s) NOT CHECKED for pinning "
+                       f"(require_pinned_seeds=False)")
+    elif not sd:
+        ev["seed_clause_verdict"] = (
+            "CHECKED — no sampler in this graph (asserted by the caller and checked)")
+        seed_phrase = "no sampler (asserted and checked), so no seed to pin"
+    else:
+        ev["seed_clause_verdict"] = f"CHECKED — {len(sd)} seed(s) all pinned"
+        seed_phrase = f"{len(sd)} seed(s) all pinned"
 
     if require_pinned_seeds:
         loose = [s for s in sd if not s["pinned"]]
