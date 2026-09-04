@@ -48,6 +48,7 @@ pass on one having examined zero characters.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -308,11 +309,51 @@ def coverage(doc):
     }
 
 
+@functools.lru_cache(maxsize=512)
+def _phrase_re(phrase):
+    """The ONE matcher both directions use for a phrase. Word boundaries, like
+    `_forbidden_hit`.
+
+    ⚠ **The phrase clause used to be `haystack.find(phrase.lower())`** — a bare
+    substring test with no boundary — while the refusal clause two screens down
+    (`_forbidden_hit`) argues at length that a claim about text needs `\b` and that
+    'sleeveless' must not satisfy 'sleeve'. The phrase clause on the same page did not
+    get that discipline, and it decides BOTH directions: the forward loop's "does this
+    ratified phrase occur in the prompt" and `residue`'s licensed-span strip.
+
+    Measured 2026-09-04 on a doc whose only ratified occupant phrase is 'cape':
+    `cover(doc, 'wide landscape shot')` (legal_clause 'wide landscape shot') returned
+    verdict COVERED with missing [] — the surface is named nowhere in that prompt, and
+    Gate CANON would report ARMED on a payload whose text does not carry the ratified
+    statement. The mirror defect is in the reverse direction: with the same doc,
+    `residue('a landscape')` returned ['lands'] and `cover` raised "unlicensed residue
+    ['lands']", a refusal quoting a token that is not a word. Short single-word phrases
+    — cape, helm, arm, hood, mask — are exactly the form a surfaces file names an
+    occupant with.
+
+    The boundary is applied only where the phrase's own edge is a word character, so a
+    phrase written with leading or trailing punctuation still matches: `\b` between two
+    non-word characters never holds, and a matcher that cannot fire is not a matcher.
+    """
+    low = str(phrase).lower()
+    pat = re.escape(low)
+    if low[:1].isalnum() or low[:1] == "_":
+        pat = r"\b" + pat
+    if low[-1:].isalnum() or low[-1:] == "_":
+        pat = pat + r"\b"
+    return re.compile(pat)
+
+
 def _find_phrase(haystack, phrase):
-    """Lowest index of phrase in haystack (both already lowercased), or -1."""
+    """Lowest index of phrase in haystack (both already lowercased), or -1.
+
+    Word-boundary matched through `_phrase_re` — the same object `residue` strips with,
+    so the two directions cannot drift apart.
+    """
     if not phrase:
         return -1
-    return haystack.find(phrase.lower())
+    m = _phrase_re(phrase).search(haystack)
+    return m.start() if m else -1
 
 
 def _negated_at(haystack, index):
@@ -343,9 +384,32 @@ def blocked_additions(doc):
 
 
 def licensed_phrases(doc):
-    """Spans the reverse direction treats as licensed."""
+    """Spans the reverse direction treats as licensed.
+
+    ⚠ **An occupant phrase licenses only when the occupant is RATIFIED.** This walked
+    every surface with no ratification test, while `cover`'s forward direction
+    deliberately keeps phrase clauses behind ratification and says why: "a refusal is not
+    a claim about the occupant; a phrase IS a claim about the occupant". So the same
+    claim was honoured on one side of the router and ignored on the other, and an
+    UNRATIFIED row acted as a licence.
+
+    Measured 2026-09-04 before the fix: a doc with a ratified 'black plate' torso and an
+    UNRATIFIED 'glowing red halo' surface returned `cover(doc, 'black plate glowing red
+    halo')` -> COVERED, residue []; deleting only the unratified surface made the same
+    prompt raise "reverse cover failed: unlicensed residue ['glowing', 'red', 'halo']".
+    Text the Director has not ratified passed the reverse direction because an
+    unratified row in the same file named it — and refusing text the statement does not
+    license is that direction's whole job.
+
+    The asymmetry is resolved in the direction the forward clause already took: a
+    ratified phrase both licenses and obliges; an unratified one does neither.
+    `legal_clauses` rows are a different object — they carry no ratification flag at all
+    and are the declared licence surface — so they are unaffected.
+    """
     out = []
     for s in doc["surfaces"]:
+        if not is_ratified(s):
+            continue
         occ = s.get("occupant") or {}
         phrase = occ.get("phrase")
         if phrase:
@@ -364,10 +428,15 @@ def licensed_phrases(doc):
 
 
 def residue(prompt, doc):
-    """Word tokens left after licensed spans and stopwords are stripped."""
+    """Word tokens left after licensed spans and stopwords are stripped.
+
+    The strip goes through `_phrase_re`, the same matcher the forward direction uses,
+    so a licence for 'cape' cannot fragment 'landscape' into a residue token 'lands'
+    that no reader could act on. See `_phrase_re` for the measurement.
+    """
     text = prompt.lower()
     for phrase in licensed_phrases(doc):
-        text = text.replace(phrase, " ")
+        text = _phrase_re(phrase).sub(" ", text)
     text = STOP.sub(" ", text)
     return WORD.findall(text)
 
@@ -593,20 +662,35 @@ def texts_from_api_graph(graph):
     siblings are skipped rather than fatal, and a shape carrying no node-like value at
     all raises instead of reporting an empty prompt.
     """
-    doc = graph
-    if isinstance(doc, dict):
-        for key in GRAPH_WRAPPER_KEYS:
-            inner = doc.get(key)
-            if isinstance(inner, dict) and any(
-                    isinstance(v, dict) and ("inputs" in v or "class_type" in v)
-                    for v in inner.values()):
-                doc = inner
-                break
-    if not isinstance(doc, dict):
+    # The unwrap is `route_gates.normalise_graph` — THE loader, whose own docstring
+    # says "every gate in this module reads its graph through this one function" and
+    # which wave 6 made one implementation precisely so two unwrap rules could not
+    # drift. This module carried a second one: it unwrapped exactly one level, only
+    # when the inner mapping already held node-shaped values, and did not recognise
+    # save format at all. Measured 2026-09-04: a save-format graph and a doubly-wrapped
+    # {'prompt': {'prompt': <api>}} both raised `unrecognised_graph` — fail-closed
+    # either way, so the exposure was a refusal rather than a false pass, and the cost
+    # was the one the wave-6 consolidation was paying down.
+    #
+    # Imported inside the function because `route_gates` imports `GRAPH_WRAPPER_KEYS`
+    # from this module at import time; a top-level import here would be a cycle. The
+    # node-shaped-value clause below stays this module's own.
+    from . import route_gates
+
+    try:
+        doc = route_gates.normalise_graph(graph)
+    except route_gates.RouteGate as exc:
         _raise(
-            f"a graph must be an object, got {type(graph).__name__}; an unrecognised "
-            f"shape is not an empty prompt",
-            {"clause": "unrecognised_graph", "type": type(graph).__name__},
+            f"{exc}; an unrecognised shape is not an empty prompt",
+            dict(exc.evidence or {}, clause="unrecognised_graph",
+                 type=type(graph).__name__),
+        )
+    if not route_gates.is_api_format(doc):
+        _raise(
+            "this is a SAVE-format graph (a `nodes` list); this reader walks API format "
+            "(node-id keyed values carrying `class_type`) and would report no text at "
+            "all on it, which is not the same answer as a graph carrying none",
+            {"clause": "not_api_format", "type": type(graph).__name__},
         )
     nodes = [v for v in doc.values()
              if isinstance(v, dict) and ("inputs" in v or "class_type" in v)]
