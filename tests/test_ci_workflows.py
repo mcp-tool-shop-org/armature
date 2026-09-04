@@ -969,6 +969,11 @@ def _eval_if(expr, ctx):
     for name in sorted(ctx, key=len, reverse=True):
         body = body.replace(name, repr(ctx[name]))
     body = body.replace("||", " or ").replace("&&", " and ")
+    # GitHub's expression language spells the booleans lowercase; `pages.yml`'s deploy
+    # condition compares against a literal `false` and no caller had ever fed one of those
+    # through here, so this substitution arrived with the first job that needed it.
+    body = re.sub(r"\bfalse\b", "False", body)
+    body = re.sub(r"\btrue\b", "True", body)
     assert "github." not in body, f"unmodelled context in an if-expression: {expr!r}"
     return bool(eval(body, {"__builtins__": {}}, {}))  # noqa: S307 - the input is this repo's own YAML
 
@@ -2284,3 +2289,121 @@ def test_the_trigger_derivation_reads_the_licence_file_whichever_form_declares_i
     assert declared_licence_files({"license": "MIT"}) == []
     assert declared_licence_files() == ["LICENSE"]
     assert "LICENSE" in trigger_population()
+
+
+# -- fail closed on the ref, in every workflow that faces the public (wave 10, F-017f3cc2) -
+#
+# release.yml was hardened for exactly this shape at wave 8: `workflow_dispatch` stays
+# re-runnable but the tag gate is unconditional and refuses a non-tag `GITHUB_REF` before any
+# publishing job runs. pages.yml did not get the clause. Its push trigger is fenced to
+# `branches: [main]`, but `workflow_dispatch` carries no ref condition and the `deploy` job's
+# only guard was `if: github.event.repository.private == false` — so a dispatch at any branch
+# built THAT branch's site/ and handed it to `actions/deploy-pages`, the step the file's own
+# header calls "the step that replaces what the public sees".
+#
+# LOW, and recorded as such: dispatching needs repository write access, which is also enough
+# to push to main, so this is a consistency gap against a stated repo precedent rather than a
+# privilege escalation — and it is inert today, because the repo is private and `deploy` is
+# skipped. The fix keeps the useful half (a dispatch from a branch still BUILDS) and closes
+# the irreversible one.
+#
+# THE NODE THIS CENSUS KEYS ON: the steps that hand something to the public —
+# `actions/deploy-pages`, `npm publish`, `pypa/gh-action-pypi-publish` — walked out of the
+# job bodies. Not the job's name, and not the workflow's: `deploy`, `npm` and `pypi` are
+# three names for one property, and a fourth surface added under a different name joins the
+# requirement on the day it lands.
+
+
+def jobs_that_replace_a_public_surface():
+    """(workflow, job) for every job whose steps hand something to the public."""
+    markers = ("actions/deploy-pages", "npm publish", "gh-action-pypi-publish")
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if any(marker in _code_only(body) for marker in markers):
+                out.append((name, job))
+    return out
+
+
+#: Measured 2026-09-04. Three surfaces: the Pages deployment and the two registries.
+PUBLIC_SURFACE_JOBS_TODAY = [("pages.yml", "deploy"), ("release.yml", "pypi"),
+                             ("release.yml", "npm")]
+
+
+def _ref_refusal_mechanism(workflow, job):
+    """How `job` refuses a dispatch from an arbitrary branch, or None if it does not.
+
+    Two mechanisms are legitimate and both are named rather than assumed: a `github.ref`
+    clause in the job's own `if:`, or an unconditional `GITHUB_REF` gate in a job it needs
+    (release.yml's tag gate, which `test_the_tag_gate_refuses_*` above actually RUNS).
+    """
+    condition = _job_if(_text(workflow), job)
+    if condition is not None and "github.ref" in condition:
+        return "if"
+    for upstream in sorted(set(_job_needs(_text(workflow), job))):
+        body = "\n".join(_job_lines(_text(workflow), upstream))
+        if "GITHUB_REF" in body and "refs/tags/" in body:
+            return f"needs:{upstream}"
+    return None
+
+
+def test_the_public_surface_census_is_the_jobs_in_the_files():
+    assert jobs_that_replace_a_public_surface() == PUBLIC_SURFACE_JOBS_TODAY, (
+        f"the jobs that replace a public surface are {jobs_that_replace_a_public_surface()}; "
+        f"this file was written against {PUBLIC_SURFACE_JOBS_TODAY}")
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_replace_a_public_surface())
+def test_every_job_that_replaces_a_public_surface_fails_closed_on_the_ref(workflow, job):
+    """`workflow_dispatch` reaches every workflow here, from any ref the dispatcher picks."""
+    mechanism = _ref_refusal_mechanism(workflow, job)
+    assert mechanism is not None, (
+        f"{workflow}:{job} performs an irreversible public step and neither its own `if:` "
+        f"({_job_if(_text(workflow), job)!r}) nor any job it needs refuses a non-main, "
+        "non-tag ref; a `workflow_dispatch` from any branch reaches it")
+
+
+PAGES_DEPLOY_ARRIVALS = [
+    ("a push to main on a public repo", "push", "refs/heads/main", False, True),
+    ("a dispatch at main on a public repo", "workflow_dispatch", "refs/heads/main", False, True),
+    ("a dispatch at a branch on a public repo", "workflow_dispatch", "refs/heads/topic", False, False),
+    ("a dispatch at a tag on a public repo", "workflow_dispatch", "refs/tags/v0.3.0", False, False),
+    ("a dispatch at main while private", "workflow_dispatch", "refs/heads/main", True, False),
+]
+
+
+@pytest.mark.parametrize("arrival,event,ref,private,deploys", PAGES_DEPLOY_ARRIVALS)
+def test_the_pages_deploy_job_runs_only_at_main_on_a_public_repo(arrival, event, ref, private,
+                                                                 deploys):
+    """The truth table, evaluated against the file's own condition.
+
+    The third row is the measured hole and the first two are the direction the fix must not
+    break — a gate that cannot pass would take the site's deploys with it.
+    """
+    condition = _job_if(_text("pages.yml"), "deploy")
+    assert condition is not None, "pages.yml's deploy job lost its condition entirely"
+    got = _eval_if(condition, {
+        "github.event_name": event,
+        "github.ref": ref,
+        "github.event.repository.private": private,
+    })
+    assert got is deploys, (
+        f"on {arrival} the deploy job {'runs' if got else 'does not run'}; "
+        f"expected {'runs' if deploys else 'does not run'}. Condition: {condition!r}")
+
+
+def test_the_ref_clause_check_goes_red_on_the_condition_pages_had():
+    """The mutation: the visibility guard alone, which is true at every ref.
+
+    Both halves are exercised — the predicate that reads a condition for a ref clause, and
+    the evaluator, which said `True` for a dispatch at a topic branch.
+    """
+    before = "github.event.repository.private == false"
+    assert "github.ref" not in before
+    assert _eval_if(before, {
+        "github.event_name": "workflow_dispatch",
+        "github.ref": "refs/heads/topic",
+        "github.event.repository.private": False,
+    }) is True, "the pre-fix condition reads as refusing a branch dispatch"

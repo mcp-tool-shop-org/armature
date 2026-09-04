@@ -77,12 +77,23 @@ jobs:
           path: site/dist
 
   deploy:
-    # Skipped while the repo is private: Pages went dark with the repo on
-    # 2026-08-11, and deploy-pages 404s against a Pages that does not exist
-    # (measured 2026-08-13, run 31726592984 — the first site/** push since the
-    # visibility change). The build job above stays load-bearing as the site's
-    # CI; deploys resume by themselves if the repo goes public again.
-    if: github.event.repository.private == false
+    # Two clauses, and the workflow refuses if either fails.
+    #
+    # `private == false`: skipped while the repo is private. Pages went dark with the repo on
+    # 2026-08-11, and deploy-pages 404s against a Pages that does not exist (measured
+    # 2026-08-13, run 31726592984 — the first site/** push since the visibility change). The
+    # build job above stays load-bearing as the site's CI; deploys resume by themselves if the
+    # repo goes public again.
+    #
+    # `github.ref == 'refs/heads/main'`: the push trigger is fenced to `branches: [main]`, but
+    # `workflow_dispatch` carries no ref condition at all — so a dispatch at ANY branch built
+    # that branch's site/ and handed it to `actions/deploy-pages`, the step this file's header
+    # calls "the step that replaces what the public sees". release.yml was hardened for exactly
+    # this shape: its tag gate is unconditional and refuses a non-tag `GITHUB_REF` before any
+    # publishing job runs, on the reasoning that `workflow_dispatch` must stay re-runnable but
+    # must fail closed on the ref. This is that clause, for this file. A dispatch from a branch
+    # still BUILDS — which is the useful half — and never deploys.
+    if: github.event.repository.private == false && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     # A job-level block REPLACES the workflow-level grant, so this job has no `contents`
