@@ -300,3 +300,29 @@ def test_the_optimization_actually_took_effect(tmp_path):
     assert _run(tmp_path, flag=False)["asserts_active"] is True
     assert _run(tmp_path, flag=True)["asserts_active"] is False
     assert _run(tmp_path, env_var=True)["asserts_active"] is False
+
+
+def test_gate_turn_refuses_a_set_of_zero_views_rather_than_agreeing_about_nothing():
+    """F-1dd37d93's family, third in-domain site. Measured 2026-09-04:
+    `gate_set_distinct([], 0)` returned green with the verdict "0 distinct views, as many
+    as were asked for" — the count clause compares 0 to 0, the digest loop never runs and
+    the duplicate clause compares two empty sets. The wording carried is
+    `parts.gate_rigid_arrival`'s."""
+    with pytest.raises(TA.TurnaroundGate) as exc:
+        TA.gate_set_distinct([], 0)
+    assert "check that cannot fail" in str(exc.value)
+    assert exc.value.evidence["expected"] == 0
+
+
+def test_the_alpha_andon_names_itself_because_its_gate_id_is_shared():
+    """F-f2f42e4a. Gate id "ALPHA" is carried by two andons —
+    `startframe.AlphaGate` and `turnaround.TurnaroundAlphaGate` — and `stage_render`
+    prints only `exc.gate`, so a reader keying on the receipt cannot tell a per-view
+    turnaround alpha failure from the start-frame one. The evidence names the class on
+    both the raising and the passing path."""
+    ev = TA.gate_view_alpha(0, 0, 255, transparent_fraction=0.5)
+    assert ev["gate"] == "ALPHA" and ev["andon"] == "TurnaroundAlphaGate"
+    with pytest.raises(TA.TurnaroundAlphaGate) as exc:
+        TA.gate_view_alpha(0, 255, 255, 0.0)
+    assert exc.value.evidence["andon"] == "TurnaroundAlphaGate"
+    assert exc.value.evidence["gate"] == exc.value.gate == "ALPHA"

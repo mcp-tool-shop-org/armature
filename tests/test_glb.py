@@ -150,3 +150,76 @@ def test_the_verdict_states_coverage_not_only_a_count(tmp_path):
     v = glb.gate_atlas_untouched(a, b)["verdict"]
     assert v.startswith("2 of 2 embedded")
     assert "0 unhashable" in v
+
+
+def _glb_blobs(path, blobs, mime="image/png"):
+    """A GLB carrying exactly the blobs given, in order — duplicates allowed.
+
+    `_glb` derives its second image from the first (`image_bytes[::-1]`), so it cannot
+    build the pair this fixture needs: a source that embeds the SAME image twice.
+    """
+    binary = b""
+    views, image_defs = [], []
+    for i, blob in enumerate(blobs):
+        views.append({"buffer": 0, "byteOffset": len(binary), "byteLength": len(blob)})
+        image_defs.append({"bufferView": i, "mimeType": mime, "name": f"img{i}"})
+        binary += blob + b"\x00" * (-len(blob) % 4)
+    js = json.dumps({"asset": {"version": "2.0"},
+                     "buffers": [{"byteLength": len(binary)}],
+                     "bufferViews": views, "images": image_defs}).encode("utf-8")
+    js += b" " * (-len(js) % 4)
+    total = 12 + 8 + len(js) + 8 + len(binary)
+    with open(path, "wb") as fh:
+        fh.write(struct.pack("<III", glb.GLB_MAGIC, 2, total))
+        fh.write(struct.pack("<II", len(js), glb.CHUNK_JSON))
+        fh.write(js)
+        fh.write(struct.pack("<II", len(binary), glb.CHUNK_BIN))
+        fh.write(binary)
+    return path
+
+
+def test_a_source_image_embedded_twice_is_not_satisfied_by_one_export_copy(tmp_path):
+    """Membership is not multiplicity (F-937f8a81).
+
+    Source embeds A twice; the export embeds A once and a different image B. The count
+    clause does not fire (2 == 2) and neither image is unhashable, so a membership test
+    reports "2 of 2 embedded image(s) byte-identical through the route" over an export
+    that re-encoded one of them. The comparison is a multiset comparison.
+    """
+    A = ATLAS
+    B = bytes(bytearray(ATLAS)[::-1]) + b"\x01"
+    assert A != B
+    src = _glb_blobs(str(tmp_path / "src.glb"), [A, A])
+    out = _glb_blobs(str(tmp_path / "out.glb"), [A, B])
+    with pytest.raises(glb.GateAtlasUntouched) as exc:
+        glb.gate_atlas_untouched(src, out)
+    ev = exc.value.evidence
+    ha, hb = hashlib.sha256(A).hexdigest(), hashlib.sha256(B).hexdigest()
+    assert ev["missing_hash_counts"] == {ha: 1}
+    assert ev["source_hash_counts"] == {ha: 2}
+    assert ev["export_hash_counts"] == {ha: 1, hb: 1}
+    assert "re-encoded or resampled" in str(exc.value)
+
+
+def test_a_source_image_embedded_twice_passes_when_both_copies_arrive(tmp_path):
+    """The multiset comparison must not fire on a correct export — including a reordered
+    one, which `test_the_gate_does_not_care_about_image_ORDER` already pins for the
+    distinct case."""
+    A, B = ATLAS, bytes(bytearray(ATLAS)[::-1]) + b"\x01"
+    src = _glb_blobs(str(tmp_path / "src.glb"), [A, A, B])
+    out = _glb_blobs(str(tmp_path / "out.glb"), [B, A, A])
+    assert glb.gate_atlas_untouched(src, out)["verdict"].startswith("3 of 3 embedded")
+
+
+def test_the_atlas_gate_carries_its_own_id_in_the_evidence(tmp_path):
+    """F-f2f42e4a's family: `stage_render` prints `GATE_FAILURE <exc.gate>` and
+    `GATE_EVIDENCE <json>` as two lines, and a reader that keeps only the JSON had no id
+    at all. Every other gate in assembly.py, turnaround.py, startframe.py, resample.py
+    and lift_solve.py puts "gate" in the evidence; this one did not."""
+    a = _glb(str(tmp_path / "src.glb"), ATLAS)
+    b = _glb(str(tmp_path / "out.glb"), ATLAS)
+    assert glb.gate_atlas_untouched(a, b)["gate"] == "ATLAS"
+    c = _glb(str(tmp_path / "bad.glb"), ATLAS, images=0)
+    with pytest.raises(glb.GateAtlasUntouched) as exc:
+        glb.gate_atlas_untouched(a, c)
+    assert exc.value.evidence["gate"] == exc.value.gate == "ATLAS"

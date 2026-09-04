@@ -157,7 +157,7 @@ def project(point, target, radius, azimuth_deg, elevation_deg,
     return 0.5 + 0.5 * ndc_x, 0.5 - 0.5 * ndc_y, True
 
 
-def load_pinned_camera(path, expect=None):
+def load_pinned_camera(path, expect):
     """(target, radius) from a prior camera record, or raise naming what disagreed.
 
     Any JSON carrying `camera.target` and `camera.radius` will do — a
@@ -171,7 +171,25 @@ def load_pinned_camera(path, expect=None):
     somewhere else, and every downstream check — counts, legality, ink, in-canvas — passes
     on it. So the caller states the angles it projects at and any disagreement raises here,
     where the mistake is still cheap.
+
+    **It is required, and an empty expectation is refused** (F-abcb06a8). The signature was
+    `load_pinned_camera(path, expect=None)` with the comparison written
+    `(expect or {}).items()`, so omitting the argument - or passing `None` - skipped the
+    loop and the andon this docstring already called non-optional was disarmed by a
+    caller who typed less. `tests/test_pinned_camera.py` named `expect=None` "the escape
+    hatch" and pinned it; that test is replaced by the refusal below. It is left
+    positional-or-keyword rather than keyword-only because both production call sites
+    already pass it positionally and the invariant is about presence, not spelling.
     """
+    if not expect:
+        raise FramingError(
+            f"{path}: load_pinned_camera was called with no expectation to check against "
+            f"({expect!r}). Pinning a camera skips the framing solve and therefore skips "
+            f"its gate; a record pinned at a different azimuth, elevation or lens projects "
+            f"a plausible view of the same body from somewhere else and every downstream "
+            f"check passes on it. This argument is the andon, not optional discipline, so "
+            f"there is no shape of it that means 'do not check'")
+
     with open(path, "r", encoding="utf-8") as fh:
         rec = json.load(fh)
     cam = rec.get("camera")
@@ -186,7 +204,7 @@ def load_pinned_camera(path, expect=None):
     if not (radius > 0.0):
         raise FramingError(f"{path}: camera.radius is {radius}, which is not a distance")
 
-    for field, ours in sorted((expect or {}).items()):
+    for field, ours in sorted(expect.items()):
         theirs = cam.get(field)
         if theirs is None:
             raise FramingError(

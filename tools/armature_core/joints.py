@@ -203,17 +203,33 @@ def verdict(table):
     overlay were the defect, every offset would be near-equal — that is what a wrong transform
     does. Offsets that differ by an order of magnitude between joints cannot come from one bad
     transform, so they are the subject's: the pivots really are in the wrong places.
+
+    **The discriminator needs at least two offsets** (F-41134b38). With exactly one matched
+    ball `spread = offs.max() / offs.min()` is 1.0 and
+    `residual_after_removing_common_translation_max` is 0.0 BY CONSTRUCTION — measured,
+    both, on a single-entry table — so `spread > 3.0` was False and the ruling came
+    back unconditionally THE INSTRUMENT. A single offset cannot be near-uniform or not: the
+    two hypotheses this function exists to separate are indistinguishable at n=1 and it
+    reported one of them with certainty. That is the "grade an arm only on what it can
+    move" law — the value is the same when the evidence supports the instrument
+    hypothesis and when it supports nothing at all — and it lands on exactly the
+    thin-evidence subject (one qualifying shell) where the reader would be sent to check the
+    overlay projector rather than to look at the pivots the Director caught by eye. Below
+    two matched balls the numbers are still reported and the RULING is withheld, the same
+    shape as the `not matched` branch.
     """
     matched = {k: v for k, v in table.items() if v["matched"]}
     if not matched:
-        return {"ruling": "NO BALLS MATCHED — neither hypothesis is testable from this table"}
+        return {"n_matched": 0,
+                "ruling": "NO BALLS MATCHED — neither hypothesis is testable "
+                          "from this table"}
     offs = np.array([v["offset"] for v in matched.values()])
     fracs = np.array([v["offset_as_fraction_of_segment"] for v in matched.values()])
     vectors = np.array([v["offset_vector"] for v in matched.values()])
     spread = float(offs.max() / offs.min()) if offs.min() > 0 else float("inf")
     common = vectors.mean(axis=0)
     residual_after_common = np.linalg.norm(vectors - common, axis=1)
-    return {
+    out = {
         "n_matched": len(matched),
         "offset_min": float(offs.min()), "offset_max": float(offs.max()),
         "offset_spread_ratio": spread,
@@ -233,3 +249,14 @@ def verdict(table):
             "looks like. Check the overlay projector before moving any bone."
         ),
     }
+    if len(matched) < 2:
+        # One offset separates nothing: the spread is 1.0 and the residual 0.0 whatever
+        # the true cause is, so the ruling below would be the same string on a perfect
+        # projector and on a pivot that is genuinely 30% of a bone out of place.
+        out["ruling"] = (
+            f"ONE BALL MATCHED — the two hypotheses are not separable from a single "
+            f"offset. The spread is 1.0 and the residual after removing a common "
+            f"translation is 0.0 by construction at n=1, not by measurement. The offset "
+            f"itself stands: {offs.max():.4f} "
+            f"({fracs.max() * 100:.1f}% of its own segment). Judge it by eye at 1:1.")
+    return out

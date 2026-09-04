@@ -613,3 +613,114 @@ def test_the_refused_set_still_brackets_the_only_value_that_works():
     assert min(REFUSED_STANCE_FRACTIONS) < 0.5 < max(REFUSED_STANCE_FRACTIONS)
     assert 0.6 in REFUSED_STANCE_FRACTIONS, "0.6 is the ordinary human stance fraction"
     assert walk.GaitParams().stance_frac == 0.5
+
+
+# ------------------------------------------- the cadence andon, over every frame pair
+
+
+def test_a_cadence_that_outruns_the_frame_rate_raises_with_no_exchange_detected(performer):
+    """F-84f8fd3b. The refusal lived inside the `else` branch that runs only when two
+    sampled frames DISAGREE about which foot is planted, so it was reached only when an
+    exchange happened to be detected. The failure it names — more than one exchange
+    between two samples — does not require one: the phase can advance a whole number of
+    cycles plus a fraction and land back in the same stance state.
+
+    Measured in this worktree on the 21-landmark performer above:
+    `GaitParams(n_walk=2, n_decel=2, steps=30)` gives 3 of 20 frame intervals advancing
+    more than half a cycle (max 6.100 cycles/frame) with ZERO stance exchanges detected,
+    and `build_gait` returned normally. Re-measured here rather than inherited: on THIS
+    fixture's landmarks `derived.total_forward_travel` came back 0.11539 against its own
+    `derived.step_distance_derived` 0.23078 x `params.steps` 30 = 6.92340 — 1.67% of the
+    authored travel, in the record every downstream measurement is graded against. (The
+    finding quoted 0.17672 / 0.35345 on a different performer; the ratio is the same
+    1.7%, the absolute numbers are leg-length scaled.)
+    """
+    p = walk.GaitParams(n_walk=2, n_decel=2, steps=30)
+    with pytest.raises(walk.WalkError) as exc:
+        walk.build_gait(performer, p)
+    msg = str(exc.value)
+    assert "cannot be represented at this frame rate" in msg
+    ev = exc.value.evidence if hasattr(exc.value, "evidence") else {}
+    assert ev.get("max_cycles_per_frame", 0) > 0.5
+    assert ev.get("n_intervals_over_half_a_cycle") == 3
+    assert ev.get("n_stance_exchanges_detected") == 0, (
+        "the andon must not depend on an exchange being observed — that is the coincidence "
+        "of sampling this finding is about")
+
+
+def test_the_cadence_andon_still_fires_where_an_exchange_is_detected(performer):
+    """The case that already fired: 4 exchanges detected at n_walk=4, steps=12. Whether
+    the andon fires must not depend on which of the two it is."""
+    with pytest.raises(walk.WalkError) as exc:
+        walk.build_gait(performer, walk.GaitParams(n_walk=4, steps=12))
+    assert "cannot be represented at this frame rate" in str(exc.value)
+
+
+def test_no_build_returns_while_any_frame_interval_exceeds_half_a_cycle(performer):
+    """The sweep: over a grid of cadences, a build either raises or every consecutive
+    phase pair advances at most half a cycle. There is no third outcome."""
+    grid = [(2, 2, 30), (4, 4, 12), (6, 4, 20), (40, 8, 6), (40, 8, 200), (3, 3, 1)]
+    checked = 0
+    for n_walk, n_decel, steps in grid:
+        p = walk.GaitParams(n_walk=n_walk, n_decel=n_decel, steps=steps)
+        try:
+            walk.build_gait(performer, p)
+        except walk.WalkError:
+            checked += 1
+            continue
+        _, phase, _ = walk._phase_schedule(p)
+        worst = max((phase[i] - phase[i - 1]) / (2.0 * math.pi)
+                    for i in range(1, len(phase)))
+        assert worst <= 0.5, f"{(n_walk, n_decel, steps)} returned with du={worst:.3f}"
+        checked += 1
+    assert checked == len(grid)
+
+
+# ---------------------------------------- the required landmark set, derived not restated
+
+
+def test_dropping_head_top_is_refused_at_construction_naming_the_landmark(performer):
+    """F-ed7acbf3. The completeness check named `set(HEAD_LANDMARK.values())` plus four
+    extras — 21 names — and `head_top` was in neither, yet `forward_kinematics` reads it on
+    every frame (`place("head", "head_top")`). Measured: a table with all 21 checked names
+    and no head_top built a Performer, built a full gait, and only then died with a bare
+    `KeyError: 'head_top'` — after the whole performance had been computed, with no message
+    naming the missing landmark or the rule it broke."""
+    thin = {k: v for k, v in LANDMARKS.items() if k != "head_top"}
+    with pytest.raises(walk.WalkError) as exc:
+        walk.Performer(thin, FACING_Y_SIGN, LEFT_X_SIGN)
+    assert "head_top" in str(exc.value)
+
+
+def test_the_required_set_is_derived_from_the_sites_the_code_reads():
+    """A literal list drifts; a derived one cannot. Every landmark named by
+    `forward_kinematics`' own site table must be in the required set, and the set must be
+    exactly the union of that table and the rest-head map."""
+    from_fk = {lm for _bone, lm in walk.FK_SITES.values()}
+    assert from_fk <= walk.REQUIRED_LANDMARKS
+    assert walk.REQUIRED_LANDMARKS == set(walk.HEAD_LANDMARK.values()) | from_fk
+    assert "head_top" in from_fk
+
+
+@pytest.mark.parametrize("dropped", sorted(
+    {lm for _b, lm in walk.FK_SITES.values()} | set(walk.HEAD_LANDMARK.values())))
+def test_every_required_landmark_is_refused_by_its_absence(dropped):
+    """The census as a sweep: dropping ANY required landmark raises at construction, so no
+    member of the set is protected only by another member's presence."""
+    thin = {k: v for k, v in LANDMARKS.items() if k != dropped}
+    with pytest.raises(walk.WalkError) as exc:
+        walk.Performer(thin, FACING_Y_SIGN, LEFT_X_SIGN)
+    assert dropped in str(exc.value)
+
+
+def test_the_height_span_is_measured_over_a_complete_table(performer):
+    """The omission also shrank a reported measurement: `landmark_height_span` is
+    max(z) - min(z) over whatever landmarks were supplied, so it came back short without
+    head_top and that number rode the record. Measured on this fixture: 1.0018 complete
+    against 0.8190 with head_top dropped, 18.2% short."""
+    complete = performer.as_dict()["landmark_height_span"]
+    zs = [p[2] for p in LANDMARKS.values()]
+    assert complete == pytest.approx(max(zs) - min(zs))
+    without = [p[2] for k, p in LANDMARKS.items() if k != "head_top"]
+    assert (max(without) - min(without)) < complete
+    assert performer.as_dict()["n_landmarks"] == len(LANDMARKS)

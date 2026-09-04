@@ -28,7 +28,7 @@ import bpy
 import mathutils
 import numpy as np
 
-from .errors import G6SubjectMotion
+from .errors import G6SubjectMotion, GateFailure
 
 SKY_Z = 1e9
 
@@ -58,10 +58,18 @@ def set_frame_rate(scene, fps):
     return scene
 
 
-def import_glb(path, expected_fps=None):
+def import_glb(path, *, expected_fps):
     """Import a GLB and return (mesh_objects, armature_objects, info).
 
-    `expected_fps` makes the ordering requirement executable rather than a comment.
+    `expected_fps` makes the ordering requirement executable rather than a comment. It is
+    **keyword-only and required** (F-abcb06a8): the signature used to be
+    `import_glb(path, expected_fps=None)`, so a caller that omitted it skipped the check
+    below entirely and the import proceeded at whatever rate the scene carried.
+    `probe_subject.py:42` did exactly that, immediately after `reset_scene()` (factory
+    settings, 24 fps) - harmless there because it reads geometry, and proof that nothing
+    anywhere required a caller to arm the andon. Wave 3 removed the identical shape from
+    `assembly.gate_batch_topology` by making `expected_sources` required and keyword-only;
+    this is the same removal. An optional keyword IS a skip flag.
 
     MEASURED 2026-08-10, and it cost a full debugging pass: importing at Blender's default
     24 fps a 33-key action authored and exported at 16 fps lands the keys on frames 1..49.
@@ -75,7 +83,7 @@ def import_glb(path, expected_fps=None):
     The andon is here, inside the function performing the import, because this is the last
     moment the mistake is still cheap.
     """
-    if expected_fps is not None and int(scene_fps()) != int(expected_fps):
+    if int(scene_fps()) != int(expected_fps):
         raise G6SubjectMotion(
             f"scene frame rate is {scene_fps()} fps but the shot is {expected_fps} fps, and "
             f"the glTF importer maps key times (seconds) to frames using the rate it finds "
@@ -240,6 +248,19 @@ def _evaluated_world_vertices(objects):
     return np.concatenate(chunks, axis=0)
 
 
+def evaluated_world_vertices(scene, objects):
+    """World-space vertices of the objects that will actually RENDER, as one (N, 3) array.
+
+    The public entry point. `_evaluated_world_vertices` is the unfiltered primitive, and
+    two tools outside this module import it by its underscore name and apply no visibility
+    filter at all, so geometry that will never reach a frame can define a measurement -
+    the failure `render_visible_meshes` exists for, reintroduced one import at a time. This
+    name takes the scene and filters first, and there is no shape of it that skips the
+    filter.
+    """
+    return _evaluated_world_vertices(render_visible_meshes(scene, objects))
+
+
 def world_bounds(objects):
     """(center, half_extent, bounding_sphere_radius) over evaluated geometry."""
     pts = _evaluated_world_vertices(objects)
@@ -249,6 +270,50 @@ def world_bounds(objects):
     center = (lo + hi) * 0.5
     half = (hi - lo) * 0.5
     radius = float(np.linalg.norm(pts - center, axis=1).max())
+    return center, half, radius
+
+
+def union_sphere(frame_points):
+    """(center, half_extent, radius) over a sequence of per-frame (N, 3) arrays.
+
+    Pure — no bpy — so the arithmetic that decides a shot's framing is testable without a
+    render. `frame_points` is a CALLABLE returning a fresh iterator, because the union
+    centre is not known until every frame has been seen and the radius is measured about
+    THAT centre: the function walks the frames twice rather than keeping them, which is the
+    whole point (F-39c191a8). Handing it a plain iterator raises, because a single-use
+    iterator would leave the radius pass reading nothing and returning 0.0 — a bounding
+    sphere of radius zero around a real subject, with every other check green.
+
+    Returns None when no frame carried geometry.
+    """
+    if not callable(frame_points):
+        raise TypeError(
+            "union_sphere takes a CALLABLE returning a fresh iterator of per-frame vertex "
+            "arrays, not an iterator: it walks the frames twice (the radius is measured "
+            "about a centre that is not known until the first pass ends), and a "
+            "single-use iterator would silently make the second pass read nothing")
+
+    lo = hi = None
+    for pts in frame_points():
+        pts = np.asarray(pts, dtype=np.float64)
+        if pts.shape[0] == 0:
+            continue
+        f_lo, f_hi = pts.min(axis=0), pts.max(axis=0)
+        lo = f_lo if lo is None else np.minimum(lo, f_lo)
+        hi = f_hi if hi is None else np.maximum(hi, f_hi)
+    if lo is None:
+        return None
+
+    center = (lo + hi) * 0.5
+    half = (hi - lo) * 0.5
+    # Measured about the UNION centre over every frame's vertices, so it bounds the whole
+    # performance rather than the worst single frame about its own centre.
+    radius = 0.0
+    for pts in frame_points():
+        pts = np.asarray(pts, dtype=np.float64)
+        if pts.shape[0] == 0:
+            continue
+        radius = max(radius, float(np.linalg.norm(pts - center, axis=1).max()))
     return center, half, radius
 
 
@@ -265,29 +330,28 @@ def world_bounds_over_frames(scene, objects, count):
     over here: the camera is static, so any breathing in the framing would be the subject's
     size changing rather than the camera moving, and that is a second variable inside a
     measurement of one.
+
+    **The frames are walked twice and none is retained** (F-39c191a8). This used to do
+    `centers.append(pts)` - appending every frame's FULL evaluated vertex array, held until
+    a second loop consumed it - so peak resident memory was the whole shot's geometry at
+    once: on the performer (306,110 faces, `_evaluated_world_vertices` returns float64)
+    roughly 0.3 GB for an 81-frame shot and 1.2 GB for a 320-frame one, on a rig whose GPU
+    work runs under a VRAM watchdog and whose Blender process is doing the render. The
+    union radius needs the union centre, which is not known until every frame has been
+    seen, so the honest shape is two passes over the frames rather than one pass plus a
+    list. The trade is stated rather than hidden: depsgraph evaluation happens twice per
+    frame, and resident memory falls from O(frames x vertices) to O(vertices).
     """
-    lo = hi = None
-    pts_max_r = 0.0
-    centers = []
-    for i in range(count):
-        set_scene_frame(scene, i)
-        pts = _evaluated_world_vertices(objects)
-        if pts.shape[0] == 0:
-            continue
-        f_lo, f_hi = pts.min(axis=0), pts.max(axis=0)
-        lo = f_lo if lo is None else np.minimum(lo, f_lo)
-        hi = f_hi if hi is None else np.maximum(hi, f_hi)
-        centers.append(pts)
-    if lo is None:
-        return None
-    center = (lo + hi) * 0.5
-    half = (hi - lo) * 0.5
-    # The sphere is measured about the UNION centre, over every frame's vertices, so it
-    # bounds the whole performance rather than the worst single frame about its own centre.
-    for pts in centers:
-        pts_max_r = max(pts_max_r, float(np.linalg.norm(pts - center, axis=1).max()))
+    def frames():
+        for i in range(count):
+            set_scene_frame(scene, i)
+            pts = _evaluated_world_vertices(objects)
+            if pts.shape[0]:
+                yield pts
+
+    result = union_sphere(frames)
     set_scene_frame(scene, 0)
-    return center, half, pts_max_r
+    return result
 
 
 def evaluated_geometry_signature(objects):
@@ -407,6 +471,65 @@ def projected_bbox_px(cam, objects, width, height):
 # ---------------------------------------------------------------------- compositor
 
 
+class CompositorWiring(GateFailure):
+    """Gate COMPOSITOR — the render passes are not wired to the sockets they claim.
+
+    The three checks this replaces raised a bare `RuntimeError` with no gate id and no
+    evidence (F-ac989919), while their own comment named them as the andon: "a dry_run PASS
+    does not prove link sanity — check the topology in code". `ArmatureError` subclasses
+    `RuntimeError`, so this was not merely untyped: `stage_render.py:508` catches only
+    `GateFailure` and prints GATE_FAILURE / GATE_EVIDENCE before returning 2, so a
+    compositor mis-wiring escaped that handler entirely and surfaced as an unhandled
+    traceback with no receipt lines for an orchestrator or a later reader to key on. The
+    Depth pass wired to the Alpha socket is the case: the run stops, correctly, and leaves
+    nothing behind saying which andon stopped it.
+    """
+
+    gate = "COMPOSITOR"
+
+
+def gate_compositor_wiring(tag, expected_socket, render_layers_name, incoming):
+    """Gate COMPOSITOR — ANDON — one link, from the Render Layers node, on the right socket.
+
+    `incoming` is `[(from_node_name, from_socket_name), ...]` for the links arriving at
+    this output node. Plain tuples, not bpy proxies, so the topology this gate decides on
+    is checkable without a render.
+    """
+    ev = {"gate": "COMPOSITOR", "andon": "CompositorWiring", "tag": tag,
+          "expected_socket": expected_socket,
+          "render_layers_node": render_layers_name,
+          "n_links": len(incoming),
+          "incoming": [[str(a), str(b)] for a, b in incoming]}
+
+    if len(incoming) != 1:
+        raise CompositorWiring(
+            f"compositor wiring for {tag!r}: expected exactly 1 incoming link, got "
+            f"{len(incoming)}. A pass with no link writes a blank channel and a pass with "
+            f"two writes whichever the compositor evaluated last; both produce a run whose "
+            f"files are all present and correctly sized",
+            ev)
+
+    from_node, from_socket = incoming[0]
+    ev["from_node"] = str(from_node)
+    ev["got_socket"] = str(from_socket)
+
+    if str(from_node) != render_layers_name:
+        raise CompositorWiring(
+            f"compositor wiring for {tag!r}: source is {from_node!r}, not the Render "
+            f"Layers node {render_layers_name!r}", ev)
+
+    if str(from_socket) != expected_socket:
+        raise CompositorWiring(
+            f"compositor wiring for {tag!r}: connected to socket {from_socket!r}, expected "
+            f"{expected_socket!r}. The channel would be written from the wrong pass and "
+            f"every file would still open, be the right size, and carry plausible numbers",
+            ev)
+
+    ev["verdict"] = (f"{tag} takes its one link from {render_layers_name}."
+                     f"{expected_socket}")
+    return ev
+
+
 def setup_passes_and_compositor(scene, exr_dir, need_normal=True):
     """Wire Depth / Normal / Alpha to File Output nodes writing single-layer EXR."""
     vl = scene.view_layers[0]
@@ -443,22 +566,9 @@ def setup_passes_and_compositor(scene, exr_dir, need_normal=True):
     # identity comparison on a datablock is always False. Compare names.
     wanted_sockets = {tag: socket for tag, socket, _, _ in wanted}
     for tag, node in outputs.items():
-        linked = [l for l in ng.links if l.to_node.name == node.name]
-        if len(linked) != 1:
-            raise RuntimeError(
-                f"compositor wiring for {tag!r}: expected exactly 1 incoming link, got {len(linked)}"
-            )
-        link = linked[0]
-        if link.from_node.name != rl.name:
-            raise RuntimeError(
-                f"compositor wiring for {tag!r}: source is {link.from_node.name!r}, "
-                f"not the Render Layers node"
-            )
-        if link.from_socket.name != wanted_sockets[tag]:
-            raise RuntimeError(
-                f"compositor wiring for {tag!r}: connected to socket "
-                f"{link.from_socket.name!r}, expected {wanted_sockets[tag]!r}"
-            )
+        incoming = [(l.from_node.name, l.from_socket.name)
+                    for l in ng.links if l.to_node.name == node.name]
+        gate_compositor_wiring(tag, wanted_sockets[tag], rl.name, incoming)
     return outputs
 
 

@@ -76,6 +76,32 @@ HEAD_LANDMARK = {
 }
 
 
+#: Every site `forward_kinematics` emits, and the (gait bone, rest landmark) it is placed
+#: from. `forward_kinematics` BUILDS its per-frame record by iterating this table and
+#: `Performer` requires exactly the landmarks it names, so the two cannot drift apart
+#: (F-ed7acbf3: `head_top` was read on every frame by `place("head", "head_top")` and was
+#: in neither the checked map nor the four hand-written extras, so a table missing it built
+#: a Performer, built a full gait, and died with a bare `KeyError: 'head_top'` after the
+#: whole performance had been computed).
+FK_SITES = {
+    "hips": ("hips", "crotch"),
+    "head_top": ("head", "head_top"),
+    "ankle_L": ("ankle.L", "ankle_L"),
+    "ankle_R": ("ankle.R", "ankle_R"),
+    "toe_L": ("ankle.L", "toe_L"),
+    "toe_R": ("ankle.R", "toe_R"),
+    "wrist_L": ("wrist.L", "wrist_L"),
+    "wrist_R": ("wrist.R", "wrist_R"),
+    "hand_end_L": ("wrist.L", "hand_end_L"),
+    "hand_end_R": ("wrist.R", "hand_end_R"),
+}
+
+#: Derived, never restated: the rest heads every bone needs, plus every landmark
+#: `forward_kinematics` reads. Adding a site to FK_SITES adds its landmark here.
+REQUIRED_LANDMARKS = frozenset(HEAD_LANDMARK.values()) | {
+    landmark for _bone, landmark in FK_SITES.values()}
+
+
 class WalkError(ValueError):
     """The gait could not be built as specified.
 
@@ -151,6 +177,73 @@ def gate_stance_frac_is_modelled(stance_frac, where="GaitParams"):
         {"gate": "GAIT", "stance_frac": sf, "modelled": STANCE_FRAC_MODELLED,
          "flight_fraction_of_cycle": flight, "double_support_fraction_of_cycle": double,
          "where": where})
+
+
+#: The largest fraction of a gait cycle one frame interval may advance. Half a cycle is
+#: the Nyquist bound for the stance state: past it, more than one stance exchange can fall
+#: between two samples and no downstream reader can reconstruct which foot was on the
+#: floor when. Not a tuning knob — a sampling limit.
+MAX_CYCLES_PER_FRAME = 0.5
+
+
+def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
+                                  where="build_gait"):
+    """ANDON - refuse a cadence that outruns the frame rate, over EVERY frame interval.
+
+    Raises `WalkError`; no flag, no environment escape, no `assert`.
+
+    **Why it is not inside the exchange branch** (F-84f8fd3b). The refusal used to live in
+    `_integrate_forward`'s `else`, which runs only when two sampled frames DISAGREE about
+    which foot is planted - so it was reached only when an exchange happened to be
+    observed. The failure it names does not require one: the phase can advance a whole
+    number of cycles plus a fraction and land back in the same stance state. Measured
+    2026-09-04 on a 21-landmark performer, `GaitParams(n_walk=2, n_decel=2, steps=30)`
+    gives 3 of 20 frame intervals advancing more than half a cycle (max 6.100
+    cycles/frame) with ZERO exchanges detected, and `build_gait` returned normally with
+    `derived.total_forward_travel` 0.11539 against its own `step_distance_derived`
+    0.23078 x 30 steps = 6.92340 - 1.67% of the travel its own record describes.
+    `GaitParams(n_walk=4, steps=12)` DID fire the old refusal (4 exchanges detected), so
+    whether the andon fired was a coincidence of sampling rather than a property of the
+    input.
+
+    The exchange count rides the evidence as a diagnostic, never as a condition.
+    """
+    n = len(phase)
+    if n < 2:
+        raise WalkError(
+            f"the cadence was gated over {n} phase sample(s) ({where}); a walk cannot be "
+            f"checked for representability on fewer than two frames, and a gate that "
+            f"compares no interval is a check that cannot fail",
+            {"gate": "CADENCE", "where": where, "n_phase_samples": n})
+
+    du = [(phase[i] - phase[i - 1]) / (2.0 * math.pi) for i in range(1, n)]
+    stance = [_leg_state((ph / (2.0 * math.pi)) % 1.0, stance_frac)[2] for ph in phase]
+    exchanges = sum(1 for i in range(1, n) if stance[i] != stance[i - 1])
+    over = [(i, du[i - 1]) for i in range(1, n) if du[i - 1] > MAX_CYCLES_PER_FRAME]
+    worst = max(du)
+    ev = {"gate": "CADENCE", "andon": "WalkError", "where": where,
+          "max_cycles_per_frame": worst,
+          "limit_cycles_per_frame": MAX_CYCLES_PER_FRAME,
+          "n_intervals": len(du),
+          "n_intervals_over_half_a_cycle": len(over),
+          "n_stance_exchanges_detected": exchanges,
+          "first_offending_interval": over[0][0] if over else None,
+          "offending_intervals": [[i, d] for i, d in over[:12]]}
+
+    if over:
+        i, d = over[0]
+        raise WalkError(
+            f"frame {i}: the gait advances {d:.3f} of a cycle in one frame, so more than "
+            f"one stance exchange falls between two samples; the walk cannot be "
+            f"represented at this frame rate. {len(over)} of {len(du)} frame interval(s) "
+            f"exceed {MAX_CYCLES_PER_FRAME} of a cycle, the worst {worst:.3f}, with "
+            f"{exchanges} stance exchange(s) actually observed - the invariant is about "
+            f"the sampling rate, not about whether an exchange was seen",
+            ev)
+
+    ev["verdict"] = (f"{len(du)} frame interval(s), the largest advancing {worst:.3f} of "
+                     f"a cycle against a limit of {MAX_CYCLES_PER_FRAME}")
+    return ev
 
 
 # ------------------------------------------------------------------ small numerics
@@ -266,13 +359,13 @@ class Performer:
     """
 
     def __init__(self, landmarks, facing_y_sign, left_x_sign):
-        missing = [n for n in set(HEAD_LANDMARK.values()) if n not in landmarks]
-        extra = [n for n in ("toe_L", "toe_R", "hand_end_L", "hand_end_R") if n not in landmarks]
-        if missing or extra:
+        missing = sorted(n for n in REQUIRED_LANDMARKS if n not in landmarks)
+        if missing:
             raise WalkError(
-                f"the landmark table is missing {sorted(missing + extra)}; the gait scales "
-                f"itself against this character's own measurements and cannot proceed on "
-                f"defaults"
+                f"the landmark table is missing {missing}; the gait scales itself against "
+                f"this character's own measurements and cannot proceed on defaults. The "
+                f"required set is derived from HEAD_LANDMARK and FK_SITES rather than "
+                f"restated, so it cannot drift from what the code reads"
             )
         self.landmarks = {k: [float(v) for v in p] for k, p in landmarks.items()}
         self.facing_y_sign = float(facing_y_sign)
@@ -292,6 +385,10 @@ class Performer:
         self.hip_half_separation = 0.5 * abs(
             self.landmarks["hip_L"][0] - self.landmarks["hip_R"][0]
         )
+        # Over every landmark supplied. It came back short whenever a required one was
+        # absent - measured on the suite's performer, 1.0018 complete against 0.8190 with
+        # head_top dropped, 18.2% short - and that number rides the record, so the
+        # completeness check above is what makes this span mean anything.
         zs = [p[2] for p in self.landmarks.values()]
         self.height = max(zs) - min(zs)
         if self.leg_length <= 0.0 or self.height <= 0.0:
@@ -303,6 +400,7 @@ class Performer:
             "arm_length": self.arm_length,
             "hip_half_separation": self.hip_half_separation,
             "landmark_height_span": self.height,
+            "n_landmarks": len(self.landmarks),
             "facing_y_sign": self.facing_y_sign,
             "left_x_sign": self.left_x_sign,
         }
@@ -383,6 +481,8 @@ def _integrate_forward(performer, p, phase, speed, legs):
     up to psi = -1, incoming leg from psi = +1 — removes it, because those two states are
     the same instant of the same gait.
     """
+    gate_cadence_is_representable(phase, getattr(p, "stance_frac", STANCE_FRAC_MODELLED),
+                                  where="_integrate_forward")
     L = performer.leg_length
     fy = performer.facing_y_sign
 
@@ -398,10 +498,11 @@ def _integrate_forward(performer, p, phase, speed, legs):
             key = "psi_L" if b["stance_L"] else "psi_R"
             y += -L * (s_of(b[key], amp_b) - s_of(a[key], amp_a))
         else:
-            # More than one exchange inside a frame interval means the cadence has
-            # outrun the frame rate; nothing downstream could reconstruct the walk.
+            # Defensive floor only. `gate_cadence_is_representable` above has already
+            # walked every interval, including the ones where no exchange is detected -
+            # which is the case this clause could never see (F-84f8fd3b).
             du = (phase[i] - phase[i - 1]) / (2.0 * math.pi)
-            if du > 0.5:
+            if du > MAX_CYCLES_PER_FRAME:
                 raise WalkError(
                     f"frame {i}: the gait advances {du:.3f} of a cycle in one frame, so "
                     f"more than one stance exchange falls between two samples; the walk "
@@ -439,6 +540,11 @@ def build_gait(performer, params):
     lx = performer.left_x_sign
     L = performer.leg_length
     speed, phase, omega = _phase_schedule(p)
+    # The cadence andon runs over EVERY consecutive pair, here, before pass 1 reads the
+    # phase - not inside the integrator's exchange branch, where it was reachable only
+    # when an exchange happened to be sampled (F-84f8fd3b). One implementation, called
+    # from both places, so a direct `_integrate_forward` caller is covered too.
+    gate_cadence_is_representable(phase, p.stance_frac, where="build_gait")
 
     n = p.n_frames
     frames = []
@@ -617,19 +723,13 @@ def forward_kinematics(performer, gait):
             v = lm[landmark]
             return [_mat_vec(R, v)[k] + t[k] for k in range(3)]
 
-        out.append({
-            "frame": rec["frame"],
-            "hips": place("hips", "crotch"),
-            "head_top": place("head", "head_top"),
-            "ankle_L": place("ankle.L", "ankle_L"),
-            "ankle_R": place("ankle.R", "ankle_R"),
-            "toe_L": place("ankle.L", "toe_L"),
-            "toe_R": place("ankle.R", "toe_R"),
-            "wrist_L": place("wrist.L", "wrist_L"),
-            "wrist_R": place("wrist.R", "wrist_R"),
-            "hand_end_L": place("wrist.L", "hand_end_L"),
-            "hand_end_R": place("wrist.R", "hand_end_R"),
-        })
+        record = {"frame": rec["frame"]}
+        # Iterated, not restated: FK_SITES is the same table `Performer` derives its
+        # required landmark set from, so a site added here cannot be read off a table
+        # nobody checked for it.
+        for site, (bone, landmark) in FK_SITES.items():
+            record[site] = place(bone, landmark)
+        out.append(record)
     return out
 
 

@@ -51,6 +51,22 @@ class AssemblyGate(GateFailure):
     gate = "ASSEMBLY"
 
 
+class CascadeGate(AssemblyGate):
+    """Gate CASCADE — the cascade's own andons, under the id the receipt already used.
+
+    F-fb4fc1c0: `gate_slot_ceiling` and `gate_cascade_topology` both set
+    `ev["gate"] = "CASCADE"` and both raised `AssemblyGate`, whose class attribute is
+    `gate = "ASSEMBLY"`. Measured 2026-09-04: `gate_slot_ceiling({}, cap=99)` raised with
+    `.gate == "ASSEMBLY"`, `evidence["gate"] == "CASCADE"`, and `str(exc)` beginning
+    `[ASSEMBLY]`. `stage_render.py` prints `exc.gate`, and the builders key the same
+    evidence as `CASCADE_ceiling` / `CASCADE_topology`, so the record disagreed with
+    itself about which andon pulled. Subclassing keeps every existing
+    `except AssemblyGate` / `pytest.raises(AssemblyGate)` site catching these.
+    """
+
+    gate = "CASCADE"
+
+
 #: The only classes this graph may contain. Every one re-measured `api_node: false` with
 #: `get_node` on 2026-08-13. Widening this list is a deliberate diff, which is the point.
 ALLOWED_CLASSES = ("LoadImage", "BatchImagesNode", "CreateVideo", "SaveVideo")
@@ -271,8 +287,32 @@ def cascade_plan(n, group_size=GROUP_SIZE):
     """
     n, group_size = int(n), int(group_size)
     if group_size < 1:
-        raise AssemblyGate("group size must be at least 1", {"group_size": group_size})
+        raise CascadeGate("group size must be at least 1",
+                          {"gate": "CASCADE", "group_size": group_size})
     return [(s, min(s + group_size, n)) for s in range(0, n, group_size)]
+
+
+def _bare_images_arity(inputs):
+    """How many images a bare `images` key carries, or None when there is no bare key.
+
+    E02's shape is `{"images": [[node, 0], [node, 0], ...]}` — a LIST of links where the
+    dotted `images.imageN` keys belong. `gate_batch_topology` and `gate_cascade_topology`
+    refuse it outright on the nodes they are handed by name; `gate_slot_ceiling` walks the
+    WHOLE graph and so is the only check that sees a batch node neither of them names.
+    Counting only `images.image*` keys made such a node contribute ZERO slots (F-0f585645,
+    measured 2026-09-04: an 81-link bare-`images` node passed with `per_node {"400": 0}`).
+
+    A single link is `[node_id, slot]` — two scalars — and carries one image. A list of
+    links carries one image per element.
+    """
+    if "images" not in inputs:
+        return None
+    value = inputs["images"]
+    if not isinstance(value, list):
+        return 1
+    if value and all(isinstance(v, (list, tuple)) for v in value):
+        return len(value)
+    return 1 if value else 0
 
 
 def gate_slot_ceiling(graph, group_size=None, cap=None):
@@ -295,6 +335,19 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
     So `group_size` is the caller's DECLARED group size, checked AGAINST this module's
     constant, and `cap` may only TIGHTEN: asking for a ceiling above `MAX_SLOTS_PER_NODE`
     raises, which is what the module docstring already claimed happened.
+
+    **What the ceiling counts, and refusing to count nothing** (F-0f585645, measured
+    2026-09-04). The per-node count was `len([k for k in inputs if k.startswith(
+    "images.image")])`, so a BatchImagesNode carrying the E02 bare-`images` list
+    contributed ZERO: a graph whose single batch node held 81 links passed with
+    `per_node {"400": 0}` and the verdict "1 batch node(s), largest carries 0 slot(s),
+    ceiling 27". The topology gates do refuse a bare list, but only on the group and final
+    nodes they are handed BY NAME, while this gate is the one that walks the whole graph —
+    so any other batch node was covered by nothing. A bare `images` list is now counted at
+    its real arity (`_bare_images_arity`). Measured separately: a graph with no batch node
+    at all passed with "0 batch node(s), largest carries 0 slot(s)", so the empty
+    population is now refused in this module's own words, the way `gate_batch_topology`
+    and `gate_cascade_topology` already refuse a comparison over nothing.
     """
     ceiling = int(MAX_SLOTS_PER_NODE)
     ev = {"gate": "CASCADE", "module_ceiling": int(MAX_SLOTS_PER_NODE),
@@ -304,7 +357,7 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
 
     if cap is not None:
         if int(cap) > ceiling:
-            raise AssemblyGate(
+            raise CascadeGate(
                 f"a caller asked this gate to run with a ceiling of {int(cap)}, above the "
                 f"module's own MAX_SLOTS_PER_NODE={ceiling}. `cap` may only TIGHTEN: a "
                 f"ceiling the caller supplies is a ceiling the caller can raise, and a gate "
@@ -315,7 +368,7 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
         ev["ceiling"] = ceiling
 
     if group_size is not None and int(group_size) > ceiling:
-        raise AssemblyGate(
+        raise CascadeGate(
             f"the declared group size {int(group_size)} is above the ceiling {ceiling}. "
             f"The runtime cap is INFERRED at {INFERRED_SLOT_CAP} from a single error "
             f"message and was never measured at its boundary; a graph built above this "
@@ -325,13 +378,26 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
     for nid, node in graph.items():
         if node.get("class_type") != "BatchImagesNode":
             continue
-        k = len([key for key in node.get("inputs", {}) if key.startswith("images.image")])
+        inputs = node.get("inputs", {}) or {}
+        k = len([key for key in inputs if key.startswith("images.image")])
+        bare = _bare_images_arity(inputs)
+        if bare is not None:
+            ev.setdefault("bare_images_nodes", {})[nid] = bare
+            k += bare
         ev["per_node"][nid] = k
         if k > ceiling:
             over.append((nid, k))
+
+    if not ev["per_node"]:
+        raise CascadeGate(
+            "the graph carries no BatchImagesNode at all, so this gate walked every node "
+            "and measured nothing: its verdict would read '0 batch node(s), largest "
+            "carries 0 slot(s)' about a graph in which no slot exists to be over any "
+            "ceiling. A comparison over nothing must not report agreement", ev)
+
     if over:
         ev["over"] = over
-        raise AssemblyGate(
+        raise CascadeGate(
             f"batch node(s) {over} carry more than {ceiling} auto-grow slot(s). The runtime "
             f"cap is INFERRED at {INFERRED_SLOT_CAP} from a single error message and was "
             f"never measured at its boundary; a graph built above this ceiling is a graph "
@@ -382,16 +448,16 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
           "n_expected_sources": len(exp)}
 
     if n < 1:
-        raise AssemblyGate(
+        raise CascadeGate(
             f"the cascade was gated over {n} frame(s): the plan is empty, the group loop "
             f"never runs, and every count clause would compare 0 to 0. A comparison over "
             f"nothing must not report agreement", ev)
     if len(exp) != n:
-        raise AssemblyGate(
+        raise CascadeGate(
             f"{len(exp)} expected per-frame source id(s) against {n} frame(s); the gate "
             f"cannot relate slot k to frame k on a list that is not the frame list", ev)
     if len(set(exp)) != len(exp):
-        raise AssemblyGate(
+        raise CascadeGate(
             f"the {len(exp)} expected per-frame source id(s) are not distinct, so the "
             f"expectation itself already carries a duplicated frame", ev)
 
@@ -401,7 +467,7 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
     problems = []
 
     if len(group_ids) != len(plan):
-        raise AssemblyGate(
+        raise CascadeGate(
             f"{len(group_ids)} group node(s) for a plan that needs {len(plan)}", ev)
 
     # ---- each group: dotted keys, contiguous slot names, distinct LoadImage sources, and
@@ -492,7 +558,7 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
 
     if problems:
         ev["problems"] = problems
-        raise AssemblyGate("; ".join(problems), ev)
+        raise CascadeGate("; ".join(problems), ev)
 
     ev["verdict"] = (f"{n} distinct LoadImage nodes -> {len(plan)} group batch(es) of at "
                      f"most {group_size} -> final batch -> CreateVideo -> "

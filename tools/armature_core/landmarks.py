@@ -23,7 +23,7 @@ build is deterministic, and the bones are simply in the wrong places.
 
 import numpy as np
 
-from .errors import LandmarkError
+from .errors import GateFailure, LandmarkError
 
 #: Fraction of total X width below which two X-clusters in a band count as one structure.
 GAP_FRAC = 0.02
@@ -259,6 +259,40 @@ def _point_along(trace, frac):
     return tuple(float(v) for v in pts[-1]), total
 
 
+def _margin_fraction(fwd, back):
+    """|fwd - back| over the structure's own total y-extent, in [0, 1].
+
+    0 means the structure is symmetric about the reference and separates nothing; 1 means
+    it lies entirely on one side. Dimensionless, so a foot's reading and a head's are
+    comparable to each other without either being compared to a length in metres.
+    """
+    total = float(fwd) + float(back)
+    if total <= 0.0:
+        return 0.0
+    return abs(float(fwd) - float(back)) / total
+
+
+class FacingGate(GateFailure):
+    """Gate FACING — the figure's forward direction was read off nothing.
+
+    F-d876df3f: `facing()` computed `foot_margin`, `head_cross_check_sign` and
+    `cross_check_agrees` and NOTHING anywhere compared them to anything — a repo-wide
+    grep found `cross_check_agrees` in exactly two places, the line that computes it and
+    one test assertion. The dict reaches the rig manifest and is read back only for
+    `left_x_sign`. Meanwhile the sign itself came from `1.0 if fwd > back else -1.0` with
+    no separation requirement at all, so on a symmetric foot, a foot cropped at the bbox,
+    or a mesh imported rotated, `facing_y_sign` was read off noise and `left_x_sign =
+    -sign` mirrored the whole downstream chain: the gait's forward direction and
+    handedness (walk.py reads fy and lx on every bone) and the AAPose-20 L/R map, whose
+    own docstring warns that a mirrored reading produces a solve that round-trips
+    perfectly and is wrong.
+
+    This is a mechanical geometric check on the mesh, not an identity metric, so it gates.
+    """
+
+    gate = "FACING"
+
+
 def facing(verts, z_ankle, height, z_ground):
     """Which way the figure faces, measured from the feet and cross-checked on the head.
 
@@ -266,6 +300,23 @@ def facing(verts, z_ankle, height, z_ground):
     further forward of the ankle than the heel extends behind it. The head is a cross-check
     and not a tiebreaker — a clay mannequin may have no nose at all, and a face-derived
     answer would then be reading noise.
+
+    **Two of the numbers this computed were compared to nothing** (F-d876df3f):
+    `foot_margin` measured exactly the separation the sign needs and was never read, and
+    `cross_check_agrees` appeared in this module and in one test assertion and nowhere
+    else. Both are compared now, in units neither can move:
+
+    * an exact tie on the FEET raises, because the sign then comes from the `else` branch
+      rather than from the mesh;
+    * the head raises only when it DISAGREES **and** separates its own front from its own
+      back at least as well as the feet separate theirs — the two margins each taken as a
+      fraction of their own structure's y-extent. That keeps the head advisory where the
+      paragraph above says it must be (a noseless mannequin scores ~0 and cannot outvote
+      anything) while making a well-separated contradiction stop the run.
+
+    No threshold is invented: both clauses are comparisons between measured quantities. A
+    thin-but-nonzero foot margin with an agreeing or noisy head is reported rather than
+    refused, and `foot_margin_fraction` rides the record for the Director's eye.
     """
     verts = np.asarray(verts, dtype=np.float64)
     foot = verts[verts[:, 2] < z_ground + 0.03 * height]
@@ -285,18 +336,51 @@ def facing(verts, z_ankle, height, z_ground):
         head_back = y_head - float(head[:, 1].min())
         head_sign = 1.0 if head_fwd > head_back else -1.0
 
-    return {
+    # Each margin as a fraction of ITS OWN structure's y-extent: per-structure and
+    # dimensionless, because a margin in metres means different things on a 0.3 m foot and
+    # on a head, and a global constant must not govern a local feature.
+    foot_frac = _margin_fraction(fwd, back)
+    head_frac = None if head_sign is None else _margin_fraction(head_fwd, head_back)
+
+    out = {
+        "gate": "FACING",
+        "andon": "FacingGate",
         "facing_y_sign": sign,
         "left_x_sign": -sign,
         "foot_forward_extent": fwd,
         "foot_backward_extent": back,
         "foot_margin": abs(fwd - back),
+        "foot_margin_fraction": foot_frac,
         "head_cross_check_sign": head_sign,
         "head_forward_extent": head_fwd,
         "head_backward_extent": head_back,
+        "head_margin_fraction": head_frac,
         "cross_check_agrees": None if head_sign is None else bool(head_sign == sign),
         "instrument": "feet primary (toe protrusion past the shin centre); head advisory",
     }
+
+    if fwd == back:
+        raise FacingGate(
+            f"the foot slab extends {fwd:.6f} forward of the shin centre and {back:.6f} "
+            f"behind it: the two are equal, so the sign comes from an arbitrary `else` "
+            f"branch rather than from the mesh. This is a tie, not a measurement. "
+            f"left_x_sign is -sign, so a coin flip here mirrors the gait's forward "
+            f"direction, its handedness and the AAPose-20 L/R map, all of which would "
+            f"round-trip perfectly and be wrong",
+            out)
+
+    if head_sign is not None and head_sign != sign and head_frac >= foot_frac:
+        raise FacingGate(
+            f"the advisory head cross-check reads facing {head_sign:+.0f} while the "
+            f"primary foot instrument reads {sign:+.0f}, and the head separates its own "
+            f"front from its own back BETTER than the feet do ({head_frac:.4f} of the "
+            f"head's y-extent against {foot_frac:.4f} of the foot's). The head is advisory "
+            f"because it may be noise on a mannequin with no nose - but a disagreement "
+            f"this well separated is not the noise case, and the two instruments cannot "
+            f"both be describing this mesh",
+            out)
+
+    return out
 
 
 def derive(verts, n_bands=200):

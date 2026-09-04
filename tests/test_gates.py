@@ -465,3 +465,102 @@ def test_no_new_gate_raise_ships_without_its_evidence():
     assert not new, (
         f"these gate raises carry no evidence dict: {new}. Pass the measurement that "
         f"fired the gate as the second argument.")
+
+
+# --------------------------------------- the receipt's id lives in the evidence too
+
+#: Modules whose gate-function evidence dicts omit the `gate` key. EMPTY, as of the
+#: wave-6 amend: ten sites were measured 2026-09-04 (F-f2f42e4a), four in core-solvers
+#: (`parts.py` x3, `glb.py`) fixed with this test, and the rest in `gates.py` and
+#: `rig_gates.py` fixed on the core-gates branch (commit b4b49f1, seven sites - the six
+#: this census found plus `g6_subject_motion`, which their own AST sweep added).
+#:
+#: `stage_render.py:509` prints `GATE_FAILURE <exc.gate>` and `GATE_EVIDENCE <json of
+#: exc.evidence>` as two lines, so a reader holding only the JSON has no id at all - and
+#: ids are shared across andon families ("D" by GateDDeterminism and GatePartsDeterminism,
+#: "ALPHA" by AlphaGate and TurnaroundAlphaGate), so the prose is not enough either.
+#:
+#: SUBSET assertion: the set can only shrink. Until the core-gates branch is merged this
+#: test is RED on the core-solvers branch alone, by two modules that branch owns - the
+#: coordinated-pair artifact the wave brief names, not a defect in either half.
+EVIDENCE_WITHOUT_GATE_ID_ROUTED = set()
+
+
+def _evidence_dicts_missing_the_gate_key():
+    """Every `ev = {...}` / `evidence = {...}` literal inside a gate-raising function in
+    `armature_core` that does not name its own gate id."""
+    import ast
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[1] / "tools" / "armature_core"
+    out = []
+    for path in sorted(root.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for fn in [n for n in ast.walk(tree)
+                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+            raised = {getattr(r.exc.func, "id", getattr(r.exc.func, "attr", ""))
+                      for r in ast.walk(fn)
+                      if isinstance(r, ast.Raise) and isinstance(r.exc, ast.Call)}
+            if not any("Gate" in name for name in raised):
+                continue
+            for node in ast.walk(fn):
+                if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict)):
+                    continue
+                target = node.targets[0]
+                if not (isinstance(target, ast.Name) and target.id in ("ev", "evidence")):
+                    continue
+                keys = [k.value for k in node.value.keys if isinstance(k, ast.Constant)]
+                if "gate" not in keys:
+                    out.append(f"{path.name}:{node.lineno} {fn.name}")
+    return out
+
+
+def test_no_core_solvers_gate_raises_evidence_that_cannot_name_its_own_andon():
+    """The census, not the instance. Measured 2026-09-04 before the fix: ten sites across
+    four modules, of which `glb.gate_atlas_untouched` and all three of `parts.py`'s gates
+    were in this domain."""
+    offenders = _evidence_dicts_missing_the_gate_key()
+    modules = {o.split(":", 1)[0] for o in offenders}
+    assert modules <= EVIDENCE_WITHOUT_GATE_ID_ROUTED, (
+        f"a gate evidence dict outside the routed modules omits its own id: {offenders}; "
+        f"routed and expected to shrink, never to grow: "
+        f"{sorted(EVIDENCE_WITHOUT_GATE_ID_ROUTED)}")
+    for module in ("parts.py", "glb.py", "assembly.py", "turnaround.py", "startframe.py",
+                   "resample.py", "lift_solve.py"):
+        assert module not in modules, f"{module} regressed: {offenders}"
+
+
+def test_the_census_would_catch_an_evidence_dict_that_forgot_its_id():
+    """The red direction: the scan must actually see a dict literal that omits the key,
+    or the assertion above is a check that cannot fail."""
+    import ast
+
+    src = (
+        "def gate_x(a):\n"
+        "    ev = {'n': len(a)}\n"
+        "    raise SomeGate('bad', ev)\n"
+    )
+    tree = ast.parse(src)
+    fn = tree.body[0]
+    raised = {r.exc.func.id for r in ast.walk(fn)
+              if isinstance(r, ast.Raise) and isinstance(r.exc, ast.Call)}
+    assert any("Gate" in name for name in raised)
+    dicts = [n for n in ast.walk(fn)
+             if isinstance(n, ast.Assign) and isinstance(n.value, ast.Dict)]
+    assert dicts and "gate" not in [k.value for k in dicts[0].value.keys]
+
+
+def test_every_shared_gate_id_is_disambiguated_by_the_evidence_in_this_domain():
+    """`SHARED_GATE_IDS` records that two ids are carried by two andons each. The receipt
+    line cannot tell them apart, so the evidence must: each core-solvers gate on a shared
+    id names its own class under "andon"."""
+    from armature_core import parts, turnaround as TA
+
+    with pytest.raises(parts.GatePartsDeterminism) as exc:
+        parts.gate_parts_determinism({}, {}, 1.0)
+    assert exc.value.gate == "D" and exc.value.evidence["andon"] == "GatePartsDeterminism"
+
+    with pytest.raises(TA.TurnaroundAlphaGate) as exc:
+        TA.gate_view_alpha(0, 255, 255, 0.0)
+    assert exc.value.gate == "ALPHA"
+    assert exc.value.evidence["andon"] == "TurnaroundAlphaGate"
