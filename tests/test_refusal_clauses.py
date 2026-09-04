@@ -163,7 +163,17 @@ RECORDED_POPULATION = frozenset({
     # raise site to two when `make_lift_sheet.subject_box` stopped raising a string.
     # (`ABClipError` is raised from exactly one site, so its name IS its clause and the
     # derivation deliberately leaves it out.)
-    "ReviewClipError", "SheetPopulationError", "ShotsetSheetError", "ZoomSheetError",
+    "ReviewClipError", "SheetPopulationError", "ShotsetSheetError",
+    "ZoomSheetError",
+    # Joined 2026-09-04 (wave 12, instruments-measure). `SheetInputError`
+    # (`make_e08_sheet`) crossed from one raise site to two when the sheet's
+    # `cv2.imwrite` return was checked — `cv2.imwrite` returns a BOOL on failure and
+    # raises nothing, so `E08_SHEET_OK` was printed over a write that had not landed
+    # (F-e4fc9531). `ClipRateError` (`measure_cascade_clip`) is the new andon for
+    # `--expect-fps`, which was parsed, recorded and printed beside the value read off the
+    # stream with nothing comparing them; two raise sites — an fps ffprobe could not
+    # parse, and one outside tolerance (F-c397574b).
+    "ClipRateError", "SheetInputError",
 })
 
 #: Re-derived 2026-09-04 and EMPTY. There is no class this census excuses: a class raised
@@ -196,7 +206,18 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # 71 + 2 + 3 = 76; instruments-measure's branch added `ReviewClipError`, `ShotsetSheetError`,
     # `ZoomSheetError` (new classes) and `SheetPopulationError` (crossed to two sites):
     # 76 + 4 = 80, MEASURED on the merged tree.
-    assert len(POLICED) == 80, sorted(POLICED)
+    # WAVE 12 (instruments-measure, F-e4fc9531): 80 -> 81. `make_e08_sheet.SheetInputError`
+    # crossed to a second raise site when the sheet's `cv2.imwrite` return was checked --
+    # `cv2.imwrite` returns a BOOL on failure and raises nothing, so `E08_SHEET_OK` was
+    # printed over a write that had not landed. Three sibling sites took the same refusal
+    # (`make_overlay_sheet` gained `OverlaySheetError`, `make_zoom_sheet` reused
+    # `ZoomSheetError`, `render_pose_sticks` reused `SticksGate`); only this one crossed
+    # the two-site threshold the derivation uses.
+    # ...and 81 -> 82 (F-c397574b): `measure_cascade_clip.ClipRateError` is the andon for
+    # `--expect-fps`, which was parsed, recorded and printed beside the value read off the
+    # stream with nothing comparing them. Two raise sites: an fps ffprobe could not parse,
+    # and one outside tolerance.
+    assert len(POLICED) == 82, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

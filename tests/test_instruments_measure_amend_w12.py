@@ -745,30 +745,54 @@ def _dests_declared(tree):
 
 
 def _names_read(tree):
-    """Every attribute name read anywhere in the module, plus every bare name.
+    """Every dest name that appears ANYWHERE outside the `add_argument` call that
+    declares it — as an attribute (`a.meta`), a bare name, a keyword, or a string key
+    (`args["glb"]`, the shape `vars(p.parse_args(argv))` produces in five tools).
 
     The DECLARED-and-unread direction cannot use the namespace-scoped walk the READ-and-
     undeclared direction uses: a flag may legitimately be read through a helper that took
-    the namespace as a parameter (`provenance_lines(a.meta)`), so this direction asks the
-    weaker question — does the dest appear at all — and a flag that appears nowhere in its
-    own module reaches nothing by any route.
+    the namespace as a parameter (`provenance_lines(a.meta)`), or off a dict two functions
+    away. So this direction asks the WEAKER question — does the dest appear at all — and a
+    dest that appears nowhere but its own declaration reaches nothing by any route. That
+    is exactly the `make_thesis_sheet --meta` shape: grep for `meta` across the module
+    returned the `add_argument` line and nothing else.
+
+    The declaring calls are excised first, so their own flag strings do not answer the
+    question they are being asked.
     """
+    declaring = set()
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "add_argument"):
+            declaring.update(id(n) for n in ast.walk(node))
     seen = set()
     for node in ast.walk(tree):
+        if id(node) in declaring:
+            continue
         if isinstance(node, ast.Attribute):
             seen.add(node.attr)
         elif isinstance(node, ast.Name):
             seen.add(node.id)
         elif isinstance(node, ast.keyword) and node.arg:
             seen.add(node.arg)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            seen.add(node.value)
+            seen.add(node.value.replace("-", "_"))
     return seen
 
 
-#: Flags declared by `armature_core.canon`'s shared helper rather than by the module's own
-#: parser body are resolved as DECLARED there; this census walks each module's own
-#: `add_argument` calls, so a shared flag is only in the population of the module that
-#: writes the call. Named here because the exemption is the reason, not a proxy.
-CANON_SHARED_FLAGS = {"subject", "no_canon", "canon_prompt"}
+#: Exemptions, each keyed on the REASON and not on a proxy.
+#:
+#: `subject` / `no_canon` / `canon_prompt` are declared by `armature_core.canon`'s shared
+#: helper rather than by a module's own parser body; this census walks each module's own
+#: `add_argument` calls, so a shared flag is only ever in the population of the module that
+#: writes the call, and the module that writes it is not the one that reads it.
+#:
+#: `debug` in `armature_index` is declared for the shared record-index CLI contract and
+#: consumed by `_cli.run_contract`, which this module hands its dispatcher to — the value
+#: leaves the module through the runner rather than through the module's own body.
+#: Re-derived 2026-09-04; both reasons checked against the files that state them.
+CANON_SHARED_FLAGS = {"subject", "no_canon", "canon_prompt", "debug"}
 
 
 def test_every_flag_a_parser_declares_is_read_somewhere_in_that_module():

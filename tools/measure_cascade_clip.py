@@ -77,6 +77,67 @@ class ClipShapeError(ArmatureError):
         self.evidence = evidence or {}
 
 
+class ClipRateError(ArmatureError):
+    """The clip's playback rate is not the one the spec declared.
+
+    `--expect-fps` was PARSED (`:112`), written into the record (`:152`) and printed beside
+    the value read off the stream (`:196`) -- and nothing compared them. Its sibling
+    `--expect-frames` IS gated, with the stated reason that every per-frame comparison
+    below a count mismatch compares different pictures; the frame rate is the third
+    dimension of the same argument, because the clip's duration -- and therefore every
+    timing number read against it (`measure_tracking`'s correlation, the review clip's
+    0.5x rate) -- is computed from it. The two adjacent shape checks exist because
+    "supplying the dimensions is how a decode silently reshapes"; supplying the rate is
+    how a decode silently retimes.
+
+    Also fires when ffprobe's fps token did not parse at all: the line rendered
+    `NOT PARSED` beside the expectation and exited 0 with a full record on disk.
+    """
+
+    gate = "CLIP_RATE"
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+#: How far the stream's reported rate may sit from `--expect-fps` and still be the same
+#: rate. A container reports a rate ffmpeg derived from a time base, so an exact float
+#: equality would refuse a legal 16000/1001 clip; a twentieth of a frame per second is far
+#: below any rate a route would legitimately choose instead.
+FPS_TOLERANCE = 0.05
+
+
+def gate_clip_rate(stream, expect_fps, clip, tolerance=FPS_TOLERANCE):
+    """ANDON -- the decoded clip plays at the rate the spec declared, or raise.
+
+    Returns the evidence dict when it holds: a gate whose passing verdict is never written
+    down is a gate nobody can read.
+    """
+    read = stream.get("fps")
+    ev = {"gate": "CLIP_RATE", "clip": os.path.abspath(clip), "read": read,
+          "expected": float(expect_fps), "tolerance": float(tolerance),
+          "stream": stream.get("stream", "NOT PARSED")}
+    if read is None:
+        raise ClipRateError(
+            f"{clip}: ffmpeg reported no frame rate for this stream, so the rate every "
+            f"timing number below is computed against was never read. `NOT PARSED` beside "
+            f"an expectation is not a comparison",
+            ev)
+    read = float(read)
+    ev["read"] = read
+    ev["delta"] = abs(read - float(expect_fps))
+    if ev["delta"] > tolerance:
+        raise ClipRateError(
+            f"{clip} decodes at {read} fps and --expect-fps declared "
+            f"{float(expect_fps)} (|delta| {ev['delta']:.4f} > {tolerance}); the clip's "
+            f"duration, and therefore every timing number read against it, is computed "
+            f"on a rate nobody verified",
+            ev)
+    ev["verdict"] = f"{read} fps, within {tolerance} of the declared {float(expect_fps)}"
+    return ev
+
+
 def ffprobe_stream(path):
     """Container facts, read from ffmpeg's own report rather than assumed."""
     proc = subprocess.run([FFMPEG, "-hide_banner", "-i", path],
@@ -138,6 +199,10 @@ def main(argv=None):
             {"clip": os.path.abspath(a.clip), "stream_shape": [sh, sw],
              "source_shape": [h, w], "frames_dir": os.path.abspath(a.frames)},
         )
+    # ---- ANDON . the rate is COMPARED, not printed beside. Before the decode is spent
+    #      and before any per-frame number is computed, exactly as the count clause below
+    #      states its own reason.
+    gate_rate = gate_clip_rate(stream, a.expect_fps, a.clip)
     decoded = decode(a.clip, sw, sh)
 
     with open(a.clip, "rb") as fh:
@@ -151,6 +216,7 @@ def main(argv=None):
         "n_source_frames": len(sources), "n_decoded_frames": len(decoded),
         "expect_frames": a.expect_frames, "expect_fps": a.expect_fps,
         "source_shape": [h, w], "stream": stream, "ffmpeg": FFMPEG,
+        "gate_FPS": gate_rate,
     }
 
     if len(decoded) != a.expect_frames or len(sources) != a.expect_frames:
@@ -193,7 +259,8 @@ def main(argv=None):
     f = record["fidelity_summary"]
     print(f"decoded frames   {len(decoded)} (expected {a.expect_frames})")
     print(f"stream           {stream.get('stream', 'NOT PARSED')}")
-    print(f"fps read         {stream.get('fps', 'NOT PARSED')} (expected {a.expect_fps})")
+    print(f"fps read         {stream.get('fps', 'NOT PARSED')} (expected {a.expect_fps}) "
+          f"-- {gate_rate['verdict']}")
     print(f"identical frames {f['n_identical']} of {len(per_frame)}")
     print(f"mean abs         {f['mean_abs_min']:.4f} .. {f['mean_abs_max']:.4f}  "
           f"max {f['max_abs_max']:.0f}")

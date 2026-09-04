@@ -59,12 +59,35 @@ def analyze(run_dir):
 
         # Split the frame's geometry at its own median depth: "near half" and "far
         # half" are per-frame quantities, not a global brightness constant.
+        #
+        # THE HALVES ARE NOT HALVES, and the denominator is now on the record. The split
+        # was `d_pf > med` / `d_pf < med` — two STRICT subsets, so every masked pixel
+        # sitting exactly AT the median fell into neither, and depth here is 8-bit (this
+        # module's own docstring: measured in the space that actually ships), so ties are
+        # not rare — they are what a flat surface looks like after quantisation. Measured
+        # 2026-09-04 on a plausible masked population of 10,000 samples (4,000 flat at
+        # level 128 plus 6,000 spread over 100..159): near = 3,046, far = 2,864,
+        # EXCLUDED = 4,090 — 40.9% of the geometry in neither half, with `n_px` (the mask
+        # total) the only denominator on the record, so a reader could not derive the
+        # shortfall. The two means then decided the summary this tool exists to produce
+        # (`frames_where_near_half_is_darker` / `frames_where_far_half_is_lighter`).
+        #
+        # The strict split is KEPT — a pixel at the median is neither near nor far, and
+        # folding it into one side would put a flat surface's whole population on that
+        # side — and the three counts are recorded so both means carry their denominator.
+        # The `unit` string below states the convention.
         med = int(np.median(d_pf))
         near, far = d_pf > med, d_pf < med
+        at_med = d_pf == med
         frames.append({
             "frame": i,
             "n_px": int(mask.sum()),
             "median_d_perframe": med,
+            "n_near_half": int(near.sum()),
+            "n_far_half": int(far.sum()),
+            "n_at_median": int(at_med.sum()),
+            "frac_at_median": (float(at_med.sum()) / float(d_pf.size)
+                               if d_pf.size else None),
             "mean_signed_near_half": float(signed[near].mean()) if near.any() else None,
             "mean_signed_far_half": float(signed[far].mean()) if far.any() else None,
             "mean_abs_levels": float(np.abs(signed).mean()),
@@ -104,12 +127,27 @@ def analyze(run_dir):
         "frames_where_far_half_is_lighter": sum(
             1 for f in frames if f["mean_signed_far_half"] is not None and f["mean_signed_far_half"] > 0
         ),
+        # A count with no denominator is the thing this repo refuses. These two counts are
+        # over frames whose respective half was NON-EMPTY, and the excluded population is
+        # named beside them: a frame with no near half and a frame whose near half is not
+        # darker used to be the same number.
+        "frames_with_no_near_half": sum(
+            1 for f in frames if f["mean_signed_near_half"] is None),
+        "frames_with_no_far_half": sum(
+            1 for f in frames if f["mean_signed_far_half"] is None),
+        "n_px_at_median_excluded_from_both_halves": sum(
+            f["n_at_median"] for f in frames),
+        "n_px_masked_total": sum(f["n_px"] for f in frames),
         "n_frames": count,
     }
 
     return {
         "run": os.path.abspath(run_dir),
-        "unit": "8-bit levels of the emitted PNG; positive = per-shot is lighter",
+        "unit": ("8-bit levels of the emitted PNG; positive = per-shot is lighter. The "
+                 "near/far split is STRICT about each frame's own median (near = d_pf > "
+                 "median, far = d_pf < median), so pixels AT the median are in NEITHER "
+                 "half; `n_near_half` / `n_far_half` / `n_at_median` per frame sum to "
+                 "`n_px` and are the denominators of the two signed means."),
         "n_geometry_px_total": int(signed.size),
         "mean_abs_levels": float(np.abs(signed).mean()),
         "max_abs_levels": int(np.abs(signed).max()),
