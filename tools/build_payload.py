@@ -813,7 +813,8 @@ def main(argv=None):
     ap.add_argument("--experiment", default="E02", choices=sorted(EXPERIMENTS))
     ap.add_argument("--arm", required=True,
                     choices=sorted({a for e in EXPERIMENTS.values() for a in e["arms"]}),
-                    help="⚠ these choices are the UNION across every experiment, not the "
+                    help="NOTE: these choices are the UNION across every experiment, "
+                         "not the "
                          "arms of the one you chose: argparse cannot narrow a choice list "
                          "against another flag. 30 of the 40 pairs it accepts are invalid, "
                          "and `gate_experiment_arm` refuses them by name, listing the arms "
