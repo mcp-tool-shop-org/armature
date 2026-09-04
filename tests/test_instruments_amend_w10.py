@@ -1097,3 +1097,121 @@ def test_a_stray_png_with_an_upper_case_extension_is_named_by_render_performer(t
                  if f.endswith(".png") and f not in planned_names
                  and f != "empty_plate.png")
     assert old == [], "the superseded case-sensitive test could not see it"
+
+
+# --------------------------------------------------------------------------------------
+# F-ce3a471d -- the three-outcome vocabulary is spelled the same way in all 21 copies
+# --------------------------------------------------------------------------------------
+#
+# Normalising every `if __name__ == "__main__":` body by AST and hashing gave FIVE distinct
+# shapes on 2026-09-04, with no behavioural drift: 63 runs through
+# `blender_stub.exit_code_of_main_block` (21 handlers x the gate / refusal / crash raisers,
+# and again with an `--out` whose parent is a regular file so the halt.json write itself
+# fails) gave 0 violations of the 2/2/1 codes and 0 violations of the six-key sentinel.
+#
+# What remains duplicated is the VOCABULARY. `halt_outcome(exc)` is the only named
+# implementation, it lives in a tool module (`rig_character.py`) rather than in
+# `armature_core`, and `rig_character` is its only caller -- the other twenty inline the
+# same three-branch ternary. The Stage B lift into `armature_core.errors` is outside this
+# domain's globs and is filed in this wave's `skipped[]` (together with `_halt_keysafe`,
+# which this wave added as a 21st copy for the same reason).
+#
+# The in-domain half is this census: the exit-code contract is driven for three raiser
+# kinds, so a WORDING change in one copy of twenty is invisible to it unless one of those
+# three raisers happens to hit the changed branch. This reads the literals themselves.
+
+#: The vocabulary, as measured 2026-09-04 and as `test_instrument_exits.CONTRACT` asserts
+#: behaviourally. Em dashes are part of it.
+OUTCOME_VOCABULARY = (
+    "FAILED — an unhandled error",
+    "HALTED — a gate fired",
+    "REFUSED — the tool declined to proceed",
+)
+
+
+def _outcome_strings(node):
+    """Single-line em-dashed string constants inside `node`, docstrings excluded.
+
+    The docstring exclusion is not cosmetic: `rig_character._write_halt`'s own docstring
+    contains an em dash, and a census that counted it would report that tool as having a
+    vocabulary of one prose paragraph instead of following the delegation to
+    `halt_outcome`.
+    """
+    docstrings = set()
+    for sub in ast.walk(node):
+        if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                            ast.Module)):
+            text = ast.get_docstring(sub, clean=False)
+            if text is not None:
+                docstrings.add(text)
+    return {n.value for n in ast.walk(node)
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)
+            and "—" in n.value and "\n" not in n.value
+            and len(n.value) < 80 and n.value not in docstrings}
+
+
+def outcome_literals(filename):
+    """`(literals, routed_through)` — the outcome strings this tool's handler can print.
+
+    Keyed on the handler and, where the handler delegates, on the module-level function it
+    delegates to: `rig_character`'s handler carries no literal at all because it calls
+    `halt_outcome(exc)`, and a census that read only the handler would report it as having
+    no vocabulary rather than as having the same one by reference.
+    """
+    tree = ast.parse(read_source(filename))
+    handler = None
+    for top in tree.body:
+        if (isinstance(top, ast.If) and isinstance(top.test, ast.Compare)
+                and isinstance(top.test.left, ast.Name)
+                and top.test.left.id == "__name__"):
+            handler = top
+    if handler is None:
+        return [], None
+    lits = _outcome_strings(handler)
+    if lits:
+        return sorted(lits), None
+    called = {n.func.id for n in ast.walk(handler)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    module_fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    for name in sorted(called & set(module_fns)):
+        found = _outcome_strings(module_fns[name])
+        if found:
+            return sorted(found), name
+    return [], None
+
+
+@pytest.mark.parametrize("filename", BLENDER_TOOLS)
+def test_every_handler_spells_the_three_outcomes_the_same_way(filename):
+    lits, _routed = outcome_literals(filename)
+    assert tuple(lits) == OUTCOME_VOCABULARY, (
+        f"{filename}: {lits}. The vocabulary is duplicated across 21 handlers, so a "
+        f"wording change in one copy is a false record the exit-code contract cannot see")
+
+
+def test_exactly_one_tool_routes_the_vocabulary_through_a_named_function():
+    """The duplication itself, measured rather than described: 20 inline copies and one
+    named `halt_outcome`, which is why the lift into `armature_core.errors` is filed."""
+    routed = {f: r for f in BLENDER_TOOLS for _l, r in [outcome_literals(f)] if r}
+    assert routed == {"rig_character.py": "halt_outcome"}, routed
+
+
+def test_the_vocabulary_census_goes_red_on_one_reworded_copy(tmp_path, monkeypatch):
+    """Rule 3: a member added with a drifted literal must be reported."""
+    probe = tmp_path / "probe_words.py"
+    probe.write_text(
+        'import bpy\n'
+        'if __name__ == "__main__":\n'
+        '    try:\n'
+        '        raise SystemExit(main())\n'
+        '    except SystemExit:\n'
+        '        raise\n'
+        '    except BaseException as exc:\n'
+        '        print("PROBE_WORDS_HALT", "HALTED \\u2014 a gate fired",\n'
+        '              "REFUSED \\u2014 the tool declined to proceed",\n'
+        '              "FAILED \\u2014 an unexpected error")\n', encoding="utf-8")
+    import blender_stub
+    monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
+    lits, routed = outcome_literals("probe_words.py")
+    assert routed is None
+    assert tuple(lits) != OUTCOME_VOCABULARY
+    assert "FAILED — an unexpected error" in lits
