@@ -25,10 +25,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# `contents: read` is the whole workflow-level grant, and the two scopes that can change
+# what the public sees live on the ONE job that uses them. Both jobs used to carry all three:
+# the `build` job below runs `npm ci` over site/'s whole lockfile — every install lifecycle
+# script in the resolved tree — while holding a token able to create a Pages deployment, so a
+# compromised transitive dependency could replace the front door from a build job. ci.yml's
+# own permissions comment names this threat model and release.yml puts `id-token: write` on
+# its two publish jobs alone; this file skipped the narrowing.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
   build:
@@ -75,6 +80,13 @@ jobs:
     if: github.event.repository.private == false
     needs: build
     runs-on: ubuntu-latest
+    # A job-level block REPLACES the workflow-level grant, so this job has no `contents`
+    # scope at all — deliberately: its one step performs the deployment and never clones.
+    # (release.yml's `npm` job is the same rule in the other direction: it re-declares
+    # `contents: read` beside `id-token: write` precisely because its step 1 IS a checkout.)
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

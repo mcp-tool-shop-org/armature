@@ -1088,3 +1088,97 @@ def test_the_ordering_check_goes_red_on_a_body_that_scans_after_installing():
     before = "      - run: npm ci\n      - run: npm audit --audit-level=high\n"
     install, scan = _order_in(before, "npm ci", "npm audit")
     assert not (scan < install), "the ordering comparison cannot fail on the pre-fix shape"
+
+
+# -- the second direction of the permissions census (F-0f644506) --------------------------
+#
+# `test_every_checkout_job_runs_on_a_declared_token_scope` asserts only that a contents scope
+# is PRESENT. It has no direction that fails on a grant BROADER than the job's steps need,
+# and pages.yml declared `contents: read`, `pages: write` and `id-token: write` at WORKFLOW
+# level, so both jobs carried all three. The `build` job is the one that runs `npm ci` over
+# site/'s whole lockfile — every install lifecycle script in the resolved tree — and it needs
+# `contents: read` and nothing else. ci.yml's own permissions comment names this exact threat
+# model ("this is the workflow that executes the most third-party code"), and release.yml puts
+# `id-token: write` on the two publish jobs alone; pages.yml is the file that skipped the
+# narrowing. Worst realistic consequence: a compromised transitive dependency's install script
+# runs on a runner holding a token that can create a Pages deployment.
+
+#: What a job must contain for a scope beyond `contents` to be one it USES. `contents` is the
+#: read-only baseline a checkout authenticates with and is not policed for use here.
+#: Re-derive rather than extend blindly: each entry is a step that consumes the scope.
+SCOPE_MARKERS = {
+    "pages": ("actions/deploy-pages",),
+    "id-token": ("actions/deploy-pages", "gh-action-pypi-publish", "--provenance"),
+}
+BASELINE_SCOPE = "contents"
+
+
+def _scopes_in(block):
+    """{scope: level} for a `permissions:` block's own lines."""
+    return {m.group(1): m.group(2)
+            for m in re.finditer(r"(?m)^\s+([a-z-]+):\s*(read|write|none)\s*$", block or "")}
+
+
+def granted_scopes():
+    """(workflow, job, {scope: level}) for every job in every workflow, effective grant.
+
+    A job-level block REPLACES the workflow-level one, so the effective grant is the job's
+    own block where it has one and the file's block where it does not. Walked out of the
+    directory, so a fourth workflow is covered the day it lands.
+    """
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        file_level = _workflow_level_permissions(text)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if re.search(r"(?m)^    permissions:\s*$", body):
+                block = "\n".join(named_block(body, "permissions", 4))
+            else:
+                block = file_level
+            out.append((name, job, _scopes_in(block)))
+    return out
+
+
+def test_every_scope_this_repo_grants_has_a_recorded_consumer():
+    """Fail-closed: a scope nobody wrote a marker for is not silently exempt from the check."""
+    seen = {scope for _w, _j, scopes in granted_scopes() for scope in scopes}
+    assert seen, "no job in any workflow declares a permissions scope any more"
+    unknown = sorted(seen - set(SCOPE_MARKERS) - {BASELINE_SCOPE})
+    assert unknown == [], (
+        f"{unknown} is granted somewhere and has no row in SCOPE_MARKERS, so nothing says "
+        "which step consumes it and the check below would pass it by default")
+
+
+@pytest.mark.parametrize("workflow,job,scopes", granted_scopes(),
+                         ids=lambda v: v if isinstance(v, str) else "")
+def test_a_job_is_granted_only_the_scopes_its_own_steps_use(workflow, job, scopes):
+    """Least privilege, in the direction the present census does not bound.
+
+    What this looks like if wrong: the job that executes the most third-party code holds a
+    token that can replace the public front door.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    unused = [
+        scope for scope, level in sorted(scopes.items())
+        if scope != BASELINE_SCOPE and level != "none"
+        and not any(marker in body for marker in SCOPE_MARKERS[scope])
+    ]
+    assert unused == [], (
+        f"{workflow} job {job!r} is granted {unused} and runs no step that consumes "
+        f"{'it' if len(unused) == 1 else 'them'}; the scope is available to every line of "
+        "third-party code the job executes")
+
+
+def test_the_least_privilege_check_goes_red_on_an_unused_scope():
+    """The mutation: the pre-fix grant, fed to the same comparison.
+
+    pages.yml's `build` job held `pages: write` with no deploy step in it; a check that
+    cannot fail on that shape is not the check this finding asked for.
+    """
+    scopes = {"contents": "read", "pages": "write", "id-token": "write"}
+    body = "      - uses: actions/checkout@abc\n      - run: npm ci\n"
+    unused = [s for s, level in sorted(scopes.items())
+              if s != BASELINE_SCOPE and level != "none"
+              and not any(m in body for m in SCOPE_MARKERS[s])]
+    assert unused == ["id-token", "pages"], unused
