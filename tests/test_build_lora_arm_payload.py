@@ -495,7 +495,20 @@ def test_the_clean_baseline_passes_the_licence_gate_and_the_record_carries_its_v
 
     ev = B.gate_base_licence(base, FIXTURE)
     assert ev["banned"] == []
-    assert "none BANNED" in ev["verdict"]
+    # Wave 14, F-b7e7c5c0. This assertion used to read `"none BANNED" in ev["verdict"]`,
+    # against a verdict that read "{n} ruled component(s) read off the baseline, none
+    # BANNED and none EXCLUDED" — and the measurement below is why that sentence had to
+    # go: on the repo's OWN pinned E12 baseline the licence table classifies ZERO of the
+    # four components it loads. "nothing banned" and "the table ruled nothing" were the
+    # same receipt, and this test asserted the half that was not measured. The numbers are
+    # pinned with `==` rather than re-derived, per the wave-14 rule on ceilings.
+    assert ev["n_components_examined"] == 4
+    assert ev["n_components_classified"] == 0
+    assert ev["n_components_unclassified"] == 4
+    assert "0 of 4 component(s)" in ev["verdict"]
+    assert "4 unclassified" in ev["verdict"]
+    assert "none of the classified is BANNED or EXCLUDED" in ev["verdict"]
+    assert "wan_2.1_vae.safetensors" in " ".join(ev["unclassified"])
 
     argv, out = _cli(tmp_path, base)
     assert B.main(argv) == 0

@@ -244,7 +244,36 @@ def plan(results, base, run, node_dir, video_nodes):
     return jobs, counts
 
 
-def download(manifest_path, exits_path=None):
+#: The downloader command, as a CONSTANT (see `download`). Each runspace records its own
+#: `$LASTEXITCODE` because a native non-zero exit inside `ForEach-Object -Parallel` does not
+#: reach the pwsh process code — measured on this rig, 2026-09-04.
+DOWNLOAD_PS = (
+    f"$j = Get-Content -LiteralPath $env:{MANIFEST_ENV} -Raw | ConvertFrom-Json; "
+    "$r = $j | ForEach-Object -Parallel "
+    "{ $o = & curl.exe -sS -L --fail-with-body -o $_.out -- $_.url 2>&1; "
+    "[pscustomobject]@{ out = $_.out; url = $_.url; code = $LASTEXITCODE; "
+    "message = ($o | Out-String).Trim() } } "
+    "-ThrottleLimit 12; "
+    f"ConvertTo-Json -InputObject @($r) -Depth 3 | "
+    f"Set-Content -LiteralPath $env:{EXITS_ENV} -Encoding utf8"
+)
+
+#: The same command with the URL left OUT of each row. `out` identifies a job uniquely —
+#: `plan` refuses a plan whose paths collide — so nothing the gate reads is lost, and a
+#: caller whose urls are signed does not gain a durable file naming them.
+DOWNLOAD_PS_NO_URLS = (
+    f"$j = Get-Content -LiteralPath $env:{MANIFEST_ENV} -Raw | ConvertFrom-Json; "
+    "$r = $j | ForEach-Object -Parallel "
+    "{ $o = & curl.exe -sS -L --fail-with-body -o $_.out -- $_.url 2>&1; "
+    "[pscustomobject]@{ out = $_.out; code = $LASTEXITCODE; "
+    "message = ($o | Out-String).Trim() } } "
+    "-ThrottleLimit 12; "
+    f"ConvertTo-Json -InputObject @($r) -Depth 3 | "
+    f"Set-Content -LiteralPath $env:{EXITS_ENV} -Encoding utf8"
+)
+
+
+def download(manifest_path, exits_path=None, record_urls=True):
     """pwsh + curl, with each job's own exit code recorded where this process can read it.
 
     The command string below is a CONSTANT. Nothing derived from `--run`, `--root` or the
@@ -260,11 +289,24 @@ def download(manifest_path, exits_path=None):
             { cmd.exe /c "exit 22" } -ThrottleLimit 12'          -> process exit 0
 
     A native non-zero exit inside a `-Parallel` runspace does not reach the pwsh process
-    code, so every curl in a fetch could fail and this tool would print FETCH_RUN_OK. The
-    sibling `fetch_t2v_run`'s `foreach ($x in $j)` shape exits 1 on the identical inner
-    command — the two fetchers' identically-worded gates disagreed about whether they could
-    fire at all. This is not the closed F-61771e61 ("the returncode is never inspected");
-    the inspection existed and was structurally unreachable.
+    code, so every curl in a fetch could fail and this tool would print FETCH_RUN_OK. This
+    is not the closed F-61771e61 ("the returncode is never inspected"); the inspection
+    existed and was structurally unreachable.
+
+    ⚠ **CORRECTION, wave 14 (F-a3ba416b).** This paragraph used to close: "The sibling
+    `fetch_t2v_run`'s `foreach ($x in $j)` shape exits 1 on the identical inner command —
+    the two fetchers' identically-worded gates disagreed about whether they could fire at
+    all." That is true only of a single-job run or a failure in the LAST job. RE-MEASURED
+    ON THIS RIG 2026-09-04:
+
+        pwsh -NoProfile -Command '$j = @(1,2,3); foreach ($x in $j)
+            { cmd.exe /c "exit $(if($x -eq 1){22}else{0})" }'      -> process exit 0
+        ...the same loop with the failure on the LAST element      -> process exit 1
+
+    A `foreach` loop's process code reflects only the last native command, so the sibling's
+    gate could not fire on a mid-loop failure either — and that claim is the reason the
+    sibling was left without this per-job record. It has it now: `fetch_t2v_run.download`
+    calls THIS function (one implementation, not a second shape).
 
     And the backstop did not cover the gap it left: curl runs `--fail-with-body`, which
     writes the HTTP error body to the `-o` path, so three planned frames replaced by 35-byte
@@ -280,16 +322,14 @@ def download(manifest_path, exits_path=None):
     manifest_abs = os.path.abspath(manifest_path)
     exits_abs = os.path.abspath(
         exits_path or os.path.join(os.path.dirname(manifest_abs), EXITS_NAME))
-    ps = (
-        f"$j = Get-Content -LiteralPath $env:{MANIFEST_ENV} -Raw | ConvertFrom-Json; "
-        "$r = $j | ForEach-Object -Parallel "
-        "{ $o = & curl.exe -sS -L --fail-with-body -o $_.out -- $_.url 2>&1; "
-        "[pscustomobject]@{ out = $_.out; url = $_.url; code = $LASTEXITCODE; "
-        "message = ($o | Out-String).Trim() } } "
-        "-ThrottleLimit 12; "
-        f"ConvertTo-Json -InputObject @($r) -Depth 3 | "
-        f"Set-Content -LiteralPath $env:{EXITS_ENV} -Encoding utf8"
-    )
+    # TWO constants, selected by a boolean — not one string with a value interpolated into
+    # it. Nothing derived from a run name, a path or a dump reaches the command line, which
+    # is the whole of the quoting fix above; a caller's choice between two literals cannot
+    # reopen it. `record_urls=False` exists for `fetch_t2v_run`, whose `_urls.json` is
+    # deleted on every path BECAUSE it holds signed download links (wave 12, F-8ccedf71):
+    # the exit record is the same object with the same exposure, so that fetcher asks for
+    # the rows without the urls rather than gaining a durable file the earlier fix removed.
+    ps = DOWNLOAD_PS if record_urls else DOWNLOAD_PS_NO_URLS
     env = dict(os.environ)
     env[MANIFEST_ENV] = manifest_abs
     env[EXITS_ENV] = exits_abs
@@ -318,8 +358,20 @@ def download(manifest_path, exits_path=None):
             f"measured on this rig — so with no record there is nothing that could have "
             f"observed a failed curl, and a green line here would mean only that pwsh ran",
             dict(base, clause="downloader_exits_unobserved"))
-    with open(exits_abs, encoding="utf-8") as fh:
-        rows = json.load(fh)
+    # ---- wave 14, F-b5db1a40. A malformed or truncated record used to raise a bare
+    # `JSONDecodeError` here, which left the `__main__` halt block printing exit 1 ("this
+    # tool crashed") rather than a FETCH clause naming the record a reader could open.
+    try:
+        with open(exits_abs, encoding="utf-8") as fh:
+            rows = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise FetchHalt(
+            f"the downloader's exit record at {exits_abs!r} could not be read "
+            f"({type(exc).__name__}: {exc}). The record IS the evidence this gate decides "
+            f"on — the process code cannot see a failed curl in a -Parallel runspace — so "
+            f"an unreadable one is a gate that has not run, not a gate that passed",
+            dict(base, clause="downloader_exits_unreadable",
+                 error=type(exc).__name__)) from exc
     rows = rows if isinstance(rows, list) else [rows]
     if len(rows) != len(planned):
         raise FetchHalt(
@@ -327,7 +379,34 @@ def download(manifest_path, exits_path=None):
             f"download(s). The record is not evidence about this plan, and the clause that "
             f"reads it would be deciding on a population that is not the one fetched",
             dict(base, clause="downloader_exits_incomplete", recorded=len(rows)))
-    failed = [r for r in rows if int(r.get("code") or 0) != 0]
+    # ---- wave 14, F-b5db1a40. This read `int(r.get("code") or 0) != 0`, which collapses
+    # "no exit was recorded for this job" into "this job exited zero" — contradicting this
+    # function's own rule that a gate whose evidence never arrived has not run. Measured on
+    # this rig with the command shape above and an UNLAUNCHABLE downloader: process exit 0
+    # and every row `"code": null, "message": ""`, because a CommandNotFound error goes to
+    # the runspace's error stream and not into the captured output. The row COUNT matches
+    # the plan, so `downloader_exits_incomplete` does not fire either, and the verdict below
+    # read "N download(s), each recording its own exit, all zero". `verify_downloads`
+    # backstops the empty-directory case; what it does not backstop is a re-fetch into a
+    # re-used run directory whose planned frames are already present from a PRIOR run.
+    #
+    # `int()` is kept only for values that are actually PRESENT: a null, an empty string, or
+    # anything that will not parse is `unrecorded`, in a clause of its own, naming the job.
+    unrecorded, failed = [], []
+    for i, row in enumerate(rows):
+        row = row if isinstance(row, dict) else {"out": None, "code": None, "row": row}
+        job = row.get("out") or f"<row {i}, no `out` recorded>"
+        code = row.get("code")
+        try:
+            if code is None or (isinstance(code, str) and not code.strip()):
+                raise ValueError("no exit was recorded")
+            code = int(code)
+        except (TypeError, ValueError):
+            unrecorded.append({"job": job, "code": row.get("code"),
+                               "message": row.get("message")})
+            continue
+        if code != 0:
+            failed.append(dict(row, code=code))
     if failed:
         raise FetchHalt(
             f"{len(failed)} of {len(rows)} download(s) exited non-zero: "
@@ -337,9 +416,22 @@ def download(manifest_path, exits_path=None):
             f"{proc.returncode}, because a native non-zero exit inside a -Parallel runspace "
             f"does not reach it; without this record every curl in a fetch could fail under "
             f"a printed FETCH_RUN_OK",
-            dict(base, clause="downloader_job_exit_nonzero", failed=failed))
+            dict(base, clause="downloader_job_exit_nonzero", failed=failed,
+                 unrecorded=unrecorded))
+    if unrecorded:
+        raise FetchHalt(
+            f"{len(unrecorded)} of {len(rows)} download(s) recorded NO exit at all: "
+            + "; ".join(f"{os.path.basename(str(u['job']))} -> code={u['code']!r}"
+                        for u in unrecorded[:5])
+            + ". A job whose exit was never observed is not a job that exited zero, and "
+            f"this gate's own rule is that evidence which never arrived has not run. The "
+            f"downloader itself may not have launched — a CommandNotFound inside a "
+            f"-Parallel runspace goes to that runspace's error stream and leaves the row's "
+            f"code null while the pwsh process exits 0",
+            dict(base, clause="downloader_job_exit_unrecorded", unrecorded=unrecorded))
     return proc, {"gate": "FETCH", "clause": "downloader_job_exits",
                   "record": exits_abs, "jobs": len(rows),
+                  "n_recorded": len(rows) - len(unrecorded), "n_unrecorded": 0,
                   "verdict": f"{len(rows)} download(s), each recording its own exit, "
                              f"all zero"}
 
@@ -376,8 +468,24 @@ def derived_root_artifacts(run):
     artifacts this pipeline itself produced. An andon whose documented workaround is
     "delete a legitimate derived file" is how an operator learns to work around an andon.
 
-    Bound to the run name, so another run's clip left in this directory still raises: that
-    is a file about a generation this fetch is not retrieving.
+    ⚠ **CORRECTION, wave 14 (F-ec454582).** This paragraph used to close: "Bound to the run
+    name, so another run's clip left in this directory still raises: that is a file about a
+    generation this fetch is not retrieving." That holds for the FIRST pattern and not the
+    second. Measured in this worktree with `derived_root_artifacts('A2')`:
+    `A2_review_8fps.mp4` matches pattern 0; `A0r1_review_8fps.mp4` matches neither (correct
+    — another run's clip does raise); and `review_0.50x_8fps.mp4` matches pattern 1, a name
+    carrying no run identity at all, so ANY run's review clip is exempted by it.
+
+    It cannot be otherwise from here: `make_review_clip.clip_name` returns
+    `review_{rate:.2f}x_{fps}fps.<ext>` with no run token, and that tool is not this one's
+    to change. Today the live consequence is nil — the canonical suffix is `.webp` and
+    `VIDEO_SUFFIXES` is (.mp4, .webm, .mkv), so the name never reaches the sweep — but the
+    pattern exists precisely to survive a change of suffix, and on the day that change
+    happens a PREVIOUS run's review clip in a re-used run root is exempted rather than
+    raised: the exact stray class the sweep was added for. Binding the second pattern to the
+    run needs `clip_name` to carry the run token first (instruments-measure owns it); until
+    then the honest sentence is the one above, and `tests/test_amend_w14_builders.py` pins
+    the three measurements so the claim cannot drift back.
     """
     return (re.compile(r"^" + re.escape(str(run)) + r"_review[_.].*$", re.IGNORECASE),
             re.compile(r"^review_[0-9.]+x_[0-9]+fps\.[a-z0-9]+$", re.IGNORECASE))

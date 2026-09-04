@@ -314,7 +314,26 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # WAVE-12 MERGE (coordinator, 2026-09-04): builders +1 (`conditional_attribution`) and core-gates +3
     # (`unreadable_node`, `uncredited_conditional_component`, `attribution_entry_for`): 54 + 1 + 3 = 58,
     # MEASURED on the merged tree.
-    assert len(RAISE_SITES["RouteGate"]) == 58, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 14 (builders, F-2da88c51): `gate_saved_graph.route_facts` raises `RouteGate`
+    # three times reading the payload record beside the graph — the source of the two facts
+    # the LAST gate before a paid submission hands to `verify`:
+    #   +1  `record_unreadable`: a record that will not parse supplies neither fact.
+    #   +1  `record_carries_no_verify_receipt`: a record with no `verify` receipt in it —
+    #       and `gate_base_licence`'s evidence carries the same gate/andon pair and neither
+    #       fact, so the reader keys on content and refuses that shape by name.
+    #   +1  `record_route_facts_disagree`: two receipts, two answers about the sampler.
+    # WAVE 14 (builders, F-eec3f145): `build_r2v_payload.gate_one_paid_node` splits into
+    # two clauses where it had one —
+    #   +1  `hosted_population_is_not_the_expected_node`: the billable population counted by
+    #       `route_gates.HOSTED_API_CLASS_SUFFIXES` (behaviour) must be the same set as the
+    #       node this route expects to be charged for (identity). The old single clause
+    #       counted one hard-coded class SPELLING and returned a green verdict over a graph
+    #       carrying a second partner tier.
+    #   (the count clause `not_exactly_one_billable_node` is the original raise, kept.)
+    # 58 + 3 + 1 = 62 on this branch. Re-pinned with the arithmetic rather than replaced
+    # (wave 3 section 0); ⚠ sibling branches move it too and the coordinator re-measures
+    # the merged number, as at waves 10 and 12.
+    assert len(RAISE_SITES["RouteGate"]) == 62, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside

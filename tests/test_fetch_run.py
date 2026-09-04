@@ -668,22 +668,53 @@ def test_the_downloader_command_asks_each_job_for_its_own_exit(tmp_path, stub_do
     assert stub_download[-1]["kw"]["env"][F.EXITS_ENV].endswith(F.EXITS_NAME)
 
 
-def test_the_two_fetchers_disagree_about_the_shell_shape_and_the_record_says_why():
-    """The family census, keyed on the pwsh command each fetcher builds rather than on the
-    word `curl`. `fetch_t2v_run`'s `foreach` shape DOES propagate a native non-zero exit
-    (measured); `fetch_run`'s `-Parallel` shape does not, and so must observe each job.
-    Red if a later edit gives `fetch_t2v_run` a `-Parallel` block without the observation."""
+def test_there_is_exactly_ONE_downloader_across_the_two_fetchers():
+    """The family census, keyed on WHO BUILDS a downloader command rather than on the word
+    `curl`.
+
+    **CORRECTION, wave 14 (F-a3ba416b).** This test used to be
+    `test_the_two_fetchers_disagree_about_the_shell_shape_and_the_record_says_why`, and it
+    pinned the disagreement on the stated ground that "`fetch_t2v_run`'s `foreach` shape
+    DOES propagate a native non-zero exit (measured)". That measurement was of a
+    single-job loop. RE-MEASURED ON THIS RIG 2026-09-04 with three jobs: a failure on the
+    FIRST leaves the pwsh process at exit 0; the same loop with the failure on the LAST
+    exits 1 — a `foreach` loop's process code reflects only the last native command. So the
+    sibling's gate could not fire on a mid-loop failure either, and this test was pinning
+    the reason the sibling had been left without a per-job record.
+
+    There is one downloader now. The census asserts that only `fetch_run` builds a pwsh
+    command at all, and that the interpreter, the `--` terminator and the per-job
+    `$LASTEXITCODE` all live in it.
+    """
+    import ast
+
     import fetch_t2v_run as T
 
-    for mod, shape in ((F, "-Parallel"), (T, "foreach")):
+    builders = {}
+    for mod in (F, T):
         src = open(os.path.join(TOOLS, f"{mod.__name__}.py"), encoding="utf-8").read()
-        body = src[src.index("def download("):]
-        body = body[:body.index("\ndef ")]
-        assert shape in body, f"{mod.__name__} no longer builds a {shape} downloader"
-        if "-Parallel" in body:
-            assert "$LASTEXITCODE" in body, (
-                f"{mod.__name__} runs curl in a -Parallel runspace, whose native non-zero "
-                f"exit does not reach the process code, and records no per-job exit")
+        tree = ast.parse(src)
+        # every string literal in the module EXCEPT docstrings — a docstring recording the
+        # measurement that retired a shape is evidence, not a shape.
+        docstrings = {ast.get_docstring(n, clean=False) for n in ast.walk(tree)
+                      if isinstance(n, (ast.Module, ast.FunctionDef, ast.ClassDef,
+                                        ast.AsyncFunctionDef))}
+        literals = [n.value for n in ast.walk(tree)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                    and n.value not in docstrings]
+        builders[mod.__name__] = [v for v in literals if "curl.exe" in v]
+
+    assert builders["fetch_t2v_run"] == [], (
+        "fetch_t2v_run builds a downloader command again; there is one implementation and "
+        "it is fetch_run.download")
+    assert builders["fetch_run"], "fetch_run stopped building the downloader command"
+    joined = " ".join(builders["fetch_run"])
+    assert "-Parallel" in joined
+    assert "-- $_.url" in joined, "a url in option position is read by curl as a flag"
+    assert "$LASTEXITCODE" in joined, (
+        "curl runs in a -Parallel runspace, whose native non-zero exit does not reach the "
+        "process code, and no per-job exit is recorded")
+    assert T.fetch_download is F.download, "one downloader, not two"
 
 
 # ------------------------------------------------ the backstop: a body is not a frame

@@ -570,8 +570,11 @@ def gate_base_licence(graph, path=None):
     # cfg-1 distilled trajectory is not the trajectory every other arm is measured on), and
     # a base carrying it would have been admitted here. One verdict set, named once.
     REFUSED_VERDICTS = ("BANNED", "EXCLUDED")
-    banned = [r for r in route_gates.components(graph)
-              if _verdict_of(r) in REFUSED_VERDICTS]
+    # ONE census, read once and reported three ways (wave 14, F-b7e7c5c0). It used to be
+    # called twice — once for the filter and once for `n_components_examined` — and the
+    # second call was the only number the receipt carried.
+    comp = route_gates.components(graph)
+    banned = [r for r in comp if _verdict_of(r) in REFUSED_VERDICTS]
     # `gate` is the raising class's id and `andon` its name (the evidence contract every
     # census reads); the clause names this check. Aligned at the wave-8 merge — the first
     # draft put the clause under `andon` and its test expected a gate id no class carries.
@@ -587,7 +590,42 @@ def gate_base_licence(graph, path=None):
                       "licence": r.get("licence") or (r.get("ruling") or {}).get("licence"),
                       "reason": r.get("reason") or (r.get("ruling") or {}).get("reason")}
                      for r in banned],
-          "n_components_examined": len(route_gates.components(graph))}
+          "n_components_examined": len(comp)}
+    # ---- the three numbers, not one (wave 14, F-b7e7c5c0). `n_components_examined` counts
+    # what was LOOKED AT; the verdict then read "{n} ruled component(s) read off the
+    # baseline, none BANNED and none EXCLUDED", so "every component is ruled clean" and
+    # "the table classified none of them" were the same receipt. Measured 2026-09-04 on a
+    # graph loading `some_unknown_style_v3` + `mystery_vae_xyz` + `nobody_knows_clip`:
+    # `components()` returns three rows all reading `NOT IN THIS TABLE` with
+    # `matched_on: None`, and this gate returned a green, confident sentence over a
+    # baseline the licence map has never seen — on a repo whose law is that an unverifiable
+    # licence is treated as NO. `route_gates.verify`'s own licence clause was changed the
+    # same day for exactly this reason (route_gates.py:1593-1600); this is that shape,
+    # carried, and the SAME predicate: a component is CLASSIFIED when the table matched a
+    # row for it (`ruling.matched_on`), and the rest are NAMED rather than counted away.
+    #
+    # What is NOT changed: an unclassified component is still not refused here. Which map
+    # row governs which served filename is a spec's decision (the wave-10 pin), and 8 of the
+    # 9 submitted weight files are unclassified by design. The receipt now says the
+    # question was asked, and says what the answer was.
+    label = getattr(route_gates, "_component_label", None)
+    if label is None:                     # a tree without the helper still names the file
+        def label(rec):                   # noqa: E306 - local fallback, one expression
+            return rec.get("file") or rec.get("class_type") or rec.get("class")
+    conditional_verdicts = tuple(getattr(route_gates, "CONDITIONAL_VERDICTS",
+                                         ("CONDITIONAL",)))
+    classified = [c for c in comp if (c.get("ruling") or {}).get("matched_on")]
+    unclassified = [label(c) for c in comp
+                    if not (c.get("ruling") or {}).get("matched_on")]
+    conditional = [label(c) for c in comp if _verdict_of(c) in conditional_verdicts]
+    ev["n_components_classified"] = len(classified)
+    ev["n_components_unclassified"] = len(unclassified)
+    ev["n_components_conditional"] = len(conditional)
+    ev["unclassified"] = unclassified
+    ev["conditional"] = conditional
+    ev["classified"] = [{"label": label(c),
+                         "matched_on": (c.get("ruling") or {}).get("matched_on"),
+                         "verdict": _verdict_of(c)} for c in classified]
     if banned:
         named = "; ".join(
             f"{b['class_type'] or b['file']!r} ({b['verdict']}; matched the licence "
@@ -602,9 +640,16 @@ def gate_base_licence(graph, path=None):
             f"component is a conclusion that has to be thrown away — so it never starts. "
             f"Nothing is built and no output directory is created",
             dict(ev, clause="banned_component_in_base"))
-    ev["verdict"] = (f"{ev['n_components_examined']} ruled component(s) read off the "
-                     f"baseline, none BANNED and none EXCLUDED (route_gates.verify's own "
-                     f"verdict set)")
+    # The verdict states only what was MEASURED, and "nothing banned" and "nothing ruled"
+    # are now two different sentences in it.
+    ev["verdict"] = (
+        f"{len(classified)} of {len(comp)} component(s) read off the baseline are "
+        f"classified by the licence map, {len(unclassified)} unclassified, "
+        f"{len(conditional)} conditional; none of the classified is BANNED or EXCLUDED "
+        f"(route_gates.verify's own verdict set)"
+        + (f". UNCLASSIFIED (the table ruled nothing about these, and this gate asserts "
+           f"nothing about them): {', '.join(str(u) for u in unclassified)}"
+           if unclassified else ""))
     return ev
 
 
@@ -666,6 +711,63 @@ def conditional_attribution(graph):
     return [entry(k) for k in keys(graph)]
 
 
+def disclosure(arm, attribution, route_ev):
+    """The per-route disclosure block: what a user of THIS arm's footage is exposed to.
+
+    CLAUDE.md's per-route disclosure ruling (the Director, 2026-08-12) requires a route that
+    sends assets through a third-party tier to document what its user is exposed to, and its
+    licence rule states that a CONDITIONAL grant is a Director decision surfaced
+    contrastively, never silently accepted. Wave 14, F-92f67091: this arm's obligation lived
+    in `credit_obligation` inside the JSON and reached no operator-facing surface at all, so
+    the one grant in the licence map that is conditional on a credits line could be incurred
+    without the line ever being said out loud.
+
+    Every field here is READ from the licence table's own row (through `attribution`, which
+    `route_gates.attribution_entry_for` built) or from Gate ROUTE's own receipt. Nothing is
+    typed twice. An arm whose row carries no condition reports an EMPTY obligations list
+    beside the components the gate examined — a measured "none", not a silence.
+    """
+    entries = [e for e in (attribution or []) if isinstance(e, dict)]
+    return {
+        "route": f"E14 arm {arm} - camera i2v on the Comfy Cloud hosted tier",
+        "conditional_components": [e.get("component") for e in entries],
+        "obligations": [
+            {"component": e.get("component"), "kind": e.get("kind", "credit"),
+             "creditor": e.get("creditor"), "source": e.get("source"),
+             "text": e.get("text"),
+             "applies_to": "published footage from this arm",
+             "read_from": "route_gates.RULED_COMPONENTS[<component>]['condition']"}
+            for e in entries],
+        "checked_by": ("route_gates.verify's `uncredited_conditional_component` clause, "
+                       "which refuses this build if the record does not credit a "
+                       "CONDITIONAL component the graph loads"),
+        "route_verdict": route_ev.get("verdict"),
+        "credit_obligation": credit_obligation(arm),
+    }
+
+
+def disclosure_lines(block):
+    """The operator-facing lines for a disclosure block, one per obligation.
+
+    `canon_line(canon_ev)` exists one screen away precisely so a census escape "announces
+    itself"; this is the same shape for the obligation an arm incurs. It returns lines
+    rather than printing them so a test can read the words back without a capture.
+    """
+    out = [f"  ROUTE: {block.get('route_verdict')}"]
+    obligations = block.get("obligations") or []
+    if not obligations:
+        out.append(f"  CREDIT OBLIGATION: none - the licence map rules no CONDITIONAL "
+                   f"component in this arm's graph "
+                   f"({block['credit_obligation'].get('text')})")
+        return out
+    for ob in obligations:
+        out.append(
+            f"  CREDIT OBLIGATION: this arm credits {ob['creditor']} - {ob['text']} "
+            f"[{ob['kind']}; {ob['applies_to']}; source {ob['source']}; component "
+            f"{ob['component']}]")
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", required=True,
@@ -704,6 +806,7 @@ def main(argv=None):
     if "attribution" in inspect.signature(route_gates.verify).parameters:
         verify_kwargs["attribution"] = attribution
     route = route_gates.verify(built, **verify_kwargs)
+    disclosure_block = disclosure(args.arm, attribution, route)
 
     os.makedirs(args.out, exist_ok=True)
     graph_path = os.path.join(args.out, f"E14-{args.arm}-camera-i2v.api.json")
@@ -714,6 +817,9 @@ def main(argv=None):
         "experiment": EXPERIMENT, "arm": args.arm, "tool_version": TOOL_VERSION,
         "lora": ARMS[args.arm]["lora"],
         "credit_obligation": credit_obligation(args.arm),
+        # The per-route disclosure the Director's 2026-08-12 ruling requires, beside the
+        # obligation it discloses (wave 14, F-92f67091).
+        "disclosure": disclosure_block,
         # The credit line as the submitting record must carry it, built from the licence
         # table's rows and checked by Gate ROUTE against the components the graph loads.
         "attribution": attribution,
@@ -745,6 +851,14 @@ def main(argv=None):
         print(f"  {tier_name}-noise expert (sampler {rec['feeds_expert_sampler']}) <- "
               f"loader {rec['loader_node']} <- {rec['lora_name']}")
     print(f"  PAIR_TIER: {tier.get('verdict')}")
+    # ---- wave 14, F-92f67091. The ONLY CONDITIONAL grant in the licence map carries an
+    # obligation on the FOOTAGE, and the operator-facing surface of the tool that authors
+    # that spend never printed it: `credit_obligation`, `attribution` and the ROUTE verdict
+    # appeared only inside the JSON record. `canon_line(canon_ev)` one screen up exists
+    # precisely so a census escape announces itself; the obligation now announces itself
+    # the same way, at the moment it is incurred.
+    for line in disclosure_lines(disclosure_block):
+        print(line)
     print(f"  graph   {graph_path}")
     print(f"  record  {record_path}")
     # The SUCCESS half of the exit convention (wave 10). `<PREFIX>_OK ` uses the SAME

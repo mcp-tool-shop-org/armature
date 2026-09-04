@@ -444,6 +444,112 @@ def link_round_trip(api_graph, saved_graph):
             "optional_sockets_empty_in_both": sorted(empty)}
 
 
+#: The two keys `route_gates.verify` writes into its own receipt for the two facts a
+#: builder passes it. A dict carrying BOTH is a `verify` receipt; `gate_base_licence`'s
+#: evidence carries the same `gate`/`andon` pair and neither of these, which is why the
+#: reader below keys on the FACTS and not on the gate id (wave 12's rule: key on
+#: behaviour, not spelling).
+VERIFY_RECEIPT_KEYS = ("attribution", "carries_no_sampler_asserted")
+
+
+def verify_receipts(doc):
+    """Every `route_gates.verify` receipt inside a payload record, found by its CONTENT.
+
+    Walks the record rather than indexing a key path, because the builders spell that path
+    two different ways — `gates.ROUTE` (the assemblers, `build_lora_arm_payload`,
+    `build_r2v_payload`) and `gate_ROUTE_built` (`build_i2v_payload` and its camera
+    sibling) — and a reader keyed on one of them would silently find nothing in the others
+    and hand the DEFAULT facts to the last gate before a spend.
+    """
+    out = []
+    stack = [doc]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if (node.get("gate") == "ROUTE" and node.get("andon") == "RouteGate"
+                    and all(k in node for k in VERIFY_RECEIPT_KEYS)):
+                out.append(node)
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return out
+
+
+def route_facts(record_path):
+    """The two facts every builder passes `verify`, READ OFF the record beside the graph.
+
+    Wave 14, F-2da88c51. This tool is the LAST gate before a paid submission and it called
+    `RG.verify(saved, frame=..., hosted_tier=...)` — neither `attribution` nor
+    `carries_no_sampler`. Two route families this repo's own builders emit could therefore
+    not be admitted at all:
+
+    * the free assembly / cascade chains, which carry no sampler and say so
+      (`build_assembly_payload.py:507`, `build_cascade_payload.py:192`). Measured
+      2026-09-04 on `build_assembly_payload.build([8 names])`: `RG.verify` with this tool's
+      exact kwargs raises `RouteGate` — "the seed clause is INDETERMINATE on this graph and
+      therefore UNPROVEN ... Pass carries_no_sampler=True if the graph really carries none".
+    * arm T of `build_lora_arm_payload`, whose graph loads the CONDITIONAL
+      `wan22-14b-t2v-technically_color.safetensors`. Measured on a one-node graph loading
+      it: `RG.verify(g)` raises clause `uncredited_conditional_component`, and
+      `RG.verify(g, attribution=[RG.attribution_entry_for('technically_color')])` clears it.
+
+    Both refusal texts instruct the operator to pass a Python keyword, and the CLI exposed
+    no way to supply either — so the admission step that exists because "a dry_run PASS does
+    not prove link sanity" fired on a CORRECT configuration, and the only way past it was to
+    skip the last check before an irreversible spend.
+
+    The facts are DERIVED, never re-typed at this call site: the credit the builder built
+    from the licence row (`route_gates.attribution_entry_for`) is the credit checked here,
+    and the no-sampler assertion is the one the builder already had CHECKED against its own
+    graph. Deriving `carries_no_sampler` from the saved graph instead would make the
+    assertion self-fulfilling — `verify` checks the caller's claim against the graph, and a
+    claim read off that same graph is not a claim.
+    """
+    path = os.path.abspath(record_path)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise RG.RouteGate(
+            f"--record={record_path!r} could not be read as JSON ({type(exc).__name__}: "
+            f"{exc}). The two facts this admission hands to Gate ROUTE come from the "
+            f"builder's own payload record, and a record that cannot be read supplies "
+            f"neither",
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "record_unreadable",
+             "record": path, "error": type(exc).__name__}) from exc
+    receipts = verify_receipts(doc)
+    if not receipts:
+        raise RG.RouteGate(
+            f"--record={record_path!r} carries no `route_gates.verify` receipt: no dict in "
+            f"it holds gate=ROUTE, andon=RouteGate and both of "
+            f"{list(VERIFY_RECEIPT_KEYS)}. A record that does not say what the builder "
+            f"asserted is a record that cannot supply this gate's facts, and defaulting "
+            f"them would put an unasserted claim on the last check before a spend",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "record_carries_no_verify_receipt", "record": path,
+             "required_keys": list(VERIFY_RECEIPT_KEYS)})
+    asserted = sorted({bool(r["carries_no_sampler_asserted"]) for r in receipts})
+    if len(asserted) != 1:
+        raise RG.RouteGate(
+            f"--record={record_path!r} carries {len(receipts)} verify receipts that "
+            f"DISAGREE about whether the graph carries a sampler ({asserted}). One of them "
+            f"describes the graph about to be submitted and this gate cannot tell which",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "record_route_facts_disagree", "record": path,
+             "carries_no_sampler_values": asserted, "n_receipts": len(receipts)})
+    attribution, seen = [], set()
+    for rec in receipts:
+        for entry in rec.get("attribution") or []:
+            key = json.dumps(entry, sort_keys=True, default=str)
+            if key not in seen:
+                seen.add(key)
+                attribution.append(entry)
+    return {"record": path, "n_verify_receipts": len(receipts),
+            "carries_no_sampler": asserted[0], "attribution": attribution,
+            "source": ("route_gates.verify's own receipt inside the builder's payload "
+                       "record; neither fact is typed at this call site")}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--saved", required=True)
@@ -457,6 +563,15 @@ def main(argv=None):
                          "pixel dimension at all (wan2.7-r2v). Gate L's pixel clause is "
                          "INAPPLICABLE there, not skipped: the tier's own enum constraints "
                          "are checked instead and an illegal one still raises")
+    ap.add_argument("--record", default=None,
+                    help="the payload record the builder wrote beside this graph. Gate "
+                         "ROUTE's two caller-supplied facts - the `attribution` entries "
+                         "the record carries and whether the builder asserted the graph "
+                         "carries no sampler - are READ OFF it, so the credit derived "
+                         "from the licence row is the credit this admission checks. "
+                         "Without it both facts are `verify`'s defaults and a free "
+                         "assembly chain or a CONDITIONAL-component arm cannot be "
+                         "admitted at all (wave 14, F-2da88c51)")
     ap.add_argument("--frame", default=None,
                     help="width,height,length — the shape the caller knows it is "
                          "generating. Gate L is INDETERMINATE and raises on a graph whose "
@@ -496,8 +611,21 @@ def main(argv=None):
 
     equality = round_trip(api, saved)                       # 0 — is it even our graph
     topology = link_round_trip(api, saved)                  # 0b — is it wired as we wired it
-    gate_route = RG.verify(saved, frame=frame, hosted_tier=a.hosted_tier)   # 1
-    gate_s = RG.gate_s_registration(saved, registered)      # 2
+    # The facts the BUILDER passed `verify`, read off its record rather than re-typed here
+    # (wave 14, F-2da88c51). With no `--record` they are `verify`'s own defaults, and the
+    # recorded `route_facts` block says which of the two this admission ran under.
+    facts = (route_facts(a.record) if a.record else
+             {"record": None, "n_verify_receipts": 0, "carries_no_sampler": False,
+              "attribution": [],
+              "source": "no --record supplied; route_gates.verify's defaults"})
+    gate_route = RG.verify(saved, frame=frame, hosted_tier=a.hosted_tier,
+                           carries_no_sampler=facts["carries_no_sampler"],
+                           attribution=facts["attribution"])                # 1
+    # The SAME fact reaches Gate S. `gate_s_registration` runs the identical seed-population
+    # andon, so a no-sampler graph that cleared Gate ROUTE above used to be refused one line
+    # later by the sibling clause that was never told.
+    gate_s = RG.gate_s_registration(saved, registered,
+                                    carries_no_sampler=facts["carries_no_sampler"])  # 2
     checked = [f for f in gate_route["frame_legality"]]     # 3 — already raised if illegal
     if a.hosted_tier:
         # The honest Gate L line for a tier that has no pixels to report.
@@ -515,6 +643,7 @@ def main(argv=None):
                      "sha256": hashlib.sha256(open(a.api, "rb").read()).hexdigest()},
         "round_trip": equality,
         "topology_round_trip": topology,
+        "route_facts": facts,
         "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked},
     }
     # BELOW every check, not above them. `build_payload.py` states the repo's invariant —
@@ -530,6 +659,10 @@ def main(argv=None):
         "round_trip_values_compared": equality["n_values_compared"],
         "links_compared": topology["n_links"],
         "optional_sockets_empty_in_both": topology["optional_sockets_empty_in_both"],
+        "route_facts": {"record": facts["record"],
+                        "carries_no_sampler": facts["carries_no_sampler"],
+                        "attribution": [e.get("component") if isinstance(e, dict) else e
+                                        for e in facts["attribution"]]},
         "gate_ROUTE": gate_route["verdict"], "gate_S": gate_s["verdict"],
         "gate_L": f"{', '.join(shapes)} legal ({gate_route['frame_legality_verdict']})",
         "record": a.out}))

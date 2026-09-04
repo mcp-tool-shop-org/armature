@@ -56,7 +56,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 from fetch_run import (  # noqa: E402,F401
-    FetchHalt, PNG_SIGNATURE, verify_downloads)
+    EXITS_NAME, FetchHalt, PNG_SIGNATURE, verify_downloads)
+from fetch_run import download as fetch_download  # noqa: E402
 
 TOOL_VERSION = "E09.A3"
 
@@ -114,28 +115,55 @@ def plan(results, out):
     return jobs
 
 
-def download(jobs):
-    """curl, behind a `--` terminator, with the manifest path in the environment.
+def download(jobs, out=None):
+    """The sibling's downloader, called — ONE implementation, not a second shape.
 
-    Two defects lived in the old three lines. A url read straight out of an
+    Two defects lived in the original three lines. A url read straight out of an
     operator-pasted dump sat in OPTION position with no terminator, so an entry beginning
     with a dash was read by curl as a flag — and both `-o` and `-K` (read a config file)
-    are reachable that way; the sibling `fetch_run.py` already had the terminator. And the
-    manifest path was interpolated into a single-quoted PowerShell literal, so an
-    apostrophe anywhere in `--out` closed the literal and the remainder parsed as separate
-    statements. The command string below is a CONSTANT.
+    are reachable that way. And the manifest path was interpolated into a single-quoted
+    PowerShell literal, so an apostrophe anywhere in `--out` closed the literal and the
+    remainder parsed as separate statements. Both are fixed in `fetch_run.download`, whose
+    command string is a CONSTANT and which is what runs now.
+
+    ⚠ **The third defect, and why this function no longer builds a command at all**
+    (wave 14, F-a3ba416b). This fetcher's ONLY downloader gate read the pwsh PROCESS code,
+    under a `foreach ($x in $j) { curl.exe ... }` loop — and that code reflects only the
+    LAST native command in the loop. MEASURED ON THIS RIG 2026-09-04:
+
+        pwsh -NoProfile -Command '$j = @(1,2,3); foreach ($x in $j)
+            { cmd.exe /c "exit $(if($x -eq 1){22}else{0})" }'      -> process exit 0
+        ...the same loop with the failure on the LAST element      -> process exit 1
+
+    So `if proc.returncode != 0` could not fire on any download failure except one in the
+    final job. `fetch_run.download`'s own docstring asserted the opposite as a measured
+    fact, and that claim is corrected in place there; it is also the reason this fetcher was
+    left without the per-job `download_exits.json` record the sibling gained.
+
+    The backstop was only partial: `verify_downloads` PNG-signature-checks every planned
+    `.png`, so a mid-loop FRAME failure that lands a `--fail-with-body` HTTP error body
+    still raises — but the VIDEO job's `donor<ext>` carries a suffix this tool has no
+    signature for and is counted, not judged, so a failed donor download that lands a
+    35-byte error body read as present, non-empty, no stray, and FETCH_T2V_OK was printed.
+
+    `record_urls=False`: the exit record lands in the run directory as the sibling's does,
+    but WITHOUT the urls. `_urls.json` is deleted on every path here precisely because it
+    holds signed download links (wave 12, F-8ccedf71), and a per-job record naming the same
+    urls would reopen exactly what that fix closed. `out` identifies a job uniquely, so the
+    gate reads everything it needs.
     """
     for j in jobs:
         os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
     manifest = [{"url": j["url"], "out": os.path.abspath(j["out"])} for j in jobs]
-    tmp = os.path.join(os.path.dirname(jobs[0]["out"]), "_urls.json")
+    manifest_dir = os.path.dirname(os.path.abspath(jobs[0]["out"]))
+    # The exit record belongs in the run ROOT, beside the frame directories rather than
+    # inside one: `verify_downloads`' root sweep judges only VIDEO_SUFFIXES there, and a
+    # mapped frame directory refuses every file the plan did not name. `out` is the
+    # `--out` `plan` was given; the fallback keeps an in-process caller working.
+    run_root = os.path.abspath(out) if out else manifest_dir
+    tmp = os.path.join(manifest_dir, "_urls.json")
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh)
-    ps = (f"$j = Get-Content -LiteralPath $env:{MANIFEST_ENV} -Raw | ConvertFrom-Json; "
-          "foreach ($x in $j) "
-          "{ curl.exe -sS -L --fail-with-body -o $x.out -- $x.url }")
-    env = dict(os.environ)
-    env[MANIFEST_ENV] = os.path.abspath(tmp)
     # ---- wave 12, F-8ccedf71. `os.remove(tmp)` sat BELOW the refusal, so it ran only on
     # the success path: a halt on a non-zero downloader left `_urls.json` — every result URL
     # the operator pasted, signed download links included — in the run directory, where this
@@ -144,20 +172,12 @@ def download(jobs):
     # kept deliberately; this file's `_urls.json` is a temporary whose deletion is the
     # intended behaviour on every path, including one where `subprocess.run` itself raises.
     try:
-        proc = subprocess.run(["pwsh", "-NoProfile", "-Command", ps],
-                              capture_output=True, text=True, env=env)
-        if proc.returncode != 0:
-            raise FetchHalt(
-                f"the downloader exited {proc.returncode}; the frames this run would be "
-                f"measured on are not on disk",
-                {"gate": "FETCH", "andon": "FetchHalt", "clause": "downloader_exit_nonzero",
-                 "returncode": proc.returncode,
-                 "stdout": (proc.stdout or "")[-2000:],
-                 "stderr": (proc.stderr or "")[-2000:]})
+        proc, exits = fetch_download(
+            tmp, exits_path=os.path.join(run_root, EXITS_NAME), record_urls=False)
     finally:
         if os.path.isfile(tmp):
             os.remove(tmp)
-    return proc
+    return proc, exits
 
 
 def gate_order_evidence(ev):
@@ -271,7 +291,7 @@ def main(argv=None):
                                   "shuffles the clip"),
                    "files": [{k: v for k, v in j.items() if k != "url"} for j in jobs]},
                   fh, indent=2)
-    download(jobs)
+    download(jobs, out=a.out)
 
     # Gate FETCH · ANDON, carried from `fetch_run.verify_downloads` rather than written a
     # second time. This tool had NO plan-to-disk check: the frame population came from

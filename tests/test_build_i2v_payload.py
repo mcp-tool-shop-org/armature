@@ -467,11 +467,23 @@ def test_the_asserted_fit_is_now_checkable_against_the_file(tmp_path):
     assert start["measured"]["height"] == B.HEIGHT
     assert start["fit_agrees_with_the_file"] is True
 
-    # …and it goes False on the input it exists to catch: a start frame authored at the
-    # wrong size, which used to leave the `fit` sentence entirely unchanged.
+    # …and on the input it exists to catch — a start frame authored at the wrong size — it
+    # REFUSES. Wave 14, F-e17613c2: this assertion used to read
+    # `assert built(start_frame=wrong)[1]["start_image"]["fit_agrees_with_the_file"] is
+    # False`, and it PINNED the non-refusal. The comparison was computed, written into the
+    # record, and read by nothing: measured by grep 2026-09-04, `fit_agrees_with_the_file`
+    # occurs in the two writers and in tests, and nowhere under tools/, docs/ or verify.ps1.
+    # A paid i2v generation could therefore go out on a start frame at the wrong resolution
+    # with every printed gate line green, on the one input that is the whole of this route's
+    # conditioning — and spent credits have no compensator. A diagnostic and a gate are
+    # different objects; this is the gate.
     wrong = B.resolve_start_frame(str(_authored_start_frame(
         tmp_path, name="wrong.png", size=(1024, 576))))
-    assert built(start_frame=wrong)[1]["start_image"]["fit_agrees_with_the_file"] is False
+    with pytest.raises(B.PayloadError, match=r"declares a NATIVE fit") as exc:
+        built(start_frame=wrong)
+    assert exc.value.evidence["clause"] == "fit_disagrees_with_the_file"
+    assert exc.value.evidence["measured"] == [1024, 576]
+    assert exc.value.evidence["generation_frame"] == [B.WIDTH, B.HEIGHT]
 
 
 def test_the_record_says_whether_the_authored_input_carried_ALPHA(tmp_path):
