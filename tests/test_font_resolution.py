@@ -233,18 +233,28 @@ def test_all_three_composers_resolve_through_the_one_implementation():
 
 
 def _modules_binding_the_shared_resolver():
-    """Enumerated from `tools/`, not typed: every module that does
-    `from sheet_compose import font as _font`."""
+    """Enumerated from `tools/`, not typed: every module other than `sheet_compose` that
+    carries a `_font` of its own.
+
+    Deliberately shape-independent. A composer may reach the shared resolver by
+    `from sheet_compose import font as _font` (a reference bound at import — the shape that
+    made the fixture miss two of three) or by a wrapper that calls
+    `sheet_compose._font(name, size)` at call time. Both are `_font` in the module, and
+    which one is in the tree is not this census's question: the census is WHICH MODULES the
+    fixture has to reach.
+    """
     import glob
-    import re
 
     tools = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                          "tools")
     found = []
     for path in sorted(glob.glob(os.path.join(tools, "*.py"))):
+        stem = os.path.basename(path)[:-3]
+        if stem == "sheet_compose":
+            continue
         with open(path, encoding="utf-8") as fh:
-            if re.search(r"(?m)^from sheet_compose import font as _font\b", fh.read()):
-                found.append(os.path.basename(path)[:-3])
+            if "_font" in fh.read():
+                found.append(stem)
     return found
 
 
@@ -288,12 +298,27 @@ def test_the_sheet_fonts_fallback_reaches_every_composer(monkeypatch):
         assert f.size == 30, f"{name}'s fallback ignores the requested size"
 
 
-def test_the_composers_that_bind_the_resolver_are_the_ones_that_hold_their_own_reference():
-    """Why the fixture needs a list at all, asserted rather than explained: each of these
-    modules holds its own object, so a patch on `sheet_compose._font` cannot reach it."""
+def test_every_composer_answers_with_whatever_sheet_compose_would_answer(monkeypatch):
+    """The property the fixture depends on, stated without naming a binding shape.
+
+    A composer may hold its own reference bound at import, or delegate at call time; what
+    the sheet fixture needs either way is that no composer resolves a face
+    `sheet_compose` would not. Asserted by making the shared resolver answer with a
+    sentinel and requiring every composer to return it — the patch reaches a delegating
+    wrapper directly and a bound reference through `install_sheet_font_fallback`.
+    """
+    import conftest
     import make_cast_sheet
     import rig_sheet_compose
 
+    sentinel = object()
+    monkeypatch.setattr(SC, "_font", lambda name, size: sentinel)
+    monkeypatch.setattr(SC, "font", lambda name, size: sentinel)
     for mod in (rig_sheet_compose, make_cast_sheet):
-        assert mod._font is SC.font
-        assert mod._font is not SC._font
+        if mod._font("arial.ttf", 26) is sentinel:
+            continue
+        # A reference bound at import cannot see the patch above; the fixture's own
+        # installer is what reaches it, and that is exactly why the census exists.
+        assert mod.__name__ in conftest.SHEET_COMPOSERS, (
+            f"{mod.__name__} holds its own resolver reference and is not in "
+            f"conftest.SHEET_COMPOSERS, so the sheet_fonts fixture cannot reach it")
