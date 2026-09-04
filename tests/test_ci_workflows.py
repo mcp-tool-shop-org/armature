@@ -468,9 +468,13 @@ def trigger_population():
     """
     project = PYPROJECT["project"]
     inputs = {"pyproject.toml", project["readme"]}
-    licence = project.get("license")
-    if isinstance(licence, dict) and licence.get("file"):
-        inputs.add(licence["file"])
+    # Read through `declared_licence_files()`, which understands PEP 639's `license-files`
+    # as well as the deprecated `license = { file = ... }` table. This line WAS
+    # `project["license"]["file"]`, keyed on the table's own key: moving to the PEP 639 form
+    # would have made it return nothing and dropped the LICENSE trigger requirement in
+    # silence, with the census still green because `_repo_root_files_the_suite_reads()`
+    # finds `LICENSE` by an unrelated route (F-77a1c1b9).
+    inputs.update(declared_licence_files())
     inputs.update(_local_action_files())
     inputs.update(_repo_root_files_the_suite_reads())
     return sorted(inputs)
@@ -481,8 +485,10 @@ def trigger_population():
 RECORDED_TRIGGER_POPULATION = [
     # `clean-room` joined at the wave-8 merge: ci-packaging lifted the clean-install leg into a
     # composite action called by ci.yml and release.yml (F-60ab1bd7); this census saw it
-    # appear, which is the direction it exists for.
-    ".github/actions/clean-room/action.yml", ".github/actions/sheet-fonts/action.yml",
+    # appear, which is the direction it exists for. `npm-clean-room` joined at wave 10 the
+    # same way (F-3729edd4) — the npm package's half of that leg — and the census saw it too.
+    ".github/actions/clean-room/action.yml", ".github/actions/npm-clean-room/action.yml",
+    ".github/actions/sheet-fonts/action.yml",
     ".gitignore", "HANDOFF.md", "LICENSE", "MANIFEST.in", "README.md", "README.pypi.md",
     "pyproject.toml", "verify.ps1",
 ]
@@ -501,6 +507,7 @@ def test_the_trigger_population_is_derived_from_what_ci_and_the_suite_actually_c
     # beside the font step); this pin is the typed half the derived census above exists to
     # catch, and it caught this one at the merge.
     assert _local_action_files() == [".github/actions/clean-room/action.yml",
+                                     ".github/actions/npm-clean-room/action.yml",
                                      ".github/actions/sheet-fonts/action.yml"]
     assert {"verify.ps1", ".gitignore"} <= set(_repo_root_files_the_suite_reads())
     #: the two enumerators must agree: `action_files()` walks `.github/actions/` off the
@@ -962,6 +969,11 @@ def _eval_if(expr, ctx):
     for name in sorted(ctx, key=len, reverse=True):
         body = body.replace(name, repr(ctx[name]))
     body = body.replace("||", " or ").replace("&&", " and ")
+    # GitHub's expression language spells the booleans lowercase; `pages.yml`'s deploy
+    # condition compares against a literal `false` and no caller had ever fed one of those
+    # through here, so this substitution arrived with the first job that needed it.
+    body = re.sub(r"\bfalse\b", "False", body)
+    body = re.sub(r"\btrue\b", "True", body)
     assert "github." not in body, f"unmodelled context in an if-expression: {expr!r}"
     return bool(eval(body, {"__builtins__": {}}, {}))  # noqa: S307 - the input is this repo's own YAML
 
@@ -1414,15 +1426,36 @@ def _install_tokens(script):
             # the constraint exists to protect, and pinning a filename would be nonsense.
             if "/" in token or token.endswith((".whl", ".tar.gz")):
                 continue
+            # Nor is a runner-side variable. `npm install --prefix "$PREFIX" "$TARBALL"` in
+            # `.github/actions/npm-clean-room` expands to a scratch directory and to the
+            # tarball just packed — the same "local artifact" exemption one substitution
+            # later, and a `$` can never begin a package name.
+            if token.startswith("$"):
+                continue
             tokens.append(token)
     return tokens
 
 
-def toolchain_tokens():
-    """Every package installed by a job that produces or publishes a distribution.
+#: The build backend is not installed by any workflow line: `python -m build` resolves
+#: `[build-system].requires` into an isolated environment of its own. Until wave 10 that put
+#: the ONE tool that applies MANIFEST.in and selects sdist contents outside a census whose
+#: whole subject is "what runs on release day" (F-fbf7020c).
+BACKEND_SOURCE = "pyproject.toml:[build-system].requires"
 
-    The population is the jobs, walked: the ones that build (above) plus the ones that hand
-    an artifact to a registry. What is installed inside them is what runs on release day.
+#: `verify.ps1`'s DESCRIPTION says a green local run and a green CI run are the same claim,
+#: and leg 3 produces a wheel and an sdist. That makes it a third place the artifact is
+#: PRODUCED, and it was in no census at all: `toolchain_tokens()` walked `job_scripts()` over
+#: `workflow_files()` only (F-da6b0457).
+LOCAL_VERIFY_SOURCE = "verify.ps1"
+
+
+def toolchain_tokens():
+    """Every package a distribution's production or publication resolves.
+
+    Two populations, both walked: the JOBS that build (above) plus the ones that hand an
+    artifact to a registry, read for what they install — and `[build-system].requires`, read
+    out of pyproject, because the backend is resolved by `python -m build` itself and appears
+    in no install line anywhere.
     """
     jobs = set(jobs_that_produce_a_distribution())
     for name in workflow_files():
@@ -1436,14 +1469,21 @@ def toolchain_tokens():
         for script in job_scripts(workflow, job):
             for token in _install_tokens(script):
                 tokens.setdefault(token, []).append(f"{workflow}:{job}")
+    for requirement in PYPROJECT["build-system"]["requires"]:
+        tokens.setdefault(requirement.strip(), []).append(BACKEND_SOURCE)
+    with open(os.path.join(REPO, LOCAL_VERIFY_SOURCE), encoding="utf-8") as fh:
+        for token in _install_tokens(fh.read()):
+            tokens.setdefault(token, []).append(LOCAL_VERIFY_SOURCE)
     return tokens
 
 
 #: Installed without a version constraint, deliberately, as of 2026-09-04. None of these
 #: PRODUCES or UPLOADS the artifact: `pip` is the installer itself, and numpy/pillow/pytest
 #: are the suite's own dependencies, whose byte-stable pins (opencv, matplotlib) carry `==`
-#: where the golden frames need them. `build`, `twine` and `npm` are the three tools that
-#: make or move the artifact, and all three are constrained.
+#: where the golden frames need them. `build`, `twine`, `npm` and `setuptools` are the four
+#: tools that make or move the artifact, and all four are constrained — `setuptools` since
+#: wave 10, when the census learned to read the backend that PRODUCES the artifact and not
+#: only the tools that invoke it.
 UNCONSTRAINED_BY_DESIGN = {"pip", "numpy", "pillow", "pytest"}
 
 
@@ -1773,3 +1813,629 @@ def test_the_trigger_census_goes_red_on_a_guarded_file_no_filter_covers(trigger)
     intruder = "no-such-directory-8481819/guarded.txt"
     assert _unfiltered([intruder], trigger) == [intruder], (
         f"the {trigger} filter claims to cover {intruder!r}; the check cannot fail")
+
+
+# -- the npm half of the clean room (wave 10, F-3729edd4) ---------------------------------
+#
+# The Python wheel is built, installed into a clean venv and RUN from that install before it
+# is published; `.github/actions/clean-room/action.yml` exists because "the artifact handed to
+# publish was the one artifact never installed in the workflow that publishes it". The npm
+# package is published irreversibly in the same workflow and was never packed, never
+# installed and never run from an install anywhere in this repository. Its only coverage was
+# `npm test` — `node bin/armature.mjs --node-selftest` — run from the CHECKOUT, which consults
+# neither `bin` nor `files` nor the tarball.
+#
+# Measured 2026-09-04 on a scratch copy of npm/ with the `bin` map pointed at
+# `bin/armature.msj`: `npm test` printed `armature launcher ok` and exited 0, `npm pack`
+# produced the same four-file tarball, and `npm install --prefix <scratch> <tarball>` reported
+# `added 1 package` while creating NO `node_modules/.bin` at all — the command the package
+# exists to install did not exist, with every gate in the workflow green.
+#
+# THE NODE THIS CENSUS KEYS ON: `npm pack` inside a run script of a job, with local composite
+# actions expanded. It does not key on the job's name, and it deliberately does not key on
+# `npm test`, because running the launcher out of the checkout is exactly the coverage that
+# was green on the defect.
+
+
+def _job_needs(text, job):
+    """The job names in a job's `needs:` key — scalar or inline list."""
+    for line in _job_lines(text, job):
+        stripped = line.strip()
+        if stripped.startswith("needs:"):
+            value = stripped[len("needs:") :].strip()
+            return [
+                piece.strip().strip("[]").strip("\"'")
+                for piece in value.split(",")
+                if piece.strip().strip("[]")
+            ]
+    return []
+
+
+def npm_pack_jobs():
+    """(workflow, job) for every job that packs the npm package — walked, never listed."""
+    out = []
+    for name in workflow_files():
+        for job in job_names(_text(name)):
+            if any("npm pack" in _code_only(s) for s in job_scripts(name, job)):
+                out.append((name, job))
+    return out
+
+
+def npm_publish_jobs():
+    """(workflow, job) for every job that hands the npm package to the registry."""
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            if "npm publish" in _code_only("\n".join(_job_lines(text, job))):
+                out.append((name, job))
+    return out
+
+
+#: Measured 2026-09-04. Before this wave `npm_pack_jobs()` was EMPTY — the census's own red
+#: proof — while `npm_publish_jobs()` was already this.
+NPM_PACK_JOBS_TODAY = [("ci.yml", "launcher"), ("release.yml", "verify")]
+NPM_PUBLISH_JOBS_TODAY = [("release.yml", "npm")]
+
+
+def test_the_npm_pack_and_publish_censuses_are_the_jobs_in_the_files():
+    """Size and membership before the property, both directions."""
+    assert npm_pack_jobs() == NPM_PACK_JOBS_TODAY, (
+        f"the jobs that pack the npm package are {npm_pack_jobs()}; this file was written "
+        f"against {NPM_PACK_JOBS_TODAY}")
+    assert npm_publish_jobs() == NPM_PUBLISH_JOBS_TODAY, (
+        f"the jobs that publish the npm package are {npm_publish_jobs()}; this file was "
+        f"written against {NPM_PUBLISH_JOBS_TODAY}")
+
+
+def npm_clean_room_script():
+    """The one script anywhere under `.github/` that packs the npm package.
+
+    Derived, so lifting the leg into an action (or back out of one) moves every check that
+    reads it. Exactly one is required: two would be two implementations of one gate, which
+    is how the font dependency and the packaging leg both forked.
+    """
+    hits = [(source, script) for source, script in _all_run_scripts()
+            if "npm pack" in _code_only(script)]
+    assert len(hits) == 1, (
+        f"{len(hits)} scripts under .github/ pack the npm package; the leg that catches a "
+        f"`bin`/`files` defect must have one implementation: {[s for s, _ in hits]}")
+    return hits[0][1]
+
+
+def _runs_the_installed_shim(script):
+    """True when a script packs the package, installs THE TARBALL into a scratch prefix, and
+    invokes the shim npm created there.
+
+    All three clauses matter and each has a measured failure: `npm test` does none of them;
+    packing without installing proves only that a tarball can be written; installing without
+    invoking `node_modules/.bin/armature` is the exact state measured above, where npm
+    reported `added 1 package` and created no bin directory at all.
+    """
+    code = _code_only(script)
+    return (
+        "npm pack" in code
+        and re.search(r"npm\s+(install|i)\b[^\n]*--prefix", code) is not None
+        and "node_modules/.bin/armature" in code
+        and "--node-selftest" in code
+    )
+
+
+def test_the_npm_package_is_run_from_a_clean_install_before_it_is_published():
+    """A published version is taken forever; a `bin` map nothing resolves is silent.
+
+    What this looks like if wrong: `@mcptoolshop/armature-studio@X.Y.Z` lands on the
+    registry, provenance attested, and `npx armature` provides no command.
+    """
+    assert _runs_the_installed_shim(npm_clean_room_script()), (
+        "the npm leg does not pack, install and run the package from its tarball:\n"
+        + npm_clean_room_script())
+
+
+@pytest.mark.parametrize("workflow,job", npm_publish_jobs())
+def test_every_job_that_publishes_the_npm_package_is_gated_by_the_pack_and_install_leg(workflow, job):
+    """The gate must be upstream of the irreversible step, not beside it."""
+    packers = {j for w, j in npm_pack_jobs() if w == workflow}
+    reachable = set(_job_needs(_text(workflow), job)) | {job}
+    assert packers & reachable, (
+        f"{workflow}:{job} publishes the npm package and neither it nor any job it needs "
+        f"({sorted(reachable)}) packs and installs the tarball first; the jobs that do are "
+        f"{sorted(packers)}")
+
+
+def test_the_npm_clean_room_check_goes_red_on_the_coverage_this_repo_had():
+    """The mutation set: three scripts that must NOT satisfy the predicate.
+
+    A check that cannot fail is not a check, so the shapes measured green-on-the-defect are
+    fed to the same predicate the leg is judged by.
+    """
+    assert not _runs_the_installed_shim("npm test"), (
+        "`npm test` reads as a clean install; it runs bin/armature.mjs out of the checkout")
+    assert not _runs_the_installed_shim("npm pack\nnode bin/armature.mjs --node-selftest"), (
+        "packing and then running the CHECKOUT reads as a clean install")
+    assert not _runs_the_installed_shim(
+        'npm pack\nnpm install --prefix "$RUNNER_TEMP/x" ./pkg.tgz'), (
+        "installing without invoking node_modules/.bin/armature reads as a clean install; "
+        "that is the exact state where npm reported `added 1 package` and made no bin")
+    assert not _runs_the_installed_shim(
+        '# npm pack\n# npm install --prefix x\n# node_modules/.bin/armature --node-selftest'), (
+        "a commented-out leg reads as a leg that runs")
+
+
+# -- the sdist assertions must RUN where they gate (wave 10, F-3abdf3a5) ------------------
+#
+# `tests/test_packaging.py` holds the two tests that pin what the published sdist carries —
+# the whole point of the wave-8 MANIFEST.in fix-up — and neither could run in CI or in the
+# release gate, because the tool they need was installed AFTER the suite. `_build_sdist`
+# shells `[sys.executable, "-m", "build", "--sdist", ...]`; ci.yml installed
+# `pip numpy pillow pytest opencv-python-headless matplotlib` and ran the suite twice, and
+# only THEN reached `./.github/actions/clean-room`, whose script installs `build>=1.5,<2`.
+# release.yml had the same order and the same gap.
+#
+# Measured both directions on this tree with the repo venv: with `build` shadowed by a module
+# that exits non-zero, `pytest tests/test_packaging.py -k sdist -rs` reported `2 skipped`; with
+# the real build 1.5.0 present, `2 passed`. The narrow half that held is that the first sdist
+# test asserts MANIFEST.in exists BEFORE the skip, so DELETING the file was caught. Removing
+# `prune tests` from it was not, and `twine check dist/*` reads metadata, never the archive.
+#
+# THE NODE THIS CENSUS KEYS ON: the ORDER of the run scripts written directly in a job body.
+# Composite-action scripts are deliberately excluded — `job_scripts()` appends them after the
+# body whatever line the `uses:` sits on, which is right for "does this job run X" and wrong
+# for "does X run before Y", and getting that backwards is how the tool came to be installed
+# after the suite that needs it.
+
+
+def _body_scripts(workflow, job):
+    """Every `run:` script written DIRECTLY in a job body, in file order."""
+    return _run_scripts_in("\n".join(_job_lines(_text(workflow), job)))
+
+
+def suite_modules_that_build_a_distribution():
+    """Every test module that shells out to `python -m build` — walked over `tests/**`.
+
+    Keyed on the argv LIST the module hands `subprocess`, not on the word `build` appearing
+    in a file: `build` is also a directory, a `.gitignore` line and half the workflow
+    vocabulary, and a census keyed on the word would be green on a file that only mentions it.
+    """
+    out = []
+    for name in sorted(os.listdir(TESTS_DIR)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.List):
+                continue
+            consts = [e.value for e in node.elts if isinstance(e, ast.Constant)]
+            if "-m" in consts and "build" in consts:
+                out.append(name)
+                break
+    return sorted(out)
+
+
+#: Measured 2026-09-04. `test_packaging.py`'s `_build_sdist` is the only caller, and both
+#: sdist tests go through it.
+SUITE_MODULES_THAT_BUILD_TODAY = ["test_packaging.py"]
+
+#: Every job whose steps run pytest, measured the same day. The suite is the same one in both
+#: — release.yml's Install step says so in its own comment — so the toolchain must be too.
+SUITE_JOBS_TODAY = [("ci.yml", "python-tests"), ("release.yml", "verify")]
+
+
+def test_the_suite_build_censuses_are_what_the_tree_holds():
+    assert suite_modules_that_build_a_distribution() == SUITE_MODULES_THAT_BUILD_TODAY, (
+        f"the suite modules that shell out to `python -m build` are "
+        f"{suite_modules_that_build_a_distribution()}; this file was written against "
+        f"{SUITE_MODULES_THAT_BUILD_TODAY}")
+    assert jobs_that_run_the_suite() == SUITE_JOBS_TODAY, (
+        f"the jobs that run the suite are {jobs_that_run_the_suite()}; this file was written "
+        f"against {SUITE_JOBS_TODAY}")
+
+
+def _installs_the_build_tool(script):
+    """True when a script installs the `build` frontend from an index (constrained or not)."""
+    return any(re.fullmatch(r"build[<>=!~,.\d]*", token) for token in _install_tokens(script))
+
+
+def _runs_pytest(script):
+    """True when a script INVOKES pytest — not merely names it in an install line.
+
+    Measured while writing this: `"pytest" in script` matched the dependency install step,
+    so the ordering comparison was `0 < 0` and the check read the install as the run. The
+    distinction between naming a tool and running it is the whole property here.
+    """
+    for line in _code_only(script).splitlines():
+        stripped = line.strip()
+        if "pip install" in stripped or "npm install" in stripped:
+            continue
+        if re.search(r"-m\s+pytest\b", stripped) or re.match(r"pytest\b", stripped):
+            return True
+    return False
+
+
+def build_tool_specifiers():
+    """{specifier: [sources]} for every `build` install token anywhere under `.github/`.
+
+    One string, or the constraint has forked — which is the failure mode the clean-room
+    action's own header names about the font step, one directory over.
+    """
+    found = {}
+    for source, script in _all_run_scripts():
+        for token in _install_tokens(script):
+            if re.fullmatch(r"build[<>=!~,.\d]*", token):
+                found.setdefault(token, []).append(source)
+    return found
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_run_the_suite())
+def test_every_job_that_runs_the_suite_installs_build_before_it(workflow, job):
+    """A test that skips itself is not a gate, and this one guards the published sdist.
+
+    What this looks like if wrong: the sdist regresses to the F-4c607d79 shape — 112 test
+    files that cannot collect — CI stays green because the check skipped, and the artifact
+    reaches `release: published` and PyPI, where the version is taken forever.
+    """
+    scripts = _body_scripts(workflow, job)
+    runs = [i for i, s in enumerate(scripts) if _runs_pytest(s)]
+    assert runs, f"{workflow}:{job} is in the suite census and runs no pytest in its body"
+    installs = [i for i, s in enumerate(scripts) if _installs_the_build_tool(s)]
+    assert installs, (
+        f"{workflow}:{job} runs the suite and installs no `build`; "
+        f"{SUITE_MODULES_THAT_BUILD_TODAY} shells out to `python -m build` and converts its "
+        "absence into a skip, so the two sdist assertions do not execute here")
+    assert min(installs) < min(runs), (
+        f"{workflow}:{job} installs `build` at step {min(installs)} and runs the suite at "
+        f"step {min(runs)}; the clean-room action installs it AFTER the suite, which is the "
+        "measured order that left the sdist unchecked")
+
+
+def test_the_build_tool_has_one_constraint_wherever_it_is_installed():
+    """Two copies of one version constraint is how the font dependency forked."""
+    specs = build_tool_specifiers()
+    listed = {spec: sorted(set(sources)) for spec, sources in specs.items()}
+    assert len(specs) == 1, (
+        f"`build` is installed under {len(specs)} different specifiers under .github/: {listed}")
+    (spec, sources), = specs.items()
+    assert re.search(r"[<>=~]", spec), (
+        f"`build` is installed as {spec!r}, resolved fresh on the day the step runs")
+    assert ".github/actions/clean-room/action.yml" in sources, (
+        "the clean-room action no longer installs `build`; it is the constraint's home and "
+        f"the sources today are {sorted(set(sources))}")
+
+
+def test_the_build_ordering_check_goes_red_on_the_order_this_repo_had():
+    """The mutation: ci.yml's own install line and step order, as they stood this morning.
+
+    A census that cannot fail is the class this wave exists to close, so the pre-fix shape is
+    fed to the same two predicates the jobs are judged by.
+    """
+    before = [
+        "python -m pip install --upgrade pip numpy pillow pytest "
+        "opencv-python-headless==5.0.0.93 matplotlib==3.11.1",
+        "python -m pytest tests -q",
+    ]
+    assert [i for i, s in enumerate(before) if _installs_the_build_tool(s)] == [], (
+        "the pre-fix install line reads as installing `build`; the check cannot fail")
+    after_the_suite = ["python -m pytest tests -q", 'python -m pip install "build>=1.5,<2"']
+    installs = [i for i, s in enumerate(after_the_suite) if _installs_the_build_tool(s)]
+    runs = [i for i, s in enumerate(after_the_suite) if _runs_pytest(s)]
+    assert not min(installs) < min(runs), (
+        "installing the tool after the suite reads as installing it before")
+    # And the third direction, the one that made this check compare a step with itself: an
+    # install line that NAMES pytest is not a step that runs it.
+    assert not _runs_pytest(before[0]), (
+        "a `pip install ... pytest ...` line reads as a step that runs the suite")
+    assert _runs_pytest(before[1])
+
+
+# -- the backend that MAKES the artifact (wave 10, F-fbf7020c) ----------------------------
+#
+# `requires = ["setuptools>=68", "wheel"]` had no upper bound, so the tool that actually
+# produces the wheel and the sdist was resolved fresh from the index on release day, inside
+# the isolated environment `python -m build` creates. The clean-room action pins `build` and
+# `twine` under a header calling them "the two tools that PRODUCE the artifact published
+# irreversibly", and release.yml pins `npm@^11.5.1` for the same stated reason. setuptools is
+# the third tool in that sentence — it is what applies MANIFEST.in and selects sdist contents
+# — and it was the one left unbounded, in the one file no census read.
+#
+# Measured on this tree 2026-09-04: `python -m build` resolved setuptools into
+# `build-env-b1ne98lw` and then again into `build-env-uqzn12d8` — a fresh resolution per
+# invocation — and the wheel it produced carries `Generator: setuptools (84.0.0)`.
+#
+# THE NODE THIS CENSUS KEYS ON: `[build-system].requires` in pyproject.toml, read as data.
+# `toolchain_tokens()` walked workflow install lines only, so it could see every tool that
+# INVOKES the build and none of the tool that performs it.
+
+
+def build_backend_requirements():
+    """`[build-system].requires` — what `python -m build` installs into its isolated env."""
+    return list(PYPROJECT["build-system"]["requires"])
+
+
+def _has_a_ceiling(spec):
+    """True when a specifier bounds the version from ABOVE.
+
+    A floor is not a pin. `setuptools>=68` carries a constraint character and no ceiling at
+    all, which is exactly why the older check — whose predicate is "any of [=<>~^@]" — would
+    have read it as held to a version the day it joined the population.
+    """
+    return bool(re.search(r"(<|==|~=|\^)\s*\d", spec))
+
+
+def test_the_backend_that_produces_the_artifact_is_in_the_toolchain_population():
+    """The census must contain the tool that MAKES the artifact, not only its callers."""
+    tokens = toolchain_tokens()
+    backend = [t for t in tokens if t.startswith("setuptools")]
+    assert backend, (
+        f"the toolchain census is {sorted(tokens)} and none of it is the build backend; "
+        f"`[build-system].requires` is {build_backend_requirements()} and it is what applies "
+        "MANIFEST.in and selects sdist contents")
+    assert any(BACKEND_SOURCE in where for where in tokens.values()), (
+        f"no token in the census is sourced from {BACKEND_SOURCE!r}")
+
+
+def test_every_tool_that_makes_or_moves_the_artifact_is_bounded_from_above():
+    """A new major of the build backend must not arrive by itself on release day.
+
+    What this looks like if wrong: setuptools changes sdist file selection or metadata
+    handling between two runs of the SAME tag and — with nothing in CI opening the sdist —
+    the difference reaches PyPI unexamined; or the build simply fails inside the release job,
+    after `release: published` has fired and both registries are waiting.
+    """
+    tokens = toolchain_tokens()
+    unbounded = sorted(
+        token + " (" + ", ".join(sorted(set(where))) + ")"
+        for token, where in tokens.items()
+        if not _has_a_ceiling(token) and token not in UNCONSTRAINED_BY_DESIGN
+    )
+    assert unbounded == [], (
+        f"these can pick up a new major on the day the step runs, in a job that produces or "
+        f"publishes the artifact: {unbounded}")
+
+
+def test_the_ceiling_check_goes_red_on_the_requires_this_repo_had():
+    """The mutation: `["setuptools>=68", "wheel"]`, fed to the same predicate.
+
+    Both members must fail it — the floor-only one because a floor is not a ceiling, and the
+    bare one because it carries no constraint at all — or the check is green on the shape it
+    was written to catch.
+    """
+    before = ["setuptools>=68", "wheel"]
+    assert [spec for spec in before if not _has_a_ceiling(spec)] == before
+    assert _has_a_ceiling("setuptools>=70.1,<85")
+    assert _has_a_ceiling("build>=1.5,<2")
+    assert _has_a_ceiling("npm@^11.5.1")
+    assert _has_a_ceiling("matplotlib==3.11.1")
+
+
+# -- the licence declaration, and the reader that moves with it (wave 10, F-77a1c1b9) -----
+#
+# The build emitted two SetuptoolsDeprecationWarnings with a stated removal date, on every
+# wheel and every sdist, and nothing recorded or gated them. Measured on this tree
+# 2026-09-04 from one `python -m build`: `project.license` as a TOML table is deprecated —
+# "By 2027-Feb-18, you need to update your project and remove deprecated calls"
+# (`setuptools/config/_apply_pyprojecttoml.py:82`) — and `License classifiers are deprecated`
+# (`_apply_pyprojecttoml.py:61` and `dist.py:765`), both fired twice, once per artifact.
+# With the backend now bounded the removal cannot arrive by surprise, but the honest fix is
+# to stop making the deprecated declaration: `license = "MIT"` plus `license-files`, and no
+# `License :: OSI Approved ::` classifier. Re-measured after the change: zero
+# SetuptoolsDeprecationWarnings in the whole build, and `twine check dist/*` PASSED on both.
+#
+# THE NODE THE TRIGGER DERIVATION KEYS ON: the licence FILES pyproject declares, in either
+# form it can declare them. `trigger_population()` read `project['license']['file']` — the
+# table's own key — so moving to PEP 639 would have made that reader return nothing and
+# dropped the LICENSE trigger requirement silently, with the census still green because
+# `_repo_root_files_the_suite_reads()` happens to find `LICENSE` by a different route.
+
+
+def declared_licence_files(project=None):
+    """Every licence file pyproject names, in either form it may be written in.
+
+    PEP 639's `license-files` (glob patterns) is the form setuptools will still read after
+    2027-Feb-18; `license = { file = "..." }` is the TOML table it deprecated. Both are read,
+    so this derivation survives the move instead of silently returning nothing.
+    """
+    import glob as _glob
+
+    project = PYPROJECT["project"] if project is None else project
+    out = set()
+    patterns = project.get("license-files")
+    if isinstance(patterns, list):
+        for pattern in patterns:
+            for match in _glob.glob(pattern, root_dir=REPO):
+                out.add(match.replace(os.sep, "/"))
+    licence = project.get("license")
+    if isinstance(licence, dict) and licence.get("file"):
+        out.add(licence["file"])
+    return sorted(out)
+
+
+def test_the_licence_is_declared_in_the_form_setuptools_will_still_read():
+    """The deprecated declaration is the thing removed, not the warning about it.
+
+    What this looks like if wrong: on whichever release day CI resolves a setuptools that has
+    dropped the deprecated form, the build fails inside release.yml's `verify` job — after
+    `release: published` has fired, on a tag that is already cut and public, recoverable only
+    by fixing forward and re-dispatching at the tag.
+    """
+    project = PYPROJECT["project"]
+    licence = project.get("license")
+    assert isinstance(licence, str), (
+        f"`project.license` is {type(licence).__name__} ({licence!r}); the TOML table form is "
+        "deprecated with a removal date of 2027-Feb-18")
+    assert licence == "MIT", licence
+    assert declared_licence_files(), (
+        "`license` is an SPDX expression and no `license-files` names the text; the wheel "
+        "METADATA would carry no licence file at all")
+    deprecated = [row for row in project["classifiers"] if row.startswith("License ::")]
+    assert deprecated == [], (
+        f"licence classifiers are deprecated and these remain: {deprecated}; the SPDX "
+        "expression in `license` is the replacement")
+
+
+def test_the_licence_form_matches_the_backend_floor_the_build_resolves():
+    """`license` as a string and `license-files` are PEP 639, which setuptools reads from 77.
+
+    A declaration the pinned backend interval cannot parse is a build that fails everywhere
+    at once, so the two are asserted together rather than left to agree by luck.
+    """
+    floor = re.search(r"setuptools>=\s*(\d+)", " ".join(build_backend_requirements()))
+    assert floor, f"no setuptools floor in {build_backend_requirements()}"
+    assert int(floor.group(1)) >= 77, (
+        f"`license = {PYPROJECT['project']['license']!r}` and `license-files` are PEP 639, "
+        f"which setuptools reads from 77; the pinned floor is {floor.group(1)}")
+
+
+def test_the_trigger_derivation_reads_the_licence_file_whichever_form_declares_it():
+    """The reader moved with the key, and the move is pinned in both directions.
+
+    The third case is the silent drop this test exists for: the PEP 639 form WITHOUT
+    `license-files` names no file at all, and the old reader would have returned the same
+    empty answer on the correct declaration.
+    """
+    assert declared_licence_files({"license": {"file": "LICENSE"}}) == ["LICENSE"]
+    assert declared_licence_files({"license": "MIT", "license-files": ["LICENSE"]}) == ["LICENSE"]
+    assert declared_licence_files({"license": "MIT"}) == []
+    assert declared_licence_files() == ["LICENSE"]
+    assert "LICENSE" in trigger_population()
+
+
+# -- fail closed on the ref, in every workflow that faces the public (wave 10, F-017f3cc2) -
+#
+# release.yml was hardened for exactly this shape at wave 8: `workflow_dispatch` stays
+# re-runnable but the tag gate is unconditional and refuses a non-tag `GITHUB_REF` before any
+# publishing job runs. pages.yml did not get the clause. Its push trigger is fenced to
+# `branches: [main]`, but `workflow_dispatch` carries no ref condition and the `deploy` job's
+# only guard was `if: github.event.repository.private == false` — so a dispatch at any branch
+# built THAT branch's site/ and handed it to `actions/deploy-pages`, the step the file's own
+# header calls "the step that replaces what the public sees".
+#
+# LOW, and recorded as such: dispatching needs repository write access, which is also enough
+# to push to main, so this is a consistency gap against a stated repo precedent rather than a
+# privilege escalation — and it is inert today, because the repo is private and `deploy` is
+# skipped. The fix keeps the useful half (a dispatch from a branch still BUILDS) and closes
+# the irreversible one.
+#
+# THE NODE THIS CENSUS KEYS ON: the steps that hand something to the public —
+# `actions/deploy-pages`, `npm publish`, `pypa/gh-action-pypi-publish` — walked out of the
+# job bodies. Not the job's name, and not the workflow's: `deploy`, `npm` and `pypi` are
+# three names for one property, and a fourth surface added under a different name joins the
+# requirement on the day it lands.
+
+
+def jobs_that_replace_a_public_surface():
+    """(workflow, job) for every job whose steps hand something to the public."""
+    markers = ("actions/deploy-pages", "npm publish", "gh-action-pypi-publish")
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if any(marker in _code_only(body) for marker in markers):
+                out.append((name, job))
+    return out
+
+
+#: Measured 2026-09-04. Three surfaces: the Pages deployment and the two registries.
+PUBLIC_SURFACE_JOBS_TODAY = [("pages.yml", "deploy"), ("release.yml", "pypi"),
+                             ("release.yml", "npm")]
+
+
+def _ref_refusal_mechanism(workflow, job):
+    """How `job` refuses a dispatch from an arbitrary branch, or None if it does not.
+
+    Two mechanisms are legitimate and both are named rather than assumed: a `github.ref`
+    clause in the job's own `if:`, or an unconditional `GITHUB_REF` gate in a job it needs
+    (release.yml's tag gate, which `test_the_tag_gate_refuses_*` above actually RUNS).
+    """
+    condition = _job_if(_text(workflow), job)
+    if condition is not None and "github.ref" in condition:
+        return "if"
+    for upstream in sorted(set(_job_needs(_text(workflow), job))):
+        body = "\n".join(_job_lines(_text(workflow), upstream))
+        if "GITHUB_REF" in body and "refs/tags/" in body:
+            return f"needs:{upstream}"
+    return None
+
+
+def test_the_public_surface_census_is_the_jobs_in_the_files():
+    assert jobs_that_replace_a_public_surface() == PUBLIC_SURFACE_JOBS_TODAY, (
+        f"the jobs that replace a public surface are {jobs_that_replace_a_public_surface()}; "
+        f"this file was written against {PUBLIC_SURFACE_JOBS_TODAY}")
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_replace_a_public_surface())
+def test_every_job_that_replaces_a_public_surface_fails_closed_on_the_ref(workflow, job):
+    """`workflow_dispatch` reaches every workflow here, from any ref the dispatcher picks."""
+    mechanism = _ref_refusal_mechanism(workflow, job)
+    assert mechanism is not None, (
+        f"{workflow}:{job} performs an irreversible public step and neither its own `if:` "
+        f"({_job_if(_text(workflow), job)!r}) nor any job it needs refuses a non-main, "
+        "non-tag ref; a `workflow_dispatch` from any branch reaches it")
+
+
+PAGES_DEPLOY_ARRIVALS = [
+    ("a push to main on a public repo", "push", "refs/heads/main", False, True),
+    ("a dispatch at main on a public repo", "workflow_dispatch", "refs/heads/main", False, True),
+    ("a dispatch at a branch on a public repo", "workflow_dispatch", "refs/heads/topic", False, False),
+    ("a dispatch at a tag on a public repo", "workflow_dispatch", "refs/tags/v0.3.0", False, False),
+    ("a dispatch at main while private", "workflow_dispatch", "refs/heads/main", True, False),
+]
+
+
+@pytest.mark.parametrize("arrival,event,ref,private,deploys", PAGES_DEPLOY_ARRIVALS)
+def test_the_pages_deploy_job_runs_only_at_main_on_a_public_repo(arrival, event, ref, private,
+                                                                 deploys):
+    """The truth table, evaluated against the file's own condition.
+
+    The third row is the measured hole and the first two are the direction the fix must not
+    break — a gate that cannot pass would take the site's deploys with it.
+    """
+    condition = _job_if(_text("pages.yml"), "deploy")
+    assert condition is not None, "pages.yml's deploy job lost its condition entirely"
+    got = _eval_if(condition, {
+        "github.event_name": event,
+        "github.ref": ref,
+        "github.event.repository.private": private,
+    })
+    assert got is deploys, (
+        f"on {arrival} the deploy job {'runs' if got else 'does not run'}; "
+        f"expected {'runs' if deploys else 'does not run'}. Condition: {condition!r}")
+
+
+def test_the_ref_clause_check_goes_red_on_the_condition_pages_had():
+    """The mutation: the visibility guard alone, which is true at every ref.
+
+    Both halves are exercised — the predicate that reads a condition for a ref clause, and
+    the evaluator, which said `True` for a dispatch at a topic branch.
+    """
+    before = "github.event.repository.private == false"
+    assert "github.ref" not in before
+    assert _eval_if(before, {
+        "github.event_name": "workflow_dispatch",
+        "github.ref": "refs/heads/topic",
+        "github.event.repository.private": False,
+    }) is True, "the pre-fix condition reads as refusing a branch dispatch"
+
+
+# -- the licence map is a CI input (wave 10, seam from core-gates) ------------------------
+#
+# `docs/license-map.md` is the verified map this repo's licence gate is written against, and
+# the suite now OPENS it by path: core-gates' licence-table census parses its rows and
+# resolves the Commercial column against `RULED_COMPONENTS`. `paths_the_suite_guards()` picks
+# that up by AST the day the census lands, but the FILTER is in this domain's file, so the
+# requirement is pinned here as well — a re-fetch that adds or retires a kill is exactly the
+# change CI must run on, and a guard that does not run on the change it guards is the shape
+# the trigger census exists to close.
+
+
+@pytest.mark.parametrize("trigger", ["push", "pull_request"])
+def test_ci_runs_on_the_licence_map(trigger):
+    """The licence gate is a non-negotiable, so its map is a build input like any other."""
+    licence_map = "docs/license-map.md"
+    assert os.path.isfile(os.path.join(REPO, licence_map)), (
+        f"{licence_map} no longer exists; this requirement and the census that reads it must "
+        "be retired deliberately, not left green")
+    assert _pattern_hits(_paths_under(trigger), licence_map), (
+        f"{trigger} builds nothing when {licence_map} changes, and the suite reads it by "
+        f"path; the filters are {_paths_under(trigger)}")

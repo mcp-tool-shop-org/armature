@@ -33,7 +33,15 @@ import pytest
 
 from conftest import REPO
 
-from test_ci_workflows import CI, clean_room_script, run_script, step_containing
+from test_ci_workflows import (
+    CI,
+    _has_a_ceiling,
+    _install_tokens,
+    clean_room_script,
+    npm_clean_room_script,
+    run_script,
+    step_containing,
+)
 
 VERIFY_PATH = os.path.join(REPO, "verify.ps1")
 with open(VERIFY_PATH, encoding="utf-8") as _fh:
@@ -445,3 +453,121 @@ def test_the_local_scan_is_the_lockfile_only_form_ci_uses():
     assert scan in VERIFY, (
         f"ci.yml runs {scan!r} and verify.ps1 does not; a green local run is then a weaker "
         "claim than the green CI run its DESCRIPTION equates it to")
+
+
+# -- the parity claim, at the level of the TOOL (wave 10, F-da6b0457) ----------------------
+#
+# The DESCRIPTION says "the legs are the same ones `.github/workflows/ci.yml` runs, in the
+# same order and with the same meaning, so a green local run and a green CI run are the same
+# claim". Leg 3 called `& $python -m build` and `& $python -m twine check` against whatever
+# the repo venv happened to hold; the CI leg it mirrors installs `build>=1.5,<2` and
+# `twine>=7,<8` first. Measured 2026-09-04: the repo venv holds build 1.5.0 and twine 7.0.0 —
+# inside CI's window, so the divergence was latent rather than live, which is exactly the
+# state in which nobody notices it.
+#
+# Neither existing check could see it. `toolchain_tokens()` walked `job_scripts()` over
+# `workflow_files()` only, and the mirror test below asserted `-m venv` and `armature check`
+# appear in both texts — the SHAPE of the leg, not the toolchain that produces the artifact
+# it inspects. A `pip install -U build` past 2.0 on the rig would make the local leg select
+# sdist contents differently from CI, and a green local run would then assert something CI
+# never ran.
+#
+# THE NODE THIS CENSUS KEYS ON: the install tokens of the clean-room ACTION's own script,
+# read at run time. Nothing is typed here, so raising either constraint in the action moves
+# this requirement with it rather than leaving the local leg pinned to yesterday's window.
+
+
+def clean_room_install_tokens():
+    """The package specifiers `.github/actions/clean-room` installs before it builds."""
+    return sorted(set(_install_tokens(clean_room_script())))
+
+
+def _missing_from(text, tokens):
+    return [token for token in tokens if token not in text]
+
+
+def test_the_clean_room_pins_a_toolchain_this_check_can_compare():
+    """The census's own premise: an empty token list would make the comparison vacuous."""
+    tokens = clean_room_install_tokens()
+    assert tokens, (
+        "the clean-room action installs nothing this check can read; the comparison below "
+        "would pass on any verify.ps1 at all")
+    unbounded = [t for t in tokens if not _has_a_ceiling(t)]
+    assert unbounded == [], (
+        f"the clean-room action installs {unbounded} without an upper bound, so pinning "
+        "verify.ps1 to it would pin it to nothing")
+
+
+def test_verify_builds_the_artifact_with_the_toolchain_the_clean_room_action_pins():
+    """The DESCRIPTION equates a green local run to a green CI run; the tools must match.
+
+    What this looks like if wrong: `pip install -U build` on the rig takes the local leg past
+    the constraint CI holds, sdist file selection changes underneath it, and the local run
+    asserts a packaging outcome CI has never produced — while claiming to be the same claim.
+    """
+    missing = _missing_from(VERIFY, clean_room_install_tokens())
+    assert missing == [], (
+        f"verify.ps1 builds the package without installing {missing}, which "
+        f".github/actions/clean-room/action.yml installs before it builds; the DESCRIPTION "
+        "equates the two runs and the toolchain that PRODUCES the artifact is what differs")
+
+
+def test_the_toolchain_parity_check_goes_red_on_the_leg_this_repo_had():
+    """The mutation: leg 3 as it stood, building against whatever the venv held."""
+    before = "& $python -m build\n& $python -m twine check (Join-Path $repo 'dist\\*')"
+    assert _missing_from(before, clean_room_install_tokens()) == clean_room_install_tokens(), (
+        "the pre-fix leg reads as installing the pinned toolchain; the check cannot fail")
+    # And the near-miss that matters: the right tools at the WRONG constraint.
+    forked = "& $python -m pip install 'build' 'twine'"
+    assert _missing_from(forked, clean_room_install_tokens()), (
+        "an unconstrained local install reads as matching CI's pinned one")
+
+
+# -- the npm clean room, locally too (wave 10, F-3729edd4 family carry) --------------------
+#
+# The family is "places that run the npm package's launcher as coverage": ci.yml's `launcher`
+# job, release.yml's `npm` job, and verify.ps1's leg 3. All three ran
+# `node bin/armature.mjs --node-selftest` out of the CHECKOUT, which consults neither `bin`,
+# nor `files`, nor the tarball — measured green on a `bin` map pointed at a typo, with no
+# `armature` command existing anywhere after the install. ci.yml and release.yml now call
+# `.github/actions/npm-clean-room`; this is the same leg in the script whose DESCRIPTION says
+# a green local run and a green CI run are the same claim.
+
+
+def _runs_the_npm_clean_room(text):
+    """True when a text packs the npm package, installs the tarball into a scratch prefix,
+    and invokes the shim npm created there.
+
+    The bash action and the PowerShell script cannot share tokens verbatim, so what is
+    compared is the three MECHANISMS, and the action is held to the same predicate below so
+    a change of mechanism there fails here rather than drifting.
+    """
+    return (
+        "npm pack" in text
+        and re.search(r"npm\s+(install|i)\b[^\n]*--prefix", text) is not None
+        and "node_modules/.bin" in text
+        and "--node-selftest" in text
+    )
+
+
+def test_verify_runs_the_npm_package_from_a_clean_install_the_way_ci_does():
+    """The third member of the family, in the file that claims parity with the other two."""
+    assert _runs_the_npm_clean_room(npm_clean_room_script()), (
+        "the CI leg this is mirrored from no longer matches the mechanisms compared here:\n"
+        + npm_clean_room_script())
+    assert _runs_the_npm_clean_room(VERIFY.replace("\\", "/")), (
+        "verify.ps1 runs the launcher out of the checkout and never installs the package it "
+        "would publish; a `bin` map that resolves to nothing passes locally")
+
+
+def test_the_local_npm_clean_room_check_goes_red_on_the_leg_this_script_had():
+    """The mutation: leg 3's npm step exactly as it stood, and two near-misses."""
+    before = "Push-Location (Join-Path $repo 'npm')\ntry { node bin/armature.mjs --node-selftest } finally { Pop-Location }"
+    assert not _runs_the_npm_clean_room(before), (
+        "the checkout self-test reads as a clean install")
+    assert not _runs_the_npm_clean_room("npm pack --silent\nnode bin/armature.mjs --node-selftest"), (
+        "packing and then running the CHECKOUT reads as a clean install")
+    assert not _runs_the_npm_clean_room(
+        "npm pack --silent\nnpm install --prefix $npmroom $tarball.FullName"), (
+        "installing without invoking the shim reads as a clean install; that is the exact "
+        "state where npm reported `added 1 package` and made no bin directory")

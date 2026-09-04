@@ -1,0 +1,56 @@
+# The npm half of the clean room: pack the package, install THE TARBALL into a scratch
+# prefix, and run the command npm created there.
+#
+# WHY THIS EXISTS. `.github/actions/clean-room/action.yml` was written because "the artifact
+# handed to publish was the one artifact never installed in the workflow that publishes it".
+# That was true of the wheel and it stayed true of the npm package for one more wave:
+# `npm publish --provenance --access public` runs in release.yml's `npm` job, and the only
+# coverage anywhere was `npm test` — `node bin/armature.mjs --node-selftest` — run from the
+# CHECKOUT, which consults neither `bin`, nor `files`, nor the tarball.
+#
+# MEASURED 2026-09-04 on a scratch copy of npm/ with one character changed, the `bin` map
+# pointed at `bin/armature.msj`: `npm test` printed `armature launcher ok` and exited 0;
+# `npm pack` produced the same four-file tarball; `npm install --prefix <scratch> <tarball>`
+# reported `added 1 package` and created NO `node_modules/.bin` at all — the command the
+# package exists to install did not exist, with every gate in the workflow green. Worst
+# realistic consequence: the version lands on the registry, taken forever and provenance
+# attested, and `npx armature` provides no command. Re-measured against this action on the
+# same copy: the bin check refuses, naming the path it looked for.
+#
+# WHY IT IS AN ACTION AND NOT A STEP IN EACH WORKFLOW. Same reason as the wheel's leg and
+# the font step: two copies of one gate is how the font dependency forked. ci.yml's
+# `launcher` job calls it across the node matrix (18 and 22, the floor `engines.node`
+# promises and the version the publish job runs), and release.yml's `verify` job calls it on
+# the exact tree it is about to publish.
+#
+# The runner's own node/npm run this. release.yml's version gate already reads
+# npm/package.json through the preinstalled `node`, so this adds no new assumption; nothing
+# here publishes, so the npm that packs need not be the pinned `npm@^11.5.1` that does.
+name: npm clean room
+description: Pack the npm package, install the tarball into a scratch prefix, and run the installed command.
+
+runs:
+  using: composite
+  steps:
+    - name: pack the npm package and run it from a clean install
+      shell: bash
+      working-directory: npm
+      run: |
+        set -eu
+        rm -f ./*.tgz
+        npm pack
+        TARBALL="$PWD/$(ls -1 ./*.tgz | head -1)"
+        PREFIX="${RUNNER_TEMP:-/tmp}/npm-cleanroom"
+        rm -rf "$PREFIX"
+        mkdir -p "$PREFIX"
+        npm install --prefix "$PREFIX" "$TARBALL"
+        SHIM="$PREFIX/node_modules/.bin/armature"
+        # npm reports `added 1 package` for a package whose bin map resolves to nothing, so
+        # the install's own exit code is not the check. The command is.
+        if [ ! -x "$SHIM" ]; then
+          echo "::error::the installed package provides no armature command at $SHIM; check bin/ and files/ in npm/package.json"
+          ls -la "$PREFIX/node_modules/.bin" || echo "(no node_modules/.bin at all)"
+          exit 1
+        fi
+        "$SHIM" --node-selftest
+        rm -f ./*.tgz

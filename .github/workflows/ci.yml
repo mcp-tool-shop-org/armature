@@ -72,6 +72,13 @@ on:
       - "specs/**"
       - "docs/experiments/**"
       - "docs/index/**"
+      # The licence map. `docs/license-map.md` is the verified map the repo's licence gate
+      # is written against, and the suite now OPENS it by path: core-gates' licence-table
+      # census parses its rows and resolves the Commercial column against
+      # `RULED_COMPONENTS`. A re-fetch that adds or retires a kill is exactly the change CI
+      # must run on — the licence gate is a CLAUDE.md non-negotiable, and a guard that does
+      # not run on the change it guards is the shape this filter list exists to close.
+      - "docs/license-map.md"
   pull_request:
     paths:
       - "site/**"
@@ -119,6 +126,13 @@ on:
       - "specs/**"
       - "docs/experiments/**"
       - "docs/index/**"
+      # The licence map. `docs/license-map.md` is the verified map the repo's licence gate
+      # is written against, and the suite now OPENS it by path: core-gates' licence-table
+      # census parses its rows and resolves the Commercial column against
+      # `RULED_COMPONENTS`. A re-fetch that adds or retires a kill is exactly the change CI
+      # must run on — the licence gate is a CLAUDE.md non-negotiable, and a guard that does
+      # not run on the change it guards is the shape this filter list exists to close.
+      - "docs/license-map.md"
   workflow_dispatch:
 
 concurrency:
@@ -213,8 +227,16 @@ jobs:
       # opencv is pinned to the rig's verified version: the aapose golden-frame
       # tests assert byte-stable rasterization, and the rasterizer's version is
       # the axis that matters. Headless build — no GUI stack on a runner.
+      #
+      # `build` is in THIS list, before the suite, and not only in the clean-room action
+      # that runs after it. `tests/test_packaging.py` builds an sdist by subprocess to pin
+      # what the published archive carries — the whole point of the MANIFEST.in fix-up —
+      # and with the tool absent those two assertions skipped, in CI and in the release
+      # gate both. `twine check dist/*` reads metadata and never opens the archive, so
+      # nothing else here would have noticed the sdist regressing. The specifier is the
+      # clean-room action's, character for character; a test holds every copy to one string.
       - name: install test dependencies
-        run: python -m pip install --upgrade pip numpy pillow pytest opencv-python-headless==5.0.0.93 matplotlib==3.11.1
+        run: python -m pip install --upgrade pip numpy pillow pytest opencv-python-headless==5.0.0.93 matplotlib==3.11.1 "build>=1.5,<2"
 
       # The sheet composers resolve a real font (Arial → Liberation Sans → Noto Sans, all
       # licence-verified) or refuse by name; nothing is bundled, because a font is a binary
@@ -272,3 +294,12 @@ jobs:
       - name: launcher self-test
         working-directory: npm
         run: npm test
+
+      # `npm test` runs the launcher out of the CHECKOUT and consults neither `bin`, `files`
+      # nor the tarball. The npm package is published irreversibly by release.yml and, until
+      # this wave, was the one artifact never installed anywhere in this repository — the
+      # exact shape `.github/actions/clean-room` exists to close on the wheel side. Measured
+      # with the `bin` map pointed at a typo: `npm test` green, `npm pack` green, install
+      # green, and no `armature` command anywhere. Both node versions run it, because
+      # `engines.node` is enforced at install time on a user's machine.
+      - uses: ./.github/actions/npm-clean-room

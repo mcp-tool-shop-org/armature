@@ -55,11 +55,18 @@ jobs:
         # It was shorter once, and the first release attempt died on a missing Pillow at
         # collection rather than on anything about the release.
         #
-        # `build` and `twine` are NOT here any more: they are installed, under a version
-        # constraint, by the clean-room action that uses them — one place, one constraint.
+        # `twine` is NOT here: it is installed, under a version constraint, by the
+        # clean-room action that uses it — one place, one constraint.
+        #
+        # `build` IS here, because the SUITE needs it and the suite runs first. Two tests in
+        # `tests/test_packaging.py` build an sdist by subprocess to pin what the published
+        # archive carries, and with the tool absent they skipped — here, in the gate whose
+        # whole job is to be the last thing between a tag and PyPI. The specifier is the
+        # clean-room action's, character for character; `tests/test_ci_workflows.py` holds
+        # every copy of it to one string, so the constraint still cannot fork.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest numpy pillow opencv-python-headless==5.0.0.93 matplotlib==3.11.1
+          python -m pip install pytest numpy pillow opencv-python-headless==5.0.0.93 matplotlib==3.11.1 "build>=1.5,<2"
       # The same font ci.yml installs, from the same implementation. This job ran the suite
       # without one: two tests hard-require a permitted face and FAIL rather than skip without
       # it, so this gate depended on exactly what ci.yml refuses to depend on — and by the time
@@ -77,6 +84,12 @@ jobs:
       # calls through to every function-local dependency; `dist/` is left for the upload
       # step below.
       - uses: ./.github/actions/clean-room
+      # The npm package's half of the same leg, and for the same reason: the `npm` job below
+      # runs `npm publish --provenance --access public`, and the only thing that had ever
+      # been run was `node bin/armature.mjs --node-selftest` out of the checkout. A `bin`
+      # map that resolves to nothing installs cleanly and provides no command, and a version
+      # on the registry is taken forever.
+      - uses: ./.github/actions/npm-clean-room
       - name: The version in the tag must equal the version in the package
         # A tag that disagrees with the metadata publishes a version nobody asked for.
         #
