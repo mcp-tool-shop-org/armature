@@ -114,7 +114,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
-from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
+from armature_core.canon import add_spend_flags  # noqa: E402
+from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
@@ -918,7 +919,10 @@ def main(argv=None):
             "config, never retyped. E09's citation check fired on this string")
 
     positive, prompt_log = build_prompt()
-    gate_write(a.subject, a.canon_prompt or positive, no_canon=a.no_canon, out_dir=out)
+    # The SHIPPED positive is what the router checks; `--canon-prompt` is compared
+    # against it rather than substituted for it.
+    canon_ev = canon_spend(a.subject, positive, no_canon=a.no_canon, out_dir=out,
+                           canon_prompt=a.canon_prompt)
     negative, negative_log = build_negative(a.negative_source)
     overrides = {}
     if a.cfg is not None:
@@ -936,6 +940,7 @@ def main(argv=None):
                      experiment=a.experiment, length=a.length, fps=a.fps, wave=a.wave,
                      trajectory_overrides=overrides)
     meta["gate_LEDGER_W3"] = gate_ledger
+    meta["gate_CANON"] = canon_ev
     meta["prompt_record"] = {
         "surgery": prompt_log,
         "negative": negative_log,
@@ -952,6 +957,7 @@ def main(argv=None):
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
+    print(canon_line(canon_ev))
     print("BUILD_CAMERA_I2V_OK " + json.dumps({
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
         "resolution": meta["resolution"], "length": meta["length"], "fps": meta["fps"],

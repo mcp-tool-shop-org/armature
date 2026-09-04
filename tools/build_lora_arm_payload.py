@@ -62,10 +62,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates  # noqa: E402
-from armature_core.canon import add_spend_flags, gate_write, texts_from_api_graph  # noqa: E402
-from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+from armature_core.canon import add_spend_flags  # noqa: E402
+from armature_core.errors import ArmatureError, GateCanon, GateFailure  # noqa: E402
+from canon_gate import canon_line, canon_spend  # noqa: E402
 
-TOOL_VERSION = "E14.1"
+TOOL_VERSION = "E14.2"
 EXPERIMENT = "E14"
 
 #: The served filenames, verbatim. The HIGH member of the SmartphoneSnapshot pair really
@@ -175,6 +176,92 @@ def model_lineage(graph, node_id):
         seen.add(nxt)
         chain.append(nxt)
         cur = nxt
+
+
+def positive_text_node(graph, sampler_id, max_hops=8):
+    """Follow a sampler's `positive` CONDITIONING chain to the text node that feeds it.
+
+    The chain is not one hop: on this route the sampler's `positive` is the conditioning
+    node's output (`WanCameraImageToVideo`), whose own `positive` input is the
+    `CLIPTextEncode`. Walking it is the whole point — a length heuristic over every
+    text/prompt/positive string in the graph cannot tell a positive from a negative, and
+    on a graph whose negative is the longer string it picks the negative.
+    """
+    cur, seen = str(sampler_id), set()
+    for _ in range(max_hops):
+        node = graph.get(cur)
+        link = (node.get("inputs") or {}).get("positive") if isinstance(node, dict) else None
+        if not isinstance(link, list) or not link:
+            break
+        nxt = str(link[0])
+        if nxt in seen:
+            raise ArmatureError(
+                f"the CONDITIONING chain from node {sampler_id} loops at {nxt}")
+        seen.add(nxt)
+        cand = graph.get(nxt) or {}
+        text = (cand.get("inputs") or {}).get("text")
+        if cand.get("class_type") == "CLIPTextEncode" and isinstance(text, str):
+            return nxt, text
+        cur = nxt
+    raise ArmatureError(
+        f"no CLIPTextEncode is reachable along the positive CONDITIONING chain from "
+        f"sampler {sampler_id}. This tool gates the text it ships, and a graph whose "
+        f"positive it cannot LOCATE is a graph it must not gate by guessing")
+
+
+def positive_prompt_from_graph(graph):
+    """The positive prompt this graph carries, selected by node identity. Raises or returns.
+
+    Wave 3, F-815b8a85. The prompt handed to Gate CANON used to be
+    `max(texts_from_api_graph(base), key=len)` — the longest of every text/prompt/positive
+    string — on the heuristic that negatives are shorter quality lists. Nothing checked the
+    choice, so a base whose negative was the longer string would have had the NEGATIVE
+    gated. Separately, `texts_from_api_graph` returns `[]` for any graph whose top-level
+    values are not all dicts, so a `.saved.json` passed as `--base` yielded `prompt=None`,
+    which `require_canon` never examines at all on the `--no-canon` path — and both formats
+    sit side by side in this pipeline's output directories.
+
+    Returns `(text, {tier: text_node_id})`.
+    """
+    ks = experts(graph)
+    found = {}
+    for tier in sorted(ks):
+        found[tier] = positive_text_node(graph, ks[tier])
+    texts = {t for _, t in found.values()}
+    if len(texts) != 1:
+        raise ArmatureError(
+            f"the two experts read different positive prompts ({sorted(texts)!r}); gating "
+            f"one of them would leave the other ungoverned, and this tool only knows the "
+            f"E12 two-expert split-step route")
+    text = texts.pop()
+    if not text.strip():
+        raise ArmatureError(
+            "the positive prompt this graph carries is empty; a spend gated on an empty "
+            "string is a check that cannot fail")
+    return text, {tier: nid for tier, (nid, _) in found.items()}
+
+
+def gate_canon_text_is_in_graph(gated, graph):
+    """Gate CANON · ANDON — the gated string is byte-equal to the emitted graph's positive.
+
+    Wave 3, F-dfcc0bea, this tool's half. The payload's prompt lives inside the inherited
+    `--base` graph rather than in a value this tool holds, so the only way to bind the
+    router's string to the shipped one is to read the shipped one back out of the graph
+    that is about to be written and require byte equality.
+    """
+    shipped, nodes = positive_prompt_from_graph(graph)
+    ev = {"gate": "CANON", "text_nodes": nodes, "gated_len": len(gated or ""),
+          "shipped_len": len(shipped)}
+    if gated != shipped:
+        raise GateCanon(
+            "the graph this tool emits does not carry the text Gate CANON checked. The "
+            "router would have examined one string while the submission carried another, "
+            "and every other gate would still be green",
+            dict(ev, clause="gated_text_is_not_shipped_text",
+                 gated=gated, shipped=shipped))
+    ev["verdict"] = (f"the gated text is byte-equal to the positive carried by "
+                     f"{sorted(nodes.values())} in the emitted graph")
+    return ev
 
 
 def build_arm(base, arm):
@@ -385,11 +472,13 @@ def main(argv=None):
     with open(args.base, encoding="utf-8") as fh:
         base = json.load(fh)
 
-    inherited = texts_from_api_graph(base)
-    prompt = args.canon_prompt or (max(inherited, key=len) if inherited else None)
-    gate_write(args.subject, prompt, no_canon=args.no_canon, out_dir=args.out)
+    prompt, prompt_nodes = positive_prompt_from_graph(base)
+    canon_ev = canon_spend(args.subject, prompt, no_canon=args.no_canon,
+                           out_dir=args.out, canon_prompt=args.canon_prompt)
 
     built, inserts = build_arm(base, args.arm)
+    # The graph exists now: bind the router's string to the one the submission carries.
+    gate_canon_graph = gate_canon_text_is_in_graph(prompt, built)
 
     ledger = gate_ledger(base, built, inserts)
     tier = gate_pair_tier(inserts, args.arm)
@@ -416,7 +505,9 @@ def main(argv=None):
                               "links, read as a reference not a route, 2026-08-13"),
             "tier_matched": "high-noise LoRA on the high-noise expert's line"},
         "attachments": inserts,
-        "gates": {"LEDGER": ledger, "PAIR_TIER": tier, "S": seed_ev, "ROUTE": route},
+        "prompt_nodes": prompt_nodes,
+        "gates": {"LEDGER": ledger, "PAIR_TIER": tier, "S": seed_ev, "ROUTE": route,
+                  "CANON": canon_ev, "CANON_graph_text": gate_canon_graph},
         "graph": os.path.abspath(graph_path),
         "graph_sha256": sha256_file(graph_path),
     }
@@ -424,6 +515,7 @@ def main(argv=None):
     with open(record_path, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2, ensure_ascii=False)
 
+    print(canon_line(canon_ev))
     print(f"arm {args.arm}: {ledger['verdict']}")
     for tier_name, rec in sorted(inserts.items()):
         print(f"  {tier_name}-noise expert (sampler {rec['feeds_expert_sampler']}) <- "

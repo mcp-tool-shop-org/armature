@@ -18,7 +18,8 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import build_lora_arm_payload as B  # noqa: E402
 from armature_core import route_gates  # noqa: E402
-from armature_core.errors import GateFailure  # noqa: E402
+from armature_core.errors import (  # noqa: E402
+    ArmatureError, GateCanon, GateFailure)
 
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "E12-w3-camera-i2v.api.json")
 REGISTRY = os.path.join(ROOT, "specs", "E14-seeds.json")
@@ -232,3 +233,58 @@ def test_gate_pair_still_sees_the_camera_family(base):
     built, _ = B.build_arm(base, "S")
     ev = route_gates.pairing(built)
     assert "fun_camera" in json.dumps(ev)
+
+
+# --------------------------------------------------------------------------- the prompt
+
+
+def test_the_positive_is_selected_by_node_identity_not_by_length(base):
+    """Wave 3, F-815b8a85. The prompt handed to Gate CANON was
+    `max(inherited, key=len)` over every text/prompt/positive string in the base graph, on
+    the heuristic that negatives are shorter quality lists. Nothing checked the choice, so
+    a base whose NEGATIVE is longer than its positive would have had the negative gated.
+    """
+    base["30"]["inputs"]["text"] = "short positive"
+    base["31"]["inputs"]["text"] = "a very much longer negative " * 20
+    text, nodes = B.positive_prompt_from_graph(base)
+    assert text == "short positive"
+    assert set(nodes.values()) == {"30"}
+
+
+def test_a_save_format_base_raises_rather_than_yielding_none(base):
+    """`canon.texts_from_api_graph` returns [] for any graph whose top-level values are not
+    all dicts, so a `.saved.json` passed as --base yielded prompt=None — which
+    `require_canon` never examines at all on the --no-canon path. Both formats sit side by
+    side in this pipeline's output directories."""
+    save_format = {"nodes": [{"id": 30, "type": "CLIPTextEncode",
+                              "widgets_values": ["a positive prompt"]}], "links": []}
+    with pytest.raises(ArmatureError):
+        B.positive_prompt_from_graph(save_format)
+
+
+def test_an_empty_positive_raises_rather_than_being_gated(base):
+    base["30"]["inputs"]["text"] = "   "
+    with pytest.raises(ArmatureError):
+        B.positive_prompt_from_graph(base)
+
+
+def test_the_two_experts_reading_different_positives_raises(base):
+    """A base whose experts read different text is not this route, and gating one of them
+    would leave the other ungoverned."""
+    base["31"]["inputs"]["text"] = "x"
+    base["61"]["inputs"]["positive"] = ["31", 0]
+    with pytest.raises(ArmatureError):
+        B.positive_prompt_from_graph(base)
+
+
+def test_the_emitted_graph_must_carry_the_text_the_gate_checked(base):
+    """Wave 3, F-dfcc0bea, lora_arm's half: the payload's prompt lives inside the inherited
+    --base graph, so the gated string is required to be byte-equal to a string actually
+    present in the graph this tool emits."""
+    built, _ = B.build_arm(base, "T")
+    gated, nodes = B.positive_prompt_from_graph(built)
+    assert B.gate_canon_text_is_in_graph(gated, built)["verdict"]
+    assert set(nodes.values()) == {"30"}
+    with pytest.raises(GateCanon) as exc:
+        B.gate_canon_text_is_in_graph("phrases pasted in to get past the refusal", built)
+    assert exc.value.evidence["clause"] == "gated_text_is_not_shipped_text"

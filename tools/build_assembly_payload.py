@@ -214,7 +214,9 @@ def main(argv=None):
 
     # ---- the gates, in code, before anything is submitted.
     gate_paid = AS.gate_no_paid_nodes(wf)
-    gate_topo = AS.gate_batch_topology(wf, len(names), BATCH_ID, VIDEO_ID, SAVE_ID)
+    ordered_ids = frame_source_ids(names, FIRST_IMAGE_ID)
+    gate_topo = AS.gate_batch_topology(wf, len(names), BATCH_ID, VIDEO_ID, SAVE_ID,
+                                       expected_sources=ordered_ids)
     gate_index = gate_slot_frame_index(wf, names, [(BATCH_ID, 0)], FIRST_IMAGE_ID)
     # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no
     # noise-bearing node at all, so the seed clause has nothing to decide and saying so is
@@ -246,7 +248,7 @@ def main(argv=None):
                           "output_node TRUE"),
             "LoadImage": "image COMBO -> IMAGE, MASK; api_node false",
         },
-        "frame_source_ids": frame_source_ids(names, FIRST_IMAGE_ID),
+        "frame_source_ids": list(ordered_ids),
         "gates": {"ASSEMBLY_paid": gate_paid, "ASSEMBLY_topology": gate_topo,
                   "ASSEMBLY_slot_frame_index": gate_index, "ROUTE": gate_route},
     }

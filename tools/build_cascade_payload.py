@@ -54,7 +54,6 @@ them, and they persist service-side (the E12 w2/w3 §7 convention).
 """
 
 import argparse
-import inspect
 import json
 import os
 import sys
@@ -71,26 +70,13 @@ TOOL_VERSION = "E13.2"
 __all__ = ["FRAME_KEY", "frame_order", "frame_source_ids", "gate_slot_frame_index",
            "build", "main"]
 
-#: P3 / P2 seam (swarm wave 3, health-amend-a). The shared gates in
-#: `armature_core.assembly` are being taught, on a sibling branch, to take the expected
-#: per-frame source ids (`gate_cascade_topology`) and the caller's group size
-#: (`gate_slot_ceiling`, whose `cap` may then only TIGHTEN below `MAX_SLOTS_PER_NODE`).
-#: That branch is not visible from here, so the values are offered under the names the pair
-#: brief uses and filtered against the callee's real signature: whichever the gate declares
-#: it receives, and the payload record states which — never a green tick for a clause that
-#: did not run. `gate_slot_frame_index` above runs either way, so the invariant is enforced
-#: in this tool regardless of what the shared gate ends up declaring.
-ORDERED_ID_PARAMS = ("frame_source_ids", "expected_sources", "expected_frame_sources",
-                     "expected_source_ids", "source_ids", "frame_ids")
-
-
-def _accepted(fn, candidates, value):
-    """`({param: value}, param)` for the first candidate `fn` actually declares."""
-    params = inspect.signature(fn).parameters
-    for name in candidates:
-        if name in params:
-            return {name: value}, name
-    return {}, None
+#: The shared gates own their own ceiling and their own ordering clause:
+#: `gate_slot_ceiling(graph, group_size=..., cap=...)` compares the caller's group size
+#: against `MAX_SLOTS_PER_NODE` and raises above it, and both topology gates take
+#: `expected_sources` — the ordered LoadImage node ids, one per frame, in frame order —
+#: and compare slot k to frame k. This tool supplies both. `gate_slot_frame_index` above
+#: is this tool's own copy of the slot-to-frame clause, kept because the builder is the
+#: tool that authors the payload and the check belongs inside it.
 
 #: Node ids. LoadImages from 200 as S03's flat chain used; the cascade's own nodes are
 #: numbered so a group, the final batch and the tail are distinguishable at a glance in a
@@ -168,15 +154,11 @@ def main(argv=None):
     # The gate owns the ceiling. `cap` is NOT passed: handing it the same --group value
     # that produced the group nodes made it check a direction the construction already
     # bounds. `group_size` is offered for the gate to check against its own constant.
-    ceiling_kw, ceiling_param = _accepted(AS.gate_slot_ceiling, ("group_size",),
-                                          int(a.group))
-    gate_ceiling = AS.gate_slot_ceiling(wf, **ceiling_kw)
+    gate_ceiling = AS.gate_slot_ceiling(wf, group_size=int(a.group))
     ordered_ids = frame_source_ids(names, FIRST_IMAGE_ID)
-    topo_kw, topo_param = _accepted(AS.gate_cascade_topology, ORDERED_ID_PARAMS,
-                                    list(ordered_ids))
     gate_topo = AS.gate_cascade_topology(wf, len(names), group_ids, FINAL_BATCH_ID,
                                          VIDEO_ID, SAVE_ID, "video", group_size=a.group,
-                                         **topo_kw)
+                                         expected_sources=list(ordered_ids))
     slot_plan = [(gid, start) for (start, _), gid
                  in zip(AS.cascade_plan(len(names), a.group), group_ids)]
     gate_index = gate_slot_frame_index(wf, names, slot_plan, FIRST_IMAGE_ID)
@@ -222,16 +204,6 @@ def main(argv=None):
         "gates": {"ASSEMBLY_paid": gate_paid, "CASCADE_ceiling": gate_ceiling,
                   "CASCADE_topology": gate_topo,
                   "CASCADE_slot_frame_index": gate_index, "ROUTE": gate_route},
-        "shared_gate_parameters": {
-            "gate_slot_ceiling_group_size_param": ceiling_param,
-            "gate_cascade_topology_ordered_ids_param": topo_param,
-            "what_null_means": (
-                "the shared gate in armature_core.assembly does not declare that "
-                "parameter on this tree, so it did NOT receive the value and the clause "
-                "it would arm did not run there. The builder's own "
-                "CASCADE_slot_frame_index ran regardless; this row exists so the record "
-                "says which checks actually executed rather than implying both did"),
-        },
     }
 
     # Below the last in-tool gate: a refuse leaves no output directory.

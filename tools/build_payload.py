@@ -70,7 +70,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
-from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
+from armature_core.canon import add_spend_flags  # noqa: E402
+from canon_gate import (  # noqa: E402
+    canon_line, canon_spend, gate_canon_ships_what_it_gated)
 from armature_core.errors import ArmatureError  # noqa: E402
 
 WIDTH, HEIGHT, LENGTH, FPS = 480, 832, 33, 16
@@ -547,22 +549,32 @@ def main(argv=None):
 
     cfg = EXPERIMENTS[a.experiment]
     arm_cfg = cfg["arms"][a.arm]
-    positive = a.canon_prompt or (
+    # The SHIPPED positive, derived exactly as `build()` derives it. `--canon-prompt`
+    # used to stand in for it here while `build()` re-derived the payload's positive from
+    # EXPERIMENTS regardless, so the flag could never be the text that went out — only the
+    # text the router examined. It is now compared against the shipped string instead.
+    positive = (
         arm_cfg.get("positive", cfg["positive"]) if isinstance(arm_cfg, dict)
         else cfg["positive"]
     )
     # Gate CANON fires before mkdir. A refuse must leave no output directory.
-    gate_write(
+    canon_ev = canon_spend(
         a.subject, positive, no_canon=a.no_canon,
         out_dir=os.path.dirname(os.path.abspath(a.out)),
+        canon_prompt=a.canon_prompt,
     )
 
     wf, meta = build(a.arm, a.experiment, seed=a.seed)
+    # The graph exists now, so the claim is checkable rather than mirrored: the text the
+    # router checked is the text the payload carries.
+    gate_canon_ships_what_it_gated(positive, meta.get("positive"))
+    meta["gate_CANON"] = canon_ev
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=1)
     with open(a.out.replace(".json", ".meta.json"), "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2)
+    print(canon_line(canon_ev))
     print("BUILD_PAYLOAD " + json.dumps({
         "experiment": a.experiment, "arm": a.arm, "nodes": len(wf), "gate_L": "PASS",
         "reference": meta["reference_image"],

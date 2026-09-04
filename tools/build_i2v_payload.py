@@ -89,7 +89,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
-from armature_core.canon import add_spend_flags, gate_write  # noqa: E402
+from armature_core.canon import add_spend_flags  # noqa: E402
+from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 import build_animate_payload as E08  # noqa: E402  - the prompt's source of record
@@ -472,13 +473,17 @@ def main(argv=None):
     negative = E08.read_negative(a.negative_source)
     ident, ident_original, drops = E08.identity_clause()
     positive = ident + ". " + E08.SCENE_CLAUSE
-    gate_write(a.subject, a.canon_prompt or positive, no_canon=a.no_canon, out_dir=out)
+    # The SHIPPED positive is what the router checks; `--canon-prompt` is compared
+    # against it rather than substituted for it.
+    canon_ev = canon_spend(a.subject, positive, no_canon=a.no_canon, out_dir=out,
+                           canon_prompt=a.canon_prompt)
 
     gate_pin = pin_against_e08(positive, negative, a.e08_record)
 
     wf, meta = build(uploads, a.seed, negative, positive, registry,
                      experiment=a.experiment, length=a.length, fps=a.fps)
     meta["gate_PIN"] = gate_pin
+    meta["gate_CANON"] = canon_ev
     meta["prompt_record"] = {
         "identity_clause_source": E08.TWIN_PROMPT_JSON,
         "identity_clause_original": ident_original,
@@ -500,6 +505,7 @@ def main(argv=None):
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
+    print(canon_line(canon_ev))
     print("BUILD_I2V_OK " + json.dumps({
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
         "length": meta["length"], "fps": meta["fps"],

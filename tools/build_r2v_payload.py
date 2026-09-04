@@ -220,29 +220,21 @@ def main(argv=None):
     if a.arm == "A2":
         # The gate owns the ceiling; `cap=max(--group, 1)` made it check a direction the
         # construction already bounds, on the arm that spends.
-        ceiling_kw, ceiling_param = CASCADE._accepted(
-            AS.gate_slot_ceiling, ("group_size",), int(a.group))
-        gates["CASCADE_ceiling"] = AS.gate_slot_ceiling(wf, **ceiling_kw)
+        gates["CASCADE_ceiling"] = AS.gate_slot_ceiling(wf, group_size=int(a.group))
+        # The cascade's OWN first image id (200), not this tool's (100): the ids the gate
+        # compares are the LoadImage nodes the cascade built inside this graph.
         ordered_ids = CASCADE.frame_source_ids(upload_names, CASCADE.FIRST_IMAGE_ID)
-        topo_kw, topo_param = CASCADE._accepted(
-            AS.gate_cascade_topology, CASCADE.ORDERED_ID_PARAMS, list(ordered_ids))
         gates["CASCADE_topology"] = AS.gate_cascade_topology(
             wf, len(upload_names), cascade_ids["groups"], CASCADE.FINAL_BATCH_ID,
             CASCADE.VIDEO_ID, R2V_ID, "model.reference_videos.video1",
-            group_size=a.group, **topo_kw)
+            group_size=a.group, expected_sources=list(ordered_ids))
         slot_plan = [(gid, start) for (start, _), gid
                      in zip(AS.cascade_plan(len(upload_names), a.group),
                             cascade_ids["groups"])]
         gates["CASCADE_slot_frame_index"] = CASCADE.gate_slot_frame_index(
             wf, upload_names, slot_plan, CASCADE.FIRST_IMAGE_ID)
-        shared_params = {
-            "gate_slot_ceiling_group_size_param": ceiling_param,
-            "gate_cascade_topology_ordered_ids_param": topo_param,
-            "what_null_means": (
-                "the shared gate in armature_core.assembly does not declare that "
-                "parameter on this tree, so it did NOT receive the value and the clause "
-                "it would arm did not run there. CASCADE_slot_frame_index ran regardless"),
-        }
+        shared_params = {"expected_sources_first_image_id": CASCADE.FIRST_IMAGE_ID,
+                         "expected_sources": list(ordered_ids)}
 
     node_inputs = wf[str(R2V_ID)]["inputs"]
     record = {
