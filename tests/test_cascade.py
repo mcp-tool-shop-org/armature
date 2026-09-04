@@ -683,3 +683,97 @@ def test_a_group_with_its_tail_slots_dropped_is_refused():
     with pytest.raises(AS.AssemblyGate) as exc:
         B.gate_slot_frame_index(wf, names, plan, B.FIRST_IMAGE_ID)
     assert gids[1] in str(exc.value)
+
+
+# --- F-527b4284: every link comparison reads the same way -----------------------------
+
+
+def _int_node_ids(wf):
+    """The same graph with every link's node id spelled as an `int` instead of a `str`.
+
+    The node KEYS stay strings — this changes only what sits inside the `[node, slot]`
+    links, which is exactly the variation `_link` was written for: "node ids arrive as
+    `str` from a builder and as whatever a fixture used".
+    """
+    out = json.loads(json.dumps(wf))
+    for node in out.values():
+        inputs = node.get("inputs") or {}
+        for key, value in list(inputs.items()):
+            if (isinstance(value, list) and len(value) == 2
+                    and isinstance(value[0], str) and value[0].isdigit()):
+                inputs[key] = [int(value[0]), value[1]]
+    return out
+
+
+def _link_comparison_sites():
+    """Every comparison against a `[str(...), 0]` link literal in `assembly.py`.
+
+    Derived by AST over the module: a `Compare` or a call whose operand is a two-element
+    list literal starting with `str(...)`. The population is what the source contains, so
+    a sixth raw comparison written tomorrow joins it.
+    """
+    import ast
+    import inspect
+
+    src = inspect.getsource(AS)
+    raw, normalised = [], []
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Compare):
+            for side in [node.left] + list(node.comparators):
+                if (isinstance(side, ast.List) and len(side.elts) == 2
+                        and isinstance(side.elts[0], ast.Call)
+                        and getattr(side.elts[0].func, "id", "") == "str"):
+                    raw.append(node.lineno)
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "_links_equal"):
+            normalised.append(node.lineno)
+    return sorted(raw), sorted(normalised)
+
+
+def test_no_link_is_compared_raw_against_a_str_literal():
+    """Census, derived by AST over assembly.py. Two of the seven link comparisons went
+    through `_link`; five compared raw file values against `[str(x), 0]` (F-527b4284)."""
+    raw, normalised = _link_comparison_sites()
+    assert raw == [], f"raw link comparisons at lines {raw}"
+    assert len(normalised) >= 3, normalised
+
+
+def test_the_cascade_gate_passes_on_both_spellings_of_the_same_topology():
+    """Measured before the fix on a 2-frame, group-size-1 cascade: the string spelling
+    PASSED and the integer spelling RAISED "the final batch's slots are [[10, 0], [11, 0]],
+    not the group nodes in order [['10', 0], ['11', 0]] - the clip's frames would be
+    assembled out of sequence" — a wrong-order accusation about a correctly ordered graph,
+    on the andon a builder is meant to trust before spending credits.
+    """
+    wf, gids = _graph(2, group_size=1)
+    assert _gates(wf, gids, n=2, group=1)["verdict"]
+    wf_int = _int_node_ids(wf)
+    assert _gates(wf_int, gids, n=2, group=1)["verdict"]
+
+
+def test_a_genuinely_permuted_final_batch_still_raises_in_both_spellings():
+    """The check has to keep binding: normalising the comparison must not make it blind to
+    the fault it exists for."""
+    for spelling in ("str", "int"):
+        wf, gids = _graph(2, group_size=1)
+        if spelling == "int":
+            wf = _int_node_ids(wf)
+        final = wf[str(B.FINAL_BATCH_ID)]["inputs"]
+        keys = AS.batch_slot_keys(2)
+        final[keys[0]], final[keys[1]] = final[keys[1]], final[keys[0]]
+        with pytest.raises(AS.CascadeGate, match=r"out of sequence"):
+            _gates(wf, gids, n=2, group=1)
+
+
+def test_the_flat_batch_gate_passes_on_both_spellings_too():
+    """`gate_batch_topology`'s CreateVideo and SaveVideo comparisons are two of the same
+    five. Exercised through the assembly builder rather than the cascade one."""
+    import build_assembly_payload as FLAT
+
+    names = [f"{i:064x}.png" for i in range(4)]
+    wf = FLAT.build(names)
+    srcs = [str(FLAT.FIRST_IMAGE_ID + i) for i in range(4)]
+    for graph in (wf, _int_node_ids(wf)):
+        ev = AS.gate_batch_topology(graph, 4, FLAT.BATCH_ID, FLAT.VIDEO_ID, FLAT.SAVE_ID,
+                                    expected_sources=srcs)
+        assert "every link resolved" in ev["verdict"]
