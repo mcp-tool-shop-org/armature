@@ -24,6 +24,27 @@ CHUNK_JSON = 0x4E4F534A
 CHUNK_BIN = 0x004E4942
 
 
+class MalformedGLB(ValueError):
+    """The container declares something the file does not contain.
+
+    A `ValueError` subclass because `read_chunks` already refused unreadable containers
+    that way and `tests/test_glb.py` pins it; naming the class is what was missing.
+
+    Why the module needs it (F-edbd890a). Every value this reader indexes with comes out
+    of the same file it is reading, and two of those reads were unchecked. `views[ref]`
+    took `image["bufferView"]` straight from the JSON chunk: past the end that is an
+    `IndexError` with no id, and NEGATIVE it is a perfectly legal Python index that
+    silently hashes a different bufferView and reports the digest as this image's.
+    `binary[start:start + length]` is a Python slice, so a bufferView whose declared range
+    runs past the BIN chunk yields a SHORT blob whose sha256 is computed and reported as
+    though it were the whole image. Gate ATLAS compares hashes on both sides, so a
+    truncation identical in source and export CANCELS: the gate reports "byte-identical
+    through the route" over bytes that neither file actually contains. The promise the
+    gate exists for is about the bytes, so a reader that can invent them is the one place
+    the promise cannot be repaired downstream.
+    """
+
+
 class GateAtlasUntouched(GateFailure):
     """Arm (c)'s andon on the promise the route was chosen for.
 
@@ -54,6 +75,11 @@ def read_chunks(path):
                 break
             length, kind = struct.unpack("<II", head)
             data = fh.read(length)
+            if len(data) < length:
+                raise MalformedGLB(
+                    f"{path}: chunk {kind:#x} declares {length} bytes and the file holds "
+                    f"{len(data)} - the container is truncated, and every read off a "
+                    f"short chunk is short without saying so")
             if kind == CHUNK_JSON:
                 js = json.loads(data.decode("utf-8"))
             elif kind == CHUNK_BIN:
@@ -61,6 +87,49 @@ def read_chunks(path):
         if js is None:
             raise ValueError(f"{path}: no JSON chunk")
         return js, binary
+
+
+def _image_blob(views, binary, image, index, path):
+    """The bytes one bufferView-stored image declares, or raise naming the declaration.
+
+    **Every read of `views` and `binary` in this module happens here** — that is the point
+    of the helper, and `tests/test_glb.py::test_every_read_of_the_containers_goes_through
+    _the_one_checked_helper` derives the population by walking this module's AST for
+    subscripts of either name and asserts the answer is this function alone. A second
+    unchecked reader therefore cannot be added quietly.
+
+    The three refusals correspond to the three ways the file can lie about itself: a
+    `bufferView` that is not an index into the table it names, a view with no declared
+    length, and a view whose range runs past the BIN chunk. See `MalformedGLB`.
+    """
+    ref = image["bufferView"]
+    if isinstance(ref, bool) or not isinstance(ref, int):
+        raise MalformedGLB(
+            f"{path}: image {index} names bufferView {ref!r}, which is not an index")
+    if ref < 0 or ref >= len(views):
+        raise MalformedGLB(
+            f"{path}: image {index} names bufferView {ref} and the container declares "
+            f"{len(views)} bufferView(s) - a negative index is a legal Python index and "
+            f"would have hashed a different view")
+    view = views[ref]
+    if "byteLength" not in view:
+        raise MalformedGLB(
+            f"{path}: image {index} names bufferView {ref}, which declares no byteLength, "
+            f"so there is no range to hash")
+    start = int(view.get("byteOffset", 0))
+    length = int(view["byteLength"])
+    if start < 0 or length < 0:
+        raise MalformedGLB(
+            f"{path}: image {index} names bufferView {ref} with byteOffset {start} and "
+            f"byteLength {length}; neither may be negative")
+    if start + length > len(binary):
+        raise MalformedGLB(
+            f"{path}: image {index} declares bytes [{start}, {start + length}) and the "
+            f"BIN chunk does not contain them - it holds {len(binary)} bytes. Slicing "
+            f"anyway hashes a short blob and reports it as the whole image; a truncation "
+            f"identical on both sides of Gate ATLAS would cancel and certify bytes the "
+            f"files do not carry. This is a broken export, not a re-encode")
+    return binary[start:start + length]
 
 
 def embedded_images(path):
@@ -71,10 +140,7 @@ def embedded_images(path):
     for i, image in enumerate(js.get("images") or []):
         rec = {"index": i, "name": image.get("name"), "mime_type": image.get("mimeType")}
         if "bufferView" in image:
-            view = views[image["bufferView"]]
-            start = int(view.get("byteOffset", 0))
-            length = int(view["byteLength"])
-            blob = binary[start:start + length]
+            blob = _image_blob(views, binary, image, i, path)
             rec.update({"bytes": len(blob),
                         "sha256": hashlib.sha256(blob).hexdigest(),
                         "storage": "bufferView"})
