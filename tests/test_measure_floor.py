@@ -331,7 +331,7 @@ def test_the_size_invariant_holds_on_the_cli(tmp_path):
     for name in ("r1", "r2"):
         _run(tmp_path, name, 33, seed=31)
     out = tmp_path / "floor.json"
-    with pytest.raises(MF.FloorError):
+    with pytest.raises(MF.FloorError, match=r"are not comparable rows"):
         MF.main([f"--runs=r1,r2", f"--root={tmp_path}", "--early=0-4", "--late=29-32",
                  f"--out={out}"])
     assert not out.exists()
