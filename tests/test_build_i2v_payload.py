@@ -125,7 +125,8 @@ def test_the_experts_must_hand_over_at_the_same_step():
 def test_the_low_noise_expert_must_continue_the_high_noise_latent():
     wf, _ = built()
     wf["61"]["inputs"]["latent_image"] = ["50", 2]
-    with pytest.raises(B.PayloadError):
+    with pytest.raises(B.PayloadError,
+                       match=r"low-noise sampler does not continue the high-noise latent"):
         B.verify_topology(wf, "start.png")
 
 
@@ -134,21 +135,24 @@ def test_the_gate_b_probe_must_read_the_upload_directly():
     server decoded, which is the only half the local round trip cannot check."""
     wf, _ = built()
     wf["41"]["inputs"]["images"] = ["70", 0]
-    with pytest.raises(B.PayloadError):
+    with pytest.raises(B.PayloadError,
+                       match=r"Gate B probe does not read the start-frame LoadImage"):
         B.verify_topology(wf, "start.png")
 
 
 def test_the_lossless_tap_must_read_the_decode_directly():
     wf, _ = built()
     wf["71"]["inputs"]["images"] = ["40", 0]
-    with pytest.raises(B.PayloadError):
+    with pytest.raises(B.PayloadError,
+                       match=r"lossless tap does not read VAEDecode directly"):
         B.verify_topology(wf, "start.png")
 
 
 def test_a_link_to_a_node_that_does_not_exist_refuses_the_graph():
     wf, _ = built()
     wf["70"]["inputs"]["samples"] = ["999", 0]
-    with pytest.raises(B.PayloadError):
+    with pytest.raises(B.PayloadError,
+                       match=r"node 70\.samples links to missing node 999"):
         B.verify_topology(wf, "start.png")
 
 
@@ -266,7 +270,8 @@ def test_gate_pin_fires_when_the_record_carries_no_string_at_all(tmp_path):
     labels keep producing."""
     p = tmp_path / "rec.json"
     p.write_text(json.dumps({"experiment": "E08"}), encoding="utf-8")
-    with pytest.raises(B.PayloadError):
+    with pytest.raises(B.PayloadError,
+                       match=r"record carries no positive string to pin against"):
         B.pin_against_e08(POS, NEG, str(p))
 
 

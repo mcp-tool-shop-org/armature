@@ -103,9 +103,9 @@ def test_a_wider_band_blends_more_vertices_and_a_narrow_one_fewer():
 
 
 def test_a_zero_or_negative_band_raises_rather_than_silently_making_hard_seams():
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"blend band must be positive, got 0\.0"):
         _weights([(0.0, 0.0, 1.0)], band=0.0)
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"blend band must be positive, got -0\.2"):
         _weights([(0.0, 0.0, 1.0)], band=-0.2)
 
 
@@ -148,9 +148,10 @@ def test_a_single_deforming_bone_takes_everything():
 
 
 def test_empty_input_and_empty_bone_list_both_raise():
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError,
+                       match=r"non-empty \(N, 3\) vertex array, got \(0, 3\)"):
         _weights(np.zeros((0, 3)))
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"no deforming bones"):
         binding.rigid_segment_weights(np.zeros((5, 3)), [], {})
 
 

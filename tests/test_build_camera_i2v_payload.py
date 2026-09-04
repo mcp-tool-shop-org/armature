@@ -233,7 +233,8 @@ def test_the_structural_fields_are_not_overridable(field):
 
 
 def test_an_unknown_trajectory_field_is_refused():
-    with pytest.raises(B.PayloadError):
+    with pytest.raises(B.PayloadError,
+                       match=r"'cfg_scale' is not a trajectory field"):
         built(trajectory_overrides={"cfg_scale": {"value": 6.0, "source": "x"}})
 
 
@@ -564,5 +565,5 @@ def test_a_declared_hash_that_agrees_is_recorded_as_confirmed(tmp_path):
 
 
 def test_a_missing_start_frame_file_raises(tmp_path):
-    with pytest.raises(B.PayloadError):
+    with pytest.raises(B.PayloadError, match=r"is not a file, so there is nothing to hash"):
         B.resolve_start_frame(str(tmp_path / "nope.png"), None)

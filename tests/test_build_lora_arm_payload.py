@@ -183,7 +183,10 @@ def test_gate_s_accepts_the_registered_seed(base):
 def test_gate_s_raises_on_an_unregistered_seed(base):
     built, _ = B.build_arm(base, "T")
     built["60"]["inputs"]["noise_seed"] = 1234
-    with pytest.raises(GateFailure):
+    # The base class, deliberately: builders is narrowing this to a typed
+    # GateSSeedRegistration, which is a GateFailure. What is pinned is the CLAUSE, so the
+    # test survives that change and stops being satisfiable by any other refusal.
+    with pytest.raises(GateFailure, match=r"Gate S: seed 1234 is not in"):
         B.gate_s(built, REGISTRY, 1234)
 
 
@@ -258,13 +261,20 @@ def test_a_save_format_base_raises_rather_than_yielding_none(base):
     side in this pipeline's output directories."""
     save_format = {"nodes": [{"id": 30, "type": "CLIPTextEncode",
                               "widgets_values": ["a positive prompt"]}], "links": []}
-    with pytest.raises(ArmatureError):
+    # MEASURED, and it is not what the test name says: the refusal that actually fires
+    # is the expert-derivation clause ("the baseline does not present one noise-adding
+    # sampler starting at step 0 and one noise-free sampler; found {}"), because a save
+    # format graph has no API-format nodes for `experts()` to read. The outcome is right
+    # and the reason is a different gate; pinning the clause records that rather than
+    # leaving a bare root-class raise that any refusal would satisfy.
+    with pytest.raises(ArmatureError, match=r"one noise-adding sampler"):
         B.positive_prompt_from_graph(save_format)
 
 
 def test_an_empty_positive_raises_rather_than_being_gated(base):
     base["30"]["inputs"]["text"] = "   "
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError,
+                       match=r"positive prompt this graph carries is empty"):
         B.positive_prompt_from_graph(base)
 
 
@@ -273,7 +283,8 @@ def test_the_two_experts_reading_different_positives_raises(base):
     would leave the other ungoverned."""
     base["31"]["inputs"]["text"] = "x"
     base["61"]["inputs"]["positive"] = ["31", 0]
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError,
+                       match=r"two experts read different positive prompts"):
         B.positive_prompt_from_graph(base)
 
 

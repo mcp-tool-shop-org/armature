@@ -169,7 +169,8 @@ def test_the_lossless_tap_reads_the_decoder_and_the_gate_B_probe_reads_the_pack(
 def test_a_sampler_fed_from_the_wrong_latent_is_refused():
     wf, _ = e10()
     wf["3"]["inputs"]["latent_image"] = ["8", 0]
-    with pytest.raises(BAP.PayloadError):
+    with pytest.raises(BAP.PayloadError,
+                       match=r"sampler does not take the conditioning node's latent"):
         BAP.verify_topology(wf)
 
 
