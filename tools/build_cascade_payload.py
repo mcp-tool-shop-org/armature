@@ -185,13 +185,11 @@ def build_and_write(argv=None):
     slot_plan = [(gid, start, stop) for (start, stop), gid
                  in zip(AS.cascade_plan(len(names), a.group), group_ids, strict=True)]
     gate_index = gate_slot_frame_index(wf, names, slot_plan, FIRST_IMAGE_ID)
-    # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no
-    # noise-bearing node at all, so the seed clause has nothing to decide, and a green
-    # "0 seeds, all pinned" here would be the vacuous shape CLAUDE.md names. The clauses
-    # that DO bind are the licence one (no weights load, so none can be banned) and Gate
-    # PAIR (no conditioning node, so none can be unpaired) — both reported below for what
-    # they examined rather than as green ticks.
-    gate_route = RG.verify(wf, family="wan", require_pinned_seeds=False,
+    # Gate ROUTE. `carries_no_sampler=True` is the CHECKED form of the sentence this
+    # comment used to make with `require_pinned_seeds=False` (wave 12, F-60a1222b) — the same
+    # swap as in `build_assembly_payload`, one wording. The assertion is checked, not obeyed:
+    # a sampler in this graph refuses here rather than riding a green "NOT CHECKED".
+    gate_route = RG.verify(wf, family="wan", carries_no_sampler=True,
                            frame=(WIDTH, HEIGHT, len(names)))
 
     record = {

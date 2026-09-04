@@ -427,6 +427,18 @@ def build(names, fps=16.0, prefix="video/S03_assembly"):
     wf[str(SAVE_ID)] = {"class_type": "SaveVideo", "inputs": {
         "filename_prefix": prefix, "format": "auto", "codec": "auto",
         "video": [str(VIDEO_ID), 0]}}
+    # ---- Gate FLAT_SLOT_CEILING, wave 12 (F-133f2bdc). It lives HERE, in the function that
+    # emits the BatchImagesNode it judges, for the reason `gate_create_video_fps` states four
+    # lines above: an in-process caller cannot route around a check inside the emitter the way
+    # it can route around one in `main`. Measured before the move:
+    # `build(["%064x.png" % i for i in range(81)])` returned an 84-node graph whose node 400
+    # carried 81 `images.image*` slots and raised nothing — the exact flat chain S03 watched
+    # pass pre-flight and die at execution — while the gate in `build_and_write` refused that
+    # same graph. The gate's own docstring already claimed this placement.
+    #
+    # It is the LAST statement because it reads the emitted node; `build_and_write` re-runs it
+    # for the RECORD, which is the pattern `gate_create_video_fps` already uses.
+    gate_flat_slot_ceiling(wf, BATCH_ID)
     return wf
 
 
@@ -472,23 +484,27 @@ def build_and_write(argv=None):
 
     # ---- the gates, in code, before anything is submitted.
     gate_paid = AS.gate_no_paid_nodes(wf)
+    # Re-run for the RECORD. `build` already raised on an over-wide batch and on an illegal
+    # rate; these are the evidence dicts, so the receipt states the contracts that were
+    # checked rather than asserting numbers nothing read.
     gate_flat = gate_flat_slot_ceiling(wf, BATCH_ID)
-    # Re-run for the RECORD. `build` already raised on an illegal rate; this is the
-    # evidence dict, so the receipt states the contract that was checked rather than
-    # asserting a number nothing read.
     gate_fps = gate_create_video_fps(a.fps)
     ordered_ids = frame_source_ids(names, FIRST_IMAGE_ID)
     gate_topo = AS.gate_batch_topology(wf, len(names), BATCH_ID, VIDEO_ID, SAVE_ID,
                                        expected_sources=ordered_ids)
     gate_index = gate_slot_frame_index(wf, names, [(BATCH_ID, 0, len(names))],
                                       FIRST_IMAGE_ID)
-    # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no
-    # noise-bearing node at all, so the seed clause has nothing to decide and saying so is
-    # honest where a green "0 seeds, all pinned" would be the vacuous shape the E13
-    # executor was ruled right to refuse. The clauses that DO bind here are the licence one
-    # (no weights are loaded, so none can be banned) and Gate PAIR (no conditioning node,
-    # so none can be unpaired) — both reported below with what they actually examined.
-    gate_route = RG.verify(wf, family="wan", require_pinned_seeds=False,
+    # Gate ROUTE. `carries_no_sampler=True` is the CHECKED form of the sentence this
+    # comment used to make with `require_pinned_seeds=False` (wave 12, F-60a1222b): the flag
+    # said "nobody looked", the sentence said "there is nothing to look at", and only one of
+    # those is a claim about the graph. `verify` refuses the two keywords together, so this is
+    # a swap. The record now reads "CHECKED — no sampler in this graph (asserted by the caller
+    # and checked)", the unrecorded-seed-source andon runs, and a sampler spliced into this
+    # graph refuses HERE — where before the direction was bounded only by
+    # `AS.gate_no_paid_nodes`' allowlist one module over, which a widening would have opened.
+    # The clauses that also bind: the licence one (no weights load, so none can be banned) and
+    # Gate PAIR (no conditioning node, so none can be unpaired).
+    gate_route = RG.verify(wf, family="wan", carries_no_sampler=True,
                            frame=(WIDTH, HEIGHT, len(names)))
 
     record = {

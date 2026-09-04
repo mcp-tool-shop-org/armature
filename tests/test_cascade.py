@@ -779,3 +779,48 @@ def test_the_flat_batch_gate_passes_on_both_spellings_too():
         ev = AS.gate_batch_topology(graph, 4, FLAT.BATCH_ID, FLAT.VIDEO_ID, FLAT.SAVE_ID,
                                     expected_sources=srcs)
         assert "every link resolved" in ev["verdict"]
+
+
+# ============================================================ wave 12, F-60a1222b (this builder's half)
+# `require_pinned_seeds=False` is the UNCHECKED flag; this graph's claim — "no noise-bearing
+# node at all, so the seed clause has nothing to decide" — is `carries_no_sampler=True`, the
+# CHECKED form, which the comment beside the call already wrote in words. Measured on the
+# sibling's flat graph before the swap: the builders' verbatim call returned GREEN with
+# `seed_clause_verdict: "NOT CHECKED"` over a spliced KSamplerAdvanced, and the evidence dict
+# carried no `unrecorded_seed_sources` key at all. The direction WAS bounded — by
+# `AS.gate_no_paid_nodes`' closed allowlist one module over, not by the clause whose comment
+# claims it, and a widening of ALLOWED_CLASSES would have opened it silently.
+#
+# family: keyed on the CALL — every `RG.verify(...)` in a builder passing
+# `require_pinned_seeds=False` — by AST over `tools/build_*.py` -> 2 sites, both swapped;
+# the census that pins it lives beside the sibling's half in tests/test_assembly.py.
+
+
+def test_the_cascade_route_call_refuses_a_spliced_sampler_ON_ITS_OWN():
+    """Independently of `gate_no_paid_nodes`. The assertion is checked, not obeyed."""
+    from armature_core import route_gates as RG
+
+    names = [f"{i:064x}.png" for i in range(9)]
+    wf, _groups = B.build(names, group_size=4)
+    wf["900"] = {"class_type": "KSamplerAdvanced",
+                 "inputs": {"noise_seed": 7, "add_noise": "enable",
+                            "control_after_generate": "fixed"}}
+    with pytest.raises(RG.RouteGate, match=r"asserted this graph carries no sampler"):
+        RG.verify(wf, family="wan", carries_no_sampler=True,
+                  frame=(B.WIDTH, B.HEIGHT, len(names)))
+
+
+def test_the_cascade_record_says_the_seed_clause_was_CHECKED(tmp_path):
+    names = 9
+    uploads = {f"{i:05d}.png": f"{i:064x}.png" for i in range(names)}
+    up = tmp_path / "uploads.json"
+    up.write_text(json.dumps(uploads), encoding="utf-8")
+    out = tmp_path / "run"
+    B.build_and_write(["--uploads", str(up), "--out", str(out), "--group", "4"])
+    rec = json.loads(
+        (out / "E13-cascade-payload-record.json").read_text(encoding="utf-8"))
+    route = rec["gates"]["ROUTE"]
+    assert route["seed_clause_verdict"].startswith("CHECKED"), route["seed_clause_verdict"]
+    assert "NOT CHECKED" not in route["verdict"]
+    assert "unrecorded_seed_sources" in route, (
+        "the unrecorded-seed-source andon does not run under require_pinned_seeds=False")
