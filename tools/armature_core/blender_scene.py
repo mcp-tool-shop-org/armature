@@ -56,11 +56,17 @@ class NonReiterableFrames(ArmatureError):
     function's refusals reach a halt record with the measurement that fired them rather
     than as a sentence — and the second of them, the non-callable guard, stops being a bare
     `TypeError` that the halt contract records as a crash.
-    """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+    **It defines no `__init__` of its own** (rule 5, wave 16). It carried
+    `self.evidence = evidence or {}`, which manufactured an empty dict for a refusal raised
+    with a bare message: the halt line then printed `"evidence": {}` for a refusal that
+    carried no receipt, so "no receipt" and "a receipt with nothing in it" became the same
+    record. `armature_core.errors.ArmatureError` stores what it is passed and normalises
+    nothing; the one exemption is `GateFailure`, whose clauses index into `ev` while they
+    measure. A bare-message refusal from this class now reads `"evidence": null`, which is
+    the honest record; a refusal that passes a dict is unchanged in both directions, and the
+    dict the raising line passed is the object the halt handler reads.
+    """
 
 
 class MeasurementWithoutScene(ArmatureError):
@@ -74,11 +80,17 @@ class MeasurementWithoutScene(ArmatureError):
     reading is called here, so the message says what to do rather than only what not to.
 
     Carries an `evidence` dict; a plain refusal writes `gate: None` + `andon` + `clause`.
-    """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+    **It defines no `__init__` of its own** (rule 5, wave 16). It carried
+    `self.evidence = evidence or {}`, which manufactured an empty dict for a refusal raised
+    with a bare message: the halt line then printed `"evidence": {}` for a refusal that
+    carried no receipt, so "no receipt" and "a receipt with nothing in it" became the same
+    record. `armature_core.errors.ArmatureError` stores what it is passed and normalises
+    nothing; the one exemption is `GateFailure`, whose clauses index into `ev` while they
+    measure. A bare-message refusal from this class now reads `"evidence": null`, which is
+    the honest record; a refusal that passes a dict is unchanged in both directions, and the
+    dict the raising line passed is the object the halt handler reads.
+    """
 
 
 def scene_fps():
@@ -113,7 +125,7 @@ def import_glb(path, *, expected_fps):
     **keyword-only and required** (F-abcb06a8): the signature used to be
     `import_glb(path, expected_fps=None)`, so a caller that omitted it skipped the check
     below entirely and the import proceeded at whatever rate the scene carried.
-    `probe_subject.py:42` did exactly that, immediately after `reset_scene()` (factory
+    `probe_subject.py::probe_one` did exactly that, immediately after `reset_scene()` (factory
     settings, 24 fps) - harmless there because it reads geometry, and proof that nothing
     anywhere required a caller to arm the andon. Wave 3 removed the identical shape from
     `assembly.gate_batch_topology` by making `expected_sources` required and keyword-only;
@@ -367,13 +379,15 @@ def world_bounds(objects, scene):
     overturned it** (F-e2be2262). This docstring read: "The guard on the other spelling is
     a suite-side ban ... not a refusal here: three call sites in other domains still omit
     it and the signature cannot tighten until they move." Re-derived by grep across
-    `tools/` and `tests/` on the wave-12 base (`89269f1`): every live `world_bounds(...)`
-    call passes a scene — `preview_walk.py:159`, `probe_subject.py:67`,
-    `stage_render.py:160`, `tests/blender/check_visibility.py:72`,
-    `tests/test_blender_scene_pure.py:320` — and the single omission left,
-    `tools/superseded/render_reference.py:183`, is inside `UNFILTERED_BAN_EXEMPT_DIRS` by
-    name and date. **Zero live call sites, not three**, so the signature could tighten and
-    now has. It is the second time this same docstring asserted a call-site relationship
+    `tools/` and `tests/` on the wave-12 base (`89269f1`), re-derived and re-anchored on the
+    SYMBOL 2026-09-04 (F-0f035830 — four of the five line numbers below had already drifted
+    onto unrelated code): every live `world_bounds(...)` call passes a scene —
+    `preview_walk.py::main`, `probe_subject.py::probe_one`, `stage_render.py::prepare`,
+    `tests/blender/check_visibility.py::filtered_bounds` and
+    `tests/test_blender_scene_pure.py::test_world_bounds_filters_by_render_visibility_when_it_is_given_the_scene`
+    — and the single omission left, `tools/superseded/render_reference.py::main`, is inside
+    `UNFILTERED_BAN_EXEMPT_DIRS` by name and date. **Zero live call sites, not three**, so
+    the signature could tighten and now has. It is the second time this same docstring asserted a call-site relationship
     the tree did not have (F-08b5c1b8 corrected `unfiltered_world_bounds`'s "probe_subject
     reports the naive bounds" for the same reason), which is why the correction is written
     here beside the claim rather than substituted for it.
@@ -381,16 +395,24 @@ def world_bounds(objects, scene):
     **The two doors that are still open are named, because this one is not the one
     production uses naively** (F-efe65849). `_points_to_measure` has three public entry
     points; `evaluated_geometry_signature` and `projected_bbox_px` keep their `scene=None`
-    default and ARE called with the scene omitted — `check_relift.py:167`,
-    `render_start_frame.py:669`, `stage_render.py:219` and `stage_render.py:236`. All four
-    pass a `render_visible_meshes` result today, so that is a shape rather than a live wrong
-    number; the ban's population half (widening `BOUNDS_FAMILY` to all three doors by
-    behaviour) is the tests domain's, and the four call sites naming their selection are
-    instruments' and instruments-measure's. What is closed here is the one door whose naive
+    default, so the naive door is still open on both.
+
+    **Corrected in place 2026-09-04 (F-0f035830): the four call sites this paragraph named
+    as omitting the scene now all PASS it.** The paragraph said they "ARE called with the
+    scene omitted" and cited four line numbers, every one of which had drifted onto
+    unrelated code. Re-derived by grep and re-anchored on the symbol:
+    `check_relift.py::signatures`, `render_start_frame.py::main` and
+    `stage_render.py::render_frame` (twice — the geometry signature and the projected bbox)
+    are the four sites, and each spells `scene=` explicitly today. The naming half of the
+    finding is therefore closed by the call sites themselves; what is left open is the
+    SIGNATURE, which still defaults `scene=None` on both doors, so a fifth caller can omit
+    it silently. Tightening those two defaults is a separate change with its own callers to
+    move; the ban's population half (widening `BOUNDS_FAMILY` to all three doors by
+    behaviour) is the tests domain's. What is closed here is the one door whose naive
     spelling had no remaining caller.
 
-    A superseded tool calling the old shape (`tools/superseded/render_reference.py:183`)
-    will now raise on that line. That file is a recorded failure kept runnable for its
+    A superseded tool calling the old shape (`tools/superseded/render_reference.py::main`)
+    will now raise where it calls. That file is a recorded failure kept runnable for its
     reason, not a route; the exempt list names it, and the refusal it now gets says what to
     call instead.
     """
@@ -417,9 +439,13 @@ def unfiltered_world_bounds(objects):
     **Its caller, corrected in place 2026-09-04** (F-08b5c1b8). This docstring said
     "`probe_subject` reports the naive bounds beside the filtered ones". Measured by grep
     across `tools/` and `tests/` on the wave-10 base: the ONLY call site of this name in the
-    tree was `tests/blender/check_visibility.py:71`, and `tools/probe_subject.py:75` still
-    read `naive = blender_scene.world_bounds(meshes)` — so the named production consumer did
-    not use the name, and the docstring asserted a relationship the tree did not have.
+    tree was `tests/blender/check_visibility.py::naive_bounds`, and
+    `tools/probe_subject.py::probe_one` still read `naive =
+    blender_scene.world_bounds(meshes)` — so the named production consumer did not use the
+    name, and the docstring asserted a relationship the tree did not have. (Re-anchored on
+    the symbol 2026-09-04, F-0f035830: `probe_subject.py:75` had become a blank line, and
+    `probe_subject` was routed onto this name in wave 12 — it calls
+    `unfiltered_world_bounds` today.)
     `check_visibility.py` pins that the filtered and naive bounds differ; the instruments
     domain is routing `probe_subject` onto this name in the same wave.
 
@@ -669,12 +695,16 @@ class CompositorWiring(GateFailure):
     The three checks this replaces raised a bare `RuntimeError` with no gate id and no
     evidence (F-ac989919), while their own comment named them as the andon: "a dry_run PASS
     does not prove link sanity — check the topology in code". `ArmatureError` subclasses
-    `RuntimeError`, so this was not merely untyped: `stage_render.py:508` catches only
-    `GateFailure` and writes the halt contract's `<PREFIX>_HALT` line before returning
-    2 (the `GATE_FAILURE` / `GATE_EVIDENCE` prints this used to name were deleted in wave
-    12; corrected in passing), so a
-    compositor mis-wiring escaped that handler entirely and surfaced as an unhandled
-    traceback with no receipt lines for an orchestrator or a later reader to key on. The
+    `RuntimeError`, so this was not merely untyped: `stage_render.py::__main__` classifies
+    on the family and writes the halt contract's `<PREFIX>_HALT` line before exiting (the
+    `GATE_FAILURE` / `GATE_EVIDENCE` prints this used to name were deleted in wave 12;
+    corrected in passing), so a bare `RuntimeError` was recorded as "FAILED — an unhandled
+    error" at exit 1 rather than as the andon it is, with no gate id and no evidence for an
+    orchestrator or a later reader to key on. (Re-anchored on the symbol 2026-09-04,
+    F-0f035830: the cited `stage_render.py:508` had become a blank line, and the handler
+    catches `BaseException` — the "escaped entirely" reading was the wave-12 shape and is
+    corrected here rather than deleted, because exit 1 with `"gate": null` is the same
+    false record by a different route.) The
     Depth pass wired to the Alpha socket is the case: the run stops, correctly, and leaves
     nothing behind saying which andon stopped it.
     """

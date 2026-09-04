@@ -111,11 +111,17 @@ class SolveError(ArmatureError):
     Carries an `evidence` dict like `GateFailure` does, so a refusal reaches a halt record
     with the measurement that fired it. A plain refusal writes `gate: None` + `andon` +
     `clause` — a refusal is not an andon and has no gate id.
-    """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+    **It defines no `__init__` of its own** (rule 5, wave 16). It carried
+    `self.evidence = evidence or {}`, which manufactured an empty dict for a refusal raised
+    with a bare message: the halt line then printed `"evidence": {}` for a refusal that
+    carried no receipt, so "no receipt" and "a receipt with nothing in it" became the same
+    record. `armature_core.errors.ArmatureError` stores what it is passed and normalises
+    nothing; the one exemption is `GateFailure`, whose clauses index into `ev` while they
+    measure. A bare-message refusal from this class now reads `"evidence": null`, which is
+    the honest record; a refusal that passes a dict is unchanged in both directions, and the
+    dict the raising line passed is the object the halt handler reads.
+    """
 
 
 class SolveGate(GateFailure):
@@ -617,17 +623,19 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
 
     **This never raises on the measurement.** It was one function with a `raise_on_fail`
     keyword defaulting to True, and every non-test call site in the tree passed False
-    (`lift_clip.py:275`, `measure_lift.py:481`) - so the only paths that ever armed the
+    (`lift_clip.py:275 (main)`, `measure_lift.py:481 (solve_series)`) - so the only paths that ever armed the
     andon were the tests, and a keyword that turns an andon into a return value is a skip
     flag whatever it is called. The two behaviours are now two functions: this one
     measures, `gate_round_trip` below halts, and no caller can disarm the second by
     keyword because it has no keyword to pass.
 
-    **The two call-site anchors above are `lift_clip.py:275` and `measure_lift.py:481`**,
-    re-derived by grep 2026-09-04 (F-8cd65665). Both docstrings said `lift_clip.py:276`;
-    this one said `measure_lift.py:334` and `gate_round_trip`'s said `measure_lift.py:468`
-    for the SAME two call sites, so the pair disagreed with each other and all four were
-    wrong — the recorded-count-measured-on-a-
+    **The two call-site anchors above are `lift_clip.py:275 (main)` and
+    `measure_lift.py:481 (solve_series)`**, re-derived by grep 2026-09-04 (F-8cd65665) and
+    qualified with the symbol that holds each line 2026-09-04 (F-0f035830), because a bare
+    line number is not an identity that survives an edit. Both docstrings said
+    `lift_clip.py:276 (main)`; this one said `measure_lift.py:334 (detect)` and
+    `gate_round_trip`'s said `measure_lift.py:468 (summarise)` for the SAME two call sites,
+    so the pair disagreed with each other and all four were wrong — the recorded-count-measured-on-a-
     branch shape, a number that moved at a merge and was never re-derived, presented as a
     grep result. `tests/test_lift_solve.py` now derives the anchors from `tools/` and
     asserts these docstrings name them, so the fifth stale one cannot be written.
@@ -692,8 +700,8 @@ def gate_round_trip(rest, obs, solved, diagonal, tol_frac=None):
     quoted against a wrong pose while every other number looked reasonable.
 
     The synthetic path is the one whose invariant is exactness, and this is the function
-    it calls. **No tool implements that path**: grep finds `lift_clip.py:275` and
-    `measure_lift.py:481`, both on the DIAGNOSTIC `round_trip_report`, and this gate's only
+    it calls. **No tool implements that path**: grep finds `lift_clip.py:275 (main)` and
+    `measure_lift.py:481 (solve_series)`, both on the DIAGNOSTIC `round_trip_report`, and this gate's only
     callers are `tests/test_lift_solve.py` and `tests/test_amend_w3_andons.py`. The
     docstring used to name a caller that does not exist in the tree; corrected here rather
     than deleted, because the correction is the useful part (F-1831f75d).

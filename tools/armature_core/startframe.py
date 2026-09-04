@@ -531,9 +531,18 @@ def gate_whole(extent, width, height, margin_px):
     than as a refusal at exit 2. Both are now checked with the DEFAULT `positive=True`: a
     resolution cannot be zero or negative, and this frame IS the conditioning image for a
     whole generation, so a PASS beside a measurement that is not a number certifies
-    nothing. `tools/render_start_frame.py:142-143` declares `--width`/`--height` as
-    `type=int` with no positivity bound — the parser half is filed for that domain; this
-    gate refuses regardless of who calls it.
+    nothing.
+
+    **The parser half is CLOSED, and this paragraph said otherwise in the present tense**
+    (F-dc4cf57e, corrected 2026-09-04). It read: "`tools/render_start_frame.py:142-143`
+    declares `--width`/`--height` as `type=int` with no positivity bound — the parser half
+    is filed for that domain". Both halves are false on the merged tree. The anchor had
+    drifted onto a docstring line about the render engine, and the bound EXISTS:
+    `tools/render_start_frame.py::require_frame_size` refuses a `--width`/`--height` that is
+    not a positive int (`not isinstance(v, int) or isinstance(v, bool) or v <= 0`), added in
+    wave 12 as F-34a858f5. What is still true is the part worth keeping: this gate refuses
+    regardless of who calls it, because a gate that trusts its caller's parser is a gate
+    with a skip flag one import away.
     """
     ev = {
         "gate": "WHOLE", "andon": "StartFrameGate",

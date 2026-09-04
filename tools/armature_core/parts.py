@@ -101,7 +101,7 @@ def gate_parts_accounting(labels, n_faces, bone_names):
     compare 0 to 0.
 
     The evidence carries `gate` and `andon` (F-f2f42e4a): the halt contract's
-    `STAGE_RENDER_HALT` line (`stage_render.py:634`, and the same six-key shape in all
+    `STAGE_RENDER_HALT` line (`stage_render.py::__main__`, and the same six-key shape in all
     21 sibling tools) carries the gate id beside the evidence JSON, and gate ids are
     shared across andon families, so the JSON has to name which andon pulled. The
     citation used to name `GATE_FAILURE` / `GATE_EVIDENCE`, two print lines wave 12
@@ -298,9 +298,11 @@ class GateRigidArrival(GateFailure):
 #: same keywords from four rig gates) and from `assembly.gate_slot_ceiling`'s `cap` clause,
 #: which is the shape this repo already settled on: a bound the caller supplies is a bound
 #: the caller can raise, and a gate whose tolerance grows with the defect it is measuring
-#: cannot see the defect. Neither production call site passes one — `rig_parts.py:490` and
-#: `rig_parts.py:503` both take the defaults — so the freedom bought nothing and the
-#: loosening direction was unbounded.
+#: cannot see the defect. Neither production call site passes one — `rig_parts.py::main`
+#: calls `parts.gate_parts_determinism` and `parts.gate_rigid_arrival` and both take the
+#: defaults — so the freedom bought nothing and the loosening direction was unbounded.
+#: (Re-anchored on the symbol 2026-09-04, F-0f035830: the two line numbers had drifted onto
+#: a `view_layer.update()` and onto a blank line.)
 RIGID_TRANSFORM_FRAC = 1e-4
 RIGID_RIGIDITY_FRAC = 1e-5
 DETERMINISM_LENGTH_FRAC = 1e-6
@@ -465,8 +467,9 @@ def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_
     `bbox_diagonal=1.0`, the same call PASSED at `bbox_diagonal=1e6` with
     `transform_tolerance` 100.0 and PASSED at `bbox_diagonal=float('nan')` with
     `transform_tolerance` nan. Non-finite and non-positive are refused here by name. A
-    merely LARGE diagonal is not, and cannot be: `rig_parts.py:338` measures it off the
-    mesh bbox and this module does not know the caller's units, so "big" is not a
+    merely LARGE diagonal is not, and cannot be: `rig_parts.py::build_pass` measures it off
+    the mesh bbox (`rig_character.subject_scale`) and this module does not know the caller's
+    units, so "big" is not a
     property this gate can rule on — what it can rule on is that the multiplicand is a
     number at all.
 

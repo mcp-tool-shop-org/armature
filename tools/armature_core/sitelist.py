@@ -24,9 +24,22 @@ class SiteListError(ArmatureError):
 
     A deliberate refusal, and it used to be a bare `ValueError` (F-9fab7829, wave 12). The
     docstring on `validate` already said "Raises ValueError, never asserts": the intent was
-    a refusal, only the class was wrong. `validate()` is called by three production Blender
-    tools (`tools/rig_character.py:1135`, `tools/rig_parts.py:480`,
-    `tools/project_pose_keypoints.py:229`) and the 21-tool halt contract classifies on the
+    a refusal, only the class was wrong.
+
+    **The caller population, as the tree actually has it** (F-69733981, corrected in place
+    2026-09-04). This read "called by three production Blender tools
+    (`tools/rig_character.py:1135`, `tools/rig_parts.py:480`,
+    `tools/project_pose_keypoints.py:229`)". Re-derived by grep: `validate()` has TWO direct
+    callers — `tools/rig_character.py::validate_sitelist` and
+    `tools/project_pose_keypoints.py::main` — and ONE indirect, `tools/rig_parts.py::main`,
+    which calls `rig_character.validate_sitelist()` and reaches this refusal through it. Of
+    the three line numbers, only `project_pose_keypoints.py:229` was right; the other two
+    landed on a docstring line and on a `np.linalg.norm` call, and `grep -n validate
+    tools/rig_parts.py` returns exactly one line, the wrapper call. Two direct and one
+    through the wrapper, then — the re-classing argument below is unaffected and reads
+    stronger for being the tree's own count.
+
+    The 21-tool halt contract classifies on the
     `ArmatureError` family, so measured 2026-09-04 by driving that classifier with the
     exception `validate()` raises on a duplicated registration: ('FAILED - an unhandled
     error', exit 1, gate None, evidence None). The tool wrote a halt record asserting an
@@ -36,11 +49,17 @@ class SiteListError(ArmatureError):
     and its E07 registration document disagreeing.
 
     Carries an `evidence` dict; a plain refusal writes `gate: None` + `andon` + `clause`.
-    """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+    **It defines no `__init__` of its own** (rule 5, wave 16). It carried
+    `self.evidence = evidence or {}`, which manufactured an empty dict for a refusal raised
+    with a bare message: the halt line then printed `"evidence": {}` for a refusal that
+    carried no receipt, so "no receipt" and "a receipt with nothing in it" became the same
+    record. `armature_core.errors.ArmatureError` stores what it is passed and normalises
+    nothing; the one exemption is `GateFailure`, whose clauses index into `ev` while they
+    measure. A bare-message refusal from this class now reads `"evidence": null`, which is
+    the honest record; a refusal that passes a dict is unchanged in both directions, and the
+    dict the raising line passed is the object the halt handler reads.
+    """
 
 
 #: The 18 sites `tools/probe_glb.py::SITES` enumerates — the list every `0 / 18` in E01's
