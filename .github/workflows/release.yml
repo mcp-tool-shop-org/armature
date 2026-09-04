@@ -29,7 +29,39 @@ name: release
 on:
   release:
     types: [published]
+  # THE REHEARSAL. Measured 2026-09-04: `git tag -l` holds v0.1.0, v0.1.1, v0.2.0, v0.2.1,
+  # v0.3.0 and nothing newer; v0.3.0 is c7549b9, dated 2026-08-18; `git diff --stat
+  # v0.3.0..HEAD` over the CI/packaging files is 11 files and 1558 insertions, of which
+  # release.yml alone is +186/-17, and all three composite actions under `.github/actions/`
+  # were created since that tag. So the tag-ref gate below, the visibility gate beside it,
+  # `npm-clean-room`, the clean-room action's sdist room, the `-O` step's `PYTHONOPTIMIZE`
+  # env and BOTH arms of the npm `Publish` branch have never executed in a `release:
+  # published` run. Nothing green anywhere says otherwise: the suite reads these files as
+  # text, which is a claim about what they SAY, not about what they DO on a runner.
+  #
+  # Without a rehearsal, the first real use of roughly two hundred lines of never-executed
+  # shell is the one path in this repository with no compensator -- a defect in it surfaces
+  # AFTER `release: published` has fired, on a tag already cut and public, with both
+  # registries waiting. That is the state this file's header says the release trigger exists
+  # to keep rare, not the state in which to debug a gate.
+  #
+  # `rehearse: true` runs the whole `verify` job -- the suite twice, both clean rooms, the
+  # tag gate, the visibility gate -- and SKIPS both publish jobs. Dispatch AT AN EXISTING
+  # TAG, which the tag gate requires either way:
+  #
+  #     gh workflow run release.yml --ref v0.3.0 -f rehearse=true
+  #
+  # STATUS: NOT YET RUN. No run id is recorded on this line because no such run exists; a
+  # plausible id beside a verdict would be a placeholder shaped like evidence. Write the run
+  # id here the first time it is dispatched, and dispatch again after any change to this
+  # workflow or to the actions it calls, so "exercised" is a fact with a run id rather than
+  # an inference from a green suite.
   workflow_dispatch:
+    inputs:
+      rehearse:
+        description: "Run the verify job's gates only; skip both publish jobs."
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -155,14 +187,41 @@ jobs:
         # held different beliefs about one fact, and the disagreement sat on the step with no
         # compensator.
         #
-        # PREMISE, MARKED ASSUMED AND NOT FETCHED IN THE SEAT THAT WROTE THIS (no network):
-        # npm is understood to generate provenance attestations only for packages published
-        # from a PUBLIC source repository, so `--provenance` from a private repo fails AT the
-        # publish rather than degrading. The npm documentation was not retrieved to confirm the
-        # clause or its current wording. Re-fetch before relying on the reasoning; the
-        # BEHAVIOUR below is chosen so that it is correct either way -- public still attests,
-        # private still publishes, and neither reading makes the flag the thing that decides
-        # whether a release completes.
+        # THE PREMISE, FETCHED -- AND STILL UNVERIFIED ON THE POINT THAT MATTERS. Recorded
+        # the way docs/license-map.md records a row: what was checked, where, on what date,
+        # the operative sentence, and the verdict.
+        #
+        #   document : "Generating provenance statements", npm Docs
+        #   url      : https://docs.npmjs.com/generating-provenance-statements
+        #   fetched  : 2026-09-04 (wave 16; the one network fetch this wave allowed)
+        #   operative sentence, quoted: "Ensure your `package.json` is configured with a
+        #              public `repository` that matches (case-sensitive) where you are
+        #              publishing with provenance from."
+        #   verdict  : UNVERIFIED. That page states a requirement about the `repository`
+        #              FIELD in the manifest -- which this package has, pointing at
+        #              github.com/mcp-tool-shop-org/armature -- and says nothing about the
+        #              repository's VISIBILITY. It names no error, no failure mode and no
+        #              degradation for `npm publish --provenance` from a private repository.
+        #              So the claim the seat before this one marked ASSUMED ("provenance is
+        #              generated only from a public source repo, so `--provenance` fails at
+        #              the publish rather than degrading") is neither confirmed nor refuted
+        #              by the document that was named as the way to settle it.
+        #
+        # WHAT THIS REPOSITORY'S OWN RECORD SAYS, measured with no network: tag v0.3.0
+        # (c7549b9, 2026-08-18) carries `npm publish --provenance --access public`
+        # unconditionally at its release.yml:126, and its npm/package.json:39-42 carries
+        # `publishConfig: { access: public, provenance: true }`. That tag is seven days after
+        # the ruling that took this repository private (pages.yml records the date,
+        # 2026-08-11). So the experiment has been RUN once, from a private source repository,
+        # with the flag on. NOT CHECKED HERE, and named rather than guessed: that run's log,
+        # and whether `@mcptoolshop/armature-studio@0.3.0` exists on the registry. Either
+        # would settle it; neither was retrieved, and no verdict is recorded as if it had
+        # been.
+        #
+        # The BEHAVIOUR below is unchanged and stays chosen so that it is correct either way
+        # -- public still attests, private still publishes, and neither reading makes the flag
+        # the thing that decides whether a release completes. Re-fetch, or read the v0.3.0
+        # run, before writing a narrower branch than that.
         #
         # This step reads the value and REFUSES anything that is not `true` or `false`. It runs
         # in `verify`, upstream of both publish jobs, because `pypi` and `npm` are siblings on
@@ -196,6 +255,16 @@ jobs:
 
   pypi:
     needs: verify
+    # THE REHEARSAL SKIPS THE IRREVERSIBLE HALF, and both publish jobs carry the same clause
+    # rather than one of them: a rehearsal that published to one registry would leave exactly
+    # the asymmetric state the visibility gate in `verify` was hoisted upstream to prevent.
+    #
+    # `inputs` is empty on `release: published`, so `inputs.rehearse` is null there and this
+    # reads true -- a real release publishes. On a dispatch it is the boolean the operator
+    # picked. The direction of the failure mode is deliberate: if this expression is ever
+    # wrong it is wrong toward NOT publishing, which a second dispatch fixes, rather than
+    # toward publishing, which nothing fixes.
+    if: ${{ !inputs.rehearse }}
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -224,6 +293,10 @@ jobs:
 
   npm:
     needs: verify
+    # The same clause as `pypi` above, for the reason stated there: a rehearsal reaches
+    # neither registry, and the two jobs must agree about that or the rehearsal creates the
+    # divergence it exists to rule out.
+    if: ${{ !inputs.rehearse }}
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -253,11 +326,31 @@ jobs:
         # requirement the comment above already names. Raising the major is a deliberate
         # edit, reviewed like any other.
         run: npm install -g npm@^11.5.1
-      - name: Launcher self-test
-        # Runs where Python is irrelevant: it proves the launcher parses and reports
-        # honestly, which is the half of it that must work before Python is even looked for.
-        run: npm test
-        working-directory: npm
+      # NO GATE LIVES DOWNSTREAM OF THE FORK. There was one here -- `Launcher self-test`,
+      # `npm test`, i.e. `node bin/armature.mjs --node-selftest` (npm/package.json:37) run out
+      # of the checkout -- and it was the only step in this job that was a pure gate rather
+      # than a structural requirement (the clone, the registry-configured node, and the npm
+      # that performs OIDC publishing are the other three). It was also a strict SUBSET of a
+      # check `verify` had already run: `.github/actions/npm-clean-room`, called at the
+      # `uses:` line in `verify`, packs the package, installs the TARBALL into a scratch
+      # prefix, refuses if no `armature` shim exists and runs `"$SHIM" --node-selftest` --
+      # the same assertion on a strictly stronger artifact. That action's own header records
+      # why the checkout-level form is the weaker one: it "consults neither `bin`, nor
+      # `files`, nor the tarball", and was measured green with the `bin` map pointed at a
+      # typo.
+      #
+      # So the only removable failure mode downstream of the fork could catch nothing
+      # `verify` had not, while the state it COULD produce is the asymmetric one this file
+      # names in the visibility gate: a refusal down here leaves PyPI having taken the
+      # version, the tag cut, the release object public, and one registry ahead of the other
+      # with a number npm can only match by a fix-forward release. `pypi` and `npm` are
+      # siblings on `needs: verify` and run in parallel; every gate belongs upstream of that
+      # fork, and every gate now is.
+      #
+      # `npm test` itself is not retired: ci.yml's `launcher` job still runs it across the
+      # node 18/22 matrix, which is a stronger exercise of the launcher than one copy on
+      # node 22 here, and verify.ps1's leg 3 runs it on the rig.
+      #
       # A release workflow gets re-run — because a sibling job failed, because a gate
       # caught something, because a step was fixed. Publishing is the one step that
       # cannot be repeated: npm refuses a version that already exists, so on the second
