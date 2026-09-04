@@ -86,3 +86,39 @@ def test_no_reference_note_is_not_hardcoded_to_one_experiment(scene):
     src = open(TOOL, encoding="utf-8").read()
     assert "WanVaceToVideo" not in src, (
         "one experiment's measured claim is still baked into the shared composer")
+
+
+def test_an_out_under_a_directory_that_does_not_exist_still_produces_the_sheet(scene):
+    """`sheet.save(a.out)` with no `os.makedirs` anywhere in the file — the only writer
+    among this domain's 42 tools with zero makedirs calls, while every sibling got one
+    (`sheet_compose.py`, `rig_sheet_compose.py`, `make_cast_sheet.py`, and
+    `make_lift_sheet.py` / `make_review_clip.py` already had theirs).
+
+    Measured: `--out=outputs/E02/sheets/thesis.png` against a tree where that directory
+    does not yet exist died with `FileNotFoundError` out of PIL's `Image.save` — on the
+    panel assembled after the arms have been generated and paid for. This file's other
+    tests all write into an existing `tmp_path`, so the direction was unexercised."""
+    ctl, arm, ref, tmp = scene
+    out = str(tmp / "E02" / "sheets" / "thesis.png")
+    assert not os.path.isdir(os.path.dirname(out))
+    _run(f"--control={ctl}", f"--arms=A:{arm}", f"--reference={ref}", f"--out={out}",
+         "--frames=0,4", "--tile-height=36")
+    assert os.path.isfile(out)
+
+
+def test_every_writer_in_this_family_creates_its_own_output_directory():
+    """The census: the repo's named rule ("Scripts create their own output directories.
+    Two facet runs died on this."), asserted over the family rather than one file."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    without = []
+    for mod in ("make_thesis_sheet", "make_lift_sheet", "make_gate0_sheet",
+                "make_review_clip", "make_cast_sheet", "sheet_compose",
+                "rig_sheet_compose", "make_identity_sheet", "make_plate",
+                "fit_reference", "pack_pose_pack"):
+        lines = open(os.path.join(root, "tools", f"{mod}.py"),
+                     encoding="utf-8").read().splitlines()
+        # a CALL, not the prose that records the defect: naming makedirs in a docstring
+        # is exactly what this census must not accept as having made a directory
+        if not any(ln.strip().startswith("os.makedirs(") for ln in lines):
+            without.append(mod)
+    assert without == [], without
