@@ -36,7 +36,9 @@ def gate_n_names(observed, registered, where):
     """
     observed = list(observed)
     registered = list(registered)
-    ev = {"where": where, "n_observed": len(observed), "n_registered": len(registered)}
+    ev = {"gate": "N", "andon": "GateNNames",
+          "where": where, "n_observed": len(observed),
+          "n_registered": len(registered)}
 
     counts = {}
     for n in observed:
@@ -80,7 +82,8 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal,
     """
     a = np.asarray(source_world, dtype=np.float64)
     b = np.asarray(bound_world, dtype=np.float64)
-    ev = {"epsilon_frac": epsilon_frac, "bbox_diagonal": float(bbox_diagonal),
+    ev = {"gate": "P", "andon": "GatePRestPose",
+          "epsilon_frac": epsilon_frac, "bbox_diagonal": float(bbox_diagonal),
           "n_source": int(a.shape[0]) if a.ndim == 2 else None,
           "n_bound": int(b.shape[0]) if b.ndim == 2 else None}
 
@@ -151,7 +154,9 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal,
     """
     a = np.unique(np.ascontiguousarray(np.asarray(source, dtype=np.float32)), axis=0)
     b = np.unique(np.ascontiguousarray(np.asarray(roundtrip, dtype=np.float32)), axis=0)
-    ev = {"unique_positions_source": int(len(a)), "unique_positions_roundtrip": int(len(b)),
+    ev = {"gate": "P", "andon": "GatePRestPose",
+          "unique_positions_source": int(len(a)),
+          "unique_positions_roundtrip": int(len(b)),
           "n_source_vertices": int(len(np.asarray(source))),
           "n_roundtrip_vertices": int(len(np.asarray(roundtrip))),
           "epsilon_frac": epsilon_frac, "bbox_diagonal": float(bbox_diagonal),
@@ -217,7 +222,8 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal, min_frac=1
     """
     a = np.asarray(rest_world, dtype=np.float64)
     b = np.asarray(probe_world, dtype=np.float64)
-    ev = {"min_frac": min_frac, "bbox_diagonal": float(bbox_diagonal)}
+    ev = {"gate": "P", "andon": "GatePRestPose",
+          "min_frac": min_frac, "bbox_diagonal": float(bbox_diagonal)}
     if a.shape != b.shape:
         raise GatePRestPose(
             f"liveness probe returned a different vertex array ({a.shape} vs {b.shape}); "
@@ -271,12 +277,40 @@ def gate_d_determinism(a, b, bbox_diagonal,
 
     Compared as parsed objects. Lengths are toleranced as a fraction of the subject's own
     bbox diagonal; weights and rolls on their own natural units.
+
+    **The verdict says only what was CHECKED.** Two clauses of this gate can be handed an
+    empty population, and neither used to say so.
+
+    * `a["bones"]` empty: nothing about the skeleton is compared and the gate returned
+      "two builds agree on bones, hierarchy and weights". Measured 2026-09-03,
+      `gate_d_determinism(rig_fingerprint({}, {}, 0), rig_fingerprint({}, {}, 0), 1.0)`
+      returned exactly that with `n_bones_a == n_bones_b == 0`. `gate_p_rest_pose` on
+      this page already raises on `a.shape[0] == 0`; this is the same refusal.
+    * Both `weights` dicts empty: the weight clause iterates `sorted(set(wa) & set(wb))`,
+      so ZERO per-vertex vectors are compared while the verdict names weights. This is
+      not hypothetical — `rig_character.build_pass` initialises `weights = {}` and only
+      fills it inside `if bind:`, and the skeleton-only route calls `build_pass(...,
+      bind=False)` twice and hands both fingerprints straight here. On that route the
+      per-vertex comparison this gate's own docstring names as part of the contract
+      examines nothing, while the receipt asserts weights agree. The bone half DOES bind
+      there, so the gate is not wholly vacuous — the false half is the one the receipt
+      asserted, and the verdict now names it as NOT COMPARED.
     """
     tol = length_frac * float(bbox_diagonal)
-    ev = {"length_tolerance": tol, "weight_tolerance": weight_tol,
+    ev = {"gate": "D", "andon": "GateDDeterminism",
+          "length_tolerance": tol, "weight_tolerance": weight_tol,
           "angle_tolerance": angle_tol, "bbox_diagonal": float(bbox_diagonal),
-          "n_bones_a": len(a["bones"]), "n_bones_b": len(b["bones"])}
+          "n_bones_a": len(a["bones"]), "n_bones_b": len(b["bones"]),
+          "n_weight_groups_a": len(a["weights"]), "n_weight_groups_b": len(b["weights"])}
     problems = []
+
+    # · ANDON — a comparison over zero bones is not a determinism verdict.
+    if not a["bones"] and not b["bones"]:
+        raise GateDDeterminism(
+            "both fingerprints carry ZERO bones, so nothing about the skeleton was "
+            "compared and 'the two builds agree' would be a statement about an empty "
+            "population. gate_p_rest_pose refuses an empty vertex array on the same "
+            "grounds", ev)
 
     if a["n_verts"] != b["n_verts"]:
         problems.append(f"vertex count {a['n_verts']} vs {b['n_verts']}")
@@ -337,5 +371,14 @@ def gate_d_determinism(a, b, bbox_diagonal,
             + (f" (+{len(problems) - 6} more)" if len(problems) > 6 else ""),
             ev,
         )
-    ev["verdict"] = "two builds agree on bones, hierarchy and weights"
+    # The verdict says what was checked and no more. Both weight dicts empty means ZERO
+    # per-vertex vectors were compared — the state the skeleton-only route is always in.
+    compared_groups = sorted(set(a["weights"]) & set(b["weights"]))
+    ev["n_weight_groups_compared"] = len(compared_groups)
+    if compared_groups:
+        ev["verdict"] = "two builds agree on bones, hierarchy and weights"
+    else:
+        ev["verdict"] = (
+            f"two builds agree on bones and hierarchy over {len(a['bones'])} bone(s); "
+            f"weights NOT COMPARED — neither fingerprint carries any vertex group")
     return ev

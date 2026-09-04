@@ -369,6 +369,8 @@ def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, width, height):
     """
     tolerance_px = G4_TOLERANCE_PX
     ev = {
+        "gate": "G4",
+        "andon": "G4BboxSanity",
         "frame": frame_index,
         "mask_bbox": mask_bbox,
         "projected_bbox": projected_bbox,
@@ -494,6 +496,8 @@ def g6_subject_motion(frame_signatures, animation_mode):
     fired on that would be a gate that fails on correct work.
     """
     ev = {
+        "gate": "G6",
+        "andon": "G6SubjectMotion",
         "animation_mode": animation_mode,
         "n_frames": len(frame_signatures),
         "distinct_signatures": len(set(frame_signatures)),
@@ -552,6 +556,8 @@ def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label
     import numpy as np
 
     ev = {
+        "gate": "R",
+        "andon": "GateRRoundTrip",
         "n_source": len(source),
         "n_decoded": len(decoded),
         "source": source_label,
@@ -695,6 +701,7 @@ def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
     """
     ev = {
         "gate": "S",
+        "andon": "GateSSeedRegistration",
         "experiment": experiment,
         "seed": seed,
         "seed_was_explicit": bool(seed_was_explicit),
