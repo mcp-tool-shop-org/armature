@@ -303,6 +303,22 @@ def resolve_start_frame(path, declared_sha256=None):
 
 
 
+#: The word a route uses when it asserts that NOTHING resamples the start frame. Both i2v
+#: builders open their `fit` sentence with it ("native - authored at WxH ..."), and it is
+#: the only declaration in this tree that claims an exact match; a letterbox or centre-crop
+#: sentence claims something weaker and is recorded rather than gated.
+NATIVE_FIT_WORD = "native"
+
+
+def declares_native_fit(fit):
+    """Does this route's own `fit` sentence assert an exact match?
+
+    Read off the CALLER's sentence rather than off a constant here, so the gate below binds
+    the claim the record makes instead of a resolution this module happens to know.
+    """
+    return str(fit or "").strip().lower().startswith(NATIVE_FIT_WORD)
+
+
 def start_image_record(start_frame, server_name, width, height, fit, why=None):
     """The `start_image` block of an i2v payload record — ONE implementation, two routes.
 
@@ -327,8 +343,57 @@ def start_image_record(start_frame, server_name, width, height, fit, why=None):
     (F-08853dfb) and both builders refuse an evidence dict with no measurement, so the
     `None if not start_frame.get("image")` degradation — a null on exactly the input that
     most needs the comparison — has no input left to happen on.
+
+    **CORRECTION, wave 14 (F-e17613c2).** The paragraph above described a comparison and
+    called it a CHECK. It was not one. `fit_agrees_with_the_file` was computed, written into
+    the record, and read by nothing: measured by grep over the tree 2026-09-04, the name
+    occurs in this module, in the sibling that imports it, and in tests — and in no other
+    file under `tools/`, `docs/` or `verify.ps1`. Two tests pinned the non-refusal, so the
+    832x480 frame handed to a 1024x576 wave (this repo's own words for "the mutation that
+    actually happened") built green and recorded `False`. The clause below is the andon on
+    the direction the sibling clauses do not bound: they refuse a measurement that never
+    arrived; this refuses one that arrived and disagreed. A diagnostic and a gate are
+    different objects, and the object this route needed on the whole of its conditioning,
+    one step before an irreversible spend, was the gate.
     """
     measured = start_frame["image"]
+    agrees = [measured["width"], measured["height"]] == [width, height]
+    # ---- ANDON, wave 14 (F-e17613c2). The comparison wave 12 built to replace an asserted
+    # `fit` sentence with a measurement was COMPUTED and GATED NOTHING, on both i2v spend
+    # builders, about the one input that is the whole of the route's conditioning. Measured
+    # by grep 2026-09-04: `fit_agrees_with_the_file` occurs in the two writers and in tests,
+    # and in nothing under tools/, docs/ or verify.ps1 — no caller reads it. Two tests PINNED
+    # the non-refusal: the 832x480 frame handed to a 1024x576 wave (that module's own words,
+    # "the mutation that actually happened") built green and recorded `False`. So a paid i2v
+    # generation could go out on a start frame at the wrong resolution with every printed
+    # gate line green and the disagreement visible only to someone who opened the JSON —
+    # credits spent, and spent credits have no compensator.
+    #
+    # The clause keys on the CALLER'S OWN `fit` sentence, not on a constant here: a route
+    # that declares a NATIVE fit is asserting an exact match, and a file that disagrees makes
+    # the record's own sentence untrue. A future letterboxing or centre-crop route states its
+    # own `fit` and passes this clause with its own sentence intact, which is why the gate is
+    # written against the declaration rather than against the numbers alone.
+    #
+    # The sibling clauses one screen up already raise for a start frame with NO measurement
+    # (build_i2v_payload:375) and one whose IHDR cannot be read
+    # (build_camera_i2v_payload:577). This is the andon on the direction they do not bound:
+    # a measurement that arrived and disagreed. A diagnostic and a gate are different objects.
+    if declares_native_fit(fit) and not agrees:
+        raise PayloadError(
+            f"the route declares a NATIVE fit ({fit!r}) and the start frame is "
+            f"{measured['width']}x{measured['height']} while this generation's frame is "
+            f"{width}x{height}. `native` asserts that nothing resamples the image, so the "
+            f"record's own `fit` sentence would be untrue and the whole of this route's "
+            f"conditioning would be an image at the wrong size. Re-author the start frame "
+            f"at {width}x{height}, or state the route's real fit (a letterbox or a "
+            f"centre-crop sentence passes this clause with its own words)",
+            {"gate": "PAYLOAD", "andon": "start_frame",
+             "clause": "fit_disagrees_with_the_file", "flag": "--start-frame",
+             "fit": fit, "declares_native_fit": True,
+             "measured": [measured["width"], measured["height"]],
+             "generation_frame": [width, height],
+             "path": start_frame.get("path"), "sha256": start_frame.get("sha256")})
     rec = {
         "server_name": server_name,
         # ---- the LOCAL artifact, which these records could not name until wave 10.
@@ -343,8 +408,10 @@ def start_image_record(start_frame, server_name, width, height, fit, why=None):
         # composite the route submits is a recorded choice, never an accident.
         "measured": measured,
         "fit": fit,
-        "fit_agrees_with_the_file": (
-            [measured["width"], measured["height"]] == [width, height]),
+        "fit_agrees_with_the_file": agrees,
+        # what the sentence above CLAIMS, so a reader of the record can see which clause
+        # ran: a native declaration is gated, any other is recorded and not gated.
+        "fit_declares_native": declares_native_fit(fit),
         "generation_frame": [width, height],
     }
     if why:

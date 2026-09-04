@@ -360,3 +360,103 @@ def test_an_arm_with_no_conditional_row_says_so_rather_than_saying_nothing(tmp_p
         (out / "E14-S-payload-record.json").read_text(encoding="utf-8"))
     assert record["disclosure"]["conditional_components"] == []
     assert record["disclosure"]["obligations"] == []
+
+
+# ===========================================================================
+# F-e17613c2 — the i2v `fit` comparison GATES, on both spend builders.
+# ===========================================================================
+
+import build_i2v_payload as W1  # noqa: E402
+import build_camera_i2v_payload as CAM  # noqa: E402
+
+
+def _png(tmp_path, name, size):
+    """A real PNG at `size`, so the IHDR the builders read is the file's own."""
+    import struct
+    import zlib
+
+    w, h = size
+    raw = b"".join(b"\x00" + b"\x00\x00\x00" * w for _ in range(h))
+
+    def chunk(tag, payload):
+        return (struct.pack(">I", len(payload)) + tag + payload
+                + struct.pack(">I", zlib.crc32(tag + payload) & 0xFFFFFFFF))
+
+    doc = (b"\x89PNG\r\n\x1a\n"
+           + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(raw))
+           + chunk(b"IEND", b""))
+    p = tmp_path / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(doc)
+    return p
+
+
+def test_a_native_fit_that_disagrees_with_the_file_is_a_REFUSAL(tmp_path):
+    """F-e17613c2 · operand: `fit_agrees_with_the_file`, the value no caller read.
+
+    reverted-red: yes. On the reverted tree this call RETURNS a record whose
+    `fit_agrees_with_the_file` is False and whose `fit` sentence says "native", and nothing
+    anywhere reads it — the disagreement is visible only to someone who opens the JSON.
+    """
+    ev = W1.resolve_start_frame(str(_png(tmp_path, "wrong.png", (1024, 576))))
+    with pytest.raises(W1.PayloadError) as exc:
+        W1.start_image_record(ev, "server.png", 832, 480,
+                              fit="native — authored at 832x480")
+    e = exc.value.evidence
+    assert e["clause"] == "fit_disagrees_with_the_file"
+    assert e["measured"] == [1024, 576]
+    assert e["generation_frame"] == [832, 480]
+
+
+def test_a_route_that_declares_its_own_non_native_fit_still_passes(tmp_path):
+    """F-e17613c2 · the clause keys on the CALLER's sentence, not on the numbers alone.
+
+    A future letterboxing route states its own fit and is recorded, not refused — which is
+    why the gate is written against the declaration.
+    """
+    ev = W1.resolve_start_frame(str(_png(tmp_path, "wide.png", (1024, 576))))
+    rec = W1.start_image_record(ev, "server.png", 832, 480,
+                                fit="letterboxed — 1024x576 padded into 832x480")
+    assert rec["fit_agrees_with_the_file"] is False
+    assert rec["fit_declares_native"] is False
+
+
+def test_the_i2v_builder_refuses_the_wrong_sized_start_frame_and_writes_nothing(tmp_path):
+    """F-e17613c2 · the gate is inside `build`, so an in-process caller cannot route past it,
+    and a refused build leaves no output directory (the repo's standing invariant)."""
+    wrong = W1.resolve_start_frame(str(_png(tmp_path, "wrong.png",
+                                            (W1.WIDTH + 192, W1.HEIGHT + 96))))
+    out = tmp_path / "fresh" / "run"
+    with pytest.raises(W1.PayloadError) as exc:
+        W1.build({"start_frame": "s.png"}, None, "neg", "pos", [1],
+                 start_frame=wrong)
+    assert exc.value.evidence["clause"] == "fit_disagrees_with_the_file"
+    assert not out.exists()
+
+
+def test_the_camera_i2v_builder_carries_the_same_refusal(tmp_path):
+    """F-e17613c2 · the family: ONE implementation, two routes.
+
+    The sibling calls `W1.start_image_record` with its own wave's frame, so the fix reaches
+    it through the same function. Red on wave 1's 832x480 frame handed to a 1024x576 wave —
+    the module's own words, "the mutation that actually happened".
+    """
+    p1 = _png(tmp_path, "w1.png", (832, 480))
+    import hashlib
+    sha = hashlib.sha256(p1.read_bytes()).hexdigest()
+    wrong = CAM.resolve_start_frame(str(p1), sha)
+    with pytest.raises(W1.PayloadError) as exc:
+        W1.start_image_record(wrong, "server.png", CAM.WIDTH, CAM.HEIGHT,
+                              fit=f"native — authored at {CAM.WIDTH}x{CAM.HEIGHT}")
+    assert exc.value.evidence["clause"] == "fit_disagrees_with_the_file"
+    assert exc.value.evidence["generation_frame"] == [CAM.WIDTH, CAM.HEIGHT]
+
+
+def test_the_matching_start_frame_still_builds(tmp_path):
+    """F-e17613c2 · the direction the gate must NOT fire on."""
+    right = W1.resolve_start_frame(str(_png(tmp_path, "ok.png", (W1.WIDTH, W1.HEIGHT))))
+    rec = W1.start_image_record(right, "server.png", W1.WIDTH, W1.HEIGHT,
+                                fit=f"native — authored at {W1.WIDTH}x{W1.HEIGHT}")
+    assert rec["fit_agrees_with_the_file"] is True
+    assert rec["fit_declares_native"] is True

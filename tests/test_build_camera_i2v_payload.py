@@ -788,14 +788,23 @@ def test_the_start_image_block_carries_the_files_own_measurement():
     assert start["fit_agrees_with_the_file"] is True
 
 
-def test_a_start_frame_authored_at_wave_ones_resolution_reads_FALSE():
+def test_a_start_frame_authored_at_wave_ones_resolution_is_REFUSED():
     """The mutation the block exists to catch, and the one that actually happened: wave 1's
     832x480 frame handed to a wave that generates at 1024x576. The prose `fit` line was
-    unchanged by it."""
+    unchanged by it.
+
+    **Wave 14, F-e17613c2 — this test used to pin the non-refusal.** It read
+    `assert start["fit_agrees_with_the_file"] is False` and let the build return: the
+    comparison was computed into the record and read by no caller anywhere in the tree, so
+    the wrong-sized frame — the whole of this route's conditioning — reached a paid
+    generation with every printed gate line green. The comparison gates now, on both i2v
+    builders, through the one `start_image_record` they share."""
     wrong = resolved_start_frame(size=(832, 480))
-    start = built(start_frame=wrong)[1]["start_image"]
-    assert start["fit_agrees_with_the_file"] is False
-    assert start["measured"]["width"] == 832
+    with pytest.raises(W1.PayloadError, match=r"declares a NATIVE fit") as exc:
+        built(start_frame=wrong)
+    assert exc.value.evidence["clause"] == "fit_disagrees_with_the_file"
+    assert exc.value.evidence["measured"] == [832, 480]
+    assert exc.value.evidence["generation_frame"] == [B.WIDTH, B.HEIGHT]
 
 
 def test_the_fit_sentence_names_THIS_waves_resolution_not_wave_ones():
