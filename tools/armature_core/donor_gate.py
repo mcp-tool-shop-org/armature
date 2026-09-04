@@ -75,8 +75,26 @@ def frame_paths(frames_dir):
     order that every count and every gate would have passed. Frames written by
     `fetch_run` are renumbered on the way in, so a name that is not a number is a frame
     whose order nobody established.
+
+    ⚠ **The suffix test was case SENSITIVE, and it silently dropped this gate's own
+    andon's population.** Measured 2026-09-04 on a directory holding 0.png, 1.PNG and
+    2.png: this function returned ['0.png', '2.png'] with no complaint, so
+    `mean_consecutive_frame_difference` differenced frame 0 against frame 2 as a
+    CONSECUTIVE pair and the clip's motion mean — the number `gate_donor` compares
+    against `THRESHOLDS` — was computed over the wrong pairs. On a directory holding only
+    0.PNG and notanumber.PNG it returned [] and the unnumbered-name refusal below never
+    fired, because the name it exists to catch was filtered out before it was examined.
+
+    The producer states the contract explicitly: `fetch_run.verify_downloads` was made
+    case-insensitive at the wave-8 merge and its comment (fetch_run.py:250) says its
+    consumers `encode_control.py:126` and `invert_frames.py:70` use
+    `n.lower().endswith('.png')` and that "the andon and its consumers share one"
+    population rule. This is the gate that decides whether a clip may be a baseline at
+    all, so it reads the population the same way — and the RAW directory count rides in
+    the evidence beside `n_total`, so a dropped file is visible rather than inferred.
     """
-    names = [f for f in os.listdir(frames_dir) if f.endswith(".png")]
+    listing = os.listdir(frames_dir)
+    names = [f for f in listing if f.lower().endswith(".png")]
     bad = [n for n in names if not os.path.splitext(n)[0].isdigit()]
     if bad:
         raise DonorGate(
@@ -85,7 +103,9 @@ def frame_paths(frames_dir):
             f"directory. Sorting content-addressed names alphabetically produces a "
             f"shuffled clip that every other check passes",
             {"gate": "DONOR", "andon": "DonorGate",
-             "unnumbered": sorted(bad)[:20], "n_total": len(names)})
+             "unnumbered": sorted(bad)[:20], "n_total": len(names),
+             "n_in_directory": len(listing),
+             "n_not_png": len(listing) - len(names)})
     return [os.path.join(frames_dir, n)
             for n in sorted(names, key=lambda n: int(os.path.splitext(n)[0]))]
 
