@@ -465,7 +465,8 @@ def test_the_sentinel_census_goes_red_on_a_second_owner(tmp_path):
     ("make_sheet", ["--out=x.png"], "--run"),
     ("analyze_p3", ["--out=x.json"], "--run"),
     ("make_sheet", ["--run=x"], "--out"),
-    ("analyze_p3", ["--run=x"], "--out"),
+    ("make_sheet", ["--run=x", "--nope=1"], "--nope"),
+    ("analyze_p3", ["--run=x", "--nope=1"], "--nope"),
 ])
 def test_a_missing_required_flag_is_a_typed_refusal_naming_the_flag(mod_name, argv,
                                                                     wanted):
@@ -491,23 +492,56 @@ def test_a_token_that_lost_its_leading_dashes_is_named(mod_name):
 
 
 def test_no_instrument_indexes_a_hand_rolled_argv_dict_without_a_named_refusal():
-    """THE NODE: the modules that build their own `{flag: value}` dict from `argv` instead
-    of using argparse. Derived from the tree — a subscript of a dict assembled by a
-    `partition("=")` loop — so a third hand-rolled parser joins the census when it lands.
+    """THE NODE: the FUNCTION that hand-rolls the parse — the one containing a
+    `.partition("=")` call, in a module that does not `import argparse`. Derived by AST,
+    never by a substring in source: `make_sheet`'s new refusal docstring says the word
+    "argparse" and `stage_render`'s says it on line 11, so a text filter drops exactly the
+    two modules the finding is about.
+
+    THE PROPERTY: that function `raise`s. A hand-rolled parser that only builds a dict
+    hands the refusal to whichever `args[...]` subscript runs first, and that answers with
+    a bare `KeyError` naming one word.
     """
-    hand_rolled = []
-    for mod, (path, tree) in TOOL_TREES.items():
-        src = _src(path)
-        if 'partition("=")' not in src and "partition('=')" not in src:
+    def _imports_argparse(tree):
+        return any(isinstance(n, ast.Import) and any(a.name == "argparse" for a in n.names)
+                   for n in ast.walk(tree))
+
+    def _parsers(tree):
+        out = []
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            partitions = any(
+                isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr == "partition"
+                and any(isinstance(a, ast.Constant) and a.value == "=" for a in n.args)
+                for n in ast.walk(fn))
+            if partitions:
+                out.append((fn.name, any(isinstance(n, ast.Raise) for n in ast.walk(fn))))
+        return out
+
+    population = {}
+    for mod, (_path, tree) in TOOL_TREES.items():
+        if _imports_argparse(tree):
             continue
-        if "argparse" in src:
-            continue
-        hand_rolled.append(mod)
-    assert sorted(hand_rolled) == ["analyze_p3", "make_sheet", "stage_render"], \
-        sorted(hand_rolled)
-    for mod in hand_rolled:
-        src = _src(TOOL_TREES[mod][0])
-        assert "SpecError" in src or "Error(" in src, mod
+        found = _parsers(tree)
+        if found:
+            population[mod] = found
+
+    # Size and membership before the property. Measured 2026-09-04 before this amend:
+    # `analyze_p3.main` and `make_sheet.main` were the two members whose parser raised
+    # nothing; `analyze_p3` now calls `make_sheet.parse_argv` and so leaves the population.
+    assert sorted(population) == ["make_sheet", "probe_glb", "probe_subject",
+                                  "rig_character", "rig_parts",
+                                  "stage_render"], sorted(population)
+    silent = {mod: [fn for fn, raises in found if not raises]
+              for mod, found in population.items()}
+    silent = {m: fns for m, fns in silent.items() if fns}
+    assert silent == {}, silent
+    # ...and the module that LEFT the population reaches the same refusal by calling it
+    # rather than by copying it — one implementation, two hand-rolled parsers.
+    assert "from make_sheet import parse_argv" in _src(
+        os.path.join(TOOLS, "analyze_p3.py"))
 
 
 # ===========================================================================

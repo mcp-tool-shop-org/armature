@@ -31,7 +31,8 @@ directory nor the file.
 `resolve_font_path` replaces both outcomes with an explicit ordered search — the
 `ARMATURE_FONT_DIR` override, then the platform's own font directories, walked — and a
 `FontError` naming every directory and every face tried when none resolves. The resolved
-path is printed on the sheet's own `SHEET_OK` line, so a substituted typeface is stated
+path is printed on the sheet's own `SHEET_COMPOSE_OK` line, so a substituted typeface is
+stated
 rather than silent.
 
 **Which faces, and their licences.** The requested face first (a system font already on
@@ -338,7 +339,7 @@ def main():
     # A ROW is as tall as its tallest panel, not as its first. Panels are pasted at their
     # rendered size and never resampled (the rule this module exists for), so a row whose
     # later panels are taller than its first used to overflow into the next row and off the
-    # bottom of the sheet — cropped in silence, with SHEET_OK printed.
+    # bottom of the sheet — cropped in silence, with the success sentinel printed.
     row_heights = [max(im.height for im, _ in panels) for _, panels in rows]
     height = TITLE_H + sum(ROW_TITLE_H + rh + LABEL_H + PAD for rh in row_heights) + PAD
     sheet = Image.new("RGB", (width, height), BG)
@@ -366,7 +367,8 @@ def main():
         os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, spec.get("filename", "sheet.png"))
     sheet.save(path)
-    print(f"SHEET_OK {path} font={f_lab.path}")
+    # Its OWN token -- see make_cast_sheet for the four-way collision this retires.
+    print(f"SHEET_COMPOSE_OK {path} font={f_lab.path}")
 
 
 if __name__ == "__main__":

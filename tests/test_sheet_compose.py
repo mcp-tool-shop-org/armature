@@ -157,7 +157,12 @@ def test_the_output_line_names_the_typeface_it_used(tmp_path, capsys):
     """A substituted face must be stated, not silent."""
     _run(tmp_path, _spec(tmp_path))
     out = capsys.readouterr().out
-    assert "SHEET_OK" in out and "font=" in out
+    # WAVE-12 (instruments-measure, F-9c43c029): `SHEET_OK` was printed by FOUR tools
+    # (`make_cast_sheet`, `make_e13_sheet`, `rig_sheet_compose`, `sheet_compose`) — the
+    # only shared success sentinel in the tree, so a caller keying on it could not say
+    # which panel it had. Each now prints its own token; this driver's is
+    # `SHEET_COMPOSE_OK`.
+    assert "SHEET_COMPOSE_OK" in out and "font=" in out
 
 
 # ------------------------------------------- the siblings that never got the text fix

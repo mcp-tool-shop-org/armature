@@ -165,7 +165,8 @@ def main():
     os.makedirs(spec["out"], exist_ok=True)  # scripts create their own output directories
     path = os.path.join(spec["out"], "E07-rig-sheet.png")
     sheet.save(path)
-    print(f"SHEET_OK {path} font={f_lab.path}")
+    # Its OWN token -- see make_cast_sheet for the four-way collision this retires.
+    print(f"RIG_SHEET_OK {path} font={f_lab.path}")
 
 
 if __name__ == "__main__":

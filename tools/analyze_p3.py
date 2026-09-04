@@ -19,6 +19,25 @@ import sys
 import numpy as np
 from PIL import Image
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from armature_core.errors import ArmatureError  # noqa: E402
+from make_sheet import parse_argv  # noqa: E402
+
+
+class AnalyzeP3Error(ArmatureError):
+    """This analysis cannot be run as asked. One typed refusal for this tool.
+
+    `args["run"]` answered a missing flag with a bare `KeyError: 'run'`, and a token that
+    had lost its leading `--` (`run=E:/x`) registered the key `n` — `token[2:]` — before
+    dying with the same one-word KeyError, naming neither the flag it wanted nor the token
+    it got.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
 
 def _arr(path):
     img = Image.open(path)
@@ -107,10 +126,13 @@ def analyze(run_dir):
 
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
-    args = {}
-    for token in argv:
-        key, _, value = token[2:].partition("=")
-        args[key] = value
+    # The refusal `make_sheet.parse_argv` carries, called rather than copied: two
+    # hand-rolled parsers, one implementation, and both name the flag they wanted.
+    # `--out` stays OPTIONAL here (the tool prints its P3_SIGN summary either way and only
+    # writes the record when asked) -- the refusal added is the one for a MISSING --run and
+    # for a token that is not `--key=value`, not a new requirement.
+    args = parse_argv(argv, required=("run",), optional=("out",), tool="analyze_p3",
+                      exc=AnalyzeP3Error)
     report = analyze(args["run"])
     if "out" in args:
         os.makedirs(os.path.dirname(os.path.abspath(args["out"])), exist_ok=True)

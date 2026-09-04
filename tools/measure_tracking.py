@@ -81,6 +81,12 @@ E02_PUBLISHED_CROSS = {("A1a", "A1b"): 0.343, ("A1a", "A2"): -0.113}
 
 ANCHOR_TOLERANCE = 0.0005  # published to 3 decimals; this is half a unit in the last place
 
+#: The exit code for "the anchor could not check anything". Distinct from 0 (checked and
+#: reproduced) and from the 2 a raised `AnchorMismatch` earns through the caller's own halt
+#: handling, because "could not check" and "checked and passed" are different answers and a
+#: caller that branches on the code is asking which one happened.
+ANCHOR_ABSENT_EXIT = 3
+
 
 class TrackingError(ArmatureError):
     """The statistic could not be computed on what was handed to it."""
@@ -259,15 +265,31 @@ def main(argv=None):
     ap.add_argument("--out")
     ap.add_argument("--anchor", action="store_true",
                     help="reproduce E02's published figures and raise on any miss")
+    ap.add_argument("--allow-absent", action="store_true",
+                    help="with --anchor: exit 0 when E02's runs are not on disk, instead "
+                         "of the ANCHOR_ABSENT_EXIT code. Names itself in the printed "
+                         "line, so a green anchor that read nothing says so")
     ap.add_argument("--e02-root", default="outputs/E02")
     a = ap.parse_args(argv)
 
     if a.anchor:
         rows = anchor(a.e02_root)
         if rows is None:
+            # The stdout line was already honest and follows the repo's NOT-YET-RUN rule;
+            # the EXIT CODE was not. All three outcomes a caller can read were spelled 0:
+            # "the instrument reproduces E02's figures", "the anchor never ran", and only
+            # a raised AnchorMismatch distinguished a real miss. `outputs/` is gitignored
+            # BY DESIGN, so "the runs are absent" is the DEFAULT state of any fresh clone,
+            # CI runner or swarm worktree -- a verify chain would have recorded a green
+            # anchor for an instrument that opened no file, and every later
+            # timing-correlation number would be quoted against a calibration nobody
+            # performed.
             print("ANCHOR NOT YET RUN — E02's runs are not on disk (gitignored output); "
-                  f"looked under {a.e02_root}")
-            return 0
+                  f"looked under {a.e02_root}"
+                  + ("; exit 0 because --allow-absent was given" if a.allow_absent
+                     else f"; exiting {ANCHOR_ABSENT_EXIT} — pass --allow-absent to make "
+                          f"this an optional step"))
+            return 0 if a.allow_absent else ANCHOR_ABSENT_EXIT
         print(f"ANCHOR — E02's published figures, recomputed (tolerance {ANCHOR_TOLERANCE})")
         for r in rows:
             print(f"  {r['row']:<22} published {r['published']:+.3f}   "
