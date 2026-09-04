@@ -549,7 +549,23 @@ def main():
     # lower frame with exactly the kind of baked, non-transparent backdrop this tool exists
     # to stop shipping — and `turn_final`, the set this stands beside, has none either.
 
-    subject = [o for o in meshes]
+    # `render_visible_meshes` and not `type == "MESH"` — CARRIED from
+    # `render_start_frame.py:435`, the sibling this file already inherits its staging
+    # from. Blender's glTF importer drops a 42-vertex Icosphere of world radius 1.0 into
+    # a hidden `glTF_not_exported` collection; measuring it inflates the bbox, the orbit
+    # target, the framing cloud and therefore the solved radius / shared `ortho_scale`.
+    # NO gate below can see that: Gate WHOLE reads the same inflated cloud, and Gate CROP
+    # reads the rendered alpha, which a hide_render decoy never reaches — a figure drawn
+    # too SMALL moves away from every border, so CROP passes more easily, not less.
+    # E02-report.md:34 measured the decoy turning a 3.23:1 figure into a 1.05:1 near-cube.
+    subject = blender_scene.render_visible_meshes(scene, meshes)
+    excluded = [o.name for o in meshes if o not in subject]
+    if not subject:
+        raise RenderTurnaroundGate(
+            f"{a.glb} imported {len(meshes)} mesh object(s) and none of them is "
+            f"render-visible ({[o.name for o in meshes]}); there is nothing to turn "
+            f"around, and framing against hidden geometry would compose a shot of an "
+            f"object the renderer will not draw")
     verts = blender_scene._evaluated_world_vertices(subject)
     lo = verts.min(axis=0)
     hi = verts.max(axis=0)
@@ -653,7 +669,8 @@ def main():
         "numpy": np.__version__,
         "source": {"glb": os.path.abspath(a.glb), "sha256": _sha256(a.glb),
                    "bytes": os.path.getsize(a.glb)},
-        "import_info": info,
+        "import_info": dict(info, subject_render_visible=[o.name for o in subject],
+                            subject_excluded_not_render_visible=excluded),
         "resolution": [width, height],
         "camera": {
             "type": "orbit", "n_views": int(a.views),
