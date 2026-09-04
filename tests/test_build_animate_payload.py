@@ -313,3 +313,73 @@ def test_main_names_the_file_beside_the_key(tmp_path):
     assert "pose_pack" in str(exc.value)
     assert str(up) in str(exc.value)
     assert not (tmp_path / "fresh").exists()
+
+import json
+
+
+# ---- the identity drop matches a WORD, not a substring (wave 8, routed from core-gates)
+
+
+def _twin(tmp_path, entry):
+    p = tmp_path / "twin.json"
+    p.write_text(json.dumps({"_entry_verbatim": entry}), encoding="utf-8")
+    return str(p)
+
+
+def test_a_recorded_drop_removes_the_phrase_and_its_adjoining_comma(tmp_path):
+    """The mutation that must NOT change: the two phrases E08 actually drops come out, and
+    the surrounding clause reads as prose."""
+    text, original, log = BAP.identity_clause(_twin(
+        tmp_path,
+        "A knight in dark plate, plain pale grey background, soft studio light, "
+        "heavy cloak."))
+    assert text == "A knight in dark plate, heavy cloak."
+    assert [row["dropped"] for row in log] == [p for p, _ in BAP.IDENTITY_DROPS]
+    assert "plain pale grey background" in original
+
+
+def test_a_drop_phrase_that_is_only_a_SUBSTRING_is_refused(tmp_path, monkeypatch):
+    """Routed from core-gates (F-138c009c's family): `phrase not in text` followed by
+    `text.replace(", " + phrase, "").replace(phrase + ", ", "")` is a bare substring edit
+    with no word boundary — the same class core-gates closed in `canon._find_phrase`, where
+    'cape' matched inside 'landscape'. Short single-word phrases (cape, helm, arm, hood,
+    mask) are exactly the form a drop is written with, and a drop that cut a hole in the
+    middle of an unrelated word would still be recorded in the change log as a clean drop.
+
+    The locator is `canon._find_phrase` — core-gates' ONE matcher, called rather than
+    re-implemented — so the boundary rule arrives with that module.
+
+    SEAM: on a tree where `_find_phrase` is still the bare `haystack.find(...)` this test is
+    the pin that says so.
+    """
+    monkeypatch.setattr(BAP, "IDENTITY_DROPS", [("cape", "a short occupant phrase")])
+    with pytest.raises(BAP.PayloadError, match=r"as a whole phrase"):
+        BAP.identity_clause(_twin(tmp_path, "A figure against a wide landscape, lit warmly."))
+
+
+def test_the_drop_still_fires_when_the_phrase_IS_a_whole_word(tmp_path, monkeypatch):
+    """The other half of the same clause: the boundary must not stop a real match."""
+    monkeypatch.setattr(BAP, "IDENTITY_DROPS", [("cape", "a short occupant phrase")])
+    text, _original, log = BAP.identity_clause(_twin(
+        tmp_path, "A figure in a long cape, against a wide landscape."))
+    assert text == "A figure in a long against a wide landscape."
+    assert log == [{"dropped": "cape", "reason": "a short occupant phrase"}]
+
+
+def test_the_missing_drop_halt_carries_its_evidence(tmp_path, monkeypatch):
+    monkeypatch.setattr(BAP, "IDENTITY_DROPS", [("helm", "a short occupant phrase")])
+    with pytest.raises(BAP.PayloadError, match=r"as a whole phrase") as exc:
+        BAP.identity_clause(_twin(tmp_path, "A figure with no headgear at all."))
+    assert exc.value.evidence["phrase"] == "helm"
+    assert len(exc.value.evidence["clause_sha256"]) == 64
+
+
+def test_the_phrase_matcher_is_canons_and_not_a_second_one():
+    """family: derived by AST over `tools/*.py` for a `str.replace` call whose argument is
+    built from a phrase constant -> 1 site — tools/build_animate_payload.py:251 (now
+    removed). The locator this file uses is `armature_core.canon._find_phrase`, the same
+    object `canon.cover` and `canon.residue` search with."""
+    from armature_core import canon as C
+
+    assert BAP.C is C
+    assert BAP.C._find_phrase is C._find_phrase

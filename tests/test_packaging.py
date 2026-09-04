@@ -663,3 +663,150 @@ def test_every_stub_installing_fixture_restores_what_it_imported():
             assert "armature_core" in body, (
                 f"{filename}:{fn.name}'s teardown does not name the package whose modules the "
                 f"stub makes importable")
+
+
+# -- 4. the exit convention on the CPU-side spend and fetch tools (wave 8, F-3f642bd9) ----
+#
+# The nine builders and the two fetchers disagreed THREE ways on how a refusal leaves the
+# process. Measured 2026-09-04 by running each as a subprocess:
+#
+#   * `build_payload.py --experiment=E02 --arm=A1a --out=<fresh>` on a Gate CANON refusal
+#     exited 1 with a raw traceback and no HALT sentinel;
+#   * `build_t2v_payload.py --out=<fresh>` on the SAME GateCanon exited 2 with
+#     BUILD_T2V_HALT;
+#   * `gate_saved_graph.py` on a plain `FileNotFoundError` — not a gate at all — exited 2
+#     with SAVED_ADMISSION_HALT;
+#   * `fetch_run.py` on a missing dump exited 1 with a traceback.
+#
+# Eight of the eleven carried no handler at all. Argparse's own usage errors also exit 2
+# (measured on `build_r2v_payload.py` and `build_animate_payload.py`), which is why the
+# convention is "2 vs 1 AND the sentinel", and why a caller keys on the sentinel: `verify.ps1`
+# tests `-ne 0` only, so nothing on the rig reads the distinction today and a wrapper that
+# started to would read a build_payload refusal as a crash.
+
+
+def _spend_and_fetch_tools():
+    """The population, WALKED rather than typed.
+
+    Every `tools/build_*payload*.py`, `tools/canon_gate.py`, `tools/fetch_*.py` and
+    `tools/gate_saved_graph.py` — the CPU-side tools that either author a submission, gate
+    one, or retrieve its output. A typed list is what let this family drift into three
+    conventions; a member added tomorrow joins the census the day it lands.
+    """
+    tools = os.path.join(REPO, "tools")
+    return sorted(
+        n for n in os.listdir(tools)
+        if n.endswith(".py")
+        and ((n.startswith("build_") and "payload" in n)
+             or n.startswith("fetch_")
+             or n in ("canon_gate.py", "gate_saved_graph.py")))
+
+
+def _exit_convention(path):
+    """`(has_main_block, prints_halt_sentinel, discriminates_2_vs_1)` for one file."""
+    src = open(path, encoding="utf-8").read()
+    block = None
+    for node in ast.parse(src).body:
+        if (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)
+                and isinstance(node.test.left, ast.Name)
+                and node.test.left.id == "__name__"):
+            block = node
+    if block is None:
+        return (False, False, False)
+    sentinel = discriminates = False
+    for node in ast.walk(block):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "print"):
+            for lit in ast.walk(node):
+                if isinstance(lit, ast.Constant) and isinstance(lit.value, str) \
+                        and lit.value.strip().endswith("_HALT"):
+                    sentinel = True
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "exit" and node.args
+                and isinstance(node.args[0], ast.IfExp)):
+            discriminates = True
+    return (True, sentinel, discriminates)
+
+
+SPEND_AND_FETCH = _spend_and_fetch_tools()
+
+
+def test_the_spend_and_fetch_population_is_the_one_this_census_claims():
+    """Size AND membership, so a new member fails loudly rather than being skipped."""
+    assert SPEND_AND_FETCH == [
+        "build_animate_payload.py", "build_assembly_payload.py",
+        "build_camera_i2v_payload.py", "build_cascade_payload.py",
+        "build_i2v_payload.py", "build_lora_arm_payload.py", "build_payload.py",
+        "build_r2v_payload.py", "build_t2v_payload.py", "canon_gate.py",
+        "fetch_run.py", "fetch_t2v_run.py", "gate_saved_graph.py"], SPEND_AND_FETCH
+    assert len(SPEND_AND_FETCH) == 13
+
+
+@pytest.mark.parametrize("filename", SPEND_AND_FETCH)
+def test_every_spend_and_fetch_tool_carries_the_exit_convention(filename):
+    has_main, sentinel, discriminates = _exit_convention(
+        os.path.join(REPO, "tools", filename))
+    assert has_main, f"{filename} has no `__main__` block at all"
+    assert sentinel, f"{filename} prints no <TOOL>_HALT line; its halt is a traceback"
+    assert discriminates, (
+        f"{filename} does not discriminate a gate refusal (2) from a crash (1); an "
+        f"unconditional exit code makes a programming error indistinguishable from an andon")
+
+
+def test_the_census_goes_RED_on_a_member_without_the_convention(tmp_path, monkeypatch):
+    """A census that cannot fail is the defect class this wave exists to close. A module is
+    added to the walked tree WITHOUT the handler and the property check must refuse it."""
+    fake = tmp_path / "build_nothing_payload.py"
+    fake.write_text('if __name__ == "__main__":\n    main()\n', encoding="utf-8")
+    assert _exit_convention(str(fake)) == (True, False, False)
+
+    # …and one that exits 2 unconditionally — the SECOND of the three conventions — is
+    # refused for the reason it was filed: a crash reads as a gate refusal.
+    blunt = tmp_path / "build_blunt_payload.py"
+    blunt.write_text(
+        'if __name__ == "__main__":\n'
+        '    try:\n'
+        '        raise SystemExit(main())\n'
+        '    except BaseException as exc:\n'
+        '        print("BUILD_BLUNT_HALT " + json.dumps({}))\n'
+        '        sys.exit(2)\n', encoding="utf-8")
+    has_main, sentinel, discriminates = _exit_convention(str(blunt))
+    assert (has_main, sentinel) == (True, True)
+    assert discriminates is False
+
+    # And the walk itself sees a new member rather than a typed list of the old ones.
+    real_listdir = os.listdir
+    tools_dir = os.path.join(REPO, "tools")
+
+    def listdir(path):
+        names = real_listdir(path)
+        return names + ["build_nothing_payload.py"] if path == tools_dir else names
+
+    monkeypatch.setattr(os, "listdir", listdir)
+    grown = _spend_and_fetch_tools()
+    assert "build_nothing_payload.py" in grown
+    assert len(grown) == len(SPEND_AND_FETCH) + 1
+
+
+def test_a_gate_refusal_exits_2_with_its_sentinel_and_a_crash_exits_1(tmp_path):
+    """The convention, behaviourally, on the two tools the finding measured: a Gate CANON
+    refusal out of `build_payload` (which exited 1 with a raw traceback) and a missing dump
+    out of `fetch_run` (which did the same). Both leave a machine-readable line now."""
+    env = dict(os.environ, PYTHONPATH=os.path.join(REPO, "tools"))
+
+    refusal = subprocess.run(
+        [sys.executable, os.path.join(REPO, "tools", "build_payload.py"),
+         "--experiment=E03", "--arm=B2", f"--out={tmp_path / 'fresh' / 'B2.json'}"],
+        capture_output=True, text=True, env=env, cwd=REPO)
+    assert refusal.returncode == 2, refusal.stdout + refusal.stderr
+    assert "BUILD_PAYLOAD_HALT" in refusal.stdout
+    assert "GateCanon" in refusal.stdout
+    assert not (tmp_path / "fresh").exists()
+
+    crash = subprocess.run(
+        [sys.executable, os.path.join(REPO, "tools", "fetch_run.py"),
+         f"--dump={tmp_path / 'nothing.json'}", "--run=r", f"--root={tmp_path / 'runs'}"],
+        capture_output=True, text=True, env=env, cwd=REPO)
+    assert crash.returncode == 1, crash.stdout + crash.stderr
+    assert "FETCH_RUN_HALT" in crash.stdout
+    assert "FileNotFoundError" in crash.stdout
