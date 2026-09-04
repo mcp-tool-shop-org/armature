@@ -44,7 +44,8 @@ import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 import rig_character  # noqa: E402
-from armature_core import glb, joints, landmarks, parts, rig_gates, sitelist  # noqa: E402
+from armature_core import (blender_scene, glb, joints, landmarks, parts,  # noqa: E402
+                           rig_gates, sitelist)
 from armature_core.errors import (ArmatureError, GateFailure,          # noqa: E402
                                   GateNNames, GatePRestPose)
 
@@ -556,7 +557,11 @@ def main():
         "calibration_cited": ("full-mesh bisect on this performer: 298,366 of 298,366 "
                               "far-from-cut faces byte-identical UVs, 0 changed, 0 missing; "
                               "1,590 cut-band faces split to 1,980 with interpolated UVs"),
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started)),
         "elapsed_s": round(time.time() - started, 2),
         "source": {"path": args["glb"], "sha256": source_sha,

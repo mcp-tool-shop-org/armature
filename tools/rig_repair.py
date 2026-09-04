@@ -219,7 +219,12 @@ def main():
                                    what="the repaired GLB")
 
     manifest = {
-        "tool": "rig_repair", "started": started, "blender": bpy.app.version_string,
+        "tool": "rig_repair", "started": started,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "gate_GLB_written": gate_glb,
         "thesis": ("repair the shell rather than resample it -- the voxel route reaches a "
                    "clean manifold by destroying the face, and this reaches the same "

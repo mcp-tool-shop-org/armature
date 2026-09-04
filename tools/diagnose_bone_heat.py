@@ -238,7 +238,11 @@ def main():
 
     payload = {
         "tool": "diagnose_bone_heat",
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "glb": args.glb,
         "arms": arms,
         "note": ("A DIAGNOSTIC. No arm here is a pipeline stage and none produces a rigged "

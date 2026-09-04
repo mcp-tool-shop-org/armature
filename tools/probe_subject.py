@@ -215,7 +215,11 @@ def main():
     summary = probe_summary(records)
     payload = {
         "tool": "probe_subject",
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "n_files": len(records),
         "summary": summary,
         "files": records,

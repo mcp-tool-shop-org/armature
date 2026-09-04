@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 from mathutils import Euler  # noqa: E402
 
+from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
 # Token sets for the anatomical sites an 18-keypoint body skeleton needs. Matching is
@@ -308,7 +309,11 @@ def main():
         "clause_C_posable_and_named": sum(1 for r in records if r.get("clause_C_posable_and_named")),
         "P2_joined": sum(1 for r in records if r.get("P2_joined")),
         "P2b_all_18_sites_named": sum(1 for r in records if r.get("P2b_all_18_sites_named")),
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
     }
     payload = {"summary": summary, "files": records}
     path = os.path.join(out_dir, "p2_armatures.json")

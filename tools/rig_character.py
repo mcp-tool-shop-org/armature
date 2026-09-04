@@ -1317,7 +1317,11 @@ def run_skeleton(args, out_dir, source_sha, started):
     manifest = {
         "tool": "rig_character", "tool_version": TOOL_VERSION, "mode": "skeleton",
         "tool_sha256": _tool_hashes(),
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started)),
         "elapsed_s": round(time.time() - started, 2),
         "source": {"path": args["glb"], "sha256": source_sha,
@@ -1401,7 +1405,9 @@ def main():
                          bind=args["binding"], envelope_radii=args["envelope_radii"])
         rec = {
             "tool": "rig_character", "tool_version": TOOL_VERSION, "mode": "measure-only",
-            "blender": bpy.app.version_string, "source": args["glb"],
+            # WAVE 14, F-252f399d -- see the note on the sibling manifests above.
+            "blender": blender_scene.blender_provenance(),
+            "source": args["glb"],
             "source_sha256": source_sha,
             "premise_2_pre_existing_rig": ctx["premise2"],
         "weld_on_import": ctx["weld_on_import"],
@@ -1490,7 +1496,11 @@ def main():
         "joint_ball_offset_table": ctx["offset_table"],
         "placement_ruling": ctx["placement_ruling"],
         "tool_sha256": _tool_hashes(),
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started)),
         "elapsed_s": round(time.time() - started, 2),
         "source": {"path": args["glb"], "sha256": source_sha,
@@ -1575,7 +1585,11 @@ def _write_halt(out_dir, exc, source_sha, glb):
         "exception": type(exc).__name__,
         "message": str(exc),
         "evidence": getattr(exc, "evidence", None),
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "source": {"path": glb, "sha256": source_sha},
         "outputs_not_produced": ["<name>_rigged.glb", "rig_manifest.json"],
         "note": (("Nothing downstream of the gate ran. No rigged GLB exists, no manifest "

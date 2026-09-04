@@ -43,7 +43,7 @@ from mathutils import Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import rig_character as rc  # noqa: E402  (the GLB write gate lives there; one copy)
-from armature_core import posearc  # noqa: E402
+from armature_core import blender_scene, posearc  # noqa: E402
 from armature_core.errors import SpecError  # noqa: E402
 
 # Joint layout in metres, origin at the feet, +Z up, facing -Y. A T-pose: the bind pose,
@@ -334,7 +334,11 @@ def main():
         "gate_GLB_written": gate_glb,
         "params": {"thickness": args.thickness, "joint_scale": args.joint_scale,
                    "segments": args.segments, "fps": args.fps},
-        "blender": bpy.app.version_string,
+        # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
+        # A version string is not enough to reproduce a build -- the record needs the build
+        # hash, the build date and the numpy version, and numpy in particular is
+        # load-bearing wherever a verdict is a numerical comparison between two builds.
+        "blender": blender_scene.blender_provenance(),
         "dimensions_xyz": dims,
         "vertices": verts,
         "triangles": tris,
