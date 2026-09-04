@@ -307,10 +307,20 @@ from blender_stub import FakeCollection, FakeObject  # noqa: E402
 
 class _FakeScene:
     """Enough of a scene for `gate_objects_registered`: it reads `scene.objects` and each
-    object's `hide_render` / `users_collection`."""
+    object's `hide_render` / `users_collection`.
+    WAVE 16, F-94a7d14d (instruments). The two visibility andons now resolve render
+    visibility through `blender_scene.collection_render_flags`, the canonical walk, which
+    reads `scene.view_layers[0].layer_collection` — so a fake scene that exposes only
+    `objects` no longer models the object under test. The view layer below is the DEFAULT
+    one (`Scene Collection`, nothing hidden, nothing excluded), which is what every fixture
+    in this file already assumed implicitly; the collection-level fixtures pass their own.
+    No assertion in this file changed.
+    """
 
-    def __init__(self, objects):
+    def __init__(self, objects, root=None):
         self.objects = list(objects)
+        self.view_layers = [self]
+        self.layer_collection = root or FakeCollection()
 
 
 def test_gate_obj_raises_a_typed_andon_that_keeps_its_evidence(rc):

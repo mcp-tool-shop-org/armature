@@ -27,7 +27,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig_character as rc                                            # noqa: E402
 from armature_core import blender_scene                               # noqa: E402
 from armature_core.errors import ArmatureError                        # noqa: E402
-from make_parts_sheet import (articulated_side, light_the_scene,      # noqa: E402
+from make_parts_sheet import (ArcDidNotSurvive, arc_liveness,         # noqa: E402
+                              articulated_side, light_the_scene,
                               ortho_camera, shoot)
 
 
@@ -170,18 +171,31 @@ def main():
     scene.frame_set(rc.PROBE_FRAMES)
     dg.update()
     at_end = evaluated(mesh, dg)
-    moved = float(np.abs(at_end - at_rest).max())
-    # SIBLING CARRIED under F-6a9a0f72 (wave 14). Gate SCALE: the arc-survived refusal on
-    # the next line compares `moved` against a fraction of this diagonal, and a NaN diagonal
-    # makes `moved <= 1e-4 * diagonal` False -- so a subject carrying a NaN reads as a
-    # subject whose arc survived.
-    diagonal, lo, hi = rc.subject_scale(at_rest, "make_rig_sheet")
-    if moved <= 1e-4 * diagonal:
-        raise ArmatureError(
+    # SIBLING CARRIED under F-6a9a0f72 (wave 14). Gate SCALE: the arc-survived refusal
+    # compares `moved` against a fraction of the subject's bbox diagonal, and a NaN
+    # diagonal makes that comparison False -- so a subject carrying a NaN read as a
+    # subject whose arc survived. `subject_scale` closed that half.
+    #
+    # WAVE 16, F-4dc96644 -- the half the comment above did NOT cover, and said so: it
+    # names a NaN DIAGONAL only, and `subject_scale` is taken on `at_rest`. The POSED
+    # frame was examined by no clause, so one NaN vertex arriving at frame PROBE_FRAMES
+    # made `moved` NaN, the comparison False, and the sheet was built and captioned over
+    # an arc nobody measured. Both halves now live in ONE implementation of the measurement
+    # and the bound -- `make_parts_sheet.arc_liveness`, beside the staging triple and
+    # `articulated_side` this module already imports from there, with the refusal staying
+    # here in this sheet's own words -- and this file's `1e-4 * diagonal` is the form the
+    # other two were corrected TO (F-8958f574).
+    arc, diagonal, lo, hi = arc_liveness(
+        float(np.abs(at_end - at_rest).max()),
+        "max_vertex_motion", at_rest, "make_rig_sheet")
+    if arc["max_vertex_motion"] <= arc["floor"]:
+        raise ArcDidNotSurvive(
             f"{args['glb']}: the evaluated mesh is identical at frame 1 and frame "
-            f"{rc.PROBE_FRAMES} "
-            f"(max {moved:.3e}). The authored arc did not survive the round trip, and a "
-            f"sheet built from this would read as 'this route does not move'")
+            f"{rc.PROBE_FRAMES} (max {arc['max_vertex_motion']:.3e}, "
+            f"{arc['displacement_over_diagonal']:.3e} of this subject's own bbox diagonal "
+            f"{arc['bbox_diagonal']:.6f}). The authored arc did not survive the round "
+            f"trip, and a sheet built from this would read as 'this route does not move'",
+            dict(arc, glb=args["glb"]))
 
     # Every refusal above this line can fire before a single pixel exists — three of them
     # are inline `raise`s, which is precisely why the wave-10 census could not see that
@@ -297,7 +311,9 @@ def main():
             "out": out_dir, "filename": "E07-rig-armature.png", "rows": rows}
     with open(os.path.join(out_dir, "panels.json"), "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
-    print("MAKE_RIG_SHEET_OK " + json.dumps({"max_vertex_motion": moved, "rows": len(rows),
+    print("MAKE_RIG_SHEET_OK " + json.dumps({"max_vertex_motion":
+                                             arc["max_vertex_motion"],
+                                             "rows": len(rows),
                                      "stray_meshes_removed": stray}))
 
 

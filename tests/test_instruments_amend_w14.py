@@ -30,10 +30,20 @@ TOOLS = blender_stub.TOOLS
 
 
 class FakeScene:
-    """`scene.objects`, and nothing else — the population an isolation andon must read."""
+    """`scene.objects`, and nothing else — the population an isolation andon must read.
+    WAVE 16, F-94a7d14d (instruments). The two visibility andons now resolve render
+    visibility through `blender_scene.collection_render_flags`, the canonical walk, which
+    reads `scene.view_layers[0].layer_collection` — so a fake scene that exposes only
+    `objects` no longer models the object under test. The view layer below is the DEFAULT
+    one (`Scene Collection`, nothing hidden, nothing excluded), which is what every fixture
+    in this file already assumed implicitly; the collection-level fixtures pass their own.
+    No assertion in this file changed.
+    """
 
-    def __init__(self, objects=()):
+    def __init__(self, objects=(), root=None):
         self.objects = list(objects)
+        self.view_layers = [self]
+        self.layer_collection = root or FakeCollection()
 
 
 def _fn_source(filename, name):
@@ -141,7 +151,21 @@ def test_clause_one_goes_red_when_the_hiding_loop_is_mutated_to_a_no_op(retopo):
 
 
 def test_the_isolation_andon_no_longer_reads_the_list_the_loop_just_wrote(retopo):
-    """The source-level half: `still` is derived from `scene.objects`, never from `objects`."""
+    """The source-level half: `still` is derived from `scene.objects`, never from `objects`.
+
+    CORRECTED IN PLACE, wave 16 (instruments, F-94a7d14d), by the measurement that
+    overturned the last clause. It read `assert "users_collection" in text` over the ONE
+    expression that assigns `still`, and its message said "collection-level hide_render is
+    still not consulted". That was a check on a SPELLING at one line, and the spelling was
+    the defect: the one-level `any(c.hide_render for c in o.users_collection)` it was
+    pinning is precisely what F-94a7d14d measured wrong -- a decoy in a collection nested
+    under a `hide_render=True` parent, and one in an excluded collection, both read as
+    render-visible to it and as invisible to `blender_scene.render_visible_meshes`. The
+    property is "collection-level visibility IS consulted, through the canonical walk",
+    and it is now asserted over the whole function rather than over one expression, so a
+    fix that lifts the predicate into a named helper reads as health rather than as a
+    regression.
+    """
     src = read_source("rig_retopo.py")
     tree = ast.parse(src)
     fn = next(n for n in ast.walk(tree)
@@ -154,8 +178,13 @@ def test_the_isolation_andon_no_longer_reads_the_list_the_loop_just_wrote(retopo
     assert "scene.objects" in text, text
     assert "for o in objects" not in text, (
         "the andon still reads the list the loop on the line above assigned")
-    assert "users_collection" in text, (
-        "collection-level hide_render is still not consulted (gate_objects_registered's level)")
+    body = ast.unparse(fn)
+    assert "users_collection" in body, (
+        "collection-level visibility is still not consulted at all")
+    assert "collection_render_flags(" in body, (
+        "collection-level visibility is consulted with a SECOND implementation; the "
+        "canonical walk is `blender_scene.collection_render_flags`, which is the only one "
+        "that carries `exclude` and an ancestor's `hide_render` (F-94a7d14d)")
 
 
 def test_render_comparison_hands_the_scene_to_the_isolation(retopo):

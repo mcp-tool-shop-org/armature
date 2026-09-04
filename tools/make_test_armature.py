@@ -240,6 +240,83 @@ def build(thickness, joint_scale, segments, arc=None, frames=33, start_deg=0.0, 
     return fig, arm
 
 
+class SubjectArgError(SpecError):
+    """A flag that shapes the synthetic subject is not a number this tool can build with.
+
+    WAVE 16, F-26ee2b03. `--frames` was a bare `type=int` with no bound, on the tool that
+    AUTHORS the synthetic subject GLB and the `.joints.json` ground truth every arc
+    comparison in this repo is measured against -- the same shape `require_frame_size`
+    closed for `--width`/`--height` (F-34a858f5, wave 12) and never applied here.
+
+    MEASURED on this worktree's `armature_core.posearc`: `arc_readout(arc, 0, 0.0, 90.0)`
+    returns normally (`crossing_frame_exact: -0.5`) and `arc_readout(arc, -5, 0.0, 90.0)`
+    returns normally too, so the ONE refusal that runs before geometry -- `--pose-arc`'s
+    zero-span/uncrossable readout -- passed a frame count of 0 or a negative straight
+    through. What follows, read: `build`'s keying loop is `for i in range(frames)`, so NO
+    keyframe is inserted; `arm.animation_data` stays None so the LINEAR-interpolation pass
+    is skipped; `scene.frame_end` is set to 0 or a negative number; the GLB is EXPORTED
+    with `export_animations=True` and PASSES Gate GLB, which is a real non-empty file; the
+    `.joints.json` is written with `side["frames"] == []`; and only then does
+    `side["frames"][0]` raise `IndexError`, which the halt contract records as
+    `MAKE_TEST_ARMATURE_HALT {"outcome": "FAILED - an unhandled error"}` at exit 1.
+
+    So an operator typo left a GLB with no action and a ground-truth sidecar with no frames
+    on disk as a matched pair, with no success sentinel and an untyped crash naming a dict
+    index rather than the flag. `--fps`, `--segments`, `--thickness` and `--joint-scale`
+    were unbounded in the same way and are refused here too.
+
+    A `SpecError`, which is an `ArmatureError`: the halt handler classifies it REFUSED at
+    exit 2, where the `IndexError` was FAILED at exit 1. Not a `GateFailure` -- no gate
+    ran; this is an argument that never should have reached geometry.
+    """
+
+
+def require_subject_args(args):
+    """`args` if every dimension it names can build a subject, else raise.
+
+    Runs ABOVE `posearc.resolve_arc`, so it is the FIRST thing after parsing and nothing --
+    no geometry, no directory, no GLB, no sidecar -- exists when it fires. The shape is
+    `render_start_frame.require_frame_size`'s, carried: one clause listing every offending
+    flag by name, with the values in the evidence, rather than a stack trace from inside a
+    helper three calls down.
+
+    `--frames >= 2` **only when an arc is named**: without `--pose-arc` this tool builds the
+    static bind pose, `scene.frame_end` is pinned to 1 and `--frames` is not read at all, so
+    refusing it there would refuse a flag the run does not use. With an arc, one frame
+    cannot carry a performance -- `posearc.angle_at_frame(i, 1, ...)` has no span to
+    interpolate over and the `.joints.json` would hold a single sample under a key named
+    `frames`.
+    """
+    ev = {"gate": None, "andon": "SubjectArgError", "clause": "subject_args",
+          "pose_arc": args.pose_arc,
+          "frames": args.frames, "fps": args.fps, "segments": args.segments,
+          "thickness": args.thickness, "joint_scale": args.joint_scale}
+    bad = []
+    if args.pose_arc and (not isinstance(args.frames, int) or args.frames < 2):
+        bad.append(f"--frames={args.frames!r} must be an integer >= 2 when --pose-arc is "
+                   f"named; one frame cannot carry a performance")
+    if not isinstance(args.fps, int) or args.fps < 1:
+        bad.append(f"--fps={args.fps!r} must be an integer >= 1; glTF stores key times in "
+                   f"seconds and divides by it")
+    if not isinstance(args.segments, int) or args.segments < 3:
+        bad.append(f"--segments={args.segments!r} must be an integer >= 3; fewer than three "
+                   f"gives a limb no cross-section")
+    for name, value in (("--thickness", args.thickness),
+                        ("--joint-scale", args.joint_scale)):
+        if not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0.0:
+            bad.append(f"{name}={value!r} must be a finite positive number; it is a radius")
+    if bad:
+        ev["offending"] = bad
+        raise SubjectArgError(
+            "the synthetic subject cannot be built from these arguments: "
+            + "; ".join(bad)
+            + ". This tool authors the GLB and the `.joints.json` ground truth every arc "
+              "comparison in this repo is measured against, and an unbounded frame count "
+              "leaves both on disk as a matched pair -- a GLB with no action beside a "
+              "sidecar with no frames -- before anything raises", ev)
+    return args
+
+
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser()
@@ -261,6 +338,13 @@ def main():
     ap.add_argument("--arc-end-deg", type=float, default=90.0)
     ap.add_argument("--out", required=True)
     args = ap.parse_args(argv)
+
+    # F-26ee2b03, wave 16. FIRST, above `resolve_arc`: nothing exists yet -- no geometry,
+    # no output directory, no GLB, no `.joints.json` -- so a refusal here leaves nothing
+    # behind. The clause the readout below runs (a zero-span or uncrossable arc) does not
+    # examine the frame count at all; measured, `arc_readout(arc, 0, ...)` and
+    # `arc_readout(arc, -5, ...)` both return normally.
+    require_subject_args(args)
 
     arc = posearc.resolve_arc(args.pose_arc) if args.pose_arc else None
     readout = None

@@ -35,7 +35,8 @@ from mathutils import Vector  # noqa: E402
 import rig_character  # noqa: E402
 from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
-from make_parts_sheet import articulated_side, side_word  # noqa: E402,F401
+from make_parts_sheet import (ArcDidNotSurvive, arc_liveness,        # noqa: E402,F401
+                              articulated_side, side_word)
 
 FULL_W, FULL_H = 780, 1180
 INSET = 560
@@ -226,13 +227,25 @@ def render_arm(glb, tag, out_dir, targets=None):
     scene.frame_set(rig_character.PROBE_FRAMES)
     bpy.context.view_layer.update()
     at_end = evaluated(mesh_obj)
-    moved = float(np.linalg.norm(at_end - at_rest, axis=1).max())
-    if moved <= 1e-6:
-        raise ArmatureError(
+    # ONE implementation of the MEASUREMENT and the BOUND (`make_parts_sheet.arc_liveness`,
+    # wave 16, F-4dc96644 + F-8958f574), beside the staging triple and `articulated_side`
+    # this module already imports from there; the refusal stays here, in this sheet's own
+    # words. It refuses a non-finite displacement -- a NaN in the POSED array made `moved`
+    # NaN, every clause False, and `max_vertex_motion: NaN` was published -- and it derives
+    # the floor as a fraction of the subject's OWN bbox diagonal instead of the 1e-6 metres
+    # that used to stand here, whose only justification was that it is small.
+    arc, _diagonal, _slo, _shi = arc_liveness(
+        float(np.linalg.norm(at_end - at_rest, axis=1).max()),
+        "max_vertex_motion", at_rest, "make_binding_sheet")
+    if arc["max_vertex_motion"] <= arc["floor"]:
+        raise ArcDidNotSurvive(
             f"{glb}: the mesh is identical at frame 1 and frame "
-            f"{rig_character.PROBE_FRAMES}. The authored arc did not survive the round trip, "
-            f"and a sheet built from this would show two matching panels and read as 'this "
-            f"binding does not move'")
+            f"{rig_character.PROBE_FRAMES} (max {arc['max_vertex_motion']:.3e}, "
+            f"{arc['displacement_over_diagonal']:.3e} of this subject's own bbox diagonal "
+            f"{arc['bbox_diagonal']:.6f}). The authored arc did not survive the round "
+            f"trip, and a sheet built from this would show two matching panels and read "
+            f"as 'this binding does not move'",
+            dict(arc, glb=glb, tag=tag))
 
     # The posed bone positions at the last frame — identical across arms, so both rows share
     # one camera per joint. Computed from the FIRST arm and passed to the second.
@@ -249,7 +262,8 @@ def render_arm(glb, tag, out_dir, targets=None):
 
     full_scale = height * 1.10
     inset_scale = height * INSET_HEIGHT_FRACTION
-    out = {"targets": targets, "max_displacement": moved,
+    out = {"targets": targets, "max_displacement": arc["max_vertex_motion"],
+           "arc": arc,
            "articulated_side": side_rec, "panels": {}}
 
     for frame in (1,) + tuple(ARC_FRAMES):
