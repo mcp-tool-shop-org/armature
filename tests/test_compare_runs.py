@@ -144,3 +144,70 @@ def test_a_real_difference_still_reports_rather_than_halting(tmp_path):
     report = CR.compare_runs(a, b)
     assert report["verdict_inputs"]["max_abs_diff_any_channel"] == 100
     assert report["verdict_inputs"]["channels_with_any_pixel_difference"] == ["lossless"]
+
+
+# ------------------------------------------------- a report over SOME of the population
+#
+# Wave 3's two andons refuse only a TOTAL absence of comparison. A PARTIAL one still read
+# as a clean reproduction, with the evidence that contradicts it sitting in the JSON and
+# absent from the verdict. Both measured 2026-09-03.
+
+
+def test_a_six_frame_run_against_a_three_frame_one_is_not_a_reproduction(tmp_path):
+    """An aborted render: A holds 6 frames, B holds the first 3, byte-identical. The old
+    line read `frames_compared: 3, max_abs_diff_any_channel: 0` and exited 0, with
+    `only_in_a: [00003,00004,00005]` unread in the per-channel record."""
+    a = _run(tmp_path, "a", frames=6)
+    b = _run(tmp_path, "b", frames=3)
+    with pytest.raises(CR.CompareError) as e:
+        CR.compare_runs(a, b)
+    ev = e.value.evidence
+    assert ev["frames_a"] == 6 and ev["frames_b"] == 3
+    assert ev["only_in_a"] == ["00003.png", "00004.png", "00005.png"]
+
+
+def test_some_shared_names_shape_mismatched_is_not_a_reproduction(tmp_path):
+    """Four names on both sides, three of them rendered at another size with wholly
+    different content: the pixel verdict said the render reproduced over one of four."""
+    a = _run(tmp_path, "a", frames=4, h=8, w=8)
+    b = os.path.join(str(tmp_path), "b")
+    d = os.path.join(b, "lossless")
+    os.makedirs(d, exist_ok=True)
+    for i in range(4):
+        side = 8 if i == 0 else 16
+        _png(os.path.join(d, f"{i:05d}.png"), np.full((side, side, 3), 100, np.uint8))
+    with pytest.raises(CR.CompareError) as e:
+        CR.compare_runs(a, b)
+    ev = e.value.evidence
+    assert len(ev["shape_mismatch"]) == 3
+    assert ev["frames_compared"] == 1
+
+
+def test_the_printed_verdict_carries_the_two_populations_and_the_mismatch_counts(tmp_path):
+    """A clean verdict may not be readable without the population behind it."""
+    a = _run(tmp_path, "a", frames=3)
+    b = _run(tmp_path, "b", frames=3)
+    vi = CR.compare_runs(a, b)["verdict_inputs"]
+    assert vi["frames_a"] == 3 and vi["frames_b"] == 3
+    assert vi["n_name_mismatch"] == 0
+    assert vi["n_shape_mismatch"] == 0
+
+
+def test_the_partial_andon_survives_python_optimize(tmp_path):
+    """It raises; it is not an `assert`. `-O` deletes an assert and this must survive."""
+    import subprocess
+    import sys as _sys
+
+    a = _run(tmp_path, "a", frames=4)
+    b = _run(tmp_path, "b", frames=2)
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = (
+        "import sys; sys.path.insert(0, r'%s')\n"
+        "import compare_runs as CR\n"
+        "try:\n"
+        "    CR.compare_runs(r'%s', r'%s')\n"
+        "except CR.CompareError:\n"
+        "    print('RAISED')\n"
+    ) % (os.path.join(repo, "tools"), a, b)
+    out = subprocess.run([_sys.executable, "-O", "-c", code], capture_output=True, text=True)
+    assert "RAISED" in out.stdout, out.stderr

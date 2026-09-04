@@ -24,6 +24,24 @@ channel that compared zero frames raises, a pair of runs sharing no channel rais
 `frames_compared` rides the printed line — a clean verdict now cannot be read without the
 population behind it. Measured 2026-09-03.
 
+**A PARTIAL non-comparison is the same defect, and it took a second measurement to see.**
+Those two andons refuse only a TOTAL absence of comparison. `name_mismatch` and
+`shape_mismatch` were recorded per channel and reached neither `verdict_inputs` nor the
+printed line, so a reduced comparison still read as a clean reproduction. Measured
+2026-09-03, two cases: run A of 6 frames against run B holding only the first 3,
+byte-identical, printed `frames_compared: 3, max_abs_diff_any_channel: 0` and exited 0 —
+an aborted render reported as a reproduction, with `only_in_a: [00003,00004,00005]` sitting
+unread in the record; and four matching names of which three were rendered at another size
+with wholly different content printed `max_abs_diff_any_channel: 0` with an empty
+difference list, the render "reproducing" over one of four frames.
+
+So the two sides must name the SAME frames for a shared channel, and every shared name must
+be comparable. This is the refusal `measure_floor.common_frame_count` already implements for
+the same reason — pairing populations that disagree reports over a population nobody
+described. `frames_a`, `frames_b`, `n_name_mismatch` and `n_shape_mismatch` ride
+`verdict_inputs` and the printed line as well, so the happy path also states what it
+compared rather than only how much.
+
 **A pixel is counted once.** `n_differing_px` used to sum `(d > 0)` over the whole
 (H, W, C) array, so a single differing RGB pixel read 3. The pixel count and the sample
 count are now reported as separate, separately named quantities with the channel count
@@ -82,11 +100,25 @@ def compare_channel(dir_a, dir_b):
         "worst_frame": None,
         "shape_mismatch": [],
     }
+    only_a = sorted(set(names_a) - set(names_b))
+    only_b = sorted(set(names_b) - set(names_a))
     if names_a != names_b:
-        rec["name_mismatch"] = {
-            "only_in_a": sorted(set(names_a) - set(names_b))[:8],
-            "only_in_b": sorted(set(names_b) - set(names_a))[:8],
-        }
+        rec["name_mismatch"] = {"only_in_a": only_a[:8], "only_in_b": only_b[:8]}
+        # ---- ANDON. Not on a difference — on the two sides not being the same frames.
+        #      A truncated or renamed run compared over its intersection reports a clean
+        #      verdict for the frames that survived and says nothing about the rest.
+        raise CompareError(
+            f"{dir_a} holds {len(names_a)} PNG(s) and {dir_b} holds {len(names_b)}, and "
+            f"they do not name the same frames ({len(only_a)} only on the a side, "
+            f"{len(only_b)} only on the b side). Comparing the "
+            f"{len(set(names_a) & set(names_b))} shared name(s) would report a "
+            f"reproduction over a population nobody described",
+            {"dir_a": dir_a, "dir_b": dir_b,
+             "frames_a": len(names_a), "frames_b": len(names_b),
+             "names_a": names_a[:32], "names_b": names_b[:32],
+             "only_in_a": only_a[:32], "only_in_b": only_b[:32],
+             "n_name_mismatch": len(only_a) + len(only_b)},
+        )
 
     shared = [n for n in names_a if n in set(names_b)]
     total, npx = 0.0, 0
@@ -124,6 +156,21 @@ def compare_channel(dir_a, dir_b):
         npx += int(d.size)
     # ---- ANDON. Not on a difference — on having compared nothing, which reports as a
     #      perfect zero and is indistinguishable from a run that reproduced.
+    if rec["shape_mismatch"]:
+        # ---- ANDON. The other half of the same refusal: every shared name exists on
+        #      both sides, and some of them were never comparable. The pixel verdict was
+        #      computed over the rest and read exactly like a run that reproduced.
+        raise CompareError(
+            f"{len(rec['shape_mismatch'])} of the {len(shared)} shared frame(s) between "
+            f"{dir_a} and {dir_b} differ in SHAPE and were never compared "
+            f"({', '.join(m['frame'] for m in rec['shape_mismatch'][:6])}); the pixel "
+            f"verdict would be read over the {rec['frames_compared']} that remained",
+            {"dir_a": dir_a, "dir_b": dir_b,
+             "frames_a": len(names_a), "frames_b": len(names_b),
+             "frames_compared": rec["frames_compared"],
+             "shape_mismatch": rec["shape_mismatch"][:8],
+             "n_shape_mismatch": len(rec["shape_mismatch"])},
+        )
     if rec["frames_compared"] == 0:
         raise CompareError(
             f"nothing was compared between {dir_a} and {dir_b}: "
@@ -170,8 +217,16 @@ def compare_runs(run_a, run_b):
 
     report["verdict_inputs"] = {
         # The size of the population every number below is read over. A verdict without
-        # it can be clean because nothing was opened.
+        # it can be clean because nothing was opened — or because only part of it was.
         "frames_compared": sum(v["frames_compared"] for v in report["channels"].values()),
+        "frames_a": sum(v["frames_a"] for v in report["channels"].values()),
+        "frames_b": sum(v["frames_b"] for v in report["channels"].values()),
+        "n_name_mismatch": sum(
+            len(v.get("name_mismatch", {}).get("only_in_a", []))
+            + len(v.get("name_mismatch", {}).get("only_in_b", []))
+            for v in report["channels"].values()),
+        "n_shape_mismatch": sum(
+            len(v["shape_mismatch"]) for v in report["channels"].values()),
         "channels_compared": sorted(report["channels"]),
         "max_abs_diff_any_channel": max(
             (v["max_abs_diff"] for v in report["channels"].values()), default=None
