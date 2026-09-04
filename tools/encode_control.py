@@ -91,10 +91,6 @@ class EncodeFailure(ArmatureError):
     measurement that fired the refusal is the useful half of it.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def _run(cmd, **kw):
     return subprocess.run(cmd, capture_output=True, **kw)

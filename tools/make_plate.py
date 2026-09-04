@@ -61,10 +61,6 @@ TOOL_VERSION = "E12.2"
 class PlateError(ArmatureError):
     """The plate cannot be derived honestly — the authored-RGBA law, chiefly."""
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser()

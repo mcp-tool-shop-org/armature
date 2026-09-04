@@ -53,10 +53,6 @@ class ClipCountError(ArmatureError):
 
     gate = "CLIP_COUNT"
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 class ClipShapeError(ArmatureError):
     """The clip's own resolution is not the one the decode was about to use.
@@ -71,10 +67,6 @@ class ClipShapeError(ArmatureError):
     """
 
     gate = "CLIP_SHAPE"
-
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
 
 
 class ClipRateError(ArmatureError):
@@ -95,10 +87,6 @@ class ClipRateError(ArmatureError):
     """
 
     gate = "CLIP_RATE"
-
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
 
 
 #: How far the stream's reported rate may sit from `--expect-fps` and still be the same

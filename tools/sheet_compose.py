@@ -70,10 +70,6 @@ class SheetPopulationError(ArmatureError):
     one place, for all of them.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 #: The RGB plate a sheet composites an RGBA tile over before drawing it.
 #:
@@ -223,10 +219,6 @@ FONT_DIR = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
 
 class FontError(ArmatureError):
     """No permitted typeface could be found. Names every path and face that was tried."""
-
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
 
 
 def platform_font_dirs():

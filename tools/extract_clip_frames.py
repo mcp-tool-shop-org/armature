@@ -42,29 +42,23 @@ FPS = re.compile(r"([\d.]+)\s+fps")
 class ClipReadError(ArmatureError):
     """The clip's stream could not be read, so nothing downstream may quote its numbers.
 
-    **Why the constructor is written out here.** F-734951dc, wave 14. This class declared
-    `gate` and defined no `__init__`, and `ArmatureError` (its base) defines none either —
-    only `GateFailure` accepts `(message, evidence)`. All three raises below pass an
-    evidence dict, and every one of them was swallowed into `args[1]`: measured on this
-    branch, `ClipReadError("no WxH in the stream line", {"line": "abc"})` gave
-    `hasattr(e, "evidence") == False` and `str(e)` equal to the 2-tuple repr. This tool's
-    `__main__` is a bare `main()`, so the refusal an operator hits most often — ffmpeg
-    reporting no video stream — surfaced as a traceback whose only text was that tuple,
-    with the `stderr_tail` saying WHY ffmpeg refused collected, passed and thrown away.
+    **It defines no constructor, and that is the fix — not an omission.** F-734951dc, wave
+    14, said "`ArmatureError` (its base) defines none either", and that premise is FALSE on
+    this tree: measured 2026-09-04 in this worktree, `armature_core/errors.py:40-42` gives
+    the base `__init__(self, message, evidence=None)` and stores the dict AS PASSED. The
+    local override written here to work around the missing base constructor added one thing
+    of its own — `evidence or {}` — which put back the very defect `errors.py:27-33` rules
+    against: `"evidence": null` beside `"gate": null` is the honest halt record for a bare
+    refusal, and `{}` says a receipt was built and came back empty. The override is deleted
+    (wave 16), and the three raises below reach the base unchanged, receipt included.
 
-    It is deliberately NOT re-based on `GateFailure` to inherit the constructor: the
-    `tools/`-wide evidence ratchet in `tests/test_gates.py` derives its population from the
-    live `GateFailure` subclass tree, so re-basing a tools-local class changes which raise
-    sites that census examines depending on what has been imported. The three lines below
-    are the cheap half; core-gates is landing the same constructor on `ArmatureError`
-    itself this wave, after which this override is redundant and harmless.
+    It is deliberately NOT re-based on `GateFailure`: the `tools/`-wide evidence ratchet in
+    `tests/test_gates.py` derives its population from the live `GateFailure` subclass tree,
+    so re-basing a tools-local class changes which raise sites that census examines
+    depending on what has been imported.
     """
 
     gate = "CLIP_READ"
-
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
 
 
 def probe(path):

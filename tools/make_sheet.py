@@ -37,10 +37,6 @@ class MakeSheetError(ArmatureError):
     the counter-example in the same hand-rolled shape: `missing --{required}=<path>`.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def parse_argv(argv, *, required, optional=(), tool="make_sheet", exc=None):
     """`--key=value` tokens into a dict, refusing by NAME rather than by KeyError.

@@ -54,10 +54,6 @@ class MeasureError(ArmatureError):
     fired it is the useful half.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 # ------------------------------------------------------------------------ projection
 

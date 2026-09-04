@@ -38,7 +38,40 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from armature_core.errors import ArmatureError  # noqa: E402
+
 TOOL_VERSION = "E13.1"
+
+
+class E13SheetError(ArmatureError):
+    """This sheet cannot be built from what it was pointed at.
+
+    The file declared NO typed refusal at all before wave 16, which is also why the
+    write-ordering ratchet in `tests/test_instrument_write_ordering.py` had no entry for it:
+    a module enters that census only when it both refuses and writes, and this one only
+    wrote. It defines no `__init__` — the base stores what it is passed
+    (`armature_core/errors.py:40-42`).
+    """
+
+
+def reference_picks(n):
+    """The frame indices sampled from the constructed reference clip — N of them, distinct.
+
+    F-9297b54f, wave 16. This was the literal `[0, n // 3, 2 * n // 3, n - 1]`, inlined and
+    indexed with no emptiness check. Measured on the base tree: for `n == 0` the first pick
+    is `paths[0]`, a bare `IndexError` after `os.makedirs` has already run; for `n` of 1, 2
+    and 3 the picks are `[0,0,0,0]`, `[0,0,1,1]` and `[0,1,2,2]`, so the REFERENCES band
+    showed 4, 2 and 3 DISTINCT panels under four headings — four slots that are not four
+    samples. Each panel is captioned with its own index and `ref_rows` records
+    `constructed clip (Nf)`, so the duplication was visible rather than hidden, which is why
+    the finding is LOW; it is still a band whose slot count asserts a sample count it does
+    not have.
+
+    Four samples on a clip long enough to carry four; N on a clip that is not.
+    """
+    if n <= 0:
+        return []
+    return sorted({0, n // 3, 2 * n // 3, n - 1})
 
 MARGIN = 10
 LABEL_H = 16
@@ -167,8 +200,6 @@ def main(argv=None):
                     help="output frame indices (argparse eats leading minus signs)")
     a = ap.parse_args(argv)
 
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-
     with open(a.payload, encoding="utf-8") as fh:
         payload = json.load(fh)
     fr = json.load(open(os.path.join(a.frames, "frames.json"), encoding="utf-8"))
@@ -183,7 +214,18 @@ def main(argv=None):
                              "sha": v["composited_sha256"]})
     elif a.ref_frames:
         paths = sorted(glob.glob(os.path.join(a.ref_frames, "*.png")))
-        picks = [0, len(paths) // 3, 2 * len(paths) // 3, len(paths) - 1]
+        # ---- ANDON, before the listing is indexed and before anything is written.
+        if not paths:
+            raise E13SheetError(
+                f"--ref-frames {os.path.abspath(a.ref_frames)} holds no PNG frames; the "
+                f"REFERENCES band is what was SENT to the tier, and a sheet whose "
+                f"reference band is empty claims a conditioning input that cannot be shown",
+                {"gate": None, "andon": "E13SheetError",
+                 "clause": "reference_clip_has_no_frames",
+                 "ref_frames": os.path.abspath(a.ref_frames),
+                 "png_files": sorted(os.path.basename(p) for p in
+                                     glob.glob(os.path.join(a.ref_frames, "*.png")))})
+        picks = reference_picks(len(paths))
         for i in picks:
             ref_images.append(paths[i])
             ref_labels.append(f"video1  constructed clip f{i}")
@@ -204,6 +246,12 @@ def main(argv=None):
     title = (f"E13 {a.arm} seed {a.seed} — references | output | provenance   "
              f"(diagnostics only; the Director's eye is the verdict)")
     sheet = build(a.arm, ref_images, ref_labels, frame_paths, frame_labels, prov, title)
+    # ---- the output directory is created only once every in-tool andon above has fired.
+    #      It used to sit at the top of `main`, above the `--ref-frames` listing that could
+    #      die with a bare IndexError, so a refused run left an empty sheet directory
+    #      behind — which a later reader, or a re-run into the same `--out`, reads as an
+    #      attempt that produced nothing rather than one that was refused.
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     sheet.save(a.out)
     # Its OWN token -- see make_cast_sheet for the four-way collision this retires.
     print(f"E13_SHEET_OK {a.out}  {sheet.size[0]}x{sheet.size[1]}")

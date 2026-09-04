@@ -71,10 +71,6 @@ TOOL_VERSION = "E08.2"
 class FitReferenceError(ArmatureError):
     """The fit cannot be made honestly — the alpha law, or a degenerate source."""
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 #: How wide a border strip `--pad=auto` reads, as a fraction of the shorter side. A fraction
 #: of the image's own size rather than a pixel count, so it does not encode this one asset.
 BORDER_FRAC = 0.04

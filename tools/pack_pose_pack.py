@@ -66,10 +66,6 @@ class PosePackError(ArmatureError):
     as `fit_reference`, `make_plate` and `encode_control`.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 TOOL_VERSION = "E08.1"
 
 

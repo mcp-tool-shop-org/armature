@@ -54,6 +54,30 @@ BAND_INK = (96, 220, 255)
 MISSING = "NOT RECORDED"
 
 
+class PickSheetError(ArmatureError):
+    """This pick sheet cannot be built as asked.
+
+    A NAMED andon rather than the family base: a halt record names which check pulled, and
+    `ArmatureError` is the family, not an andon. It defines no `__init__` — the base stores
+    what it is passed (`armature_core/errors.py:40-42`) and normalising a bare refusal's
+    receipt to `{}` is what wave 16 deleted from thirty classes in this domain.
+    """
+
+
+def _recorded(value):
+    """A value the record does not carry prints `MISSING`; one it carries prints as it is.
+
+    Deliberately NOT written `value or MISSING` (F-da27f9de, wave 16). That spelling was
+    used for `prompt_id` and reads as a null check while being a truthiness test: a seed of
+    `0` and a length of `0` are values a payload record can legitimately carry, and `or`
+    erases both into "NOT RECORDED" — a different lie in the same place. The two shapes that
+    mean "not carried" are `None` and a blank string, and those are what this keys on.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return MISSING
+    return value
+
+
 def sharpness(gray):
     """Variance of a discrete Laplacian — the standard focus measure.
 
@@ -151,15 +175,29 @@ def source_run(record_path):
     Read, never typed. The one time this line was going to be passed in by hand, the hand
     typed a prompt_id that did not exist — a placeholder shaped like evidence, on the sheet
     that a spending decision gets made from. `NOT RECORDED` is what a missing record prints.
+
+    **F-da27f9de, wave 16 — a RECORDED null is not a missing key.** `prompt_id` was
+    normalised with `or MISSING` and the other three with `.get(k, MISSING)` — a DEFAULT,
+    which fires only when the key is ABSENT. Measured in this worktree: a payload record
+    carrying `"seed": null` returned `{'seed': None}`, and `provenance_lines` printed the
+    literal line `source seed    None` onto the sheet a spending decision is made from. This
+    module's own rule (docstring, line 14) is that a value the inputs do not carry prints
+    `NOT RECORDED` rather than a plausible default, and a reader reconstructing the pick
+    later could not tell an unrecorded seed from a recorded null.
+
+    All four fields now go through `_recorded`, which keys on the VALUE. `resolution` and
+    `length` are printed by nothing today; they carried the same shape, which is exactly how
+    a defect waits for its first caller.
     """
     if not record_path:
-        return {"prompt_id": MISSING, "seed": MISSING, "record": MISSING}
+        return {"prompt_id": MISSING, "seed": MISSING, "resolution": MISSING,
+                "length": MISSING, "record": MISSING}
     with open(record_path, encoding="utf-8") as fh:
         rec = json.load(fh)
-    return {"prompt_id": rec.get("prompt_id") or MISSING,
-            "seed": rec.get("seed", MISSING),
-            "resolution": rec.get("resolution", MISSING),
-            "length": rec.get("length", MISSING),
+    return {"prompt_id": _recorded(rec.get("prompt_id")),
+            "seed": _recorded(rec.get("seed")),
+            "resolution": _recorded(rec.get("resolution")),
+            "length": _recorded(rec.get("length")),
             "record": os.path.abspath(record_path)}
 
 
@@ -287,6 +325,25 @@ def main(argv=None):
             f"--visible-rows must be y0,y1 inside 0..{target[1]}; got {a.visible_rows!r}")
 
     indices = [int(v) for v in a.at.split(",") if v.strip()]
+    # ---- ANDON, above the size check and above every write: `--at` named candidates.
+    #      F-9b7cc1de, wave 16. `--at=` (and `--at=,,`) yields `[]`; `measure` then walked
+    #      nothing, `sizes` was `{}`, `distinct` was `[]`, and the SIZE andon fired because
+    #      `len([]) != 1` — measured in this worktree on a 6-frame directory whose frames
+    #      ARE all one size: "the frames are not all one size ([]); one cover fit cannot
+    #      describe all of them and the marked bands would be wrong on some tiles". The
+    #      refusal was right that it must not proceed (`cands[0]` below would have died) and
+    #      named a fault that does not exist, so an operator whose `--at` list was eaten by a
+    #      shell spends the next step inspecting frame dimensions.
+    if not indices:
+        present = frame_paths(a.frames)
+        raise PickSheetError(
+            f"--at={a.at!r} named no candidate frames; a pick sheet over zero candidates "
+            f"decides nothing, and Gate PLATE is the decision it exists to serve "
+            f"({len(present)} frame(s) are present, {min(present)}..{max(present)})",
+            {"gate": "PLATE", "andon": "PickSheetError", "clause": "no_candidate_frames",
+             "at": a.at, "frames_dir": os.path.abspath(a.frames),
+             "frames_present": len(present),
+             "frames_range": [min(present), max(present)]})
     cands = measure(a.frames, indices)      # raises if the frames are not all one size
     src = list(cands[0]["size"])
 

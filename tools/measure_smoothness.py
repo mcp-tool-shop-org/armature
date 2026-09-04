@@ -71,10 +71,6 @@ class SmoothnessInputError(ArmatureError):
     Carries the two lists that disagree — the useful half of the refusal.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def check_records(ra, rb, label_a="A", label_b="B"):
     """Refuse two records whose keypoints are not the same keypoints, in the same order.

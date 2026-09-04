@@ -103,7 +103,14 @@ def test_a_fresh_review_directory_still_writes_the_clip_and_the_stills(tmp_path,
                      "--crop=8"]) == 0
     assert "MAKE_REVIEW_CLIP_OK " in capsys.readouterr().out
     written = sorted(os.listdir(out))
-    assert "review_0.50x_8fps.webp" in written
+    # WAVE 16 (F-78f49c7c): the clip's name now carries the RUN TOKEN when one can be
+    # derived, so a run-root sweep can bind its exemption to the run instead of exempting
+    # every run's review clip. `_frames` builds `<tmp>/lossless/`, so the derived token is
+    # the tmp directory's own name; the rate half of the name is unchanged and is what this
+    # assertion was written for.
+    clip = [n for n in written if n.endswith(".webp")]
+    assert len(clip) == 1, written
+    assert clip[0].endswith("review_0.50x_8fps.webp"), clip
     assert "review_manifest.json" in written
     assert sum(1 for n in written if n.startswith("still_f")) == 8
 

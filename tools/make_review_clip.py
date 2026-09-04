@@ -53,9 +53,50 @@ class ReviewClipError(ArmatureError):
     `SystemExit` string the frame check used to raise.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+
+#: The directory names a run's frame population canonically lives under, so that `<run>`
+#: is the frames directory's PARENT. Recorded rather than guessed: the run token is derived
+#: only when the layout it is derived from is the one that carries it.
+FRAME_SUBDIR_NAMES = ("lossless", "frames")
+
+#: What the record says when no run token could be derived. The repo's rule: a value the
+#: inputs do not carry prints as missing, never as a plausible default -- and the review
+#: clip's FILENAME is a label the Director opens.
+NO_RUN_TOKEN = "NOT DERIVED"
+
+
+def run_token(frames_dir, explicit=None):
+    """`(token, source)` -- the run this review pass is OF, or `(None, 'NOT DERIVED')`.
+
+    F-78f49c7c, wave 16. `clip_name` returned `review_{rate:.2f}x_{fps}fps.webp` with no run
+    token, and `fetch_run.derived_root_artifacts(run)`'s second pattern --
+    `^review_[0-9.]+x_[0-9]+fps[.][a-z0-9]+$` -- therefore could not be bound to the run.
+    That module's own CORRECTION block measures it (`derived_root_artifacts('A2')`:
+    `A0r1_review_8fps.mp4` matches neither pattern, `review_0.50x_8fps.mp4` matches pattern
+    1 and so exempts ANY run's review clip) and names this tool as the owner of the fix.
+    Today's live consequence is nil -- the canonical suffix is `.webp` and `VIDEO_SUFFIXES`
+    is (.mp4, .webm, .mkv) -- but the pattern exists to survive a change of suffix, and on
+    that day a PREVIOUS run's review clip in a re-used run root is exempted rather than
+    raised: the exact stray class the sweep was added for.
+
+    **It is derived from `--frames`, not from `--out`.** The wave-16 brief said "derive the
+    token from `--out`'s run directory"; that cannot be done here, for a reason
+    `gate_out_directory` below measures: `--out` is REFUSED when it is the frames directory
+    or when it already holds a numbered frame population, so `--out` is by construction a
+    review directory of its own and its parent is not run-shaped. `--frames` is the run's
+    own `<run>/lossless/`, so the run is that directory's parent -- and the derivation fires
+    only when the frames directory is actually named like a frame population, because a
+    token pasted onto a filename from a directory that is not a run is a placeholder shaped
+    like evidence. `--run=<token>` states it explicitly and wins.
+    """
+    if explicit is not None and str(explicit).strip():
+        return str(explicit).strip(), "--run"
+    frames_abs = os.path.abspath(frames_dir)
+    if os.path.basename(frames_abs).lower() in FRAME_SUBDIR_NAMES:
+        parent = os.path.basename(os.path.dirname(frames_abs))
+        if parent:
+            return parent, "frames_parent"
+    return None, NO_RUN_TOKEN
 
 
 def gate_out_directory(out, frames_dir):
@@ -100,15 +141,23 @@ def gate_out_directory(out, frames_dir):
     return ev
 
 
-def clip_name(fps, source_fps):
+def clip_name(fps, source_fps, run=None):
     """`review_<rate>x_<fps>fps.webp`, from the actual numbers.
 
     The name was the literal `review_0.5x_8fps.webp` whatever the flags said, which was
     true only while every source ran at 16 fps. On a 20 fps source the same file is 0.40x
     at 8 fps and the filename asserted otherwise — a label on an artifact the Director
     opens is evidence, and it may not be a placeholder. Corrected E10, 2026-08-12.
+
+    WAVE 16 (F-78f49c7c): the run token is prefixed when one is KNOWN, so a review clip
+    carries the identity of the generation it reviews and a run-root sweep can bind its
+    exemption to the run instead of exempting every run's clip. When no token could be
+    derived the name is unchanged - an un-tokened name is the honest one, and pasting a
+    directory name that is not a run onto the file would be the placeholder this tool's own
+    history is about. See `run_token`.
     """
-    return f"review_{fps / float(source_fps):.2f}x_{fps}fps.webp"
+    stem = f"review_{fps / float(source_fps):.2f}x_{fps}fps.webp"
+    return f"{run}_{stem}" if run else stem
 
 
 def main(argv=None):
@@ -119,13 +168,36 @@ def main(argv=None):
     ap.add_argument("--fps", type=int, default=8,
                     help="playback rate; 8 against a 16 fps source is 0.5x")
     ap.add_argument("--source-fps", type=int, default=16)
+    ap.add_argument("--run", default=None,
+                    help="the run this review pass is OF; prefixed onto the clip's name so "
+                         "a run-root sweep can bind its exemption to the run. Derived from "
+                         "--frames' own run root when not given")
     ap.add_argument("--stills", default="0,16,32,48,64")
     ap.add_argument("--crop", type=int, default=224, help="still crop size, native pixels")
     a = ap.parse_args(argv)
 
-    # ---- ANDON, before anything is read or made: this review pass is not being written
-    #      into the run it is reading.
+    # ---- ANDON, before anything is read or made, and far above `os.makedirs`: both rates
+    #      are rates. F-e924157e, wave 16. `--fps=0` reached
+    #      `duration=int(round(1000.0 / a.fps))` inside `ims[0].save(...)` and died with a
+    #      bare `ZeroDivisionError` -- untyped, and AFTER `os.makedirs(a.out)` had created
+    #      the review directory, so a refused run left an empty directory a later reader
+    #      takes for an attempt that produced nothing. `--source-fps=0` dies one line later,
+    #      in `a.fps / float(a.source_fps)` and in `clip_name` -- which is the FILENAME the
+    #      Director opens. A negative rate is worse than either: `int(round(1000.0 / -8))`
+    #      is a negative frame delay written into a WebP.
+    for _flag, _value in (("--fps", a.fps), ("--source-fps", a.source_fps)):
+        if _value <= 0:
+            raise ReviewClipError(
+                f"{_flag}={_value} is not a rate; the clip's frame delay is "
+                f"1000/--fps ms and both the clip's name and its manifest quote "
+                f"--fps and --source-fps as a playback rate",
+                {"gate": "ARGS", "andon": "ReviewClipError",
+                 "clause": "playback_rate_not_positive",
+                 "flag": _flag, "value": _value, "minimum_exclusive": 0})
+
+    # ---- ANDON: this review pass is not being written into the run it is reading.
     gate_out = gate_out_directory(a.out, a.frames)
+    token, token_source = run_token(a.frames, a.run)
 
     names = sorted(f for f in os.listdir(a.frames)
                    if f.lower().endswith(".png") and os.path.splitext(f)[0].isdigit())
@@ -168,7 +240,7 @@ def main(argv=None):
     #      The clip used to be written between the two andons above, so a run refused
     #      by either left a directory holding a review clip and no stills.
     os.makedirs(a.out, exist_ok=True)
-    clip = os.path.join(a.out, clip_name(a.fps, a.source_fps))
+    clip = os.path.join(a.out, clip_name(a.fps, a.source_fps, token))
     ims[0].save(clip, save_all=True, append_images=ims[1:],
                 duration=int(round(1000.0 / a.fps)), loop=0, lossless=True, quality=100)
 
@@ -209,9 +281,12 @@ def main(argv=None):
                    "source_frame_files": list(names),
                    "stills_requested": idx, "n_stills_requested": len(idx),
                    "gate_OUT": gate_out,
+                   "run_token": token if token else NO_RUN_TOKEN,
+                   "run_token_source": token_source,
                    "stills": cuts}, fh, indent=2)
     print("MAKE_REVIEW_CLIP_OK " + json.dumps({
-        "clip": clip, "frames": len(ims), "fps": a.fps,
+        "clip": clip, "run_token": token if token else NO_RUN_TOKEN,
+        "frames": len(ims), "fps": a.fps,
         "rate": f"{a.fps / float(a.source_fps):.2f}x",
         "stills": len(cuts), "stills_requested": idx,
         "manifest": side}))

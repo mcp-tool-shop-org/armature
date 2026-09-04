@@ -58,10 +58,6 @@ MISSING = "NOT RECORDED"
 class SheetInputError(ArmatureError):
     """A tile could not be read. Names the path, which an AttributeError did not."""
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def _get(meta, *path, default=MISSING):
     """Walk a path through the record, or return `NOT RECORDED`."""
@@ -209,7 +205,8 @@ def main(argv=None):
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     # `cv2.imwrite` returns a BOOL on failure and raises NOTHING; the sentinel below
     # carries an absolute path and is the receipt a later session cites. Same shape as
-    # fit_reference.py:216 and make_plate.py:224.
+    # fit_reference.py:212 and make_plate.py:220 (RE-MEASURED wave 16: both cited 216 /
+    # 224 before their classes lost a normalising `__init__` four lines up).
     if not cv2.imwrite(a.out, sheet):
         raise SheetInputError(
             f"cv2 refused to write {os.path.abspath(a.out)}; E08_SHEET_OK would name a "

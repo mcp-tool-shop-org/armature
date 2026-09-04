@@ -731,6 +731,9 @@ def test_no_builder_derives_a_sidecar_path_by_whole_path_substring():
         f"{offenders} derive a sidecar path by rewriting every occurrence of an extension "
         f"in a whole PATH; the six siblings use os.path.splitext(out)[0] + <suffix>. "
         f"Path COMPONENTS exempted this run: {exempt}")
-    assert exempt == ["make_shotset_sheet.py:232"], (
+    # WAVE 16 (instruments-measure): 232 -> 228. `make_shotset_sheet.ShotsetSheetError`
+    # lost its normalising `__init__` (four lines, rule 5 / F-13333ef4) and every line
+    # below it moved. Re-measured in the commit that moved it.
+    assert exempt == ["make_shotset_sheet.py:228"], (
         f"the exemption set moved: {exempt}. Each member must be a `replace` whose result "
         f"is joined into a directory, so it cannot rewrite a directory component.")

@@ -43,10 +43,6 @@ class OverlaySheetError(ArmatureError):
     where they are; what this class exists for is the WRITE, which had no refusal at all.
     """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
-
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser()
@@ -108,7 +104,9 @@ def main(argv=None):
     # `cv2.imwrite` returns a BOOL on failure and raises NOTHING -- measured 2026-09-04
     # with this venv's OpenCV 5.0.0: an --out naming an existing DIRECTORY returned False,
     # wrote nothing and printed only a WARN on stderr, while the sentinel below carried
-    # that path as though the sheet were there. The shape is fit_reference.py:216's.
+    # that path as though the sheet were there. The shape is fit_reference.py:212's
+    # (RE-MEASURED wave 16: it cited 216 before that class lost a normalising
+    # `__init__` four lines up).
     if not cv2.imwrite(a.out, sheet):
         raise OverlaySheetError(
             f"cv2 refused to write {os.path.abspath(a.out)}; the sentinel line would name "
