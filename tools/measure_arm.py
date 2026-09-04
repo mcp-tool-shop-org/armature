@@ -43,6 +43,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.framing import half_fovs  # noqa: E402
+from armature_core.parts import require_finite  # noqa: E402
 from measure_lift import as_pairing_rows, gate_pairing  # noqa: E402
 
 
@@ -123,7 +124,46 @@ def subject_mask(arr, tol=12):
     }
 
 
-def arm_angle(mask, shoulder_px, r_in, r_out):
+def gate_segmentation(mask, seg, frame, filename):
+    """The clause this module's docstring promised and no code implemented.
+
+    The docstring states "an angle whose segmentation is implausible is reported as failed,
+    not as a number", records the E02 confound it is written against (a lit studio gradient
+    counted as subject at 78-89% coverage), and `subject_mask` says "the caller is expected
+    to refuse an implausible one". The caller stored the fraction and refused nothing.
+
+    **The clause, and why it carries no constant.** A shot is framed AROUND the figure —
+    `armature_core.framing` solves the camera to bound the subject's own cloud — so the
+    four image corners are background by construction. A mask that classifies a corner as
+    subject has not found a subject; it has found a gradient. Measured 2026-09-04 on frames
+    carrying a left-to-right luminance ramp: `subject_fraction 0.875`, all four corners
+    inside the mask, and a confident `angle_deg_measured 0.0` on every frame. A
+    subject-fraction band would have needed a number nobody has calibrated (advisor rule 3:
+    suspend rather than invent one); the corners are a property of the frame itself.
+
+    Returns `(ok, evidence)`. The row-level caller marks the row failed; the run-level
+    caller refuses to publish a crossing frame computed across one.
+    """
+    h, w = mask.shape
+    corners = {"top_left": (0, 0), "top_right": (0, w - 1),
+               "bottom_left": (h - 1, 0), "bottom_right": (h - 1, w - 1)}
+    hit = sorted(name for name, (y, x) in corners.items() if bool(mask[y, x]))
+    ev = {"gate": "SEGMENTATION", "frame": frame, "file": filename,
+          "corners_classified_as_subject": hit,
+          "subject_fraction": seg.get("subject_fraction"),
+          "background_rgb": seg.get("background_rgb"),
+          "tolerance": seg.get("tolerance"),
+          "clause": ("the four image corners are background on a shot framed around the "
+                     "figure; a mask that calls one of them subject has segmented a "
+                     "gradient, not a body")}
+    if hit:
+        ev["verdict"] = "FAILED"
+        return False, ev
+    ev["verdict"] = "no image corner is inside the subject mask"
+    return True, ev
+
+
+def arm_angle(mask, shoulder_px, r_in, r_out, hemisphere=1):
     """The angular lobe of subject pixels in an annulus about the shoulder, in degrees.
 
     0 deg is image-right (the T-pose), +90 deg is image-up (overhead) — so the number is
@@ -137,29 +177,67 @@ def arm_angle(mask, shoulder_px, r_in, r_out):
     h, w = mask.shape
     ys, xs = np.nonzero(mask)
     if xs.size == 0:
-        return None, {"n_px": 0}
+        return None, {"n_px": 0, "hemisphere": int(hemisphere)}
     dx = xs - shoulder_px[0]
     dy = shoulder_px[1] - ys  # image y grows downward; flip so +y is up
     r = np.hypot(dx, dy)
-    keep = (r >= r_in) & (r <= r_out) & (dx > 0)  # right hemisphere: the arm's side
+    annulus = (r >= r_in) & (r <= r_out)
+    # The SIDE is a measured property of the subject, handed in by the caller from the
+    # authored truth — not the `dx > 0` this line used to carry. On a figure whose arm
+    # projects to image-LEFT, that constant returned a full series of confident angles off
+    # the opposite side of the body, and no key in the record named a hemisphere.
+    keep = annulus & ((dx * hemisphere) > 0)
+    other = annulus & ((dx * hemisphere) < 0)
     if keep.sum() == 0:
-        return None, {"n_px": 0, "note": "annulus empty on the arm's side"}
-    ang = np.degrees(np.arctan2(dy[keep], dx[keep]))
+        ev = {"n_px": 0, "hemisphere": int(hemisphere),
+              "n_px_other_side": int(other.sum()),
+              "note": "annulus empty on the arm's side"}
+        if other.sum():
+            raise MeasureError(
+                f"the annulus holds no subject pixels on the hemisphere the authored "
+                f"truth names (sign {int(hemisphere):+d}) while {int(other.sum())} sit on "
+                f"the other side; measuring there would report the wrong side of the body "
+                f"and reporting no angle would hide that the pixels exist",
+                dict(ev, gate="HEMISPHERE"))
+        return None, ev
+    # Measured in the arm's own frame first, so the median does not wrap at +-180 for a
+    # left-side arm, then mapped back to the image convention the authored angle uses.
+    rot = np.degrees(np.arctan2(dy[keep], dx[keep] * hemisphere))
+    ang = rot if hemisphere > 0 else 180.0 - rot
     return float(np.median(ang)), {
         "n_px": int(keep.sum()),
+        "hemisphere": int(hemisphere),
+        "n_px_other_side": int(other.sum()),
         "angle_p25": round(float(np.percentile(ang, 25)), 3),
         "angle_p75": round(float(np.percentile(ang, 75)), 3),
     }
 
 
-def crossing_frame(angles, threshold):
+def crossing_frame(angles, threshold, failed=None, reasons=None):
     """First frame index at which the angle series reaches `threshold`, interpolated.
 
     Returns None if it never does. Linear interpolation between the bracketing frames, so a
     crossing that happens between two frames is not silently rounded to one of them.
+
+    `failed` marks rows whose segmentation was refused. A missing angle used to be skipped
+    with `continue`, so the number the arm is graded on could be interpolated straight
+    across a frame that had no measurement at all — a placeholder shaped like evidence in
+    the one scalar this record quotes.
     """
+    failed = list(failed) if failed is not None else [False] * len(angles)
+    reasons = list(reasons) if reasons is not None else [None] * len(angles)
     prev = None
     for i, a in enumerate(angles):
+        if failed[i]:
+            raise MeasureError(
+                f"frame {i} is a failed row (its segmentation was refused) and lies "
+                f"before the crossing ({reasons[i]}); interpolating the crossing frame "
+                f"across it would publish a number derived from a frame nothing was "
+                f"measured on",
+                {"gate": "CROSSING", "failed_row": i, "threshold": threshold,
+                 "failed": [j for j, f in enumerate(failed) if f],
+                 "failed_reason": reasons[i],
+                 "failed_reasons": {j: reasons[j] for j, f in enumerate(failed) if f}})
         if a is None:
             continue
         if a >= threshold:
@@ -211,6 +289,68 @@ def _load_frames(d):
     return names, [np.array(Image.open(os.path.join(d, n)).convert("RGB")) for n in names]
 
 
+def arm_hemisphere(truth):
+    """`(+1 | -1, why)` — which side of the shoulder the arm projects to, from the truth.
+
+    Derived from the authored frame whose wrist is furthest from the shoulder in x, so a
+    pose that happens to start vertical does not decide the side on a rounding error. This
+    is the posture `rig_character.which_arm_is_on_plus_x` already takes: the side is a
+    measured property of the subject, not a constant in an instrument.
+    """
+    best, best_dx = None, 0.0
+    for row in truth:
+        dx = float(row["wrist_px"][0]) - float(row["shoulder_px"][0])
+        if abs(dx) > abs(best_dx):
+            best, best_dx = row, dx
+    if best is None or best_dx == 0.0:
+        raise MeasureError(
+            "the authored truth places the wrist at the shoulder's own x in every frame, "
+            "so the arm projects to neither side and no hemisphere can be derived",
+            {"gate": "HEMISPHERE", "frames": len(truth)})
+    sign = 1 if best_dx > 0 else -1
+    return sign, ("derived from truth frame %s: wrist_px[0] - shoulder_px[0] = %+.2f px"
+                  % (best["frame"], best_dx))
+
+
+def _rows(names, frames, shoulder, r_in, r_out, hemisphere, tol):
+    """One row per measured frame, with the segmentation clause applied to each.
+
+    A row whose segmentation is refused carries `angle_deg_measured: None`, `failed: True`
+    and a `failed_reason` — "reported as failed, not as a number", which is what this
+    module docstring has said since it was written and no code did.
+    """
+    rows = []
+    for n, f in zip(names, frames):
+        number = int(os.path.splitext(n)[0])
+        mask, seg = subject_mask(f, tol=tol)
+        ok, gate = gate_segmentation(mask, seg, number, n)
+        if not ok:
+            rows.append({"frame": number, "file": n, "angle_deg_measured": None,
+                         "segmentation": seg, "gate_SEGMENTATION": gate,
+                         "failed": True, "n_px": 0,
+                         "failed_reason": (
+                             "segmentation refused: image corner(s) %s are inside the "
+                             "subject mask at subject_fraction %s"
+                             % (", ".join(gate["corners_classified_as_subject"]),
+                                seg["subject_fraction"]))})
+            continue
+        ang, adiag = arm_angle(mask, shoulder, r_in, r_out, hemisphere=hemisphere)
+        rows.append({"frame": number, "file": n, "angle_deg_measured": (
+            round(ang, 3) if ang is not None else None), "segmentation": seg,
+            "gate_SEGMENTATION": gate, "failed": False, "failed_reason": None, **adiag})
+    return rows
+
+
+def rows_for_frames(frames_dir, shoulder, r_in, r_out, hemisphere=1, tol=12):
+    """The measured rows for one frames directory, without the authored half.
+
+    Exposed so the segmentation clause can be exercised on its own — the run-level driver
+    refuses at the crossing frame, which would otherwise be the only way to see it.
+    """
+    names, frames = _load_frames(frames_dir)
+    return _rows(names, frames, np.array(shoulder), r_in, r_out, hemisphere, tol)
+
+
 def run(run_dir, joints_path, frames_dir=None, label=None, tol=12):
     with open(os.path.join(run_dir, "manifest.json"), encoding="utf-8") as fh:
         man = json.load(fh)
@@ -246,7 +386,18 @@ def run(run_dir, joints_path, frames_dir=None, label=None, tol=12):
     # The annulus is derived from the subject's own projected geometry — never a global
     # constant. r_out is the shoulder-to-wrist distance in pixels; r_in clears the torso.
     span = float(np.hypot(*(np.array(truth[0]["wrist_px"]) - np.array(truth[0]["shoulder_px"]))))
+    # ---- ANDON on the direction the arithmetic does NOT bound. A NaN span (a projection
+    #      that divided by a zero depth) makes `r >= r_in` and `r <= r_out` False in BOTH
+    #      directions, so every frame silently reports "no angle" instead of "the
+    #      projection failed". `require_finite` is the one helper (armature_core.parts),
+    #      raising THIS module's own error so the gate id and evidence stay ours.
+    span = require_finite("span_px", span, MeasureError,
+                          {"gate": "SPAN", "shoulder_px": truth[0]["shoulder_px"],
+                           "wrist_px": truth[0]["wrist_px"],
+                           "note": ("nan >= nan is False in both directions, so a "
+                                    "non-finite span empties the annulus in silence")})
     r_in, r_out = 0.35 * span, 1.10 * span
+    hemisphere, hemi_source = arm_hemisphere(truth)
 
     out = {
         "label": label or os.path.basename(run_dir),
@@ -257,6 +408,10 @@ def run(run_dir, joints_path, frames_dir=None, label=None, tol=12):
         "readout_deg": arc["readout"]["readout_deg"],
         "authored_crossing_frame": arc["readout"]["crossing_frame_exact"],
         "annulus_px": [round(r_in, 2), round(r_out, 2)],
+        # The SIDE, beside the radii it is measured with — both derived from the subject's
+        # own projected geometry. `arm_angle` used to carry `dx > 0` as a constant.
+        "hemisphere": hemisphere,
+        "hemisphere_source": hemi_source,
         "shoulder_px": truth[0]["shoulder_px"],
         "truth": truth,
     }
@@ -275,26 +430,28 @@ def run(run_dir, joints_path, frames_dir=None, label=None, tol=12):
         #      docstring says does NOT carry the information.
         out["gate_PAIRING"] = gate_pairing(as_pairing_rows(names), truth)
         shoulder = np.array(truth[0]["shoulder_px"])
-        angles, rows = [], []
-        for n, f in zip(names, frames):
-            number = int(os.path.splitext(n)[0])
-            mask, seg = subject_mask(f, tol=tol)
-            ang, adiag = arm_angle(mask, shoulder, r_in, r_out)
-            angles.append(ang)
-            rows.append({"frame": number, "file": n, "angle_deg_measured": (
-                round(ang, 3) if ang is not None else None), "segmentation": seg, **adiag})
+        rows = _rows(names, frames, shoulder, r_in, r_out, hemisphere, tol)
+        angles = [r["angle_deg_measured"] for r in rows]
+        failed = [r["failed"] for r in rows]
         out["measured"] = rows
         out["measured_angles"] = [None if a is None else round(a, 3) for a in angles]
         # Image-space readout: the authored 45 deg arc angle lands at this image angle.
         img_readout = truth[arc["readout"]["crossing_frame_nearest"]]["angle_deg_image"]
         out["readout_deg_image"] = img_readout
-        out["measured_crossing_frame"] = crossing_frame(angles, img_readout)
         fracs = [r["segmentation"]["subject_fraction"] for r in rows]
         out["segmentation_summary"] = {
             "subject_fraction_min": round(min(fracs), 6),
             "subject_fraction_max": round(max(fracs), 6),
             "frames_without_an_angle": sum(1 for a in angles if a is None),
+            "frames_failed": sum(1 for f in failed if f),
+            "clause": ("SEGMENTATION: no image corner is inside the subject mask; a row "
+                       "that fails carries angle_deg_measured null and a failed_reason"),
         }
+        # ---- ANDON on the one scalar this record quotes. It used to skip a missing angle
+        #      with `continue` and interpolate straight across it.
+        out["measured_crossing_frame"] = crossing_frame(
+            angles, img_readout, failed=failed,
+            reasons=[r["failed_reason"] for r in rows])
     return out
 
 
