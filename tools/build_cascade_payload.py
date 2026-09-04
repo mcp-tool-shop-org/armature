@@ -65,12 +65,13 @@ from armature_core import route_gates as RG  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 from build_assembly_payload import (  # noqa: E402
-    FRAME_KEY, frame_order, frame_source_ids, gate_slot_frame_index)
+    FRAME_KEY, frame_order, frame_source_ids, gate_create_video_fps,
+    gate_slot_frame_index)
 
 TOOL_VERSION = "E13.2"
 
-__all__ = ["FRAME_KEY", "frame_order", "frame_source_ids", "gate_slot_frame_index",
-           "build", "main"]
+__all__ = ["FRAME_KEY", "frame_order", "frame_source_ids", "gate_create_video_fps",
+           "gate_slot_frame_index", "build", "build_and_write", "main"]
 
 #: The shared gates own their own ceiling and their own ordering clause:
 #: `gate_slot_ceiling(graph, group_size=..., cap=...)` compares the caller's group size
@@ -97,6 +98,12 @@ WIDTH, HEIGHT = 1024, 576
 
 def build(names, fps=16.0, group_size=AS.GROUP_SIZE, prefix="video/E13_cascade"):
     """The API-format cascade. `names` is the server-side upload name per frame, IN ORDER."""
+    # `--fps` was written straight into `CreateVideo.fps` with no clause while this tool's
+    # OWN record stated the node's measured contract as fps FLOAT (1-120). The gate lives
+    # here, inside the function that emits the node, beside the `--group` clause that was
+    # already bounded in both directions. One implementation, in `build_assembly_payload`,
+    # imported by all five builders that take the flag.
+    gate_create_video_fps(fps)
     plan = AS.cascade_plan(len(names), group_size)
     wf = {}
 
@@ -121,7 +128,15 @@ def build(names, fps=16.0, group_size=AS.GROUP_SIZE, prefix="video/E13_cascade")
     return wf, group_ids
 
 
-def main(argv=None):
+def build_and_write(argv=None):
+    """Build, gate, write — and hand the GRAPH back to an in-process caller.
+
+    Split out of `main` in wave 10 (F-4d6b26ec). `main` used to end `return wf` under
+    `raise SystemExit(main())`, so a successful build exited 1: measured as a subprocess on
+    an 81-entry padded map, stdout ended `BUILD_CASCADE_OK <path>` with seven green gate
+    lines, stderr received 9,673 bytes of the graph dict, and the exit code was 1. This is
+    the builder whose cascade helpers the E13 A2 spend arm shares.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--uploads", required=True)
     ap.add_argument("--out", required=True)
@@ -153,6 +168,8 @@ def main(argv=None):
 
     # ---- the gates, in code, before anything is submitted.
     gate_paid = AS.gate_no_paid_nodes(wf)
+    # Re-run for the RECORD; `build` already raised on an illegal rate.
+    gate_fps = gate_create_video_fps(a.fps)
     # The gate owns the ceiling. `cap` is NOT passed: handing it the same --group value
     # that produced the group nodes made it check a direction the construction already
     # bounds. `group_size` is offered for the gate to check against its own constant.
@@ -207,7 +224,8 @@ def main(argv=None):
             "LoadImage": "image COMBO -> IMAGE, MASK; api_node false",
         },
         "frame_source_ids": list(ordered_ids),
-        "gates": {"ASSEMBLY_paid": gate_paid, "CASCADE_ceiling": gate_ceiling,
+        "gates": {"ASSEMBLY_paid": gate_paid, "CREATE_VIDEO_fps": gate_fps,
+                  "CASCADE_ceiling": gate_ceiling,
                   "CASCADE_topology": gate_topo,
                   "CASCADE_slot_frame_index": gate_index, "ROUTE": gate_route},
     }
@@ -232,6 +250,12 @@ def main(argv=None):
     print(f"frame legality   {[f['legal'] for f in gate_route['frame_legality']]}")
     print(f"BUILD_CASCADE_OK {graph_path}")
     return wf
+
+
+def main(argv=None):
+    """The process exit code, and nothing else. 0 = built; a gate raises."""
+    build_and_write(argv)
+    return 0
 
 
 if __name__ == "__main__":

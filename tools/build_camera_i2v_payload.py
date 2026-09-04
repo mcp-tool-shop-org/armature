@@ -118,6 +118,7 @@ from armature_core import route_gates  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+from build_assembly_payload import gate_create_video_fps  # noqa: E402
 
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
 import build_i2v_payload as W1  # noqa: E402  - wave 1's trajectory, weights and frame
@@ -720,6 +721,11 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
     `"wave": 3` field, and cloud output prefixes under `E12/w3/` — every one of them a
     plausible label pointing at the wrong run.
     """
+    # ---- Gate ROUTE - ANDON on `CreateVideo.fps` (wave 10, F-29693a0e, family carry).
+    # `--fps` reached the node with no clause in all five builders that take the flag,
+    # while every one of their records states the node's measured contract as
+    # "fps FLOAT (1-120)". One implementation, in `build_assembly_payload`, imported here.
+    gate_create_video_fps(fps)
     # The default is resolved BEFORE Gate S, not after it. The old order put
     # `seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)`
     # BELOW a gate that refuses a non-int first, so the fallback was dead code and the

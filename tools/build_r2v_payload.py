@@ -152,7 +152,17 @@ def gate_one_paid_node(graph):
     return ev
 
 
-def main(argv=None):
+def build_and_write(argv=None):
+    """Build, gate, write — and hand `(graph, record)` back to an in-process caller.
+
+    Split out of `main` in wave 10 (F-c236304b). `main` used to end `return wf, record`
+    under `raise SystemExit(main())`, so on the SUCCESS path CPython printed the tuple to
+    stderr and exited 1. Measured as a subprocess: the full green block ending
+    `BUILD_R2V_OK <path>` on stdout, both artifacts written, 6,047 bytes of the tuple on
+    stderr, exit code 1 — on the spend builder for E13's hosted r2v tier, whose own comment
+    declares "2 = a gate refused ... 1 = this tool crashed". `verify.ps1` reads `-ne 0`, so
+    a wrapper recorded the successful authoring of a paid submission as a failure.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--arm", required=True, choices=("A1", "A2"))
     ap.add_argument("--seed", type=int, required=True)
@@ -327,6 +337,12 @@ def main(argv=None):
     print(f"slots            {record['slot_order']}")
     print(f"BUILD_R2V_OK     {graph_path}")
     return wf, record
+
+
+def main(argv=None):
+    """The process exit code, and nothing else. 0 = built; a gate raises."""
+    build_and_write(argv)
+    return 0
 
 
 if __name__ == "__main__":

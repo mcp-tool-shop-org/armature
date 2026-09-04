@@ -340,7 +340,10 @@ def main(argv=None):
     # ones the plan writes to the run root itself rather than into a mapped subdirectory.
     vids = sorted(os.path.basename(o) for _, o in jobs
                   if os.path.dirname(os.path.abspath(o)) == os.path.abspath(base))
-    print("FETCH_RUN " + json.dumps({
+    # The SUCCESS half of the exit convention (wave 10). `<PREFIX>_OK ` uses the SAME
+    # prefix this file's `__main__` block prints on a halt, so one AST read of that block
+    # derives both directions of the census. The tree spelled this four ways before.
+    print("FETCH_RUN_OK " + json.dumps({
         "run": a.run, "dir": base, "by_node": counts, "downloaded": got, "video": vids,
         "gate_FETCH": landed["verdict"]}))
     return 0

@@ -126,7 +126,7 @@ def test_the_video_tap_is_indexed_so_two_videos_cannot_overwrite(tmp_path, stub_
 def test_a_downloader_that_fails_halts_instead_of_printing_fetch_run(tmp_path, monkeypatch,
                                                                     capsys):
     """Measured on today's tree with subprocess.run stubbed to returncode 1: the tool
-    printed FETCH_RUN {"by_node": {...}, "downloaded": {"lossless": 0}} and returned None,
+    printed FETCH_RUN_OK {"by_node": {...}, "downloaded": {"lossless": 0}} and returned None,
     i.e. exit 0. The planned count was never compared to what landed."""
     monkeypatch.setattr(F.subprocess, "run",
                         lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "boom"))
@@ -195,7 +195,7 @@ def test_a_stale_frame_in_a_mapped_directory_halts_rather_than_being_counted(
     """`got[sub] = len(os.listdir(d))` counted the DIRECTORY while `counts` counted the
     PLAN, and nothing compared them. Measured on today's tree: a 3-frame dump fetched into
     a run directory whose `lossless/` already held one stale `00099.png` printed
-    FETCH_RUN {"by_node": {"302": 3}, "downloaded": {"lossless": 4}, "gate_FETCH": "3
+    FETCH_RUN_OK {"by_node": {"302": 3}, "downloaded": {"lossless": 4}, "gate_FETCH": "3
     planned file(s), all present and non-empty"} — two counts that disagree, side by side,
     in a green receipt. `encode_control` and `invert_frames` build their frame populations
     with a bare listdir over exactly this directory."""
@@ -217,7 +217,7 @@ def test_the_printed_download_counts_come_from_the_plan_not_from_the_directory(
     dump = _dump(tmp_path, [_result("302", i) for i in range(3)]
                  + [_result("301", i) for i in range(2)])
     F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
-    line = json.loads(capsys.readouterr().out.split("FETCH_RUN ", 1)[1])
+    line = json.loads(capsys.readouterr().out.split("FETCH_RUN_OK ", 1)[1])
     assert line["by_node"] == {"302": 3, "301": 2}
     assert line["downloaded"] == {"lossless": 3, "batchprobe": 2}
 
@@ -278,7 +278,7 @@ def test_the_printed_video_list_comes_from_the_plan_not_from_a_listdir(
     dump = _dump(tmp_path, [_result("302", i) for i in range(2)]
                  + [_result("114", 0, ext=".mp4")])
     F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
-    line = json.loads(capsys.readouterr().out.split("FETCH_RUN ", 1)[1])
+    line = json.loads(capsys.readouterr().out.split("FETCH_RUN_OK ", 1)[1])
     assert line["video"] == ["r_00000.mp4"]
 
 

@@ -329,7 +329,7 @@ _CANON_ESCAPE = ["--subject=PERFORMER", "--no-canon"]
 def test_a1_end_to_end_writes_the_full_payload_and_the_slot_order(tmp_path):
     seeds, prompt, refs, _ = _files(tmp_path)
     out = tmp_path / "route"
-    _, rec = B.main([f"--arm=A1", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
+    _, rec = B.build_and_write([f"--arm=A1", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
                      f"--prompt-file={prompt}", f"--refs={refs}", f"--out={out}",
                      *_CANON_ESCAPE])
     assert rec["payload"]["model.duration"] == 5
@@ -349,7 +349,7 @@ def test_a2_end_to_end_orders_frames_by_local_name(tmp_path):
     uploads = {f"{i:05d}.png": f"{(80 - i):064x}.png" for i in range(81)}
     seeds, prompt, _, up = _files(tmp_path, uploads=uploads)
     out = tmp_path / "route2"
-    wf, rec = B.main([f"--arm=A2", f"--seed={SEEDS[1]}", f"--seeds={seeds}",
+    wf, rec = B.build_and_write([f"--arm=A2", f"--seed={SEEDS[1]}", f"--seeds={seeds}",
                       f"--prompt-file={prompt}", f"--uploads={up}", f"--out={out}",
                       *_CANON_ESCAPE])
     assert rec["reference_video"]["frame_order"] == [f"{i:05d}.png" for i in range(81)]
@@ -407,7 +407,7 @@ def test_a2_refuses_a_group_above_the_module_ceiling(tmp_path):
 def test_a2_records_the_slot_to_frame_index_gate(tmp_path):
     seeds, prompt, _, up = _files(tmp_path)
     out = tmp_path / "route"
-    _, rec = B.main([f"--arm=A2", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
+    _, rec = B.build_and_write([f"--arm=A2", f"--seed={SEEDS[0]}", f"--seeds={seeds}",
                      f"--prompt-file={prompt}", f"--uploads={up}", f"--out={out}",
                      *_CANON_ESCAPE])
     assert rec["gates"]["CASCADE_slot_frame_index"]["verdict"]

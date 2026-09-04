@@ -3,9 +3,9 @@
 Wave 3, F-2770135b / F-f7ba7452. The module docstring calls the 7.6x array-order vs
 hash-order discriminator *the only evidence in the run directory that the order is right*
 and then never compared it to anything: `main` wrote it to `frame_order_evidence.json`,
-printed the ratio inside the FETCH_OK line, and returned 0. The zero-length-frame check
+printed the ratio inside the FETCH_T2V_OK line, and returned 0. The zero-length-frame check
 three lines above it raises, so the file already knew the difference between reporting and
-gating. A shuffled clip would be written, FETCH_OK printed, and a ratio near 1.0 noticed
+gating. A shuffled clip would be written, FETCH_T2V_OK printed, and a ratio near 1.0 noticed
 only if a human opened the JSON.
 
 The second defect is in the same file's downloader: `curl.exe -sSL -o $x.out $x.url` put a
@@ -48,7 +48,7 @@ def test_e09s_own_measurement_passes_the_gate():
 def test_two_orderings_that_agree_do_not_print_fetch_ok():
     """The defect. A hash-sorted permutation that differences the SAME as the array order
     is a run whose order this tool cannot vouch for, and the docstring says so — while the
-    code printed FETCH_OK and exit 0."""
+    code printed FETCH_T2V_OK and exit 0."""
     with pytest.raises(T.FetchHalt) as exc:
         T.gate_order_evidence(_ev(2.0, 2.0))
     assert "FETCH_ORDER_UNVOUCHED" in str(exc.value)
@@ -65,7 +65,7 @@ def test_a_hash_order_that_is_tighter_than_the_array_order_halts():
 
 def test_an_undefined_ratio_halts_rather_than_reporting_null():
     """`main` divided by the array mean and wrote `None` when it was zero — a null in the
-    FETCH_OK line rather than a halt. All-identical frames decide nothing."""
+    FETCH_T2V_OK line rather than a halt. All-identical frames decide nothing."""
     with pytest.raises(T.FetchHalt) as exc:
         T.gate_order_evidence(_ev(0.0, 0.0))
     assert exc.value.evidence["ratio"] is None
@@ -179,7 +179,7 @@ def test_main_prints_fetch_ok_when_the_order_evidence_supports_the_order(
         tmp_path, monkeypatch, capsys):
     rc = _run_main(tmp_path, monkeypatch, _ev(E09_ARRAY, E09_HASH))
     assert rc == 0
-    assert "FETCH_OK" in capsys.readouterr().out
+    assert "FETCH_T2V_OK" in capsys.readouterr().out
 
 
 def test_main_does_not_print_fetch_ok_on_an_unvouched_order(tmp_path, monkeypatch, capsys):
@@ -188,7 +188,7 @@ def test_main_does_not_print_fetch_ok_on_an_unvouched_order(tmp_path, monkeypatc
     with pytest.raises(T.FetchHalt,
                        match=r"\[FETCH\] FETCH_ORDER_UNVOUCHED: differencing the"):
         _run_main(tmp_path, monkeypatch, _ev(2.0, 2.0))
-    assert "FETCH_OK" not in capsys.readouterr().out
+    assert "FETCH_T2V_OK" not in capsys.readouterr().out
 
 
 def test_the_evidence_file_is_still_written_when_the_order_gate_fires(
@@ -221,7 +221,7 @@ def test_a_zero_length_frame_still_halts(tmp_path, monkeypatch, capsys):
     # above the sha256 manifest rather than below it, so the halt names the planned file.
     assert "zero length" in str(exc.value)
     assert [os.path.basename(p) for p in exc.value.evidence["empty"]] == ["00000.png"]
-    assert "FETCH_OK" not in capsys.readouterr().out
+    assert "FETCH_T2V_OK" not in capsys.readouterr().out
 
 
 # ------------------------------------- the plan-to-disk andon (wave 6, F-7e59f719/F-e3af7342)
@@ -252,7 +252,7 @@ def test_a_stale_frame_from_a_previous_run_halts_rather_than_being_counted(
         tmp_path, monkeypatch, capsys):
     """The finding. `frames` came from `os.listdir(lossless)`, so a 4-frame dump fetched
     into an --out whose lossless/ already held one 00009.png from an earlier, longer run
-    printed FETCH_OK {"frames": 5} and returned 0 — with the stale frame in the sha256
+    printed FETCH_T2V_OK {"frames": 5} and returned 0 — with the stale frame in the sha256
     manifest, differenced by BOTH arms of Gate ORDER, and `_hash_name` falling back to its
     local basename for it, so the hash-sorted arm was a mix of cloud hashes and filenames."""
     out = tmp_path / "run"
@@ -263,11 +263,11 @@ def test_a_stale_frame_from_a_previous_run_halts_rather_than_being_counted(
     with pytest.raises(T.FetchHalt) as exc:
         T.main([f"--dump={_dump_of(tmp_path, 4)}", f"--out={out}"])
     assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00009.png"]
-    assert "FETCH_OK" not in capsys.readouterr().out
+    assert "FETCH_T2V_OK" not in capsys.readouterr().out
 
 
 def test_a_planned_frame_that_never_landed_halts(tmp_path, monkeypatch, capsys):
-    """Measured on today's tree: frame index 3 never landing printed FETCH_OK
+    """Measured on today's tree: frame index 3 never landing printed FETCH_T2V_OK
     {"frames": 4} with 00000,00001,00002,00004 differenced AS IF CONSECUTIVE and Gate
     ORDER reporting a healthy 1.75x."""
     monkeypatch.setattr(T, "download", _writer(skip=("00003.png",)))
@@ -275,7 +275,7 @@ def test_a_planned_frame_that_never_landed_halts(tmp_path, monkeypatch, capsys):
     with pytest.raises(T.FetchHalt) as exc:
         T.main([f"--dump={_dump_of(tmp_path, 5)}", f"--out={tmp_path / 'run'}"])
     assert [os.path.basename(p) for p in exc.value.evidence["missing"]] == ["00003.png"]
-    assert "FETCH_OK" not in capsys.readouterr().out
+    assert "FETCH_T2V_OK" not in capsys.readouterr().out
 
 
 def test_the_video_job_that_never_landed_halts(tmp_path, monkeypatch, capsys):
@@ -285,7 +285,7 @@ def test_the_video_job_that_never_landed_halts(tmp_path, monkeypatch, capsys):
     with pytest.raises(T.FetchHalt) as exc:
         T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={tmp_path / 'run'}"])
     assert [os.path.basename(p) for p in exc.value.evidence["missing"]] == ["donor.mp4"]
-    assert "FETCH_OK" not in capsys.readouterr().out
+    assert "FETCH_T2V_OK" not in capsys.readouterr().out
 
 
 def test_a_complete_fetch_still_prints_fetch_ok(tmp_path, monkeypatch, capsys):
@@ -294,7 +294,7 @@ def test_a_complete_fetch_still_prints_fetch_ok(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
     rc = T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={tmp_path / 'run'}"])
     assert rc == 0
-    line = json.loads(capsys.readouterr().out.split("FETCH_OK ", 1)[1])
+    line = json.loads(capsys.readouterr().out.split("FETCH_T2V_OK ", 1)[1])
     assert line["frames"] == 3
 
 
@@ -352,7 +352,7 @@ def test_a_stale_donor_video_in_the_out_root_halts(tmp_path, monkeypatch, capsys
     with pytest.raises(T.FetchHalt) as exc:
         T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={out}"])
     assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["donor.webm"]
-    assert "FETCH_OK" not in capsys.readouterr().out
+    assert "FETCH_T2V_OK" not in capsys.readouterr().out
 
 
 def test_a_stale_differently_cased_frame_halts_here_too(tmp_path, monkeypatch, capsys):
@@ -366,7 +366,7 @@ def test_a_stale_differently_cased_frame_halts_here_too(tmp_path, monkeypatch, c
     with pytest.raises(T.FetchHalt) as exc:
         T.main([f"--dump={_dump_of(tmp_path, 3)}", f"--out={out}"])
     assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00009.PNG"]
-    assert "FETCH_OK" not in capsys.readouterr().out
+    assert "FETCH_T2V_OK" not in capsys.readouterr().out
 
 
 def test_the_tools_own_manifests_in_the_root_are_not_strays(tmp_path, monkeypatch, capsys):
@@ -376,7 +376,7 @@ def test_the_tools_own_manifests_in_the_root_are_not_strays(tmp_path, monkeypatc
     monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
     rc = T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={tmp_path / 'run'}"])
     assert rc == 0
-    assert "FETCH_OK" in capsys.readouterr().out
+    assert "FETCH_T2V_OK" in capsys.readouterr().out
 
 
 def test_both_fetchers_sweep_the_run_root_through_the_one_andon():

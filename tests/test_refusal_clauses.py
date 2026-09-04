@@ -182,13 +182,23 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # 45 on the tests branch; 51 on the merged wave-8 tree, where core-gates added the
     # class-level licence refusals, Gate P's truncation refusal and the save-format seed
     # clauses (all RouteGate). Recorded as measured at the merge.
-    assert len(RAISE_SITES["RouteGate"]) == 51, sorted(RAISE_SITES["RouteGate"])
+    #
+    # 54 on the wave-10 builders branch. The ratchet MOVED, and it moved because a gate was
+    # added, not because one was weakened: `build_assembly_payload.gate_create_video_fps`
+    # raises RouteGate three times — a non-numeric fps, a non-finite fps, and an fps outside
+    # `CreateVideo`'s measured 1-120 contract (F-29693a0e). It is one function with five
+    # importers (the five builders that take a `--fps` flag and write it into a
+    # `CreateVideo` node), so the count rises by three and not by fifteen. Re-pinned with
+    # the reason rather than relaxed, per wave 3 §0: a pin that moves is a finding.
+    assert len(RAISE_SITES["RouteGate"]) == 54, sorted(RAISE_SITES["RouteGate"])
     files = {path for path, _ in RAISE_SITES["RouteGate"]}
     # `build_lora_arm_payload.py` joined at the wave-8 merge: its new `gate_base_licence`
     # raises RouteGate on a banned node class in the operator's baseline graph.
+    # `build_assembly_payload.py` joined in wave 10: `gate_create_video_fps` lives there and
+    # the other four `--fps` builders import it rather than carrying a copy.
     assert files == {"armature_core/route_gates.py", "gate_saved_graph.py",
                      "build_t2v_payload.py", "build_r2v_payload.py",
-                     "build_lora_arm_payload.py"}, sorted(files)
+                     "build_lora_arm_payload.py", "build_assembly_payload.py"}, sorted(files)
 
 
 def test_the_exemption_set_is_empty_and_sits_inside_the_population():
