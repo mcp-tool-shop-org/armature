@@ -66,7 +66,15 @@ def rt():
         # for it — the reading `armature check` exists to make honestly.
         for name in sorted(set(sys.modules) - before):
             if name == "armature_core" or name.startswith("armature_core."):
-                sys.modules.pop(name, None)
+                gone = sys.modules.pop(name, None)
+                # The registry entry is not the only binding: importing `armature_core.x`
+                # also sets `x` as an attribute of the package, and `from armature_core
+                # import x` reads that attribute first. Found by the wave-6 serial verify
+                # through blender_stub's twin of this teardown; carried here (one rule).
+                parent_name, _, child = name.rpartition(".")
+                parent = sys.modules.get(parent_name) if parent_name else None
+                if parent is not None and getattr(parent, child, None) is gone:
+                    delattr(parent, child)
 
 
 # --------------------------------------------------------------- repo-anchored resources

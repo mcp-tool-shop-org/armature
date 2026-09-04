@@ -243,6 +243,11 @@ def _run_verify(root, *args, path=None):
         [PWSH, "-NoProfile", "-NonInteractive", "-File", str(root / "verify.ps1"), *args],
         capture_output=True,
         text=True,
+        # verify.ps1 prints box-drawing rules; decoded with the console's locale codec (cp1252
+        # under PowerShell) a byte it cannot map raised inside the reader thread and the
+        # CompletedProcess came back with stdout None (measured 2026-09-04, merged wave 6).
+        encoding="utf-8",
+        errors="replace",
         env=env,
         cwd=str(root),
     )

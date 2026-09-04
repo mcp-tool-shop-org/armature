@@ -208,10 +208,15 @@ def test_declaring_unbound_over_a_pair_that_carries_weights_raises(rc):
     """The direction the record does not otherwise bound: a caller that says "nothing is
     bound" about a build that WAS bound would erase a real weight comparison."""
     w = {"hip": np.zeros(10)}
-    a, b = _fingerprint({}), _fingerprint(w)
-    with pytest.raises(rc.ArmatureError):
-        rc.unbound_determinism_record(rig_gates.gate_d_determinism(a, b, 1.0), a, b,
-                                      expect_weights=False)
+    # Both sides carry the same weights so Gate D PASSES and the declaration is what is
+    # under test. As first written the pair was ({}, w): Gate D itself raised "[D] ...
+    # vertex-group sets differ" before unbound_determinism_record ran, and a clauseless
+    # `pytest.raises(ArmatureError)` read that substituted refusal as green — the exact
+    # class tests/test_refusal_clauses.py's census exists to catch (wave-6 serial verify).
+    a, b = _fingerprint(w), _fingerprint(w)
+    gate_d = rig_gates.gate_d_determinism(a, b, 1.0)
+    with pytest.raises(rc.ArmatureError, match="declared this build unbound"):
+        rc.unbound_determinism_record(gate_d, a, b, expect_weights=False)
 
 
 def test_run_skeleton_records_the_unbound_determinism_record():

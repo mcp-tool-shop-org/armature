@@ -81,6 +81,7 @@ def blender_stubbed():
     """`bpy`, `mathutils` and `bmesh` replaced for the duration."""
     keys = ("bpy", "mathutils", "mathutils.kdtree", "bmesh")
     saved = {k: sys.modules.get(k) for k in keys}
+    before = set(sys.modules)
     try:
         sys.modules["bpy"] = mock.MagicMock(name="bpy")
         sys.modules["bmesh"] = mock.MagicMock(name="bmesh")
@@ -101,6 +102,25 @@ def blender_stubbed():
                 sys.modules.pop(k, None)
             else:
                 sys.modules[k] = v
+        # Restoring the stub entries is not the whole teardown (conftest.rt learned this in
+        # wave 6): a module first imported UNDER the stub — `armature_core.blender_scene`,
+        # or a tool imported by name — stays cached with the stub bound, and the next test
+        # that expects `import bpy` to fail (test_run_export's NotInsideBlender) reads it as
+        # importable. Measured: test_retopo_and_bake.py then test_run_export.py → 1 failed.
+        # Popping the registry entry is still not enough: importing `armature_core.x` also
+        # binds `x` as an ATTRIBUTE of the `armature_core` package, and
+        # `from armature_core import blender_scene` (stage_render.prepare) reads that
+        # attribute before it consults sys.modules — so the stale, stub-bound module was
+        # found there without any import failing. Both go.
+        tool_names = {fn[:-3] for fn in os.listdir(TOOLS) if fn.endswith(".py")}
+        for k in set(sys.modules) - before:
+            root_name = k.split(".", 1)[0]
+            if root_name == "armature_core" or root_name in tool_names:
+                gone = sys.modules.pop(k, None)
+                parent_name, _, child = k.rpartition(".")
+                parent = sys.modules.get(parent_name) if parent_name else None
+                if parent is not None and getattr(parent, child, None) is gone:
+                    delattr(parent, child)
 
 
 def load_tool(filename, *, argv=None):

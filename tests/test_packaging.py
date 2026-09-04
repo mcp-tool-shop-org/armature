@@ -581,6 +581,11 @@ def test_todays_tree_still_reads_the_way_the_measurement_recorded_it():
 ORDER_DEPENDENT_PAIRS = [
     ("test_turnaround_ortho.py", "test_cli.py"),
     ("test_turnaround_pin.py", "test_cli.py"),
+    # blender_stub.blender_stubbed() — the second installer, found by the wave-6 serial verify:
+    # rig_retopo/rig_bake imported armature_core.blender_scene under the stub and left it cached,
+    # so test_run_export's NotInsideBlender path read Blender as importable. Measured red before
+    # the teardown fix: 1 failed, 45 passed on this pair alone.
+    ("test_retopo_and_bake.py", "test_run_export.py"),
 ]
 
 
@@ -609,42 +614,45 @@ def test_a_stub_using_module_does_not_change_what_the_next_one_can_import(first,
 
 
 def test_every_stub_installing_fixture_restores_what_it_imported():
-    """The family, asserted rather than left to the two pairs above.
+    """The family, asserted rather than left to the pairs above.
 
-    `conftest.rt` is the only fixture in this suite that writes into `sys.modules`
-    (`tests/test_cli.py` does it too, through `monkeypatch.delitem`, which pytest undoes
-    itself). Any second one must clear what was imported under its stub, so the census is
-    the check: a new stub-installing fixture fails here until it is paired with a teardown
-    and added to the pairs above.
+    Two helpers in this suite write into `sys.modules`: `conftest.rt` and
+    `blender_stub.blender_stubbed` (`tests/test_cli.py` does it too, through
+    `monkeypatch.delitem`, which pytest undoes itself). Each must clear what was imported
+    under its stub, so the census is the check: a new stub-installing helper fails here until
+    it is paired with a teardown and added to the pairs above.
     """
-    conftest_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conftest.py")
-    with open(conftest_path, encoding="utf-8") as fh:
-        src = fh.read()
-    tree = ast.parse(src)
+    tests_dir = os.path.dirname(os.path.abspath(__file__))
+    expected = {"conftest.py": ["rt"], "blender_stub.py": ["blender_stubbed"]}
 
-    installers = []
-    for fn in ast.walk(tree):
-        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        writes_stub = any(
-            isinstance(n, ast.Assign)
-            and any(isinstance(t, ast.Subscript)
-                    and isinstance(t.value, ast.Attribute) and t.value.attr == "modules"
-                    for t in n.targets)
-            for n in ast.walk(fn))
-        if writes_stub:
-            installers.append(fn)
+    for filename, expected_names in expected.items():
+        with open(os.path.join(tests_dir, filename), encoding="utf-8") as fh:
+            src = fh.read()
+        tree = ast.parse(src)
 
-    assert [fn.name for fn in installers] == ["rt"], (
-        f"conftest installs stub modules in {[fn.name for fn in installers]}; each one "
-        f"needs a teardown that clears what was imported under it, and a pair in "
-        f"ORDER_DEPENDENT_PAIRS that runs it before a module reading those imports")
+        installers = []
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            writes_stub = any(
+                isinstance(n, ast.Assign)
+                and any(isinstance(t, ast.Subscript)
+                        and isinstance(t.value, ast.Attribute) and t.value.attr == "modules"
+                        for t in n.targets)
+                for n in ast.walk(fn))
+            if writes_stub:
+                installers.append(fn)
 
-    for fn in installers:
-        body = ast.get_source_segment(src, fn) or ""
-        assert "set(sys.modules) - before" in body or "- before" in body, (
-            f"conftest.{fn.name} installs a stub and never clears the modules imported "
-            f"under it; restoring the stub entries alone leaves those importable")
-        assert "armature_core" in body, (
-            f"conftest.{fn.name}'s teardown does not name the package whose modules the "
-            f"stub makes importable")
+        assert [fn.name for fn in installers] == expected_names, (
+            f"{filename} installs stub modules in {[fn.name for fn in installers]}; each one "
+            f"needs a teardown that clears what was imported under it, and a pair in "
+            f"ORDER_DEPENDENT_PAIRS that runs it before a module reading those imports")
+
+        for fn in installers:
+            body = ast.get_source_segment(src, fn) or ""
+            assert "set(sys.modules) - before" in body or "- before" in body, (
+                f"{filename}:{fn.name} installs a stub and never clears the modules imported "
+                f"under it; restoring the stub entries alone leaves those importable")
+            assert "armature_core" in body, (
+                f"{filename}:{fn.name}'s teardown does not name the package whose modules the "
+                f"stub makes importable")

@@ -133,7 +133,7 @@ def test_two_arms_moving_together_is_refused_rather_than_guessed(mps):
     arm.bones["elbow.R"]._heads[33] = (-0.2, 0.0, 1.1 + 0.30)
     arm.bones["wrist.R"]._heads[33] = (-0.25, 0.0, 0.9 + 0.30)
     with blender_stubbed():
-        with pytest.raises(mps.ArmatureError):
+        with pytest.raises(mps.ArmatureError, match="both arms move"):
             mps.articulated_side(arm, _Scene(arm), 1, 33)
 
 

@@ -137,7 +137,7 @@ def test_a_reference_import_that_added_no_mesh_raises(sheet, monkeypatch):
     bpy = FakeBpy(present=[skinned], adds=[FakeObject("Empty", kind="EMPTY")])
     with blender_stubbed():
         monkeypatch.setattr(sheet, "bpy", bpy)
-        with pytest.raises(sheet.ArmatureError):
+        with pytest.raises(sheet.ArmatureError, match="exactly one is needed"):
             sheet.import_reference("ref.glb", bpy.scene, skinned)
 
 
