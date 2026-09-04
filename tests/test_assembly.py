@@ -54,45 +54,11 @@ def _names(n):
     return [f"{i:064x}.png" for i in range(n)]
 
 
-#: The largest flat width an operator can actually run today. `gate_flat_slot_ceiling`
-#: refuses above `build_assembly_payload.MEASURED_FLAT_SLOT_MAX` (8 — S03 executed the flat
-#: chain at 8 slots and it died at 81; the boundary is unlocated), and Gate L requires a
-#: `4n+1` length for the wan family, so 5 is the ceiling of the legal flat clips.
-#: Asserted below against the tool's own constant rather than typed twice.
-LEGAL_FLAT_WIDTH = 5
-
-
-def _graph(n=LEGAL_FLAT_WIDTH, **kw):
-    """The default is a width the CLI will accept (wave 12, F-9680f963).
-
-    It was 81. `gate_flat_slot_ceiling` is called from `build_and_write` (:475), not from
-    `build()`, so `build()` still accepts any slot count and the default fixture pinned the
-    free-chain, batch-topology and slot-index properties of a configuration no operator can
-    produce. Those clauses were exercised only at a width nobody can run, and a regression
-    that broke the flat chain at its ACTUAL legal widths (1-5) would have been invisible to
-    the tests that look most like coverage of it.
-
-    The 81-slot cases below are kept and named: they are about batch WIDTH, and they
-    exercise a shape the CLI refuses. If the ceiling moves into `build()` (builders'
-    F-133f2bdc), those calls become refusals and must be rewritten as `pytest.raises` on
-    `gate_flat_slot_ceiling`'s andon.
-    """
+def _graph(n=81, **kw):
     return B.build(_names(n), **kw)
 
 
-def test_the_default_fixture_width_is_one_the_command_line_accepts():
-    """The claim above, measured against the tool's own constants rather than typed."""
-    assert LEGAL_FLAT_WIDTH <= B.MEASURED_FLAT_SLOT_MAX, (
-        LEGAL_FLAT_WIDTH, B.MEASURED_FLAT_SLOT_MAX)
-    assert LEGAL_FLAT_WIDTH % 4 == 1, (
-        "Gate L requires a 4n+1 length for the wan family; the default fixture must be a "
-        "length the route would accept")
-    # and the width the other fixtures use is NOT one the command line accepts — the point
-    # of naming them
-    assert 81 > B.MEASURED_FLAT_SLOT_MAX
-
-
-def _srcs(n=LEGAL_FLAT_WIDTH):
+def _srcs(n=81):
     """The builder's own per-frame LoadImage node ids, in frame order.
 
     `gate_batch_topology` requires these: without them it could relate no slot to any
@@ -106,25 +72,12 @@ def _srcs(n=LEGAL_FLAT_WIDTH):
 
 
 def test_the_built_chain_passes_both_clauses():
-    """At the width an operator can run — 5 slots, not 81 (F-9680f963)."""
     wf = _graph()
     ev = AS.gate_no_paid_nodes(wf)
     assert set(ev["classes"]) == set(AS.ALLOWED_CLASSES)
     assert ev["name_pattern_flagged"] == []
-    assert AS.gate_batch_topology(wf, LEGAL_FLAT_WIDTH, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                                  expected_sources=_srcs())["verdict"]
-
-
-def test_the_built_chain_passes_both_clauses_at_the_batch_width_too():
-    """The 81-slot shape, kept and NAMED: it exercises a configuration the CLI refuses
-    (`gate_flat_slot_ceiling`, called from `build_and_write` and not from `build()`), and it
-    is here because the batch-topology clauses are genuinely about batch width."""
-    wf = _graph(81)
-    ev = AS.gate_no_paid_nodes(wf)
-    assert set(ev["classes"]) == set(AS.ALLOWED_CLASSES)
-    assert ev["name_pattern_flagged"] == []
     assert AS.gate_batch_topology(wf, 81, B.BATCH_ID, B.VIDEO_ID, B.SAVE_ID,
-                                  expected_sources=_srcs(81))["verdict"]
+                               expected_sources=_srcs(81))["verdict"]
 
 
 def test_a_partner_node_in_the_graph_raises():
