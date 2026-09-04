@@ -42,6 +42,8 @@ warnings and was refused only by a real submission. A `dry_run` PASS does not pr
 sanity, so the link topology is checked in code.
 """
 
+import datetime
+
 from . import route_gates
 from .errors import GateFailure
 from .parts import narrowed
@@ -104,10 +106,42 @@ MEASURED_FREE_CLASSES = {
 }
 
 
+#: The window a recorded `api_node: false` reading stays CURRENT for, in days. The same
+#: number `docs/license-map.md` rows age at under CLAUDE.md ("entries older than 90 days
+#: are advisory until re-fetched"), for the same reason: a partner tier can reclassify a
+#: node, and a measurement is a statement about the day it was taken.
+MEASUREMENT_WINDOW_DAYS = 90
+
+
+def measurement_age_days(record, today=None):
+    """`(age_in_days, raw_value)` for one `MEASURED_FREE_CLASSES` receipt.
+
+    The age is `None` for a receipt whose `measured_on` is absent or is not an ISO date —
+    the two shapes that make the age unreadable. The caller refuses on those; nothing here
+    decides.
+
+    F-1f5282d5 (wave 16), the coordinator's dating seed. Nothing read `measured_on` at all:
+    grep over `tools/` and `tests/` found it in one place, an assertion on truthiness, so
+    `'yesterday'` satisfied the only clause that mentioned it. The four live entries are
+    dated 2026-08-13 and were 22 days old when this was written, so the defect was the
+    shape and not a live escape — but a receipt table with no ageing clause is a licence
+    map with no fetch date.
+    """
+    raw = None if record is None else record.get("measured_on")
+    if not isinstance(raw, str):
+        return None, raw
+    try:
+        when = datetime.date.fromisoformat(raw)
+    except ValueError:
+        return None, raw
+    on = datetime.date.today() if today is None else today
+    return (on - when).days, raw
+
+
 def gate_no_paid_nodes(graph, allowed=None):
     """Gate ASSEMBLY - ANDON - nothing in this graph can bill a partner credit.
 
-    Five clauses now, and the evidence shows every one of them ran, against the
+    Six clauses now, and the evidence shows every one of them ran, against the
     population each one could have failed on:
 
     * a vacuity guard — an empty graph is refused rather than certified;
@@ -117,8 +151,12 @@ def gate_no_paid_nodes(graph, allowed=None):
       `route_gates` tables the licence clause reads, and a class the licence map has ruled
       BANNED or EXCLUDED is refused even when the allowlist names it. Its recall is
       stated, not implied — see below;
-    * the **measurement** clause: every class in the graph carries a recorded
-      `api_node: false` reading in `MEASURED_FREE_CLASSES`, or it is refused.
+    * the **measurement** clause: every class in the graph carries a receipt in
+      `MEASURED_FREE_CLASSES` whose recorded `api_node` value READS `False`, or it is
+      refused — the VALUE, never the presence of the key (F-1f5282d5);
+    * the **dating** clause: that receipt's `measured_on` parses as an ISO date, so the
+      reading can be aged. Past `MEASUREMENT_WINDOW_DAYS` it is reported ADVISORY in the
+      verdict, the way `docs/license-map.md` rows age.
 
     A node carrying **no** `class_type` is refused before anything is sorted. It used to
     contribute `None` to the class set, and `sorted()` then raised `TypeError: '<' not
@@ -259,19 +297,72 @@ def gate_no_paid_nodes(graph, allowed=None):
     # see: a class in this graph that carries no recorded `api_node: false` measurement.
     # It runs on the classes the allowlist just admitted, which is exactly the direction
     # `parts.narrowed` leaves open — a diff to the module constant itself.
-    unmeasured = [c for c in classes if c not in MEASURED_FREE_CLASSES]
+    #
+    # **It reads the recorded VALUE, never the presence of the key** (F-1f5282d5, wave
+    # 16). This was `[c for c in classes if c not in MEASURED_FREE_CLASSES]` — a
+    # membership test — while the refusal message and the verdict both said "a recorded
+    # api_node: false measurement". Measured 2026-09-04 with `ALLOWED_CLASSES` widened by
+    # ('KlingVideoNode',), the one widening `parts.narrowed` still permits and the one the
+    # docstring above names as the clause's reason for existing: with the receipt
+    # `{'api_node': True, 'measured_with': 'get_node', 'measured_on': '2026-08-13'}` the
+    # gate RETURNED "1 node(s) across 1 class(es), all named by the allowlist, all 1
+    # carrying a recorded api_node: false measurement..."; with the receipt `{}` it
+    # returned the identical sentence. A receipt recording the class as a PAID node
+    # cleared the gate that exists to keep paid nodes out — the last free-chain clause
+    # before an assembly or cascade payload is written, and this repo's named
+    # most-expensive defect class (a verdict stating a licence property nothing read),
+    # reintroduced one wave after F-594e1792 closed it on this same function.
+    #
+    # Three readings now, and each is refused by name: no receipt at all; a receipt whose
+    # `api_node` is anything other than the boolean `False`; and a receipt whose
+    # `measured_on` cannot be read as a date, because a receipt that cannot be aged is a
+    # licence-map row with no fetch date.
+    unmeasured, measured_as_paid, undateable, ages = [], {}, {}, {}
+    for c in classes:
+        rec = MEASURED_FREE_CLASSES.get(c)
+        if rec is None:
+            unmeasured.append(c)
+            continue
+        if rec.get("api_node") is not False:
+            measured_as_paid[c] = repr(rec.get("api_node"))
+            continue
+        age, raw = measurement_age_days(rec)
+        if age is None:
+            undateable[c] = repr(raw)
+        else:
+            ages[c] = age
     ev["classes_without_a_free_measurement"] = unmeasured
-    ev["n_classes_with_a_free_measurement"] = len(classes) - len(unmeasured)
-    if unmeasured:
+    ev["classes_measured_as_paid"] = measured_as_paid
+    ev["classes_with_an_unreadable_measurement_date"] = undateable
+    ev["measurement_age_days"] = ages
+    ev["measurement_window_days"] = MEASUREMENT_WINDOW_DAYS
+    stale = sorted(c for c, a in ages.items() if a > MEASUREMENT_WINDOW_DAYS)
+    ev["classes_whose_measurement_is_advisory"] = stale
+    ev["n_classes_with_a_free_measurement"] = len(ages)
+    if unmeasured or measured_as_paid:
         ev["clause"] = "class_without_a_recorded_free_measurement"
         raise AssemblyGate(
-            f"the graph carries {unmeasured}, which the allowlist names but "
-            f"MEASURED_FREE_CLASSES does not: nothing in this repo records that class "
-            f"having been measured `api_node: false`. The allowlist says somebody meant "
-            f"to permit it; the measurement record says whether anybody checked what it "
-            f"costs, and a chain that is supposed to cost nothing is cleared by the "
-            f"second, not the first. Record the `get_node` measurement in the same diff "
-            f"that widens the allowlist", ev)
+            f"the graph carries {sorted(unmeasured) + sorted(measured_as_paid)}, which "
+            f"MEASURED_FREE_CLASSES does not clear: "
+            + (f"{sorted(unmeasured)} carry no receipt at all" if unmeasured else "")
+            + ("; " if unmeasured and measured_as_paid else "")
+            + (f"{sorted(measured_as_paid)} carry a receipt whose api_node reads "
+               f"{sorted(measured_as_paid.values())}, which records the class as a PAID "
+               f"node" if measured_as_paid else "")
+            + ". The allowlist says somebody meant to permit the class; the measurement "
+              "record says whether anybody checked what it costs AND whether the answer "
+              "was no. A chain that is supposed to cost nothing is cleared by the second, "
+              "not the first, and never by the mere existence of a row. Record the "
+              "`get_node` measurement in the same diff that widens the allowlist", ev)
+    if undateable:
+        ev["clause"] = "class_with_an_unreadable_measurement_date"
+        raise AssemblyGate(
+            f"{sorted(undateable)} carry an `api_node: false` reading whose `measured_on` "
+            f"is {sorted(undateable.values())}, which is not an ISO date. A measurement is "
+            f"a statement about the day it was taken; a receipt that cannot be aged cannot "
+            f"be told from one taken before the node's tier changed, and "
+            f"`docs/license-map.md` rows age at {MEASUREMENT_WINDOW_DAYS} days for exactly "
+            f"that reason", ev)
 
     flagged = [c for c in allowed if any(m in c.lower() for m in API_MARKERS)]
     ev["name_pattern_flagged"] = flagged
@@ -285,12 +376,20 @@ def gate_no_paid_nodes(graph, allowed=None):
     # Every noun in this sentence names a clause that ran against a population that
     # could have failed it. `ruled` is reported as a COUNT OF WHAT THE MAP KNOWS, never
     # as "none BANNED/EXCLUDED" over an empty set (F-594e1792).
+    oldest = max(ages.values()) if ages else None
     ev["verdict"] = (
         f"{len(graph)} node(s) across {len(classes)} class(es), all named by the "
-        f"allowlist, all {len(classes)} carrying a recorded api_node: false "
-        f"measurement, none reading as a partner class; "
+        f"allowlist, all {len(ages)} carrying a receipt whose recorded api_node value "
+        f"READS False"
+        + ("" if oldest is None else
+           (f" (oldest reading {oldest} day(s) old, {len(stale)} of them past the "
+            f"{MEASUREMENT_WINDOW_DAYS}-day window and therefore ADVISORY: {stale})"
+            if stale else
+            f" (oldest reading {oldest} day(s) old, all within the "
+            f"{MEASUREMENT_WINDOW_DAYS}-day window)"))
+        + f", none reading as a partner class; "
         f"{len(ruled)} of {len(classes)} class(es) are known to the licence map"
-        + (f" and none of those is BANNED/EXCLUDED" if ruled else
+        + (" and none of those is BANNED/EXCLUDED" if ruled else
            " (so the licence clause ruled on nothing here)"))
     return ev
 

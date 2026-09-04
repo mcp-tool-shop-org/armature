@@ -156,3 +156,114 @@ def test_every_family_class_here_stores_the_dict_it_is_given_by_identity():
     for qualified, cls in sorted(_family_classes_in_owned_modules().items()):
         sentinel = {"measured": 1, "threshold": 2}
         assert cls("m", sentinel).evidence is sentinel, qualified
+
+
+# ====================================================================== F-1f5282d5
+#
+# Gate ASSEMBLY's free-measurement clause keyed on the PRESENCE of a key in
+# `MEASURED_FREE_CLASSES` while its refusal message and its verdict both said "a recorded
+# api_node: false measurement". The population it must rule on is not "classes with a row"
+# but "classes whose row RECORDS api_node false, on a date that can be read" — so the red
+# proofs below drive the two members a membership test cannot see: a receipt PRESENT and
+# recording `api_node: True`, and a receipt present, empty, and therefore recording nothing.
+#
+# The operand is the one widening `parts.narrowed` still permits and the one the module
+# docstring names as this clause's reason for existing: a diff to `ALLOWED_CLASSES` itself.
+
+KLING = "KlingVideoNode"
+
+
+def _widened(monkeypatch, receipt):
+    """`ALLOWED_CLASSES` widened by one partner class, with the receipt under test."""
+    monkeypatch.setattr(assembly, "ALLOWED_CLASSES",
+                        tuple(assembly.ALLOWED_CLASSES) + (KLING,))
+    table = dict(assembly.MEASURED_FREE_CLASSES)
+    if receipt is not None:
+        table[KLING] = receipt
+    monkeypatch.setattr(assembly, "MEASURED_FREE_CLASSES", table)
+    return {"1": {"class_type": KLING}}
+
+
+@pytest.mark.parametrize("receipt, why", [
+    ({"api_node": True, "measured_with": "get_node", "measured_on": "2026-08-13"},
+     "a receipt recording the class as a PAID node"),
+    ({}, "a receipt with nothing recorded in it"),
+    ({"measured_with": "get_node", "measured_on": "2026-08-13"},
+     "a receipt with every key but the one the clause claims to read"),
+    ({"api_node": "false", "measured_with": "get_node", "measured_on": "2026-08-13"},
+     "the string 'false', which is truthy"),
+    ({"api_node": 0, "measured_with": "get_node", "measured_on": "2026-08-13"},
+     "0, which is equal to False and is not False"),
+])
+def test_a_receipt_that_does_not_record_api_node_false_is_refused(monkeypatch, receipt,
+                                                                  why):
+    """The member outside the population the membership test walked: the row EXISTS.
+
+    On `041027c` every one of these five returned the full success verdict, because the
+    class was in the dict. `is not False` is deliberate — `0 == False` is True in Python,
+    and a receipt carrying `0` records a number, not a measurement.
+    """
+    graph = _widened(monkeypatch, receipt)
+    with pytest.raises(assembly.AssemblyGate) as exc:
+        assembly.gate_no_paid_nodes(graph)
+    ev = exc.value.evidence
+    assert ev["clause"] == "class_without_a_recorded_free_measurement", (why, ev)
+    assert KLING in ev["classes_measured_as_paid"], (why, ev)
+    assert ev["classes_without_a_free_measurement"] == [], ev
+
+
+def test_the_class_with_no_receipt_at_all_is_still_refused_and_named_separately():
+    """The reading the old clause DID catch, kept, and now reported under its own key so a
+    reader can tell "nobody measured it" from "somebody measured it and it costs"."""
+    graph = {"1": {"class_type": KLING}}
+    with pytest.raises(assembly.AssemblyGate) as exc:
+        assembly.gate_no_paid_nodes(graph, allowed=None)
+    ev = exc.value.evidence
+    assert ev["clause"] == "class_not_named_by_the_allowlist", ev
+
+
+def test_a_receipt_whose_measurement_date_cannot_be_read_is_refused(monkeypatch):
+    """The dating seed. Nothing in the tree read `measured_on`; the one assertion that
+    mentioned it tested truthiness, so `'yesterday'` passed."""
+    graph = _widened(monkeypatch, {"api_node": False, "measured_with": "get_node",
+                                   "measured_on": "yesterday"})
+    with pytest.raises(assembly.AssemblyGate) as exc:
+        assembly.gate_no_paid_nodes(graph)
+    ev = exc.value.evidence
+    assert ev["clause"] == "class_with_an_unreadable_measurement_date", ev
+    assert "'yesterday'" in ev["classes_with_an_unreadable_measurement_date"][KLING]
+
+
+def test_a_receipt_with_no_measurement_date_at_all_is_refused(monkeypatch):
+    """A default that disarms a clause is a refusal: an absent `measured_on` must not read
+    as "current"."""
+    graph = _widened(monkeypatch, {"api_node": False, "measured_with": "get_node"})
+    with pytest.raises(assembly.AssemblyGate) as exc:
+        assembly.gate_no_paid_nodes(graph)
+    assert exc.value.evidence["clause"] == "class_with_an_unreadable_measurement_date"
+
+
+def test_the_verdict_states_the_ages_it_read_and_the_window_it_read_them_against():
+    """The sentence the gate prints is the sentence the gate checked."""
+    ev = assembly.gate_no_paid_nodes({"1": {"class_type": "LoadImage"},
+                                      "2": {"class_type": "SaveVideo"}})
+    assert set(ev["measurement_age_days"]) == {"LoadImage", "SaveVideo"}, ev
+    assert ev["measurement_window_days"] == assembly.MEASUREMENT_WINDOW_DAYS
+    assert "recorded api_node value READS False" in ev["verdict"]
+    assert f"{assembly.MEASUREMENT_WINDOW_DAYS}-day window" in ev["verdict"]
+    assert ev["classes_measured_as_paid"] == {}
+
+
+def test_a_reading_past_the_window_is_reported_advisory_rather_than_assumed_current():
+    """The licence map's own convention, on this table. Pinned against a fixed `today` so
+    the assertion is about the rule and not about the day the suite runs."""
+    import datetime
+
+    rec = {"api_node": False, "measured_with": "get_node", "measured_on": "2026-08-13"}
+    fresh, raw = assembly.measurement_age_days(rec, today=datetime.date(2026, 9, 4))
+    assert (fresh, raw) == (22, "2026-08-13")
+    aged, _ = assembly.measurement_age_days(rec, today=datetime.date(2027, 1, 1))
+    assert aged == 141 and aged > assembly.MEASUREMENT_WINDOW_DAYS
+    assert assembly.measurement_age_days({}, today=datetime.date(2026, 9, 4)) == (None,
+                                                                                 None)
+    assert assembly.measurement_age_days(None)[0] is None
