@@ -816,19 +816,74 @@ def _count_is_structurally_nonzero(filename, counted):
     return False
 
 
-def test_the_structurally_nonzero_category_is_measured_and_not_asserted():
-    """Rule 3: the walk must tell the two shapes apart on the real tree, or it is an
-    exemption wearing a derivation's clothes."""
+#: The loop-appended counter `probe_subject` used to be, kept runnable. WAVE 14, F-501e37b3:
+#: instruments' F-5b3ead49 replaced that tool's bare `len(records)` payload with
+#: `{"n_probed","n_measured","n_errors","json"}`, so `_counted_payload_terms('probe_subject')`
+#: is now `[]` — and `_count_is_structurally_nonzero` with an EMPTY term list builds
+#: `names = set()`, whose `node.func.value.id in names` test can never match, so it returned
+#: False for every file in the tree. Measured: False for `make_rig_sheet.py` and
+#: `rig_parts.py` too, and `make_rig_sheet.py` is the subject of the POSITIVE half two lines
+#: above. The negative assertion passed for a reason that had nothing to do with `records`
+#: being appended inside a loop.
+LOOP_APPENDED_COUNTER = (
+    "import json\n"
+    "def main(argv=None):\n"
+    "    records = []\n"
+    "    for path in argv or []:\n"
+    "        records.append(path)\n"
+    "    print('FAKE_OK ' + json.dumps({'n': len(records)}))\n"
+    "    return 0\n")
+
+
+def test_the_structurally_nonzero_category_is_measured_and_not_asserted(monkeypatch):
+    """Rule 3: the walk must tell the two shapes apart, on a NON-EMPTY term list.
+
+    WAVE 14, F-501e37b3. Both halves are driven with terms the walk can actually look for,
+    and the term list is asserted non-empty first — because an empty one makes the walk
+    answer False about everything, which is how this test came to pass while demonstrating
+    nothing. The negative half is the synthetic loop-appended module the sibling test at
+    `test_the_counted_success_walk_can_tell_a_guarded_tool_from_an_unguarded_one` already
+    builds (the population no longer contains a real one), fed through `read_source` the same
+    way.
+    """
+    import test_instruments_amend_w10 as me
+
     def terms(f):
         return sorted({t for v in _counted_payload_terms(f).values() for t in v})
 
-    assert _count_is_structurally_nonzero("make_rig_sheet.py", terms("make_rig_sheet.py")), (
+    positive = terms("make_rig_sheet.py")
+    assert positive, (
+        "`make_rig_sheet` reports no counted payload term; with an empty term list "
+        "`_count_is_structurally_nonzero` answers False about every file and neither half "
+        "below measures the walk")
+    assert _count_is_structurally_nonzero("make_rig_sheet.py", positive), (
         "`rows` is appended to unconditionally three times; if this reads as conditional the "
         "category is measuring nothing")
-    assert not _count_is_structurally_nonzero(
-        "probe_subject.py", terms("probe_subject.py")), (
+
+    real = me.read_source
+    monkeypatch.setattr(
+        me, "read_source",
+        lambda f: LOOP_APPENDED_COUNTER if f == "fake_counter.py" else real(f))
+    negative = terms("fake_counter.py")
+    assert negative == ["records"], negative
+    assert not _count_is_structurally_nonzero("fake_counter.py", negative), (
         "`records` is appended to inside a loop and CAN be empty; the category must not "
         "absorb the site it exists to leave uncovered")
+
+    # The two answers differ on the SAME non-empty shape of input, which is the whole claim.
+    assert _count_is_structurally_nonzero("make_rig_sheet.py", positive) is not \
+        _count_is_structurally_nonzero("fake_counter.py", negative)
+
+
+def test_an_empty_term_list_makes_the_walk_answer_false_about_everything():
+    """The defect F-501e37b3 named, kept runnable so it cannot come back unnoticed.
+
+    `_count_is_structurally_nonzero(f, [])` builds `names = set()` and its
+    `node.func.value.id in names` test can never match. Any future caller that passes the
+    empty list is asserting nothing, and the assertion above is the guard against it.
+    """
+    for filename in ("make_rig_sheet.py", "rig_parts.py"):
+        assert _count_is_structurally_nonzero(filename, []) is False, filename
 
 
 def test_the_counting_success_population_is_the_one_measured_today():
@@ -878,14 +933,11 @@ def test_the_counted_success_walk_can_tell_a_guarded_tool_from_an_unguarded_one(
     """
     import test_instruments_amend_w10 as me
 
-    fake = (
-        "import json\n"
-        "def main(argv=None):\n"
-        "    records = []\n"
-        "    for path in argv or []:\n"
-        "        records.append(path)\n"
-        "    print('FAKE_OK ' + json.dumps({'n': len(records)}))\n"
-        "    return 0\n")
+    # WAVE 14, F-501e37b3: ONE copy of the synthetic module, shared with
+    # `test_the_structurally_nonzero_category_is_measured_and_not_asserted`, which needs the
+    # same shape now that the real tree carries no loop-appended counter. Two copies of one
+    # fixture fork the same way two copies of one walk do.
+    fake = LOOP_APPENDED_COUNTER
     real = me.read_source
     monkeypatch.setattr(me, "read_source", lambda f: fake if f == "fake_counter.py" else real(f))
     assert me._guards_the_count("fake_counter.py", ["records"]) is False
