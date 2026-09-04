@@ -74,11 +74,30 @@ def _is_gate_call(name):
             or name in CANON_CALLS or name in OTHER_GATE_CALLS)
 
 
+def _returning_branch_spans(fn):
+    """Line spans of `if` bodies that end in a `return` or a `raise`.
+
+    A write inside one of those is on a path that never reaches the code below it, so
+    comparing its line number against a later refusal compares two mutually exclusive
+    branches and reports a defect that cannot happen. Measured 2026-09-04 on
+    `encode_control.main`: its `--survey` mode writes a codec report and returns, and the
+    plate parse sixteen lines below is on the other branch. Corrected here rather than
+    exempted, because the same shape will arrive again.
+    """
+    spans = []
+    for node in ast.walk(fn):
+        if (isinstance(node, ast.If) and node.body
+                and isinstance(node.body[-1], (ast.Return, ast.Raise))):
+            spans.append((node.body[0].lineno, node.body[-1].end_lineno))
+    return spans
+
+
 def gate_and_write_lines(src, what):
     """`({line: gate name}, {line: write kind})` for `main()`, or `(None, None)`.
 
     The same shape `test_canon_spend._gate_and_write_lines` computes for the builders,
-    lifted here so the instruments are read by the same rule rather than a second one.
+    lifted here so the instruments are read by the same rule rather than a second one —
+    plus the mutually-exclusive-branch correction above.
     """
     tree = ast.parse(src)
     fn = next((n for n in tree.body
@@ -98,6 +117,12 @@ def gate_and_write_lines(src, what):
               and isinstance(node.args[1], ast.Constant)
               and "w" in str(node.args[1].value)):
             writes_at.setdefault(node.lineno, 'open(..., "w")')
+    spans = _returning_branch_spans(fn)
+    for line in list(writes_at):
+        for lo, hi in spans:
+            if lo <= line <= hi and not any(lo <= g <= hi for g in gates_at):
+                del writes_at[line]
+                break
     return gates_at, writes_at
 
 
@@ -152,6 +177,25 @@ GATES_READ_BACK_WHAT_THEY_WROTE = {
     "render_pose_sticks": "gate_ink measures the PNGs this tool just drew",
     "fetch_t2v_run": "the order gate reads the files this tool just downloaded",
 }
+
+
+def test_the_branch_correction_is_exercised_and_can_still_see_a_real_write():
+    """Both directions of `_returning_branch_spans`, so the correction is not a blanket
+    excuse: `encode_control.main` writes only inside its returning `--survey` branch and
+    so has no comparable write, while a write in a branch that FALLS THROUGH is still
+    counted."""
+    gates_at, writes_at = gate_and_write_lines(_source("encode_control"), "encode_control")
+    assert gates_at, "encode_control.main runs no in-tool refusal"
+    assert writes_at == {}, writes_at
+
+    falls_through = (
+        "import os\n"
+        "def main():\n"
+        "    if flag:\n"
+        "        os.makedirs(out)\n"
+        "    gate_something()\n")
+    g, w = gate_and_write_lines(falls_through, "probe")
+    assert w, "a write in a branch that falls through must still be counted"
 
 
 def test_the_population_is_the_one_measured_today():
