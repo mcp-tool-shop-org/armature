@@ -94,9 +94,7 @@ def import_reference(path, scene, skinned):
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
     panel_dir = os.path.join(out_dir, "panels")
-    os.makedirs(panel_dir, exist_ok=True)
 
     scene = rc.fresh_scene(16)
     bpy.ops.import_scene.gltf(filepath=args["glb"])
@@ -141,6 +139,16 @@ def main():
             f"{rc.PROBE_FRAMES} "
             f"(max {moved:.3e}). The authored arc did not survive the round trip, and a "
             f"sheet built from this would read as 'this route does not move'")
+
+    # Every refusal above this line can fire before a single pixel exists — three of them
+    # are inline `raise`s, which is precisely why the wave-10 census could not see that
+    # they were stranded below the directory (F-244b2ad5; the corrected shape is carried
+    # from `render_performer.py` and `preview_glb.py`). The directory is created HERE so a
+    # halt does not leave an empty one behind for a later run, or a reader scanning
+    # `outputs/`, to read as an attempt that produced nothing. Nothing between the old site
+    # and this one writes.
+    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(panel_dir, exist_ok=True)
 
     # Inset targets read from the POSED armature, so each crop lands on its own joint.
     scene.frame_set(rc.PROBE_FRAMES)
@@ -290,29 +298,49 @@ if __name__ == "__main__":
         import traceback
 
         from armature_core.errors import ArmatureError, GateFailure
-        traceback.print_exc()
-        _detail = getattr(exc, "evidence", None)
+        # THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12). Wave 10 moved `json.dumps`
+        # inside a try/except/finally so a sentinel that cannot serialise could no longer
+        # delete `sys.exit` — but the sentinel's CONSTRUCTION stayed ABOVE that guard, and
+        # so did `traceback.print_exc()`. MEASURED 2026-09-04 by driving
+        # `blender_stub.exit_code_of_main_block` over all 21 WITH_MAIN tools with a
+        # `GateFailure` whose evidence carried (a) a key whose `__str__` raises and (b) 6000
+        # levels of non-cyclic nesting: 21 of 21 returned code None, with `RuntimeError` /
+        # `RecursionError` escaping the handler and ZERO sentinel lines printed — which is
+        # `blender -b -P` reporting exit 0 on a fired andon, the E07 failure this contract
+        # exists to end.
+        #
+        # Stated plainly: neither trigger is reachable from today's raise sites (an AST scan
+        # of all 21 finds no non-string-literal evidence key, and every `raise` passes an
+        # already-materialised f-string, so `str(exc)` cannot fail). The measured defect was
+        # in the CLAIM `tests/test_instrument_exits.py` makes about this block — that any
+        # secondary failure in a handler still yields a sentinel and an exit code — and the
+        # claim is made TRUE here rather than weakened there.
+        #
+        # Everything below that can fail is inside the guard. What is above it cannot:
+        # `isinstance` on an exception, `type(exc).__name__`, and a `json.dumps` of six
+        # values that are already strings or None.
         _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _outcome = ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                    else "REFUSED — the tool declined to proceed"
+                    if isinstance(exc, ArmatureError)
+                    else "FAILED — an unhandled error")
         _sentinel = {
-            "tool": "make_rig_sheet",
-            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
-                        else "REFUSED — the tool declined to proceed"
-                        if isinstance(exc, ArmatureError)
-                        else "FAILED — an unhandled error"),
-            "gate": getattr(exc, "gate", None),
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
-        # The sentinel and the exit code are the contract, and NEITHER may be deleted by a
-        # failure to serialise the sentinel itself. `_code` is computed before anything that
-        # can raise and delivered from a `finally`; the fallback line carries only values
-        # that are already strings, so it cannot fail in turn.
+            "tool": "make_rig_sheet", "outcome": _outcome, "gate": None,
+            "error": type(exc).__name__,
+            "message": "the halt line could not be built", "evidence": None}
+        _line = json.dumps(_sentinel)
         try:
+            traceback.print_exc()
+            _detail = getattr(exc, "evidence", None)
+            _sentinel = {
+                "tool": "make_rig_sheet", "outcome": _outcome,
+                "gate": getattr(exc, "gate", None),
+                "error": type(exc).__name__, "message": str(exc),
+                "evidence": (_halt_keysafe(_detail)
+                             if isinstance(_detail, dict) else None)}
             _line = json.dumps(_sentinel, default=str)
         except BaseException:                                         # noqa: BLE001
-            _line = json.dumps({
-                "tool": _sentinel["tool"], "outcome": _sentinel["outcome"], "gate": None,
-                "error": _sentinel["error"], "message": _sentinel["message"],
-                "evidence": None})
+            pass
         finally:
             print("MAKE_RIG_SHEET_HALT " + _line)
             sys.exit(_code)

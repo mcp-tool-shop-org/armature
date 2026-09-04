@@ -149,7 +149,6 @@ def repair(ob, diagonal):
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
 
     scene = rc.fresh_scene(16)
@@ -195,6 +194,13 @@ def main():
         validated = "mesh.validate() CORRECTED problems — recorded, not hidden"
     ob.data.update()
 
+    # F-244b2ad5: three inline `raise`s sit above this line — an ambiguous subject, a
+    # shell still not manifold after repair, and a repair that removed more of the
+    # character than the budget allows — and none of them needs a directory. It is created
+    # HERE. The wave-10 census reported this file clean because all three are inline
+    # `raise`s and its predicate keyed on the callee's NAME.
+    os.makedirs(out_dir, exist_ok=True)
+
     bpy.ops.object.select_all(action="DESELECT")
     ob.select_set(True)
     bpy.context.view_layer.objects.active = ob
@@ -202,9 +208,12 @@ def main():
     bpy.ops.export_scene.gltf(filepath=out_glb, export_format="GLB", use_selection=True,
                               export_apply=False, export_yup=True,
                               export_image_format="AUTO")
+    # F-9b2d4106, family carry: one implementation, `rig_character.gate_glb_written`.
+    gate_glb = rc.gate_glb_written(out_glb, what="the repaired GLB")
 
     manifest = {
         "tool": "rig_repair", "started": started, "blender": bpy.app.version_string,
+        "gate_GLB_written": gate_glb,
         "thesis": ("repair the shell rather than resample it -- the voxel route reaches a "
                    "clean manifold by destroying the face, and this reaches the same "
                    "manifold while touching 0.40% of the faces"),
@@ -288,18 +297,49 @@ if __name__ == "__main__":
         import traceback
 
         from armature_core.errors import ArmatureError, GateFailure
-        traceback.print_exc()
+        # THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12). Wave 10 moved `json.dumps`
+        # inside a try/except/finally so a sentinel that cannot serialise could no longer
+        # delete `sys.exit` — but the sentinel's CONSTRUCTION stayed ABOVE that guard, and
+        # so did `traceback.print_exc()`. MEASURED 2026-09-04 by driving
+        # `blender_stub.exit_code_of_main_block` over all 21 WITH_MAIN tools with a
+        # `GateFailure` whose evidence carried (a) a key whose `__str__` raises and (b) 6000
+        # levels of non-cyclic nesting: 21 of 21 returned code None, with `RuntimeError` /
+        # `RecursionError` escaping the handler and ZERO sentinel lines printed — which is
+        # `blender -b -P` reporting exit 0 on a fired andon, the E07 failure this contract
+        # exists to end.
+        #
+        # Stated plainly: neither trigger is reachable from today's raise sites (an AST scan
+        # of all 21 finds no non-string-literal evidence key, and every `raise` passes an
+        # already-materialised f-string, so `str(exc)` cannot fail). The measured defect was
+        # in the CLAIM `tests/test_instrument_exits.py` makes about this block — that any
+        # secondary failure in a handler still yields a sentinel and an exit code — and the
+        # claim is made TRUE here rather than weakened there.
+        #
+        # Everything below that can fail is inside the guard. What is above it cannot:
+        # `isinstance` on an exception, `type(exc).__name__`, and a `json.dumps` of six
+        # values that are already strings or None.
         _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
-        _detail = getattr(exc, "evidence", None)
+        _outcome = ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                    else "REFUSED — the tool declined to proceed"
+                    if isinstance(exc, ArmatureError)
+                    else "FAILED — an unhandled error")
         _sentinel = {
-            "tool": "rig_repair",
-            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
-                        else "REFUSED — the tool declined to proceed"
-                        if isinstance(exc, ArmatureError)
-                        else "FAILED — an unhandled error"),
-            "gate": getattr(exc, "gate", None),
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+            "tool": "rig_repair", "outcome": _outcome, "gate": None,
+            "error": type(exc).__name__,
+            "message": "the halt line could not be built", "evidence": None}
+        _line = json.dumps(_sentinel)
+        try:
+            traceback.print_exc()
+            _detail = getattr(exc, "evidence", None)
+            _sentinel = {
+                "tool": "rig_repair", "outcome": _outcome,
+                "gate": getattr(exc, "gate", None),
+                "error": type(exc).__name__, "message": str(exc),
+                "evidence": (_halt_keysafe(_detail)
+                             if isinstance(_detail, dict) else None)}
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            pass
         try:
             _a = parse_args()
             _d = os.path.abspath(_a["out"])
@@ -308,18 +348,13 @@ if __name__ == "__main__":
                 json.dump(dict(_sentinel, traceback=traceback.format_exc()), fh,
                           indent=2, default=str)
         except BaseException:                                         # noqa: BLE001
-            # The halt record is a courtesy; the sentinel and the exit code are the contract.
-            traceback.print_exc()
-        finally:
-            # The sentinel line may not be deleted by a failure to serialise the sentinel:
-            # a `TypeError` raised HERE would leave the `finally` before `sys.exit`. The
-            # fallback carries only values that are already strings.
+            # The halt record is a courtesy; the sentinel and the exit code are
+            # the contract. Even this diagnostic is guarded (F-586822bf):
+            # nothing in this handler may reach the `finally` before `sys.exit`.
             try:
-                _line = json.dumps(_sentinel, default=str)
+                traceback.print_exc()
             except BaseException:                                     # noqa: BLE001
-                _line = json.dumps({
-                    "tool": _sentinel["tool"], "outcome": _sentinel["outcome"],
-                    "gate": None, "error": _sentinel["error"],
-                    "message": _sentinel["message"], "evidence": None})
+                pass
+        finally:
             print("RIG_REPAIR_HALT " + _line)
             sys.exit(_code)

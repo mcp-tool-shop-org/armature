@@ -334,8 +334,11 @@ def build_pass(args, label):
                else "UVMap")
 
     source = rig_character.world_verts(mesh_obj)
-    lo, hi = source.min(axis=0), source.max(axis=0)
-    diagonal = float(np.linalg.norm(hi - lo))
+    # F-940b0800, family carry: the second site in this domain that derives the tolerance
+    # scale for a whole build from a raw imported mesh, and it divides by it eleven lines
+    # down (`measure_joint_balls`). One implementation, in the file that owns the andon —
+    # never a second finiteness clause here.
+    diagonal, lo, hi = rig_character.subject_scale(source, "parts")
 
     lm = landmarks.derive(source, n_bands=args["bands"])
     balls, _ = rig_character.measure_joint_balls(mesh_obj, diagonal)
@@ -411,12 +414,25 @@ def gate_p_bind_pose(part_objs, at_bind, diagonal):
     `at_bind` maps part name -> world positions at frame 1; the comparison is against each
     part's own LOCAL coordinates, which are what it was built with. Bounded as a fraction
     of the subject's own bbox diagonal, not in metres.
+
+    Wave 12, F-524f0a25: `worst = max(worst, d)` returns `worst` when `d` is NaN — the
+    same sentinel-plus-comparison shape that let `lift_solve.gate_arrived` publish "max
+    0.000e+00" over a performance made entirely of NaN. A part whose bind-pose positions
+    are not numbers (a degenerate parent inverse, a division by a zero-length segment)
+    therefore passed Gate P with a verdict saying bone parenting left every part where it
+    was built. Each per-part displacement goes through `armature_core.parts.require_finite`
+    — the one implementation of wave 10's rule 4 — which raises THIS gate's andon with the
+    offending part named in THIS gate's evidence.
     """
-    ev = {"gate": "P", "per_part": {}, "verdict": None}
+    ev = {"gate": "P", "andon": "GatePRestPose", "per_part": {}, "verdict": None}
+    parts.require_finite("bbox_diagonal", diagonal, GatePRestPose, ev)
     worst = 0.0
     for name, ob in part_objs.items():
         local = np.array([list(v.co) for v in ob.data.vertices], dtype=np.float64)
-        d = float(np.linalg.norm(at_bind[name] - local, axis=1).max())
+        d = parts.require_finite(
+            f"displacement[{name}]",
+            float(np.linalg.norm(at_bind[name] - local, axis=1).max()),
+            GatePRestPose, ev, positive=False)
         ev["per_part"][name] = d
         worst = max(worst, d)
     threshold = rig_gates.REST_POSE_EPSILON_FRAC * diagonal
@@ -477,7 +493,10 @@ def observe_under_pose(ctx):
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    sitelist.validate()
+    # F-61671cb3: through `rig_character`'s wrapper, so a refusal from the registration
+    # validator answers the halt contract's 2 ("REFUSED") instead of 1 ("FAILED - an
+    # unhandled error"). One implementation, imported, not a second copy of the wrapper.
+    rig_character.validate_sitelist()
     started = time.time()
     source_sha = sha256_file(args["glb"])
 
@@ -517,6 +536,8 @@ def main():
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
     bpy.ops.export_scene.gltf(**kwargs)
+    # F-9b2d4106, family carry: refused before Gate ATLAS reads the file back.
+    gate_glb = rig_character.gate_glb_written(out_glb, what="the parts GLB")
 
     gate_atlas = glb.gate_atlas_untouched(args["glb"], out_glb)
 
@@ -564,6 +585,7 @@ def main():
         "bone_lengths": ctx["bone_lengths"],
         "probe_action": probe,
         "gates": {"PARTS_accounting": ctx["accounting"],
+                  "GLB_written": gate_glb,
                   "N_parts_pre_export": gate_names_pre,
                   "N_parts_post_export": gate_names_post,
                   "P_bind_pose": gate_p,
@@ -633,18 +655,49 @@ if __name__ == "__main__":
         main()
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
-        traceback.print_exc()
+        # THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12). Wave 10 moved `json.dumps`
+        # inside a try/except/finally so a sentinel that cannot serialise could no longer
+        # delete `sys.exit` — but the sentinel's CONSTRUCTION stayed ABOVE that guard, and
+        # so did `traceback.print_exc()`. MEASURED 2026-09-04 by driving
+        # `blender_stub.exit_code_of_main_block` over all 21 WITH_MAIN tools with a
+        # `GateFailure` whose evidence carried (a) a key whose `__str__` raises and (b) 6000
+        # levels of non-cyclic nesting: 21 of 21 returned code None, with `RuntimeError` /
+        # `RecursionError` escaping the handler and ZERO sentinel lines printed — which is
+        # `blender -b -P` reporting exit 0 on a fired andon, the E07 failure this contract
+        # exists to end.
+        #
+        # Stated plainly: neither trigger is reachable from today's raise sites (an AST scan
+        # of all 21 finds no non-string-literal evidence key, and every `raise` passes an
+        # already-materialised f-string, so `str(exc)` cannot fail). The measured defect was
+        # in the CLAIM `tests/test_instrument_exits.py` makes about this block — that any
+        # secondary failure in a handler still yields a sentinel and an exit code — and the
+        # claim is made TRUE here rather than weakened there.
+        #
+        # Everything below that can fail is inside the guard. What is above it cannot:
+        # `isinstance` on an exception, `type(exc).__name__`, and a `json.dumps` of six
+        # values that are already strings or None.
         _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
-        _detail = getattr(exc, "evidence", None)
+        _outcome = ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                    else "REFUSED — the tool declined to proceed"
+                    if isinstance(exc, ArmatureError)
+                    else "FAILED — an unhandled error")
         _sentinel = {
-            "tool": "rig_parts",
-            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
-                        else "REFUSED — the tool declined to proceed"
-                        if isinstance(exc, ArmatureError)
-                        else "FAILED — an unhandled error"),
-            "gate": getattr(exc, "gate", None),
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+            "tool": "rig_parts", "outcome": _outcome, "gate": None,
+            "error": type(exc).__name__,
+            "message": "the halt line could not be built", "evidence": None}
+        _line = json.dumps(_sentinel)
+        try:
+            traceback.print_exc()
+            _detail = getattr(exc, "evidence", None)
+            _sentinel = {
+                "tool": "rig_parts", "outcome": _outcome,
+                "gate": getattr(exc, "gate", None),
+                "error": type(exc).__name__, "message": str(exc),
+                "evidence": (_halt_keysafe(_detail)
+                             if isinstance(_detail, dict) else None)}
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            pass
         try:
             _a = parse_args()
             _d = os.path.abspath(_a["out"])
@@ -653,18 +706,13 @@ if __name__ == "__main__":
                 json.dump(dict(_sentinel, traceback=traceback.format_exc()), fh,
                           indent=2, default=str)
         except BaseException:                                         # noqa: BLE001
-            # The halt record is a courtesy; the sentinel and the exit code are the contract.
-            traceback.print_exc()
-        finally:
-            # The sentinel line may not be deleted by a failure to serialise the sentinel:
-            # a `TypeError` raised HERE would leave the `finally` before `sys.exit`. The
-            # fallback carries only values that are already strings.
+            # The halt record is a courtesy; the sentinel and the exit code are
+            # the contract. Even this diagnostic is guarded (F-586822bf):
+            # nothing in this handler may reach the `finally` before `sys.exit`.
             try:
-                _line = json.dumps(_sentinel, default=str)
+                traceback.print_exc()
             except BaseException:                                     # noqa: BLE001
-                _line = json.dumps({
-                    "tool": _sentinel["tool"], "outcome": _sentinel["outcome"],
-                    "gate": None, "error": _sentinel["error"],
-                    "message": _sentinel["message"], "evidence": None})
+                pass
+        finally:
             print("RIG_PARTS_HALT " + _line)
             sys.exit(_code)

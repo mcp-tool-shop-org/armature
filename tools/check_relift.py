@@ -82,20 +82,56 @@ class ReliftWindow(GateFailure):
 
 
 def keyed_window(glb, span, frames):
-    """What one GLB offers the comparison: its keyed span and how much of it was asked for.
+    """What one GLB offers the comparison: its keyed span and the frames to be read.
 
     `span` is `(first, last)` in SCENE frames or None. Control frames are 0-based and scene
     frames 1-based (`blender_scene.set_scene_frame`), so a span of (1.0, 65.0) is 65 keyed
     control frames.
+
+    **F-4d9161df, wave 12 - the window is ABSOLUTE now, not a length.** This function used
+    to compute `keyed = int(hi) - int(lo) + 1` and throw `lo` away, and `signatures` then
+    sampled `range(window["sampled"])` through `set_scene_frame`, which maps control frame
+    i to SCENE frame 1 + i. So the comparison always began at scene frame 1 whatever the
+    action keyed. MEASURED: with both GLBs keying (10.0, 74.0) and `--frames=65`,
+    `gate_relift_window` returned clause None and the verdict "both GLBs key [10.0, 74.0]
+    and the requested 65 frames sit inside it" - while the sampler read scene frames 1..65,
+    of which 1..9 are BEFORE the first key and 66..74 were never read at all. Blender holds
+    the nearest pose outside an action's range and reports nothing, so a re-solve that
+    drifted only in its last frames read as identical: `n_frames_differing: 0` about a
+    window whose head is the held first pose on both sides and whose tail was never
+    compared. The sibling instrument this file imports from checks BOTH ends for exactly
+    this reason (`render_start_frame.py:441`).
+
+    `sampled_scene_frames` is `[first, last]` INCLUSIVE, in scene frames, and is what
+    `scene_frames_to_sample` and `gate_relift_window` both read. `sampled` is kept as the
+    count, because the record and the gate's verdict quote it.
     """
     if span is None:
         return {"glb": os.path.abspath(glb), "action_frame_range": None,
-                "keyed_frames": 0, "requested": int(frames), "sampled": 0}
+                "keyed_frames": 0, "requested": int(frames), "sampled": 0,
+                "first_keyed_scene_frame": None, "last_keyed_scene_frame": None,
+                "sampled_scene_frames": None}
     lo, hi = float(span[0]), float(span[1])
-    keyed = int(hi) - int(lo) + 1
+    first, last = int(lo), int(hi)
+    keyed = last - first + 1
+    sampled = min(int(frames), max(keyed, 0))
     return {"glb": os.path.abspath(glb), "action_frame_range": [lo, hi],
-            "keyed_frames": keyed, "requested": int(frames),
-            "sampled": min(int(frames), max(keyed, 0))}
+            "keyed_frames": keyed, "requested": int(frames), "sampled": sampled,
+            "first_keyed_scene_frame": first, "last_keyed_scene_frame": last,
+            "sampled_scene_frames": ([first, first + sampled - 1] if sampled > 0
+                                     else None)}
+
+
+def scene_frames_to_sample(window):
+    """The SCENE frames `signatures` reads, from the window's own recorded ends.
+
+    One function, so the frames the gate certifies and the frames the sampler reads cannot
+    be two different derivations - which is what F-4d9161df was.
+    """
+    span = window.get("sampled_scene_frames")
+    if not span:
+        return []
+    return list(range(int(span[0]), int(span[1]) + 1))
 
 
 def gate_relift_window(pinned, fresh, frames):
@@ -139,10 +175,35 @@ def gate_relift_window(pinned, fresh, frames):
             f"Blender holds the last pose past the end of an action and renders it without "
             f"complaint, so frames {shared}..{int(frames) - 1} would enter the denominator "
             f"as agreement about a moment neither performance has", ev)
+    # F-4d9161df - the clause a COUNT cannot state. A window can be short enough to fit
+    # inside the keyed span and still sit outside it: the old code certified "the requested
+    # 65 frames sit inside [10.0, 74.0]" over a sampler that read scene frames 1..65. Both
+    # ends of what is actually SAMPLED are checked against both ends of the keys, which is
+    # the check `render_start_frame.py:441` already carries one instrument over.
+    first = min(pinned["first_keyed_scene_frame"], fresh["first_keyed_scene_frame"])
+    last = max(pinned["last_keyed_scene_frame"], fresh["last_keyed_scene_frame"])
+    outside = [w["sampled_scene_frames"] for w in (pinned, fresh)
+               if not w["sampled_scene_frames"]
+               or not (first <= w["sampled_scene_frames"][0]
+                       and w["sampled_scene_frames"][1] <= last)]
+    if outside:
+        ev["clause"] = "sampled_window_outside_the_keys"
+        ev["keyed_scene_frames"] = [first, last]
+        ev["sampled_outside"] = outside
+        raise ReliftWindow(
+            f"the frames this comparison would read, {outside}, do not lie inside the "
+            f"keyed scene frames [{first}, {last}]. Blender holds the nearest pose outside "
+            f"an action's range and reports nothing, so those frames would enter the "
+            f"denominator as agreement about a moment neither performance has", ev)
     ev["clause"] = None
     ev["shared_keyed_frames"] = shared
-    ev["verdict"] = (f"both GLBs key {pinned['action_frame_range']} and the requested "
-                     f"{int(frames)} frames sit inside it")
+    ev["sampled_scene_frames"] = pinned["sampled_scene_frames"]
+    ev["keyed_scene_frames"] = [first, last]
+    ev["verdict"] = (
+        f"both GLBs key {pinned['action_frame_range']} and the {int(frames)} frames this "
+        f"comparison reads are scene frames "
+        f"{pinned['sampled_scene_frames'][0]}..{pinned['sampled_scene_frames'][1]}, "
+        f"inside it")
     return ev
 
 
@@ -161,10 +222,17 @@ def signatures(glb, frames, fps):
     if not subject:
         raise ArmatureError(f"{glb} imported no render-visible mesh")
     window = keyed_window(glb, action_frame_range(), frames)
+    # F-33fb7947: the selection is named in the record, not left to a reader of the
+    # argument. The call below passes `scene=` as well - idempotent, because `subject` is
+    # already the filtered list, and a statement rather than a behaviour change.
+    window["selection"] = "render_visible_meshes"
     out = []
-    for i in range(window["sampled"]):
-        blender_scene.set_scene_frame(scene, i)
-        out.append(blender_scene.evaluated_geometry_signature(subject))
+    # F-4d9161df: the frames come from the window's own recorded ends, not from a count.
+    # `set_scene_frame` takes a 0-based CONTROL frame and adds 1, so a scene frame f is
+    # asked for as f - 1.
+    for scene_frame in scene_frames_to_sample(window):
+        blender_scene.set_scene_frame(scene, scene_frame - 1)
+        out.append(blender_scene.evaluated_geometry_signature(subject, scene=scene))
     return out, window
 
 
@@ -210,6 +278,11 @@ def main():
         "frames_source": ("--frames, checked against both GLBs' own keyed action ranges by "
                           "gate_RELIFT.window; a request that overruns either one refuses"),
         "gate_RELIFT": ev,
+        "signature_selection": (
+            "render_visible_meshes - every digest above was taken over the RENDER-VISIBLE "
+            "meshes of each import, never over every mesh the file happens to carry. Named "
+            "here because a digest is a number about a population and the population was "
+            "not in the record (F-33fb7947)"),
         "what_this_settles": (
             "whether the E09 lift solver is deterministic and the on-disk GLB is what the "
             "recorded inputs still produce. Geometry is the verdict; the byte hashes are a "
@@ -278,29 +351,49 @@ if __name__ == "__main__":
         raise
     except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
         import traceback
-        traceback.print_exc()
-        _detail = getattr(exc, "evidence", None)
+        # THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12). Wave 10 moved `json.dumps`
+        # inside a try/except/finally so a sentinel that cannot serialise could no longer
+        # delete `sys.exit` — but the sentinel's CONSTRUCTION stayed ABOVE that guard, and
+        # so did `traceback.print_exc()`. MEASURED 2026-09-04 by driving
+        # `blender_stub.exit_code_of_main_block` over all 21 WITH_MAIN tools with a
+        # `GateFailure` whose evidence carried (a) a key whose `__str__` raises and (b) 6000
+        # levels of non-cyclic nesting: 21 of 21 returned code None, with `RuntimeError` /
+        # `RecursionError` escaping the handler and ZERO sentinel lines printed — which is
+        # `blender -b -P` reporting exit 0 on a fired andon, the E07 failure this contract
+        # exists to end.
+        #
+        # Stated plainly: neither trigger is reachable from today's raise sites (an AST scan
+        # of all 21 finds no non-string-literal evidence key, and every `raise` passes an
+        # already-materialised f-string, so `str(exc)` cannot fail). The measured defect was
+        # in the CLAIM `tests/test_instrument_exits.py` makes about this block — that any
+        # secondary failure in a handler still yields a sentinel and an exit code — and the
+        # claim is made TRUE here rather than weakened there.
+        #
+        # Everything below that can fail is inside the guard. What is above it cannot:
+        # `isinstance` on an exception, `type(exc).__name__`, and a `json.dumps` of six
+        # values that are already strings or None.
         _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _outcome = ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                    else "REFUSED — the tool declined to proceed"
+                    if isinstance(exc, ArmatureError)
+                    else "FAILED — an unhandled error")
         _sentinel = {
-            "tool": "check_relift",
-            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
-                        else "REFUSED — the tool declined to proceed"
-                        if isinstance(exc, ArmatureError)
-                        else "FAILED — an unhandled error"),
-            "gate": getattr(exc, "gate", None),
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
-        # The sentinel and the exit code are the contract, and NEITHER may be deleted by a
-        # failure to serialise the sentinel itself. `_code` is computed before anything that
-        # can raise and delivered from a `finally`; the fallback line carries only values
-        # that are already strings, so it cannot fail in turn.
+            "tool": "check_relift", "outcome": _outcome, "gate": None,
+            "error": type(exc).__name__,
+            "message": "the halt line could not be built", "evidence": None}
+        _line = json.dumps(_sentinel)
         try:
+            traceback.print_exc()
+            _detail = getattr(exc, "evidence", None)
+            _sentinel = {
+                "tool": "check_relift", "outcome": _outcome,
+                "gate": getattr(exc, "gate", None),
+                "error": type(exc).__name__, "message": str(exc),
+                "evidence": (_halt_keysafe(_detail)
+                             if isinstance(_detail, dict) else None)}
             _line = json.dumps(_sentinel, default=str)
         except BaseException:                                         # noqa: BLE001
-            _line = json.dumps({
-                "tool": _sentinel["tool"], "outcome": _sentinel["outcome"], "gate": None,
-                "error": _sentinel["error"], "message": _sentinel["message"],
-                "evidence": None})
+            pass
         finally:
             print("CHECK_RELIFT_HALT " + _line)
             sys.exit(_code)

@@ -32,6 +32,64 @@ from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.subject import extent_summary  # noqa: E402
 
 
+def require_openable(paths):
+    """`paths` if every one is a file, else raise - BEFORE the population is built.
+
+    F-5b3ead49, wave 12. `probe_one` returned `{"exists": False, "error": "file not
+    found"}` for a path that is not a file, `main` never inspected it, and the sentinel's
+    `n` was `len(records)` - the count of ARGUMENTS. MEASURED:
+    `probe_subject.py -- --out=<tmp> --glb=nope.glb --glb=also_missing.glb` printed
+    `PROBE_SUBJECT_OK {"json": ".../subject_extents.json", "n": 2}`, `main()` returned
+    None, `raise SystemExit(main())` exited 0, and the written record carried two
+    `"error": "file not found"` rows the sentinel did not mention.
+
+    That is the rule E07 earned - "verify a success sentinel in the output, never the exit
+    code alone" - answered with a sentinel saying two subjects were probed when zero were
+    opened. `check_relift.py:185-187` already refuses outright on `not os.path.isfile(p)`;
+    this is the same refusal, in the tool whose record marks premise 6 ("the subject is a
+    character") MEASURED.
+
+    Distinct from the closed F-f3cd559e, which stopped EMPTY `--glb` values from joining
+    the population: a named-but-absent path still did.
+    """
+    missing = [p for p in paths if not os.path.isfile(p)]
+    if missing:
+        raise ArmatureError(
+            f"{len(missing)} of {len(paths)} named GLB(s) are not files: {missing}. Each "
+            f"would have joined the probed population as an error row while the success "
+            f"sentinel counted it as a subject probed, and a record whose rows are all "
+            f"errors is not a measurement of anything")
+    return paths
+
+
+def probe_summary(records):
+    """`n_probed` / `n_measured` / `n_errors`, derived from the records themselves.
+
+    Carried from `probe_glb.py:305-311`, which already builds its whole summary out of the
+    records and prints it in its own OK line - the honest shape existed one file over.
+    """
+    return {"n_probed": len(records),
+            "n_measured": sum(1 for r in records if "error" not in r),
+            "n_errors": sum(1 for r in records if "error" in r)}
+
+
+def require_something_measured(records):
+    """Refuse a run whose every row is an error, before the success sentinel is printed.
+
+    The SUCCESS rule: `<PREFIX>_OK` is earned by a measurable effect, not by reaching the
+    end of `main`. An import that contributes no render-visible mesh produces
+    `{"error": "no render-visible geometry to measure"}`, which `require_openable` above
+    cannot see - the file exists, it simply carries nothing this tool can measure.
+    """
+    summary = probe_summary(records)
+    if summary["n_probed"] and not summary["n_measured"]:
+        raise ArmatureError(
+            f"this run measured 0 of {summary['n_probed']} subject(s); every row is an "
+            f"error: {[r.get('error') for r in records]}. A PROBE_SUBJECT_OK line here "
+            f"would report subjects probed that were never opened")
+    return None
+
+
 def probe_one(path):
     rec = {"path": path, "exists": os.path.isfile(path)}
     if not rec["exists"]:
@@ -149,19 +207,26 @@ def parse_argv(argv, *, known=("out", "glb")):
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     out_dir, paths = parse_argv(argv)
-    os.makedirs(out_dir, exist_ok=True)
+    # F-5b3ead49: refused before the population is built, and before the directory exists.
+    require_openable(paths)
 
     records = [probe_one(p) for p in paths]
+    require_something_measured(records)
+    summary = probe_summary(records)
     payload = {
         "tool": "probe_subject",
         "blender": bpy.app.version_string,
         "n_files": len(records),
+        "summary": summary,
         "files": records,
     }
+    os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "subject_extents.json")
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
-    print("PROBE_SUBJECT_OK " + json.dumps({"json": out_path, "n": len(records)}))
+    # The OK line reports what was OPENED, not what was named: `n_probed`, `n_measured`
+    # and `n_errors` come from the records, the way `probe_glb.py:317` already does.
+    print("PROBE_SUBJECT_OK " + json.dumps(dict(summary, json=out_path)))
 
 
 def _halt_keysafe(value, _seen=None):
@@ -216,29 +281,49 @@ if __name__ == "__main__":
         import traceback
 
         from armature_core.errors import ArmatureError, GateFailure
-        traceback.print_exc()
-        _detail = getattr(exc, "evidence", None)
+        # THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12). Wave 10 moved `json.dumps`
+        # inside a try/except/finally so a sentinel that cannot serialise could no longer
+        # delete `sys.exit` — but the sentinel's CONSTRUCTION stayed ABOVE that guard, and
+        # so did `traceback.print_exc()`. MEASURED 2026-09-04 by driving
+        # `blender_stub.exit_code_of_main_block` over all 21 WITH_MAIN tools with a
+        # `GateFailure` whose evidence carried (a) a key whose `__str__` raises and (b) 6000
+        # levels of non-cyclic nesting: 21 of 21 returned code None, with `RuntimeError` /
+        # `RecursionError` escaping the handler and ZERO sentinel lines printed — which is
+        # `blender -b -P` reporting exit 0 on a fired andon, the E07 failure this contract
+        # exists to end.
+        #
+        # Stated plainly: neither trigger is reachable from today's raise sites (an AST scan
+        # of all 21 finds no non-string-literal evidence key, and every `raise` passes an
+        # already-materialised f-string, so `str(exc)` cannot fail). The measured defect was
+        # in the CLAIM `tests/test_instrument_exits.py` makes about this block — that any
+        # secondary failure in a handler still yields a sentinel and an exit code — and the
+        # claim is made TRUE here rather than weakened there.
+        #
+        # Everything below that can fail is inside the guard. What is above it cannot:
+        # `isinstance` on an exception, `type(exc).__name__`, and a `json.dumps` of six
+        # values that are already strings or None.
         _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
+        _outcome = ("HALTED — a gate fired" if isinstance(exc, GateFailure)
+                    else "REFUSED — the tool declined to proceed"
+                    if isinstance(exc, ArmatureError)
+                    else "FAILED — an unhandled error")
         _sentinel = {
-            "tool": "probe_subject",
-            "outcome": ("HALTED — a gate fired" if isinstance(exc, GateFailure)
-                        else "REFUSED — the tool declined to proceed"
-                        if isinstance(exc, ArmatureError)
-                        else "FAILED — an unhandled error"),
-            "gate": getattr(exc, "gate", None),
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
-        # The sentinel and the exit code are the contract, and NEITHER may be deleted by a
-        # failure to serialise the sentinel itself. `_code` is computed before anything that
-        # can raise and delivered from a `finally`; the fallback line carries only values
-        # that are already strings, so it cannot fail in turn.
+            "tool": "probe_subject", "outcome": _outcome, "gate": None,
+            "error": type(exc).__name__,
+            "message": "the halt line could not be built", "evidence": None}
+        _line = json.dumps(_sentinel)
         try:
+            traceback.print_exc()
+            _detail = getattr(exc, "evidence", None)
+            _sentinel = {
+                "tool": "probe_subject", "outcome": _outcome,
+                "gate": getattr(exc, "gate", None),
+                "error": type(exc).__name__, "message": str(exc),
+                "evidence": (_halt_keysafe(_detail)
+                             if isinstance(_detail, dict) else None)}
             _line = json.dumps(_sentinel, default=str)
         except BaseException:                                         # noqa: BLE001
-            _line = json.dumps({
-                "tool": _sentinel["tool"], "outcome": _sentinel["outcome"], "gate": None,
-                "error": _sentinel["error"], "message": _sentinel["message"],
-                "evidence": None})
+            pass
         finally:
             print("PROBE_SUBJECT_HALT " + _line)
             sys.exit(_code)

@@ -44,7 +44,7 @@ import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 from armature_core import (  # noqa: E402
-    binding, blender_scene, joints, landmarks, posearc, rig_gates, sitelist)
+    binding, blender_scene, joints, landmarks, parts, posearc, rig_gates, sitelist)
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "1.1.0"
@@ -104,6 +104,180 @@ class GateMode(GateFailure):
     """A named route this tool does not have."""
 
     gate = "MODE"
+
+
+class GateSubjectDegenerate(GateFailure):
+    """Gate SCALE - the subject's own bbox diagonal is not a number to divide by.
+
+    MEASURED 2026-09-04 (F-940b0800). `build_pass` derived the tolerance SCALE for the
+    whole build as `float(np.linalg.norm(hi - lo))` over the raw imported mesh, with no
+    finiteness clause anywhere on the path: `grep` for `isfinite`/`isnan`/`isinf`/
+    `require_finite` across this file, `rig_gates.py`, `landmarks.py` and `joints.py`
+    returned ZERO hits. One NaN vertex gives a NaN diagonal, hence a NaN tolerance, and
+    `rig_gates.gate_d_determinism` then returns "two builds agree on bones and hierarchy"
+    with a 4.0-unit `worst_bone_delta` in the same evidence dict, because `nan > x` is
+    False in both directions. One `+inf` vertex does the same.
+
+    It matters most on the SKELETON route: `run_skeleton` calls `build_pass(..., bind=False)`
+    twice, `gate_p` is left None when nothing is bound, and `gate_n_names` runs after Gate D
+    and compares names only — so Gate D is the FIRST gate that sees geometry, and nothing
+    between `blender_scene.import_glb` and it examines a coordinate. The artifact that
+    reaches the Director is `<name>_skeleton.glb` beside a manifest recording
+    `bbox.diagonal: NaN` and `gates.D_determinism: PASS`.
+
+    The refusal belongs at the SOURCE rather than at the gate: `measure_joint_balls` divides
+    by this diagonal, `landmarks.derive` consumes the same array, and both run before Gate D.
+    Its own id ("SCALE") rather than GateSubject's, because a subject that cannot be
+    identified and a subject whose coordinates are not numbers send a session to two
+    different places — and `tests/test_gates.py::test_no_new_andon_takes_an_id_another_andon
+    _already_uses` is the standing check that two andons never share one.
+    """
+
+    gate = "SCALE"
+
+
+def subject_scale(source, where):
+    """`(diagonal, lo, hi)` for a subject whose coordinates are numbers, else raise.
+
+    The one place in this module a bbox diagonal is derived. `require_finite`'s default
+    refuses zero and negatives in the same clause, which also catches the all-coincident
+    and single-vertex subjects before `measure_joint_balls(mesh_obj, diagonal)` divides by
+    it. The per-vertex clause is the stronger form and names WHICH vertex, because "the
+    subject carries a NaN" is not an actionable sentence and "vertex 41,207 axis 1" is.
+    """
+    n = int(source.shape[0])
+    ev = {"gate": "SCALE", "andon": "GateSubjectDegenerate", "where": where,
+          "n_vertices": n}
+    if not n:
+        raise GateSubjectDegenerate(
+            f"the subject carries no vertices at all, so it has no scale of its own for "
+            f"any tolerance in this build to be a fraction of", ev)
+    bad = np.argwhere(~np.isfinite(source))
+    if bad.size:
+        i, axis = int(bad[0][0]), int(bad[0][1])
+        ev["first_non_finite_vertex"] = {
+            "index": i, "axis": axis, "value": repr(float(source[i][axis])),
+            "n_non_finite_components": int(bad.shape[0])}
+        raise GateSubjectDegenerate(
+            f"the subject carries {bad.shape[0]} non-finite coordinate component(s); the "
+            f"first is vertex {i} axis {axis} = {float(source[i][axis])!r}. Every "
+            f"tolerance in this build is a fraction of this subject's own bbox diagonal, "
+            f"and a NaN diagonal makes every one of them NaN — which fires no bound at "
+            f"all, because `nan > x` and `nan < x` are both False. A rig built on it "
+            f"passes Gate D with an agreement verdict about a build that did not agree",
+            ev)
+    lo, hi = source.min(axis=0), source.max(axis=0)
+    ev.update({"bbox_lo": lo.tolist(), "bbox_hi": hi.tolist()})
+    diagonal = parts.require_finite(
+        "bbox_diagonal", float(np.linalg.norm(hi - lo)), GateSubjectDegenerate, ev)
+    return diagonal, lo, hi
+
+
+class SiteListInvalid(ArmatureError):
+    """The site registration table itself is inconsistent - a refusal, not a crash.
+
+    F-61671cb3, wave 12. `sitelist.validate()` audits this repo's own literal registration
+    table (duplicate names, forward parents, head == tail, the `site` flags against
+    `E01_SITES`, the count of 18), so on an unmodified sitelist it CANNOT fire. It is
+    reachable in exactly the situation it exists for: a session editing the site list -
+    which is the case `rig_character` and `rig_parts` invoke it to catch.
+
+    What that session saw, MEASURED 2026-09-04 by driving both `__main__` handlers with a
+    `ValueError` carrying a real sitelist message: `RIG_CHARACTER_HALT {"outcome": "FAILED
+    - an unhandled error", "gate": null, "evidence": null}` at exit **1**, and the identical
+    shape for `RIG_PARTS_HALT`. `ValueError` is outside the `ArmatureError` family, so the
+    three-outcome branch classified the repo's own registration validator refusing as a
+    crash in the rigging code. That is F-c3f86abc's harm inverted: that finding removed a
+    crash being recorded as a fired gate; this one removes a deliberate refusal being
+    recorded as an unhandled error - and the `halt.json` the five rig writers produce said
+    the same, sending a session that had just edited `sitelist.py` to the rigging
+    arithmetic instead of to the table it had edited.
+
+    A refusal with no gate behind it, so a bare `ArmatureError` and not a `GateFailure`:
+    the halt contract answers 2 and "REFUSED - the tool declined to proceed" for both, and
+    the three-outcome vocabulary is what distinguishes them.
+
+    The cleanest home for this is `armature_core.sitelist` itself, raising a typed refusal
+    so no caller needs a wrapper at all; that module is another domain's in the frozen map
+    and the change is in flight there (SEAM 1, core-solvers). `validate_sitelist` below
+    re-types only what is NOT already in the `ArmatureError` family, so their class reaches
+    the halt line as itself the moment it lands.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+class GateGlbWritten(GateFailure):
+    """Gate GLB - an exported GLB reached disk and is not zero bytes.
+
+    F-9b2d4106, wave 12. `bpy.ops.export_scene.gltf(...)` has the same property
+    `bpy.ops.render.render` has and that F-13bd448d was closed for on the four RENDERERS:
+    it returns an operator STATUS SET and can return `{'CANCELLED'}` without raising. An
+    AST scan pairing every `bpy.ops.export_scene.gltf` call site against a later existence
+    or size check found eight tools that export a GLB, of which six at least materialise
+    the file afterwards (`os.path.getsize`, `sha256_file`, or a re-import - each of which
+    raises on an absent file) and two - `make_test_armature.py` and `rig_retopo.py`'s outer
+    shell - did neither. NONE of the eight refused a ZERO-BYTE export: the six record the
+    byte count as a number and never compare it, where the renderer family raises on
+    `getsize(p) == 0`.
+
+    The shape is `preview_glb.gate_previews_written`'s - missing AND zero-byte, naming the
+    path - carried rather than reinvented, and it lives here because every rig tool already
+    imports this module. It returns the digest so the caller records the file it actually
+    confirmed, rather than hashing the path a second time.
+    """
+
+    gate = "GLB"
+
+
+def gate_glb_written(path, *, what="the exported GLB"):
+    """`{"path", "bytes", "sha256", "verdict"}` for a GLB that reached disk, else raise."""
+    p = os.path.abspath(path)
+    ev = {"gate": "GLB", "andon": "GateGlbWritten", "what": what, "path": p}
+    if not os.path.isfile(p):
+        raise GateGlbWritten(
+            f"{what} never reached disk at {p}. `bpy.ops.export_scene.gltf` returns an "
+            f"operator status set and can return CANCELLED without raising, so a run that "
+            f"exported nothing would otherwise name this file in its own record", ev)
+    n = os.path.getsize(p)
+    ev["bytes"] = n
+    if n == 0:
+        raise GateGlbWritten(
+            f"{what} at {p} is zero bytes. A file that exists and holds nothing is the "
+            f"shape a cancelled export leaves behind, and every consumer downstream reads "
+            f"the path rather than the size", ev)
+    digest = sha256_file(p)
+    return {"path": p, "bytes": n, "sha256": digest,
+            "verdict": f"{what} is {n:,} bytes on disk"}
+
+
+def validate_sitelist():
+    """`sitelist.validate()`, with its refusal inside the `ArmatureError` family.
+
+    The handler is `ValueError` and nothing broader, deliberately:
+    `tests/test_rig_character_dispatch.py::test_nothing_between_the_landmark_solve_and_the
+    _manifest_catches_a_gate` holds that the ONLY broad handlers in this file are the two in
+    the `__main__` block, because a `FacingGate` caught anywhere else would never reach
+    `halt.json` or the exit code. A first draft of this wrapper caught `ArmatureError` (to
+    re-raise it) and `Exception`, and that census was right to refuse it. `sitelist.validate`
+    documents `ValueError` in its own docstring, so that is the whole surface; the
+    `isinstance` guard below keeps a typed refusal from the core intact even if it should
+    ever arrive as a `ValueError` subclass.
+    """
+    try:
+        sitelist.validate()
+    except ValueError as exc:
+        if isinstance(exc, ArmatureError):
+            raise
+        raise SiteListInvalid(
+            f"the site registration table is inconsistent, so nothing built from it would "
+            f"mean what its names say: {exc}",
+            {"gate": None, "andon": "SiteListInvalid",
+             "clause": "site_registration_invalid",
+             "source": "sitelist.validate", "raised": type(exc).__name__,
+             "problems": str(exc)}) from exc
 
 
 def sha256_file(path):
@@ -619,8 +793,11 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
     premise6, shell_id, shell_sizes = measure_subject(mesh_obj)
 
     source = world_verts(mesh_obj)
-    lo, hi = source.min(axis=0), source.max(axis=0)
-    diagonal = float(np.linalg.norm(hi - lo))
+    # F-940b0800: the refusal sits HERE, above `landmarks.derive` and
+    # `measure_joint_balls`, because both consume this array and Gate D — the first gate
+    # that sees geometry on the `bind=False` skeleton route — reads a tolerance scaled by
+    # this number. See `subject_scale`.
+    diagonal, lo, hi = subject_scale(source, label)
 
     t0 = time.time()
     lm = landmarks.derive(source, n_bands=bands)
@@ -942,6 +1119,7 @@ def export_rigged(ctx, probe, out_path, animated=True):
     kwargs = {k: v for k, v in wanted.items() if k in props}
     dropped = sorted(set(wanted) - set(kwargs))
     bpy.ops.export_scene.gltf(**kwargs)
+    written = gate_glb_written(out_path, what="the rigged GLB")
 
     # Re-import into a throwaway scene and read the names a consumer would actually get.
     fresh_scene(PROBE_FPS)
@@ -986,6 +1164,10 @@ def export_rigged(ctx, probe, out_path, animated=True):
         "reimported_actions": actions,
         "gate_n_post": gate_n_post, "gate_obj": gate_obj,
         "gate_p_round_trip": gate_p_round_trip,
+        # F-9b2d4106: the export reached disk and is not zero bytes, recorded rather than
+        # assumed. The re-import below it would raise on an ABSENT file, but not on an
+        # empty one, and nothing published the byte count it confirmed.
+        "gate_glb_written": written,
     }
 
 
@@ -1053,6 +1235,11 @@ def run_skeleton(args, out_dir, source_sha, started):
     gate_n_pre = rig_gates.gate_n_names(
         [b.name for b in ctx["armature"].data.bones], sitelist.ALL_NAMES,
         "the built armature, before export")
+
+    # F-244b2ad5: both `build_pass` calls above refuse an ambiguous or non-finite subject
+    # and neither needs a directory; this is the route whose only artefact the Director
+    # approves the skeleton on. Created here, below the last refusal.
+    os.makedirs(out_dir, exist_ok=True)
 
     out_glb = os.path.join(out_dir, f"{args['name']}_skeleton.glb")
     export = export_rigged(ctx, None, out_glb, animated=False)
@@ -1131,8 +1318,7 @@ def _tool_hashes():
 def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
-    os.makedirs(out_dir, exist_ok=True)
-    sitelist.validate()
+    validate_sitelist()
 
     started = time.time()
     source_sha = sha256_file(args["glb"])
@@ -1167,6 +1353,15 @@ def main():
                            "displacement for Gate P to be about")},
             "timings": ctx["timings"],
         }
+        # F-244b2ad5: the output directory used to be created at the top of `main`, above
+        # every `build_pass` in every branch — and `build_pass` refuses an ambiguous subject,
+        # a non-finite one (`subject_scale`) and an unknown binding mode, none of which needs
+        # a directory. It is created per branch, below the last refusal and above the first
+        # byte. A halt still leaves a record: `_write_halt` makes the directory itself and
+        # writes `halt.json` into it, so what a reader finds is a refusal, never an empty
+        # directory. Corrected shape carried from `render_performer.py:319`.
+        os.makedirs(out_dir, exist_ok=True)
+
         path = os.path.join(out_dir, "measure.json")
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(rec, fh, indent=2)
@@ -1200,6 +1395,15 @@ def main():
 
     probe = author_probe(ctx)
     diagnostics = deformation_diagnostics(ctx, probe)
+
+    # F-244b2ad5: the output directory used to be created at the top of `main`, above
+    # every `build_pass` in every branch — and `build_pass` refuses an ambiguous subject,
+    # a non-finite one (`subject_scale`) and an unknown binding mode, none of which needs
+    # a directory. It is created per branch, below the last refusal and above the first
+    # byte. A halt still leaves a record: `_write_halt` makes the directory itself and
+    # writes `halt.json` into it, so what a reader finds is a refusal, never an empty
+    # directory. Corrected shape carried from `render_performer.py:319`.
+    os.makedirs(out_dir, exist_ok=True)
 
     tag = mode if mode != "envelope" else f"envelope_{args['envelope_radii']}"
     out_glb = os.path.join(out_dir, f"{args['name']}_{tag}.glb")
@@ -1371,14 +1575,46 @@ if __name__ == "__main__":
         main()
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
-        traceback.print_exc()
+        # THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12). Wave 10 moved `json.dumps`
+        # inside a try/except/finally so a sentinel that cannot serialise could no longer
+        # delete `sys.exit` — but the sentinel's CONSTRUCTION stayed ABOVE that guard, and
+        # so did `traceback.print_exc()`. MEASURED 2026-09-04 by driving
+        # `blender_stub.exit_code_of_main_block` over all 21 WITH_MAIN tools with a
+        # `GateFailure` whose evidence carried (a) a key whose `__str__` raises and (b) 6000
+        # levels of non-cyclic nesting: 21 of 21 returned code None, with `RuntimeError` /
+        # `RecursionError` escaping the handler and ZERO sentinel lines printed — which is
+        # `blender -b -P` reporting exit 0 on a fired andon, the E07 failure this contract
+        # exists to end.
+        #
+        # Stated plainly: neither trigger is reachable from today's raise sites (an AST scan
+        # of all 21 finds no non-string-literal evidence key, and every `raise` passes an
+        # already-materialised f-string, so `str(exc)` cannot fail). The measured defect was
+        # in the CLAIM `tests/test_instrument_exits.py` makes about this block — that any
+        # secondary failure in a handler still yields a sentinel and an exit code — and the
+        # claim is made TRUE here rather than weakened there.
+        #
+        # Everything below that can fail is inside the guard. What is above it cannot:
+        # `isinstance` on an exception, `type(exc).__name__`, and a `json.dumps` of six
+        # values that are already strings or None.
         _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
-        _detail = getattr(exc, "evidence", None)
+        _outcome = halt_outcome(exc)
         _sentinel = {
-            "tool": "rig_character", "outcome": halt_outcome(exc),
-            "gate": getattr(exc, "gate", None),
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": _halt_keysafe(_detail) if isinstance(_detail, dict) else None}
+            "tool": "rig_character", "outcome": _outcome, "gate": None,
+            "error": type(exc).__name__,
+            "message": "the halt line could not be built", "evidence": None}
+        _line = json.dumps(_sentinel)
+        try:
+            traceback.print_exc()
+            _detail = getattr(exc, "evidence", None)
+            _sentinel = {
+                "tool": "rig_character", "outcome": _outcome,
+                "gate": getattr(exc, "gate", None),
+                "error": type(exc).__name__, "message": str(exc),
+                "evidence": (_halt_keysafe(_detail)
+                             if isinstance(_detail, dict) else None)}
+            _line = json.dumps(_sentinel, default=str)
+        except BaseException:                                         # noqa: BLE001
+            pass
         try:
             _args = parse_args()
             try:
@@ -1389,18 +1625,13 @@ if __name__ == "__main__":
                 _sha = None
             _write_halt(os.path.abspath(_args["out"]), exc, _sha, _args["glb"])
         except BaseException:                                         # noqa: BLE001
-            # The halt record is a courtesy; the sentinel and the exit code are the contract.
-            traceback.print_exc()
-        finally:
-            # The sentinel line may not be deleted by a failure to serialise the sentinel:
-            # a `TypeError` raised HERE would leave the `finally` before `sys.exit`. The
-            # fallback carries only values that are already strings.
+            # The halt record is a courtesy; the sentinel and the exit code are
+            # the contract. Even this diagnostic is guarded (F-586822bf):
+            # nothing in this handler may reach the `finally` before `sys.exit`.
             try:
-                _line = json.dumps(_sentinel, default=str)
+                traceback.print_exc()
             except BaseException:                                     # noqa: BLE001
-                _line = json.dumps({
-                    "tool": _sentinel["tool"], "outcome": _sentinel["outcome"],
-                    "gate": None, "error": _sentinel["error"],
-                    "message": _sentinel["message"], "evidence": None})
+                pass
+        finally:
             print("RIG_CHARACTER_HALT " + _line)
             sys.exit(_code)

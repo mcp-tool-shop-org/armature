@@ -133,6 +133,16 @@ RECORDED_POPULATION = frozenset({
     "CadenceGate", "PinnedCameraGate",
     "CropStripError", "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate",
     "PreviewWalkGate",
+    # JOINED 2026-09-04 (wave 12, instruments F-940b0800): `rig_character.
+    # GateSubjectDegenerate` refuses a subject whose coordinates are not numbers, from two
+    # sites in `subject_scale` — the empty-population clause and the non-finite-coordinate
+    # clause — so its NAME stops being its clause and its `pytest.raises` sites need one.
+    "GateSubjectDegenerate",
+    # JOINED 2026-09-04 (wave 12, instruments F-9b2d4106): `rig_character.gate_glb_written`
+    # refuses a GLB export that never reached disk and one that is zero bytes - two sites,
+    # so its NAME stops being its clause. It is the one implementation for all nine
+    # `bpy.ops.export_scene.gltf` call sites in the tree.
+    "GateGlbWritten",
     # JOINED 2026-09-04, exactly as this comment anticipated: the instruments wave-10
     # amend (F-51c5e0ef) gives `make_binding_sheet.shoot` and `make_parts_sheet.shoot`
     # the render-completeness refusal their siblings carry, so `BindingSheetGate` and
@@ -236,9 +246,10 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # `gate_out_paths`. 80 + 1 = 81. ⚠ This number moves once per domain that adds a typed
     # refusal in a wave; the coordinator re-measures it at the merge, as it did at wave 10.
     # WAVE-12 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    # WAVE-12 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
 
     # WAVE-12 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(POLICED) == 87, sorted(POLICED)
+    assert len(POLICED) == 89, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
