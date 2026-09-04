@@ -253,3 +253,57 @@ def test_the_reference_graph_loads_no_lora_of_any_kind():
         for v in node["inputs"].values():
             if isinstance(v, str):
                 assert "lora" not in v.lower(), v
+
+
+# ------------------------- `--canon-prompt` has one meaning (wave 6, F-b28837eb/F-c6580beb)
+
+
+def _t2v_args(tmp_path, *extra):
+    return ["--out", str(tmp_path / "fresh"), "--subject", "BLACKGUARD", "--no-canon",
+            "--tag", "probe", *extra]
+
+
+def test_canon_prompt_cannot_change_the_text_this_builder_ships(tmp_path, capsys):
+    """In the six sibling spend builders `--canon-prompt` is cross-checked against the
+    shipped text by `canon_gate.gate_canon_ships_what_it_gated` and can do nothing but
+    refuse. Here it was a PROMPT OVERRIDE — `prompt = a.canon_prompt or (...)` — while the
+    shared `add_spend_flags` help string describes only the cross-check semantics ("text
+    the router checks; default is the payload's positive"). Measured on today's tree: a
+    `--canon-prompt` naming a sentence no canon governs printed `[canon] UNGATED:
+    BLACKGUARD` and BUILD_T2V_OK, and node 30 of the emitted graph carried exactly that
+    string. An operator who learned the flag on r2v or i2v, where passing it can only
+    raise, silently changed the text a paid generation is made from."""
+    from armature_core.errors import GateCanon
+
+    out = tmp_path / "fresh"
+    with pytest.raises(GateCanon) as exc:
+        B.main(_t2v_args(tmp_path, "--canon-prompt",
+                         "a completely different sentence that no canon governs"))
+    assert exc.value.evidence["clause"] == "gated_text_is_not_shipped_text"
+    assert not out.exists(), "a refused build created its output directory"
+    assert "BUILD_T2V_OK" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("profile", ["reference", "derived"])
+def test_the_profiles_own_prompt_passed_as_canon_prompt_still_builds(tmp_path, profile):
+    """The mutation that must NOT fire it: the flag agreeing with the shipped text."""
+    shipped = B.PROMPT_A3 if profile == "reference" else B.PROBE_PROMPT
+    B.main(_t2v_args(tmp_path / profile, "--profile", profile,
+                     "--canon-prompt", shipped))
+    graph = json.load(open(os.path.join(str(tmp_path / profile / "fresh"),
+                                        "E09-B2-probe-t2v.api.json"), encoding="utf-8"))
+    assert graph["30"]["inputs"]["text"] == shipped
+
+
+def test_a_refused_gate_below_canon_leaves_no_output_directory(tmp_path, capsys):
+    """`os.makedirs` sat directly under `canon_spend` and ABOVE Gates ROUTE, S and L.
+    Measured: `--seed 999999` raised "[ROUTE] Gate S: node 50 would run seed 999999, which
+    the committed list does not pre-register" and left the output directory on disk, empty
+    — to be read later as a run that happened. Every other builder in this tree was moved
+    below its last in-tool gate in wave 3; build_payload.py states the invariant."""
+    out = tmp_path / "fresh"
+    with pytest.raises(RG.RouteGate) as exc:
+        B.main(_t2v_args(tmp_path, "--seed", "999999"))
+    assert "999999" in str(exc.value)
+    assert not out.exists(), "a refused spend left an output directory behind"
+    assert "BUILD_T2V_OK" not in capsys.readouterr().out
