@@ -1634,20 +1634,40 @@ def _distributions_this_file_skips_on():
     return out
 
 
-#: Named and dated 2026-09-04. Distributions this file skips on that the `dev` extra does not
-#: yet declare. SUBSET, so ci-packaging adding `build>=1.5,<2` to the extra (F-968c4c54)
-#: leaves this test green and the entry merely deletable.
-DEV_EXTRA_ADDITIONS_PENDING = {"build"}
+#: RE-DERIVED 2026-09-04 (wave 14, F-a1fb54ce) and EMPTY.
+#:
+#: What it held: `{"build"}`, routed to ci-packaging as F-968c4c54 under a SUBSET assertion
+#: so the entry would become "stale, not red" the moment the extra grew. The fix landed —
+#: the `dev` extra now reads `["pytest>=8.0", "opencv-python-headless==5.0.0.93",
+#: "matplotlib==3.11.1", "build>=1.5,<2"]` — and `missing` became `[]`. A subset assertion
+#: over a set containing `build` then holds whether or not the extra still declares it, so
+#: removing `build` from the manifest again left this test green: the exact silent-skip this
+#: file paid to close (`_build_sdist` skips on `find_spec('build') is None`, so a contributor
+#: installing the way the manifest tells them to runs a suite in which the published sdist's
+#: contents are asserted by nothing).
+#:
+#: Re-derive with:
+#:     python -c "import sys,os,re,tomllib;sys.path[:0]=['tests','tools'];\
+#:     import test_packaging as P;\
+#:     cfg=tomllib.load(open(os.path.join(P.REPO,'pyproject.toml'),'rb'));\
+#:     d={re.split(r'[<>=!~\\[ ]',s.strip())[0] for s in \
+#:        cfg['project']['optional-dependencies']['dev']};\
+#:     print(sorted(P._distributions_this_file_skips_on()-d))"
+DEV_EXTRA_ADDITIONS_PENDING = set()
 
 
 def test_the_declared_dev_install_carries_every_distribution_this_file_skips_on():
     """A skip keyed on a dependency the manifest never asks for is a silent gap.
 
-    Measured 2026-09-04: `_distributions_this_file_skips_on()` is `{"build"}` and
-    `pyproject.toml`'s `dev` extra is `["pytest>=8.0"]`, so a contributor who installs the
-    way the manifest tells them to runs a suite in which the sdist's contents — the artifact
-    `pyproject.toml:114-122` records as measured-and-not-yet-decided, 156 files with 84
-    collection errors when unpacked — are asserted by nothing.
+    Measured 2026-09-04 (wave 14, corrected in place — the line this docstring carried
+    described the pre-fix tree for a wave after the fix landed):
+    `_distributions_this_file_skips_on()` is `{"build"}` and `pyproject.toml`'s `dev` extra
+    is the four-member `["pytest>=8.0", "opencv-python-headless==5.0.0.93",
+    "matplotlib==3.11.1", "build>=1.5,<2"]`, so `missing` is `[]` and the assertion is
+    equality. Before that extra grew, a contributor who installed the way the manifest tells
+    them to ran a suite in which the sdist's contents — the artifact `pyproject.toml` records
+    as measured-and-not-yet-decided, 156 files with 84 collection errors when unpacked — were
+    asserted by nothing.
     """
     with open(os.path.join(REPO, "pyproject.toml"), "rb") as fh:
         cfg = tomllib.load(fh)
@@ -1656,10 +1676,13 @@ def test_the_declared_dev_install_carries_every_distribution_this_file_skips_on(
     needed = _distributions_this_file_skips_on()
     assert needed, "the walk found no skip guards; it is not reading this file"
     missing = sorted(needed - declared)
-    assert set(missing) <= DEV_EXTRA_ADDITIONS_PENDING, {
-        "skipped on, and the `dev` extra does not declare it":
-            sorted(set(missing) - DEV_EXTRA_ADDITIONS_PENDING),
-        "the extra declares": sorted(declared)}
+    assert missing == [], {
+        "skipped on, and the `dev` extra does not declare it": missing,
+        "the extra declares": sorted(declared),
+        "why it matters": "the skip is silent: the suite reports a pass over tests that "
+                          "never ran, and the two that pin the published sdist's contents "
+                          "are the ones that go quiet"}
+    assert DEV_EXTRA_ADDITIONS_PENDING == set(), sorted(DEV_EXTRA_ADDITIONS_PENDING)
 
 
 def test_the_dev_extra_walk_would_see_a_new_skip_guard():

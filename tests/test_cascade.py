@@ -448,9 +448,18 @@ PROBE = textwrap.dedent(
 )
 
 
-def _run(tmp_path, *, flag=False, env_var=False):
+#: The andons the PROBE above exercises, pinned. WAVE 14, F-509a012b: the body of the `-O`
+#: survival test here was byte-identical to `tests/test_assembly.py`'s (confirmed by an AST
+#: sweep over `tests/`) — `for name, outcome in res['raised'].items(): assert outcome ==
+#: 'RAISED'`, which passes over an empty dict. See the note beside `EXPECTED_ANDONS` there for
+#: why this is written down rather than parsed out of the PROBE.
+EXPECTED_ANDONS = ("bareimages", "capraise", "ceiling", "dropped", "duplicated",
+                   "emptyframes", "groupsize", "nobatchnode", "order", "paid", "slotorder")
+
+
+def _run(tmp_path, *, flag=False, env_var=False, probe=None):
     script = tmp_path / f"cas_probe_{int(flag)}_{int(env_var)}.py"
-    script.write_text(PROBE, encoding="utf-8")
+    script.write_text(PROBE if probe is None else probe, encoding="utf-8")
     env = dict(os.environ)
     env.pop("PYTHONOPTIMIZE", None)
     if env_var:
@@ -469,8 +478,25 @@ def _run(tmp_path, *, flag=False, env_var=False):
 )
 def test_every_cascade_andon_survives_optimization(tmp_path, flag, env_var, label):
     res = _run(tmp_path, flag=flag, env_var=env_var)
+    # Size and membership BEFORE the property (wave 14, F-509a012b).
+    assert sorted(res["raised"]) == sorted(EXPECTED_ANDONS), {
+        "not exercised by the probe": sorted(set(EXPECTED_ANDONS) - set(res["raised"])),
+        "exercised and not pinned": sorted(set(res["raised"]) - set(EXPECTED_ANDONS))}
     for name, outcome in res["raised"].items():
         assert outcome == "RAISED", f"{label}/{name}: {outcome}"
+
+
+def test_the_optimization_leg_is_red_when_the_probe_stops_exercising_an_andon(tmp_path):
+    """Rule 3 on the operand the finding named: the PROBE's own dispatch dict."""
+    dropped = PROBE.replace('"nobatchnode": nobatchnode}', "}")
+    assert dropped != PROBE, "the probe's dispatch dict did not change; nothing is proven"
+    res = _run(tmp_path, probe=dropped)
+    assert sorted(res["raised"]) != sorted(EXPECTED_ANDONS), sorted(res["raised"])
+    with pytest.raises(AssertionError):
+        assert sorted(res["raised"]) == sorted(EXPECTED_ANDONS)
+    # …and the pre-wave-14 body is green over the same narrowed run.
+    for name, outcome in res["raised"].items():
+        assert outcome == "RAISED", (name, outcome)
 
 
 def test_the_optimization_actually_took_effect(tmp_path):

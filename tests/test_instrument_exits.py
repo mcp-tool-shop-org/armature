@@ -155,10 +155,23 @@ def halt_contract_pending(filename):
         f"population that makes it visible.")
 
 
-#: Named and dated 2026-09-04. Members of the population that cannot yet be held to the
-#: sentinel half of the contract, each for the reason `halt_contract_pending` computes. The
-#: set may not GROW; it empties on its own.
-HALT_CONTRACT_PENDING = {"stage_render.py"}
+#: RE-DERIVED 2026-09-04 (wave 14, F-49eb5adc) and EMPTY, the way `NO_MAIN_BLOCK` above
+#: already is.
+#:
+#: What it held: `{"stage_render.py"}`, routed to instruments-measure as F-f9251c74 in wave
+#: 12. That fix landed — `tools/stage_render.py` carries the `STAGE_RENDER_HALT` literal
+#: `halt_contract_pending` keys on — so `[f for f in WITH_MAIN if halt_contract_pending(f)]`
+#: is `[]`. The entry then did worse than say nothing: the test below asserted
+#: `set([]) <= {"stage_render.py"}` and iterated `for name in sorted([])`, so the clause that
+#: exists to prove "the reason is a real, readable one, not an empty string standing in for
+#: evidence" examined a zero-length population and could not fire. A synthetic member is fed
+#: to `halt_contract_pending` there now, because the real population no longer supplies one.
+#:
+#: Re-derive with:
+#:     python -c "import sys;sys.path[:0]=['tests','tools'];\
+#:     import test_instrument_exits as M;\
+#:     print([f for f in M.WITH_MAIN if M.halt_contract_pending(f)])"
+HALT_CONTRACT_PENDING = set()
 
 GATE_OUTCOME = "HALTED \u2014 a gate fired"
 REFUSAL_OUTCOME = "REFUSED \u2014 the tool declined to proceed"
@@ -253,13 +266,91 @@ RECORDED_HALT_RECORD_WRITERS = [
 ]
 
 
+HALT_RECORD = "halt.json"
+
+
+def _called_tail(call):
+    import ast
+
+    try:
+        return ast.unparse(call.func).split(".")[-1]
+    except Exception:                                                   # noqa: BLE001
+        return ""
+
+
+def _is_halt_path(expr):
+    """True when this expression BUILDS a path whose last component is `halt.json`.
+
+    A string constant that merely mentions the filename in prose is not one: the last path
+    component is compared, so `"writes halt.json beside the outputs"` is not a path and
+    `os.path.join(_d, "halt.json")` is.
+    """
+    import ast
+    import posixpath
+
+    if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
+        return posixpath.basename(expr.value.replace("\\", "/")) == HALT_RECORD
+    if isinstance(expr, ast.Call) and _called_tail(expr) == "join" and expr.args:
+        return _is_halt_path(expr.args[-1])
+    return False
+
+
+def _writes_halt_record_in(node):
+    """True when `node` OPENS a `halt.json` path for writing — the behaviour, not a spelling.
+
+    WAVE 14, F-e4919c09. This used to be `any ast.Constant string containing "halt.json"`
+    anywhere in the MODULE, under a docstring stating "THE NODE: the `__main__` block's own
+    statements". The stated reason for widening past the block was real — `rig_character`
+    writes through `_write_halt`, which puts the literal one function away — but the widening
+    applied to all 22 members, so a module docstring or an unrelated reader NAMING the file
+    read as a halt-record writer. No live defect the day it was found (only the five rig
+    tools carried the literal at all) and a census keyed on a spelling in a wave whose rule
+    was that censuses key on behaviour.
+
+    THE NODE now: an `open(<path ending in halt.json>, <write mode>)` call, or a
+    `Path(...).write_text/write_bytes` on such a path, resolving a name bound to the path one
+    assignment back (`path = os.path.join(out_dir, "halt.json")` … `open(path, "w")` is
+    `rig_character`'s shape).
+    """
+    import ast
+
+    bound = set()
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Assign) and _is_halt_path(sub.value):
+            bound |= {t.id for t in sub.targets if isinstance(t, ast.Name)}
+    for call in ast.walk(node):
+        if not isinstance(call, ast.Call):
+            continue
+        tail = _called_tail(call)
+        if tail in ("write_text", "write_bytes"):
+            target = getattr(call.func, "value", None)
+            if target is not None and (_is_halt_path(target)
+                                       or (isinstance(target, ast.Name)
+                                           and target.id in bound)):
+                return True
+            continue
+        if tail != "open" or not call.args:
+            continue
+        mode = ""
+        if len(call.args) > 1 and isinstance(call.args[1], ast.Constant):
+            mode = str(call.args[1].value)
+        for kw in call.keywords:
+            if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                mode = str(kw.value.value)
+        if not any(c in mode for c in "wax"):
+            continue
+        first = call.args[0]
+        if _is_halt_path(first) or (isinstance(first, ast.Name) and first.id in bound):
+            return True
+    return False
+
+
 def _block_shape(filename):
     """`(uses_finally, writes_a_halt_record)` for one tool's `__main__` block.
 
-    THE NODE: the `__main__` block's own statements. `writes_a_halt_record` is read off the
-    module — `rig_character` writes through `_write_halt(...)`, which puts the `halt.json`
-    literal one function away — so the discriminator asserted below is the `finally`, and
-    the record write is checked to agree with it.
+    THE NODE: the `__main__` block's own statements, plus ONE HOP into a module-local
+    function the block calls — the same one-hop rule `_census_nodes.functions_that_refuse`
+    uses, and the reason the original widened to the whole module by mistake.
     """
     import ast
 
@@ -268,9 +359,16 @@ def _block_shape(filename):
                  if isinstance(n, ast.If) and isinstance(n.test, ast.Compare)
                  and getattr(n.test.left, "id", None) == "__name__")
     uses_finally = any(isinstance(n, ast.Try) and n.finalbody for n in ast.walk(block))
-    writes_record = any(
-        isinstance(n, ast.Constant) and isinstance(n.value, str) and "halt.json" in n.value
-        for n in ast.walk(tree))
+
+    local = {fn.name: fn for fn in ast.walk(tree)
+             if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    writes_record = _writes_halt_record_in(block)
+    if not writes_record:
+        for call in ast.walk(block):
+            if isinstance(call, ast.Call) and _called_tail(call) in local:
+                if _writes_halt_record_in(local[_called_tail(call)]):
+                    writes_record = True
+                    break
     return uses_finally, writes_record
 
 
@@ -302,6 +400,102 @@ def test_the_halt_record_writers_are_the_ones_the_contract_names():
     assert len(held) - len(writes) == 17, (
         "16 tools print their sentinel and exit from the `finally` and write no halt record; "
         "the five that write one are the rig tools the contract names")
+
+
+def test_the_halt_record_half_of_the_walk_is_red_on_a_module_that_only_names_the_file():
+    """Rule 3 on the half that had no red proof (wave 14, F-e4919c09).
+
+    Three synthetic modules, all carrying the literal `halt.json`, and the walk must
+    separate them:
+
+    * a module whose ONLY mention is a docstring — a reader, not a writer;
+    * a module that OPENS the path for writing inside the `__main__` block;
+    * a module that opens it one hop away, through a module-local helper the block calls,
+      which is `rig_character`'s real shape and the reason the original walk was widened to
+      the whole module by mistake.
+
+    Under the substring predicate this replaced, all three read as writers, so the census
+    could not have told a docstring from a write.
+    """
+    import ast
+    import textwrap
+
+    def shape(src):
+        tree = ast.parse(textwrap.dedent(src))
+        block = next(n for n in tree.body
+                     if isinstance(n, ast.If) and isinstance(n.test, ast.Compare)
+                     and getattr(n.test.left, "id", None) == "__name__")
+        local = {fn.name: fn for fn in ast.walk(tree)
+                 if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        if _writes_halt_record_in(block):
+            return True
+        return any(_writes_halt_record_in(local[_called_tail(c)])
+                   for c in ast.walk(block)
+                   if isinstance(c, ast.Call) and _called_tail(c) in local)
+
+    only_names_it = '''
+        """This tool writes halt.json beside its outputs when a gate fires."""
+        import os
+        def main(argv=None):
+            return 0
+        if __name__ == "__main__":
+            import sys
+            sys.exit(main())
+    '''
+    writes_in_the_block = '''
+        import json, os, sys
+        def main(argv=None):
+            return 0
+        if __name__ == "__main__":
+            try:
+                sys.exit(main())
+            except BaseException as exc:
+                with open(os.path.join("out", "halt.json"), "w") as fh:
+                    json.dump({}, fh)
+                raise
+    '''
+    writes_one_hop_away = '''
+        import json, os, sys
+        def _write_halt(out_dir, exc):
+            path = os.path.join(out_dir, "halt.json")
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump({}, fh)
+        def main(argv=None):
+            return 0
+        if __name__ == "__main__":
+            try:
+                sys.exit(main())
+            except BaseException as exc:
+                _write_halt("out", exc)
+                raise
+    '''
+    assert shape(only_names_it) is False, (
+        "a module whose only `halt.json` is in a docstring reads as a halt-record writer; "
+        "the census is keyed on a spelling, not on the write")
+    assert shape(writes_in_the_block) is True
+    assert shape(writes_one_hop_away) is True
+
+    # …and the predicate this replaced, run beside them, or the comparison says nothing.
+    def substring_keyed(src):
+        return any(isinstance(n, ast.Constant) and isinstance(n.value, str)
+                   and "halt.json" in n.value
+                   for n in ast.walk(ast.parse(textwrap.dedent(src))))
+
+    assert substring_keyed(only_names_it) is True, (
+        "the substring predicate did not see the docstring; there is no defect to compare "
+        "against and this test proves nothing")
+
+    # A write in the wrong MODE is not a halt record either.
+    reads_it_back = '''
+        import json, os, sys
+        def main(argv=None):
+            return 0
+        if __name__ == "__main__":
+            with open(os.path.join("out", "halt.json")) as fh:
+                json.load(fh)
+            sys.exit(main())
+    '''
+    assert shape(reads_it_back) is False, reads_it_back
 
 
 def test_the_block_shape_walk_can_tell_the_two_shapes_apart():
@@ -387,11 +581,58 @@ def test_the_pending_category_is_named_dated_and_may_not_grow():
     assert set(derived) <= HALT_CONTRACT_PENDING, {
         "prints no `<STEM>_HALT` line and is not named as pending":
             sorted(set(derived) - HALT_CONTRACT_PENDING)}
+    # WAVE 14, F-49eb5adc: EQUALITY. The subset direction alone let `stage_render.py` sit here
+    # for a wave after its handler landed, naming nothing — and an entry that names nothing
+    # cannot be deleted by the commit that closes it, because nothing fails.
+    assert HALT_CONTRACT_PENDING == set(derived), {
+        "named as pending and no longer pending (delete these)":
+            sorted(HALT_CONTRACT_PENDING - set(derived))}
     assert HALT_CONTRACT_PENDING <= set(blender_tools()), sorted(
         HALT_CONTRACT_PENDING - set(blender_tools()))
-    # the reason is a real, readable one — not an empty string standing in for evidence
-    for name in sorted(derived):
-        assert "F-f9251c74" in halt_contract_pending(name), name
+
+
+def test_the_pending_reason_is_readable_evidence_and_not_an_empty_string(tmp_path,
+                                                                        monkeypatch):
+    """The clause that used to run over an empty list (wave 14, F-49eb5adc).
+
+    `for name in sorted(derived)` was a ZERO-ITERATION loop the moment `stage_render`'s
+    handler landed, so the one thing this category asserts about its own reasons — that they
+    are readable evidence — checked nothing. The real population no longer supplies a
+    sentinel-less member, so a synthetic one is put through `halt_contract_pending` itself:
+    the predicate is exercised on the shape it exists to recognise, and its answer is read.
+    """
+    import blender_stub
+
+    module = tmp_path / "probe_no_sentinel.py"
+    module.write_text(
+        "import bpy\n"
+        "def main(argv=None):\n"
+        "    return 0\n"
+        'if __name__ == "__main__":\n'
+        "    import sys\n"
+        "    sys.exit(main())\n", encoding="utf-8")
+    monkeypatch.setattr(blender_stub, "TOOLS", str(tmp_path))
+
+    reason = halt_contract_pending("probe_no_sentinel.py")
+    assert reason, (
+        "a module carrying no `<STEM>_HALT` literal anywhere reads as NOT pending; the "
+        "category cannot recognise the shape it exists to hold")
+    assert "F-f9251c74" in reason and "PROBE_NO_SENTINEL_HALT" in reason, reason
+    assert reason.strip() == reason and len(reason) > 80, reason
+
+    # …and the other direction, or the check above says nothing about the predicate: the
+    # same module WITH the sentinel must read as not pending.
+    module.write_text(
+        "import bpy\n"
+        "def main(argv=None):\n"
+        "    return 0\n"
+        'if __name__ == "__main__":\n'
+        "    import sys\n"
+        "    try:\n"
+        "        sys.exit(main())\n"
+        "    finally:\n"
+        "        print('PROBE_NO_SENTINEL_HALT {}')\n", encoding="utf-8")
+    assert halt_contract_pending("probe_no_sentinel.py") is None
 
 
 def test_the_population_is_the_whole_blender_side_of_the_repo():

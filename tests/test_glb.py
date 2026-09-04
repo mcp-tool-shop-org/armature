@@ -217,9 +217,10 @@ def test_a_source_image_embedded_twice_passes_when_both_copies_arrive(tmp_path):
 
 
 def test_the_atlas_gate_carries_its_own_id_in_the_evidence(tmp_path):
-    """F-f2f42e4a's family: `stage_render` prints `GATE_FAILURE <exc.gate>` and
-    `GATE_EVIDENCE <json>` as two lines, and a reader that keeps only the JSON had no id
-    at all. Every other gate in assembly.py, turnaround.py, startframe.py, resample.py
+    """F-f2f42e4a's family: `stage_render` records the halt as one `STAGE_RENDER_HALT
+    <json>` line carrying `gate` and `evidence` as separate keys (CORRECTED wave 14: the
+    two-line `GATE_FAILURE` / `GATE_EVIDENCE` receipt this named was deleted with the old
+    handler), and a reader that keeps only the evidence dict had no id at all. Every other gate in assembly.py, turnaround.py, startframe.py, resample.py
     and lift_solve.py puts "gate" in the evidence; this one did not."""
     a = _glb(str(tmp_path / "src.glb"), ATLAS)
     b = _glb(str(tmp_path / "out.glb"), ATLAS)

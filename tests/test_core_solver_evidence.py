@@ -12,8 +12,10 @@ no `gate` either. Runtime confirmation on the same tree:
 `startframe.gate_alpha(0.0, (0.1,0.1,0.1), "why")` raised with `exc.gate == "ALPHA"`,
 `ev["gate"] == "ALPHA"` and `ev["andon"] is None`, while `turnaround.gate_view_alpha(...)`
 raised with `ev["andon"] == "TurnaroundAlphaGate"` — and the gate id `ALPHA` is carried by
-BOTH `startframe.AlphaGate` and `turnaround.TurnaroundAlphaGate`. `stage_render.py:509-510`
-prints `GATE_FAILURE <exc.gate>` beside `GATE_EVIDENCE <json>` and never the class name, so
+BOTH `startframe.AlphaGate` and `turnaround.TurnaroundAlphaGate`. `stage_render.py` records
+`gate` beside `evidence` in one `STAGE_RENDER_HALT <json>` line and never the class name
+(CORRECTED wave 14: the `GATE_FAILURE` / `GATE_EVIDENCE` lines this named were deleted with
+the old handler), so
 an `ALPHA` receipt read off that handler could not be traced back to the andon that pulled.
 Gate id `D` is shared the same way, by `errors.GateDDeterminism` and
 `parts.GatePartsDeterminism`.

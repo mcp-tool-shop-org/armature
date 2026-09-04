@@ -477,8 +477,9 @@ def test_every_gate_p_clause_refuses_an_empty_vertex_array_by_name(clause):
     raised a bare `ValueError: zero-size array to reduction operation maximum which has no
     identity` out of `float(d.max())`, and `gate_p_round_trip_positions` on the same input
     returned a green verdict. A ValueError is not an `ArmatureError`, so the halt
-    contract's exit-2 branch and the `GATE_FAILURE` / `GATE_EVIDENCE` receipt lines every
-    census reads are bypassed. `gate_p_rest_pose` — the clause `rig_character.py:666`
+    contract's exit-2 branch and the `STAGE_RENDER_HALT` receipt line every census reads
+    are bypassed (CORRECTED wave 14: this named `GATE_FAILURE` / `GATE_EVIDENCE`, two
+    lines the handler no longer prints). `gate_p_rest_pose` — the clause `rig_character.py:666`
     calls two lines AFTER the liveness clause at :664 — already refused it by name."""
     empty = np.zeros((0, 3), dtype=np.float64)
     with pytest.raises(GatePRestPose, match=r"non-empty \(N, 3\) vertex array"):

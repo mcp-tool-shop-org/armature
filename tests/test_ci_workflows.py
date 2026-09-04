@@ -1003,14 +1003,193 @@ def _all_run_scripts():
     for name, text in sources:
         lines = text.splitlines()
         for i, line in enumerate(lines):
+            rest = _run_header(line)
+            if rest is None:
+                continue
+            # WAVE 14 (ci-packaging seed, test_ci_workflows.py:1005): the block scalars were
+            # `("run: |", "run: |-")` only. YAML has SIX headers here — `|`, `|-`, `|+`, `>`,
+            # `>-`, `>+` — and a `run: >` step fell to the `else` branch, which took
+            # `line.strip()[len("run: "):]` and yielded the string `">"`. Every rule in this
+            # file that reads a run script would then have examined one character while the
+            # step's actual commands went unread: no shell, no `set -euo pipefail`, no
+            # `pip install`, no `npm publish`. There is no folded step on disk today, which
+            # is exactly why the blindness was free to sit here; the red proof below plants
+            # one.
+            # …and a step whose FIRST key is `run:` reads `- run: …`, which
+            # `line.strip().startswith("run:")` did not see at all — a second blindness in
+            # the same three lines, and the reason `_run_header` exists.
+            if rest in RUN_BLOCK_HEADERS:
+                body = block_at(lines, i)
+                pad = min((_indent(x) for x in body if x.strip()), default=0)
+                out.append((name, "\n".join(x[pad:] for x in body)))
+            else:
+                out.append((name, rest))
+    return out
+
+
+def test_the_run_script_reader_sees_a_folded_scalar(tmp_path, monkeypatch):
+    """RED on the spelling the reader could not see (wave 12, rule 2; wave 14 seed).
+
+    A synthetic workflow whose only step uses `run: >` — the folded scalar — must have its
+    commands read, and the pre-wave-14 reader is run beside it and shown to return `">"`, or
+    the comparison this test makes says nothing.
+    """
+    import test_ci_workflows as SELF
+
+    folded = (
+        "name: probe\n"
+        "jobs:\n"
+        "  build:\n"
+        "    steps:\n"
+        "      - name: install\n"
+        "        run: >\n"
+        "          pip install --quiet\n"
+        "          armature-studio[dev]\n")
+    (tmp_path / "probe.yml").write_text(folded, encoding="utf-8")
+    monkeypatch.setattr(SELF, "WORKFLOWS", str(tmp_path))
+    monkeypatch.setattr(SELF, "ACTIONS", str(tmp_path / "no-actions"))
+
+    scripts = dict(_all_run_scripts())
+    assert set(scripts) == {"probe.yml"}, sorted(scripts)
+    assert "pip install --quiet" in scripts["probe.yml"], scripts
+    assert "armature-studio[dev]" in scripts["probe.yml"], scripts
+
+    def pre_wave_14(text):
+        got = []
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
             if not line.strip().startswith("run:"):
                 continue
             if line.strip() in ("run: |", "run: |-"):
                 body = block_at(lines, i)
                 pad = min((_indent(x) for x in body if x.strip()), default=0)
-                out.append((name, "\n".join(x[pad:] for x in body)))
+                got.append("\n".join(x[pad:] for x in body))
             else:
-                out.append((name, line.strip()[len("run: ") :]))
+                got.append(line.strip()[len("run: "):])
+        return got
+
+    assert pre_wave_14(folded) == [">"], (
+        "the pre-wave-14 reader read the folded step's commands; it could not, and if it "
+        "could this test would be comparing a reader with itself")
+
+    # …and the spellings it COULD read are unchanged, so the widening did not trade one
+    # blindness for another. The `- run:` forms are the SECOND blindness in the same three
+    # lines: a step whose first key is `run:` was invisible to the reader entirely, so the
+    # pre-wave-14 walk is shown returning nothing for them.
+    for src, expected in (
+            ("jobs:\n  b:\n    steps:\n      - name: x\n        run: |\n          echo hi\n",
+             "echo hi"),
+            ("jobs:\n  b:\n    steps:\n      - name: x\n        run: |-\n          echo hi\n",
+             "echo hi"),
+            ("jobs:\n  b:\n    steps:\n      - name: x\n        run: echo hi\n", "echo hi"),
+            ("jobs:\n  b:\n    steps:\n      - run: |\n          echo hi\n", "echo hi"),
+            ("jobs:\n  b:\n    steps:\n      - run: echo hi\n", "echo hi"),
+    ):
+        (tmp_path / "probe.yml").write_text(src, encoding="utf-8")
+        assert dict(_all_run_scripts())["probe.yml"].strip() == expected, src
+    for src in ("jobs:\n  b:\n    steps:\n      - run: |\n          echo hi\n",
+                "jobs:\n  b:\n    steps:\n      - run: echo hi\n"):
+        assert pre_wave_14(src) == [], (
+            "the pre-wave-14 reader saw a `- run:` step; it did not, and if it could this "
+            "half of the test compares a reader with itself")
+
+
+# ------------------------------------------- the `-O` leg, and the env var that reaches it
+#
+# WAVE 14, ci-packaging's seam (F-a2a838c7). `release.yml`'s `Suite under -O` step ran
+# `python -O -m pytest -q` with NO `env:` block at all, while `ci.yml`'s equivalent set
+# `PYTHONOPTIMIZE: "1"` beside the flag. The difference is not cosmetic and ci-packaging
+# measured it on this rig: a parent run as `python -O` spawning
+# `subprocess.run([sys.executable, "-c", ...])` gives a CHILD with `__debug__ is True` and
+# `PYTHONOPTIMIZE` unset; the same parent with `PYTHONOPTIMIZE=1` in the environment gives a
+# child with `__debug__ is False`. There are subprocess call sites in `tests/**` that inherit
+# the environment and pass no `-O`, so the flag alone does not reach them — and this repo's
+# whole argument that gates still raise when asserts are deleted rests on that leg.
+#
+# Keyed on the ARGV, never on the step's name (wave-8 rule): the two spellings on disk are
+# `Suite under -O` and `run tests under -O (gates must still raise)` and neither is read here,
+# so a rename cannot delete the census. Driven from TEXT rather than from `WORKFLOWS`, so the
+# red proof can run it over a reverted copy — which is the only way it goes red on the operand.
+
+
+#: The six YAML block-scalar headers a `run:` may carry. The reader shipped with two.
+RUN_BLOCK_HEADERS = ("|", "|-", "|+", ">", ">-", ">+", "")
+
+
+def _run_header(line):
+    """The text after `run:` on this line, or None — `- run:` counted as well as `run:`.
+
+    A step's FIRST key may be `run:`, in which case the line reads `- run: …` and a
+    `line.strip().startswith("run:")` test does not see it at all.
+    """
+    stripped = line.strip()
+    if stripped.startswith("- "):
+        stripped = stripped[2:].lstrip()
+    if not stripped.startswith("run:"):
+        return None
+    return stripped[len("run:"):].strip()
+
+
+def _step_blocks(body):
+    """Every `steps:` entry in a job body, as a list of lines including its own `- ` line."""
+    lines = [ln for ln in body.splitlines()]
+    starts = [i for i, ln in enumerate(lines) if ln.lstrip().startswith("- ")]
+    out = []
+    for n, i in enumerate(starts):
+        base = _indent(lines[i])
+        end = len(lines)
+        for j in starts[n + 1:]:
+            if _indent(lines[j]) <= base:
+                end = j
+                break
+        out.append(lines[i:end])
+    return out
+
+
+def _run_script_of(step):
+    """The `run:` script of one step block — folded and literal scalars alike, else None."""
+    for i, line in enumerate(step):
+        rest = _run_header(line)
+        if rest is None:
+            continue
+        if rest in RUN_BLOCK_HEADERS:
+            body = block_at(step, i)
+            pad = min((_indent(x) for x in body if x.strip()), default=0)
+            return "\n".join(x[pad:] for x in body)
+        return rest
+    return None
+
+
+def _pythonoptimize_of(step):
+    """The value of `PYTHONOPTIMIZE` in this step's own `env:` block, or None."""
+    for i, line in enumerate(step):
+        if line.strip() != "env:":
+            continue
+        for entry in block_at(step, i):
+            key, _, value = entry.partition(":")
+            if key.strip() == "PYTHONOPTIMIZE":
+                return value.strip().strip('"').strip("'")
+    return None
+
+
+def optimized_suite_steps(body):
+    """`[(run script, PYTHONOPTIMIZE value or None)]` for every step in `body` that runs the
+    suite under `-O`.
+
+    THE NODE: an invocation of pytest carrying the `-O` flag. Not the step's name, not the
+    file it lives in.
+    """
+    out = []
+    for step in _step_blocks(body):
+        script = _run_script_of(step)
+        if script is None:
+            continue
+        code = _code_only(script)
+        if "pytest" not in code:
+            continue
+        if not re.search(r"(?m)(^|\s)-O(\s|$)", code):
+            continue
+        out.append((code, _pythonoptimize_of(step)))
     return out
 
 
@@ -1024,6 +1203,96 @@ def jobs_that_run_the_suite():
             if re.search(r"(?m)^\s*(-\s*(name|run):.*)?$", body) and "pytest" in _code_only(body):
                 out.append((name, job))
     return out
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_run_the_suite())
+def test_every_job_that_runs_the_suite_also_runs_it_under_optimize(workflow, job):
+    """The population is the jobs that run pytest, derived — not a list of two file names.
+
+    `python -O` deletes every `assert`, so a job that runs the suite only in its ordinary
+    form proves nothing about whether the gates still raise; that is the whole argument
+    `verify.ps1` and both workflows are built to make.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    steps = optimized_suite_steps(body)
+    assert steps, (
+        f"{workflow} job {job!r} runs pytest and never runs it under -O; the leg that shows "
+        f"the andons survive `assert` deletion does not exist in this job")
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_run_the_suite())
+def test_every_optimize_leg_sets_pythonoptimize_in_its_environment(workflow, job):
+    """The flag alone does not reach a child process; the environment variable does.
+
+    ci-packaging measured it on this rig (F-a2a838c7): a parent run as `python -O` spawning
+    `subprocess.run([sys.executable, "-c", ...])` gives a child with `__debug__ is True` and
+    `PYTHONOPTIMIZE` unset, and the same parent with `PYTHONOPTIMIZE=1` in the environment
+    gives a child with `__debug__ is False`. `tests/**` has subprocess call sites that
+    inherit the environment and pass no `-O` of their own, so a `-O` leg without the variable
+    exercises the parent only.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    for script, value in optimized_suite_steps(body):
+        assert value == "1", (
+            f"{workflow} job {job!r} runs the suite under -O with PYTHONOPTIMIZE={value!r}; "
+            f"the flag reaches this process and not the ones the suite spawns:\n{script}")
+
+
+def test_the_optimize_census_is_red_on_a_leg_that_drops_the_environment_block(tmp_path):
+    """Rule 3, on the operand the finding named: a workflow whose `-O` step has no `env:`.
+
+    The census is driven over TEXT, so the reverted copy is drivable — pointing it at
+    `WORKFLOWS` only would make this test a re-implementation rather than a proof. Both the
+    literal-block and the one-line `run:` spellings are exercised, because a workflow may use
+    either and the census must not be keyed on the layout.
+    """
+    guarded = (
+        "  verify:\n"
+        "    steps:\n"
+        "      - name: Suite\n"
+        "        run: python -m pytest -q\n"
+        "      - name: Suite under -O\n"
+        "        run: python -O -m pytest -q\n"
+        "        env:\n"
+        '          PYTHONOPTIMIZE: "1"\n')
+    reverted = guarded.replace("        env:\n", "").replace(
+        '          PYTHONOPTIMIZE: "1"\n', "")
+    assert "PYTHONOPTIMIZE" not in reverted
+
+    assert [v for _s, v in optimized_suite_steps(guarded)] == ["1"]
+    assert [v for _s, v in optimized_suite_steps(reverted)] == [None], (
+        optimized_suite_steps(reverted))
+    with pytest.raises(AssertionError):
+        for _script, value in optimized_suite_steps(reverted):
+            assert value == "1"
+
+    # …and a step whose name never mentions -O is still found, or the census is keyed on the
+    # spelling the wave-8 rule forbids.
+    renamed = guarded.replace("- name: Suite under -O", "- name: second pass")
+    assert [v for _s, v in optimized_suite_steps(renamed)] == ["1"], renamed
+
+    # …and a job with no `-O` leg at all is reported as having none.
+    assert optimized_suite_steps(
+        "  verify:\n"
+        "    steps:\n"
+        "      - name: Suite\n"
+        "        run: python -m pytest -q\n") == []
+
+
+def test_the_verify_script_runs_the_same_optimize_leg_the_workflows_do():
+    """The third copy. `verify.ps1` is the local equivalent of both jobs, and a rule that
+    holds in CI and not on the rig is a rule contributors meet only after pushing."""
+    with open(os.path.join(REPO, "verify.ps1"), encoding="utf-8") as fh:
+        script = fh.read()
+    assert re.search(r"-O\s+-m\s+pytest", script), (
+        "verify.ps1 runs no `-O` pytest leg; the workflows do, so the rig and CI disagree "
+        "about what a green verify means")
+    assert re.search(r"\$env:PYTHONOPTIMIZE\s*=\s*'1'", script), (
+        "verify.ps1's -O leg does not set PYTHONOPTIMIZE, so the subprocesses the suite "
+        "spawns run with asserts ACTIVE while the parent runs with them deleted")
+    assert "finally" in script, (
+        "verify.ps1 sets PYTHONOPTIMIZE and does not restore it in a `finally`; every leg "
+        "after the -O one would then run optimized without saying so")
 
 
 @pytest.mark.parametrize("workflow,job", jobs_that_run_the_suite())
@@ -2203,16 +2472,27 @@ GUARDED_TODAY = [
     "verify.ps1",
 ]
 
-#: WAVE 12, F-387eb031. Members of the guarded population that ci.yml's filters do not yet
-#: cover. Named, dated 2026-09-04, routed: `docs/research-grounding.md` is ci-packaging's
-#: F-5d2c6d28 ("add it to both trigger lists"). SUBSET, so the entry becomes deletable — not
-#: red — the moment the filter lands.
+#: RE-DERIVED 2026-09-04 (wave 14, F-f70a495d) and EMPTY.
 #:
-#: The stake: a PR editing only that file runs no CI job at all, and
+#: What it held: `{"docs/research-grounding.md"}`, routed to ci-packaging in wave 12 as
+#: F-5d2c6d28 ("add it to both trigger lists") under a SUBSET assertion so the entry would
+#: become deletable rather than red once the filter landed. The filter landed —
+#: `.github/workflows/ci.yml` lists `- "docs/research-grounding.md"` under both `push` and
+#: `pull_request` — and `_unfiltered(paths_the_suite_guards(), …)` returns `[]` for both
+#: triggers. But `test_ci_runs_on_every_file_the_suite_guards` subtracted this set
+#: UNCONDITIONALLY, so deleting the ci.yml line again — in a filter-tidying PR, say — left
+#: the test green, and the stale entry hid the exact regression its own comment described.
+#:
+#: The stake, unchanged: a PR editing only that file would run no CI job at all, and
 #: `tests/test_openpose_convention.py:55`, whose whole purpose is "if someone edits
 #: research-grounding.md's F20, this fails", is green-by-absence on the PR and first surfaces
 #: on some later unrelated push, attributed to whatever that push touched.
-UNFILTERED_PENDING = {"docs/research-grounding.md"}
+#:
+#: Re-derive with:
+#:     python -c "import sys;sys.path[:0]=['tests','tools'];import test_ci_workflows as C;\
+#:     print({t: C._unfiltered(C.paths_the_suite_guards(), t) \
+#:            for t in ('push','pull_request')})"
+UNFILTERED_PENDING = set()
 
 
 def test_the_guarded_path_census_is_the_one_the_suite_actually_opens():
@@ -2310,8 +2590,12 @@ def _unfiltered(paths, trigger):
 @pytest.mark.parametrize("trigger", ["push", "pull_request"])
 def test_ci_runs_on_every_file_the_suite_guards(trigger):
     """A file a test opens, that no filter covers, is a guard that cannot run on its subject."""
-    missing = [p for p in _unfiltered(paths_the_suite_guards(), trigger)
-               if p not in UNFILTERED_PENDING]
+    # WAVE 14, F-f70a495d: the `if p not in UNFILTERED_PENDING` subtraction is gone with the
+    # set it read. `_unfiltered` returns `[]` for both triggers on this tree, so the
+    # assertion holds without it — and it starts covering `docs/research-grounding.md` again
+    # the moment the filter line is removed.
+    assert UNFILTERED_PENDING == set(), sorted(UNFILTERED_PENDING)
+    missing = _unfiltered(paths_the_suite_guards(), trigger)
     assert missing == [], (
         f"{trigger} runs nothing when these change, and a test in tests/ reads every one of "
         f"them: {missing}; the guard does not run on the change it exists to guard"

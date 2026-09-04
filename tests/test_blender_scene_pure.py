@@ -81,8 +81,10 @@ def test_this_module_does_not_stub_bpy_at_import_time():
 def test_a_compositor_output_with_no_incoming_link_raises_a_typed_gate(BS):
     """F-ac989919. The three checks raised a bare RuntimeError with no gate id and no
     evidence. `ArmatureError` subclasses `RuntimeError`, so this was not merely untyped:
-    `stage_render.py:508` catches only `GateFailure` and prints GATE_FAILURE /
-    GATE_EVIDENCE before returning 2, so a compositor mis-wiring escaped that handler
+    `stage_render.py`'s handler at the time caught only `GateFailure` before returning 2,
+    so a compositor mis-wiring escaped it
+    (CORRECTED wave 14: this named the GATE_FAILURE / GATE_EVIDENCE lines, since replaced
+    by the six-key `STAGE_RENDER_HALT` line)
     entirely and surfaced as an unhandled traceback with no receipt lines at all."""
     with pytest.raises(BS.CompositorWiring) as exc:
         BS.gate_compositor_wiring("depth", "Depth", "Render Layers", [])
