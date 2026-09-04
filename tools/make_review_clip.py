@@ -40,8 +40,63 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from armature_core.errors import ArmatureError  # noqa: E402
 from measure_lift import gate_listing_pairing  # noqa: E402
 from sheet_compose import require_frames  # noqa: E402
+
+
+class ReviewClipError(ArmatureError):
+    """This review pass cannot be written where it was pointed.
+
+    One typed refusal for this tool, carrying an evidence dict, rather than the bare
+    `SystemExit` string the frame check used to raise.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+def gate_out_directory(out, frames_dir):
+    """ANDON — `--out` is a review directory, not the run it is reading.
+
+    Measured 2026-09-04: `--frames=<dir> --out=<same dir>` on a 5-frame `lossless/` with
+    `--stills=0,4` exited 0 and left `review_0.50x_8fps.webp`, `review_manifest.json` and
+    EIGHT `still_f00*.png` beside `00000..00004.png`. `measure_floor.frame_population` then
+    refused that directory ("holds 8 PNG(s) that are not numbered frames") and
+    `measure_clip.frame_paths` silently dropped all eight — so a review pass pointed at a
+    run's own fetched frames leaves that population unusable for every stray-refusing
+    instrument, and halts a later `verify_downloads` re-check on files the fetcher cannot
+    attribute to anything.
+
+    The refusal is here rather than a widening of the fetcher's sweep: the canonical name
+    is `review_<rate>x_<fps>fps.webp` under a dedicated review directory, which is what
+    every report on the rig records (E09, E10, E11), and teaching the run-root andon to
+    tolerate a review artifact would teach it to accept a file that does not belong there.
+    """
+    out_abs = os.path.abspath(out)
+    frames_abs = os.path.abspath(frames_dir)
+    ev = {"gate": "OUT", "out": out_abs, "frames": frames_abs,
+          "convention": "review_<rate>x_<fps>fps.webp under a directory of its own"}
+    if out_abs == frames_abs:
+        raise ReviewClipError(
+            f"--out {out_abs} is the frames directory itself; the clip, the manifest and "
+            f"one still per index per target would be written in among the run's numbered "
+            f"frames, where every stray-refusing instrument then halts on them", ev)
+    if os.path.isdir(out_abs):
+        numbered = sorted(n for n in os.listdir(out_abs)
+                          if n.lower().endswith(".png")
+                          and os.path.splitext(n)[0].isdigit())
+        has_urls = os.path.exists(os.path.join(out_abs, "urls.json"))
+        if numbered or has_urls:
+            raise ReviewClipError(
+                f"--out {out_abs} already holds "
+                f"{len(numbered)} numbered frame(s)"
+                f"{' and a urls.json' if has_urls else ''}; it is a run directory, and the "
+                f"stills would sort in beside its population",
+                dict(ev, numbered_frames=numbered[:16], urls_json=has_urls))
+    ev["verdict"] = "a review directory of its own"
+    return ev
 
 
 def clip_name(fps, source_fps):
@@ -67,10 +122,18 @@ def main(argv=None):
     ap.add_argument("--crop", type=int, default=224, help="still crop size, native pixels")
     a = ap.parse_args(argv)
 
+    # ---- ANDON, before anything is read or made: this review pass is not being written
+    #      into the run it is reading.
+    gate_out = gate_out_directory(a.out, a.frames)
+
     names = sorted(f for f in os.listdir(a.frames)
-                   if f.lower().endswith(".png") and f[0].isdigit())
+                   if f.lower().endswith(".png") and os.path.splitext(f)[0].isdigit())
     if not names:
-        raise SystemExit(f"no frames in {a.frames}")
+        raise ReviewClipError(
+            f"no numbered frames in {a.frames}; there is nothing to review",
+            {"gate": "FRAMES", "frames": os.path.abspath(a.frames),
+             "png_files": sorted(n for n in os.listdir(a.frames)
+                                 if n.lower().endswith(".png"))[:16]})
     ims = [Image.open(os.path.join(a.frames, n)).convert("RGB") for n in names]
 
     det = None
@@ -129,13 +192,15 @@ def main(argv=None):
                    "playback_rate": f"{a.fps / float(a.source_fps):.2f}x",
                    "clip_lossless": True,
                    "stills_requested": idx, "n_stills_requested": len(idx),
+                   "gate_OUT": gate_out,
                    "stills": cuts}, fh, indent=2)
     print("MAKE_REVIEW_CLIP_OK " + json.dumps({
         "clip": clip, "frames": len(ims), "fps": a.fps,
         "rate": f"{a.fps / float(a.source_fps):.2f}x",
         "stills": len(cuts), "stills_requested": idx,
         "manifest": side}))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

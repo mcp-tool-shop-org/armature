@@ -194,3 +194,63 @@ def test_db_resolution_follows_the_shared_precedence(mod, tmp_path, monkeypatch)
     assert mod._resolve_db(None).endswith("from_env.db")
     monkeypatch.delenv("ARMATURE_INDEX_DB")
     assert mod._resolve_db(None) == mod.BINDING.db_default()
+
+
+# -------------------------------------- the usage line and the dispatcher say the same thing
+#
+# `_print_help` printed `usage: armature_index.py {build,verify,q,claims,health} [term]
+# [--db PATH] ...`, advertising the SPACE-separated form; `_peek_verb` returned the first
+# token not starting with `-`, so in `--db PATH health` that token is the PATH. Measured
+# 2026-09-04 in this worktree:
+#
+#   `armature_index.py --db C:/tmp/nonexistent.db health`
+#       -> error: invalid choice: 'C:/tmp/nonexistent.db'
+#          (choose from 'build','verify','q','claims','health')
+#          hint: armature_index.py --help                                   exit 1
+#   `armature_index.py --db=C:/tmp/nonexistent.db health`
+#       -> state INDEX_MISSING / serving no / why no index at ...           exit 4
+#
+# The refusal that names the verb was written to stop exactly this class of unhelpful
+# message, and it produced one: an operator following the tool's own usage line was told
+# their database path is an invalid verb.
+
+
+def test_the_two_db_forms_reach_the_same_verb(mod, tmp_path):
+    """THE fixture: the same command, written the two ways the tool advertises."""
+    missing = str(tmp_path / "nonexistent.db")
+    assert mod._peek_verb(["--db", missing, "health"]) == "health"
+    assert mod._peek_verb(["--db=" + missing, "health"]) == "health"
+    assert mod.main(["--db", missing, "health"]) == \
+        mod.main(["--db=" + missing, "health"])
+
+
+def test_every_value_taking_flag_is_derived_from_the_parsers_that_declare_it(mod):
+    """The node this census keys on is the `add_argument` call — this binding's own
+    parser and the shared CLI's, read by AST — not a list typed beside the dispatcher.
+
+    A `store_true` flag consumes nothing after it and must NOT be in the set, or
+    `--debug health` would swallow the verb.
+    """
+    flags = mod._value_flags()
+    assert "--db" in flags
+    assert "--limit" in flags and "--table" in flags, sorted(flags)
+    assert "--debug" not in flags, sorted(flags)
+    assert mod._peek_verb(["--debug", "health"]) == "health"
+
+
+def test_the_usage_line_advertises_a_form_the_dispatcher_accepts(mod, capsys):
+    """A usage line naming a form the dispatcher rejects is the defect, whichever half
+    is changed to close it. Both halves are asserted, so neither can drift alone."""
+    mod._print_help()
+    usage = capsys.readouterr().out.splitlines()[0]
+    for flag in re.findall(r"--[a-z-]+", usage):
+        if flag in mod._value_flags():
+            assert flag + "=" in usage, (flag, usage)
+
+
+def test_a_term_after_a_query_verb_is_not_mistaken_for_the_verb(mod):
+    """The guard the other way: `q armature` must still dispatch on `q`, and a term that
+    happens to follow a value flag must not become the verb."""
+    assert mod._peek_verb(["q", "armature"]) == "q"
+    assert mod._peek_verb(["--limit", "5", "q", "armature"]) == "q"
+    assert mod._peek_verb([]) is None

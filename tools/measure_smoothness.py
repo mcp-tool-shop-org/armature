@@ -209,13 +209,19 @@ def main(argv=None):
         rb = json.load(fh)
 
     if ra["resolution"] != rb["resolution"]:
-        raise SystemExit(f"the two records are projected at different resolutions "
-                         f"({ra['resolution']} vs {rb['resolution']}); a pixel comparison "
-                         f"across resolutions measures the resolution")
+        raise SmoothnessInputError(
+            f"the two records are projected at different resolutions "
+            f"({ra['resolution']} vs {rb['resolution']}); a pixel comparison across "
+            f"resolutions measures the resolution",
+            {"gate": "RESOLUTION", "resolution_a": ra["resolution"],
+             "resolution_b": rb["resolution"], "a": a.a, "b": a.b})
     if ra["camera"]["radius"] != rb["camera"]["radius"] or \
             ra["camera"]["target"] != rb["camera"]["target"]:
-        raise SystemExit("the two records were projected through different cameras; the "
-                         "difference measured would include the composition")
+        raise SmoothnessInputError(
+            "the two records were projected through different cameras; the difference "
+            "measured would include the composition",
+            {"gate": "CAMERA", "camera_a": ra["camera"], "camera_b": rb["camera"],
+             "a": a.a, "b": a.b})
 
     # ---- the same style of refusal as the two above, on the axis they left open.
     names = check_records(ra, rb, label_a=a.label_a, label_b=a.label_b)

@@ -157,16 +157,18 @@ def test_a_comparison_across_elevations_is_refused(tmp_path, monkeypatch):
                 "elevation_deg": el, "resolution": [8, 8]}
 
     monkeypatch.setattr(MSS, "load_set", fake)
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(MSS.ShotsetSheetError) as exc:
         MSS.main(["--ortho=a/ortho", "--persp=b/persp", f"--out={tmp_path}",
                   "--mode=compare"])
     assert "different elevations" in str(exc.value)
+    assert exc.value.evidence["gate"] == "ELEVATION"
 
 
 def test_a_missing_manifest_names_itself_rather_than_composing_a_partial_set(tmp_path):
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(MSS.ShotsetSheetError) as exc:
         MSS.load_set(str(tmp_path))
     assert "turnaround_manifest.json" in str(exc.value)
+    assert exc.value.evidence["gate"] == "MANIFEST"
 
 
 # ------------------------------------------------- S05: comparing where the scale came from
@@ -214,9 +216,10 @@ def test_the_scale_mode_refuses_two_sets_whose_tags_would_collide(tmp_path, monk
     overwrite each other and the sheet shows ONE set twice — ruled, labelled, and entirely
     plausible as a comparison of two."""
     monkeypatch.setattr(MSS, "load_set", lambda d: _ortho_set("solved"))
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(MSS.ShotsetSheetError) as exc:
         MSS.main(["--ortho=a", "--second=b", f"--out={tmp_path}", "--mode=scale"])
     assert "overwrite each other" in str(exc.value)
+    assert exc.value.evidence["gate"] == "TAGS"
 
 
 def test_the_scale_mode_refuses_a_perspective_set(tmp_path, monkeypatch):
@@ -227,9 +230,10 @@ def test_the_scale_mode_refuses_a_perspective_set(tmp_path, monkeypatch):
                 else dict(_ortho_set("pinned"), projection="PERSP"))
 
     monkeypatch.setattr(MSS, "load_set", fake)
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(MSS.ShotsetSheetError) as exc:
         MSS.main(["--ortho=a", "--second=b", f"--out={tmp_path}", "--mode=scale"])
     assert "no such scale to compare" in str(exc.value)
+    assert exc.value.evidence["gate"] == "PROJECTION"
 
 
 def test_the_scale_mode_refuses_across_elevations(tmp_path, monkeypatch):
@@ -240,13 +244,17 @@ def test_the_scale_mode_refuses_across_elevations(tmp_path, monkeypatch):
                 else _ortho_set("pinned", el=0.0))
 
     monkeypatch.setattr(MSS, "load_set", fake)
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(MSS.ShotsetSheetError) as exc:
         MSS.main(["--ortho=a", "--second=b", f"--out={tmp_path}", "--mode=scale"])
     assert "different elevations" in str(exc.value)
+    assert exc.value.evidence["gate"] == "ELEVATION"
 
 
 def test_the_scale_mode_needs_its_second_set(tmp_path, monkeypatch):
     monkeypatch.setattr(MSS, "load_set", lambda d: _ortho_set("solved"))
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(MSS.ShotsetSheetError) as exc:
         MSS.main(["--ortho=a", f"--out={tmp_path}", "--mode=scale"])
-    assert "--second" in str(exc.value)
+    # The flag is named in the evidence now rather than only in the message, which is what
+    # a caller reads: `{"gate": "ARGS", "mode": "scale", "missing": "--second"}`.
+    assert exc.value.evidence == {"gate": "ARGS", "mode": "scale", "missing": "--second"}
+    assert "two ORTHO sets" in str(exc.value)

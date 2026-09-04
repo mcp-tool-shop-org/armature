@@ -180,7 +180,11 @@ def main(argv=None):
     sheet.save(a.out)
     print(f"THESIS_SHEET {a.out} {sheet.width}x{sheet.height} "
           f"plate={tuple(int(v) for v in plate)}")
+    # The SUCCESS direction of the exit convention, stated: 0, beside the sentinel. It
+    # returned None, which `SystemExit(None)` happens to render as 0 — a convention no
+    # census could read off the function.
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

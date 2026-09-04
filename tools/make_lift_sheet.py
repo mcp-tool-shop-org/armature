@@ -128,7 +128,12 @@ def subject_box(frame_paths, empty_plate, pad=0.10):
         y0 = by0 if y0 is None else min(y0, by0)
         y1 = by1 if y1 is None else max(y1, by1)
     if x0 is None:
-        raise SystemExit("no subject pixels found in any frame; nothing to show")
+        raise SheetPopulationError(
+            f"no subject pixels found in any of the {len(list(frame_paths))} frame(s) "
+            f"against {os.path.basename(str(empty_plate))}; the crop box would be the "
+            f"whole frame or nothing, and neither is the subject",
+            {"gate": "SUBJECT_BOX", "empty_plate": str(empty_plate),
+             "n_frames": len(list(frame_paths))})
     h, w = base.shape[:2]
     mx, my = int(pad * (x1 - x0)), int(pad * (y1 - y0))
     return (max(0, int(x0) - mx), max(0, int(y0) - my),
@@ -157,7 +162,14 @@ def draw_landmarks(im, image_landmarks, visibility, box, full_size):
     return im
 
 
-def main():
+def main(argv=None):
+    """The sheet, or a refusal. Returns 0 so `SystemExit(main())` pins SUCCESS too.
+
+    `argv` was not a parameter: four of the five panel tools took one and this one read
+    `sys.argv` directly, so the suite could only drive it through a monkeypatched
+    `sys.argv` in a subprocess — which is why no test drove any sheet's `main` end to end
+    and a sibling shipped a call site with no flag (wave 10, rule 3).
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", required=True)
     ap.add_argument("--detection", required=True)
@@ -181,7 +193,7 @@ def main():
     ap.add_argument("--lifted-camera", default=None,
                     help="the render_performer camera behind the lifted column; "
                          "printed on the sheet and in the sidecar. Absent = NOT RECORDED.")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     idx = [int(v) for v in a.frames.split(",") if v.strip() != ""]
 
@@ -291,7 +303,8 @@ def main():
                                               "sheet_plate": [int(v) for v in plate],
                                               "frames": idx, "crop_source": list(box_s),
                    "crop_lifted": list(box_l)}))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

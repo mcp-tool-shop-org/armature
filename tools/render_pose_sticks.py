@@ -120,6 +120,29 @@ def gate_ink(fracs, min_frac):
     return ev
 
 
+def _written_frames(out):
+    """The numbered PNGs on disk, by the predicate this directory's CONSUMERS use.
+
+    Gate COUNT matched `f.endswith(".png") and f[0].isdigit()` — case-SENSITIVE on the
+    extension and a first-character test on the stem — while the five tools that read this
+    directory (`measure_floor.frame_population`, `encode_control.frame_population`,
+    `measure_arm._load_frames`, `gate_b_frames.frame_paths`, `measure_clip.frame_paths`)
+    were all settled in wave 8 on `n.lower().endswith(".png")` plus
+    `os.path.splitext(n)[0].isdigit()`.
+
+    Measured 2026-09-04: with `00003.PNG` planted beside three written frames, the gate
+    recorded `COUNT PASS, frames: 3` and exited 0 while all five consumers derived FOUR.
+    The upper-case arrival is real here — `fetch_run.verify_downloads` sweeps `.PNG` as a
+    downloaded frame, and Windows preserves case. The stem test also drops the
+    `0_debug.png` over-count the old predicate produced; that direction is pinned in
+    `tests/test_render_pose_sticks.py`.
+    """
+    return sorted((f for f in os.listdir(out)
+                   if f.lower().endswith(".png")
+                   and os.path.splitext(f)[0].isdigit()),
+                  key=lambda f: int(os.path.splitext(f)[0]))
+
+
 def main(argv=None):
     started = time.time()
     a = parse_args(argv)
@@ -175,10 +198,15 @@ def main(argv=None):
     min_frac = (sw * 2.0 * (0.1 * min(width, height))) / float(width * height)
     gate_i = gate_ink(fracs, min_frac)
 
-    written = sorted(f for f in os.listdir(out) if f.endswith(".png") and f[0].isdigit())
+    # Gate COUNT — over the population every CONSUMER of this directory derives.
+    written = _written_frames(out)
     if len(written) != n:
-        raise SticksGate(f"wrote {len(written)} frames and the record carries {n}",
-                         {"out": out})
+        raise SticksGate(
+            f"wrote {len(written)} frames and the record carries {n}; the control "
+            f"sequence a paid generation is driven by is not the sequence this manifest "
+            f"describes",
+            {"gate": "COUNT", "out": out, "written": written, "n_written": len(written),
+             "n_record": n})
 
     strip_path = None
     if a.strip:

@@ -177,3 +177,147 @@ def test_every_tool_that_indexes_frames_by_a_caller_supplied_number_keys_by_the_
     for mod, body in derived.items():
         assert "splitext" in body, mod
         assert "enumerate" not in body, mod
+
+
+# --------------------------- the box is inside the frame it is cut from, and the flags parse
+#
+# **A box outside the frame was padded with black and recorded as though it were cut.**
+# `build` refuses a frame NUMBER the run does not hold, and nothing bounded the BOX against
+# the frame it is cut from: `Image.open(path).convert('RGB').crop(box)` pads a box outside
+# the image with zeros rather than raising. Measured 2026-09-04 on three 64x64 frames,
+# `--boxes="0:900,900,960,960" --scale=2`: exit 0, `CROP_STRIP ... 136x168`, a tile of 14400
+# pure-black pixels, and a sidecar recording `{"frame": 0, "file": "00000.png",
+# "box": [900,900,960,960]}`. The realistic arrival is a box cut for one route's resolution
+# applied to another's (832x480 vs 1280x720): part image, part black padding, no refusal and
+# no note — under a docstring whose stated reason for existing is that "a later reader can
+# re-cut the identical crop rather than guess where a published still came from".
+#
+# **And two flag typos escaped the tool's one refusal shape.** `CropStripError`'s class
+# docstring states there is "One refusal shape for this tool, carrying an evidence dict,
+# rather than the bare `SystemExit` strings these checks used to raise". Measured:
+# `--boxes="0:a,b,c,d"` died with `ValueError: invalid literal for int() with base 10: 'a'`,
+# exit 1, no evidence dict, no flag named; `--scale=0` died inside PIL at
+# `ValueError: height and width must be > 0` raised from `PIL/Image.py:2438`, after every
+# requested frame had been opened. This is the escape `measure_floor._span` was given a
+# refusal for, one tool over.
+
+
+def _square(tmp, numbers, size=64):
+    d = tmp / "sq"
+    d.mkdir(parents=True, exist_ok=True)
+    for n in numbers:
+        arr = np.zeros((size, size, 3), dtype=np.uint8)
+        arr[..., 0] = 40 + n
+        Image.fromarray(arr).save(d / f"{n:05d}.png")
+    return str(d)
+
+
+def test_a_box_wholly_outside_the_frame_is_refused_not_padded(tmp_path):
+    """THE fixture: the measured case. 14400 black pixels published as a native crop."""
+    frames = _square(tmp_path, [0, 1, 2])
+    out = tmp_path / "strip.png"
+    with pytest.raises(C.CropStripError, match=r"box .* is not inside") as e:
+        C.main([f"--frames={frames}", f"--out={out}", "--boxes=0:900,900,960,960",
+                "--scale=2"])
+    ev = e.value.evidence
+    assert ev["box"] == [900, 900, 960, 960]
+    assert ev["frame_size"] == [64, 64]
+    assert ev["overhang"] == {"x0": 0, "y0": 0, "x1": 896, "y1": 896}
+    assert not out.exists()
+
+
+def test_a_box_half_outside_the_frame_is_refused_too(tmp_path):
+    """The realistic arrival: a box cut for another route's resolution. Part image, part
+    black padding — the half that IS image is what makes it survive a glance."""
+    frames = _square(tmp_path, [0, 1, 2])
+    with pytest.raises(C.CropStripError, match=r"box .* is not inside") as e:
+        C.main([f"--frames={frames}", f"--out={tmp_path / 'strip.png'}",
+                "--boxes=1:40,40,100,100"])
+    assert e.value.evidence["overhang"]["x1"] == 36
+
+
+def test_a_negative_origin_is_refused(tmp_path):
+    """The other side of the same bound: PIL pads a negative origin just as silently."""
+    frames = _square(tmp_path, [0, 1, 2])
+    with pytest.raises(C.CropStripError, match=r"box .* is not inside"):
+        C.main([f"--frames={frames}", f"--out={tmp_path / 'strip.png'}",
+                "--boxes=--0:-4,0,20,20".replace("--0", "0")])
+
+
+def test_a_box_exactly_at_the_edge_is_accepted(tmp_path):
+    """The guard the other way: the refusal must not make a legitimate full-frame crop
+    unreachable. `crop((0,0,W,H))` is the whole frame and nothing is padded."""
+    frames = _square(tmp_path, [0, 1, 2], size=64)
+    out = tmp_path / "strip.png"
+    assert C.main([f"--frames={frames}", f"--out={out}", "--boxes=0:0,0,64,64",
+                   "--scale=1"]) == 0
+    assert out.exists()
+
+
+def test_the_sidecar_records_the_frame_size_the_box_was_checked_against(tmp_path):
+    """So a later reader can see the crop was inside the frame, not merely that a box was
+    asked for."""
+    frames = _square(tmp_path, [0, 1, 2])
+    out = tmp_path / "strip.png"
+    C.main([f"--frames={frames}", f"--out={out}", "--boxes=0:0,0,20,20"])
+    side = json.loads((tmp_path / "strip.json").read_text(encoding="utf-8"))
+    assert side["crops"][0]["frame_size"] == [64, 64]
+    assert side["crops"][0]["box"] == [0, 0, 20, 20]
+
+
+@pytest.mark.parametrize("bad,where", [
+    ("0:a,b,c,d", "coordinate"),
+    ("0:1,2,3,x", "coordinate"),
+    ("f:1,2,3,4", "frame"),
+])
+def test_a_non_numeric_token_raises_the_tools_own_error(bad, where):
+    """`int(...)` was unguarded on both the coordinates and the frame token: a plausible
+    operator typo in the flag this tool exists to RECORD surfaced as a bare Python error
+    naming neither the flag nor the shape it wanted."""
+    with pytest.raises(C.CropStripError, match=r"--boxes") as e:
+        C.parse_boxes(bad)
+    assert e.value.evidence["entry"] == bad
+    assert where in str(e.value)
+
+
+@pytest.mark.parametrize("scale", [0, -1])
+def test_a_scale_below_one_is_refused_before_a_frame_is_opened(tmp_path, scale):
+    """The contract is an enlargement "by an integer factor with NEAREST"; a factor below
+    1 is not one, and PIL's own error named neither the flag nor the value — after every
+    requested frame had been opened."""
+    frames = _square(tmp_path, [0, 1, 2])
+    out = tmp_path / "strip.png"
+    with pytest.raises(C.CropStripError, match=r"--scale") as e:
+        C.main([f"--frames={frames}", f"--out={out}", "--boxes=0:0,0,20,20",
+                f"--scale={scale}"])
+    assert e.value.evidence["scale"] == scale
+    assert not out.exists()
+
+
+def test_the_crop_strip_refusals_survive_python_optimize(tmp_path):
+    """They raise; they are not asserts."""
+    import subprocess
+    import sys
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    frames = _square(tmp_path, [0, 1, 2])
+    code = (
+        "import sys; sys.path.insert(0, r'%s')\n"
+        "import make_crop_strip as C\n"
+        "for argv, tag in ((['--frames=%s', '--out=%s', '--boxes=0:900,900,960,960'], 'BOX'),\n"
+        "                  (['--frames=%s', '--out=%s', '--boxes=0:0,0,20,20',\n"
+        "                    '--scale=0'], 'SCALE')):\n"
+        "    try:\n"
+        "        C.main(argv)\n"
+        "    except C.CropStripError:\n"
+        "        print(tag + '_RAISED')\n"
+        "try:\n"
+        "    C.parse_boxes('0:a,b,c,d')\n"
+        "except C.CropStripError:\n"
+        "    print('PARSE_RAISED')\n"
+    ) % (os.path.join(root, "tools"),
+         frames.replace("\\", "/"), str(tmp_path / "s1.png").replace("\\", "/"),
+         frames.replace("\\", "/"), str(tmp_path / "s2.png").replace("\\", "/"))
+    res = subprocess.run([sys.executable, "-O", "-c", code], capture_output=True, text=True)
+    for tag in ("BOX_RAISED", "SCALE_RAISED", "PARSE_RAISED"):
+        assert tag in res.stdout, res.stdout + res.stderr

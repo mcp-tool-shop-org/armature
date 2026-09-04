@@ -189,3 +189,81 @@ def test_the_family_is_swept_all_three_sheets_make_the_azimuth_opt_in():
     import make_gate0_sheet as G0
 
     assert G0.frame_caption(3) == "f003", G0.frame_caption(3)
+
+
+# ------------------------------------- the mesh population, by frame NUMBER, strays refused
+#
+# `names = sorted(n for n in os.listdir(cdir) if n.lower().endswith(".png"))` took the whole
+# PNG listing and `names[fi]` indexed it POSITIONALLY while the tile caption printed
+# `f{fi:03d}` and the row title printed `{len(names)}-frame run`. Measured 2026-09-04 on a
+# `run/normal/` holding 00001.png, 00002.png, 00003.png and `strip_every8.png` (the contact
+# sheet `render_pose_sticks` writes into the directory it has just filled), with
+# `--frames=0,3 --azimuth-captions`: exit 0, sheet 110x190, row title
+# "normal channel, 4-frame orbit", the tile captioned `f000  az 0d` cut from 00001.png and
+# the tile captioned `f003  az 270d` cut from `strip_every8.png`.
+#
+# The same directory is REFUSED by five siblings — `encode_control.frame_population`,
+# `invert_frames.frame_population`, `measure_floor.frame_population`,
+# `measure_arm._load_frames` and `gate_b_frames.frame_paths` — and the unnumbered file is
+# refused for the four sheets that call `measure_lift.gate_listing_pairing`. This sheet
+# called neither, on the panel whose own row title asks "is this the same man?".
+
+
+def _numbered(tmp_path, numbers, channel="normal", extra=None):
+    d = tmp_path / "run" / channel
+    d.mkdir(parents=True, exist_ok=True)
+    for n in numbers:
+        # Each frame its own flat colour, so a mis-pairing is visible in PIXELS and not
+        # only in a name — which is what makes the fixture able to catch the defect.
+        Image.fromarray(np.full((16, 12, 3), 40 + n, dtype=np.uint8)).save(d / f"{n:05d}.png")
+    for name in (extra or []):
+        Image.fromarray(np.full((16, 12, 3), 250, dtype=np.uint8)).save(d / name)
+    return str(tmp_path / "run")
+
+
+def test_a_contact_strip_beside_the_frames_is_refused_by_name(tmp_path):
+    """THE fixture: the stray `render_pose_sticks` actually writes, in the same directory.
+
+    It must be named in the refusal, the way `measure_arm._load_frames` names it — not
+    filtered in silence and not drawn as a tile.
+    """
+    run = _numbered(tmp_path, [1, 2, 3], extra=["strip_every8.png"])
+    with pytest.raises(MIS.IdentitySheetError) as e:
+        MIS.build(run, [_plate(tmp_path)], [1, 2], tile_h=16)
+    assert "strip_every8.png" in str(e.value)
+    assert e.value.evidence["unexpected"] == ["strip_every8.png"]
+    assert e.value.evidence["frames"] == ["00001.png", "00002.png", "00003.png"]
+
+
+def test_the_tile_labelled_f001_is_cut_from_00001_png(tmp_path):
+    """`--frames` names a frame NUMBER, not a position in a listing.
+
+    On a run numbered from 1, position 0 IS `00001.png`, so the old positional index put
+    the run's first frame under the caption `f000` — a frame the run does not hold.
+    """
+    run = _numbered(tmp_path, [1, 2, 3])
+    rows = MIS.rows_for(run, [_plate(tmp_path)], [1, 3], tile_h=16)
+    tiles = rows[1][1]
+    assert [label.split("  ")[0] for _t, label in tiles] == ["f001", "f003"]
+    # 40 + n is the fixture's own colour per frame number.
+    assert np.asarray(tiles[0][0]).reshape(-1, 3)[0].tolist() == [41, 41, 41]
+    assert np.asarray(tiles[1][0]).reshape(-1, 3)[0].tolist() == [43, 43, 43]
+
+
+def test_a_frame_number_the_run_does_not_hold_is_refused(tmp_path):
+    """The bound is membership in the run's own numbers, not `< len(names)`. Frame 0 is
+    inside the old index bound and is not a frame of a run numbered 1..3."""
+    run = _numbered(tmp_path, [1, 2, 3])
+    with pytest.raises(MIS.IdentitySheetError) as e:
+        MIS.build(run, [_plate(tmp_path)], [0, 1], tile_h=16)
+    assert e.value.evidence["missing_indices"] == [0]
+    assert e.value.evidence["frame_numbers"] == [1, 2, 3]
+
+
+def test_the_azimuth_is_the_frames_position_in_the_runs_own_orbit(tmp_path):
+    """With `--azimuth-captions` on a run numbered 1..4, `f003` is the third of four
+    positions — 180 degrees — not `360*3/4`."""
+    run = _numbered(tmp_path, [1, 2, 3, 4])
+    rows = MIS.rows_for(run, [_plate(tmp_path)], [1, 3], tile_h=16, azimuth_captions=True)
+    assert [label.split("  ")[1] for label in [x[1] for x in rows[1][1]]] == \
+        ["az 0d", "az 180d"]

@@ -113,23 +113,40 @@ def load_rgb_over_plate(path, plate=SHEET_PLATE):
     }
 
 
-def require_frames(requested, population, *, what, where, exc=SheetPopulationError):
+def require_frames(requested, population, *, what, where, exc=SheetPopulationError,
+                   numbers=None):
     """Every requested index EXISTS in `population`, or raise naming the shortfall.
 
     Returns the evidence dict when it holds — a gate whose passing verdict is never
     written down is a gate nobody can read.
+
+    `numbers` switches the bound from POSITION to the frames' own NUMBERS — one
+    implementation with two modes rather than a second copy of the refusal, because the
+    two questions differ only in what "exists" means. A run numbered 00001..00003 holds
+    no frame 0, and the positional bound (`0 <= i < n`) admits it: measured 2026-09-04,
+    `make_identity_sheet` drew that run's FIRST file under the caption `f000`. Pass the
+    population's frame numbers and the same evidence dict carries `frame_numbers` beside
+    `missing_indices`.
     """
     requested = list(requested)
     n = len(population)
-    missing = [i for i in requested if i < 0 or i >= n]
+    if numbers is None:
+        missing = [i for i in requested if i < 0 or i >= n]
+    else:
+        available = set(int(v) for v in numbers)
+        missing = [i for i in requested if i not in available]
     ev = {"gate": "FRAMES", "what": what, "where": str(where), "n_frames": n,
           "requested": requested, "missing_indices": missing}
+    if numbers is not None:
+        ev["frame_numbers"] = sorted(int(v) for v in numbers)[:64]
     if missing or not n or not requested:
         raise exc(
             f"{where} holds {n} {what} and frame(s) {missing} of the requested "
             f"{requested} are not among them; a panel built from whichever of them happen "
             f"to exist shows fewer than were asked for and says nothing about it", ev)
-    ev["verdict"] = f"all {len(requested)} requested indices exist in {n} {what}"
+    ev["verdict"] = (f"all {len(requested)} requested "
+                     f"{'frame numbers' if numbers is not None else 'indices'} exist "
+                     f"in {n} {what}")
     return ev
 
 

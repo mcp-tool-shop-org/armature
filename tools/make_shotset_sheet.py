@@ -57,6 +57,22 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sheet_compose  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
+
+class ShotsetSheetError(ArmatureError):
+    """The shot-set sheet cannot be composed as asked.
+
+    One typed refusal for this tool, carrying an evidence dict, rather than the bare
+    `SystemExit(<str>)` these checks used to raise. A bare `SystemExit` carries no
+    measurement, cannot be caught by class, and is indistinguishable at the process
+    boundary from argparse's own usage exit — which is the whole reason the repo's
+    refusals are typed.
+    """
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
 
 TOOL_VERSION = "S05.1"
 
@@ -72,7 +88,10 @@ def load_set(directory):
     missing. A sheet built from a directory listing would happily compose a partial set."""
     path = os.path.join(directory, "turnaround_manifest.json")
     if not os.path.isfile(path):
-        raise SystemExit(f"no turnaround_manifest.json in {directory}")
+        raise ShotsetSheetError(
+            f"no turnaround_manifest.json in {directory}; a sheet built from a directory "
+            f"listing would happily compose a partial set",
+            {"gate": "MANIFEST", "directory": directory, "expected": path})
     with open(path, encoding="utf-8") as fh:
         man = json.load(fh)
     cam = man["camera"]
@@ -226,10 +245,14 @@ def build(sets, tags, out_dir, filename, title, subtitle):
 def _refuse_across_elevations(a, b, what):
     """Two sets at different camera heights are not a comparison of anything else."""
     if a["camera"]["elevation_deg"] != b["camera"]["elevation_deg"]:
-        raise SystemExit(
+        raise ShotsetSheetError(
             f"the two sets are at different elevations "
             f"({a['camera']['elevation_deg']} vs {b['camera']['elevation_deg']}); a "
-            f"comparison across elevation is not a comparison of {what}")
+            f"comparison across elevation is not a comparison of {what}",
+            {"gate": "ELEVATION", "compared": what,
+             "elevation_a": a["camera"]["elevation_deg"],
+             "elevation_b": b["camera"]["elevation_deg"],
+             "dir_a": a["dir"], "dir_b": b["dir"]})
 
 
 def main(argv=None):
@@ -253,31 +276,40 @@ def main(argv=None):
         # says ORTHO — a mislabelled sheet that saves, opens and looks finished. This mode
         # takes both tags off the manifests instead.
         if not a.second:
-            raise SystemExit("--mode=scale needs --second")
+            raise ShotsetSheetError(
+                "--mode=scale compares two ORTHO sets and only one was given",
+                {"gate": "ARGS", "mode": a.mode, "missing": "--second"})
         second = load_set(a.second)
         for s, flag in ((ortho, "--ortho"), (second, "--second")):
             if s["projection"] != "ORTHO":
-                raise SystemExit(
+                raise ShotsetSheetError(
                     f"{flag} is a {s['projection']} set; --mode=scale compares where an "
                     f"ORTHO run's shared scale came from, and a perspective set has no "
-                    f"such scale to compare")
+                    f"such scale to compare",
+                    {"gate": "PROJECTION", "flag": flag,
+                     "projection": s["projection"], "dir": s["dir"]})
         _refuse_across_elevations(ortho, second, "scale source")
         tags = [set_tag(ortho), set_tag(second)]
         if tags[0] == tags[1]:
             # Not cosmetic: the cell files are named `<tag>_<view>.png`, so two rows
             # sharing a tag overwrite each other's cells and the sheet shows ONE set
             # twice, ruled and labelled and entirely plausible.
-            raise SystemExit(
+            raise ShotsetSheetError(
                 f"both sets record ortho_scale_source {ortho.get('ortho_scale_source')!r}, "
                 f"so both rows would be tagged {tags[0]!r}: the sheet could not name its "
-                f"own rows apart and their cells would overwrite each other")
+                f"own rows apart and their cells would overwrite each other",
+                {"gate": "TAGS", "tags": list(tags),
+                 "ortho_scale_source": ortho.get("ortho_scale_source"),
+                 "dir_a": ortho["dir"], "dir_b": second["dir"]})
         sets = [ortho, second]
         title = ("S05 — the same GLB at the same preset, one shared ortho_scale SOLVED "
                  "above one PINNED   (diagnostics only; the Director's eye is the verdict)")
         filename = "S05-solved-vs-pinned.png"
     elif a.mode == "compare":
         if not a.persp:
-            raise SystemExit("--mode=compare needs --persp")
+            raise ShotsetSheetError(
+                "--mode=compare puts a PERSP row under an ORTHO one and none was given",
+                {"gate": "ARGS", "mode": a.mode, "missing": "--persp"})
         persp = load_set(a.persp)
         _refuse_across_elevations(ortho, persp, "projection")
         sets, tags = [ortho, persp], ["ORTHO", "PERSP"]

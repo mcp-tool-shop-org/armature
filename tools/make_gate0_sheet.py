@@ -235,6 +235,17 @@ def main(argv=None):
     ap.add_argument("--frames", default="0,8,16,24")
     ap.add_argument("--captions", default=None,
                     help="optional 'idx=text,idx=text' per-frame labels, replacing azimuth")
+    # DECLARED, not only read. `main` read `a.sheet_plate` and this line did not exist:
+    # measured 2026-09-04, every invocation of this tool died with
+    # `AttributeError: 'Namespace' object has no attribute 'sheet_plate'` before
+    # `os.makedirs` and before a tile was cut — on the one panel Gate 0 says no number may
+    # be quoted without. The four sibling sheets took the same wave-8 change and each
+    # added the flag; this one got the call site alone, and no test drove `main`.
+    ap.add_argument("--sheet-plate", default=",".join(str(v) for v in SHEET_PLATE),
+                    help="R,G,B of the plate an RGBA tile is composited over before it is "
+                         "drawn. Named and recorded, never assumed: the reference column "
+                         "of a panel must not show the character against a plate the "
+                         "route did not submit")
     a = ap.parse_args(argv)
 
     with open(a.meta, encoding="utf-8") as fh:

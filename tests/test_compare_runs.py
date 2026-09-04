@@ -290,3 +290,114 @@ def test_the_png_listing_is_case_insensitive_like_the_fetchers(tmp_path):
     report = CR.compare_runs(a, b)
     # two numbered frames per run plus the upper-case one: three compared.
     assert report["verdict_inputs"]["frames_compared"] == 3
+
+
+# ------------------------------ the CLI, and the field whose only reachable value was []
+#
+# **The hand-rolled parser.** `main` read `for token in argv: key, _, value =
+# token[2:].partition("=")` — every token has its first two characters removed regardless of
+# shape, unknown keys are accepted in silence, and the report is written only `if "out" in
+# args`. Three measurements 2026-09-04 against the rig's real outputs/E02/runs A0r1 / A0r2
+# (read-only):
+#
+#   1. `--outt=<path>` printed `COMPARE {...frames_compared: 99...}`, exited 0, and wrote no
+#      file at that path — G3's comparison reporting a clean verdict and leaving no report,
+#      because the operator mistyped the flag that names the report;
+#   2. `--help` died with `KeyError: 'a'` — the tool could not answer for its own usage,
+#      while every sibling in this domain uses argparse;
+#   3. the space-separated `--a <path> --b <path>` form the siblings accept produced
+#      `run_a = ''` and `FileNotFoundError: [WinError 3] ... ''`, naming no flag.
+#
+# **And `shape_mismatch` was a placeholder shaped like evidence.** `rec["shape_mismatch"]`
+# was initialised to `[]`, appended to, and then RAISED on whenever it was non-empty — so
+# every record a caller can read carries the empty list and no other value is reachable.
+# That is the defect the wave-8 correction removed from `verdict_inputs` and left one level
+# down: the module docstring says the counts "are gone; in their place `verdict_inputs`
+# states the POLICY", and the per-channel record was not swept with it. Read on the rig's
+# real A0r1 vs A0r2 (read-only): all three channels returned `shape_mismatch: []` beside
+# `frames_compared: 33`.
+
+import json  # noqa: E402
+import subprocess  # noqa: E402
+
+
+def test_no_returned_channel_record_carries_a_field_with_one_reachable_value(tmp_path):
+    """The census, keyed on the RETURNED record rather than on the source text: a key whose
+    only reachable value is its initial one is not a measurement, and a reader beside
+    `frames_compared: N` reads it as a check that ran and found nothing."""
+    a = _run(tmp_path, "a", frames=3)
+    b = _run(tmp_path, "b", frames=3)
+    report = CR.compare_runs(a, b)
+    for name, rec in report["channels"].items():
+        assert "shape_mismatch" not in rec, (name, sorted(rec))
+    # the policy is stated where the wave-8 correction put the other two
+    assert "shape_mismatch_policy" in report["verdict_inputs"]
+
+
+def test_the_shape_refusal_still_carries_the_mismatch_in_its_evidence(tmp_path):
+    """The guard the other way: removing the record key must not remove the measurement.
+    The evidence dict on the refusal is where it belongs — it is read when it exists."""
+    a = _run(tmp_path, "a", frames=2)
+    b = _run(tmp_path, "b", frames=2, h=16, w=16)
+    with pytest.raises(CR.CompareError, match=r"differ in SHAPE") as e:
+        CR.compare_runs(a, b)
+    assert e.value.evidence["n_shape_mismatch"] == 2
+    assert e.value.evidence["shape_mismatch"][0]["a"] == [4, 4, 3]
+
+
+def test_an_unknown_flag_is_refused_rather_than_accepted_in_silence(tmp_path):
+    """THE fixture: the plausible typo in the flag that names the report."""
+    a = _run(tmp_path, "a", frames=2)
+    b = _run(tmp_path, "b", frames=2)
+    out = tmp_path / "report.json"
+    with pytest.raises(SystemExit) as e:
+        CR.main([f"--a={a}", f"--b={b}", f"--outt={out}"])
+    assert e.value.code == 2
+    assert not out.exists()
+
+
+@pytest.mark.parametrize("form", ["equals", "space"])
+def test_out_written_in_either_form_leaves_a_file_on_disk(tmp_path, form, capsys):
+    """`--a <path>` is the form every sibling accepts and this tool silently read as ''."""
+    a = _run(tmp_path, "a", frames=2)
+    b = _run(tmp_path, "b", frames=2)
+    out = tmp_path / "report.json"
+    argv = ([f"--a={a}", f"--b={b}", f"--out={out}"] if form == "equals"
+            else ["--a", str(a), "--b", str(b), "--out", str(out)])
+    assert CR.main(argv) == 0
+    assert out.exists()
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert written["verdict_inputs"]["frames_compared"] == 2
+    printed = capsys.readouterr().out
+    # SUCCESS convention: exit 0 AND a line naming the artifact the run produced.
+    assert printed.startswith("COMPARE_RUNS_OK ")
+    line = json.loads(printed[len("COMPARE_RUNS_OK "):])
+    assert os.path.abspath(line["report"]) == os.path.abspath(str(out))
+
+
+def test_a_run_with_no_out_says_so_rather_than_implying_a_report(tmp_path, capsys):
+    """`--out` stays optional, and the line says explicitly that no report was written."""
+    a = _run(tmp_path, "a", frames=2)
+    b = _run(tmp_path, "b", frames=2)
+    assert CR.main([f"--a={a}", f"--b={b}"]) == 0
+    printed = capsys.readouterr().out
+    assert "COMPARE_RUNS_OK " in printed
+    assert "no report written" in printed
+
+
+def test_the_tool_can_answer_for_its_own_usage():
+    """`--help` died with `KeyError: 'a'`."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    res = subprocess.run(
+        [sys.executable, os.path.join(root, "tools", "compare_runs.py"), "--help"],
+        capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    for flag in ("--a", "--b", "--out"):
+        assert flag in res.stdout, res.stdout
+
+
+def test_a_missing_required_flag_is_named(tmp_path):
+    a = _run(tmp_path, "a", frames=2)
+    with pytest.raises(SystemExit) as e:
+        CR.main([f"--a={a}"])
+    assert e.value.code == 2
