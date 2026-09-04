@@ -179,3 +179,89 @@ def test_a_link_the_save_lost_is_caught_too():
     with pytest.raises(RG.RouteGate) as exc:
         GSG.link_round_trip(API, saved(drop_link=True))
     assert "we wired it and the saved file carries no link" in str(exc.value)
+
+
+def test_a_socket_the_save_REMOVED_entirely_is_caught(tmp_path):
+    """Wave 3, F-3be7aebb. The comparison iterated the SAVED node's socket list, so a
+    socket we wired that the round trip removed outright was never visited and the
+    "we wired it and the saved file carries no link" branch never ran. `round_trip` does
+    not cover it either — it skips list-valued inputs as links.
+
+    Measured on this exact fixture before the fix: with the socket present and its link
+    null the gate RAISED; with the socket ABSENT, `link_round_trip` returned
+    {n_links: 0, links: [], optional_sockets_empty_in_both: []} and `round_trip` returned
+    n_values_compared=4, all_equal=True — both clean, on a graph the cloud would execute
+    with a conditioning link missing.
+    """
+    api = {"49": {"class_type": "WanAnimateToVideo",
+                  "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1,
+                             "continue_motion_max_frames": 5, "video_frame_offset": 0,
+                             "control_video": ["200", 0]}}}
+    sv = {"nodes": [{"id": 49, "type": "WanAnimateToVideo",
+                     "inputs": [{"name": "vae", "type": "VAE", "link": 12}],
+                     "widgets_values": [832, 480, 81, 1, 5, 0]}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_round_trip(api, sv)
+    assert "control_video" in str(exc.value)
+    assert "no socket" in str(exc.value)
+
+
+def test_the_removed_socket_clause_does_not_fire_on_a_literal_we_wrote():
+    """The mutation that must NOT fire it: `width` is a literal, not a link, and the value
+    round trip owns it. A clause that fired here would refuse every faithful graph."""
+    api = {"49": {"class_type": "WanAnimateToVideo",
+                  "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1,
+                             "continue_motion_max_frames": 5, "video_frame_offset": 0}}}
+    sv = {"nodes": [{"id": 49, "type": "WanAnimateToVideo", "inputs": [],
+                     "widgets_values": [832, 480, 81, 1, 5, 0]}]}
+    ev = GSG.link_round_trip(api, sv)
+    assert ev["n_links"] == 0
+
+
+def test_the_union_visits_both_sides_at_once():
+    """One graph carrying both defects: a socket we wired that the save removed, and a
+    socket the save wired that we left empty. Both must be reported, not the first."""
+    api = {"49": {"class_type": "WanAnimateToVideo",
+                  "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1,
+                             "continue_motion_max_frames": 5, "video_frame_offset": 0,
+                             "control_video": ["200", 0]}}}
+    sv = {"nodes": [{"id": 49, "type": "WanAnimateToVideo",
+                     "inputs": [{"name": "background_video", "type": "IMAGE", "link": 99}],
+                     "widgets_values": [832, 480, 81, 1, 5, 0]}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_round_trip(api, sv)
+    problems = exc.value.evidence["problems"]
+    assert any("control_video" in p for p in problems)
+    assert any("background_video" in p for p in problems)
+
+
+# ---------------------------------------------------------- a refuse leaves no directory
+
+
+def test_a_refused_admission_leaves_no_output_directory(tmp_path):
+    """Wave 3, F-451d9008. `os.makedirs` sat above every check in this tool, so a halted
+    admission left an empty directory beside real ones, read later as a run that happened.
+    build_payload.py states the repo's invariant — a refuse must leave no output directory
+    — and it held for Gate CANON only."""
+    import json
+
+    api_path = tmp_path / "in" / "g.api.json"
+    saved_path = tmp_path / "in" / "g.saved.json"
+    seeds_path = tmp_path / "in" / "seeds.json"
+    api_path.parent.mkdir(parents=True)
+    api_path.write_text(json.dumps({
+        "49": {"class_type": "WanAnimateToVideo",
+               "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1,
+                          "continue_motion_max_frames": 5, "video_frame_offset": 0}}}),
+        encoding="utf-8")
+    saved_path.write_text(json.dumps({"nodes": [
+        {"id": 49, "type": "WanAnimateToVideo", "inputs": [],
+         "widgets_values": [832, 480, 65, 1, 5, 0]}]}), encoding="utf-8")   # 65, not 81
+    seeds_path.write_text(json.dumps({"seeds": [1]}), encoding="utf-8")
+
+    out = tmp_path / "fresh" / "admission.json"
+    with pytest.raises(RG.RouteGate):
+        GSG.main([f"--saved={saved_path}", f"--api={api_path}",
+                  f"--seeds={seeds_path}", f"--out={out}"])
+    assert not out.exists()
+    assert not out.parent.exists(), "a refused admission created its output directory"

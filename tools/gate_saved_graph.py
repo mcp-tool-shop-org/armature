@@ -183,6 +183,16 @@ def link_round_trip(api_graph, saved_graph):
     widget value still matched. It binds in both directions for the same reason Gate S
     does: a lost link and an invented link are different defects and both pass a
     value-only comparison.
+
+    **The comparison walks the UNION of both socket lists, and that is a correction.**
+    Until 2026-09-03 it iterated the SAVED node's sockets only, so the third defect —
+    a socket we wired that the round trip removed ENTIRELY — was never visited, and the
+    "we wired it and the saved file carries no link" branch could not run for it. Measured
+    on a two-node fixture wiring `49.control_video`: with the socket present and its link
+    null the gate raised; with the socket absent it returned `n_links: 0` and a clean
+    verdict, and the value round trip returned `all_equal: True` beside it, because it
+    skips list-valued inputs as links. Both checks passed a graph the cloud would execute
+    with a conditioning link gone.
     """
     saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
     wired, empty, problems = [], [], []
@@ -190,10 +200,22 @@ def link_round_trip(api_graph, saved_graph):
         s = saved_by_id.get(str(node_id))
         if s is None:
             continue                                  # `round_trip` already raised on this
-        for slot in (s.get("inputs") or []):
-            name = slot.get("name")
+        saved_slots = {slot.get("name"): slot for slot in (s.get("inputs") or [])}
+        names = list(saved_slots) + [n for n in node["inputs"] if n not in saved_slots]
+        for name in names:
             ours = node["inputs"].get(name)
             we_linked = isinstance(ours, list)
+            slot = saved_slots.get(name)
+            if slot is None:
+                # A name only WE carry. A literal belongs to `round_trip`; a LINK means the
+                # save/convert round trip deleted the socket we wired.
+                if we_linked:
+                    problems.append(
+                        f"node {node_id}.{name}: we wired it and the saved file declares "
+                        f"no socket for it at all — the link is not null, it is gone, and "
+                        f"a comparison that walks only the saved node's sockets never "
+                        f"visits this name")
+                continue
             they_linked = slot.get("link") is not None
             if we_linked and not they_linked:
                 problems.append(f"node {node_id}.{name}: we wired it and the saved file "
@@ -235,7 +257,6 @@ def main(argv=None):
                          "minus signs: pass as --frame=832,480,81)")
     a = ap.parse_args(argv)
 
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     saved = RG.load_graph(a.saved)
     with open(a.api, encoding="utf-8") as fh:
         api = json.load(fh)
@@ -273,6 +294,12 @@ def main(argv=None):
         "topology_round_trip": topology,
         "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked},
     }
+    # BELOW every check, not above them. `build_payload.py` states the repo's invariant —
+    # a refuse must leave no output directory — and until 2026-09-03 it held for Gate CANON
+    # alone: this tool created the directory before the round trip, the topology comparison
+    # and Gates ROUTE / S / L, so a halted admission left an empty directory beside real
+    # ones, to be read later as a run that happened.
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2, ensure_ascii=False)
 
