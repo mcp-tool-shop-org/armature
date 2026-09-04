@@ -287,3 +287,35 @@ def test_every_gate_named_in_the_surface_exists_in_the_module_beside_it():
 def test_route_gates_is_described_by_what_it_defines():
     row = dict(cli.SURFACE)["route_gates"]
     assert "PAIR_TIER" not in row and "LEDGER" not in row
+
+
+def test_the_no_deps_install_state_the_wave_1_auditor_measured(block, capsys):
+    """The exact state this probe now has to fire on (coordinator relay, P6).
+
+    `pyproject.toml` declares opencv-python-headless, Pillow and matplotlib as hard
+    runtime deps, so a plain `pip install armature-studio` brings them. What it does not
+    cover is a **source checkout without them, or a `--no-deps` install** — measured
+    there: `armature check` printed "all modules resolved" and exited 0 while
+    `aapose.draw_body` raised ModuleNotFoundError: cv2. Blocking all three roots at once
+    reproduces that install without one, exactly as the wave-1 auditor did.
+    """
+    block("cv2", "PIL", "matplotlib")
+    rc = cli.main(["check", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["modules"]["aapose"] == "needs-cv2/matplotlib"
+    assert payload["modules"]["donor_gate"] == "needs-PIL"
+    assert payload["modules"]["blender_scene"] == "needs-blender"
+    assert payload["modules"]["gates"] == "ok"          # numpy is present, so this row is
+    assert set(payload["missing"]) >= {"aapose", "donor_gate"}
+    assert "blender_scene" not in payload["missing"]    # the one expected condition
+    assert rc == 1
+
+
+def test_the_plain_summary_line_names_the_unresolved_rows(block, capsys):
+    block("cv2", "PIL", "matplotlib")
+    rc = cli.main(["check"])
+    out = capsys.readouterr().out
+    assert "all modules resolved" not in out
+    assert "UNRESOLVED:" in out and "aapose" in out
+    assert rc == 1
