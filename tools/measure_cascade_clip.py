@@ -12,10 +12,17 @@ The three questions are kept apart on purpose — count, ORDER, fidelity — bec
 can get the first and third right while getting the second wrong, and every gate in the
 build path would still be green.
 
-**Nothing here judges quality.** Every number is a diagnostic and gates nothing. The one
-thing that raises is a count mismatch against `--expect-frames`, because a clip with the
-wrong number of frames makes every per-frame comparison below it a comparison of different
-pictures, and reporting those numbers would be reporting noise with a unit on it.
+**Nothing here judges quality.** Every number is a diagnostic and gates nothing. What
+raises is a comparison that could not be made at all — a count mismatch against
+`--expect-frames`, and a clip whose own resolution is not the source frames' — because
+either makes every per-frame number below it a comparison of different pictures, and
+reporting those would be reporting noise with a unit on it.
+
+**The dimensions come off the stream.** `decode` reshapes a raw byte stream at
+`stride = width*height*3`; supplying the wrong pair does not fail, it reinterprets, and
+`n_decoded_frames` can still land on `--expect-frames`. This tool read the stream's own
+width and height and then decoded with the *sources'* — the exact thing
+`extract_clip_frames`' docstring warns against. Corrected 2026-09-03.
 
 Compensator (NAMED_COMPENSATORS): writes JSON and PNGs under `outputs/`. Compensator:
 delete the directory; owner: the executor session.
@@ -45,6 +52,29 @@ class ClipCountError(ArmatureError):
     """The decoded clip does not carry the number of frames that was submitted."""
 
     gate = "CLIP_COUNT"
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
+
+
+class ClipShapeError(ArmatureError):
+    """The clip's own resolution is not the one the decode was about to use.
+
+    `encode_control.decode` reshapes a raw byte stream at `stride = width*height*3`, so
+    supplying the wrong dimensions does not fail — it reinterprets. The frames become
+    garbage, a trailing partial frame is dropped in silence, and `n_decoded_frames` can
+    still land on `--expect-frames`, so the count andon passes and every fidelity and
+    order number below it is computed over scrambled pixels. The sibling tool
+    `extract_clip_frames` records the rule this class enforces: the dimensions are read
+    off the stream, because supplying them is how a decode silently reshapes.
+    """
+
+    gate = "CLIP_SHAPE"
+
+    def __init__(self, message, evidence=None):
+        super().__init__(message)
+        self.evidence = evidence or {}
 
 
 def ffprobe_stream(path):
@@ -89,7 +119,26 @@ def main(argv=None):
     paths, sources = load_sources(a.frames)
     h, w, _ = sources[0].shape
     stream = ffprobe_stream(a.clip)
-    decoded = decode(a.clip, w, h)
+
+    # ---- ANDON · the decode's dimensions come off the STREAM, never off the sources.
+    if stream.get("width") is None or stream.get("height") is None:
+        raise ClipShapeError(
+            f"{a.clip}: ffmpeg did not report a video stream resolution, so there is "
+            f"nothing to decode against. Falling back to the source frames' shape is "
+            f"how a decode silently reshapes at the wrong stride",
+            {"clip": os.path.abspath(a.clip), "stream": stream,
+             "source_shape": [h, w]},
+        )
+    sw, sh = int(stream["width"]), int(stream["height"])
+    if (sh, sw) != (h, w):
+        raise ClipShapeError(
+            f"{a.clip} is {sw}x{sh} and the source frames are {w}x{h}; a per-frame "
+            f"comparison across resolutions compares different pictures, and decoding "
+            f"at the sources' stride would reinterpret the bytes rather than fail",
+            {"clip": os.path.abspath(a.clip), "stream_shape": [sh, sw],
+             "source_shape": [h, w], "frames_dir": os.path.abspath(a.frames)},
+        )
+    decoded = decode(a.clip, sw, sh)
 
     with open(a.clip, "rb") as fh:
         clip_sha = hashlib.sha256(fh.read()).hexdigest()
@@ -124,8 +173,15 @@ def main(argv=None):
         "mean_abs_max": max(p["mean_abs"] for p in per_frame),
         "max_abs_max": max(p["max_abs"] for p in per_frame),
     }
-    record["gradient_split_frame0"] = CC.gradient_split(sources[0], decoded[0])
-    record["gradient_split_frame40"] = CC.gradient_split(sources[40], decoded[40])
+    # The middle of THIS clip, not of the default 81. `sources[40]` was a global constant
+    # governing a local feature: a legal 17-frame bucket passed the count andon above and
+    # then died here with a bare IndexError, after the decode had been spent. The index
+    # used is recorded beside the numbers rather than named in the key.
+    mid = len(sources) // 2
+    record["gradient_split_first_frame"] = {
+        "frame_index": 0, **CC.gradient_split(sources[0], decoded[0])}
+    record["gradient_split_mid_frame"] = {
+        "frame_index": mid, **CC.gradient_split(sources[mid], decoded[mid])}
     record["order"] = CC.order_check(sources, decoded, step=a.step)
     record["source_frame_files"] = [os.path.basename(p) for p in paths]
 
@@ -141,8 +197,9 @@ def main(argv=None):
     print(f"identical frames {f['n_identical']} of {len(per_frame)}")
     print(f"mean abs         {f['mean_abs_min']:.4f} .. {f['mean_abs_max']:.4f}  "
           f"max {f['max_abs_max']:.0f}")
-    print(f"gradient split   f0 top {record['gradient_split_frame0']['mean_err_top_gradient']:.2f} "
-          f"vs flat {record['gradient_split_frame0']['mean_err_flat']:.2f}")
+    print(f"gradient split   f0 top {record['gradient_split_first_frame']['mean_err_top_gradient']:.2f} "
+          f"vs flat {record['gradient_split_first_frame']['mean_err_flat']:.2f}   "
+          f"(mid frame {record['gradient_split_mid_frame']['frame_index']})")
     print(f"order            {o['n_on_diagonal']}/{o['n']} on the diagonal, "
           f"{o['n_displaced']} displaced, min margin {o['min_margin']:.3f}")
     print(f"MEASURE_CASCADE_OK {out}")
