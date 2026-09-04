@@ -195,3 +195,98 @@ def test_a_spread_of_offsets_reads_as_the_subject():
 def test_the_ruling_says_so_when_nothing_matched():
     r = joints.verdict({"elbow_L": {"matched": False, "offset": 0.0}})
     assert "NO BALLS MATCHED" in r["ruling"]
+
+
+# ------------------------------------------- the sheet that reports the snap result (w6)
+#
+# F-1bfab6de. The skeleton-approval sheet — the artifact the Director gates the whole
+# experiment at — carried ONE hard-coded subtitle string making two claims the run never
+# checked:
+#
+#   "22 named bones · every limb pivot moved onto the mannequin's own sculpted ball-joint"
+#
+# Clause 1 is latent drift: `overlay_from_marks` draws its tubes by iterating
+# `sitelist.BONES`, and the literal 22 is currently correct. Clause 2 is the consequential
+# half. `snap_sites_to_balls` returns unmatched entries with `matched: False`,
+# `after == before`, `offset_as_fraction_of_segment: 0.0` and a reason saying the pivot is
+# NOT a measured marker — and the sheet read only `after` and the offset fraction. An
+# unmatched joint therefore rendered a Before inset and an After inset that are the SAME
+# picture, under a caption asserting none of them are, which reads as "this pivot was
+# already correct" — the most reassuring possible appearance for the failure.
+
+import blender_stub
+
+
+def _sheet():
+    return blender_stub.load_tool("make_skeleton_sheet.py")
+
+
+def test_no_bone_count_in_an_emitted_string_is_a_literal():
+    """The whole subtitle is built from the census. Enumerated across this domain, this was
+    the only bone-count literal in an EMITTED artifact; the other five are dated citations
+    of specific past runs, which the method requires to stay verbatim."""
+    from armature_core import sitelist
+
+    sheet = _sheet()
+    _, table = joints.snap_sites_to_balls(_derived(BASE), [_ball((0.149, 0.006, 0.098))])
+    subtitle = sheet.sheet_subtitle(table, "L")
+    assert str(len(sitelist.BONES)) in subtitle
+    assert "22 named bones" not in blender_stub.read_source("make_skeleton_sheet.py").split(
+        "def sheet_subtitle")[0], "a bone-count literal survives above the builder"
+
+
+def test_the_subtitle_states_how_many_pivots_actually_moved():
+    sheet = _sheet()
+    _, table = joints.snap_sites_to_balls(_derived(BASE), [_ball((0.149, 0.006, 0.098))])
+    n_matched, n_snappable = sheet.snap_census(table)
+    assert n_matched == 1 and n_snappable > 1
+    subtitle = sheet.sheet_subtitle(table, "L")
+    assert f"{n_matched} of {n_snappable}" in subtitle
+    assert "every limb pivot moved" not in subtitle
+
+
+def test_an_unmatched_joint_is_labelled_on_its_own_panel():
+    """Before and After are the same picture for an unmatched joint. The panel has to say
+    so, or the Director reads the failure as 'this pivot was already correct'."""
+    sheet = _sheet()
+    _, table = joints.snap_sites_to_balls(_derived(BASE), [_ball((0.149, 0.006, 0.098))])
+    assert table["elbow_L"]["matched"] is True
+    assert table["wrist_L"]["matched"] is False
+    assert sheet.inset_panel_label("elbow", "elbow_L", table) == "elbow"
+    unmatched = sheet.inset_panel_label("wrist", "wrist_L", table)
+    assert unmatched != "wrist"
+    assert "NO BALL MATCHED" in unmatched
+
+
+def test_a_sheet_on_which_nothing_matched_raises_rather_than_renders():
+    """Six identical before/after pairs are not an approval artifact. Gates raise; this one
+    carries the measurement that fired it."""
+    sheet = _sheet()
+    _, table = joints.snap_sites_to_balls(_derived(BASE), [])
+    assert all(v["matched"] is False for v in table.values())
+    with pytest.raises(sheet.SkeletonSheetGate) as exc:
+        sheet.gate_any_pivot_matched(table)
+    assert exc.value.gate == "SKELETON_SHEET"
+    assert exc.value.evidence["n_matched"] == 0
+    assert exc.value.evidence["n_snappable"] == len(table)
+    assert exc.value.evidence["unmatched"]
+
+
+def test_the_gate_passes_when_a_pivot_did_move():
+    """A gate that refuses everything is not a gate."""
+    sheet = _sheet()
+    _, table = joints.snap_sites_to_balls(_derived(BASE), [_ball((0.149, 0.006, 0.098))])
+    ev = sheet.gate_any_pivot_matched(table)
+    assert ev["n_matched"] == 1
+
+
+def test_the_inset_record_carries_matched_so_panels_json_can_be_read_back():
+    sheet = _sheet()
+    _, table = joints.snap_sites_to_balls(_derived(BASE), [_ball((0.149, 0.006, 0.098))])
+    rec = sheet.inset_record("elbow", "elbow_L", table, body="b.png", before="x.png",
+                             after="y.png")
+    assert rec["matched"] is True
+    rec = sheet.inset_record("wrist", "wrist_L", table, body="b.png", before="x.png",
+                             after="y.png")
+    assert rec["matched"] is False
+    assert "NOT a measured marker" in rec["reason"]
