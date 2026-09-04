@@ -159,7 +159,7 @@ def main(argv=None):
     gate_topo = AS.gate_cascade_topology(wf, len(names), group_ids, FINAL_BATCH_ID,
                                          VIDEO_ID, SAVE_ID, "video", group_size=a.group,
                                          expected_sources=list(ordered_ids))
-    slot_plan = [(gid, start) for (start, _), gid
+    slot_plan = [(gid, start, stop) for (start, stop), gid
                  in zip(AS.cascade_plan(len(names), a.group), group_ids)]
     gate_index = gate_slot_frame_index(wf, names, slot_plan, FIRST_IMAGE_ID)
     # Gate ROUTE. `require_pinned_seeds=False` is not a skip: this graph has no

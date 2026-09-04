@@ -250,7 +250,7 @@ def main(argv=None):
             wf, len(upload_names), cascade_ids["groups"], CASCADE.FINAL_BATCH_ID,
             CASCADE.VIDEO_ID, R2V_ID, "model.reference_videos.video1",
             group_size=a.group, expected_sources=list(ordered_ids))
-        slot_plan = [(gid, start) for (start, _), gid
+        slot_plan = [(gid, start, stop) for (start, stop), gid
                      in zip(AS.cascade_plan(len(upload_names), a.group),
                             cascade_ids["groups"])]
         gates["CASCADE_slot_frame_index"] = CASCADE.gate_slot_frame_index(
