@@ -36,7 +36,8 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import blender_stub                                                     # noqa: E402
-from blender_stub import blender_stubbed, load_tool, read_source        # noqa: E402
+from blender_stub import (FakeCollection, FakeObject, blender_stubbed,  # noqa: E402
+                          load_tool, read_source)
 # ONE implementation of the fake armature, not a second copy: `test_sheet_sides` built it
 # for `articulated_side` and this file drives the same function with a NaN in it.
 from test_sheet_sides import _Arm, _Scene                               # noqa: E402
@@ -372,6 +373,22 @@ def _rgba_flat(height, width, fill):
     return a.reshape(-1)
 
 
+def _views_carrying_pixels(ev):
+    """How many view records Gate TURN found a plane on, under EITHER key name.
+
+    THE SEAM, and it is read rather than assumed: core-solvers renamed
+    `n_views_compared_in_pixels` to `n_views_carrying_pixels` in the same wave (SEAM 8),
+    because the old name claimed COMPARISONS while the number counted RECORDS — and the
+    two domains land in separate worktrees, so this file must be green on the tree it was
+    written in and on the merged one. It reads whichever key the core provides and refuses
+    to guess if neither is there; when the merge has landed, the fallback comes out.
+    """
+    for key in ("n_views_carrying_pixels", "n_views_compared_in_pixels"):
+        if key in ev:
+            return ev[key]
+    raise KeyError(f"Gate TURN's evidence names no plane count: {sorted(ev)}")
+
+
 @pytest.fixture(scope="module")
 def rt16():
     return load_tool("render_turnaround.py")
@@ -419,8 +436,9 @@ def test_the_pixel_clause_refuses_two_byte_different_views_with_identical_pixels
         rt16.TA.gate_set_distinct(views, 2)
     ev = exc.value.evidence
     assert ev["clause"] == "views_identical_in_pixels"
-    assert ev["n_views_compared_in_pixels"] == 2
+    assert _views_carrying_pixels(ev) == 2
     assert ev["min_adjacent_pixel_distance"] == 0.0
+    assert ev["n_pairs_identical_in_pixels"] == 1
     assert ev["distinct_sha256"] == 2, "the byte clause passed this set, as it must"
 
 
@@ -442,9 +460,10 @@ def test_a_real_eight_view_set_reports_all_eight_compared_in_pixels(rt16, monkey
             {"view": i, "azimuth_deg": i * 45.0, "path": f"v{i}.png",
              "bytes": 100 + i, "sha256": f"{i}" * 64}, plane))
     ev = rt16.TA.gate_set_distinct(views, 8)
-    assert ev["n_views_compared_in_pixels"] == 8
+    assert _views_carrying_pixels(ev) == 8
     assert ev["min_adjacent_pixel_distance"] > 0.0
-    assert "distinct in PIXELS over 8 of 8" in ev["verdict"]
+    assert "distinct in PIXELS" in ev["verdict"], ev["verdict"]
+    assert "NOT compared" not in ev["verdict"], ev["verdict"]
 
 
 def test_the_manifest_drops_the_planes_and_records_what_was_compared(rt16):
@@ -724,3 +743,165 @@ def test_the_helper_is_reached_through_require_finite_and_not_a_second_isfinite(
     assert "parts.require_finite(" in body
     for hand_rolled in ("math.isnan", "math.isinf", "np.isnan", "np.isfinite"):
         assert hand_rolled not in body, hand_rolled
+
+
+# ================================== F-94a7d14d — one question, two implementations
+#
+# THE POPULATION: every andon in this domain that decides RENDER VISIBILITY. There are
+# two — `rig_character.gate_objects_registered` (Gate OBJ, guarding the central export,
+# also called by `lift_solve`) and `rig_retopo.isolate_subject` (Gate ISOLATE, between
+# panels) — and both computed it with a ONE-LEVEL predicate,
+# `ob.hide_render or any(c.hide_render for c in ob.users_collection)`, while
+# `blender_scene.render_visible_meshes` answers the same question through
+# `collection_render_flags`, which walks the LAYER-collection tree.
+#
+# The member OUTSIDE the old walk: a mesh one collection DEEPER than the level the
+# predicate reads — parked under a `hide_render=True` parent — and a mesh in a collection
+# the view layer EXCLUDES, which plain collection flags do not carry at all
+# (`blender_scene.py:169-171` says so in its own words). Both read as VISIBLE to the old
+# expression and as invisible to the renderer, so a decoy one level deeper than the glTF
+# importer's own `glTF_not_exported` halted the two most expensive tools in the tree on a
+# scene that would have rendered correctly.
+
+
+class _LayerScene:
+    """`scene.objects` and `scene.view_layers[0].layer_collection` — the whole surface both
+    andons and `blender_scene.collection_render_flags` read."""
+
+    def __init__(self, root, objects=()):
+        self.objects = list(objects)
+        self.view_layers = [self]
+        self.layer_collection = root
+
+
+def _nested_scene():
+    """`Scene Collection > Props(hide_render) > Debris`, with a mesh in `Debris`.
+
+    The decoy is one collection DEEPER than the level the old predicate read: its own
+    collection carries `hide_render=False`, and its parent carries True.
+    """
+    root = FakeCollection("Scene Collection")
+    props = FakeCollection("Props", hide_render=True)
+    debris = FakeCollection("Debris")
+    props.children = [debris]
+    root.children = [props]
+    subject = FakeObject("hero", collection=root)
+    arm = FakeObject("hero_rig", kind="ARMATURE", collection=root)
+    decoy = FakeObject("Icosphere", collection=debris)
+    return _LayerScene(root, [subject, arm, decoy]), subject, arm, decoy
+
+
+def _excluded_scene():
+    """A mesh in a collection the VIEW LAYER excludes — a flag plain collections do not
+    carry, so no reading of `users_collection[i].hide_render` can ever see it."""
+    root = FakeCollection("Scene Collection")
+    gone = FakeCollection("glTF_not_exported", exclude=True)
+    root.children = [gone]
+    subject = FakeObject("hero", collection=root)
+    arm = FakeObject("hero_rig", kind="ARMATURE", collection=root)
+    decoy = FakeObject("Icosphere", collection=gone)
+    return _LayerScene(root, [subject, arm, decoy]), subject, arm, decoy
+
+
+def _visible_scene():
+    """The control: a decoy in a plainly visible collection. The andons must still fire."""
+    root = FakeCollection("Scene Collection")
+    props = FakeCollection("Props")
+    root.children = [props]
+    subject = FakeObject("hero", collection=root)
+    arm = FakeObject("hero_rig", kind="ARMATURE", collection=root)
+    decoy = FakeObject("Icosphere", collection=props)
+    return _LayerScene(root, [subject, arm, decoy]), subject, arm, decoy
+
+
+@pytest.fixture(scope="module")
+def retopo16():
+    return load_tool("rig_retopo.py")
+
+
+@pytest.mark.parametrize("build", [_nested_scene, _excluded_scene],
+                         ids=["nested-under-a-hidden-parent", "excluded-from-the-layer"])
+def test_gate_obj_does_not_call_an_undrawable_decoy_a_stray(rigchar, build):
+    """RED on the operand: a decoy the RENDERER will not draw and the old predicate called
+    visible, at the export boundary where a halt is most expensive.
+
+    Reverted-red: yes. With `hidden = ob.hide_render or any(c.hide_render for c in
+    ob.users_collection)` restored, both scenes report `effectively_hidden: False` for the
+    decoy and Gate OBJ raises `GateObjects` — halting `rig_character` on a scene
+    `blender_scene.render_visible_meshes` returns `[]` for.
+    """
+    scene, subject, arm, decoy = build()
+    with blender_stubbed():
+        rec = rigchar.gate_objects_registered(scene, subject, arm)
+        drawn = rigchar.blender_scene.render_visible_meshes(scene, scene.objects)
+    assert rec["strays"] == [], rec["strays"]
+    assert decoy.name not in [o.name for o in drawn], "the renderer agrees it is invisible"
+    seen = {o["name"]: o for o in rec["objects"]}
+    assert seen[decoy.name]["effectively_hidden"] is True
+
+
+def test_gate_obj_still_refuses_a_decoy_the_renderer_would_draw(rigchar):
+    """A gate that refuses nothing is not a gate: the control scene still halts."""
+    scene, subject, arm, decoy = _visible_scene()
+    with blender_stubbed():
+        with pytest.raises(rigchar.GateObjects) as exc:
+            rigchar.gate_objects_registered(scene, subject, arm)
+    assert [o["name"] for o in exc.value.evidence["strays"]] == [decoy.name]
+
+
+def test_gate_obj_states_which_visibility_notion_it_ruled_on(rigchar):
+    """The other half of the finding: `export_rigged`'s operator arguments name
+    `use_selection=False` and no visibility key at all, so the exemption was being made on
+    a property the call it guards never mentions. The record now says which one it read."""
+    scene, subject, arm, _decoy = _nested_scene()
+    with blender_stubbed():
+        rec = rigchar.gate_objects_registered(scene, subject, arm)
+    assert "collection_render_flags" in rec["visibility"]
+    assert "exclude" in rec["visibility"]
+    assert rec["collections_hidden"] == ["Debris", "Props"], rec["collections_hidden"]
+    assert "Scene Collection" in rec["collections_reachable"]
+
+
+@pytest.mark.parametrize("build", [_nested_scene, _excluded_scene],
+                         ids=["nested-under-a-hidden-parent", "excluded-from-the-layer"])
+def test_isolate_subject_does_not_halt_on_an_undrawable_decoy(retopo16, build):
+    """The same operand at the second site. `isolate_subject`'s loop hides the objects it
+    was HANDED; the decoy is not among them, and the old predicate read it as still drawn.
+
+    Reverted-red: yes — both scenes raise `ComparisonNotIsolated` with the decoy in
+    `still_visible` on the one-level expression.
+    """
+    scene, subject, _arm, decoy = build()
+    with blender_stubbed():
+        hidden = retopo16.isolate_subject(scene, [subject], subject)
+    assert decoy.name not in hidden
+
+
+def test_isolate_subject_still_refuses_a_decoy_the_renderer_would_draw(retopo16):
+    scene, subject, _arm, decoy = _visible_scene()
+    with blender_stubbed():
+        with pytest.raises(retopo16.ComparisonNotIsolated) as exc:
+            retopo16.isolate_subject(scene, [subject], subject)
+    ev = exc.value.evidence
+    assert ev["still_visible"] == [decoy.name]
+    assert "collection_render_flags" in ev["visibility"]
+
+
+def test_neither_visibility_andon_carries_its_own_one_level_predicate():
+    """THE POPULATION, read off the tree: no andon in this domain answers render
+    visibility with a second implementation. `blender_scene.collection_render_flags` is the
+    one walk; `any(c.hide_render for c in ...)` is the shape that was wrong twice.
+
+    Reverted-red: yes — the base tree carries that comprehension at `rig_character.py:664`
+    and `rig_retopo.py:317`.
+    """
+    for filename in ("rig_character.py", "rig_retopo.py"):
+        src = read_source(filename)
+        assert "collection_render_flags(" in src, filename
+        for node in ast.walk(ast.parse(src)):
+            if not isinstance(node, ast.GeneratorExp):
+                continue
+            text = ast.unparse(node)
+            assert "hide_render" not in text or "users_collection" not in text, (
+                f"{filename}:{node.lineno} answers render visibility one level deep "
+                f"again: {text}")

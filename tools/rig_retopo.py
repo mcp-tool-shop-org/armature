@@ -310,11 +310,24 @@ def isolate_subject(scene, objects, subject):
     """
     for ob in objects:
         ob.hide_render = ob is not subject
+    # WAVE 16, F-94a7d14d. The expression this replaces was `o.hide_render or
+    # any(c.hide_render for c in o.users_collection)` -- a ONE-LEVEL predicate, carried
+    # from `rig_character.gate_objects_registered`, where the canonical walk lives in
+    # `blender_scene.collection_render_flags` and picks up `exclude` and an ancestor's
+    # `hide_render` too. Measured under the stub: an object in a collection nested inside a
+    # `hide_render=True` parent, and one in an excluded collection, both read as VISIBLE to
+    # the old expression and as invisible to `render_visible_meshes` -- so this andon
+    # halted a comparison between panels on a scene the renderer would draw correctly. The
+    # gate and the renderer answer one question with one implementation now.
+    reachable, hidden_collections = blender_scene.collection_render_flags(scene)
+    drawable = reachable - hidden_collections
+
+    def _drawn(o):
+        return not o.hide_render and any(c.name in drawable for c in o.users_collection)
+
     still = sorted(
         o.name for o in scene.objects
-        if o is not subject
-        and o.type in DRAWN_TYPES
-        and not (o.hide_render or any(c.hide_render for c in o.users_collection)))
+        if o is not subject and o.type in DRAWN_TYPES and _drawn(o))
     if still:
         raise ComparisonNotIsolated(
             f"{len(still)} object(s) are still in the render beside the panel's subject "
@@ -325,7 +338,12 @@ def isolate_subject(scene, objects, subject):
              "population": f"scene.objects of type {sorted(DRAWN_TYPES)}",
              "n_examined": len([o for o in scene.objects if o.type in DRAWN_TYPES]),
              "n_hidden_by_the_loop": len([o for o in objects if o is not subject]),
-             "visibility": "hide_render OR any users_collection.hide_render"})
+             "visibility": ("blender_scene.collection_render_flags: hide_render OR "
+                            "no users_collection reachable in the view layer and not "
+                            "hidden from render (ancestor hide_render and exclude "
+                            "included)"),
+             "collections_reachable": sorted(reachable),
+             "collections_hidden": sorted(hidden_collections)})
     if subject is None or subject.hide_render:
         raise ComparisonNotIsolated(
             f"the panel's own subject {getattr(subject, 'name', subject)!r} is hidden from "

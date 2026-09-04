@@ -46,10 +46,31 @@ class _Scene:
     the population that answers "nothing else is visible", and it is passed in rather than
     reached through `bpy` so a fixture can put an object in the render that is NOT in the
     list the caller hands over -- the shape the finding named.
+
+    WAVE 16, F-94a7d14d (instruments). `isolate_subject` now resolves render visibility
+    through `blender_scene.collection_render_flags`, the canonical walk, which reads
+    `scene.view_layers[0].layer_collection` -- so a fake scene exposing only `objects` no
+    longer models the object under test. The view layer below is the DEFAULT one
+    (`Scene Collection`, nothing hidden, nothing excluded), which is what every fixture in
+    this file already assumed implicitly. No assertion in this file changed.
     """
 
-    def __init__(self, objects=()):
+    def __init__(self, objects=(), root=None):
         self.objects = list(objects)
+        self.view_layers = [self]
+        self.layer_collection = root or _RootCollection()
+
+
+class _RootCollection:
+    """The default `Scene Collection` layer-collection node: reachable, not hidden, no
+    children. `blender_scene.collection_render_flags` reads exactly these four fields."""
+
+    def __init__(self, name="Scene Collection"):
+        self.name = name
+        self.collection = self
+        self.hide_render = False
+        self.exclude = False
+        self.children = []
 
 
 @pytest.fixture(scope="module")

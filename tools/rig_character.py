@@ -704,17 +704,42 @@ def gate_objects_registered(scene, subject, armature):
     than assumed: the evidence lists every object with its collection and render visibility.
     """
     registered = {subject.name, armature.name}
+    # WAVE 16, F-94a7d14d -- THE CANONICAL WALK. This gate decided render visibility with
+    # `ob.hide_render or any(c.hide_render for c in ob.users_collection)`, a ONE-LEVEL
+    # predicate, where `blender_scene.render_visible_meshes` answers the same question
+    # through `collection_render_flags`, which walks the LAYER-collection tree and picks up
+    # both `exclude` and an ancestor's `hide_render` (`blender_scene.py:165-171`: plain
+    # collection flags do not carry `exclude`). MEASURED under the stub on two scenes: a
+    # mesh in `Debris` nested inside `Props(hide_render=True)`, and a mesh in a collection
+    # whose layer-collection is `exclude=True`. `render_visible_meshes` returns [] for
+    # both; the one-level expression returned `effectively_hidden = False` for both. So a
+    # decoy parked one collection deeper than the importer's own `glTF_not_exported` was
+    # listed as a STRAY and this gate halted the central export on a scene the renderer
+    # would draw correctly -- a false andon on the tool whose halt is the most expensive in
+    # the tree. One question, one implementation.
+    reachable, hidden_collections = blender_scene.collection_render_flags(scene)
+    drawable = reachable - hidden_collections
     seen = []
     for ob in scene.objects:
-        hidden = ob.hide_render or any(c.hide_render for c in ob.users_collection)
+        cols = [c.name for c in ob.users_collection]
+        hidden = ob.hide_render or not any(c in drawable for c in cols)
         seen.append({"name": ob.name, "type": ob.type, "hide_render": bool(ob.hide_render),
-                     "collections": [c.name for c in ob.users_collection],
+                     "collections": cols,
                      "effectively_hidden": bool(hidden)})
     strays = [o for o in seen
               if o["name"] not in registered and not o["effectively_hidden"]
               and o["type"] in {"MESH", "ARMATURE"}]
     record = {"gate": "OBJ", "registered": sorted(registered), "objects": seen,
               "strays": strays,
+              # WHICH visibility notion this gate ruled on, stated rather than assumed --
+              # the other half of F-94a7d14d: `export_rigged`'s operator arguments name
+              # `use_selection=False` and no visibility key at all, so what the exporter
+              # does with a hidden object is not what this exemption reads.
+              "visibility": ("blender_scene.collection_render_flags: ob.hide_render OR no "
+                             "users_collection reachable in the view layer and not hidden "
+                             "from render (ancestor hide_render and exclude included)"),
+              "collections_reachable": sorted(reachable),
+              "collections_hidden": sorted(hidden_collections),
               "verdict": (f"{len(seen)} object(s) in the scene, none unregistered and "
                           f"render-visible" if not strays else "STRAY OBJECTS")}
     if strays:
