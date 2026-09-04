@@ -1182,3 +1182,80 @@ def test_the_least_privilege_check_goes_red_on_an_unused_scope():
               if s != BASELINE_SCOPE and level != "none"
               and not any(m in body for m in SCOPE_MARKERS[s])]
     assert unused == ["id-token", "pages"], unused
+
+
+# -- the pinning law, applied to the owner it exempted (F-aac4e7ec) -----------------------
+#
+# `THIRD_PARTY` above filters `uses_refs()` with `not row[1].startswith("actions/")` — an
+# uncommented filter that removes an entire owner — and its sibling
+# `test_no_action_is_resolved_from_a_branch_ref` accepts any non-branch ref, a moving major
+# tag included. Measured before the fix: every `uses:` under `.github/` except
+# `pypa/gh-action-pypi-publish` resolved from a mutable tag, and among them were the
+# `actions/checkout` and `actions/setup-node` that run in the SAME job as
+# `npm publish --provenance` under `id-token: write`, and the `actions/deploy-pages` that
+# performs the deployment. A moved v4 tag runs new code inside the job holding the OIDC
+# minting scope, in the one step with no compensator.
+#
+# The exemption may have been a deliberate trust decision about GitHub-owned actions;
+# nothing in the workflows or in this file recorded one, so it read as a gap. It is closed
+# rather than documented: the same law, over every `uses:` in the tree.
+#
+# The population here is `uses_refs()` — walked from `.github/`, workflows and composite
+# actions alike — and it is a SUPERSET of `THIRD_PARTY`, which keeps its own two tests. The
+# overlap is deliberate: retiring the narrow pair would leave the "population may not empty
+# itself" check with nothing to say about third-party actions specifically.
+
+#: Every external action this repo uses, as measured 2026-09-04. Asserted so a new `uses:`
+#: fails HERE — naming the action and the file — rather than joining a check silently.
+EVERY_USE_TODAY = sorted({
+    ("ci.yml", "actions/checkout"),
+    ("ci.yml", "actions/setup-node"),
+    ("ci.yml", "actions/setup-python"),
+    ("pages.yml", "actions/checkout"),
+    ("pages.yml", "actions/deploy-pages"),
+    ("pages.yml", "actions/setup-node"),
+    ("pages.yml", "actions/upload-pages-artifact"),
+    ("release.yml", "actions/checkout"),
+    ("release.yml", "actions/download-artifact"),
+    ("release.yml", "actions/setup-node"),
+    ("release.yml", "actions/setup-python"),
+    ("release.yml", "actions/upload-artifact"),
+    ("release.yml", "pypa/gh-action-pypi-publish"),
+})
+
+
+def test_the_pinning_census_is_every_external_action_in_the_tree():
+    """Size and membership, before the property. `./` paths ride the checkout and are not refs."""
+    seen = sorted({(source, action) for source, action, _ref, _line in uses_refs()})
+    assert seen == EVERY_USE_TODAY, (
+        "the set of external actions under .github/ has changed; each new one needs a SHA "
+        "and a version comment before this list is updated:\n  "
+        + "\n  ".join(f"{s}: {a}" for s, a in sorted(set(seen) ^ set(EVERY_USE_TODAY))))
+
+
+@pytest.mark.parametrize("source,action,ref,line", uses_refs())
+def test_every_action_is_pinned_to_a_commit_and_says_which_version(source, action, ref, line):
+    """The law release.yml's PyPI comment states in general terms, applied generally.
+
+    "A ref that resolves at run time means the code performing the step is not the code last
+    reviewed" is a property of the ref, not of who owns the repository it points at. The
+    trailing `# vX.Y.Z` is part of the requirement: a bare hash is unreadable, and a bump is
+    reviewed by comparing the version a human can read.
+    """
+    assert re.fullmatch(r"[0-9a-f]{40}", ref), (
+        f"{source} pins {action} to {ref!r}, which is not a full commit SHA; a tag is "
+        f"re-resolved on the day the step runs — including inside the jobs that publish:\n{line}")
+    assert re.search(r"#\s*v?\d+\.\d+(\.\d+)?", line), (
+        f"{source} pins {action} to a bare hash with no version beside it; nobody can review "
+        f"a bump they cannot read:\n{line}")
+
+
+def test_the_pinning_check_goes_red_on_a_moving_major_tag():
+    """The mutation: the shape every `actions/*` line held until today.
+
+    `test_no_action_is_resolved_from_a_branch_ref` passes on `v4` — it only refuses branch
+    refs — so the direction that matters here is exercised on its own.
+    """
+    assert not re.fullmatch(r"[0-9a-f]{40}", "v4"), "a major tag reads as a pinned commit"
+    assert not re.search(r"#\s*v?\d+\.\d+(\.\d+)?", "      - uses: actions/checkout@v4"), (
+        "an unpinned line reads as carrying a reviewable version comment")
