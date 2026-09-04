@@ -56,11 +56,17 @@ class NonReiterableFrames(ArmatureError):
     function's refusals reach a halt record with the measurement that fired them rather
     than as a sentence — and the second of them, the non-callable guard, stops being a bare
     `TypeError` that the halt contract records as a crash.
-    """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+    **It defines no `__init__` of its own** (rule 5, wave 16). It carried
+    `self.evidence = evidence or {}`, which manufactured an empty dict for a refusal raised
+    with a bare message: the halt line then printed `"evidence": {}` for a refusal that
+    carried no receipt, so "no receipt" and "a receipt with nothing in it" became the same
+    record. `armature_core.errors.ArmatureError` stores what it is passed and normalises
+    nothing; the one exemption is `GateFailure`, whose clauses index into `ev` while they
+    measure. A bare-message refusal from this class now reads `"evidence": null`, which is
+    the honest record; a refusal that passes a dict is unchanged in both directions, and the
+    dict the raising line passed is the object the halt handler reads.
+    """
 
 
 class MeasurementWithoutScene(ArmatureError):
@@ -74,11 +80,17 @@ class MeasurementWithoutScene(ArmatureError):
     reading is called here, so the message says what to do rather than only what not to.
 
     Carries an `evidence` dict; a plain refusal writes `gate: None` + `andon` + `clause`.
-    """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+    **It defines no `__init__` of its own** (rule 5, wave 16). It carried
+    `self.evidence = evidence or {}`, which manufactured an empty dict for a refusal raised
+    with a bare message: the halt line then printed `"evidence": {}` for a refusal that
+    carried no receipt, so "no receipt" and "a receipt with nothing in it" became the same
+    record. `armature_core.errors.ArmatureError` stores what it is passed and normalises
+    nothing; the one exemption is `GateFailure`, whose clauses index into `ev` while they
+    measure. A bare-message refusal from this class now reads `"evidence": null`, which is
+    the honest record; a refusal that passes a dict is unchanged in both directions, and the
+    dict the raising line passed is the object the halt handler reads.
+    """
 
 
 def scene_fps():

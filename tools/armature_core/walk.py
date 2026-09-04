@@ -138,11 +138,17 @@ class WalkError(ArmatureError):
     line reads "REFUSED" with `gate` null and the class name under `andon`, which is a
     different fact from the crash line it used to read (outcome "FAILED", `gate` null
     because nothing knew what had happened).
-    """
 
-    def __init__(self, message, evidence=None):
-        super().__init__(message)
-        self.evidence = evidence or {}
+    **It defines no `__init__` of its own** (rule 5, wave 16). It carried
+    `self.evidence = evidence or {}`, which manufactured an empty dict for a refusal raised
+    with a bare message: the halt line then printed `"evidence": {}` for a refusal that
+    carried no receipt, so "no receipt" and "a receipt with nothing in it" became the same
+    record. `armature_core.errors.ArmatureError` stores what it is passed and normalises
+    nothing; the one exemption is `GateFailure`, whose clauses index into `ev` while they
+    measure. A bare-message refusal from this class now reads `"evidence": null`, which is
+    the honest record; a refusal that passes a dict is unchanged in both directions, and the
+    dict the raising line passed is the object the halt handler reads.
+    """
 
 
 class GaitGate(WalkError, GateFailure):
