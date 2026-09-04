@@ -329,6 +329,31 @@ def test_world_bounds_without_a_scene_still_measures_what_it_was_handed(BS, monk
     assert seen == {"measured": ["a", "b"]}
 
 
+def test_the_naive_spelling_and_the_naive_NAME_are_the_same_measurement(BS, monkeypatch):
+    """F-08b5c1b8, the half that lives in this module: `world_bounds(objects)` with `scene`
+    omitted is behaviourally identical to `unfiltered_world_bounds(objects)` — same triple,
+    same object list handed to the primitive — so a deliberate naive row and a forgotten
+    `scene=` cannot be told apart by reading the code.
+
+    Pinned as a SAMENESS rather than left implicit: the guard against the second spelling
+    is a suite-side ban on `world_bounds(...)` without `scene=` (tests' wave-10 census), and
+    a ban is only worth having while these two really are the same call. If someone later
+    makes them differ, this fails and the ban has to be re-argued rather than silently
+    becoming a check on nothing.
+    """
+    seen = _routing_probe(BS, monkeypatch)
+    naive_spelling = BS.world_bounds(["decoy", "real"])
+    handed_to_spelling = seen["measured"]
+
+    seen2 = _routing_probe(BS, monkeypatch)
+    naive_name = BS.unfiltered_world_bounds(["decoy", "real"])
+
+    assert "scene" not in seen and "scene" not in seen2
+    assert handed_to_spelling == seen2["measured"] == ["decoy", "real"]
+    for a, b in zip(naive_spelling, naive_name):
+        assert np.allclose(np.asarray(a), np.asarray(b))
+
+
 def test_the_unfiltered_bounds_have_a_public_name(BS, monkeypatch):
     """`probe_subject` reports the naive bounds beside the filtered ones, and
     `tests/blender/check_visibility.py` pins that the two differ — so the naive

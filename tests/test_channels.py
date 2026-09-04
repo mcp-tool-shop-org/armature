@@ -170,3 +170,77 @@ def test_the_geometry_floor_costs_one_byte_and_no_more():
     mask = np.ones((1, 256), dtype=np.uint8)
     b = ch.encode_u8(ch.normalize_depth(z, mask, 2.0, 5.0))
     assert int(b.min()) == 1 and int(b.max()) == 255
+
+
+# ------------------------------------- wave 10: the three edge terms and the frame border
+
+
+def test_the_frame_border_is_not_drawn_as_a_silhouette_on_any_side():
+    """F-3d03d8bf. `silhouette` was `m & ~_erode3(m)` and `_erode3` padded with False, so
+    every mask pixel on the outermost row or column was marked as a geometric edge — while
+    the two sibling terms `derive_edge` ORs it with each build an `edge` mask and exclude
+    it, with the comment "do not compare across the frame border".
+
+    Measured on the wave-10 base, on the fixture below: `silhouette(m)[-1].sum()` was 6, a
+    full row of invented edge along the crop. The edge channel is a control input, so that
+    line is drawn into the picture a generation is conditioned on.
+
+    One side per case, so a fix that only handled rows would fail on columns.
+    """
+    for side in ("bottom", "top", "left", "right"):
+        m = np.zeros((6, 6), dtype=np.uint8)
+        if side == "bottom":
+            m[3:, :] = 1
+            border = ch.silhouette(m)[-1, :]
+        elif side == "top":
+            m[:3, :] = 1
+            border = ch.silhouette(m)[0, :]
+        elif side == "left":
+            m[:, :3] = 1
+            border = ch.silhouette(m)[:, 0]
+        else:
+            m[:, 3:] = 1
+            border = ch.silhouette(m)[:, -1]
+        assert border.sum() == 0, (side, border)
+
+
+def test_a_subject_that_ENDS_inside_the_frame_still_has_its_whole_boundary():
+    """The direction the policy must not break, and the half that makes the fixture above
+    mean something: the same 6x6 frame with the subject pulled one pixel off every edge
+    keeps every boundary pixel, because there the mask boundary IS a discontinuity."""
+    m = np.zeros((6, 6), dtype=np.uint8)
+    m[1:5, 1:5] = 1
+    s = ch.silhouette(m)
+    assert s.sum() == 12                       # a 4x4 block: 16 minus its 2x2 interior
+    assert not s[2, 2] and not s[3, 3]
+    assert s[1, 1] and s[4, 4]
+
+
+def test_the_interior_boundary_of_a_subject_that_runs_off_frame_is_still_marked():
+    """A subject flush against the bottom is not edgeless — only the crop line is gone."""
+    m = np.zeros((6, 6), dtype=np.uint8)
+    m[3:, :] = 1
+    s = ch.silhouette(m)
+    assert s[3, :].all()                       # the real boundary, three rows up
+    assert s[-1, :].sum() == 0
+
+
+def test_the_edge_channel_of_a_full_frame_subject_carries_no_border_line():
+    """End to end through `derive_edge`, because that is where the difference reaches a
+    control image — and `silhouette_px` is a reported diagnostic, so it counted the crop."""
+    z = np.full((8, 8), 3.0)
+    n = np.zeros((8, 8, 3))
+    n[..., 2] = 1.0
+    mask = np.ones((8, 8), dtype=np.uint8)
+    edge, diag = ch.derive_edge(z, n, mask, 0.02, 30.0)
+    assert diag["silhouette_px"] == 0
+    assert int(edge.sum()) == 0
+
+
+def test_the_erosion_border_argument_is_the_whole_policy_and_can_be_read_both_ways():
+    """The knob itself, both settings, so the policy is a decision in one place rather
+    than a property of a call site nobody can see."""
+    m = np.zeros((4, 4), dtype=np.uint8)
+    m[2:, :] = 1
+    assert ch._erode3(m, border=False)[-1, :].sum() == 0
+    assert ch._erode3(m, border=True)[-1, 1:-1].all()
