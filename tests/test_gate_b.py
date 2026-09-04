@@ -87,3 +87,33 @@ def test_it_is_a_gate_failure_and_not_an_assertion():
     assert issubclass(GateBBatching, GateFailure)
     assert not issubclass(GateBBatching, AssertionError)
     assert GateBBatching.gate == "B"
+
+
+# --- a bool is an int, and this gate's own message says what a True is (F-878b2311) ---
+
+
+@pytest.mark.parametrize("expected,observed", [(1, True), (0, False), (33, True)])
+def test_a_boolean_is_not_a_batch_count(expected, observed):
+    """`bool` subclasses `int`, so `not isinstance(x, int)` accepted True. Measured
+    2026-09-03: gate_b_batching(1, True) returned "batch intact" and gate_b_batching(0,
+    False) likewise, with the evidence recording observed_batch_images: true. The gate's
+    own message for a non-count — "the batch was not observed, so batching is unverified
+    rather than verified" — is exactly what a truthiness is."""
+    with pytest.raises(GateBBatching) as exc:
+        gate_b_batching(expected, observed)
+    assert "not a count" in str(exc.value)
+    assert exc.value.evidence["observed_batch_images"] is observed
+
+
+def test_the_two_siblings_in_this_file_close_the_same_hole():
+    """The clause was carried from `g1_generator_legality` and
+    `gate_s_seed_registration`, which already refuse a bool in the same file."""
+    from armature_core.errors import G1GeneratorLegality, GateSSeedRegistration
+    from armature_core.gates import g1_generator_legality, gate_s_seed_registration
+
+    with pytest.raises(G1GeneratorLegality):
+        g1_generator_legality(True, 480, 33, "wan")
+    with pytest.raises(GateSSeedRegistration):
+        gate_s_seed_registration(True, [1, 2], "E-probe", False)
+    with pytest.raises(GateBBatching):
+        gate_b_batching(1, True)

@@ -253,6 +253,26 @@ def g2_completeness(run_dir, expected, frame_count):
     channel's population is its frames, and a sidecar of another extension beside them
     is not a frame. When `expected` names no files at all, every entry counts.
     """
+    # · ANDON — completeness over zero channels is not a completeness verdict.
+    #
+    # The loop iterates `expected`, so an empty mapping walked no channels and this
+    # function returned {} — a PASS having examined nothing, with no statement anywhere
+    # that nothing was examined. Measured 2026-09-03: g2_completeness(<empty tmpdir>, {},
+    # 33) returned {}. The population argument this function already makes for SURPLUS
+    # ("the andon is on the direction the invariant does not bound") was never put under
+    # the channel population itself. `normalise_spec` refuses an empty channels list, so
+    # an empty mapping needs a caller bug to arrive here — and this gate runs immediately
+    # before the manifest that makes a run look finished.
+    if not expected:
+        raise G2Completeness(
+            "G2 was asked to check completeness over ZERO channels, which is not a "
+            "completeness verdict: nothing would be examined and the manifest written "
+            "after it would report a finished run. The caller built its channel "
+            "expectation wrongly — spec.channels cannot be empty",
+            {"run_dir": run_dir, "frame_count": frame_count, "expected_channels": [],
+             "channels": {}},
+        )
+
     problems = []
     detail = {}
 
@@ -356,6 +376,30 @@ def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, width, height):
         "tolerance_source": G4_TOLERANCE_SOURCE,
         "resolution": [width, height],
     }
+
+    # A bbox that is not four numbers is a malformed question, not a small disagreement.
+    #
+    # `zip(mask_bbox, projected_bbox)` truncates to the SHORTER sequence, so a bbox with
+    # fewer than four edges was compared on only the edges it has and the gate passed on
+    # the rest. Measured 2026-09-03: g4_bbox_sanity(0, (10, 10), (10, 10, 500, 500), 832,
+    # 480) returned [0, 0] — a PASS having compared two of four edges against a projected
+    # box 490 px wider. `startframe.mask_bbox` returns a 4-tuple or None on every path
+    # today, so no production caller can produce a short bbox; a future mask source that
+    # returns a 2- or 3-element bound would get a silent partial comparison from the gate
+    # whose whole job is catching a channel that rendered the wrong thing. Refused by
+    # name, the way `route_gates._frame_triple` refuses a frame that is not three numbers.
+    for label, box in (("mask_bbox", mask_bbox), ("projected_bbox", projected_bbox)):
+        if box is None:
+            continue
+        if (not isinstance(box, (list, tuple)) or len(box) != 4
+                or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                           for v in box)):
+            raise G4BboxSanity(
+                f"frame {frame_index}: {label} is {box!r}, which is not four numbers "
+                f"(x0, y0, x1, y1). Two out of four edges compared is not a comparison, "
+                f"and the surplus edges would have passed unexamined",
+                ev,
+            )
 
     if projected_bbox is None:
         raise G4BboxSanity(
@@ -595,7 +639,17 @@ def gate_b_batching(expected_frames, observed_batch_images, evidence=None):
     ev = dict(evidence or {})
     ev.update({"expected_frames": expected_frames, "observed_batch_images": observed_batch_images})
 
-    if not isinstance(observed_batch_images, int) or observed_batch_images < 0:
+    # `bool` is a subclass of `int`, so the guard accepted True: measured 2026-09-03,
+    # gate_b_batching(1, True) returned "batch intact" and gate_b_batching(0, False)
+    # likewise. A caller that reduces the save node's output to a truthiness, or a JSON
+    # `true` parsed out of a run record, passed Gate B on a one-frame expectation with
+    # the evidence recording observed_batch_images: true — which is exactly what this
+    # message calls "the batch was not observed". `g1_generator_legality` (above) and
+    # `gate_s_seed_registration` (below) already close the hole this way; the clause is
+    # theirs, carried here rather than written again.
+    if (not isinstance(observed_batch_images, int)
+            or isinstance(observed_batch_images, bool)
+            or observed_batch_images < 0):
         raise GateBBatching(
             f"batch image count is not a count: {observed_batch_images!r}; the batch "
             f"was not observed, so batching is unverified rather than verified",

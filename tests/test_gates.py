@@ -465,3 +465,28 @@ def test_no_new_gate_raise_ships_without_its_evidence():
     assert not new, (
         f"these gate raises carry no evidence dict: {new}. Pass the measurement that "
         f"fired the gate as the second argument.")
+
+
+# --- W6 amend: completeness over zero channels (F-2bf70017) ---------------------------
+
+
+@pytest.mark.parametrize("expected", [{}, dict()])
+def test_g2_refuses_an_empty_channel_expectation(tmp_path, expected):
+    """The loop iterates `expected`, so an empty mapping walked no channels and the gate
+    returned {} — a PASS having examined nothing, with no statement anywhere that nothing
+    was examined. Measured 2026-09-03: g2_completeness(<empty tmpdir>, {}, 33) returned
+    {}. This gate runs immediately before the manifest that makes a run look finished."""
+    with pytest.raises(G2Completeness) as exc:
+        gates.g2_completeness(str(tmp_path), expected, 33)
+    assert_gate(exc, "G2", expected_channels=[], frame_count=33)
+    assert "ZERO channels" in str(exc.value)
+
+
+def test_g2_still_passes_on_a_populated_expectation(tmp_path):
+    """The direction the andon must not break."""
+    names = [f"{i:05d}.png" for i in range(3)]
+    d = tmp_path / "mask"
+    d.mkdir()
+    for n in names:
+        (d / n).write_bytes(b"x")
+    assert gates.g2_completeness(str(tmp_path), {"mask": names}, 3)["mask"]["present"] == 3

@@ -202,3 +202,46 @@ def test_an_empty_pin_is_not_a_pin(tmp_path):
     spec = shotspec.normalise_spec(raw)
     with pytest.raises(SpecError):
         shotspec.resolve_asset(spec)
+
+
+# --- W6 amend: the refusal is on the KEY, not on its rows (F-5dd933c5) --------------
+
+
+@pytest.mark.parametrize("block", [{}, {"g4_tolerance_px": 2}, {"g1_dim_divisor": 1}])
+def test_the_gates_key_is_refused_whatever_it_contains(tmp_path, block):
+    """The loop `for key in sorted(gate_fields): ... raise` can only fire on a NON-EMPTY
+    block. Measured 2026-09-03: a spec carrying "gates": {} was ACCEPTED and
+    spec["gates"] came back {}, while the same spec with one row raised — so an author
+    who emptied the block instead of deleting it got a green spec, and dump_spec
+    round-tripped the empty block back out."""
+    raw = _minimal(tmp_path)
+    raw["gates"] = block
+    with pytest.raises(SpecError) as exc:
+        shotspec.normalise_spec(raw)
+    assert "gates" in str(exc.value)
+
+
+def test_a_populated_block_still_names_the_retired_keys_new_home(tmp_path):
+    raw = _minimal(tmp_path)
+    raw["gates"] = {"g4_tolerance_px": 2}
+    with pytest.raises(SpecError) as exc:
+        shotspec.normalise_spec(raw)
+    assert "G4_TOLERANCE_PX" in str(exc.value)
+
+
+def test_a_gates_key_that_is_not_an_object_is_refused_too(tmp_path):
+    raw = _minimal(tmp_path)
+    raw["gates"] = []
+    with pytest.raises(SpecError):
+        shotspec.normalise_spec(raw)
+
+
+def test_a_boolean_camera_radius_is_not_a_number(tmp_path):
+    """`bool` subclasses `int`, so `radius: true` was accepted as a number and resolved
+    to an orbit radius of 1.0. The `target` clause four lines below already carries
+    `not isinstance(v, bool)`; the same clause, carried, not re-invented."""
+    raw = _minimal(tmp_path)
+    raw.setdefault("camera", {})["radius"] = True
+    with pytest.raises(SpecError) as exc:
+        shotspec.normalise_spec(raw)
+    assert "radius" in str(exc.value)

@@ -131,3 +131,37 @@ def test_g4_fires_on_facets_own_defect_at_the_constants_value():
     used to pass at a spec-supplied 100000 is."""
     with pytest.raises(G4BboxSanity):
         gates.g4_bbox_sanity(7, (0, 0, 750, 700), (180, 60, 568, 700), 752, 752)
+
+
+# --- a bbox that is not four numbers (F-0a85e61f) -------------------------------------
+
+
+@pytest.mark.parametrize("mask,projected", [
+    ((10, 10), (10, 10, 500, 500)),
+    ((10, 10, 500), (10, 10, 500, 500)),
+    ((10, 10, 500, 500), (10, 10)),
+    ((10, 10, 500, 500, 7), (10, 10, 500, 500)),
+    ("10,10,500,500", (10, 10, 500, 500)),
+    ((10, 10, 500, True), (10, 10, 500, 500)),
+])
+def test_a_bbox_that_is_not_four_numbers_is_refused_by_name(mask, projected):
+    """`zip` truncates to the shorter sequence. Measured 2026-09-03:
+    g4_bbox_sanity(0, (10, 10), (10, 10, 500, 500), 832, 480) returned [0, 0] — a PASS
+    having compared two of four edges against a projected box 490 px wider."""
+    from armature_core.errors import G4BboxSanity
+    from armature_core.gates import g4_bbox_sanity
+
+    with pytest.raises(G4BboxSanity) as exc:
+        g4_bbox_sanity(0, mask, projected, 832, 480)
+    assert "four numbers" in str(exc.value)
+    assert exc.value.evidence["frame"] == 0
+
+
+def test_a_four_number_bbox_still_compares_all_four_edges():
+    from armature_core.errors import G4BboxSanity
+    from armature_core.gates import g4_bbox_sanity
+
+    assert g4_bbox_sanity(0, (10, 10, 500, 500), (10, 10, 500, 500), 832, 480) \
+        == [0, 0, 0, 0]
+    with pytest.raises(G4BboxSanity):
+        g4_bbox_sanity(0, (10, 10, 500, 500), (10, 10, 500, 990), 832, 480)
