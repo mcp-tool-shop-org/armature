@@ -26,7 +26,10 @@ is what the accounting gate checks. The collar is duplication layered on top, co
 separately, so the two can never be confused in the record.
 """
 
+import json
 import math
+import os
+import sys
 
 import numpy as np
 
@@ -336,13 +339,46 @@ def require_finite(name, value, gate_cls, ev, positive=True):
     that file is another domain's in the wave-10 frozen map, so the helper lives here (with
     `_tightened`, the repo's settled "the module owns the bound" shape) and is imported by
     the other three rather than copied.
+
+    **The coercion is INSIDE the guard, not above it (wave 22, F-fda74b87).** `v =
+    float(value)` used to run first, so the ONE implementation of rule 4 was broken in one
+    class of the case it exists for: a value that is not a real number left here as an
+    untyped `TypeError`, which the 21-tool halt contract records as exit 1 "FAILED — an
+    unhandled error" where a typed refusal at exit 2 belongs. MEASURED on `e8263a3`:
+    `require_finite('x', None, AlphaGate, {})` raised `TypeError: float() argument must be
+    a string or a real number, not 'NoneType'` — not in the `ArmatureError` family — and so
+    did a list and a dict, while `'nan'` (a string) `float()` accepts and this clause
+    refuses correctly. Two spellings of an unreadable measurement, two different exits.
+    Through the importers, `turnaround.gate_view_alpha(0, 0, 255, None)`,
+    `startframe.gate_backdrop(None, ...)` and `startframe.gate_whole(extent, 64, None, 4)`
+    each raised the bare `TypeError`; their input is a MEASUREMENT read back from a record,
+    and `null` is the ordinary JSON shape of a measurement nobody took.
+
+    An unreadable operand is read as NaN — which the clause below already refuses by name —
+    and the RAW value rides the evidence beside the coerced one under `<name>_raw`, because
+    "not a number at all" and "a number that is not finite" are different facts about a
+    record and the halt line has to be able to say which one arrived. This is the shape
+    `channels.normalize_depth` already uses for `z_near`/`z_far` and `framing._finite_positive`
+    uses as a predicate; the file records the same defect being caught by its own test at
+    `joint_planes` below.
     """
-    v = float(value)
+    try:
+        v = float(value)
+        unreadable = False
+    except (TypeError, ValueError):
+        v = float("nan")
+        unreadable = True
     if not math.isfinite(v) or (positive and v <= 0.0):
         ev[name] = v
+        if unreadable:
+            ev[f"{name}_raw"] = repr(value)
+        shown = (f"{name}={value!r} is not a number at all (read as {v!r}) and so is not a "
+                 f"finite {'positive ' if positive else ''}number"
+                 if unreadable else
+                 f"{name}={v!r} is not a finite "
+                 f"{'positive ' if positive else ''}number")
         raise gate_cls(
-            f"{name}={v!r} is not a finite "
-            f"{'positive ' if positive else ''}number, so it cannot be compared against. "
+            f"{shown}, so it cannot be compared against. "
             f"A NaN fails EVERY comparison in both directions — `nan > x` and `nan < x` "
             f"are both False — so it does not fire a bound, it walks past every bound and "
             f"lands on the verdict line. A gate that returns a PASS beside a measurement "
@@ -648,6 +684,20 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=None):
                             f"{pb['n_verts']}v/{pb['n_faces']}f")
             continue
         d = float(np.abs(np.asarray(pa["positions"]) - np.asarray(pb["positions"])).max())
+        # WAVE 22, F-cfb560aa — the sweep before either strict `>` is asked. `worst` is
+        # seeded `{"part": None, "delta": 0.0}` and BOTH readings of `d` are strict `>`,
+        # which a NaN fails in BOTH directions, so no problem was appended and `worst` was
+        # never updated: MEASURED on `e8263a3` on two single-part builds differing only in
+        # that the second carried `nan` in one coordinate, Gate D RETURNED
+        # `verdict: '1 parts identical across two builds'` with `worst: {'part': None,
+        # 'delta': 0.0}` — its strongest verdict over a part set that is not the one the
+        # previous build produced. `+inf` refused, but by ACCIDENT (`inf > tol`), so only
+        # the sign-free direction was unbounded and only by luck was the other one not.
+        # `lift_solve.gate_round_trip` sweeps its residuals this way and the helper is
+        # defined 310 lines above, in this file. Reachability is F-13a144c2's, verbatim: a
+        # GLB carrying a non-finite vertex position, representable in glTF float32 and
+        # passed through by the importer.
+        require_finite(f"delta.{name}", d, GatePartsDeterminism, ev, positive=False)
         if d > worst["delta"]:
             worst = {"part": name, "delta": d}
         if d > tol:
@@ -659,3 +709,173 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=None):
                                    + "; ".join(problems[:6]), ev)
     ev["verdict"] = f"{len(a)} parts identical across two builds"
     return ev
+
+
+# ===================================================================================
+# WAVE 22 · SEAM 1 — THE TOOL-ENTRY HELPERS, ONE HOME
+# ===================================================================================
+#
+# The two things every CPython instrument in this repo had to spell for itself, spelled
+# ONCE here and imported. Both are LIFTS of code that already existed in 22 and 2 copies
+# respectively; neither is a new rule.
+#
+# **Why `parts.py` and not `errors.py`.** Every one of the 22 `_halt_keysafe` docstrings
+# nominates `armature_core.errors` as the home, and both `single_path_segment` copies
+# nominate `armature_core`. `errors.py` is core-gates' file in the frozen domain map, and a
+# NEW module under `armature_core/` matches no domain's globs at all — the swarm's
+# `checkOwnership` resolves such a file to `unassigned`, which is an ownership violation,
+# which fails the whole wave's collect. So the one home is an existing core-solvers file,
+# and this is the one the repo already points at: `require_finite` — the refusal's RAISE
+# end — lives here and is imported by 12 `armature_core` modules and by `measure_arm.py`,
+# and `rig_gates.py` and both `single_path_segment` copies name it as the pattern to
+# follow. `run_tool_main` is the same refusal's EXIT end. The two ends belong together.
+
+
+def halt_keysafe(value, _seen=None):
+    """`value` with every mapping key stringified and every non-finite float named.
+
+    The 22-copy `_halt_keysafe`, plus the clause instruments measured in wave 22 (SEAM 3,
+    F-897a3329). Two failure modes, both of which end with `blender -b -P` reporting exit
+    **0** on a fired andon:
+
+    1. `json.dumps(..., default=str)` applies `default` to VALUES ONLY, so a tuple key or a
+       `numpy.int64` key raises `TypeError` from inside the halt handler, the new exception
+       leaves the whole `try`, and `sys.exit` never runs. MEASURED 2026-09-04 against all 21
+       handlers: 21 of 21 escaped that way.
+    2. A SELF-REFERENCING evidence dict recursed until `RecursionError` escaped the handler
+       — 21 of 21 again. Containers already on the path are written as the literal
+       `"<circular>"` rather than re-entered.
+
+    And the strictness clause: a non-finite float is written as its `repr` (`"nan"`,
+    `"inf"`, `"-inf"`), because `json.dumps` at its `allow_nan` default emits the bare token
+    `NaN`, which Python's own `json.loads` accepts and JS `JSON.parse`, Go `encoding/json`
+    and serde all reject. `require_finite` writes exactly such a float into the caller's
+    evidence (`ev[name] = v`), so the halt line an operator pipes into any non-Python reader
+    was not JSON. Named here rather than dropped: `"nan"` is the operand, and the operand is
+    why the tool halted.
+    """
+    if _seen is None:
+        _seen = set()
+    if isinstance(value, (dict, list, tuple)):
+        if id(value) in _seen:
+            return "<circular>"
+        _seen = _seen | {id(value)}
+    if isinstance(value, dict):
+        return {str(k): halt_keysafe(v, _seen) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [halt_keysafe(v, _seen) for v in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
+    return value
+
+
+def halt_outcome(exc):
+    """`(exit_code, outcome)` for `exc` under the halt contract. THREE outcomes, not two.
+
+    A typed `GateFailure` is an andon that fired and names itself; a bare `ArmatureError`
+    is a deliberate refusal with no gate behind it (an unknown flag, an unknown `--mode=`);
+    anything else is a crash. Recording a crash as "a gate fired" is a false record —
+    F-c3f86abc measured `rig_character` writing one. A deliberate refusal exits 2; a crash
+    exits 1.
+    """
+    if isinstance(exc, GateFailure):
+        return 2, "HALTED — a gate fired"
+    if isinstance(exc, ArmatureError):
+        return 2, "REFUSED — the tool declined to proceed"
+    return 1, "FAILED — an unhandled error"
+
+
+def run_tool_main(main, prefix, tool=None):
+    """Run `main()` under the halt contract and exit. NEVER RETURNS.
+
+        if __name__ == "__main__":
+            from armature_core.parts import run_tool_main
+            run_tool_main(main, "RENDER_TURNAROUND")
+
+    `blender -b -P` exits **0** when the script's exception propagates (E07, measured three
+    times: `rig_character.py`, `rig_parts.py`, `author_walk.py`), so a halt that does not
+    exit deliberately is reported as a success. This prints `f"{prefix}_HALT " + <record>`
+    and exits 2 for a refusal, 1 for a crash. It does NOT print the tool's success
+    sentinel — that stays with the tool, earned by an effect (wave 12).
+
+    `tool` defaults to `prefix.lower()`, which reproduces all 22 spellings on `e8263a3`.
+
+    **THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12).** Wave 10 moved `json.dumps`
+    inside a try/except/finally so a sentinel that cannot serialise could no longer delete
+    `sys.exit` — but the sentinel's CONSTRUCTION stayed ABOVE that guard, and so did
+    `traceback.print_exc()`. Everything below that can fail is inside the guard; what is
+    above it cannot: `isinstance` on an exception, `type(exc).__name__`, and a
+    `json.dumps` of six values that are already strings or None.
+    """
+    import traceback
+
+    name = prefix.lower() if tool is None else tool
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException as exc:                # noqa: BLE001 — the halt must be loud
+        _code, _outcome = halt_outcome(exc)
+        _sentinel = {
+            "tool": name, "outcome": _outcome, "gate": None,
+            "error": type(exc).__name__,
+            "message": "the halt line could not be built", "evidence": None}
+        _line = json.dumps(_sentinel)
+        try:
+            traceback.print_exc()
+            _detail = getattr(exc, "evidence", None)
+            _sentinel = {
+                "tool": name, "outcome": _outcome,
+                "gate": getattr(exc, "gate", None),
+                "error": type(exc).__name__, "message": str(exc),
+                "evidence": (halt_keysafe(_detail)
+                             if isinstance(_detail, dict) else None)}
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
+        except BaseException:                                         # noqa: BLE001
+            pass
+        finally:
+            print(prefix + "_HALT " + _line)
+            sys.exit(_code)
+
+
+def single_path_segment(value, flag, exc, extra=None):
+    """`value` if it names ONE path component, else raise `exc` naming the flag. · ANDON
+
+    A `--name` is a NAME, not a path. `os.path.join(out_dir, f"{name}.{ext}")` with
+    `name="../escaped"` writes OUTSIDE `--out` while every gate above it stays green and
+    the manifest that certifies the artifact stays behind in `--out` — measured on the base
+    tree (F-62dec63b): `PACK_POSE_PACK_OK` with `"gate_R": "identical"`, exit 0, the pack
+    at `<base>/esc/escaped.apng.png` and the manifest at `<base>/esc/inner/`, so the
+    directory the caller was told to read held a manifest and no pack. Gate R read the
+    escaped file back and reported it identical, because Gate R compares pixels and is
+    blind to where they live. The neighbouring spelling refused by accident rather than by
+    name: `--name=a/b` died with an untyped `FileNotFoundError` whose halt record read
+    `"evidence": null`, so a run that was refused looked like a run that crashed.
+
+    `os.path.basename` alone is not the check: it is platform-dependent (on POSIX
+    `basename` of a backslash-bearing string is the whole string) and it accepts `.` and
+    `..` unchanged. Both separators, the drive-relative spellings, the two dot names and an
+    absent name are refused explicitly, so the same call answers the same way on either
+    platform.
+
+    **WAVE 22, SEAM 1: this is the ONE home.** It was two byte-identical copies
+    (`pack_pose_pack.py`, `resample_motion.py`), each carrying a docstring saying the single
+    home is `armature_core`. Signature, argument ORDER, clause word
+    (`output_name_is_not_a_name`) and evidence keys are unchanged, so the copies are deleted
+    and imported rather than re-derived.
+    """
+    text = "" if value is None else str(value)
+    sep = {"/", "\\"} | {c for c in (os.sep, os.altsep) if c}
+    if (not text.strip() or text in (".", "..") or os.path.isabs(text)
+            or any(c in text for c in sep) or os.path.basename(text) != text):
+        ev = {"gate": "ARGS", "andon": exc.__name__,
+              "clause": "output_name_is_not_a_name", "flag": flag, "name": text}
+        ev.update(extra or {})
+        raise exc(
+            f"{flag}={text!r} is not a name; it is pasted into the output path as one "
+            f"component of a filename, so a separator, an absolute path or a dot name "
+            f"writes the artifact somewhere other than the directory this tool was told to "
+            f"write into, while the manifest that certifies it stays behind and every "
+            f"gate above reports on the file that escaped",
+            ev)
+    return text

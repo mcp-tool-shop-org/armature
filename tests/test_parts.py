@@ -724,3 +724,79 @@ def test_require_finite_writes_the_offending_value_into_the_caller_s_own_evidenc
         parts.require_finite("x", 0.0, parts.GateRigidArrival, ev)
     with pytest.raises(parts.GateRigidArrival, match=r"not a finite number"):
         parts.require_finite("x", float("inf"), parts.GateRigidArrival, ev, positive=False)
+
+
+# ------------------------------------------------- wave 22: the coercion above the guard
+#
+# F-fda74b87. `v = float(value)` ran ABOVE `if not math.isfinite(v)`, so the ONE
+# implementation of wave 10's rule 4 was broken in one class of the case it exists for: a
+# value that is not a real number left the helper as an untyped `TypeError`, which the
+# 21-tool halt contract records as exit 1 "FAILED - an unhandled error" where a typed
+# refusal at exit 2 belongs. The file records the identical defect being caught by its own
+# test 300 lines below, at `joint_planes`.
+
+
+@pytest.mark.parametrize("raw", [None, [], {}, object(), "wide", (1.0,)])
+def test_require_finite_refuses_an_unreadable_operand_in_the_caller_s_family(raw):
+    """The direction the guard did not bound: not a BAD number, but not a number at all."""
+    ev = {"gate": "RIGID"}
+    with pytest.raises(parts.GateRigidArrival) as exc:
+        parts.require_finite("x", raw, parts.GateRigidArrival, ev)
+    assert isinstance(exc.value, ArmatureError)
+    assert repr(raw) in str(exc.value), "the halt line must name the raw value"
+    assert exc.value.evidence["x_raw"] == repr(raw)
+    assert exc.value.evidence["x"] != exc.value.evidence["x"]        # coerced to NaN
+
+
+def test_no_importer_of_the_helper_can_exit_the_family_on_an_unreadable_operand():
+    """The siblings the finding enumerated, driven through their own front doors: three
+    andons on the start-frame and turnaround routes whose input is a MEASUREMENT read back
+    from a record, where `null` is the ordinary JSON shape of a measurement nobody took."""
+    from armature_core import startframe, turnaround
+
+    with pytest.raises(ArmatureError, match=r"transparent_fraction=None is not a number"):
+        turnaround.gate_view_alpha(0, 0, 255, None)
+    with pytest.raises(ArmatureError, match=r"void_vs_plate_255=None is not a number"):
+        startframe.gate_backdrop(None, 10.0, 0.5, "why", 1.0, 5.0)
+    with pytest.raises(ArmatureError, match=r"height=None is not a number"):
+        startframe.gate_whole({"x0": 1.0, "x1": 2.0, "y0": 1.0, "y1": 2.0},
+                              64, None, 4)
+
+
+# ------------------------------------ wave 22: Gate D's seeded extremum behind a strict >
+#
+# F-cfb560aa. `worst = {"part": None, "delta": 0.0}` and BOTH readings of the per-part
+# distance are strict `>`, which a NaN fails in both directions - so Gate D returned its
+# strongest verdict, "N parts identical across two builds", over a build carrying a
+# non-finite vertex position. `+inf` refused already; the sign-free direction did not.
+
+
+def test_determinism_refuses_a_non_finite_vertex_rather_than_certifying_agreement():
+    a, b = _fp(), _fp()
+    b["neck"]["positions"][3, 1] = float("nan")
+    with pytest.raises(parts.GatePartsDeterminism) as exc:
+        parts.gate_parts_determinism(a, b, 1.069)
+    assert exc.value.evidence["delta.neck"] != exc.value.evidence["delta.neck"]
+    assert exc.value.gate == "D"
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("-inf")])
+def test_determinism_refuses_both_infinities_by_the_same_clause(bad):
+    """The sibling that refused by ACCIDENT (`inf > tol`) now refuses by name, and the
+    negative one - which `d > tol` reads as agreement after `np.abs` only because the
+    absolute value happens to be `+inf` - takes the same door."""
+    a, b = _fp(), _fp()
+    b["head"]["positions"][2, 0] = bad
+    with pytest.raises(parts.GatePartsDeterminism) as exc:
+        parts.gate_parts_determinism(a, b, 1.069)
+    assert "delta.head" in exc.value.evidence
+
+
+def test_determinism_still_passes_and_still_fires_on_a_real_displacement():
+    """The arm can still move in both directions: the sweep is not a check that always
+    fires."""
+    assert parts.gate_parts_determinism(_fp(), _fp(), 1.069)["verdict"].startswith("3 parts")
+    a, b = _fp(), _fp()
+    b["neck"]["positions"][3, 1] += 1e-3
+    with pytest.raises(parts.GatePartsDeterminism, match=r"vertices differ by up to"):
+        parts.gate_parts_determinism(a, b, 1.069)
