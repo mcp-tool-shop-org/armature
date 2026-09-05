@@ -779,10 +779,15 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # `SpendCeiling` is deliberately not reproduced here.
     # WAVE 18 (builders): 125 → 126 — +1 `gate_saved_graph.SavedAdmission` (F-c11410c5).
     # ⚠ `build_r2v_payload.SpendCeiling` does NOT move this number: it was already visible
-    # here, because THIS file's `_family_classes_defined_under_tools` resolves a dotted base
-    # while `tests/test_gates._armature_error_family` does not — which is precisely the
-    # F-d8593862 defect (two censuses of one family disagreeing about its membership).
-    # Widening the other walk is Stage B.
+    # here, because THIS file's `_family_classes_defined_under_tools` resolved a dotted base
+    # while `tests/test_gates._armature_error_family` did not — precisely the F-d8593862
+    # defect (two censuses of one family disagreeing about its membership).
+    # CLOSED WAVE 23 (F-74339050): `tests/test_gates._armature_error_family` reads an
+    # `_ast.Attribute` base too, and `test_gates.py::test_the_two_family_walks_are_one_law`
+    # reconciles the two implementations by equality, so the disagreement cannot return
+    # silently. Re-measured 2026-09-05: both walks yield the same 134 names, symmetric
+    # difference empty, and there are ZERO dotted-base class definitions under `tools/**` —
+    # the defect was latent by then, and the red proof is a synthetic class.
     #      ⚠ **BRANCH-LOCAL.** This is measured in `w18-builders` and is a COMPOSITION on the
     #      merged tree (core-solvers posts +3 and core-gates +5 on the sibling pins); it must be
     #      RE-DERIVED there by measurement, never summed. tests' SEAM 11 carries the
