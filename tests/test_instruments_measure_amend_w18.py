@@ -1,16 +1,21 @@
 """Wave 18, instruments-measure: the two flags the UPLOADED pack is written from.
 
-One finding, one bound:
+Two findings, one family and one bound:
 
 * **F-6bb38028** — `pack_pose_pack --fps` divides in `write_pack` and in the manifest, and
   was unbounded. On the base tree `--fps=0` died with a bare `ZeroDivisionError` and
   `--fps=-16` with a bare `struct.error` / `RuntimeError`, in all four cases AFTER
   `os.makedirs` had created `--out` and left it behind empty.
+* **F-62dec63b** — `pack_pose_pack --name` was pasted into the output path with no check
+  that it names one path component. `--name=../escaped` printed `PACK_POSE_PACK_OK` with
+  `"gate_R": "identical"`, exited 0, and put the pack one directory ABOVE the manifest that
+  certifies it.
 
 **The rule this file is written to (wave-18 brief, rule 2): a fix's red proof runs against
-its SIBLINGS.** So the operand the finding named is proven red, and so is every neighbour
-of it in the same parser: both pack formats and both signs of the rate. The population
-these two tools sit in (every `--name`/`--out`/rate flag
+its SIBLINGS.** So the operand each finding named is proven red, and so is every neighbour
+of it in the same parser and the same family: both pack formats, both signs of the rate,
+both path separators on either platform, the two dot names, an absolute path, an empty
+name. The population these two tools sit in (every `--name`/`--out`/rate flag
 pasted into a path or divided by, across the domain's 42 instruments) is enumerated in the
 wave-18 seams inbox, SEAM 10; the rest, including `make_review_clip --run` and
 `make_ab_clip --a-fps/--b-fps`, are DEFERRED Stage B items and are deliberately untouched.
@@ -60,9 +65,76 @@ def tree_under(root):
             out.append(os.path.relpath(os.path.join(base, n), root).replace(os.sep, "/"))
     return sorted(out)
 
+
+#: The names that are NOT one path component. `.` and `..` are the two `os.path.basename`
+#: returns unchanged — a check spelled as `basename(x) != x` alone lets both through — and
+#: `a\b` is the one that separates the platforms: on POSIX `basename("a\\b")` IS the whole
+#: string, so a Windows-only check passes it straight into a join.
+NOT_A_NAME = ("../escaped", "..", ".", "a/b", "a\\b", "/abs", "", "   ")
+
+
 # ===========================================================================
 # F-62dec63b — `pack_pose_pack --name` is a NAME
 # ===========================================================================
+
+
+def test_a_pack_name_that_escapes_out_refuses_and_writes_nothing_anywhere(tmp_path):
+    """THE OPERAND the finding named, and the two things that made it dangerous.
+
+    On the base tree this exact call printed `PACK_POSE_PACK_OK` with `"gate_R":
+    "identical"`, returned 0, wrote the pack to `<base>/esc/escaped.apng.png` and left
+    `pose_pack_manifest.json` behind in `<base>/esc/inner` — so the directory the caller was
+    told to read held a manifest and no pack, and Gate R read the escaped file back and
+    called it identical, because Gate R compares pixels and is blind to where they live.
+    """
+    frames = stick_frames(str(tmp_path / "frames"))
+    root = tmp_path / "esc"
+    out = root / "inner"
+    with pytest.raises(PP.PosePackError) as exc:
+        PP.main([f"--frames={frames}", f"--out={out}", "--name=../escaped"])
+    ev = exc.value.evidence
+    assert ev["andon"] == "PosePackError"
+    assert ev["clause"] == "output_name_is_not_a_name"
+    assert ev["flag"] == "--name" and ev["name"] == "../escaped"
+    # NOTHING was written: not the escaped pack, not the manifest, not `--out` itself.
+    assert tree_under(str(root)) == []
+
+
+@pytest.mark.parametrize("name", NOT_A_NAME)
+def test_every_sibling_spelling_of_a_name_that_is_not_a_name_refuses(tmp_path, name):
+    """Rule 2: the operand's SIBLINGS, each proven red, not the operand alone.
+
+    `a\\b` and the two dot names are the members a `basename(x) != x` check alone lets out
+    (on POSIX for the first, on both platforms for the other two), and an empty `--name`
+    wrote a file called `.apng.png` on the base tree.
+    """
+    frames = stick_frames(str(tmp_path / "frames"))
+    out = tmp_path / "o" / "inner"
+    with pytest.raises(PP.PosePackError) as exc:
+        PP.main([f"--frames={frames}", f"--out={out}", f"--name={name}"])
+    assert exc.value.evidence["clause"] == "output_name_is_not_a_name"
+    assert tree_under(str(tmp_path / "o")) == []
+
+
+def test_a_pack_name_that_is_a_name_still_writes_the_pack_and_its_manifest(tmp_path):
+    """The other direction of the bound: the andon refuses names, not runs.
+
+    An andon that also refuses correct work is a defect with a clause attached, so the
+    default name and an ordinary one both have to come out the far side with Gate R green.
+    """
+    frames = stick_frames(str(tmp_path / "frames"))
+    for argv_name, stem in ((None, "E08_pose_sticks"), ("shot_A2", "shot_A2")):
+        out = tmp_path / ("o_" + stem)
+        argv = [f"--frames={frames}", f"--out={out}"]
+        if argv_name is not None:
+            argv.append(f"--name={argv_name}")
+        assert PP.main(argv) == 0
+        assert tree_under(str(out)) == sorted([f"{stem}.apng.png",
+                                               "pose_pack_manifest.json"])
+        with open(out / "pose_pack_manifest.json", encoding="utf-8") as fh:
+            man = json.load(fh)
+        assert man["gates"]["R"]["verdict"] == "identical"
+        assert os.path.dirname(man["pack"]["path"]) == os.path.abspath(str(out))
 
 
 # ===========================================================================
@@ -124,7 +196,7 @@ def test_a_pack_rate_that_is_a_rate_still_writes_the_frame_delay_it_names(tmp_pa
         assert man["encoding"]["duration_ms"] == int(round(1000.0 / fps))
 
 
-def test_the_pack_rate_andon_sits_above_the_makedirs_it_protects():
+def test_both_pack_andons_sit_above_the_makedirs_they_protect():
     """The ordering rule, read off the source rather than inferred from a passing run.
 
     The two tests above prove `--out` is absent after a refusal, which is the BEHAVIOUR.
@@ -140,6 +212,7 @@ def test_the_pack_rate_andon_sits_above_the_makedirs_it_protects():
 
     makedirs = line_of("os.makedirs(out_dir, exist_ok=True)")
     assert line_of("if a.fps <= MIN_FPS_EXCLUSIVE:") < makedirs
+    assert line_of('single_path_segment(a.name, "--name", PosePackError,') < makedirs
 
 
 # ===========================================================================
@@ -205,6 +278,8 @@ fired = []
 for argv, cls, tag in (
         ([f"--frames={frames}", f"--out={out}1", "--fps=0"],
          pack_pose_pack.PosePackError, "pack_rate"),
+        ([f"--frames={frames}", f"--out={out}2", "--name=../x"],
+         pack_pose_pack.PosePackError, "pack_name"),
 ):
     try:
         pack_pose_pack.main(argv)
@@ -219,15 +294,16 @@ print(json.dumps(fired))
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout.strip().splitlines()[-1]) == [
         ["pack_rate", "pack_rate_not_positive", False],
+        ["pack_name", "output_name_is_not_a_name", False],
     ]
 
 
-def test_the_andon_is_not_an_assert_and_carries_no_skip_flag():
+def test_neither_andon_is_an_assert_or_carries_a_skip_flag():
     """Gates raise; they never `assert`, and nothing may disarm one from outside.
 
-    Keyed on the RESOLVED shape rather than on a spelling: the andon added here is reached
-    from a `raise` statement, and the file grew no environment read and no
-    `--no-*` / `--skip-*` / `--force` flag beside it.
+    Keyed on the RESOLVED shape rather than on a spelling: every andon added this wave is
+    reached from a `raise` statement, and neither file grew an environment read or a
+    `--no-*` / `--skip-*` / `--force` flag alongside them.
     """
     for name in ("pack_pose_pack.py",):
         src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
