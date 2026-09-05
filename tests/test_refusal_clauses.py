@@ -631,7 +631,10 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # table still rules a row CONDITIONAL, and nine lines from the spend the other shim
     # DROPPED the computed credit list with no clause. The asymmetry is closed with a
     # refusal, so the file that authors the spend refuses when its premise fails.
-    assert len(RAISE_SITES["RouteGate"]) == 73, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 22 (core-gates, F-0d33958f): 71 → 72. `_one_graph_declaration`'s
+    # `multiple_graph_declarations`. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    # WAVE-22 MERGE (coordinator, 2026-09-05): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(RAISE_SITES["RouteGate"]) == 74, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside

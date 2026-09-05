@@ -267,11 +267,14 @@ def test_hosted_enums_read_the_same_values_in_both_formats():
     read them positionally. Disagreement here is the off-by-one the whole table exists for."""
     api = _a1()
     # `hosted_enums` returns one entry per hosted node; these graphs carry exactly one.
-    (_, res_a, ratio_a, dur_a), = RG.hosted_enums(api)
+    # WAVE 22 (core-gates, F-2fa07723): the row is `(where, node_id, resolution, ratio,
+    # duration)` — `where` is the level the walk yields, and the tuple discarded it, so on
+    # the one tier that bills per node the billing refusal read "node(s) (6, 6)".
+    (_, _, res_a, ratio_a, dur_a), = RG.hosted_enums(api)
     saved = {"nodes": [{"id": 500, "type": "Wan2ReferenceVideoApi",
                         "widgets_values": ["wan2.7-r2v", PROMPT, NEG, "720P", "16:9", 5,
                                            SEEDS[0], "fixed", False]}]}
-    (_, res_s, ratio_s, dur_s), = RG.hosted_enums(saved)
+    (_, _, res_s, ratio_s, dur_s), = RG.hosted_enums(saved)
     assert (res_a, ratio_a, dur_a) == (res_s, ratio_s, dur_s) == ("720P", "16:9", 5)
 
 
@@ -454,8 +457,9 @@ def test_hosted_enums_returns_every_node_not_the_first():
     saved = {"nodes": [_hosted_node(500, "720P", "16:9", 5),
                        _hosted_node(501, "4K", "99:1", 900)]}
     found = RG.hosted_enums(saved)
-    assert [f[0] for f in found] == [500, 501]
-    assert found[1][1:] == ("4K", "99:1", 900)
+    # WAVE 22 (core-gates, F-2fa07723): index 0 is now `where`, index 1 the node id.
+    assert [f[:2] for f in found] == [("top", 500), ("top", 501)]
+    assert found[1][2:] == ("4K", "99:1", 900)
 
 
 def test_an_illegal_second_hosted_node_raises_and_is_named():

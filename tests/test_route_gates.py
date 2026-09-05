@@ -611,7 +611,7 @@ def test_gate_pair_goes_RED_on_the_exact_wave_2_graph():
         "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"]
 
     # and the whole gate now refuses the graph, where before it admitted it
-    with pytest.raises(RG.PairGate, match=r"\[PAIR\] node 50 is WanCameraImageToVideo, which requires a"):
+    with pytest.raises(RG.PairGate, match=r"\[PAIR\] node api/50 is WanCameraImageToVideo, which requires a"):
         RG.verify(g, frame=(832, 480, 65))
 
 
@@ -636,8 +636,12 @@ def test_gate_pair_is_GREEN_on_the_wave_1_graph():
     g = fixture("E11-w1-probe-i2v.api.json")
     ev = RG.pairing(g)
     assert ev["families_present"] == ["i2v"]
+    # WAVE 22 (core-gates, F-94cc5fe1): the row family gained `where`, the level the walk
+    # yields — node identity here is the pair `(where, id)` and this was the one row family
+    # on the page that discarded it, so a top-level and a blueprint node sharing an id read
+    # as two identical rows.
     assert ev["conditioning_nodes"] == [
-        {"node_id": "50", "class": "WanImageToVideo", "requires": "i2v"}]
+        {"where": "api", "node_id": "50", "class": "WanImageToVideo", "requires": "i2v"}]
     assert "1 conditioning node(s) paired" in ev["verdict"]
     RG.verify(g, frame=(832, 480, 65))       # the whole gate still admits it
 
@@ -707,8 +711,9 @@ def test_controlnet_appliers_are_exempt_by_record_not_by_omission():
          "50": {"class_type": "WanImageToVideo", "inputs": {}},
          "90": {"class_type": "ControlNetApplyAdvanced", "inputs": {}}}
     ev = RG.pairing(g)
-    assert {"node_id": "90", "class": "ControlNetApplyAdvanced", "requires": None} \
-        in ev["conditioning_nodes"]
+    # WAVE 22 (core-gates, F-94cc5fe1): `where` joined the row — see the note above.
+    assert {"where": "api", "node_id": "90", "class": "ControlNetApplyAdvanced",
+            "requires": None} in ev["conditioning_nodes"]
 
 
 def test_the_two_tables_cover_every_latent_sizing_conditioning_class():

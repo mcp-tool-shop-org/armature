@@ -2611,11 +2611,31 @@ GUARDED_TODAY = [
     "tools/armature_core/blender_scene.py",
     # WAVE-12 MERGE (coordinator, 2026-09-04): `canon.py` opened by path by a wave-12 test; under `tools/**`.
     "tools/armature_core/canon.py",
+    # WAVE 22 (core-gates, F-682ce228): `tests/test_amend_w22_core_gates.py` opens
+    # `canon_census.py` by path to assert that `gate_census_table()` is CALLED at import —
+    # a run-time-only check is the half of the andon that a module read once does not
+    # have, and asserting the call site means reading the source rather than importing it.
+    # Under `tools/**`, which BOTH triggers already carry, so `ci.yml` needs no change and
+    # `UNFILTERED_PENDING` stays empty. RE-DERIVED, not typed: this list is asserted with
+    # `==` and was measured red at exactly this one member. (The list is SORTED; the entry
+    # sits here for that reason, not by topic.)
+    "tools/armature_core/canon_census.py",
     "tools/armature_core/framing.py",
     # WAVE-10 MERGE (coordinator, 2026-09-04): `glb.py` (core-solvers' MalformedGLB census) and
     # `render_pose_sticks.py` (instruments-measure's Gate COUNT census) are opened by path by
     # sibling branches' new tests; both under `tools/**`, which both triggers carry.
     "tools/armature_core/glb.py",
+    # WAVE 22 (core-gates, F-f2808386): `tests/test_amend_w22_core_gates.py` parses
+    # `route_gates.py`'s AST by path for the structural census over every function that
+    # SUBSCRIPTS a widget list — the census keys on the resolved shape (a local bound from
+    # `n.get("widgets_values")` that is then indexed) and on which shift andon each body
+    # calls, which means reading the source rather than importing it. Two more tests in the
+    # same module read it by path for the two prose invariants (`verify`'s "a returned
+    # receipt never carries `clause`"). Under `tools/**`, which BOTH triggers already
+    # carry, so `ci.yml` needs no change and `UNFILTERED_PENDING` stays empty. RE-DERIVED,
+    # not typed: measured red at exactly this one member. (The list is SORTED; the entry
+    # sits here for that reason, not by topic.)
+    "tools/armature_core/route_gates.py",
     # WAVE 16 (core-solvers, SEAM 11 §5) — see the note above `aapose.py`.
     "tools/armature_core/sitelist.py",
     "tools/armature_core/walk.py",

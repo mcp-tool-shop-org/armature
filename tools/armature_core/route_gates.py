@@ -243,8 +243,21 @@ HOSTED_TIER_RULES = {
 #: check it against. The exposure is bounded: widget order is irrelevant in API format,
 #: where inputs are keyed by name, and matters only when re-reading the SAVED file. So the
 #: second reading is taken empirically there instead — `camera_widget_order_evidence`
-#: reports the values standing at these indices on the converted file, and the builder's
-#: saved-graph step requires them to be the ones it set.
+#: reports the values standing at these indices on the converted file.
+#:
+#: ⚠ **The sentence that used to end this paragraph — "and the builder's saved-graph step
+#: requires them to be the ones it set" — described a confirmation that was being taken by
+#: a DIFFERENT implementation.** Measured by grep across the worktree on `e8263a3`: the
+#: only references to `camera_widget_order_evidence` outside its own definition were four
+#: in `tests/test_route_gates.py` (550-568); no builder and no gate called it, and the
+#: saved-graph step reads `gate_saved_graph.WIDGET_INDEX` (`:41`, read at `:141`) — a
+#: second copy of the same table. So the empirical second reading this note claims was
+#: taken by code that does not read this table, and the function the note names was dead.
+#: A clause with no caller is armed or deleted: `verify` is its production caller now (see
+#: the andon near the end of that function), so every save-format graph that reaches Gate
+#: ROUTE with a frame to check against records the values standing at these indices, and a
+#: disagreement halts. Routed to builders as SEAM 5 §2: whether `WIDGET_INDEX`'s camera row
+#: is retired in favour of this one is theirs to decide, in their own file.
 LATENT_NODES = {
     "EmptyHunyuanLatentVideo": {"width": 0, "height": 1, "length": 2},
     "EmptyLatentVideo": {"width": 0, "height": 1, "length": 2},
@@ -447,15 +460,28 @@ def pairing(graph):
     graph = normalise_graph(graph)
     loaded = model_weights(graph)
     present = sorted({fam for w in loaded for fam in w["families"]})
-    cond = [(str(n.get("id")), n.get("type")) for _, n in _iter_nodes(graph)
+    # ⚠ **`where` — Gate PAIR's rows were the one row family on this page that never
+    # carried it.** The comprehension read `for _, n in _iter_nodes(graph)` and discarded
+    # the level the walk yields, beside `components`, `ruled_node_classes`,
+    # `model_weights`, `seeds`, `latents`, `cameras` and `camera_widget_order_evidence`,
+    # every one of which records `"where": where`. Measured 2026-09-05 in this worktree on
+    # a save-format graph carrying a top-level `WanImageToVideo` id 3 and a blueprint
+    # `WanImageToVideo` id 3: the CONTRADICTED refusal read "node 3 is WanImageToVideo ...;
+    # node 3 is WanImageToVideo ..." and `conditioning_nodes` carried two rows keyed 3 and
+    # 3 — the same duplicate-id tell the wave-18 Gate S fix removed from its own verdict
+    # by printing `level/id`. Node identity in this walk is the PAIR `(where, id)`, because
+    # blueprint ids are a separate namespace. No verdict was wrong (`missing` is computed
+    # per row rather than by a lookup), so what this closes is the RECEIPT and the refusal
+    # an operator reads.
+    cond = [(where, str(n.get("id")), n.get("type")) for where, n in _iter_nodes(graph)
             if n.get("type") in CONDITIONING_WEIGHT_FAMILY
             or n.get("type") in CONDITIONING_FAMILY_EXEMPT]
 
     ev = {"gate": "PAIR", "andon": "PairGate",
           "model_weights": loaded, "families_present": present,
-          "conditioning_nodes": [{"node_id": i, "class": c,
+          "conditioning_nodes": [{"where": w, "node_id": i, "class": c,
                                   "requires": CONDITIONING_WEIGHT_FAMILY.get(c)}
-                                 for i, c in cond]}
+                                 for w, i, c in cond]}
 
     unknown = sorted({n.get("type") for _, n in _iter_nodes(graph)
                       if _looks_like_conditioning(n.get("type"))
@@ -470,23 +496,24 @@ def pairing(graph):
             f"letting a new class through — the class this gate was built for passed every "
             f"other check in this file", ev)
 
-    required = [(i, c, CONDITIONING_WEIGHT_FAMILY[c]) for i, c in cond
+    required = [(w, i, c, CONDITIONING_WEIGHT_FAMILY[c]) for w, i, c in cond
                 if c in CONDITIONING_WEIGHT_FAMILY]
     if required and not loaded:
         ev["verdict"] = "INDETERMINATE"
         raise PairGate(
-            f"the graph wires {len(required)} conditioning node(s) but loads no diffusion "
-            f"model this gate can read ({', '.join(MODEL_LOADER_CLASSES)}), so the pairing "
-            f"is UNPROVEN. A check that cannot fail is not a check", ev)
+            f"the graph wires {len(required)} conditioning node(s) "
+            f"({', '.join(f'{w}/{i}' for w, i, _c, _f in required)}) but loads no "
+            f"diffusion model this gate can read ({', '.join(MODEL_LOADER_CLASSES)}), so "
+            f"the pairing is UNPROVEN. A check that cannot fail is not a check", ev)
 
-    missing = [(i, c, fam) for i, c, fam in required if fam not in present]
+    missing = [(w, i, c, fam) for w, i, c, fam in required if fam not in present]
     if missing:
         ev["verdict"] = "CONTRADICTED"
         raise PairGate(
             "; ".join(
-                f"node {i} is {c}, which requires a {fam!r} model, but the graph loads "
-                f"{', '.join(w['file'] for w in loaded) or 'nothing'} "
-                f"(families present: {present or 'none'})" for i, c, fam in missing) +
+                f"node {w}/{i} is {c}, which requires a {fam!r} model, but the graph "
+                f"loads {', '.join(x['file'] for x in loaded) or 'nothing'} "
+                f"(families present: {present or 'none'})" for w, i, c, fam in missing) +
             ". Measured 2026-08-12: this exact pairing produced 65 frames with no subject "
             "after the first, and every other gate in this file passed on it", ev)
 
@@ -512,6 +539,57 @@ def _shape_of(doc):
     return None
 
 
+def _one_graph_declaration(doc):
+    """The ONE wrapper key `doc` declares a graph under, or Gate ROUTE's refusal.
+
+    Returns `None` when the mapping declares none — the ordinary "this is not an envelope"
+    answer `normalise_graph` breaks its loop on.
+
+    ⚠ **A document declaring TWO graphs was resolved by wrapper-key ORDER, and the second
+    declaration was recorded nowhere.** `next((doc[k] for k in GRAPH_WRAPPER_KEYS if
+    isinstance(doc.get(k), dict)), None)` takes the first of `('prompt', 'workflow_json',
+    'workflow')` that is a mapping. Measured 2026-09-05 in this worktree on
+    `{"prompt": <API graph, clean>, "workflow": <save-format graph loading
+    causvid_x.safetensors>}` — the shape a ComfyUI queue/history record carries:
+    `_shape_of(doc)` returned `None`, `components(doc)` returned only the API half's one
+    weight, and `verify(doc, frame=(832,480,81))` RETURNED the verdict "0 of 1
+    component(s) classified, ... 1 frame(s) checked and generator-legal" with the BANNED
+    CC-BY-NC file named nowhere in the receipt and no key naming a second declaration.
+    `load_graph` of the same document written to disk returned a graph equal to the API
+    half. Reversing the two keys in the document changed nothing: the TUPLE is the
+    selector, not dict order, so this is not a shape a caller can spell around.
+
+    Bounded as the auditor filed it: `gate_saved_graph.round_trip(api, load_graph(<that
+    file>))` still refused with `SavedAdmission` "the saved graph argument is not a
+    save-format graph", so what was open is any caller handing such a document straight to
+    `verify` / `components` / `is_api_format`, and the receipt's silence about the choice.
+
+    It REFUSES rather than recording the choice, which is what this module does with
+    ambiguity everywhere else in exactly this family: `duplicate_subgraph_id` and
+    `duplicate_subgraph_label` here, `duplicate_link_id` and `duplicate_socket_name` in
+    `gate_saved_graph.link_table`, `node_map_duplicate_id` in `fetch_run.parse_node_map`.
+    Two declarations are two different graphs and one of them is what would run.
+    """
+    declaring = [k for k in GRAPH_WRAPPER_KEYS if isinstance(doc.get(k), dict)]
+    if not declaring:
+        return None
+    if len(declaring) > 1:
+        raise RouteGate(
+            f"this document declares {len(declaring)} graphs — {declaring!r} — and the "
+            f"loader would have taken {declaring[0]!r} by the order of "
+            f"{list(GRAPH_WRAPPER_KEYS)}, reading nothing at all from the other(s). Two "
+            f"declarations are two different graphs and one of them is what runs; a "
+            f"licence, seed and frame walk that reads one of them reports a verdict about "
+            f"a graph the submission may not carry",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "multiple_graph_declarations",
+             "declaring_keys": declaring, "would_have_taken": declaring[0],
+             "wrapper_keys": list(GRAPH_WRAPPER_KEYS),
+             "top_level_keys": sorted(map(str, doc)),
+             "shapes": {k: _shape_of(doc[k]) for k in declaring}})
+    return declaring[0]
+
+
 def normalise_graph(graph):
     """THE loader. Every gate in this module reads its graph through this one function.
 
@@ -532,6 +610,16 @@ def normalise_graph(graph):
     [7])` likewise reported every seed pinned and registered. Gate ROUTE reported a graph
     clean on licence, seeds and pairing having read zero nodes.
 
+    (The quoted verdict is the 2026-09-03 measurement and is left as measured. **Dated
+    note, 2026-09-05:** the licence half of that string is no longer spelled
+    `"{n} weight file(s)"` — wave 12 replaced it with the three-number form
+    `"{classified} of {n} component(s) classified, {u} unclassified, {c} conditional
+    (credited), {a} attribution entr(y|ies) matching no loaded component"`, because a count
+    of what was LOOKED AT with no count of what was CLASSIFIED made "every component is
+    ruled clean" and "the table classified none of them" the same receipt. The seed, latent
+    and frame clauses of the quote are unchanged. Routed here from builders' F-c222d9ba,
+    whose own two copies of the stale quote carry the same dated note.)
+
     This is verbatim the fix wave 3 applied to `canon.texts_from_api_graph` — "'No text
     here' and 'I did not recognise this shape' are different answers" — carried into the
     module where the spend gates live, as ONE loader rather than a second implementation:
@@ -544,8 +632,12 @@ def normalise_graph(graph):
             return doc
         inner = None
         if isinstance(doc, dict):
-            inner = next((doc[k] for k in GRAPH_WRAPPER_KEYS
-                          if isinstance(doc.get(k), dict)), None)
+            # · ANDON — TWO declarations, before either is taken. See
+            # `_one_graph_declaration`; the selector is this tuple and not dict order, so
+            # reversing the keys in the document changes nothing and the ambiguity is not
+            # a property a caller can spell their way out of.
+            declaring = _one_graph_declaration(doc)
+            inner = doc[declaring] if declaring is not None else None
         if inner is None:
             break
         doc = inner
@@ -621,8 +713,34 @@ def _walk_nodes(graph):
             inputs = node.get("inputs") or {}
             # A link is [node_id, slot]; anything else is a literal this graph pins.
             widgets = [v for v in inputs.values() if not isinstance(v, list)]
+            # ⚠ **An API entry that declares its OWN `widgets_values` had it DISCARDED.**
+            # This branch synthesised the node's widgets from `inputs.values()` alone and
+            # `NODE_CONTAINERS[True]` recorded only `("inputs", dict)`, so a value spelled
+            # there was neither read nor refused. Measured 2026-09-05 in this worktree on
+            # an API graph of `UNETLoader(wan2.2_t2v_high_noise_14B_fp8_scaled)` +
+            # `KSampler(seed 7, fixed)` + `{"class_type": "LoraLoaderModelOnly",
+            # "inputs": {}, "widgets_values": ["causvid_x.safetensors", 1.0]}` (BANNED,
+            # CC-BY-NC): `components()` named ONLY the UNETLoader, `verify(g,
+            # frame=(832,480,81))` RETURNED "0 of 1 component(s) classified, 1
+            # unclassified, ... 1 frame(s) checked and generator-legal",
+            # `json.dumps(ev)` contained "causvid" zero times, and `walk_census.
+            # n_nodes_walked` read 3. The control — the same file spelled in the API
+            # `inputs` mapping — raised naming it. That is the wave-20 CRITICAL
+            # F-f9ab0645 one container over, on the format every builder submits.
+            #
+            # It is READ rather than refused, because a converter that emits `class_type`
+            # beside `widgets_values` is producing a node whose values ARE pinned and the
+            # honest reading is to test them; the SHAPE is refused instead, by the
+            # `widgets_values` row now in `NODE_CONTAINERS[True]`, so a mapping or a bare
+            # string here meets `unreadable_node` exactly as it does in save format.
+            # The `inputs` literals keep the positions they had, and the declared values
+            # are appended: nothing in API format is positional (every reader keys inputs
+            # by NAME — see `seeds`, `latents`, `cameras`, `hosted_enums`), so the union
+            # adds a population to the weight and class readers without moving an index.
+            declared = node.get("widgets_values") or []
             yield ("api", {"id": node_id, "type": node["class_type"],
-                           "widgets_values": widgets, "inputs": inputs})
+                           "widgets_values": widgets + list(declared),
+                           "inputs": inputs})
         return
     for i, n in enumerate(graph.get("nodes") or []):
         # · ANDON — the save-format branch used to yield whatever the array held, and it
@@ -820,7 +938,16 @@ _UNSET = object()
 NODE_CONTAINERS = {
     False: (("widgets_values", list, "a list of widget values"),
             ("inputs", list, "a list of save-format input slots")),
-    True: (("inputs", dict, "a mapping of API input name to literal-or-link"),),
+    # ⚠ `widgets_values` joined the API row 2026-09-05 (F-ddfb61e6). The comment above
+    # read "API format ... carries no `widgets_values` at all", and that is what the
+    # standard envelope carries — but a converter or a hand-edit that emits `class_type`
+    # BESIDE a `widgets_values` array produced a node whose declared values were neither
+    # read by the walk nor refused by this table, and a BANNED weight inside one reached
+    # a green `verify`. `_walk_nodes` now unions the declared values into the widgets it
+    # synthesises from the literal inputs, and this row is what refuses the container
+    # shapes that cannot be read (a mapping yields its KEYS, a string its CHARACTERS).
+    True: (("inputs", dict, "a mapping of API input name to literal-or-link"),
+           ("widgets_values", list, "a list of widget values")),
 }
 
 
@@ -1920,6 +2047,32 @@ def camera_widget_order_evidence(graph, expect):
     return ev
 
 
+def _camera_widget_order_receipt(graph, ev, supplied):
+    """`camera_widget_order_evidence` for `verify`, or a row saying why it was not taken.
+
+    The `expect` this reading is checked against is the frame the run is being graded on:
+    the caller's supplied triple when there is one, otherwise the single frame the graph
+    itself pins. When the graph pins several different frames there is no one thing to
+    confirm the indices against — `verify`'s own clash clause is what answers that — and a
+    row saying so is recorded rather than a verdict over a number nobody chose.
+    """
+    frames = {(f["width"], f["height"], f["length"])
+              for f in ev["frame_legality"] if f["source"] == "graph"}
+    if supplied is not None:
+        target = (supplied["width"], supplied["height"], supplied["length"])
+    elif len(frames) == 1:
+        target = next(iter(frames))
+    else:
+        return {"gate": "ROUTE", "andon": "RouteGate", "clause": "camera_widget_order",
+                "verdict": ("NOT TAKEN — the second reading needs one frame to check the "
+                            "declared indices against, and this call supplied none while "
+                            f"the graph pins {sorted(frames)}"),
+                "nodes": [], "agrees": None, "expect": None,
+                "graph_frames": sorted(frames)}
+    return camera_widget_order_evidence(
+        graph, {"width": target[0], "height": target[1], "length": target[2]})
+
+
 def _frame_triple(frame):
     """`(width, height, length)` from a tuple or a mapping, or raise saying what arrived.
 
@@ -2046,7 +2199,7 @@ HOSTED_ENUM_WIDGETS = {
 
 
 def hosted_enums(graph):
-    """EVERY hosted node's `(node_id, resolution, ratio, duration)`, in EITHER format.
+    """EVERY hosted node's `(where, node_id, resolution, ratio, duration)`, EITHER format.
 
     Found by the field rather than by the class name in API format, because the thing being
     read is the field. In save format there are no field names at all — the values are
@@ -2060,15 +2213,30 @@ def hosted_enums(graph):
     wan2.7-r2v at 720P 16:9 5s — enum-legal". The illegal second node was named nowhere
     in the evidence, so a two-shot hosted graph could carry an out-of-contract resolution,
     ratio or duration under a green Gate L receipt.
+
+    ⚠ **The tuple gained `where` 2026-09-05 (F-2fa07723) and its arity changed from 4 to
+    5.** The loop read `for _where, n in _iter_nodes(graph)` and DISCARDED the level, so
+    the per-node billing andon and the enum refusal above it could not name which node they
+    were about — on the one tier that bills per node. Measured in this worktree on a
+    save-format graph carrying a top-level `Wan2ReferenceVideoApi` id 6 and a blueprint
+    (`name: 'inner'`) `Wan2ReferenceVideoApi` id 6, both at ('720P','16:9',5): this
+    function returned `[(6,'720P','16:9',5), (6,'720P','16:9',5)]`, `verify(g,
+    hosted_tier='wan2.7-r2v')` raised "the graph carries 2 wan2.7-r2v node(s) (6, 6)", and
+    the two rows in `hosted_frame_legality_nodes` were keyed `node_id: 6` and `node_id: 6`
+    and carried no `where`; making the blueprint node illegal instead produced "Gate L
+    (hosted tier): node 6: resolution 4K is not one of ...", which does not say which node
+    6. Node identity in this walk is the PAIR `(where, id)` (wave 18) — what every DICT
+    row family on this page already records, and this was the one TUPLE family that did
+    not. The only consumer is `verify`'s hosted branch, in this module.
     """
     graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
-    for _where, n in _iter_nodes(graph):
+    for where, n in _iter_nodes(graph):
         if api:
             inp = n.get("inputs") or {}
             if "model.resolution" in inp:
-                out.append((n.get("id"), inp.get("model.resolution"),
+                out.append((where, n.get("id"), inp.get("model.resolution"),
                             inp.get("model.ratio"), inp.get("model.duration")))
         else:
             idx = HOSTED_ENUM_WIDGETS.get(n.get("type"))
@@ -2077,7 +2245,7 @@ def hosted_enums(graph):
                 # · ANDON — the positional read is cross-checked against the node's own
                 # declared input names before it is trusted. See `_hosted_enum_shift_andon`.
                 _hosted_enum_shift_andon(n, idx, wv)
-                out.append((n.get("id"), wv[idx["resolution"]], wv[idx["ratio"]],
+                out.append((where, n.get("id"), wv[idx["resolution"]], wv[idx["ratio"]],
                             wv[idx["duration"]]))
     return out
 
@@ -2374,6 +2542,25 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
                     not in ("disable", False)
             else:
                 wv = n.get("widgets_values") or []
+                # · ANDON — the positional read, cross-checked in THIS function's own body.
+                # ⚠ Wave 20 wired `_converted_widget_shift_andon` into four readers by hand
+                # and nothing required the fifth. Measured 2026-09-05 by walking this
+                # module's AST for subscripts of a widget list: six functions index widget
+                # values positionally — `seeds`, `latents`, `cameras`,
+                # `camera_widget_order_evidence`, `hosted_enums` and this one — and this
+                # one called no shift andon at all. Its `add_noise` read was bounded only
+                # TRANSITIVELY, by a hand-maintained index set two functions away
+                # (`seeds()` passes `add_noise` into the andon's index dict with the
+                # comment "`add_noise` rides the index set because `gate_s_registration`
+                # reads it off this same widget list"), and by the fact that this
+                # function's population comes from `seeds()`. No shifted graph escaped —
+                # the gap was that the coverage was a comment plus a hand-kept dict, on the
+                # walk that decides whether credits are spent, and the next positional
+                # table or the next reader joined the population only if someone
+                # remembered. The read is behind the andon now, so no exemption is needed
+                # and `tests/test_amend_w22_core_gates.py`'s structural census can require
+                # every member of the family to call one in its own body.
+                _converted_widget_shift_andon(n, {"add_noise": slot}, wv, "SEED_NODES")
                 adds = (wv[slot] if len(wv) > slot else "enable") not in ("disable", False)
         s["adds_noise"] = adds
         if adds:
@@ -2547,6 +2734,33 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # function returns — and every refusal evidence it raises — answers the same questions.
     # `_seed_population_andon` still writes `carries_no_sampler_asserted` for its own other
     # caller (`gate_s_registration`), with the same value.
+    #
+    # ⚠ **THE INVARIANT THAT TELLS A RETURNED RECEIPT FROM A CAUGHT REFUSAL: a receipt this
+    # function RETURNS never carries `clause`; only a refusal it RAISES does.** Both are
+    # stamped `gate: "ROUTE"`, `andon: "RouteGate"`, `receipt: "verify"` and both fact keys,
+    # written in this literal before the first clause can raise — so the ONLY thing
+    # separating them downstream is the absence of `clause`.
+    #
+    # It is stated here because it is read there and was written down nowhere on this page.
+    # `gate_saved_graph.route_facts` reads `refusals = [r for r in receipts if
+    # r.get("clause")]` and raises `record_carries_a_caught_refusal` on a hit; the sentence
+    # that says a returned receipt never carries `clause` lives at `gate_saved_graph.py`,
+    # in another domain's file, and in `tests/test_amend_w18_builders.py`. Re-measured
+    # 2026-09-05 on `e8263a3`: a passing `verify` returns with `"clause" in ev` False and
+    # `receipt == "verify"`, and a caught refusal (an `attribution` naming a component the
+    # graph does not load) raises with evidence carrying `receipt: "verify"`, both fact keys
+    # AND `clause: "orphan_attribution"` — told apart by an absence nothing in this module
+    # pinned.
+    #
+    # Three OTHER dicts in this module stamped `gate: "ROUTE", andon: "RouteGate"` DO carry
+    # `clause` on a pass — `gate_s_registration` (`clause: "gate_s_registration"`),
+    # `camera_widget_order_evidence` (`clause: "camera_widget_order"`) and
+    # `gate_alias_table` (`clause: "orphaned_component_class_alias"`). Measured,
+    # `gate_saved_graph.verify_receipts` admits none of the three, but only because it ALSO
+    # requires `receipt == "verify"` or both fact keys. So the day a clause name is added to
+    # THIS literal for symmetry with those three, every builder's payload record starts
+    # refusing at the last gate before a paid submission with
+    # `record_carries_a_caught_refusal` naming the wrong defect. Do not add one.
     ev = {"gate": "ROUTE", "andon": "RouteGate", "receipt": "verify",
           "carries_no_sampler_asserted": bool(carries_no_sampler),
           "require_pinned_seeds": bool(require_pinned_seeds),
@@ -2789,6 +3003,33 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                 "it", ev)
         ev["camera_agreement_verdict"] = "AGREES"
 
+    # The empirical SECOND reading of the recorded widget indices, RECORDED on the graph
+    # that is about to be graded. `camera_widget_order_evidence` is the function the
+    # `LATENT_NODES` note says takes this confirmation, and until 2026-09-05 nothing in
+    # `tools/` called it at all (see that note for the grep, and for the second copy of the
+    # table that was taking the reading instead). This is its production caller.
+    #
+    # **It is RECORDED and does not raise, and that is a measurement rather than a
+    # preference.** Measured 2026-09-05 in this worktree: every disagreement this reading
+    # can report on a save-format graph is ALREADY refused, earlier, by a clause above —
+    # a `LATENT_NODES` row whose indices are wrong makes `latents()` read the wrong
+    # dimensions, which the supplied-vs-graph clash clause refuses (operand: swapping
+    # `WanCameraImageToVideo`'s width/height indices on a graph verified at (832, 480, 81)
+    # raised "Gate L: the caller supplied 832x480x81 and the graph's WanCameraImageToVideo
+    # node 3 pins 480x832x81"), and a `CAMERA_NODES` row's is refused by the camera
+    # agreement clause on the same operand. A raise here would be a check that cannot fail,
+    # which is the thing this file refuses to ship. What the receipt adds is the reading
+    # itself — the values standing at the declared indices, per node, with `where` — so the
+    # confirmation the `LATENT_NODES` note promises is in the record an operator reads
+    # instead of in a function nobody called.
+    #
+    # Its three answers all ride: the reading, `INDETERMINATE` when no node in the graph
+    # carries a recorded widget-index row, and `not_applicable` in API format where nothing
+    # is positional. Routed to builders as SEAM 5 §2: adopting this function in
+    # `gate_saved_graph`'s camera step — where a disagreement WOULD be the only reading of
+    # it — is theirs, in their file.
+    ev["camera_widget_order"] = _camera_widget_order_receipt(graph, ev, supplied)
+
     # · ANDON — the clause E08 found passing vacuously. "Nothing to check" and "everything
     # checked out" must not be the same verdict. On a hosted tier the honest third answer
     # is INAPPLICABLE: there is no pixel dimension in the graph to check, and the enum
@@ -2811,8 +3052,11 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         # `hosted_enums` used to return the first match and this branch checked only that
         # tuple: a second node at an illegal resolution, ratio or duration was named
         # nowhere in the evidence.
+        # `where` rides every row: node identity in this walk is the pair, and both
+        # refusals below print `level/id`. See `hosted_enums` for the measurement.
         rows = [dict(hosted_frame_legality(res, ratio, dur, hosted_tier),
-                     source="graph", node_id=nid) for nid, res, ratio, dur in found]
+                     source="graph", where=where, node_id=nid)
+                for where, nid, res, ratio, dur in found]
         ev["hosted_frame_legality_nodes"] = rows
         ev["frame_legality_verdict"] = "INAPPLICABLE — hosted tier, enum clause instead"
         ev["frame_legality_inapplicable_reason"] = (
@@ -2823,7 +3067,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         if illegal_rows:
             raise RouteGate(
                 "Gate L (hosted tier): " + "; ".join(
-                    f"node {r['node_id']}: " + "; ".join(r["problems"])
+                    f"node {r['where']}/{r['node_id']}: " + "; ".join(r["problems"])
                     for r in illegal_rows), ev)
         if len(rows) > 1:
             # Both legal is not the same as one checked. This tier bills per node, so a
@@ -2832,7 +3076,8 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             # function already makes for `frame` and `hosted_tier` together.
             raise RouteGate(
                 f"the graph carries {len(rows)} {hosted_tier} node(s) "
-                f"({', '.join(str(r['node_id']) for r in rows)}); every one is legal and "
+                f"({', '.join(str(r['where']) + '/' + str(r['node_id']) for r in rows)}); "
+                f"every one is legal and "
                 f"reported in `hosted_frame_legality_nodes`, but one submission carrying "
                 f"two billable nodes is two charges against a ceiling counted per "
                 f"submission, and one tier verdict cannot describe both", ev)

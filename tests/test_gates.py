@@ -1171,10 +1171,19 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # And 360 -> 361: +1 in `resample.sample_map` (F-60909e5b) — the unreachable clamp
     # converted to a raise, so an arithmetic change above it is loud rather than silently
     # resampling the timeline onto a shorter one.
-    assert total == 361, (
-        f"{total} family raises in armature_core; this pin asserts 361, RE-DERIVED on the "
-        f"wave-22 core-solvers branch. This is the denominator every ratio below is quoted against — "
-        f"re-measure it deliberately")
+    # WAVE 22 (core-gates, 2026-09-05): 346 → 347. +1 in `canon_census.GateCanon` —
+    # `gate_census_table`'s `_refuse`, the module's first raise (F-682ce228). RE-DERIVED
+    # with `==` in this worktree against `e8263a3`. BRANCH-LOCAL — the coordinator
+    # re-measures on the merged tree, never sums.
+    # WAVE 22 (core-gates, F-715ecaab): 348 -> 349. +1 in `shotspec.SpecError` —
+    # `_refuse_unknown_keys`, the unknown-key clause `spec.gates` already carried for one
+    # key. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    # WAVE-22 MERGE (coordinator, 2026-09-05): 365 on the MERGED tree, measured by calling `family_raise_count()` on it — never a sum of
+    # branches (core-solvers froze 361 and core-gates 350, each branch-local by its own note; four other
+    # domains moved siblings of this census in the same wave).
+    assert total == 365, (
+        f"{total} family raises in armature_core; this pin asserts 365, MEASURED on the wave-22 merged "
+        f"tree. This is the denominator every ratio below is quoted against — re-measure it deliberately")
 
 
 def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():

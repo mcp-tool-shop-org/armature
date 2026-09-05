@@ -82,6 +82,54 @@ DEFAULTS = {
     },
 }
 
+#: The keys each block of a spec may carry — the schema, as DATA, so a refusal can name
+#: what the block does hold. One row per mapping block `normalise_spec` reads; a block with
+#: no row would be a level checked at its parent and nowhere else.
+#:
+#: ⚠ **`normalise_spec` validated the keys it knew and ACCEPTED every key it did not, at
+#: every level, and `dump_spec` then wrote them back into the provenance spec.** Measured
+#: 2026-09-05 against a minimal valid spec: an unknown TOP-LEVEL key (`cammera`), and
+#: unknown keys inside `spec.camera` (`fov_degrees`), `spec.resolution` (`depth`),
+#: `spec.frames` (`framerate`) and `spec.render` (`engien`) were each ACCEPTED and each
+#: survived into the returned spec. Round-tripped: with `camera.fov_degrees = 90.0`
+#: alongside `camera.fov_deg = 35.0`, `dump_spec` wrote a camera block carrying BOTH, and
+#: the value the solvers read is `spec["camera"]["fov_deg"]`.
+#:
+#: This module answered that question in exactly two places and nowhere else —
+#: `spec.channels` refuses an unknown VALUE ("names unknown channel(s)") and `spec.gates`
+#: refuses the retired KEY even when the block is empty, on the stated ground that "the key
+#: itself is the retired schema surface, and an empty block that round-trips back out is
+#: the next number's home". That argument is the general case and it was applied to one
+#: key. An operator's typo — `fov_degrees`, `framerate`, `frame_count` — was accepted, the
+#: render was taken at the module default instead, and the provenance spec recorded the
+#: ignored field beside the used one with nothing saying which was read: a recipe that does
+#: not reproduce its output.
+SPEC_KEYS = {
+    "spec": ("asset", "camera", "channels", "depth", "edge", "frames", "generator",
+             "name", "render", "resolution", "spec_version", "subject"),
+    # `note` is the schema's, not an author's stray: all five committed specs under
+    # `specs/**` carry `asset.note`, and it is the one annotation field that is not
+    # `_`-prefixed. Recorded here rather than tolerated by silence.
+    "spec.asset": ("note", "path", "sha256"),
+    "spec.resolution": ("height", "width"),
+    "spec.frames": ("count", "fps"),
+    "spec.camera": ("azimuth_start_deg", "azimuth_sweep_deg", "clip_end", "clip_start",
+                    "elevation_deg", "fit_margin", "lens_mm", "radius", "sensor_mm",
+                    "target", "type"),
+    "spec.subject": ("animation",),
+    "spec.depth": ("window",),
+    "spec.edge": ("depth_rel_threshold", "normal_angle_deg"),
+    "spec.render": ("engine", "film_transparent", "filter_size", "samples"),
+}
+
+#: The ONE named passthrough. Forward compatibility has a shape here rather than being
+#: "anything the schema did not recognise": a key beginning with `_` is an annotation, it
+#: is what the five committed specs already use (`_notes`), and `dump_spec` already strips
+#: it on write (`if not k.startswith("_")`). Which ones a spec carried is RECORDED on the
+#: returned spec under `_passthrough_keys`, so a reader can tell the fields the schema did
+#: not read from the fields it did.
+PASSTHROUGH_PREFIX = "_"
+
 #: Keys that used to live under `spec.gates` and now do not. A spec naming one is
 #: refused rather than obeyed — see `normalise_spec`. Kept as data so the refusal can
 #: name where the number went.
@@ -198,6 +246,52 @@ def _require_finite_number(mapping, key, where, note=None, positive=False):
         ) from None
 
 
+def _refuse_unknown_keys(spec):
+    """ANDON — every key in every block is one `SPEC_KEYS` names, or `SpecError`.
+
+    Returns `{block: [passthrough keys]}` for the `_`-prefixed annotations it admitted, so
+    the caller can record them. Blocks that are not mappings are left alone: `_require`
+    states the ONE refusal for a wrong-typed block, and two clauses answering the same
+    question in different words is what this module already refuses to grow (see
+    `_require_finite_number`).
+
+    `spec.gates` is deliberately NOT in `SPEC_KEYS`: it has its own clause above, which
+    runs first and names where each retired number went. A generic "unknown key" message
+    there would lose that.
+    """
+    passthrough = {}
+    for where, known in SPEC_KEYS.items():
+        block = spec
+        if where != "spec":
+            block = spec.get(where.split(".", 1)[1])
+        if not isinstance(block, dict):
+            continue
+        through = sorted(k for k in block
+                         if isinstance(k, str) and k.startswith(PASSTHROUGH_PREFIX))
+        if through:
+            passthrough[where] = through
+        unknown = sorted(str(k) for k in block
+                         if str(k) not in known
+                         and not str(k).startswith(PASSTHROUGH_PREFIX)
+                         and not (where == "spec" and str(k) == "gates"))
+        if unknown:
+            raise SpecError(
+                f"{where} carries {unknown!r}, which this schema has no reader for; the "
+                f"keys of {where} are {list(known)}. An unknown key is not a spec with an "
+                f"extra field — the value is IGNORED, the shot is taken at the module "
+                f"default, and `dump_spec` writes the ignored field back into the "
+                f"provenance spec beside the used one with nothing saying which was read. "
+                f"A recipe that does not reproduce its output is not a recipe. For a note "
+                f"the schema should not read, prefix the key with "
+                f"{PASSTHROUGH_PREFIX!r} — that is what `specs/**` already does and what "
+                f"`dump_spec` already strips",
+                {"gate": None, "andon": "SpecError", "clause": "unknown_spec_key",
+                 "where": where, "unknown": unknown, "known_keys": list(known),
+                 "passthrough_prefix": PASSTHROUGH_PREFIX},
+            )
+    return passthrough
+
+
 def load_spec(path):
     with open(path, "r", encoding="utf-8") as fh:
         raw = json.load(fh)
@@ -261,6 +355,12 @@ def normalise_spec(raw, spec_path=None):
                   "be read by stage_render and handed to G4 unvalidated; the constant is "
                   "gates.G4_TOLERANCE_PX)"
             )
+
+    # · ANDON — the KEYS, before any value is read. Placed after `spec.gates`' own clause
+    # (which names where each retired number went, and would be lost inside a generic
+    # message) and before every value clause, because a key nothing reads is a value
+    # nothing checks. See `SPEC_KEYS`.
+    passthrough = _refuse_unknown_keys(spec)
 
     asset = _require(spec, "asset", dict, "spec")
     _require(asset, "path", str, "spec.asset")
@@ -481,6 +581,11 @@ def normalise_spec(raw, spec_path=None):
                       note="which is a pixel filter WIDTH")
     _require(render, "film_transparent", bool, "spec.render")
 
+    # The receipt half of the passthrough: which fields the schema did NOT read, recorded
+    # so a reader of the spec can tell them from the fields it did. `_`-prefixed, so
+    # `dump_spec` strips it and the file on disk stays the schema.
+    if passthrough:
+        spec["_passthrough_keys"] = passthrough
     if spec_path:
         spec.setdefault("_spec_path", os.path.abspath(spec_path))
     return spec

@@ -197,6 +197,27 @@ def _missing_root(exc):
 def _probe(name):
     """Import one surface module, resolve its function-local deps, report the outcome.
 
+    Returns a ROW — `{"module", "status", "error", "message", "missing_root"}` — not a bare
+    status string.
+
+    ⚠ **The failure row carried no CAUSE.** This caught `Exception` and returned the bare
+    string `"MISSING"`; the exception's type and message were discarded and appeared in no
+    output path. Measured 2026-09-05 by making
+    `importlib.import_module("armature_core.shotspec")` raise `ValueError("boom: a table in
+    this module is malformed")`: `main(["check", "--json"])` printed `{"version": ...,
+    "modules": {..., "shotspec": "MISSING", ...}, "missing": ["shotspec"]}` and exited 1,
+    with no key anywhere in the document naming the error type, the message, or the module
+    that could not be found. The exit code and the row were correct; what was absent is
+    anything an operator or a support reader can key on — and this command is the installed
+    package's ONLY self-diagnosis. A user on a broken wheel install got one word and had to
+    reproduce the import by hand to learn whether the cause was a missing dependency, a
+    syntax error or a packaging omission.
+
+    `status` keeps the four words the command already distinguishes (`ok`, `needs-blender`,
+    `needs-<dep>/<dep>`, `MISSING`), so `--json`'s `modules` map and every pin on it are
+    unchanged; the cause rides `error` / `message` / `missing_root` beside it, and the whole
+    row is carried in `--json` under `module_rows`.
+
     `blender_scene` is EXPECTED to fail outside Blender — but that reading belongs to
     **bpy**, not to the module's name. `_probe` used to return `needs-blender` for any
     `ImportError` raised by `blender_scene` without inspecting which module was missing:
@@ -209,13 +230,14 @@ def _probe(name):
     try:
         importlib.import_module(f"armature_core.{name}")
     except Exception as exc:  # noqa: BLE001 — a broken module is a row, not a traceback
-        if _missing_root(exc) == "bpy":
-            return "needs-blender"
-        return "MISSING"
+        return {"module": name,
+                "status": "needs-blender" if _missing_root(exc) == "bpy" else "MISSING",
+                "error": type(exc).__name__, "message": str(exc),
+                "missing_root": _missing_root(exc)}
     unresolved = [r for r in _function_local_dependencies(name) if not _resolvable(r)]
-    if unresolved:
-        return "needs-" + "/".join(unresolved)
-    return "ok"
+    status = "needs-" + "/".join(unresolved) if unresolved else "ok"
+    return {"module": name, "status": status, "error": None, "message": None,
+            "missing_root": None}
 
 
 def main(argv=None):
@@ -248,20 +270,31 @@ def main(argv=None):
         return 0
 
     if a.cmd == "check":
-        rows = [(m, _probe(m)) for m, _ in SURFACE]
+        rows = [_probe(m) for m, _ in SURFACE]
         # `needs-blender` is the one expected condition outside Blender. Every other
         # non-`ok` row is a broken install — including `needs-cv2` / `needs-PIL`, which
         # say the module imports and its functions cannot run. Reporting those as
         # resolved is what made this command worthless on a clean-venv wheel install.
-        missing = [m for m, s in rows if s not in ("ok", "needs-blender")]
+        missing = [r["module"] for r in rows
+                   if r["status"] not in ("ok", "needs-blender")]
         if a.json:
+            # `modules` stays the module -> status map it has always been, so a consumer
+            # keyed on it is unchanged; `module_rows` carries the whole row, including the
+            # exception type and message this command used to discard. `missing` stays the
+            # id list.
             print(json.dumps({"version": _version(),
-                              "modules": {m: s for m, s in rows},
+                              "modules": {r["module"]: r["status"] for r in rows},
+                              "module_rows": rows,
                               "missing": missing}, indent=2))
         else:
             print(f"armature-studio {_version()}\n")
-            for m, s in rows:
-                print(f"  {m:<16} {s}")
+            for r in rows:
+                print(f"  {r['module']:<16} {r['status']}")
+                # The CAUSE, beside the module, in the output an operator actually reads.
+                if r["error"]:
+                    print(f"  {'':<16} {r['error']}: {r['message']}"
+                          + (f" (no module named {r['missing_root']!r})"
+                             if r["missing_root"] else ""))
             print()
             print("all modules resolved" if not missing
                   else f"UNRESOLVED: {', '.join(missing)}")

@@ -128,14 +128,29 @@ def test_missing_asset_is_refused(tmp_path):
 
 def test_the_spec_cannot_weaken_a_gate(tmp_path):
     """A spec-supplied `dim_divisor` would be a skip flag wearing a schema's clothes.
-    The spec may only *name* a generator; the numbers live in gates.py."""
+    The spec may only *name* a generator; the numbers live in gates.py.
+
+    WAVE 22 (core-gates, F-715ecaab): the two keys are now REFUSED rather than accepted
+    and ignored. They used to reach `normalise_spec` and survive into the returned spec —
+    the gate read gates.py's numbers anyway, so nothing was weakened, but the provenance
+    spec then recorded a `dim_divisor` beside the one that was actually used with nothing
+    saying which was read. `spec.gates`' own clause already made this argument for one
+    key; the unknown-key clause is that argument as the general case. Both halves are
+    asserted here: the refusal names them, and with them gone the gate still reads
+    gates.py."""
     from armature_core import gates
-    from armature_core.errors import G1GeneratorLegality
+    from armature_core.errors import G1GeneratorLegality, SpecError
 
     raw = _minimal(tmp_path)
     raw["generator"] = "wan-vace"
     raw["dim_divisor"] = 1
     raw["generator_profile"] = {"dim_divisor": 1, "frame_modulus": 1, "frame_residue": 0}
+    with pytest.raises(SpecError) as exc:
+        shotspec.normalise_spec(raw)
+    assert exc.value.evidence["clause"] == "unknown_spec_key"
+    assert exc.value.evidence["unknown"] == ["dim_divisor", "generator_profile"]
+
+    raw.pop("dim_divisor"), raw.pop("generator_profile")
     spec = shotspec.normalise_spec(raw)
     with pytest.raises(G1GeneratorLegality,
                        match=r"\[G1\] frame is not legal for generator 'wan-vace'"):

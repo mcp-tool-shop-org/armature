@@ -390,7 +390,11 @@ def test_a_truncated_widget_list_refuses_rather_than_dropping_the_node():
 
 def test_the_unshifted_r2v_fixture_stays_green():
     """The population that must not move."""
-    assert RG.hosted_enums({"nodes": [_R2V_UNSHIFTED]}) == [(1, "720P", "16:9", 5)]
+    # WAVE 22 (core-gates, F-2fa07723): the tuple is `(where, node_id, resolution, ratio,
+    # duration)`; `where` was discarded and the per-node billing refusal could not say
+    # which node it stopped.
+    assert RG.hosted_enums({"nodes": [_R2V_UNSHIFTED]}) == [
+        ("top", 1, "720P", "16:9", 5)]
 
 
 def test_an_unrelated_converted_input_does_not_fire_the_clause():
@@ -400,7 +404,8 @@ def test_an_unrelated_converted_input_does_not_fire_the_clause():
     ok = {"id": 5, "type": "Wan2ReferenceVideoApi",
           "inputs": [{"name": "seed", "widget": {"name": "seed"}}],
           "widgets_values": ["wan2.7-r2v", "p", "n", "720P", "16:9", 5, "fixed"]}
-    assert RG.hosted_enums({"nodes": [ok]}) == [(5, "720P", "16:9", 5)]
+    # WAVE 22 (core-gates, F-2fa07723) — see the note above.
+    assert RG.hosted_enums({"nodes": [ok]}) == [("top", 5, "720P", "16:9", 5)]
 
 
 # =======================================================================================

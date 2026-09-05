@@ -76,7 +76,7 @@ def test_check_exits_nonzero_when_a_module_is_missing(monkeypatch, capsys):
 
 def test_blender_probe_is_not_counted_a_defect(monkeypatch):
     """bpy is absent in this suite by construction, so this asserts the real outcome."""
-    assert cli._probe("blender_scene") == "needs-blender"
+    assert cli._probe("blender_scene")["status"] == "needs-blender"
 
 
 def test_modules_json_is_machine_readable(capsys):
@@ -165,7 +165,7 @@ def test_a_function_local_dependency_that_is_absent_is_reported(block):
     then raised ModuleNotFoundError: PIL. The command said 'importable' in language an
     operator reads as 'runnable', on an install where two modules' functions cannot run."""
     block("PIL")
-    assert cli._probe("donor_gate") == "needs-PIL"
+    assert cli._probe("donor_gate")["status"] == "needs-PIL"
     assert cli.main(["check"]) == 1
 
 
@@ -192,7 +192,7 @@ def test_a_module_level_dependency_is_still_reported_as_missing(block):
     """The other half: a root the module imports at the top is caught by the import
     itself, and must not be mistaken for the expected Blender condition."""
     block("numpy")
-    assert cli._probe("channels") in ("MISSING", "needs-numpy")
+    assert cli._probe("channels")["status"] in ("MISSING", "needs-numpy")
     assert cli.main(["check"]) == 1
 
 
@@ -214,7 +214,7 @@ def test_a_genuinely_broken_blender_scene_is_not_read_as_the_expected_condition(
         return real(name, *a, **kw)
 
     monkeypatch.setattr(cli.importlib, "import_module", fake)
-    assert cli._probe("blender_scene") == "MISSING"
+    assert cli._probe("blender_scene")["status"] == "MISSING"
     assert cli.main(["check"]) == 1
 
 
@@ -229,14 +229,14 @@ def test_a_non_import_error_at_import_time_is_missing_not_a_traceback(monkeypatc
         return real(name, *a, **kw)
 
     monkeypatch.setattr(cli.importlib, "import_module", fake)
-    assert cli._probe("channels") == "MISSING"
+    assert cli._probe("channels")["status"] == "MISSING"
     assert cli.main(["check"]) == 1
 
 
 def test_bpy_is_still_the_expected_condition():
     """The direction that must not break: bpy really is absent here, and that row is
     not a defect."""
-    assert cli._probe("blender_scene") == "needs-blender"
+    assert cli._probe("blender_scene")["status"] == "needs-blender"
     assert cli.main(["check"]) == 0
 
 

@@ -64,6 +64,18 @@ OWNED = (
 #: Recorded in the same commit as the raises, which is what this ratchet asks for.
 RECORDED_GATE_RAISES = {
     ("canon.py", "GateCanon"): 1,
+    # WAVE 22 (core-gates, F-682ce228): the file's first raise. `canon_census.CENSUS` is a
+    # hand-edited table whose docstring states the contract the spend helpers rest on, and
+    # NO clause checked a row against it: a misspelled `surface:` key returned
+    # `verdict: UNGATED` from `--no-canon` for a subject that HAS a ratified surfaces file
+    # (the `clause: checkbox` refusal inoperative because `.get` reads None), an
+    # identity-only row with no `reason` announced an escape it could not explain, and a
+    # non-mapping row raised a bare `AttributeError` from BOTH `require_canon` and
+    # `resolve`. ONE raise site — `_refuse`, the module's own andon, reached by six clauses
+    # (`census_is_not_a_mapping`, `subject_is_not_a_name`, `row_is_not_a_mapping`,
+    # `unknown_census_key`, `surfaces_is_not_a_path`, `hole_without_a_reason`), the shape
+    # `canon._raise` already uses. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    ("canon_census.py", "GateCanon"): 1,
     # WAVE 18: 6 → 10 (core-gates, F-04197047). `_readable_landmark_row` — Gate DONOR
     # guarded its EMPTY population and never the SHAPE of a row it reads, so a
     # 17-landmark (COCO-topology) record raised IndexError, a None landmark TypeError
@@ -71,7 +83,14 @@ RECORDED_GATE_RAISES = {
     # `lift_clip`'s halt handler wrote a halt line naming no gate. Four clauses: the
     # `image` that is not a sequence, the sequence too short to hold index 28, the
     # landmark that is not an (x, y) pair, the coordinate that is not a number.
-    ("donor_gate.py", "DonorGate"): 10,
+    # WAVE 22 (core-gates, F-0d00378d): 10 -> 11. `_require_landmark_table`'s
+    # `landmark_table_renamed` — the named guard
+    # `_landmark_names_are_the_ones_this_module_assumes` returned a BOOL and had exactly one
+    # caller in the worktree, `tests/test_donor_gate.py:64`; no code path in `tools/` invoked
+    # it, so in production a renamed table raised a bare `ValueError` from inside
+    # `ankle_framing` — not an `ArmatureError`, and after the function had been entered.
+    # RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    ("donor_gate.py", "DonorGate"): 11,
     ("gates.py", "G1GeneratorLegality"): 2,
     ("gates.py", "G2Completeness"): 2,
     ("gates.py", "G4BboxSanity"): 4,
@@ -121,7 +140,13 @@ RECORDED_GATE_RAISES = {
     #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-    ("route_gates.py", "RouteGate"): 46,  # +3 w12: unreadable_node,
+    # WAVE 22 (core-gates, F-0d33958f): +1 = 47. `_one_graph_declaration`'s
+    # `multiple_graph_declarations` — a document declaring TWO graphs was resolved by
+    # wrapper-key ORDER and the second declaration was recorded nowhere, so a queue/history
+    # record `{'prompt': <clean api>, 'workflow': <save graph loading causvid_x.safetensors>}`
+    # returned a GREEN `verify` verdict with the BANNED CC-BY-NC file named nowhere in the
+    # receipt. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    ("route_gates.py", "RouteGate"): 47,  # +3 w12: unreadable_node,
                                           # uncredited_conditional_component,
                                           # attribution_for_unconditional_row
                                           # +1 w14: orphan_attribution (F-74787978) — the
@@ -262,7 +287,11 @@ def test_the_derived_population_is_the_one_this_file_records():
     #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 101
+    # WAVE 22 (core-gates, 2026-09-05): 101 → 102. +1 `canon_census.GateCanon` — itemised
+    # at its entry above. RE-DERIVED with `==` in this worktree against `e8263a3`, which
+    # every census here read GREEN first. BRANCH-LOCAL — five domains move pins this wave
+    # and the coordinator re-measures on the merged tree rather than summing.
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 104
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():
