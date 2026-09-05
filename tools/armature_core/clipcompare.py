@@ -95,8 +95,36 @@ def gradient_split(src, dec, top_frac=0.10, flat_frac=0.50):
     *shape* of the error is evidence about the encoder rather than about the picture. A
     number that is the same in both bands says something different from one that is not,
     and both readings are legible only if the two bands are reported separately.
+
+    **The two clauses `frame_fidelity` already had, and this did not** (F-e15d9de2, wave
+    22). Both measured on `e8263a3`:
+
+    * **`(H, W, 3)`.** On a 16x16x1 pair `frame_fidelity` REFUSED with
+      `clause: frame_not_hw3` and this function RETURNED
+      `{'mean_err_top_gradient': 0.01, 'mean_err_flat': 0.01}` — so two functions in one
+      module disagreed about what a frame is, and a fidelity table built from both would
+      carry one refused population beside one accepted. Same class, same clause word, so a
+      reader keys one triage on both.
+    * **A band that selects no pixel.** The selections are unguarded slices, so a zero
+      fraction selects NOTHING and `err[...].mean()` over an empty array is returned as the
+      band's error: `gradient_split(a, b, top_frac=0.0)` returned
+      `mean_err_top_gradient: nan` and `flat_frac=0.0` returned `mean_err_flat: nan` — a
+      mean over nothing reported as a measurement, with no refusal and nothing in the dict
+      saying the band was empty. The population a band is quoted over is a clause of the
+      reading, not a number beside it (`turnaround.gate_set_distinct`'s wave-16 rule, one
+      module over).
     """
     s, d = _f(src), _f(dec)
+    if s.ndim != 3 or s.shape[2] < 3:
+        raise ClipCompareError(
+            f"expected an (H, W, 3) frame, got shape {s.shape}",
+            {"gate": None, "andon": "ClipCompareError", "clause": "frame_not_hw3",
+             "source_shape": list(s.shape)})
+    if s.shape != d.shape:
+        raise ClipCompareError(
+            f"shape mismatch: source {s.shape} vs decoded {d.shape}",
+            {"gate": None, "andon": "ClipCompareError", "clause": "shape_mismatch",
+             "source_shape": list(s.shape), "decoded_shape": list(d.shape)})
     lum = s.mean(axis=-1)
     gy, gx = np.gradient(lum)
     g = np.hypot(gy, gx).ravel()
@@ -105,6 +133,19 @@ def gradient_split(src, dec, top_frac=0.10, flat_frac=0.50):
     n = g.size
     top = order[int(round(n * (1.0 - top_frac))):]
     flat = order[:int(round(n * flat_frac))]
+    for _band, _sel in (("top_gradient", top), ("flat", flat)):
+        if _sel.size == 0:
+            raise ClipCompareError(
+                f"the {_band} band selects 0 of {n} pixel(s) at top_frac="
+                f"{float(top_frac)!r} / flat_frac={float(flat_frac)!r}, so the mean this "
+                f"function would return for it is a mean over nothing. numpy reports that "
+                f"as `nan` with a RuntimeWarning, and a NaN in a fidelity table is a "
+                f"measurement-shaped hole: it fails every comparison in both directions and "
+                f"reads as a band that was examined",
+                {"gate": None, "andon": "ClipCompareError",
+                 "clause": "empty_gradient_band", "band": _band, "n": int(n),
+                 "top_gradient_frac": float(top_frac), "flat_frac": float(flat_frac),
+                 "n_selected": int(_sel.size)})
     return {
         "top_gradient_frac": float(top_frac), "flat_frac": float(flat_frac),
         "mean_err_top_gradient": float(err[top].mean()),

@@ -1176,8 +1176,12 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # the algebra bounds that used to fall through to the COLLINEARITY message the test four
     # lines above it had already ruled out. Kept as an andon with its own clause rather than
     # deleted, so a change to the arithmetic above it is loud.
-    assert total == 357, (
-        f"{total} family raises in armature_core; this pin asserts 357, RE-DERIVED on the "
+    # And 357 -> 360: +3 in `clipcompare.gradient_split` (F-e15d9de2) — the (H, W, 3)
+    # clause and the shape-mismatch clause its sibling `frame_fidelity` twenty lines above
+    # already carried, and `empty_gradient_band` for a band that selects no pixel and
+    # returned a mean over nothing as the band error.
+    assert total == 360, (
+        f"{total} family raises in armature_core; this pin asserts 360, RE-DERIVED on the "
         f"wave-22 core-solvers branch. This is the denominator every ratio below is quoted against — "
         f"re-measure it deliberately")
 

@@ -381,6 +381,17 @@ def _refusal_twist_tripwire():
         mp.undo()
 
 
+def _refusal_gradient_band_empty():
+    """Driven through `measure_clip.py`, which carries the halt record on the measurement
+    route. `measure_cascade_clip.py` is the caller of `gradient_split` and ends in a bare
+    `main()` — that is instruments-measure's F-7ff7943e, and SEAM 1's handler is what closes
+    it; the CLAUSE read here is the same one either tool would print."""
+    from armature_core import clipcompare
+    a = np.zeros((16, 16, 3), dtype=np.float64)
+    a[:, 8:, :] = 1.0
+    clipcompare.gradient_split(a, a + 0.01, top_frac=0.0)
+
+
 HALT_ROWS = [
     # (finding, tool, sentinel, raiser, error class name, evidence key that must be there)
     ("F-cfb560aa", "rig_parts.py", "RIG_PARTS_HALT", _refusal_gate_d,
@@ -405,6 +416,8 @@ HALT_ROWS = [
      "SolveGate", "sites_non_finite"),
     ("F-d255af87", "lift_clip.py", "LIFT_CLIP_HALT", _refusal_twist_tripwire,
      "SolveError", "clause"),
+    ("F-e15d9de2", "measure_clip.py", "MEASURE_CLIP_HALT", _refusal_gradient_band_empty,
+     "ClipCompareError", "selects 0 of 256 pixel(s)"),
 ]
 
 
@@ -412,6 +425,18 @@ HALT_ROWS = [
                          HALT_ROWS, ids=[r[0] for r in HALT_ROWS])
 def test_the_halt_line_an_operator_reads_carries_this_waves_operand(
         finding, tool, sentinel, raiser, cls, key, capsys):
+    """Wave-18 rule 4: the record is PARSED, not assumed.
+
+    Two record shapes exist in the tree and this test reads whichever the driven tool
+    actually prints. Nineteen of the 21 Blender-side tools carry the wave-8 five-key record
+    (`tool` / `outcome` / `gate` / `error` / `message` / `evidence`) and the operand is read
+    out of `evidence`. `measure_clip.py` and `render_pose_sticks.py` carry OLDER, narrower
+    records — `measure_clip` prints `error` and `message` only, with no `evidence` key at all
+    — so for those the operand is read out of the printed MESSAGE. That narrowing is
+    instruments-measure's own wave-22 work (F-c3dd5ba3, F-7f59629f) and SEAM 1's handler is
+    what closes it; this test is written to read what is there rather than to assert the
+    other domain's fix has landed.
+    """
     from blender_stub import exit_code_of_main_block
 
     code, escaped = exit_code_of_main_block(
@@ -423,8 +448,10 @@ def test_the_halt_line_an_operator_reads_carries_this_waves_operand(
     assert len(lines) == 1, f"{tool} ({finding}): {len(lines)} sentinel line(s)"
     rec = json.loads(lines[0][len(sentinel):].strip())
     assert rec["error"] == cls
-    assert isinstance(rec["evidence"], dict), rec["evidence"]
-    assert key in rec["evidence"], sorted(rec["evidence"])
+    if isinstance(rec.get("evidence"), dict):
+        assert key in rec["evidence"], sorted(rec["evidence"])
+    else:
+        assert key in rec["message"], rec
 
 
 def test_every_refusal_this_wave_adds_is_in_the_armature_error_family():
