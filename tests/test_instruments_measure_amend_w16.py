@@ -415,8 +415,11 @@ def test_a_single_frame_arm_is_contiguous_by_construction(tmp_path):
     invent one."""
     import make_ab_clip as AB
 
-    assert AB.gate_contiguous_numbering([7], "--a")["verdict"].startswith("4 frame") is False
-    ev = AB.gate_contiguous_numbering([7], "--a")
+    # Wave 22, F-070bfff3: the gate now TAKES the arm's rate, because the shift its
+    # refusal quotes is a frame time (1000/fps) and not 1000/n_frames. The arity change is
+    # this domain's own contract; these two fixture call sites move with it.
+    assert AB.gate_contiguous_numbering([7], "--a", 16.0)["verdict"].startswith("4 frame") is False
+    ev = AB.gate_contiguous_numbering([7], "--a", 16.0)
     assert ev["numbers"] == [7] and ev["first_gap"] is None
 
 
