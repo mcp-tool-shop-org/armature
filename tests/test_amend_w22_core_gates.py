@@ -797,3 +797,213 @@ def test_the_unknown_spec_key_refusal_reaches_a_printed_halt_record(capsys):
     assert payload["evidence"]["clause"] == "unknown_spec_key"
     assert payload["evidence"]["where"] == "spec.camera"
     assert payload["evidence"]["unknown"] == ["fov_degrees"]
+
+
+# ---------------------------------------------------------------------------
+# F-0d00378d — the named landmark-table guard that only a test called is armed.
+# ---------------------------------------------------------------------------
+
+def _rows_with_ankles(n=4):
+    image = [[0.5, 0.5] for _ in range(33)]
+    return [{"frame": i, "fired": True, "image": [list(p) for p in image]}
+            for i in range(n)]
+
+
+def test_a_renamed_landmark_table_refuses_by_name(monkeypatch):
+    """RED on base: `ankle_framing` built `idx` with `LS.POSE_LANDMARKS.index(a)` and a
+    renamed table raised a bare `ValueError` — not an `ArmatureError`, so the halt
+    contract's exit-2 branch was bypassed — and it was raised AFTER the function had been
+    entered rather than before. The named guard that would have caught it had exactly one
+    caller in the whole worktree: `tests/test_donor_gate.py:64`."""
+    from armature_core import lift_solve as LS
+
+    renamed = [n for n in LS.POSE_LANDMARKS if n != "left_ankle"] + ["left_foot"]
+    monkeypatch.setattr(LS, "POSE_LANDMARKS", renamed)
+    with pytest.raises(DG.DonorGate) as exc:
+        DG.ankle_framing(_rows_with_ankles())
+    ev = exc.value.evidence
+    assert ev["clause"] == "landmark_table_renamed"
+    assert ev["missing"] == ["left_ankle"]
+    assert ev["gate"] == "DONOR" and ev["andon"] == "DonorGate"
+    assert ev["table"] == "lift_solve.POSE_LANDMARKS"
+
+
+def test_both_ankle_names_are_the_enumerated_siblings(monkeypatch):
+    """`ANKLES` is the population the clause is written against; each member is proved
+    red separately, and both-missing names both."""
+    from armature_core import lift_solve as LS
+
+    original = list(LS.POSE_LANDMARKS)
+    for missing in ("left_ankle", "right_ankle"):
+        monkeypatch.setattr(LS, "POSE_LANDMARKS",
+                            [n for n in original if n != missing])
+        with pytest.raises(DG.DonorGate) as exc:
+            DG.ankle_framing(_rows_with_ankles())
+        assert exc.value.evidence["missing"] == [missing]
+    monkeypatch.setattr(LS, "POSE_LANDMARKS",
+                        [n for n in original if n not in DG.ANKLES])
+    with pytest.raises(DG.DonorGate) as exc:
+        DG.ankle_framing(_rows_with_ankles())
+    assert exc.value.evidence["missing"] == ["left_ankle", "right_ankle"]
+
+
+def test_the_guard_fires_BEFORE_the_clause_reads_a_row(monkeypatch):
+    """Position is half the finding: the `ValueError` it replaces was raised after
+    `ankle_framing` had been entered. A row population that would itself refuse
+    (`no frame carries image landmarks`) still meets the TABLE clause first."""
+    from armature_core import lift_solve as LS
+
+    monkeypatch.setattr(LS, "POSE_LANDMARKS",
+                        [n for n in LS.POSE_LANDMARKS if n != "left_ankle"])
+    with pytest.raises(DG.DonorGate) as exc:
+        DG.ankle_framing([])
+    assert exc.value.evidence["clause"] == "landmark_table_renamed"
+
+
+def test_the_intact_table_is_unchanged_and_the_gate_still_computes():
+    """The gate that fires on correct work is the gate nobody keeps."""
+    ev = DG.ankle_framing(_rows_with_ankles())
+    assert ev["both_ankles_in_image"] == 1.0
+    assert ev["n_frames_considered"] == 4
+
+
+def test_the_landmark_table_refusal_reaches_a_printed_halt_record(tmp_path, capsys):
+    """The halt line READ. `lift_clip.py` is Gate DONOR's one production caller; its
+    `__main__` handler is driven with Blender stubbed and `main` replaced by the real
+    refusal, so the handler, the sentinel and the exit code are the shipped ones."""
+    import blender_stub
+    from armature_core import lift_solve as LS
+
+    renamed = [n for n in LS.POSE_LANDMARKS if n != "left_ankle"]
+
+    def raiser():
+        saved = LS.POSE_LANDMARKS
+        try:
+            LS.POSE_LANDMARKS = renamed
+            DG.ankle_framing(_rows_with_ankles())
+        finally:
+            LS.POSE_LANDMARKS = saved
+
+    code, escaped = blender_stub.exit_code_of_main_block("lift_clip.py", raiser=raiser)
+    assert escaped is None and code == 2, (code, escaped)
+    out = capsys.readouterr().out
+    halts = [ln for ln in out.splitlines() if "_HALT " in ln]
+    assert len(halts) == 1, out
+    payload = json.loads(halts[0].split("_HALT ", 1)[1])
+    assert payload["error"] == "DonorGate"
+    assert payload["evidence"]["clause"] == "landmark_table_renamed"
+    assert payload["evidence"]["missing"] == ["left_ankle"]
+
+
+# ---------------------------------------------------------------------------
+# F-092dd71f — `armature check`'s failure row carries its cause.
+# ---------------------------------------------------------------------------
+
+def test_a_probe_forced_to_raise_produces_a_row_naming_the_exception(monkeypatch):
+    """RED on base: `_probe` caught `Exception` and returned the bare string `'MISSING'`;
+    the type and the message were discarded and appeared in no output path. The auditor's
+    operand: `importlib.import_module('armature_core.shotspec')` raising
+    `ValueError('boom: a table in this module is malformed')`."""
+    import importlib as _il
+
+    real = _il.import_module
+
+    def boom(name, *a, **k):
+        if name == "armature_core.shotspec":
+            raise ValueError("boom: a table in this module is malformed")
+        return real(name, *a, **k)
+
+    monkeypatch.setattr(cli.importlib, "import_module", boom)
+    row = cli._probe("shotspec")
+    assert row["status"] == "MISSING"
+    assert row["error"] == "ValueError"
+    assert row["message"] == "boom: a table in this module is malformed"
+    assert row["module"] == "shotspec" and row["missing_root"] is None
+
+
+def test_the_cause_reaches_both_output_paths(monkeypatch, capsys):
+    """The receipt half. `--json` carries the whole row and keeps `modules` and `missing`
+    exactly as they were, so every existing pin on them holds; the text output prints the
+    type and the message beside the module."""
+    import importlib as _il
+
+    real = _il.import_module
+
+    def boom(name, *a, **k):
+        if name == "armature_core.shotspec":
+            raise ValueError("boom: a table in this module is malformed")
+        return real(name, *a, **k)
+
+    monkeypatch.setattr(cli.importlib, "import_module", boom)
+    assert cli.main(["check", "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["modules"]["shotspec"] == "MISSING"
+    assert payload["missing"] == ["shotspec"]
+    row = next(r for r in payload["module_rows"] if r["module"] == "shotspec")
+    assert (row["error"], row["message"]) == (
+        "ValueError", "boom: a table in this module is malformed")
+
+    assert cli.main(["check"]) == 1
+    text = capsys.readouterr().out
+    assert "shotspec         MISSING" in text
+    assert "ValueError: boom: a table in this module is malformed" in text
+    assert "UNRESOLVED: shotspec" in text
+
+
+@pytest.mark.parametrize("exc,root,status", [
+    (ModuleNotFoundError("No module named 'bpy'", name="bpy"), "bpy", "needs-blender"),
+    (ModuleNotFoundError("No module named 'nope'", name="nope"), "nope", "MISSING"),
+    (SyntaxError("invalid syntax"), None, "MISSING"),
+])
+def test_every_failing_outcome_carries_its_cause(monkeypatch, exc, root, status):
+    """The siblings, enumerated: the four outcomes this command distinguishes. The two that
+    can carry a missing root do; `needs-blender` — the ONE expected condition outside
+    Blender — keeps its status and now says which module was absent, which is what told the
+    genuine bpy-absent reading from a typo'd import in the first place."""
+    import importlib as _il
+
+    real = _il.import_module
+
+    def boom(name, *a, **k):
+        if name == "armature_core.shotspec":
+            raise exc
+        return real(name, *a, **k)
+
+    monkeypatch.setattr(cli.importlib, "import_module", boom)
+    row = cli._probe("shotspec")
+    assert row["status"] == status
+    assert row["error"] == type(exc).__name__
+    assert row["missing_root"] == root
+
+
+def test_a_healthy_module_row_says_so_and_carries_no_cause():
+    """The negative half: an `ok` row and a `needs-<dep>` row both carry `error: None`, so
+    a reader keyed on `error` cannot mistake a resolvable module for a broken one."""
+    row = cli._probe("errors")
+    assert row["status"] == "ok" and row["error"] is None and row["message"] is None
+
+
+def test_the_check_cause_reaches_the_real_main_block(tmp_path):
+    """The printed record READ from the tool's OWN `__main__`, in a subprocess. `armature
+    check` carries no `<PREFIX>_HALT` sentinel — its record IS the printed table and the
+    exit code, and that is what this reads: exit 1, the UNRESOLVED line, and the cause
+    beside the module."""
+    import subprocess
+
+    driver = tmp_path / "drive_check.py"
+    driver.write_text(
+        "import importlib, runpy\n"
+        "_real = importlib.import_module\n"
+        "def _boom(name, *a, **k):\n"
+        "    if name == 'armature_core.shotspec':\n"
+        "        raise ValueError('boom: a table in this module is malformed')\n"
+        "    return _real(name, *a, **k)\n"
+        "importlib.import_module = _boom\n"
+        "runpy.run_module('armature_core.cli', run_name='__main__')\n",
+        encoding="utf-8")
+    env = dict(os.environ, PYTHONPATH=os.path.join(REPO, "tools"))
+    proc = subprocess.run([sys.executable, str(driver), "check"],
+                          capture_output=True, text=True, env=env, cwd=REPO)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "UNRESOLVED: shotspec" in proc.stdout
+    assert "ValueError: boom: a table in this module is malformed" in proc.stdout

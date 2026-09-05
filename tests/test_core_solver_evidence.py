@@ -276,7 +276,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # the coordinator re-measures at merge and never sums the branches.
         # WAVE-18 MERGE (coordinator, 2026-09-05): every row MEASURED on the merged tree by this walk (core-gates and core-solvers each
         # moved different rows on their own branches; neither dict was a merged measurement).
-        "assembly": 23, "blender_scene": 8, "canon": 1, "donor_gate": 10, "framing": 6,
+        "assembly": 23, "blender_scene": 8, "canon": 1, "donor_gate": 11, "framing": 6,
         "gates": 24, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8,
                 # WAVE 20 (core-gates, 2026-09-05): +3 in `route_gates.RouteGate`, RE-DERIVED with
         # `==` in this worktree against the merged base `475f4eb`, which every census here read
@@ -329,7 +329,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
     # WAVE 22 (core-gates, 2026-09-05): 202 → 203, the `canon_census` row above.
-    assert sum(with_gates.values()) == 204
+    assert sum(with_gates.values()) == 205
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

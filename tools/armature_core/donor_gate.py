@@ -254,7 +254,9 @@ def ankle_framing(rows, detect_evidence=None):
     because nothing observed them there. The fired-only fraction is kept beside the
     gating one as a diagnostic, so the two readings are visible rather than swapped.
     """
-    idx = {a: LS.POSE_LANDMARKS.index(a) for a in ANKLES}
+    # · ANDON — the landmark TABLE, before the index comprehension reads it. See
+    # `_require_landmark_table`: the named guard existed and only a test called it.
+    idx = _require_landmark_table()
     fired = [r for r in rows if r.get("fired") and r.get("image")]
     if not fired:
         raise DonorGate("no frame carries image landmarks, so the framing clause cannot "
@@ -395,6 +397,44 @@ def gate_donor(motion, framing):
     return ev
 
 
-def _landmark_names_are_the_ones_this_module_assumes():
-    """Guard against the landmark table being renamed out from under the ankle clause."""
-    return all(a in LS.POSE_LANDMARKS for a in ANKLES)
+def _require_landmark_table():
+    """Gate DONOR's `landmark_table_renamed`, and the ankle index map it hands back.
+
+    ⚠ **This was a named guard that only a TEST called.** It read
+    `def _landmark_names_are_the_ones_this_module_assumes(): return all(a in
+    LS.POSE_LANDMARKS for a in ANKLES)` — a predicate returning a bool — and its docstring
+    called it "a guard against the landmark table being renamed out from under the ankle
+    clause". Measured 2026-09-05 by grep across the worktree on `e8263a3`: exactly one
+    caller, `tests/test_donor_gate.py:64`, and no code path in `tools/` invoked it at all.
+    So in production the protection was whatever `LS.POSE_LANDMARKS.index(a)` inside
+    `ankle_framing` happened to do — a `ValueError`, which is not an `ArmatureError` and so
+    bypasses the halt contract's exit-2 branch, and which is raised AFTER `ankle_framing`
+    has been entered rather than before. A named guard that only a test calls reads as an
+    armed check and is not one.
+
+    Its own sibling two lines below the same `idx` construction — `_readable_landmark_row`,
+    added in waves 12/14 — DOES raise `DonorGate`; this one did not get the same treatment.
+    It is now that same shape: it raises, it names the missing names and the table it read
+    them from, and it returns the `{name: index}` map so there is one construction of the
+    ankle indices rather than a check beside a separate read.
+
+    `lift_solve.POSE_LANDMARKS` is MediaPipe's 33-entry topology as this repo records it.
+    A rename there is a data change of exactly the class `canon_census.CENSUS` and
+    `route_gates.RULED_COMPONENTS` carry their own import-time andons for.
+    """
+    missing = [a for a in ANKLES if a not in LS.POSE_LANDMARKS]
+    if missing:
+        raise DonorGate(
+            f"the landmark table this clause indexes no longer carries {missing!r}: "
+            f"`lift_solve.POSE_LANDMARKS` has {len(LS.POSE_LANDMARKS)} entries and Gate "
+            f"DONOR's framing clause is written against the names {list(ANKLES)}. A table "
+            f"renamed out from under the clause is not a clip whose ankles are out of "
+            f"frame — it is a gate that cannot compute its own quantity, and reading it "
+            f"anyway raises a bare `ValueError` from inside the clause, which is not an "
+            f"`ArmatureError` and so leaves the run classified as a crash",
+            {"gate": "DONOR", "andon": "DonorGate", "clause": "landmark_table_renamed",
+             "missing": missing, "expected": list(ANKLES),
+             "landmarks_expected": len(LS.POSE_LANDMARKS),
+             "table": "lift_solve.POSE_LANDMARKS",
+             "table_names": list(LS.POSE_LANDMARKS)})
+    return {a: LS.POSE_LANDMARKS.index(a) for a in ANKLES}

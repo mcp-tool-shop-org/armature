@@ -61,7 +61,13 @@ def test_the_thresholds_are_the_amendments_and_name_where_they_came_from():
 
 
 def test_the_landmark_names_this_module_assumes_still_exist():
-    assert DG._landmark_names_are_the_ones_this_module_assumes()
+    """WAVE 22 (core-gates, F-0d00378d): this used to be the guard's ONLY caller — a
+    predicate returning a bool that no code path in `tools/` invoked, so in production the
+    protection was whatever `POSE_LANDMARKS.index()` did (a `ValueError`, not an
+    `ArmatureError`, raised after `ankle_framing` had been entered). It is an andon now and
+    it returns the ankle index map, so there is one construction rather than a check beside
+    a separate read."""
+    assert DG._require_landmark_table() == {"left_ankle": 27, "right_ankle": 28}
 
 
 # ------------------------------------------------------------ the clip that made it necessary

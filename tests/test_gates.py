@@ -1160,8 +1160,8 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # WAVE 22 (core-gates, F-715ecaab): 348 -> 349. +1 in `shotspec.SpecError` —
     # `_refuse_unknown_keys`, the unknown-key clause `spec.gates` already carried for one
     # key. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
-    assert total == 349, (
-        f"{total} family raises in armature_core; this pin asserts 349, RE-DERIVED on the "
+    assert total == 350, (
+        f"{total} family raises in armature_core; this pin asserts 350, RE-DERIVED on the "
         f"wave-22 core-gates branch. This is the denominator every ratio below is quoted against — "
         f"re-measure it deliberately")
 
