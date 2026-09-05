@@ -321,7 +321,12 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     "make_lift_sheet": ["subject_box"],
     "make_overlay_sheet": ["raise OverlaySheetError"],
     "make_parts_sheet": ["shoot"],
-    "make_plate": ["raise ArmatureError"],
+    # WAVE 22 (instruments-measure, F-e40749e9): the token changed, not the position.
+    # `make_plate` raised the family BASE at eleven sites; all eleven now raise its own
+    # `PlateError` with a clause, so the one refusal that still sits below a write is
+    # spelled `raise PlateError`. The `--visible-rows` refusal that used to sit here too
+    # MOVED above `os.makedirs` in the same commit and leaves this table entirely.
+    "make_plate": ["raise PlateError"],
     "make_test_armature": ["gate_glb_written"],
     "make_zoom_sheet": ["raise ZoomSheetError"],
     "measure_cascade_clip": ["raise ClipCountError"],
@@ -441,7 +446,7 @@ NOT_YET_MOVED = {
     "gate_whole": "render_turnaround, same family as `gate_set_distinct`",
     "pick_subject": "author_walk / lift_solve pick the subject after the run directory exists",
     "probe": "extract_clip_frames probes the clip after the frame directory exists",
-    "raise ArmatureError": "make_plate refuses inline below its first write",
+    "raise PlateError": "make_plate's cv2 write-failure refusal reports the write it sits below (wave 22: the token was `raise ArmatureError` until the eleven base raises were named)",
     "raise ClipCountError": "measure_cascade_clip refuses on the clip count below its first write",
     "raise ClipReadError": "extract_clip_frames, same family as `probe`",
     "raise FitReferenceError": "fit_reference refuses inline below its first write",
@@ -687,11 +692,20 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # ASSERTS; the overturned measurement stays in the comment above, where this file keeps
     # its corrections.
 
-
-    assert sites == 78, (
-        f"{sites} refusal SITES below a first write; this pin asserts 78, re-derived on the "
-        f"merged tree 2026-09-05 (wave 22; see the comment above for the measurements it overturned), "
-        f"and the number falls as the moves land")
+    # WAVE 22 (instruments-measure): 69 → 68, MEASURED in this worktree with the derivation
+    # command above. `make_plate --visible-rows` MOVED above `os.makedirs`: the flag was
+    # parsed and range-checked below both the directory and the `plate.png` write, so a
+    # refused run left the plate on disk with no provenance JSON beside it. One site, one
+    # direction, and the number falls — which is what this pin is for. `len(derived)` and
+    # `names` are unchanged at 27 / 51 because `make_plate`'s OTHER stranded refusal (the
+    # `cv2.imwrite` failure, which reports the write it sits below) keeps the module and its
+    # one name in the table; only its TOKEN changed, from `raise ArmatureError` to
+    # `raise PlateError`, re-derived in `NOT_YET_MOVED` and `READBACK_REASONS` above.
+    # ⚠ BRANCH-LOCAL — four sibling domains move this pin in the same wave.
+    assert sites == 77, (
+        f"{sites} refusal SITES below a first write; this pin asserts 77, re-derived on the "
+        f"merged tree 2026-09-05 (wave 22, all five domains merged; see the comments above for the "
+        f"measurements it overturned), and the number falls as the moves land")
 
 
 def test_no_assertion_message_in_the_suite_quotes_a_ceiling_it_does_not_assert():

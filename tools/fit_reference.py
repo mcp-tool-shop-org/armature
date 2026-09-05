@@ -120,7 +120,11 @@ def letterbox(img, width, height, pad):
 
     h, w = img.shape[:2]
     if h <= 0 or w <= 0:
-        raise ArmatureError(f"degenerate source image of shape {img.shape}")
+        raise FitReferenceError(
+            f"degenerate source image of shape {img.shape}",
+            {"gate": "SOURCE", "andon": "FitReferenceError",
+             "clause": "source_image_has_a_zero_dimension",
+             "shape": [int(v) for v in img.shape]})
     s = min(width / w, height / h)
     nw, nh = max(1, int(round(w * s))), max(1, int(round(h * s)))
     interp = cv2.INTER_AREA if s < 1.0 else cv2.INTER_CUBIC
@@ -169,7 +173,11 @@ def main(argv=None):
     # dropped by the decoder before anything can refuse it.
     raw = cv2.imread(a.src, cv2.IMREAD_UNCHANGED)
     if raw is None:
-        raise FitReferenceError(f"cv2 could not read {a.src}", {"src": a.src})
+        raise FitReferenceError(
+            f"cv2 could not read {a.src}",
+            {"gate": "READ", "andon": "FitReferenceError",
+             "clause": "cv2_could_not_read_the_source", "flag": "--src",
+             "src": os.path.abspath(a.src)})
     if raw.ndim == 2:
         raw = cv2.cvtColor(raw, cv2.COLOR_GRAY2BGR)
     plate_bgr = None
@@ -194,10 +202,24 @@ def main(argv=None):
         pad = border_colour(img)
         pad_source = f"median of the source's own outer {BORDER_FRAC:.0%} border"
     else:
-        parts = [int(v) for v in a.pad.split(",")]
-        if len(parts) != 3:
-            raise FitReferenceError(f"--pad must be 'auto' or R,G,B; got {a.pad!r}",
-                                    {"pad": a.pad})
+        # ---- F-3092e646, wave 22: this was `parts = [int(v) for v in a.pad.split(",")]`
+        #      with the cast ABOVE the length check and no 0-255 range check, eleven lines
+        #      below `--alpha-over`, which goes through the ONE parser and gets a typed
+        #      refusal with an evidence dict for exactly this class of value. Measured on
+        #      `e8263a3` through the real CLI on an RGB source: `--pad=a,b,c` exited 1 with
+        #      an untyped `ValueError: invalid literal for int() with base 10: 'a'`;
+        #      `--pad=999,-5,0` exited 1 with an untyped
+        #      `OverflowError: Python integer -5 out of bounds for uint8`, raised from
+        #      `letterbox`'s `out[:] = np.array(pad, dtype=img.dtype)` on numpy 2.5.2. Both
+        #      refuse above `os.makedirs`, so nothing was stranded — the defect is that a
+        #      refusal on the PAID path read as a crash: exit 1, no `FIT_REFERENCE` line,
+        #      and none of the flag, the value or a clause in a machine-readable field.
+        #      On a numpy that WRAPS instead of raising, the same input letterboxes in a
+        #      colour the record does not name: the provenance writes
+        #      `pad_bgr=[int(v) for v in pad]` from this tuple, which is the exact defect
+        #      `composite_reference`'s own comment records as fixed THERE (`--plate=999,-5,0`
+        #      clipped to [255,0,0] while the record said [999,-5,0]).
+        parts = list(parse_plate(a.pad, FitReferenceError, flag="--pad"))
         pad = tuple(parts[::-1])          # the caller says RGB; cv2 arrays are BGR
         pad_source = f"caller-supplied RGB {parts}"
 
@@ -210,7 +232,11 @@ def main(argv=None):
     os.makedirs(out_dir, exist_ok=True)
     dst = os.path.join(out_dir, f"{stem}_fit_{a.width}x{a.height}.png")
     if not cv2.imwrite(dst, fitted):
-        raise FitReferenceError(f"cv2 refused to write {dst}", {"dst": dst})
+        raise FitReferenceError(
+            f"cv2 refused to write {dst}",
+            {"gate": "WRITE", "andon": "FitReferenceError",
+             "clause": "cv2_refused_the_write", "dst": os.path.abspath(dst),
+             "out": out_dir})
 
     rec = {
         "tool": "fit_reference", "tool_version": TOOL_VERSION, "mode": a.mode,

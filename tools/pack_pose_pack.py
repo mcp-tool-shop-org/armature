@@ -54,6 +54,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import gates  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+
 from composite_reference import (  # noqa: E402
     compose_over_named_plate, parse_plate)
 
@@ -77,48 +78,6 @@ TOOL_VERSION = "E08.1"
 #: the finiteness half is `resample_motion`'s two lines, in that order (`isfinite` first,
 #: because `nan > 0` is False and `inf > 0` is True).
 MIN_FPS_EXCLUSIVE = 0
-
-
-def single_path_segment(value, flag, exc, extra=None):
-    """`value` if it names ONE path component, else raise `exc` naming the flag. · ANDON
-
-    A `--name` is a NAME, not a path. `os.path.join(out_dir, f"{name}.{ext}")` with
-    `name="../escaped"` writes OUTSIDE `--out` while every gate above it stays green and
-    the manifest that certifies the artifact stays behind in `--out` — measured on the base
-    tree (F-62dec63b): `PACK_POSE_PACK_OK` with `"gate_R": "identical"`, exit 0, the pack
-    at `<base>/esc/escaped.apng.png` and the manifest at `<base>/esc/inner/`, so the
-    directory the caller was told to read held a manifest and no pack. Gate R read the
-    escaped file back and reported it identical, because Gate R compares pixels and is
-    blind to where they live.
-
-    `os.path.basename` alone is not the check: it is platform-dependent (on POSIX
-    `basename("a\b")` is the whole string) and it accepts `.` and `..` unchanged. Both
-    separators, the drive-relative spellings, the two dot names and an absent name are
-    refused explicitly, so the same call answers the same way on either platform.
-
-    ⚠ **This is the second spelling of one rule, not a second rule.** `resample_motion`
-    carries a character-identical copy under the same clause word
-    (`output_name_is_not_a_name`); the single home for it is `armature_core`, which is
-    another domain's tree in the frozen map, so the helper lives beside its callers the way
-    `parts.require_finite` does. The third instance in this domain — `make_review_clip`'s
-    `--run`, which reaches `clip_name`'s `f"{run}_{stem}"` — is a DEFERRED Stage B item and
-    is deliberately NOT fixed here.
-    """
-    text = "" if value is None else str(value)
-    sep = {"/", "\\"} | {c for c in (os.sep, os.altsep) if c}
-    if (not text.strip() or text in (".", "..") or os.path.isabs(text)
-            or any(c in text for c in sep) or os.path.basename(text) != text):
-        ev = {"gate": "ARGS", "andon": exc.__name__,
-              "clause": "output_name_is_not_a_name", "flag": flag, "name": text}
-        ev.update(extra or {})
-        raise exc(
-            f"{flag}={text!r} is not a name; it is pasted into the output path as one "
-            f"component of a filename, so a separator, an absolute path or a dot name "
-            f"writes the artifact somewhere other than the directory this tool was told to "
-            f"write into, while the manifest that certifies it stays behind and every "
-            f"gate above reports on the file that escaped",
-            ev)
-    return text
 
 
 def parse_args(argv=None):
@@ -147,7 +106,13 @@ def frame_paths(directory):
     names = [f for f in os.listdir(directory)
              if f.lower().endswith(".png") and os.path.splitext(f)[0].isdigit()]
     if not names:
-        raise ArmatureError(f"no NNNNN.png frames in {directory}")
+        raise PosePackError(
+            f"no NNNNN.png frames in {directory}",
+            {"gate": "FRAMES", "andon": "PosePackError",
+             "clause": "no_numbered_frames_in_the_directory",
+             "flag": "--frames", "frames": os.path.abspath(directory),
+             "png_files": sorted(n for n in os.listdir(directory)
+                                 if n.lower().endswith(".png"))[:16]})
     return [os.path.join(directory, n)
             for n in sorted(names, key=lambda s: int(os.path.splitext(s)[0]))]
 
@@ -168,10 +133,13 @@ def load_frames(paths, alpha_over=None):
         out.append(np.ascontiguousarray(rgb, dtype=np.uint8))
     shapes = {a.shape for a in out}
     if len(shapes) != 1:
-        raise ArmatureError(
+        raise PosePackError(
             f"the frames are not all the same size: {sorted(shapes)}. LoadImage's PIL path "
             f"SKIPS any frame whose size differs from the first, so a mixed-size pack "
-            f"arrives as a short batch with nothing erroring")
+            f"arrives as a short batch with nothing erroring",
+            {"gate": "FRAMES", "andon": "PosePackError",
+             "clause": "frames_are_not_all_one_size",
+             "shapes": [list(sh) for sh in sorted(shapes)], "n_frames": len(out)})
     return out
 
 
@@ -238,6 +206,14 @@ def main(argv=None):
              "minimum_exclusive": MIN_FPS_EXCLUSIVE})
 
     # ---- ANDON, the same block: `--name` is a NAME. F-62dec63b, wave 18.
+    # WAVE 22, SEAM 1: the ONE home for this check, adopted BY IMPORT (the two
+    # byte-identical copies this domain held are deleted). The import is at the
+    # CALL SITE rather than at module scope for one reason, stated so it is not
+    # read as a cycle break: the helper lands on core-solvers' branch in the same
+    # parallel wave, and a module-scope import makes this file uncollectable on
+    # any tree where that branch has not merged yet. Same object either way.
+    from armature_core.parts import single_path_segment
+
     single_path_segment(a.name, "--name", PosePackError,
                         extra={"tool": "pack_pose_pack", "out": out_dir})
 
@@ -291,4 +267,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # WAVE 22, SEAM 1: the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (core-solvers' file, posted to the wave-22 seams inbox). Never
+    # copied — the whole point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "PACK_POSE_PACK")

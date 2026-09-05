@@ -44,7 +44,7 @@ class ClipReadError(ArmatureError):
 
     **It defines no constructor, and that is the fix — not an omission.** F-734951dc, wave
     14, said "`ArmatureError` (its base) defines none either", and that premise is FALSE on
-    this tree: measured 2026-09-04 in this worktree, `armature_core/errors.py:40-42` gives
+    this tree: measured 2026-09-04 in this worktree, `armature_core/errors.py::ArmatureError.__init__` gives
     the base `__init__(self, message, evidence=None)` and stores the dict AS PASSED. The
     local override written here to work around the missing base constructor added one thing
     of its own — `evidence or {}` — which put back the very defect `errors.py:27-33` rules

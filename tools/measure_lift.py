@@ -502,9 +502,41 @@ def rotation_errors(solved_local, authored, bones):
             "torso": pool(torso)}
 
 
+def gate_detector_rate(fps):
+    """ANDON — the source clip's rate, which the detector's timestamp axis divides by.
+
+    Wave 22, F-afa9c41e's SIBLING half. `--fps` is `type=int, default=16` with no bound and
+    it is read at `detect_for_video(image, int(round(i * 1000.0 / fps)))` — MediaPipe's
+    monotonic video-mode timestamp. Measured on `e8263a3`: `--fps=0` reaches that line and
+    raises a bare `ZeroDivisionError` naming neither the flag nor the value, and `--fps=-16`
+    hands the landmarker a DECREASING timestamp axis, which is not a rate error the detector
+    reports — it is a tracking axis running backwards, recorded in the output as
+    `"fps": a.fps` with no gate having read it.
+
+    This flag is one of the eleven `--*fps*` flags across this domain's 42 owned modules;
+    seven were unbounded on `e8263a3` and this wave closes them together, because a fix
+    whose red proof runs only on the member the finding happened to name is the shape the
+    wave-18 rule ends.
+    """
+    if fps <= 0:
+        raise DetectionGate(
+            f"--fps={fps} is not a rate; the detector is driven in VIDEO mode, whose "
+            f"per-frame timestamp is round(i * 1000 / --fps) ms, so a rate that is zero "
+            f"divides by zero and a negative one hands the landmarker a timestamp axis "
+            f"that runs backwards",
+            {"gate": "ARGS", "andon": "DetectionGate",
+             "clause": "source_rate_not_positive", "flag": "--fps", "value": fps,
+             "minimum_exclusive": 0})
+    return fps
+
+
 def main():
     started = time.time()
     a = parse_args()
+
+    # ---- ANDON, before a single frame is opened: the detector's timestamp
+    #      axis divides by this rate. See `gate_detector_rate` above.
+    gate_detector_rate(a.fps)
     out = os.path.abspath(a.out)
 
     with open(os.path.join(a.render, "render_provenance.json"), encoding="utf-8") as fh:

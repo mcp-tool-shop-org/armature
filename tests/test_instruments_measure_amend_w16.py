@@ -108,7 +108,12 @@ def test_the_plain_refusal_population_is_the_thirty_this_wave_names():
     replaced, so a class appearing or vanishing fails HERE on the day it lands.
     """
     live = _plain_refusal_classes()
-    assert len(live) == 31, sorted(live)
+    # WAVE 22 (instruments-measure): 31 -> 32, MEASURED in this worktree. ONE new plain-
+    # refusal class, `stage_render.StageRenderError` (F-92a67269 / F-e40749e9: the three
+    # refusals in that file raised the family BASE, which `errors.py::ArmatureError`'s own
+    # docstring names as the thing the wave-14 constructor is 'not a licence for').
+    # Nothing left the population. BRANCH-LOCAL; the coordinator measures at the merge.
+    assert len(live) == 32, sorted(live)
     assert "make_pick_sheet.PickSheetError" in live
     assert "make_e13_sheet.E13SheetError" in live
     # the three the wave-14 probe walked ...
@@ -415,8 +420,11 @@ def test_a_single_frame_arm_is_contiguous_by_construction(tmp_path):
     invent one."""
     import make_ab_clip as AB
 
-    assert AB.gate_contiguous_numbering([7], "--a")["verdict"].startswith("4 frame") is False
-    ev = AB.gate_contiguous_numbering([7], "--a")
+    # Wave 22, F-070bfff3: the gate now TAKES the arm's rate, because the shift its
+    # refusal quotes is a frame time (1000/fps) and not 1000/n_frames. The arity change is
+    # this domain's own contract; these two fixture call sites move with it.
+    assert AB.gate_contiguous_numbering([7], "--a", 16.0)["verdict"].startswith("4 frame") is False
+    ev = AB.gate_contiguous_numbering([7], "--a", 16.0)
     assert ev["numbers"] == [7] and ev["first_gap"] is None
 
 

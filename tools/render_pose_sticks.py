@@ -37,6 +37,7 @@ delete the directory; owner: the executor session. The keypoint record is read-o
 import argparse
 import hashlib
 import json
+import math
 import os
 import sys
 import time
@@ -77,14 +78,46 @@ def _sha256_bytes(b):
 
 
 def gate_canvas(body, width, height):
-    """Gate CANVAS · ANDON — every body keypoint is inside the frame."""
-    bad = []
+    """Gate CANVAS · ANDON — every body keypoint is inside the frame, and is a NUMBER.
+
+    **The confidence is read, not discarded.** Wave 22, SEAM 9 item 2: this loop unpacked
+    `for j, (x, y, _c) in enumerate(frame)` and threw `_c` away, so it bounded coordinates
+    only. `aapose.draw_body` compares that confidence against a threshold to decide whether
+    a limb is drawn, and `nan < threshold` is False in both directions — so a NaN
+    confidence produced ink byte-identical to a confidence of 1.0, with nothing having read
+    it. core-solvers closed the andon INSIDE `draw_body`/`draw_hand`
+    (`confidence_not_a_number`); this is the complementary bound at the reader, which is
+    the wave-18 SEAM-5 shape: the andon inside the function performing the step, and the
+    reader's bound at the flag. It fires earlier and names the frame and the keypoint.
+
+    A non-finite COORDINATE is caught by the range test below (`nan <= width - 1` is False,
+    so it lands in `bad`), and is named explicitly rather than left to that accident.
+    """
+    bad, not_a_number = [], []
     for i, frame in enumerate(body):
-        for j, (x, y, _c) in enumerate(frame):
+        for j, (x, y, c) in enumerate(frame):
+            if not all(math.isfinite(float(v)) for v in (x, y, c)):
+                not_a_number.append({"frame": i, "index": j,
+                                     "name": aapose.KEYPOINT_NAMES[j],
+                                     "xyc": [x, y, c]})
+                continue
             if not (0 <= x <= width - 1 and 0 <= y <= height - 1):
                 bad.append({"frame": i, "index": j,
                             "name": aapose.KEYPOINT_NAMES[j], "xy": [x, y]})
-    ev = {"gate": "CANVAS", "resolution": [width, height], "n_outside": len(bad),
+    if not_a_number:
+        raise SticksGate(
+            f"{len(not_a_number)} body keypoint(s) carry a value that is not a number, "
+            f"e.g. {not_a_number[0]}. A NaN confidence walks `draw_body`'s threshold "
+            f"comparison in both directions — `nan < threshold` and `nan > threshold` are "
+            f"both False — so the limb is drawn or dropped on a number no code read, and "
+            f"the ink is byte-identical to a confidence of 1.0",
+            {"gate": "CANVAS", "andon": "SticksGate",
+             "clause": "keypoint_value_is_not_a_number",
+             "resolution": [width, height], "n_not_a_number": len(not_a_number),
+             "examples": not_a_number[:8]})
+    ev = {"gate": "CANVAS", "andon": "SticksGate",
+          "clause": "keypoint_outside_the_frame",
+          "resolution": [width, height], "n_outside": len(bad),
           "examples": bad[:8]}
     if bad:
         raise SticksGate(
@@ -143,10 +176,51 @@ def _written_frames(out):
                   key=lambda f: int(os.path.splitext(f)[0]))
 
 
+def gate_strip_stride(stride):
+    """ANDON — the contact strip's stride is a stride, checked where it is READ.
+
+    F-a5b1e0af, wave 22. `--strip` is `type=int, default=8` with no bound, and it is read
+    as `list(range(0, n, a.strip))` AFTER the whole control sequence and Gate COUNT have
+    run. Re-measured on `e8263a3`: `list(range(0, 5, -8))` is `[]`, so
+    `np.concatenate([], axis=1)` raised an untyped
+    `ValueError: need at least one array to concatenate`. `--strip=0` was already guarded —
+    `if a.strip:` disables the strip, which is the parser's documented off switch — so the
+    NEGATIVE direction is the one nothing bounded, which is the shape wave 18's rule names:
+    put the andon on the direction the invariant does not bound.
+
+    The consequence is a write-ordering one. The run exited 1 as a crash AFTER every
+    `NNNNN.png` was written and Gate COUNT had passed, but BEFORE `sticks_manifest.json` —
+    so `--out` held a complete-looking driving sequence with no manifest, no convention pin,
+    no per-frame sha256 and no Gate INK/CANVAS verdicts, and every consumer that derives its
+    population from a bare listing (`encode_control.frame_population`,
+    `gate_b_frames.frame_paths`, `measure_floor.frame_population`, `measure_arm._load_frames`,
+    `measure_clip.frame_paths`) reads that as a finished sequence. So the bound is raised in
+    the argument block, above `os.makedirs`, and a refused run leaves `--out` absent.
+
+    A stride LARGER than the population is legal and is not refused: `range(0, 3, 99)` is
+    `[0]`, one tile, which is a contact strip.
+    """
+    if stride < 0:
+        raise SticksGate(
+            f"--strip={stride} is not a stride; the contact strip is built from "
+            f"range(0, n, --strip), and a negative stride makes that range EMPTY, which "
+            f"reaches np.concatenate with no arrays after the whole control sequence has "
+            f"already been written and Gate COUNT has already passed",
+            {"gate": "ARGS", "andon": "SticksGate",
+             "clause": "strip_stride_not_positive", "flag": "--strip", "value": stride,
+             "minimum": 0,
+             "note": "0 is the parser's documented off switch and stays legal"})
+    return stride
+
+
 def main(argv=None):
     started = time.time()
     a = parse_args(argv)
     out = os.path.abspath(a.out)
+
+    # ---- ANDON, in the argument block and far above `os.makedirs`: see the docstring
+    #      above for why this cannot wait until the stride is read.
+    gate_strip_stride(a.strip)
 
     import cv2
 
@@ -158,7 +232,16 @@ def main(argv=None):
     if not (len(body) == len(lh) == len(rh) == n):
         raise SticksGate(
             f"the keypoint record disagrees with itself: {n} frames declared, "
-            f"{len(body)}/{len(lh)}/{len(rh)} present", {})
+            f"{len(body)}/{len(lh)}/{len(rh)} present",
+            # F-eab60ac3, wave 22: this raise passed a LITERAL `{}`, so the
+            # `RENDER_STICKS_HALT` line printed `"evidence": {}` — no gate, no clause, and
+            # none of the four counts the message states in prose. An empty dict at the
+            # raise site is the exact shape wave 16 deleted family-wide (`evidence or {}`),
+            # spelled where that sweep does not reach.
+            {"gate": "RECORD", "andon": "SticksGate",
+             "clause": "record_frame_counts_disagree",
+             "keypoints": os.path.abspath(a.keypoints), "n_declared": n,
+             "n_body": len(body), "n_left_hand": len(lh), "n_right_hand": len(rh)})
 
     # Gate CONV — before a single pixel. What is about to be drawn IS the convention.
     aapose.check_convention(len(aapose.KEYPOINT_NAMES), aapose.LIMB_SEQ, aapose.PALETTE)
@@ -167,7 +250,9 @@ def main(argv=None):
             "the keypoint record was projected against a different convention pin than this "
             "module carries; the two halves would disagree about what a keypoint index "
             "means",
-            {"record": rec.get("convention", {}).get("sha256"),
+            {"gate": "CONV", "andon": "SticksGate",
+             "clause": "convention_pin_disagrees",
+             "record": rec.get("convention", {}).get("sha256"),
              "module": aapose.SOURCE["sha256"]})
 
     gate_can = gate_canvas(body, width, height)
@@ -215,7 +300,19 @@ def main(argv=None):
         # The source's own __main__ reverses channels into cv2.imwrite; the canvas is RGB.
         ok = cv2.imwrite(p, canvas[..., ::-1])
         if not ok:
-            raise SticksGate(f"cv2 refused to write {p}", {})
+            # F-eab60ac3, wave 22: this raise passed a LITERAL `{}` while its own sibling
+            # twenty-four lines below (the strip write) carried
+            # `{"gate": "WRITE", "strip": ..., "every": ..., "n_tiles": ...}`. This one
+            # fires INSIDE the write loop, eight lines below `os.makedirs`, so a partial
+            # control sequence is on disk and the halt record carried nothing to say which
+            # frame stopped it or where the directory is — the operator had to parse prose.
+            raise SticksGate(
+                f"cv2 refused to write {p}; frame {i} of {n} did not reach disk, so "
+                f"{out} now holds a PARTIAL control sequence",
+                {"gate": "WRITE", "andon": "SticksGate",
+                 "clause": "cv2_refused_the_frame_write",
+                 "frame": i, "path": os.path.abspath(p), "out": out, "n": n,
+                 "written_before_this_frame": len(paths)})
         paths.append(p)
         with open(p, "rb") as fh:
             digests[os.path.basename(p)] = _sha256_bytes(fh.read())
@@ -243,7 +340,9 @@ def main(argv=None):
             raise SticksGate(
                 f"cv2 refused to write {strip_path}; the manifest would record a contact "
                 f"strip that is not there",
-                {"gate": "WRITE", "strip": os.path.abspath(strip_path),
+                {"gate": "WRITE", "andon": "SticksGate",
+                 "clause": "cv2_refused_the_strip_write",
+                 "strip": os.path.abspath(strip_path),
                  "every": a.strip, "n_tiles": len(idx)})
 
     manifest = {
@@ -293,15 +392,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("RENDER_STICKS_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # WAVE 22, SEAM 1: the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (core-solvers' file, posted to the wave-22 seams inbox). Never
+    # copied — the whole point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "RENDER_STICKS")

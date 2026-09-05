@@ -258,6 +258,29 @@ RECORDED_POPULATION = frozenset({
     #     them to confirm. If it does not land, this assertion names it by name.
     "ABClipError", "ResampleArgError", "SeedRegistrationError", "SpendCeiling",
     "ArcDidNotSurvive",
+    # WAVE 22 (instruments-measure) — MEASURED in the w22-instruments-measure worktree,
+    # not carried. Two classes cross the two-site threshold as F-e40749e9's fix lands:
+    #   `make_pick_sheet.PickSheetError` — recorded as deliberately single-site in wave 16
+    #     ("a class raised once IS its clause — and joins the day a second site is
+    #     written"). That day is this one: the five refusals in that file which raised the
+    #     family BASE now raise it, so it holds 7 sites and is no longer single-site.
+    #   `stage_render.StageRenderError` — new this wave, three sites (the compensator's
+    #     run-marker refusal, the depth-buffer shape, and F-92a67269's background-depth
+    #     clause), all three previously the bare base with no evidence at all.
+    # Measured before and after in this worktree: POLICED read 105 on `e8263a3` and 107
+    # after, and `POLICED - RECORDED_POPULATION` was exactly
+    # `['PickSheetError', 'StageRenderError']` with `RECORDED_POPULATION - POLICED` empty —
+    # so the delta is demonstrably this domain's and nothing vanished.
+    # ⚠ BRANCH-LOCAL: four sibling domains move this pin in the same wave; the coordinator
+    # re-measures on the merged tree and never sums.
+    "PickSheetError", "StageRenderError",
+    # WAVE 22, the same domain, one commit later: `make_e13_sheet.E13SheetError` — recorded
+    # in wave 16 as deliberately single-site alongside `PickSheetError`, and crossing the
+    # threshold for the same reason. F-76364ac7 gives the OUTPUT band the `--sample` andon
+    # the REFERENCES band got in wave 16 (four sites: the non-integer component, the empty
+    # list, a negative index, and a frame the extraction does not hold), so it holds 5.
+    # Measured: `POLICED - RECORDED_POPULATION == ['E13SheetError']` on that commit.
+    "E13SheetError",
     # WAVE-14 MERGE (coordinator, 2026-09-04): `aapose.ConventionError` (core-solvers, F-d0de0c2d) — the class landed, the
     # name did not; measured `POLICED - RECORDED_POPULATION == ["ConventionError"]` on the merged tree.
     "ConventionError",
@@ -493,7 +516,15 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # two raise sites (`SourceHasNoFaces`; see RECORDED_POPULATION for why the wave's
     # other two new classes are single-site and absent). Four domains move this number
     # in the same wave — the coordinator MEASURES on the merged tree, never sums.
-    assert len(POLICED) == 106, sorted(POLICED)
+    # WAVE 22 (instruments-measure): 105 → 107, MEASURED in this worktree. `PickSheetError`
+    # (5 base raises became named ones, so 1 site → 7) and `StageRenderError` (new, 3
+    # sites) cross the two-site threshold; both are named in RECORDED_POPULATION above with
+    # their derivation, and the SET assertion beneath names either if it does not arrive.
+    # The base was measured green at 105 in this worktree before any edit, so the delta is
+    # exactly these two. One commit later F-76364ac7 adds `E13SheetError` the same way,
+    # 107 -> 108, measured. ⚠ BRANCH-LOCAL — a COMPOSITION on the merged tree.
+    # WAVE-22 MERGE (coordinator, 2026-09-05): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(POLICED) == 110, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -768,7 +799,13 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # derivation command above; four domains move it in the same wave, so the
     # coordinator re-derives on the merged tree rather than summing these deltas.
     # WAVE-22 MERGE (coordinator, 2026-09-05): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(defined) == 133, len(defined)
+    # WAVE 22 (instruments-measure): 129 → 130, MEASURED in this worktree — ONE new family
+    # class, `stage_render.StageRenderError` (F-92a67269 / F-e40749e9: the three refusals in
+    # that file raised the family BASE, which `errors.py::ArmatureError`'s own docstring
+    # names as the thing the wave-14 constructor is "not a licence for"). No class was
+    # deleted. ⚠ BRANCH-LOCAL — a COMPOSITION on the merged tree.
+    # WAVE-22 MERGE (coordinator, 2026-09-05): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(defined) == 134, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
@@ -813,19 +850,34 @@ def test_the_delegated_edge_sees_the_three_classes_the_literal_walk_could_not():
     # is stated as its own row: the literal walk sees ONE of its four sites, the delegated edge all four. Every
     # line below is re-measured on the merged tree through `RAISE_SITES` and the literal walk (SEAM 9's numbers
     # were one docstring re-wrap stale by SEAM 15 — a line pinned from a branch is stale by construction).
+    # WAVE 22 (instruments-measure): F-e40749e9 turned eleven base raises in `make_plate`
+    # and two in `pack_pose_pack` into NAMED ones, so both demonstrator classes gained
+    # LITERAL sites and the old absolute-line pins below stopped describing the tree
+    # (`PosePackError` 231 → three literal sites; `PlateError` 1 → thirteen). Re-derived
+    # here on the property the test is actually about rather than on the line numbers:
+    # **what the delegated edge sees that the literal walk cannot**. That difference is
+    # stable under any edit above a raise, which the two merge notes above record as the
+    # thing that keeps going stale — "a line pinned from a branch is stale by
+    # construction". The two PURE demonstrators (zero literal sites, reached only through a
+    # helper that raises its own parameter) are unchanged and still carry the red proof.
     old = literal_sites_only(TOOLS)
     for name in ("MakeSheetError", "AnalyzeP3Error"):
         assert old.get(name, set()) == set(), (name, sorted(old.get(name, ())))
-        assert RAISE_SITES[name], name
-    assert sorted(old.get("PosePackError", ())) == [("pack_pose_pack.py", 231)]   # literal-blind until wave 18
+        assert len(RAISE_SITES[name]) == 1, sorted(RAISE_SITES[name])
 
-    assert sorted(RAISE_SITES["PosePackError"]) == [("pack_pose_pack.py", 163), ("pack_pose_pack.py", 231),
-                                                    ("pack_pose_pack.py", 241), ("pack_pose_pack.py", 245)]
-    assert sorted(RAISE_SITES["MakeSheetError"]) == [("make_sheet.py", 48)]
-    assert sorted(RAISE_SITES["AnalyzeP3Error"]) == [("analyze_p3.py", 168)]
-    # `PlateError` had ONE literal site and gains two delegated ones, so the edge moves a
-    # class across the threshold as well as into the census.
-    assert len(old.get("PlateError", ())) == 1 and len(RAISE_SITES["PlateError"]) == 3
+    # The delegated-only sites: present in the widened walk, invisible to the literal one.
+    # If the old walk could see them this comparison would be with itself.
+    for name, n_delegated in (("PosePackError", 3), ("PlateError", 2),
+                              ("MakeSheetError", 1), ("AnalyzeP3Error", 1)):
+        delegated = set(RAISE_SITES[name]) - set(old.get(name, ()))
+        assert len(delegated) == n_delegated, (name, sorted(delegated),
+                                               sorted(old.get(name, ())))
+        assert delegated, name
+
+    # MEASURED in the w22-instruments-measure worktree after F-e40749e9:
+    # `PosePackError` 3 literal / 6 total; `PlateError` 13 literal / 15 total.
+    assert len(old.get("PosePackError", ())) == 3 and len(RAISE_SITES["PosePackError"]) == 6
+    assert len(old.get("PlateError", ())) == 13 and len(RAISE_SITES["PlateError"]) == 15
     assert "PlateError" in POLICED and "PosePackError" in POLICED
 
 

@@ -130,13 +130,41 @@ def compose_over_named_plate(arr, plate, *, label, exc, extra_evidence=None,
 
 
 def parse_plate(text, exc, flag="--alpha-over"):
-    """`R,G,B` of a named plate, or None. Raises `exc` on anything else."""
+    """`R,G,B` of a named plate, or None. Raises `exc` on anything else.
+
+    **The ONE three-integer parser in this domain.** `fit_reference`, `make_plate`,
+    `pack_pose_pack` and `encode_control` all call it rather than splitting the flag
+    themselves — the census that pins that is
+    `tests/test_alpha_law.py::test_the_flag_parser_is_one_implementation_read_off_the_ast`.
+    Wave 22 (F-3092e646) added `fit_reference --pad`, which had its own inline
+    `[int(v) for v in a.pad.split(",")]` with the cast ABOVE the length check and no
+    0-255 range check, eleven lines below this function's own `--alpha-over` call.
+
+    The evidence dict names the andon and the clause as well as the value, because the
+    caller's `flag` is the thing a reader has to retype and `supplied` alone said only that
+    something was wrong. `supplied` is kept — `tests/test_alpha_law.py` reads it across all
+    four producers.
+    """
     if text is None or text == "":
         return None
     parts = [t.strip() for t in str(text).split(",")]
-    if len(parts) != 3 or not all(t.isdigit() and 0 <= int(t) <= 255 for t in parts):
+    if len(parts) != 3:
         raise exc(f"{flag} takes three 0-255 integers, e.g. {flag}=0,0,0; got {text!r}",
-                  {"supplied": text})
+                  {"gate": "ARGS", "andon": exc.__name__,
+                   "clause": "plate_not_three_components", "flag": flag,
+                   "supplied": text, "n_components": len(parts)})
+    if not all(t.isdigit() for t in parts):
+        raise exc(f"{flag} takes three 0-255 integers, e.g. {flag}=0,0,0; got {text!r}",
+                  {"gate": "ARGS", "andon": exc.__name__,
+                   "clause": "plate_component_not_an_integer", "flag": flag,
+                   "supplied": text,
+                   "unreadable": [t for t in parts if not t.isdigit()]})
+    if not all(0 <= int(t) <= 255 for t in parts):
+        raise exc(f"{flag} takes three 0-255 integers, e.g. {flag}=0,0,0; got {text!r}",
+                  {"gate": "ARGS", "andon": exc.__name__,
+                   "clause": "plate_component_out_of_range", "flag": flag,
+                   "supplied": text,
+                   "out_of_range": [int(t) for t in parts if not 0 <= int(t) <= 255]})
     return tuple(int(t) for t in parts)
 
 
@@ -288,5 +316,31 @@ def main(argv=None):
     return record
 
 
+def _cli(argv=None):
+    """The process entry point: an exit code, beside the record `main` returns.
+
+    F-41a09432, wave 22. This module ended in a bare `main()` — the weakest form in the
+    42-tool population, in which the function's return value can never become an exit code
+    at all. It holds the authored-RGBA law's ONE plate parser, called by `encode_control`,
+    `pack_pose_pack`, `fit_reference` and `make_plate`. Measured on `e8263a3` through its
+    real CLI on a one-view kit: a deliberate typed refusal (`--plate=a,b,c` ->
+    `ReferenceGate: [REFERENCE] --plate takes three 0-255 integers ...`) and an untyped
+    crash (`--plate=\u00b2,0,0` -> `ValueError: invalid literal for int()`) BOTH exited 1
+    with stdout empty and no halt line, so the two outcomes the three-outcome contract
+    exists to separate were indistinguishable here.
+
+    `main` keeps returning the record — `tests/test_composite_reference.py` reads it — and
+    this wrapper is what `run_tool_main` runs, so the process gets 0 on success, 2 on a
+    typed refusal and 1 on a crash.
+    """
+    main(argv)
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    # WAVE 22, SEAM 1: the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (core-solvers' file, posted to the wave-22 seams inbox). Never
+    # copied — the whole point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(_cli, "COMPOSITE_REFERENCE")

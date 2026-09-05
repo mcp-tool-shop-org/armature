@@ -94,7 +94,7 @@ ANCHOR_ABSENT_EXIT = 3
 # `(message, evidence=None)` shape, on the stated premise that "`ArmatureError` defines
 # none". Measured in this worktree on 2026-09-04, that premise is FALSE: the wave-14 merge
 # put `__init__(self, message, evidence=None)` on the base itself
-# (`armature_core/errors.py:40-42`), storing the dict AS PASSED.
+# (`armature_core/errors.py::ArmatureError.__init__`), storing the dict AS PASSED.
 #
 # What survived the premise was a behaviour CHANGE the base rules against. Measured:
 # `ArmatureError('m').evidence is None` while `TrackingError('m').evidence == {}` -- and

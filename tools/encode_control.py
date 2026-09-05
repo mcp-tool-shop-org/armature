@@ -238,10 +238,78 @@ def load_frames(frames_dir, invert=False, expect=None, alpha_over=None):
     return names, frames
 
 
+def gate_encode_rate(fps):
+    """ANDON — `--fps` is a rate, refused by name where it is READ.
+
+    F-e0f1f520, wave 22. `--fps` is `type=int, default=16` with no bound and it reaches
+    ffmpeg as `-r str(fps)`. Measured on `e8263a3` through the real CLI: `--fps=0` and
+    `--fps=-16` both exited 1 with stdout EMPTY and the raw line
+    `Error opening input files: Invalid argument` — naming neither the flag, nor the value,
+    nor this tool. A refusal on the paid path that reads as an environment failure sends a
+    chain routing on exit codes into the retry branch.
+    """
+    if fps <= 0:
+        raise EncodeFailure(
+            f"--fps={fps} is not a rate; it reaches ffmpeg as `-r {fps}` on the input "
+            f"side of the control video this run uploads, and the receipt records it as "
+            f"the rate that video plays at",
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "encode_rate_not_positive", "flag": "--fps", "value": fps,
+             "minimum_exclusive": 0})
+    return fps
+
+
+def gate_ffmpeg_binary():
+    """ANDON — the encoder this tool is about to run exists, named by path and by source.
+
+    F-e0f1f520, wave 22. `FFMPEG` is selected at import from `ARMATURE_FFMPEG` with a
+    hard-coded fallback under `E:/AI-Models`. Measured on `e8263a3` with that variable
+    pointed at a path that does not exist: exit 1 and a bare
+    `FileNotFoundError: [WinError 2] The system cannot find the file specified` — naming
+    neither the variable, nor the path, nor ffmpeg.
+    """
+    if not os.path.isfile(FFMPEG):
+        raise EncodeFailure(
+            f"the ffmpeg binary this tool encodes and decodes with is not on disk: "
+            f"{FFMPEG!r}. Gate R compares an encode against its own decode, so both halves "
+            f"of the losslessness proof run through this one binary",
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "ffmpeg_binary_not_found", "ffmpeg": FFMPEG,
+             "from_env": "ARMATURE_FFMPEG" in os.environ,
+             "env_var": "ARMATURE_FFMPEG"})
+    return FFMPEG
+
+
+def ffmpeg_version():
+    """The encoder's OWN first line of `ffmpeg -version`, for the receipt.
+
+    F-7c1f4117, wave 22. The receipt beside the control video named the codec, the codec
+    args, the resolution, the fps, the video sha256 and the source-frame sha256 — and NOT
+    the binary that produced it, although that binary is chosen by an environment variable
+    and this module's own `CODECS` table records that the build matters ("this build's ffv1
+    lists bgr0 but not plain gbrp"). Losslessness, the single property this receipt
+    certifies, is a property of an encoder the receipt did not identify. Its three siblings
+    all record it: `extract_clip_frames`, `measure_cascade_clip`, and this module's own
+    `--survey` branch.
+    """
+    try:
+        proc = _run([FFMPEG, "-hide_banner", "-version"])
+        first = proc.stdout.decode("utf-8", "replace").splitlines()
+        return first[0].strip() if first else "NOT REPORTED"
+    except OSError as exc:                       # the binary vanished between the two calls
+        return f"UNAVAILABLE: {exc}"
+
+
 def encode(frames, path, codec, fps=16):
     """Write `frames` to `path` with the named codec. Raises on ffmpeg failure."""
     if codec not in CODECS:
-        raise EncodeFailure(f"unknown codec {codec!r}; known: {sorted(CODECS)}")
+        raise EncodeFailure(f"unknown codec {codec!r}; known: {sorted(CODECS)}",
+                            {"gate": "ARGS", "andon": "EncodeFailure",
+                             "clause": "unknown_codec", "flag": "--codec",
+                             "value": codec, "known": sorted(CODECS)})
+    # ---- ANDON, above the subprocess: the rate, then the binary.
+    gate_encode_rate(fps)
+    gate_ffmpeg_binary()
     h, w = frames[0].shape[:2]
     os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
     cmd = [
@@ -379,6 +447,13 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
         **source,
         "codec": codec,
         "codec_args": CODECS[codec]["args"],
+        # F-7c1f4117, wave 22: the encoder is selected at import by `ARMATURE_FFMPEG`, and
+        # losslessness — the one property this receipt certifies — is a property of the
+        # build. The two siblings that merely MEASURE (`extract_clip_frames`,
+        # `measure_cascade_clip`) already recorded it; the one that PRODUCES did not.
+        "ffmpeg": FFMPEG,
+        "ffmpeg_version": ffmpeg_version(),
+        "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
         "video": out_path,
         "video_sha256": video_sha,
         "source_frames_sha256": hashlib.sha256(
@@ -431,6 +506,9 @@ def main(argv=None):
     #      `SystemExit` string, in the one tool of the four whose output is UPLOADED -- so
     #      a caller catching `EncodeFailure` around `main` did not catch it, and the halt
     #      carried none of the measurement that fired it.
+    # ---- ANDON, before a single frame is read: the rate and the encoder.
+    gate_encode_rate(args.fps)
+    gate_ffmpeg_binary()
     plate = parse_plate(args.alpha_over, EncodeFailure)
     receipt = build(args.frames, args.out, args.codec, invert=args.invert, fps=args.fps,
                     expect=args.expect, alpha_over=plate)
@@ -445,4 +523,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # WAVE 22, SEAM 1: the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (core-solvers' file, posted to the wave-22 seams inbox). Never
+    # copied — the whole point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "ENCODE_CONTROL")

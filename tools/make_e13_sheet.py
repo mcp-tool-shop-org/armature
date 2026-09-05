@@ -50,7 +50,7 @@ class E13SheetError(ArmatureError):
     write-ordering ratchet in `tests/test_instrument_write_ordering.py` had no entry for it:
     a module enters that census only when it both refuses and writes, and this one only
     wrote. It defines no `__init__` — the base stores what it is passed
-    (`armature_core/errors.py:40-42`).
+    (`armature_core/errors.py::ArmatureError.__init__`).
     """
 
 
@@ -185,6 +185,40 @@ def build(arm, ref_images, ref_labels, frame_paths, frame_labels, prov_lines, ti
     return sheet
 
 
+def _sample_indices(text):
+    """`--sample` as a list of frame indices, refusing by NAME above the cast.
+
+    F-76364ac7's sibling half, wave 22, and the same shape as `make_plate --visible-rows`:
+    `[int(v) for v in a.sample.split(",")]` puts the cast above every check, so a
+    non-integer component dies with an untyped `ValueError` naming neither the flag nor the
+    value.
+    """
+    parts = [t.strip() for t in str(text).split(",") if t.strip() != ""]
+    bad = [t for t in parts if not t.lstrip("+-").isdigit()]
+    if bad:
+        raise E13SheetError(
+            f"--sample takes frame indices; got {text!r}",
+            {"gate": None, "andon": "E13SheetError",
+             "clause": "sample_component_not_an_integer",
+             "flag": "--sample", "supplied": text, "unreadable": bad})
+    idx = [int(t) for t in parts]
+    if not idx:
+        raise E13SheetError(
+            f"--sample={text!r} names no frames; the OUTPUT band would be empty on the "
+            f"sheet the Director rules the arm from",
+            {"gate": None, "andon": "E13SheetError",
+             "clause": "sample_names_no_frames", "flag": "--sample", "supplied": text})
+    negative = [i for i in idx if i < 0]
+    if negative:
+        raise E13SheetError(
+            f"--sample carries negative indices {negative}; frame files are numbered from "
+            f"zero and a negative index is not a frame",
+            {"gate": None, "andon": "E13SheetError",
+             "clause": "sample_index_is_negative", "flag": "--sample",
+             "supplied": text, "negative": negative})
+    return idx
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--arm", required=True)
@@ -232,7 +266,35 @@ def main(argv=None):
         ref_rows.append({"slot": "video1", "label": f"constructed clip ({len(paths)}f)",
                          "sha": "see cascade_decode_compare.json"})
 
-    idx = [int(v) for v in a.sample.split(",")]
+    # ---- ANDON, above `build` and above `os.makedirs`: `--sample` names frames the
+    #      extraction actually holds. F-76364ac7, wave 22.
+    #
+    #      Wave 16 guarded the REFERENCES listing above (`--ref-frames` empty ->
+    #      `E13SheetError`) and moved `os.makedirs` below the andons, and left the OUTPUT
+    #      band — the panels the Director actually judges — indexing an unchecked listing
+    #      one screen down. `--sample` defaults to `0,37,75,112,149`. Measured on `e8263a3`
+    #      on a 3-frame extraction whose `frames.json` records `n_frames: 3`, run with the
+    #      default `--sample`: `FileNotFoundError: [Errno 2] No such file or directory:
+    #      '...\\frames\\00037.png'` — untyped, no clause, and naming neither the band nor
+    #      the denominator, even though `fr["n_frames"]` was read four lines above and is
+    #      quoted in the provenance panel eleven lines below. The write ordering was
+    #      already correct (no sheet directory was created), so the residue half of the
+    #      wave-16 fix held; the missing half was the refusal. The sibling sheet in this
+    #      domain already has it: `make_e08_sheet` reads each frame through
+    #      `_imread(..., f"previz frame {i}")` and names the input that was missing.
+    idx = _sample_indices(a.sample)
+    missing = [i for i in idx if not os.path.isfile(
+        os.path.join(a.frames, f"{i:05d}.png"))]
+    if missing:
+        raise E13SheetError(
+            f"--sample asks for frame(s) {missing} and the extraction at "
+            f"{os.path.abspath(a.frames)} holds {fr['n_frames']} "
+            f"(0..{fr['n_frames'] - 1}); the OUTPUT band is the panel the Director rules "
+            f"the arm from, and it cannot show a frame that was never extracted",
+            {"gate": None, "andon": "E13SheetError",
+             "clause": "sample_frame_not_in_the_extraction",
+             "flag": "--sample", "sample": idx, "n_frames": fr["n_frames"],
+             "missing": missing, "frames": os.path.abspath(a.frames)})
     frame_paths = [os.path.join(a.frames, f"{i:05d}.png") for i in idx]
     frame_labels = [f"f{i}  ({fr['stream']['width']}x{fr['stream']['height']} "
                     f"@ {fr['stream']['fps']} fps)" for i in idx]

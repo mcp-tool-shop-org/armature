@@ -54,6 +54,7 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from armature_core.parts import require_finite  # noqa: E402
 
 TOOL_VERSION = "E10.1"
 
@@ -68,6 +69,50 @@ class ABClipError(ArmatureError):
     refusals are typed.
     """
 
+
+def require_rate(flag, value):
+    """ANDON — a playback rate this tool can build a time axis from.
+
+    F-afa9c41e, wave 22. `--a-fps` / `--b-fps` are `type=float, required=True` and were
+    bounded NOWHERE, while every quantity in this tool divides by them: `event_timeline`'s
+    axis, `tail`, and four manifest fields. Measured on `e8263a3` on two 4-frame arms,
+    `--a-fps=-16 --b-fps=16` ran to COMPLETION — it printed `MAKE_AB_CLIP_OK` with
+    `"clip_s": -0.25`, exited 0, and wrote both the WebP and the manifest. The axis it
+    built was
+
+        [(-0.1875, 3, -3), (-0.125, 2, -2), (-0.0625, 1, -1), (-0.0, 0, 0),
+         (0.0625, -1, 1), (0.125, -2, 2), (0.1875, -3, 3)]
+
+    — seven composite frames for two four-frame arms, with NEGATIVE indices that
+    `ia_frames[x]` resolves by Python's wrap-around to frames counted from the END. The
+    banner prints the wrapped frame's OWN file number, so the caption agreed with the
+    pixels and nothing on the sheet looked wrong: the two arms were silently paired
+    frame-3-against-frame-1 for the whole clip, under a manifest asserting that NEITHER arm
+    is resampled or retimed. Gate TIMELINE, landed in wave 16 in this same file to stop
+    exactly this desynchronisation, keys on the file NUMBERS and never on the rate that
+    builds the axis, so it passed. `--a-fps=0` raised a bare `ZeroDivisionError` and
+    `--a-fps=nan` a bare `ValueError: cannot convert float NaN to integer`.
+
+    **Finite FIRST, then positive** — the ordering `resample_motion` records: `nan > 0` is
+    False and `inf > 0` is True, so a positivity bound alone admits both ends of the
+    non-finite population. The finiteness half goes through the repo's ONE helper,
+    `armature_core.parts.require_finite`, so this is not a second copy of `math.isfinite`
+    with a different message; the positivity half raises here because the two clauses have
+    to be distinguishable in the record.
+    """
+    ev = {"gate": "ARGS", "andon": "ABClipError",
+          "clause": "playback_rate_not_finite", "flag": flag, "value": value}
+    v = require_finite(flag, value, ABClipError, ev, positive=False)
+    if v <= 0.0:
+        raise ABClipError(
+            f"{flag}={value!r} is not a playback rate; this tool builds its time axis as "
+            f"k/{flag} for every frame k, so a rate that is zero or negative gives an axis "
+            f"that runs backwards and frame indices that Python resolves by wrap-around to "
+            f"frames counted from the END of the other arm",
+            {"gate": "ARGS", "andon": "ABClipError",
+             "clause": "playback_rate_not_positive", "flag": flag, "value": v,
+             "minimum_exclusive": 0.0})
+    return v
 
 
 def frame_paths(directory):
@@ -103,7 +148,7 @@ def frame_numbers(paths):
     return [int(os.path.splitext(os.path.basename(p))[0]) for p in paths]
 
 
-def gate_contiguous_numbering(numbers, arm):
+def gate_contiguous_numbering(numbers, arm, fps):
     """ANDON — this arm's file NUMBERS are the contiguous run its POSITIONS assume.
 
     F-b1949407, wave 16. `event_timeline` below builds the time axis from
@@ -130,22 +175,39 @@ def gate_contiguous_numbering(numbers, arm):
     The pairing question is separate and stays out: this tool pairs by TIME by design (its
     module docstring argues that at length) and is correctly outside `measure_lift`'s
     positional-pairing gate.
+
+    **The shift this refusal quotes is a FRAME TIME, and a frame time needs the rate.**
+    F-070bfff3, wave 22. Until this wave the message said every frame after the gap would
+    be shown `1000.0 / max(len(numbers), 1)` "ms-scale early" — 1000 divided by the FRAME
+    COUNT, which is not a time. Measured on `e8263a3` by calling this gate directly: a
+    4-frame arm reported "250 ms-scale early" for both a 16 fps arm (true frame time
+    62.5 ms) and an 8 fps arm (true 125 ms) — the quoted number was INVARIANT to the rate —
+    and a 41-frame arm at 16 fps reported "24 ms-scale early" where the truth was still
+    62.5 ms. The docstring one screen above states the correct quantity, so the file
+    disagreed with itself, and the evidence dict carried no `fps` and no computed shift, so
+    a reader could not correct the halt record either. Both rates were in hand at both call
+    sites; the gate simply did not take one. It takes one now, and the receipt states the
+    shift rather than the reader inferring it.
     """
     numbers = list(numbers)
+    fps = require_rate(f"{arm}-fps", fps)
+    frame_time_ms = 1000.0 / fps
     ev = {"gate": "TIMELINE", "arm": arm, "numbers": numbers, "first_gap": None,
+          "fps": fps, "frame_time_ms": frame_time_ms, "frames_after_the_gap": None,
           "rule": ("the time axis is built from listing POSITIONS, so the file numbers "
                    "must be the contiguous run those positions assume; an offset is fine, "
                    "a gap is not")}
     for i in range(1, len(numbers)):
         if numbers[i] != numbers[i - 1] + 1:
             ev["first_gap"] = [numbers[i - 1], numbers[i]]
+            ev["frames_after_the_gap"] = len(numbers) - i
             raise ABClipError(
                 f"{arm}'s frames are not contiguous: {numbers[i - 1]:05d} is followed by "
                 f"{numbers[i]:05d}. The composite's time axis is built from listing "
-                f"positions, so every frame after that gap would be shown "
-                f"{1000.0 / max(len(numbers), 1):.0f} ms-scale early against its own "
-                f"banner, and the two arms would run out of step for the rest of the clip "
-                f"— which is read as a difference between the arms",
+                f"positions, so each of the {len(numbers) - i} frames after that gap would "
+                f"be shown one frame-time ({frame_time_ms:.1f} ms at {fps:g} fps) early "
+                f"against its own banner, and the two arms would run out of step for the "
+                f"rest of the clip — which is read as a difference between the arms",
                 ev)
     ev["verdict"] = (f"contiguous from {numbers[0]}" if numbers
                      else "no frames")
@@ -164,7 +226,13 @@ def event_timeline(n_a, fps_a, n_b, fps_b):
     a 16 fps arm would jump to its frame 1, which does not begin until 0.0625 s, so one
     side would run a fraction of a frame ahead of its own tempo for the whole clip. Caught
     by `test_each_side_holds_its_own_frame_between_its_own_events`, 2026-08-12.
+
+    **It bounds its own rates.** F-afa9c41e's fix bounds both flags in `main`, and this
+    function refuses independently so the invariant — no index this returns is negative —
+    does not depend on one caller having checked first.
     """
+    fps_a = require_rate("--a-fps", fps_a)
+    fps_b = require_rate("--b-fps", fps_b)
     times = sorted({k / float(fps_a) for k in range(n_a)}
                    | {j / float(fps_b) for j in range(n_b)})
     out = []
@@ -207,6 +275,11 @@ def main(argv=None):
                          "way — the measurement source is the PNGs, never this file")
     a = ap.parse_args(argv)
 
+    # ---- ANDON, before a single frame is opened and far above `os.makedirs`: both rates
+    #      are playback rates. See `require_rate` for the measurement this earned.
+    a_fps = require_rate("--a-fps", a.a_fps)
+    b_fps = require_rate("--b-fps", a.b_fps)
+
     pa, pb = frame_paths(a.a), frame_paths(a.b)
     ia_frames = [Image.open(p).convert("RGB") for p in pa]
     ib_frames = [Image.open(p).convert("RGB") for p in pb]
@@ -214,10 +287,10 @@ def main(argv=None):
     na, nb = frame_numbers(pa), frame_numbers(pb)
     # ---- ANDON, before the time axis exists: the numbers the banner prints are the
     #      contiguous run the axis's positions assume. Both arms, not the first one read.
-    gate_a = gate_contiguous_numbering(na, "--a")
-    gate_b = gate_contiguous_numbering(nb, "--b")
-    times = event_timeline(len(pa), a.a_fps, len(pb), a.b_fps)
-    tail = max(1.0 / a.a_fps, 1.0 / a.b_fps)
+    gate_a = gate_contiguous_numbering(na, "--a", a_fps)
+    gate_b = gate_contiguous_numbering(nb, "--b", b_fps)
+    times = event_timeline(len(pa), a_fps, len(pb), b_fps)
+    tail = max(1.0 / a_fps, 1.0 / b_fps)
     delays = durations_ms([t for t, _x, _y in times], tail)
 
     label_a = f"{a.a_label}"

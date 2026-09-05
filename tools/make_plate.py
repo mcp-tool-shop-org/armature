@@ -105,19 +105,54 @@ def parse_args(argv=None):
 ANCHORS = {"top": (0.5, 0.0), "centre": (0.5, 0.5), "bottom": (0.5, 1.0)}
 
 
+def _is_number(text):
+    """`float(text)` succeeds — used only to name WHICH component was unreadable."""
+    try:
+        float(text)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _int_pair(text, flag):
+    """The components of `a,b` as ints, refusing by NAME above the cast.
+
+    F-3092e646's sibling. `[int(v) for v in a.visible_rows.split(",")]` put the cast above
+    its own length and range check, so a non-integer component died with an untyped
+    `ValueError` naming neither the flag nor the value — the same shape `--pad` carried in
+    `fit_reference` and the same shape `parse_plate` exists to end.
+    """
+    parts = [t.strip() for t in str(text).split(",")]
+    bad = [t for t in parts if not (t.lstrip("+-").isdigit())]
+    if bad:
+        raise PlateError(
+            f"{flag} takes integers; got {text!r}",
+            {"gate": "ARGS", "andon": "PlateError",
+             "clause": "visible_rows_component_not_an_integer",
+             "flag": flag, "supplied": text, "unreadable": bad})
+    return [int(t) for t in parts]
+
+
 def parse_anchor(text):
     """`top|centre|bottom` or `x,y` -> a pair of fractions. No silent default."""
     if text in ANCHORS:
         return ANCHORS[text]
     parts = [p.strip() for p in str(text).split(",")]
     if len(parts) != 2:
-        raise ArmatureError(
+        raise PlateError(
             f"--anchor must be one of {sorted(ANCHORS)} or a pair `x,y` of fractions in "
-            f"0..1; got {text!r}")
+            f"0..1; got {text!r}",
+            {"gate": "ARGS", "andon": "PlateError", "clause": "anchor_not_a_pair",
+             "flag": "--anchor", "supplied": text, "n_components": len(parts),
+             "known": sorted(ANCHORS)})
     try:
         return tuple(float(p) for p in parts)
     except ValueError:
-        raise ArmatureError(f"--anchor carries a non-number: {text!r}") from None
+        raise PlateError(
+            f"--anchor carries a non-number: {text!r}",
+            {"gate": "ARGS", "andon": "PlateError", "clause": "anchor_not_a_number",
+             "flag": "--anchor", "supplied": text,
+             "unreadable": [q for q in parts if not _is_number(q)]}) from None
 
 
 def _sha256(path):
@@ -136,27 +171,47 @@ def resolve_source(src, frames, index):
     is a caller who has not decided.
     """
     if bool(src) == bool(frames):
-        raise ArmatureError(
+        raise PlateError(
             "name exactly one source: --src=<image> for a picked file, or --frames=<dir> "
-            "--index=N to lift a frame out of a clip")
+            "--index=N to lift a frame out of a clip",
+            {"gate": "ARGS", "andon": "PlateError",
+             "clause": ("plate_source_named_twice" if src else "plate_source_not_named"),
+             "src": src, "frames": frames})
     if src:
         if not os.path.isfile(src):
-            raise ArmatureError(f"no such plate source: {src}")
+            raise PlateError(
+                f"no such plate source: {src}",
+                {"gate": "ARGS", "andon": "PlateError",
+                 "clause": "plate_source_missing", "flag": "--src",
+                 "src": os.path.abspath(src)})
         return os.path.abspath(src), {"kind": "file"}
 
     if index is None:
-        raise ArmatureError("--frames needs --index: which frame of the clip is the plate")
+        raise PlateError(
+            "--frames needs --index: which frame of the clip is the plate",
+            {"gate": "ARGS", "andon": "PlateError", "clause": "frames_without_index",
+             "flag": "--index", "frames": os.path.abspath(frames)})
     names = [n for n in os.listdir(frames)
              if n.lower().endswith(".png") and os.path.splitext(n)[0].isdigit()]
     if not names:
-        raise ArmatureError(f"no NNNNN.png frames in {frames}")
+        raise PlateError(
+            f"no NNNNN.png frames in {frames}",
+            {"gate": "FRAMES", "andon": "PlateError",
+             "clause": "no_numbered_frames_in_the_directory",
+             "frames": os.path.abspath(frames),
+             "png_files": sorted(n for n in os.listdir(frames)
+                                 if n.lower().endswith(".png"))[:16]})
     by_number = {int(os.path.splitext(n)[0]): n for n in names}
     if index not in by_number:
         lo, hi = min(by_number), max(by_number)
-        raise ArmatureError(
+        raise PlateError(
             f"frame {index} is not in {frames} (it holds {len(by_number)} frames, "
             f"{lo}..{hi}). A plate lifted from a frame that does not exist would silently "
-            f"become whichever frame sorted nearest")
+            f"become whichever frame sorted nearest",
+            {"gate": "FRAMES", "andon": "PlateError",
+             "clause": "frame_index_not_in_the_clip", "flag": "--index",
+             "index": index, "frames": os.path.abspath(frames),
+             "n_frames": len(by_number), "first": lo, "last": hi})
     path = os.path.abspath(os.path.join(frames, by_number[index]))
     return path, {"kind": "clip_frame", "frame_index": index,
                   "frames_dir": os.path.abspath(frames), "n_frames": len(by_number)}
@@ -176,9 +231,13 @@ def cover(img, width, height, anchor=(0.5, 0.5)):
     x0, y0, x1, y1 = geom["crop_box"]
     out = resized[y0:y1, x0:x1]
     if out.shape[0] != height or out.shape[1] != width:
-        raise ArmatureError(
+        raise PlateError(
             f"the cover crop produced {out.shape[1]}x{out.shape[0]}, not {width}x{height}; "
-            f"geometry {geom}")
+            f"geometry {geom}",
+            {"gate": "CROP", "andon": "PlateError",
+             "clause": "cover_crop_produced_the_wrong_size",
+             "produced": [int(out.shape[1]), int(out.shape[0])],
+             "asked": [width, height], "geometry": geom})
     return np.ascontiguousarray(out), dict(geom, interpolation=(
         "INTER_AREA" if geom["scale"] < 1.0 else "INTER_CUBIC"))
 
@@ -186,9 +245,31 @@ def cover(img, width, height, anchor=(0.5, 0.5)):
 def main(argv=None):
     a = parse_args(argv)
     if not a.why or not a.why.strip():
-        raise ArmatureError(
+        raise PlateError(
             "--why is required: the plate is the world this generation is conditioned on, "
-            "and a choice nobody wrote down is indistinguishable from a leftover")
+            "and a choice nobody wrote down is indistinguishable from a leftover",
+            {"gate": "ARGS", "andon": "PlateError", "clause": "why_not_supplied",
+             "flag": "--why", "supplied": a.why})
+
+    # ---- ANDON, in the argument block and far above `os.makedirs`: `--visible-rows` names
+    #      a band inside the frame. F-3092e646's SIBLING, enumerated and read.
+    #      `vr = [int(v) for v in a.visible_rows.split(",")]` put the cast ABOVE its own
+    #      length and range check, so `--visible-rows=a,b` died with an untyped `ValueError`
+    #      naming neither the flag nor the value — and the whole block sat BELOW
+    #      `os.makedirs` and BELOW the `plate.png` write, so a refused run left the plate
+    #      and the directory on disk with no provenance JSON beside them. Both halves move
+    #      here: the refusal is typed and named, and it fires before the first write.
+    vr = None
+    if a.visible_rows:
+        vr = _int_pair(a.visible_rows, "--visible-rows")
+        if len(vr) != 2 or not (0 <= vr[0] < vr[1] <= a.height):
+            raise PlateError(
+                f"--visible-rows must be y0,y1 inside 0..{a.height}; got "
+                f"{a.visible_rows!r}",
+                {"gate": "ARGS", "andon": "PlateError",
+                 "clause": "visible_rows_not_a_band_inside_the_frame",
+                 "flag": "--visible-rows", "supplied": a.visible_rows,
+                 "parsed": vr, "height": a.height})
 
     src_path, origin = resolve_source(a.src, a.frames, a.index)
     out_dir = os.path.abspath(a.out)
@@ -197,7 +278,10 @@ def main(argv=None):
     # dropped by the decoder before anything can refuse it.
     raw = cv2.imread(src_path, cv2.IMREAD_UNCHANGED)
     if raw is None:
-        raise PlateError(f"cv2 could not read {src_path}", {"src": src_path})
+        raise PlateError(
+            f"cv2 could not read {src_path}",
+            {"gate": "READ", "andon": "PlateError",
+             "clause": "cv2_could_not_read_the_source", "src": src_path})
     if raw.ndim == 2:
         raw = cv2.cvtColor(raw, cv2.COLOR_GRAY2BGR)
     plate_rgb = parse_plate(a.alpha_over, PlateError)
@@ -218,15 +302,14 @@ def main(argv=None):
     os.makedirs(out_dir, exist_ok=True)
     dst = os.path.join(out_dir, "plate.png")
     if not cv2.imwrite(dst, fitted):
-        raise ArmatureError(f"cv2 refused to write {dst}")
+        raise PlateError(
+            f"cv2 refused to write {dst}",
+            {"gate": "WRITE", "andon": "PlateError",
+             "clause": "cv2_refused_the_write", "dst": os.path.abspath(dst),
+             "out": out_dir})
 
     band = None
     if a.visible_rows:
-        vr = [int(v) for v in a.visible_rows.split(",")]
-        if len(vr) != 2 or not (0 <= vr[0] < vr[1] <= a.height):
-            raise ArmatureError(
-                f"--visible-rows must be y0,y1 inside 0..{a.height}; got "
-                f"{a.visible_rows!r}")
         band = {"target_rows": vr,
                 "source_rows": SF.band_source_rows(vr, geom),
                 "fraction_of_target_rows": (vr[1] - vr[0]) / float(a.height),
