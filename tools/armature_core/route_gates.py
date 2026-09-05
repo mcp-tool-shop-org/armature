@@ -610,6 +610,16 @@ def normalise_graph(graph):
     [7])` likewise reported every seed pinned and registered. Gate ROUTE reported a graph
     clean on licence, seeds and pairing having read zero nodes.
 
+    (The quoted verdict is the 2026-09-03 measurement and is left as measured. **Dated
+    note, 2026-09-05:** the licence half of that string is no longer spelled
+    `"{n} weight file(s)"` — wave 12 replaced it with the three-number form
+    `"{classified} of {n} component(s) classified, {u} unclassified, {c} conditional
+    (credited), {a} attribution entr(y|ies) matching no loaded component"`, because a count
+    of what was LOOKED AT with no count of what was CLASSIFIED made "every component is
+    ruled clean" and "the table classified none of them" the same receipt. The seed, latent
+    and frame clauses of the quote are unchanged. Routed here from builders' F-c222d9ba,
+    whose own two copies of the stale quote carry the same dated note.)
+
     This is verbatim the fix wave 3 applied to `canon.texts_from_api_graph` — "'No text
     here' and 'I did not recognise this shape' are different answers" — carried into the
     module where the spend gates live, as ONE loader rather than a second implementation:

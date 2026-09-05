@@ -124,7 +124,11 @@ def gate_n_names(observed, registered, where):
     # fingerprints carrying zero bones; `gates.g2_completeness`, on an empty channel
     # mapping) and both acknowledge the same reachability: the input needs a caller bug to
     # arrive. Every live call site passes `sitelist.ALL_NAMES` (`author_walk.py:552/612`,
-    # `lift_solve.py:307`, `rig_character.py:1196`), a module constant that is non-empty
+    # `lift_solve.py::validate_motion_record`, `rig_character.py:1196`), a module constant
+    # RE-ANCHORED 2026-09-05 on the SYMBOL: this cited `lift_solve.py:307`, and that line
+    # is blank after core-solvers' wave-22 receipt sweep pushed twelve evidence dicts into
+    # the module above it (SEAM 13). Prose cites FUNCTIONS, not lines. The constant is
+    # non-empty
     # today, so an empty registry means that constant was emptied or mis-imported — and
     # THAT is the edit this andon exists to catch: E01's whole result (four rigged GLBs
     # naming bone_0..bone_N, zero of 18 sites findable, every other check passing) is
