@@ -238,9 +238,30 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # refusal with `gate: None`, and this walk counts `GateFailure` subclasses only.
         # `rig_gates`, `donor_gate` and `parts` are unchanged — core-gates' two new donor
         # clauses raise from `parts.require_finite`, already a `parts` site.
-        "assembly": 22, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
-        "gates": 23, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
-        "rig_gates": 17, "route_gates": 41, "startframe": 21, "turnaround": 13, "walk": 3,
+        # WAVE 18 (core-gates, 2026-09-04), +10 and itemised rather than replaced.
+        # Measured in the core-gates worktree by re-running this walk:
+        #   route_gates 41 → 46  `_api_entry_kind`'s `unreadable_node` (the API branch
+        #                        answered a node-shaped mapping with no `class_type` by a
+        #                        silent `continue`), `_iter_definitions`'
+        #                        `duplicate_subgraph_id` (the cycle guard keyed on the
+        #                        blueprint's `id` VALUE), `gate_s_registration`'s
+        #                        `seed_node_unresolvable` (node identity is the pair
+        #                        `(where, id)` and the lookup is now TOTAL), and
+        #                        `_hosted_enum_shift_andon`'s two enum-shift clauses.
+        #   donor_gate   6 → 10  `_readable_landmark_row`'s four clauses. This entry's
+        #                        wave-16 comment says donor_gate is "unchanged — core-
+        #                        gates' two new donor clauses raise from
+        #                        `parts.require_finite`". That stays true of THOSE two;
+        #                        these four raise `DonorGate` in this module, because a
+        #                        row shape is not a non-finite measurement.
+        #   gates       23 → 24  `registry_member_not_an_int` — Gate S guarded the
+        #                        SEED's type and never the COMMITTED LIST's.
+        # core-solvers also edits `armature_core` this wave (`channels`, `framing`,
+        # `resample`, `assembly`, `blender_scene`), so the merged tree reads HIGHER —
+        # the coordinator re-measures at merge and never sums the branches.
+        "assembly": 22, "blender_scene": 4, "canon": 1, "donor_gate": 10, "framing": 6,
+        "gates": 24, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
+        "rig_gates": 17, "route_gates": 46, "startframe": 21, "turnaround": 13, "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
     # route_gates 34 -> 35 in the same wave; merged = 155 + 3 + 1 = 159, MEASURED on the merged tree.
@@ -252,7 +273,10 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # WAVE-14 MERGE (coordinator, 2026-09-04): 170 (core-gates alone) → 174, MEASURED on the merged tree.
     # WAVE 16: 174 → 180 (+2 core-gates in `route_gates`, +1 core-solvers in `assembly`,
     # +3 core-solvers in `turnaround`). COMPOSED, not measured on a merged tree.
-    assert sum(with_gates.values()) == 180
+    # WAVE 18 (core-gates, 2026-09-04): 180 → 190, MEASURED in this worktree — +5
+    # `route_gates`, +4 `donor_gate`, +1 `gates`, itemised at the dict above. The
+    # coordinator re-measures at merge, as at waves 10, 12 and 14.
+    assert sum(with_gates.values()) == 190
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():
