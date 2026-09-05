@@ -24,8 +24,8 @@ import pytest
 # in wave 12 (F-6b3040d1) when it stopped keying on the literal token `import bpy`, and the
 # handler it needs is instruments-measure's to write (F-f9251c74).
 from test_instrument_exits import halt_contract_pending
-from blender_stub import (blender_tools, exit_code_of_main_block, load_tool, main_block,
-                          read_source)
+from blender_stub import (blender_tools, exit_code_of_main_block, halt_handler,
+                          load_tool, main_block, read_source)
 
 TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 
@@ -235,13 +235,23 @@ def _handler_node_ids(tree):
 
 
 def halt_prefix(filename):
-    """The `<PREFIX>` of the one `<PREFIX>_HALT` literal in the tool's `__main__` handler.
+    """The `<PREFIX>` of the tool's halt sentinel, from its `__main__` handler.
 
     Keyed on the HANDLER's own sentinel -- the node the halt contract's identity actually
     lives on -- rather than on the file's stem, so a tool whose token and stem disagree is
     REPORTED by the pairing assertion below instead of being defined into agreement by the
     census's own derivation.
+
+    **WAVE 25 (F-40316edd): there are TWO spellings of the handler, and this reads both.**
+    A tool that adopts `armature_core.parts.run_tool_main` passes its prefix as an argument
+    (`run_tool_main(main, "STAGE_RENDER")`) and carries no `"<PREFIX>_HALT "` literal at
+    all, so a walk for the literal reported `[]` and this raised on the FIRST Blender-side
+    tool to adopt the home -- on the commit that adopted it. `blender_stub.halt_handler` is
+    the ONE derivation that already reads both spellings (wave 23, F-2f1b18c2); it is used
+    here rather than a second copy of the walk, and the literal walk stays as the
+    cross-check that the two agree wherever a literal exists.
     """
+    handler = halt_handler(filename)
     tree = ast.parse(read_source(filename))
     found = set()
     for top in tree.body:
@@ -253,9 +263,19 @@ def halt_prefix(filename):
             prefix = _print_prefix(node)
             if prefix and prefix.split(" ", 1)[0].endswith("_HALT"):
                 found.add(prefix.split(" ", 1)[0][: -len("_HALT")])
-    if len(found) != 1:
-        raise ValueError(f"{filename}: {sorted(found)} HALT token(s) in the handler, want 1")
-    return found.pop()
+    if found:
+        if len(found) != 1:
+            raise ValueError(
+                f"{filename}: {sorted(found)} HALT token(s) in the handler, want 1")
+        literal = found.pop()
+        if handler is not None and handler["prefix"] != literal:
+            raise ValueError(
+                f"{filename}: the printed token is {literal!r} and the handler declares "
+                f"{handler['prefix']!r}")
+        return literal
+    if handler is None:
+        raise ValueError(f"{filename}: no HALT token and no handler in the `__main__` block")
+    return handler["prefix"]
 
 
 def success_tokens(filename):
@@ -473,13 +493,30 @@ def test_every_handler_carries_the_keysafe_helper(filename):
     """The family census. One implementation per tool today (21 copies, recorded as a
     Stage B lift into `armature_core.errors` under `skipped[]`), so the property has to be
     asserted of every member rather than of one shared function.
+
+    **WAVE 25 (F-40316edd): the lift LANDED, and this reads the resolved shape.** The
+    helper's one home is `armature_core.parts.halt_keysafe` (wave 22), and a tool that
+    hands its `__main__` to `parts.run_tool_main` gets the walk by delegation -- it defines
+    no `_halt_keysafe` of its own and must not, because a second copy is the thing the lift
+    removed. `stage_render` is the first Blender-side adopter; read as a missing helper, it
+    would fail here on the commit that deleted its copy, which is the census keying on the
+    spelling rather than on the property (wave 18, rule 1). The property is "the handler
+    this tool runs stringifies keys at every depth", and it is satisfied either way.
     """
+    block = read_source(filename).split('if __name__ == "__main__":')[-1]
+    if "run_tool_main" in block:
+        from armature_core.parts import halt_keysafe, run_tool_main  # noqa: F401
+
+        assert callable(halt_keysafe)
+        assert not hasattr(load_tool(filename), "_halt_keysafe"), (
+            f"{filename} adopts `parts.run_tool_main` AND keeps a local `_halt_keysafe`; "
+            f"the lift exists so there is one walk, not two")
+        return
     mod = load_tool(filename)
     assert callable(getattr(mod, "_halt_keysafe", None)), (
         f"{filename} has no `_halt_keysafe`; its sentinel cannot serialise a "
         f"non-string-keyed evidence dict and the halt escapes")
-    assert "_halt_keysafe(" in read_source(filename).split(
-        'if __name__ == "__main__":')[-1], (
+    assert "_halt_keysafe(" in block, (
         f"{filename} defines the helper but its handler does not use it")
 
 
@@ -1823,6 +1860,21 @@ def outcome_literals(filename):
         found = _outcome_strings(module_fns[name])
         if found:
             return sorted(found), name
+    # WAVE 25 (F-40316edd): the delegation can leave the module. A handler that is
+    # `run_tool_main(main, "<PREFIX>")` prints the vocabulary through
+    # `armature_core.parts.halt_outcome`, so the literals are read off THAT function --
+    # the same one-hop rule, following the import instead of stopping at the module edge.
+    # Read as an empty vocabulary, the tool that adopted the ONE home would be reported as
+    # having no vocabulary at all on the commit that adopted it.
+    if "run_tool_main" in called:
+        import armature_core.parts as _parts
+
+        home = ast.parse(open(_parts.__file__, encoding="utf-8").read())
+        for node in ast.walk(home):
+            if isinstance(node, ast.FunctionDef) and node.name == "halt_outcome":
+                found = _outcome_strings(node)
+                if found:
+                    return sorted(found), "armature_core.parts.halt_outcome"
     return [], None
 
 
@@ -1838,7 +1890,12 @@ def test_exactly_one_tool_routes_the_vocabulary_through_a_named_function():
     """The duplication itself, measured rather than described: 20 inline copies and one
     named `halt_outcome`, which is why the lift into `armature_core.errors` is filed."""
     routed = {f: r for f in HALT_HELD for _l, r in [outcome_literals(f)] if r}
-    assert routed == {"rig_character.py": "halt_outcome"}, routed
+    # WAVE 25 (F-40316edd): 20 inline copies, one module-local `halt_outcome`, and the
+    # FIRST Blender-side tool to route through the lifted home. The lift the wave-10
+    # comment above filed as pending landed in wave 22 as `armature_core.parts`; this row
+    # is the measurement of it reaching this population, not a second exemption.
+    assert routed == {"rig_character.py": "halt_outcome",
+                      "stage_render.py": "armature_core.parts.halt_outcome"}, routed
 
 
 def test_the_vocabulary_census_goes_red_on_one_reworded_copy(tmp_path, monkeypatch):

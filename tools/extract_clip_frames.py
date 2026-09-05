@@ -29,7 +29,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
-from encode_control import FFMPEG, decode  # noqa: E402
+from encode_control import FFMPEG, decode, gate_ffmpeg_binary  # noqa: E402
 
 TOOL_VERSION = "E13.1"
 
@@ -62,7 +62,28 @@ class ClipReadError(ArmatureError):
 
 
 def probe(path):
-    """Width, height, fps and the raw stream line, from ffmpeg's own report."""
+    """Width, height, fps and the raw stream line, from ffmpeg's own report.
+
+    **The encoder is GATED before it is run** (F-a19ebe73, wave 25). `FFMPEG` is selected at
+    import from `ARMATURE_FFMPEG` with a hard-coded `E:/AI-Models` fallback, and this module
+    imported the constant and ran it without arming the gate that was written for exactly
+    that. Measured on `580af47` with the repo venv and `ARMATURE_FFMPEG` pointed at a path
+    that does not exist: `tools/encode_control.py` exited 2 with an `ENCODE_CONTROL_HALT`
+    line carrying `{"clause": "ffmpeg_binary_not_found", "from_env": true, "env_var":
+    "ARMATURE_FFMPEG"}`, while `tools/extract_clip_frames.py --clip=<file> --out=<tmp>`
+    exited 1 with a bare `FileNotFoundError: [WinError 2] The system cannot find the file
+    specified` — naming neither the encoder, nor the variable that chose it, nor the path,
+    on the one input that arrives AFTER a credit has been spent.
+
+    `encode_control.gate_ffmpeg_binary` is the ONE home for this refusal and is adopted by
+    import, never re-spelled as a local `os.path.isfile(FFMPEG)` test. This record already
+    states `"ffmpeg": FFMPEG` as part of its provenance (:115); now it checks it.
+
+    The ORDERING `encode_control.main` records is preserved: the operator's own arguments
+    are refused before the encoder is inspected, so a missing rig binary cannot mask an
+    argument defect. `main` parses and resolves `--out` above this call.
+    """
+    gate_ffmpeg_binary()
     proc = subprocess.run([FFMPEG, "-hide_banner", "-i", path],
                           capture_output=True, text=True)
     line = next((l.strip() for l in proc.stderr.splitlines()
@@ -124,5 +145,34 @@ def main(argv=None):
     return record
 
 
+def _cli(argv=None):
+    """The process entry point: an exit code, beside the frames record `main` returns.
+
+    WAVE 25, F-68f3fb4b — the shape `composite_reference._cli` took in wave 22, for the
+    same reason.
+
+    `main` returns the frames record — `frames.json`'s own content — and this module ended in
+    a bare `main()` with no `sys.exit` at all, the WEAKEST form in the 42-tool population:
+    the returned value could never become an exit code, so neither a refusal nor a success
+    was expressible. Measured on `580af47` with the repo venv: `--clip=<missing>` exited 1
+    with `ClipReadError: no video stream line in ffmpeg's report` on stderr and stdout
+    empty — a typed refusal on the tool that turns a PAID run's returned clip into frames,
+    delivered as the code this repo reserves for a crash.
+
+    `main` keeps returning the frames record; this wrapper is what `run_tool_main` runs, so the
+    process gets 0 on success, 2 on a typed refusal and 1 on a crash.
+    """
+    main(argv)
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(_cli, "EXTRACT_CLIP_FRAMES")

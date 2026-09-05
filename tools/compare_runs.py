@@ -72,6 +72,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from sheet_compose import frames_by_number  # noqa: E402
 
 
 class CompareError(ArmatureError):
@@ -95,8 +96,24 @@ def _load(path):
 
 
 def compare_channel(dir_a, dir_b):
+    """Both sides, frame by frame — on a population that is FRAMES (F-2f2c19a9, wave 25).
+
+    The two listings were bare `*.png` walks on both sides of the reproduction verdict. A
+    stray — `render_pose_sticks` writes `strip_every{N}.png` beside its `NNNNN.png` frames,
+    so this is the pipeline's own ordinary output — present in BOTH runs sorted into both
+    populations and was compared as a frame; present in ONE it was refused, but as a name
+    disagreement rather than as the stray it is, so the halt named the wrong condition.
+    `sheet_compose.frames_by_number` is the ONE home for this refusal and is adopted by
+    import, never spelled again here.
+    """
     names_a = sorted(f for f in os.listdir(dir_a) if f.lower().endswith(".png"))
     names_b = sorted(f for f in os.listdir(dir_b) if f.lower().endswith(".png"))
+    # ---- ANDON on each population, before either is compared or counted.
+    for side, where, names in (("a", dir_a, names_a), ("b", dir_b, names_b)):
+        frames_by_number(names, where=where, what="frames", exc=CompareError,
+                         evidence={"andon": "CompareError",
+                                   "clause": "stray_png_in_the_frame_population",
+                                   "side": side})
     rec = {
         "frames_a": len(names_a),
         "frames_b": len(names_b),
@@ -304,4 +321,12 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "COMPARE_RUNS")

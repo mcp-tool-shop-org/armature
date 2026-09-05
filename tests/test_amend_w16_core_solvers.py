@@ -1209,6 +1209,23 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # this file's own converse assertion refuses. Its citation was RE-ANCHORED on the
     # symbol instead (`::test_a_base_weight_reads_not_in_this_table_and_that_is_recorded_
     # not_silent`), which is the fix this census's message asks for.
+    # WAVE 25 (instruments-measure). Two rows JOIN and one LEAVES.
+    #   JOIN: both numbers are quoted inside the sentence that records them as wrong, which
+    #   is the reason most of this table exists — deleting the number would delete the
+    #   correction. The first is named in `test_refusal_clauses._delegated_raise_sites`' own
+    #   note saying that anchor moved when `analyze_p3` gained its two manifest refusals; the
+    #   second in `test_render_visibility`'s routing table, saying that anchor went blank when
+    #   `stage_render` dropped an import it no longer used. Both notes explain why those
+    #   tables cite SYMBOLS now, so the numbers survive only as the measurement.
+    #   ⚠ The rows below are written as tuples and the reasons above name no line number,
+    #   deliberately: a comment here that SPELLS `<file>.py:<n>` becomes a citation FROM this
+    #   module, and the census would then report this very table as stale.
+    #   LEAVE: the `pack_pose_pack` row — that citation is gone, re-anchored on the symbol,
+    #   so the row would excuse nothing.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): core-gates' deletion applied (that anchor is live) AND instruments-measure's two joins kept —
+    # each branch's own rule, both honoured; the module's converse check below is the measurement.
+    ('test_refusal_clauses', 'analyze_p3.py', 173),
+    ('test_render_visibility', 'stage_render.py', 219),
     ('test_amend_w16_core_solvers', 'lift_solve.py', 307),
     ('test_assembly', 'test_amend_w12_core_solvers.py', 797),
     ('test_donor_gate', 'render_pose_sticks.py', 178),
@@ -1242,7 +1259,9 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # them live again -- this table's own rule. Both cited lines were blank; the named
     # refusal classes and the evidence dicts this wave added pushed real code back onto
     # them. A row kept after its anchor resolves is a record of nothing.
-    ('test_refusal_clauses', 'pack_pose_pack.py', 164),
+
+    # WAVE-25 MERGE (coordinator, 2026-09-05): instruments' two deletions applied (their anchors are live) AND instruments-measure's
+    # leave applied (the pack_pose_pack citation is re-anchored on a symbol) — no row survives this hunk.
 }
 
 

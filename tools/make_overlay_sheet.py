@@ -38,9 +38,25 @@ from armature_core.errors import ArmatureError  # noqa: E402
 class OverlaySheetError(ArmatureError):
     """This overlay sheet cannot be produced as asked. One typed refusal for this tool.
 
-    The three bare `FileNotFoundError` / `RuntimeError` / `ValueError` raises above it are
+    WARNING - **the paragraph that used to stand here is CORRECTED, not deleted.** It read:
+    "The three bare `FileNotFoundError` / `RuntimeError` / `ValueError` raises above it are
     a separate family (wave 8's typed-refusal sweep did not reach this file) and are left
-    where they are; what this class exists for is the WRITE, which had no refusal at all.
+    where they are; what this class exists for is the WRITE". Measured on `580af47` by AST
+    walk over this module: 5 raises, 1 with an evidence dict - so three of five refusals in
+    a file that defines its own family class raised builtins with no evidence, eleven lines
+    above a correct use of the family with a full dict. "A separate family" was a
+    description of the defect, written as though it were a design.
+
+    Worst realistic consequence, and it is the mismatch clause that carries it: the sheet
+    that shows the projected keypoints drawn over the previz frames - the panel a reader
+    uses to decide whether the driving signal lands on the body - refused on a resolution
+    disagreement (the refusal whose own message says "an overlay across resolutions proves
+    nothing") through an exception class that no halt reader, no `RECORDED_ANDON_CLASSES`
+    member and no clause-vocabulary consumer can see. The two resolutions and the frame that
+    disagreed are the measurement worth keeping, and they reached nothing.
+
+    All five refusals raise this class now, each with the evidence its message already named
+    in prose. F-a3160731, wave 25.
     """
 
 
@@ -56,6 +72,48 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
+def gate_frame_indices(text, rec):
+    """ANDON - `--frames` is a list of frame indices this keypoint record HOLDS.
+
+    F-a3160731's two adjacent argument holes, closed by one guard (wave 25). `idx = [int(v)
+    for v in a.frames.split(",") if v.strip() != ""]` was unvalidated, and `rec["body"][i]`
+    below indexed the keypoint record by the same unbounded `i` - so a non-integer token
+    died as a bare `ValueError` from inside a list comprehension and an out-of-range index
+    reached the record as an `IndexError`, on a tool that has a family class of its own.
+    Python's own negative indexing is the sharper half: `--frames=-1` reaches
+    `rec["body"][-1]` and draws the LAST frame's keypoints under the caption `frame -1`,
+    over a previz file named `-0001.png` - so the refusal it produced named a missing file
+    rather than the flag that was wrong.
+    """
+    parts = [t.strip() for t in str(text).split(",") if t.strip() != ""]
+    if not parts:
+        raise OverlaySheetError(
+            f"--frames={text!r} names no frame; there is nothing to draw",
+            {"gate": "ARGS", "andon": "OverlaySheetError",
+             "clause": "frame_list_is_empty", "flag": "--frames", "supplied": text})
+    unreadable = [t for t in parts if not t.lstrip("-").isdigit() or t.lstrip("-") == ""]
+    if unreadable:
+        raise OverlaySheetError(
+            f"--frames={text!r} is a comma-separated list of frame indices; "
+            f"{', '.join(repr(u) for u in unreadable)} is not one",
+            {"gate": "ARGS", "andon": "OverlaySheetError",
+             "clause": "frame_index_not_an_integer", "flag": "--frames",
+             "supplied": text, "unreadable": unreadable})
+    idx = [int(t) for t in parts]
+    n = len(rec.get("body") or [])
+    out_of_range = [i for i in idx if not 0 <= i < n]
+    if out_of_range:
+        raise OverlaySheetError(
+            f"--frames={text!r} names frame(s) {out_of_range} and the keypoint record "
+            f"holds {n} frame(s) (0..{n - 1}); an out-of-range index reaches "
+            f"rec['body'][i], and Python's negative indexing would draw a DIFFERENT "
+            f"frame's keypoints under the caption the reader is given",
+            {"gate": "ARGS", "andon": "OverlaySheetError",
+             "clause": "frame_index_outside_the_record", "flag": "--frames",
+             "supplied": text, "out_of_range": out_of_range, "n_frames": n})
+    return idx
+
+
 def main(argv=None):
     a = parse_args(argv)
     import cv2
@@ -63,20 +121,36 @@ def main(argv=None):
     with open(a.keypoints, encoding="utf-8") as fh:
         rec = json.load(fh)
     width, height = rec["resolution"]
-    idx = [int(v) for v in a.frames.split(",") if v.strip() != ""]
+    idx = gate_frame_indices(a.frames, rec)
 
     tiles = []
     for i in idx:
         src = os.path.join(a.render, f"{i:05d}.png")
         if not os.path.isfile(src):
-            raise FileNotFoundError(f"no previz frame at {src}")
+            raise OverlaySheetError(
+                f"no previz frame at {src}; the overlay is the panel a reader uses to "
+                f"decide whether the driving signal lands on the body, and a frame that "
+                f"is not there cannot be one of its tiles",
+                {"gate": "INPUT", "andon": "OverlaySheetError",
+                 "clause": "previz_frame_is_not_on_disk",
+                 "frame": i, "file": src, "render": a.render, "frames": idx})
         img = cv2.imread(src)
         if img is None:
-            raise RuntimeError(f"cv2 could not read {src}")
+            raise OverlaySheetError(
+                f"cv2 could not read {src}; a frame that decodes to nothing would be "
+                f"drawn as an empty tile beside tiles that carry a body",
+                {"gate": "INPUT", "andon": "OverlaySheetError",
+                 "clause": "previz_frame_could_not_be_decoded",
+                 "frame": i, "file": src, "render": a.render, "frames": idx})
         if (img.shape[1], img.shape[0]) != (width, height):
-            raise ValueError(
+            raise OverlaySheetError(
                 f"{src} is {img.shape[1]}x{img.shape[0]} and the keypoints were projected "
-                f"at {width}x{height}; an overlay across resolutions proves nothing")
+                f"at {width}x{height}; an overlay across resolutions proves nothing",
+                {"gate": "INPUT", "andon": "OverlaySheetError",
+                 "clause": "render_and_keypoints_disagree_on_resolution",
+                 "frame": i, "file": src,
+                 "render_size": [int(img.shape[1]), int(img.shape[0])],
+                 "keypoints_size": [int(width), int(height)]})
 
         # The sticks, drawn full-strength, then screened over the render so the body stays
         # readable underneath. Additive rather than alpha: a stick over a light backdrop
@@ -121,4 +195,12 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "MAKE_OVERLAY_SHEET")

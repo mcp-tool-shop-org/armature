@@ -44,7 +44,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core import clipcompare as CC  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.parts import require_finite  # noqa: E402
-from encode_control import FFMPEG, decode  # noqa: E402
+from encode_control import FFMPEG, decode, gate_ffmpeg_binary  # noqa: E402
 
 TOOL_VERSION = "E13.1"
 
@@ -167,7 +167,21 @@ def gate_clip_rate(stream, expect_fps, clip, tolerance=FPS_TOLERANCE):
 
 
 def ffprobe_stream(path):
-    """Container facts, read from ffmpeg's own report rather than assumed."""
+    """Container facts, read from ffmpeg's own report rather than assumed.
+
+    **The encoder is GATED before it is run** (F-a19ebe73, wave 25) — the second of the two
+    consumers that imported `encode_control.FFMPEG` and ran it without arming
+    `encode_control.gate_ffmpeg_binary`. Measured on `580af47` with `ARMATURE_FFMPEG`
+    pointed at a missing path: `tools/measure_cascade_clip.py --clip=<file> --frames=<dir>
+    --out=<json>` exited 1 with the identical bare `FileNotFoundError: [WinError 2]`. This
+    module's record already carries `"ffmpeg": FFMPEG` (:266) as part of its provenance
+    while nothing checked the binary was there.
+
+    Adopt the home, never a second `os.path.isfile(FFMPEG)`. The ordering holds: `main`
+    reads the SOURCE frames — the operator's own `--frames` — above this call, so an
+    argument defect is refused before the encoder is inspected.
+    """
+    gate_ffmpeg_binary()
     proc = subprocess.run([FFMPEG, "-hide_banner", "-i", path],
                           capture_output=True, text=True)
     text = proc.stderr
@@ -332,5 +346,30 @@ def main(argv=None):
     return record
 
 
+def _cli(argv=None):
+    """The process entry point: an exit code, beside the comparison record `main` returns.
+
+    WAVE 25, F-68f3fb4b — the shape `composite_reference._cli` took in wave 22, for the
+    same reason.
+
+    `main` returns the comparison record and `tests/test_measure_cascade_clip.py` reads it
+    (`rec = MCC.main([...])`), so the record stays the return value and this wrapper is what
+    `run_tool_main` runs.
+
+    `main` keeps returning the comparison record; this wrapper is what `run_tool_main` runs, so the
+    process gets 0 on success, 2 on a typed refusal and 1 on a crash.
+    """
+    main(argv)
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(_cli, "MEASURE_CASCADE_CLIP")

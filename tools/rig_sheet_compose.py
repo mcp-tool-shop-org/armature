@@ -38,7 +38,28 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sheet_compose  # noqa: E402
 from armature_core import sitelist  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
 from sheet_compose import max_text_width  # noqa: E402
+
+
+#: The keys `make_rig_sheet` writes into `panels.json` that this composer reads. Stated once
+#: so a refusal can name what it expected, rather than a bare subscript naming one word.
+REQUIRED_SPEC_KEYS = ("geometry", "full", "views", "arc", "insets", "joint_order", "side",
+                      "out")
+
+
+class RigSheetComposeError(ArmatureError):
+    """The panels document is not the one this composer reads. F-c66ad0c4, wave 25.
+
+    Measured on `580af47` by AST walk: this module held ZERO `raise` statements. `main`
+    read `sys.argv[1]` with no guard (`IndexError: list index out of range` when the tool is
+    run with no argument, which is the ordinary mistake, since its documented invocation is
+    `rig_sheet_compose.py <out-dir>/panels.json`) and then indexed eight keys of the
+    document with bare subscripts. It is the compose half of a TWO-STEP: `make_rig_sheet`
+    renders under Blender and writes `panels.json`; this reads it in CPython because
+    Blender's bundled Python carries no PIL. A two-step's second half is exactly where a
+    contract between two programs needs to be stated and checked.
+    """
 
 BG, INK, SUB = (22, 22, 24), (238, 238, 240), (166, 166, 172)
 
@@ -112,8 +133,44 @@ def over(body_path, bones_path, alpha=0.92):
     return Image.alpha_composite(a, b).convert("RGB")
 
 
+def gate_spec(argv):
+    """ANDON - the panels document named on the command line exists and is this one."""
+    if len(argv) < 2 or not str(argv[1]).strip():
+        raise RigSheetComposeError(
+            "rig_sheet_compose takes the panels document `make_rig_sheet` wrote: "
+            "`<venv-python> tools/rig_sheet_compose.py <out-dir>/panels.json`",
+            {"gate": "ARGS", "andon": "RigSheetComposeError",
+             "clause": "panels_document_not_named", "argv": [str(t) for t in argv[1:]]})
+    path = str(argv[1])
+    if not os.path.isfile(path):
+        raise RigSheetComposeError(
+            f"no panels document at {path}; this is the compose half of a two-step and "
+            f"the render half writes that file",
+            {"gate": "ARGS", "andon": "RigSheetComposeError",
+             "clause": "panels_document_is_not_on_disk", "file": path})
+    with open(path, encoding="utf-8") as fh:
+        spec = json.load(fh)
+    if not isinstance(spec, dict):
+        raise RigSheetComposeError(
+            f"{path} is a {type(spec).__name__}, not the panels object this composer reads",
+            {"gate": "INPUT", "andon": "RigSheetComposeError",
+             "clause": "panels_document_is_not_an_object",
+             "file": path, "type": type(spec).__name__})
+    absent = [k for k in REQUIRED_SPEC_KEYS if k not in spec]
+    if absent:
+        raise RigSheetComposeError(
+            f"{path} carries no {', '.join(absent)}; every one is read by a bare subscript "
+            f"below, and a KeyError names one word and neither the document nor the step "
+            f"that wrote it",
+            {"gate": "INPUT", "andon": "RigSheetComposeError",
+             "clause": "panels_document_is_missing_a_key",
+             "file": path, "missing": absent,
+             "expected_keys": list(REQUIRED_SPEC_KEYS), "given": sorted(spec)})
+    return spec
+
+
 def main():
-    spec = json.load(open(sys.argv[1], encoding="utf-8"))
+    spec = gate_spec(sys.argv)
     g = spec["geometry"]
     PAD, LABEL_H, TITLE_H = g["pad"], g["label_h"], g["title_h"]
     last = g["probe_frames"]
@@ -170,4 +227,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "RIG_SHEET_COMPOSE")

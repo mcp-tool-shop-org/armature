@@ -163,6 +163,14 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
     #      `fi`, with nothing checking they name the same frames; and a requested index
     #      past either was dropped in SILENCE (`continue`), on the panel the whole judging
     #      discipline rests on. `make_identity_sheet` was given this refusal in wave 3.
+    #      WAVE 25 (F-2f2c19a9): the POPULATION gate now fires FIRST. `frames_by_number` —
+    #      the ONE home for "the numbered frame population, with a stray refusal" — ran two
+    #      lines BELOW this pairing gate, so a `strip_every8.png` in the control directory
+    #      and not the output one was refused as a listing disagreement rather than as the
+    #      stray it is, naming an andon that is not the condition. `render_pose_sticks`
+    #      writes that file beside its `NNNNN.png` frames, so it is ordinary output.
+    cby = frames_by_number(cnames, where=control_dir, what="control frame(s)")
+    oby = frames_by_number(onames, where=frames_dir, what="output frame(s)")
     gate_listing_pairing({"control": cnames, "output": onames})
     # ---- and the bound is the frames' own NUMBERS, not their POSITION in the listing.
     #      Measured 2026-09-04 on a control and output both numbered 00001..00003 with
@@ -172,8 +180,6 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
     #      own caption promises. `sheet_compose.require_frames`'s `numbers=` mode was built
     #      in wave 10 for exactly this and landed in one of six callers
     #      (`make_identity_sheet`); this is the panel the whole judging discipline rests on.
-    cby = frames_by_number(cnames, where=control_dir, what="control frame(s)")
-    oby = frames_by_number(onames, where=frames_dir, what="output frame(s)")
     require_frames(frame_idx, cnames, what="control frame(s)", where=control_dir,
                    numbers=sorted(cby))
     require_frames(frame_idx, onames, what="output frame(s)", where=frames_dir,
@@ -285,4 +291,12 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "MAKE_GATE0_SHEET")

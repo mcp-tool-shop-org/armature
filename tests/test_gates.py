@@ -2133,10 +2133,20 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
     # coordinator MEASURES on the merged tree, never sums.
     # WAVE-25 MERGE (coordinator, 2026-09-05): every value below MEASURED on the merged tree with the helpers above — never a sum
     # of the branch-local readings the comments above record.
+    # WAVE 25 (instruments-measure, F-c66ad0c4): 134 -> 137 names, 140 -> 143 definitions,
+    # 79 -> 82 modules. THREE new family classes, one per module that previously carried no
+    # refusal of its own: `make_cast_sheet.CastSheetError`,
+    # `rig_sheet_compose.RigSheetComposeError` and `make_hole_survey.HoleSurveyError`. The
+    # delta is exactly three in all three counts, which is what says the three modules each
+    # gained one class and nothing else moved. BRANCH-LOCAL: four sibling domains move
+    # family counts in the same wave; the coordinator re-measures on the merged tree and
+    # never sums.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): every value below MEASURED on the merged tree with the helpers above — never a sum
+    # of the branch-local readings the comments above record.
     assert measured == {
-        "names": 145,
-        "definitions": 151,
-        "modules": 82,
+        "names": 148,
+        "definitions": 154,
+        "modules": 85,
         "defined_more_than_once": {"DetectionGate": 2, "PayloadError": 5, "RenderGate": 2},
         "core_only_definitions": 60,
         "core_only_modules": 20,
@@ -2151,4 +2161,7 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
     # `580af47`; 90 here — all eight classes above are tool-side, so the whole delta
     # lands on this side of the subtraction and `core_only_definitions` is unmoved.
     # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree (definitions minus core-only definitions).
-    assert measured["definitions"] - measured["core_only_definitions"] == 91
+    # the quantity the comment's last clause is about: definitions outside the core-only
+    # walk, which is the gap the tree-wide census exists to close (82 -> 85 with the three)
+    # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree (definitions minus core-only definitions).
+    assert measured["definitions"] - measured["core_only_definitions"] == 94

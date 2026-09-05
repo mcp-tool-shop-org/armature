@@ -144,14 +144,29 @@ def gate_segmentation(mask, seg, frame, filename):
     corners = {"top_left": (0, 0), "top_right": (0, w - 1),
                "bottom_left": (h - 1, 0), "bottom_right": (h - 1, w - 1)}
     hit = sorted(name for name, (y, x) in corners.items() if bool(mask[y, x]))
+    # ---- WAVE 25 (F-eb2456cc): `clause` is a WORD, and the sentence moves to `note`.
+    #      `clause` is the machine-readable key a halt reader keys on - this repo's own
+    #      stated contract, quoted by `tests/_census_nodes.py:797` from
+    #      `tests/test_instruments_amend_w14.py:461`: "a halt reader keys on that string,
+    #      never on the sentence around it". Derived with the census's own home on
+    #      `580af47` (`_census_nodes.clause_literals()`, 385 literals): exactly 4 of the 385
+    #      contained a space and the two LONGEST were both this module's - this one at 28
+    #      words and `segmentation_summary`'s at 19. A reader or runner keying on the clause
+    #      vocabulary to tell one refusal from another met two members no predicate could
+    #      match and no fixture could name without quoting a paragraph, and the value that
+    #      WOULD be the key - the condition's name - was nowhere on the record, so the same
+    #      segmentation failure could not be counted across runs. The sentences are not
+    #      wrong; they were the wrong FIELD. `composite_reference.parse_plate` is the shape
+    #      followed here: a vocabulary word in `clause`, the full sentence beside it.
     ev = {"gate": "SEGMENTATION", "frame": frame, "file": filename,
           "corners_classified_as_subject": hit,
           "subject_fraction": seg.get("subject_fraction"),
           "background_rgb": seg.get("background_rgb"),
           "tolerance": seg.get("tolerance"),
-          "clause": ("the four image corners are background on a shot framed around the "
-                     "figure; a mask that calls one of them subject has segmented a "
-                     "gradient, not a body")}
+          "clause": "corner_classified_as_subject",
+          "note": ("the four image corners are background on a shot framed around the "
+                   "figure; a mask that calls one of them subject has segmented a "
+                   "gradient, not a body")}
     if hit:
         ev["verdict"] = "FAILED"
         return False, ev
@@ -440,8 +455,10 @@ def run(run_dir, joints_path, frames_dir=None, label=None, tol=12):
             "subject_fraction_max": round(max(fracs), 6),
             "frames_without_an_angle": sum(1 for a in angles if a is None),
             "frames_failed": sum(1 for f in failed if f),
-            "clause": ("SEGMENTATION: no image corner is inside the subject mask; a row "
-                       "that fails carries angle_deg_measured null and a failed_reason"),
+            # WAVE 25 (F-eb2456cc): the word is the key; the sentence is the note.
+            "clause": "no_corner_is_inside_the_subject_mask",
+            "note": ("SEGMENTATION: no image corner is inside the subject mask; a row "
+                     "that fails carries angle_deg_measured null and a failed_reason"),
         }
         # ---- ANDON on the one scalar this record quotes. It used to skip a missing angle
         #      with `continue` and interpolate straight across it.
@@ -479,4 +496,12 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "MEASURE_ARM")

@@ -145,17 +145,25 @@ def main(argv=None):
     for lab, d in arms:
         rows.append((f"OUTPUT  {lab}", d, listing(d)))
 
-    # ---- ANDON, before a tile is cut: every row names the same frames as the control,
-    #      and every requested index exists in every row.
+    # ---- ANDON, and the ORDER of the two is the fix (F-2f2c19a9, wave 25). The POPULATION
+    #      is settled first: `sheet_compose.frames_by_number` is the ONE home for "the
+    #      numbered frame population, with a stray refusal", and it ran BELOW the pairing
+    #      gate — so a `strip_every8.png` present in one row and not another was refused by
+    #      `gate_listing_pairing` under `listings_disagree`, naming the wrong andon for the
+    #      condition, and a stray present in EVERY row reached the pairing gate as a frame.
+    #      `render_pose_sticks` writes `strip_every{N}.png` into the same directory as its
+    #      `NNNNN.png` control frames, so this is the pipeline's own ordinary output.
+    by_number = {}
+    for title, ddir, names in rows:
+        by_number[title] = frames_by_number(names, where=ddir,
+                                            what=f"frame(s) of {title}")
+    # ---- THEN the pairing: every row names the same frames as the control.
     gate_listing_pairing({title: names for title, _d, names in rows})
     # ---- and the bound is the frames' own NUMBERS, not their POSITION in the listing
     #      (wave 12): a run numbered 00001..00003 accepted `--frames=0,1,2` and captioned
     #      its three files f000/f001/f002 — frame numbers the run does not hold — while
     #      refusing the numbers it does.
-    by_number = {}
     for title, ddir, names in rows:
-        by_number[title] = frames_by_number(names, where=ddir,
-                                            what=f"frame(s) of {title}")
         require_frames(idx, names, what=f"frame(s) of {title}", where=ddir,
                        numbers=sorted(by_number[title]))
 
@@ -239,4 +247,12 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "MAKE_THESIS_SHEET")

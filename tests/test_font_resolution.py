@@ -239,7 +239,7 @@ def test_all_three_composers_resolve_through_the_one_implementation():
 # `make_cast_sheet._font` ARE `sheet_compose.font`, a different object bound at import, so
 # the patch never reached either. Measured by simulating a fontless runner and running the
 # whole suite: exactly two tests failed, both layout-width fixtures, both raising through
-# `rig_sheet_compose.py:53` and `make_cast_sheet.py:44` — under the module-wide
+# `rig_sheet_compose.py::_font` and `make_cast_sheet.py::_font` — under the module-wide
 # `usefixtures("sheet_fonts")` that was added to stop precisely that.
 
 

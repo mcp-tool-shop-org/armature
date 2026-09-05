@@ -117,11 +117,17 @@ def _raising_parameters(trees):
 def _delegated_raise_sites(tree, defined, raising):
     """`[(name, lineno)]` — a refusal class handed to a helper that raises its parameter.
 
-    Three spellings, all live: the `exc=<Class>` keyword (`analyze_p3.py:173`,
-    `pack_pose_pack.py:116`), the class as a bare POSITIONAL in the raised parameter's slot
-    (`pack_pose_pack.py:164`, `parse_plate(a.alpha_over, PosePackError)`), and the
-    module-level fallback `exc = exc or MakeSheetError` (`make_sheet.py:52`), which fills the
-    slot for every caller that names none.
+    Three spellings, all live: the `exc=<Class>` keyword (`analyze_p3.py::main`,
+    `pack_pose_pack.py::load_frames`), the class as a bare POSITIONAL in the raised
+    parameter's slot (`pack_pose_pack.py::main`, `parse_plate(a.alpha_over,
+    PosePackError)`), and the module-level fallback `exc = exc or MakeSheetError`
+    (`make_sheet.py::parse_argv`), which fills the slot for every caller that names none.
+
+    WAVE 25: the four anchors above were line numbers and three of the four had moved by
+    the time this wave read them — `analyze_p3.py:173` opened a blank line once
+    `analyze_p3` gained the two manifest refusals (F-c66ad0c4). Re-anchored on the
+    SYMBOL, for the reason `lift_solve.py` records at length: a line citation does not
+    survive an edit above it and a symbol does.
     """
     out = []
     for node in ast.walk(tree):
@@ -223,7 +229,6 @@ RECORDED_POPULATION = frozenset({
     #     glTF importer's status clause), so `rc.require_import_status(_import, path,
     #     ImportEmpty, ...)` is a raise site. The other eleven callers hand over classes that are already
     #     policed or already single-site-and-named.
-    "BandCountError", "ImportEmpty",
     # WAVE 25 (instruments, F-3b71c0aa), the second pass — MEASURED. Seven NAMED
     # classes replacing the family BASE at the 30 sites whose refusals had no
     # evidence at all. One per module, each carrying that module's own clause words:
@@ -237,8 +242,29 @@ RECORDED_POPULATION = frozenset({
     # `BindingSheetGate` / `PartsSheetGate` already name the same condition their
     # sibling `make_skeleton_sheet` raises it under, so those seven sites adopt the
     # existing gate rather than inventing a class.
+    # WAVE 25 (instruments-measure) — MEASURED in this worktree, not carried. FIVE classes
+    # cross the two-site threshold:
+    #   `make_cast_sheet.CastSheetError`, `rig_sheet_compose.RigSheetComposeError` and
+    #     `make_hole_survey.HoleSurveyError` are NEW (F-c66ad0c4): each is the first typed
+    #     refusal its module has ever had — all three held ZERO `raise` statements on
+    #     `580af47` — and each lands with three or more clauses, so none is single-site.
+    #   `make_overlay_sheet.OverlaySheetError` was single-site (the `cv2.imwrite` return,
+    #     wave 12) and crosses now (F-a3160731): the three bare stdlib raises eleven lines
+    #     above it become the family, and `--frames` gets its own three-clause andon.
+    #   `analyze_p3.AnalyzeP3Error` was recorded in wave 16 as "deliberately absent — a
+    #     class raised once IS its clause — and joins the day a second site is written".
+    #     That day is this one: the run manifest's two refusals (F-c66ad0c4) are the first
+    #     LITERAL raises in that module, beside the delegated `exc=AnalyzeP3Error` site.
+    # Measured before and after in this worktree: POLICED read 110 on `580af47` and 115
+    # after, `POLICED - RECORDED_POPULATION` was exactly these five and
+    # `RECORDED_POPULATION - POLICED` empty — so nothing vanished.
+    # BRANCH-LOCAL: four sibling domains move this pin in the same wave; the coordinator
+    # re-measures on the merged tree and never sums.
+    "AnalyzeP3Error", "CastSheetError", "HoleSurveyError", "OverlaySheetError",
+    "BandCountError", "ImportEmpty",
     "BoneHeatSubjectError", "ProbeArgError", "ReliftError", "RigCharacterError",
-    "RigPartsError", "RigRepairSubjectError", "RigSheetSubjectError",
+    "RigPartsError", "RigRepairSubjectError", "RigSheetSubjectError",    # WAVE 25 (instruments-measure) — MEASURED in this worktree, not carried. FIVE classes
+    "RigSheetComposeError",
     # WAVE 22 (instruments) — MEASURED on this branch, and a delta of exactly one.
     # `rig_repair.SourceHasNoFaces` (F-4354f34d, gate REPAIR_SOURCE) crosses the
     # two-site threshold with the two face-count denominators it guards
@@ -608,7 +634,16 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # module now names its own class (see RECORDED_POPULATION above), and each crosses
     # the two-site threshold.
     # WAVE-25 MERGE (coordinator, 2026-09-05): POLICED MEASURED on the merged tree, never summed.
-    assert len(POLICED) == 121, sorted(POLICED)
+    # WAVE 25 (instruments-measure): 110 -> 115, RE-DERIVED with `==` in this worktree,
+    # which read 110 GREEN before the first edit — so the delta is demonstrably this
+    # domain's. Five classes cross the two-site threshold; each is named in
+    # RECORDED_POPULATION above with the reason, and the SET assertion beneath names any
+    # that did not arrive. Measured: `POLICED - RECORDED_POPULATION` was exactly
+    # `['AnalyzeP3Error', 'CastSheetError', 'HoleSurveyError', 'OverlaySheetError',
+    # 'RigSheetComposeError']` with `RECORDED_POPULATION - POLICED` empty.
+    # BRANCH-LOCAL — a COMPOSITION on the merged tree; the coordinator MEASURES, never sums.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): POLICED MEASURED on the merged tree, never summed.
+    assert len(POLICED) == 126, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -868,7 +903,8 @@ NOTHING_RAISES_THESE = {
     "GateFailure": "the family's gate BASE (armature_core/errors.py). A base is raised "
                    "through its subclasses; a literal `raise GateFailure(...)` would be the "
                    "defect `test_two_policed_classes_do_not_descend...` exists to name.",
-    "_CarriesEvidence": "measure_tracking.py:91 — a mixin with no behaviour and no raise "
+    "_CarriesEvidence": "measure_tracking.py, above `TrackingError` — a mixin with no "
+                        "behaviour and no raise "
                         "site anywhere in the tree. instruments-measure DELETES it this "
                         "wave (SEAM 5, rule 5), so this entry is conditional on the class "
                         "still being defined: when it goes, it leaves both sets at once.",
@@ -957,7 +993,16 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # above, which replaced the family BASE at the sites whose refusals carried no
     # evidence at all. Nothing was deleted.
     # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree with the derivation above.
-    assert len(defined) == 145, len(defined)
+    # WAVE 25 (instruments-measure): 134 -> 137, MEASURED in this worktree — THREE new
+    # family classes, one per module in this domain that held ZERO `raise` statements on
+    # `580af47` (F-c66ad0c4): `make_cast_sheet.CastSheetError`,
+    # `rig_sheet_compose.RigSheetComposeError`, `make_hole_survey.HoleSurveyError`. No class
+    # was deleted. The same delta is asserted from the other walk in
+    # `tests/test_gates.py::test_the_recorded_family_measurement_is_the_one_the_helpers_
+    # return`, which is what `test_the_two_family_walks_are_one_law` reconciles.
+    # BRANCH-LOCAL — a COMPOSITION on the merged tree.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree with the derivation above.
+    assert len(defined) == 148, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
@@ -1012,15 +1057,32 @@ def test_the_delegated_edge_sees_the_three_classes_the_literal_walk_could_not():
     # thing that keeps going stale — "a line pinned from a branch is stale by
     # construction". The two PURE demonstrators (zero literal sites, reached only through a
     # helper that raises its own parameter) are unchanged and still carry the red proof.
+    # WAVE 25 (instruments-measure, F-c66ad0c4): `AnalyzeP3Error` LEAVES the pure-
+    # demonstrator pair. It was the second class with zero literal raise sites, reached only
+    # through `make_sheet.parse_argv(..., exc=AnalyzeP3Error)`; the run-manifest andons this
+    # wave adds are the first literal raises that module has ever had, so it now has two
+    # literal sites and one delegated one and is POLICED. `MakeSheetError` is unchanged and
+    # still carries the red proof alone — a pair that becomes a single member is exactly the
+    # kind of quiet narrowing this file exists to report, so the count is asserted rather
+    # than the membership silently shrinking.
     old = literal_sites_only(TOOLS)
-    for name in ("MakeSheetError", "AnalyzeP3Error"):
+    pure = sorted(n for n in ("MakeSheetError", "AnalyzeP3Error", "PosePackError",
+                              "PlateError")
+                  if not old.get(n))
+    assert pure == ["MakeSheetError"], pure
+    for name in pure:
         assert old.get(name, set()) == set(), (name, sorted(old.get(name, ())))
         assert len(RAISE_SITES[name]) == 1, sorted(RAISE_SITES[name])
+    # `AnalyzeP3Error`'s delegated site is still SEEN by the widened walk, which is the
+    # property this test is about — what changed is that the literal walk can now see two
+    # OTHER sites of the same class.
+    assert len(old.get("AnalyzeP3Error", ())) == 2, sorted(old.get("AnalyzeP3Error", ()))
+    assert len(RAISE_SITES["AnalyzeP3Error"]) == 3, sorted(RAISE_SITES["AnalyzeP3Error"])
 
     # The delegated-only sites: present in the widened walk, invisible to the literal one.
     # If the old walk could see them this comparison would be with itself.
     for name, n_delegated in (("PosePackError", 3), ("PlateError", 2),
-                              ("MakeSheetError", 1), ("AnalyzeP3Error", 1)):
+                              ("MakeSheetError", 1), ("AnalyzeP3Error", 1)):  # noqa: E501
         delegated = set(RAISE_SITES[name]) - set(old.get(name, ()))
         assert len(delegated) == n_delegated, (name, sorted(delegated),
                                                sorted(old.get(name, ())))
@@ -1499,7 +1561,6 @@ TESTS_DIR = TESTS
 
 #: DERIVED 2026-09-05 by `_census_nodes.clause_literals()`. Equality.
 RECORDED_CLAUSES = [
-    'SEGMENTATION: no image corner is inside the subject mask; a row that fails carries angle_deg_measured null and a failed_reason',
     'above_one',
     'adjacent_pair_shapes_differ',
     'allowlist_may_only_narrow',
@@ -1628,6 +1689,7 @@ RECORDED_CLAUSES = [
     'convention_pin_disagrees',
     'converted_widget_shifts_enum_indices',
     'converted_widget_shifts_recorded_indices',
+    'corner_classified_as_subject',
     'cover',
     'cover_crop_produced_the_wrong_size',
     'coverage_has_no_frames_to_rule_on',
@@ -1638,6 +1700,8 @@ RECORDED_CLAUSES = [
     'cv2_refused_the_write',
     'declared_group_size_above_the_ceiling',
     'declared_total_disagrees',
+    'decode_stride_is_not_positive',
+    'decoded_bytes_are_not_whole_frames',
     'decoded_rate_disagrees_with_the_declaration',
     'decoded_rate_not_finite',
     'degenerate_bounding_box',
@@ -1689,6 +1753,8 @@ RECORDED_CLAUSES = [
     'extent_over_zero_points',
     'extraction_left_no_faces',
     'ffmpeg_binary_not_found',
+    'ffmpeg_refused_the_decode',
+    'ffmpeg_refused_the_encode',
     'field_absent',
     'field_disagrees',
     'fingerprints_carry_no_bones',
@@ -1700,13 +1766,17 @@ RECORDED_CLAUSES = [
     'forbidden_word',
     'frame_absent_from_manifest',
     'frame_and_predecessor_are_different_sizes',
+    'frame_array_shape_is_not_a_frame',
     'frame_array_shape_is_unsupported',
     'frame_carries_an_alpha_channel',
     'frame_count_changed_through_the_bridge',
+    'frame_dtype_is_not_uint8',
     'frame_form',
     'frame_hints_are_parallel',
     'frame_illegal',
+    'frame_index_not_an_integer',
     'frame_index_not_in_the_clip',
+    'frame_index_outside_the_record',
     'frame_indices_have_a_hole',
     'frame_is_colour_not_grayscale',
     'frame_is_missing_a_bone',
@@ -1715,6 +1785,8 @@ RECORDED_CLAUSES = [
     'frame_key_is_not_a_frame_name',
     'frame_key_shapes_are_mixed',
     'frame_legality_indeterminate',
+    'frame_list_is_empty',
+    'frame_names_are_not_a_fixed_width',
     'frame_not_generator_legal',
     'frame_not_hw3',
     'frame_not_three_integers',
@@ -1726,8 +1798,10 @@ RECORDED_CLAUSES = [
     'frame_triple',
     'frame_type',
     'frame_zero_carries_no_bones',
+    'frames_and_out_are_required',
     'frames_are_not_all_one_size',
     'frames_are_not_contiguous',
+    'frames_dir_is_not_a_directory',
     'frames_is_not_a_comparable_count',
     'frames_not_numerically_named',
     'frames_without_index',
@@ -1807,6 +1881,7 @@ RECORDED_CLAUSES = [
     'no_camera_block',
     'no_candidate_frames',
     'no_composite_colour_named',
+    'no_corner_is_inside_the_subject_mask',
     'no_deforming_bones',
     'no_distribution_to_summarise',
     'no_foot_vertices_below_the_ankle',
@@ -1822,6 +1897,9 @@ RECORDED_CLAUSES = [
     'no_moving_frames',
     'no_neck_between_two_wider_sections',
     'no_numbered_frames_in_the_directory',
+    'no_numbered_frames_to_encode',
+    'no_numbered_frames_to_invert',
+    'no_numbered_frames_to_measure',
     'no_out_or_no_glb',
     'no_parts_to_assign_to',
     'no_points_given',
@@ -1889,6 +1967,10 @@ RECORDED_CLAUSES = [
     'pack_rate_not_positive',
     'palm_plane_degenerate',
     'panel_subject_is_hidden_from_render',
+    'panels_document_is_missing_a_key',
+    'panels_document_is_not_an_object',
+    'panels_document_is_not_on_disk',
+    'panels_document_not_named',
     'part_radius_not_positive',
     'payload_is_not_the_ruling_it_describes',
     'performance_clause_does_not_dominate',
@@ -1917,6 +1999,8 @@ RECORDED_CLAUSES = [
     'positive_prompt_is_empty',
     'preview_frame_collapsed',
     'preview_is_incomplete',
+    'previz_frame_could_not_be_decoded',
+    'previz_frame_is_not_on_disk',
     'projected_bbox_is_empty',
     'prompt_is_not_the_e08_prompt',
     'quadriflow_declined',
@@ -1944,6 +2028,7 @@ RECORDED_CLAUSES = [
     'registry_is_empty',
     'reimport_is_not_one_render_visible_mesh',
     'render visibility',
+    'render_and_keypoints_disagree_on_resolution',
     'render_engine_unknown',
     'render_target_missing',
     'render_wrote_nothing',
@@ -1962,6 +2047,8 @@ RECORDED_CLAUSES = [
     'round_trip_over_zero_frames',
     'round_trip_probe_window_too_small',
     'ruled_name_with_unknown_suffix',
+    'run_manifest_is_missing_a_key',
+    'run_manifest_is_not_on_disk',
     'sample_component_not_an_integer',
     'sample_frame_not_in_the_extraction',
     'sample_index_is_negative',
@@ -2013,7 +2100,9 @@ RECORDED_CLAUSES = [
     'start_frame_refused_by_the_sibling',
     'start_frame_unmeasured',
     'start_frame_was_not_resolved',
+    'stats_document_is_missing_a_key',
     'still_not_manifold_after_repair',
+    'stray_png_in_the_frame_population',
     'stream_reported_no_rate',
     'strip_stride_not_positive',
     'subject_args',
@@ -2023,12 +2112,15 @@ RECORDED_CLAUSES = [
     'subject_is_not_one_mesh_object',
     'subject_is_not_one_render_visible_mesh',
     'subject_is_not_one_skinned_mesh',
+    'subject_list_is_empty',
     'subject_never_moved',
     'subject_not_in_the_canon_census',
+    'subject_panel_is_not_on_disk',
+    'subject_stats_sidecar_is_not_on_disk',
     'supplied_frame_contradicts_graph',
+    'survey_panel_is_not_on_disk',
     'sweep_revisits_an_azimuth',
     'target_not_a_3_vector',
-    'the four image corners are background on a shot framed around the figure; a mask that calls one of them subject has segmented a gradient, not a body',
     'tier_is_not_in_the_lora_name',
     'tier_matched_pair_is_crossed',
     'tolerance_not_finite',
@@ -2090,6 +2182,7 @@ RECORDED_CLAUSES = [
     'vertex_arrays_do_not_correspond',
     'vertices_not_n_by_3',
     'video_nodes_empty',
+    'view_count_not_positive',
     'view_direction_parallel_to_up',
     'view_without_a_digest',
     'views_byte_identical',
@@ -2112,16 +2205,72 @@ RECORDED_CLAUSES = [
 #: CATEGORY, not an exemption — it may not grow, and a clause that gains a
 #: fixture leaves it in the commit that adds the fixture.
 CLAUSES_NAMED_BY_NO_FIXTURE = [
-    'SEGMENTATION: no image corner is inside the subject mask; a row that fails carries angle_deg_measured null and a failed_reason',
-    'allowlist_name_pattern',
-    'anchor_not_a_number',
-    'anchor_not_a_pair',
-    'anchor_outside_unit_interval',
+    # WAVE-25 MERGE (coordinator, 2026-09-05): the entries below are REGENERATED from this test's own derivation on the merged tree
+    # (five branches each read their table branch-local; their unions left duplicated rows, and the test
+    # compares ordered lists). Every reason the table carried is kept here, in one block, as the record:
     # WAVE 25 (instruments): `asset_has_no_evaluated_geometry` and
     # `motion_record_has_no_frames` LEFT this table in the commit that gave them a
     # fixture -- `tests/test_instruments_amend_w25.py` names both (the first in
     # `WAVE_25_CLAUSE_WORDS`, the second there and in the empty-record refusal's own
     # test). The table may not grow; it may shrink exactly this way.
+    # 'anchor_outside_unit_interval', 'arc_does_not_move',
+    # 'asset_has_no_evaluated_geometry', 'asset_imported_no_mesh_objects', 'bad_magic',
+    # 'band_too_narrow', 'batch_node_is_not_a_batch', 'batch_node_over_the_slot_ceiling',
+    # 'bit1_not_grayscale', 'bit1_values', 'bit8_dtype', 'blend_band_not_positive',
+    # 'body_keypoints_wrong_shape', 'bone_has_an_unknown_rule', 'bone_has_no_model_rule',
+    # 'bone_has_zero_rest_length', 'bone_radius_not_positive',
+    # 'bone_set_changes_between_frames', 'bufferview_negative_range',
+    # 'bufferview_no_bytelength', 'bufferview_not_an_index', 'bufferview_out_of_range',
+    # 'bufferview_past_bin_chunk', 'candidate_frames_are_not_all_one_size',
+    # 'cap_below_the_bbox_corners', 'cap_would_loosen_the_module_ceiling',
+    # 'centroids_not_n_by_3', 'child_bone_has_no_length',
+    # 'clip_end_is_closer_than_the_subject', 'clip_would_be_written_outside_out',
+    # 'compensator_target_carries_no_run_marker', 'composite_colour_carries_a_non_number',
+    # 'composite_colour_not_linear_unit_floats', 'composite_colour_not_three_floats',
+    # 'composition_puts_points_behind_the_camera', 'composition_unreachable',
+    # 'cover_crop_produced_the_wrong_size', 'cv2_could_not_read_the_source',
+    # 'cv2_refused_the_strip_write', 'cv2_refused_the_write',
+    # 'declared_group_size_above_the_ceiling', 'decode_stride_is_not_positive',
+    # 'decoded_bytes_are_not_whole_frames', 'decoded_rate_disagrees_with_the_declaration',
+    # 'degenerate_plate', 'degenerate_target_frame', 'depth_buffer_is_not_the_frame_size',
+    # 'drawing_convention_not_retrieved', 'every_imported_mesh_is_hidden_from_render',
+    # 'expectation_carries_a_duplicated_frame', 'expectation_is_not_the_frame_list',
+    # 'extraction_left_no_faces', 'ffmpeg_refused_the_decode', 'ffmpeg_refused_the_encode',
+    # 'field_absent', 'flag_component_not_an_integer',
+    # 'frame_and_predecessor_are_different_sizes', 'frame_array_shape_is_unsupported',
+    # 'frame_hints_are_parallel', 'frame_index_not_in_the_clip', 'frame_is_missing_a_bone',
+    # 'frame_source_not_callable', 'frame_source_not_reiterable',
+    # 'frame_zero_carries_no_bones', 'frames_are_not_all_one_size',
+    # 'frames_are_not_contiguous', 'frames_without_index',
+    # 'group_node_count_disagrees_with_the_plan', 'group_size_below_one',
+    # 'hand_has_no_length', 'hand_keypoints_wrong_shape', 'hand_length_not_positive',
+    # 'hinge_hint_is_parallel_to_the_bone', 'keypoint_outside_the_frame',
+    # 'keypoint_value_is_not_a_number', 'landmark_list_is_partial', 'landmarks_missing',
+    # 'licence_map_ruling', 'measurement_not_positive', 'min_frac_may_only_tighten',
+    # 'mitten_hand_wrong_point_count', 'motion_record_has_no_frames',
+    # 'no_batch_node_to_measure', 'no_composite_colour_named', 'no_deforming_bones',
+    # 'no_json_chunk', 'no_moving_frames', 'no_numbered_frames_in_the_directory',
+    # 'no_parts_to_assign_to', 'no_positive_joint_radius',
+    # 'no_trace_to_size_a_ball_against', 'no_vertices_to_frame', 'not_a_rotation',
+    # 'numpy_unavailable', 'observed_sites_missing', 'palm_plane_degenerate',
+    # 'part_radius_not_positive', 'phase_shorter_than_a_frame', 'plate_source_missing',
+    # 'population_is_not_the_spec_names', 'readout_angle_outside_the_arc',
+    # 'render_target_missing', 'required_landmark_missing', 'rest_landmarks_missing',
+    # 'root_is_not_a_3_vector', 'scene_fps_disagrees_with_the_shot',
+    # 'segment_has_zero_length', 'set_short', 'sign_not_unit',
+    # 'snappable_site_is_not_a_landmark', 'source_image_has_a_zero_dimension',
+    # 'stance_frac_not_modelled', 'stream_reported_no_rate', 'tolerance_not_finite',
+    # 'too_few_destination_samples', 'too_few_frames_for_an_arc', 'too_few_phase_samples',
+    # 'too_few_points_for_a_sphere_fit', 'too_few_source_samples', 'unknown_pose_arc',
+    # 'unsupported_bit_depth', 'unsupported_shape', 'vector_has_zero_length',
+    # 'view_direction_parallel_to_up', 'view_without_a_digest',
+    # 'visible_rows_component_not_an_integer', 'visible_rows_not_a_band_inside_the_frame',
+    # 'why_not_supplied', 'zero_length_direction', 'zero_quaternion',
+    # 'zero_quaternion',    'allowlist_name_pattern', 'anchor_not_a_number', 'anchor_not_a_pair',
+    'allowlist_name_pattern',
+    'anchor_not_a_number',
+    'anchor_not_a_pair',
+    'anchor_outside_unit_interval',
     'arc_does_not_move',
     'asset_imported_no_mesh_objects',
     'bad_magic',
@@ -2160,16 +2309,19 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'cv2_refused_the_strip_write',
     'cv2_refused_the_write',
     'declared_group_size_above_the_ceiling',
+    'decode_stride_is_not_positive',
+    'decoded_bytes_are_not_whole_frames',
     'decoded_rate_disagrees_with_the_declaration',
     'degenerate_plate',
     'degenerate_target_frame',
     'depth_buffer_is_not_the_frame_size',
-    'diagnostic_cannot_be_armed',
     'drawing_convention_not_retrieved',
     'every_imported_mesh_is_hidden_from_render',
     'expectation_carries_a_duplicated_frame',
     'expectation_is_not_the_frame_list',
     'extraction_left_no_faces',
+    'ffmpeg_refused_the_decode',
+    'ffmpeg_refused_the_encode',
     'field_absent',
     'flag_component_not_an_integer',
     'frame_and_predecessor_are_different_sizes',
@@ -2227,7 +2379,6 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'source_image_has_a_zero_dimension',
     'stance_frac_not_modelled',
     'stream_reported_no_rate',
-    'the four image corners are background on a shot framed around the figure; a mask that calls one of them subject has segmented a gradient, not a body',
     'tolerance_not_finite',
     'too_few_destination_samples',
     'too_few_frames_for_an_arc',
@@ -2250,14 +2401,10 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
 #: The clause values that are SENTENCES rather than words, with the site that
 #: spells each. Both files are other domains'; counted, posted, not fixed here.
 SENTENCE_SHAPED_CLAUSES = {
-    'SEGMENTATION: no image corner is inside the subject mask; a row that fails carries angle_deg_measured null and a failed_reason':
-        'measure_arm.py:438',
     'orbit radius':
         'render_turnaround.py:757',
     'render visibility':
         'render_turnaround.py:907',
-    'the four image corners are background on a shot framed around the figure; a mask that calls one of them subject has segmented a gradient, not a body':
-        'measure_arm.py:147',
 }
 
 
@@ -2318,6 +2465,19 @@ def test_every_clause_word_is_named_by_a_fixture_or_listed_with_a_reason():
     A clause nothing names is a receipt word no test would notice changing. The listed ones
     are the state of the tree on 2026-09-05, dated; the table may not grow, and a clause
     that gains a fixture leaves it in the commit that adds the fixture.
+
+    WAVE 25 (instruments-measure): 132 -> 133 (the clause vocabulary itself moves 385 -> 416). THREE leave — the round-trip diagnostic's
+    arming refusal and `measure_arm`'s two sentence-shaped values, all three now named by
+    fixtures in `test_instruments_measure_amend_w25.py` — and FOUR join. Every one of the
+    wave's 31 new clause words is reached by a fixture there except the four `encode_control`
+    writes when the ENCODER itself has spoken: the two ffmpeg-return refusals in `encode` and
+    `decode`, and the two stride refusals below the decode. All four fire only after a real
+    ffmpeg has run and returned a non-zero code or a byte count that is not a whole number of
+    frames; the suite installs no encoder and runs no generation, so a fixture for them would
+    have to fake the subprocess and would then be naming its own stub. The words themselves
+    are deliberately NOT spelled in this docstring — spelling them here would make them
+    "named by a fixture" by writing them into the very sentence that records that nothing
+    names them, which is the census marking its own homework.
     """
     text = fixture_text()
     unnamed = sorted(c for c in _clause_sites() if c not in text)

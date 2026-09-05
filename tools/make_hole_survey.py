@@ -78,7 +78,23 @@ import sys
 import numpy as np
 from PIL import Image, ImageFilter
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from armature_core.errors import ArmatureError  # noqa: E402
+
 TOOL_VERSION = "S06.1"
+
+
+class HoleSurveyError(ArmatureError):
+    """The survey cannot be run over what it was pointed at. F-c66ad0c4, wave 25.
+
+    Measured on `580af47` by AST walk: this module held ZERO `raise` statements. `--views`
+    was unbounded (`--views=0` produced an empty survey, wrote `survey.json` with
+    `"views": []` and printed `SURVEY_OK` - a success token earned by no effect, which is
+    the shape wave 12 named) and each side's panel was opened with a bare `Image.open`, so a
+    missing view died with a `FileNotFoundError` naming one path and neither the side nor
+    the view index.
+    """
 
 #: `turn_final`'s baked void, measured off its corner pixel. sRGB.
 OLD_VOID_RGB = (154, 154, 157)
@@ -231,6 +247,36 @@ def main():
                     help="panel label for the new side; defaults to the S03 wording")
     a = ap.parse_args()
 
+    # ---- ANDON on the flag, before a directory is made: a survey over zero views writes a
+    #      record with an empty `views` list and prints `SURVEY_OK` beside it.
+    if a.views <= 0:
+        raise HoleSurveyError(
+            f"--views={a.views} surveys nothing; the record would carry an empty views "
+            f"list and the SURVEY_OK line would be earned by no effect",
+            {"gate": "ARGS", "andon": "HoleSurveyError", "clause": "view_count_not_positive",
+             "flag": "--views", "value": a.views, "minimum_exclusive": 0})
+
+    # ---- ANDON naming the SIDE and the VIEW, not just a path -- and ABOVE THE FIRST WRITE,
+    #      over EVERY view, not per iteration. The whole instrument is the two sides read
+    #      the same way, so a view present on one side only is not a comparison; and a run
+    #      refused at view 5 after writing four pairs of panels leaves a partial survey
+    #      directory a later reader cannot tell from a complete one. The write-ordering
+    #      census (`tests/test_instrument_write_ordering.py`) is the pin: every refusal in
+    #      this tool sits above `os.makedirs`.
+    for i in range(a.views):
+        for side, root, prefix in (("new", a.new, a.new_prefix),
+                                   ("old", a.old, a.old_prefix)):
+            path = os.path.join(root, f"{prefix}_{i}.png")
+            if not os.path.isfile(path):
+                raise HoleSurveyError(
+                    f"the {side} side has no view {i} at {path}; this survey compares the "
+                    f"two sides view by view, so a view present on one side only is not a "
+                    f"comparison",
+                    {"gate": "INPUT", "andon": "HoleSurveyError",
+                     "clause": "survey_panel_is_not_on_disk",
+                     "side": side, "view": i, "file": path, "views": a.views,
+                     "prefix": prefix})
+
     out = os.path.abspath(a.out)
     panels_dir = os.path.join(out, "panels")
     os.makedirs(panels_dir, exist_ok=True)     # scripts create their own output directories
@@ -337,4 +383,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "MAKE_HOLE_SURVEY")

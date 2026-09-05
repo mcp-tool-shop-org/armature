@@ -153,19 +153,43 @@ def parse_plate(text, exc, flag="--alpha-over"):
                   {"gate": "ARGS", "andon": exc.__name__,
                    "clause": "plate_not_three_components", "flag": flag,
                    "supplied": text, "n_components": len(parts)})
-    if not all(t.isdigit() for t in parts):
+    # ---- WAVE 25 (F-e7565198). The integer clause asks the question `int()` ANSWERS.
+    #      `str.isdigit()` is True for characters `int()` refuses: it is a Unicode property,
+    #      and superscripts, circled digits and other numeric forms satisfy it. Wave 22 split
+    #      one boolean (`t.isdigit() and 0 <= int(t) <= 255`) into two clauses, which moved
+    #      the untyped raise rather than removing it: a component passed the `isdigit` clause
+    #      and then `int(t)` in the RANGE clause raised `ValueError` before a typed refusal
+    #      could be produced. Re-measured on `580af47` in this worktree with the repo venv:
+    #      `parse_plate('0,0,0')` -> `(0, 0, 0)`; `parse_plate('a,b,c')` and
+    #      `parse_plate('999,-5,0')` -> typed, with their clauses; `parse_plate('\u00b2,0,0')`
+    #      (superscript two) and `parse_plate('\u2461,0,0')` (circled two) -> untyped
+    #      `ValueError: invalid literal for int() with base 10`. This is the ONE plate parser
+    #      the authored-RGBA law is administered through - `encode_control`, `pack_pose_pack`,
+    #      `fit_reference` and `make_plate` all call it - so a value pasted from a document
+    #      carrying a non-ASCII numeric character exited untyped on whichever caller ran,
+    #      while this module's own `_cli` docstring cites exactly that input as the crash the
+    #      wave-22 wrapper was written for.
+    #
+    #      `t.isascii() and t.isdigit()` is true only of a run of the ASCII digits `0`-`9`,
+    #      which `int()` reads by definition - so the cast below this clause CANNOT raise,
+    #      and nothing this parser accepted before is refused now (a superscript was never
+    #      accepted; it crashed).
+    unreadable = [t for t in parts if not (t.isascii() and t.isdigit())]
+    if unreadable:
         raise exc(f"{flag} takes three 0-255 integers, e.g. {flag}=0,0,0; got {text!r}",
                   {"gate": "ARGS", "andon": exc.__name__,
                    "clause": "plate_component_not_an_integer", "flag": flag,
                    "supplied": text,
-                   "unreadable": [t for t in parts if not t.isdigit()]})
-    if not all(0 <= int(t) <= 255 for t in parts):
+                   "unreadable": unreadable})
+    values = [int(t) for t in parts]
+    out_of_range = [v for v in values if not 0 <= v <= 255]
+    if out_of_range:
         raise exc(f"{flag} takes three 0-255 integers, e.g. {flag}=0,0,0; got {text!r}",
                   {"gate": "ARGS", "andon": exc.__name__,
                    "clause": "plate_component_out_of_range", "flag": flag,
                    "supplied": text,
-                   "out_of_range": [int(t) for t in parts if not 0 <= int(t) <= 255]})
-    return tuple(int(t) for t in parts)
+                   "out_of_range": out_of_range})
+    return tuple(values)
 
 
 def gate_pin(path, manifest_sha):
