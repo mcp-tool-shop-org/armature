@@ -29,15 +29,22 @@ name: release
 on:
   release:
     types: [published]
-  # THE REHEARSAL. Measured 2026-09-04: `git tag -l` holds v0.1.0, v0.1.1, v0.2.0, v0.2.1,
-  # v0.3.0 and nothing newer; v0.3.0 is c7549b9, dated 2026-08-18; `git diff --stat
-  # v0.3.0..HEAD` over the CI/packaging files is 11 files and 1558 insertions, of which
-  # release.yml alone is +186/-17, and all three composite actions under `.github/actions/`
-  # were created since that tag. So the tag-ref gate below, the visibility gate beside it,
-  # `npm-clean-room`, the clean-room action's sdist room, the `-O` step's `PYTHONOPTIMIZE`
-  # env and BOTH arms of the npm `Publish` branch have never executed in a `release:
-  # published` run. Nothing green anywhere says otherwise: the suite reads these files as
-  # text, which is a claim about what they SAY, not about what they DO on a runner.
+  # THE REHEARSAL, AND THE REF IT CANNOT BE DISPATCHED AT YET.
+  #
+  # Measured on this tree 2026-09-04, and the earlier form of this block understated it.
+  # `git tag -l` holds swarm-save-1788481819, v0.1.0, v0.1.1, v0.2.0, v0.2.1 and v0.3.0 and
+  # nothing else; `git ls-tree -r --name-only <tag> -- .github/actions` returns ZERO files
+  # for EVERY ONE of the six. So it is not that the actions post-date v0.3.0 -- NO TAG IN
+  # THIS REPOSITORY CARRIES ANY OF THEM. `git show v0.3.0:.github/workflows/release.yml`
+  # has `workflow_dispatch:` with no `inputs:` block beneath it, no `refs/tags/` anywhere,
+  # and `npm publish --provenance --access public` unconditional at its :126.
+  #
+  # The consequence for the tag-ref gate below, the visibility gate beside it,
+  # `npm-clean-room`, the clean-room action's sdist and classifier rooms, the `-O` step's
+  # `PYTHONOPTIMIZE` env and BOTH arms of the npm `Publish` branch is unchanged: none of
+  # them has ever executed in a `release: published` run. Nothing green anywhere says
+  # otherwise -- the suite reads these files as TEXT, which is a claim about what they SAY,
+  # not about what they DO on a runner.
   #
   # Without a rehearsal, the first real use of roughly two hundred lines of never-executed
   # shell is the one path in this repository with no compensator -- a defect in it surfaces
@@ -45,17 +52,45 @@ on:
   # registries waiting. That is the state this file's header says the release trigger exists
   # to keep rare, not the state in which to debug a gate.
   #
-  # `rehearse: true` runs the whole `verify` job -- the suite twice, both clean rooms, the
-  # tag gate, the visibility gate -- and SKIPS both publish jobs. Dispatch AT AN EXISTING
-  # TAG, which the tag gate requires either way:
+  # WHY NO REF IS NAMED ON THE COMMAND BELOW. This block used to print
+  # `gh workflow run release.yml --ref v0.3.0 -f rehearse=true`, and that command has only
+  # two outcomes, both of which end at the publish steps rather than at a rehearsal: the
+  # dispatch is refused because the workflow AT THAT REF declares no `rehearse` input, and
+  # the operator's next move is the same command without it -- which runs v0.3.0's ungated
+  # definition; or it is accepted and the definition executed is still v0.3.0's, where
+  # `rehearse` guards nothing and `uses: ./.github/actions/*` resolves to files that do not
+  # exist at that ref. The only thing between that command and a live publish today is that
+  # 0.3.0 is already taken on both registries, which is not a gate. Naming ANY of the six
+  # existing tags here has the same shape.
   #
-  #     gh workflow run release.yml --ref v0.3.0 -f rehearse=true
+  # WHY NOT `--ref main`, WHICH DOES CARRY THE GATES. The tag gate at :179 refuses any
+  # `GITHUB_REF` that is not `refs/tags/*`, deliberately and by its own comment ("Dispatch
+  # from a branch and it refuses here"). It is step 9 of the 11 steps in `verify`
+  # (checkout, setup-python, Install, sheet-fonts, Suite, Suite under -O, clean-room,
+  # npm-clean-room, TAG GATE, visibility gate, upload-artifact). So a `main` dispatch
+  # exercises the suite twice and both clean rooms and then HALTS -- the visibility gate
+  # and the artifact upload never run. That is a useful partial run and it is not what the
+  # sentence below claims, so it is not the command this block prints.
   #
-  # STATUS: NOT YET RUN. No run id is recorded on this line because no such run exists; a
-  # plausible id beside a verdict would be a placeholder shaped like evidence. Write the run
-  # id here the first time it is dispatched, and dispatch again after any change to this
-  # workflow or to the actions it calls, so "exercised" is a fact with a run id rather than
-  # an inference from a green suite.
+  # THE ORDERING, which is the actual fix: a tag alone does not fire `release: published`
+  # -- creating the GitHub RELEASE object does. So the rehearsal fits BETWEEN them.
+  #
+  #   1. cut and push the release tag:  git tag vX.Y.Z && git push origin vX.Y.Z
+  #   2. rehearse AT THAT TAG:          gh workflow run release.yml --ref vX.Y.Z -f rehearse=true
+  #   3. read the run; only then:       gh release create vX.Y.Z
+  #
+  # At step 2 the ref is a tag AND it carries these gates, so `rehearse: true` runs the
+  # whole `verify` job -- the suite twice, both clean rooms, the classifier gate, the tag
+  # gate, the visibility gate -- and SKIPS both publish jobs (`if: ${{ !inputs.rehearse }}`
+  # on each, so neither registry is reached and the two cannot diverge). If step 2 is red,
+  # step 3 never happens and the tag is deletable; after step 3 nothing is.
+  #
+  # STATUS: NOT YET RUN, and no ref exists at which it could be. No run id is recorded on
+  # this line because no such run exists; a plausible id beside a verdict would be a
+  # placeholder shaped like evidence. Write the run id and the tag here the first time it is
+  # dispatched, and dispatch again after any change to this workflow or to the actions it
+  # calls, so "exercised" is a fact with a run id rather than an inference from a green
+  # suite.
   workflow_dispatch:
     inputs:
       rehearse:
@@ -154,8 +189,27 @@ jobs:
         #
         # `workflow_dispatch` stays (a failed release job must be re-runnable without
         # cutting a second tag) but it now fails closed: dispatch AT THE TAG
-        # (`gh workflow run release.yml --ref v0.3.0`) and the gate reads it like any other
+        # (`gh workflow run release.yml --ref vX.Y.Z`) and the gate reads it like any other
         # tag ref. Dispatch from a branch and it refuses here, before any job that publishes.
+        #
+        # THE REF IS A PLACEHOLDER AND NOT A TAG THIS REPOSITORY HAS. This line read
+        # `--ref v0.3.0` until 2026-09-04 -- the same defect the rehearsal block above was
+        # corrected for, in a second place and a worse form, because there is no
+        # `-f rehearse=true` on THIS command: at v0.3.0 the workflow declares no `rehearse`
+        # input, carries none of the three composite actions (`git ls-tree -r --name-only
+        # v0.3.0 -- .github/actions` returns nothing), has no `refs/tags/` gate at all, and
+        # publishes to both registries unconditionally. A re-run dispatched at it would reach
+        # BOTH PUBLISH STEPS past every gate this comment is describing. The tag to re-run at
+        # is the tag of the release being re-run, and the error annotation below already
+        # prints it in exactly this placeholder form.
+        #
+        # (Neither publish step is named here in the spelling its own `uses:` line carries.
+        # `tests/test_ci_workflows.py:375` locates that step with
+        # `step_containing(RELEASE, <the action ref>)` and takes the FIRST match, with no
+        # comment stripping -- so an earlier step whose PROSE quotes the ref becomes the step
+        # it reads, and its `skip-existing: true` assertion goes red against a gate that was
+        # never the subject. Measured: naming it here failed exactly that test, 1 failed /
+        # 5319 passed, while the publish step it judges was untouched.)
         #
         # No `${{ }}` in this script, deliberately: a runner-side expression is interpolated
         # before the shell sees it, so a gate written with one cannot be exercised by
