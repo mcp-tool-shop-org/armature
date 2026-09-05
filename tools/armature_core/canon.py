@@ -682,20 +682,31 @@ def cover(doc, prompt):
     ev["blocked"] = blocked
     leftover = residue(prompt, doc)
     ev["residue"] = leftover
+    # ⚠ **FIVE distinct refusals reached a halt line under ONE clause word.** `ev["clause"]
+    # = "cover"` was set once here and only the blocked-additions branch overrode it, so "a
+    # ratified phrase is absent", "a ratified phrase is negated", "a forbidden word is
+    # present" and "unlicensed residue" all printed `clause: 'cover'` — four different
+    # operator actions under one key, on the gate a spend builder runs before mkdir. The
+    # word an operator or a runner branches on now names the condition; `cover` stays as
+    # the RECEIPT's own word on the passing path, the way `gate_s_registration` and
+    # `camera_widget_order` name their receipts one module over.
     ev["clause"] = "cover"
     if missing:
+        ev["clause"] = "phrase_absent"
         _raise(
             "forward cover failed: ratified phrases absent: "
             + ", ".join(m["phrase"] for m in missing),
             ev,
         )
     if negated:
+        ev["clause"] = "phrase_negated"
         _raise(
             "forward cover failed: ratified phrases negated: "
             + ", ".join(m["phrase"] for m in negated),
             ev,
         )
     if forbidden:
+        ev["clause"] = "forbidden_word"
         _raise(
             "forward cover failed: forbidden words present: "
             + ", ".join(f["word"] for f in forbidden),
@@ -710,6 +721,7 @@ def cover(doc, prompt):
             ev,
         )
     if leftover:
+        ev["clause"] = "unlicensed_residue"
         _raise(
             "reverse cover failed: unlicensed residue "
             + repr(leftover),
@@ -919,17 +931,47 @@ def texts_from_api_graph(graph):
     # the question it asked is now answered above, once, by the loader every gate in
     # `route_gates` reads through, and the two answers it separates ("no text here" and
     # "I did not recognise this shape") are still separate.
-    nodes = [v for v in doc.values()
-             if isinstance(v, dict) and ("inputs" in v or "class_type" in v)]
+    # ⚠ **The node POPULATION is `route_gates._walk_nodes`, not a local comprehension.**
+    # The loop that stood here read `nodes = [v for v in doc.values() if isinstance(v,
+    # dict) and ("inputs" in v or "class_type" in v)]` and then `inputs = node.get(
+    # "inputs") or {}` / `if not isinstance(inputs, dict): continue` — the bare `continue`
+    # this docstring's own warning was rewritten to remove, re-introduced one level down:
+    # at the GRAPH the earlier fix separated "no text here" from "I did not recognise this
+    # shape", and at the NODE the two answers collapsed again.
+    #
+    # Measured 2026-09-05 in this worktree on `580af47`, on an API graph of two
+    # `CLIPTextEncode` nodes — the first with `inputs={'text': 'a knight in plate
+    # armour'}`, the second with `inputs=[['text', 'a second, unchecked prompt with
+    # forbidden words']]` — this function returned `['a knight in plate armour']`, one of
+    # two, with nothing in the return value or anywhere else recording that a node existed
+    # and was not read. The control on the SAME graph one module over:
+    # `route_gates.components(g)` RAISES with `clause: 'unreadable_node'`, because
+    # `_readable_containers` / `NODE_CONTAINERS` refuses exactly this container shape on
+    # the stated ground that "a skipped node is a node no clause examined". Two readers of
+    # one API graph, opposite verdicts, and the one that failed OPEN is the one whose
+    # output becomes the prompt `cover` runs the both-direction router over — so
+    # `require_canon`'s coverage numbers were computed over a subset of the text the
+    # submission actually conditions on.
+    #
+    # Adopting the walk rather than adding a second `isinstance` here is the wave-24
+    # method: `_walk_nodes` already guards the node's own containers, already refuses an
+    # API entry whose class was lost, and is the population every Gate ROUTE clause reads.
+    # The refusal is re-raised as this module's andon (as `unrecognised_graph` above is),
+    # carrying Gate ROUTE's own `clause` unchanged so a halt reader keys on one word for
+    # one condition.
     out = []
-    for node in nodes:
-        inputs = node.get("inputs") or {}
-        if not isinstance(inputs, dict):
-            continue
-        for key in ("text", "prompt", "positive"):
-            val = inputs.get(key)
-            if isinstance(val, str) and val.strip():
-                out.append(val)
+    try:
+        for _where, node in route_gates._walk_nodes(doc):
+            inputs = node["inputs"]
+            for key in ("text", "prompt", "positive"):
+                val = inputs.get(key)
+                if isinstance(val, str) and val.strip():
+                    out.append(val)
+    except route_gates.RouteGate as exc:
+        _raise(
+            f"{exc}; a node this reader cannot enter is not a node carrying no text",
+            dict(exc.evidence or {}, type=type(graph).__name__),
+        )
     return out
 
 

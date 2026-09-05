@@ -266,7 +266,11 @@ def test_the_classified_count_moves_zero_to_one_when_a_row_is_added(monkeypatch)
 
 def test_an_unclassified_component_is_still_reported_and_still_not_refused():
     """What this fix does NOT change, pinned beside what it does: the wave-10 ruling that
-    UNKNOWN is reported rather than raised stands (`tests/test_route_gates.py:1893`). The
+    UNKNOWN is reported rather than raised stands
+    (`tests/test_route_gates.py::test_a_base_weight_reads_not_in_this_table_and_that_is_
+    recorded_not_silent` — RE-ANCHORED on the symbol 2026-09-05, wave 25: the line this
+    used to cite, `:1893`, moved when this domain's citation edit shifted the file, and it
+    was already a recorded stale anchor). The
     receipt now says the question was asked; it does not answer it."""
     ev = _verify(_graph("some_unknown_style_v3.safetensors"))
     assert [c["verdict"] for c in ev["components"]] == ["NOT IN THIS TABLE"] * 2

@@ -103,7 +103,7 @@ def frame_paths(frames_dir):
             f"({sorted(bad)[:5]}), so their temporal order is not established by this "
             f"directory. Sorting content-addressed names alphabetically produces a "
             f"shuffled clip that every other check passes",
-            {"gate": "DONOR", "andon": "DonorGate",
+            {"gate": "DONOR", "andon": "DonorGate", "clause": "frames_not_numerically_named",
              "unnumbered": sorted(bad)[:20], "n_total": len(names),
              "n_in_directory": len(listing),
              "n_not_png": len(listing) - len(names)})
@@ -125,8 +125,10 @@ def mean_consecutive_frame_difference(paths):
 
     if len(paths) < 2:
         raise DonorGate(f"a clip of {len(paths)} frame(s) has no consecutive pair to "
-                        f"difference", {"gate": "DONOR", "andon": "DonorGate",
-                                        "n_frames": len(paths)})
+                        f"difference",
+                        {"gate": "DONOR", "andon": "DonorGate",
+                         "clause": "clip_has_no_consecutive_pair",
+                         "n_frames": len(paths)})
     per_pair = []
     prev = None
     for p in paths:
@@ -136,8 +138,10 @@ def mean_consecutive_frame_difference(paths):
                 raise DonorGate(
                     f"frame {os.path.basename(p)} is {arr.shape} where the previous frame "
                     f"is {prev.shape}; a clip whose frames change size has no per-pixel "
-                    f"difference", {"gate": "DONOR", "andon": "DonorGate",
-                                    "frame": os.path.basename(p)})
+                    f"difference",
+                    {"gate": "DONOR", "andon": "DonorGate",
+                     "clause": "frame_sizes_differ",
+                     "frame": os.path.basename(p)})
             per_pair.append(float(np.abs(arr - prev).mean()))
         prev = arr
     return {
@@ -261,7 +265,10 @@ def ankle_framing(rows, detect_evidence=None):
     if not fired:
         raise DonorGate("no frame carries image landmarks, so the framing clause cannot "
                         "be evaluated. A gate that cannot compute its own quantity halts "
-                        "rather than passing", {"gate": "DONOR", "andon": "DonorGate", "n_rows": len(rows)})
+                        "rather than passing",
+                        {"gate": "DONOR", "andon": "DonorGate",
+                         "clause": "no_frame_carries_landmarks",
+                         "n_rows": len(rows)})
     required = max(idx.values())
     per_frame = []
     for r in rows:
@@ -318,8 +325,100 @@ def ankle_framing(rows, detect_evidence=None):
             "the exact both-ankles fraction falls outside the bounds its own per-ankle "
             "rates allow, which means the two were computed off different populations",
             dict({k: v for k, v in out.items() if k != "frames"},
-                 gate="DONOR", andon="DonorGate"))
+                 gate="DONOR", andon="DonorGate",
+                 clause="ankle_fractions_off_different_populations"))
     return out
+
+
+def _readable_gate_record(name, record, required, producer):
+    """Gate DONOR's refusal for an argument record whose key moved.
+
+    ⚠ **The gate read its two argument records with BARE SUBSCRIPTS, and the fragile path
+    was the REFUSAL path.** `m = motion['mean']` and `f = framing['both_ankles_in_image']`
+    were bare, and the failure branch composes its own message from
+    `framing['per_ankle_fraction_of_frames_in_image']['left_ankle'|'right_ankle']`, which
+    nothing reads when the clip passes. Measured 2026-09-05 in this worktree on `580af47`:
+    `gate_donor({'mean_over_255': 3.0}, {'both_ankles_in_image': 0.9})` raised
+    `KeyError: 'mean'`; `gate_donor({'mean': 3.0}, {'ankles_in_image': 0.9})` raised
+    `KeyError: 'both_ankles_in_image'`; and — the sharp one —
+    `gate_donor({'mean': 0.1}, {'both_ankles_in_image': 0.1})`, a clip that FAILS both of
+    A3's clauses, raised `KeyError: 'per_ankle_fraction_of_frames_in_image'`.
+
+    `isinstance(exc, ArmatureError)` is False for all three, so the halt contract's exit-2
+    receipt branch is bypassed and a deliberate Gate DONOR refusal is classified exit 1 —
+    an unhandled crash — with the evidence dict (thresholds, both measurements, `verdict:
+    FAILED`) reaching no printed line. The operator sees a stdlib traceback where "this
+    clip is not a baseline" belonged, on the gate whose pass is the input to every
+    rotation solved afterwards.
+
+    This is one step earlier than the direction this function already accepted: the two
+    MEASURED quantities were given `parts.require_finite` on the stated ground that "the
+    exposure is a caller, or a future producer (a record read back from a JSON motion
+    summary), handing the gate a non-number". The same producer class hands it a record
+    whose KEY moved, and the presence of the key got no clause while the finiteness of its
+    value did. The sibling shape inside this module — `_readable_landmark_row`, refusing
+    the SHAPE of a row `ankle_framing` reads — is the pattern copied here.
+
+    `producer` names which function in this module writes the record, so the halt line
+    tells the operator where to look rather than only that a key was absent.
+    """
+    if not isinstance(record, dict):
+        raise DonorGate(
+            f"Gate DONOR's `{name}` argument is a {type(record).__name__} "
+            f"({record!r}), not the record `{producer}` writes. A gate that cannot read "
+            f"its own operand halts by name rather than crashing under one",
+            {"gate": "DONOR", "andon": "DonorGate", "clause": "unreadable_gate_input",
+             "argument": name, "producer": producer, "required_keys": list(required),
+             "record_type": type(record).__name__, "record_keys": None},
+        )
+    missing = [k for k in required if k not in record]
+    if missing:
+        raise DonorGate(
+            f"Gate DONOR's `{name}` record is missing {missing!r}; it carries "
+            f"{sorted(map(str, record))!r}. `{producer}` is what writes this record — a "
+            f"renamed or dropped key reaches this gate as a `KeyError`, which is not an "
+            f"`ArmatureError`, so a deliberate refusal would be classified as an "
+            f"unhandled crash and the evidence would reach no printed line",
+            {"gate": "DONOR", "andon": "DonorGate", "clause": "unreadable_gate_input",
+             "argument": name, "producer": producer, "required_keys": list(required),
+             "missing_keys": missing, "record_type": type(record).__name__,
+             "record_keys": sorted(map(str, record))},
+        )
+    return record
+
+
+def _readable_per_ankle(per_ankle):
+    """The per-ankle sub-record the FAILURE message indexes, guarded on the same clause.
+
+    `ANKLES` is the population: the refusal branch formats
+    `per_ankle_fraction_of_frames_in_image[a]` for each, so a record carrying the outer key
+    and not the inner ones crashes only on the path that was about to refuse.
+    """
+    if not isinstance(per_ankle, dict):
+        raise DonorGate(
+            f"Gate DONOR's `framing.per_ankle_fraction_of_frames_in_image` is a "
+            f"{type(per_ankle).__name__} ({per_ankle!r}), not a per-ankle mapping. The "
+            f"REFUSAL message indexes it, so this shape crashes exactly when the gate was "
+            f"about to say the clip is not a baseline",
+            {"gate": "DONOR", "andon": "DonorGate", "clause": "unreadable_gate_input",
+             "argument": "framing.per_ankle_fraction_of_frames_in_image",
+             "producer": "donor_gate.ankle_framing", "required_keys": list(ANKLES),
+             "record_type": type(per_ankle).__name__, "record_keys": None},
+        )
+    missing = [a for a in ANKLES if a not in per_ankle]
+    if missing:
+        raise DonorGate(
+            f"Gate DONOR's `framing.per_ankle_fraction_of_frames_in_image` is missing "
+            f"{missing!r}; it carries {sorted(map(str, per_ankle))!r}. The REFUSAL message "
+            f"indexes both ankles, so this record refuses cleanly on a passing clip and "
+            f"crashes on a failing one",
+            {"gate": "DONOR", "andon": "DonorGate", "clause": "unreadable_gate_input",
+             "argument": "framing.per_ankle_fraction_of_frames_in_image",
+             "producer": "donor_gate.ankle_framing", "required_keys": list(ANKLES),
+             "missing_keys": missing, "record_type": type(per_ankle).__name__,
+             "record_keys": sorted(map(str, per_ankle))},
+        )
+    return per_ankle
 
 
 def gate_donor(motion, framing):
@@ -340,6 +439,17 @@ def gate_donor(motion, framing):
     th = dict(THRESHOLDS)
     m_min = th["min_mean_consecutive_frame_difference_over_255"]
     f_min = th["min_fraction_of_frames_with_ankles_in_image"]
+    # · ANDON — the two ARGUMENT RECORDS, before the first subscript. See
+    # `_readable_gate_record`: `m = motion['mean']` and `f = framing[
+    # 'both_ankles_in_image']` were bare, and so were the two per-ankle reads the FAILURE
+    # message composes — so the fragile path was the refusal path, not the pass path.
+    _readable_gate_record("motion", motion, ("mean",),
+                          "donor_gate.mean_consecutive_frame_difference")
+    _readable_gate_record("framing", framing,
+                          ("both_ankles_in_image",
+                           "per_ankle_fraction_of_frames_in_image"),
+                          "donor_gate.ankle_framing")
+    _readable_per_ankle(framing["per_ankle_fraction_of_frames_in_image"])
     m = motion["mean"]
     f = framing["both_ankles_in_image"]
 
@@ -388,6 +498,7 @@ def gate_donor(motion, framing):
                       f"right {framing['per_ankle_fraction_of_frames_in_image']['right_ankle']:.1%})")
     if failed:
         ev["verdict"] = "FAILED"
+        ev["clause"] = "donor_below_threshold"
         raise DonorGate(
             "; ".join(failed) + ". A donor failing this gate is a recorded take, not a "
             "baseline: nothing is lifted off it, and A3 item 4 governs what happens next",

@@ -1190,7 +1190,12 @@ TESTS_CITED_FILES_NOT_IN_THE_TREE = {
 #: (No `<file>` `<line>` pair is written in this prose, for the reason the block below
 #: records: a comment explaining the rule is inside the population the rule governs.)
 TESTS_STALE_ANCHORS_RECORDED = {
-    ('test_amend_w12_core_gates', 'test_route_gates.py', 1893),
+    # WAVE 25 (core-gates, 2026-09-05): the `('test_amend_w12_core_gates',
+    # 'test_route_gates.py', 1893)` row is DELETED here rather than kept, because line 1893
+    # became live under this domain's edits and a recorded anchor that resolves is a row
+    # this file's own converse assertion refuses. Its citation was RE-ANCHORED on the
+    # symbol instead (`::test_a_base_weight_reads_not_in_this_table_and_that_is_recorded_
+    # not_silent`), which is the fix this census's message asks for.
     ('test_amend_w16_core_solvers', 'lift_solve.py', 307),
     ('test_assembly', 'test_amend_w12_core_solvers.py', 797),
     ('test_donor_gate', 'render_pose_sticks.py', 178),

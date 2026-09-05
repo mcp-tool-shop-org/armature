@@ -593,7 +593,8 @@ def test_the_base_class_stores_the_evidence_it_is_given():
     # instruments-measure's tools; 4 `PayloadError`s; `rig_character.SiteListInvalid`), and
     # `measure_tracking.TrackingError` / `.AnchorMismatch` inherit one from
     # `_CarriesEvidence`. So the general claim was false of 45 measured classes, and
-    # `tests/test_core_solver_evidence.py:522-524` asserted of three of them that they are
+    # `tests/test_core_solver_evidence.py::test_the_two_dual_based_andons_are_both_kinds_of_
+    # refusal_at_once` asserted of three of them that they are
     # `not issubclass(GateFailure)` and then checked only the PASSED path, two lines from
     # where the same file could have caught it.
     #

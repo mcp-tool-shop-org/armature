@@ -159,15 +159,51 @@ def _merge(base, override):
     return out
 
 
+def _refuse(message, evidence):
+    """This module's ONE andon, in the shape `canon._raise` and `canon_census._refuse` use.
+
+    ⚠ **23 of this module's 25 refusals raised with NO evidence dict at all**, so the halt
+    line an operator keys on printed `"evidence": null` for every refusal about the asset
+    each control render is built from. Measured 2026-09-05 in this worktree on `580af47`:
+    of 25 `raise SpecError(...)` sites exactly TWO passed a second argument, and
+    `resolve_asset({'asset': {'path': <a real file>, 'sha256': 'deadbeef'}})` raised with
+    `evidence is None` — the halt record reading `{"error": "SpecError", "message":
+    "spec.asset.sha256 pins deadbeef but … hashes to …", "evidence": null}` for the ONE
+    field this module's docstring says it exists to fix.
+
+    `errors.ArmatureError`'s own docstring rules that a null is "the honest record for
+    `raise ArmatureError("unknown --mode=wobble")`" — a plain refusal that HAS no receipt —
+    and that "a refusal still names a class with a `clause` or a `gate`". These refusals
+    HAVE a receipt to give (the pinned digest and the measured one, the path, the key, the
+    accepted vocabulary) and gave none.
+
+    The module was consequently absent from the census that would have noticed:
+    `tests/test_core_solver_evidence.py`'s per-module table is keyed on
+    `GateFailure`-subclass raises, and `SpecError` is a plain `ArmatureError`; the
+    family-wide judge (`tests/test_gates.evidence_dicts_missing`) counted this module's
+    four functions in `no_evidence` and `EVIDENCE_NO_EVIDENCE_ROUTED` carried them as a
+    routed exemption. All four leave in the commit that adds this helper.
+
+    `gate: None` + `andon` is the receipt shape a PLAIN refusal carries in this tree:
+    `SpecError` is not a gate, so it names no gate id and SAYS so rather than omitting the
+    key.
+    """
+    raise SpecError(message, dict(evidence, gate=None, andon="SpecError"))
+
+
 def _require(mapping, key, kind, where):
     if key not in mapping:
-        raise SpecError(f"{where}: missing required key {key!r}")
+        _refuse(f"{where}: missing required key {key!r}", {'clause': 'missing_spec_key',
+                                                           'where': where, 'key': key,
+                                                           'present_keys': sorted(map(str, mapping))})
     value = mapping[key]
     if not isinstance(value, kind) or isinstance(value, bool) and kind is not bool:
         named = (kind.__name__ if isinstance(kind, type)
                  else " or ".join(k.__name__ for k in kind))
-        raise SpecError(
-            f"{where}.{key}: expected {named}, got {type(value).__name__}"
+        _refuse(
+            f"{where}.{key}: expected {named}, got {type(value).__name__}",
+            {'clause': 'spec_value_wrong_type', 'where': where, 'key': key,
+             'expected': named, 'got': type(value).__name__, 'value': repr(value)}
         )
     return value
 
@@ -210,11 +246,13 @@ def _require_positive(mapping, key, where, note=None):
     # message this function has always given it.
     _require_finite_number(mapping, key, where, note=note, positive=False)
     if value <= 0:
-        raise SpecError(
+        _refuse(
             f"{where}.{key} is {value}" + (f", {note}" if note else "")
             + f"; it must be positive. A spec that parses is not "
             f"a spec that may run, but a non-positive count, rate or dimension is not a "
-            f"spec that parses either"
+            f"spec that parses either",
+            {'clause': 'spec_value_not_positive', 'where': where, 'key': key,
+             'value': value, 'note': note}
         )
     return value
 
@@ -232,7 +270,13 @@ def _require_finite_number(mapping, key, where, note=None, positive=False):
     # `gate: None` + `andon` is the receipt shape a PLAIN refusal carries in this tree (the
     # convention core-solvers is extending across walk/framing/glb this wave): SpecError is
     # not a gate, so it names no gate id, and it says so rather than omitting the key.
-    ev = {"gate": None, "andon": "SpecError", "spec_field": f"{where}.{key}"}
+    # WAVE 25 (F-b333ba7c): `clause` joined this literal. It was the ONE site in the module
+    # already carrying a receipt AND the one `evidence_dicts_missing('clause')` named as
+    # this file's offender — a receipt with a gate id slot and no clause word, which is the
+    # key a halt reader branches on.
+    ev = {"gate": None, "andon": "SpecError", "clause": "spec_value_not_finite",
+          "spec_field": f"{where}.{key}", "where": where, "key": key,
+          "value": repr(mapping[key]), "note": note}
     try:
         return require_finite(f"{where}.{key}", mapping[key], SpecError, ev,
                               positive=positive)
@@ -275,7 +319,7 @@ def _refuse_unknown_keys(spec):
                          and not str(k).startswith(PASSTHROUGH_PREFIX)
                          and not (where == "spec" and str(k) == "gates"))
         if unknown:
-            raise SpecError(
+            _refuse(
                 f"{where} carries {unknown!r}, which this schema has no reader for; the "
                 f"keys of {where} are {list(known)}. An unknown key is not a spec with an "
                 f"extra field — the value is IGNORED, the shot is taken at the module "
@@ -285,9 +329,8 @@ def _refuse_unknown_keys(spec):
                 f"the schema should not read, prefix the key with "
                 f"{PASSTHROUGH_PREFIX!r} — that is what `specs/**` already does and what "
                 f"`dump_spec` already strips",
-                {"gate": None, "andon": "SpecError", "clause": "unknown_spec_key",
-                 "where": where, "unknown": unknown, "known_keys": list(known),
-                 "passthrough_prefix": PASSTHROUGH_PREFIX},
+                {'clause': 'unknown_spec_key', 'where': where, 'unknown': unknown,
+                 'known_keys': list(known), 'passthrough_prefix': PASSTHROUGH_PREFIX}
             )
     return passthrough
 
@@ -305,13 +348,17 @@ def normalise_spec(raw, spec_path=None):
     the tool that writes, not here. A spec that parses is not a spec that may run.
     """
     if not isinstance(raw, dict):
-        raise SpecError("spec must be a JSON object")
+        _refuse("spec must be a JSON object", {'clause': 'spec_is_not_an_object',
+                                               'type': type(raw).__name__,
+                                               'value': repr(raw)[:200]})
 
     spec = _merge(DEFAULTS, raw)
 
     version = spec.get("spec_version")
     if version != SPEC_VERSION:
-        raise SpecError(f"spec_version {version!r} is not supported (want {SPEC_VERSION})")
+        _refuse(f"spec_version {version!r} is not supported (want {SPEC_VERSION})",
+                {'clause': 'spec_version_unsupported', 'version': repr(version),
+                 'supported': SPEC_VERSION})
 
     _require(spec, "name", str, "spec")
     _require(spec, "generator", str, "spec")
@@ -334,26 +381,35 @@ def normalise_spec(raw, spec_path=None):
     if "gates" in raw:
         gate_fields = raw.get("gates")
         if not isinstance(gate_fields, dict):
-            raise SpecError("spec.gates must be an object — and it is refused whatever "
-                            "it contains; delete the key")
+            _refuse("spec.gates must be an object — and it is refused whatever "
+                    "it contains; delete the key", {'clause': 'retired_gates_block',
+                                                    'where': 'spec.gates',
+                                                    'got': type(gate_fields).__name__,
+                                                    'value': repr(gate_fields)[:200],
+                                                    'retired_keys': sorted(RETIRED_GATE_KEYS)})
         if not gate_fields:
-            raise SpecError(
+            _refuse(
                 "spec.gates is refused even when it is EMPTY: the key itself is the "
                 "retired schema surface, and an empty block that round-trips back out "
                 "is the next number's home. Delete the key. "
                 f"(Known retired keys and their new homes: {sorted(RETIRED_GATE_KEYS)}; "
-                "g4_tolerance_px now lives in gates.G4_TOLERANCE_PX)"
+                "g4_tolerance_px now lives in gates.G4_TOLERANCE_PX)",
+                {'clause': 'retired_gates_block', 'where': 'spec.gates', 'got': 'dict',
+                 'value': '{}', 'retired_keys': sorted(RETIRED_GATE_KEYS)}
             )
         for key in sorted(gate_fields):
             home = RETIRED_GATE_KEYS.get(key)
-            raise SpecError(
+            _refuse(
                 f"spec.gates.{key} is refused: a number a gate compares against is a "
                 f"skip flag wearing a schema's clothes"
                 + (f". It now lives in {home}" if home
                    else f". Known retired keys: {sorted(RETIRED_GATE_KEYS)}")
                 + " — delete the row from the spec. (spec.gates.g4_tolerance_px used to "
                   "be read by stage_render and handed to G4 unvalidated; the constant is "
-                  "gates.G4_TOLERANCE_PX)"
+                  "gates.G4_TOLERANCE_PX)",
+                {'clause': 'retired_gates_key', 'where': 'spec.gates', 'key': key,
+                 'value': repr(gate_fields[key]), 'new_home': home,
+                 'retired_keys': sorted(RETIRED_GATE_KEYS)}
             )
 
     # · ANDON — the KEYS, before any value is read. Placed after `spec.gates`' own clause
@@ -379,14 +435,24 @@ def normalise_spec(raw, spec_path=None):
 
     channels = _require(spec, "channels", list, "spec")
     if not channels:
-        raise SpecError("spec.channels is empty; there is nothing to export")
+        _refuse("spec.channels is empty; there is nothing to export", {'clause': 'channels_empty',
+                                                                       'where': 'spec.channels',
+                                                                       'known_channels': list(KNOWN_CHANNELS)})
     unknown = [c for c in channels if c not in KNOWN_CHANNELS]
     if unknown:
-        raise SpecError(
-            f"spec.channels names unknown channel(s) {unknown}; known: {list(KNOWN_CHANNELS)}"
+        _refuse(
+            f"spec.channels names unknown channel(s) {unknown}; known: "
+            f"{list(KNOWN_CHANNELS)}",
+            {'clause': 'channel_unknown', 'where': 'spec.channels',
+             'unknown': [repr(c) for c in unknown],
+             'known_channels': list(KNOWN_CHANNELS),
+             'channels': [repr(c) for c in channels]}
         )
     if len(set(channels)) != len(channels):
-        raise SpecError(f"spec.channels contains duplicates: {channels}")
+        _refuse(f"spec.channels contains duplicates: {channels}", {'clause': 'channels_duplicated',
+                                                                   'where': 'spec.channels',
+                                                                   'channels': [repr(c) for c in channels],
+                                                                   'duplicated': sorted({repr(c) for c in channels if channels.count(c) > 1})})
 
     # A pinned depth window exists so two arms can share one tonal scale.
     #
@@ -402,8 +468,10 @@ def normalise_spec(raw, spec_path=None):
         if (not isinstance(window, (list, tuple)) or len(window) != 2
                 or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
                            for v in window)):
-            raise SpecError(
-                "spec.depth.window must be 'per_shot' or a 2-number [z_min, z_max]"
+            _refuse(
+                "spec.depth.window must be 'per_shot' or a 2-number [z_min, z_max]",
+                {'clause': 'depth_window_shape', 'where': 'spec.depth.window',
+                 'value': repr(window), 'got': type(window).__name__}
             )
         # · ANDON — `spec.depth.window` was covered against NaN only BY ACCIDENT: the
         # ordering test below is `window[0] < window[1]`, which is False for a NaN, so a
@@ -416,9 +484,11 @@ def normalise_spec(raw, spec_path=None):
             _require_finite_number(dict(enumerate(window)), i, "spec.depth.window",
                                    positive=False)
         if not window[0] < window[1]:
-            raise SpecError(
+            _refuse(
                 f"spec.depth.window is [{window[0]}, {window[1]}]; z_min must be below "
-                f"z_max or the normalisation collapses"
+                f"z_max or the normalisation collapses",
+                {'clause': 'depth_window_not_ordered', 'where': 'spec.depth.window',
+                 'z_min': window[0], 'z_max': window[1]}
             )
 
     subject = _require(spec, "subject", dict, "spec")
@@ -427,20 +497,30 @@ def normalise_spec(raw, spec_path=None):
         # Not a soft default: silently falling back to `static` would render 33 identical
         # frames for a spec that asked for a performance, and G6 would never be armed
         # because the mode it keys on never arrived.
-        raise SpecError(
-            f"spec.subject.animation {animation!r} is not one of {list(ANIMATION_MODES)}"
+        _refuse(
+            f"spec.subject.animation {animation!r} is not one of "
+            f"{list(ANIMATION_MODES)}",
+            {'clause': 'animation_mode_unknown', 'where': 'spec.subject',
+             'key': 'animation', 'value': repr(animation),
+             'animation_modes': list(ANIMATION_MODES)}
         )
 
     cam = spec["camera"]
     if cam.get("type") != "orbit":
-        raise SpecError(f"spec.camera.type {cam.get('type')!r} is not implemented (only 'orbit')")
+        _refuse(f"spec.camera.type {cam.get('type')!r} is not implemented "
+                f"(only 'orbit')", {'clause': 'camera_type_not_implemented',
+                                    'where': 'spec.camera', 'key': 'type',
+                                    'value': repr(cam.get('type')),
+                                    'implemented': ['orbit']})
     radius = cam.get("radius")
     # `bool` is a subclass of `int`, so `radius: true` was accepted as a number and
     # resolved to an orbit radius of 1.0. The `target` clause immediately below already
     # carries `not isinstance(v, bool)`; the same clause, not a second mechanism.
     if radius != "auto" and (not isinstance(radius, (int, float))
                              or isinstance(radius, bool)):
-        raise SpecError("spec.camera.radius must be a number or the string 'auto'")
+        _refuse("spec.camera.radius must be a number or the string 'auto'",
+                {'clause': 'camera_radius_not_a_number', 'where': 'spec.camera',
+                 'key': 'radius', 'value': repr(radius), 'got': type(radius).__name__})
 
     # `target` may be pinned numerically as well as derived. E03 needs this: its animated
     # arm fits the camera to the union of every frame while its static arm fits the bind
@@ -453,8 +533,10 @@ def normalise_spec(raw, spec_path=None):
         if (not isinstance(target, (list, tuple)) or len(target) != 3
                 or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
                            for v in target)):
-            raise SpecError(
-                "spec.camera.target must be 'bbox_center' or a 3-number [x, y, z]"
+            _refuse(
+                "spec.camera.target must be 'bbox_center' or a 3-number [x, y, z]",
+                {'clause': 'camera_target_shape', 'where': 'spec.camera',
+                 'key': 'target', 'value': repr(target), 'got': type(target).__name__}
             )
         # · ANDON — `target` is the ONE numeric camera field the wave-12 non-finite sweep
         # did not reach: the comment below says "the rest of the camera block's numbers"
@@ -520,10 +602,12 @@ def normalise_spec(raw, spec_path=None):
     # range that does not open turns that andon into a check that always fires, and
     # nothing anywhere catches it as a malformed value.
     if not cam["clip_start"] < cam["clip_end"]:
-        raise SpecError(
+        _refuse(
             f"spec.camera.clip_start is {cam['clip_start']} and clip_end is "
             f"{cam['clip_end']}; the near plane must be in front of the far one or the "
-            f"camera has no depth range at all"
+            f"camera has no depth range at all",
+            {'clause': 'camera_clip_range_not_ordered', 'where': 'spec.camera',
+             'clip_start': cam['clip_start'], 'clip_end': cam['clip_end']}
         )
 
     # · ANDON — `spec.edge` and `spec.render` were validated in NO WAY AT ALL: no
@@ -557,22 +641,27 @@ def normalise_spec(raw, spec_path=None):
     # outside the half-turn is not a tighter or looser threshold, it is a number whose
     # meaning is not the one the field's name states.
     if not 0.0 <= float(edge["normal_angle_deg"]) <= 180.0:
-        raise SpecError(
+        _refuse(
             f"spec.edge.normal_angle_deg is {edge['normal_angle_deg']}; a normal break "
             f"angle lives in [0, 180]. `channels.derive_edge` reads it as "
             f"cos(radians(x)), which is periodic, so a value outside the half-turn "
-            f"silently means a different angle than the one written down"
+            f"silently means a different angle than the one written down",
+            {'clause': 'edge_normal_angle_out_of_domain', 'where': 'spec.edge',
+             'key': 'normal_angle_deg', 'value': edge['normal_angle_deg'],
+             'domain': [0.0, 180.0]}
         )
 
     render = _require(spec, "render", dict, "spec")
     engine = _require(render, "engine", str, "spec.render")
     if engine not in KNOWN_ENGINES:
-        raise SpecError(
+        _refuse(
             f"spec.render.engine {engine!r} is not one of {list(KNOWN_ENGINES)}. "
             f"`blender_scene.configure_render` assigns it to `scene.render.engine` "
             f"verbatim, so an unknown identifier is refused by Blender's RNA from inside "
             f"the render layer — after the scene is built and the tool that writes has "
-            f"been entered"
+            f"been entered",
+            {'clause': 'render_engine_unknown', 'where': 'spec.render', 'key': 'engine',
+             'value': repr(engine), 'known_engines': list(KNOWN_ENGINES)}
         )
     _require(render, "samples", int, "spec.render")
     _require_positive(render, "samples", "spec.render", note="which is a sample COUNT")
@@ -607,18 +696,26 @@ def resolve_asset(spec):
     """
     path = os.path.abspath(spec["asset"]["path"])
     if not os.path.isfile(path):
-        raise SpecError(f"spec.asset.path does not exist: {path}")
+        _refuse(f"spec.asset.path does not exist: {path}", {'clause': 'asset_missing',
+                                                            'where': 'spec.asset',
+                                                            'key': 'path',
+                                                            'path': str(path),
+                                                            'declared': repr(spec['asset']['path'])})
     digest = sha256_file(path)
     pinned = spec["asset"].get("sha256")
     if not pinned:
-        raise SpecError(
+        _refuse(
             f"spec.asset.sha256 is absent, so this spec asserts nothing about the "
             f"bytes it was written against. {path} hashes to {digest} — paste that "
-            f"into spec.asset.sha256"
+            f"into spec.asset.sha256",
+            {'clause': 'asset_sha256_absent', 'where': 'spec.asset', 'key': 'sha256',
+             'path': str(path), 'measured': digest, 'pinned': repr(pinned)}
         )
     if pinned != digest:
-        raise SpecError(
-            f"spec.asset.sha256 pins {pinned} but {path} hashes to {digest}"
+        _refuse(
+            f"spec.asset.sha256 pins {pinned} but {path} hashes to {digest}",
+            {'clause': 'asset_sha256_mismatch', 'where': 'spec.asset', 'key': 'sha256',
+             'path': str(path), 'pinned': pinned, 'measured': digest}
         )
     return path, digest
 

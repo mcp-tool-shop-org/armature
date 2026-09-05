@@ -26,6 +26,11 @@ from .errors import (
     GateSSeedRegistration,
 )
 from .parts import require_finite
+#: G6's vocabulary is `shotspec`'s, imported rather than re-typed here — one home for the
+#: set of animation modes, so a third mode cannot be added to the contract and join G6's
+#: passing side unexamined. `shotspec` imports only `errors` and `parts`, so this is not a
+#: cycle; `normalise_spec` refuses a value outside the tuple, and G6 now refuses one too.
+from .shotspec import ANIMATION_MODES
 
 
 class GeneratorProfile:
@@ -179,7 +184,7 @@ def resolve_generator(name):
         raise G1GeneratorLegality(
             f"unknown generator profile {name!r}; no legality constraints are known "
             f"for it, so nothing would be checked",
-            {"gate": "G1", "andon": "G1GeneratorLegality",
+            {"gate": "G1", "andon": "G1GeneratorLegality", "clause": "unknown_generator_profile",
              "generator": name, "known": sorted(GENERATOR_PROFILES)},
         )
     return profile
@@ -223,7 +228,7 @@ def g1_generator_legality(width, height, frame_count, generator):
             f"{profile.name!r}: " + "; ".join(problems),
             {
                 "gate": "G1",
-                "andon": "G1GeneratorLegality",
+                "andon": "G1GeneratorLegality", "clause": "frame_not_generator_legal",
                 "width": width,
                 "height": height,
                 "frame_count": frame_count,
@@ -273,7 +278,7 @@ def g2_completeness(run_dir, expected, frame_count):
             "completeness verdict: nothing would be examined and the manifest written "
             "after it would report a finished run. The caller built its channel "
             "expectation wrongly — spec.channels cannot be empty",
-            {"gate": "G2", "andon": "G2Completeness",
+            {"gate": "G2", "andon": "G2Completeness", "clause": "completeness_over_zero_channels",
              "run_dir": run_dir, "frame_count": frame_count, "expected_channels": [],
              "channels": {}},
         )
@@ -330,7 +335,7 @@ def g2_completeness(run_dir, expected, frame_count):
     if problems:
         raise G2Completeness(
             "export is incomplete: " + "; ".join(problems),
-            {"gate": "G2", "andon": "G2Completeness",
+            {"gate": "G2", "andon": "G2Completeness", "clause": "export_incomplete",
              "run_dir": run_dir, "frame_count": frame_count, "channels": detail},
         )
     return detail
@@ -385,6 +390,25 @@ def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, width, height):
         "resolution": [width, height],
     }
 
+    # · ANDON — the FRAME, before either box is read against it. The containment clause
+    # below is the first thing on this page to READ `width` and `height` rather than
+    # transcribe them into the receipt, and a resolution that is not two positive integers
+    # would disarm it in silence — which is the disease this whole finding is about. A
+    # check that can be switched off by an unreadable argument is not a check, so the
+    # argument is refused by name (wave 10's rule: a disarming default is a refusal).
+    for name, value in (("width", width), ("height", height)):
+        if (not isinstance(value, int) or isinstance(value, bool) or value <= 0):
+            ev["clause"] = "resolution_is_not_a_frame_size"
+            ev["offending_field"] = name
+            ev["offending_value"] = repr(value)
+            raise G4BboxSanity(
+                f"frame {frame_index}: {name} is {value!r}, which is not a positive "
+                f"integer pixel dimension. G4 reads the resolution to decide whether a "
+                f"bbox lies inside the frame at all; an unreadable one would leave that "
+                f"clause silently disarmed while the receipt still recorded a resolution",
+                ev,
+            )
+
     # A bbox that is not four numbers is a malformed question, not a small disagreement.
     #
     # `zip(mask_bbox, projected_bbox)` truncates to the SHORTER sequence, so a bbox with
@@ -402,6 +426,7 @@ def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, width, height):
         if (not isinstance(box, (list, tuple)) or len(box) != 4
                 or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
                            for v in box)):
+            ev["clause"] = "bbox_is_not_four_numbers"
             raise G4BboxSanity(
                 f"frame {frame_index}: {label} is {box!r}, which is not four numbers "
                 f"(x0, y0, x1, y1). Two out of four edges compared is not a comparison, "
@@ -430,14 +455,70 @@ def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, width, height):
         # and a projected one may sit off-frame at a negative pixel.
         for edge, v in zip(("x0", "y0", "x1", "y1"), box):
             require_finite(f"{label}.{edge}", v, G4BboxSanity, ev, positive=False)
+        # · ANDON — the third and fourth properties of the same four numbers. Arity has a
+        # clause, member type has a clause, finiteness has a clause; ORDERING and
+        # CONTAINMENT did not, and containment's two parameters were already in the
+        # signature. Measured 2026-09-05 in this worktree on `580af47`: inside this
+        # function the names `width` and `height` occurred exactly ONCE each, both inside
+        # `ev['resolution'] = [width, height]` — written into the receipt and deciding
+        # nothing. `g4_bbox_sanity(0, (5000,5000,5010,5010), (5002,5002,5012,5012), 832,
+        # 480)` returned `[2,2,2,2]`, a PASS on two boxes entirely off an 832x480 frame;
+        # `(-900,-900,-880,-880)` against itself returned `[0,0,0,0]`; and
+        # `(500,400,10,10)` against itself returned `[0,0,0,0]` with
+        # `ev['projected_bbox_size_px']` composed as `[-490, -390]` — a receipt asserting
+        # the projected silhouette is negative on both axes.
+        #
+        # The docstring declares both contracts these violate: "(x0, y0, x1, y1) INCLUSIVE
+        # pixel bounds", and a projected bbox that is every mesh vertex "clipped to the
+        # frame". Bounded honestly: `blender_scene.projected_bbox_px` clips and returns
+        # ints and `startframe.mask_bbox` returns ordered integer bounds, so no production
+        # caller can produce either today — the input class is a future mask source, a
+        # bbox read back out of a JSON manifest, or a camera change that moves the subject
+        # off frame. That is the same class the arity and finiteness clauses above were
+        # written for, on the gate whose stated job is catching a channel rendering the
+        # wrong thing.
+        x0, y0, x1, y1 = box
+        if x1 < x0 or y1 < y0:
+            ev["clause"] = "bbox_corners_out_of_order"
+            ev["offending_bbox"] = list(box)
+            ev["offending_label"] = label
+            ev["failed_edges"] = [e for e, bad in (("x", x1 < x0), ("y", y1 < y0)) if bad]
+            raise G4BboxSanity(
+                f"frame {frame_index}: {label} is {tuple(box)}, whose corners are out of "
+                f"order — (x0, y0, x1, y1) are inclusive bounds, so x1 >= x0 and "
+                f"y1 >= y0. A reversed box makes every delta below a comparison between "
+                f"two different questions, and the receipt would record a silhouette size "
+                f"of {[x1 - x0, y1 - y0]}, which is not a size",
+                ev,
+            )
+        outside = [name for name, bad in (
+            ("x1 < 0", x1 < 0), ("y1 < 0", y1 < 0),
+            (f"x0 > {width - 1}", x0 > width - 1),
+            (f"y0 > {height - 1}", y0 > height - 1)) if bad]
+        if outside:
+            ev["clause"] = "bbox_outside_the_frame"
+            ev["offending_bbox"] = list(box)
+            ev["offending_label"] = label
+            ev["failed_edges"] = outside
+            raise G4BboxSanity(
+                f"frame {frame_index}: {label} is {tuple(box)}, which lies wholly outside "
+                f"the {width}x{height} frame ({', '.join(outside)}). The projected bbox is "
+                f"clipped to the frame by definition and a mask is read out of it, so a "
+                f"box with no pixel inside the image is a channel that rendered the wrong "
+                f"thing — the failure this gate exists to catch, and the one it passed on "
+                f"whenever the mask and the projection agreed with each other off-frame",
+                ev,
+            )
 
     if projected_bbox is None:
+        ev["clause"] = "projected_bbox_is_empty"
         raise G4BboxSanity(
             f"frame {frame_index}: no mesh vertex projects into the frame, so the "
             f"expected silhouette is undefined",
             ev,
         )
     if mask_bbox is None:
+        ev["clause"] = "mask_bbox_is_empty"
         raise G4BboxSanity(
             f"frame {frame_index}: mask is empty, but the mesh projects to "
             f"{projected_bbox}",
@@ -451,6 +532,7 @@ def g4_bbox_sanity(frame_index, mask_bbox, projected_bbox, width, height):
     ev["projected_bbox_size_px"] = [projected_bbox[2] - projected_bbox[0],
                                     projected_bbox[3] - projected_bbox[1]]
     if max(deltas) > tolerance_px:
+        ev["clause"] = "mask_disagrees_with_projection"
         raise G4BboxSanity(
             f"frame {frame_index}: mask bbox {tuple(mask_bbox)} disagrees with the "
             f"projected mesh bbox {tuple(projected_bbox)} by {deltas} px "
@@ -539,7 +621,7 @@ def g5_openpose_conformance(keypoint_count, limb_seq, reference_count, reference
             + "; ".join(problems),
             {
                 "gate": "G5",
-                "andon": "G5ConventionConformance",
+                "andon": "G5ConventionConformance", "clause": "openpose_convention_mismatch",
                 "keypoint_count": keypoint_count,
                 "reference_count": reference_count,
                 "problems": problems,
@@ -579,17 +661,49 @@ def g6_subject_motion(frame_signatures, animation_mode):
         "n_frames": len(frame_signatures),
         "distinct_signatures": len(set(frame_signatures)),
     }
+    # · ANDON — the answer is split THREE ways, not two. This clause read
+    # `if animation_mode != 'per_frame': return N/A`, an inequality against ONE literal
+    # rather than membership in the recorded vocabulary, so the gate disarmed itself IN
+    # THE AFFIRMATIVE on any mode it did not recognise. Measured 2026-09-05 in this
+    # worktree on `580af47`: `g6_subject_motion(['a'] * 33, 'per-frame')` and
+    # `g6_subject_motion(['a'] * 33, None)` both RETURNED the N/A verdict over 33
+    # identical signatures — the exact input this gate exists to refuse — quoting the
+    # unrecognised value back as if it were a mode.
+    #
+    # The vocabulary is `shotspec.ANIMATION_MODES`, imported rather than re-typed: a third
+    # mode added there must have its G6 semantics chosen, and until it is chosen it joins
+    # on the REFUSING side rather than silently on the passing one. `normalise_spec`
+    # refuses a value outside the tuple, so the live path through `stage_render` is
+    # bounded; the exposure is a caller that does not normalise first, a spec dict mutated
+    # after normalisation, or that third mode. Every neighbouring "value I do not
+    # recognise" in this package already raises — `route_gates.pairing` on a conditioning
+    # class in neither table, `hosted_frame_legality` on an unrecorded tier,
+    # `frame_legality` on an unrecorded generator family — and G6 was the one whose "not
+    # applicable" answer was reachable by a typo.
+    if animation_mode not in ANIMATION_MODES:
+        ev["clause"] = "unknown_animation_mode"
+        ev["animation_modes"] = list(ANIMATION_MODES)
+        raise G6SubjectMotion(
+            f"subject.animation is {animation_mode!r}, which is not one of "
+            f"{list(ANIMATION_MODES)}. G6 cannot say whether a performance was asked for, "
+            f"and answering 'not applicable' would report the failure this gate exists to "
+            f"catch — {len(frame_signatures)} frame(s), "
+            f"{len(set(frame_signatures))} distinct — as a mode it does not check",
+            ev,
+        )
     if animation_mode != "per_frame":
         ev["verdict"] = f"N/A — subject.animation is {animation_mode!r}, not 'per_frame'"
         return ev
 
     if len(frame_signatures) < 2:
+        ev["clause"] = "motion_undefined_over_one_frame"
         raise G6SubjectMotion(
             f"subject.animation is 'per_frame' but the shot is {len(frame_signatures)} "
             f"frame(s) long; motion is undefined over fewer than two frames",
             ev,
         )
     if ev["distinct_signatures"] == 1:
+        ev["clause"] = "subject_never_moved"
         raise G6SubjectMotion(
             f"subject.animation is 'per_frame' but the subject's evaluated geometry is "
             f"IDENTICAL at all {len(frame_signatures)} frames — the authored performance "
@@ -642,12 +756,14 @@ def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label
     }
 
     if len(source) != len(decoded):
+        ev["clause"] = "frame_count_changed_through_the_bridge"
         raise GateRRoundTrip(
             f"frame count changed through the bridge: {len(source)} in, "
             f"{len(decoded)} out",
             ev,
         )
     if not source:
+        ev["clause"] = "round_trip_over_zero_frames"
         raise GateRRoundTrip("no frames to compare; the round trip proves nothing", ev)
 
     wrong_dtype = []
@@ -659,6 +775,7 @@ def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label
     if wrong_dtype:
         ev["dtypes"] = wrong_dtype[:8]
         seen = sorted({d["dtype"] for d in wrong_dtype})
+        ev["clause"] = "round_trip_dtype_not_uint8"
         raise GateRRoundTrip(
             f"the round trip was handed {', '.join(seen)} arrays where it documents "
             f"uint8: {len(wrong_dtype)} frame(s), e.g. {wrong_dtype[0]}. The "
@@ -695,6 +812,7 @@ def gate_r_round_trip(source, decoded, source_label="source PNGs", decoded_label
     if problems:
         ev["frames_differing"] = len(per_frame)
         ev["detail"] = per_frame[:8]
+        ev["clause"] = "round_trip_not_lossless"
         raise GateRRoundTrip(
             f"the encode/decode round trip is not lossless: "
             + "; ".join(problems[:6])
@@ -735,6 +853,7 @@ def gate_b_batching(expected_frames, observed_batch_images, evidence=None):
     if (not isinstance(observed_batch_images, int)
             or isinstance(observed_batch_images, bool)
             or observed_batch_images < 0):
+        ev["clause"] = "batch_count_is_not_a_count"
         raise GateBBatching(
             f"batch image count is not a count: {observed_batch_images!r}; the batch "
             f"was not observed, so batching is unverified rather than verified",
@@ -763,6 +882,7 @@ def gate_b_batching(expected_frames, observed_batch_images, evidence=None):
     # observed value is the stronger defect and keeps its own message.
     if (not isinstance(expected_frames, int) or isinstance(expected_frames, bool)
             or expected_frames <= 0):
+        ev["clause"] = "batch_expectation_is_not_a_count"
         raise GateBBatching(
             f"Gate B was asked to check a batch against an expectation of "
             f"{expected_frames!r} image(s), which is not a batching verdict: nothing was "
@@ -774,6 +894,7 @@ def gate_b_batching(expected_frames, observed_batch_images, evidence=None):
 
     if observed_batch_images != expected_frames:
         short = observed_batch_images < expected_frames
+        ev["clause"] = "batch_image_count_disagrees"
         raise GateBBatching(
             f"the control batch carried {observed_batch_images} image(s), not "
             f"{expected_frames}"
@@ -821,6 +942,7 @@ def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
     }
 
     if not isinstance(seed, int) or isinstance(seed, bool):
+        ev["clause"] = "seed_is_not_an_int"
         raise GateSSeedRegistration(
             f"seed must be an int, got {type(seed).__name__} ({seed!r}); a seed that is "
             f"not an integer cannot be compared against the committed list at all",
@@ -833,6 +955,7 @@ def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
     # came back empty", which is not a registration at all.
     if registry is None:
         if seed_was_explicit:
+            ev["clause"] = "experiment_has_no_seed_registry"
             raise GateSSeedRegistration(
                 f"{experiment} has no pre-registered seed list, so its seed may not be "
                 f"varied; {seed} was supplied explicitly. Pre-register the seeds in the "
@@ -858,6 +981,7 @@ def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
     # guards a failure with NO technical symptom, so nothing downstream contradicts it and
     # the number is quoted forever against a run nobody registered.
     if not registry:
+        ev["clause"] = "seed_registry_is_empty"
         raise GateSSeedRegistration(
             f"{experiment} declared a seed registry and it is EMPTY ({registry!r}), so "
             f"there is no committed list to check {seed} against. An empty list is not "
@@ -914,12 +1038,14 @@ def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
         )
 
     if seed not in registry:
+        ev["clause"] = "seed_not_registered"
+        ev["registry"] = sorted(registry)
         raise GateSSeedRegistration(
             f"seed {seed} is not in {experiment}'s pre-registered list of "
             f"{len(registry)} seed(s). The list is committed in the spec before the "
             f"first submission precisely so this cannot be decided now: registered "
             f"{sorted(registry)}",
-            dict(ev, registry=sorted(registry)),
+            ev,
         )
 
     ev["verdict"] = "seed is pre-registered"
