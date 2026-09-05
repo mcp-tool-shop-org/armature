@@ -853,8 +853,9 @@ def test_the_png_case_rule_is_the_same_one_its_consumers_use():
     """family: derived by grep over tools/ for a `.png` suffix test -> 5 sites —
     fetch_run.py (verify_downloads, the EXTRA andon), fetch_t2v_run.py (same function,
     imported not re-written), build_payload.py (`_distinct_source_frames`),
-    encode_control.py:126 and invert_frames.py:70 (the consumers), plus this one,
-    build_assembly_payload.py:96, which is the only member keyed on an upload KEY rather
+    encode_control.py::frame_population and invert_frames.py::frame_population (the
+    consumers), plus this one,
+    build_assembly_payload.py::FRAME_KEY, which is the only member keyed on an upload KEY rather
     than a directory listing. SIBLING CARRIED: `fetch_run.verify_downloads`'s lower-cased
     comparison, settled with instruments-measure this wave. Every member treats a
     differently-cased suffix as the same population."""
@@ -865,12 +866,28 @@ def test_the_png_case_rule_is_the_same_one_its_consumers_use():
 
     # WAVE 16 (instruments-measure): 126 -> 122 and 70 -> 66. Both files lost their
     # class's normalising `__init__` (four lines each, rule 5 / F-13333ef4), which moved
-    # every line below it. The citations are RE-MEASURED here, in the commit that moved
+    # every line below it. The citations were RE-MEASURED there, in the commit that moved
     # them, rather than relaxed into a grep — the point of the pin is that it names the
     # site, and a pin that drifts silently is what wave 15 found seven of.
-    for name, line in (("encode_control.py", 122), ("invert_frames.py", 66)):
-        src = open(os.path.join(TOOLS, name), encoding="utf-8").read().splitlines()
-        assert ".lower()" in src[line - 1], f"{name}:{line} no longer lower-cases"
+    #
+    # WAVE 25 (F-b2c7b15a): the same two moved AGAIN — 122 -> 133 and 66 -> 74, when both
+    # classes gained their gate id and the population refusals gained clause words — and
+    # this is the SECOND re-measurement of the same pair in nine waves. A pin re-derived
+    # every wave is a line citation wearing a pin's clothes, so the anchor becomes the
+    # FUNCTION that holds the rule (wave 22, SEAM 7/8: prose cites symbols, not lines).
+    # It is not relaxed into a grep over the file: the source of the named function is what
+    # is read, so a `.lower()` that moves OUT of `frame_population` into some other part of
+    # the module still fails here.
+    import ast
+
+    for name in ("encode_control.py", "invert_frames.py"):
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+        fn = next((n for n in ast.parse(src).body
+                   if isinstance(n, ast.FunctionDef) and n.name == "frame_population"), None)
+        assert fn is not None, f"{name} no longer defines `frame_population`"
+        body = "\n".join(src.splitlines()[fn.lineno - 1:fn.end_lineno])
+        assert ".lower()" in body, (
+            f"{name}::frame_population no longer lower-cases the suffix test")
 
 
 # ============================================================ wave 12, F-133f2bdc

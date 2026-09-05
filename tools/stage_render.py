@@ -70,7 +70,6 @@ from armature_core import channels as ch  # noqa: E402
 from armature_core import gates, openpose, pngio, shotspec  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError,
-    GateFailure,
     NotInsideBlender,
     SpecError,
 )
@@ -643,42 +642,23 @@ def _parse_argv(argv, known=KNOWN_FLAGS, required=REQUIRED_FLAGS):
     return args
 
 
-def _halt_keysafe(value, _seen=None):
-    """`value` with every mapping key stringified, at every depth.
-
-    `json.dumps(..., default=str)` applies `default` to VALUES ONLY: a tuple key or a
-    `numpy.int64` key raises `TypeError` from inside a halt handler, the new exception
-    leaves the whole `try` statement, `sys.exit` never runs -- and `blender -b -P` then
-    exits **0** on a fired andon, with no sentinel line at all. Measured 2026-09-04 against
-    all 21 Blender-side handlers; this is the 22nd tool joining the same contract.
-
-    A container already on the path is written as the literal "<circular>" rather than
-    re-entered: a self-referencing evidence dict recursed until `RecursionError` escaped.
-
-    STAGE B: this is the ninth copy of a helper that belongs in `armature_core.errors`
-    beside the halt vocabulary. `armature_core` is outside this domain's globs, so the
-    lift is FILED, not done -- see this amend's `skipped[]` entry.
-    """
-    if _seen is None:
-        _seen = set()
-    if isinstance(value, (dict, list, tuple)):
-        if id(value) in _seen:
-            return "<circular>"
-        _seen = _seen | {id(value)}
-    if isinstance(value, dict):
-        return {str(k): _halt_keysafe(v, _seen) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_halt_keysafe(v, _seen) for v in value]
-    # WAVE-22 MERGE (coordinator, 2026-09-05): the VALUE clause the 21 Blender-side handlers gained in the same
-    # wave (instruments, F-897a3329), posted to this domain's inbox as the 22nd copy. `default=`
-    # applies to values Python cannot encode, never to a float it CAN, and `allow_nan` defaults
-    # True -- so a non-finite operand reached the halt line as the bare token `NaN`, which the
-    # JSON grammar does not have. `repr` keeps the operand readable ("nan" / "inf" / "-inf"),
-    # and `allow_nan=False` on the two halt dumps below then cannot raise.
-    if isinstance(value, float) and (value != value
-                                     or value in (float("inf"), float("-inf"))):
-        return repr(value)
-    return value
+# WAVE 25 (F-40316edd): `_halt_keysafe` IS DELETED HERE, and the docstring that used to sit
+# on it is corrected in place with the measurement that overturned it. It closed with
+# "STAGE B: this is the ninth copy of a helper that belongs in `armature_core.errors`
+# beside the halt vocabulary ... the lift is FILED, not done" — an inherited claim wearing a
+# fact's clothes. The lift LANDED in wave 22: `armature_core.parts.halt_keysafe`
+# (`parts.py::halt_keysafe`) is the same walk with the same two failure modes recorded (a
+# non-str key escaping through `json.dumps(default=str)`; a self-referencing dict recursing
+# until `RecursionError`) PLUS the non-finite-float clause, which the local copy spelled as
+# `value != value or value in (inf, -inf)` where the home uses `math.isfinite`. The two
+# agreed behaviourally on this tree, so this was never a live defect — it was a divergence
+# surface: a clause added to the home would not have reached the tool that writes the run
+# directory, the per-frame manifest and the control frames every downstream payload builder
+# consumes. Adopt the home, never a second copy: the `__main__` block below imports
+# `run_tool_main`, which calls `halt_keysafe` itself.
+#
+# This is the 22nd Blender-side tool and it is instruments-measure's file, so the wave-22
+# exception that keeps instruments' 21 local handlers local does not cover it.
 
 
 class _UnreadablePath(ArmatureError):
@@ -776,43 +756,12 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    # THE HALT CONTRACT — the shape all 21 Blender-side tools carry, on the 22nd
-    # (instruments-measure F-f9251c74; WAVE-12 MERGE (coordinator, 2026-09-04): brought to the
-    # rewritten shape instruments landed on the 21 the same day — F-586822bf — because this
-    # tool's copy was taken from the wave-10 form an hour before that rewrite). `blender -b -P`
-    # exits **0** when the script's exception propagates, so a halt that does not exit
-    # deliberately is reported as a success. THREE outcomes: a typed `GateFailure` is an andon
-    # that fired; a bare `ArmatureError` is a deliberate refusal; anything else is a crash.
-    # A deliberate refusal exits 2; a crash exits 1. Everything that can fail is inside the
-    # guard; the sentinel line and `sys.exit` are delivered from a `finally`.
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:                                      # noqa: BLE001
-        import traceback
-        _code = 2 if isinstance(exc, (GateFailure, ArmatureError)) else 1
-        _outcome = ("HALTED — a gate fired" if isinstance(exc, GateFailure)
-                    else "REFUSED — the tool declined to proceed"
-                    if isinstance(exc, ArmatureError)
-                    else "FAILED — an unhandled error")
-        _sentinel = {
-            "tool": "stage_render", "outcome": _outcome, "gate": None,
-            "error": type(exc).__name__,
-            "message": "the halt line could not be built", "evidence": None}
-        _line = json.dumps(_sentinel, allow_nan=False)
-        try:
-            traceback.print_exc()
-            _detail = getattr(exc, "evidence", None)
-            _sentinel = {
-                "tool": "stage_render", "outcome": _outcome,
-                "gate": getattr(exc, "gate", None),
-                "error": type(exc).__name__, "message": str(exc),
-                "evidence": (_halt_keysafe(_detail)
-                             if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str, allow_nan=False)
-        except BaseException:                                         # noqa: BLE001
-            pass
-        finally:
-            print("STAGE_RENDER_HALT " + _line)
-            sys.exit(_code)
+    # WAVE 25 (F-40316edd): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1). `parts.halt_outcome` produces the SAME three
+    # outcome strings and the same two codes this block spelled by hand, and
+    # `parts.halt_keysafe` is the walk deleted above — so the halt line is unchanged and the
+    # copy is gone. Under `blender -b -P` an exception that propagates exits **0**, which is
+    # why this handler exists at all and why it must never be reached by a second copy.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "STAGE_RENDER")

@@ -43,7 +43,15 @@ class InvertError(ArmatureError):
 
     Carries an evidence dict, like every other refusal in this repo: the measurement
     that fired it is the useful half.
+
+    **WAVE 25 (F-b2c7b15a): it declares its gate id**, for `EncodeFailure`'s reason —
+    `run_tool_main` reads `getattr(exc, "gate", None)`, so a class with no class-level
+    `gate` prints `"gate": null` wherever the raise site's own dict does not carry one, and
+    the three population refusals below carried none. This is the same shape on the
+    INVERTED control sequence that `encode_control` is on the control video.
     """
+
+    gate = "INVERT"
 
 
 def frame_population(src, expect=None):
@@ -62,7 +70,9 @@ def frame_population(src, expect=None):
     rather than to a length any five files would satisfy.
     """
     if not os.path.isdir(src):
-        raise InvertError(f"{src} is not a directory of frames", {"src": src})
+        raise InvertError(f"{src} is not a directory of frames",
+                          {"gate": "FRAMES", "andon": "InvertError",
+                           "clause": "frames_dir_is_not_a_directory", "src": src})
     pngs = sorted(n for n in os.listdir(src) if n.lower().endswith(".png"))
     numbered = [n for n in pngs if os.path.splitext(n)[0].isdigit()]
     unexpected = [n for n in pngs if n not in set(numbered)]
@@ -72,12 +82,16 @@ def frame_population(src, expect=None):
             f"{src} holds {len(unexpected)} PNG(s) that are not numbered frames "
             f"({', '.join(unexpected[:8])}); inverting one produces an extra frame that "
             f"the receipt then names as part of the shot",
-            {"src": src, "unexpected": unexpected, "frames": names},
+            {"gate": "FRAMES", "andon": "InvertError",
+             "clause": "stray_png_in_the_frame_population",
+             "src": src, "unexpected": unexpected, "frames": names},
         )
     if not names:
         raise InvertError(
             f"no NNNNN.png frames in {src}; there is nothing to invert",
-            {"src": src, "png_files": pngs},
+            {"gate": "FRAMES", "andon": "InvertError",
+             "clause": "no_numbered_frames_to_invert",
+             "src": src, "png_files": pngs},
         )
     if expect is not None:
         want = shotspec.frame_names(expect, "png")

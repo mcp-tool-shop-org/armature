@@ -89,7 +89,21 @@ class EncodeFailure(ArmatureError):
 
     Carries an evidence dict for the same reason every gate in this repo does: the
     measurement that fired the refusal is the useful half of it.
+
+    **WAVE 25 (F-b2c7b15a): it declares its gate id.** `run_tool_main` reads
+    `getattr(exc, "gate", None)`, so a class with no class-level `gate` prints
+    `"gate": null` on its halt line wherever the raise site's own evidence dict does not
+    carry one. Driven end to end on `580af47` with the repo venv:
+    `python tools/encode_control.py --frames=<empty dir> --out=<tmp>` exited 2 and printed
+    `ENCODE_CONTROL_HALT {"tool": "encode_control", "outcome": "REFUSED - the tool declined
+    to proceed", "gate": null, ...}` — the tool that produces the control video a paid run
+    UPLOADS, halting on the refusal that stops a wrong frame population from becoming that
+    upload, with no andon named for a runner to branch on. `ProjectGate`, `SticksGate`,
+    `ClipReadError` and `measure_cascade_clip`'s trio all declare one; this is the same
+    declaration, and it is why the halt line now reads `"gate": "ENCODE"`.
     """
+
+    gate = "ENCODE"
 
 
 def _run(cmd, **kw):
@@ -118,7 +132,9 @@ def frame_population(frames_dir, expect=None):
     """
     if not os.path.isdir(frames_dir):
         raise EncodeFailure(f"{frames_dir} is not a directory of frames",
-                            {"frames_dir": frames_dir})
+                            {"gate": "FRAMES", "andon": "EncodeFailure",
+                             "clause": "frames_dir_is_not_a_directory",
+                             "frames_dir": frames_dir})
     pngs = sorted(n for n in os.listdir(frames_dir) if n.lower().endswith(".png"))
     numbered = [n for n in pngs if os.path.splitext(n)[0].isdigit()]
     unexpected = [n for n in pngs if n not in set(numbered)]
@@ -128,12 +144,16 @@ def frame_population(frames_dir, expect=None):
             f"{frames_dir} holds {len(unexpected)} PNG(s) that are not numbered frames "
             f"({', '.join(unexpected[:8])}); a stray sorts into the population and "
             f"becomes a frame of the encoded control with every gate green",
-            {"frames_dir": frames_dir, "unexpected": unexpected, "frames": names},
+            {"gate": "FRAMES", "andon": "EncodeFailure",
+             "clause": "stray_png_in_the_frame_population",
+             "frames_dir": frames_dir, "unexpected": unexpected, "frames": names},
         )
     if not names:
         raise EncodeFailure(
             f"no NNNNN.png frames in {frames_dir}; there is nothing to encode",
-            {"frames_dir": frames_dir, "png_files": pngs},
+            {"gate": "FRAMES", "andon": "EncodeFailure",
+             "clause": "no_numbered_frames_to_encode",
+             "frames_dir": frames_dir, "png_files": pngs},
         )
     if expect is not None:
         want = shotspec.frame_names(expect, "png")
@@ -142,7 +162,9 @@ def frame_population(frames_dir, expect=None):
                 f"{frames_dir} holds {len(names)} frame(s) and the spec names "
                 f"{len(want)}; the population an upload is built from must be the one "
                 f"the spec declared",
-                {"frames_dir": frames_dir, "found": names, "expected": want,
+                {"gate": "FRAMES", "andon": "EncodeFailure",
+                 "clause": "population_is_not_the_spec_names",
+                 "frames_dir": frames_dir, "found": names, "expected": want,
                  "missing": [n for n in want if n not in set(names)],
                  "unexpected": [n for n in names if n not in set(want)]},
             )
@@ -181,7 +203,9 @@ def read_frames(frames_dir, invert=False, expect=None, alpha_over=None):
                 raise EncodeFailure(
                     f"{path}: mode 'P' is palette-indexed; encoding an index as a "
                     f"value is not encoding the frame",
-                    {"frame": n, "mode": mode},
+                    {"gate": "FRAMES", "andon": "EncodeFailure",
+                     "clause": "frame_is_palette_indexed",
+                     "frame": n, "mode": mode},
                 )
             has_alpha = mode in ("RGBA", "LA", "PA")
             a = np.array(im.convert("RGBA") if has_alpha else im)
@@ -194,7 +218,9 @@ def read_frames(frames_dir, invert=False, expect=None, alpha_over=None):
                 f"{path}: dtype {a.dtype}; the uint8 view of 16-bit data wraps mod 256 "
                 f"(a level of 40000 becomes 64) rather than converting, and the receipt "
                 f"would hash the wrapped array",
-                {"frame": n, "mode": mode, "dtype": a.dtype.name,
+                {"gate": "FRAMES", "andon": "EncodeFailure",
+                 "clause": "frame_dtype_is_not_uint8",
+                 "frame": n, "mode": mode, "dtype": a.dtype.name,
                  "alpha_present": has_alpha},
             )
         if has_alpha:
@@ -214,7 +240,9 @@ def read_frames(frames_dir, invert=False, expect=None, alpha_over=None):
         else:
             raise EncodeFailure(
                 f"{path}: array shape {a.shape} is not a frame this bridge encodes",
-                {"frame": n, "mode": mode, "shape": list(a.shape)},
+                {"gate": "FRAMES", "andon": "EncodeFailure",
+                 "clause": "frame_array_shape_is_not_a_frame",
+                 "frame": n, "mode": mode, "shape": list(a.shape)},
             )
         if invert:
             a = (255 - a).astype(np.uint8)
@@ -322,7 +350,12 @@ def encode(frames, path, codec, fps=16):
     proc = _run(cmd, input=b"".join(f.tobytes() for f in frames))
     if proc.returncode != 0 or not os.path.isfile(path):
         raise EncodeFailure(
-            f"ffmpeg failed to encode {codec}: {proc.stderr.decode('utf-8', 'replace')[:500]}"
+            f"ffmpeg failed to encode {codec}: {proc.stderr.decode('utf-8', 'replace')[:500]}",
+            {"gate": "ENCODE", "andon": "EncodeFailure",
+             "clause": "ffmpeg_refused_the_encode",
+             "codec": codec, "out": path, "returncode": proc.returncode,
+             "wrote_the_file": os.path.isfile(path), "ffmpeg": FFMPEG,
+             "stderr_tail": proc.stderr.decode("utf-8", "replace")[-800:]},
         )
     return path
 
@@ -340,14 +373,20 @@ def decode(path, width, height):
     proc = _run(cmd)
     if proc.returncode != 0:
         raise EncodeFailure(
-            f"ffmpeg failed to decode {path}: {proc.stderr.decode('utf-8', 'replace')[:500]}"
+            f"ffmpeg failed to decode {path}: {proc.stderr.decode('utf-8', 'replace')[:500]}",
+            {"gate": "ENCODE", "andon": "EncodeFailure",
+             "clause": "ffmpeg_refused_the_decode",
+             "path": path, "returncode": proc.returncode, "ffmpeg": FFMPEG,
+             "stderr_tail": proc.stderr.decode("utf-8", "replace")[-800:]},
         )
     stride = int(width) * int(height) * 3
     raw = proc.stdout
     if stride <= 0:
         raise EncodeFailure(
             f"decode asked for a {width}x{height} frame, which has no bytes",
-            {"width": width, "height": height, "stride": stride},
+            {"gate": "ENCODE", "andon": "EncodeFailure",
+             "clause": "decode_stride_is_not_positive",
+             "width": width, "height": height, "stride": stride},
         )
     if len(raw) % stride:
         # `n = len(raw) // stride` drops a trailing partial frame in silence, and a byte
@@ -359,7 +398,9 @@ def decode(path, width, height):
             f"{path} decoded to {len(raw)} bytes, which is not a whole number of "
             f"{width}x{height} RGB frames ({stride} bytes each; remainder "
             f"{len(raw) % stride}). The dimensions are wrong for this stream",
-            {"path": path, "width": width, "height": height, "stride": stride,
+            {"gate": "ENCODE", "andon": "EncodeFailure",
+             "clause": "decoded_bytes_are_not_whole_frames",
+             "path": path, "width": width, "height": height, "stride": stride,
              "n_bytes": len(raw), "remainder": len(raw) % stride},
         )
     n = len(raw) // stride
@@ -495,7 +536,9 @@ def main(argv=None):
     if not args.frames or not args.out:
         raise EncodeFailure(
             "--frames and --out are required unless --survey",
-            {"gate": "ARGS", "frames": args.frames, "out": args.out,
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "frames_and_out_are_required",
+             "frames": args.frames, "out": args.out,
              "survey": bool(args.survey)})
     # ---- the ONE parser. `compose_over_named_plate`'s docstring states the contract the
     #      wave-6 sweep delivered -- "there is one refusal, one composite and one record

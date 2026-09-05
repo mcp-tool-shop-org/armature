@@ -374,6 +374,14 @@ def _block_shape(filename):
     THE NODE: the `__main__` block's own statements, plus ONE HOP into a module-local
     function the block calls — the same one-hop rule `_census_nodes.functions_that_refuse`
     uses, and the reason the original widened to the whole module by mistake.
+
+    **WAVE 25 (F-40316edd): the hop reaches the ONE handler too.** `uses_finally` is the
+    contract's DELIVERY guarantee — "the sentinel line and `sys.exit` come from a `finally`,
+    on every path" — and a block that is `run_tool_main(main, "STAGE_RENDER")` carries that
+    guarantee without carrying a `try` of its own, because `armature_core.parts.run_tool_main`
+    delivers both from its own `finally`. Read as an absent `finally`, the tool that ADOPTED
+    the home would fail this assertion on the commit that adopted it, which is the census
+    keying on the spelling rather than the resolved shape (wave 18, rule 1).
     """
     import ast
 
@@ -382,6 +390,10 @@ def _block_shape(filename):
                  if isinstance(n, ast.If) and isinstance(n.test, ast.Compare)
                  and getattr(n.test.left, "id", None) == "__name__")
     uses_finally = any(isinstance(n, ast.Try) and n.finalbody for n in ast.walk(block))
+    if not uses_finally:
+        uses_finally = any(
+            isinstance(n, ast.Call) and _called_tail(n) == "run_tool_main"
+            for n in ast.walk(block))
 
     local = {fn.name: fn for fn in ast.walk(tree)
              if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef))}
@@ -847,10 +859,22 @@ def _keysafe_is_guarded(filename):
     the line falls to the fallback and the `finally` still delivers a sentinel and an exit
     code. If it sits above the try — where all 21 handlers put it on 2026-09-04 — the walk's
     own failure escapes the whole handler.
+
+    **WAVE 25 (F-40316edd): the property is the RESOLVED shape, not the local spelling.**
+    A tool that hands its `__main__` to `armature_core.parts.run_tool_main` has no local
+    `ast.Try` and no local `_halt_keysafe` call at all — and it is guarded, because the ONE
+    handler builds its sentinel inside its own guarded `try` (`parts.py::run_tool_main`,
+    "Everything below that can fail is inside the guard"). Keying on the spelling turned
+    `stage_render` — the 22nd Blender-side tool and the first to adopt the home — from a
+    member this check RAN against into one it SKIPPED, on the commit that fixed it. That is
+    wave 18's first rule (a census keys on the resolved shape) failing in the direction that
+    loses coverage, so the adoption is read as the guarantee it is.
     """
     import ast
 
     src = read_source(filename)
+    if "run_tool_main" in src:
+        return True
     stem = os.path.basename(filename)[:-3].upper()
     tree = ast.parse(src)
     block = next((n for n in tree.body
@@ -1213,37 +1237,50 @@ CPYTHON_WITH_HANDLER = [f for f in cpython_tools() if halt_handler(f)]
 #: CPython tool that loses its handler — or a new one that never gets one — fails HERE,
 #: naming itself, rather than falling silently out of the three properties below.
 RECORDED_CPYTHON_WITH_HANDLER = [
-    "build_animate_payload.py", "build_assembly_payload.py", "build_camera_i2v_payload.py",
+    "analyze_p3.py", "armature_index.py", "build_animate_payload.py",
+    "build_assembly_payload.py", "build_camera_i2v_payload.py",
     "build_cascade_payload.py", "build_i2v_payload.py", "build_lora_arm_payload.py",
     "build_payload.py", "build_r2v_payload.py", "build_t2v_payload.py", "canon_gate.py",
-    "composite_reference.py", "encode_control.py", "fetch_run.py", "fetch_t2v_run.py",
+    "compare_runs.py", "composite_reference.py", "encode_control.py",
+    "extract_clip_frames.py", "fetch_run.py", "fetch_t2v_run.py", "fit_reference.py",
     "gate_b_frames.py", "gate_saved_graph.py", "invert_frames.py", "lift_clip.py",
-    "make_review_clip.py", "measure_clip.py", "measure_lift.py", "pack_pose_pack.py",
-    "project_pose_keypoints.py", "render_pose_sticks.py", "resample_motion.py",
+    "make_ab_clip.py", "make_cast_sheet.py", "make_crop_strip.py", "make_e08_sheet.py",
+    "make_e13_sheet.py", "make_gate0_sheet.py", "make_hole_survey.py",
+    "make_identity_sheet.py", "make_lift_sheet.py", "make_overlay_sheet.py",
+    "make_pick_sheet.py", "make_plate.py", "make_review_clip.py", "make_sheet.py",
+    "make_shotset_sheet.py", "make_startframe_sheet.py", "make_thesis_sheet.py",
+    "make_zoom_sheet.py", "measure_arm.py", "measure_cascade_clip.py",
+    "measure_clip.py", "measure_floor.py", "measure_lift.py", "measure_smoothness.py",
+    "measure_tracking.py", "pack_pose_pack.py", "project_pose_keypoints.py",
+    "render_pose_sticks.py", "resample_motion.py", "rig_sheet_compose.py",
+    "sheet_compose.py",
 ]
 
 #: THE PENDING TABLE, dated, in `halt_contract_pending`'s shape rather than a skip flag:
-#: the CPython tools with no halt handler at all. Each ends in a bare `main()`,
-#: `sys.exit(main())` or `raise SystemExit(main())`, so a typed refusal reaches the operator
-#: as a stdlib traceback at exit 1 and the clause reaches nothing. MEASURED 2026-09-05, 29
-#: members. This is a CATEGORY, not an exemption: `test_the_cpython_pending_table_is_the_
-#: measured_one` fails when it grows, and a member leaving it joins the contract above in
-#: the same commit.
+#: the CPython tools with no halt handler at all. Each ended in a bare `main()`,
+#: `sys.exit(main())` or `raise SystemExit(main())`, so a typed refusal reached the operator
+#: as a stdlib traceback at exit 1 and the clause reached nothing.
+#:
+#: **IT IS EMPTY. MEASURED 2026-09-05 on the wave-25 instruments-measure branch** — 29
+#: members on `580af47`, 0 here. The category was keyed on the objective property and not on
+#: a list, which is what let it empty itself: all 29 were one domain's files and all 29 adopt
+#: `armature_core.parts.run_tool_main` in the wave-25 amend (F-68f3fb4b), so the population
+#: with a handler moves 25 -> 54 and every one of the 149 raises those files carry (124 with
+#: an evidence dict) now reaches the operator as exit 2 with a `<PREFIX>_HALT` line rather
+#: than as exit 1 with a traceback. Six of them keep a non-int return value and adopt the
+#: handler through a `_cli` wrapper, the shape `composite_reference` took in wave 22:
+#: `extract_clip_frames`, `make_cast_sheet`, `make_e13_sheet`, `make_shotset_sheet`,
+#: `measure_cascade_clip`, `measure_floor`.
+#:
+#: An empty table is not a retired one: it stays here, and the assertion below stays an
+#: equality, so a NEW tool that arrives without a handler fails here naming itself.
+#: BRANCH-LOCAL: builders move the adopter set in the same wave; the coordinator re-measures
+#: on the merged tree and never sums.
 #:
 #: Re-derive with:
 #:     python -c "import sys;sys.path.insert(0,'tests');import blender_stub as B;
 #:     print([f for f in B.cpython_tools() if not B.halt_handler(f)])"
-CPYTHON_HALT_CONTRACT_PENDING = [
-    "analyze_p3.py", "armature_index.py", "compare_runs.py", "extract_clip_frames.py",
-    "fit_reference.py", "make_ab_clip.py", "make_cast_sheet.py", "make_crop_strip.py",
-    "make_e08_sheet.py", "make_e13_sheet.py", "make_gate0_sheet.py", "make_hole_survey.py",
-    "make_identity_sheet.py", "make_lift_sheet.py", "make_overlay_sheet.py",
-    "make_pick_sheet.py", "make_plate.py", "make_sheet.py", "make_shotset_sheet.py",
-    "make_startframe_sheet.py", "make_thesis_sheet.py", "make_zoom_sheet.py",
-    "measure_arm.py", "measure_cascade_clip.py", "measure_floor.py",
-    "measure_smoothness.py", "measure_tracking.py", "rig_sheet_compose.py",
-    "sheet_compose.py",
-]
+CPYTHON_HALT_CONTRACT_PENDING = []
 
 #: The three keys every CPython handler prints; the six above are the ceiling.
 CPYTHON_SENTINEL_FLOOR = {"error", "message", "evidence"}
@@ -1362,9 +1399,20 @@ def test_the_one_handlers_adopters_are_derived_and_carry_the_six_key_record():
     `tool` / `outcome` / `gate`."""
     adopters = sorted(f for f in CPYTHON_WITH_HANDLER
                       if "run_tool_main" in read_source(f))
-    assert adopters == ["composite_reference.py", "encode_control.py", "invert_frames.py",
-                        "make_review_clip.py", "measure_clip.py", "pack_pose_pack.py",
-                        "render_pose_sticks.py", "resample_motion.py"], adopters
+    assert adopters == [
+        "analyze_p3.py", "armature_index.py", "compare_runs.py",
+        "composite_reference.py", "encode_control.py", "extract_clip_frames.py",
+        "fit_reference.py", "invert_frames.py", "make_ab_clip.py", "make_cast_sheet.py",
+        "make_crop_strip.py", "make_e08_sheet.py", "make_e13_sheet.py",
+        "make_gate0_sheet.py", "make_hole_survey.py", "make_identity_sheet.py",
+        "make_lift_sheet.py", "make_overlay_sheet.py", "make_pick_sheet.py",
+        "make_plate.py", "make_review_clip.py", "make_sheet.py",
+        "make_shotset_sheet.py", "make_startframe_sheet.py", "make_thesis_sheet.py",
+        "make_zoom_sheet.py", "measure_arm.py", "measure_cascade_clip.py",
+        "measure_clip.py", "measure_floor.py", "measure_smoothness.py",
+        "measure_tracking.py", "pack_pose_pack.py", "render_pose_sticks.py",
+        "resample_motion.py", "rig_sheet_compose.py", "sheet_compose.py",
+    ], adopters
     for filename in adopters:
         import io as _io
         import contextlib as _contextlib
@@ -1386,13 +1434,38 @@ def test_the_cpython_derivation_reads_the_prefix_and_the_entry_off_the_block():
     — reports 20 of these 25 as having no handler; and a driver that assumes the entry is
     `main` runs `composite_reference`'s real `_cli`. Both are asserted here so a later
     simplification of `halt_handler` cannot pass by getting easier.
+
+    **WAVE 25: the same five, out of 54 rather than 25, and the point is sharper for it.**
+    The 29 tools that adopted the one handler this wave pass their prefix as a bare constant
+    (`run_tool_main(main, "MAKE_PLATE")`), so the literal `MAKE_PLATE_HALT` appears nowhere in
+    their source: a `<STEM>_HALT` grep now reports 47 of 54 as handler-less, and the two that
+    JOINED the list did so by quoting their own halt token in a docstring, not by printing
+    it — the predicate reads a substring, which is the whole point. Seven
+    entries are no longer `main` — `composite_reference`'s `_cli` plus the six wave-25
+    wrappers — which is the half a substituting driver gets wrong.
     """
     by_stem = [f for f in CPYTHON_WITH_HANDLER
                if f"{f[:-3].upper()}_HALT" in read_source(f)]
-    assert len(by_stem) == 5, sorted(by_stem)
-    assert sorted(by_stem) == ["build_payload.py", "canon_gate.py", "fetch_run.py",
-                               "lift_clip.py", "measure_lift.py"], sorted(by_stem)
+    # 5 -> 7 in wave 25, and NEITHER newcomer prints the token: `encode_control` and
+    # `measure_tracking` each quote their own `<STEM>_HALT` line inside a DOCSTRING or a
+    # comment recording what was measured on `580af47`. That is precisely why the predicate
+    # is wrong — it reads a substring of the source, not the handler — and it is recorded
+    # here rather than papered over, because a census whose red proof drifts toward the
+    # thing it is proving wrong stops proving it.
+    assert len(by_stem) == 7, sorted(by_stem)
+    assert sorted(by_stem) == ["build_payload.py", "canon_gate.py", "encode_control.py",
+                               "fetch_run.py", "lift_clip.py", "measure_lift.py",
+                               "measure_tracking.py"], sorted(by_stem)
+    assert len(CPYTHON_WITH_HANDLER) - len(by_stem) == 47, len(CPYTHON_WITH_HANDLER)
+    # The entry is not always `main`, and it is seven tools now rather than one.
+    assert sorted(f for f in CPYTHON_WITH_HANDLER
+                  if halt_handler(f)["entry"] != "main") == [
+        "composite_reference.py", "extract_clip_frames.py", "make_cast_sheet.py",
+        "make_e13_sheet.py", "make_shotset_sheet.py", "measure_cascade_clip.py",
+        "measure_floor.py"], sorted(f for f in CPYTHON_WITH_HANDLER
+                                    if halt_handler(f)["entry"] != "main")
     assert halt_handler("composite_reference.py") == {"prefix": "COMPOSITE_REFERENCE",
                                                       "entry": "_cli"}
+    assert halt_handler("measure_floor.py") == {"prefix": "MEASURE_FLOOR", "entry": "_cli"}
     assert halt_handler("gate_saved_graph.py")["prefix"] == "SAVED_ADMISSION"
     assert halt_handler("build_animate_payload.py")["prefix"] == "BUILD_ANIMATE"

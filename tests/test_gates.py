@@ -2042,14 +2042,22 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
         "core_only_definitions": sum(len(v) for v in core.values()),
         "core_only_modules": len(core),
     }
+    # WAVE 25 (instruments-measure, F-c66ad0c4): 134 -> 137 names, 140 -> 143 definitions,
+    # 79 -> 82 modules. THREE new family classes, one per module that previously carried no
+    # refusal of its own: `make_cast_sheet.CastSheetError`,
+    # `rig_sheet_compose.RigSheetComposeError` and `make_hole_survey.HoleSurveyError`. The
+    # delta is exactly three in all three counts, which is what says the three modules each
+    # gained one class and nothing else moved. BRANCH-LOCAL: four sibling domains move
+    # family counts in the same wave; the coordinator re-measures on the merged tree and
+    # never sums.
     assert measured == {
-        "names": 134,
-        "definitions": 140,
-        "modules": 79,
+        "names": 137,
+        "definitions": 143,
+        "modules": 82,
         "defined_more_than_once": {"DetectionGate": 2, "PayloadError": 5, "RenderGate": 2},
         "core_only_definitions": 58,
         "core_only_modules": 20,
     }, measured
-    # the quantity the comment's last clause is about: 82 definitions sit outside the
-    # core-only walk, which is the gap the tree-wide census exists to close
-    assert measured["definitions"] - measured["core_only_definitions"] == 82
+    # the quantity the comment's last clause is about: definitions outside the core-only
+    # walk, which is the gap the tree-wide census exists to close (82 -> 85 with the three)
+    assert measured["definitions"] - measured["core_only_definitions"] == 85

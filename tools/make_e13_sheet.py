@@ -320,5 +320,29 @@ def main(argv=None):
     return a.out
 
 
+def _cli(argv=None):
+    """The process entry point: an exit code, beside the sheet path `main` returns.
+
+    WAVE 25, F-68f3fb4b — the shape `composite_reference._cli` took in wave 22, for the
+    same reason.
+
+    `main` returns the sheet's path, not an exit code, and this module ended in a bare
+    `main()`. The wrapper keeps the return value a value and gives the process the code.
+
+    `main` keeps returning the sheet path; this wrapper is what `run_tool_main` runs, so the
+    process gets 0 on success, 2 on a typed refusal and 1 on a crash.
+    """
+    main(argv)
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(_cli, "MAKE_E13_SHEET")

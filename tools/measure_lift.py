@@ -478,7 +478,14 @@ def solve_series(rest, obs_frames, diagonal):
         s = LS.solve_frame(rest, obs)
         locals_.append({k: [list(r) for r in v] for k, v in s["local"].items()})
         roots.append(list(s["root"]["hips_delta_translation"]))
-        rt.append(LS.round_trip_report(rest, obs, s, diagonal, raise_on_fail=False))
+        # WAVE 25 (F-128727b1): `raise_on_fail=False` is DROPPED. It is the
+        # parameter's default and its only other value RAISES - `round_trip_report`
+        # keeps the keyword solely to REFUSE (`raise_on_fail=True` raises SolveError
+        # naming `gate_round_trip`), so typing it here told a reader an andon was
+        # being disarmed at this line when the andon is `gate_round_trip` and has no
+        # keyword to disarm. The two remaining readers of the wave-6 split now see a
+        # diagnostic call that looks like one.
+        rt.append(LS.round_trip_report(rest, obs, s, diagonal))
         lengths.append(LS.bone_length_residuals(rest, obs))
         under.append(sorted(s["underdetermined"]))
         cond.append(s["twist_conditioning"])

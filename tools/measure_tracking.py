@@ -62,6 +62,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from sheet_compose import frames_by_number  # noqa: E402
 
 TOOL_VERSION = "E04.1"
 
@@ -132,17 +133,50 @@ def _frame_names(d):
     the failure this check exists to catch, so it raises instead of sorting cleverly:
     the repo's frame writers all zero-pad, so a ragged directory is a sign the input is
     not what the caller thinks it is.
+
+    **WAVE 25 (F-2f2c19a9): the ANDON is on the direction the fixed-width check does not
+    bound.** This function listed `*.png` and then guarded a DIFFERENT property — that every
+    name is the same LENGTH — which is a diagnostic standing where the invariant's own andon
+    belongs. Measured on `580af47` in this worktree on three synthetic control directories:
+    `00000..00003.png` gave four names; adding `strip_every8.png` was refused, but for the
+    RAGGED-WIDTH reason, i.e. by accident of that stray's length; adding `plate.png` — nine
+    characters, the same width as `00001.png` — was admitted in SILENCE and became a sample
+    of the temporal-energy profile the timing correlation is computed from, and was hashed
+    into `_manifest_sha256` as part of the recorded provenance. `render_pose_sticks` writes
+    `strip_every{N}.png` into the same directory as its `NNNNN.png` control frames
+    (render_pose_sticks.py:335), so a control directory holding a non-frame PNG is the
+    pipeline's own ordinary output, not a hypothetical.
+
+    `sheet_compose.frames_by_number` is the ONE home for "the numbered frame population,
+    with a stray refusal" — eight instruments in this domain carry that refusal already — so
+    it is adopted by import rather than spelled a ninth time. The fixed-width check STAYS,
+    because it catches a different defect (a ragged zero-pad among names that are all
+    numbered), and it now runs on a population that is already known to be frames.
     """
     if not os.path.isdir(d):
-        raise TrackingError(f"no such frame directory: {d}")
-    names = sorted(n for n in os.listdir(d) if n.lower().endswith(".png"))
+        raise TrackingError(
+            f"no such frame directory: {d}",
+            {"gate": "FRAMES", "andon": "TrackingError",
+             "clause": "frames_dir_is_not_a_directory", "frames_dir": d})
+    pngs = sorted(n for n in os.listdir(d) if n.lower().endswith(".png"))
+    # ---- ANDON on the population itself, through the ONE home, before anything is read.
+    frames_by_number(pngs, where=d, what="frames", exc=TrackingError,
+                     evidence={"andon": "TrackingError",
+                               "clause": "stray_png_in_the_frame_population"})
+    names = pngs
     if not names:
-        raise TrackingError(f"no PNG frames in {d}")
+        raise TrackingError(
+            f"no PNG frames in {d}",
+            {"gate": "FRAMES", "andon": "TrackingError",
+             "clause": "no_numbered_frames_to_measure", "frames_dir": d})
     widths = {len(n) for n in names}
     if len(widths) != 1:
         raise TrackingError(
             f"{d}: frame names are not a fixed width ({sorted(widths)}), so sorting them "
-            f"lexically would not put them in frame order; e.g. {names[:4]}"
+            f"lexically would not put them in frame order; e.g. {names[:4]}",
+            {"gate": "FRAMES", "andon": "TrackingError",
+             "clause": "frame_names_are_not_a_fixed_width",
+             "frames_dir": d, "widths": sorted(widths), "frames": names[:8]}
         )
     return names
 
@@ -320,7 +354,27 @@ def main(argv=None):
         return 0
 
     if not (a.run and a.control):
-        ap.error("--run and --control are required unless --anchor is given")
+        # ---- WAVE 25 (F-314625be): the LAST `ap.error` call site under `tools/`, and the
+        #      shape the repo measured, named and closed everywhere else one wave ago
+        #      (`render_turnaround.py:452-466`, F-0befca53). `ap.error` raises
+        #      `SystemExit(2)` from inside `main` and argparse prints a usage line on
+        #      stderr: measured on `580af47` with the repo venv,
+        #      `python tools/measure_tracking.py --label=x` -> rc 2, stdout EMPTY, stderr
+        #      `measure_tracking.py: error: --run and --control are required unless
+        #      --anchor is given`. 2 is the code this repo's halt contract reserves for "a
+        #      gate decided", so a caller or a verify chain branching on 2 read an argparse
+        #      usage error from the timing-correlation instrument as a fired andon, with no
+        #      sentinel line, no gate id and no clause to tell the two apart. This module's
+        #      own `ANCHOR_ABSENT_EXIT = 3` already shows it knows a distinct outcome needs
+        #      a distinct code. The CODE is unchanged — 2 was and is correct for a refusal;
+        #      what changes is that the refusal now carries a `MEASURE_TRACKING_HALT` line.
+        #      The condition is a real invariant argparse cannot express, which is why it
+        #      was hand-rolled here in the first place.
+        raise TrackingError(
+            "--run and --control are required unless --anchor is given",
+            {"gate": "ARGS", "andon": "TrackingError", "clause": "missing_required",
+             "flags": ["--run", "--control", "--anchor"],
+             "run": a.run, "control": a.control, "anchor": bool(a.anchor)})
     rec = measure(a.run, a.control, a.label)
     print("MEASURE_TRACKING " + json.dumps({
         "label": rec["label"], "timing_correlation": round(rec["timing_correlation"], 6),
@@ -334,4 +388,12 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "MEASURE_TRACKING")

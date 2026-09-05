@@ -32,6 +32,21 @@ class AnalyzeP3Error(ArmatureError):
     had lost its leading `--` (`run=E:/x`) registered the key `n` — `token[2:]` — before
     dying with the same one-word KeyError, naming neither the flag it wanted nor the token
     it got.
+
+    ⚠ **CORRECTED IN PLACE, wave 25 (F-c66ad0c4).** The filed row named this module as one
+    of four in the domain that "contain NO refusal at all", measured by an AST walk for
+    `raise` statements — 0 here. The walk is right and the conclusion was not: this module
+    holds three refusals, all of them `AnalyzeP3Error`, reached through
+    `make_sheet.parse_argv(..., exc=AnalyzeP3Error)` — the delegated-raise edge
+    `tests/test_refusal_clauses.py::_raising_parameters` was built in wave 16 to see
+    (F-d426d4bd), and the same edge is why `AnalyzeP3Error` is recorded there as
+    deliberately single-site. Counting `raise` statements per module is not the same
+    question as counting refusals, and this is the module where the two answers differ.
+
+    What the walk DID find, and what wave 25 closes: the argument refusals fired and then
+    `analyze(args["run"])` opened `<run>/manifest.json` with a bare `open`, so a `--run`
+    naming a directory that is not a run directory — the most likely wrong value the flag
+    can take — died as a `FileNotFoundError` on a path the operator had not typed.
     """
 
 
@@ -42,7 +57,28 @@ def _arr(path):
 
 
 def analyze(run_dir):
-    manifest = json.load(open(os.path.join(run_dir, "manifest.json"), encoding="utf-8"))
+    # ---- ANDON, before a frame is opened: `--run` names a run directory `stage_render`
+    #      wrote, and that directory's manifest states its frame count. Each of the three
+    #      was a bare subscript or a bare `open` one line below this comment.
+    manifest_path = os.path.join(run_dir, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        raise AnalyzeP3Error(
+            f"no manifest at {manifest_path}; --run names the run directory "
+            f"`stage_render` wrote, and every number this tool publishes is read out of "
+            f"that run's own frames",
+            {"gate": "INPUT", "andon": "AnalyzeP3Error",
+             "clause": "run_manifest_is_not_on_disk",
+             "flag": "--run", "run": run_dir, "file": manifest_path})
+    with open(manifest_path, encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    if "frame_count" not in manifest:
+        raise AnalyzeP3Error(
+            f"{manifest_path} carries no frame_count; the sweep below is `range(count)` "
+            f"and a run whose length is not stated cannot be swept",
+            {"gate": "INPUT", "andon": "AnalyzeP3Error",
+             "clause": "run_manifest_is_missing_a_key",
+             "run": run_dir, "file": manifest_path, "missing": ["frame_count"],
+             "given": sorted(manifest) if isinstance(manifest, dict) else None})
     count = manifest["frame_count"]
 
     frames, all_signed, all_dpf = [], [], []
@@ -97,11 +133,26 @@ def analyze(run_dir):
     signed = np.concatenate(all_signed)
     dpf = np.concatenate(all_dpf)
 
-    # crossover: the per-frame depth level at which the sign flips
-    order = np.argsort(dpf)
-    dpf_s, signed_s = dpf[order], signed[order]
     crossover = None
-    flips = np.flatnonzero(np.diff(np.sign(np.maximum.accumulate(np.where(signed_s > 0, 1, -1)))))
+    # ---- WAVE 25 (F-78852870): three dead lines are DELETED, and the comment that stood
+    #      above them moves to the code that actually derives `crossover`.
+    #
+    #      They read:
+    #          # crossover: the per-frame depth level at which the sign flips
+    #          order = np.argsort(dpf)
+    #          dpf_s, signed_s = dpf[order], signed[order]
+    #          flips = np.flatnonzero(np.diff(np.sign(np.maximum.accumulate(
+    #              np.where(signed_s > 0, 1, -1)))))
+    #
+    #      `flips` was computed and never used: measured on `580af47` in this worktree,
+    #      `grep -n 'flips' tools/analyze_p3.py` returned the comment and that one line and
+    #      nothing else, and `dpf_s` - the sorted array the expression consumes - was
+    #      likewise assigned and read nowhere. The `crossover` this tool publishes is
+    #      derived instead from the 8-level binned means below, which is a DIFFERENT
+    #      quantity from a monotone accumulate over signs. The dead expression sat directly
+    #      under the comment describing what the crossover IS, so a reader reasonably took
+    #      it for the crossover's implementation and a later maintainer could "restore" it
+    #      and publish a different number under the same key.
     bins = np.arange(0, 257, 8)
     means = []
     for lo, hi in zip(bins[:-1], bins[1:]):
@@ -109,6 +160,10 @@ def analyze(run_dir):
         means.append({"d_perframe_bin": [int(lo), int(hi)],
                       "n_px": int(sel.sum()),
                       "mean_signed_levels": float(signed[sel].mean()) if sel.any() else None})
+    # crossover: the per-frame depth LEVEL at which the binned mean signed difference
+    # changes sign - the first bin boundary where the per-shot normalisation stops making
+    # surfaces lighter and starts making them darker. This sweep is the derivation; there
+    # is no second one.
     for a, b in zip(means[:-1], means[1:]):
         if a["mean_signed_levels"] is None or b["mean_signed_levels"] is None:
             continue
@@ -183,4 +238,12 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # WAVE 25 (F-68f3fb4b): the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (wave 22, SEAM 1 — core-solvers' file). This tool was one of
+    # the 29 in `tests/test_instrument_exits.py::CPYTHON_HALT_CONTRACT_PENDING`: its
+    # typed refusals reached the operator as a stdlib traceback at exit 1 — the code this
+    # repo reserves for a crash — and the evidence dict naming the clause reached nothing.
+    # Never copied; the point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "ANALYZE_P3")

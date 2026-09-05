@@ -164,6 +164,22 @@ def imports_bpy(name):
 #: `make_rig_sheet` is the pointed one: it creates `<out>/` and `<out>/panels/` and then
 #: raises `ArmatureError` inline at three lines below them.
 POPULATION_MEASURED_2026_09_04 = {
+    # WAVE 25 (instruments-measure, F-c66ad0c4): FOUR JOIN, and they are the measurement of
+    # that finding. `analyze_p3`, `make_cast_sheet`, `make_hole_survey` and
+    # `rig_sheet_compose` were the modules in that domain with NO refusal of their own —
+    # zero `raise` statements between them by AST walk on `580af47` — so they only WROTE and
+    # `derive_population()` could not reach them. Each now refuses by name with evidence, so
+    # each gates-and-writes and joins here loudly, which is this census doing its job.
+    #
+    # None of the four strands a refusal: `make_cast_sheet`'s three clauses and
+    # `rig_sheet_compose`'s four sit in `main`/`gate_spec` above the single `os.makedirs`
+    # beside `sheet.save`; `analyze_p3`'s two are inside `analyze()`, above the `--out`
+    # write; `make_hole_survey`'s per-view existence clause was MOVED above its
+    # `os.makedirs(panels_dir)` when this ratchet reported it stranded — the census caught
+    # a real ordering defect in the fix that created it, which is the direction it exists
+    # for, and the fix is better for it (a run refused at view 5 no longer leaves four
+    # pairs of written panels behind).
+    "analyze_p3", "make_cast_sheet", "make_hole_survey", "rig_sheet_compose",
     # WAVE 16 (instruments-measure, SEAM 14 §1): `make_e13_sheet` JOINS. It had NO typed
     # refusal at all — it only wrote — and now refuses (`E13SheetError`, their `F-9297b54f`,
     # the listing checked before it is indexed), so `derive_population()` reaches it. It

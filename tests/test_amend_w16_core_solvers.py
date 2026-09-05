@@ -1168,6 +1168,21 @@ TESTS_CITED_FILES_NOT_IN_THE_TREE = {
 #: the same shape as `CORRECTED_ANCHORS` above. Checked rather than trusted: a row
 #: that becomes live again fails `test_the_recorded_stale_anchors_are_all_still_stale`.
 TESTS_STALE_ANCHORS_RECORDED = {
+    # WAVE 25 (instruments-measure). Two rows JOIN and one LEAVES.
+    #   JOIN: both numbers are quoted inside the sentence that records them as wrong, which
+    #   is the reason most of this table exists — deleting the number would delete the
+    #   correction. The first is named in `test_refusal_clauses._delegated_raise_sites`' own
+    #   note saying that anchor moved when `analyze_p3` gained its two manifest refusals; the
+    #   second in `test_render_visibility`'s routing table, saying that anchor went blank when
+    #   `stage_render` dropped an import it no longer used. Both notes explain why those
+    #   tables cite SYMBOLS now, so the numbers survive only as the measurement.
+    #   ⚠ The rows below are written as tuples and the reasons above name no line number,
+    #   deliberately: a comment here that SPELLS `<file>.py:<n>` becomes a citation FROM this
+    #   module, and the census would then report this very table as stale.
+    #   LEAVE: the `pack_pose_pack` row — that citation is gone, re-anchored on the symbol,
+    #   so the row would excuse nothing.
+    ('test_refusal_clauses', 'analyze_p3.py', 173),
+    ('test_render_visibility', 'stage_render.py', 219),
     ('test_amend_w12_core_gates', 'test_route_gates.py', 1893),
     ('test_amend_w16_core_solvers', 'lift_solve.py', 307),
     ('test_amend_w18_builders', 'build_r2v_payload.py', 69),
@@ -1186,7 +1201,6 @@ TESTS_STALE_ANCHORS_RECORDED = {
     ('test_instruments_amend_w8', 'test_retopo_and_bake.py', 122),
     ('test_make_rig_sheet', 'rig_repair.py', 150),
     ('test_probe_glb', 'probe_subject.py', 88),
-    ('test_refusal_clauses', 'pack_pose_pack.py', 164),
 }
 
 

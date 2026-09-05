@@ -113,9 +113,19 @@ def test_the_plain_refusal_population_is_the_thirty_this_wave_names():
     # refusals in that file raised the family BASE, which `errors.py::ArmatureError`'s own
     # docstring names as the thing the wave-14 constructor is 'not a licence for').
     # Nothing left the population. BRANCH-LOCAL; the coordinator measures at the merge.
-    assert len(live) == 32, sorted(live)
+    # WAVE 25 (instruments-measure): 32 -> 35, MEASURED in this worktree. THREE new plain-
+    # refusal classes, one per module in this domain that held ZERO `raise` statements on
+    # `580af47` (F-c66ad0c4): `make_cast_sheet.CastSheetError`,
+    # `rig_sheet_compose.RigSheetComposeError` and `make_hole_survey.HoleSurveyError`. Each
+    # declares no `__init__`, which is the property this census is about — the base's
+    # constructor stores what it is passed and a bare-message refusal keeps its honest
+    # `"evidence": null`. Nothing left the population. BRANCH-LOCAL.
+    assert len(live) == 35, sorted(live)
     assert "make_pick_sheet.PickSheetError" in live
     assert "make_e13_sheet.E13SheetError" in live
+    for q in ("make_cast_sheet.CastSheetError", "rig_sheet_compose.RigSheetComposeError",
+              "make_hole_survey.HoleSurveyError"):
+        assert q in live, sorted(live)
     # the three the wave-14 probe walked ...
     for q in ("extract_clip_frames.ClipReadError", "measure_tracking.TrackingError",
               "measure_tracking.AnchorMismatch"):

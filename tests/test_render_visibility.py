@@ -449,11 +449,13 @@ def test_no_file_under_tools_reaches_into_the_private_vertex_primitive():
 # Measured 2026-09-04 with this file's own call-site rule: `world_bounds` has 3 live sites
 # and ALL THREE pass `scene=`, so the one member named was the one with nothing left to
 # catch; `evaluated_geometry_signature` has 3 sites and all three omit the scene
-# (check_relift.py:167, render_start_frame.py:669, stage_render.py:219) and
-# `projected_bbox_px` has 1, also without it (stage_render.py:236). Four live unfiltered
+# (check_relift.py::main, render_start_frame.py::main, stage_render.py::run_export) and
+# `projected_bbox_px` has 1, also without it (stage_render.py::run_export). Four live
+# unfiltered
 # measurements sat outside a ban whose only enforced clause was already at zero.
 #
-# `stage_render.py:219` is the pointed one: the per-frame geometry signature written into
+# `stage_render.py::run_export` is the pointed one: the per-frame geometry signature
+# written into
 # the run manifest and read by Gate G6's `distinct_signatures` clause. Computed over every
 # handed object it includes render-hidden decoys, so a hidden proxy mesh moving between
 # frames changes the signature — and the gate that exists to prove the subject moved rules
@@ -591,10 +593,16 @@ def test_the_exempt_paths_and_the_family_are_the_ones_this_ban_claims():
 #: `BOUNDS_FAMILY` named one of its three doors. Named, dated 2026-09-04, keyed by
 #: `path -> callee`, and routed:
 #:
-#:   check_relift.py:167          `evaluated_geometry_signature`  core-solvers F-efe65849 /
-#:   render_start_frame.py:669    `evaluated_geometry_signature`  instruments  F-33fb7947
-#:   stage_render.py:219          `evaluated_geometry_signature`  instruments-measure
-#:   stage_render.py:236          `projected_bbox_px`             instruments-measure
+#:   check_relift.py::main            `evaluated_geometry_signature`  core-solvers
+#:                                                                   F-efe65849 /
+#:   render_start_frame.py::main      `evaluated_geometry_signature`  instruments
+#:                                                                   F-33fb7947
+#:   stage_render.py::run_export      `evaluated_geometry_signature`  instruments-measure
+#:   stage_render.py::run_export      `projected_bbox_px`             instruments-measure
+#:
+#: WAVE 25: re-anchored on the SYMBOL. `stage_render.py:219` opened a blank line the
+#: moment that module dropped an import it no longer used (F-40316edd), and a routing
+#: table whose rows cannot be opened routes nothing.
 #:
 #: SUBSET, so a site that starts passing `scene=` leaves this set without failing the file
 #: that named it, and a FIFTH unfiltered site fails loudly.
