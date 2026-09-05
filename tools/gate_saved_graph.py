@@ -655,6 +655,37 @@ VERIFY_RECEIPT_KEYS = ("attribution", "carries_no_sampler_asserted")
 #: presence — a dict carrying `receipt: "something-else"` is not a verify receipt.
 VERIFY_RECEIPT_KIND = "verify"
 
+#: The key that is written ONLY on the way out of `route_gates.verify`, and the positive
+#: mark this reader tells a RETURNED receipt by (wave 22, F-9ad5cbc2).
+#:
+#: The wave-18 reader told a returned receipt from a caught refusal by the ABSENCE of
+#: `clause`, on the comment "a returned receipt never carries `clause`; that is the reading
+#: that tells them apart". That proposition is true and it is not the one the reader needs;
+#: the converse — every caught refusal carries `clause` — is what it was actually asking,
+#: and it is FALSE. RE-MEASURED on `e8263a3` by an AST walk of `route_gates.verify`
+#: (spanning :2448-:2865): **17 `RouteGate` raise sites inside it, 14 of which pass evidence
+#: carrying no `clause` key at all** (:2574, :2586, :2698, :2718, :2728, :2740, :2765,
+#: :2773, :2782, :2798, :2805, :2824, :2833, :2850); across the whole module 23 of 46
+#: `RouteGate` raises are clause-less. Driving `RG.verify` on a two-node graph
+#: (`WanCameraEmbedding` with width/height/length wired as LINKS, plus a `PrimitiveInt`)
+#: raised with `receipt: "verify"`, `gate: "ROUTE"`, `andon: "RouteGate"` and BOTH
+#: `VERIFY_RECEIPT_KEYS` — and no `clause`. Written into a record as
+#: `{"gates": {"ROUTE": <that evidence>}}` it was ADMITTED here: `n_verify_receipts` 1,
+#: `found_by` "declared receipt kind", `carries_no_sampler` False, `attribution` []. The
+#: clause that exists to stop exactly that could not fire on 14 of the 17 sites.
+#:
+#: So the reader is keyed on a property the RETURN establishes rather than on one 14 raise
+#: sites do not write. Measured on the same tree: `ev["verdict"]` is assigned at exactly two
+#: statements in `verify`, each immediately above one of its two `return ev` statements, and
+#: no raise site is reachable after either — so `verdict` is present on every receipt
+#: `verify` HANDS BACK and absent from every evidence dict it RAISES.
+#:
+#: HONEST BOUND, unchanged from wave 18: no builder in this domain writes a caught refusal
+#: into its record (the only two catch-and-re-raise sites, `build_payload._carry` and
+#: `build_i2v_payload`, re-raise and record nothing), so the exposure is latent. What is new
+#: is the size of the blind spot the wave-18 clause left: 14 of 17, not 3.
+VERIFY_RECEIPT_RETURNED_KEY = "verdict"
+
 
 def verify_receipts(doc):
     """Every `route_gates.verify` receipt inside a payload record.
@@ -778,18 +809,37 @@ def route_facts(record_path, api_graph=None):
     # `clause`; that is the reading that tells them apart. No builder records a caught
     # refusal today, which is the only thing that kept this closed — and a latent shape at
     # the spend boundary is refused by name rather than left to a future builder.
-    refusals = [r for r in receipts if r.get("clause")]
+    # ---- ANDON, wave 22 (F-9ad5cbc2). The reader above was keyed on the ABSENCE of
+    # `clause`, and 14 of the 17 `RouteGate` raise sites inside `verify` write no `clause`
+    # at all — see `VERIFY_RECEIPT_RETURNED_KEY`. It is keyed on the RETURN's own mark now:
+    # a receipt is a receipt when it carries the `verdict` `verify` writes on its way out,
+    # and anything else in that shape is a caught refusal whatever it does or does not say
+    # about why. The clause reading is KEPT beside it rather than replaced, because it names
+    # the refusal when the raise site did write one, which is the more useful halt.
+    refusals = [r for r in receipts
+                if r.get("clause")
+                or not str(r.get(VERIFY_RECEIPT_RETURNED_KEY) or "").strip()]
     if refusals:
+        named = sorted({str(r["clause"]) for r in refusals if r.get("clause")})
+        unmarked = sum(1 for r in refusals
+                       if not str(r.get(VERIFY_RECEIPT_RETURNED_KEY) or "").strip())
         raise RG.RouteGate(
             f"--record={record_path!r} carries the evidence of a CAUGHT Gate ROUTE "
-            f"REFUSAL, not a passing receipt: "
-            f"{sorted({str(r.get('clause')) for r in refusals})}. `verify` writes its "
-            f"declared kind and both fact keys before the first clause can raise, so a "
-            f"refusal looks like a receipt to this reader; a record of a gate that FIRED "
-            f"may not supply the facts that admit the next submission",
+            f"REFUSAL, not a passing receipt"
+            + (f": {named}" if named else
+               f": {unmarked} of {len(receipts)} carry no "
+               f"`{VERIFY_RECEIPT_RETURNED_KEY}`, the key `verify` writes only on its way "
+               f"out")
+            + f". `verify` writes its declared kind and both fact keys before the first "
+            f"clause can raise, so a refusal looks like a receipt to this reader; 14 of its "
+            f"17 raise sites write no `clause` either, so absence of a clause is not "
+            f"evidence of a return. A record of a gate that FIRED may not supply the facts "
+            f"that admit the next submission",
             {"gate": "ROUTE", "andon": "RouteGate",
              "clause": "record_carries_a_caught_refusal", "record": path,
-             "refusal_clauses": sorted({str(r.get("clause")) for r in refusals}),
+             "refusal_clauses": named,
+             "n_unmarked_receipts": unmarked,
+             "returned_receipt_key": VERIFY_RECEIPT_RETURNED_KEY,
              "n_receipts": len(receipts)})
     if not receipts:
         raise RG.RouteGate(
