@@ -588,14 +588,17 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # Measured in the core-gates worktree; builders and core-solvers may move this
     # count too, so the coordinator re-measures at merge rather than summing.
     # WAVE-18 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    # WAVE 20 (core-gates, 2026-09-05): +1 in `route_gates.RouteGate`, RE-DERIVED with
+    # WAVE 20 (core-gates, 2026-09-05): +2 in `route_gates.RouteGate`, RE-DERIVED with
     # `==` in this worktree against the merged base `475f4eb`, which every census here read
     # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
     #   `_iter_definitions`' `duplicate_subgraph_label` — the LABEL the walk EMITS, which
     #   the id clause did not bound, so two blueprints under one `name` (or two under
     #   neither field, or one named `top`) collapsed the `(where, id)` pair Gate S keys on
     #   (F-400c1df4).
-    assert len(RAISE_SITES["RouteGate"]) == 69, sorted(RAISE_SITES["RouteGate"])
+    #   `_readable_containers`' `unreadable_node` — the node's OWN `widgets_values` /
+    #   `inputs` container, where a BANNED weight spelled inside a mapping or a bare string
+    #   was read as empty and `verify` returned GREEN (F-f9ab0645).
+    assert len(RAISE_SITES["RouteGate"]) == 70, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside

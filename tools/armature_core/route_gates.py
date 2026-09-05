@@ -613,6 +613,11 @@ def _walk_nodes(graph):
             # bare `continue` on the format every builder submits.
             if _api_entry_kind(node_id, node, graph) == "metadata":
                 continue
+            # · ANDON — the node's own container, before `.values()` is called on it. See
+            # `_readable_containers`: a list here used to raise a bare `AttributeError`,
+            # which is not an `ArmatureError` and so bypasses the halt contract entirely.
+            _readable_containers("api", node, population=len(graph), api=True,
+                                 node_id=node_id)
             inputs = node.get("inputs") or {}
             # A link is [node_id, slot]; anything else is a literal this graph pins.
             widgets = [v for v in inputs.values() if not isinstance(v, list)]
@@ -759,6 +764,36 @@ def _readable_node(where, n, index, population):
 
     One implementation, both call sites, so the two levels cannot drift apart again;
     `where` names which one, and it is the definition's own name or id for a nested node.
+
+    ⚠ **It guarded the node ENTRY and left the node's OWN CONTAINERS unguarded** — the
+    level below the one wave 18 closed for `definitions` / `definitions.subgraphs` and the
+    one wave 14 closed for the `nodes` array. Every weight read on this page is
+    `for v in (n.get("widgets_values") or [])` (`components`, `model_weights`), which
+    iterates the KEYS of a mapping and the CHARACTERS of a string, so no value inside
+    either shape is ever tested against `WEIGHT_SUFFIXES`. Measured 2026-09-05 in this
+    worktree on a save-format graph of `UNETLoader` + pinned `KSampler` +
+    `WanImageToVideo(832,480,81,1)` + a `LoraLoaderModelOnly` carrying
+    `causvid_x.safetensors` (BANNED, CC-BY-NC): with `widgets_values` as the ordinary LIST
+    `components()` returned that file with verdict BANNED and `verify(g)` raised naming
+    it; with the SAME node's `widgets_values` spelled as the mapping
+    `{"lora_name": "causvid_x.safetensors", "strength_model": 1.0}`, and again as the bare
+    string `"causvid_x.safetensors"`, `components()` returned only the `UNETLoader`'s
+    weight and `verify(g)` RETURNED "0 of 1 component(s) classified, 1 unclassified, …
+    1 frame(s) checked and generator-legal". No key in the receipt recorded that a node's
+    widget container had been entered and read as empty.
+
+    The node's `inputs` is guarded on the same clause because the converted-widget reading
+    the shift andons rest on is taken from it: `_save_format_input_names` and
+    `_save_format_converted_widget_names` iterate `node.get("inputs") or []`, and a mapping
+    there yields its string keys, every one of which fails `isinstance(slot, dict)` — so
+    the answer "this node has no converted widgets" is returned about a container nobody
+    read. `None` and an absent key stay the ordinary spelling of "no widgets" / "no
+    inputs", exactly as an absent `definitions` stays the spelling of "no blueprints".
+
+    NOT MEASURED, and stated as this module states its siblings: whether Comfy's own
+    exporter ever emits a non-list `widgets_values`. The input class is the one
+    `load_graph`'s docstring names — the save-format file the cloud converted and handed
+    back, an operator's `--saved` file, a converter or a hand-edit artifact.
     """
     if not isinstance(n, dict):
         raise RouteGate(
@@ -769,7 +804,66 @@ def _readable_node(where, n, index, population):
             {"gate": "ROUTE", "andon": "RouteGate", "clause": "unreadable_node",
              "index": index, "entry_type": type(n).__name__, "entry": repr(n),
              "where": where, "n_nodes": population})
+    # · ANDON — the node's own containers, on the level the wave-14 fix did not reach.
+    _readable_containers(where, n, index=index, population=population, api=False)
     return n
+
+
+#: What each node container is spelled as, per format. Save format spells `inputs` as a
+#: LIST of slot dicts (`{"name", "type", "link"}`, plus `{"widget": {...}}` on a converted
+#: widget) and `widgets_values` as a LIST of positional values; API format keys `inputs` by
+#: NAME and carries no `widgets_values` at all — `_walk_nodes` synthesises one from the
+#: literal inputs, so only `inputs` is read there.
+#: The "caller said nothing" sentinel, distinct from a node id that is legitimately `None`.
+_UNSET = object()
+
+NODE_CONTAINERS = {
+    False: (("widgets_values", list, "a list of widget values"),
+            ("inputs", list, "a list of save-format input slots")),
+    True: (("inputs", dict, "a mapping of API input name to literal-or-link"),),
+}
+
+
+def _readable_containers(where, node, *, index=None, population=None, api=False,
+                         node_id=_UNSET):
+    """Gate ROUTE's `unreadable_node`, raised for a node's OWN container.
+
+    One implementation, both formats and both save-format call sites, for the reason
+    `_unreadable_level` gives one level up: a reader keyed on the clause has one question —
+    *did this walk enter everything it reported on?* — and three spellings of the answer
+    would be three things to remember. `container` names which one and `entry_type` carries
+    the shape that arrived, so the receipt says what was refused rather than only that
+    something was.
+
+    The API half is the same defect wearing the crash hat. `_walk_nodes`' API branch reads
+    `inputs.values()`, so an `inputs` spelled as a LIST raised a bare
+    `AttributeError: 'list' object has no attribute 'values'` — measured 2026-09-05 on the
+    API mirror of the graph in `_readable_node`'s note. An `AttributeError` is not an
+    `ArmatureError`, so the halt contract's exit-2 six-key `<TOOL>_HALT` branch is bypassed
+    and Gate ROUTE refusing a shape it cannot read is recorded as an unhandled crash.
+
+    `node_id` is passed explicitly by the API branch, where a node's id is the MAPPING KEY
+    and never a field inside the entry — an evidence record naming `None` as the operand
+    would name nothing an operator could find in the file.
+    """
+    if node_id is _UNSET:
+        node_id = node.get("id")
+    for name, shape, expected in NODE_CONTAINERS[bool(api)]:
+        value = node.get(name)
+        if value is None or isinstance(value, shape):
+            continue
+        raise RouteGate(
+            f"this graph's node {node_id!r} (in {where!r}) carries a "
+            f"{type(value).__name__} as its `{name}` ({value!r}), which is not "
+            f"{expected}. Every clause on this page reads that container by iterating or "
+            f"indexing it, and a mapping yields its KEYS while a string yields its "
+            f"CHARACTERS — so a weight, a seed or a frame count inside it is tested "
+            f"against nothing and the node is reported clean having been read as empty",
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "unreadable_node",
+             "container": name, "expected": expected, "where": where,
+             "node_id": node_id, "class": node.get("type"),
+             "entry_type": type(value).__name__, "entry": repr(value),
+             "index": index, "n_nodes": population})
 
 
 def _unreadable_level(where, value, expected, index=None, population=None, extra=None):

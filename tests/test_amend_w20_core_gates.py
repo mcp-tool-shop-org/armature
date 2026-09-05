@@ -12,9 +12,14 @@ all three fixes stop one level short of the thing they are about:
     walk's own level label `top`, collapse the `(where, id)` pair Gate S keys on — and
     Gate S RETURNED a PASS naming `expert/3, expert/3` while a blueprint node ran seed
     999999999;
+  * **F-f9ab0645** `_readable_node` guards the node ENTRY and nothing guards the node's
+    own `widgets_values` CONTAINER, so the same BANNED `causvid_x.safetensors` spelled
+    inside a mapping or a bare string is invisible to every weight reader on the page and
+    `verify` returns GREEN — the level below the one wave 18 closed for `definitions`;
 
 Every test here goes RED on the tree at base `475f4eb`, and each red is proved on the
-OPERAND the finding named — the auditor's two-blueprint Gate S graphs — and on that operand's enumerated
+OPERAND the finding named — the auditor's two-blueprint Gate S graphs; `causvid_x.safetensors` in all three container spellings plus the API
+mirror — and on that operand's enumerated
 SIBLINGS.
 """
 
@@ -209,12 +214,143 @@ def test_the_id_ledger_and_the_label_ledger_do_not_cross():
 
 
 # =======================================================================================
+# F-f9ab0645 · CRITICAL (unanimous) — the node's own containers. `_readable_node` guards
+# the ENTRY; every weight reader on this page iterates `n.get("widgets_values") or []`,
+# which walks the KEYS of a mapping and the CHARACTERS of a string.
+# =======================================================================================
+
+
+def _lora_graph(widgets_values):
+    """The finding's operand: `UNETLoader` + pinned `KSampler` + `WanImageToVideo` +
+    a `LoraLoaderModelOnly` carrying `causvid_x.safetensors` (BANNED, CC-BY-NC)."""
+    return {"nodes": [
+        {"id": 1, "type": "UNETLoader", "widgets_values": [BASE]},
+        {"id": 2, "type": "KSampler", "widgets_values": [7, "fixed"]},
+        {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]},
+        {"id": 4, "type": "LoraLoaderModelOnly", "widgets_values": widgets_values},
+    ]}
+
+
+def test_the_list_spelling_is_the_control_and_still_names_the_banned_file():
+    """The measurement the other two are read against: with `widgets_values` as the
+    ordinary LIST, `components()` returns the file with verdict BANNED and `verify`
+    raises naming it."""
+    comp = [c for c in RG.components(_lora_graph([BANNED])) if c["kind"] == "weight"]
+    assert [c["file"] for c in comp] == [BASE, BANNED]
+    assert comp[1]["verdict"] == "BANNED"
+    with pytest.raises(RG.RouteGate, match=r"causvid"):
+        RG.verify(_lora_graph([BANNED]), family="wan")
+
+
+@pytest.mark.parametrize("spelling,wv", [
+    ("mapping", {"lora_name": BANNED, "strength_model": 1.0}),
+    ("string", BANNED),
+])
+def test_a_widgets_values_that_is_not_a_list_refuses_rather_than_reading_empty(
+        spelling, wv):
+    """RED on base: with the SAME node's `widgets_values` spelled as the mapping,
+    `components()` returned only the UNETLoader's weight and `verify(g)` RETURNED "0 of 1
+    component(s) classified, 1 unclassified, ... 1 frame(s) checked and generator-legal".
+    The bare string produced the identical green receipt. Nothing in the evidence recorded
+    that a node's widget container was entered and read as empty."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(_lora_graph(wv))
+    ev = exc.value.evidence
+    assert ev["clause"] == "unreadable_node"
+    assert ev["container"] == "widgets_values"
+    assert ev["node_id"] == 4
+    assert ev["where"] == "top"
+    assert ev["entry_type"] == type(wv).__name__
+    with pytest.raises(RG.RouteGate, match=r"widgets_values"):
+        RG.verify(_lora_graph(wv), family="wan")
+
+
+@pytest.mark.parametrize("reader", ["components", "model_weights", "seeds", "latents",
+                                    "cameras", "ruled_node_classes", "pairing",
+                                    "unrecorded_seed_sources", "hosted_enums"])
+def test_every_reader_that_walks_nodes_meets_the_same_refusal(reader):
+    """Wave-18 rule 2 — the SIBLINGS, enumerated. Every reader on this page that touches a
+    node reaches it through `_iter_nodes`, so the container guard is on the walk rather
+    than in `components`: `components` and `model_weights` iterate `widgets_values`
+    directly; `seeds`, `latents`, `cameras`, `hosted_enums` index it positionally;
+    `ruled_node_classes`, `pairing` and `unrecorded_seed_sources` read the class beside
+    it. None of the nine may report on a graph carrying a container it cannot read."""
+    g = _lora_graph({"lora_name": BANNED})
+    with pytest.raises(RG.RouteGate) as exc:
+        getattr(RG, reader)(g)
+    assert exc.value.evidence["clause"] == "unreadable_node"
+
+
+def test_a_blueprint_node_container_is_guarded_at_the_level_below_too():
+    """The same refusal one level down: `_readable_node` is the ONE implementation both
+    call sites use, so a container hidden inside a subgraph blueprint is not a second
+    hole to close."""
+    g = {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [BASE]}],
+         "definitions": {"subgraphs": [{"id": "bp", "name": "inner", "nodes": [
+             {"id": 11, "type": "LoraLoaderModelOnly",
+              "widgets_values": {"lora_name": BANNED}}]}]}}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(g)
+    ev = exc.value.evidence
+    assert ev["clause"] == "unreadable_node" and ev["where"] == "inner"
+    assert ev["container"] == "widgets_values"
+
+
+@pytest.mark.parametrize("inputs", [{"lora_name": BANNED}, "x", 3])
+def test_a_save_format_inputs_that_is_not_a_list_refuses(inputs):
+    """The node's OTHER container. Save format spells `inputs` as a LIST of slot dicts and
+    `_save_format_input_names` / `_save_format_converted_widget_names` iterate it; a
+    mapping there yields its string keys, every one fails `isinstance(slot, dict)`, and
+    the converted-widget reading that the shift andon rests on silently answers "none"."""
+    g = _lora_graph([BANNED])
+    g["nodes"][3]["inputs"] = inputs
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(g)
+    ev = exc.value.evidence
+    assert ev["clause"] == "unreadable_node" and ev["container"] == "inputs"
+    assert ev["expected"] == "a list of save-format input slots"
+
+
+def test_the_api_mirror_refuses_instead_of_crashing_with_an_attributeerror():
+    """The API mirror the finding asks for. `_walk_nodes`' API branch reads
+    `inputs.values()`, so an `inputs` spelled as a LIST raised a bare
+    `AttributeError: 'list' object has no attribute 'values'` — measured on base. An
+    `AttributeError` is not an `ArmatureError`, so the halt contract's exit-2 six-key
+    `<TOOL>_HALT` branch is bypassed and Gate ROUTE refusing a shape it cannot read is
+    recorded as an unhandled crash."""
+    api = {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": BASE}},
+           "2": {"class_type": "KSampler", "inputs": {"seed": 7}},
+           "3": {"class_type": "LoraLoaderModelOnly", "inputs": [{"lora_name": BANNED}]}}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(api)
+    ev = exc.value.evidence
+    assert ev["clause"] == "unreadable_node" and ev["container"] == "inputs"
+    assert ev["where"] == "api" and ev["node_id"] == "3"
+    assert ev["expected"] == "a mapping of API input name to literal-or-link"
+
+
+@pytest.mark.parametrize("node", [
+    {"id": 4, "type": "LoraLoaderModelOnly"},
+    {"id": 4, "type": "LoraLoaderModelOnly", "widgets_values": None, "inputs": None},
+    {"id": 4, "type": "LoraLoaderModelOnly", "widgets_values": [], "inputs": []},
+])
+def test_absent_and_none_stay_the_ordinary_spelling_of_no_widgets(node):
+    """An andon that fires on a correct graph is not one anybody keeps. `None` and an
+    absent key are how this module already spells "no widgets" and "no inputs" — the
+    same reading `_iter_definitions` gives an absent `definitions`."""
+    g = _lora_graph([BANNED])
+    g["nodes"][3] = node
+    assert [c["file"] for c in RG.components(g) if c["kind"] == "weight"] == [BASE]
+
+
+# =======================================================================================
 # The halt line an operator actually reads (wave-18 rule 4), and the family census.
 # =======================================================================================
 
 
 HALT_ROUTES = [
     ("duplicate_subgraph_label", "gate_saved_graph.py", "SAVED_ADMISSION_HALT"),
+    ("unreadable_node", "gate_saved_graph.py", "SAVED_ADMISSION_HALT"),
 ]
 
 
@@ -223,6 +359,8 @@ def _refusal_for(clause):
     operator gets rather than a hand-built exception wearing the clause's name."""
     if clause == "duplicate_subgraph_label":
         return lambda: RG.components(_label_graph("expert", "expert"))
+    if clause == "unreadable_node":
+        return lambda: RG.components(_lora_graph({"lora_name": BANNED}))
     raise AssertionError(clause)
 
 
