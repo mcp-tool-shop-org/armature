@@ -435,3 +435,224 @@ def test_the_halt_line_reads_the_tie_clause(tmp_path, monkeypatch):
     assert len(halt["evidence"]["declared_payload_sha256"]) == 64
     assert (halt["evidence"]["declared_payload_sha256"]
             != halt["evidence"]["api_payload_sha256"])
+
+
+# ===========================================================================
+# WAVE 23, F-bacc3961 — the builders' halt line and exit code, as REAL PROCESSES
+# ===========================================================================
+#
+# Seven of the nine builders never executed their own `__main__` block anywhere in the
+# suite. Measured on `e8263a3` by AST over every `subprocess.run` in `tests/*.py`: exactly
+# two builders were ever run as a real process — `build_payload.py`
+# (`test_packaging.py:1081`) and `build_t2v_payload.py` (`test_amend_w16_builders.py:215`).
+# The other seven were driven only in-process through `main([...])` — `DRIVES` above is
+# that shape — which cannot reach the `try`/`except` that prints the sentinel and picks the
+# exit code. Of the 42 tools carrying a halt token, 17 carried one no test in `tests/`
+# named, five of them these builders: BUILD_ANIMATE, BUILD_CAMERA_I2V, BUILD_CASCADE,
+# BUILD_I2V, BUILD_LORA_ARM.
+#
+# The mechanism does work today — which is exactly what nothing asserted. So: one refusal
+# per builder, run as the operator runs it, asserting the three things a caller reads.
+#
+# THE PREFIX IS DERIVED, not typed: `blender_stub.halt_handler` reads it off the
+# `__main__` block, because seven of these nine print a prefix that is NOT the module stem
+# (`build_animate_payload.py` prints `BUILD_ANIMATE_HALT`). One home for that derivation,
+# shared with `test_instrument_exits.py`'s CPython census.
+
+import subprocess                                                   # noqa: E402
+import sys                                                          # noqa: E402
+
+from blender_stub import halt_handler                                # noqa: E402
+
+
+def _json_file(tmp_path, name, doc):
+    path = tmp_path / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return str(path)
+
+
+#: One TYPED REFUSAL per builder, each reached before any credit-adjacent work: the argv,
+#: and the clause word its own andon carries. Chosen so every member refuses through a
+#: named gate rather than through argparse (`ap.error` exits 2 with a usage line no halt
+#: reader can key on — the wave-22 rule) and so no two members share a recipe by accident.
+def _refusal_animate(tmp_path):
+    return ([f"--uploads={_json_file(tmp_path, 'uploads.json', {})}",
+             f"--out={tmp_path / 'o'}"], "missing_upload_key")
+
+
+def _refusal_assembly(tmp_path):
+    return ([f"--uploads={_json_file(tmp_path, 'uploads.json', {})}",
+             f"--out={tmp_path / 'o'}"], "no_frames_to_gate")
+
+
+def _refusal_camera_i2v(tmp_path):
+    empty = _json_file(tmp_path, "uploads.json", {})
+    return ([f"--uploads={empty}", f"--w1-record={empty}", f"--out={tmp_path / 'o'}",
+             "--experiment=../escaped"], "output_name_is_not_a_name")
+
+
+def _refusal_cascade(tmp_path):
+    return ([f"--uploads={_json_file(tmp_path, 'uploads.json', {})}",
+             f"--out={tmp_path / 'o'}"], "no_frames_to_gate")
+
+
+def _refusal_i2v(tmp_path):
+    empty = _json_file(tmp_path, "uploads.json", {})
+    return ([f"--uploads={empty}", f"--e08-record={empty}", f"--out={tmp_path / 'o'}",
+             "--experiment=../escaped"], "output_name_is_not_a_name")
+
+
+def _refusal_lora_arm(tmp_path):
+    base = os.path.join(REPO, "tests", "fixtures", "E12-w3-camera-i2v.api.json")
+    seeds = _json_file(tmp_path, "seeds.json", {"seeds": [2026081233]})
+    return ([f"--base={base}", "--arm=T", f"--out={tmp_path / 'o'}",
+             f"--seeds-registry={seeds}", "--seed=2026081233"], "missing_subject")
+
+
+def _refusal_payload(tmp_path):
+    return (["--experiment=E03", "--arm=B2", f"--out={tmp_path / 'o' / 'B2.json'}"],
+            "missing_subject")
+
+
+def _refusal_r2v(tmp_path):
+    seeds = _json_file(tmp_path, "seeds.json", {"seeds": [2026081301]})
+    prompt = _json_file(tmp_path, "prompt.json",
+                        {"prompt": "a figure", "negative_prompt": "blur"})
+    return (["--arm=A1", "--seed=2026081301", f"--seeds={seeds}",
+             f"--prompt-file={prompt}", f"--out={tmp_path / 'o'}"], "missing_arm_input")
+
+
+def _refusal_t2v(tmp_path):
+    seeds = _json_file(tmp_path, "seeds.json", {"seeds": [2026081201]})
+    return ([f"--seeds={seeds}", f"--out={tmp_path / 'o'}", "--seed=2026081201"],
+            "missing_subject")
+
+
+REFUSALS = {
+    "build_animate_payload": _refusal_animate,
+    "build_assembly_payload": _refusal_assembly,
+    "build_camera_i2v_payload": _refusal_camera_i2v,
+    "build_cascade_payload": _refusal_cascade,
+    "build_i2v_payload": _refusal_i2v,
+    "build_lora_arm_payload": _refusal_lora_arm,
+    "build_payload": _refusal_payload,
+    "build_r2v_payload": _refusal_r2v,
+    "build_t2v_payload": _refusal_t2v,
+}
+
+
+def test_every_builder_in_the_population_has_a_subprocess_refusal():
+    """The census, in the shape `test_every_builder_in_the_population_has_a_behavioural_
+    drive` already uses: the nine enumerated by glob and the nine refused here are the same
+    set, so a builder cannot join the family and skip its own halt contract."""
+    assert sorted(REFUSALS) == BUILDERS, sorted(set(REFUSALS) ^ set(BUILDERS))
+
+
+def _run_builder(name, argv):
+    return subprocess.run([sys.executable, os.path.join(TOOLS, f"{name}.py"), *argv],
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", cwd=REPO)
+
+
+@pytest.mark.parametrize("name", BUILDERS)
+def test_every_builder_refuses_through_its_own_main_block_with_the_halt_contract(
+        name, tmp_path):
+    """The three things a caller reads, over the whole family, as real processes.
+
+    What this looks like if the code were wrong in the specific way it exists to catch: a
+    builder's `__main__` loses its handler, is reordered so the print follows `sys.exit`,
+    or starts answering 1 for a typed refusal — and the paid path's halt line goes silent
+    with the whole suite green, because seven of these nine were driven only through
+    `main([...])` in-process.
+    """
+    argv, clause = REFUSALS[name](tmp_path)
+    handler = halt_handler(f"{name}.py")
+    assert handler, (
+        f"{name} carries no `__main__` halt handler at all: its block prints no "
+        f"`<PREFIX>_HALT` line and names no `run_tool_main` prefix, so a typed "
+        f"refusal reaches the operator as a traceback at the exit code this repo "
+        f"reserves for a crash")
+    prefix = handler["prefix"]
+    proc = _run_builder(name, argv)
+
+    assert proc.returncode == 2, (
+        f"{name}: exit {proc.returncode}; 2 is a deliberate refusal and 1 is a crash\n"
+        f"{proc.stdout[-800:]}\n{proc.stderr[-800:]}")
+    token = f"{prefix}_HALT"
+    lines = [l for l in proc.stdout.splitlines() if l.split(" ", 1)[0] == token]
+    assert len(lines) == 1, (
+        f"{name}: {len(lines)} `{token} <json>` line(s) on stdout, want exactly 1\n"
+        f"{proc.stdout[-800:]}")
+    rec = json.loads(lines[0][len(token):].strip())
+    assert {"error", "message", "evidence"} <= set(rec), (name, sorted(rec))
+    ev = rec["evidence"]
+    assert isinstance(ev, dict), (name, rec)
+    assert ev.get("clause") == clause, (name, ev)
+    assert rec["message"], (name, rec)
+
+
+#: MEASURED 2026-09-05 by driving all nine refusals below: eight name the gate and the
+#: andon in their evidence and ONE does not. `build_animate_payload`'s `missing_upload_key`
+#: prints `{"clause": ..., "key": ..., "source": ..., "present": []}` — the clause and the
+#: operand, and nothing that names the check that pulled. A halt reader keyed on
+#: `evidence["gate"]` (the shape the other eight and every Blender-side handler carry) reads
+#: `None` on the E08 builder's uploads refusal.
+#:
+#: The gap is in `tools/build_animate_payload.py`, which is the builders domain's file, so
+#: it is COUNTED here rather than fixed here (wave 12, rule 3: a walk that cannot judge a
+#: site reports it in its own category) and posted to the wave-23 seams inbox. This table
+#: may not grow: a tenth builder, or a second refusal, arriving without the two keys fails
+#: below rather than joining it.
+EVIDENCE_WITHOUT_A_GATE_KEY = {
+    "build_animate_payload": "missing_upload_key",
+}
+
+
+@pytest.mark.parametrize("name", BUILDERS)
+def test_a_builder_refusal_names_the_gate_and_the_andon_that_pulled(name, tmp_path):
+    """Wave 18, rule 3: a refusal names the andon that pulled, in the record an operator
+    actually reads — not only in the exception a test caught in-process."""
+    argv, clause = REFUSALS[name](tmp_path)
+    handler = halt_handler(f"{name}.py")
+    assert handler, (
+        f"{name} carries no `__main__` halt handler at all: its block prints no "
+        f"`<PREFIX>_HALT` line and names no `run_tool_main` prefix, so a typed "
+        f"refusal reaches the operator as a traceback at the exit code this repo "
+        f"reserves for a crash")
+    prefix = handler["prefix"]
+    proc = _run_builder(name, argv)
+    token = f"{prefix}_HALT"
+    line = [l for l in proc.stdout.splitlines() if l.split(" ", 1)[0] == token]
+    assert line, (name, proc.stdout[-600:])
+    ev = json.loads(line[0][len(token):].strip())["evidence"]
+
+    if EVIDENCE_WITHOUT_A_GATE_KEY.get(name) == clause:
+        assert not (ev.get("gate") or ev.get("andon")), (
+            f"{name} now names the gate on `{clause}`; delete its row from "
+            f"EVIDENCE_WITHOUT_A_GATE_KEY in the same commit")
+        return
+    assert ev.get("gate"), (
+        f"{name}: the halt line names no gate, so the refusal cannot be read back to the "
+        f"check that pulled it: {ev}")
+    assert ev.get("andon"), (name, ev)
+
+
+@pytest.mark.parametrize("name", BUILDERS)
+def test_a_builder_refusal_writes_no_output_directory(name, tmp_path):
+    """The effect beside the code: a refused build leaves nothing behind for a later step
+    to read as a build that happened. `build_payload` writes a FILE at `--out`, so the
+    directory it names is checked instead."""
+    argv, _clause = REFUSALS[name](tmp_path)
+    _run_builder(name, argv)
+    out = [a[len("--out="):] for a in argv if a.startswith("--out=")]
+    assert len(out) == 1, argv
+    assert not os.path.exists(out[0]), f"{name}: a refusal left {out[0]}"
+
+
+# The CRASH side of the divergence (an ordinary failure answers 1, never 2) is held for
+# these same nine by `tests/test_instrument_exits.py::
+# test_a_cpython_refusal_and_crash_do_not_answer_with_the_same_code`, which drives every
+# builder's `__main__` block with a raiser rather than needing a per-builder broken input —
+# `build_payload` takes no file argument at all, so there is no uniform crash operand here.
+# Stated rather than duplicated, so the pair is findable from either side.
