@@ -108,6 +108,36 @@ def _norm(a):
     return _scale(a, 1.0 / n)
 
 
+def _finite_positive(value):
+    """Is `value` a number that is finite and strictly greater than zero?
+
+    A PREDICATE, never a raiser, and that is deliberate: `tests/test_gates.
+    evidence_dicts_missing` is the suite's one evidence walk, and it returns `unreadable`
+    — policed by nothing — for a raise whose evidence dict it cannot resolve. A shared
+    raising helper mutating a caller's `ev` is exactly that shape, so every refusal below
+    is spelled at its own site with a literal dict carrying `gate`, `andon` and `clause`.
+    A diagnostic and a gate are different objects (CLAUDE.md); this is the diagnostic.
+    """
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(f) and f > 0.0
+
+
+#: Why both span functions bound the FRAME SIZE and not only the camera numbers:
+#: `sensor_mm * height / width` divides by one of the frame's own dimensions, and
+#: `width >= height` chooses WHICH — so a zero width is a bare `ZeroDivisionError` on one
+#: branch and a silently collapsed span on the other, and the render saves as a
+#: well-formed image either way.
+_FRAME_SIZE_REFUSAL = (
+    "is not a finite positive number of pixels. Both span functions divide one sensor "
+    "dimension by the frame's aspect, and which dimension divides is chosen by "
+    "`width >= height`, so a degenerate size is a bare ZeroDivisionError on one branch "
+    "and a silently collapsed span on the other — and the render saves as a well-formed "
+    "image either way")
+
+
 def half_fovs(lens_mm, sensor_mm, width, height):
     """Half field of view per axis, matching Blender's AUTO sensor fit.
 
@@ -115,7 +145,48 @@ def half_fovs(lens_mm, sensor_mm, width, height):
     the framing solved here and the framing rendered there would differ, and the only
     symptom would be a subject slightly off the mark with nothing pointing at why.
     `tests/test_framing.py` pins them against each other.
+
+    **It had no clause at all, twenty lines from a sibling that does** (F-329a9555, wave
+    18). `ortho_half_spans` below opens with a non-positive guard; this function opened
+    with the arithmetic. Measured on the wave-18 base: `half_fovs(50.0, 0.0, 832, 480)`
+    returned `(0.0, 0.0)` and `project` then raised a bare `ZeroDivisionError` from
+    `math.tan(0.0)` — untyped, so the 21-tool halt contract records exit 1 "an unhandled
+    error" where a refusal at exit 2 belongs. `half_fovs(nan, 36.0, ...)` returned
+    `(nan, nan)`. And `half_fovs(-50.0, 36.0, 832, 480)` returned
+    `(-0.34555558058171215, -0.2047809499429749)` — a NEGATIVE field of view, from which
+    `project` point-mirrors the whole frame about its centre while `silhouette_extent`
+    reports a perfectly plausible finite box.
+
+    That last one is the escape that was open END TO END: `render_turnaround.py` declares
+    `--lens` and `--sensor` as bare `type=float` with no bound, and a mirrored silhouette
+    that stays inside the frame clears Gate WHOLE, Gate CROP and Gate ALPHA — an eight-view
+    turnaround rendered and shipped upside down with every andon green.
+
+    **The andon is inside the function performing the step**, per CLAUDE.md, rather than at
+    each caller: `blender_scene.auto_radius` divides by `math.sin(min(hx, hy))` and
+    `project` divides by `math.tan(hx)`, so both are closed by this one clause in each
+    copy rather than by a guard per division.
     """
+    for name, v in (("width", width), ("height", height)):
+        if not _finite_positive(v):
+            raise FramingError(
+                f"{name}={v!r} {_FRAME_SIZE_REFUSAL}",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "frame_size_not_positive", name: v,
+                 "lens_mm": lens_mm, "sensor_mm": sensor_mm,
+                 "width": width, "height": height})
+    for name, v in (("sensor_mm", sensor_mm), ("lens_mm", lens_mm)):
+        if not _finite_positive(v):
+            raise FramingError(
+                f"{name}={v!r} is not a finite positive camera number. A NaN fails every "
+                f"comparison in both directions and reaches the verdict line; a zero "
+                f"divides; and a NEGATIVE one returns a negative half-FOV, which "
+                f"point-mirrors the projected frame about its centre while every extent, "
+                f"crop and alpha gate still reads a plausible finite box",
+                {"gate": None, "andon": "FramingError",
+                 "clause": f"{name}_not_finite_and_positive",
+                 "lens_mm": lens_mm, "sensor_mm": sensor_mm,
+                 "width": width, "height": height})
     if width >= height:
         sx = sensor_mm
         sy = sensor_mm * height / width
@@ -135,14 +206,32 @@ def ortho_half_spans(ortho_scale, width, height):
     why S04's calibration render is taken at 352x1024 and not at the square preset it ships.
 
     Returns HALF spans, because that is what the projection divides by.
+
+    **The guard used to bound one direction and not the other** (F-329a9555, wave 18). It
+    read `if ortho_scale <= 0.0`, and `nan <= 0.0` is False: measured on the wave-18 base,
+    `ortho_half_spans(nan, 832, 480)` RETURNED `(nan, nan)` past this function's own and
+    only clause, and `+inf` returned `(inf, inf)`. `turnaround.projection_plan`'s docstring
+    already recorded the fact — "`ortho_half_spans` refuses <= 0 downstream but takes nan
+    and inf" — and guarded it at the two callers instead of here. The clause is now
+    `not (isfinite and > 0)`, which is the direction the invariant did not bound; the
+    callers' pins stand and are no longer the only thing standing.
     """
-    if ortho_scale <= 0.0:
+    for name, v in (("width", width), ("height", height)):
+        if not _finite_positive(v):
+            raise FramingError(
+                f"{name}={v!r} {_FRAME_SIZE_REFUSAL}",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "frame_size_not_positive", name: v,
+                 "ortho_scale": ortho_scale, "width": width, "height": height})
+    if not _finite_positive(ortho_scale):
         raise FramingError(
             f"ortho_scale is {ortho_scale}, which spans no world at all; a parallel camera "
-            f"with a non-positive scale collapses every point onto the frame centre, and "
-            f"the render still saves as a well-formed image",
-            {"gate": None, "andon": "FramingError", "clause": "ortho_scale_not_positive",
-             "ortho_scale": ortho_scale, "width": width, "height": height})
+            f"with a non-positive scale collapses every point onto the frame centre, a "
+            f"non-finite one sends every point nowhere at all, and the render still saves "
+            f"as a well-formed image either way",
+            {"gate": None, "andon": "FramingError",
+             "clause": "ortho_scale_not_positive", "ortho_scale": ortho_scale,
+             "width": width, "height": height})
     if width >= height:
         sx = ortho_scale
         sy = ortho_scale * height / width

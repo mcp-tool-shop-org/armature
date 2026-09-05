@@ -360,11 +360,81 @@ def endpoints_match(src_frames, dst_frames):
     frame. The count is right, the timeline is monotonic, every rotation is a rotation, and
     the clip plays — starting a little into the dance and ending a little before it
     finishes. Compared as stored VALUES, because that is what the contract says.
+
+    **Four clauses now, because the gate had one and three ways to answer without it**
+    (F-62774c72, wave 18). Its population is `s["local"]` — the SOURCE's bone set — and it
+    indexed `d["local"][b]` unguarded. Measured on the wave-18 base with identity matrices:
+
+    * `endpoints_match([], [])` raised a bare `IndexError: list index out of range` from
+      `src_frames[0]` — exit 1, no gate id, no evidence — where `monotonic` and
+      `resample_frames` both refuse `n < 2` by name;
+    * a ONE-frame source and destination RETURNED the full PASS verdict "first and last
+      frames are the source's own, value for value" with `checked: ['first','last']`,
+      having compared frame 0 to itself twice. A comparison over nothing reporting
+      agreement — the shape `gate_parts_determinism`, `gate_cascade_topology` and
+      `gate_no_paid_nodes` all got vacuity guards for;
+    * a destination that DROPPED a bone raised a bare `KeyError('b')` — the exact defect
+      this gate exists to detect, arriving as a crash rather than as a refusal naming the
+      missing bone;
+    * a destination that GAINED a bone the source never had RETURNED the full PASS
+      verdict, because the extra bone is outside the iterated population.
+
+    `resample_motion.py::main` is the only production caller and it runs this gate on a
+    record read from a JSON file, between `monotonic` and `validate_motion_record`. Every
+    raise carries a `clause` key, so a halt record can say which of the four fired.
     """
+    ev = {"gate": "RESAMPLE", "andon": "ResampleGate",
+          "n_src": len(src_frames), "n_dst": len(dst_frames), "checked": []}
+
+    # Vacuity, in the words `monotonic` already writes. Two distinct clauses, because
+    # "there is nothing to compare" and "the two ends are one frame" are different
+    # defects: the first is an empty record, the second is a record whose endpoints
+    # cannot disagree with each other.
+    if not src_frames or not dst_frames:
+        raise ResampleGate(
+            f"the endpoints were gated over {len(src_frames)} source frame(s) and "
+            f"{len(dst_frames)} destination frame(s): there is no first frame and no last "
+            f"frame to compare, and indexing one is how this refusal used to arrive — as "
+            f"an untyped IndexError at exit 1 with no gate id and no evidence",
+            dict(ev, clause="no_frames_to_compare"))
+    if len(src_frames) < 2 or len(dst_frames) < 2:
+        raise ResampleGate(
+            f"the endpoints were gated over {len(src_frames)} source frame(s) and "
+            f"{len(dst_frames)} destination frame(s): the first and the last are the SAME "
+            f"frame, so this gate would compare frame 0 to itself and report that the "
+            f"endpoints agree. A comparison over nothing must not report agreement — "
+            f"`monotonic` and `resample_frames` both refuse a record this short by name",
+            dict(ev, clause="a_single_frame_is_both_endpoints"))
+
     pairs = ((0, 0, "first"), (len(src_frames) - 1, len(dst_frames) - 1, "last"))
-    ev = {"gate": "RESAMPLE", "andon": "ResampleGate", "checked": []}
     for si, di, label in pairs:
         s, d = src_frames[si], dst_frames[di]
+        src_bones = set(s.get("local") or {})
+        dst_bones = set(d.get("local") or {})
+        # THE BONE POPULATION, compared as two SETS. The old loop walked the source's
+        # names and indexed the destination, so it crashed on the first direction and was
+        # blind to the second.
+        missing = sorted(src_bones - dst_bones)
+        extra = sorted(dst_bones - src_bones)
+        if missing:
+            raise ResampleGate(
+                f"the {label} resampled frame is missing {len(missing)} bone(s) the "
+                f"source's {label} frame carries: {missing[:8]}. Interpolating across a "
+                f"changing bone set holds the missing bone's last pose with nothing "
+                f"reporting it, and this gate used to report the same fact as an untyped "
+                f"KeyError",
+                dict(ev, label=label, clause="bones_missing_from_destination",
+                     bones_missing_from_destination=missing[:8],
+                     n_src_bones=len(src_bones), n_dst_bones=len(dst_bones)))
+        if extra:
+            raise ResampleGate(
+                f"the {label} resampled frame carries {len(extra)} bone(s) the source's "
+                f"{label} frame never had: {extra[:8]}. A bone outside the source's "
+                f"population is outside every comparison this gate makes, so the record "
+                f"would ship with a green endpoint verdict and a bone nobody authored",
+                dict(ev, label=label, clause="bones_absent_from_source",
+                     bones_absent_from_source=extra[:8],
+                     n_src_bones=len(src_bones), n_dst_bones=len(dst_bones)))
         rot_bad = [b for b in s["local"]
                    if _as_mat(s["local"][b]) != _as_mat(d["local"][b])]
         root_bad = tuple(float(v) for v in s["root"]) != tuple(float(v) for v in d["root"])
@@ -374,9 +444,12 @@ def endpoints_match(src_frames, dst_frames):
                 f"{len(rot_bad)} bone rotation(s) differ"
                 + (" and the root translation differs" if root_bad else "")
                 + ". The performance would be shifted in time with every count still right",
-                dict(ev, label=label, bones=sorted(rot_bad)[:8], root_differs=root_bad))
+                dict(ev, label=label, clause="endpoint_pose_differs",
+                     bones=sorted(rot_bad)[:8], root_differs=root_bad))
         ev["checked"].append(label)
-    ev["verdict"] = "first and last frames are the source's own, value for value"
+    ev["verdict"] = ("first and last frames are the source's own, value for value, over "
+                     f"the same {len(set(src_frames[0].get('local') or {}))} bone(s) at "
+                     "both ends")
     return ev
 
 
