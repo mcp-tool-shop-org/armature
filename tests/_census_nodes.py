@@ -730,6 +730,165 @@ def spend_and_fetch_tools():
              or n in ("canon_gate.py", "gate_saved_graph.py")))
 
 
+# ------------------------------------------ the pasted-name node (wave 23, F-54179a94)
+#
+# "A name pasted into an output path is a name" was enumerated one domain at a time and
+# recorded as a TYPED list: wave 18 declared the family had exactly three members
+# (`pack_pose_pack --name`, `resample_motion --name`, `make_review_clip --run`), and wave
+# 22 added a second, domain-scoped walk over the 21 Blender tools. Neither could see the
+# spend builders, which carry four more: measured on `e8263a3`,
+# `build_animate_payload.py` joined `f"{a.experiment}-probe-animate.api.json"` onto the
+# output directory with `--experiment` unbounded, and `build_camera_i2v_payload`,
+# `build_i2v_payload` and `build_t2v_payload` (whose `--tag` help string reads "goes in the
+# written filenames") did the same. Wave 22 bounded those four; the CENSUS that would have
+# found them is this one.
+#
+# THE RESOLVED SHAPE (wave 18, rule 1): not "the flags someone remembered", but every
+# argparse STRING option whose value reaches a filename composed under the tool's own
+# `--out`. The population is the union of two derivations, because either one alone is
+# short:
+#
+#   * the PASTE — an `os.path.join()` whose first argument resolves (transitively) from
+#     `a.out` and whose later arguments interpolate `a.<dest>`;
+#   * the BOUND — a flag already routed through `armature_core.parts.single_path_segment`,
+#     which is the repo's own statement that this flag reaches an output name. Three
+#     members are visible only this way (`fetch_run --run` composes `<root>/<run>` from
+#     `--root`, `make_review_clip --run` goes into a filename stem, `resample_motion
+#     --name` into `f"{name}.motion.json"`), and a member that keeps its guard while its
+#     paste moves must not fall out of the census.
+#
+# A member is bounded either by `single_path_segment` or by argparse `choices=` (a closed
+# set of literals, none of which can carry a separator). Anything else is OPEN.
+
+_NS_NAMES = ("a", "args", "ns")
+_OUT_DESTS = ("out", "out_dir", "outdir", "output")
+
+
+def _string_options(tree):
+    """`{dest: (flag, choices_declared)}` for every argparse option that takes a string."""
+    out = {}
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and called_name(node) == "add_argument"):
+            continue
+        flags = [a.value for a in node.args
+                 if isinstance(a, ast.Constant) and isinstance(a.value, str)
+                 and a.value.startswith("--")]
+        if not flags:
+            continue
+        kw = {k.arg: k.value for k in node.keywords}
+        kind = kw.get("type")
+        if kind is not None and not (isinstance(kind, ast.Name) and kind.id == "str"):
+            continue                                    # int/float flags are not names
+        dest = kw.get("dest")
+        name = (dest.value if isinstance(dest, ast.Constant)
+                else flags[0][2:].replace("-", "_"))
+        out[name] = (flags[0], "choices" in kw)
+    return out
+
+
+def _out_derived_names(tree):
+    """Local names holding the output DIRECTORY, transitively from `a.out`.
+
+    `out_dir = os.path.abspath(a.out)` and `base = os.path.join(out_dir, "sheets")` both
+    name the place this tool writes; a join rooted at either composes an OUTPUT path.
+    """
+    names = set()
+    for _ in range(6):                       # fixed point over simple assignment chains
+        grew = False
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Assign) and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)):
+                continue
+            target = node.targets[0].id
+            if target in names:
+                continue
+            for sub in ast.walk(node.value):
+                rooted = (isinstance(sub, ast.Attribute)
+                          and isinstance(sub.value, ast.Name)
+                          and sub.value.id in _NS_NAMES and sub.attr in _OUT_DESTS)
+                rooted = rooted or (isinstance(sub, ast.Name) and sub.id in names)
+                if rooted:
+                    names.add(target)
+                    grew = True
+                    break
+        if not grew:
+            break
+    return names
+
+
+def _rooted_in_output(node, out_names):
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Name) and sub.id in out_names:
+            return True
+        if (isinstance(sub, ast.Attribute) and isinstance(sub.value, ast.Name)
+                and sub.value.id in _NS_NAMES and sub.attr in _OUT_DESTS):
+            return True
+    return False
+
+
+def _flags_bound_by_the_one_helper(tree):
+    """The flag STRINGS this module routes through `single_path_segment`.
+
+    Keyed on the flag argument rather than on the value expression: `make_review_clip`
+    passes `str(explicit).strip()`, not `a.run`, and it is bounded all the same.
+    """
+    bound = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and called_name(node) == "single_path_segment"):
+            continue
+        if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+            bound.add(node.args[1].value)
+    return bound
+
+
+def pasted_name_flags(trees=None):
+    """`{tool: {flag: {"dest", "lines", "bound"}}}` — the pasted-name family, derived.
+
+    `bound` is `"single_path_segment"`, `"choices"` or `None`. A `None` is a flag an
+    operator can paste a separator or `..` into, writing the artifact outside the run
+    directory its own record names.
+    """
+    trees = tool_trees() if trees is None else trees
+    family = {}
+    for tool, tree in sorted(trees.items()):
+        options = _string_options(tree)
+        out_names = _out_derived_names(tree)
+        bound = _flags_bound_by_the_one_helper(tree)
+
+        pasted = {}
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and called_name(node) == "join"
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Attribute)
+                    and node.func.value.attr == "path" and len(node.args) >= 2):
+                continue
+            if not _rooted_in_output(node.args[0], out_names):
+                continue
+            for arg in node.args[1:]:
+                for sub in ast.walk(arg):
+                    if (isinstance(sub, ast.Attribute)
+                            and isinstance(sub.value, ast.Name)
+                            and sub.value.id in _NS_NAMES
+                            and isinstance(sub.ctx, ast.Load)
+                            and sub.attr not in _OUT_DESTS):
+                        pasted.setdefault(sub.attr, set()).add(node.lineno)
+
+        rows = {}
+        for dest, (flag, choices) in sorted(options.items()):
+            lines = sorted(pasted.get(dest, ()))
+            if not lines and flag not in bound:
+                continue
+            rows[flag] = {
+                "dest": dest,
+                "lines": lines,
+                "bound": ("single_path_segment" if flag in bound
+                          else "choices" if choices else None),
+            }
+        if rows:
+            family[tool] = rows
+    return family
+
+
 # --------------------------------------------------- the output-gated guard node (wave 16)
 #
 # `outputs/` is gitignored, so a handful of tests can only run on a rig that has the run on
