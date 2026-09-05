@@ -365,6 +365,13 @@ def test_a_sixth_drawing_constant_cannot_be_added_silently(tmp_path):
     # be spelled absolutely. Nothing else about the source changes but the sixth constant.
     src = src.replace("from .errors import ArmatureError",
                       "from armature_core.errors import ArmatureError", 1)
+    # WAVE 22 (core-solvers, F-6bdd660a): `aapose` gained a second package-relative import
+    # when it took the repo's ONE non-finite helper for its confidence bound. A scratch copy
+    # executed outside the package has to spell that one absolutely too, or this fixture
+    # fails on an `ImportError` from the module it is meant to be exercising rather than on
+    # the property it asserts.
+    src = src.replace("from .parts import require_finite",
+                      "from armature_core.parts import require_finite", 1)
     src = src.replace("\nHAND_EPS = 0.01\n",
                       "\nHAND_EPS = 0.01\nSIXTH_DRAWING_CONSTANT = 3\n", 1)
     src = src.replace("    H, W = canvas.shape[:2]\n    sw = hand_stickwidth(H, W, stickwidth_type)\n",

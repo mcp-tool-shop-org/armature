@@ -320,6 +320,36 @@ def _refusal_solve_camera():
                          height_frac=0.8, end_x_frac=float("nan"))
 
 
+def _turn_planes(n=8, size=32, seed=0):
+    rng = np.random.default_rng(seed)
+    return [rng.random((size, size, 4)).astype(np.float32) for _ in range(n)]
+
+
+def _turn_records(planes):
+    return [{"view": i, "sha256": "%064x" % i, "pixels": p}
+            for i, p in enumerate(planes)]
+
+
+def _refusal_pair_distance_not_a_number():
+    from armature_core import turnaround
+    planes = _turn_planes()
+    planes[3][0, 0, 0] = np.float32("nan")
+    turnaround.gate_set_distinct(_turn_records(planes), 8)
+
+
+def _refusal_identical_at_a_distance():
+    from armature_core import turnaround
+    planes = _turn_planes(size=64, seed=1)
+    planes[4] = planes[0].copy()
+    turnaround.gate_set_distinct(_turn_records(planes), 8)
+
+
+def _refusal_ortho_pin_not_a_number():
+    """The pin that used to leave as a bare `ValueError` at exit 1."""
+    from armature_core import turnaround
+    turnaround.projection_plan(True, 50.0, 36.0, ortho_scale_pin="wide")
+
+
 HALT_ROWS = [
     # (finding, tool, sentinel, raiser, error class name, evidence key that must be there)
     ("F-cfb560aa", "rig_parts.py", "RIG_PARTS_HALT", _refusal_gate_d,
@@ -333,6 +363,13 @@ HALT_ROWS = [
      _refusal_aapose_confidence, "ConventionError", "indices"),
     ("F-c6124fe0", "render_start_frame.py", "RENDER_START_FRAME_HALT",
      _refusal_solve_camera, "FramingError", "end_x_frac"),
+    ("F-8cfaefd9", "render_turnaround.py", "RENDER_TURNAROUND_HALT",
+     _refusal_pair_distance_not_a_number, "TurnaroundGate", "adjacent_pairs_non_finite"),
+    ("F-99e5de1a", "render_turnaround.py", "RENDER_TURNAROUND_HALT",
+     _refusal_identical_at_a_distance, "TurnaroundGate",
+     "pairs_identical_in_pixels_anywhere"),
+    ("F-4ce10f2a", "render_turnaround.py", "RENDER_TURNAROUND_HALT",
+     _refusal_ortho_pin_not_a_number, "TurnaroundPlanRefusal", "ortho_scale_pin"),
 ]
 
 

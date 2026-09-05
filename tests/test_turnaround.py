@@ -18,6 +18,8 @@ import subprocess
 import sys
 import textwrap
 
+import numpy as np
+
 import pytest
 
 from armature_core import turnaround as TA
@@ -387,3 +389,173 @@ def test_every_turnaround_raise_site_passes_an_evidence_dict():
     assert bare == [], (
         f"RenderTurnaroundGate raised with a message only at lines {bare}; the halt record "
         f"then carries no measurement")
+
+
+# ===================== wave 22: three findings in one module, all on Gate TURN's populations
+
+
+def _planes(n=8, size=32, seed=0):
+    rng = np.random.default_rng(seed)
+    return [rng.random((size, size, 4)).astype(np.float32) for _ in range(n)]
+
+
+def _records(planes):
+    return [{"view": i, "sha256": "%064x" % i, "pixels": p}
+            for i, p in enumerate(planes)]
+
+
+# ----------------- F-8cfaefd9: a pair distance that is not a number is not a comparison
+#
+# `gate_set_distinct` accepts "anything numpy will read as an (H, W, C) plane" by contract,
+# and `render_turnaround._alpha_stats` builds each view's plane with `np.empty(w*h*4,
+# float32)` + `img.pixels.foreach_get` — a FLOAT read, not a uint8 one — so a caller that
+# attaches a plane from the render buffer, an EXR, or a compositor output passes a different
+# object through the same clause. `_pixel_pairs` computed `d = float(np.abs(a - b).mean())`
+# with no finiteness test and the identity clause is `d == 0.0`, which is False for a NaN.
+#
+# RE-MEASURED on `e8263a3` on eight distinct 32x32x4 planes with a single NaN element in view
+# 3: the gate RETURNED, `adjacent_pixel_distances = [0.314050278, 0.33407258, nan, nan,
+# 0.341410028, 0.298898358, 0.340567585]`, `min_adjacent_pixel_distance = 0.29889835824724287`
+# (Python's `min` walks past NaN because every comparison against it is False), and the
+# verdict read "distinct in PIXELS over 7 of 7 adjacent pair(s)". The two pairs touching view
+# 3 were counted as compared and ruled on by nothing — the population-vs-comparisons defect
+# F-1935e0e1 and F-e207fd20 closed through the SHAPE and UNREADABLE doors, arriving through
+# the VALUE door those two fixes left open.
+
+
+def test_a_non_finite_pair_distance_is_refused_rather_than_counted_as_compared():
+    planes = _planes()
+    planes[3][0, 0, 0] = np.float32("nan")
+    with pytest.raises(TA.TurnaroundGate) as exc:
+        TA.gate_set_distinct(_records(planes), 8)
+    ev = exc.value.evidence
+    assert ev["clause"] == "non_finite_pair_distance"
+    assert [k["pair"] for k in ev["adjacent_pairs_non_finite"]] == [[2, 3], [3, 4]]
+    assert ev["n_adjacent_pairs_non_finite"] == 2
+    assert ev["n_adjacent_pairs_compared"] == 5
+    assert ev["n_adjacent_pairs"] == 7
+
+
+def test_the_pair_count_the_verdict_quotes_is_the_count_of_pairs_actually_ruled_on():
+    """The control: a clean set still reports 7 of 7 and still passes."""
+    ev = TA.gate_set_distinct(_records(_planes()), 8)
+    assert ev["n_adjacent_pairs_compared"] == 7
+    assert ev["n_adjacent_pairs_non_finite"] == 0
+    assert "over 7 of 7 adjacent pair(s)" in ev["verdict"]
+
+
+# ----------------- F-99e5de1a: the pixel clause ranged over ADJACENT pairs only
+#
+# `gate_set_distinct`'s docstring stated the contract as "compared in pixel space against
+# every other view that carries one" while `_pixel_pairs` ranged over `range(1, len(planes))`.
+# Two views identical in PIXELS but different in BYTES therefore passed unseen whenever they
+# were not neighbours.
+#
+# RE-MEASURED on `e8263a3` with eight 64x64x4 random planes, view 4 replaced by a copy of view
+# 0 and eight distinct sha256 values: the gate RETURNED "8 distinct views by sha256, as many
+# as were asked for, and distinct in PIXELS over 7 of 7 adjacent pair(s) (8 of 8 view(s)
+# carried a plane): closest adjacent pair 0.30739 mean absolute difference", with
+# `n_pairs_identical_in_pixels: 0`, while `np.abs(planes[0] - planes[4]).mean()` is exactly
+# 0.0. The mechanism that produces a non-adjacent revisit is in this module and was
+# unbounded: `orbit_azimuths(8, 0, 720)` returns the same four azimuths twice, at stride 4.
+
+
+def test_two_views_identical_in_pixels_at_a_NON_ADJACENT_distance_are_refused():
+    planes = _planes(size=64)
+    planes[4] = planes[0].copy()
+    with pytest.raises(TA.TurnaroundGate) as exc:
+        TA.gate_set_distinct(_records(planes), 8)
+    ev = exc.value.evidence
+    assert ev["clause"] == "views_identical_in_pixels_anywhere"
+    assert [0, 4] in ev["pairs_identical_in_pixels_anywhere"]
+    assert ev["n_pairs_identical_in_pixels"] == 0          # no ADJACENT pair is identical
+    assert ev["n_unordered_pairs"] == 28
+    assert ev["n_unordered_pairs_compared"] == 28
+
+
+def test_an_adjacent_duplicate_still_takes_the_adjacent_clause_it_always_took():
+    """The wave-14 clause is not replaced by the wave-22 one; the adjacent population is
+    still counted and named separately, which is what wave 16 established."""
+    planes = _planes(size=64)
+    planes[5] = planes[4].copy()
+    with pytest.raises(TA.TurnaroundGate) as exc:
+        TA.gate_set_distinct(_records(planes), 8)
+    ev = exc.value.evidence
+    assert ev["clause"] == "views_identical_in_pixels"
+    assert ev["n_pairs_identical_in_pixels"] == 1
+
+
+def test_a_sweep_that_revisits_an_azimuth_is_refused_where_it_is_produced():
+    """The mechanism, bounded at the function that produces it. `orbit_azimuths(8, 0, 720)`
+    returned `[0, 90, 180, 270, 360, 450, 540, 630]` — the same four azimuths twice, at
+    stride 4 — and `render_turnaround` bounds `--sweep` for FINITENESS only."""
+    with pytest.raises(TA.TurnaroundGate) as exc:
+        TA.orbit_azimuths(8, 0.0, 720.0)
+    ev = exc.value.evidence
+    assert ev["clause"] == "sweep_revisits_an_azimuth"
+    assert ev["n_views"] == 8 and ev["n_distinct_azimuths"] == 4
+
+
+def test_the_ordinary_closed_sweep_is_untouched_by_the_revisit_clause():
+    """Grade the clause only on what it can move: a 360 sweep is the tool's own default and
+    a negative one is an ordinary way to orbit the other way."""
+    assert len(TA.orbit_azimuths(8, 270.0, 360.0)) == 8
+    assert len(TA.orbit_azimuths(8, 270.0, -360.0)) == 8
+    assert len(TA.orbit_azimuths(1, 0.0, 360.0)) == 1
+
+
+# ----------------- F-4ce10f2a: the ortho pin's refusals carried no receipt
+#
+# `--ortho-scale` is the one number a whole roster is framed on. Both `TurnaroundPlanRefusal`
+# raises on the ORTHO side were ONE-ARGUMENT raises, while the PERSPECTIVE sibling eight lines
+# below passes a literal evidence dict with `clause`. MEASURED on `e8263a3` by driving
+# `projection_plan` through `render_turnaround`'s own handler: an ortho pin of `nan` and of
+# `-1.0` each produce exit 2 and `{"outcome": "REFUSED — the tool declined to proceed",
+# "gate": null, "error": "TurnaroundPlanRefusal", "evidence": null}` — a typed refusal at the
+# right exit code carrying no receipt and no clause — and so does the
+# perspective-with-a-pin refusal, while `lens_mm=nan` on the same function produces exit 2
+# with a full evidence dict naming its clause.
+#
+# Second half, same anchor: `pin = float(ortho_scale_pin)` coerced ABOVE its own guard, so a
+# pin that is not a real number left the family entirely — a string pin `'wide'` exited 1 as a
+# bare `ValueError` and a list pin `[1.0]` exited 1 as a bare `TypeError`, both recorded as
+# "FAILED — an unhandled error". A pin that is a bad NUMBER and a pin that is not a number at
+# all left by two different doors at two different exit codes, and neither carried a clause.
+
+
+@pytest.mark.parametrize("pin", [float("nan"), float("inf"), 0.0, -1.0])
+def test_an_ortho_pin_that_is_a_bad_number_now_carries_its_clause(pin):
+    with pytest.raises(TA.TurnaroundPlanRefusal) as exc:
+        TA.projection_plan(True, 50.0, 36.0, ortho_scale_pin=pin)
+    ev = exc.value.evidence
+    assert ev["clause"] == "ortho_scale_pin_not_finite_and_positive"
+    assert ev["projection"] == TA.ORTHOGRAPHIC
+    assert ev["andon"] == "TurnaroundPlanRefusal" and ev["gate"] is None
+
+
+@pytest.mark.parametrize("pin", ["wide", [1.0], {}, object()])
+def test_an_ortho_pin_that_is_not_a_number_at_all_stays_in_the_family(pin):
+    """The door that led out of the family: `float()` above the guard. A string pin exited 1
+    as a bare `ValueError` and a list pin as a bare `TypeError`."""
+    from armature_core.errors import ArmatureError
+
+    with pytest.raises(TA.TurnaroundPlanRefusal) as exc:
+        TA.projection_plan(True, 50.0, 36.0, ortho_scale_pin=pin)
+    assert isinstance(exc.value, ArmatureError)
+    assert exc.value.evidence["clause"] == "ortho_scale_pin_not_finite_and_positive"
+    assert exc.value.evidence["ortho_scale_pin"] == repr(pin)
+
+
+def test_a_pin_on_a_perspective_plan_carries_its_own_clause():
+    with pytest.raises(TA.TurnaroundPlanRefusal) as exc:
+        TA.projection_plan(False, 50.0, 36.0, ortho_scale_pin=1.2)
+    ev = exc.value.evidence
+    assert ev["clause"] == "ortho_scale_pin_on_a_perspective_plan"
+    assert ev["projection"] == TA.PERSPECTIVE
+
+
+def test_a_legal_pin_still_composes_the_plan_it_always_did():
+    plan = TA.projection_plan(True, 50.0, 36.0, ortho_scale_pin=1.25)
+    assert plan["ortho_scale_pin"] == 1.25
+    assert plan["ortho_scale_source"] == TA.PINNED
+    assert TA.projection_plan(True, 50.0, 36.0)["ortho_scale_source"] == TA.SOLVED

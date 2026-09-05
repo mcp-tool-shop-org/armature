@@ -1058,7 +1058,12 @@ EVIDENCE_NO_EVIDENCE_ROUTED = {
     "shotspec.py:_require_positive (SpecError)",
     "shotspec.py:normalise_spec (SpecError)",
     "shotspec.py:resolve_asset (SpecError)",
-    "turnaround.py:projection_plan (TurnaroundPlanRefusal)",
+    # WAVE 22 (core-solvers, F-4ce10f2a): `turnaround.py:projection_plan
+    # (TurnaroundPlanRefusal)` LEFT this set — both ortho raises now carry a literal
+    # evidence dict with a clause, matching the perspective sibling twenty lines below.
+    # Deleted rather than commented in the commit that adds the receipt, which is what the
+    # converse assertion below requires: a routed entry that names no live site re-admits
+    # that site in silence.
 }
 
 
@@ -1164,8 +1169,11 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # `height_frac` clause, its `end_x_frac`/`target_y_frac` clause, and the two
     # `radius_bounds` clauses. The SOLVER half of F-f0c261c1, whose fix went to one tool's
     # parser while `end_x_frac` and `target_y_frac` were bounded at no parser in the tree.
-    assert total == 353, (
-        f"{total} family raises in armature_core; this pin asserts 353, RE-DERIVED on the "
+    # And 353 -> 356: +3 in `turnaround` — `orbit_azimuths`' `sweep_revisits_an_azimuth`
+    # (F-99e5de1a) and `gate_set_distinct`'s `non_finite_pair_distance` (F-8cfaefd9) and
+    # `views_identical_in_pixels_anywhere` (F-99e5de1a). RE-DERIVED with `==`, branch-local.
+    assert total == 356, (
+        f"{total} family raises in armature_core; this pin asserts 356, RE-DERIVED on the "
         f"wave-22 core-solvers branch. This is the denominator every ratio below is quoted against — "
         f"re-measure it deliberately")
 
@@ -1204,7 +1212,10 @@ def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_categor
     # The census on the page, pinned `==` (wave 14, rule 4). Re-derive with the command
     # beside EVIDENCE_NO_EVIDENCE_ROUTED.
     # WAVE-14 MERGE (coordinator, 2026-09-04): 40 → 32, measured on the merged tree.
-    assert len(no_evidence) == 32, sorted(no_evidence)
+    # WAVE 22 (core-solvers, F-4ce10f2a): 32 -> 31, RE-DERIVED with `==` in this worktree.
+    # `turnaround.py:projection_plan` is the entry that left; its two one-argument
+    # `TurnaroundPlanRefusal` raises now carry `gate`, `andon`, `clause` and the operand.
+    assert len(no_evidence) == 31, sorted(no_evidence)
 
 
 #: Modules of `armature_core` whose classes this census cannot INSTANTIATE on a rig with no
