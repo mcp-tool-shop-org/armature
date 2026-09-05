@@ -16,10 +16,16 @@ all three fixes stop one level short of the thing they are about:
     own `widgets_values` CONTAINER, so the same BANNED `causvid_x.safetensors` spelled
     inside a mapping or a bare string is invisible to every weight reader on the page and
     `verify` returns GREEN — the level below the one wave 18 closed for `definitions`;
+  * **F-29e1cbb7** the converted-widget shift andon exists for `HOSTED_ENUM_WIDGETS`
+    alone. `latents()`, `cameras()`, `seeds()` and `camera_widget_order_evidence()` read
+    `wv[spec[key]]` positionally with no shift clause, so converting `WanImageToVideo`'s
+    `length` widget left Gate L reading the batch_size slot and reporting
+    `frame_legality_verdict: PROVEN`, "1 frame(s) checked and generator-legal".
 
 Every test here goes RED on the tree at base `475f4eb`, and each red is proved on the
-OPERAND the finding named — the auditor's two-blueprint Gate S graphs; `causvid_x.safetensors` in all three container spellings plus the API
-mirror — and on that operand's enumerated
+OPERAND the finding named — the auditor's two-blueprint Gate S graphs; `causvid_x.
+safetensors` in all three container spellings plus the API mirror; a `WanImageToVideo`
+whose `length` widget was converted to an input — and on that operand's enumerated
 SIBLINGS.
 """
 
@@ -344,6 +350,162 @@ def test_absent_and_none_stay_the_ordinary_spelling_of_no_widgets(node):
 
 
 # =======================================================================================
+# F-29e1cbb7 · CRITICAL (unanimous) — the converted-widget shift andon covered ONE of the
+# four positional tables. `known_widget_indices` unions all four and was already the
+# reading that detects it.
+# =======================================================================================
+
+
+def _i2v(node):
+    return {"nodes": [
+        {"id": 1, "type": "UNETLoader", "widgets_values": [BASE]},
+        {"id": 2, "type": "KSampler", "widgets_values": [7, "fixed"]},
+        node]}
+
+
+_I2V_HONEST = {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]}
+#: The auditor's operand. Converting `length` to an input is an ordinary ComfyUI edit; the
+#: save format then DROPS that value from `widgets_values` and declares the slot as
+#: `{"name": "length", "widget": {"name": "length"}}`.
+_I2V_CONVERTED = {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 1],
+                  "inputs": [{"name": "positive", "type": "CONDITIONING", "link": 1},
+                             {"name": "length", "type": "INT", "link": 9,
+                              "widget": {"name": "length"}}]}
+
+
+def test_the_honest_widget_list_is_the_control():
+    """Measured on base and unchanged: `[832, 480, 81, 1]` gives width 832, height 480,
+    length 81, and `verify` reports the frame PROVEN."""
+    assert RG.latents(_i2v(_I2V_HONEST)) == [
+        {"node_id": 3, "class": "WanImageToVideo", "where": "top",
+         "width": 832, "height": 480, "length": 81, "checkable": True}]
+    ev = RG.verify(_i2v(_I2V_HONEST), family="wan")
+    assert ev["frame_legality_verdict"] == "PROVEN"
+
+
+def test_a_converted_length_widget_refuses_rather_than_reading_the_batch_size_slot():
+    """RED on base: `_save_format_converted_widget_names` returned `['length']` and
+    `known_widget_indices('WanImageToVideo')` returned `{'width':0,'height':1,'length':2}`
+    — the shift is fully readable — yet `latents()` returned
+    `{'width': 832, 'height': 480, 'length': 1, 'checkable': True}` and `verify(g)`
+    RETURNED PROVEN with `frame_legality` `length: 1, legal: true`. `length` is the one
+    conversion of the four that fails OPEN: 1 is a legal 4n+1 count."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.latents(_i2v(_I2V_CONVERTED))
+    ev = exc.value.evidence
+    assert ev["clause"] == "converted_widget_shifts_recorded_indices"
+    assert ev["converted"] == ["length"]
+    assert ev["node_id"] == 3 and ev["class"] == "WanImageToVideo"
+    assert ev["table"] == "LATENT_NODES"
+    assert ev["recorded_widget_indices"] == {"width": 0, "height": 1, "length": 2}
+    with pytest.raises(RG.RouteGate, match=r"converted"):
+        RG.verify(_i2v(_I2V_CONVERTED), family="wan")
+
+
+def test_an_ordinary_link_socket_does_not_fire_the_clause():
+    """The negative direction, and the distinction the andon rests on: a slot with NO
+    `widget` key is an ordinary input socket that never occupied a widget position and
+    shifts nothing. `positive`, `negative` and `vae` arrive over links on every I2V graph
+    this repo builds; an andon that fired on them is not one anybody keeps."""
+    node = dict(_I2V_HONEST, inputs=[
+        {"name": "positive", "type": "CONDITIONING", "link": 1},
+        {"name": "negative", "type": "CONDITIONING", "link": 2},
+        {"name": "vae", "type": "VAE", "link": 3}])
+    assert RG.latents(_i2v(node))[0]["length"] == 81
+    assert RG.verify(_i2v(node), family="wan")["frame_legality_verdict"] == "PROVEN"
+
+
+def test_the_camera_table_gets_the_same_clause():
+    """Sibling 2 of 4, `cameras()` over `CAMERA_NODES`. On base a converted `camera_pose`
+    (index 0 of the declared order, below all three) left `cameras()` reporting
+    `width 480, height 81, length None` — the width read off the HEIGHT field, caught only
+    by the `checkable` flag falling to False further down rather than by any clause."""
+    cam = {"id": 5, "type": "WanCameraEmbedding", "widgets_values": [832, 480, 81],
+           "inputs": [{"name": "camera_pose", "type": "COMBO", "link": 3,
+                       "widget": {"name": "camera_pose"}}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.cameras(_i2v(cam))
+    ev = exc.value.evidence
+    assert ev["clause"] == "converted_widget_shifts_recorded_indices"
+    assert ev["converted"] == ["camera_pose"] and ev["table"] == "CAMERA_NODES"
+
+
+def test_the_camera_order_evidence_gets_the_same_clause():
+    """Sibling 3 of 4. On base `camera_widget_order_evidence` answered `CONTRADICTED` —
+    which is a DISAGREEMENT with the builder's numbers, not "these indices no longer
+    address the fields they name", and it says nothing at all when the shifted values
+    happen to equal what the builder set. This function is the empirical SECOND reading
+    the `LATENT_NODES` warning says is owed; a reading taken off shifted slots is not a
+    reading."""
+    cam = {"id": 5, "type": "WanCameraEmbedding", "widgets_values": [832, 480, 81],
+           "inputs": [{"name": "camera_pose", "widget": {"name": "camera_pose"}}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.camera_widget_order_evidence(
+            _i2v(cam), {"width": 832, "height": 480, "length": 81})
+    assert exc.value.evidence["clause"] == "converted_widget_shifts_recorded_indices"
+
+
+def test_the_seed_table_gets_the_same_clause():
+    """Sibling 4 of 4, `seeds()` over `SEED_NODES`. On base a `KSamplerAdvanced` whose
+    `add_noise` widget (index 0) was converted read seed `'fixed'` and
+    `control_after_generate` `None`, and Gate S refused "node 2 ... is not pinned" — a
+    NEIGHBOURING clause answering about a slot nobody read, which is the state the wave-18
+    andon's own honesty note describes for the hosted tier."""
+    ks = {"nodes": [
+        {"id": 1, "type": "UNETLoader", "widgets_values": [BASE]},
+        {"id": 2, "type": "KSamplerAdvanced", "widgets_values": [999999999, "fixed"],
+         "inputs": [{"name": "add_noise", "type": "COMBO", "link": 4,
+                     "widget": {"name": "add_noise"}}]}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.seeds(ks)
+    ev = exc.value.evidence
+    assert ev["clause"] == "converted_widget_shifts_recorded_indices"
+    assert ev["converted"] == ["add_noise"] and ev["table"] == "SEED_NODES"
+    with pytest.raises(RG.RouteGate) as exc2:
+        RG.gate_s_registration(ks, [7])
+    assert exc2.value.evidence["clause"] == "converted_widget_shifts_recorded_indices"
+
+
+def test_a_converted_name_with_no_recorded_index_also_refuses():
+    """`batch_size` sits at index 3 of `WanImageToVideo`'s declared order and NO table
+    records it, so this module cannot say whether converting it shifts the three slots it
+    reads. That is the third answer the hosted clause already gives: "a name this repo has
+    no recorded index for has an unknown position, and an unknown position is not evidence
+    of no shift"."""
+    node = {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 81],
+            "inputs": [{"name": "batch_size", "widget": {"name": "batch_size"}}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.latents(_i2v(node))
+    assert exc.value.evidence["converted"] == ["batch_size"]
+    assert exc.value.evidence["recorded_widget_indices"].get("batch_size") is None
+
+
+def test_the_hosted_clause_keeps_its_own_name():
+    """The wave-18 refusal is not renamed by this fix. Both andons read the SAME converted
+    names through `_shifted_widget_names`, and the hosted one keeps
+    `converted_widget_shifts_enum_indices` because its receipts, its evidence keys
+    (`highest_enum_index`) and wave 18's `HALT_ROUTES` already carry that word."""
+    shifted = {"id": 2, "type": "Wan2ReferenceVideoApi",
+               "inputs": [{"name": "duration", "widget": {"name": "duration"}}],
+               "widgets_values": ["wan2.7-r2v", "p", "n", "720P", "16:9", 7, "fixed"]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.hosted_enums({"nodes": [shifted]})
+    assert exc.value.evidence["clause"] == "converted_widget_shifts_enum_indices"
+
+
+def test_an_api_graph_is_untouched_by_the_shift_clause():
+    """Positions are a save-format fact. In API format inputs are keyed by NAME, there is
+    nothing positional to shift, and the andon must not invent a refusal there — the same
+    ground `camera_widget_order_evidence` answers `not_applicable` on."""
+    api = {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": BASE}},
+           "2": {"class_type": "KSampler", "inputs": {"seed": 7}},
+           "3": {"class_type": "WanImageToVideo",
+                 "inputs": {"width": 832, "height": 480, "length": [9, 0]}}}
+    assert RG.latents(api)[0]["length"] is None
+    assert RG.latents(api)[0]["checkable"] is False
+
+
+# =======================================================================================
 # The halt line an operator actually reads (wave-18 rule 4), and the family census.
 # =======================================================================================
 
@@ -351,6 +513,8 @@ def test_absent_and_none_stay_the_ordinary_spelling_of_no_widgets(node):
 HALT_ROUTES = [
     ("duplicate_subgraph_label", "gate_saved_graph.py", "SAVED_ADMISSION_HALT"),
     ("unreadable_node", "gate_saved_graph.py", "SAVED_ADMISSION_HALT"),
+    ("converted_widget_shifts_recorded_indices", "gate_saved_graph.py",
+     "SAVED_ADMISSION_HALT"),
 ]
 
 
@@ -361,6 +525,8 @@ def _refusal_for(clause):
         return lambda: RG.components(_label_graph("expert", "expert"))
     if clause == "unreadable_node":
         return lambda: RG.components(_lora_graph({"lora_name": BANNED}))
+    if clause == "converted_widget_shifts_recorded_indices":
+        return lambda: RG.latents(_i2v(_I2V_CONVERTED))
     raise AssertionError(clause)
 
 

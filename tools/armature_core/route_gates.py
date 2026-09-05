@@ -1738,6 +1738,16 @@ def seeds(graph):
         # reading a Gate S halt on a truncated save-format sampler was told the seed is a
         # literal beside a `seed` of None. Mirrored on the API branch above: an absent seed
         # is not a literal one.
+        # · ANDON — the positional read is cross-checked against the node's own declared
+        # input names before it is trusted. See `_converted_widget_shift_andon`: a
+        # converted `add_noise` left this function reading the seed as the string
+        # `'fixed'`. `add_noise` rides the index set because `gate_s_registration` reads it
+        # off this same widget list, and the andon must bound every index the family reads.
+        _converted_widget_shift_andon(
+            n, {name: spec[key] for name, key in
+                (("seed", "seed"), ("control_after_generate", "control"),
+                 ("add_noise", "add_noise")) if isinstance(spec.get(key), int)},
+            wv, "SEED_NODES")
         present = len(wv) > spec["seed"]
         control = wv[spec["control"]] if len(wv) > spec["control"] else None
         out.append({"node_id": n.get("id"), "class": cls, "where": where,
@@ -1772,6 +1782,12 @@ def latents(graph):
                 rec[key] = v if not isinstance(v, list) else None
         else:
             wv = n.get("widgets_values") or []
+            # · ANDON — the auditor's operand: a converted `length` widget left this
+            # function reading the batch_size slot and Gate L reporting PROVEN. See
+            # `_converted_widget_shift_andon`.
+            _converted_widget_shift_andon(
+                n, {k: spec[k] for k in ("width", "height", "length")}, wv,
+                "LATENT_NODES")
             for key in ("width", "height", "length"):
                 i = spec[key]
                 rec[key] = wv[i] if len(wv) > i else None
@@ -1803,6 +1819,11 @@ def cameras(graph):
                 rec[key] = v if not isinstance(v, list) else None
         else:
             wv = n.get("widgets_values") or []
+            # · ANDON — sibling 2 of the four positional tables. See
+            # `_converted_widget_shift_andon`.
+            _converted_widget_shift_andon(
+                n, {k: spec[k] for k in ("width", "height", "length")}, wv,
+                "CAMERA_NODES")
             for key in ("width", "height", "length"):
                 i = spec[key]
                 rec[key] = wv[i] if len(wv) > i else None
@@ -1841,6 +1862,15 @@ def camera_widget_order_evidence(graph, expect):
         if not spec or n.get("type") not in set(CAMERA_NODES) | {"WanCameraImageToVideo"}:
             continue
         wv = n.get("widgets_values") or []
+        # · ANDON — sibling 3 of the four positional tables, and the one where a shift is
+        # least visible: this function REPORTS a disagreement with the builder's numbers,
+        # which says nothing at all when the shifted values happen to equal what the
+        # builder set. A reading taken off shifted slots is not the empirical second
+        # reading `LATENT_NODES`' warning says is owed. It raises here for the same reason
+        # its nearest sibling `hosted_enums` raises while returning values.
+        _converted_widget_shift_andon(
+            n, {k: spec[k] for k in ("width", "height", "length")}, wv,
+            "CAMERA_NODES" if n.get("type") in CAMERA_NODES else "LATENT_NODES")
         found = {k: (wv[spec[k]] if len(wv) > spec[k] else None)
                  for k in ("width", "height", "length")}
         ev["nodes"].append({
@@ -2052,6 +2082,85 @@ def hosted_enums(graph):
     return out
 
 
+def _shifted_widget_names(node, highest):
+    """The converted widgets that may have SHIFTED a positional read up to `highest`.
+
+    ONE reading, shared by `_hosted_enum_shift_andon` and `_converted_widget_shift_andon`,
+    so the hosted enum block and the three other positional tables cannot disagree about
+    what a shift is. A converted widget shifts a read unless its own slot is KNOWN to sit
+    above every index the reader touches; a name this repo has no recorded index for has an
+    UNKNOWN position, and an unknown position is not evidence of no shift — the third
+    answer, the same one `latents()` gives a dimension arriving over a link.
+    """
+    known = known_widget_indices(node.get("type"))
+    return sorted({name for name in _save_format_converted_widget_names(node)
+                   if known.get(name) is None or known[name] <= highest})
+
+
+def _converted_widget_shift_andon(node, indices, wv, table):
+    """Refuse a save-format node whose recorded widget positions cannot be trusted.
+
+    ⚠ **The shift clause existed for ONE of the four positional tables.** Wave 18 gave
+    `HOSTED_ENUM_WIDGETS` `_hosted_enum_shift_andon`, whose own honesty note says "a future
+    `HOSTED_ENUM_WIDGETS` row whose seed slot is not last would not be [caught]" — and the
+    siblings were never enumerated. `latents()` over `LATENT_NODES`, `cameras()` and
+    `camera_widget_order_evidence()` over `CAMERA_NODES`, and `seeds()` over `SEED_NODES`
+    all read `wv[spec[key]]` positionally with no shift clause, although
+    `known_widget_indices(cls)` — built in the same wave, over all four tables — is the
+    reading that detects it.
+
+    Measured 2026-09-05 in this worktree on a save-format graph of
+    `UNETLoader('wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors')` + pinned `KSampler` +
+    `WanImageToVideo`: honest widgets `[832, 480, 81, 1]` gave `latents()` width 832,
+    height 480, length 81 and `verify(g)` PROVEN. Converting the `length` widget to an
+    input — an ordinary ComfyUI edit, after which the save format DROPS that value from
+    `widgets_values` and declares the slot as `{"name":"length","widget":{"name":"length"}}`
+    — leaves widgets `[832, 480, 1]`; `_save_format_converted_widget_names` returned
+    `['length']` and `known_widget_indices('WanImageToVideo')` returned
+    `{'width':0,'height':1,'length':2}`, so the shift was fully readable, yet `latents()`
+    returned `{'width': 832, 'height': 480, 'length': 1, 'checkable': True}` — the
+    batch_size slot read as the frame count — and `verify(g)` RETURNED PROVEN with
+    `frame_legality` `length: 1, legal: true`, "1 frame(s) checked and generator-legal".
+    That is the vacuous Gate L state E08 paid for, on the last gate before a paid
+    submission, re-entered through a widget conversion.
+
+    `length` is the one conversion of the four that fails OPEN: converting `width` or
+    `height` shifts a non-multiple-of-16 into the dimension slots and Gate L refuses, while
+    1 is a legal 4n+1 count. The other three tables were caught only by NEIGHBOURING
+    clauses answering about slots nobody read — a converted `camera_pose` left `cameras()`
+    reporting width 480 / height 81 / length None (caught by `checkable` falling to False),
+    and a converted `add_noise` left `seeds()` reading the seed as the string `'fixed'`
+    (caught by Gate S's "not pinned"). A refusal by name is not a neighbour's accident.
+
+    It keeps its OWN clause word rather than reusing the hosted one: the hosted refusal's
+    receipts, its `highest_enum_index` evidence key and wave 18's `HALT_ROUTES` all carry
+    `converted_widget_shifts_enum_indices`, and "enum indices" is not what `LATENT_NODES`
+    records. Both read the same converted names through `_shifted_widget_names`.
+
+    Save format only. In API format inputs are keyed by NAME, there is nothing positional
+    to shift, and inventing a refusal there would be the category error
+    `camera_widget_order_evidence` answers `not_applicable` on.
+    """
+    shifting = _shifted_widget_names(node, max(indices.values()))
+    if not shifting:
+        return
+    raise RouteGate(
+        f"node {node.get('id')} ({node.get('type')}) declares {shifting} as a CONVERTED "
+        f"widget, so this class's recorded widget indices {indices} (from {table}) no "
+        f"longer address the fields they name — every value at or after the converted "
+        f"slot is shifted, and a name with no recorded index could sit anywhere. Reading "
+        f"them anyway would grade a number that is not the field it is quoted as, on the "
+        f"gates that stand before a paid submission",
+        {"gate": "ROUTE", "andon": "RouteGate",
+         "clause": "converted_widget_shifts_recorded_indices",
+         "node_id": node.get("id"), "class": node.get("type"),
+         "converted": shifting, "indices": dict(indices), "table": table,
+         "recorded_widget_indices": known_widget_indices(node.get("type")),
+         "highest_index_read": max(indices.values()),
+         "declared_input_names": sorted(set(_save_format_input_names(node))),
+         "widgets_values": wv})
+
+
 def _hosted_enum_shift_andon(n, idx, wv):
     """Refuse a save-format hosted node whose positional enum indices cannot be trusted.
 
@@ -2088,11 +2197,9 @@ def _hosted_enum_shift_andon(n, idx, wv):
     highest = max(idx.values())
     known = known_widget_indices(n.get("type"))
     # A converted widget shifts the enum block unless its own slot is KNOWN to sit above
-    # every enum index. A name this repo has no recorded index for has an unknown
-    # position, and an unknown position is not evidence of no shift — the third answer,
-    # the same one `latents()` gives a dimension arriving over a link.
-    shifting = sorted({name for name in _save_format_converted_widget_names(n)
-                       if known.get(name) is None or known[name] <= highest})
+    # every enum index. ONE reading, shared with `_converted_widget_shift_andon` — see
+    # `_shifted_widget_names`.
+    shifting = _shifted_widget_names(n, highest)
     if shifting:
         raise RouteGate(
             f"node {n.get('id')} ({n.get('type')}) declares {shifting} as a CONVERTED "

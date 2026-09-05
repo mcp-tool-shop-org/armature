@@ -278,7 +278,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # moved different rows on their own branches; neither dict was a merged measurement).
         "assembly": 23, "blender_scene": 8, "canon": 1, "donor_gate": 10, "framing": 6,
         "gates": 24, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8,
-                # WAVE 20 (core-gates, 2026-09-05): +2 in `route_gates.RouteGate`, RE-DERIVED with
+                # WAVE 20 (core-gates, 2026-09-05): +3 in `route_gates.RouteGate`, RE-DERIVED with
         # `==` in this worktree against the merged base `475f4eb`, which every census here read
         # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
         #   `_iter_definitions`' `duplicate_subgraph_label` — the LABEL the walk EMITS, which
@@ -288,7 +288,10 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         #   `_readable_containers`' `unreadable_node` — the node's OWN `widgets_values` /
         #   `inputs` container, where a BANNED weight spelled inside a mapping or a bare string
         #   was read as empty and `verify` returned GREEN (F-f9ab0645).
-        "resample": 8, "rig_gates": 17, "route_gates": 48, "startframe": 21, "turnaround": 13,
+        #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
+        #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
+        #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
+        "resample": 8, "rig_gates": 17, "route_gates": 49, "startframe": 21, "turnaround": 13,
         "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
@@ -308,7 +311,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # `route_gates`, +4 `donor_gate`, +1 `gates`, itemised at the dict above. The
     # coordinator re-measures at merge, as at waves 10, 12 and 14.
     # WAVE-18 MERGE (coordinator, 2026-09-05): 199 on the MERGED tree, measured — core-gates froze 190 and core-solvers 189, both branch-local.
-    # WAVE 20 (core-gates, 2026-09-05): +2 in `route_gates.RouteGate`, RE-DERIVED with
+    # WAVE 20 (core-gates, 2026-09-05): +3 in `route_gates.RouteGate`, RE-DERIVED with
     # `==` in this worktree against the merged base `475f4eb`, which every census here read
     # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
     #   `_iter_definitions`' `duplicate_subgraph_label` — the LABEL the walk EMITS, which
@@ -318,7 +321,10 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     #   `_readable_containers`' `unreadable_node` — the node's OWN `widgets_values` /
     #   `inputs` container, where a BANNED weight spelled inside a mapping or a bare string
     #   was read as empty and `verify` returned GREEN (F-f9ab0645).
-    assert sum(with_gates.values()) == 201
+    #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
+    #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
+    #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
+    assert sum(with_gates.values()) == 202
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():
