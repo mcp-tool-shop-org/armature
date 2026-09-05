@@ -137,7 +137,7 @@ import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-from armature_core import blender_scene, framing  # noqa: E402
+from armature_core import blender_scene, framing, parts  # noqa: E402
 from armature_core import startframe as SF  # noqa: E402
 from armature_core import turnaround as TA  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
@@ -146,7 +146,7 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 # rather than a second copy here. The same idiom as `check_relift` importing
 # `action_frame_range` from this module and `make_rig_sheet` importing
 # `make_parts_sheet.shoot`. Stage B: it belongs in `armature_core.startframe`.
-from render_start_frame import require_frame_size  # noqa: E402
+from render_start_frame import require_frame_size, require_shot_fraction  # noqa: E402
 
 TOOL_VERSION = "S05.1"
 
@@ -300,6 +300,82 @@ def parse_args():
                          "survive into the sheet. Used verbatim; --height-frac does not "
                          "participate. Requires --ortho (S05)")
     a = ap.parse_args(argv)
+
+    # ---- F-cc1d17aa, wave 18. THE NUMBERS THAT COMPOSE THE SHOT, bounded beside the
+    # `--ortho-scale` clause below because that is where this file already states the
+    # predicate: a length that composes a picture is finite and strictly positive.
+    #
+    # `--ortho-scale` was pinned in S05 under a paragraph explaining that a non-finite span
+    # "still writes a well-formed, correctly-sized RGBA PNG that no later check reports
+    # on". The two flags declared on the lines above it — the ones `projection_plan`
+    # describes as what "composes the shot" on the perspective path — got no clause at all,
+    # and `projection_plan` passes them through as `float(lens_mm)` / `float(sensor_mm)`
+    # with no check either. MEASURED 2026-09-04 on the repo venv, `solve_radius_for_height`
+    # over a four-point cloud and eight azimuths:
+    #
+    #   --lens=nan      -> RETURNS radius=0.001, no refusal. `SF.silhouette_extent` gives
+    #                      y0=nan, y1=nan; `tallest`'s `max(best, nan)` keeps `best` at
+    #                      0.0, so the growth loop breaks on its first probe and the
+    #                      80-step bisection converges on `lo`. The camera sits ONE
+    #                      MILLIMETRE from the target for all eight views — and those eight
+    #                      views are the reference stack a paid generation is conditioned
+    #                      on, with nothing downstream measuring the lens.
+    #   --lens=0.0      -> bare `ZeroDivisionError` out of `armature_core.framing.project`,
+    #                      which the halt contract records as "FAILED - an unhandled error"
+    #                      at exit 1: the exact outcome `require_frame_size` was written to
+    #                      stop for `--width`/`--height` six lines up.
+    #   --lens=-50.0    -> RETURNS the same radius as +50.0. A mirrored projection, silent.
+    #   --sensor=nan    -> RETURNS radius=0.001.   --sensor=inf -> RETURNS radius=0.001.
+    #   --sensor=-36.0  -> RETURNS the same radius as +36.0.
+    #
+    # A CORRECTION to the finding that routed this, kept in place rather than deleted: it
+    # states that `lens=0.0`, `sensor=0.0` and `lens=inf` "each raise a bare
+    # ZeroDivisionError". Only `lens=0.0` does. `sensor=0.0` and `lens=inf` reach
+    # `RenderTurnaroundGate` through the growth loop's own 1.6e60 ceiling — an accident of
+    # a different search, not a bound — and `sensor=inf` returns 0.001 silently, a third
+    # silent case the finding did not name.
+    #
+    # WHY THIS RAISES THE ANDON RATHER THAN CALLING `ap.error`: `parse_args` is called from
+    # inside `main`'s try, so a raised `RenderTurnaroundGate` reaches the halt contract and
+    # prints RENDER_TURNAROUND_HALT with the gate id, the clause and the operand, where
+    # `ap.error`'s `SystemExit(2)` is re-raised untouched by the `__main__` block and leaves
+    # an argparse usage message no log reader can key on. `--ortho-scale`'s older clause
+    # still uses `ap.error`; changing a shipped refusal is a separate decision and is not
+    # smuggled in under this finding.
+    # ONE FINGERPRINT ACROSS THE FLAG AND THE SOLVER. The clause words below are the ones
+    # `armature_core.framing.half_fovs`, its `blender_scene` byte-twin and
+    # `turnaround.projection_plan`'s perspective branch use for the same two numbers, so a
+    # reader grepping a halt record finds the flag refusal and the solver refusal under one
+    # string. The two halves are complementary, not redundant: this one refuses before a
+    # Blender scene exists, that one is inside the function performing the step.
+    for _flag, _value, _clause in (("--lens", a.lens, "lens_mm_not_finite_and_positive"),
+                                   ("--sensor", a.sensor,
+                                    "sensor_mm_not_finite_and_positive")):
+        parts.require_finite(
+            _flag, _value, RenderTurnaroundGate,
+            {"gate": "TURNAROUND_OPTICS", "andon": RenderTurnaroundGate.__name__,
+             "who": "render_turnaround", "flag": _flag, "clause": _clause},
+            positive=True)
+
+    # THE SIBLINGS, enumerated and closed in the same wave (wave-18 rule 2). The three
+    # remaining `type=float` flags on this parser are the orbit's angles, and they carry
+    # the same disease one predicate weaker. MEASURED the same session:
+    # `TA.orbit_azimuths(8, nan, 360)` and `(8, 270, nan)` each return EIGHT NaN azimuths
+    # with no refusal; `sweep=inf` returns `[nan, inf, inf, ...]`; `elevation=nan` drives
+    # `solve_radius_for_height` to the same radius=0.001 a NaN lens does, and
+    # `elevation=inf` reaches a bare `ValueError` out of a projection helper. An angle may
+    # legitimately be zero or negative — `--elevation=0` is this tool's own default and a
+    # negative azimuth start is an ordinary way to name a direction — so the clause here is
+    # FINITENESS only, and `positive=False` says so rather than a comment saying so.
+    for _flag, _value in (("--elevation", a.elevation),
+                          ("--azimuth-start", a.azimuth_start),
+                          ("--sweep", a.sweep)):
+        parts.require_finite(
+            _flag, _value, RenderTurnaroundGate,
+            {"gate": "TURNAROUND_ORBIT", "andon": RenderTurnaroundGate.__name__,
+             "who": "render_turnaround", "flag": _flag,
+             "clause": "not_a_finite_angle"},
+            positive=False)
 
     # The two refusals, at the parser, where the mistake is still free. `projection_plan`
     # refuses the same two for callers who never reach this function.
@@ -654,6 +730,19 @@ def main():
     width, height = require_frame_size(
         int(a.width), int(a.height), who="render_turnaround",
         module_frame=(WIDTH, HEIGHT), gate=RenderTurnaroundGate, gate_id="TURNAROUND_FRAME")
+    # F-f0c261c1's sibling half, carried here rather than copied. Bounded ON BOTH PATHS,
+    # including the PINNED ortho run where `projection_plan` says the fraction does not
+    # participate: `ortho_scale_record` still writes `float(height_frac)` into the manifest
+    # there, and a NaN in a recipe is a recipe that does not reproduce its output. Read
+    # ONCE, here; every use below is of this value.
+    #
+    # This tool's own solve happens to refuse a NaN by growing to 1.6e60 and raising
+    # `RenderTurnaroundGate` — an accident of a different search, not a bound. MEASURED
+    # 2026-09-04 on the same solver: `height_frac=0.0` RETURNS 4.25e16, `1.5` RETURNS 1.68
+    # and `inf` RETURNS 0.001, all three without a word.
+    height_frac = require_shot_fraction(
+        "--height-frac", a.height_frac, who="render_turnaround",
+        gate=RenderTurnaroundGate, gate_id="TURNAROUND_FRACTION")
 
     azimuths = TA.orbit_azimuths(a.views, a.azimuth_start, a.sweep)
 
@@ -746,11 +835,11 @@ def main():
             ortho_scale = plan["ortho_scale_pin"]
         else:
             ortho_scale = solve_ortho_scale_for_height(
-                cloud, target, radius, azimuths, a.elevation, width, height, a.height_frac)
+                cloud, target, radius, azimuths, a.elevation, width, height, height_frac)
     else:
         sphere_radius, ortho_scale = None, None
         radius = solve_radius_for_height(cloud, target, azimuths, a.elevation, a.lens,
-                                         a.sensor, width, height, a.height_frac)
+                                         a.sensor, width, height, height_frac)
 
     # Every refusal above this line can fire before a single pixel exists; the output
     # directory is created HERE so a halt does not leave an empty one behind for a
@@ -846,7 +935,7 @@ def main():
     gate_turn = TA.gate_set_distinct(views, a.views)
 
     solved_for, pinned_as = ortho_scale_record(
-        plan, ortho_scale, a.height_frac, a.ortho_scale_text, sphere_radius)
+        plan, ortho_scale, height_frac, a.ortho_scale_text, sphere_radius)
 
     manifest = {
         "tool": "render_turnaround", "tool_version": TOOL_VERSION,
@@ -876,7 +965,7 @@ def main():
             "ortho_scale_solved_for": solved_for,
             "ortho_scale_pinned_as": pinned_as,
             "radius": radius, "radius_solved_for": (None if ortho_scale is not None else {
-                "height_frac": float(a.height_frac),
+                "height_frac": height_frac,
                 "over": "the tallest projected view of the set",
                 "why": ("a bounding-sphere fit is bounded by the narrow axis of a "
                         "352x1024 frame and would spend most of it on empty air; the "

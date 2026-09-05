@@ -74,7 +74,7 @@ import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-from armature_core import blender_scene, framing, pngio, startframe as SF  # noqa: E402
+from armature_core import blender_scene, framing, parts, pngio, startframe as SF  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "E11.1"
@@ -258,6 +258,67 @@ def require_frame_size(width, height, *, who="render_start_frame",
             f"tool's own frame is {module_frame[0]}x{module_frame[1]}); a frame it will not "
             f"accept is better refused here than after the render", ev)
     return int(width), int(height)
+
+
+def require_shot_fraction(name, value, *, who="render_start_frame", gate=None,
+                          gate_id="STARTFRAME_FRACTION"):
+    """`float(value)` if `name` is a fraction of the frame, else raise the caller's gate.
+
+    F-f0c261c1, wave 18, and the residue of the `require_frame_size` sweep. That sweep
+    bounded `--width`/`--height` on both renderers and never reached the framing FRACTION
+    on either — the one remaining flag that composes the shot on the tool whose plate
+    conditions a paid I2V submission was a bare `type=float` with no bound.
+
+    **A NaN walked past every clause below it.** MEASURED 2026-09-04 on the repo venv over
+    a four-point cloud: `framing.solve_camera(cloud, cloud, 270, 8, 50.0, 36.0, 832, 480,
+    height_frac=nan, end_x_frac=0.5)` RETURNS `radius=40.0` — the bisection ceiling — and
+    no refusal, where `height_frac=0.0`, `-0.5` and `inf` each raise `FramingError` ("the
+    requested framing is not reachable between 0.5 and 40.0"). The reachability clause
+    cannot fire because `nan <= x` and `nan > x` are both False, so the search terminates
+    at its own ceiling and hands the caller a number. Everything after that passes:
+    `require_frame_size` has already ruled on width and height, the render is a
+    correctly-sized RGBA PNG, and `SF.gate_whole` reads a subject a handful of pixels wide
+    near the frame centre — well inside every margin — so Gate WHOLE returns its strongest
+    verdict, "whole silhouette in frame; smallest margin 206.1 px", over a figure occupying
+    0.1011 of the frame. The record then publishes `height_frac_requested: NaN`.
+
+    **The band is `0 < f <= 1`**, because a fraction of the frame height is that by
+    construction. `1.0` is INSIDE — the subject exactly filling the frame is the tightest
+    legal request, not an illegal one; refusing it would repeat F-2a564189, where
+    `parts.tightened` refused the exact match it existed to accept. Above 1 is not a
+    tighter fit but a subject taller than the picture, and `render_turnaround` returns a
+    solved radius for `1.5` with no refusal at all.
+
+    **Finiteness is spelled through `armature_core.parts.require_finite`**, the repo's ONE
+    implementation of wave 10's rule 4, rather than as another copy of `math.isfinite`;
+    only the upper clause is new, because `require_finite` bounds no ceiling. The evidence
+    dict is the caller's, so each caller keeps its own gate id and its own andon name.
+
+    ONE implementation with two callers, parameterised only in what it says about ITSELF —
+    `who`, the caller's gate class, the caller's gate id — never in what it checks. This is
+    the shape `require_frame_size` above already has, and for the same reason:
+    `armature_core.startframe` is where the one implementation belongs and is outside this
+    domain's globs, so the lift is FILED, not done.
+    """
+    gate = gate or RenderGate
+    ev = {"gate": gate_id, "andon": gate.__name__, "who": who, "flag": name,
+          "clause": "not_a_finite_positive_fraction"}
+    v = parts.require_finite(name, value, gate, ev, positive=True)
+    if v > 1.0:
+        # The operand rides the evidence in BOTH clauses. `require_finite` writes
+        # `ev[name] = v` on its own way out; this branch never reaches it, and an evidence
+        # dict that names the flag without carrying the value it refused is a refusal a
+        # reader cannot check.
+        ev["clause"] = "above_one"
+        ev[name] = v
+        raise gate(
+            f"{name}={v!r} is not a fraction of the frame. A framing fraction is "
+            f"0 < f <= 1 by construction: 1.0 is the subject exactly filling the picture, "
+            f"and anything above it asks for a figure taller than the frame it is being "
+            f"solved into. The solve does not refuse that — measured on "
+            f"render_turnaround's own solver, 1.5 returns a radius and the run renders "
+            f"eight well-formed views of a subject cropped on every one", ev)
+    return v
 
 
 def parse_args():
@@ -517,6 +578,12 @@ def main():
     # F-34a858f5: refused BEFORE `scene.render.resolution_x` is assigned, and before the
     # silhouette solve divides by it.
     width, height = require_frame_size(int(a.width), int(a.height))
+    # F-f0c261c1: the framing FRACTION, bounded in the same breath and for the same reason
+    # — above the `scene.render.resolution_x` assignment and above the solve that would
+    # otherwise return the bisection ceiling for a NaN and hand it to a Gate WHOLE that
+    # certifies it. Read ONCE, here; every use below is of this value, never of the
+    # namespace attribute.
+    height_frac = require_shot_fraction("--height-frac", a.height_frac)
 
     # ---- fps FIRST, on an empty scene, before the import. glTF key times are seconds.
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -589,7 +656,7 @@ def main():
 
     sol = framing.solve_camera(solve_cloud, solve_cloud, AZIMUTH_DEG, ELEVATION_DEG,
                                LENS_MM, SENSOR_MM, width, height,
-                               height_frac=float(a.height_frac),
+                               height_frac=height_frac,
                                end_x_frac=CENTRE_X_FRAC, target_y_frac=CENTRE_Y_FRAC)
     target, radius = tuple(sol["target"]), float(sol["radius"])
 
@@ -939,7 +1006,7 @@ def main():
             "target": list(target), "radius": radius,
             "position": list(framing.camera_position(target, radius,
                                                      ELEVATION_DEG, AZIMUTH_DEG)),
-            "height_frac_requested": float(a.height_frac),
+            "height_frac_requested": height_frac,
             "centre_x_frac": CENTRE_X_FRAC, "centre_y_frac": CENTRE_Y_FRAC,
             "solver_achieved": sol["achieved"], "solver_in_frame": sol["in_frame"],
             "framing_cloud": {"n_vertices": len(cloud), "n_solved_against": len(solve_cloud),
