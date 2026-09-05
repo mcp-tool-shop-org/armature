@@ -506,10 +506,18 @@ def main(argv=None):
     #      `SystemExit` string, in the one tool of the four whose output is UPLOADED -- so
     #      a caller catching `EncodeFailure` around `main` did not catch it, and the halt
     #      carried none of the measurement that fired it.
-    # ---- ANDON, before a single frame is read: the rate and the encoder.
+    # ---- ANDON, before a single frame is read: the operator's arguments first, then the
+    #      encoder. Operator input is refused before the environment is inspected, so a
+    #      malformed `--alpha-over` or `--fps` reads as ITS OWN refusal on any host --
+    #      MEASURED on the first CI run of the swarm (2026-09-05, `6e83dbb`, ubuntu-latest, no
+    #      ffmpeg on the runner): with the encoder gate ahead of the plate parser, the alpha-law
+    #      family test's `[encode_control]` case met `ffmpeg_binary_not_found` instead of the
+    #      parser's refusal and read `KeyError: 'supplied'` -- the one producer of four whose
+    #      parser contract could not be exercised without an encoder installed. The same
+    #      inversion reproduces on the rig with `ARMATURE_FFMPEG` pointed at a missing path.
     gate_encode_rate(args.fps)
-    gate_ffmpeg_binary()
     plate = parse_plate(args.alpha_over, EncodeFailure)
+    gate_ffmpeg_binary()
     receipt = build(args.frames, args.out, args.codec, invert=args.invert, fps=args.fps,
                     expect=args.expect, alpha_over=plate)
     print("ENCODE_CONTROL " + json.dumps({

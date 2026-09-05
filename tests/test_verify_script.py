@@ -1052,8 +1052,17 @@ def test_the_interpreter_line_reports_a_version_it_can_read(tmp_path):
         )
         assert made.returncode == 0, made.stdout + made.stderr
     else:
-        # `Join-Path` leaves the backslashes alone on a POSIX host, so the script looks for a
-        # file whose NAME contains them (the same shape `_scratch_verify` writes).
+        # BOTH spellings, the way `_scratch_verify` writes them: whether `Join-Path` on a POSIX
+        # host leaves the child's backslashes alone (a file whose NAME contains them) or
+        # normalises them to `/` (the nested path) depends on the pwsh build. MEASURED on the
+        # first CI run of the swarm (2026-09-05, `6e83dbb`, ubuntu-latest): the script's ANDON
+        # named `<root>/.venv/Scripts/python.exe` -- forward slashes -- while this test had
+        # linked only the backslash spelling, so the interpreter line never printed. Two links
+        # to one interpreter cost nothing and make the test read the script's behaviour rather
+        # than assume one join semantics.
+        nested = root / ".venv" / "Scripts"
+        nested.mkdir(parents=True, exist_ok=True)
+        os.symlink(sys.executable, nested / "python.exe")
         os.symlink(sys.executable, root / r".venv\Scripts\python.exe")
     got = _run_verify(root, "-NoSite", "-NoPackage")
     out = got.stdout or ""
