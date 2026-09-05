@@ -99,3 +99,45 @@ runs:
         donor_gate.mean_consecutive_frame_difference(paths)
         print("clean room: draw_body, draw_hand and mean_consecutive_frame_difference all ran")
         PROBE
+
+    # THE ONE FAILURE CLASS THIS PROJECT HAS ALREADY PAID FOR, AND THE ONLY GATE THAT CAN
+    # SEE IT. `twine check` above validates metadata STRUCTURE, not classifier MEMBERSHIP:
+    # measured 2026-09-04 on a `git archive` copy of this tree with `Topic :: Scientific ::
+    # Image Processing` (the row PyPI 400'd this project's first upload on, recorded in
+    # `pyproject.toml:70-72`) added back beside the valid ones, `python -m build` produced
+    # both artifacts with no warning and `python -m twine check dist/*` printed PASSED for
+    # the wheel AND the sdist and exited 0. So the step above, `verify.ps1`'s leg 3 and every
+    # green suite would be green on a wheel PyPI will refuse -- and the 400 would arrive
+    # inside `pypa/gh-action-pypi-publish` on a tag already cut and public, while the `npm`
+    # job, a sibling on `needs: verify` running in PARALLEL, published successfully. This
+    # gate is upstream of that fork for the reason the visibility gate was hoisted upstream
+    # of it.
+    #
+    # THE CHECK IS A FILE, NOT A HEREDOC: `verify.ps1`'s leg 3 calls the SAME file, so the
+    # local leg and the release gate cannot fork the way the font dependency did one
+    # directory over, and the way the sdist room did in this very action. This header's own
+    # first paragraph is the law being followed.
+    #
+    # WHY THE CEILING IS A YEAR, AND THE ARGUMENT THAT LOST. This step first shipped
+    # `trove-classifiers>=2026.6.1.19` with NO ceiling, on the reasoning that `build` and
+    # `twine` are pinned because they PRODUCE the artifact while this one produces nothing --
+    # it is a DATA snapshot of PyPI's vocabulary, and a ceiling freezes this gate's idea of
+    # that vocabulary. The suite refused it:
+    # `tests/test_ci_workflows.py::test_every_tool_that_makes_or_moves_the_artifact_is_bounded_from_above`
+    # walks every install token in every job that produces or publishes a distribution and
+    # requires a bound from ABOVE, and it named this one in all three sources (ci.yml:
+    # python-tests, release.yml: verify, verify.ps1). The census is right and the reasoning
+    # was wrong on the axis it was arguing: the repo's law is that the code -- and the data --
+    # running on release day must be the code that was verified, and a list resolved fresh on
+    # the day is neither. Both readings fail in the SAME direction anyway: an out-of-date list
+    # refuses a valid new classifier, and a fresh one refuses a row PyPI has deprecated;
+    # neither can let a bad row through, and both are fixed by a deliberate edit here.
+    # `>=2026.6.1.19` is the version this rig resolved and ran with the network on 2026-09-04;
+    # `<2027` is a CalVer year, so bumping it is the same deliberate act raising `npm@^11.5.1`
+    # already is.
+    - name: refuse a classifier PyPI does not have
+      shell: bash
+      run: |
+        set -eu
+        python -m pip install "trove-classifiers>=2026.6.1.19,<2027"
+        python "$GITHUB_ACTION_PATH/classifier_gate.py" dist

@@ -216,7 +216,13 @@ if ($NoPackage) {
             # `.github/actions/clean-room/action.yml` by
             # `tests/test_verify_script.py::test_verify_builds_the_artifact_with_the_toolchain_the_clean_room_action_pins`,
             # so raising either constraint there moves this line with it.
-            & $python -m pip install --quiet 'build>=1.5,<2' 'twine>=7,<8'
+            # `trove-classifiers` joins them for the classifier gate below, under the
+            # action's specifier character for character. It carries a CalVer-year ceiling
+            # for the reason the action's comment records: it was written floor-only first,
+            # and `test_every_tool_that_makes_or_moves_the_artifact_is_bounded_from_above`
+            # named it here as well as in both workflows — a data set resolved fresh on the
+            # day is no more verified than a tool resolved fresh on the day.
+            & $python -m pip install --quiet 'build>=1.5,<2' 'twine>=7,<8' 'trove-classifiers>=2026.6.1.19,<2027'
             if ($LASTEXITCODE -ne 0) { return }
 
             # THE LEG JUDGES WHAT THIS RUN BUILT, AND NOTHING ELSE. `python -m build` does
@@ -268,6 +274,20 @@ if ($NoPackage) {
                     return
                 }
             }
+
+            # THE CLASSIFIER GATE, and it is the SAME FILE the release gate runs -- not a
+            # second implementation of it. `twine check` two commands up validates metadata
+            # STRUCTURE, not classifier MEMBERSHIP: measured 2026-09-04 on a `git archive`
+            # copy of this tree with `Topic :: Scientific :: Image Processing` (the row PyPI
+            # 400'd this project's first upload on) added back, the build produced both
+            # artifacts with no warning and `twine check` printed PASSED for each and exited
+            # 0. This script's DESCRIPTION equates a green local run to a green CI run; the
+            # release gate calls `.github/actions/clean-room/classifier_gate.py` from its own
+            # action and so does this line, so the equivalence is a shared text rather than a
+            # claim. The sdist room three paragraphs down is in this script BECAUSE that
+            # equivalence was once asserted over a leg the action had and this one did not.
+            & $python (Join-Path $repo '.github/actions/clean-room/classifier_gate.py') $dist
+            if ($LASTEXITCODE -ne 0) { return }
 
             $binDir = if ($IsWindows -eq $false) { 'bin' } else { 'Scripts' }
             $exe = if ($IsWindows -eq $false) { '' } else { '.exe' }
