@@ -336,3 +336,155 @@ def test_the_halt_line_reads_the_caught_refusal_clause(tmp_path):
     assert halt["evidence"]["refusal_clauses"] == [], halt
     assert halt["evidence"]["n_unmarked_receipts"] == 1, halt
     assert halt["evidence"]["returned_receipt_key"] == "verdict", halt
+
+
+# ===========================================================================
+# F-1b6be488 — the LAST gate before a paid submission opened its `--out` with no Gate OUT.
+#
+# Operand (the auditor's, RE-MEASURED on `e8263a3`): the assembly fixture that runs GREEN —
+# the same files as the control run, which printed SAVED_ADMISSION_OK at exit 0 — with
+# `--out` pointing at an existing DIRECTORY. Every gate PASSED and the tool then exited 1
+# with `SAVED_ADMISSION_HALT {"error": "PermissionError", "message": "[Errno 13] Permission
+# denied: '...\\out\\isadir'", "evidence": null}` (`IsADirectoryError` on POSIX) — "this tool
+# crashed", with a stdlib exception name where a clause belongs, and no admission record for
+# the spend that had just been cleared.
+#
+# The wave-18 entry closed this sibling BY MEASUREMENT on the wrong fixture: it recorded
+# "`--out=<an existing directory>` reaches Gate PAIR first on this fixture, so the write
+# shape is not reachable behind a passing graph here". The measurement is right about that
+# fixture and the conclusion does not follow — that fixture cannot reach the write AT ALL.
+# The red proof below therefore runs behind a graph that PASSES every gate.
+#
+# reverted-red: yes — measured in this worktree before the fix, exit 1 / PermissionError /
+# evidence null on exactly the invocation below.
+# ===========================================================================
+
+
+import build_payload as BP  # noqa: E402
+
+
+def test_gate_OUT_refuses_an_out_that_is_a_directory_behind_a_PASSING_graph(tmp_path):
+    """The operand, in-process: the green assembly admission with `--out` on a directory."""
+    isadir = tmp_path / "out" / "isadir"
+    isadir.mkdir(parents=True)
+    argv = _assembly_cli(tmp_path, out=isadir)
+    exc, ev = _raises(GSG.main, argv)
+    assert isinstance(exc, BP.PayloadOutHalt), repr(exc)
+    assert ev["clause"] == "out_path_is_a_directory", ev
+    assert ev["gate"] == "OUT" and ev["andon"] == "PayloadOutHalt", ev
+    assert ev["flag"] == "--out" and ev["is_dir"] is True, ev
+
+
+def test_the_same_invocation_without_the_directory_still_reaches_the_OK_line(tmp_path,
+                                                                            capsys):
+    """The direction the gate must not bound, and the proof the operand really is green
+    otherwise: one character of difference between this and the refusal above."""
+    assert GSG.main(_assembly_cli(tmp_path)) == 0
+    printed = [ln for ln in capsys.readouterr().out.splitlines()
+               if ln.startswith("SAVED_ADMISSION_OK ")]
+    assert printed, "the control invocation stopped printing its OK line"
+    line = json.loads(printed[0][len("SAVED_ADMISSION_OK "):])
+    assert line["gate_OUT"], line
+    written = json.loads((tmp_path / "out" / "admission.json").read_text(encoding="utf-8"))
+    assert written["gates"]["OUT"]["clause"] == "out_path_is_a_directory", written["gates"]
+    assert written["gates"]["OUT"]["verdict"], written["gates"]["OUT"]
+
+
+def test_the_halt_line_reads_the_gate_OUT_clause(tmp_path):
+    """Rule 4 — driven through `__main__`, the halt record READ, at the gate exit code."""
+    isadir = tmp_path / "out" / "isadir"
+    isadir.mkdir(parents=True)
+    proc = subprocess.run(
+        [sys.executable, os.path.join(TOOLS, "gate_saved_graph.py"),
+         *_assembly_cli(tmp_path, out=isadir)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=REPO)
+    line = [ln for ln in proc.stdout.splitlines()
+            if ln.startswith("SAVED_ADMISSION_HALT ")]
+    assert line, proc.stdout + proc.stderr
+    halt = json.loads(line[-1][len("SAVED_ADMISSION_HALT "):])
+    assert proc.returncode == 2, (proc.returncode, halt)
+    assert halt["error"] == "PayloadOutHalt", halt
+    assert halt["evidence"]["clause"] == "out_path_is_a_directory", halt
+    assert halt["evidence"]["gate"] == "OUT", halt
+
+
+# ---- the census: keyed on the RESOLVED shape, not on a file list.
+
+#: The domain's own tools. Enumerated from the tree so a tool added later joins the census.
+DOMAIN_TOOLS = sorted({
+    os.path.basename(p) for p in
+    glob.glob(os.path.join(TOOLS, "build_*payload*.py"))
+    + [os.path.join(TOOLS, n) for n in
+       ("build_payload.py", "canon_gate.py", "gate_saved_graph.py",
+        "fetch_run.py", "fetch_t2v_run.py")]})
+
+#: The names that ARE a Gate OUT, wherever the call sits.
+GATE_OUT_CALLS = {"gate_out_writable", "gate_out_paths"}
+
+
+def _out_writes_and_their_gate(path):
+    """`[(function, opens `--out` directly, calls a Gate OUT)]` for one tool.
+
+    A write is `open(<x>, "w"...)` whose target is the parsed `--out` value itself
+    (`a.out` / `args.out`) — a path the tool opens rather than a directory it creates. The
+    shape is resolved from the AST, never from a spelling: a tool that renames its namespace
+    variable is still read, and a tool that joins `--out` with a filename is correctly NOT
+    in this population, because `os.makedirs` on a directory is not the defect this bounds.
+    """
+    tree = ast.parse(open(os.path.join(TOOLS, path), encoding="utf-8").read())
+    out = []
+    for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+        opens_out = False
+        for call in [n for n in ast.walk(fn) if isinstance(n, ast.Call)]:
+            if getattr(call.func, "id", None) != "open" or not call.args:
+                continue
+            target = call.args[0]
+            mode = call.args[1].value if (len(call.args) > 1
+                                          and isinstance(call.args[1], ast.Constant)) else \
+                next((kw.value.value for kw in call.keywords
+                      if kw.arg == "mode" and isinstance(kw.value, ast.Constant)), "r")
+            if (isinstance(target, ast.Attribute) and target.attr == "out"
+                    and isinstance(target.value, ast.Name)
+                    and "w" in str(mode)):
+                opens_out = True
+        gated = any((getattr(c.func, "id", None) or getattr(c.func, "attr", None))
+                    in GATE_OUT_CALLS
+                    for c in ast.walk(fn) if isinstance(c, ast.Call))
+        if opens_out:
+            out.append((fn.name, opens_out, gated))
+    return out
+
+
+def test_every_tool_that_OPENS_its_out_is_bounded_by_a_gate_OUT():
+    """The population, re-derived every run. `gate_out_paths` was the ONLY Gate OUT in this
+    domain on `e8263a3` and NO other builder or fetcher called it — re-censused there. A
+    tool whose `--out` is a directory it creates is correctly outside this population; a
+    tool that OPENS the value is inside it and must be gated."""
+    ungated = {name: sites for name in DOMAIN_TOOLS
+               for sites in [[fn for fn, _o, g in _out_writes_and_their_gate(name)
+                              if not g]]
+               if sites}
+    assert ungated == {}, ungated
+
+
+def test_the_census_would_have_seen_the_defect_it_was_written_for():
+    """A census that cannot fail is not a census. `gate_saved_graph.main` is in the
+    population — it OPENS `--out` — so the pre-fix tree, where nothing in that function
+    called a Gate OUT, would have failed the check above."""
+    sites = _out_writes_and_their_gate("gate_saved_graph.py")
+    assert [fn for fn, _o, _g in sites] == ["main"], sites
+    assert all(gated for _fn, _o, gated in sites), sites
+    assert "gate_out_writable" in open(
+        os.path.join(TOOLS, "gate_saved_graph.py"), encoding="utf-8").read()
+
+
+def test_gate_out_writable_is_the_ONE_home_of_the_directory_clause():
+    """No second spelling: `os.path.isdir` guarding a write raises through this function in
+    every tool of the domain, so the two clause words have one implementation."""
+    spellings = []
+    for name in DOMAIN_TOOLS:
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+        for lineno, line in enumerate(src.splitlines(), 1):
+            if "is a DIRECTORY, so" in line and "raise" not in line:
+                spellings.append((name, lineno))
+    assert [n for n, _ln in spellings] == ["build_payload.py"], spellings

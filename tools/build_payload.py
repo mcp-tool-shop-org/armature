@@ -792,6 +792,49 @@ class PayloadOutHalt(GateFailure):
     gate = "OUT"
 
 
+def gate_out_writable(path, *, flag="--out", what="the artifact",
+                      clause="out_path_is_a_directory", extra=None):
+    """Gate OUT · ANDON — one artifact path this tool can open for writing, or a refusal.
+
+    The ONE home for the directory clause, and the reason it has one: it is the direction
+    the *derivation* clauses do not bound, and the only one of this andon's four an
+    operator can reach with the SHIPPED `META_SUFFIX` (wave 18, F-46bffbb9, measured over
+    13 `--out` shapes). `open(<a directory>, "w")` raises `IsADirectoryError` on POSIX and
+    `PermissionError` on Windows — neither is an `ArmatureError`, so the halt contract's
+    exit-2 branch is bypassed and a refusal is recorded as a crash.
+
+    Wave 22, F-1b6be488: `gate_saved_graph` — the LAST gate before a paid submission —
+    opened its `--out` with no Gate OUT anywhere in the tool. RE-MEASURED on `e8263a3` as a
+    subprocess on the assembly fixture that runs GREEN (the control run printed
+    `SAVED_ADMISSION_OK`, exit 0) with `--out` pointing at an existing DIRECTORY: exit 1,
+    `SAVED_ADMISSION_HALT {"error": "PermissionError", "message": "[Errno 13] Permission
+    denied: '...\\out\\isadir'", "evidence": null}` — every gate on the last check before
+    a spend PASSED, and the tool then exited on the code it reserves for "this tool
+    crashed", with a stdlib exception name where a clause belongs and no admission record
+    for the spend that had just been cleared.
+
+    Re-censused on the same commit, `gate_out_paths` below was the ONLY Gate OUT in this
+    domain: no other builder or fetcher called it. So the clause is lifted here rather than
+    spelled a second time, and `gate_out_paths` calls it for BOTH of its derived paths.
+    """
+    target = os.path.abspath(path)
+    ev = {"gate": "OUT", "andon": "PayloadOutHalt", "clause": clause, "flag": flag,
+          "path": target, "exists": os.path.exists(target),
+          "is_dir": os.path.isdir(target)}
+    if extra:
+        ev = dict(extra, **ev)
+    if os.path.isdir(target):
+        raise PayloadOutHalt(
+            f"{flag} {target!r} is a DIRECTORY, so {what} cannot be written there: the run "
+            f"would open it, fail, and leave whatever had already reached disk behind — a "
+            f"partial write reported as a crash, at the exit code this tree reserves for "
+            f"one. Give {flag} a file path",
+            ev)
+    ev["verdict"] = (f"{flag} names a path that is not an existing directory: "
+                     f"{os.path.basename(target)}")
+    return ev
+
+
 def gate_out_paths(out, meta_suffix=None):
     """`(graph_path, record_path)` for `--out`, or raise saying why there is only one.
 
@@ -825,18 +868,14 @@ def gate_out_paths(out, meta_suffix=None):
     # crash. `open(<a directory>, "w")` fails the same way, after the first artifact is
     # already on disk. Checked here, before `os.makedirs` and before either write, so a
     # refusal leaves no output directory.
-    if os.path.isdir(graph):
-        raise PayloadOutHalt(
-            f"--out {graph!r} is a DIRECTORY, so the graph cannot be written there: the "
-            f"build would open it, fail, and leave the record's path unwritten — a partial "
-            f"write reported as a crash. Give --out a file path",
-            dict(ev, clause="out_path_is_a_directory"))
-    if os.path.isdir(meta):
-        raise PayloadOutHalt(
-            f"the record would be written to {meta!r}, which already exists as a "
-            f"DIRECTORY. The graph would land on disk and the record write would then "
-            f"fail, leaving a graph whose payload_sha256 nothing states",
-            dict(ev, clause="meta_path_is_a_directory"))
+    # Wave 22 (F-1b6be488): both directory clauses go through `gate_out_writable` above —
+    # the ONE home, so `gate_saved_graph`'s `--out` is bounded by the same code rather than
+    # by a second spelling of it. The clause WORDS and this function's own evidence keys
+    # (`out`, `meta`, `meta_suffix`, `derived_by`) are unchanged; `extra=ev` carries them.
+    gate_out_writable(graph, flag="--out", what="the graph",
+                      clause="out_path_is_a_directory", extra=ev)
+    gate_out_writable(meta, flag="--out", what="the record (derived from --out)",
+                      clause="meta_path_is_a_directory", extra=ev)
     if meta == graph:
         raise PayloadOutHalt(
             f"the graph and its record would both be written to {graph!r}: the second "

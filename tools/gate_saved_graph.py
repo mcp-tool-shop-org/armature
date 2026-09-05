@@ -36,6 +36,11 @@ from armature_core import route_gates as RG  # noqa: E402
 from armature_core.route_gates import RouteGate  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
     canonical_payload_digest, read_seed_registration)
+# Gate OUT's ONE home (wave 22, F-1b6be488). `build_payload.gate_out_paths` was, re-censused
+# on `e8263a3`, the only Gate OUT in this domain and no other builder or fetcher called it;
+# the directory clause is lifted into `gate_out_writable` there and imported here rather
+# than spelled a second time beside the write it has to bound.
+from build_payload import gate_out_writable  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
@@ -1139,6 +1144,17 @@ def main(argv=None):
     else:
         shapes = sorted({f"{f['width']}x{f['height']}x{f['length']}" for f in checked})
 
+    # ---- Gate OUT · ANDON, wave 22 (F-1b6be488). ABOVE `os.makedirs` and above the write,
+    # so a refusal leaves no output directory — the invariant `build_payload` states for
+    # Gate CANON and this file states for its own `os.makedirs`. RE-MEASURED on `e8263a3`
+    # as a subprocess on the assembly fixture that runs GREEN, with `--out` pointing at an
+    # existing DIRECTORY: every gate above PASSED and the tool then exited 1 —
+    # `SAVED_ADMISSION_HALT {"error": "PermissionError", ..., "evidence": null}`
+    # (`IsADirectoryError` on POSIX) — the code this module reserves for "this tool
+    # crashed", leaving no admission record for the spend it had just cleared.
+    gate_out = gate_out_writable(a.out, flag="--out",
+                                 what="the admission record this gate writes")
+
     record = {
         "tool": "gate_saved_graph", "tool_version": TOOL_VERSION,
         "experiment": a.experiment, "stage": a.stage,
@@ -1149,7 +1165,7 @@ def main(argv=None):
         "round_trip": equality,
         "topology_round_trip": topology,
         "route_facts": facts,
-        "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked},
+        "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked, "OUT": gate_out},
     }
     # BELOW every check, not above them. `build_payload.py` states the repo's invariant —
     # a refuse must leave no output directory — and until 2026-09-03 it held for Gate CANON
@@ -1170,6 +1186,7 @@ def main(argv=None):
                         "attribution": [e.get("component") if isinstance(e, dict) else e
                                         for e in facts["attribution"]]},
         "gate_ROUTE": gate_route["verdict"], "gate_S": gate_s["verdict"],
+        "gate_OUT": gate_out["verdict"],
         "gate_L": f"{', '.join(shapes)} legal ({gate_route['frame_legality_verdict']})",
         "record": a.out}))
     return 0
