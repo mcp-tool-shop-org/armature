@@ -95,18 +95,62 @@ def test_the_blend_band_only_applies_between_adjacent_bones():
 
 
 def test_a_wider_band_blends_more_vertices_and_a_narrow_one_fewer():
+    """The wide arm was `band=0.80`, which is ABOVE the module's own `BLEND_BAND` (0.35)
+    and is refused as a loosening from wave 25 on (F-95c9a97e): a caller may only tighten
+    a bound this module owns. The property the test is about — a wider band blends more —
+    is unchanged and is read inside the legal range, against the module constant itself as
+    the widest legal request. Both arms are asserted against `BLEND_BAND` rather than
+    against literals so the pair moves with the constant.
+    """
     rng = np.random.default_rng(2)
     pts = rng.uniform(-0.2, 0.2, size=(3000, 3)) + np.array([0.0, 0.0, 1.0])
     _, narrow = _weights(pts, band=0.05)
-    _, wide = _weights(pts, band=0.80)
+    _, wide = _weights(pts, band=binding.BLEND_BAND)
+    assert binding.BLEND_BAND > 0.05
     assert wide["vertices_blended"] > narrow["vertices_blended"]
 
 
+def test_a_band_wider_than_the_module_owns_is_refused_as_a_loosening():
+    """F-95c9a97e, wave 25. `if not (blend_band > 0)` admitted `inf`, because `inf > 0` is
+    True, and every value above the module's own besides. MEASURED on `580af47` over a
+    two-bone chain with `blend_band=inf`: `gap < inf` at every vertex, `t = clip(gap/inf,
+    0, 1)` is 0, so `w1 = w2 = 0.5` on every vertex whose two nearest bones are adjacent —
+    a uniformly smooth skin over the character this module's docstring says IS rigid
+    segments — with `blend_band_normalised: inf` riding the diagnostics and `json.dumps`
+    writing it as the bare `Infinity` token.
+    """
+    with pytest.raises(ArmatureError) as exc:
+        _weights([(0.0, 0.0, 1.0)], band=float("inf"))
+    assert exc.value.evidence["clause"] == "bound_not_finite"
+
+    with pytest.raises(ArmatureError) as exc:
+        _weights([(0.0, 0.0, 1.0)], band=float("nan"))
+    assert exc.value.evidence["clause"] == "bound_not_finite"
+
+    with pytest.raises(ArmatureError, match=r"may only TIGHTEN") as exc:
+        _weights([(0.0, 0.0, 1.0)], band=binding.BLEND_BAND * 2)
+    assert exc.value.evidence["clause"] == "bound_may_only_tighten"
+
+    # A TIGHTENING is still legal, which is the direction the bound leaves open.
+    _, diag = _weights([(0.0, 0.0, 1.0)], band=binding.BLEND_BAND / 10.0)
+    assert diag["blend_band_normalised"] == binding.BLEND_BAND / 10.0
+
+
 def test_a_zero_or_negative_band_raises_rather_than_silently_making_hard_seams():
-    with pytest.raises(ArmatureError, match=r"blend band must be positive, got 0\.0"):
+    """The two halves now refuse under two different clauses, which is the split wave 25
+    made deliberately (F-95c9a97e): ZERO keeps this module's own sentence, because a hard
+    seam at every joint is a different arm and that reason is local; a NEGATIVE band is
+    refused by `parts.tightened`, the one home for a bound on a module constant, under
+    `bound_is_negative`. The clause word is asserted rather than the sentence, because a
+    halt reader keys on the word.
+    """
+    with pytest.raises(ArmatureError, match=r"blend band must be positive, got 0\.0") as exc:
         _weights([(0.0, 0.0, 1.0)], band=0.0)
-    with pytest.raises(ArmatureError, match=r"blend band must be positive, got -0\.2"):
+    assert exc.value.evidence["clause"] == "blend_band_not_positive"
+
+    with pytest.raises(ArmatureError, match=r"a bound no measurement can satisfy") as exc:
         _weights([(0.0, 0.0, 1.0)], band=-0.2)
+    assert exc.value.evidence["clause"] == "bound_is_negative"
 
 
 # ------------------------------------------- normalising by radius, and why it is not optional

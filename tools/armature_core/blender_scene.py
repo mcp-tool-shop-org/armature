@@ -286,17 +286,63 @@ def set_scene_frame(scene, frame_index):
 # ------------------------------------------------------------------------ geometry
 
 
-def _evaluated_world_vertices(objects):
-    """World-space vertex positions of every mesh object, as one (N, 3) array."""
+def _evaluated_world_vertices(objects, census=None):
+    """World-space vertex positions of every mesh object, as one (N, 3) array.
+
+    **Two silent drop paths, and the census that makes them legible** (F-e6d76657, wave 25).
+    An object leaves this measurement without a trace on either of two branches —
+    `except RuntimeError: continue` (an evaluated object with no mesh to give) and
+    `me is None or len(me.vertices) == 0` (an object that gave an empty one) — and the
+    return is a bare (N, 3) array, so no caller could learn how many of the objects it
+    handed in actually contributed.
+
+    MEASURED in this worktree on `580af47` under a stub `bpy`, three render-visible mesh
+    objects: one 4-vertex body at world offset 1, one whose `to_mesh()` raises
+    `RuntimeError`, one whose `to_mesh()` returns `None`, the latter two at world offset
+    100. The call returned a **(4, 3)** array and `_sphere` over it gave centre
+    `[1.5, 1.5, 1.5]`, radius **0.866** — the body alone — while the same three objects
+    with all three contributing give centre `[51.0, 51.0, 51.0]` and radius **86.6**. The
+    shot would be framed on a fraction of the subject.
+
+    The ALL-drop case is guarded, and by all three consumers: `_sphere` returns None over
+    an empty array (measured in the same run) and `stage_render.py::prepare`,
+    `preview_walk.py::main` and `probe_subject.py::probe_one` each refuse or record on
+    `bounds is None`. The PARTIAL case is the one that mis-frames the shot, and it is the
+    unguarded one: `stage_render`'s refusal evidence quotes `n_render_visible_meshes:
+    len(meshes)`, the count BEFORE the drop, so the number in the record names a population
+    that did not contribute.
+
+    **Two populations, counted separately** — the shape this domain settled one module over
+    in wave 16, where `turnaround._pixel_pairs` returns `carrying`, `skipped` and
+    `unreadable` beside the distances for exactly this reason (F-1935e0e1 / F-e207fd20).
+    Pass a dict as `census` and it is filled with `n_objects`, `n_contributing`,
+    `n_dropped`, `n_vertices` and `dropped` (one `{name, reason}` row per dropped object);
+    `world_bounds_census` and `unfiltered_world_bounds_census` below are the public names
+    that hand it back beside the bounds, so a framing receipt can state the population it
+    was measured over. The array return is UNCHANGED for every existing caller — the count
+    is what was missing, not the geometry.
+
+    Whether a partial drop should also REFUSE is the Director's call and is not decided
+    here; the count is not optional either way.
+    """
     depsgraph = bpy.context.evaluated_depsgraph_get()
     chunks = []
+    dropped = []
+    n_objects = 0
     for ob in objects:
+        n_objects += 1
         ev = ob.evaluated_get(depsgraph)
         try:
             me = ev.to_mesh()
-        except RuntimeError:
+        except RuntimeError as exc:
+            dropped.append({"name": str(getattr(ob, "name", ob)),
+                            "reason": "to_mesh_raised_runtime_error",
+                            "detail": str(exc)})
             continue
         if me is None or len(me.vertices) == 0:
+            dropped.append({"name": str(getattr(ob, "name", ob)),
+                            "reason": ("to_mesh_returned_none" if me is None
+                                       else "evaluated_mesh_has_no_vertices")})
             ev.to_mesh_clear()
             continue
         co = np.empty(len(me.vertices) * 3, dtype=np.float64)
@@ -305,12 +351,21 @@ def _evaluated_world_vertices(objects):
         M = np.array(ev.matrix_world, dtype=np.float64)
         chunks.append(co @ M[:3, :3].T + M[:3, 3])
         ev.to_mesh_clear()
-    if not chunks:
-        return np.zeros((0, 3), dtype=np.float64)
-    return np.concatenate(chunks, axis=0)
+    pts = (np.zeros((0, 3), dtype=np.float64) if not chunks
+           else np.concatenate(chunks, axis=0))
+    if census is not None:
+        census.clear()
+        census.update({
+            "n_objects": n_objects,
+            "n_contributing": n_objects - len(dropped),
+            "n_dropped": len(dropped),
+            "n_vertices": int(pts.shape[0]),
+            "dropped": dropped,
+        })
+    return pts
 
 
-def evaluated_world_vertices(scene, objects):
+def evaluated_world_vertices(scene, objects, census=None):
     """World-space vertices of the objects that will actually RENDER, as one (N, 3) array.
 
     The public entry point. `_evaluated_world_vertices` is the unfiltered primitive, and
@@ -319,11 +374,15 @@ def evaluated_world_vertices(scene, objects):
     the failure `render_visible_meshes` exists for, reintroduced one import at a time. This
     name takes the scene and filters first, and there is no shape of it that skips the
     filter.
+
+    `census`, when a dict is passed, is filled with the drop census
+    `_evaluated_world_vertices` records (F-e6d76657): its `n_objects` is the count AFTER
+    the visibility filter, which is the population a framing receipt should be quoting.
     """
-    return _evaluated_world_vertices(render_visible_meshes(scene, objects))
+    return _evaluated_world_vertices(render_visible_meshes(scene, objects), census=census)
 
 
-def _points_to_measure(objects, scene):
+def _points_to_measure(objects, scene, census=None):
     """The vertices a measurement should read — filtered whenever a scene is available.
 
     F-0e29613a. `evaluated_world_vertices(scene, objects)` was introduced so that "there
@@ -340,10 +399,13 @@ def _points_to_measure(objects, scene):
     selected (and for `unfiltered_world_bounds`, the one measurement that is DELIBERATELY
     naive: `probe_subject` reports the difference between the two, so filtering that row
     would silently turn its comparison into a no-op).
+
+    `census` (F-e6d76657) is passed straight through on both branches, so a caller that
+    wants the drop count gets it whichever side of the filter it is on.
     """
     if scene is not None:
-        return evaluated_world_vertices(scene, objects)
-    return _evaluated_world_vertices(objects)
+        return evaluated_world_vertices(scene, objects, census=census)
+    return _evaluated_world_vertices(objects, census=census)
 
 
 def _sphere(pts):
@@ -454,6 +516,46 @@ def unfiltered_world_bounds(objects):
     `tests/test_render_visibility.py` bans.
     """
     return _sphere(_evaluated_world_vertices(objects))
+
+
+def world_bounds_census(objects, scene):
+    """`(bounds, census)` — `world_bounds` beside the population it was measured over.
+
+    F-e6d76657, wave 25. `world_bounds` returns a triple (or None) and every caller unpacks
+    it, so the drop census cannot ride that return without breaking them; this is the name
+    that hands both back. `bounds` is exactly what `world_bounds` returns for the same
+    arguments, and `census` is `_evaluated_world_vertices`' dict — `n_objects`,
+    `n_contributing`, `n_dropped`, `n_vertices`, `dropped`.
+
+    `n_objects` here is the count AFTER `render_visible_meshes` and BEFORE the two drop
+    branches, which is the number a framing receipt has to state beside the bounds:
+    `stage_render`'s refusal evidence quotes `n_render_visible_meshes` taken before both,
+    and on a partial drop that is a population which did not contribute. Adopting this name
+    there is instruments-measure's half and is posted to the wave-25 seams inbox; the count
+    exists here either way.
+    """
+    census = {}
+    pts = evaluated_world_vertices(scene, objects, census=census)
+    return _sphere(pts), census
+
+
+def unfiltered_world_bounds_census(objects):
+    """`(bounds, census)` — `unfiltered_world_bounds`' sibling, same contract.
+
+    The naive measurement gets the census too, because `probe_subject` reports the naive
+    bounds BESIDE the filtered ones and a difference between two numbers is only readable
+    when both name the population they were taken over.
+
+    It goes through `_points_to_measure(objects, None)` rather than through the private
+    primitive directly, so
+    `tests/test_blender_scene_pure.test_the_unfiltered_primitive_has_exactly_three_readers_inside_the_module`
+    stays a census of three and this name does not become a fourth door onto the naive
+    reading. `scene=None` there is the DELIBERATELY naive branch that funnel's own docstring
+    names, so the measurement is `unfiltered_world_bounds`' to the value.
+    """
+    census = {}
+    pts = _points_to_measure(objects, None, census=census)
+    return _sphere(pts), census
 
 
 def union_sphere(frame_points):
@@ -638,15 +740,32 @@ def half_fovs(lens_mm, sensor_mm, width, height):
         except (TypeError, ValueError):
             _f = float("nan")
         if not (math.isfinite(_f) and _f > 0.0):
+            # The clause word is assigned as a LITERAL rather than interpolated
+            # (`f"{_name}_not_finite_and_positive"`, wave 25's `[proactive]` seed on this
+            # file). `tests/_census_nodes.clause_literals` — the ONE walk over the clause
+            # vocabulary — reads a `Constant` inside an evidence dict and a `Constant`
+            # assigned into one, and an f-string is neither, so both of this loop's clause
+            # words were invisible to the census that exists to notice a clause word being
+            # added, misspelled or doubled. MEASURED on `580af47`: the census resolved 9 of
+            # this module's 13 family raise sites; these two spellings and the three
+            # `CompositorWiring` raises below were the four sites it could not see. The
+            # assignment form is used rather than two unrolled blocks because
+            # `tests/test_framing.py::test_half_fovs_matches_blenders` slices this
+            # function's SOURCE out of the file and execs it in a namespace holding only
+            # `math` — no new name may appear here that the slice cannot resolve.
+            _ev = {"gate": None, "andon": "CameraGeometry",
+                   "lens_mm": lens_mm, "sensor_mm": sensor_mm,
+                   "width": width, "height": height}
+            if _name == "sensor_mm":
+                _ev["clause"] = "sensor_mm_not_finite_and_positive"
+            else:
+                _ev["clause"] = "lens_mm_not_finite_and_positive"
             raise CameraGeometry(
                 f"{_name}={_v!r} is not a finite positive camera number. A zero divides, "
                 f"a NaN walks past every comparison in both directions, and a negative "
                 f"one returns a negative half-FOV that point-mirrors the frame about its "
                 f"centre while every extent and crop check still reads a plausible box",
-                {"gate": None, "andon": "CameraGeometry",
-                 "clause": f"{_name}_not_finite_and_positive",
-                 "lens_mm": lens_mm, "sensor_mm": sensor_mm,
-                 "width": width, "height": height})
+                _ev)
     if width >= height:
         sx = sensor_mm
         sy = sensor_mm * height / width
@@ -784,7 +903,15 @@ def gate_compositor_wiring(tag, expected_socket, render_layers_name, incoming):
           "n_links": len(incoming),
           "incoming": [[str(a), str(b)] for a, b in incoming]}
 
+    # Gate COMPOSITOR's three refusals carried NO `clause` key at all on `580af47` — the
+    # only three raises in this module with none, and three of the four sites the clause
+    # census could not see (wave 25's `[proactive]` seed on this file). A halt reader keys
+    # on that string and never on the sentence around it, and these three sentences are the
+    # ones that say WHICH way the control sequence was mis-wired: no link, the wrong source
+    # node, or the right node's wrong socket. `stage_render` reads these refusals; the words
+    # are posted to the wave-25 seams inbox so that domain can key on them.
     if len(incoming) != 1:
+        ev["clause"] = "compositor_link_count"
         raise CompositorWiring(
             f"compositor wiring for {tag!r}: expected exactly 1 incoming link, got "
             f"{len(incoming)}. A pass with no link writes a blank channel and a pass with "
@@ -797,11 +924,13 @@ def gate_compositor_wiring(tag, expected_socket, render_layers_name, incoming):
     ev["got_socket"] = str(from_socket)
 
     if str(from_node) != render_layers_name:
+        ev["clause"] = "compositor_source_is_not_render_layers"
         raise CompositorWiring(
             f"compositor wiring for {tag!r}: source is {from_node!r}, not the Render "
             f"Layers node {render_layers_name!r}", ev)
 
     if str(from_socket) != expected_socket:
+        ev["clause"] = "compositor_socket_is_not_the_pass"
         raise CompositorWiring(
             f"compositor wiring for {tag!r}: connected to socket {from_socket!r}, expected "
             f"{expected_socket!r}. The channel would be written from the wrong pass and "

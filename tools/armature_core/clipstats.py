@@ -32,6 +32,7 @@ and this repo has already shipped two of those.
 """
 
 import hashlib
+import math
 
 import numpy as np
 
@@ -298,7 +299,94 @@ def horizon_row(frame, band=None, tolerance=3, min_agreement=0.5):
     return out
 
 
+#: How many samples per frame the PIXEL comparison reads. A stride over the flattened
+#: frame, not a crop: a freeze is a property of the whole plate, and a crop would answer
+#: about a corner of it. 4096 over a 256x256x3 plate is every 48th value; over a
+#: 832x480x3 one, every 292nd. The number is a COST bound and nothing about it is tuned
+#: toward a picture — the quantity reported is the mean absolute difference over whatever
+#: it reads, and the count of samples rides the dict so a reader knows what it was taken
+#: over.
+PIXEL_SAMPLES_PER_FRAME = 4096
+
+
 def distinct_frames(frames):
-    """How many of the frames are byte-distinct. A clip that froze reads 1."""
+    """How many of the frames differ — in BYTES and, separately, in PIXELS.
+
+    **The byte count's failing direction is unreachable on this function's real input**
+    (F-4ba279bf, wave 25). `n_distinct` is a count of sha256 digests and its docstring used
+    to say "A clip that froze reads 1", which is true only of a clip that froze
+    byte-for-byte. CLAUDE.md rules on this direction: "A file-hash mismatch is not evidence
+    a render changed. Compare pixels; reserve byte-hashes for artifacts whose bytes are the
+    contract." Here the bytes are not the contract — the pictures are.
+
+    MEASURED in this worktree on `580af47`, 65 frames of a 256x256x3 plate in which each
+    frame differs from the base by ONE byte in one channel: `n_frames: 65,
+    n_distinct: 65` — the strongest reading the instrument has — while the neighbouring
+    `frame_deltas` in this same module reported a median frame-to-frame mean absolute
+    difference of **5.09e-06**. A decoded generation is never byte-identical frame to
+    frame, so on its real input this diagnostic could only ever return `n_frames`. It is
+    the finding wave 14 already paid for one module over
+    (F-c4cf355d on `turnaround.gate_set_distinct`: an orbit helper advancing by a rounding
+    error writes eight files with eight DIFFERENT digests over one picture).
+
+    The panel the Director reads quotes it verbatim — `make_e13_sheet.py::main` prints
+    "<n> frames, <d> distinct" and `make_startframe_sheet.py::main` the same, both filled by
+    `measure_clip.py` — so the sheet now carries a number the arm can move.
+
+    **The shape is `gate_set_distinct`'s, which is where this repo already settled it**:
+    every UNORDERED pair, mean absolute difference, both populations counted separately,
+    and the measured minimum quoted as a MAGNITUDE rather than as the word "distinct". A
+    frame is pixel-distinct when it is not identical to any earlier frame, so a clip that
+    froze reads `n_pixel_distinct: 1` whether or not its bytes agree.
+
+    **It gates nothing**, per this module's own doctrine — these are diagnostics, and the
+    Director's eye is the judge. `gate_set_distinct` is the gate-shaped sibling and it
+    lives in `turnaround` because that is where the andon belongs.
+
+    Returned keys: `n_frames`, `n_distinct` (bytes), `n_pixel_distinct`,
+    `n_pairs_compared`, `n_pairs_identical_in_pixels`, `pairs_identical_in_pixels` (first
+    12), `min_pair_mean_abs_difference`, `n_samples_per_frame` and `pixel_stride`. A
+    single frame has no pair to compare, and `min_pair_mean_abs_difference` is then None
+    rather than a number taken over nothing.
+    """
     seen = {hashlib.sha256(np.ascontiguousarray(f).tobytes()).hexdigest() for f in frames}
-    return {"n_frames": len(frames), "n_distinct": len(seen)}
+    flats = [_as_float(f).ravel() for f in frames]
+    size = min((v.size for v in flats), default=0)
+    stride = max(1, int(np.ceil(size / PIXEL_SAMPLES_PER_FRAME))) if size else 1
+    # Frames of differing shape are compared over the leading `size` samples of each, which
+    # is what a stride over a ravel gives; a clip whose frames are not one size is a
+    # different defect and `frame_deltas` beside this would already be reporting on it.
+    sampled = [v[:size:stride] for v in flats]
+    identical, distances, non_finite = [], [], []
+    pixel_distinct = 0
+    for i in range(len(sampled)):
+        is_new = True
+        for j in range(i):
+            d = float(np.abs(sampled[i] - sampled[j]).mean()) if size else 0.0
+            # THE VALUE DOOR, partitioned rather than dropped — the shape
+            # `turnaround._pixel_pairs` settled in wave 22 (F-8cfaefd9). `d == 0.0` is
+            # False for a NaN and so is every comparison `min` makes, so a pair carrying
+            # one would be counted as compared and read as distinct while the minimum
+            # quoted beside it was taken over the readable pairs only. Frames off
+            # `VAEDecode` are uint8 and cannot produce one; `_as_float` accepts a float
+            # array and this function is public, so the pairs are counted rather than
+            # assumed away.
+            if not math.isfinite(d):
+                non_finite.append([j, i])
+                continue
+            distances.append(d)
+            if d == 0.0:
+                identical.append([j, i])
+                is_new = False
+        if is_new:
+            pixel_distinct += 1
+    return {"n_frames": len(frames), "n_distinct": len(seen),
+            "n_pixel_distinct": pixel_distinct,
+            "n_pairs_compared": len(distances),
+            "n_pairs_identical_in_pixels": len(identical),
+            "pairs_identical_in_pixels": identical[:12],
+            "n_pairs_non_finite": len(non_finite),
+            "pairs_non_finite": non_finite[:12],
+            "min_pair_mean_abs_difference": (min(distances) if distances else None),
+            "n_samples_per_frame": int(len(sampled[0])) if sampled else 0,
+            "pixel_stride": stride}

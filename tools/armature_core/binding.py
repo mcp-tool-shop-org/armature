@@ -73,12 +73,50 @@ def rigid_segment_weights(verts, bones, radii, blend_band=BLEND_BAND):
         raise ArmatureError("no deforming bones to assign vertices to",
             {"gate": None, "andon": "ArmatureError",
              "clause": "no_deforming_bones"})
+    # THE BAND IS A BOUND ON A MODULE CONSTANT, so it goes through the home that bounds
+    # those (F-95c9a97e, wave 25). `if not (blend_band > 0)` refused zero, negatives and
+    # NaN — and ADMITTED `inf`, because `inf > 0` is True. MEASURED in this worktree on
+    # `580af47` over a three-vertex, two-bone chain with `blend_band=inf`: `gap <
+    # blend_band` is True at every vertex, `t = np.clip(gap / inf, 0, 1)` is 0, so `w1 =
+    # w2 = 0.5` on EVERY vertex whose two nearest bones are adjacent — weights
+    # `{'a': [0.5, 0.5, 0.5], 'b': [0.5, 0.5, 0.5]}`, `blended_fraction: 1.0`. That is a
+    # uniformly smooth skin over a subject whose module docstring says, in the second
+    # paragraph above, that rigid segments with a small blend at the joints are not a
+    # fallback for this character — they are what the character is, and the E07-round-1
+    # failure this arm exists to replace. `blend_band_normalised: inf` then rode the
+    # manifest, and `json.dumps` writes it as the bare `Infinity` token
+    # `parts.halt_keysafe` was written to stop putting on a halt line (measured in the
+    # same run).
+    #
+    # Reachability is the SHAPE and not a live escape: grep across `tools/` finds one call
+    # site, `rig_character.py::apply_binding`, and it takes the default.
+    #
+    # `parts.tightened` gives finiteness, the negative clause and the may-only-tighten
+    # clause in one call, against this module's own `BLEND_BAND` — a caller may narrow the
+    # band, never widen it. Zero is the tightest legal request THERE and is refused HERE,
+    # by the clause below, for the reason it already gave: a hard seam at every joint is a
+    # different arm. The two are complementary; `tightened` rules on the direction, this
+    # clause rules on the value the arm cannot be.
+    # Imported INSIDE the function, not at module scope: `parts` imports
+    # `binding.segment_distance` at its own top, so a module-level `from .parts import
+    # tightened` here is a genuine cycle — measured in this worktree, `ImportError: cannot
+    # import name 'tightened' from partially initialized module 'armature_core.parts'`. The
+    # lazy import is the shape `turnaround._pixel_pairs` already uses for numpy, and it
+    # keeps the home ONE home rather than spelling the bound a second time here.
+    from .parts import tightened
+
+    blend_band = tightened(
+        "blend_band", blend_band, BLEND_BAND, ArmatureError,
+        {"gate": None, "andon": "ArmatureError", "where": "rigid_segment_weights",
+         "module_blend_band": BLEND_BAND, "blend_band_requested": blend_band})
     if not (blend_band > 0):
         raise ArmatureError(
             f"blend band must be positive, got {blend_band}; a zero band is a hard seam at "
             f"every joint and would be a different arm than the one specified",
             {"gate": None, "andon": "ArmatureError",
-             "clause": "blend_band_not_positive"})
+             "clause": "blend_band_not_positive",
+             "blend_band": float(blend_band),
+             "module_blend_band": BLEND_BAND})
 
     names = [b["name"] for b in bones]
     missing = [n for n in names if n not in radii or not (radii[n] > 0)]

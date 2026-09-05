@@ -1214,9 +1214,19 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # WAVE-22 MERGE (coordinator, 2026-09-05): 365 on the MERGED tree, measured by calling `family_raise_count()` on it — never a sum of
     # branches (core-solvers froze 361 and core-gates 350, each branch-local by its own note; four other
     # domains moved siblings of this census in the same wave).
-    assert total == 365, (
-        f"{total} family raises in armature_core; this pin asserts 365, MEASURED on the wave-22 merged "
-        f"tree. This is the denominator every ratio below is quoted against — re-measure it deliberately")
+    # WAVE 25 (core-solvers): 365 -> 370, RE-DERIVED with `==` in this worktree against
+    # `580af47`, which this census read GREEN at 365 before the first edit. BRANCH-LOCAL —
+    # five domains move siblings of this census in the same wave and the coordinator
+    # MEASURES on the merged tree, never sums. The five new raises: `channels.encode_u8`
+    # (F-e8074763) and `channels.derive_edge`'s angle-domain clause (F-075b3af4);
+    # `framing.solve_camera`'s point-cloud census and `framing._bisect`'s bracket ends
+    # (F-526e9069); `startframe.shadow_ratio`'s zero-floor clause (F-efd6b45c). The wave's
+    # other new refusals are DELEGATED through `parts.require_finite` / `parts.tightened`
+    # rather than spelled as their own `raise`, which is why the delta is five and not nine.
+    assert total == 370, (
+        f"{total} family raises in armature_core; this pin asserts 370, MEASURED in the "
+        f"wave-25 core-solvers worktree. This is the denominator every ratio below is "
+        f"quoted against — re-measure it deliberately")
 
 
 def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():
@@ -2042,12 +2052,22 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
         "core_only_definitions": sum(len(v) for v in core.values()),
         "core_only_modules": len(core),
     }
+    # WAVE 25 (core-solvers): names 134 -> 136, definitions 140 -> 142,
+    # core_only_definitions 58 -> 60. RE-DERIVED with `==` in this worktree against
+    # `580af47`, measured GREEN at the old numbers before the first edit. Two new family
+    # classes, both in `armature_core` — which is why the tree-wide and core-only counts
+    # move together: `channels.ChannelEncodeError` (F-e8074763, the shared byte writer's
+    # channel-neutral refusal) and `startframe.ShadowError` (F-efd6b45c, a plain
+    # `ArmatureError` sibling rather than a fourth gate class). `modules` is unchanged at
+    # 79 because both land in files that already define family classes, and
+    # `defined_more_than_once` is unchanged because both names are new. BRANCH-LOCAL — a
+    # COMPOSITION on the merged tree; the coordinator measures, never sums.
     assert measured == {
-        "names": 134,
-        "definitions": 140,
+        "names": 136,
+        "definitions": 142,
         "modules": 79,
         "defined_more_than_once": {"DetectionGate": 2, "PayloadError": 5, "RenderGate": 2},
-        "core_only_definitions": 58,
+        "core_only_definitions": 60,
         "core_only_modules": 20,
     }, measured
     # the quantity the comment's last clause is about: 82 definitions sit outside the

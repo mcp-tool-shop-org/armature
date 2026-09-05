@@ -306,8 +306,13 @@ def _routing_probe(BS, monkeypatch):
         seen["scene"] = scene
         return ["visible-only"]
 
-    def fake_points(objects):
+    def fake_points(objects, census=None):
+        # `census=None` because the primitive gained an optional out-dict in wave 25
+        # (F-e6d76657) and this probe stands in for it. The stub RECORDS the census
+        # argument rather than ignoring it, so a routing change that stopped threading it
+        # is visible here rather than silently dropping the drop count.
         seen["measured"] = objects
+        seen["census_passed"] = census is not None
         return np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
 
     monkeypatch.setattr(BS, "render_visible_meshes", fake_visible)
@@ -324,7 +329,8 @@ def test_world_bounds_filters_by_render_visibility_when_it_is_given_the_scene(BS
     """
     seen = _routing_probe(BS, monkeypatch)
     BS.world_bounds(["a", "b"], scene="SCENE")
-    assert seen == {"scene": "SCENE", "measured": ["visible-only"]}
+    assert seen == {"scene": "SCENE", "measured": ["visible-only"],
+                    "census_passed": False}
 
 
 def test_world_bounds_without_a_scene_is_now_refused_by_name(BS, monkeypatch):
@@ -379,13 +385,14 @@ def test_the_unfiltered_bounds_have_a_public_name(BS, monkeypatch):
     measurement needs a public name rather than a reach into the private primitive."""
     seen = _routing_probe(BS, monkeypatch)
     assert BS.unfiltered_world_bounds(["a", "b"])[2] == pytest.approx(0.5)
-    assert seen == {"measured": ["a", "b"]}
+    assert seen == {"measured": ["a", "b"], "census_passed": False}
 
 
 def test_the_geometry_signature_filters_when_it_is_given_the_scene(BS, monkeypatch):
     seen = _routing_probe(BS, monkeypatch)
     BS.evaluated_geometry_signature(["a", "b"], scene="SCENE")
-    assert seen == {"scene": "SCENE", "measured": ["visible-only"]}
+    assert seen == {"scene": "SCENE", "measured": ["visible-only"],
+                    "census_passed": False}
 
 
 def test_world_bounds_over_frames_always_filters_because_it_holds_the_scene(BS,
@@ -394,7 +401,8 @@ def test_world_bounds_over_frames_always_filters_because_it_holds_the_scene(BS,
     seen = _routing_probe(BS, monkeypatch)
     monkeypatch.setattr(BS, "set_scene_frame", lambda scene, i: None)
     BS.world_bounds_over_frames("SCENE", ["a", "b"], 2)
-    assert seen == {"scene": "SCENE", "measured": ["visible-only"]}
+    assert seen == {"scene": "SCENE", "measured": ["visible-only"],
+                    "census_passed": False}
 
 
 def _functions_calling(source, callee):

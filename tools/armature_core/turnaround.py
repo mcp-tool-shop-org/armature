@@ -129,20 +129,46 @@ def orbit_azimuths(n_views, start_deg, sweep_deg):
     # place. A NaN azimuth is not compared here (every comparison against it is False, so no
     # duplicate is claimed); `--sweep` and `--azimuth-start` are bounded for finiteness at
     # the parser, which is the complementary half.
+    # CORRECTED IN PLACE, WAVE 25 (F-8361eff3), with the measurement that overturned the
+    # old sentence. The refusal below used to end "... and Gate TURN's pixel clause ranges
+    # over adjacent pairs — a revisit at stride {n} is never adjacent", which was the reason
+    # this bound was needed and stopped being true in the SAME COMMIT that landed it:
+    # F-99e5de1a shipped this refusal and `_pixel_pairs`' `identical_anywhere` walk and
+    # `gate_set_distinct`'s `views_identical_in_pixels_anywhere` clause together. MEASURED
+    # in this worktree on `580af47`: `orbit_azimuths(8, 0, 720)` raises this clause carrying
+    # that sentence, while `gate_set_distinct` over eight 64x64x4 planes with view 4 a copy
+    # of view 0 and eight distinct sha256 values RAISES `views_identical_in_pixels_anywhere`
+    # with `pairs_identical_in_pixels_anywhere: [[0, 4]]` over
+    # `n_unordered_pairs_compared: 28`. A triage reading the old halt line would conclude
+    # the downstream gate cannot see a revisit and go looking for a second bound that
+    # already exists.
+    #
+    # The STRIDE arithmetic was wrong too, measured in the same run: `n // len(seen)` printed
+    # "stride 2" for `orbit_azimuths(8, 0, 720)`, whose coinciding views are 0 and 4. That
+    # quotient is how many TIMES each direction is visited; the stride between two views
+    # pointing the same way is `len(seen)`. Both halves are corrected here rather than
+    # deleted, because the correction is the useful part.
     seen = {a % 360.0 for a in out}
     if len(seen) != n:
         raise TurnaroundGate(
             f"a sweep of {sweep_deg} over {n} view(s) revisits an azimuth: the plan names "
             f"{len(seen)} distinct direction(s) for {n} views, so the camera returns to a "
-            f"place it has already photographed. The run writes {n} well-formed RGBA files "
-            f"with {n} different digests over {len(seen)} pictures, every per-view gate "
-            f"passes on every one of them, and Gate TURN's pixel clause ranges over "
-            f"adjacent pairs — a revisit at stride {n // max(len(seen), 1)} is never "
-            f"adjacent",
+            f"place it has already photographed — views {len(seen)} apart point the same "
+            f"way, and each direction is photographed {n // max(len(seen), 1)} times. The "
+            f"run writes {n} well-formed RGBA files with {n} different digests over "
+            f"{len(seen)} pictures and every per-view gate passes on every one of them. "
+            f"Gate TURN's set clause refuses a pixel-identical pair at ANY distance "
+            f"(`views_identical_in_pixels_anywhere`), so it would catch this too — after "
+            f"{n} renders have been written and their time spent. This bound refuses the "
+            f"PLAN, before the first file exists; the two are complementary, not one "
+            f"compensating for a gap in the other",
             {"gate": "TURN", "andon": "TurnaroundGate",
              "clause": "sweep_revisits_an_azimuth", "n_views": n,
              "n_distinct_azimuths": len(seen), "start_deg": float(start_deg),
-             "sweep_deg": float(sweep_deg), "azimuths": out[:16]})
+             "sweep_deg": float(sweep_deg),
+             "revisit_stride": len(seen),
+             "visits_per_direction": n // max(len(seen), 1),
+             "azimuths": out[:16]})
     return out
 
 

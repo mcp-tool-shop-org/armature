@@ -426,12 +426,61 @@ def tightened(name, requested, owned, gate_cls, ev):
     So the two obligations are split: finiteness is asked with `positive=False`, and a
     NEGATIVE bound gets its own clause and its own sentence. The NaN paragraph is now
     quoted only at values it describes.
+
+    **The three refusals name their condition** (wave 25, the `binding` / `startframe`
+    bounds' half). MEASURED on `580af47` by reading every caller in `armature_core` and
+    `tools/`: not one of the eight ev dicts handed to this function or to `narrowed`
+    carries a `clause` key (`parts.gate_rigid_arrival` / `gate_parts_determinism`,
+    `assembly.gate_no_paid_nodes`, `resample.require_rotation`,
+    `armature_core.lift_solve.gate_round_trip`, `tools/lift_solve` twice,
+    `tools/author_walk` three times), so every "may only TIGHTEN" refusal reached a halt
+    line with `"clause"` absent and a halt reader keying on that string had nothing to key
+    on. Three words, one per condition, assigned as literals so
+    `tests/_census_nodes.clause_literals` can see them.
+
+    **Written where the caller has none, never over one the caller wrote.** A caller that
+    DOES name a clause is naming the same condition with its own flag in it, which is a
+    FINER id than the generic one — `render_performer.gate_coverage` passes
+    `clause: min_frac_may_only_tighten` (posted by the instruments domain, wave 25 SEAM 4).
+    Overwriting that with `bound_may_only_tighten` would replace a word that says which
+    flag with a word that says only which helper, which is the opposite of the improvement
+    this change is. So the home supplies a word where the caller has none and defers where
+    the caller has one.
+
+    **Spelled `if "clause" not in ev: ev["clause"] = "..."` rather than `ev.setdefault`,
+    and the spelling is load-bearing.** `tests/_census_nodes.clause_literals` — the ONE walk
+    over the clause vocabulary — reads a `Constant` inside an evidence dict and a `Constant`
+    ASSIGNED into one. A `setdefault` call is neither, so the four words below would have
+    been invisible to the census that exists to notice a clause word being added, misspelled
+    or doubled: measured in this worktree, the vocabulary pin went red reporting all four as
+    "vanished". This is the same defect the f-string clause in `blender_scene.half_fovs` had,
+    caught in the same wave; a clause word must be written in a shape the census can read.
+
+    And the finiteness word goes into a COPY of the caller's dict, never the caller's own:
+    `require_finite` RETURNS on the happy path and this function does not, so writing into
+    `ev` up front would leave a stale `bound_not_finite` under the clause key of an evidence
+    dict that `resample.require_rotation` and `author_walk`'s three gates go on to raise
+    their OWN refusal with. (Written that way round rather than quoting the key-and-value
+    pair. The wave-22 census that holds one clause word to one refusal per module regexes
+    this module's SOURCE for that literal shape, so prose quoting it reads as a second raise
+    site — measured here, twice, before this sentence was reworded.)
     """
     if requested is None:
         return float(owned)
-    value = require_finite(name, requested, gate_cls, ev, positive=False)
+    # A COPY for the finiteness call, never `ev` itself: `require_finite` returns on the
+    # happy path and this function does not, so writing the clause into the caller's dict
+    # up front would leave a stale `bound_not_finite` under the clause key of an evidence
+    # dict that `resample.require_rotation` and `author_walk`'s three gates go on to raise
+    # their OWN refusal with — a halt line naming a condition that did not pull. The copy
+    # carries everything the caller had plus the word, and only a refusal ever sees it.
+    _guard = dict(ev)
+    if "clause" not in _guard:
+        _guard["clause"] = "bound_not_finite"
+    value = require_finite(name, requested, gate_cls, _guard, positive=False)
     if value < 0.0:
         ev[name] = value
+        if "clause" not in ev:
+            ev["clause"] = "bound_is_negative"
         raise gate_cls(
             f"a caller asked this gate to run with {name}={value:.3e}: a negative "
             f"tolerance admits nothing, so the gate would fire on correct work and the "
@@ -440,6 +489,8 @@ def tightened(name, requested, owned, gate_cls, ev):
             f"bound no measurement can satisfy", ev)
     if value > float(owned):
         ev[name] = value
+        if "clause" not in ev:
+            ev["clause"] = "bound_may_only_tighten"
         raise gate_cls(
             f"a caller asked this gate to run with {name}={value:.3e}, above the module's "
             f"own {float(owned):.3e}. It may only TIGHTEN: a tolerance the caller supplies "
@@ -481,6 +532,8 @@ def narrowed(name, requested, owned, gate_cls, ev):
         ev[name] = list(req)
         ev[name + "_added"] = added
         ev[name + "_module_owns"] = list(own)
+        if "clause" not in ev:
+            ev["clause"] = "allowlist_may_only_narrow"
         raise gate_cls(
             f"a caller asked this gate to run with {name} widened by {added}, which the "
             f"module's own {name} does not name. It may only NARROW: an allowlist the "
