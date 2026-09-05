@@ -605,6 +605,55 @@ def returning_branch_spans(fn):
     return spans
 
 
+#: Every call this tree uses to put bytes (or a directory) on disk, as `callee tail -> the
+#: spelling to report`. DERIVED from the 24 tools whose writes the two-spelling predicate
+#: could not see (F-d91c8d9b, measured 2026-09-05): composite_reference, extract_clip_frames,
+#: fit_reference, make_ab_clip, make_cast_sheet, make_crop_strip, make_e08_sheet,
+#: make_e13_sheet, make_gate0_sheet, make_hole_survey, make_identity_sheet, make_lift_sheet,
+#: make_overlay_sheet, make_pick_sheet, make_plate, make_review_clip, make_sheet,
+#: make_startframe_sheet, make_thesis_sheet, make_zoom_sheet, render_pose_sticks, rig_bake,
+#: rig_sheet_compose, sheet_compose.
+#:
+#: Keyed on the callee TAIL, so `cv2.imwrite`, `imwrite` and `_cv.imwrite` are one member.
+WRITE_CALLS = {
+    "makedirs": "os.makedirs",
+    "mkdir": "mkdir",
+    "imwrite": "cv2.imwrite",
+    "imsave": "imsave",
+    "save": "save",                       # PIL Image.save, np.save, matplotlib savefig kin
+    "savefig": "savefig",
+    "savez": "np.savez",
+    "write_text": "Path.write_text",
+    "write_bytes": "Path.write_bytes",
+    "copy": "shutil.copy",
+    "copy2": "shutil.copy2",
+    "copyfile": "shutil.copyfile",
+    "copytree": "shutil.copytree",
+    "rename": "os.rename",
+    "replace": "os.replace",
+}
+
+#: A mode that opens for writing. `r` and `rb` are the only ones that do not.
+_WRITE_MODES = ("w", "a", "x", "+")
+
+
+def _open_mode_writes(node):
+    """True when this `open(...)` names a writing mode — POSITIONALLY or by keyword.
+
+    `open(path, mode="w")` was invisible to the wave-12 predicate, which read `args[1]`
+    only.
+    """
+    mode = None
+    if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant):
+        mode = node.args[1].value
+    for kw in node.keywords:
+        if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+            mode = kw.value.value
+    if not isinstance(mode, str):
+        return False
+    return any(ch in mode for ch in _WRITE_MODES)
+
+
 def refusal_and_write_lines(src, *, error_names=None, canon_calls=CANON_CALLS,
                             other_gate_calls=(), by_name_only=False):
     """`({line: refusal}, {line: write kind})` for the tool's CLI body, or `(None, None)`.
@@ -618,6 +667,21 @@ def refusal_and_write_lines(src, *, error_names=None, canon_calls=CANON_CALLS,
 
     `by_name_only=True` restores the pre-wave-12 predicate. It exists so the red proof can
     show, in one test, that the old walk is blind to the shape the new one sees.
+
+    **THE WRITE PREDICATE, wave 23 (F-d91c8d9b).** It recognised exactly two spellings —
+    `makedirs`, and `open(...)` whose SECOND POSITIONAL argument is a mode containing `w` —
+    and 24 tools carry a write it could not see: `cv2.imwrite`, `Image.save`, `np.save`,
+    `shutil.copy*`, `Path.write_text` / `write_bytes` and `open(path, mode="w")` were all
+    invisible. It is widened to `WRITE_CALLS` below, which is the resolved shape: any call
+    that opens a path for writing.
+
+    The live-defect form was and stays REFUTED, and that is the half worth recording:
+    re-measured with the wider spellings over every tool this census admits, all 24 of those
+    hidden writes have a recognised `os.makedirs` ABOVE them, so the first-write line the
+    ordering property reads is unchanged and no refusal moves below it. What the widening
+    buys is the next tool — a control-sequence tool whose first byte reaches disk through
+    `cv2.imwrite` above its refusals used to pass the census whose whole purpose is that no
+    refusal sits below the first write.
     """
     error_names = armature_error_names() if error_names is None else error_names
     tree = ast.parse(src)
@@ -635,11 +699,9 @@ def refusal_and_write_lines(src, *, error_names=None, canon_calls=CANON_CALLS,
             gates_at.setdefault(node.lineno, called)
         elif isinstance(node.func, ast.Name) and called in refusing and called != fn.name:
             gates_at.setdefault(node.lineno, called)
-        elif called == "makedirs":
-            writes_at.setdefault(node.lineno, "os.makedirs")
-        elif (called == "open" and len(node.args) >= 2
-              and isinstance(node.args[1], ast.Constant)
-              and "w" in str(node.args[1].value)):
+        elif called in WRITE_CALLS:
+            writes_at.setdefault(node.lineno, WRITE_CALLS[called])
+        elif called == "open" and _open_mode_writes(node):
             writes_at.setdefault(node.lineno, 'open(..., "w")')
     spans = returning_branch_spans(fn)
     for line in list(writes_at):
