@@ -278,7 +278,14 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # moved different rows on their own branches; neither dict was a merged measurement).
         "assembly": 23, "blender_scene": 8, "canon": 1, "donor_gate": 10, "framing": 6,
         "gates": 24, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8,
-        "resample": 8, "rig_gates": 17, "route_gates": 46, "startframe": 21, "turnaround": 13,
+                # WAVE 20 (core-gates, 2026-09-05): +1 in `route_gates.RouteGate`, RE-DERIVED with
+        # `==` in this worktree against the merged base `475f4eb`, which every census here read
+        # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
+        #   `_iter_definitions`' `duplicate_subgraph_label` — the LABEL the walk EMITS, which
+        #   the id clause did not bound, so two blueprints under one `name` (or two under
+        #   neither field, or one named `top`) collapsed the `(where, id)` pair Gate S keys on
+        #   (F-400c1df4).
+        "resample": 8, "rig_gates": 17, "route_gates": 47, "startframe": 21, "turnaround": 13,
         "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
@@ -298,7 +305,14 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # `route_gates`, +4 `donor_gate`, +1 `gates`, itemised at the dict above. The
     # coordinator re-measures at merge, as at waves 10, 12 and 14.
     # WAVE-18 MERGE (coordinator, 2026-09-05): 199 on the MERGED tree, measured — core-gates froze 190 and core-solvers 189, both branch-local.
-    assert sum(with_gates.values()) == 199
+    # WAVE 20 (core-gates, 2026-09-05): +1 in `route_gates.RouteGate`, RE-DERIVED with
+    # `==` in this worktree against the merged base `475f4eb`, which every census here read
+    # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
+    #   `_iter_definitions`' `duplicate_subgraph_label` — the LABEL the walk EMITS, which
+    #   the id clause did not bound, so two blueprints under one `name` (or two under
+    #   neither field, or one named `top`) collapsed the `(where, id)` pair Gate S keys on
+    #   (F-400c1df4).
+    assert sum(with_gates.values()) == 200
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

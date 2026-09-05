@@ -108,7 +108,14 @@ RECORDED_GATE_RAISES = {
     # keyed on the pair `(where, id)` and is TOTAL (F-10af549a); and
     # `_hosted_enum_shift_andon`'s two, `converted_widget_shifts_enum_indices` and
     # `hosted_enum_widgets_truncated` (F-7854d570).
-    ("route_gates.py", "RouteGate"): 43,  # +3 w12: unreadable_node,
+    # WAVE 20 (core-gates, 2026-09-05): +1 in `route_gates.RouteGate`, RE-DERIVED with
+    # `==` in this worktree against the merged base `475f4eb`, which every census here read
+    # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
+    #   `_iter_definitions`' `duplicate_subgraph_label` — the LABEL the walk EMITS, which
+    #   the id clause did not bound, so two blueprints under one `name` (or two under
+    #   neither field, or one named `top`) collapsed the `(where, id)` pair Gate S keys on
+    #   (F-400c1df4).
+    ("route_gates.py", "RouteGate"): 44,  # +3 w12: unreadable_node,
                                           # uncredited_conditional_component,
                                           # attribution_for_unconditional_row
                                           # +1 w14: orphan_attribution (F-74787978) — the
@@ -236,7 +243,14 @@ def test_the_derived_population_is_the_one_this_file_records():
     # +1 gates.GateSSeedRegistration — itemised at each entry above. Measured in the
     # core-gates worktree; core-solvers also edits `armature_core`, so the coordinator
     # re-measures at merge rather than summing the branches (SEAM 8 §1's worked example).
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 98
+    # WAVE 20 (core-gates, 2026-09-05): +1 in `route_gates.RouteGate`, RE-DERIVED with
+    # `==` in this worktree against the merged base `475f4eb`, which every census here read
+    # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
+    #   `_iter_definitions`' `duplicate_subgraph_label` — the LABEL the walk EMITS, which
+    #   the id clause did not bound, so two blueprints under one `name` (or two under
+    #   neither field, or one named `top`) collapsed the `(where, id)` pair Gate S keys on
+    #   (F-400c1df4).
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 99
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

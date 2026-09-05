@@ -1140,9 +1140,17 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # coordinator re-measures at merge and never sums the branches.
     # WAVE-18 MERGE (coordinator, 2026-09-05): 343 on the MERGED tree, measured by calling `family_raise_count()` on it — never a
     # sum of branches (core-gates froze 325 and core-solvers 333, each branch-local by its own note).
-    assert total == 343, (
-        f"{total} family raises in armature_core; this pin asserts 343, MEASURED on the wave-18 merged "
-        f"tree. This is the denominator every ratio below is quoted against — re-measure it deliberately")
+    # WAVE 20 (core-gates, 2026-09-05): +1 in `route_gates.RouteGate`, RE-DERIVED with
+    # `==` in this worktree against the merged base `475f4eb`, which every census here read
+    # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
+    #   `_iter_definitions`' `duplicate_subgraph_label` — the LABEL the walk EMITS, which
+    #   the id clause did not bound, so two blueprints under one `name` (or two under
+    #   neither field, or one named `top`) collapsed the `(where, id)` pair Gate S keys on
+    #   (F-400c1df4).
+    assert total == 344, (
+        f"{total} family raises in armature_core; this pin asserts 344, RE-DERIVED on the "
+        f"wave-20 core-gates branch. This is the denominator every ratio below is quoted against — "
+        f"re-measure it deliberately")
 
 
 def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():

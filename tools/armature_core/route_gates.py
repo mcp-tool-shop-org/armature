@@ -797,6 +797,20 @@ def _unreadable_level(where, value, expected, index=None, population=None, extra
         "reported clean", ev)
 
 
+#: The level labels `_walk_nodes` emits for the graph's OWN node sources. A blueprint may
+#: not declare one of them, because node identity in this walk is the pair `(where, id)`
+#: and a blueprint named `top` puts its nodes in the top level's namespace.
+#:
+#: `api` cannot collide inside a single graph today — `_walk_nodes`' API branch returns
+#: before `_iter_definitions` runs — and it is recorded here explicitly rather than by
+#: omission, the way `CONDITIONING_FAMILY_EXEMPT` records the conditioning classes that
+#: pair with no model family.
+RESERVED_LEVEL_LABELS = {
+    "top": {"what": "the save-format graph's own top-level `nodes` array"},
+    "api": {"what": "an API-format graph's node map"},
+}
+
+
 def _iter_definitions(container, path=None, declared=None):
     """Every node inside `container`'s subgraph definitions, to any depth.
 
@@ -862,6 +876,47 @@ def _iter_definitions(container, path=None, declared=None):
     `_readable_node`'s own comment gives about its array: a skipped blueprint is a
     blueprint no clause examined, and "nothing was checkable" and "everything checked out"
     may not be the same verdict.
+
+    ⚠ **The id clause bounded one field over from the invariant Gate S rests on, and the
+    LABEL this walk emits was left unbounded.** The refusal above is keyed on `id` on the
+    stated ground that "the `where` label a duplicate-id blueprint would carry is ambiguous
+    by construction" — and nothing refused a duplicate `name`, or two blueprints declaring
+    NEITHER field, both of which collapse that same label. `gate_s_registration` resolves
+    each seed record to its node with `next(... if (w, str(x.get("id"))) == (s["where"],
+    str(s["node_id"])))`, which is TOTAL but not UNIQUE, so the second colliding record
+    reads its `add_noise` off the FIRST node the walk yielded.
+
+    Measured 2026-09-05 in this worktree on a save-format graph carrying a live top-level
+    `KSamplerAdvanced` id 2 (`add_noise=enable`, seed 7) plus two blueprints with DISTINCT
+    ids `bp1`/`bp2` and the SAME `name: "expert"`, the first holding `KSamplerAdvanced`
+    id 3 (`add_noise=disable`, seed 7) and the second holding `KSamplerAdvanced` id 3
+    (`add_noise=ENABLE`, seed 999999999): `seeds()` correctly returned
+    `[('top',2,7), ('expert',3,7), ('expert',3,999999999)]` and `gate_s_registration(g,
+    [7])` RETURNED with `seeds_noise_bearing: 1 of 3` and the verdict "… 2 exempted by
+    add_noise=disable (node(s) expert/3, expert/3)". Seed 999999999 was never graded, and
+    the receipt's own tell — one identity printed twice, which the wave-18 fix added
+    `seeds_exempt_nodes` and the `level/id` wording to remove — was back verbatim. Two
+    more spellings of the same collapse: NO `name` and NO `id` on either blueprint (both
+    labels fall to the literal `"subgraph"`, and the `bid is not None` guard skips the id
+    clause entirely), and a single blueprint NAMED `top`, which is the label `_walk_nodes`
+    gives the graph's own `nodes` array.
+
+    **The label is refused, not rewritten.** The other available fix — emitting `where`
+    keyed on the definition's position as well as its label — would have moved every Gate
+    S receipt string, the `level/id` verdict wording, `seeds_exempt_nodes`' `{where,
+    node_id}` pairs and the `where` recorded by `components`, `model_weights`, `seeds`,
+    `latents`, `cameras` and `camera_widget_order_evidence`, on every graph including the
+    ones that were never ambiguous. A refusal leaves all of that byte-identical and states
+    the invariant where the label is BUILT. It is also the answer this module gives to
+    ambiguity everywhere else: `duplicate_subgraph_id` here, `link_table`'s
+    `duplicate_link_id`, `fetch_run.parse_node_map`'s `node_map_duplicate_id`.
+
+    The two ledgers are separate namespaces inside one `declared` dict (`("id", …)` and
+    `("label", …)`), because a blueprint whose `id` is `"x"` and a later blueprint NAMED
+    `"x"` are not ambiguous with each other and a single key space would have refused
+    them. NOT MEASURED: whether Comfy's exporter ever emits two blueprints under one
+    `name`. The cost of the refusal is a halt an operator reads and re-exports past; the
+    cost of its absence is the green PASS measured above.
     """
     path = set() if path is None else path
     declared = {} if declared is None else declared
@@ -892,7 +947,7 @@ def _iter_definitions(container, path=None, declared=None):
         if bid is not None:
             # · ANDON — ambiguity, which is a different fact from a cycle and gets a
             # different answer. See this function's docstring.
-            prev = declared.get(str(bid))
+            prev = declared.get(("id", str(bid)))
             if prev is not None:
                 raise RouteGate(
                     f"this graph declares two subgraph blueprints under one id "
@@ -907,7 +962,36 @@ def _iter_definitions(container, path=None, declared=None):
                      "clause": "duplicate_subgraph_id", "subgraph_id": bid,
                      "declared_by": [prev, where], "index": i,
                      "n_subgraphs": len(subs), "where": where})
-            declared[str(bid)] = where
+            declared[("id", str(bid))] = where
+        # · ANDON — the LABEL this walk emits, which is the half of node identity the id
+        # clause above does not bound. See this function's docstring.
+        collides = (RESERVED_LEVEL_LABELS.get(str(where))
+                    or declared.get(("label", str(where))))
+        if collides is not None:
+            reserved = str(where) in RESERVED_LEVEL_LABELS
+            raise RouteGate(
+                f"this graph declares a subgraph blueprint whose level label is "
+                f"{str(where)!r}, which "
+                + (f"is the label this walk already gives {collides['what']}"
+                   if reserved else
+                   f"blueprint #{collides['index']} (id {collides['id']!r}) already "
+                   f"declared")
+                + f". Node identity in this walk is the PAIR (where, id) — blueprint ids "
+                f"are a separate namespace — so two levels emitting one label make that "
+                f"pair total but not unique, and the SECOND record then reads its node's "
+                f"fields off the FIRST node the walk yielded. Measured 2026-09-05 with "
+                f"two blueprints under one name: Gate S RETURNED a PASS naming "
+                f"'expert/3, expert/3' while a blueprint node ran an unregistered seed",
+                {"gate": "ROUTE", "andon": "RouteGate",
+                 "clause": "duplicate_subgraph_label", "label": str(where),
+                 "collides_with": (dict(collides, kind="reserved_level_label")
+                                   if reserved else
+                                   {"kind": "subgraph", "index": collides["index"],
+                                    "id": collides["id"]}),
+                 "declared_by": [None if reserved else collides["id"], bid],
+                 "index": i, "n_subgraphs": len(subs), "where": where,
+                 "reserved_level_labels": sorted(RESERVED_LEVEL_LABELS)})
+        declared[("label", str(where))] = {"index": i, "id": bid}
         path.add(id(d))
         try:
             nodes = d.get("nodes") or []
