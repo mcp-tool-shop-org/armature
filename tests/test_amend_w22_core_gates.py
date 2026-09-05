@@ -648,3 +648,152 @@ def test_the_hosted_billing_refusal_reaches_the_printed_halt_record(tmp_path):
     rows = payload["evidence"].get("hosted_frame_legality_nodes")
     if rows is not None:
         assert [(r["where"], r["node_id"]) for r in rows] == [("top", 6), ("inner", 6)]
+
+
+# ---------------------------------------------------------------------------
+# F-715ecaab — `normalise_spec` validated the keys it knew and ACCEPTED every key it
+# did not, at every level, and `dump_spec` wrote them back into the provenance spec.
+# ---------------------------------------------------------------------------
+
+def _minimal_spec(**over):
+    spec = {"spec_version": 1, "name": "w22", "generator": "wan",
+            "asset": {"path": "x.glb", "sha256": "0" * 64},
+            "resolution": {"width": 832, "height": 480},
+            "frames": {"count": 81, "fps": 20},
+            "channels": ["depth"]}
+    spec.update(over)
+    return spec
+
+
+#: One typo per checked block — the auditor's five, plus the four blocks the auditor did
+#: not name whose siblings are checked the same way. Rule 2: the SIBLINGS, enumerated.
+TYPO_CASES = [
+    ("spec", "cammera", _minimal_spec(cammera={"type": "orbit"})),
+    ("spec.camera", "fov_degrees", _minimal_spec(camera={"fov_degrees": 90.0})),
+    ("spec.resolution", "depth", _minimal_spec(
+        resolution={"width": 832, "height": 480, "depth": 3})),
+    ("spec.frames", "framerate", _minimal_spec(
+        frames={"count": 81, "fps": 20, "framerate": 24})),
+    ("spec.render", "engien", _minimal_spec(render={"engien": "CYCLES"})),
+    ("spec.asset", "sha256sum", _minimal_spec(
+        asset={"path": "x.glb", "sha256": "0" * 64, "sha256sum": "0" * 64})),
+    ("spec.subject", "animated", _minimal_spec(subject={"animated": True})),
+    ("spec.depth", "windows", _minimal_spec(depth={"windows": "per_shot"})),
+    ("spec.edge", "normal_angle", _minimal_spec(edge={"normal_angle": 30.0})),
+]
+
+
+@pytest.mark.parametrize("where,key,raw", TYPO_CASES,
+                         ids=[f"{w}.{k}" for w, k, _ in TYPO_CASES])
+def test_an_unknown_spec_key_is_refused_by_name(where, key, raw):
+    """RED on base: every one of these was ACCEPTED and survived into the returned spec.
+    The auditor measured the first five on `e8263a3`; the other four are the same question
+    asked of the blocks beside them."""
+    with pytest.raises(SpecError) as exc:
+        SS.normalise_spec(raw)
+    assert key in str(exc.value) and where in str(exc.value)
+    ev = getattr(exc.value, "evidence", None)
+    assert ev and ev["clause"] == "unknown_spec_key"
+    assert ev["where"] == where and ev["unknown"] == [key]
+    assert ev["andon"] == "SpecError" and ev["gate"] is None
+    assert key not in ev["known_keys"]
+
+
+def test_the_round_trip_the_auditor_measured_no_longer_happens():
+    """The measured consequence: with `camera.fov_degrees = 90.0` alongside
+    `camera.fov_deg = 35.0`... (`fov_deg` is not a field of this schema either, which is
+    the point — the auditor's operand was a spec carrying BOTH an ignored field and a used
+    one, and `dump_spec` wrote a camera block carrying both, with nothing saying which was
+    read). Neither reaches `dump_spec` now."""
+    raw = _minimal_spec(camera={"fov_degrees": 90.0, "fov_deg": 35.0})
+    with pytest.raises(SpecError) as exc:
+        SS.normalise_spec(raw)
+    assert exc.value.evidence["unknown"] == ["fov_deg", "fov_degrees"]
+
+
+def test_the_underscore_prefix_is_the_named_passthrough_and_it_is_recorded():
+    """Forward compatibility has ONE explicitly-named shape rather than "anything not
+    recognised": a key beginning with `_`. It is what the five committed specs already use
+    (`_notes`), it is what `dump_spec` already strips on write (`if not
+    k.startswith("_")`), and it is RECORDED on the returned spec so a reader can tell
+    which fields the schema did not read."""
+    raw = _minimal_spec(_notes={"why": "because"},
+                        camera={"_measured_framing": "off the E01 render"})
+    spec = SS.normalise_spec(raw)
+    assert spec["_passthrough_keys"] == {"spec": ["_notes"],
+                                         "spec.camera": ["_measured_framing"]}
+    assert spec["_notes"] == {"why": "because"}
+
+
+def test_a_spec_with_no_passthrough_records_none_and_dump_writes_neither(tmp_path):
+    """The negative half: a clean spec grows no key, and the passthrough record itself is
+    `_`-prefixed so `dump_spec` strips it — the provenance spec on disk is the schema."""
+    spec = SS.normalise_spec(_minimal_spec())
+    assert "_passthrough_keys" not in spec
+    with_notes = SS.normalise_spec(_minimal_spec(_notes={"a": 1}))
+    out = SS.dump_spec(with_notes, str(tmp_path / "s.json"))
+    written = json.loads(open(out, encoding="utf-8").read())
+    assert "_passthrough_keys" not in written and "_notes" not in written
+
+
+def test_every_committed_spec_still_parses():
+    """The population this clause could break: `specs/**` carries `_notes` at the top level
+    and `asset.note`, both of which are the schema's rather than an author's typo. A gate
+    that fires on correct work is the gate nobody keeps."""
+    import glob
+
+    seen = 0
+    for path in glob.glob(os.path.join(REPO, "specs", "**", "*.json"), recursive=True):
+        raw = json.loads(open(path, encoding="utf-8").read())
+        if not isinstance(raw, dict) or "resolution" not in raw:
+            continue
+        SS.normalise_spec(raw, spec_path=path)
+        seen += 1
+    assert seen >= 5, seen
+
+
+def test_the_key_census_covers_every_block_normalise_spec_reads():
+    """A census that names fewer blocks than the function validates is a census that lets
+    a level through. Every mapping block `normalise_spec` reaches has a row."""
+    assert set(SS.SPEC_KEYS) == {
+        "spec", "spec.asset", "spec.resolution", "spec.frames", "spec.camera",
+        "spec.subject", "spec.depth", "spec.edge", "spec.render"}
+    # every block named in the top-level row that holds a mapping in DEFAULTS has its own
+    # row, so no nested block is checked at its parent and nowhere else
+    for key, value in SS.DEFAULTS.items():
+        if isinstance(value, dict):
+            assert f"spec.{key}" in SS.SPEC_KEYS, key
+
+
+def test_the_retired_gates_key_keeps_its_own_refusal():
+    """`spec.gates` is refused by the clause written for it — the KEY is the retired schema
+    surface and the message names where the number went — not by the generic unknown-key
+    clause. Its clause runs first, and this pins that it still does."""
+    with pytest.raises(SpecError, match=r"retired schema surface"):
+        SS.normalise_spec(_minimal_spec(gates={}))
+    with pytest.raises(SpecError, match=r"skip flag wearing a schema's clothes"):
+        SS.normalise_spec(_minimal_spec(gates={"g4_tolerance_px": 4}))
+
+
+def test_the_unknown_spec_key_refusal_reaches_a_printed_halt_record(capsys):
+    """The halt line READ, through the REAL `__main__` block of the tool that runs the
+    spec. `stage_render.py` runs inside Blender, so it is driven with Blender stubbed and
+    `main` replaced by a call that raises the actual refusal — the handler, the sentinel
+    and the exit code are the shipped ones."""
+    import blender_stub
+
+    def raiser():
+        SS.normalise_spec(_minimal_spec(camera={"fov_degrees": 90.0}))
+
+    code, escaped = blender_stub.exit_code_of_main_block("stage_render.py",
+                                                         raiser=raiser)
+    assert escaped is None
+    assert code == 2, code
+    out = capsys.readouterr().out
+    halts = [ln for ln in out.splitlines() if ln.startswith("STAGE_RENDER_HALT ")]
+    assert len(halts) == 1, out
+    payload = json.loads(halts[0][len("STAGE_RENDER_HALT "):])
+    assert payload["error"] == "SpecError"
+    assert payload["evidence"]["clause"] == "unknown_spec_key"
+    assert payload["evidence"]["where"] == "spec.camera"
+    assert payload["evidence"]["unknown"] == ["fov_degrees"]
