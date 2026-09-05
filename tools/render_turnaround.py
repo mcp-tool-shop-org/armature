@@ -146,7 +146,7 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 # rather than a second copy here. The same idiom as `check_relift` importing
 # `action_frame_range` from this module and `make_rig_sheet` importing
 # `make_parts_sheet.shoot`. Stage B: it belongs in `armature_core.startframe`.
-from render_start_frame import require_frame_size  # noqa: E402
+from render_start_frame import require_frame_size, require_shot_fraction  # noqa: E402
 
 TOOL_VERSION = "S05.1"
 
@@ -654,6 +654,19 @@ def main():
     width, height = require_frame_size(
         int(a.width), int(a.height), who="render_turnaround",
         module_frame=(WIDTH, HEIGHT), gate=RenderTurnaroundGate, gate_id="TURNAROUND_FRAME")
+    # F-f0c261c1's sibling half, carried here rather than copied. Bounded ON BOTH PATHS,
+    # including the PINNED ortho run where `projection_plan` says the fraction does not
+    # participate: `ortho_scale_record` still writes `float(height_frac)` into the manifest
+    # there, and a NaN in a recipe is a recipe that does not reproduce its output. Read
+    # ONCE, here; every use below is of this value.
+    #
+    # This tool's own solve happens to refuse a NaN by growing to 1.6e60 and raising
+    # `RenderTurnaroundGate` — an accident of a different search, not a bound. MEASURED
+    # 2026-09-04 on the same solver: `height_frac=0.0` RETURNS 4.25e16, `1.5` RETURNS 1.68
+    # and `inf` RETURNS 0.001, all three without a word.
+    height_frac = require_shot_fraction(
+        "--height-frac", a.height_frac, who="render_turnaround",
+        gate=RenderTurnaroundGate, gate_id="TURNAROUND_FRACTION")
 
     azimuths = TA.orbit_azimuths(a.views, a.azimuth_start, a.sweep)
 
@@ -746,11 +759,11 @@ def main():
             ortho_scale = plan["ortho_scale_pin"]
         else:
             ortho_scale = solve_ortho_scale_for_height(
-                cloud, target, radius, azimuths, a.elevation, width, height, a.height_frac)
+                cloud, target, radius, azimuths, a.elevation, width, height, height_frac)
     else:
         sphere_radius, ortho_scale = None, None
         radius = solve_radius_for_height(cloud, target, azimuths, a.elevation, a.lens,
-                                         a.sensor, width, height, a.height_frac)
+                                         a.sensor, width, height, height_frac)
 
     # Every refusal above this line can fire before a single pixel exists; the output
     # directory is created HERE so a halt does not leave an empty one behind for a
@@ -846,7 +859,7 @@ def main():
     gate_turn = TA.gate_set_distinct(views, a.views)
 
     solved_for, pinned_as = ortho_scale_record(
-        plan, ortho_scale, a.height_frac, a.ortho_scale_text, sphere_radius)
+        plan, ortho_scale, height_frac, a.ortho_scale_text, sphere_radius)
 
     manifest = {
         "tool": "render_turnaround", "tool_version": TOOL_VERSION,
@@ -876,7 +889,7 @@ def main():
             "ortho_scale_solved_for": solved_for,
             "ortho_scale_pinned_as": pinned_as,
             "radius": radius, "radius_solved_for": (None if ortho_scale is not None else {
-                "height_frac": float(a.height_frac),
+                "height_frac": height_frac,
                 "over": "the tallest projected view of the set",
                 "why": ("a bounding-sphere fit is bounded by the narrow axis of a "
                         "352x1024 frame and would spend most of it on empty air; the "
