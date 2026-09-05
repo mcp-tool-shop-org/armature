@@ -398,12 +398,12 @@ def _packaging_leg_implementations():
 #: axis to still be OPEN, so the moment the action gains the property its row must be deleted
 #: or this file goes red. It cannot rot into an exemption the way a dated count can.
 AXES_LANDING_THIS_WAVE = {
-    "dist is cleared before the build":
-        "ci-packaging F-1d0f6c82 — the action gains `rm -rf dist` plus an emptiness check "
-        "before `python -m build`; verify.ps1 has carried it since wave 23",
-    "the artifacts are selected by a derived name":
-        "ci-packaging F-2a90c1ee — the action's `dist/*.tar.gz` / `dist/*.whl` become "
-        "`${DIST_NAME}-${VERSION}...` read out of pyproject.toml, the shape verify.ps1 uses",
+    # WAVE-26 MERGE FIX-UP (coordinator, 2026-09-05): both rows this table carried on the tests branch
+    # ("dist is cleared before the build", ci-packaging F-1d0f6c82; "the artifacts are selected by a
+    # derived name", ci-packaging F-2a90c1ee) closed when the ci-packaging branch merged first, and the
+    # test below named both for deletion, as designed. Empty means: every axis the parity census reads
+    # is live on BOTH implementations. A future same-wave hand-off adds its row here and deletes it at
+    # the merge that closes it.
 }
 
 
