@@ -366,13 +366,71 @@ def test_a_record_naming_THIS_graphs_digest_passes_and_says_so(tmp_path):
 
 
 def test_a_record_that_PREDATES_the_field_records_null_and_says_so(tmp_path):
-    """`build_assembly_payload` and `build_r2v_payload` write no `payload_sha256` today —
-    measured by grep over `tools/`: four of the builders write it, the rest do not. Such a
-    record passes, with the absence STATED rather than passed silently."""
+    """A record written before the field existed passes, with the absence STATED rather
+    than passed silently.
+
+    WAVE 23, F-315d1687 — this docstring used to read "`build_assembly_payload` and
+    `build_r2v_payload` write no `payload_sha256` today — measured by grep over `tools/`:
+    four of the builders write it, the rest do not." Wave 20 (F-dba1bcd8) made that false
+    and this test could not notice: it builds a SYNTHETIC record with no such key, so the
+    prose and the assertion cannot disagree by any mechanism. Measured on `e8263a3`,
+    `build_assembly_payload.py::build_and_write` and `build_r2v_payload.py:439` both write
+    `"payload_sha256": canonical_payload_digest(wf)`, and all NINE builders do. This is the
+    paragraph a seat reads to learn which records are tied to the graph they vouch for, and
+    it named two builders as untied that had been tied since `e8263a3`.
+
+    So the claim is DERIVED beside the fixture rather than stated in prose — see
+    `test_every_builder_writes_the_field_this_legacy_fixture_omits` below. What this test
+    holds is the legacy shape itself, which is a real one: `payload_digests` reads records
+    this repo wrote before wave 20 as well as records it writes now.
+    """
     path = _record(tmp_path, {"gates": {"ROUTE": _receipt()}})
     facts = GSG.route_facts(path, _api_graph())
     assert facts["payload_sha256"] is None
     assert "no `payload_sha256`" in facts["source"], facts["source"]
+
+
+def test_every_builder_writes_the_field_this_legacy_fixture_omits():
+    """The claim the docstring above used to make, derived from the tree.
+
+    The set of builders whose record carries `payload_sha256` is the WHOLE family — not
+    four of nine, and not a number written down once. Read as the resolved call: every
+    builder's `payload_sha256` entry is computed by the one digest function, resolved in
+    that module's own namespace. The behavioural half — each builder DRIVEN and its written
+    record read back — is
+    `test_amend_w20_builders.py::test_every_builder_record_carries_the_canonical_digest_of_
+    its_own_graph`; this is the cheap census that fails the day a tenth builder lands
+    without the field, and it lives here because here is where the stale count was.
+    """
+    import ast
+    import glob
+    import importlib
+
+    from test_amend_w20_builders import BUILDERS
+
+    one = importlib.import_module("build_assembly_payload").canonical_payload_digest
+    without = {}
+    for name in BUILDERS:
+        tree = ast.parse(open(os.path.join(TOOLS, f"{name}.py"), encoding="utf-8").read())
+        computed = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            for key, value in zip(node.keys, node.values):
+                if (isinstance(key, ast.Constant) and key.value == "payload_sha256"
+                        and isinstance(value, ast.Call)):
+                    called = value.func
+                    computed.append(called.attr if isinstance(called, ast.Attribute)
+                                    else getattr(called, "id", ""))
+        if "canonical_payload_digest" not in computed:
+            without[name] = computed
+        else:
+            mod = importlib.import_module(name)
+            assert getattr(mod, "canonical_payload_digest", None) is one, name
+    assert without == {}, (
+        f"these builders write no computed `payload_sha256`: {without}. A record with none "
+        f"is not tied to the graph it vouches for, and the tie clause cannot fire.")
+    assert len(glob.glob(os.path.join(TOOLS, "build_*payload*.py"))) == len(BUILDERS)
 
 
 def test_two_conflicting_payload_digests_in_one_record_refuse(tmp_path):

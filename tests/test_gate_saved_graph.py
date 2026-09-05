@@ -4,6 +4,8 @@ The cloud does not run the API graph this repo builds; it runs the saved file. E
 here is about the gap between those two objects.
 """
 
+import os
+
 import pytest
 
 from conftest import TOOLS  # noqa: F401
@@ -655,3 +657,119 @@ def test_an_api_format_doc_passed_as_the_saved_argument_is_refused_by_name():
             fn(CROSS_API, CROSS_API)
         assert "save-format graph" in str(exc.value)
         assert exc.value.evidence["clause"] == "not_a_save_format_graph"
+
+
+# ===========================================================================
+# WAVE 23, F-5bb80c81 — the two comparisons answer the same way, and `main` runs
+#                       the value check FIRST, pinned rather than assumed
+# ===========================================================================
+#
+# `round_trip` builds its node set through `RG._api_entry_kind`, which classifies an API
+# entry by SHAPE before reading a class; `link_round_trip` iterated `api_graph.items()`
+# directly and never called it. On an API graph with `class_type` deleted from an entry
+# present in both files, `round_trip` raised `RouteGate` with clause `unreadable_node`
+# while `link_round_trip` on the SAME pair returned a clean verdict — n_links 4, the full
+# links list, `optional_sockets_empty_in_both` — reproduced on three separate node keys
+# ('105', '49', '68'). That was unreachable through the CLI only because `main` calls
+# `round_trip` before `link_round_trip`, and NOTHING pinned that ordering: every
+# `link_round_trip` call site in this file and in `test_amend_w16_builders.py` passed
+# hand-built well-formed pairs.
+#
+# Wave 22 (F-1b6be488) taught `link_round_trip` to refuse the operand, asserted over the
+# ASSEMBLY fixtures in `test_amend_w22_builders.py::
+# test_every_unreadable_member_shape_is_refused_by_name[link_round_trip-*]`. Two things
+# were still missing and are added here: the same property on THIS file's fixture — the
+# E08 animate graph, a different shape, and the one the finding measured — and the
+# ordering itself, which no test read.
+
+
+def _api_without_class(node_id):
+    """This file's API graph with one entry's `class_type` removed. The entry is present in
+    BOTH documents, so nothing else about the pair changes."""
+    import copy
+
+    api = copy.deepcopy(API)
+    del api[node_id]["class_type"]
+    return api
+
+
+@pytest.mark.parametrize("node_id", ["105", "49", "68"])
+def test_link_round_trip_alone_refuses_the_node_the_value_check_refuses(node_id):
+    """The operand handed to the topology check ALONE — no `round_trip` above it.
+
+    What this looks like if the code were wrong in the way it was: a caller that reaches
+    the topology check without the value check first is handed a PASS over a graph carrying
+    a node the walk refuses by name, on the last gate before a paid submission.
+    """
+    api = _api_without_class(node_id)
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.link_round_trip(api, saved())
+    ev = exc.value.evidence
+    assert ev.get("clause") == "unreadable_node", (node_id, ev)
+    assert ev.get("gate") in ("ROUTE", "SAVED_ADMISSION"), (node_id, ev)
+
+
+@pytest.mark.parametrize("node_id", ["105", "49", "68"])
+def test_the_value_check_refuses_the_same_node_by_the_same_word(node_id):
+    """The sibling comparison, on the same operand, so the two are known to AGREE rather
+    than assumed to. A clause that drifted in one of them would show up here."""
+    api = _api_without_class(node_id)
+    with pytest.raises(RG.RouteGate) as exc:
+        GSG.round_trip(api, saved())
+    assert exc.value.evidence.get("clause") == "unreadable_node", (node_id,
+                                                                   exc.value.evidence)
+
+
+def test_both_comparisons_still_pass_the_unmutated_pair():
+    """The direction the clause must not bound: a check that refuses everything is not a
+    check."""
+    assert GSG.round_trip(API, saved())["all_equal"] is True
+    assert GSG.link_round_trip(API, saved())["n_links"] == 4
+
+
+def test_main_runs_the_value_check_before_the_topology_check():
+    """The ordering, read off the AST rather than inferred from a passing CLI run.
+
+    `main` calls `round_trip` and then `link_round_trip`. Nothing said so, and nothing
+    would have noticed the two swapping: the difference is only visible on an operand one
+    of them refuses and the other does not, which is precisely the state the tree was in
+    until wave 22. Both calls are required to sit in the SAME statement list, so the
+    ordering cannot be satisfied by one of them moving into a branch.
+    """
+    import ast
+
+    tree = ast.parse(open(os.path.join(TOOLS, "gate_saved_graph.py"),
+                          encoding="utf-8").read())
+    mains = [n for n in ast.walk(tree)
+             if isinstance(n, ast.FunctionDef) and n.name == "main"]
+    assert len(mains) == 1, [n.lineno for n in mains]
+
+    def _calls(name):
+        return [n for n in ast.walk(mains[0])
+                if isinstance(n, ast.Call)
+                and (getattr(n.func, "id", "") == name
+                     or getattr(n.func, "attr", "") == name)]
+
+    equality = _calls("round_trip")
+    # `link_round_trip` also ends in `round_trip`; `getattr(func, "id")` matches both, so
+    # the value-check list is the difference of the two.
+    topology = _calls("link_round_trip")
+    equality = [n for n in equality if n not in topology]
+    assert len(equality) == 1 and len(topology) == 1, (
+        [n.lineno for n in equality], [n.lineno for n in topology])
+    assert equality[0].lineno < topology[0].lineno, (
+        equality[0].lineno, topology[0].lineno,
+        "`main` runs the topology check before the value check")
+
+    #: and both at the same nesting depth, in one statement list
+    def _owner(node):
+        for parent in ast.walk(mains[0]):
+            for field in ("body", "orelse", "finalbody"):
+                for stmt in getattr(parent, field, []) or []:
+                    if node in ast.walk(stmt):
+                        return id(parent), field
+        return None
+
+    assert _owner(equality[0]) == _owner(topology[0]), (
+        "the two comparisons no longer sit in one statement list; the ordering above is "
+        "then satisfiable with one of them inside a branch the other is not")

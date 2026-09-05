@@ -91,6 +91,28 @@ arrives rather than needing to be remembered.
 
 The population is derived (`blender_stub.blender_tools`), never typed out, so a new Blender
 tool joins it the day it lands.
+
+WAVE 23, F-2f1b18c2 — THE SECOND POPULATION, and the derivation hazard it exposed.
+
+Everything above is the Blender side. The 42 CPython instruments were in no equivalent
+census, and that half holds the tools whose artifacts are UPLOADED. The second population
+and its three properties are at the foot of this file; `blender_stub.halt_handler` derives
+each member's halt PREFIX and ENTRY off its `__main__` block, and two hazards make that
+derivation load-bearing rather than a formality:
+
+* **The prefix is not the module stem**, for 20 of the 25 CPython tools that carry a
+  handler. `build_animate_payload.py` prints `BUILD_ANIMATE_HALT`, `gate_saved_graph.py`
+  prints `SAVED_ADMISSION_HALT`, `gate_b_frames.py` prints `GATE_B_HALT`,
+  `project_pose_keypoints.py` prints `PROJECT_POSE_HALT`. `halt_contract_pending` keys on
+  `<STEM>_HALT`, which is correct on the Blender side where every prefix IS the stem; the
+  same predicate applied here reports 20 of 25 as carrying no handler at all.
+* **The entry is not always `main`.** `composite_reference.py` is
+  `run_tool_main(_cli, "COMPOSITE_REFERENCE")`. A driver that substitutes `main` runs the
+  real `_cli`, which fails for its own reasons — measured here as a false exit 1 on a
+  raiser that never ran, i.e. a census reporting a contract violation that does not exist.
+
+Both are read off the block rather than assumed, which is what "keys on the resolved shape"
+means for a population whose members disagree about their own spelling.
 """
 
 import json
@@ -98,7 +120,8 @@ import os
 
 import pytest
 
-from blender_stub import blender_tools, exit_code_of_main_block, main_block, read_source
+from blender_stub import (blender_tools, cpython_tools, exit_code_of_main_block,
+                          halt_handler, main_block, read_source)
 
 #: Re-derived 2026-09-04 and EMPTY (F-d5bd42b1). It held `preview_glb.py` under the
 #: comment "a library of preview helpers with no `__main__` block; it is not invoked as a
@@ -1143,3 +1166,233 @@ def test_stage_render_writes_a_non_finite_operand_as_strict_json(tmp_path, capsy
     assert ev["span"] == "inf" and ev["low"] == "-inf", ev
     assert ev["nested"][0]["deep"] == "nan", ev
     assert ev["floor"] == 0.00017320508075688773, ev
+
+
+# ===========================================================================
+# WAVE 23, F-2f1b18c2 — THE SECOND POPULATION: the CPython instruments
+# ===========================================================================
+#
+# Everything above is parametrized over `WITH_MAIN`, which is `blender_tools()` — the 22
+# tools that run under Blender. The 42 CPython instruments were in no equivalent census,
+# and that population contains the tools whose artifacts are UPLOADED. Measured on
+# `e8263a3` as real subprocesses on `tools/pack_pose_pack.py`: `--frames=<missing dir>`
+# exited 1 with a bare `FileNotFoundError` traceback; the ALPHA-LAW refusal exited 1 with
+# an empty stdout; the `--fps=0` refusal, whose own message says the delay is "written into
+# the animated image the run UPLOADS", exited 1 with an empty stdout. No halt line on any
+# of them, and the evidence dict — carrying the clause — reached no printed line. Exit 1 is
+# this repo's contract code for a CRASH, so a runner branching on 2 as "a gate decided"
+# read a deliberate alpha-law refusal on the uploaded pose pack as an environment fault.
+#
+# Wave 22 closed the mechanism for eight of them (SEAM 1's `armature_core.parts.
+# run_tool_main`) and `tests/test_instruments_measure_amend_w18.py` asserts exit 2 and the
+# clause for `pack_pose_pack` specifically — its `proc.returncode != 0` is gone, replaced
+# by `== 2` in `test_the_pack_refusal_reaches_the_operator_and_records_what_it_cannot_say`.
+# What is added here is the CENSUS: the same three properties this file holds for the
+# Blender side, over every CPython tool that carries a handler, so the next one cannot lose
+# its handler quietly.
+#
+# THE DERIVATION IS NOT `<STEM>_HALT`. The prefix is not the module stem for 20 of the 25 —
+# `build_animate_payload.py` prints `BUILD_ANIMATE_HALT`, `gate_saved_graph.py` prints
+# `SAVED_ADMISSION_HALT` — and the entry is not always `main`
+# (`composite_reference.py` is `run_tool_main(_cli, ...)`, and a driver that substitutes
+# `main` runs the real `_cli` and measures the wrong thing). `blender_stub.halt_handler`
+# reads both off the block; see its docstring.
+#
+# THE CONTRACT, and where it differs from the Blender one above. The exit codes are the
+# same three (2 for a fired gate, 2 for a bare refusal, 1 for a crash) and the sentinel is
+# still exactly one `<PREFIX>_HALT <json object>` line. The KEY SET is not: the eight tools
+# on `run_tool_main` print the full six, and the 17 that still carry a local handler print
+# three (`error`, `message`, `evidence`). So the floor is those three and the ceiling is the
+# six — a handler may not invent a seventh key, and the six-key members are additionally
+# held to the whole Blender contract by `sentinel_violations`, which is how a member that
+# adopts the one handler gets the stronger check the day it does.
+
+CPYTHON_WITH_HANDLER = [f for f in cpython_tools() if halt_handler(f)]
+
+#: DERIVED 2026-09-05 by `[f for f in cpython_tools() if halt_handler(f)]`. Equality, so a
+#: CPython tool that loses its handler — or a new one that never gets one — fails HERE,
+#: naming itself, rather than falling silently out of the three properties below.
+RECORDED_CPYTHON_WITH_HANDLER = [
+    "build_animate_payload.py", "build_assembly_payload.py", "build_camera_i2v_payload.py",
+    "build_cascade_payload.py", "build_i2v_payload.py", "build_lora_arm_payload.py",
+    "build_payload.py", "build_r2v_payload.py", "build_t2v_payload.py", "canon_gate.py",
+    "composite_reference.py", "encode_control.py", "fetch_run.py", "fetch_t2v_run.py",
+    "gate_b_frames.py", "gate_saved_graph.py", "invert_frames.py", "lift_clip.py",
+    "make_review_clip.py", "measure_clip.py", "measure_lift.py", "pack_pose_pack.py",
+    "project_pose_keypoints.py", "render_pose_sticks.py", "resample_motion.py",
+]
+
+#: THE PENDING TABLE, dated, in `halt_contract_pending`'s shape rather than a skip flag:
+#: the CPython tools with no halt handler at all. Each ends in a bare `main()`,
+#: `sys.exit(main())` or `raise SystemExit(main())`, so a typed refusal reaches the operator
+#: as a stdlib traceback at exit 1 and the clause reaches nothing. MEASURED 2026-09-05, 29
+#: members. This is a CATEGORY, not an exemption: `test_the_cpython_pending_table_is_the_
+#: measured_one` fails when it grows, and a member leaving it joins the contract above in
+#: the same commit.
+#:
+#: Re-derive with:
+#:     python -c "import sys;sys.path.insert(0,'tests');import blender_stub as B;
+#:     print([f for f in B.cpython_tools() if not B.halt_handler(f)])"
+CPYTHON_HALT_CONTRACT_PENDING = [
+    "analyze_p3.py", "armature_index.py", "compare_runs.py", "extract_clip_frames.py",
+    "fit_reference.py", "make_ab_clip.py", "make_cast_sheet.py", "make_crop_strip.py",
+    "make_e08_sheet.py", "make_e13_sheet.py", "make_gate0_sheet.py", "make_hole_survey.py",
+    "make_identity_sheet.py", "make_lift_sheet.py", "make_overlay_sheet.py",
+    "make_pick_sheet.py", "make_plate.py", "make_sheet.py", "make_shotset_sheet.py",
+    "make_startframe_sheet.py", "make_thesis_sheet.py", "make_zoom_sheet.py",
+    "measure_arm.py", "measure_cascade_clip.py", "measure_floor.py",
+    "measure_smoothness.py", "measure_tracking.py", "rig_sheet_compose.py",
+    "sheet_compose.py",
+]
+
+#: The three keys every CPython handler prints; the six above are the ceiling.
+CPYTHON_SENTINEL_FLOOR = {"error", "message", "evidence"}
+
+
+def test_the_two_populations_partition_the_tools_directory():
+    """Neither census can quietly stop covering a file: every `tools/*.py` is in exactly
+    one of them, and the CPython half splits into handler-carrying and pending."""
+    every = sorted(f for f in os.listdir(os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+        if f.endswith(".py"))
+    assert sorted(blender_tools() + cpython_tools()) == every
+    assert set(blender_tools()) & set(cpython_tools()) == set()
+    assert sorted(CPYTHON_WITH_HANDLER
+                  + [f for f in cpython_tools() if not halt_handler(f)]) == cpython_tools()
+
+
+def test_the_cpython_handler_population_is_the_measured_one():
+    assert CPYTHON_WITH_HANDLER == RECORDED_CPYTHON_WITH_HANDLER, {
+        "appeared": sorted(set(CPYTHON_WITH_HANDLER) - set(RECORDED_CPYTHON_WITH_HANDLER)),
+        "vanished": sorted(set(RECORDED_CPYTHON_WITH_HANDLER) - set(CPYTHON_WITH_HANDLER)),
+    }
+
+
+def test_the_cpython_pending_table_is_the_measured_one_and_may_not_grow():
+    """The category, keyed on the objective property, so it empties itself when a handler
+    lands — and says so when one is lost."""
+    pending = [f for f in cpython_tools() if not halt_handler(f)]
+    assert pending == CPYTHON_HALT_CONTRACT_PENDING, {
+        "joined the pending table": sorted(set(pending)
+                                           - set(CPYTHON_HALT_CONTRACT_PENDING)),
+        "left it": sorted(set(CPYTHON_HALT_CONTRACT_PENDING) - set(pending)),
+    }
+    assert set(pending) & set(RECORDED_CPYTHON_WITH_HANDLER) == set()
+
+
+def _run_cpython(filename, kind):
+    """The tool's own `__main__` block with its ENTRY replaced by a raiser.
+
+    The same instrument the Blender half uses, given the entry name the block actually
+    calls — `composite_reference`'s is `_cli`.
+    """
+    handler = halt_handler(filename)
+    return exit_code_of_main_block(filename, raiser=_raiser(kind),
+                                   argv=["python", filename],
+                                   main_name=handler["entry"])
+
+
+@pytest.mark.parametrize("kind", sorted(CONTRACT))
+@pytest.mark.parametrize("filename", CPYTHON_WITH_HANDLER)
+def test_the_cpython_exit_code_is_the_one_the_outcome_earns(filename, kind, capsys):
+    """2 for a deliberate refusal, 1 for a crash — the property the uploaded-artifact tools
+    did not have, over every CPython tool that claims to have it."""
+    want_code = CONTRACT[kind][0]
+    code, escaped = _run_cpython(filename, kind)
+    capsys.readouterr()
+    assert escaped is None, f"{filename}: {escaped!r} escaped the handler"
+    assert code == want_code, f"{filename} ({kind}): exit {code!r}, contract says {want_code}"
+
+
+@pytest.mark.parametrize("filename", CPYTHON_WITH_HANDLER)
+def test_a_cpython_refusal_and_crash_do_not_answer_with_the_same_code(filename, capsys):
+    """The divergence itself. Every one of these collapsed to 1 before its handler landed,
+    which is the state `code not in (0, None)` cannot see."""
+    refusal, _ = _run_cpython(filename, "refusal")
+    crash, _ = _run_cpython(filename, "crash")
+    capsys.readouterr()
+    assert refusal != crash, (
+        f"{filename}: a refusal and an unhandled error both exit {refusal!r}; a caller "
+        f"branching on 2 reads a crash as a decision, or a decision as a crash")
+
+
+@pytest.mark.parametrize("kind", sorted(CONTRACT))
+@pytest.mark.parametrize("filename", CPYTHON_WITH_HANDLER)
+def test_the_cpython_halt_line_carries_the_gate_and_its_measurement(filename, kind,
+                                                                    capsys):
+    """The receipt an operator keys on, READ.
+
+    One line, its prefix derived from the block rather than guessed from the stem; a JSON
+    object; the three keys every handler prints, no key outside the six the one handler
+    prints; the error class named; and, for a fired gate, the measurement that fired it —
+    which is the half that "reached nothing" on the uploaded pose pack.
+    """
+    handler = halt_handler(filename)
+    prefix = handler["prefix"]
+    code, escaped = _run_cpython(filename, kind)
+    out = capsys.readouterr().out
+    assert escaped is None, f"{filename}: {escaped!r} escaped the handler"
+
+    token = f"{prefix}_HALT"
+    lines = [l for l in out.splitlines() if l.split(" ", 1)[0] == token]
+    assert len(lines) == 1, (
+        f"{filename} ({kind}): {len(lines)} `{token} <json>` line(s), want exactly 1; "
+        f"lines carrying HALT: {[l for l in out.splitlines() if 'HALT' in l]}")
+    rec = json.loads(lines[0][len(token):].strip())
+    assert isinstance(rec, dict), (filename, kind, type(rec).__name__)
+    assert CPYTHON_SENTINEL_FLOOR <= set(rec), (filename, kind, sorted(rec))
+    assert set(rec) <= SENTINEL_KEYS, (
+        filename, kind, sorted(set(rec) - SENTINEL_KEYS),
+        "a key outside the one handler's six")
+    assert rec["error"] == {"gate": "_Gate", "refusal": "ArmatureError",
+                            "crash": "ValueError"}[kind], (filename, kind, rec)
+    if kind == "gate":
+        assert rec["evidence"] == {"measured": 1}, (
+            f"{filename}: a fired gate's halt line carries the measurement that fired it; "
+            f"got {rec.get('evidence')!r}")
+    if len(rec) == len(SENTINEL_KEYS):
+        # a member on the ONE handler is held to the whole Blender contract as well
+        assert not sentinel_violations(prefix, out, kind, code), \
+            sentinel_violations(prefix, out, kind, code)
+
+
+def test_the_one_handlers_adopters_are_derived_and_carry_the_six_key_record():
+    """Which members print the six is READ off the tree, not typed: a tool adopts the one
+    handler by importing `run_tool_main`, and that is the same set whose halt line carries
+    `tool` / `outcome` / `gate`."""
+    adopters = sorted(f for f in CPYTHON_WITH_HANDLER
+                      if "run_tool_main" in read_source(f))
+    assert adopters == ["composite_reference.py", "encode_control.py", "invert_frames.py",
+                        "make_review_clip.py", "measure_clip.py", "pack_pose_pack.py",
+                        "render_pose_sticks.py", "resample_motion.py"], adopters
+    for filename in adopters:
+        import io as _io
+        import contextlib as _contextlib
+
+        buf = _io.StringIO()
+        with _contextlib.redirect_stdout(buf), _contextlib.redirect_stderr(_io.StringIO()):
+            _run_cpython(filename, "gate")
+        prefix = halt_handler(filename)["prefix"]
+        line = [l for l in buf.getvalue().splitlines()
+                if l.split(" ", 1)[0] == f"{prefix}_HALT"]
+        assert line, (filename, buf.getvalue()[-300:])
+        assert set(json.loads(line[0][len(prefix) + 5:])) == SENTINEL_KEYS, filename
+
+
+def test_the_cpython_derivation_reads_the_prefix_and_the_entry_off_the_block():
+    """The red proof for the DERIVATION, which is where this census could go quietly wrong.
+
+    A `<STEM>_HALT` predicate — correct on the Blender side, where every prefix is the stem
+    — reports 20 of these 25 as having no handler; and a driver that assumes the entry is
+    `main` runs `composite_reference`'s real `_cli`. Both are asserted here so a later
+    simplification of `halt_handler` cannot pass by getting easier.
+    """
+    by_stem = [f for f in CPYTHON_WITH_HANDLER
+               if f"{f[:-3].upper()}_HALT" in read_source(f)]
+    assert len(by_stem) == 5, sorted(by_stem)
+    assert sorted(by_stem) == ["build_payload.py", "canon_gate.py", "fetch_run.py",
+                               "lift_clip.py", "measure_lift.py"], sorted(by_stem)
+    assert halt_handler("composite_reference.py") == {"prefix": "COMPOSITE_REFERENCE",
+                                                      "entry": "_cli"}
+    assert halt_handler("gate_saved_graph.py")["prefix"] == "SAVED_ADMISSION"
+    assert halt_handler("build_animate_payload.py")["prefix"] == "BUILD_ANIMATE"

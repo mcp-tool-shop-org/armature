@@ -467,3 +467,200 @@ def test_the_two_copies_of_the_name_check_are_one_rule_with_one_word():
                                       "clause": "output_name_is_not_a_name",
                                       "flag": "--name", "name": "../x"}
         assert "--name='../x'" in str(exc.value)
+
+
+# ===========================================================================
+# WAVE 23, F-54179a94 — the pasted-name family, DERIVED rather than typed
+# ===========================================================================
+#
+# This file's own header records the family as a typed three ("three of it are fixed,
+# `make_review_clip --run` and `make_ab_clip --a-fps/--b-fps` are DEFERRED"), enumerated
+# over one domain's tools. The spend builders carried four more and no test held the
+# property for them: measured on `e8263a3`, `build_animate_payload.py:517` joined
+# `f"{a.experiment}-probe-animate.api.json"` onto the output directory with `--experiment`
+# declared at `:211` with no bound, and `build_camera_i2v_payload`, `build_i2v_payload` and
+# `build_t2v_payload` (whose `--tag` help string reads "goes in the written filenames") did
+# the same. Wave 22 bounded those four; what was missing is the CENSUS that finds the next
+# one — an operator's `--experiment` or `--tag` carrying a separator or `..` writes the
+# payload outside the run directory its own record names, so the spend record's `graph.path`
+# and the file that exists disagree, or a second run overwrites the first's payload.
+#
+# The walk has ONE home, `_census_nodes.pasted_name_flags`, and keys on the RESOLVED shape:
+# every argparse STRING option whose value reaches a filename composed under the tool's own
+# `--out`, unioned with every flag already routed through `single_path_segment` (three
+# members are visible only that way). See that function's block comment for the derivation.
+
+import ast                                                          # noqa: E402
+
+from _census_nodes import pasted_name_flags                          # noqa: E402
+from blender_stub import load_tool                                   # noqa: E402
+
+#: DERIVED 2026-09-05 on this branch by `pasted_name_flags()`. Equality, so a tenth builder
+#: that pastes a flag into its output filename joins this census in the commit that adds it
+#: — which is the mechanism wave 18's typed three did not have.
+#:
+#: Re-derive with:
+#:     python -c "import sys,json;sys.path.insert(0,'tests');import _census_nodes as C;
+#:     print(json.dumps(C.pasted_name_flags(),indent=1))"
+RECORDED_PASTED_NAME_FAMILY = {
+    "build_animate_payload": {"--experiment": "single_path_segment"},
+    "build_camera_i2v_payload": {"--experiment": "single_path_segment"},
+    "build_i2v_payload": {"--experiment": "single_path_segment"},
+    "build_lora_arm_payload": {"--arm": "choices"},
+    "build_r2v_payload": {"--arm": "choices"},
+    "build_t2v_payload": {"--tag": "single_path_segment"},
+    "fetch_run": {"--run": "single_path_segment"},
+    "make_review_clip": {"--run": "single_path_segment"},
+    "pack_pose_pack": {"--name": "single_path_segment"},
+    "preview_glb": {"--name": "single_path_segment"},
+    "render_turnaround": {"--prefix": "single_path_segment"},
+    "resample_motion": {"--name": "single_path_segment"},
+}
+
+
+def _family_rows():
+    """`[(tool, flag, how it is bounded)]`, flattened, in a stable order."""
+    return [(tool, flag, row["bound"])
+            for tool, flags in sorted(pasted_name_flags().items())
+            for flag, row in sorted(flags.items())]
+
+
+def test_the_pasted_name_family_is_derived_and_has_not_grown_silently():
+    got = {tool: {flag: row["bound"] for flag, row in sorted(flags.items())}
+           for tool, flags in sorted(pasted_name_flags().items())}
+    assert got == RECORDED_PASTED_NAME_FAMILY, {
+        "appeared": sorted(set(got) - set(RECORDED_PASTED_NAME_FAMILY)),
+        "vanished": sorted(set(RECORDED_PASTED_NAME_FAMILY) - set(got)),
+        "changed": {t: (RECORDED_PASTED_NAME_FAMILY.get(t), got[t])
+                    for t in got if RECORDED_PASTED_NAME_FAMILY.get(t) != got[t]},
+    }
+
+
+def test_no_member_of_the_pasted_name_family_is_unbounded():
+    """The property, stated separately from the membership.
+
+    The map above could be updated to record a new OPEN member and stay green; this cannot.
+    A `None` here is a flag an operator can paste `../..` into.
+    """
+    open_flags = [(tool, flag) for tool, flag, bound in _family_rows() if bound is None]
+    assert open_flags == [], (
+        f"these flags are pasted into an output filename with no bound: {open_flags}. "
+        f"Route each through `armature_core.parts.single_path_segment`, or declare a "
+        f"`choices=` set none of whose members can carry a separator.")
+
+
+def test_the_walk_finds_a_paste_a_typed_family_list_could_not():
+    """The red proof, kept in the tree: a synthetic tool with an unbounded paste.
+
+    Wave 18's rule 2 asks what this looks like if the walk were wrong in the specific way
+    it exists to catch — a census that reports a clean tree because it stopped looking. So
+    the walk is driven over a module the real tree does not contain, whose `--tag` is
+    joined onto its own `--out`, and it must come back OPEN. The sibling beside it pastes
+    an INPUT-rooted path and must NOT be reported, because a census that refuses
+    everything is not a census.
+    """
+    offender = ast.parse(
+        "import argparse, os\n"
+        "def main(argv=None):\n"
+        "    ap = argparse.ArgumentParser()\n"
+        "    ap.add_argument('--out', required=True)\n"
+        "    ap.add_argument('--tag', default='A3')\n"
+        "    a = ap.parse_args(argv)\n"
+        "    out_dir = os.path.abspath(a.out)\n"
+        "    return os.path.join(out_dir, f'{a.tag}.api.json')\n")
+    innocent = ast.parse(
+        "import argparse, os\n"
+        "def main(argv=None):\n"
+        "    ap = argparse.ArgumentParser()\n"
+        "    ap.add_argument('--out', required=True)\n"
+        "    ap.add_argument('--uploads', required=True)\n"
+        "    a = ap.parse_args(argv)\n"
+        "    return os.path.join(os.path.dirname(a.uploads), 'sibling.json')\n")
+
+    got = pasted_name_flags({"_synthetic_offender": offender,
+                             "_synthetic_innocent": innocent})
+    assert got == {"_synthetic_offender": {
+        "--tag": {"dest": "tag", "lines": [8], "bound": None}}}, got
+
+
+def _andon_of(tool, flag):
+    """The exception class `tool` hands `single_path_segment` for `flag`.
+
+    Read by AST and then RESOLVED in the module's own namespace, so the census exercises
+    the object the tool would actually raise rather than a name that happens to match.
+    """
+    tree = ast.parse(open(os.path.join(TOOLS, f"{tool}.py"), encoding="utf-8").read())
+    named = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and len(node.args) >= 3):
+            continue
+        func = node.func
+        called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if called != "single_path_segment":
+            continue
+        if not (isinstance(node.args[1], ast.Constant) and node.args[1].value == flag):
+            continue
+        named.append(ast.unparse(node.args[2]).split(".")[-1])
+    assert len(named) == 1, (tool, flag, named)
+    mod = load_tool(f"{tool}.py")
+    cls = getattr(mod, named[0], None)
+    assert cls is not None and issubclass(cls, Exception), (tool, flag, named[0])
+    return cls
+
+
+HELPER_BOUND = [(t, f) for t, f, b in _family_rows() if b == "single_path_segment"]
+CHOICES_BOUND = [(t, f) for t, f, b in _family_rows() if b == "choices"]
+
+#: Both separators, the drive-relative spelling, the two dot names and an absent name —
+#: the set `armature_core.parts.single_path_segment`'s own docstring enumerates.
+NOT_A_NAME = ["../x", "a/b", "a" + chr(92) + "b", "C:/elsewhere/x", ".", "..", ""]
+
+
+@pytest.mark.parametrize("bad", NOT_A_NAME)
+@pytest.mark.parametrize("tool,flag", HELPER_BOUND,
+                         ids=[f"{t}{f}" for t, f in HELPER_BOUND])
+def test_single_path_segment_refuses_for_every_member_it_bounds(tool, flag, bad):
+    """`single_path_segment` parametrized over the FAMILY's members, not over the two the
+    wave-18 fix happened to touch. Each member's own andon class, the one clause word, and
+    the flag the operator has to retype, in the evidence."""
+    from armature_core.parts import single_path_segment
+
+    cls = _andon_of(tool, flag)
+    with pytest.raises(cls) as exc:
+        single_path_segment(bad, flag, cls)
+    ev = exc.value.evidence
+    assert ev["clause"] == "output_name_is_not_a_name", (tool, flag, ev)
+    assert ev["flag"] == flag, (tool, flag, ev)
+    assert ev["name"] == bad, (tool, flag, ev)
+    assert flag in str(exc.value), (tool, flag, str(exc.value))
+
+
+@pytest.mark.parametrize("tool,flag", CHOICES_BOUND,
+                         ids=[f"{t}{f}" for t, f in CHOICES_BOUND])
+def test_a_choices_bound_member_declares_only_names(tool, flag):
+    """The other bound, checked rather than trusted: `choices=` bounds a pasted name only
+    while every literal in it is itself one path component. `--arm` is `('A1', 'A2')` on
+    both members today, and a `choices` set that grew a `"a/b"` would be a bound in name
+    only."""
+    from armature_core.errors import ArmatureError
+    from armature_core.parts import single_path_segment
+
+    tree = ast.parse(open(os.path.join(TOOLS, f"{tool}.py"), encoding="utf-8").read())
+    declared = None
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call)
+                and getattr(node.func, "attr", "") == "add_argument"):
+            continue
+        if not any(isinstance(a, ast.Constant) and a.value == flag for a in node.args):
+            continue
+        for kw in node.keywords:
+            if kw.arg == "choices":
+                try:
+                    declared = ast.literal_eval(kw.value)
+                except ValueError:                       # a name, e.g. `sorted(ARMS)`
+                    mod = load_tool(f"{tool}.py")
+                    declared = sorted(eval(ast.unparse(kw.value), vars(mod)))  # noqa: S307
+    assert declared, (tool, flag, "no readable `choices=` beside the flag")
+    for choice in declared:
+        assert single_path_segment(str(choice), flag, ArmatureError) == str(choice), (
+            tool, flag, choice)

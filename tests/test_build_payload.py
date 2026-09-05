@@ -317,7 +317,7 @@ def test_the_distinct_name_check_binds_in_BOTH_directions(tmp_path, monkeypatch)
     collapsed.write_text(json.dumps({f"{i:05d}": "same.png" for i in range(33)}))
     _arm_pointed_at(monkeypatch, "E03", "B1", uploads=str(collapsed),
                     source_dir=_control_dir(tmp_path, "moving", 33))
-    # Both directions raise from ONE clause (build_payload.py:361-365), so the only thing
+    # Both directions raise from ONE clause (build_payload.py::_load_uploads-365), so the only thing
     # distinguishing them is the pair of numbers — and `pytest.raises(match=)` is
     # `re.search`, so a bare `"1 distinct server name"` also matches a message reading
     # "31 distinct server name" and would silently accept direction 2's message
@@ -626,8 +626,8 @@ def test_the_success_line_is_the_halt_sentinels_prefix_with_OK(tmp_path, capsys)
 #
 # family: keyed on the SECOND-ARTIFACT path derivation (a sidecar path computed from an
 # `--out`), via grep over `tools/*.py` for `splitext(<out>)[0] + <suffix>` and
-# `<out>.replace(` → 7 sites: author_walk.py:655, lift_solve.py:345, make_ab_clip.py:181,
-# make_crop_strip.py:244, make_lift_sheet.py:283, make_pick_sheet.py:311 all derive from the
+# `<out>.replace(` → 7 sites: author_walk.py::main, lift_solve.py:345, make_ab_clip.py:181,
+# make_crop_strip.py:244, make_lift_sheet.py::main, make_pick_sheet.py:311 all derive from the
 # STEM; build_payload.py:739 was the only `str.replace`. The sibling's implementation is
 # carried, not a seventh spelling.
 

@@ -266,7 +266,7 @@ def test_the_old_two_lines_disagree_with_the_resolver_on_the_default_spec():
 
 
 def test_the_preview_counts_its_frames_by_name_not_by_extension():
-    """`preview_walk.py:114` counted `*.png` in the output directory with a bare listdir.
+    """`preview_walk.py::PreviewWalkGate` counted `*.png` in the output directory with a bare listdir.
     Its population must be the plan — `shotspec.frame_names` — so a stray file cannot make
     a short render look complete and a misnamed frame cannot hide."""
     src = read_source("preview_walk.py")

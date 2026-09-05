@@ -236,6 +236,38 @@ def _citations(path):
     return re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)\b", why)
 
 
+SEED_READER = "read_seed_registration"
+
+
+def seed_reader_call_lines(name):
+    """Every line in `tools/<name>` where `read_seed_registration` is CALLED.
+
+    WAVE 23, F-a5089b5f — the predicate that decides whether a citation still points at the
+    reader of the seed registration. It used to be `"seeds" in lines[lineno - 1]`, which a
+    COMMENT sitting beside the line satisfies, and one such comment exists within four lines
+    of every one of the seven citation targets: measured over the wave-20 RE-ANCHORED
+    citations, `build_animate_payload.py:659` has a seeds-bearing comment two lines above
+    inside the same function, and so does every sibling. A one-to-three-line code move above
+    any `read_seed_registration` call would leave all eight specs citing a comment as the
+    reader of seeds, with both censuses green, and an operator re-deriving a spend ceiling
+    reading prose as the code that consumes the registration.
+
+    An `ast.Call` whose callee resolves to the reader cannot be satisfied by prose.
+    """
+    import ast
+
+    tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+    out = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if called == SEED_READER:
+            out.add(node.lineno)
+    return out
+
+
 def stale_citations(path):
     """`[(file, line, what that line actually says)]` for one spec's citation paragraph."""
     out = []
@@ -248,7 +280,7 @@ def stale_citations(path):
         if not 1 <= int(lineno) <= len(lines):
             out.append((name, lineno, "past the end of the file"))
             continue
-        if "seeds" not in lines[int(lineno) - 1]:
+        if int(lineno) not in seed_reader_call_lines(name):
             out.append((name, lineno, lines[int(lineno) - 1].strip()))
     return out
 
@@ -322,9 +354,10 @@ def test_every_citation_in_every_seeds_spec_resolves(spec):
         assert 1 <= int(lineno) <= len(lines), (
             f"{os.path.basename(spec)} cites {name}:{lineno}, past the end of a "
             f"{len(lines)}-line file")
-        assert "seeds" in lines[int(lineno) - 1], (
-            f"{os.path.basename(spec)} cites {name}:{lineno} as a `seeds` reader and that "
-            f"line reads {lines[int(lineno) - 1].strip()!r}")
+        assert int(lineno) in seed_reader_call_lines(name), (
+            f"{os.path.basename(spec)} cites {name}:{lineno} as the reader of the seed "
+            f"registration and that line is not a `{SEED_READER}` CALL; it reads "
+            f"{lines[int(lineno) - 1].strip()!r}")
 
 
 @pytest.mark.parametrize("spec", SEED_SPECS, ids=lambda p: os.path.basename(p))
@@ -392,3 +425,51 @@ def test_the_census_goes_red_on_a_spec_whose_citation_has_drifted(tmp_path):
            .read().splitlines()[int(l) - 1]]
     assert bad == ["build_animate_payload.py:1"], bad
     shutil.rmtree(tmp_path, ignore_errors=True)
+
+
+# ===========================================================================
+# WAVE 23, F-a5089b5f — the citation predicate, and the decoy it must refuse
+# ===========================================================================
+
+
+def test_the_citation_predicate_refuses_a_comment_beside_the_call():
+    """The red proof, kept in the tree.
+
+    A three-line module whose `read_seed_registration` call sits one line BELOW a comment
+    that mentions seeds. The old predicate (`"seeds" in <the cited line>`) says yes to the
+    comment; the AST predicate says no. Both directions asserted, so the decoy proves the
+    difference rather than only the new answer.
+    """
+    import ast
+
+    source = "\n".join([
+        "def main(argv=None):",
+        "    # the registered seeds are read on the next line",
+        "    registered = read_seed_registration(a.seeds, flag='--seeds')",
+        "    return registered",
+    ])
+    lines = source.splitlines()
+    calls = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == SEED_READER:
+            calls.add(node.lineno)
+
+    comment_line = 2
+    assert "seeds" in lines[comment_line - 1], "the decoy does not carry the substring"
+    assert comment_line not in calls, "the AST predicate accepted a comment"
+    assert 3 in calls, calls
+
+
+def test_the_seed_reader_call_lines_are_the_ones_the_specs_cite():
+    """The population, stated: each cited module holds at least one call, and the seven
+    citations are all of them — so a citation cannot drift onto a second, unrelated call
+    site while the census stays green."""
+    cited = {}
+    for spec in SEED_SPECS:
+        for name, lineno in _citations(spec):
+            cited.setdefault(name, set()).add(int(lineno))
+    assert len(cited) == 7, sorted(cited)
+    for name, linenos in sorted(cited.items()):
+        calls = seed_reader_call_lines(name)
+        assert calls, f"{name} is cited as the reader and calls {SEED_READER} nowhere"
+        assert linenos <= calls, (name, sorted(linenos), sorted(calls))

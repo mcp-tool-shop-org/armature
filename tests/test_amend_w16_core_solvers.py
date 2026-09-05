@@ -762,7 +762,7 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     # after the receipt sweep and NOT re-typed. THE CAUSE IS THIS DOMAIN'S EDIT: `rig_gates`
     # cites `lift_solve.py:307` as one of the live call sites passing `sitelist.ALL_NAMES`,
     # and the 12 evidence dicts this wave added to `lift_solve` pushed that line down — it
-    # is blank now. The other two are the pre-existing duplicate `rig_character.py:1050`.
+    # is blank now. The other two are the pre-existing duplicate `rig_character.py::build_pass`.
     # `rig_gates.py` is core-gates' file in the frozen map, so the re-anchor is theirs and
     # is posted to the inbox: the symbol is `lift_solve.py::validate_motion_record`, which
     # is where `sitelist.ALL_NAMES` is read (`:907`, `:915`). This is a CEILING, so their
@@ -770,7 +770,7 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     # what the ceiling is for, and why it is not an equality.
     # RE-DERIVED wave 22 (instruments, F-0b201a20), branch-local, and POSTED as a block
     # rather than fixed here: `armature_core/subject.py:86` cites
-    # `probe_subject.py:133/:150` as LINES, and the correction this wave folded into
+    # `probe_subject.py::probe_one/:150` as LINES, and the correction this wave folded into
     # `require_openable`'s docstring -- the enumeration that named `check_relift` and
     # missed its own twin `probe_glb`, which had no such refusal at all -- moved them
     # down by 14. `subject.py` is core-solvers' file in the frozen domain map, so the
@@ -780,8 +780,8 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     # above it; a symbol does.
     # WAVE-22 MERGE (coordinator, 2026-09-05): the ceiling is MEASURED on the merged tree with the loop
     # above. At the merge commit `41124a9`, re-measured on a clean worktree, it read
-    # {'rig_gates': 3, 'subject': 1}: `rig_gates.py` cited `rig_character.py:1050` twice and
-    # `lift_solve.py:307` once, `subject.py` cited `probe_subject.py:133`, all four blank lines. (The
+    # {'rig_gates': 3, 'subject': 1}: `rig_gates.py` cited `rig_character.py::build_pass` twice and
+    # `lift_solve.py:307` once, `subject.py` cited `probe_subject.py::probe_one`, all four blank lines. (The
     # first resolution of this hunk typed {'rig_gates': 3, 'shotspec': 1, 'subject': 1}, measured on
     # the working tree MID-merge; `shotspec: 1` never held on any committed tree — owned here, and
     # the reason a ceiling is re-measured on the commit rather than on the tree it was resolved on.)
@@ -1109,3 +1109,178 @@ def test_the_optimization_actually_took_effect_for_the_wave_16_probe(tmp_path):
     assert _run_probe16(tmp_path, flag=False)["asserts_active"] is True
     assert _run_probe16(tmp_path, flag=True)["asserts_active"] is False
     assert _run_probe16(tmp_path, env_var=True)["asserts_active"] is False
+
+
+# ===========================================================================
+# WAVE 23, F-673387f4 — the CITATION census over `tests/*.py`
+# ===========================================================================
+#
+# The repo had a citation census for `armature_core/**` (this file, above) and one for
+# `specs/**` (`tests/test_seeds_specs.STALE_CITATIONS_TODAY`) and NONE for `tests/**`,
+# which holds the largest population of prose `<file>.py:<line>` citations in the tree.
+# Measured 2026-09-05 by driving this file's own `_LINE_ANCHOR` and the resolver over every
+# `tests/*.py`: 287 line-anchored citations, of which 45 landed on a BLANK line — among
+# them `test_gates.py`'s anchor into `stage_render`'s argv parser, `test_render_visibility`'s
+# into `preview_walk` and `render_performer`, and three in `test_ci_workflows.py` naming one
+# line of `test_packaging.py`. This is the tests half of the wave-16 seam in
+# which 27 deleted constructors moved 57 prose citations across three trees; a seat opening
+# a cited line to check a claim read a blank line, and the repo's law — every `file:line`
+# opened before it is trusted — had no mechanism behind it in the directory that cites most.
+#
+# WHAT WAS DONE, and the rule is mechanical rather than a matter of taste:
+#
+#   * a stale citation whose line falls INSIDE a definition is RE-ANCHORED on that
+#     definition (`<file>.py::<symbol>`) — 18 of them, in 13 modules. The symbol survives
+#     the edit that moved the line, which is the ruling `tests/test_gates.py` already made
+#     for this repo: `(file, function, class)` is the identity and a line number is not.
+#   * a stale citation whose line falls BETWEEN definitions is RECORDED below with the
+#     measurement, not re-anchored. The nearest symbol there is "the next thing down the
+#     file", which is not what the sentence claims — and most of these are CORRECTION
+#     RECORDS in the first place: a number quoted inside the sentence that says it was
+#     wrong — this file's own `CORRECTED_ANCHORS` rows, `test_instruments_amend_w14`
+#     quoting the render-site anchor its wave-23 fix overturned, `test_instruments_amend_w22`
+#     quoting the two `single_path_segment` copies wave 22 deleted. Re-anchoring those would
+#     delete the record, which is the one thing this repo's correction law forbids.
+#
+# THIS BLOCK'S OWN PROSE carries no `<file>.py:<line>`, for the reason the census exists:
+# the first draft of it quoted three of the stale anchors as examples and the census went
+# red on itself. A comment that explains a rule is inside the population the rule governs.
+#
+# The exemption table for filenames that do not resolve is separate and named: five cited
+# basenames are deliberate synthetics or third-party modules, not repo files.
+
+#: MEASURED 2026-09-05. Cited basenames that are in NO search directory: three are
+#: deliberate synthetics a fixture writes (`fake_mod.py`, `test_newly_wide.py`) or
+#: names a decoy uses, and two are third-party modules quoted from a traceback
+#: (`Image.py` is Pillow's, `dist.py` and `_apply_pyprojecttoml.py` are setuptools').
+#: Named rather than silently skipped, and the table cannot grow.
+TESTS_CITED_FILES_NOT_IN_THE_TREE = {
+    'Image.py',
+    '_apply_pyprojecttoml.py',
+    'dist.py',
+    'fake_mod.py',
+    'test_newly_wide.py',
+}
+
+#: MEASURED 2026-09-05: stale citations KEPT, because the number is quoted inside the
+#: sentence that records it as wrong, or sits between definitions where the nearest
+#: symbol is not what the sentence claims. Keyed `(citing module, cited file, line)`,
+#: the same shape as `CORRECTED_ANCHORS` above. Checked rather than trusted: a row
+#: that becomes live again fails `test_the_recorded_stale_anchors_are_all_still_stale`.
+TESTS_STALE_ANCHORS_RECORDED = {
+    ('test_amend_w12_core_gates', 'test_route_gates.py', 1893),
+    ('test_amend_w16_core_solvers', 'lift_solve.py', 307),
+    ('test_amend_w18_builders', 'build_r2v_payload.py', 69),
+    ('test_assembly', 'test_amend_w12_core_solvers.py', 797),
+    ('test_ci_workflows', 'test_packaging.py', 1013),
+    ('test_donor_gate', 'render_pose_sticks.py', 178),
+    ('test_instrument_exits', 'author_walk.py', 13),
+    ('test_instruments_amend_w10', 'render_pose_sticks.py', 178),
+    ('test_instruments_amend_w10', 'test_check_relift.py', 44),
+    ('test_instruments_amend_w14', 'blender_scene.py', 772),
+    ('test_instruments_amend_w16', 'test_instruments_amend_w14.py', 468),
+    ('test_instruments_amend_w18', 'test_amend_w16_builders.py', 815),
+    ('test_instruments_amend_w22', 'pack_pose_pack.py', 82),
+    ('test_instruments_amend_w22', 'resample_motion.py', 76),
+    ('test_instruments_amend_w22', 'test_amend_w16_builders.py', 815),
+    ('test_instruments_amend_w8', 'test_retopo_and_bake.py', 122),
+    ('test_make_rig_sheet', 'rig_repair.py', 150),
+    ('test_probe_glb', 'probe_subject.py', 88),
+    ('test_refusal_clauses', 'pack_pose_pack.py', 164),
+}
+
+
+def line_anchors_under_tests():
+    """`[(citing module, cited file, line)]` for every `<file>.py:<line>` in `tests/*.py`."""
+    out = []
+    for path in sorted(glob.glob(os.path.join(TESTS, "test_*.py"))):
+        stem = os.path.basename(path)[:-3]
+        src = io.open(path, encoding="utf-8").read()
+        for m in _LINE_ANCHOR.finditer(src):
+            out.append((stem, m.group(1), int(m.group(2))))
+    return out
+
+
+def stale_tests_citations():
+    """`{(citing module, cited file, line): why}` — every citation that cannot be opened."""
+    bad = {}
+    for stem, name, lineno in line_anchors_under_tests():
+        path = _resolve_cited_file(name)
+        if path is None:
+            if name not in TESTS_CITED_FILES_NOT_IN_THE_TREE:
+                bad[(stem, name, lineno)] = "the cited file does not exist"
+            continue
+        lines = io.open(path, encoding="utf-8").read().splitlines()
+        if not 1 <= lineno <= len(lines):
+            bad[(stem, name, lineno)] = f"past the end of a {len(lines)}-line file"
+        elif not lines[lineno - 1].strip():
+            bad[(stem, name, lineno)] = "the cited line is blank"
+    return bad
+
+
+def test_the_tests_citation_population_is_not_empty():
+    """A walk that matched nothing would make the census below vacuously green."""
+    anchors = line_anchors_under_tests()
+    assert len(anchors) > 200, len(anchors)
+    assert len({s for s, _n, _l in anchors}) > 40, "the walk is reaching one module"
+
+
+def test_no_citation_in_tests_opens_a_blank_line_or_runs_past_the_end():
+    """The property. A seat opening a cited line to check a claim must find code there.
+
+    Every stale citation is either RE-ANCHORED on the symbol that holds it, or recorded in
+    `TESTS_STALE_ANCHORS_RECORDED` with the reason — which for most of them is that the
+    number is quoted inside the sentence that records it as wrong, and deleting it would
+    delete the correction.
+    """
+    bad = {k: v for k, v in stale_tests_citations().items()
+           if k not in TESTS_STALE_ANCHORS_RECORDED}
+    assert bad == {}, {
+        "stale and not recorded": bad,
+        "how to fix": "re-anchor on `<file>.py::<symbol>` where the cited line sits inside "
+                      "a definition; otherwise add a row to TESTS_STALE_ANCHORS_RECORDED "
+                      "with the reason the number is kept",
+    }
+
+
+def test_the_recorded_stale_anchors_are_all_still_stale():
+    """An exemption is checked, not trusted (wave 8, rule 4). A row that has become live
+    again is a row to delete, and it fails HERE rather than quietly excusing a citation the
+    census would now pass on its own."""
+    stale = set(stale_tests_citations())
+    gone = sorted(k for k in TESTS_STALE_ANCHORS_RECORDED if k not in stale)
+    assert gone == [], (
+        f"these recorded anchors resolve to real code again; delete their rows in the same "
+        f"commit: {gone}")
+
+
+def test_the_unresolvable_cited_filenames_are_the_named_synthetics():
+    """The other exemption, derived: a cited basename that is in no search directory is
+    either one of the five deliberate synthetics / third-party modules, or a typo."""
+    unresolved = {}
+    for stem, name, _lineno in line_anchors_under_tests():
+        if _resolve_cited_file(name) is None:
+            unresolved.setdefault(name, set()).add(stem)
+    assert sorted(unresolved) == sorted(TESTS_CITED_FILES_NOT_IN_THE_TREE), {
+        "cited, unresolvable and not named": sorted(set(unresolved)
+                                                    - set(TESTS_CITED_FILES_NOT_IN_THE_TREE)),
+        "named and now resolvable (delete the row)":
+            sorted(set(TESTS_CITED_FILES_NOT_IN_THE_TREE) - set(unresolved)),
+    }
+
+
+def test_the_tests_citation_census_goes_red_on_a_blank_line(tmp_path):
+    """The red proof for the PREDICATE, on a synthetic pair: one citation onto a code line
+    and one onto a blank line in the same file, so the check is shown to separate them
+    rather than to answer the same way twice."""
+    target = tmp_path / "synthetic_cited.py"
+    target.write_text("def held():\n    return 1\n\n\ndef other():\n    return 2\n",
+                      encoding="utf-8")
+    lines = target.read_text(encoding="utf-8").splitlines()
+    assert lines[1].strip() and not lines[2].strip()
+
+    def blank_at(lineno):
+        return not lines[lineno - 1].strip()
+
+    assert not blank_at(2), "the code line reads as blank; the predicate is broken"
+    assert blank_at(3), "the blank line reads as code; the predicate cannot fire"

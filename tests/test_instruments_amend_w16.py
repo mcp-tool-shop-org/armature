@@ -888,24 +888,103 @@ def test_isolate_subject_still_refuses_a_decoy_the_renderer_would_draw(retopo16)
     assert "collection_render_flags" in ev["visibility"]
 
 
-def test_neither_visibility_andon_carries_its_own_one_level_predicate():
-    """THE POPULATION, read off the tree: no andon in this domain answers render
-    visibility with a second implementation. `blender_scene.collection_render_flags` is the
-    one walk; `any(c.hide_render for c in ...)` is the shape that was wrong twice.
+#: The two andons that answer render visibility, and the function each answers it in.
+#: The FUNCTION is named because the property is "this andon consults the one walk", and a
+#: call anywhere else in the module does not give it to this one.
+VISIBILITY_ANDONS = [
+    ("rig_character.py", "gate_objects_registered"),
+    ("rig_retopo.py", "isolate_subject"),
+]
 
-    Reverted-red: yes — the base tree carries that comprehension at `rig_character.py:664`
-    and `rig_retopo.py:317`.
+ONE_WALK = "collection_render_flags"
+
+
+def _calls_the_walk(tree, function_name):
+    """Line numbers where `function_name` CALLS the one walk — an `ast.Call` whose callee
+    resolves to it, never a substring of the file."""
+    fns = [n for n in ast.walk(tree)
+           if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+           and n.name == function_name]
+    assert len(fns) == 1, (function_name, [n.lineno for n in fns])
+    out = []
+    for node in ast.walk(fns[0]):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if called == ONE_WALK:
+            out.append(node.lineno)
+    return sorted(out)
+
+
+@pytest.mark.parametrize("filename,function_name", VISIBILITY_ANDONS,
+                         ids=[f"{f}::{n}" for f, n in VISIBILITY_ANDONS])
+def test_each_visibility_andon_CALLS_the_one_walk(filename, function_name):
+    """WAVE 23, F-73402474 — keyed on an `ast.Call` inside the andon's own function.
+
+    This was `assert "collection_render_flags(" in src`, which reads the RAW SOURCE TEXT of
+    the module, so a comment or a docstring naming the walk satisfies it — the shape wave 6
+    removed from `tests/test_canon_spend.py` and wave 15 closed as `F-09a56210` at a
+    different site, recurring here at a new one. Both modules mention the name in prose
+    beside the call (`rig_character.py:785`, `:813`; `rig_retopo.py:331`, `:356`), so the
+    substring survives deleting the call.
+
+    Measured 2026-09-05 by running BOTH clauses of the old test over a three-line source
+    whose only mention of the walk is a comment and which returns `ob.hide_render`: both
+    passed. `test_a_comment_naming_the_walk_does_not_satisfy_the_clause` below is that decoy,
+    kept in the tree.
     """
-    for filename in ("rig_character.py", "rig_retopo.py"):
-        src = read_source(filename)
-        assert "collection_render_flags(" in src, filename
-        for node in ast.walk(ast.parse(src)):
-            if not isinstance(node, ast.GeneratorExp):
-                continue
-            text = ast.unparse(node)
-            assert "hide_render" not in text or "users_collection" not in text, (
-                f"{filename}:{node.lineno} answers render visibility one level deep "
-                f"again: {text}")
+    tree = ast.parse(read_source(filename))
+    sites = _calls_the_walk(tree, function_name)
+    assert sites, (
+        f"{filename}::{function_name} does not CALL `{ONE_WALK}`. The prose beside it may "
+        f"still name the walk; a substring check reads that as compliance.")
+
+
+@pytest.mark.parametrize("filename,function_name", VISIBILITY_ANDONS,
+                         ids=[f"{f}::{n}" for f, n in VISIBILITY_ANDONS])
+def test_no_visibility_andon_carries_its_own_one_level_predicate(filename, function_name):
+    """The other clause, unchanged in intent and narrowed to the andon's own function.
+
+    `any(c.hide_render for c in ...)` is the shape that was wrong twice. On its own this
+    clause is satisfied by code that consults NO collection visibility at all — which is why
+    it now sits beside the CALL check rather than instead of one.
+
+    Reverted-red: the base tree carried that comprehension at `rig_character.py:664` and
+    `rig_retopo.py:317`.
+    """
+    tree = ast.parse(read_source(filename))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.GeneratorExp):
+            continue
+        text = ast.unparse(node)
+        assert "hide_render" not in text or "users_collection" not in text, (
+            f"{filename}:{node.lineno} answers render visibility one level deep "
+            f"again: {text}")
+
+
+def test_a_comment_naming_the_walk_does_not_satisfy_the_clause():
+    """The decoy, kept in the tree: the exact substitution that used to pass.
+
+    A module whose only mention of `collection_render_flags` is a comment, and which returns
+    `ob.hide_render` — one level deep, the twice-wrong shape. The substring predicate says
+    yes; the AST predicate says no. Both directions asserted, so the decoy proves the
+    difference rather than only the new answer.
+    """
+    decoy = "\n".join([
+        "def gate_objects_registered(scene, obs):",
+        "    # visibility comes from blender_scene.collection_render_flags(scene)",
+        "    return [ob for ob in obs if not ob.hide_render]",
+    ])
+    assert ONE_WALK + "(" in decoy, "the decoy does not carry the substring it must"
+    assert _calls_the_walk(ast.parse(decoy), "gate_objects_registered") == []
+
+    real = "\n".join([
+        "def gate_objects_registered(scene, obs):",
+        "    reachable, hidden = blender_scene.collection_render_flags(scene)",
+        "    return reachable",
+    ])
+    assert _calls_the_walk(ast.parse(real), "gate_objects_registered") == [2]
 
 
 # ================================== F-26ee2b03 — the flag that shapes the ground truth

@@ -387,24 +387,69 @@ def test_gate_glb_takes_no_default_for_result_or_before(rigchar):
 # THE NODE (wave-8 rule): the population is derived by AST from `tools/*.py`, keyed on the
 # CALL — `bpy.ops.export_scene.gltf` / `bpy.ops.render.render` — and the property is that
 # the call is the value of an assignment, i.e. that the status set is captured at all.
-# `armature_core/` is excluded by PATH (it is another domain's; its one render site,
-# `blender_scene.py:772`, is `write_still=False` — a MEASUREMENT render, not a write), and
-# `tools/superseded/` is excluded from the SIZE pin by path while still being required to
-# carry the property, because a retired route may come and go.
+# WAVE 23, F-bca562a1 — `armature_core/` IS IN THE CENSUS, and the exclusion that kept it
+# out is replaced by the measurement that overturned it.
+#
+# The docstring here read "`armature_core/blender_scene.py:772` is excluded by PATH (another
+# domain's file, and a `write_still=False` MEASUREMENT render rather than a write)". Both
+# halves fail. The site is at `blender_scene.py::render_frame`, not `:772`. It sits inside
+# `render_frame`, which writes one EXR per channel through compositor File Output nodes, and
+# whose Gate FRAME andon (`RenderedFrame`, raised at `:958` with clause `operator_status`)
+# exists precisely because those writes can silently be the PREVIOUS run's frames — the
+# module's own text at `:938-941` says the check proves each path differs from whatever stood
+# there before the call ran. `write_still=False` is still literally true and is no longer a
+# reason: the frames reach disk through the compositor, not through `write_still`.
+#
+# So the walk is RECURSIVE over `tools/`, which brings `armature_core/` in and leaves
+# `tools/superseded/` excluded from the SIZE pin by name (a retired route may come and go)
+# while still being required to carry the property. What was outside: a second
+# `bpy.ops.render.render` added anywhere in `armature_core` — the package every previz render
+# the video model paints over goes through — was required by no census to capture its status
+# set, and a CANCELLED render that returns without raising hands the run the previous frames.
 
 
-def _operator_call_sites(directory, dotted):
-    """Every `<dotted>(...)` call in the `.py` files directly under `directory`.
+SUPERSEDED = "superseded"
 
-    Returns `[(filename, lineno, captured)]` where `captured` is True when the call is the
-    value of an assignment. Keyed on the CALL node, so a rename of the local variable, a
-    different keyword set, or a call inside a comprehension is all still one member.
+
+def census_sources(directory, *, recursive=True, skip=(SUPERSEDED, "__pycache__")):
+    """`[(label, path)]` for the `.py` files this census reads under `directory`.
+
+    ONE home for the population, because three checks below iterate it and two of them used
+    `os.listdir` — non-recursive — which is how `tools/armature_core/` sat outside every one
+    of them (F-bca562a1). `label` is the path relative to `directory`, POSIX-spelled, so a
+    member in a subpackage is reported as `armature_core/blender_scene.py` rather than as a
+    bare basename that could collide.
     """
     out = []
-    for fn in sorted(os.listdir(directory)):
-        if not fn.endswith(".py"):
-            continue
-        with open(os.path.join(directory, fn), encoding="utf-8") as fh:
+    if not recursive:
+        for fn in sorted(os.listdir(directory)):
+            if fn.endswith(".py"):
+                out.append((fn, os.path.join(directory, fn)))
+        return out
+    for root, dirs, names in os.walk(directory):
+        dirs[:] = sorted(d for d in dirs if d not in skip)
+        for fn in sorted(names):
+            if not fn.endswith(".py"):
+                continue
+            path = os.path.join(root, fn)
+            label = os.path.relpath(path, directory).replace(os.sep, "/")
+            out.append((label, path))
+    return sorted(out)
+
+
+def _operator_call_sites(directory, dotted, *, recursive=True):
+    """Every `<dotted>(...)` call in the `.py` files under `directory`.
+
+    Returns `[(label, lineno, captured)]` where `captured` is True when the call is the
+    value of an assignment. Keyed on the CALL node, so a rename of the local variable, a
+    different keyword set, or a call inside a comprehension is all still one member.
+
+    RECURSIVE since wave 23 (F-bca562a1), skipping `superseded/` — which is walked by its
+    own call below, because it is excluded from the size pin and not from the property.
+    """
+    out = []
+    for fn, path in census_sources(directory, recursive=recursive):
+        with open(path, encoding="utf-8") as fh:
             src = fh.read()
         tree = ast.parse(src)
         captured_calls = set()
@@ -429,6 +474,8 @@ def test_every_glb_export_site_captures_the_operator_status_set():
     (`grep -rn '= *bpy.ops.export_scene.gltf' tools/*.py` returned nothing).
     """
     sites = _operator_call_sites(TOOLS, "bpy.ops.export_scene.gltf")
+    # RE-DERIVED wave 23 under the recursive walk: 9, unchanged — `armature_core/` exports
+    # no GLB, so the widening moves this pin not at all, which is itself the measurement.
     assert len(sites) == 9, sites
     assert sorted({fn for fn, _, _ in sites}) == [
         "author_walk.py", "lift_solve.py", "make_test_armature.py", "rig_bake.py",
@@ -438,16 +485,82 @@ def test_every_glb_export_site_captures_the_operator_status_set():
     assert uncaptured == [], uncaptured
 
 
-def test_every_render_site_captures_the_operator_status_set():
-    """The other half of the family: fourteen `bpy.ops.render.render` sites in `tools/*.py`.
+#: RE-DERIVED wave 23 (F-bca562a1) under the recursive walk: 14 -> 15. The member that
+#: joined is `armature_core/blender_scene.py`, whose render site the old docstring excluded
+#: on a stated reason wave 18 measured to be false. It was ALREADY compliant — the status is
+#: captured and Gate FRAME refuses on it — so the widening moves the size and finds no
+#: offender, which is the honest result: what was outside the census was the requirement,
+#: not a defect.
+#:
+#: Re-derive with:
+#:     python -c "import sys;sys.path[:0]=['tests','tools'];
+#:     import test_instruments_amend_w14 as M;
+#:     print(len(M._operator_call_sites(M.TOOLS,'bpy.ops.render.render')))"
+RENDER_SITES_TODAY = 15
+RENDER_SITE_MODULES_TODAY = [
+    "armature_core/blender_scene.py", "make_binding_sheet.py", "make_parts_sheet.py",
+    "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py", "render_performer.py",
+    "render_start_frame.py", "render_turnaround.py",
+]
 
-    `armature_core/blender_scene.py:772` is excluded by PATH (another domain's file, and a
-    `write_still=False` MEASUREMENT render rather than a write).
+
+def test_every_render_site_captures_the_operator_status_set():
+    """The other half of the family: every `bpy.ops.render.render` site under `tools/`,
+    `armature_core/` INCLUDED.
+
+    The exclusion that kept `armature_core/` out is replaced by the measurement that
+    overturned it — see the block comment above `census_sources`. Membership is pinned as
+    well as size, so the module that joined is named rather than absorbed into a count.
     """
     sites = _operator_call_sites(TOOLS, "bpy.ops.render.render")
-    assert len(sites) == 14, sites
+    assert len(sites) == RENDER_SITES_TODAY, sites
+    assert sorted({fn for fn, _, _ in sites}) == RENDER_SITE_MODULES_TODAY,         sorted({s[0] for s in sites})
     uncaptured = [(fn, ln) for fn, ln, cap in sites if not cap]
     assert uncaptured == [], uncaptured
+
+
+def test_the_widened_census_reaches_the_site_the_exclusion_named():
+    """The finding's operand, by name: the site is in `armature_core/blender_scene.py`, it
+    is inside `render_frame`, and the census now holds it.
+
+    The stale docstring cited `blender_scene.py:772`; measured 2026-09-05 the call is at
+    `:949` and `RenderedFrame` is raised at `:958` with clause `operator_status`. A
+    line-number citation is prose; the FUNCTION and the clause are what this asserts.
+    """
+    sites = [s for s in _operator_call_sites(TOOLS, "bpy.ops.render.render")
+             if s[0] == "armature_core/blender_scene.py"]
+    assert len(sites) == 1, sites
+    _label, lineno, captured = sites[0]
+    assert captured, "the status set is not captured at the one render site every previz "                      "render goes through"
+
+    path = os.path.join(TOOLS, "armature_core", "blender_scene.py")
+    tree = ast.parse(open(path, encoding="utf-8").read())
+    holder = None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))                 and node.lineno <= lineno <= (node.end_lineno or node.lineno):
+            if holder is None or node.lineno > holder.lineno:
+                holder = node
+    assert holder is not None and holder.name == "render_frame", holder
+
+    # The clause is ASSIGNED into the evidence dict here (`ev["clause"] = "operator_status"`
+    # immediately above the raise) rather than written as a literal inside the raise's own
+    # `{...}`. `_refusal_clause` reads the literal form only and returns None for all four
+    # raises in this function — a limit of that predicate worth recording, not a defect in
+    # the module: the halt line an operator reads carries the same string either way.
+    assigned = [n for n in ast.walk(holder)
+                if isinstance(n, ast.Assign) and len(n.targets) == 1
+                and isinstance(n.targets[0], ast.Subscript)
+                and isinstance(n.targets[0].slice, ast.Constant)
+                and n.targets[0].slice.value == "clause"
+                and isinstance(n.value, ast.Constant)
+                and n.value.value == OPERATOR_STATUS_CLAUSE]
+    assert assigned, (
+        f"{holder.name} does not declare the `{OPERATOR_STATUS_CLAUSE}` clause; a CANCELLED "
+        f"render that returns without raising hands the run the previous frames")
+    guards = [n for n in ast.walk(holder)
+              if isinstance(n, ast.If) and "FINISHED" in ast.unparse(n.test)
+              and any(isinstance(b, ast.Raise) for b in n.body)]
+    assert guards, "the captured status set reaches no refusal"
 
 
 def test_the_superseded_render_site_captures_its_status_set_too():
@@ -510,14 +623,12 @@ def test_every_captured_render_status_reaches_a_refusal():
     `FINISHED`-testing `if` with a `raise` in its body per site. Keyed on the AST.
     """
     offenders = []
-    for root in (TOOLS, os.path.join(TOOLS, "superseded")):
-        for fn in sorted(os.listdir(root)):
-            if not fn.endswith(".py"):
-                continue
-            with open(os.path.join(root, fn), encoding="utf-8") as fh:
+    for root, recursive in ((TOOLS, True), (os.path.join(TOOLS, "superseded"), False)):
+        for fn, path in census_sources(root, recursive=recursive):
+            with open(path, encoding="utf-8") as fh:
                 src = fh.read()
-            n_sites = sum(1 for f, _, _ in _operator_call_sites(root, "bpy.ops.render.render")
-                          if f == fn)
+            n_sites = sum(1 for f, _, _ in _operator_call_sites(
+                root, "bpy.ops.render.render", recursive=recursive) if f == fn)
             if not n_sites:
                 continue
             tree = ast.parse(src)
@@ -552,23 +663,38 @@ def test_every_captured_render_status_reaches_a_refusal():
     assert offenders == [], offenders
 
 
-def test_the_render_status_helper_is_byte_identical_in_every_copy():
+def test_the_render_status_helper_is_one_implementation_in_every_copy():
     """It is spelled once per tool because `armature_core` is out of this domain's globs.
-    The duplication is held from drifting rather than excused."""
+    The duplication is held from drifting rather than excused.
+
+    WAVE 23 (F-bca562a1): the copy in `armature_core/blender_scene.py` joins this census
+    with the recursive walk — 9 copies became 10. Its DOCSTRING differs (it records that its
+    executable body is copied verbatim from `render_turnaround`), so the comparison is on
+    the EXECUTABLE BODY with the docstring stripped, which is the resolved shape of "one
+    implementation" and a stronger property than byte-identity of the whole node: it admits
+    a copy that documents where it came from and still refuses one whose code has drifted.
+    Measured 2026-09-05: 10 copies, ONE distinct executable body,
+    `try: return sorted(str(s) for s in result) / except TypeError: return []`.
+    """
     bodies = {}
-    for root in (TOOLS, os.path.join(TOOLS, "superseded")):
-        for fn in sorted(os.listdir(root)):
-            if not fn.endswith(".py"):
-                continue
-            with open(os.path.join(root, fn), encoding="utf-8") as fh:
+    for root, recursive in ((TOOLS, True), (os.path.join(TOOLS, "superseded"), False)):
+        for fn, path in census_sources(root, recursive=recursive):
+            with open(path, encoding="utf-8") as fh:
                 src = fh.read()
             if "def _render_status" not in src:
                 continue
             tree = ast.parse(src)
             node = next(n for n in tree.body
                         if isinstance(n, ast.FunctionDef) and n.name == "_render_status")
-            bodies[os.path.join(os.path.basename(root), fn)] = ast.unparse(node)
-    assert len(bodies) == 9, sorted(bodies)
+            body = list(node.body)
+            if (body and isinstance(body[0], ast.Expr)
+                    and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                body = body[1:]
+            label = fn if root == TOOLS else f"superseded/{fn}"
+            bodies[label] = "; ".join(ast.unparse(b) for b in body)
+    assert len(bodies) == 10, sorted(bodies)
+    assert "armature_core/blender_scene.py" in bodies, sorted(bodies)
     assert len(set(bodies.values())) == 1, sorted(bodies)
 
 

@@ -779,10 +779,15 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # `SpendCeiling` is deliberately not reproduced here.
     # WAVE 18 (builders): 125 → 126 — +1 `gate_saved_graph.SavedAdmission` (F-c11410c5).
     # ⚠ `build_r2v_payload.SpendCeiling` does NOT move this number: it was already visible
-    # here, because THIS file's `_family_classes_defined_under_tools` resolves a dotted base
-    # while `tests/test_gates._armature_error_family` does not — which is precisely the
-    # F-d8593862 defect (two censuses of one family disagreeing about its membership).
-    # Widening the other walk is Stage B.
+    # here, because THIS file's `_family_classes_defined_under_tools` resolved a dotted base
+    # while `tests/test_gates._armature_error_family` did not — precisely the F-d8593862
+    # defect (two censuses of one family disagreeing about its membership).
+    # CLOSED WAVE 23 (F-74339050): `tests/test_gates._armature_error_family` reads an
+    # `_ast.Attribute` base too, and `test_gates.py::test_the_two_family_walks_are_one_law`
+    # reconciles the two implementations by equality, so the disagreement cannot return
+    # silently. Re-measured 2026-09-05: both walks yield the same 134 names, symmetric
+    # difference empty, and there are ZERO dotted-base class definitions under `tools/**` —
+    # the defect was latent by then, and the red proof is a synthetic class.
     #      ⚠ **BRANCH-LOCAL.** This is measured in `w18-builders` and is a COMPOSITION on the
     #      merged tree (core-solvers posts +3 and core-gates +5 on the sibling pins); it must be
     #      RE-DERIVED there by measurement, never summed. tests' SEAM 11 carries the
@@ -1263,3 +1268,714 @@ def test_every_converted_refusal_carries_an_evidence_dict():
     for cls in (make_ab_clip.ABClipError, make_shotset_sheet.ShotsetSheetError,
                 make_zoom_sheet.ZoomSheetError):
         assert issubclass(cls, ArmatureError), cls
+
+
+# ===========================================================================
+# WAVE 23, F-5c1b574d — THE CLAUSE VOCABULARY, censused
+# ===========================================================================
+#
+# `clause` is the machine-readable word a halt reader keys on — this repo's own stated
+# contract, `tests/test_instruments_amend_w14.py:461`: "a halt reader keys on that string,
+# never on the sentence around it". It had no census at all, so a clause word could be
+# added, misspelled or duplicated and nothing in the suite was required to change.
+#
+# MEASURED 2026-09-05 over `tools/**` (`armature_core/` included), both spellings that
+# reach a halt line — the literal inside an evidence dict and the assignment into one:
+# 385 distinct clause words, of which 132 are named nowhere in
+# `tests/*.py`. Two of those are Gate ROUTE's own, on the last gate before a paid
+# submission (`unknown_hosted_tier`, `two_answers`); others sit on the spend and fetch path
+# (`arm_input_missing` and `missing_arm_input` in `build_r2v_payload`, `plan_paths_collide`
+# and `downloader_job_exits` in `fetch_run`, `order_unvouched` in `fetch_t2v_run`,
+# `escape_unknown`, `no_surfaces` and `not_object` in `canon`).
+#
+# THE DUPLICATION IS PRESENT RATHER THAN HYPOTHETICAL, and it is out of this domain:
+# `tools/build_r2v_payload.py` raises Gate ROUTE with `arm_input_missing` at `:134` and
+# `:144` and with `missing_arm_input` at `:317` — two spellings of one condition on the
+# hosted partner tier that bills per submission, neither named by any test. Recorded in
+# `ONE_CONDITION_TWO_SPELLINGS` below and posted to the wave-23 seams inbox for builders;
+# the census asserts BOTH spellings still exist, so deleting one forces the table to be
+# updated in the same commit.
+#
+# The walk has ONE home, `_census_nodes.clause_literals`.
+#
+# Re-derive with:
+#     python -c "import sys,json;sys.path.insert(0,'tests');import _census_nodes as C;
+#     print(len(C.clause_literals()))"
+
+import glob  # noqa: E402
+
+import _census_nodes as _CN_CLAUSES  # noqa: E402
+
+TESTS_DIR = TESTS
+
+#: DERIVED 2026-09-05 by `_census_nodes.clause_literals()`. Equality.
+RECORDED_CLAUSES = [
+    'SEGMENTATION: no image corner is inside the subject mask; a row that fails carries angle_deg_measured null and a failed_reason',
+    'above_one',
+    'adjacent_pair_shapes_differ',
+    'allowlist_name_pattern',
+    'alpha_declaration_missing',
+    'alpha_disagrees_with_the_file',
+    'anchor_not_a_number',
+    'anchor_not_a_pair',
+    'anchor_outside_unit_interval',
+    'arc_did_not_survive',
+    'arc_does_not_move',
+    'arm_input_missing',
+    'arm_not_in_experiment',
+    'asset_has_no_evaluated_geometry',
+    'asset_imported_no_mesh_objects',
+    'atlas_has_no_pixels',
+    'attribution_cannot_reach_the_gate_that_checks_it',
+    'attribution_for_unconditional_row',
+    'authoring_rate_not_positive',
+    'bad_magic',
+    'band_too_narrow',
+    'banned_component_in_base',
+    'batch_node_is_not_a_batch',
+    'batch_node_over_the_slot_ceiling',
+    'bisect_target_not_finite',
+    'bit1_not_grayscale',
+    'bit1_values',
+    'bit8_dtype',
+    'blend_band_not_positive',
+    'blocked_addition',
+    'blocked_addition_empty',
+    'blocked_addition_phrase',
+    'blocked_addition_shape',
+    'blocked_additions_not_a_list',
+    'body_keypoints_wrong_shape',
+    'bone_has_an_unknown_rule',
+    'bone_has_no_model_rule',
+    'bone_has_no_registered_cross_section',
+    'bone_has_zero_rest_length',
+    'bone_radius_not_positive',
+    'bone_set_changes_between_frames',
+    'bufferview_negative_range',
+    'bufferview_no_bytelength',
+    'bufferview_not_an_index',
+    'bufferview_out_of_range',
+    'bufferview_past_bin_chunk',
+    'cadence_outruns_frame_rate_at_a_stance_exchange',
+    'camera_widget_order',
+    'candidate_frames_are_not_all_one_size',
+    'cap_below_the_bbox_corners',
+    'cap_would_loosen_the_module_ceiling',
+    'census_is_not_a_mapping',
+    'centreline_has_zero_length',
+    'centroids_not_n_by_3',
+    'channel_is_zero_bytes',
+    'channel_never_reached_disk',
+    'checkbox',
+    'child_bone_has_no_length',
+    'class_not_named_by_the_allowlist',
+    'class_with_an_unreadable_measurement_date',
+    'class_without_a_recorded_free_measurement',
+    'clip_end_is_closer_than_the_subject',
+    'clip_would_be_written_outside_out',
+    'compensator_target_carries_no_run_marker',
+    'composite_colour_carries_a_non_number',
+    'composite_colour_not_linear_unit_floats',
+    'composite_colour_not_three_floats',
+    'composition_puts_points_behind_the_camera',
+    'composition_unreachable',
+    'conditional_tier_without_its_readers',
+    'convention_nonconformance',
+    'convention_pin_disagrees',
+    'converted_widget_shifts_enum_indices',
+    'converted_widget_shifts_recorded_indices',
+    'cover',
+    'cover_crop_produced_the_wrong_size',
+    'create_video_fps',
+    'cv2_could_not_read_the_source',
+    'cv2_refused_the_frame_write',
+    'cv2_refused_the_strip_write',
+    'cv2_refused_the_write',
+    'declared_group_size_above_the_ceiling',
+    'declared_total_disagrees',
+    'decoded_rate_disagrees_with_the_declaration',
+    'decoded_rate_not_finite',
+    'degenerate_bounding_box',
+    'degenerate_plate',
+    'degenerate_target_frame',
+    'depth_buffer_is_not_the_frame_size',
+    'destination_frame_count_below_two',
+    'diagnostic_cannot_be_armed',
+    'downloader_job_exits',
+    'drawing_constant_outside_the_record',
+    'drawing_convention_not_retrieved',
+    'duplicate_link_id',
+    'duplicate_socket_name',
+    'duplicate_subgraph_id',
+    'duplicate_subgraph_label',
+    'empty_expectation',
+    'empty_gradient_band',
+    'empty_graph',
+    'empty_keypoint_population',
+    'empty_point_cloud',
+    'empty_prompt',
+    'empty_reference',
+    'empty_results',
+    'empty_set',
+    'encode_rate_not_positive',
+    'engine',
+    'escape',
+    'escape_no_subject',
+    'escape_unknown',
+    'every_imported_mesh_is_hidden_from_render',
+    'every_point_behind_the_camera',
+    'expectation_carries_a_duplicated_frame',
+    'expectation_is_not_the_frame_list',
+    'expected_rate_not_finite',
+    'expected_rate_not_positive',
+    'extent_over_zero_points',
+    'extraction_left_no_faces',
+    'ffmpeg_binary_not_found',
+    'field_absent',
+    'field_disagrees',
+    'fit_disagrees_with_the_file',
+    'flag_component_not_an_integer',
+    'forbidden_not_a_list',
+    'forbidden_word',
+    'frame_absent_from_manifest',
+    'frame_and_predecessor_are_different_sizes',
+    'frame_array_shape_is_unsupported',
+    'frame_carries_an_alpha_channel',
+    'frame_form',
+    'frame_hints_are_parallel',
+    'frame_index_not_in_the_clip',
+    'frame_is_colour_not_grayscale',
+    'frame_is_missing_a_bone',
+    'frame_is_not_eight_bit',
+    'frame_is_palette_indexed',
+    'frame_not_hw3',
+    'frame_not_three_integers',
+    'frame_size_not_positive',
+    'frame_source_not_callable',
+    'frame_source_not_reiterable',
+    'frame_triple',
+    'frame_type',
+    'frame_zero_carries_no_bones',
+    'frames_are_not_all_one_size',
+    'frames_are_not_contiguous',
+    'frames_without_index',
+    'gate_l_frame_source',
+    'gate_s_registration',
+    'gated_text_is_not_shipped_text',
+    'graph_file_missing',
+    'group_node_count_disagrees_with_the_plan',
+    'group_size_below_one',
+    'hand_has_no_length',
+    'hand_keypoints_wrong_shape',
+    'hand_length_not_positive',
+    'hinge_hint_is_parallel_to_the_bone',
+    'hosted_enum_widgets_truncated',
+    'identity_only',
+    'import',
+    'interior_sample_past_the_span',
+    'keypoint_outside_the_frame',
+    'keypoint_value_is_not_a_number',
+    'landmark_list_is_partial',
+    'landmark_table_renamed',
+    'landmarks_missing',
+    'length_mismatch',
+    'licence_map_ruling',
+    'limb_column_is_discontinuous',
+    'limb_trace_too_short',
+    'masked_geometry_is_all_background_depth',
+    'measurement_dated_in_the_future',
+    'measurement_not_positive',
+    'meta_path_equals_graph_path',
+    'min_frac_may_only_tighten',
+    'missing_arm_input',
+    'missing_file',
+    'missing_or_empty',
+    'missing_prompt',
+    'missing_required',
+    'missing_subject',
+    'missing_upload_key',
+    'mitten_hand_wrong_point_count',
+    'motion_record_has_no_frames',
+    'multiple_graph_declarations',
+    'no_batch_node_to_measure',
+    'no_camera_block',
+    'no_candidate_frames',
+    'no_composite_colour_named',
+    'no_deforming_bones',
+    'no_distribution_to_summarise',
+    'no_foot_vertices_below_the_ankle',
+    'no_frame_carries_a_measurable_leg',
+    'no_frames_to_gate',
+    'no_head_vertices_above_the_head_base',
+    'no_json_chunk',
+    'no_keyed_action',
+    'no_legal_clauses',
+    'no_moving_frames',
+    'no_neck_between_two_wider_sections',
+    'no_numbered_frames_in_the_directory',
+    'no_parts_to_assign_to',
+    'no_points_given',
+    'no_positive_joint_radius',
+    'no_pre_export_snapshot',
+    'no_pre_render_snapshot',
+    'no_render_visible_mesh',
+    'no_seed_and_no_registration',
+    'no_slab_to_read_facing_from',
+    'no_steps',
+    'no_surfaces',
+    'no_trace_to_size_a_ball_against',
+    'no_trace_to_size_a_bone_against',
+    'no_vertices_to_frame',
+    'no_views',
+    'node_map_duplicate_id',
+    'node_map_empty',
+    'node_map_entry_empty_side',
+    'node_map_entry_shape',
+    'node_without_a_class_type',
+    'non_finite_depth_window',
+    'non_finite_geometry_depth',
+    'non_finite_geometry_normal',
+    'non_finite_pair_distance',
+    'not_a_finite_angle',
+    'not_a_finite_fraction',
+    'not_a_finite_positive_fraction',
+    'not_a_flag',
+    'not_a_rotation',
+    'not_a_save_format_graph',
+    'not_an_api_format_graph',
+    'not_api_format',
+    'not_object',
+    'numpy_unavailable',
+    'observed_sites_missing',
+    'operator_status',
+    'orbit radius',
+    'order_unvouched',
+    'orphaned_component_class_alias',
+    'ortho_scale',
+    'ortho_scale_not_finite_positive',
+    'ortho_scale_not_positive',
+    'ortho_scale_pin_not_finite_and_positive',
+    'ortho_scale_pin_on_a_perspective_plan',
+    'ortho_scale_pinned_without_ortho',
+    'out_dir_is_not_a_directory',
+    'out_dir_not_empty',
+    'output_name_is_not_a_name',
+    'pack_rate_not_positive',
+    'palm_plane_degenerate',
+    'part_radius_not_positive',
+    'phase_shorter_than_a_frame',
+    'pixels_not_a_plane',
+    'pixels_unreadable',
+    'plan_paths_collide',
+    'plate_component_not_an_integer',
+    'plate_component_out_of_range',
+    'plate_not_three_components',
+    'plate_source_missing',
+    'playback_rate_not_finite',
+    'playback_rate_not_positive',
+    'points_behind_the_camera',
+    'population_is_not_the_spec_names',
+    'preview_frame_collapsed',
+    'radius_bounds_not_an_interval',
+    'radius_bounds_not_finite_and_positive',
+    'radius_not_a_distance',
+    'ranges_differ',
+    'readout_angle_outside_the_arc',
+    'record_carries_a_caught_refusal',
+    'record_carries_no_verify_receipt',
+    'record_describes_a_different_graph',
+    'record_frame_counts_disagree',
+    'record_route_facts_disagree',
+    'record_unreadable',
+    'recorded_convention_digest_drift',
+    'reference_clip_has_no_frames',
+    'reference_file_missing',
+    'reference_file_not_a_png',
+    'reference_fit_has_no_recorded_assertion',
+    'reference_not_a_file',
+    'reference_unreadable',
+    'registration_inconsistent',
+    'render visibility',
+    'render_target_missing',
+    'request_overruns_the_performance',
+    'required_landmark_missing',
+    'rest_landmarks_missing',
+    'root_is_not_a_3_vector',
+    'sample_component_not_an_integer',
+    'sample_frame_not_in_the_extraction',
+    'sample_index_is_negative',
+    'sample_names_no_frames',
+    'sampled_window_outside_the_keys',
+    'scene_fps_disagrees_with_the_shot',
+    'schema',
+    'seed_not_registered',
+    'segment_has_zero_length',
+    'set_short',
+    'shape_mismatch',
+    'short_chunk_body',
+    'short_chunk_header',
+    'short_header',
+    'sign_not_unit',
+    'silhouette_does_not_clear_the_border',
+    'silhouette_is_not_a_standing_figure',
+    'site_registration_invalid',
+    'snappable_site_is_not_a_landmark',
+    'source_has_no_faces',
+    'source_image_has_a_zero_dimension',
+    'source_rate_not_positive',
+    'spec_or_asset_path_unreadable',
+    'stale_channel',
+    'stale_consumer',
+    'stale_render_target',
+    'stale_target',
+    'stance_frac_not_modelled',
+    'stance_frac_outside_0_1',
+    'start_frame_not_a_png',
+    'start_frame_unmeasured',
+    'stream_reported_no_rate',
+    'strip_stride_not_positive',
+    'subject_args',
+    'subject_not_in_the_canon_census',
+    'sweep_revisits_an_azimuth',
+    'target_not_a_3_vector',
+    'the four image corners are background on a shot framed around the figure; a mask that calls one of them subject has segmented a gradient, not a body',
+    'tolerance_not_finite',
+    'too_few_bands_for_a_centreline',
+    'too_few_destination_samples',
+    'too_few_frames_for_a_second_difference',
+    'too_few_frames_for_an_arc',
+    'too_few_leg_bands_for_an_ankle',
+    'too_few_phase_samples',
+    'too_few_points_for_a_sphere_fit',
+    'too_few_source_samples',
+    'too_few_vertices_for_bands',
+    'trunk_column_too_short',
+    'trunk_holds_no_clusters',
+    'twist_datum_collapsed',
+    'two_answers',
+    'unexpected_source_node',
+    'unknown_arm',
+    'unknown_axis',
+    'unknown_bone',
+    'unknown_codec',
+    'unknown_experiment',
+    'unknown_flag',
+    'unknown_generator_family',
+    'unknown_hosted_tier',
+    'unknown_pose_arc',
+    'unknown_spec_key',
+    'unknown_stickwidth_type',
+    'unknown_subject',
+    'unparseable_file',
+    'unratified_only',
+    'unreadable',
+    'unreadable_landmark_row',
+    'unreadable_node',
+    'unreadable_shape',
+    'unsupported_bit_depth',
+    'unsupported_shape',
+    'unsupported_version',
+    'vector_has_zero_length',
+    'verify_receipt_missing_its_facts',
+    'vertices_not_n_by_3',
+    'video_nodes_empty',
+    'view_direction_parallel_to_up',
+    'view_without_a_digest',
+    'views_byte_identical',
+    'views_identical_in_pixels',
+    'views_identical_in_pixels_anywhere',
+    'views_without_pixels',
+    'visible_rows_component_not_an_integer',
+    'visible_rows_not_a_band_inside_the_frame',
+    'voxel_not_finite_and_positive',
+    'why_not_supplied',
+    'world_bounds_without_scene',
+    'write',
+    'zero_dimension',
+    'zero_length_direction',
+    'zero_length_geometry_normal',
+    'zero_quaternion',
+]
+
+#: MEASURED 2026-09-05: the clause words no fixture under `tests/` names. A
+#: CATEGORY, not an exemption — it may not grow, and a clause that gains a
+#: fixture leaves it in the commit that adds the fixture.
+CLAUSES_NAMED_BY_NO_FIXTURE = [
+    'SEGMENTATION: no image corner is inside the subject mask; a row that fails carries angle_deg_measured null and a failed_reason',
+    'allowlist_name_pattern',
+    'anchor_not_a_number',
+    'anchor_not_a_pair',
+    'anchor_outside_unit_interval',
+    'arc_does_not_move',
+    'asset_has_no_evaluated_geometry',
+    'asset_imported_no_mesh_objects',
+    'bad_magic',
+    'band_too_narrow',
+    'batch_node_is_not_a_batch',
+    'batch_node_over_the_slot_ceiling',
+    'bit1_not_grayscale',
+    'bit1_values',
+    'bit8_dtype',
+    'blend_band_not_positive',
+    'body_keypoints_wrong_shape',
+    'bone_has_an_unknown_rule',
+    'bone_has_no_model_rule',
+    'bone_has_zero_rest_length',
+    'bone_radius_not_positive',
+    'bone_set_changes_between_frames',
+    'bufferview_negative_range',
+    'bufferview_no_bytelength',
+    'bufferview_not_an_index',
+    'bufferview_out_of_range',
+    'bufferview_past_bin_chunk',
+    'candidate_frames_are_not_all_one_size',
+    'cap_below_the_bbox_corners',
+    'cap_would_loosen_the_module_ceiling',
+    'centroids_not_n_by_3',
+    'child_bone_has_no_length',
+    'clip_end_is_closer_than_the_subject',
+    'clip_would_be_written_outside_out',
+    'compensator_target_carries_no_run_marker',
+    'composite_colour_carries_a_non_number',
+    'composite_colour_not_linear_unit_floats',
+    'composite_colour_not_three_floats',
+    'composition_puts_points_behind_the_camera',
+    'composition_unreachable',
+    'cover_crop_produced_the_wrong_size',
+    'cv2_could_not_read_the_source',
+    'cv2_refused_the_strip_write',
+    'cv2_refused_the_write',
+    'declared_group_size_above_the_ceiling',
+    'decoded_rate_disagrees_with_the_declaration',
+    'degenerate_plate',
+    'degenerate_target_frame',
+    'depth_buffer_is_not_the_frame_size',
+    'diagnostic_cannot_be_armed',
+    'drawing_convention_not_retrieved',
+    'every_imported_mesh_is_hidden_from_render',
+    'expectation_carries_a_duplicated_frame',
+    'expectation_is_not_the_frame_list',
+    'extraction_left_no_faces',
+    'field_absent',
+    'flag_component_not_an_integer',
+    'frame_and_predecessor_are_different_sizes',
+    'frame_array_shape_is_unsupported',
+    'frame_hints_are_parallel',
+    'frame_index_not_in_the_clip',
+    'frame_is_missing_a_bone',
+    'frame_source_not_callable',
+    'frame_source_not_reiterable',
+    'frame_zero_carries_no_bones',
+    'frames_are_not_all_one_size',
+    'frames_are_not_contiguous',
+    'frames_without_index',
+    'group_node_count_disagrees_with_the_plan',
+    'group_size_below_one',
+    'hand_has_no_length',
+    'hand_keypoints_wrong_shape',
+    'hand_length_not_positive',
+    'hinge_hint_is_parallel_to_the_bone',
+    'keypoint_outside_the_frame',
+    'keypoint_value_is_not_a_number',
+    'landmark_list_is_partial',
+    'landmarks_missing',
+    'licence_map_ruling',
+    'measurement_not_positive',
+    'min_frac_may_only_tighten',
+    'mitten_hand_wrong_point_count',
+    'motion_record_has_no_frames',
+    'no_batch_node_to_measure',
+    'no_composite_colour_named',
+    'no_deforming_bones',
+    'no_json_chunk',
+    'no_moving_frames',
+    'no_numbered_frames_in_the_directory',
+    'no_parts_to_assign_to',
+    'no_positive_joint_radius',
+    'no_trace_to_size_a_ball_against',
+    'no_vertices_to_frame',
+    'not_a_rotation',
+    'numpy_unavailable',
+    'observed_sites_missing',
+    'palm_plane_degenerate',
+    'part_radius_not_positive',
+    'phase_shorter_than_a_frame',
+    'plate_source_missing',
+    'population_is_not_the_spec_names',
+    'readout_angle_outside_the_arc',
+    'render_target_missing',
+    'required_landmark_missing',
+    'rest_landmarks_missing',
+    'root_is_not_a_3_vector',
+    'scene_fps_disagrees_with_the_shot',
+    'segment_has_zero_length',
+    'set_short',
+    'sign_not_unit',
+    'snappable_site_is_not_a_landmark',
+    'source_image_has_a_zero_dimension',
+    'stance_frac_not_modelled',
+    'stream_reported_no_rate',
+    'the four image corners are background on a shot framed around the figure; a mask that calls one of them subject has segmented a gradient, not a body',
+    'tolerance_not_finite',
+    'too_few_destination_samples',
+    'too_few_frames_for_an_arc',
+    'too_few_phase_samples',
+    'too_few_points_for_a_sphere_fit',
+    'too_few_source_samples',
+    'unknown_pose_arc',
+    'unsupported_bit_depth',
+    'unsupported_shape',
+    'vector_has_zero_length',
+    'view_direction_parallel_to_up',
+    'view_without_a_digest',
+    'visible_rows_component_not_an_integer',
+    'visible_rows_not_a_band_inside_the_frame',
+    'why_not_supplied',
+    'zero_length_direction',
+    'zero_quaternion',
+]
+
+#: The clause values that are SENTENCES rather than words, with the site that
+#: spells each. Both files are other domains'; counted, posted, not fixed here.
+SENTENCE_SHAPED_CLAUSES = {
+    'SEGMENTATION: no image corner is inside the subject mask; a row that fails carries angle_deg_measured null and a failed_reason':
+        'measure_arm.py:438',
+    'orbit radius':
+        'render_turnaround.py:757',
+    'render visibility':
+        'render_turnaround.py:907',
+    'the four image corners are background on a shot framed around the figure; a mask that calls one of them subject has segmented a gradient, not a body':
+        'measure_arm.py:147',
+}
+
+
+#: The three module-level tables in THIS file that spell clause words. Their own text is
+#: stripped before "is this clause named by a fixture?" is asked, because a census that
+#: reads its own record answers yes to everything: measured 2026-09-05, writing the 132
+#: unnamed words into `CLAUSES_NAMED_BY_NO_FIXTURE` made all 132 "named" and the table
+#: emptied itself on the next run.
+CENSUS_TABLES = ("RECORDED_CLAUSES", "CLAUSES_NAMED_BY_NO_FIXTURE",
+                 "SENTENCE_SHAPED_CLAUSES")
+
+
+def fixture_text():
+    """Every `tests/*.py`, with this file's own clause TABLES blanked out.
+
+    A clause is "named by a fixture" when some test spells it somewhere that is not one of
+    the three lists recording that nothing does.
+    """
+    text = []
+    for path in sorted(glob.glob(os.path.join(TESTS_DIR, "*.py"))):
+        with open(path, encoding="utf-8") as fh:
+            src = fh.read()
+        if os.path.basename(path) == os.path.basename(__file__):
+            lines = src.splitlines()
+            drop = set()
+            for node in ast.parse(src).body:
+                if not isinstance(node, ast.Assign):
+                    continue
+                names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+                if any(n in CENSUS_TABLES for n in names):
+                    drop.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+            src = "\n".join(ln for i, ln in enumerate(lines, 1) if i not in drop)
+        text.append(src)
+    return "\n".join(text)
+
+
+def _clause_sites():
+    return _CN_CLAUSES.clause_literals()
+
+
+def test_the_clause_vocabulary_is_pinned_by_equality():
+    """Size AND membership, the way `RECORDED_ANDON_CLASSES` is pinned.
+
+    A clause word that appears, vanishes or is respelled fails HERE, naming itself. That is
+    the whole mechanism the vocabulary did not have: a halt reader keyed on a clause string
+    met a renamed or doubled word on a spend refusal and nothing in the suite changed.
+    """
+    got = sorted(_clause_sites())
+    assert got == RECORDED_CLAUSES, {
+        "appeared": sorted(set(got) - set(RECORDED_CLAUSES)),
+        "vanished": sorted(set(RECORDED_CLAUSES) - set(got)),
+    }
+
+
+def test_every_clause_word_is_named_by_a_fixture_or_listed_with_a_reason():
+    """The property, and the table is a CATEGORY rather than an exemption.
+
+    A clause nothing names is a receipt word no test would notice changing. The listed ones
+    are the state of the tree on 2026-09-05, dated; the table may not grow, and a clause
+    that gains a fixture leaves it in the commit that adds the fixture.
+    """
+    text = fixture_text()
+    unnamed = sorted(c for c in _clause_sites() if c not in text)
+    assert unnamed == CLAUSES_NAMED_BY_NO_FIXTURE, {
+        "named by no fixture and not listed":
+            sorted(set(unnamed) - set(CLAUSES_NAMED_BY_NO_FIXTURE)),
+        "listed and now named by a fixture (delete the row)":
+            sorted(set(CLAUSES_NAMED_BY_NO_FIXTURE) - set(unnamed)),
+    }
+
+
+def test_a_clause_is_a_word_a_halt_reader_can_key_on():
+    """`{"clause": "..."}` is keyed on, not read. A SENTENCE in that slot is prose wearing
+    a machine-readable field's name: it cannot be compared for equality by a wrapper without
+    reproducing punctuation, and rewording the explanation silently changes the key.
+
+    Four values in the tree are sentences or phrases, all in files this domain does not own
+    (`measure_arm.py` is instruments-measure's, `render_turnaround.py` is instruments').
+    They are COUNTED here and posted to the inbox, not fixed here — and the table cannot
+    grow.
+    """
+    import re as _re
+
+    word = _re.compile(r"^[a-z][a-z0-9_]*$")
+    sites = _clause_sites()
+    offenders = {c: sites[c][0] for c in sites if not word.match(c)}
+    assert offenders == SENTENCE_SHAPED_CLAUSES, {
+        "a clause that is not a word and is not listed":
+            {k: v for k, v in offenders.items() if k not in SENTENCE_SHAPED_CLAUSES},
+        "listed and now a word (delete the row)":
+            sorted(set(SENTENCE_SHAPED_CLAUSES) - set(offenders)),
+    }
+
+
+#: MEASURED 2026-09-05 and OUT OF DOMAIN: one condition, two clause words, in the builder
+#: for the hosted partner tier that bills per submission. `arm_input_missing` at
+#: `build_r2v_payload.py:134` and `:144`; `missing_arm_input` at `:317`. Posted to the
+#: wave-23 seams inbox for builders. Asserted as a PAIR that still exists, so the row cannot
+#: rot: closing it deletes the row in the same commit.
+ONE_CONDITION_TWO_SPELLINGS = {
+    "build_r2v_payload.py": ("arm_input_missing", "missing_arm_input"),
+}
+
+
+def test_the_doubled_clause_spelling_is_recorded_where_it_still_lives():
+    sites = _clause_sites()
+    for module, (first, second) in sorted(ONE_CONDITION_TWO_SPELLINGS.items()):
+        assert first in sites and second in sites, (module, first, second)
+        where = {c: [s for s in sites[c] if s.startswith(module)] for c in (first, second)}
+        assert all(where.values()), (
+            f"{module} no longer spells both {first!r} and {second!r}; delete its row from "
+            f"ONE_CONDITION_TWO_SPELLINGS in the same commit as the fix: {where}")
+
+
+def test_the_clause_walk_reads_both_spellings_that_reach_a_halt_line():
+    """The red proof for the WALK: a literal inside an evidence dict AND an assignment into
+    one. `armature_core/blender_scene.render_frame` writes the second form
+    (`ev["clause"] = "operator_status"` above its raise), so a walk that read dict literals
+    only would miss the one render site every previz frame goes through."""
+    import ast as _ast
+
+    literal = _ast.parse(
+        'raise Gate("m", {"gate": "X", "clause": "literal_form"})')
+    assigned = _ast.parse(
+        'ev = {"gate": "X"}\nev["clause"] = "assigned_form"\nraise Gate("m", ev)')
+    got = _CN_CLAUSES.clause_literals({"a.py": literal, "b.py": assigned})
+    assert sorted(got) == ["assigned_form", "literal_form"], got
+
+    #: and the real tree carries the assigned form, at the site that motivated reading it
+    sites = _clause_sites()
+    assert "operator_status" in sites, sorted(sites)[:5]
+    assert any(s.startswith("armature_core/blender_scene.py")
+               for s in sites["operator_status"]), sites["operator_status"]

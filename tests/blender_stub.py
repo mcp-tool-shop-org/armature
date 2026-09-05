@@ -223,6 +223,88 @@ def main_block(filename):
     return None
 
 
+def _main_block_ast(filename):
+    """The `if __name__ == "__main__":` node, or None. `main_block` above compiles it;
+    this returns the tree, which is what a census of the handler's SHAPE has to read."""
+    for node in ast.parse(read_source(filename)).body:
+        if (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)
+                and isinstance(node.test.left, ast.Name)
+                and node.test.left.id == "__name__"):
+            return node
+    return None
+
+
+def halt_handler(filename):
+    """`{"prefix", "entry"}` for a tool whose `__main__` prints a halt line, else None.
+
+    WAVE 23, F-2f1b18c2. `test_instrument_exits.py` asserted the halt/exit contract over a
+    population that CANNOT contain the tools whose artifacts are uploaded: `WITH_MAIN` is
+    the 22 Blender tools and the 42 CPython instruments were in no equivalent census. This
+    is the derivation the second population needs, and it reads two things off the block
+    rather than assuming either:
+
+    * the PREFIX is not the module stem. `build_animate_payload.py` prints
+      `BUILD_ANIMATE_HALT`, `gate_b_frames.py` prints `GATE_B_HALT`,
+      `project_pose_keypoints.py` prints `PROJECT_POSE_HALT` and `gate_saved_graph.py`
+      prints `SAVED_ADMISSION_HALT`. A `<STEM>_HALT` predicate — the one
+      `halt_contract_pending` uses on the Blender side, where it is correct — reports 20 of
+      these 25 tools as having no handler at all.
+    * the ENTRY is not always `main`. `composite_reference.py` is
+      `run_tool_main(_cli, "COMPOSITE_REFERENCE")`, so a driver that substitutes `main`
+      runs the REAL `_cli` and measures the tool's ordinary failure instead of the
+      handler's contract — measured here as a false exit-1 on a raiser that never ran.
+
+    Both spellings of the handler are read: `run_tool_main(<entry>, "<PREFIX>")` (wave 22's
+    ONE home) and the local `print("<PREFIX>_HALT " + ...)` block the other 17 still carry.
+    """
+    block = _main_block_ast(filename)
+    if block is None:
+        return None
+    prefixes, entries = set(), set()
+
+    def _called_name(call):
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Name):
+            return call.func.id
+        return None
+
+    for node in ast.walk(block):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if name == "run_tool_main" and len(node.args) >= 2:
+                if isinstance(node.args[1], ast.Constant):
+                    prefixes.add(node.args[1].value)
+                if isinstance(node.args[0], ast.Name):
+                    entries.add(node.args[0].id)
+            elif name in ("exit", "_exit") and node.args:
+                called = _called_name(node.args[0])
+                if called:
+                    entries.add(called)
+        if (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)
+                and getattr(node.exc.func, "id", "") == "SystemExit" and node.exc.args):
+            called = _called_name(node.exc.args[0])
+            if called:
+                entries.add(called)
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and node.value.endswith("_HALT ")):
+            prefixes.add(node.value[: -len("_HALT ")])
+
+    if len(prefixes) != 1 or len(entries) != 1:
+        return None
+    return {"prefix": prefixes.pop(), "entry": entries.pop()}
+
+
+def cpython_tools():
+    """Every `tools/*.py` that does NOT run under Blender — the other half of the tree.
+
+    The complement of `blender_tools()` over the same directory, so the two populations
+    partition `tools/*.py` by construction and a new tool lands in exactly one of them.
+    """
+    blender = set(blender_tools())
+    return [fn for fn in sorted(os.listdir(TOOLS))
+            if fn.endswith(".py") and fn not in blender]
+
+
 class _Boom(Exception):
     """Stand-in for whatever blew up inside `main`."""
 

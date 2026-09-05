@@ -626,8 +626,41 @@ CORE_DIR = _pathlib.Path(__file__).resolve().parents[1] / "tools" / "armature_co
 TOOLS_DIR = _pathlib.Path(__file__).resolve().parents[1] / "tools"
 
 
+def _base_name(node):
+    """The NAME a base expression resolves to — `X`, `mod.X`, or `pkg.mod.X`.
+
+    WAVE 23, F-74339050. This walk read `b.id for b in node.bases if isinstance(b, Name)`
+    and never looked at an `Attribute`, so a family class declared with a DOTTED base — the
+    ordinary spelling when a gate is imported as a module — was examined by nothing. That is
+    the population the wave-16 rule-5 evidence contract, the tree-wide census
+    (`test_the_evidence_census_walks_the_whole_tree_and_not_one_directory`) and the
+    three-clause check are all built on, so a class outside it is compliant by not being
+    looked at.
+
+    The sibling walk `_census_nodes.armature_error_names` has read `b.attr` since wave 17;
+    the two ANSWERED DIFFERENTLY on `class SpendCeiling(RG.RouteGate)` until wave 17
+    re-declared it with a plain-name base (`tools/build_r2v_payload.py:71`, whose own
+    comment records the change). The defect is therefore latent rather than live —
+    re-measured on this branch, both walks yield 134 names with an empty symmetric
+    difference and there are ZERO dotted-base class definitions under `tools/**` — and it is
+    closed here so the next `class X(module.Base)` cannot re-open it.
+    `test_the_two_family_walks_are_one_law` reconciles the two implementations, and
+    `test_a_dotted_base_joins_the_family` is the red proof, on a synthetic class since the
+    tree no longer supplies one.
+    """
+    if isinstance(node, _ast.Name):
+        return node.id
+    if isinstance(node, _ast.Attribute):
+        return node.attr
+    return None
+
+
 def _armature_error_family(tools_root):
-    """Every class under `tools/` whose bases reach `ArmatureError`, transitively."""
+    """Every class under `tools/` whose bases reach `ArmatureError`, transitively.
+
+    A base is the class it RESOLVES to (wave 18, rule 1): both `X` and `module.X` name the
+    same class, and this walk reads both — see `_base_name`.
+    """
     bases = {}
     for path in sorted(_pathlib.Path(tools_root).rglob("*.py")):
         if "superseded" in path.parts or "__pycache__" in path.parts:
@@ -635,7 +668,7 @@ def _armature_error_family(tools_root):
         for node in _ast.walk(_ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, _ast.ClassDef):
                 bases.setdefault(node.name, set()).update(
-                    b.id for b in node.bases if isinstance(b, _ast.Name))
+                    n for n in (_base_name(b) for b in node.bases) if n)
     family = {"ArmatureError"}
     growing = True
     while growing:
@@ -1254,7 +1287,7 @@ def test_every_family_class_stores_the_evidence_it_is_passed():
 
     WAVE 14, the seam from instruments-measure (`F-8393e66c`). `stage_render.py:582` raised
     the BASE `ArmatureError(msg, {...})`; the base had no `__init__`, so the second argument
-    (WAVE 16: that line is `stage_render.py:597` on the merged tree — instruments-measure
+    (WAVE 16: that line is `stage_render.py::_parse_argv` on the merged tree — instruments-measure
     measured the move with `difflib.SequenceMatcher` against `git show 041027c:` and posted
     it in SEAM 15; it is still :582 in this worktree. The citation names a HISTORICAL site
     either way, which is why it is prose and not an assertion.)
@@ -1312,12 +1345,32 @@ def test_every_family_class_stores_the_evidence_it_is_passed():
 
 # ------------------------------------- the census, TREE-WIDE (wave 16, rule 5, F-9aa7974e)
 #
-# `_family_classes_defined_in_core()` iterates `CORE_DIR.glob("*.py")` only. Measured in this
-# worktree: `_armature_error_family(TOOLS_DIR)` yields 120 NAMES and `tools/**` holds 125
-# class DEFINITIONS of them across 71 modules (three names are defined twice —
-# `DetectionGate`, `PayloadError`, `RenderGate`). The core-only walk reached 51 of them and
-# 0 of the 74 definitions outside `armature_core/`, which are precisely the classes whose
-# halt lines the 21-tool contract prints. `tests/test_amend_w14_merge.py`'s own docstring
+# `_family_classes_defined_in_core()` iterates `CORE_DIR.glob("*.py")` only. The core-only
+# walk reaches `armature_core/` and NONE of the definitions outside it, which are precisely
+# the classes whose halt lines the 21-tool contract prints.
+#
+# THE NUMBERS ARE PROSE, and they were stale (wave 23, F-ddc5ea27). They read "120 NAMES,
+# 125 class DEFINITIONS across 71 modules, three names defined twice — `DetectionGate`,
+# `PayloadError`, `RenderGate`", and the last clause was inaccurate even when 125 was
+# arithmetically right: `PayloadError` was already defined four times. Nothing asserted any
+# of them, because the tests below pin the DERIVATION (`==` on sets), which is exactly why
+# the drift was invisible — and this comment is the only statement anywhere of what the
+# widened population IS, so a seat sizing a change against it was short by four classes and
+# four whole modules.
+#
+# RE-MEASURED on this branch, 2026-09-05, with the file's own helpers:
+#
+#     python -c "import sys,os;sys.path[:0]=['tests','tools'];import test_gates as T;\
+#     from collections import Counter;d=T._family_classes_defined_under(T.TOOLS_DIR);\
+#     c=Counter(n for v in d.values() for n in v);\
+#     print(len(T._armature_error_family(T.TOOLS_DIR)), sum(c.values()), len(d),\
+#           {k:v for k,v in c.items() if v>1})"
+#
+#   134 family NAMES · 140 class DEFINITIONS of them · 79 modules · defined more than once:
+#   `PayloadError` ×5, `DetectionGate` ×2, `RenderGate` ×2. The core-only walk reaches 58
+#   definitions across 20 modules, so 82 definitions sit outside `armature_core/`.
+#
+# `tests/test_amend_w14_merge.py`'s own docstring
 # says "the evidence census walks `armature_core` only, so the suite was green" about
 # exactly this hole, and closed that one instance by hand-writing three tests for one class
 # in one tool.
@@ -1332,14 +1385,29 @@ def test_every_family_class_stores_the_evidence_it_is_passed():
 #: Family classes under `tools/**` the tree-wide walk cannot INSTANTIATE. Named and dated
 #: 2026-09-04 (wave 16), and DERIVED — the walk files every failure here rather than letting
 #: it fall out silently, which is the half of `F-9aa7974e` that is about the population and
-#: not about the property. EMPTY today: all 125 definitions import under
-#: `blender_stub.blender_stubbed()`, the Blender-side ones included.
+#: not about the property. EMPTY today: all 140 definitions import under
+#: `blender_stub.blender_stubbed()`, the Blender-side ones included (re-measured 2026-09-05,
+#: wave 23 — this note said 125, the number the block comment above records as stale).
 TREE_WIDE_UNIMPORTABLE = {}
 
 
 def _family_classes_defined_under(root):
-    """`{module path relative to `root`: {class names}}` for every family class under it."""
-    family = _armature_error_family(TOOLS_DIR)
+    """`{module path relative to `root`: {class names}}` for every family class under it.
+
+    WAVE 23, F-af312f57 — `root` is passed THROUGH to the family derivation, the way every
+    sibling helper in this file writes it (`_armature_error_family(TOOLS_DIR if root ==
+    CORE_DIR else root)`). It used to take a root and then derive its family names from the
+    REAL tree regardless, which made the tree-wide red proof exercise a name coincidence
+    rather than the derivation: driven on two synthetic roots differing only in the class
+    NAME, the walk found the old probe name `SheetPopulationError` — because
+    `tools/sheet_compose.py:57` also defines one — and was blind to a name the tree does not
+    carry. The mutation that is supposed
+    to prove the widened population could be satisfied without the population being widened
+    at all — so the probe class below is now named after nothing in the tree, and
+    `test_the_probe_class_name_exists_nowhere_under_tools` keeps it that way.
+    """
+    family = _armature_error_family(TOOLS_DIR if _pathlib.Path(root) == CORE_DIR
+                                    else root)
     out = {}
     for path in sorted(_pathlib.Path(root).rglob("*.py")):
         if "superseded" in path.parts or "__pycache__" in path.parts:
@@ -1429,7 +1497,13 @@ def test_the_evidence_census_walks_the_whole_tree_and_not_one_directory():
 
 
 def test_every_family_class_tree_wide_keeps_the_dict_it_was_handed():
-    """Clause 2 of the contract, over all 125 — and by IDENTITY, not by equality.
+    """Clause 2 of the contract, over the whole derived family — and by IDENTITY, not by
+    equality.
+
+    (Wave 23, F-ddc5ea27: this line said "over all 125", a count four waves stale. The
+    population is `_live_family_classes()`, which is derived; naming a number here is a
+    second, unasserted statement of it. The measurement, dated, is in the block comment
+    above `TREE_WIDE_UNIMPORTABLE`.)
 
     `E("m", d).evidence is d`: the dict the raising line built is the dict the halt handler
     reads. `dict(evidence)` and `evidence or {}` both satisfy equality and both break the
@@ -1521,7 +1595,7 @@ def test_the_tree_wide_census_goes_red_on_a_tools_side_class_the_core_walk_canno
         "        self.evidence = evidence\n", encoding="utf-8")
     (root / "make_synthetic_sheet.py").write_text(
         "from armature_core.errors import ArmatureError\n"
-        "class SheetPopulationError(ArmatureError):\n"
+        "class ProbeNormalisingRefusal(ArmatureError):\n"
         "    def __init__(self, message, evidence=None):\n"
         "        super().__init__(message)\n"
         "        self.evidence = evidence or {}\n", encoding="utf-8")
@@ -1530,7 +1604,7 @@ def test_the_tree_wide_census_goes_red_on_a_tools_side_class_the_core_walk_canno
     assert "make_synthetic_sheet.py" in defined, sorted(defined)
     live, failed = _live_family_classes(root)
     assert failed == {}, failed
-    cls = live["make_synthetic_sheet.py::SheetPopulationError"]
+    cls = live["make_synthetic_sheet.py::ProbeNormalisingRefusal"]
     assert cls("m").evidence == {}, "the probe class does not carry the defect"
     assert "__init__" in vars(cls)
 
@@ -1768,3 +1842,214 @@ def test_a_raised_gates_evidence_agrees_with_the_class_it_was_raised_from(gate_i
     assert exc.value.gate == gate_id
     if "gate" in exc.value.evidence:
         assert exc.value.evidence["gate"] == gate_id
+
+
+# ===========================================================================
+# WAVE 23 — the family walk reads a DOTTED base (F-74339050), and the tree-wide
+#           red proof cannot be satisfied by a name coincidence (F-af312f57)
+# ===========================================================================
+
+
+def test_the_two_family_walks_are_one_law():
+    """This file's `_armature_error_family` and `_census_nodes.armature_error_names` are two
+    implementations of one derivation, and they must agree.
+
+    They did not: `_census_nodes` has read `b.attr` since wave 17 and this one read only
+    `b.id`, so `class SpendCeiling(RG.RouteGate)` was in one census and outside the other.
+    `tests/test_refusal_clauses.py` recorded that debt in prose — "the dotted-base blind spot
+    wave 17 found on SpendCeiling is deliberately not reproduced here. Widening the other
+    walk is Stage B." This is that widening, and the reconciliation is asserted rather than
+    stated so the two cannot drift apart again silently.
+    """
+    import _census_nodes as _CN
+
+    # The two are not the same OBJECT and must not be compared as though they were:
+    # `armature_error_names` unions the AST derivation with the LIVE class hierarchy
+    # (`cls.__subclasses__()`), so once any test module in the session has declared a
+    # `class _Gate(GateFailure)` its name is in that set and in no tree. Measured 2026-09-05
+    # — the reconciliation passed run alone and failed run beside `test_refusal_clauses.py`,
+    # which is the "measure it in the conditions it runs in" lesson in one line. So the
+    # comparison is over the TREE-DECLARED part, which is the part both walks derive.
+    declared_under_tools = set()
+    for path in sorted(TOOLS_DIR.rglob("*.py")):
+        if "superseded" in path.parts or "__pycache__" in path.parts:
+            continue
+        for node in _ast.walk(_ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, _ast.ClassDef):
+                declared_under_tools.add(node.name)
+
+    mine = _armature_error_family(TOOLS_DIR)
+    theirs = set(_CN.armature_error_names())
+    assert mine <= declared_under_tools, sorted(mine - declared_under_tools)
+    assert mine == theirs & declared_under_tools, {
+        "seen only by tests/test_gates._armature_error_family":
+            sorted(mine - theirs),
+        "declared under tools/ and seen only by _census_nodes.armature_error_names":
+            sorted((theirs & declared_under_tools) - mine),
+    }
+    assert len(mine) > 100, len(mine)
+
+
+def test_a_dotted_base_joins_the_family(tmp_path):
+    """The RED PROOF for the widening, on a synthetic class — because the tree no longer
+    supplies one.
+
+    Measured on this branch: ZERO class definitions under `tools/**` declare a dotted base,
+    `build_r2v_payload.SpendCeiling` having been re-declared with a plain-name base in wave
+    17 (its own comment at `build_r2v_payload.py:86` records that it was
+    `class SpendCeiling(RG.RouteGate)`). So the defect is LATENT, and a proof that only
+    re-measured the tree would prove nothing. This drives the walk over a root holding both
+    spellings and requires both.
+    """
+    core = tmp_path / "armature_core"
+    core.mkdir()
+    (core / "errors.py").write_text(
+        "class ArmatureError(RuntimeError):\n"
+        "    def __init__(self, message, evidence=None):\n"
+        "        super().__init__(message)\n"
+        "        self.evidence = evidence\n"
+        "class GateFailure(ArmatureError):\n"
+        "    pass\n", encoding="utf-8")
+    (tmp_path / "plain_base_tool.py").write_text(
+        "from armature_core.errors import GateFailure\n"
+        "class PlainBasedProbeGate(GateFailure):\n"
+        "    pass\n", encoding="utf-8")
+    (tmp_path / "dotted_base_tool.py").write_text(
+        "from armature_core import errors as E\n"
+        "class DottedBasedProbeGate(E.GateFailure):\n"
+        "    pass\n", encoding="utf-8")
+
+    family = _armature_error_family(tmp_path)
+    assert "PlainBasedProbeGate" in family, sorted(family)
+    assert "DottedBasedProbeGate" in family, (
+        "a family class declared `class X(module.Base)` — the ordinary spelling when a gate "
+        "is imported as a module — is examined by nothing: not the tree-wide evidence "
+        f"contract, not the three-clause check. Walk saw: {sorted(family)}")
+
+    # and the walk that finds it also RETURNS it to the population the censuses use
+    defined = _family_classes_defined_under(tmp_path)
+    assert defined["dotted_base_tool.py"] == {"DottedBasedProbeGate"}, defined
+
+
+def test_the_narrow_walk_would_have_missed_the_dotted_base(tmp_path):
+    """The other side of the same proof: the pre-wave-23 predicate, reconstructed, is shown
+    NOT to see it — otherwise the assertion above is not measuring the widening."""
+    (tmp_path / "armature_core").mkdir()
+    (tmp_path / "armature_core" / "errors.py").write_text(
+        "class ArmatureError(RuntimeError):\n    pass\n", encoding="utf-8")
+    (tmp_path / "dotted_base_tool.py").write_text(
+        "from armature_core import errors as E\n"
+        "class DottedBasedProbeGate(E.ArmatureError):\n"
+        "    pass\n", encoding="utf-8")
+
+    narrow = {}
+    for path in sorted(_pathlib.Path(tmp_path).rglob("*.py")):
+        for node in _ast.walk(_ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, _ast.ClassDef):
+                narrow.setdefault(node.name, set()).update(
+                    b.id for b in node.bases if isinstance(b, _ast.Name))
+    reached = {"ArmatureError"}
+    growing = True
+    while growing:
+        growing = False
+        for name, parents in narrow.items():
+            if name not in reached and (parents & reached):
+                reached.add(name)
+                growing = True
+    assert "DottedBasedProbeGate" not in reached, reached
+    assert "DottedBasedProbeGate" in _armature_error_family(tmp_path)
+
+
+def test_the_probe_class_name_exists_nowhere_under_tools():
+    """F-af312f57's other half: the tree-wide red proof must not be satisfiable by
+    coincidence.
+
+    `test_the_tree_wide_census_goes_red_on_a_tools_side_class_the_core_walk_cannot_see`
+    builds a synthetic tools-shaped tree holding one probe class and asserts the walk finds
+    it. Its probe used to be named `SheetPopulationError`, which `tools/sheet_compose.py:57`
+    also defines — and because `_family_classes_defined_under` ignored its `root` and derived
+    the family from the REAL tree, the proof passed on the coincidence. Driven on two
+    synthetic roots differing only in the class NAME, the walk found one and was blind to the
+    other. Both halves are closed: the root is passed through, and the probe is named after
+    nothing in the tree — pinned here, because a later rename back to a real class name would
+    silently restore the coincidence.
+    """
+    probe = "ProbeNormalisingRefusal"
+    collisions = []
+    for path in sorted(TOOLS_DIR.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        for node in _ast.walk(_ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, _ast.ClassDef) and node.name == probe:
+                collisions.append(f"{path.relative_to(TOOLS_DIR).as_posix()}:{node.lineno}")
+    assert collisions == [], (
+        f"{probe} is defined under tools/ ({collisions}); the tree-wide red proof can then "
+        f"pass on a name coincidence instead of on the derivation")
+    assert probe not in _armature_error_family(TOOLS_DIR)
+
+
+def test_the_root_is_passed_through_to_the_family_derivation(tmp_path):
+    """The mechanism itself, on the operand that exposed it: a synthetic root whose probe
+    class is named after nothing real. Before the fix this returned only the errors module.
+    """
+    (tmp_path / "armature_core").mkdir()
+    (tmp_path / "armature_core" / "errors.py").write_text(
+        "class ArmatureError(RuntimeError):\n"
+        "    def __init__(self, message, evidence=None):\n"
+        "        super().__init__(message)\n"
+        "        self.evidence = evidence\n", encoding="utf-8")
+    (tmp_path / "make_synthetic_sheet.py").write_text(
+        "from armature_core.errors import ArmatureError\n"
+        "class ProbeNormalisingRefusal(ArmatureError):\n"
+        "    def __init__(self, message, evidence=None):\n"
+        "        super().__init__(message)\n"
+        "        self.evidence = evidence or {}\n", encoding="utf-8")
+
+    defined = _family_classes_defined_under(tmp_path)
+    assert defined.get("make_synthetic_sheet.py") == {"ProbeNormalisingRefusal"}, defined
+
+    # …and the same walk on a root that defines the class under a DIFFERENT name finds that
+    # one too, which is the property a real-tree coincidence was standing in for.
+    (tmp_path / "make_synthetic_sheet.py").write_text(
+        "from armature_core.errors import ArmatureError\n"
+        "class AnotherProbeRefusal(ArmatureError):\n"
+        "    pass\n", encoding="utf-8")
+    assert _family_classes_defined_under(tmp_path).get("make_synthetic_sheet.py") == {
+        "AnotherProbeRefusal"}
+
+
+def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
+    """F-ddc5ea27: the block comment above `TREE_WIDE_UNIMPORTABLE` is the only statement in
+    the tree of what the widened population IS, and every number in it was stale — 120 names
+    where the walk returned 124, 125 definitions where it returned 129, 71 modules where it
+    returned 75, and "three names defined twice" where `PayloadError` was already four.
+
+    Prose cannot be asserted, so the numbers are re-measured in place with the derivation
+    command beside them AND pinned here, branch-local, so the next drift fails instead of
+    misinforming. The censuses themselves stay pinned on the DERIVATION (`==` on sets); this
+    is the count the comment quotes, nothing more.
+    """
+    from collections import Counter
+
+    defined = _family_classes_defined_under(TOOLS_DIR)
+    counts = Counter(n for names in defined.values() for n in names)
+    core = _family_classes_defined_in_core()
+    measured = {
+        "names": len(_armature_error_family(TOOLS_DIR)),
+        "definitions": sum(counts.values()),
+        "modules": len(defined),
+        "defined_more_than_once": {k: v for k, v in sorted(counts.items()) if v > 1},
+        "core_only_definitions": sum(len(v) for v in core.values()),
+        "core_only_modules": len(core),
+    }
+    assert measured == {
+        "names": 134,
+        "definitions": 140,
+        "modules": 79,
+        "defined_more_than_once": {"DetectionGate": 2, "PayloadError": 5, "RenderGate": 2},
+        "core_only_definitions": 58,
+        "core_only_modules": 20,
+    }, measured
+    # the quantity the comment's last clause is about: 82 definitions sit outside the
+    # core-only walk, which is the gap the tree-wide census exists to close
+    assert measured["definitions"] - measured["core_only_definitions"] == 82

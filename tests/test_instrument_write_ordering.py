@@ -1088,3 +1088,127 @@ def test_the_ordering_check_goes_red_when_a_write_moves_above_the_gate(name):
     assert not max(mutated_gates) < min(mutated_writes), (
         f"a write inserted above {name}.main's first refusal did not move the "
         f"comparison; the ordering check cannot fail")
+
+
+# ===========================================================================
+# WAVE 23, F-d91c8d9b — the write predicate recognises the writes this tree makes
+# ===========================================================================
+#
+# `refusal_and_write_lines` counted a write only as `os.makedirs` or `open(...)` whose
+# SECOND POSITIONAL argument is a mode containing `w`. Measured 2026-09-05 by re-running the
+# census's own walk with the wider spellings over every tool it admits: 24 tools carry a
+# write it could not see — `cv2.imwrite`, `Image.save`, `np.save`, `shutil.copy*`,
+# `Path.write_text` / `write_bytes` and `open(path, mode="w")` were all invisible.
+#
+# THE HALF WORTH RECORDING: the live-defect form is REFUTED and stays refuted. In ALL 24, a
+# recognised `os.makedirs` already sits ABOVE the hidden write, so the first-write line the
+# ordering property reads is unchanged and no refusal moves below it. RE-DERIVED after the
+# widening with the file's own derivation command: 27 / 54 / 77, the same three numbers —
+# the population is a floor by construction and the widening moves it not at all.
+#
+# What it buys is the next tool: a control-sequence tool whose first byte reaches disk
+# through `cv2.imwrite` above its refusals used to pass the census whose whole purpose is
+# that no refusal sits below the first write. That is what the red proof below drives.
+
+
+def test_the_write_predicate_sees_a_cv2_imwrite_above_a_refusal():
+    """The RED PROOF: a synthetic tool whose ONLY write is `cv2.imwrite`, above its refusal.
+
+    Under the two-spelling predicate this module reports no write at all, so it never enters
+    `derive_population()` (which keeps a module only when `gates_at and writes_at`) and the
+    ordering property is not applied to it. Under the widened one the write is seen and the
+    refusal below it is stranded — which is the whole point of the census.
+    """
+    src = "\n".join([
+        "import argparse, cv2",
+        "from armature_core.errors import ArmatureError",
+        "",
+        "def main(argv=None):",
+        "    ap = argparse.ArgumentParser()",
+        "    ap.add_argument('--out', required=True)",
+        "    ap.add_argument('--rows', type=int, default=4)",
+        "    a = ap.parse_args(argv)",
+        "    cv2.imwrite(a.out, build())",
+        "    if a.rows <= 0:",
+        "        raise ArmatureError('--rows is a count', {'clause': 'rows_not_positive'})",
+        "    return 0",
+    ])
+    gates, writes = gate_and_write_lines(src, "<synthetic probe>")
+    assert writes == {9: "cv2.imwrite"}, writes
+    assert gates and min(gates) > min(writes), (gates, writes)
+
+    # …and the predicate this replaces is blind to it: no write, so no population, so no
+    # ordering property. Reconstructed here rather than described.
+    narrow = {ln for ln, kind in writes.items() if kind == "os.makedirs"}
+    assert narrow == set(), (
+        "the two-spelling predicate would have reported this module's write; the "
+        "comparison below says nothing")
+
+
+def test_the_widened_predicate_still_refuses_a_read(tmp_path):
+    """The direction the predicate must not bound: `open(path)` and `open(path, "rb")` are
+    not writes, and a census that calls every `open` a write would strand every refusal in
+    the tree."""
+    src = "\n".join([
+        "import argparse, json",
+        "from armature_core.errors import ArmatureError",
+        "",
+        "def main(argv=None):",
+        "    ap = argparse.ArgumentParser()",
+        "    ap.add_argument('--src', required=True)",
+        "    a = ap.parse_args(argv)",
+        "    with open(a.src, encoding='utf-8') as fh:",
+        "        doc = json.load(fh)",
+        "    with open(a.src, 'rb') as fh:",
+        "        head = fh.read(4)",
+        "    if not doc:",
+        "        raise ArmatureError('empty', {'clause': 'empty'})",
+        "    return 0 if head else 1",
+    ])
+    _gates, writes = gate_and_write_lines(src, "<synthetic probe>")
+    assert writes == {}, writes
+
+
+def test_the_keyword_mode_spelling_is_a_write():
+    """`open(path, mode="w")` — the spelling the positional-only read could not see."""
+    src = "\n".join([
+        "import argparse",
+        "from armature_core.errors import ArmatureError",
+        "",
+        "def main(argv=None):",
+        "    ap = argparse.ArgumentParser()",
+        "    ap.add_argument('--out', required=True)",
+        "    a = ap.parse_args(argv)",
+        "    with open(a.out, mode='w', encoding='utf-8') as fh:",
+        "        fh.write('x')",
+        "    raise ArmatureError('late', {'clause': 'late'})",
+    ])
+    _gates, writes = gate_and_write_lines(src, "<synthetic probe>")
+    assert writes == {8: 'open(..., "w")'}, writes
+
+
+def test_the_hidden_writes_all_sit_below_a_recognised_makedirs():
+    """The measurement the refutation rests on, kept as an assertion rather than as prose.
+
+    For every tool this census admits, the FIRST write the widened predicate reports is at
+    or above every write the narrow predicate reported — i.e. widening can only move the
+    first-write line EARLIER, and here it moves it nowhere that changes a verdict. If a
+    later edit puts a `cv2.imwrite` above a tool's `os.makedirs` this fails, naming it, and
+    the pins are re-derived in that commit.
+    """
+    moved = {}
+    for name in sorted(derive_population()):
+        src = _source(name)
+        _gates, wide = gate_and_write_lines(src, name)
+        narrow = {ln for ln, kind in wide.items()
+                  if kind in ("os.makedirs", 'open(..., "w")')}
+        if not narrow or not wide:
+            continue
+        if min(wide) < min(narrow):
+            moved[name] = {"widened first write": min(wide),
+                           "narrow first write": min(narrow),
+                           "kind": wide[min(wide)]}
+    assert moved == {}, (
+        f"the widened write predicate moves the first-write line earlier in {sorted(moved)}: "
+        f"{moved}. Re-derive the 27 / 54 / 77 pins in the same commit and record which "
+        f"refusals the move strands.")
