@@ -64,7 +64,14 @@ OWNED = (
 #: Recorded in the same commit as the raises, which is what this ratchet asks for.
 RECORDED_GATE_RAISES = {
     ("canon.py", "GateCanon"): 1,
-    ("donor_gate.py", "DonorGate"): 6,
+    # WAVE 18: 6 → 10 (core-gates, F-04197047). `_readable_landmark_row` — Gate DONOR
+    # guarded its EMPTY population and never the SHAPE of a row it reads, so a
+    # 17-landmark (COCO-topology) record raised IndexError, a None landmark TypeError
+    # and a dict-shaped landmark KeyError — none of them an ArmatureError, so
+    # `lift_clip`'s halt handler wrote a halt line naming no gate. Four clauses: the
+    # `image` that is not a sequence, the sequence too short to hold index 28, the
+    # landmark that is not an (x, y) pair, the coordinate that is not a number.
+    ("donor_gate.py", "DonorGate"): 10,
     ("gates.py", "G1GeneratorLegality"): 2,
     ("gates.py", "G2Completeness"): 2,
     ("gates.py", "G4BboxSanity"): 4,
@@ -72,7 +79,12 @@ RECORDED_GATE_RAISES = {
     ("gates.py", "G6SubjectMotion"): 2,
     ("gates.py", "GateBBatching"): 3,  # +1 w12: expectation-of-zero refusal
     ("gates.py", "GateRRoundTrip"): 4,
-    ("gates.py", "GateSSeedRegistration"): 4,  # +1 w14: a DECLARED but empty registry
+    # WAVE 18: 4 → 5 (core-gates, F-d83e5879). `registry_member_not_an_int` — the gate
+    # guarded the SEED's type and never the COMMITTED LIST's, and `in` is `==`
+    # membership, so `[True]`, `[False]` and `[1.0]` each returned "seed is
+    # pre-registered". Same clause closes the bare TypeError from
+    # `sorted(registry).index(seed)` on a mixed-type registry.
+    ("gates.py", "GateSSeedRegistration"): 5,  # +1 w14: a DECLARED but empty registry
                                                # (F-b4706738) — `if not registry:`
                                                # collapsed None and [], so 'N/A — pre-
                                                # registered no seeds' was stated over a
@@ -87,7 +99,16 @@ RECORDED_GATE_RAISES = {
     # found samplers and every one carries `add_noise=disable`, which used to return a PASS
     # over an empty population. Carried from their branch measurement, not measured here:
     # this entry is RED on the tests branch (which reads 36) and expected green at merge.
-    ("route_gates.py", "RouteGate"): 38,  # +3 w12: unreadable_node,
+    # WAVE 18: 38 → 43 (core-gates). `_api_entry_kind`'s `unreadable_node` — the API
+    # branch answered a node-shaped mapping that lost its `class_type` with a silent
+    # `continue` while the save-format branch beside it raised (F-7eb1ba2a);
+    # `_iter_definitions`' `duplicate_subgraph_id` — the cycle guard keyed on the
+    # blueprint's `id` VALUE and dropped the second of two blueprints declaring one id
+    # (F-039202b9); Gate S's `seed_node_unresolvable` — the seed-record lookup is now
+    # keyed on the pair `(where, id)` and is TOTAL (F-10af549a); and
+    # `_hosted_enum_shift_andon`'s two, `converted_widget_shifts_enum_indices` and
+    # `hosted_enum_widgets_truncated` (F-7854d570).
+    ("route_gates.py", "RouteGate"): 43,  # +3 w12: unreadable_node,
                                           # uncredited_conditional_component,
                                           # attribution_for_unconditional_row
                                           # +1 w14: orphan_attribution (F-74787978) — the
@@ -211,7 +232,11 @@ def test_the_derived_population_is_the_one_this_file_records():
     # `aapose.ConventionError`, a plain refusal. instruments, instruments-measure and
     # builders add none in `armature_core` at all. RED on the tests branch (88 vs 86);
     # composed from branch measurements, so re-measure at merge.
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 88
+    # WAVE 18 (core-gates): 88 → 98. +5 route_gates.RouteGate, +4 donor_gate.DonorGate,
+    # +1 gates.GateSSeedRegistration — itemised at each entry above. Measured in the
+    # core-gates worktree; core-solvers also edits `armature_core`, so the coordinator
+    # re-measures at merge rather than summing the branches (SEAM 8 §1's worked example).
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 98
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

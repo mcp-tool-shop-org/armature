@@ -599,13 +599,19 @@ def _walk_nodes(graph):
     file two levels down was missed and `verify` would have reported the graph clean.
     That is this function's own docstring one level further down. NOT measured: whether
     Comfy's served save format ever nests definitions rather than hoisting them, so this
-    closed a hole in the walk rather than a demonstrated escape. A `visited` set of
-    definition ids stands against a blueprint that references itself: the gate before a
-    spend must halt or answer, never hang.
+    closed a hole in the walk rather than a demonstrated escape. A recursion PATH keyed on
+    OBJECT identity stands against a blueprint that references itself: the gate before a
+    spend must halt or answer, never hang. (This used to read "a `visited` set of
+    definition ids". It was a set keyed on the blueprint's `id` VALUE, it was doing double
+    duty as a dedup, and it dropped the second of two blueprints declaring one id — see
+    `_iter_definitions`, which now separates the cycle guard from the ambiguity refusal.)
     """
     if _shape_of(graph) == "api":
         for node_id, node in graph.items():
-            if not isinstance(node, dict) or "class_type" not in node:
+            # · ANDON — see `_api_entry_kind`. A dict that is node-shaped and carries no
+            # `class_type` is a node whose class was lost, and it used to be dropped by a
+            # bare `continue` on the format every builder submits.
+            if _api_entry_kind(node_id, node, graph) == "metadata":
                 continue
             inputs = node.get("inputs") or {}
             # A link is [node_id, slot]; anything else is a literal this graph pins.
@@ -637,7 +643,97 @@ def _walk_nodes(graph):
         # `--saved` file; a JSON null or a string inside `nodes` is an ordinary converter
         # or hand-edit artifact, not an exotic input.
         yield ("top", _readable_node("top", n, i, len(graph.get("nodes") or [])))
-    yield from _iter_definitions(graph, set())
+    yield from _iter_definitions(graph, set(), {})
+
+
+#: Top-level keys an API-format submission legitimately carries BESIDE its nodes. The
+#: standard ComfyUI envelope writes `last_node_id` / `last_link_id` / `version` beside the
+#: node map, `extra_data` and `extra_pnginfo` ride a saved prompt, and `client_id`,
+#: `prompt_id` and `number` ride a queue record. F-85d2b7a3 made the walk tolerate them;
+#: this names WHICH, so tolerance stops being "anything the walk did not recognise".
+API_ENVELOPE_KEYS = ("client_id", "extra_data", "extra_pnginfo", "last_link_id",
+                     "last_node_id", "number", "prompt_id", "version")
+
+
+def _api_entry_kind(key, value, graph=None):
+    """`"node"` or `"metadata"` for one top-level API entry, or Gate ROUTE's refusal.
+
+    ⚠ **The two node sources answered a malformed entry with opposite verdicts, and the
+    API branch — the format every builder submits — was the one that skipped in silence.**
+    Save format raises: `_readable_node` refuses a non-dict entry with `unreadable_node`,
+    and `_iter_definitions` refuses an unreadable container, both on the stated ground
+    that "a skipped node is a node no clause examined, and this file's whole argument is
+    that 'nothing was checkable' and 'everything checked out' may not be the same
+    verdict". The API branch read `if not isinstance(node, dict) or "class_type" not in
+    node: continue` — and nothing anywhere counted what it dropped.
+
+    Measured 2026-09-04 in this worktree on an API graph of `UNETLoader` + `KSampler` +
+    a `LoraLoaderModelOnly` carrying `causvid_x.safetensors` (BANNED, CC-BY-NC): with
+    `class_type` present, `verify(g, frame=(832,480,81))` raised naming the banned file;
+    with the `class_type` key removed from that ONE node and everything else identical,
+    `components()` returned only the UNETLoader's weight and `verify` RETURNED "0 of 1
+    component(s) classified, 1 unclassified, ... 1 frame(s) checked and generator-legal",
+    with no key in the receipt recording that a mapping entry existed and was not read.
+    The same stray in save format raises `unreadable_node`.
+
+    The skip is not gratuitous — an API graph legitimately carries non-node top-level
+    metadata, which is why F-85d2b7a3 made the walk tolerate it. So the split is by SHAPE
+    rather than by tolerance: a value that is not a dict is metadata; a dict under one of
+    the named `API_ENVELOPE_KEYS` is metadata; a dict under any other key with no
+    `class_type` is a node whose class was lost, and it raises the SAME `unreadable_node`
+    clause both formats now answer with. Whatever stays skipped is counted and named by
+    `api_walk_census`, so the licence clause's `of {len(comp)}` denominator can be
+    reconciled against what the walk entered.
+
+    Bounded honestly: the seven `build_*_payload` tools construct their API graphs
+    in-repo with `class_type` on every node, so this was the guard direction unbounded
+    rather than a demonstrated escape. The input class is a builder, a converter or a
+    hand-edit that loses one node's class.
+    """
+    if not isinstance(value, dict):
+        return "metadata"
+    if "class_type" in value:
+        return "node"
+    if str(key) in API_ENVELOPE_KEYS:
+        return "metadata"
+    raise RouteGate(
+        f"this API-format graph carries a mapping at key {str(key)!r} with no "
+        f"`class_type` and no envelope meaning: {sorted(map(str, value))!r}. That is a "
+        f"node whose class was lost, not submission metadata — a licence, seed and frame "
+        f"walk cannot read it, and skipping it would leave a node no clause examined "
+        f"inside a graph reported clean. The envelope keys this walk tolerates are "
+        f"{list(API_ENVELOPE_KEYS)}",
+        {"gate": "ROUTE", "andon": "RouteGate", "clause": "unreadable_node",
+         "where": "api", "key": str(key), "index": None,
+         "entry_type": type(value).__name__, "entry": repr(value),
+         "entry_keys": sorted(map(str, value)),
+         "envelope_keys": list(API_ENVELOPE_KEYS),
+         "n_nodes": len(graph) if isinstance(graph, dict) else None})
+
+
+def api_walk_census(graph):
+    """What `_walk_nodes` entered and what it skipped, on an API-format graph.
+
+    `None` on save format, because a census reporting zero skipped keys about a branch
+    that never ran is a number about a walk that did not happen — the same reason
+    `camera_widget_order_evidence` answers `not_applicable` rather than PASS.
+
+    Written because the count was the half of F-7eb1ba2a that the refusal alone does not
+    close: `verify`'s licence clause states `{classified} of {len(comp)}`, and until this
+    existed there was no way to reconcile that denominator against the population the walk
+    entered. Refuses on the same clause `_api_entry_kind` does, so the census and the walk
+    cannot disagree about what a node is.
+    """
+    graph = normalise_graph(graph)
+    if _shape_of(graph) != "api":
+        return None
+    kinds = [(str(k), _api_entry_kind(k, v, graph)) for k, v in graph.items()]
+    skipped = sorted(k for k, kind in kinds if kind == "metadata")
+    return {"format": "api", "n_top_level_values": len(kinds),
+            "n_nodes_walked": sum(1 for _, kind in kinds if kind == "node"),
+            "n_skipped_non_node_keys": len(skipped),
+            "skipped_non_node_keys": skipped,
+            "envelope_keys": list(API_ENVELOPE_KEYS)}
 
 
 def _readable_node(where, n, index, population):
@@ -701,8 +797,42 @@ def _unreadable_level(where, value, expected, index=None, population=None, extra
         "reported clean", ev)
 
 
-def _iter_definitions(container, visited):
+def _iter_definitions(container, path=None, declared=None):
     """Every node inside `container`'s subgraph definitions, to any depth.
+
+    ⚠ **The cycle guard was keyed on the blueprint's `id` VALUE, so a duplicate id
+    silently dropped the second blueprint.** The loop read
+    `key = id(d) if d.get("id") is None else ("id", d["id"])` followed by
+    `if key in visited: continue`, so two DISTINCT definitions declaring one id collapsed
+    to one and every node inside the second was never walked by any clause in this module.
+    A duplicate id is not a cycle: the guard's own docstring stands against "a blueprint
+    that references itself", and it was doing double duty as a dedup over a field nothing
+    validates. Measured 2026-09-04 in this worktree on a save-format graph with
+    `definitions.subgraphs` holding two definitions BOTH with `id: "bp"` — the first
+    (`name: "first"`) carrying `clean_style.safetensors`, the second (`name: "second"`)
+    carrying `causvid_x.safetensors` (BANNED, CC-BY-NC): `components()` returned only
+    `['wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors', 'clean_style.safetensors']` and
+    `verify(g, frame=(832,480,81))` RETURNED GREEN. Two controls: renaming the second
+    blueprint `bp2` raised naming the banned file, and deleting `id` from BOTH (so the
+    `id(d)` object-identity fallback was used) also found it.
+
+    **The two jobs are separated.** Cycle protection is the recursion PATH — a set of
+    OBJECT identities added on the way down and removed on the way back up — so a
+    blueprint that references itself is entered once and terminates, and a blueprint
+    legitimately reachable from two different parents is still walked. Ambiguity is a
+    REFUSAL by name: `duplicate_subgraph_id`, worded from the precedent this module
+    already sets one level over. `gate_saved_graph.link_table` raises `duplicate_link_id`
+    because "a file that is ambiguous about where its conditioning comes from is not a
+    file this gate can vouch for", and `fetch_run.parse_node_map` raises
+    `node_map_duplicate_id` citing it; the blueprint-id table is the third member of that
+    family and was the one that silently dropped instead.
+
+    NOT MEASURED: whether Comfy's exporter ever emits duplicate blueprint ids. The input
+    class is the one `load_graph` documents — an operator's `--saved` file, a converter or
+    hand-edit artifact, or two workflows merged — so this closed the guard direction that
+    was unbounded rather than a demonstrated escape. The id is compared as `str(bid)`,
+    which is the strict direction: a file declaring `1` and `"1"` is ambiguous about which
+    runs, and refusing is the answer this module gives to ambiguity everywhere else.
 
     ⚠ **The walk guarded the node ARRAY and left its own CONTAINER unguarded**, one level
     above the hole wave 14 closed in `_readable_node`. The loop header used to read
@@ -733,6 +863,8 @@ def _iter_definitions(container, visited):
     blueprint no clause examined, and "nothing was checkable" and "everything checked out"
     may not be the same verdict.
     """
+    path = set() if path is None else path
+    declared = {} if declared is None else declared
     defs = container.get("definitions")
     if defs is not None and not isinstance(defs, dict):
         _unreadable_level(
@@ -749,17 +881,43 @@ def _iter_definitions(container, visited):
             _unreadable_level(
                 "definitions.subgraphs", d, "a subgraph definition", index=i,
                 population=len(subs))
-        key = id(d) if d.get("id") is None else ("id", d["id"])
-        if key in visited:
+        # Cycle protection, and ONLY cycle protection: this exact blueprint object is
+        # already on the recursion path, so entering it again would not terminate. Keyed
+        # on object identity because that is the only thing that makes a self-reference a
+        # self-reference; the blueprint's `id` field is a value nothing validates.
+        if id(d) in path:
             continue
-        visited.add(key)
         where = d.get("name") or d.get("id") or "subgraph"
-        nodes = d.get("nodes") or []
-        for i, n in enumerate(nodes):
-            # · ANDON — the same refusal the top-level array carries, on the level the
-            # wave-12 fix did not reach. See `_readable_node`.
-            yield (where, _readable_node(where, n, i, len(nodes)))
-        yield from _iter_definitions(d, visited)
+        bid = d.get("id")
+        if bid is not None:
+            # · ANDON — ambiguity, which is a different fact from a cycle and gets a
+            # different answer. See this function's docstring.
+            prev = declared.get(str(bid))
+            if prev is not None:
+                raise RouteGate(
+                    f"this graph declares two subgraph blueprints under one id "
+                    f"({bid!r}): {prev!r} and {where!r}. A file that declares two "
+                    f"different blueprints under one id is ambiguous about which one "
+                    f"runs, and a walk that deduplicated them would leave every node "
+                    f"inside the second unexamined inside a graph reported clean — which "
+                    f"is what this walk did until 2026-09-04, with a CC-BY-NC LoRA in the "
+                    f"second blueprint and a green receipt on the last gate before a paid "
+                    f"submission",
+                    {"gate": "ROUTE", "andon": "RouteGate",
+                     "clause": "duplicate_subgraph_id", "subgraph_id": bid,
+                     "declared_by": [prev, where], "index": i,
+                     "n_subgraphs": len(subs), "where": where})
+            declared[str(bid)] = where
+        path.add(id(d))
+        try:
+            nodes = d.get("nodes") or []
+            for j, n in enumerate(nodes):
+                # · ANDON — the same refusal the top-level array carries, on the level the
+                # wave-12 fix did not reach. See `_readable_node`.
+                yield (where, _readable_node(where, n, j, len(nodes)))
+            yield from _iter_definitions(d, path, declared)
+        finally:
+            path.discard(id(d))
 
 
 #: Verdict precedence, strictest first. A filename that matches more than one row in
@@ -1171,6 +1329,50 @@ def _save_format_input_names(node):
     return out
 
 
+def _save_format_converted_widget_names(node):
+    """Every widget this save-format node has had CONVERTED to an input, by name.
+
+    A slot carrying a `widget` dict is a converted widget: it once occupied a position in
+    `widgets_values` and now arrives over a link, so every positional index at or after it
+    is shifted. A slot with no `widget` key is an ordinary input socket that never
+    occupied a widget position and shifts nothing — the distinction
+    `_save_format_input_names` does not draw, because its caller does not need it.
+    """
+    out = []
+    for slot in node.get("inputs") or []:
+        if not isinstance(slot, dict):
+            continue
+        widget = slot.get("widget")
+        if isinstance(widget, dict) and isinstance(widget.get("name"), str):
+            out.append(widget["name"])
+        elif isinstance(widget, dict) and isinstance(slot.get("name"), str):
+            out.append(slot["name"])
+    return out
+
+
+def known_widget_indices(cls):
+    """Every save-format widget position this module has RECORDED for `cls`.
+
+    The union of the tables that carry a positional index for the class:
+    `HOSTED_ENUM_WIDGETS`, `SEED_NODES` (`seed`, `control_after_generate`, `add_noise`),
+    `LATENT_NODES` and `CAMERA_NODES`. Published as one function because a caller asking
+    "where does this widget sit" should not have to know which of four tables happens to
+    hold the row, and because a name that is in NONE of them has an unknown position —
+    which is a third answer, not a zero.
+    """
+    out = {}
+    spec = SEED_NODES.get(cls) or {}
+    for name, key in (("seed", "seed"), ("control_after_generate", "control"),
+                      ("add_noise", "add_noise")):
+        if isinstance(spec.get(key), int):
+            out[name] = spec[key]
+    for table in (LATENT_NODES, CAMERA_NODES, HOSTED_ENUM_WIDGETS):
+        for name, i in (table.get(cls) or {}).items():
+            if isinstance(i, int):
+                out[name] = i
+    return out
+
+
 def unrecorded_seed_sources(graph):
     """Nodes that look like they carry a seed and have NO `SEED_NODES` row.
 
@@ -1469,6 +1671,38 @@ def camera_widget_order_evidence(graph, expect):
             "found": found, "widgets_values": wv,
             "agrees": all(found[k] == expect[k] for k in ("width", "height", "length")),
         })
+    # · ANDON (reported, not raised — this function reports and the caller decides) — the
+    # last member of the empty-population family this repo has closed five times.
+    # `disagree` is empty when `ev["nodes"]` is empty, so this used to return
+    # `agrees: True` with the verdict "the declared indices carry the builder's numbers on
+    # 0 node(s)". Measured 2026-09-04 in this worktree: a save-format graph of
+    # `UNETLoader` + `KSampler` and NO camera node returned that affirmative, and so did a
+    # graph whose camera node's CLASS had been renamed (`WanCameraImageToVideoV2`) — which
+    # is the drift this function exists to catch. Its siblings all refuse an empty
+    # declared population: `g2_completeness`, `gate_b_batching`,
+    # `gate_s_seed_registration`, `g5_openpose_conformance`, `rig_gates.gate_n_names`.
+    #
+    # This function is the empirical SECOND reading the `LATENT_NODES` warning says is
+    # owed for `CAMERA_NODES`' positional indices, so an affirmative over an empty
+    # population is a confirmation that the indices were never read. `agrees` is `None`
+    # rather than `False` because nothing was contradicted either; a caller taking this as
+    # its confirmation must not read a third answer as the first, and `None` is the value
+    # `if ev["agrees"]` and `if not ev["agrees"]` disagree about.
+    #
+    # It is NOT the API branch's `not_applicable`, which is a different fact: there, there
+    # is nothing positional to confirm at all. Bounded honestly: there is no production
+    # call site today (grep across tools/ finds it only at its definition), so no spend is
+    # affected now; the cost falls on the first caller that wires it.
+    if not ev["nodes"]:
+        ev["verdict"] = ("INDETERMINATE — no node in this graph carries a recorded "
+                         "widget-index row, so the declared indices were never read and "
+                         "'nothing was checkable' is not 'the indices agree'")
+        ev["agrees"] = None
+        ev["classes_with_a_recorded_row"] = sorted(
+            set(CAMERA_NODES) | {"WanCameraImageToVideo"})
+        ev["classes_in_this_graph"] = sorted(
+            {str(n.get("type")) for _, n in _iter_nodes(graph)})
+        return ev
     disagree = [n for n in ev["nodes"] if not n["agrees"]]
     ev["verdict"] = (
         "CONTRADICTED — the declared indices do not carry the builder's numbers"
@@ -1632,10 +1866,83 @@ def hosted_enums(graph):
             idx = HOSTED_ENUM_WIDGETS.get(n.get("type"))
             if idx:
                 wv = n.get("widgets_values") or []
-                if len(wv) > max(idx.values()):
-                    out.append((n.get("id"), wv[idx["resolution"]], wv[idx["ratio"]],
-                                wv[idx["duration"]]))
+                # · ANDON — the positional read is cross-checked against the node's own
+                # declared input names before it is trusted. See `_hosted_enum_shift_andon`.
+                _hosted_enum_shift_andon(n, idx, wv)
+                out.append((n.get("id"), wv[idx["resolution"]], wv[idx["ratio"]],
+                            wv[idx["duration"]]))
     return out
+
+
+def _hosted_enum_shift_andon(n, idx, wv):
+    """Refuse a save-format hosted node whose positional enum indices cannot be trusted.
+
+    ⚠ **The save-format branch read the hosted tier's three enum values purely
+    positionally** — `if len(wv) > max(idx.values()): out.append((id, wv[3], wv[4],
+    wv[5]))` — with no check that the widget list had not been SHIFTED, which is the
+    ordinary consequence of a widget being converted to an input in Comfy's save format.
+    This module already knows converted widgets exist and reads them:
+    `_save_format_input_names` exists precisely to pull `slot['widget']['name']` out of
+    the save-format `inputs` list.
+
+    Measured 2026-09-04 in this worktree on a two-node `Wan2ReferenceVideoApi` graph using
+    the repo's own fixture widget layout (model, prompt, negative, resolution, ratio,
+    duration, seed, control), where node 2's `duration` widget had been converted to an
+    input: `hosted_enums` returned `[(1,'720P','16:9',5), (2,'720P','16:9',7)]` — node 2's
+    duration read off the SEED slot, a value legal under
+    `HOSTED_TIER_RULES['wan2.7-r2v']['duration_s'] == (2, 10)` and not the number that
+    runs, which arrives over the link. Converting `prompt`, which sits BELOW all three
+    enum indices, shifted every one: `[(4,'16:9',5,7)]`.
+
+    The truncation direction is the same defect wearing the other hat: a node whose widget
+    list falls below the highest index contributed NOTHING to `found`, in silence, and
+    `verify`'s per-node billing clause ("one submission carrying two billable nodes is two
+    charges against a ceiling counted per submission") then counted a population the graph
+    does not have. Both answer with a refusal here rather than with a number nobody read.
+
+    Bounded honestly: for `Wan2ReferenceVideoApi` the seed and control widgets sit at the
+    two highest indices, so any shift also breaks `seeds()`' `control_after_generate` read
+    and Gate S refuses first — measured, `verify` on the shifted graph raised "Gate S
+    cannot be armed on this graph: node 2 ... control_after_generate=None". Today the
+    escape is caught by a neighbouring clause; a future `HOSTED_ENUM_WIDGETS` row whose
+    seed slot is not last would not be, and this clause is on the direction that bounds.
+    """
+    highest = max(idx.values())
+    known = known_widget_indices(n.get("type"))
+    # A converted widget shifts the enum block unless its own slot is KNOWN to sit above
+    # every enum index. A name this repo has no recorded index for has an unknown
+    # position, and an unknown position is not evidence of no shift — the third answer,
+    # the same one `latents()` gives a dimension arriving over a link.
+    shifting = sorted({name for name in _save_format_converted_widget_names(n)
+                       if known.get(name) is None or known[name] <= highest})
+    if shifting:
+        raise RouteGate(
+            f"node {n.get('id')} ({n.get('type')}) declares {shifting} as a CONVERTED "
+            f"widget, so this class's positional enum indices {idx} no longer address the "
+            f"fields they name — every value at or after the converted slot is shifted, "
+            f"and a name with no recorded index could sit anywhere. Reading them anyway "
+            f"would grade a number that is not the field it is quoted as, on a tier that "
+            f"bills per node",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "converted_widget_shifts_enum_indices",
+             "node_id": n.get("id"), "class": n.get("type"),
+             "converted": shifting, "indices": dict(idx),
+             "recorded_widget_indices": known,
+             "highest_enum_index": highest,
+             "declared_input_names": sorted(set(_save_format_input_names(n))),
+             "widgets_values": wv})
+    if len(wv) <= max(idx.values()):
+        raise RouteGate(
+            f"node {n.get('id')} ({n.get('type')}) carries {len(wv)} widget value(s) and "
+            f"this class's enum indices reach {max(idx.values())}, so its resolution, "
+            f"ratio and duration cannot be read at all. Dropping it from the population "
+            f"in silence is what this clause replaces: Gate L's per-node billing count "
+            f"then describes a graph with fewer billable nodes than the one submitted",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "hosted_enum_widgets_truncated",
+             "node_id": n.get("id"), "class": n.get("type"),
+             "n_widgets": len(wv), "highest_index_required": max(idx.values()),
+             "indices": dict(idx), "widgets_values": wv})
 
 
 def hosted_frame_legality(resolution, ratio, duration, tier):
@@ -1732,14 +2039,51 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
     # sampler had any connected input (measured 2026-08-12, E10): E09's saved samplers had
     # empty input arrays, `or {}` swallowed them, and the defect waited for a graph with
     # links. It is a crash rather than a wrong answer, which is the good kind of latent bug.
+    #
+    # ⚠ **The record was resolved back to its node by NODE ID ALONE, and `where` — which
+    # `seeds()` records for exactly this purpose — was discarded.** Subgraph blueprints
+    # carry their own node-id namespace, so a blueprint node sharing an id with a
+    # top-level node is ordinary; `_walk_nodes`' own docstring records a served template
+    # presenting 4 nodes at the top level and hiding 30 inside a blueprint. Every
+    # colliding record therefore read its `add_noise` off the FIRST node the walk yielded
+    # — always the top-level one — and the `adds_noise` filter that decides which seeds
+    # the registration clause grades was answered about the wrong node.
+    #
+    # Measured 2026-09-04 in this worktree on a save-format graph carrying the two-expert
+    # split this gate documents — `KSamplerAdvanced` id 2 (`add_noise=enable`, seed 7),
+    # `KSamplerAdvanced` id 3 (`add_noise=disable`, seed 7, legitimately exempt) — plus
+    # one blueprint holding its OWN `KSamplerAdvanced` id 3 with `add_noise=enable` and
+    # seed 999999999: `seeds()` correctly returned `[('top',2,7), ('top',3,7),
+    # ('inner',3,999999999)]`, and this function RETURNED with `seeds_noise_bearing: 1`
+    # and `seeds_exempt_add_noise_disable: [3, 3]`. The identical graph with the blueprint
+    # node renumbered to 9 REFUSED. The wave-16 `found and not live` andon does not save
+    # this shape — it fires only when EVERY seed is exempted, and the live top-level
+    # sibling keeps `live` non-empty.
+    #
+    # Node identity is the PAIR `(where, id)`, and the resolution is TOTAL: a record whose
+    # node cannot be re-found raises rather than defaulting `adds = True`, because the
+    # default silently decides which population the registration clause grades.
     api = is_api_format(graph)
     live = []
     for s in found:
-        n = next((x for _, x in _iter_nodes(graph) if str(x.get("id")) == str(s["node_id"])),
-                 None)
+        n = next((x for w, x in _iter_nodes(graph)
+                  if (w, str(x.get("id"))) == (s.get("where"), str(s["node_id"]))), None)
+        if n is None:
+            raise RouteGate(
+                f"Gate S cannot resolve the seed record for node {s['node_id']} at level "
+                f"{s.get('where')!r} back to a node in this graph, so the `add_noise` "
+                f"reading that decides whether its seed is graded has no operand. A "
+                f"default here would put a seed into — or out of — the registration "
+                f"clause's population under a receipt that cannot say which node it came "
+                f"from, and node identity in this walk is the pair (where, id) because "
+                f"blueprint ids are a separate namespace",
+                dict(ev, clause="seed_node_unresolvable",
+                     unresolved={"where": s.get("where"), "node_id": s["node_id"],
+                                 "class": s.get("class")},
+                     levels=sorted({str(w) for w, _ in _iter_nodes(graph)})))
         slot = SEED_NODES[s["class"]].get("add_noise")
         adds = True
-        if n is not None and slot is not None:
+        if slot is not None:
             if api:
                 adds = (n.get("inputs") or {}).get("add_noise", "enable") \
                     not in ("disable", False)
@@ -1753,6 +2097,12 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
     ev["seeds_found"] = len(found)
     ev["seeds_noise_bearing"] = len(live)
     ev["seeds_exempt_add_noise_disable"] = [s["node_id"] for s in inert]
+    # The receipt's own tell for the wrong-node read above was a duplicate id printed
+    # twice in the line above, which a reader had to notice to catch it. Node identity is
+    # the pair, so the exempt population is also recorded as pairs — this key cannot
+    # repeat an identity, and the bare-id list is kept because reports quote it.
+    ev["seeds_exempt_nodes"] = [{"where": s.get("where"), "node_id": s["node_id"]}
+                                for s in inert]
     # · ANDON — the population the `adds_noise` filter above can empty. `_seed_population_
     # andon` supplies the third answer only when `seeds()` itself is empty; nothing bounded
     # the case where seeds were FOUND and every one of them was exempted. Measured
@@ -1800,8 +2150,13 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
         f"drawn against the committed list of {len(reg)}" if not found else
         f"{len(live)} noise-bearing seed(s) of {len(found)} seed(s) found, all pinned and "
         f"all drawn from the committed list of {len(reg)}"
+        # The exempted nodes are named by the pair `(where, id)`, printed `level/id`. A
+        # bare id is not an identity in this walk — the same receipt used to read
+        # "node(s) 3, 3" for a top-level node and a blueprint node, which was the only
+        # visible tell of the wrong-node read the lookup above now makes impossible.
         + (f"; {len(inert)} exempted by add_noise=disable (node(s) "
-           + ", ".join(str(s["node_id"]) for s in inert) + ")" if inert else ""))
+           + ", ".join(f"{s.get('where')}/{s['node_id']}" for s in inert) + ")"
+           if inert else ""))
     return ev
 
 
@@ -1912,6 +2267,11 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
           "require_pinned_seeds": bool(require_pinned_seeds),
           "attribution": [dict(e) if isinstance(e, dict) else e
                           for e in (attribution or [])],
+          # What the walk ENTERED, so the licence clause's `of {len(comp)}` denominator
+          # can be reconciled against it. `None` on save format — see `api_walk_census`,
+          # and F-7eb1ba2a for the receipt that counted a population a silent `continue`
+          # had already excluded a banned LoRA from.
+          "walk_census": api_walk_census(graph),
           "components": comp, "seeds": sd, "latents": lat,
           "latents_checkable": sum(1 for l in lat if l["checkable"]),
           "frame_legality": legality}

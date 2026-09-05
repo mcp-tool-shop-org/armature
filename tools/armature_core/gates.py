@@ -869,6 +869,50 @@ def gate_s_seed_registration(seed, registry, experiment, seed_was_explicit):
             ev,
         )
 
+    # · ANDON — the gate guarded the SEED's type and never the COMMITTED LIST's, and the
+    # committed list is the object the whole andon rests on. The clause above refuses a
+    # non-int seed with the reason written out — "a seed that is not an integer cannot be
+    # compared against the committed list at all" — and the membership test below is a
+    # bare `in`, which is `==` membership, so `bool` and `float` members compare equal to
+    # ints. Measured 2026-09-04 in this worktree:
+    # `gate_s_seed_registration(1, [True], 'E14', True)` returned verdict "seed is
+    # pre-registered" with `registry_index: 0`; `(0, [False], ...)` likewise;
+    # `(1, [1.0], ...)` likewise. Wave 16 closed exactly this bool-is-an-int hole on
+    # `gate_b_batching`'s `observed_batch_images` and on this gate's own `seed`, with the
+    # comment "a JSON `true` parsed out of a run record" naming the producer; the registry
+    # arrives by the same route — a spec field, a `.get('seeds')`, a JSON list — and got
+    # no clause. A spec whose committed list was written or parsed as `[true]` or `[7.0]`
+    # pre-registers nothing, and Gate S returned a verdict stating a property of a
+    # registry this module never read as a registry, on the andon whose whole point is
+    # that a list removes the possibility a rule only forbids.
+    #
+    # It also closes the bare `TypeError` the last line of this function used to raise:
+    # `sorted(registry).index(seed)` on a registry of mixed unorderable types is not an
+    # `ArmatureError`, so the halt contract's exit-2 receipt branch was bypassed and a
+    # refusal from this gate was recorded as an unhandled crash.
+    #
+    # Bounded honestly: no live caller in tools/ passes a non-int registry today (the
+    # registries are module constants and spec fields), so this was the guard direction
+    # unbounded rather than a live escape.
+    bad_members = [(i, m) for i, m in enumerate(registry)
+                   if not isinstance(m, int) or isinstance(m, bool)]
+    if bad_members:
+        raise GateSSeedRegistration(
+            f"{experiment}'s committed seed list is not a list of integers: "
+            + ", ".join(f"index {i} is a {type(m).__name__} ({m!r})"
+                        for i, m in bad_members)
+            + f". A member that is not an integer cannot be compared against {seed} at "
+              f"all — `in` is `==` membership, so a JSON `true` or a `7.0` parsed out of "
+              f"a spec field compares EQUAL to an int and pre-registers nothing while "
+              f"reading like a registration. Fix the read that produced the list; this "
+              f"gate guards a failure with no technical symptom, so nothing downstream "
+              f"contradicts a verdict taken from a registry nobody validated",
+            dict(ev, clause="registry_member_not_an_int",
+                 offending_members=[{"index": i, "type": type(m).__name__, "value": repr(m)}
+                                    for i, m in bad_members],
+                 registry=[repr(m) for m in registry]),
+        )
+
     if seed not in registry:
         raise GateSSeedRegistration(
             f"seed {seed} is not in {experiment}'s pre-registered list of "

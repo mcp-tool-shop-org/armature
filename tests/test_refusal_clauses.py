@@ -578,7 +578,17 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     #      derivation command; the base was measured green in this worktree first, so every
     #      delta here is demonstrably this domain's.
     #
-    assert len(RAISE_SITES["RouteGate"]) == 63, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 18 (core-gates): 64 → 69, all five in `armature_core/route_gates.py` and all
+    # five on the walk itself — `_api_entry_kind`'s `unreadable_node` (the API branch
+    # answered a node-shaped mapping with no `class_type` by a silent `continue`),
+    # `_iter_definitions`' `duplicate_subgraph_id` (the cycle guard keyed on the
+    # blueprint's `id` VALUE and dropped the second of two blueprints declaring one
+    # id), Gate S's `seed_node_unresolvable` (the seed-record lookup is keyed on the
+    # pair `(where, id)` and is now TOTAL), and `_hosted_enum_shift_andon`'s two.
+    # Measured in the core-gates worktree; builders and core-solvers may move this
+    # count too, so the coordinator re-measures at merge rather than summing.
+    # WAVE-18 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(RAISE_SITES["RouteGate"]) == 68, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside

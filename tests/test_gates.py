@@ -1131,10 +1131,18 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     #                                    PERSPECTIVE branch refusing the camera numbers it
     #                                    records.
     # Nothing in `tools/*.py` reaches this walk, so sibling domains add zero here.
-    assert total == 333, (
-        f"{total} family raises in armature_core; this pin asserts 333, RE-DERIVED on the "
-        f"wave-18 core-solvers branch and itemised per module above. This is the "
-        f"denominator every ratio below is quoted against — re-measure it deliberately")
+    # WAVE 18 (core-gates): 315 → 325, measured in the core-gates worktree. +5
+    # `route_gates.RouteGate` (the API branch's `unreadable_node`, the walk's
+    # `duplicate_subgraph_id`, Gate S's `seed_node_unresolvable`, and the two hosted
+    # enum-shift clauses), +4 `donor_gate.DonorGate` (`_readable_landmark_row`), +1
+    # `gates.GateSSeedRegistration` (`registry_member_not_an_int`). core-solvers also
+    # edits `armature_core` this wave, so the merged tree will read HIGHER — the
+    # coordinator re-measures at merge and never sums the branches.
+    # WAVE-18 MERGE (coordinator, 2026-09-05): 343 on the MERGED tree, measured by calling `family_raise_count()` on it — never a
+    # sum of branches (core-gates froze 325 and core-solvers 333, each branch-local by its own note).
+    assert total == 343, (
+        f"{total} family raises in armature_core; this pin asserts 343, MEASURED on the wave-18 merged "
+        f"tree. This is the denominator every ratio below is quoted against — re-measure it deliberately")
 
 
 def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():

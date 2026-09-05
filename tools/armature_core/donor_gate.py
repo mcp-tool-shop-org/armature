@@ -155,6 +155,82 @@ def _inside(xy):
     return 0.0 <= x <= 1.0 and 0.0 <= y <= 1.0
 
 
+def _readable_landmark_row(r, idx, required):
+    """Gate DONOR's refusal for a detection row whose `image` list it cannot index.
+
+    ⚠ **The gate guarded its EMPTY population and never the SHAPE of a row it does
+    read.** `flags = {a: (observed and _inside(r["image"][idx[a]])) for a in ANKLES}` with
+    `idx = {'left_ankle': 27, 'right_ankle': 28}` from `LS.POSE_LANDMARKS` (33 entries),
+    and `_inside` then does `float(xy[0]), float(xy[1])`. Measured 2026-09-04 in this
+    worktree: a row whose `image` list carries 17 landmarks (a COCO-topology record)
+    raised `IndexError: list index out of range`; a 33-entry list with `image[27] = None`
+    raised `TypeError: 'NoneType' object is not subscriptable`; a list of
+    `{'x':..,'y':..}` dicts raised `KeyError: 0`.
+
+    None of the three is an `ArmatureError`, so `lift_clip`'s halt handler
+    (`detail = getattr(exc, "evidence", None)`) classified a deliberate-shaped refusal
+    from this gate as an unhandled crash and wrote a halt line naming no gate and carrying
+    no receipt — the exact exit `SubjectExtentError`, `rig_gates._require_numeric` and
+    `_readable_node` were each written to close in their own modules this year. Gate DONOR
+    is the andon that decides whether a clip may be a baseline at all, so a malformed
+    detection record made its halt indistinguishable from a crash and an operator would
+    debug the solver instead of the record.
+
+    Bounded honestly: the one production caller is `lift_clip.py`, whose rows come from a
+    live MediaPipe `detect()` that always emits 33 landmarks, so this was the guard
+    direction unbounded rather than a live escape; the exposure is a detection record read
+    back from JSON or produced by a second detector.
+
+    Only a row the gate actually READS is checked. A frame the detector did not fire on
+    carries no landmarks by definition, and A3's clip-denominator reading already counts
+    it as not-in-frame — guarding its shape would refuse a legitimate clip.
+    """
+    image = r.get("image")
+    frame = r.get("frame")
+    ev = {"gate": "DONOR", "andon": "DonorGate", "clause": "unreadable_landmark_row",
+          "frame": frame, "required_index": required,
+          "landmarks_expected": len(LS.POSE_LANDMARKS),
+          "ankle_indices": dict(idx), "image_type": type(image).__name__}
+    if not isinstance(image, (list, tuple)):
+        raise DonorGate(
+            f"frame {frame}'s detection record carries `image` as a "
+            f"{type(image).__name__}, which is not the ordered landmark sequence this "
+            f"clause indexes by position. A gate that cannot read its own operand halts "
+            f"by name rather than crashing under one", dict(ev, n_landmarks=None))
+    if len(image) <= required:
+        raise DonorGate(
+            f"frame {frame}'s detection record carries {len(image)} landmark(s) and this "
+            f"clause reads index {required} ({', '.join(f'{a}={idx[a]}' for a in ANKLES)}), "
+            f"so the ankles are not in it at all. A record of a different topology is not "
+            f"a clip with its ankles out of frame — it is a record this gate cannot grade, "
+            f"and MediaPipe's own POSE_LANDMARKS has "
+            f"{len(LS.POSE_LANDMARKS)} entries",
+            dict(ev, n_landmarks=len(image)))
+    for a in ANKLES:
+        xy = image[idx[a]]
+        if not isinstance(xy, (list, tuple)) or len(xy) < 2:
+            raise DonorGate(
+                f"frame {frame}'s {a} landmark is a {type(xy).__name__} ({xy!r}), which "
+                f"is not the (x, y) pair this clause tests for being inside the image. "
+                f"A landmark nothing can read is not a landmark outside the frame",
+                dict(ev, n_landmarks=len(image), landmark=a,
+                     landmark_index=idx[a], landmark_type=type(xy).__name__))
+        for axis, v in zip(("x", "y"), xy[:2]):
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                raise DonorGate(
+                    f"frame {frame}'s {a} landmark carries {v!r} "
+                    f"({type(v).__name__}) where its {axis} coordinate is required",
+                    dict(ev, n_landmarks=len(image), landmark=a,
+                         landmark_index=idx[a], axis=axis, coordinate=repr(v)))
+            # A NaN fails `0.0 <= x <= 1.0` in both directions at once, so `_inside`
+            # answers False and the frame is silently counted as ankles-out-of-frame —
+            # a measurement-shaped answer to a record that carries no measurement.
+            require_finite(f"frame {frame} {a}.{axis}", v, DonorGate,
+                           dict(ev, n_landmarks=len(image), landmark=a,
+                                landmark_index=idx[a], axis=axis),
+                           positive=False)
+
+
 def ankle_framing(rows, detect_evidence=None):
     """How often the ankles were inside the image — computed PER FRAME, not from rates.
 
@@ -184,9 +260,14 @@ def ankle_framing(rows, detect_evidence=None):
         raise DonorGate("no frame carries image landmarks, so the framing clause cannot "
                         "be evaluated. A gate that cannot compute its own quantity halts "
                         "rather than passing", {"gate": "DONOR", "andon": "DonorGate", "n_rows": len(rows)})
+    required = max(idx.values())
     per_frame = []
     for r in rows:
         observed = bool(r.get("fired") and r.get("image"))
+        if observed:
+            # · ANDON — the gate guarded its EMPTY population (`if not fired: raise`) and
+            # never the SHAPE of a row it does read. See `_readable_landmark_row`.
+            _readable_landmark_row(r, idx, required)
         flags = {a: (observed and _inside(r["image"][idx[a]])) for a in ANKLES}
         per_frame.append({"frame": r.get("frame"), **flags, "observed": observed,
                           "both": all(flags.values()), "either": any(flags.values())})
