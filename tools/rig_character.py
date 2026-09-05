@@ -271,6 +271,81 @@ def export_target_snapshot(path):
     return {"path": p, "existed": True, "bytes": st.st_size, "mtime_ns": st.st_mtime_ns}
 
 
+def render_target_snapshot(path):
+    """What is at `path` before a RENDER runs. `export_target_snapshot`'s twin.
+
+    F-a2630f86, wave 22. Wave 16 made the pre-export snapshot REQUIRED (`gate_glb_written`
+    clause 0) on the stated ground that every OTHER clause in Gate GLB "passes on that
+    file" -- a previous run's artefact at the same path -- so the stale-target clause 4 had
+    to be un-skippable. The RENDER half of the same premise had no clause 4 at all.
+    RE-ENUMERATED on `e8263a3` by walking `tools/`: `export_target_snapshot` had NINE call
+    sites (author_walk, lift_solve, make_test_armature, rig_bake, rig_character, rig_parts,
+    rig_repair, rig_retopo x2) and ZERO callers outside the export family, while the render
+    write sites -- `preview_glb.gate_previews_written`, `render_turnaround`'s per-view
+    clause, `preview_walk`, `render_performer` and `render_start_frame` -- read exactly the
+    three properties Gate GLB's own docstring names as insufficient (`FINISHED` in the
+    status set, `os.path.isfile`, `getsize == 0`) and none measured the target before the
+    write. The operator-status clause covers the CANCELLED direction; nothing covered "the
+    operator reported FINISHED and the bytes at that path did not move", which is the
+    direction clause 4 exists for.
+
+    Consequence is bounded -- no realistic FINISHED-without-write was constructed on this
+    rig -- so this is the POPULATION half of the wave-16 fix rather than a live defect. It
+    is the same measurement either way, which is why it is the same function: one
+    implementation, `mtime_ns` and not `mtime`, because the float seconds a `stat` reports
+    are rounded and two writes inside one tick compare equal.
+    """
+    return export_target_snapshot(path)
+
+
+def require_render_target_moved(path, before, gate_cls, ev=None,
+                                what="the rendered frame"):
+    """Raise `gate_cls` unless the bytes at `path` MOVED across this render. · ANDON
+
+    Called after the caller's own `FINISHED` and existence clauses, so what is left is the
+    one direction they cannot see. Two clauses, both keyed on the VALUE of the snapshot and
+    never on whether one was passed (`gate_glb_written`'s clause 0, carried):
+
+    * `no_pre_render_snapshot` -- `before` is not a `render_target_snapshot()` record
+      carrying a boolean `existed`. A caller that took no snapshot has not measured the
+      thing the clause below rules on, and a gate that answers anything in that state is
+      answering about a run it cannot see.
+    * `stale_render_target` -- the file's size AND nanosecond mtime are both what they were
+      before the render. That is the previous run's file, and every consumer downstream
+      reads the path.
+
+    Returns the after-snapshot so a caller can put it in a record.
+    """
+    p = os.path.abspath(path)
+    ev = dict(ev or {})
+    ev.update({"andon": gate_cls.__name__, "what": what, "path": p, "before": before})
+    if (not isinstance(before, dict) or "existed" not in before
+            or not isinstance(before.get("existed"), bool)):
+        ev["clause"] = "no_pre_render_snapshot"
+        raise gate_cls(
+            f"no pre-render snapshot was taken for {what} at {p}: `before` is {before!r}, "
+            f"not a `render_target_snapshot()` record carrying a boolean `existed`. The "
+            f"stale-target clause is the only one that can tell this run's frame from the "
+            f"PREVIOUS run's file at the same path, and every other clause at this write "
+            f"site passes on that file", ev)
+    if not os.path.isfile(p):
+        ev["clause"] = "render_target_missing"
+        raise gate_cls(
+            f"{what} at {p} does not exist after a render that reported FINISHED", ev)
+    st = os.stat(p)
+    after = {"bytes": st.st_size, "mtime_ns": st.st_mtime_ns}
+    ev["after"] = after
+    if (before["existed"] and before.get("bytes") == after["bytes"]
+            and before.get("mtime_ns") == after["mtime_ns"]):
+        ev["clause"] = "stale_render_target"
+        raise gate_cls(
+            f"{what} at {p} is byte-for-byte the file that was already there before this "
+            f"render ran (same size, same mtime to the nanosecond), on an operator that "
+            f"reported FINISHED. A record naming its sha256 would describe a frame this "
+            f"process never drew, and every instrument downstream would measure it", ev)
+    return after
+
+
 def gate_glb_written(path, *, result, before, what="the exported GLB"):
     """`{"path", "bytes", "sha256", "status", "verdict"}` for a GLB this run wrote, else raise.
 
@@ -1698,6 +1773,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -1766,7 +1860,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         try:

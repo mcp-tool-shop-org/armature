@@ -37,11 +37,28 @@ The gates
   measured **unclipped**. A turnaround's widest view is not its narrowest, so a radius that
   frames the front can still amputate the arms at three-quarter; this is the check that
   binds the axis the height fit does not.
+
+  ⚠ **This paragraph claimed a property this file did not have, and the correction is kept
+  in place with the measurement that overturned it (F-553c8bc0, wave 22).** Until then
+  `main` built ONE cloud — `cloud = SF.framing_cloud(verts)`, decimated to 1500 points —
+  and handed it to the radius / ortho-scale solve AND to the per-view
+  `SF.silhouette_extent` this gate rules on. `framing_cloud` carries only the six
+  WORLD-axis extremes across its reduction, and the SCREEN-space silhouette extreme at an
+  arbitrary azimuth is neither of those, so the samples the gate read were a lower bound on
+  the silhouette at every view but the axis-aligned ones. MEASURED 2026-09-05 on a
+  20,001-point cloud (a cylinder of radius R plus one point at (0.9R, 0.9R) — 1.27 R from
+  the axis, and no world-axis extreme): the decimated cloud over-reported the clearance by
+  38 px, and at two of eight azimuths `SF.gate_whole` returned a PASS over the decimated
+  cloud while REFUSING the full one with clause `silhouette_does_not_clear_the_border`.
+  The sibling `render_start_frame` does the opposite and says why at its own :120-122; this
+  file now does the same — `framing_clouds` below returns both populations, the gate reads
+  the full one, the solve reads the reduction, and the manifest's camera block records
+  which was which.
 * **Gate CROP, per view** (`turnaround.gate_view_crop`) — S04, and it arms on the
-  `--ortho` path. Gate WHOLE reads the *projected decimated cloud*, which is the same
-  measurement the scale solve was fitted to, so it cannot see a silhouette wider than the
-  samples the solve saw. Gate CROP reads the **rendered alpha**. Border contact there is
-  the failure the shared-scale solve does not bound.
+  `--ortho` path. Gate WHOLE reads the projected cloud, which is a projection of geometry
+  rather than of pixels: anti-aliasing, the alpha threshold and the shading of a thin limb
+  all live between the two. Gate CROP reads the **rendered alpha**. Border contact there is
+  the failure the projection does not bound.
 
 Gate ALPHA and Gate TURN run after the frames and **before the manifest**, because the
 manifest is what makes a run look finished (`stage_render`'s doctrine, and why its G2 sits
@@ -140,6 +157,10 @@ from mathutils import Vector  # noqa: E402
 from armature_core import blender_scene, framing, parts  # noqa: E402
 from armature_core import startframe as SF  # noqa: E402
 from armature_core import turnaround as TA  # noqa: E402
+# F-a2630f86: `render_target_snapshot` / `require_render_target_moved` are
+# `export_target_snapshot`'s twins and live beside it. The idiom is
+# `rig_bake`'s and `make_parts_sheet`'s -- one implementation, imported.
+import rig_character as rc  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 # CARRIED, not copied (F-267361f5): `render_start_frame.require_frame_size` is the sibling
 # instrument's bound on `--width`/`--height`, and it is ONE implementation with two callers
@@ -178,6 +199,29 @@ ELEVATION_DEG = 0.0
 
 #: Gate WHOLE's margin. The figure must clear every border by this much.
 MARGIN_PX = 2.0
+
+#: Points handed to the framing SOLVE, and to nothing else. Carried verbatim from
+#: `render_start_frame.FRAMING_CLOUD_CAP`, together with the sentence that makes it safe:
+#: the solve is approximate by construction (see `startframe.framing_cloud`), Gate WHOLE
+#: then runs on every vertex, so an under-report here costs margin, never correctness.
+#: F-553c8bc0 is what happens when the second half of that sentence is not true.
+FRAMING_CLOUD_CAP = 1500
+
+
+def framing_clouds(verts, cap=FRAMING_CLOUD_CAP):
+    """`(cloud, solve_cloud)` — every vertex for the GATE, a reduction for the SOLVE.
+
+    Named rather than spelled inline (the sibling spells it inline) so the separation is a
+    testable object: `tests/test_instruments_amend_w22_optics.py` asks it for both
+    populations without standing up a Blender scene, and an AST census beside it asks
+    `main` which of the two names each caller receives.
+
+    Both are lists of plain float triples. `framing.project` does its own arithmetic on
+    whatever it is handed, and a numpy row carried into a pure-Python bisection is a
+    per-point object allocation the solve does not need.
+    """
+    cloud = [tuple(float(c) for c in p) for p in verts]
+    return cloud, SF.framing_cloud(cloud, cap=cap)
 
 #: ORTHO standoff, in multiples of the subject's OWN bounding-sphere radius. A global
 #: constant must not govern a local feature, so this is a fraction of the structure's own
@@ -289,7 +333,10 @@ def parse_args():
                     help="pinned before the import because glTF key times are SECONDS; a "
                          "static subject has no action, and this keeps that true rather "
                          "than assumed")
-    ap.add_argument("--prefix", default="turn")
+    ap.add_argument("--prefix", default="turn",
+                    help="ONE path component — it is pasted into every written view "
+                         "filename, so a separator or an absolute path writes the "
+                         "views outside --out")
     ap.add_argument("--ortho", action="store_true",
                     help="parallel projection with ONE ortho_scale shared by every view "
                          "— the sprite shot-set. Absent, the perspective path runs "
@@ -300,6 +347,23 @@ def parse_args():
                          "survive into the sheet. Used verbatim; --height-frac does not "
                          "participate. Requires --ortho (S05)")
     a = ap.parse_args(argv)
+
+    # ---- F-f7d1f64f, wave 22. `--prefix` was free text with no `type=`, no `choices=`
+    # and no validation, pasted as the NAME COMPONENT of every written view path
+    # (`os.path.join(out, f"{a.prefix}_{i}.png")`) and assigned straight to
+    # `scene.render.filepath`. MEASURED on the repo venv:
+    # `os.path.join("C:\\tmp\\outdir", "../turn_0.png")` -> `C:\\tmp\\outdir\\../turn_0.png`;
+    # `os.path.join("C:\\tmp\\outdir", "C:\\elsewhere\\turn_0.png")` -> `C:\\elsewhere\\turn_0.png`
+    # — an absolute prefix discards `--out` entirely. The eight RGBA views are the whole
+    # product of this tool, and they would be written outside the directory this file's
+    # own named compensator undertakes to delete, while the manifest, Gate ALPHA, Gate
+    # TURN and Gate CROP all pass and `RENDER_TURNAROUND_OK` prints.
+    #
+    # ADOPTED BY IMPORT from SEAM 1's ONE home (`armature_core.parts`), never copied:
+    # instruments-measure held two byte-identical spellings and deletes both; builders
+    # adopts the same object for `fetch_run --run`. Nobody spells a third.
+    parts.single_path_segment(a.prefix, "--prefix", RenderTurnaroundGate,
+                              {"who": "render_turnaround", "out": a.out})
 
     # ---- F-cc1d17aa, wave 18. THE NUMBERS THAT COMPOSE THE SHOT, bounded beside the
     # `--ortho-scale` clause below because that is where this file already states the
@@ -339,9 +403,11 @@ def parse_args():
     # inside `main`'s try, so a raised `RenderTurnaroundGate` reaches the halt contract and
     # prints RENDER_TURNAROUND_HALT with the gate id, the clause and the operand, where
     # `ap.error`'s `SystemExit(2)` is re-raised untouched by the `__main__` block and leaves
-    # an argparse usage message no log reader can key on. `--ortho-scale`'s older clause
-    # still uses `ap.error`; changing a shipped refusal is a separate decision and is not
-    # smuggled in under this finding.
+    # an argparse usage message no log reader can key on. (CORRECTED IN PLACE, wave 22,
+    # F-0befca53: this paragraph used to end "`--ortho-scale`'s older clause still uses
+    # `ap.error`; changing a shipped refusal is a separate decision and is not smuggled in
+    # under this finding." That decision was taken and measured — both `--ortho-scale`
+    # clauses below are typed raises now, and the domain holds ZERO `ap.error` call sites.)
     # ONE FINGERPRINT ACROSS THE FLAG AND THE SOLVER. The clause words below are the ones
     # `armature_core.framing.half_fovs`, its `blender_scene` byte-twin and
     # `turnaround.projection_plan`'s perspective branch use for the same two numbers, so a
@@ -353,7 +419,8 @@ def parse_args():
                                     "sensor_mm_not_finite_and_positive")):
         parts.require_finite(
             _flag, _value, RenderTurnaroundGate,
-            {"gate": "TURNAROUND_OPTICS", "andon": RenderTurnaroundGate.__name__,
+            {"gate": RenderTurnaroundGate.gate, "sub_gate": "TURNAROUND_OPTICS",
+             "andon": RenderTurnaroundGate.__name__,
              "who": "render_turnaround", "flag": _flag, "clause": _clause},
             positive=True)
 
@@ -372,27 +439,58 @@ def parse_args():
                           ("--sweep", a.sweep)):
         parts.require_finite(
             _flag, _value, RenderTurnaroundGate,
-            {"gate": "TURNAROUND_ORBIT", "andon": RenderTurnaroundGate.__name__,
+            {"gate": RenderTurnaroundGate.gate, "sub_gate": "TURNAROUND_ORBIT",
+             "andon": RenderTurnaroundGate.__name__,
              "who": "render_turnaround", "flag": _flag,
              "clause": "not_a_finite_angle"},
             positive=False)
 
     # The two refusals, at the parser, where the mistake is still free. `projection_plan`
-    # refuses the same two for callers who never reach this function.
+    # refuses the same two for callers who never reach this function, so the clause words
+    # are shared and one grep finds both halves.
+    #
+    # F-0befca53, wave 22 — WHY THESE ARE RAISES AND NO LONGER `ap.error`. The comment six
+    # lines above this block used to say "`--ortho-scale`'s older clause still uses
+    # `ap.error`; changing a shipped refusal is a separate decision and is not smuggled in
+    # under this finding". This IS that decision, filed and measured rather than smuggled.
+    # `ap.error` raises `SystemExit(2)` from inside `parse_args`, and the `__main__` block
+    # re-raises `SystemExit` untouched — so the two refusals guarding the ortho pin, the
+    # number a whole ROSTER's shared frame span stands on, exited with the SAME code the
+    # halt contract uses for a gate refusal while printing NO halt record at all. MEASURED
+    # on `e8263a3` through `blender_stub.exit_code_of_main_block('render_turnaround.py')`:
+    # a typed `RenderTurnaroundGate` gives exit 2 AND `RENDER_TURNAROUND_HALT {...
+    # "gate": "TURNAROUND", "evidence": {"clause": "ortho_scale_not_finite_positive", ...}}`;
+    # `ap.error`'s `SystemExit(2)` gives exit 2 and stdout EMPTY — no sentinel, no gate id,
+    # no clause, no evidence. An operator keying on the halt line saw a run that refused
+    # nothing; one keying on the exit code could not tell a gate refusal from an argparse
+    # usage error. An AST walk over the 21 owned tools finds these two the ONLY `ap.error`
+    # refusals in the domain; every other refusal was already typed.
     if a.ortho_scale is not None:
         if not a.ortho:
-            ap.error(
+            raise RenderTurnaroundGate(
                 "--ortho-scale pins the parallel-projection frame span, and there is no "
                 "such span on the perspective path — what is shared there is the radius. "
                 "Accepting it here would render a perspective turnaround that silently "
                 "ignored the one number the run was pinned on. Pass --ortho, or drop the "
-                "pin")
+                "pin",
+                {"gate": RenderTurnaroundGate.gate,
+                 "sub_gate": "TURNAROUND_ORTHO_SCALE",
+                 "andon": RenderTurnaroundGate.__name__, "who": "render_turnaround",
+                 "flag": "--ortho-scale",
+                 "clause": "ortho_scale_pinned_without_ortho",
+                 "ortho_scale": a.ortho_scale, "ortho": bool(a.ortho)})
         if not (math.isfinite(a.ortho_scale) and a.ortho_scale > 0.0):
-            ap.error(
+            raise RenderTurnaroundGate(
                 f"--ortho-scale={a.ortho_scale!r} is not a finite positive world span. A "
                 "non-positive span collapses every point onto the frame centre and a "
                 "non-finite one sends them nowhere at all; both still write a well-formed, "
-                "correctly-sized RGBA PNG that no later check reports on")
+                "correctly-sized RGBA PNG that no later check reports on",
+                {"gate": RenderTurnaroundGate.gate,
+                 "sub_gate": "TURNAROUND_ORTHO_SCALE",
+                 "andon": RenderTurnaroundGate.__name__, "who": "render_turnaround",
+                 "flag": "--ortho-scale",
+                 "clause": "ortho_scale_not_finite_positive",
+                 "ortho_scale": a.ortho_scale, "ortho": bool(a.ortho)})
 
     #: What was typed, kept beside what was parsed. `float(repr(x)) == x` already makes the
     #: recorded double re-typable on its own; this is the other half of the recipe law —
@@ -545,8 +643,8 @@ def _border_contact(bbox, width, height):
 def _predicted_vs_measured(extent, bbox):
     """The projector's silhouette against the rendered alpha's — DIAGNOSTIC, gates nothing.
 
-    Two independent measurements of one silhouette: `silhouette_extent` projects a
-    decimated point cloud through `framing.project`, and the bbox comes off the written
+    Two independent measurements of one silhouette: `silhouette_extent` projects the
+    subject's every evaluated vertex through `framing.project`, and the bbox comes off the written
     PNG's alpha. Nothing else in this tool compares them, and a wrong ortho aspect
     convention is invisible to every gate here while showing up in this delta immediately —
     on a SQUARE frame it is invisible even here, which is what the non-square calibration
@@ -554,8 +652,8 @@ def _predicted_vs_measured(extent, bbox):
     `_orientation_probe` is what binds it.
 
     No calibrated threshold for acceptable disagreement exists on this rig. Anti-aliasing
-    widens the rendered edge, the 0.5 alpha threshold pulls it back, and the decimated
-    cloud under-reports the true silhouette — three effects of unmeasured relative size.
+    widens the rendered edge, the 0.5 alpha threshold pulls it back, and a shaded thin limb
+    can fall under it entirely — three effects of unmeasured relative size.
     So the numbers are reported and the Director's eye reads them; inventing a tolerance
     here would be a pass condition this tool could move.
     """
@@ -814,7 +912,12 @@ def main():
     lo = verts.min(axis=0)
     hi = verts.max(axis=0)
     target = ((lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5, (lo[2] + hi[2]) * 0.5)
-    cloud = SF.framing_cloud(verts)
+    # TWO populations, F-553c8bc0. `cloud` is every evaluated vertex and is what Gate WHOLE
+    # rules on; `solve_cloud` is the reduction and reaches the solvers and nothing else. One
+    # name for both is the defect: `framing_cloud` carries the six WORLD-axis extremes over
+    # its reduction and a SCREEN-space silhouette extreme at an arbitrary azimuth is not one
+    # of those, so the gate was measuring a lower bound on the thing it exists to bound.
+    cloud, solve_cloud = framing_clouds(verts)
 
     # ---- THE BRANCH, and the only one. Everything that differs between a perspective
     # turnaround and an ortho shot-set is decided by `projection_plan` and read out below.
@@ -835,11 +938,12 @@ def main():
             ortho_scale = plan["ortho_scale_pin"]
         else:
             ortho_scale = solve_ortho_scale_for_height(
-                cloud, target, radius, azimuths, a.elevation, width, height, height_frac)
+                solve_cloud, target, radius, azimuths, a.elevation, width, height,
+                height_frac)
     else:
         sphere_radius, ortho_scale = None, None
-        radius = solve_radius_for_height(cloud, target, azimuths, a.elevation, a.lens,
-                                         a.sensor, width, height, height_frac)
+        radius = solve_radius_for_height(solve_cloud, target, azimuths, a.elevation,
+                                         a.lens, a.sensor, width, height, height_frac)
 
     # Every refusal above this line can fire before a single pixel exists; the output
     # directory is created HERE so a halt does not leave an empty one behind for a
@@ -876,6 +980,7 @@ def main():
         cam.matrix_world = blender_scene.orbit_matrix(Vector(target), radius,
                                                       a.elevation, az)
         path = os.path.join(out, f"{a.prefix}_{i}.png")
+        _before = rc.render_target_snapshot(path)
         scene.render.filepath = path
         render_result = bpy.ops.render.render(write_still=True)
         # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
@@ -895,6 +1000,10 @@ def main():
                 f"view {i} rendered no file at {path}",
                 {"clause": "write", "view": i, "azimuth_deg": az, "path": path,
                  "views_written": [v["path"] for v in views]})
+        rc.require_render_target_moved(
+            path, _before, RenderTurnaroundGate,
+            {"gate": RenderTurnaroundGate.gate, "sub_gate": "RENDER_TARGET",
+             "who": "render_turnaround"})
 
         m, plane = _alpha_stats(path, width, height)
         extent = SF.silhouette_extent(cloud, target, radius, az, a.elevation, a.lens,
@@ -953,6 +1062,10 @@ def main():
             "shared_across_views": plan["shared_across_views"],
             "radius_role": plan["radius_role"],
             "azimuth_start_deg": float(a.azimuth_start), "sweep_deg": float(a.sweep),
+            # F-f7d1f64f: `prefix` is a PARAMETER of the run and was recorded nowhere,
+            # only implicitly through each `views[].path`. A recipe that does not
+            # reproduce its output is not a recipe.
+            "prefix": a.prefix,
             "azimuths_deg": azimuths, "elevation_deg": float(a.elevation),
             "lens_mm": plan["lens_mm"], "sensor_mm": plan["sensor_mm"],
             "sensor_fit": "AUTO",
@@ -972,6 +1085,13 @@ def main():
                         "height is the axis that barely moves as the camera goes round"),
             }),
             "target": list(target),
+            # F-553c8bc0, the shape `render_start_frame.py:1012` already records. Without
+            # it `subject.n_vertices` said 20,000 while the gate had measured 1500 and no
+            # field in the record could say so.
+            "framing_cloud": {"n_vertices": len(cloud),
+                              "n_solved_against": len(solve_cloud),
+                              "cap": FRAMING_CLOUD_CAP,
+                              "gate_WHOLE_measured": "n_vertices"},
         },
         "subject": {
             "animation": "static",
@@ -1054,6 +1174,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -1122,7 +1261,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:

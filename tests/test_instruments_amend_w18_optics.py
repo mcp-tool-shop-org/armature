@@ -143,7 +143,10 @@ def test_the_turnaround_refuses_optics_that_cannot_compose_a_shot(turn, flag, ba
     ev = exc.value.evidence
     assert ev["flag"] == flag, ev
     assert ev["clause"] == clause, ev
-    assert ev["gate"] == "TURNAROUND_OPTICS", ev
+    # RE-DERIVED wave 22, F-6381b9ff (branch-local): class id under "gate", the
+    # declared id under "sub_gate" — one halt event, one gate id.
+    assert ev["gate"] == "TURNAROUND", ev
+    assert ev["sub_gate"] == "TURNAROUND_OPTICS", ev
     assert ev["andon"] == "RenderTurnaroundGate", ev
     assert ev["who"] == "render_turnaround", ev
     assert flag in str(exc.value)
@@ -174,7 +177,9 @@ def test_the_orbit_angles_are_bounded_too(turn, flag, bad):
     ev = exc.value.evidence
     assert ev["flag"] == flag, ev
     assert ev["clause"] == "not_a_finite_angle", ev
-    assert ev["gate"] == "TURNAROUND_ORBIT", ev
+    # RE-DERIVED wave 22, F-6381b9ff (branch-local).
+    assert ev["gate"] == "TURNAROUND", ev
+    assert ev["sub_gate"] == "TURNAROUND_ORBIT", ev
 
 
 def test_a_negative_or_zero_orbit_angle_is_still_legal(turn):
@@ -304,14 +309,30 @@ def test_every_float_flag_in_both_parsers_is_bounded_by_name():
     assert unbounded == {}, unbounded
 
 
-def test_the_ortho_scale_pin_keeps_its_own_older_refusal(turn):
-    """The exemption above is a refusal, not a hole. It exits through argparse rather than
-    through the andon — the inconsistency this file's F-cc1d17aa comment posts to the
-    inbox rather than changing under cover of another finding."""
-    with pytest.raises(SystemExit):
-        _parse(turn, "--glb=x.glb", "--out=y", "--ortho", "--ortho-scale=nan")
-    with pytest.raises(SystemExit):
-        _parse(turn, "--glb=x.glb", "--out=y", "--ortho-scale=4.0")
+def test_the_ortho_scale_pin_raises_the_andon_like_every_other_refusal(turn):
+    """RE-DERIVED wave 22, F-0befca53 (branch-local). This test read:
+
+        "The exemption above is a refusal, not a hole. It exits through argparse rather
+        than through the andon — the inconsistency this file's F-cc1d17aa comment posts
+        to the inbox rather than changing under cover of another finding."
+
+    The inbox item was filed, approved and closed. MEASURED on `e8263a3` through
+    `blender_stub.exit_code_of_main_block('render_turnaround.py')`: a typed
+    `RenderTurnaroundGate` gives exit 2 AND a `RENDER_TURNAROUND_HALT` line carrying the
+    gate id, the clause and the operand; `ap.error`'s `SystemExit(2)` gives exit 2 and
+    stdout EMPTY. Same code, no record — on the two refusals guarding the number a whole
+    roster's shared frame span stands on. Both clauses are typed raises now, and
+    `test_the_instruments_domain_holds_no_ap_error_call_site` keeps the population closed.
+    """
+    for argv in (("--glb=x.glb", "--out=y", "--ortho", "--ortho-scale=nan"),
+                 ("--glb=x.glb", "--out=y", "--ortho-scale=4.0")):
+        with pytest.raises(turn.RenderTurnaroundGate) as exc:
+            _parse(turn, *argv)
+        ev = exc.value.evidence
+        assert ev["flag"] == "--ortho-scale", ev
+        assert ev["gate"] == turn.RenderTurnaroundGate.gate == "TURNAROUND", ev
+        assert ev["clause"] in ("ortho_scale_not_finite_positive",
+                                "ortho_scale_pinned_without_ortho"), ev
 
 
 def test_argparse_takes_nan_for_a_float_flag_and_refuses_it_for_an_int_one():
@@ -358,7 +379,8 @@ def test_the_lens_refusal_reaches_the_halt_line_intact(turn, capsys):
           "outcome": "HALTED — a gate fired", "gate": "TURNAROUND",
           "error": "RenderTurnaroundGate",
           "message": "--lens=0.0 is not a finite positive number, ...",
-          "evidence": {"gate": "TURNAROUND_OPTICS", "andon": "RenderTurnaroundGate",
+          "evidence": {"gate": "TURNAROUND", "sub_gate": "TURNAROUND_OPTICS",
+                       "andon": "RenderTurnaroundGate",
                        "who": "render_turnaround", "flag": "--lens",
                        "clause": "lens_mm_not_finite_and_positive", "--lens": 0.0}}
 
@@ -376,7 +398,9 @@ def test_the_lens_refusal_reaches_the_halt_line_intact(turn, capsys):
     assert rec["outcome"].startswith("HALTED"), rec
     assert rec["error"] == "RenderTurnaroundGate", rec
     assert rec["gate"] == "TURNAROUND", rec
-    assert rec["evidence"]["gate"] == "TURNAROUND_OPTICS", rec
+    # RE-DERIVED wave 22, F-6381b9ff (branch-local).
+    assert rec["evidence"]["gate"] == "TURNAROUND", rec
+    assert rec["evidence"]["sub_gate"] == "TURNAROUND_OPTICS", rec
     assert rec["evidence"]["clause"] == LENS_CLAUSE, rec
     assert rec["evidence"]["flag"] == "--lens", rec
 

@@ -54,6 +54,19 @@ class NotManifoldAfterRepair(GateFailure):
     gate = "REPAIR"
 
 
+class SourceHasNoFaces(GateFailure):
+    """The asset this repair was pointed at has no polygons to repair.
+
+    F-4354f34d, wave 22. Its own class rather than a clause on `NotManifoldAfterRepair`,
+    because a reader of the halt line has to be able to tell WHICH andon pulled: "the
+    shell is still not a closed manifold after repair" describes a repair that ran and
+    fell short, and this describes a run that had nothing to repair. Two different
+    defects in the asset, two different next actions.
+    """
+
+    gate = "REPAIR_SOURCE"
+
+
 class TooMuchRemoved(GateFailure):
     """Repair ate more of the character than a stitch-fixing pass should."""
 
@@ -74,13 +87,26 @@ def parse_args():
 
 
 def manifold_stats(ob):
+    """The shell's manifold counts, and whether it IS one.
+
+    **`closed_manifold` needs a face to be a claim about (F-4354f34d, wave 22).** It was
+    derived as three counts all being zero — which is True for an EMPTY mesh, MEASURED by
+    evaluating the expression on the zero-count dict: `closed_manifold = True`. So Gate
+    REPAIR's `if not final["closed_manifold"]` clause passed a mesh that had been deleted
+    entirely, and total deletion was caught one clause LOWER, by the face BUDGET — and
+    only while `shell_faces > 0`. CLAUDE.md rules on that direction: a gate whose andon is
+    load-bearing only in another gate's presence is not an andon. A vacuous PASS is not a
+    PASS; nothing is not a closed manifold.
+    """
     bm = bmesh.new()
     bm.from_mesh(ob.data)
     s = {"non_manifold_verts": sum(1 for v in bm.verts if not v.is_manifold),
          "non_manifold_edges": sum(1 for e in bm.edges if not e.is_manifold),
          "boundary_edges": sum(1 for e in bm.edges if e.is_boundary),
          "faces": len(bm.faces), "verts": len(bm.verts)}
-    s["closed_manifold"] = (s["non_manifold_verts"] == 0 and s["non_manifold_edges"] == 0
+    s["closed_manifold"] = (s["faces"] > 0
+                            and s["non_manifold_verts"] == 0
+                            and s["non_manifold_edges"] == 0
                             and s["boundary_edges"] == 0)
     bm.free()
     return s
@@ -91,6 +117,23 @@ def extract_and_weld(ob, diagonal):
     bm.from_mesh(ob.data)
     bm.faces.ensure_lookup_table()
     before = {"faces": len(bm.faces), "verts": len(bm.verts)}
+    # F-4354f34d, wave 22 — THE DENOMINATOR, guarded where it is READ. This tool's
+    # EXPECTED input is a broken mesh, and `interior_fraction = interior_deleted /
+    # before["faces"]` divided by a measured count with no guard: a source contributing
+    # vertices and no polygons reached a bare `ZeroDivisionError` inside a helper, which
+    # this tool's halt contract records as "FAILED — an unhandled error" at exit 1 rather
+    # than as a refusal naming the asset. The asset is what a reader needs.
+    if before["faces"] == 0:
+        bm.free()
+        raise SourceHasNoFaces(
+            f"the source mesh {ob.name!r} contributes {before['verts']} vertices and "
+            f"ZERO polygons, so there is no face count to divide the interior deletion "
+            f"by and nothing for a shell classification to be about. A repair pass over "
+            f"no surface is not a repair",
+            {"gate": SourceHasNoFaces.gate, "sub_gate": "EXTRACT",
+             "andon": SourceHasNoFaces.__name__, "who": "rig_repair",
+             "clause": "source_has_no_faces", "object": ob.name,
+             "faces": 0, "verts": int(before["verts"])})
     face_comp, exterior, n_shells = rp.classify_shells(bm, diagonal)
     bmesh.ops.delete(bm, geom=[bm.faces[int(i)] for i in np.flatnonzero(face_comp != exterior)],
                      context="FACES")
@@ -175,6 +218,23 @@ def main():
 
     extraction = extract_and_weld(ob, diagonal)
     shell_faces = extraction["faces"]
+    # F-4354f34d's second denominator: `"faces_removed_fraction": removed / shell_faces`
+    # in the manifest below has the same exposure as `interior_fraction` above, one step
+    # later — every shell classified interior leaves a zero here even when the source had
+    # faces. It is also the number the face-BUDGET clause divides by, so a zero makes that
+    # clause (`removed > REPAIR_FACE_BUDGET * shell_faces`) unable to fire on any removal.
+    if shell_faces == 0:
+        raise SourceHasNoFaces(
+            f"shell extraction left ZERO faces on {ob.name!r}: every shell in the source "
+            f"was classified interior and deleted. There is no surface for the repair "
+            f"passes to fix, no denominator for the removal fraction, and the face-budget "
+            f"clause below cannot fire against a budget of zero",
+            {"gate": SourceHasNoFaces.gate, "sub_gate": "EXTRACT",
+             "andon": SourceHasNoFaces.__name__, "who": "rig_repair",
+             "clause": "extraction_left_no_faces", "object": ob.name,
+             "faces_before": int(extraction["faces_before"]),
+             "interior_faces_deleted": int(extraction["interior_faces_deleted"]),
+             "shell_faces": 0})
     t = time.time()
     passes = repair(ob, diagonal)
     final = manifold_stats(ob)
@@ -276,6 +336,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -349,7 +428,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         try:

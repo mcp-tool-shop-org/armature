@@ -62,10 +62,16 @@ def _parse(rt, *args):
 def test_a_pin_without_the_ortho_flag_is_refused(rt):
     """There is no shared world span on the perspective path — what is shared there is the
     radius. Accepting the pin would render a well-formed perspective turnaround that
-    silently ignored the one number the run was pinned on, and record no scale at all."""
-    with pytest.raises(SystemExit) as exc:
+    silently ignored the one number the run was pinned on, and record no scale at all.
+
+    RE-DERIVED wave 22, F-0befca53 (branch-local): the refusal is the ANDON now, not
+    `ap.error`. `ap.error` raised `SystemExit(2)` — the same code the halt contract gives
+    a fired gate — while printing no `RENDER_TURNAROUND_HALT` record at all, so a log
+    reader saw a run that refused nothing and an exit-code reader could not tell a gate
+    refusal from an argparse usage error. The exit code is still 2, through the handler."""
+    with pytest.raises(rt.RenderTurnaroundGate) as exc:
         _parse(rt, "--glb=x.glb", "--out=y", "--ortho-scale=1.2")
-    assert exc.value.code == 2
+    assert exc.value.evidence["clause"] == "ortho_scale_pinned_without_ortho"
 
 
 @pytest.mark.parametrize("bad", ["0", "0.0", "-1.5", "nan", "inf", "-inf"])
@@ -75,10 +81,14 @@ def test_a_pin_that_is_not_a_finite_positive_span_is_refused(rt, bad):
     that Gate ALPHA's transparent clause would not even see as empty in every case.
 
     `ortho_half_spans` refuses `<= 0` downstream, so the two that only this check catches
-    are `nan` (which compares False against every bound) and `inf`."""
-    with pytest.raises(SystemExit) as exc:
+    are `nan` (which compares False against every bound) and `inf`.
+
+    RE-DERIVED wave 22, F-0befca53 (branch-local): the refusal is the ANDON now — see
+    `test_a_pin_without_the_ortho_flag_is_refused` above for the measurement."""
+    with pytest.raises(rt.RenderTurnaroundGate) as exc:
         _parse(rt, "--glb=x.glb", "--out=y", "--ortho", f"--ortho-scale={bad}")
-    assert exc.value.code == 2
+    assert exc.value.evidence["clause"] == "ortho_scale_not_finite_positive"
+    assert exc.value.evidence["flag"] == "--ortho-scale"
 
 
 def test_a_good_pin_parses_and_keeps_the_text_it_was_typed_as(rt):

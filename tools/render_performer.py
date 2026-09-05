@@ -58,7 +58,11 @@ import bpy  # noqa: E402
 import numpy as np  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-from armature_core import blender_scene, framing  # noqa: E402
+from armature_core import blender_scene, framing, parts  # noqa: E402
+# F-a2630f86: `render_target_snapshot` / `require_render_target_moved` are
+# `export_target_snapshot`'s twins and live beside it. The idiom is
+# `rig_bake`'s and `make_parts_sheet`'s -- one implementation, imported.
+import rig_character as rc  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "E09.1"
@@ -228,14 +232,29 @@ def gate_coverage(paths, empty_plate, min_frac=MIN_SUBJECT_FRAC):
     Passing a smaller `min_frac` (a stricter bar) is allowed and recorded; passing a larger
     one raises here, before a single pixel is read.
     """
-    if min_frac > MIN_SUBJECT_FRAC:
-        raise RenderGate(
-            f"gate_coverage was asked to accept {min_frac} where its own floor is "
-            f"{MIN_SUBJECT_FRAC}. A caller may TIGHTEN this gate and may not loosen it: "
-            f"what counts as a picture of the performer is the gate's decision, not the "
-            f"caller's, and a loosened threshold leaves a record saying the gate passed",
-            {"gate": "COVERAGE", "requested_min_fraction": min_frac,
-             "gate_floor": MIN_SUBJECT_FRAC})
+    # F-f25774c2, wave 22 — THE ONE IMPLEMENTATION OF THIS COMPARISON. The guard was
+    # spelled inline as `if min_frac > MIN_SUBJECT_FRAC`, where the repo has exactly one
+    # `armature_core.parts.tightened` (parts.py:353) whose own docstring records the
+    # measurement that motivates it: `float("nan") > 1e-4` is False, so a NaN was
+    # accepted as a tightening. RE-MEASURED on `e8263a3` against `MIN_SUBJECT_FRAC`: the
+    # inline guard does NOT fire for `min_frac=nan` or `min_frac=-1.0`, both of which
+    # `parts.tightened` refuses with a typed gate — and with a NaN floor this gate's own
+    # refusal clause below (`if worst["frac"] < min_frac`) is False for EVERY frame
+    # (`0.0 < nan` is False), so `gate_coverage` returns its PASS verdict over a set of
+    # frames with nobody in them: precisely the failure the docstring above says it
+    # exists to catch ("the only thing wrong with such a render is that it is a picture
+    # of a floor"). Sixth member of the family F-196c4257 routed — `author_walk`'s Gates
+    # F/A/SPACE and `lift_solve`'s Gates SPACE/ARRIVED all go through `parts.tightened`,
+    # and this gate, whose docstring cites that same routed sweep, kept the inline
+    # comparison. Finiteness and the tightening DIRECTION are asked by the one
+    # implementation, before a single pixel is read.
+    ev_bound = {"gate": RenderGate.gate, "sub_gate": "COVERAGE",
+                "andon": RenderGate.__name__, "who": "render_performer",
+                "clause": "min_frac_may_only_tighten",
+                "requested_min_fraction": min_frac,
+                "gate_floor": MIN_SUBJECT_FRAC}
+    min_frac = parts.tightened("min_frac", min_frac, MIN_SUBJECT_FRAC, RenderGate,
+                               ev_bound)
     base = _pixels(empty_plate)
     per_frame, worst = [], {"frame": None, "frac": 1.0}
     for i, p in enumerate(paths):
@@ -246,7 +265,8 @@ def gate_coverage(paths, empty_plate, min_frac=MIN_SUBJECT_FRAC):
         per_frame.append(frac)
         if frac < worst["frac"]:
             worst = {"frame": i, "frac": frac}
-    ev = {"gate": "COVERAGE", "min_fraction": min_frac, "worst": worst,
+    ev = {"gate": RenderGate.gate, "sub_gate": "COVERAGE",
+          "min_fraction": min_frac, "worst": worst,
           "empty_plate": empty_plate, "per_frame_subject_fraction": per_frame,
           "note": ("fraction of pixels differing from an empty-plate render of the same "
                    "camera, lights and floor with the character hidden; a frame with "
@@ -395,6 +415,7 @@ def main():
     for i in range(count):
         blender_scene.set_scene_frame(scene, i)
         p = os.path.join(out, f"{i:05d}.png")
+        _before = rc.render_target_snapshot(p)
         scene.render.filepath = p
         render_result = bpy.ops.render.render(write_still=True)
         # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
@@ -409,6 +430,10 @@ def main():
                 f"that path is then the previous run's",
                 {"clause": "operator_status", "status": _status,
                  "path": os.path.abspath(p)})
+        rc.require_render_target_moved(
+            p, _before, RenderGate,
+            {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
+             "who": "render_performer"})
         paths.append(p)
 
     # The population is the PLAN, not whatever is in the directory — the shape
@@ -452,6 +477,7 @@ def main():
     for o in meshes + arms:
         o.hide_render = True
     empty_plate = os.path.join(out, "empty_plate.png")
+    _before = rc.render_target_snapshot(empty_plate)
     scene.render.filepath = empty_plate
     render_result = bpy.ops.render.render(write_still=True)
     # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
@@ -466,6 +492,10 @@ def main():
             f"that path is then the previous run's",
             {"clause": "operator_status", "status": _status,
              "path": os.path.abspath(empty_plate)})
+    rc.require_render_target_moved(
+        empty_plate, _before, RenderGate,
+        {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
+         "who": "render_performer"})
 
     for o in meshes + arms:
         o.hide_render = False
@@ -543,6 +573,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -611,7 +660,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:

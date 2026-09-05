@@ -434,11 +434,25 @@ def test_the_completeness_binding_walk_cannot_be_satisfied_by_prose(tmp_path):
 def test_gate_coverage_may_be_tightened_and_may_not_be_loosened():
     """ROUTED from core-gates' threshold-argument family (the shape they applied to four
     rig gates): a tolerance the caller can LOOSEN is a gate the caller can switch off one
-    keyword at a time, with the record still saying it ran and passed."""
+    keyword at a time, with the record still saying it ran and passed.
+
+    RE-DERIVED wave 22 (instruments, F-f25774c2), branch-local: the inline comparison is
+    now `armature_core.parts.tightened`, the repo's ONE implementation of it, so the
+    sentence a refusal quotes is that helper's ("It may only TIGHTEN: a tolerance the
+    caller supplies is a tolerance the caller can loosen...") rather than this module's
+    own copy of the same paragraph. The property is unchanged and TWO more operands are
+    asserted below, which the inline `min_frac > MIN_SUBJECT_FRAC` could not refuse at
+    all: `nan` and `-1.0` both walk past a bare `>` comparison, and with a NaN floor this
+    gate's own per-frame clause (`worst["frac"] < min_frac`) is False for every frame, so
+    it returned its PASS verdict over a set of frames with nobody in them."""
     import pytest as _pytest
     from armature_core.errors import GateFailure
     from blender_stub import load_tool
 
     rp = load_tool("render_performer.py")
-    with _pytest.raises(GateFailure, match=r"may TIGHTEN this gate and may not loosen it"):
+    with _pytest.raises(GateFailure, match=r"It may only TIGHTEN"):
         rp.gate_coverage([], "plate.png", min_frac=rp.MIN_SUBJECT_FRAC * 10)
+    for bad in (float("nan"), float("inf"), -1.0):
+        with _pytest.raises(rp.RenderGate) as exc:
+            rp.gate_coverage([], "plate.png", min_frac=bad)
+        assert exc.value.evidence["gate"] == rp.RenderGate.gate

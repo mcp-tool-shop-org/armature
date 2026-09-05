@@ -38,7 +38,7 @@ from mathutils import Matrix, Vector
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig_character as rc                                            # noqa: E402
 import rig_parts as rp                                                # noqa: E402
-from armature_core import blender_scene, landmarks, sitelist          # noqa: E402
+from armature_core import blender_scene, landmarks, parts, sitelist   # noqa: E402
 from armature_core.errors import GateFailure                          # noqa: E402
 
 
@@ -46,6 +46,21 @@ class QuadriflowDeclined(GateFailure):
     """QuadriFlow returned CANCELLED and changed nothing."""
 
     gate = "QUADRIFLOW"
+
+
+class VoxelOverrideRefused(GateFailure):
+    """An explicit `--voxel` that is not a size a remesh can be run at.
+
+    F-e472aa37, wave 22. `--voxel` is declared `type=float, default=None` and was read
+    with a TRUTHINESS test, so an explicit `--voxel=0.0` (or `-0.0`) fell through to the
+    derived value with nothing saying the given number had been discarded — the wave-16
+    rule that a clause keys on the VALUE, never on presence or truthiness. Its own class
+    because the two refusals in this file are about the RESULT of a remesh (QuadriFlow
+    declined; nothing was produced) and this one is about the argument, before any of it
+    runs.
+    """
+
+    gate = "RETOPO_ARGS"
 
 
 class ComparisonNotIsolated(GateFailure):
@@ -397,7 +412,33 @@ def main():
     diagonal, lo, hi = rc.subject_scale(src, "rig_retopo")
 
     smallest_name, smallest_r, all_radii = smallest_limb_radius(ob)
-    voxel = args["voxel"] if args["voxel"] else smallest_r * VOXEL_PER_SMALLEST_RADIUS
+    # F-e472aa37, wave 22 — the branch keys on the VALUE, never on truthiness, and the
+    # override is BOUNDED. `args["voxel"] if args["voxel"] else ...` is a truthiness test
+    # on a float declared `type=float, default=None`, so an explicit `--voxel=0.0` or
+    # `-0.0` silently fell through to the derived value — MEASURED with
+    # `VOXEL_PER_SMALLEST_RADIUS = 1/6` and a smallest limb radius of 0.01301: both
+    # produced voxel 0.00217 with `voxel_derivation` reading "smallest measured limb
+    # radius", the override erased without a word. A non-finite or non-positive explicit
+    # size is refused by name instead.
+    voxel_given = args["voxel"] is not None
+    if voxel_given:
+        voxel = parts.require_finite(
+            "--voxel", args["voxel"], VoxelOverrideRefused,
+            {"gate": VoxelOverrideRefused.gate, "sub_gate": "VOXEL",
+             "andon": VoxelOverrideRefused.__name__, "who": "rig_retopo",
+             "flag": "--voxel", "clause": "voxel_not_finite_and_positive",
+             "smallest_limb": smallest_name, "smallest_limb_radius": smallest_r,
+             "would_have_derived": smallest_r * VOXEL_PER_SMALLEST_RADIUS},
+            positive=True)
+        voxel_derivation = ("explicit override -- limb radii do not bound facial "
+                            "features")
+        voxel_route = f"voxel remesh at {voxel:.5f} (explicit --voxel override)"
+    else:
+        voxel = smallest_r * VOXEL_PER_SMALLEST_RADIUS
+        voxel_derivation = (f"smallest measured limb radius ({smallest_name} = "
+                            f"{smallest_r:.5f}) / 6")
+        voxel_route = (f"voxel remesh at {voxel:.5f} (= {smallest_name} radius "
+                       f"{smallest_r:.5f} / 6)")
 
     extraction = extract_outer_shell(ob, diagonal)
     ob.name = ob.data.name = "outer_shell"
@@ -422,13 +463,18 @@ def main():
         after_voxel = mesh_stats(variant_b)
         qsecs, returned = quadriflow(variant_b, args["target_faces"])
         results["B_voxel_then_quadriflow"] = {
-            "route": f"voxel remesh at {voxel:.5f} (= {smallest_name} radius "
-                     f"{smallest_r:.5f} / 6) then QuadriFlow at x100 scale",
+            # F-e472aa37: `route` used to be built UNCONDITIONALLY as "voxel remesh at
+            # {voxel} (= {limb} radius {r} / 6)" while `voxel_derivation` beside it was
+            # built under the branch — so one record stated two contradictory accounts
+            # of where its voxel size came from, and the arithmetic in the first was
+            # FALSE on an override. MEASURED: `--voxel=0.005` wrote `route: "voxel
+            # remesh at 0.00500 (= forearm radius 0.01301 / 6)"` — 0.01301/6 is 0.00217
+            # — directly above `voxel_derivation: "explicit override..."`. A reader
+            # deciding which arm won read the false one first. Both strings are built in
+            # the ONE branch above now, so they cannot disagree.
+            "route": voxel_route + " then QuadriFlow at x100 scale",
             "voxel_size": voxel,
-            "voxel_derivation": ("explicit override -- limb radii do not bound facial "
-                                 "features" if args["voxel"] else
-                                 f"smallest measured limb radius ({smallest_name} = "
-                                 f"{smallest_r:.5f}) / 6"),
+            "voxel_derivation": voxel_derivation,
             "seconds_voxel": round(vsecs, 1), "seconds_quadriflow": round(qsecs, 1),
             "returned": returned,
             "after_voxel_before_quadriflow": after_voxel,
@@ -583,6 +629,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -656,7 +721,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         try:

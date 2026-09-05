@@ -117,7 +117,7 @@ def mesh_sample_frames(n_frames):
             f"to {frames}, and a single-frame comparison is the rest pose alone. Bone "
             f"agreement does not prove the skin followed, so this run would report a "
             f"clause that cannot fail",
-            {"gate": "A", "n_frames": n, "frames": frames,
+            {"gate": WalkGate.gate, "sub_gate": "A", "n_frames": n, "frames": frames,
              "minimum": GATE_A_MESH_FRAMES_MIN})
     return frames
 
@@ -367,7 +367,11 @@ def gate_space_is_identity(arm_obj, tol=None):
     """
     M = arm_obj.matrix_world
     ident = Matrix.Identity(4)
-    ev = {"gate": "SPACE", "andon": "WalkGate", "module_tol": GATE_SPACE_TOL,
+    # F-6381b9ff: "gate" is the RAISING CLASS's id; the clause's own finer id is
+    # "sub_gate". One halt event, one gate id — and a census that enumerates ids from
+    # the family's `gate = "..."` class literals can see this site.
+    ev = {"gate": WalkGate.gate, "sub_gate": "SPACE",
+          "andon": "WalkGate", "module_tol": GATE_SPACE_TOL,
           "tol_requested": tol, "matrix_world": [list(r) for r in M]}
     tol = parts.tightened("tol", tol, GATE_SPACE_TOL, WalkGate, ev)
     deltas = []
@@ -416,7 +420,8 @@ def gate_f_fk_agreement(fk, heads, performer, arm_obj, diagonal, tol_frac=None):
     statement this gate can make (F-524f0a25). Every distance, in the floor loop as well
     as the reading loop, goes through `parts.require_finite`.
     """
-    ev = {"gate": "F", "andon": "WalkGate", "module_tol_frac": GATE_F_TOL_FRAC,
+    ev = {"gate": WalkGate.gate, "sub_gate": "F",           # F-6381b9ff
+          "andon": "WalkGate", "module_tol_frac": GATE_F_TOL_FRAC,
           "tol_frac_requested": tol_frac, "bbox_diagonal": diagonal}
     parts.require_finite("bbox_diagonal", diagonal, WalkGate, ev)
     tol_frac = parts.tightened("tol_frac", tol_frac, GATE_F_TOL_FRAC, WalkGate, ev)
@@ -486,7 +491,8 @@ def gate_a_arrival(authored_heads, reimported_heads, authored_verts, reimported_
     performance made entirely of NaN otherwise reached the verdict line as a full PASS
     reading "max 0.000e+00" (F-524f0a25, wave 10's rule 4, one implementation).
     """
-    ev = {"gate": "A", "andon": "WalkGate", "module_tol_frac": GATE_A_TOL_FRAC,
+    ev = {"gate": WalkGate.gate, "sub_gate": "A",           # F-6381b9ff
+          "andon": "WalkGate", "module_tol_frac": GATE_A_TOL_FRAC,
           "tol_frac_requested": tol_frac, "bbox_diagonal": diagonal,
           "n_frames": len(authored_heads)}
     parts.require_finite("bbox_diagonal", diagonal, WalkGate, ev)
@@ -813,6 +819,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -881,7 +906,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:

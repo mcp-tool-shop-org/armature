@@ -240,6 +240,16 @@ def build(thickness, joint_scale, segments, arc=None, frames=33, start_deg=0.0, 
     return fig, arm
 
 
+#: The magnitude bound on `--arc-start-deg` / `--arc-end-deg`, in degrees.
+#:
+#: F-feb363d9, wave 22. ONE TURN either way: an arc is a joint rotating from one pose
+#: to another, and a bone that turns more than 360 degrees arrives where a bounded one
+#: would have while the `.joints.json` ground truth records the unbounded number. It is
+#: a constant rather than a literal inside the clause so the number a refusal quotes and
+#: the number the clause tests are the same object.
+ARC_DEG_BOUND = 360.0
+
+
 class SubjectArgError(SpecError):
     """A flag that shapes the synthetic subject is not a number this tool can build with.
 
@@ -286,11 +296,34 @@ def require_subject_args(args):
     cannot carry a performance -- `posearc.angle_at_frame(i, 1, ...)` has no span to
     interpolate over and the `.joints.json` would hold a single sample under a key named
     `frames`.
+
+    WAVE 22, F-feb363d9 -- **the two flags this clause did not list.** This docstring
+    called itself "one clause listing every offending flag by name" while bounding five;
+    `--arc-start-deg` and `--arc-end-deg` were bare `type=float`, and they are the ones
+    that BECOME the authored bone rotations in the `.joints.json` ground truth every arc
+    comparison in this repo is measured against. RE-MEASURED on `e8263a3` against
+    `POSE_ARCS["arm_r_raise"]`: `nan` and `inf` on either flag ARE refused, but
+    INCIDENTALLY -- `arc_readout` raises `SpecError` "readout angle 45.0 lies outside the
+    arc nan..90.0" because every comparison against a NaN is False, not because any
+    clause examined the flag -- and `arc_readout(arc, 33, 1e9, -1e9)` returns a NORMAL
+    readout (`crossing_frame_exact: 15.99999928`, `monotonic: True`) with no refusal at
+    all, so 2.7 million turns per arm are authored into the ground truth and exported.
+    The incidental NaN refusal is also fragile: it depends on the registered readout
+    comparing outside the span, which is a property of the arc REGISTRY rather than of
+    the flag.
+
+    The angular bound is ONE TURN either way. The arcs this repo authors are within one
+    turn by construction -- an arc is a joint rotating from one pose to another, and a
+    bone that turns more than 360 degrees arrives where a bounded one would have. It is
+    stated as a module constant (`ARC_DEG_BOUND`) rather than as a literal here so the
+    number a refusal quotes and the number the clause tests are the same object.
     """
     ev = {"gate": None, "andon": "SubjectArgError", "clause": "subject_args",
           "pose_arc": args.pose_arc,
           "frames": args.frames, "fps": args.fps, "segments": args.segments,
-          "thickness": args.thickness, "joint_scale": args.joint_scale}
+          "thickness": args.thickness, "joint_scale": args.joint_scale,
+          "arc_start_deg": args.arc_start_deg, "arc_end_deg": args.arc_end_deg,
+          "arc_deg_bound": ARC_DEG_BOUND}
     bad = []
     if args.pose_arc and (not isinstance(args.frames, int) or args.frames < 2):
         bad.append(f"--frames={args.frames!r} must be an integer >= 2 when --pose-arc is "
@@ -305,6 +338,21 @@ def require_subject_args(args):
                         ("--joint-scale", args.joint_scale)):
         if not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0.0:
             bad.append(f"{name}={value!r} must be a finite positive number; it is a radius")
+    # F-feb363d9: the two ANGLES, in the same single clause, so the refusal names the
+    # FLAG rather than the registry's readout, and lands above `resolve_arc` where
+    # nothing has been written yet. An angle may legitimately be zero or negative -- the
+    # module default for `--arc-start-deg` is 0.0 and a negative start is an ordinary way
+    # to name a direction -- so the clause is FINITENESS plus a magnitude bound.
+    for name, value in (("--arc-start-deg", args.arc_start_deg),
+                        ("--arc-end-deg", args.arc_end_deg)):
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
+            bad.append(f"{name}={value!r} must be a finite number of degrees; it becomes "
+                       f"an authored bone rotation in the .joints.json ground truth every "
+                       f"arc comparison in this repo is measured against")
+        elif abs(value) > ARC_DEG_BOUND:
+            bad.append(f"{name}={value!r} is outside +/-{ARC_DEG_BOUND:g} degrees: that is "
+                       f"{abs(value) / 360.0:.0f} turns of one joint, authored into the "
+                       f"ground truth and exported, and no clause downstream examines it")
     if bad:
         ev["offending"] = bad
         raise SubjectArgError(
@@ -520,6 +568,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -590,7 +657,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:

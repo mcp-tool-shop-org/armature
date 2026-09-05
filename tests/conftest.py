@@ -42,9 +42,19 @@ def rt():
     one. `tests/test_cli.py:139-153` already carries this idea for its own stubbing; the
     fix here is the same one, in the fixture that installs the stubs.
     """
-    saved = {k: sys.modules.get(k) for k in ("bpy", "mathutils")}
+    # WAVE 22 (instruments, F-a2630f86): `bmesh` joins the stubbed set, and the reason is a
+    # fixture of the tools' contract rather than a preference. `render_turnaround` now
+    # imports `rig_character` for `render_target_snapshot` / `require_render_target_moved`
+    # (`export_target_snapshot`'s twins, housed beside it), and `rig_character.py:42` does
+    # `import bmesh` at module scope. `blender_stub.blender_stubbed()` has stubbed all four
+    # of `bpy`, `bmesh`, `mathutils` and `mathutils.kdtree` since wave 6; this fixture
+    # stubbed two, so the two copies of one idea had drifted and the narrower one broke on
+    # a new edge in the module it exists to import. Same set here now, and the teardown
+    # below already pops by name.
+    saved = {k: sys.modules.get(k) for k in ("bpy", "bmesh", "mathutils")}
     before = set(sys.modules)
     sys.modules["bpy"] = mock.MagicMock(name="bpy")
+    sys.modules["bmesh"] = mock.MagicMock(name="bmesh")
     mathutils = types.ModuleType("mathutils")
     mathutils.Vector = lambda v: v
     mathutils.Matrix = mock.MagicMock(name="Matrix")
@@ -393,3 +403,68 @@ def sheet_font(name, size):
     import sheet_compose
 
     return sheet_compose._font(name, size)
+
+
+# ------------------------------------------------- SEAM 1, in flight (wave 22, TEMPORARY)
+
+#: True when core-solvers' `armature_core.parts.single_path_segment` (SEAM 1's ONE home)
+#: was ALREADY on this tree at collection time. Captured before the bridge below can
+#: install anything, so a reader can always tell which object answered.
+SEAM_1_LANDED = None
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _seam_1_single_path_segment():
+    """Stand SEAM 1's helper up for the suite while core-solvers' commit is in flight.
+
+    ⚠ **THIS IS A BRIDGE AND IT DELETES ITSELF.** Wave 22, SEAM 1 (core-solvers) homes
+    `single_path_segment` in `armature_core.parts`; instruments adopts it by import in
+    `preview_glb --name` (F-7cd1b3b7) and `render_turnaround --prefix` (F-f7d1f64f), and
+    spells nothing locally, because "nobody spells a third". That home is another domain's
+    file and its commit merges alongside this one, so on THIS branch alone the attribute
+    does not exist yet and every test that calls either parser would fail on an
+    `AttributeError` that says nothing about either tool.
+
+    So, and ONLY while the attribute is absent, the byte-equivalent copy SEAM 1 was lifted
+    from (`tools/pack_pose_pack.py::single_path_segment`) is installed under that name for
+    the session. `tests/test_instruments_amend_w22.py::
+    test_the_two_copies_agree_on_everything_except_their_message` is what makes that
+    substitution a measured statement rather than a convenience — it compares the two
+    instruments-measure copies' signature, predicate, clause word and evidence keys, and
+    records the one place they do differ (the refusal message, which names each module's
+    own artifact; SEAM 1's "byte-identical" is false as stated).
+
+    **On the merged tree this fixture does nothing at all.** If it is still installing a
+    stand-in after wave 22 merges, SEAM 1 did not land and the two adoptions above would
+    raise `AttributeError` in production — `test_seam_1_is_the_one_home_on_a_merged_tree`
+    is the check that says so out loud.
+    """
+    global SEAM_1_LANDED
+    from armature_core import parts
+
+    SEAM_1_LANDED = getattr(parts, "single_path_segment", None) is not None
+    if SEAM_1_LANDED:
+        yield "merged"
+        return
+
+    import ast
+    src_path = os.path.join(TOOLS, "pack_pose_pack.py")
+    with open(src_path, encoding="utf-8") as fh:
+        src = fh.read()
+    segment = None
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.FunctionDef) and node.name == "single_path_segment":
+            segment = ast.get_source_segment(src, node)
+    if segment is None:                      # pragma: no cover - both copies gone
+        raise RuntimeError(
+            "neither `armature_core.parts.single_path_segment` nor "
+            "`pack_pose_pack.single_path_segment` exists on this tree; SEAM 1's home is "
+            "missing and its source copy has been deleted, so the two instruments "
+            "adoptions cannot resolve at all")
+    ns = {"os": os}
+    exec(compile(segment, "<seam1-bridge>", "exec"), ns)
+    parts.single_path_segment = ns["single_path_segment"]
+    try:
+        yield "stand-in"
+    finally:
+        del parts.single_path_segment

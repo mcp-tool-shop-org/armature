@@ -327,11 +327,20 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     "measure_cascade_clip": ["raise ClipCountError"],
     "pack_pose_pack": ["gate_r_round_trip"],
     "preview_glb": ["gate_previews_written"],
-    "preview_walk": ["raise PreviewWalkGate"],
-    "render_performer": ["gate_coverage", "raise RenderGate"],
+    # WAVE 22 (instruments, F-a2630f86): `require_render_target_moved` joins four
+    # renderers. It is a genuine READ-BACK -- it `os.stat`s the frame the render just
+    # wrote and compares it against the snapshot taken above the write -- so it belongs
+    # below the write by construction and is entered in `READBACK_REASONS`, not in the
+    # backlog. `preview_glb` reaches the same call inside `gate_previews_written`, which
+    # is already listed.
+    "preview_walk": ["raise PreviewWalkGate", "require_render_target_moved"],
+    "render_performer": ["gate_coverage", "raise RenderGate",
+                         "require_render_target_moved"],
     "render_pose_sticks": ["raise SticksGate"],
-    "render_start_frame": ["gate_alpha", "gate_backdrop", "raise RenderGate"],
-    "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop", "gate_whole", "raise RenderTurnaroundGate"],
+    "render_start_frame": ["gate_alpha", "gate_backdrop", "raise RenderGate",
+                           "require_render_target_moved"],
+    "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop", "gate_whole", "raise RenderTurnaroundGate",
+                          "require_render_target_moved"],
     "rig_bake": ["gate_glb_written"],
     "rig_character": ["build_pass", "export_rigged", "gate_d_determinism", "gate_n_names", "raise GateMode", "unbound_determinism_record"],
     "rig_parts": ["gate_atlas_untouched", "gate_glb_written", "gate_part_names"],
@@ -389,6 +398,11 @@ READBACK_REASONS = {
                               "write it just made"),
     "raise SticksGate": ("imwrite",
                          "the refusal IS the `cv2.imwrite` return for the frame just drawn"),
+    "require_render_target_moved": (
+        "require_render_target_moved",
+        "reads back the frame the render just wrote -- `os.stat` against the "
+        "`render_target_snapshot` taken above the write (instruments F-a2630f86); it is "
+        "the render half of `gate_glb_written`'s clause 4"),
     "raise ZoomSheetError": ("imwrite",
                              "the refusal IS the `cv2.imwrite` return / the sidecar of a "
                              "written sheet"),
@@ -648,9 +662,22 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # file's own instruction to delete a listing in the commit that moved it.
     #      ⚠ **BRANCH-LOCAL.** Other domains move this census in the same wave; the
     #      coordinator MEASURES it on the merged tree and never subtracts.
+    # RE-DERIVED wave 22 (instruments, F-a2630f86), branch-local: 27 / 51 / 69 →
+    # 27 / 55 / 79, MEASURED with the command above on this branch, never summed. The
+    # four new names are `require_render_target_moved` on `preview_walk`,
+    # `render_performer`, `render_start_frame` and `render_turnaround`; the ten new
+    # SITES are its call sites (one per `bpy.ops.render.render(write_still=True)` — six
+    # in `render_start_frame`, two in `render_performer`, one each in the other two).
+    # It is a READ-BACK by construction: it `os.stat`s the frame the render just wrote
+    # against the snapshot taken above the write, so it CANNOT be moved above the write
+    # and it is entered in `READBACK_REASONS` rather than in the backlog. The number
+    # rising here is the population growing, not a move being missed.
+    # WAVE-22 MERGE (coordinator, 2026-09-05): 27 / 54 / 78 MEASURED on the merged tree with the derivation above —
+    # builders (27 / 50 / 68) and instruments (27 / 55 / 79) each moved this census branch-local; the merged value
+    # is neither and is not their sum.
     assert len(derived) == 27, sorted(derived)
     names = sum(len(v) for v in derived.values())
-    assert names == 50, sorted(derived.items())
+    assert names == 54, sorted(derived.items())
     sites = stranded_site_count(members)
     # WAVE 16, F-9b4d01ef: the message used to name 72 — the tests branch's own measurement,
     # which the wave-14 merge overturned when it re-derived 27/51/69 on the merged tree and
@@ -659,9 +686,11 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # 69 and had every reason to retype the wrong number. The message quotes the value it
     # ASSERTS; the overturned measurement stays in the comment above, where this file keeps
     # its corrections.
-    assert sites == 68, (
-        f"{sites} refusal SITES below a first write; this pin asserts 68, re-derived on the "
-        f"merged tree 2026-09-04 (see the comment above for the measurement it overturned), "
+
+
+    assert sites == 78, (
+        f"{sites} refusal SITES below a first write; this pin asserts 78, re-derived on the "
+        f"merged tree 2026-09-05 (wave 22; see the comment above for the measurements it overturned), "
         f"and the number falls as the moves land")
 
 
@@ -790,7 +819,10 @@ def test_the_read_back_table_is_read_and_says_what_it_means():
     # WIDER population (the video job included), and the deleted branch read a manifest
     # built from a strict subset of the same paths. A reason for a refusal that no longer
     # exists is a reason nothing can be checked against.
-    assert len(READBACK_REASONS) == 11, sorted(READBACK_REASONS)
+    # RE-DERIVED wave 22 (instruments, F-a2630f86), branch-local: 12 -> 13.
+    # WAVE-22 MERGE (coordinator, 2026-09-05): 12 MEASURED — builders deleted one reason (11) and instruments added one (13) on
+    # different branches; the merged table holds what the merged tree holds.
+    assert len(READBACK_REASONS) == 12, sorted(READBACK_REASONS)
     # WAVE 16, F-9b4d01ef: the message named 35, which the wave-14 merge overturned when it
     # re-derived 12 / 29 on the merged tree. Same correction as the sites message above.
     assert len(NOT_YET_MOVED) == 29, (
@@ -965,8 +997,15 @@ def test_the_nine_tools_the_name_keyed_walk_could_not_see_are_in_the_population_
     # two different claims, and only the second one stopped being true.
     # WAVE-14 MERGE (coordinator, 2026-09-04): `make_rig_sheet` LEFT this list too — instruments split its argv clause into
     # `require_reference_file` (F-4db23b72), a `require_` name the name-keyed walk sees; four remain.
+    # WAVE 22 (instruments, F-a2630f86): `preview_walk` LEAVES this list, corrected in
+    # place for the reason `make_rig_sheet` left it in wave 14 — it now carries a
+    # `require_`-named refusal (`require_render_target_moved`, the render half of Gate
+    # GLB's stale-target clause), so the name-keyed predicate is no longer blind to it
+    # and the claim this list makes about it stopped being true. It remains in the
+    # derived population and still strands that refusal below the write, which is what
+    # `REFUSALS_BELOW_THE_FIRST_WRITE` records; only "the walk could not see it" is gone.
     joined = ["extract_clip_frames", "make_parts_sheet",
-              "make_shotset_sheet", "preview_walk"]
+              "make_shotset_sheet"]
     # WAVE-14 MERGE (coordinator, 2026-09-04): `make_rig_sheet` stopped stranding too (instruments, F-4db23b72).
     strands_one_today = [n for n in joined if n not in ("make_shotset_sheet", "make_rig_sheet")]
     pop = derive_population()

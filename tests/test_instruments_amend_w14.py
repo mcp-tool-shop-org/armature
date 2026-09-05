@@ -844,7 +844,12 @@ def test_the_turnaround_refuses_a_frame_size_its_solvers_cannot_take(turn, w, h,
     ev = exc.value.evidence
     assert clause in ev, ev
     assert ev["who"] == "render_turnaround"
-    assert ev["gate"] == "TURNAROUND_FRAME"
+    # RE-DERIVED wave 22, F-6381b9ff (branch-local): `evidence["gate"]` is the RAISING
+    # CLASS's id, so this key, `exc.gate` and `str(exc)`'s `[<gate>]` prefix are ONE
+    # id; the caller's declared `gate_id` is the SUB-id under "sub_gate". Until then a
+    # single halt event printed two, and "TURNAROUND_FRAME" was declared by no class.
+    assert ev["gate"] == turn.RenderTurnaroundGate.gate == "TURNAROUND"
+    assert ev["sub_gate"] == "TURNAROUND_FRAME"
     assert "--width" in str(exc.value) and "--height" in str(exc.value)
 
 

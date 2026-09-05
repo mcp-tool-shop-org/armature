@@ -4,6 +4,20 @@ blender -b --factory-startup -P preview_glb.py -- --glb <path> --out <dir> --nam
 Read-only on the GLB; writes renders + stats.json into --out.
 
 `make_cast_sheet.py` consumes the `<name>_stats.json` this writes.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is writing four PNGs and `<name>_stats.json` under `--out`.
+Compensator: delete `--out`; owner: the executor session. That statement is only true
+while every written path resolves UNDER `--out`, which is why `--name` is refused unless
+it is a single path component (F-7cd1b3b7, wave 22): `--name` is pasted as the NAME
+COMPONENT of every written path, and MEASURED on the repo venv,
+`os.path.join("C:/tmp/out", "../v3_full_a.png")` and
+`os.path.join("C:/tmp/out", "C:/elsewhere/v3_full_a.png")` both resolve outside `--out`
+— while `gate_previews_written` PASSES (it re-reads the same escaped paths) and
+`PREVIEW_GLB_OK` prints. A compensator that names a directory the artifacts are not in
+undoes nothing. The GLB is opened read-only and is never written.
 """
 import argparse
 import json
@@ -16,7 +30,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-from armature_core import blender_scene  # noqa: E402
+# `single_path_segment` is ADOPTED BY IMPORT from SEAM 1's ONE home, never copied:
+# instruments-measure held two byte-identical spellings (`pack_pose_pack.py:82`,
+# `resample_motion.py:76`) and deletes both; builders adopts the same object for
+# `fetch_run --run`. Nobody spells a third (wave 22, SEAM 1).
+from armature_core import blender_scene, parts  # noqa: E402
+# F-a2630f86: `render_target_snapshot` is `export_target_snapshot`'s twin and lives
+# beside it. The idiom is `rig_bake`'s and `make_parts_sheet`'s -- one implementation,
+# imported.
+import rig_character as rc  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 #: The engine identifiers this tool will accept, in the order it tries them. The loop
@@ -62,8 +84,24 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--glb", required=True)
     p.add_argument("--out", required=True)
-    p.add_argument("--name", required=True)
-    return p.parse_args(argv)
+    p.add_argument("--name", required=True,
+                   help="ONE path component — it is pasted into every written "
+                        "filename, so a separator, an absolute path or a dot name "
+                        "writes the preview outside --out")
+    a = p.parse_args(argv)
+    # F-7cd1b3b7, wave 22 — REFUSED AT THE PARSER, above `os.makedirs`, which is where
+    # the mistake is still free. `--name` was free text with no `type=`, no `choices=`
+    # and no validation, pasted as the NAME COMPONENT of `os.path.join(out_dir,
+    # f"{args.name}_{suffix}.png")` (:141), assigned to `scn.render.filepath` (:142),
+    # and again into `os.path.join(args.out, f"{args.name}_stats.json")` (:290).
+    # MEASURED on the repo venv: of `perf/v3`, `../v3` and `C:/elsewhere/v3`, the last
+    # two resolve OUTSIDE `--out`. This is the family wave 18 closed one domain over
+    # (`pack_pose_pack --name`, `resample_motion --name`); that census was scoped to
+    # instruments-measure's 42 tools and never ranged over these 21. An equivalent AST
+    # walk over the 21 finds this flag and `render_turnaround --prefix` and nothing else.
+    parts.single_path_segment(a.name, "--name", PreviewGlbGate,
+                              {"who": "preview_glb", "out": a.out})
+    return a
 
 
 def scene_bbox(objs):
@@ -139,6 +177,10 @@ def add_camera_render(name_suffix, center, radius, azim_deg, elev_deg, res, out_
     scn.camera = cam
     scn.render.resolution_x, scn.render.resolution_y = res
     path = os.path.join(out_dir, f"{args.name}_{name_suffix}.png")
+    # F-a2630f86: the target as it stood BEFORE this render, returned beside the path
+    # and the status so `gate_previews_written` can rule on all three at once. It is not
+    # refused here for the same reason the status is not (see below).
+    before = rc.render_target_snapshot(path)
     scn.render.filepath = path
     render_result = bpy.ops.render.render(write_still=True)
     # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, RETURNED beside the path so
@@ -146,14 +188,17 @@ def add_camera_render(name_suffix, center, radius, azim_deg, elev_deg, res, out_
     # tool's post-write verification is one gate over the whole PLAN, and a second raise
     # inside the shooter would strand a refusal below the first write that the
     # write-ordering ratchet would then have to carry under a name of its own.
-    return path, _render_status(render_result)
+    return path, _render_status(render_result), before
 
 
 
 def gate_previews_written(written):
     """Every planned view was drawn, exists on disk and is not zero bytes, or halt.
 
-    `written` is the list of `(path, status)` pairs `add_camera_render` returns.
+    `written` is the list of `(path, status, before)` triples `add_camera_render`
+    returns -- `before` being `rig_character.render_target_snapshot(path)`, taken above
+    the render (F-a2630f86, wave 22: it was a PAIR, and the fourth clause below could
+    not exist without the third element).
 
     F-13bd448d. `bpy.ops.render.render(write_still=True)` returns an operator status set and
     can return `{'CANCELLED'}` WITHOUT raising; `add_camera_render` discarded it, and nothing
@@ -172,8 +217,9 @@ def gate_previews_written(written):
     PREVIOUS run's four PNGs at the same paths satisfy. The status clause runs FIRST, and
     it is the only one of the three that can tell an empty directory from a stale one.
     """
-    paths = [p for p, _ in written]
-    declined = [(os.path.basename(p), st) for p, st in written if "FINISHED" not in st]
+    paths = [p for p, _st, _b in written]
+    declined = [(os.path.basename(p), st)
+                for p, st, _b in written if "FINISHED" not in st]
     if declined:
         raise PreviewGlbGate(
             f"the render operator declined {len(declined)} of {len(written)} views: "
@@ -194,6 +240,19 @@ def gate_previews_written(written):
              "paths": [os.path.abspath(p) for p in paths],
              "missing": [os.path.abspath(p) for p in missing],
              "empty": [os.path.abspath(p) for p in empty]})
+    # CLAUSE 4, F-a2630f86 -- the direction the three above cannot see. `FINISHED` in
+    # the status set, `os.path.isfile` and `getsize != 0` are exactly the three
+    # properties `rig_character.gate_glb_written`'s docstring names as insufficient: a
+    # PREVIOUS run's four PNGs at these paths satisfy all three. Wave 16 made the
+    # pre-export snapshot REQUIRED on that ground and the render half of the same
+    # premise had no such clause at any of the five renderers. One implementation,
+    # beside its export twin.
+    for path, _st, before in written:
+        rc.require_render_target_moved(
+            path, before, PreviewGlbGate,
+            {"gate": PreviewGlbGate.gate, "sub_gate": "RENDER_TARGET",
+             "who": "preview_glb", "planned": len(paths)},
+            what="the preview view")
     return {"planned": len(paths), "missing": [], "empty": [],
             "verdict": f"all {len(paths)} planned views exist and are non-empty"}
 
@@ -284,8 +343,8 @@ def main():
         add_camera_render("head_b", head_c, head_r, 210, 6, (512, 512), args.out, args),
     ]
     stats["gate_PREVIEW_GLB"] = gate_previews_written(written)
-    stats["views"] = [os.path.abspath(p) for p, _ in written]
-    stats["render_status"] = {os.path.basename(p): st for p, st in written}
+    stats["views"] = [os.path.abspath(p) for p, _st, _b in written]
+    stats["render_status"] = {os.path.basename(p): st for p, st, _b in written}
 
     with open(os.path.join(args.out, f"{args.name}_stats.json"), "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)
@@ -316,6 +375,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -389,7 +467,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:

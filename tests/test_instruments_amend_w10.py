@@ -1172,11 +1172,18 @@ def test_preview_glb_refuses_when_a_planned_view_never_reached_disk(tmp_path):
     empty.write_bytes(b"")
     missing = tmp_path / "c.png"
     with pytest.raises(mod.PreviewGlbGate) as caught:
-        # WAVE 14, F-6a9a0f72: the gate now takes `(path, status)` pairs, because the
+        # WAVE 14, F-6a9a0f72: the gate takes `(path, status)` pairs, because the
         # operator's status set is the only clause that tells an empty directory from a
         # stale one. A FINISHED status is passed here so the file clauses are what fires.
-        mod.gate_previews_written([(str(good), ["FINISHED"]), (str(empty), ["FINISHED"]),
-                                   (str(missing), ["FINISHED"])])
+        # RE-DERIVED wave 22 (instruments, F-a2630f86): a TRIPLE. The third element is
+        # `rig_character.render_target_snapshot(path)` taken ABOVE the render, and the
+        # gate's fourth clause -- "the operator said FINISHED and the bytes did not
+        # move" -- cannot exist without it. `{"existed": False}` here is the honest
+        # snapshot for a path nothing had written before the render.
+        mod.gate_previews_written(
+            [(str(good), ["FINISHED"], {"existed": False}),
+             (str(empty), ["FINISHED"], {"existed": False}),
+             (str(missing), ["FINISHED"], {"existed": False})])
     ev = caught.value.evidence
     assert [os.path.basename(p) for p in ev["missing"]] == ["c.png"], ev
     assert [os.path.basename(p) for p in ev["empty"]] == ["b.png"], ev
@@ -1189,7 +1196,10 @@ def test_preview_glb_is_satisfied_by_four_real_files(tmp_path):
     for name in ("full_a", "full_b", "head_a", "head_b"):
         p = tmp_path / (name + ".png")
         p.write_bytes(b"PNG")
-        paths.append((str(p), ["FINISHED"]))
+        # RE-DERIVED wave 22 (instruments, F-a2630f86): a TRIPLE, and the snapshot is
+        # the honest one -- these four files are written by the test a moment before,
+        # so nothing was at the path when the "render" began.
+        paths.append((str(p), ["FINISHED"], {"existed": False}))
     assert mod.gate_previews_written(paths)["planned"] == 4
 
 
