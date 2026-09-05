@@ -322,6 +322,32 @@ def _positional_indexing(tree):
     return sorted(out)
 
 
+def _declares_frames_flag(tree):
+    """`True` when this module's parser DECLARES `--frames`.
+
+    ⚠ **This used to be `if "--frames" not in src`** — a substring test over the whole
+    file, so a tool that merely MENTIONS the flag in prose joined a population defined as
+    "every tool that TAKES `--frames`". Measured 2026-09-05 (wave 22, builders,
+    F-a25a7db9's correction added the words "when none can be derived from `--frames`" to
+    `fetch_run.derived_root_artifacts`' docstring): `fetch_run` entered this census on a
+    DOCSTRING, and `_positional_indexing` then flagged `landed["verdict"]` — a subscript of
+    Gate FETCH's evidence dict, which is not a listing at all — as positional frame
+    indexing. Three tools match the string and declare no flag (`fetch_run`, `make_sheet`,
+    `sheet_compose`); every tool that declares it also mentions it, so the derived
+    population is unchanged and the false-positive family is closed.
+
+    This wave's rule 1: a census keys on the RESOLVED shape, never the spelled one.
+    """
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call)
+                and getattr(node.func, "attr", None) == "add_argument"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value == "--frames"):
+            return True
+    return False
+
+
 def frame_indexing_tools():
     """THE DERIVATION: every tool that takes `--frames` and enumerates a directory."""
     out = []
@@ -333,7 +359,7 @@ def frame_indexing_tools():
         if "--frames" not in src:
             continue
         tree = ast.parse(src)
-        if _listing_builders(tree):
+        if _declares_frames_flag(tree) and _listing_builders(tree):
             out.append(name[:-3])
     return out
 

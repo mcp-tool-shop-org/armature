@@ -313,7 +313,7 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     "fetch_run": ["download", "verify_downloads"],
     # WAVE-14 MERGE (coordinator, 2026-09-04): `download` LEFT — `fetch_t2v_run.download` is now a call into
     # `fetch_run.download` (builders, F-a3ba416b: one downloader across both fetchers); measured.
-    "fetch_t2v_run": ["gate_order_evidence", "order_evidence", "raise FetchHalt"],
+    "fetch_t2v_run": ["gate_order_evidence", "order_evidence"],
     "fit_reference": ["raise FitReferenceError"],
     "lift_solve": ["gate_arrived", "gate_glb_written", "gate_n_names", "pick_subject"],
     "make_binding_sheet": ["render_arm"],
@@ -383,8 +383,6 @@ READBACK_REASONS = {
                           "Gate R re-decodes, with `read_pack(dst)`, the pack this tool wrote"),
     "order_evidence": ("order_evidence",
                        "reads back the downloaded manifest (fetch_t2v_run)"),
-    "raise FetchHalt": ("order_evidence",
-                        "raised off the order evidence read back from what it downloaded"),
     "raise OverlaySheetError": ("imwrite", "the refusal IS the `cv2.imwrite` return"),
     "raise SheetInputError": ("imwrite",
                               "the refusal IS the `cv2.imwrite` return \u2014 it verifies the "
@@ -636,9 +634,23 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     #     d=M.stranded_by_tool();print(len(d),sum(len(v) for v in d.values()),\
     #     M.stranded_site_count())"
     # WAVE-14 MERGE (coordinator, 2026-09-04): 30 / 58 / 72 → 27 / 51 / 69, MEASURED on the merged tree (never subtracted).
+    # WAVE 22 (builders, 2026-09-05): 27 / 51 / 69 → 27 / 50 / 68, RE-DERIVED with `==` by
+    # running the derivation above in `w22-builders` after reading 27/51/69 GREEN there
+    # first. One name and one site leave: `fetch_t2v_run`'s `raise FetchHalt` for
+    # `zero_length_frames` (F-c03a23c5) — a clause that COULD NOT FIRE.
+    # `verify_downloads(jobs, directories=[...], root=a.out)` above it already raises when
+    # any planned output is zero length, across the frame jobs AND the video job, and
+    # `manifest` is a strict subset of the same planned frames read from the same paths.
+    # RE-MEASURED by calling `fetch_run.verify_downloads` directly on a single planned
+    # zero-byte `lossless/00000.png`: it raised `FetchHalt` with clause
+    # `downloaded_population_is_not_the_planned_one` before any manifest existed. Its
+    # entries in `STRANDED_TODAY` and in the read-back reason table go with it, per this
+    # file's own instruction to delete a listing in the commit that moved it.
+    #      ⚠ **BRANCH-LOCAL.** Other domains move this census in the same wave; the
+    #      coordinator MEASURES it on the merged tree and never subtracts.
     assert len(derived) == 27, sorted(derived)
     names = sum(len(v) for v in derived.values())
-    assert names == 51, sorted(derived.items())
+    assert names == 50, sorted(derived.items())
     sites = stranded_site_count(members)
     # WAVE 16, F-9b4d01ef: the message used to name 72 — the tests branch's own measurement,
     # which the wave-14 merge overturned when it re-derived 27/51/69 on the merged tree and
@@ -647,8 +659,8 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # 69 and had every reason to retype the wrong number. The message quotes the value it
     # ASSERTS; the overturned measurement stays in the comment above, where this file keeps
     # its corrections.
-    assert sites == 69, (
-        f"{sites} refusal SITES below a first write; this pin asserts 69, re-derived on the "
+    assert sites == 68, (
+        f"{sites} refusal SITES below a first write; this pin asserts 68, re-derived on the "
         f"merged tree 2026-09-04 (see the comment above for the measurement it overturned), "
         f"and the number falls as the moves land")
 
@@ -771,7 +783,14 @@ def test_the_read_back_table_is_read_and_says_what_it_means():
     #     import test_instrument_write_ordering as M;\
     #     print(len(M.READBACK_REASONS), len(M.NOT_YET_MOVED))"
     # WAVE-14 MERGE (coordinator, 2026-09-04): 12 / 35 → 12 / 29, measured after the six names left.
-    assert len(READBACK_REASONS) == 12, sorted(READBACK_REASONS)
+    # WAVE 22 (builders, 2026-09-05): 12 -> 11, RE-DERIVED with `==`. `raise FetchHalt`
+    # leaves the table with the refusal it described: `fetch_t2v_run`'s
+    # `zero_length_frames` clause was deleted (F-c03a23c5) because it COULD NOT FIRE —
+    # `verify_downloads` above it already raises on any zero-length planned output, over a
+    # WIDER population (the video job included), and the deleted branch read a manifest
+    # built from a strict subset of the same paths. A reason for a refusal that no longer
+    # exists is a reason nothing can be checked against.
+    assert len(READBACK_REASONS) == 11, sorted(READBACK_REASONS)
     # WAVE 16, F-9b4d01ef: the message named 35, which the wave-14 merge overturned when it
     # re-derived 12 / 29 on the merged tree. Same correction as the sites message above.
     assert len(NOT_YET_MOVED) == 29, (

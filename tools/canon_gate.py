@@ -58,11 +58,24 @@ def gate_canon_ships_what_it_gated(canon_prompt, shipped):
     get moving, and a paid generation goes out on text no canon governs.
     """
     if canon_prompt is not None and canon_prompt != shipped:
+        # ---- wave 22, F-a22e9575. The evidence literal named neither the gate nor the
+        # andon, so a triage or a wrapper keyed on `evidence["gate"]` at the spend boundary
+        # read `None` — on the one andon standing between an operator pasting ratified
+        # phrases into `--canon-prompt` and a paid generation going out on text no canon
+        # governs. RE-MEASURED on `e8263a3` by calling
+        # `gate_canon_ships_what_it_gated('a', 'b')`: GateCanon raised, `exc.evidence` keys
+        # exactly ['canon_prompt', 'clause', 'shipped'] while `type(exc).gate` read
+        # 'CANON'; the `__main__` block prints that dict verbatim under CANON_GATE_HALT.
+        # The tree's law (`tests/test_core_solver_evidence.py`, and `cmd_resolve` twelve
+        # lines down in THIS file) is that `ev["gate"]` is the raised class's own `.gate`
+        # and `ev["andon"]` its class name. This is the most-reached raise in the file:
+        # `canon_spend` calls it for all seven builders that arm Gate CANON.
         raise GateCanon(
             "--canon-prompt is not the text this payload ships. The router would have "
             "checked one string while the graph carried another, and every other gate "
             "would still be green. Either fix the shipped prompt or drop the flag",
-            {"clause": "gated_text_is_not_shipped_text",
+            {"gate": "CANON", "andon": "GateCanon",
+             "clause": "gated_text_is_not_shipped_text",
              "canon_prompt": canon_prompt, "shipped": shipped})
 
 

@@ -736,6 +736,38 @@ BUILDERS = _builder_names()
 SPEND_BUILDER_MODULES = sorted(set(BUILDERS) - TEXTLESS_ASSEMBLERS)
 
 
+#: The three names that ARE the canon gate, wherever a builder reaches one.
+CANON_GATE_NAMES = ("gate_write", "canon_spend", "require_canon")
+
+
+def _wires_the_canon_gate(name):
+    """Whether this builder CALLS or IMPORTS the canon gate — the resolved shape.
+
+    ⚠ **This used to be `any(g in _builder_source(n) for g in ...)`** — a substring test
+    over the whole file, so a builder that merely NAMES the gate in a comment read as
+    wiring it. Measured 2026-09-05 (wave 22, builders, F-27f76c43 added a comment to
+    `build_assembly_payload` explaining that the seven spend builders carry the subject
+    through `canon_spend` and that this assembler does not): `build_assembly_payload` left
+    the `without` partition on a COMMENT, and the census that exists to say "a builder
+    quietly stopped importing `gate_write`" would have said the opposite about a builder
+    that had. This wave's rule 1: a census keys on the RESOLVED shape, never the spelled
+    one.
+    """
+    import ast as _ast
+
+    tree = _ast.parse(_builder_source(name))
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Call):
+            called = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            if called in CANON_GATE_NAMES:
+                return True
+        if isinstance(node, (_ast.Import, _ast.ImportFrom)):
+            if any(a.name in CANON_GATE_NAMES or (a.asname in CANON_GATE_NAMES)
+                   for a in node.names):
+                return True
+    return False
+
+
 def test_the_only_builders_without_the_spend_gate_are_the_recorded_two():
     """A builder that quietly stops importing `gate_write` is a spend with no subject.
 
@@ -743,9 +775,7 @@ def test_the_only_builders_without_the_spend_gate_are_the_recorded_two():
     builder loses the gate, or one of the two acquires text inputs and needs it, this is
     the check that says so.
     """
-    without = sorted(n for n in BUILDERS
-                     if not any(g in _builder_source(n) for g in ("gate_write", "canon_spend", "require_canon"))
-                     and "require_canon" not in _builder_source(n))
+    without = sorted(n for n in BUILDERS if not _wires_the_canon_gate(n))
     assert set(without) == TEXTLESS_ASSEMBLERS, (
         f"builders with no canon gate: {without}; the recorded exceptions are "
         f"{sorted(TEXTLESS_ASSEMBLERS)}")
@@ -789,9 +819,35 @@ def test_a_textless_assembler_carries_no_text_for_a_canon_router_to_check(name, 
             f"{name} builds {sorted(classes)}; it is exempt on the ground that it only "
             f"assembles already-rendered frames")
 
-    assert "--subject" not in _builder_source(name), (
-        f"{name} exposes --subject but wires no gate: a flag that is read by nothing is "
-        f"a checkbox")
+    # ⚠ **CORRECTION, 2026-09-05 (wave 22, builders, F-27f76c43), with the measurement
+    # that overturned it.** This used to be `assert "--subject" not in _builder_source(name)`
+    # on the ground that "a flag that is read by nothing is a checkbox". The GROUND is
+    # right and the TEST was the substring, which cannot tell a checkbox from a flag that
+    # is read. MEASURED on `e8263a3` by grep over `tools/`: the key "subject" occurred in
+    # NONE of the nine builder records, so the two records this repo writes for the artefact
+    # a Director opens — the assembled clip — could not say whose frames they held, while
+    # the seven spend builders carry the subject through `gate_CANON`. These two arm no Gate
+    # CANON (correctly: there is no generation to refuse, asserted above), so the subject
+    # rides the RECORD instead, and `--subject` is optional with its absence recorded as a
+    # fact and its reason.
+    #
+    # So the assertion is the ground itself: if the flag is declared, it must be READ.
+    if "--subject" in _builder_source(name):
+        tree = __import__("ast").parse(_builder_source(name))
+        reads = [n for n in __import__("ast").walk(tree)
+                 if isinstance(n, __import__("ast").Attribute) and n.attr == "subject"]
+        assert reads, (
+            f"{name} exposes --subject and never reads it: a flag that is read by nothing "
+            f"is a checkbox")
+        written = json.loads(
+            (out / sorted(p for p in os.listdir(out)
+                          if p.endswith("payload-record.json"))[0]).read_text(
+                              encoding="utf-8"))
+        assert "subject" in written, (
+            f"{name} reads --subject and its record does not carry it; the record is the "
+            f"provenance of the clip a Director opens")
+        assert written["subject"]["subject"] is None, written["subject"]
+        assert written["subject"]["why_null"], written["subject"]
 
 
 @pytest.mark.parametrize("name", SPEND_BUILDER_MODULES)

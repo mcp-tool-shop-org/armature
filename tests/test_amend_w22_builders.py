@@ -1110,3 +1110,356 @@ def test_the_vacuous_clause_is_gone_and_the_comment_says_where_the_coverage_is()
               if isinstance(d, ast.Constant) and d.value == "zero_length_frames"]
     assert raised == [], raised
     assert "THE COVERAGE" in src and "verify_downloads" in src
+
+
+# ===========================================================================
+# F-a22e9575 — the one andon between an operator pasting ratified phrases into
+#              `--canon-prompt` and a paid generation on text no canon governs raised a
+#              halt record naming neither the gate nor the andon.
+#
+# RE-MEASURED on `e8263a3` by calling `canon_gate.gate_canon_ships_what_it_gated('a','b')`:
+# GateCanon raised, `exc.evidence` keys exactly ['canon_prompt', 'clause', 'shipped'] while
+# `type(exc).gate` read 'CANON'; the `__main__` block prints that dict verbatim under
+# CANON_GATE_HALT, so a triage or a wrapper keyed on `evidence["gate"]` at the spend
+# boundary read None. `canon_spend` calls it for all seven builders that arm Gate CANON, so
+# it is the most-reached raise in the file.
+# reverted-red: yes — the two keys were absent.
+# ===========================================================================
+
+
+def test_the_canon_ships_what_it_gated_refusal_names_its_gate_and_its_andon():
+    from armature_core.errors import GateCanon
+
+    exc, ev = _raises(CG.gate_canon_ships_what_it_gated, "a", "b")
+    assert isinstance(exc, GateCanon), repr(exc)
+    assert ev["gate"] == "CANON", ev
+    assert ev["andon"] == "GateCanon", ev
+    assert ev["clause"] == "gated_text_is_not_shipped_text", ev
+    assert ev["canon_prompt"] == "a" and ev["shipped"] == "b", ev
+    # the tree's law: `ev["gate"]` is the raised class's OWN `.gate`, `ev["andon"]` its name
+    assert ev["gate"] == type(exc).gate, (ev, type(exc).gate)
+    assert ev["andon"] == type(exc).__name__, ev
+
+
+def test_every_evidence_raise_in_canon_gate_names_its_gate_and_andon():
+    """The per-module evidence census the finding asks for, so a NEW raise in this file
+    joins the population rather than needing its own assertion. Keyed on the resolved shape:
+    every `raise <Class>(<msg>, {<dict literal>})` in the module."""
+    tree = ast.parse(open(os.path.join(TOOLS, "canon_gate.py"), encoding="utf-8").read())
+    thin = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
+            continue
+        if len(node.exc.args) < 2 or not isinstance(node.exc.args[1], ast.Dict):
+            continue
+        keys = {k.value for k in node.exc.args[1].keys
+                if isinstance(k, ast.Constant)}
+        if not {"gate", "andon"} <= keys:
+            thin.append((node.lineno, sorted(keys)))
+    assert thin == [], thin
+
+
+def test_the_canon_gate_halt_line_reads_the_two_keys(tmp_path):
+    """Rule 4 — the halt record READ off `canon_gate`'s own `__main__`. `cmd_resolve`'s
+    refusal is the sibling that always carried the pair; this drives it and reads both."""
+    proc, halts, oks = _sub("canon_gate.py", ["resolve", "--subject=NOT-A-SUBJECT"],
+                            "CANON_GATE_HALT")
+    assert halts, proc.stdout + proc.stderr
+    halt = json.loads(halts[-1][len("CANON_GATE_HALT "):])
+    assert proc.returncode == 2, (proc.returncode, halt)
+    assert halt["evidence"]["gate"] == "CANON", halt
+    assert halt["evidence"]["andon"] == "GateCanon", halt
+
+
+# ===========================================================================
+# F-83829789 — two compatibility shims guard against a `route_gates` that predates the
+#              CONDITIONAL tier, and only one of them refused.
+#
+# `conditional_attribution` refuses (`conditional_tier_without_its_readers`) when the two
+# readers are absent while the licence table still rules a row CONDITIONAL — "an unknown
+# answer here is a refusal, not an empty list". Nine lines from the spend, the `attribution`
+# shim did the opposite: a signature that does not advertise the parameter caused the
+# computed credit list to be DROPPED with no clause, no evidence and no line in the record.
+#
+# HONEST BOUND, measured: on the merged tree `attribution` IS in `verify`'s signature and
+# RULED_COMPONENTS carries one CONDITIONAL row, so both false branches are unreachable
+# today. What is fixed is the ASYMMETRY. reverted-red: the mutation below (a `verify`
+# wrapper whose signature hides the parameter — which is also how `inspect.signature` is
+# defeated in the wild) built GREEN with the credit list silently deleted.
+# ===========================================================================
+
+
+def test_the_attribution_shim_refuses_when_it_cannot_pass_the_credit(monkeypatch):
+    import build_lora_arm_payload as BLA
+
+    real = BLA.route_gates.verify
+
+    def hides_the_parameter(*args, **kwargs):      # the `*args, **kwargs` wrapper case
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(BLA.route_gates, "verify", hides_the_parameter)
+    graph = {"75": {"class_type": "UNETLoader",
+                    "inputs": {"unet_name": TECHNICALLY_COLOR,
+                               "weight_dtype": "default"}}}
+    attribution = BLA.conditional_attribution(graph)
+    assert attribution, "the fixture must actually load a CONDITIONAL component"
+
+    import inspect
+    assert "attribution" not in inspect.signature(
+        BLA.route_gates.verify).parameters, "the mutation did not hide the parameter"
+
+
+def test_the_two_shims_are_symmetric_in_the_source():
+    """Keyed on the property, not on a line: the file that AUTHORS the spend has no branch
+    that drops a licence-adjacent fact silently. Both shims end in a `raise`."""
+    src = open(os.path.join(TOOLS, "build_lora_arm_payload.py"), encoding="utf-8").read()
+    assert "conditional_tier_without_its_readers" in src
+    assert "attribution_cannot_reach_the_gate_that_checks_it" in src
+    tree = ast.parse(src)
+    for fn in ast.walk(tree):
+        if isinstance(fn, ast.FunctionDef) and fn.name == "conditional_attribution":
+            assert any(isinstance(n, ast.Raise) for n in ast.walk(fn))
+
+
+def test_the_sibling_shim_still_refuses_the_way_it_always_did(monkeypatch):
+    """The direction the symmetry rests on, driven so the comparison is real."""
+    import build_lora_arm_payload as BLA
+
+    monkeypatch.delattr(BLA.route_gates, "conditional_component_keys", raising=False)
+    monkeypatch.delattr(BLA.route_gates, "attribution_entry_for", raising=False)
+    exc, ev = _raises(BLA.conditional_attribution, {})
+    assert isinstance(exc, RG.RouteGate), repr(exc)
+    assert ev["clause"] == "conditional_tier_without_its_readers", ev
+
+
+# ===========================================================================
+# F-87600738 — the one reader's docstring asserted a family property the tree did not hold.
+#
+# RE-MEASURED by grep across `tools/` on `e8263a3`: `no_seed_and_no_registration` occurred
+# at exactly ONE site (`build_t2v_payload`). The three siblings the sentence named each
+# raised `PayloadError(<message>)` with no second argument, which under the wave-16 rule-5
+# base stores `None` — so the halt printed `"evidence": null` and the refusal carried no
+# gate, no andon and no clause. So of the four callers that default a seed off the
+# registration, one was machine-readable and three were a sentence.
+# reverted-red: yes — three of the four raises carried `evidence` None.
+# ===========================================================================
+
+
+#: `(module, the flag that module actually reads)`. The wording was not one wording either:
+#: three say `--seeds-registry` and t2v says `--seeds`, which is correct PER FLAG and is not
+#: what the docstring claimed.
+W22_SEED_DEFAULT_SITES = [
+    ("build_animate_payload", "--seeds-registry"),
+    ("build_i2v_payload", "--seeds-registry"),
+    ("build_camera_i2v_payload", "--seeds-registry"),
+    ("build_t2v_payload", "--seeds"),
+]
+
+
+def test_the_clause_census_now_sees_all_four_sites():
+    """The measurement the finding turns on, kept runnable: the clause word, counted across
+    `tools/` by AST rather than by grep so a string in prose cannot inflate it."""
+    sites = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
+                continue
+            for d in ast.walk(node.exc):
+                if isinstance(d, ast.Constant) and d.value == "no_seed_and_no_registration":
+                    sites.append(name[:-3])
+                    break
+    assert sorted(set(sites)) == sorted(m for m, _f in W22_SEED_DEFAULT_SITES), sites
+
+
+@pytest.mark.parametrize("mod,flag", W22_SEED_DEFAULT_SITES,
+                         ids=[m for m, _f in W22_SEED_DEFAULT_SITES])
+def test_each_seed_default_site_raises_a_TYPED_clause_naming_its_own_flag(mod, flag):
+    """Rule 3: a refusal names the andon that pulled, with the operand in the evidence. And
+    rule 2: every site in the family, not the one the finding was filed against."""
+    module = __import__(mod)
+    src = open(os.path.join(TOOLS, mod + ".py"), encoding="utf-8").read()
+    tree = ast.parse(src)
+    found = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
+            continue
+        if len(node.exc.args) < 2 or not isinstance(node.exc.args[1], ast.Dict):
+            continue
+        pairs = {k.value: v for k, v in zip(node.exc.args[1].keys, node.exc.args[1].values)
+                 if isinstance(k, ast.Constant)}
+        if (isinstance(pairs.get("clause"), ast.Constant)
+                and pairs["clause"].value == "no_seed_and_no_registration"):
+            found.append({k: (v.value if isinstance(v, ast.Constant) else None)
+                          for k, v in pairs.items()})
+    assert len(found) == 1, (mod, found)
+    ev = found[0]
+    assert ev["gate"] == "PAYLOAD" and ev["andon"] == "seed_registration", (mod, ev)
+    assert ev["flag"] == flag, (mod, ev)
+    assert module is not None
+
+
+def test_the_raise_carries_the_dict_at_runtime_not_only_in_the_source():
+    """The AST census above proves the four sites exist and what their literals say; this
+    drives one of them so the evidence is a runtime object rather than a parsed literal.
+
+    Bounded honestly: only `build_animate_payload.build` reaches this clause on a bare
+    call. Measured — `build_i2v_payload.build` and `build_camera_i2v_payload.build` take a
+    `start_frame` and refuse FIRST with `{'gate': 'PAYLOAD', 'andon': 'start_frame',
+    'flag': '--start-frame', 'start_frame': None}`, which is a different clause doing its
+    own job. Constructing a start frame for them here would be testing their start-frame
+    path, not this one; the AST census above is what covers all four."""
+    import build_animate_payload as ANI
+
+    exc, ev = _raises(ANI.build, {}, None, "neg", "pos", [], "as-is")
+    assert type(exc).__name__ == "PayloadError", repr(exc)
+    assert ev.get("gate") == "PAYLOAD" and ev.get("andon") == "seed_registration", ev
+    assert ev.get("clause") == "no_seed_and_no_registration", ev
+    assert ev.get("flag") == "--seeds-registry", ev
+    assert ev.get("registered") == [], ev
+
+
+def test_the_docstring_is_corrected_in_place_with_the_measurement():
+    """Never quietly delete a wrong statement: the correction is more useful than the
+    original, and it names what was measured and what remains true."""
+    import build_assembly_payload as BAP
+
+    doc = BAP.read_seed_registration.__doc__
+    assert "CORRECTION, 2026-09-05" in doc, doc[-1200:]
+    assert "exactly ONE site" in doc, "the measurement, not a summary of it"
+    assert "One reader, one wording, every caller" in doc, (
+        "the original claim is kept, not deleted")
+    assert "--seeds-registry" in doc and "--seeds" in doc, (
+        "and the per-flag correction the sentence also got wrong")
+
+
+# ===========================================================================
+# F-27f76c43 — the two records this repo writes for the artefact a Director opens could not
+#              say whose frames they held, and the comment above them claimed more than the
+#              gate beneath it proves.
+#
+# HALF ONE, provenance: MEASURED on `e8263a3` by grep over `tools/`, the key "subject"
+# occurred in NONE of the nine builder records. The seven spend builders carry the subject
+# through `gate_CANON`; `build_assembly_payload` and `build_cascade_payload` arm no Gate
+# CANON at all — re-censused, the only two of the nine that never call `canon_spend` — and
+# their records carried only server-side upload names, `frame_order`, `frame_source_ids` and
+# node contracts.
+#
+# HALF TWO, wording: the comment read "Not a spend: Gate ASSEMBLY_paid requires zero
+# billable nodes". MEASURED by calling `armature_core.assembly.gate_no_paid_nodes` on the
+# assembler's own class set, the verdict is a proof about PARTNER-CREDIT nodes: "3 node(s)
+# across 3 class(es), all named by the allowlist, all 3 carrying a receipt whose recorded
+# api_node value READS False …, none reading as a partner class; 0 of 3 class(es) are known
+# to the licence map". Ordinary Comfy Cloud workflow compute is outside everything it
+# measures. The record itself was honest — it carries the verdict verbatim under
+# `gates.ASSEMBLY_paid`; the source comment was the half that overclaimed.
+# reverted-red: yes on both halves.
+# ===========================================================================
+
+
+def _assembler_argv(tmp_path, mod, subject=None):
+    uploads = tmp_path / f"{mod}-uploads.json"
+    n = 5 if mod == "build_assembly_payload" else 33
+    uploads.write_text(json.dumps({f"{i:05d}": f"srv_{i:05d}.png" for i in range(n)}),
+                       encoding="utf-8")
+    out = tmp_path / mod
+    argv = [f"--uploads={uploads}", f"--out={out}"]
+    if subject is not None:
+        argv.append(f"--subject={subject}")
+    return argv, out
+
+
+@pytest.mark.parametrize("mod", ["build_assembly_payload", "build_cascade_payload"])
+def test_the_assembler_record_names_its_subject(mod, tmp_path):
+    module = __import__(mod)
+    argv, out = _assembler_argv(tmp_path, mod, subject="BLACKGUARD")
+    assert module.main(argv) == 0
+    rec = json.loads(next(p for p in out.iterdir()
+                          if p.name.endswith("payload-record.json")).read_text(
+                              encoding="utf-8"))
+    assert rec["subject"]["subject"] == "BLACKGUARD", rec["subject"]
+    assert rec["subject"]["census"] == "armature_core.canon_census.CENSUS", rec["subject"]
+    assert rec["subject"]["row"] is not None, rec["subject"]
+
+
+@pytest.mark.parametrize("mod", ["build_assembly_payload", "build_cascade_payload"])
+def test_an_omitted_subject_is_an_explicit_null_with_its_reason(mod, tmp_path):
+    """The coordinator's 2026-09-04 ruling under the Director's delegation: `subject: null`
+    WITH the reason, never an absent key."""
+    module = __import__(mod)
+    argv, out = _assembler_argv(tmp_path, mod)
+    assert module.main(argv) == 0
+    rec = json.loads(next(p for p in out.iterdir()
+                          if p.name.endswith("payload-record.json")).read_text(
+                              encoding="utf-8"))
+    assert "subject" in rec, sorted(rec)
+    assert rec["subject"]["subject"] is None, rec["subject"]
+    assert "Gate CANON is not armed here" in rec["subject"]["why_null"], rec["subject"]
+    assert rec["subject"]["census_subjects"], rec["subject"]
+
+
+@pytest.mark.parametrize("mod", ["build_assembly_payload", "build_cascade_payload"])
+def test_a_subject_the_census_does_not_know_is_refused_by_name(mod, tmp_path):
+    """A name the record asserts that nothing backs is a placeholder shaped like evidence."""
+    module = __import__(mod)
+    argv, out = _assembler_argv(tmp_path, mod, subject="NOT-A-SUBJECT")
+    exc, ev = _raises(module.main, argv)
+    assert type(exc).__name__ == "AssemblyGate", repr(exc)
+    assert ev["clause"] == "subject_not_in_the_canon_census", ev
+    assert ev["flag"] == "--subject", ev
+    assert not out.exists(), "a refusal left an output directory"
+
+
+def test_the_two_assemblers_share_ONE_subject_reader():
+    """One implementation, both records, so the two cannot drift apart."""
+    import build_assembly_payload as BAP
+    import build_cascade_payload as BCP
+
+    assert BCP.subject_provenance is BAP.subject_provenance
+
+
+def test_the_two_assemblers_are_still_the_only_two_that_arm_no_gate_CANON():
+    """The population the finding names, re-derived rather than carried."""
+    import build_assembly_payload as BAP  # noqa: F401
+
+    without = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not (name.startswith("build_") and name.endswith("payload.py")):
+            continue
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        calls = {getattr(n.func, "id", None) or getattr(n.func, "attr", None)
+                 for n in ast.walk(tree) if isinstance(n, ast.Call)}
+        if "canon_spend" not in calls:
+            without.append(name[:-3])
+    assert without == ["build_assembly_payload", "build_cascade_payload"], without
+
+
+@pytest.mark.parametrize("mod", ["build_assembly_payload", "build_cascade_payload"])
+def test_the_not_a_spend_comment_says_what_the_gate_actually_returns(mod):
+    """HALF TWO. The comment is narrowed to the verdict's own scope, and the overclaim is
+    corrected in place with the measurement rather than deleted."""
+    src = open(os.path.join(TOOLS, mod + ".py"), encoding="utf-8").read()
+    # comments wrap, so the sentences are read off the flattened comment text
+    flat = re.sub(r"\s*\n\s*#\s*", " ", src)
+    assert "Not a PARTNER-CREDIT spend" in flat, mod
+    assert "ordinary Comfy Cloud compute still bills" in flat, mod
+    # The overclaim is CORRECTED IN PLACE, never deleted — so the old sentence survives,
+    # and every occurrence of it must be a QUOTATION of what the comment used to say.
+    body = flat.split("def build_and_write")[1]
+    for i in range(len(body)):
+        if body.startswith("Not a spend:", i):
+            assert i and body[i - 1] == '"', (
+                mod, body[max(0, i - 80):i + 40])
+
+
+def test_the_paid_node_gate_returns_a_verdict_about_partner_nodes_and_says_so(tmp_path):
+    """The measurement the comment now rests on, kept runnable."""
+    from armature_core import assembly as AS
+    import build_assembly_payload as BAP
+
+    wf = BAP.build([f"srv_{i:05d}.png" for i in range(5)], fps=8.0)
+    verdict = AS.gate_no_paid_nodes(wf)["verdict"]
+    assert "partner class" in verdict, verdict
+    assert "allowlist" in verdict, verdict

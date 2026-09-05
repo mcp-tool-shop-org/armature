@@ -601,7 +601,25 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-    assert len(RAISE_SITES["RouteGate"]) == 71, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 22 (builders, 2026-09-05): 71 -> 72, RE-DERIVED with `==` in `w22-builders`
+    # after reading 71 GREEN in this worktree first, so the delta is demonstrably this
+    # domain's. +1 in `gate_saved_graph.route_facts`: the second reading of
+    # `record_carries_a_caught_refusal` (F-9ad5cbc2). The wave-18 clause was keyed on the
+    # presence of `clause`, and an AST walk of `route_gates.verify` on `e8263a3` finds 17
+    # `RouteGate` raise sites inside it of which 14 write no `clause` at all — so the
+    # absence of a clause was not evidence of a return, and a caught refusal's evidence was
+    # ADMITTED as the source of the two facts that admit a paid submission. The new site
+    # keys on `verdict`, the mark `verify` writes only on its way out.
+    #      ⚠ **BRANCH-LOCAL.** Other domains move this number in the same wave; the
+    #      coordinator MEASURES it on the merged tree and never sums.
+    # +1 again in the same wave, same domain (F-83829789): `build_lora_arm_payload`'s
+    # `attribution` shim. Two compatibility shims guarded against a `route_gates` that
+    # predates the CONDITIONAL tier and only ONE refused — `conditional_attribution` raises
+    # `conditional_tier_without_its_readers` when its readers are absent while the licence
+    # table still rules a row CONDITIONAL, and nine lines from the spend the other shim
+    # DROPPED the computed credit list with no clause. The asymmetry is closed with a
+    # refusal, so the file that authors the spend refuses when its premise fails.
+    assert len(RAISE_SITES["RouteGate"]) == 73, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside

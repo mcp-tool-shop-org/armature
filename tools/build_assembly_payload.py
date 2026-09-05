@@ -61,6 +61,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import assembly as AS  # noqa: E402
+from armature_core import canon_census  # noqa: E402  - the subject census
+#   (wave 22, F-27f76c43): this chain arms no Gate CANON, so the census is read
+#   here for the RECORD rather than for a refusal about the prompt.
 from armature_core import route_gates as RG  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
@@ -185,9 +188,26 @@ def read_seed_registration(path, *, flag="--seeds"):
 
     **Emptiness is not this reader's clause.** A caller that was given an explicit `--seed`
     is not defaulting to anything and has nothing to index; the caller that DOES default
-    raises `no_seed_and_no_registration`, the clause `build_animate_payload`,
+    raises `no_seed_and_no_registration` before its `sorted(registry)[0]`.
+
+    ⚠ **CORRECTION, 2026-09-05 (wave 22, F-87600738), with the measurement that overturned
+    it.** The sentence above used to close: "…the clause `build_animate_payload`,
     `build_i2v_payload` and `build_camera_i2v_payload` already carried before their
-    `sorted(registry)[0]`. One reader, one wording, every caller.
+    `sorted(registry)[0]`. One reader, one wording, every caller." It asserted a family
+    property the tree did not hold. RE-MEASURED by grep across `tools/` on `e8263a3`: the
+    string `no_seed_and_no_registration` occurred at exactly ONE site,
+    `build_t2v_payload.py`. The three siblings the sentence named each raised
+    `PayloadError(<message>)` with NO second argument, which under the wave-16 rule-5 base
+    stores `None` — so the halt line printed `"evidence": null` and the refusal carried no
+    `gate`, no `andon` and no `clause`. Confirmed by calling
+    `build_animate_payload.build(...)` with `seed=None` and an empty registry:
+    `PayloadError` raised, `evidence` None, `gate` None.
+
+    Nor was it "one wording": the three say `--seeds-registry` and `build_t2v_payload` says
+    `--seeds`, which is correct PER FLAG and is not what the sentence claimed. All four
+    sites carry the typed clause now — each naming the flag it actually reads — so the
+    census sees four, and the wording claim is narrowed to what is true: one clause word,
+    each site naming its own flag.
 
     One implementation, eight callers — the same rule `gate_create_video_fps` above states.
     """
@@ -618,6 +638,46 @@ def build(names, fps=16.0, prefix="video/S03_assembly"):
     return wf
 
 
+def subject_provenance(subject, census=None):
+    """Whose frames these are, or an explicit `null` with the reason — never a silence.
+
+    Wave 22, F-27f76c43. Shared by both assemblers so the two records answer the question
+    the same way. The census is `armature_core.canon_census`'s, NAMED in the record, so a
+    reader can see which table answered rather than inferring it.
+    """
+    table = canon_census.CENSUS if census is None else census
+    if subject is None:
+        return {
+            "subject": None,
+            "why_null": (
+                "--subject was not supplied. This chain authors no generation, so Gate "
+                "CANON is not armed here and nothing forces a subject; the record states "
+                "the absence rather than omitting the key, so a reader of the assembled "
+                "clip's provenance sees that the question was asked and not answered"),
+            "census": "armature_core.canon_census.CENSUS",
+            "census_subjects": sorted(table),
+            "row": None,
+        }
+    row = canon_census.row(subject, census=table)
+    if row is None:
+        raise AS.AssemblyGate(
+            f"--subject {subject!r} is in no canon census this invocation can see "
+            f"({sorted(table)}). The record this build writes is the provenance of the "
+            f"clip a Director opens, and a subject name it asserts that nothing backs is a "
+            f"placeholder shaped like evidence. Pass a name the census carries, or omit "
+            f"the flag and let the record state `subject: null` with its reason",
+            {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+             "clause": "subject_not_in_the_canon_census", "flag": "--subject",
+             "subject": subject, "census": "armature_core.canon_census.CENSUS",
+             "census_subjects": sorted(table)})
+    return {
+        "subject": subject,
+        "census": "armature_core.canon_census.CENSUS",
+        "census_subjects": sorted(table),
+        "row": row,
+    }
+
+
 def build_and_write(argv=None):
     """Build, gate, write — and hand the GRAPH back to an in-process caller.
 
@@ -634,16 +694,47 @@ def build_and_write(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--fps", type=float, default=16.0)
     ap.add_argument("--prefix", default="video/S03_assembly")
+    ap.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
-    # Not a spend: Gate ASSEMBLY_paid requires zero billable nodes. Gate CANON
-    # lives in the builders that author a generation, not in a frames->VIDEO pack.
+    # ⚠ **Not a PARTNER-CREDIT spend, which is narrower than "not a spend"** (wave 22,
+    # F-27f76c43, second half). This comment used to read "Not a spend: Gate ASSEMBLY_paid
+    # requires zero billable nodes." MEASURED by calling
+    # `armature_core.assembly.gate_no_paid_nodes` on this assembler's own class set, the
+    # verdict it returns is: "3 node(s) across 3 class(es), all named by the allowlist, all
+    # 3 carrying a receipt whose recorded api_node value READS False (oldest reading 23
+    # day(s) old, all within the 90-day window), none reading as a partner class; 0 of 3
+    # class(es) are known to the licence map (so the licence clause ruled on nothing here)".
+    # That is a proof about PARTNER-CREDIT nodes. Ordinary Comfy Cloud workflow compute is
+    # outside everything it measures. So: **no partner-credit node (allowlist-enforced);
+    # ordinary Comfy Cloud compute still bills.** The record itself was already honest — it
+    # carries the verdict verbatim under `gates.ASSEMBLY_paid`; this comment was the half
+    # that claimed more than the gate proves. Gate CANON lives in the builders that author a
+    # generation, not in a frames->VIDEO pack; the subject rides the record instead (below).
     #
     # `os.makedirs` used to sit HERE, above --uploads being read and above every gate
     # below. A refused build therefore left an empty run directory beside real ones, to be
     # read later as a run that happened. It now sits below the last in-tool gate, matching
     # the invariant build_payload.py states for Gate CANON.
+
+    # ---- wave 22, F-27f76c43. MEASURED on `e8263a3` by grep over `tools/`: the key
+    # "subject" occurred in NONE of the nine builder records. The seven SPEND builders
+    # nonetheless carry the subject through `gate_CANON` — `canon_spend`'s evidence, and
+    # `armature_core.canon` refuses outright with clause `missing_subject` when no subject
+    # is given (measured by calling `canon_spend(None, 'a prompt')`) — while this assembler
+    # and `build_cascade_payload` arm no Gate CANON at all, and their records carried only
+    # server-side upload names, `frame_order`, `frame_source_ids` and node contracts.
+    # Nothing in either record named the character whose frames were assembled, so the
+    # provenance chain from the CLIP back to a subject was broken at the assembly step —
+    # and the clip is the artefact a Director opens.
+    #
+    # `--subject` is OPTIONAL and its absence is a RECORDED FACT with its reason, per the
+    # coordinator's 2026-09-04 ruling under the Director's delegation: this chain has no
+    # generation to gate, so requiring a subject here would be a gate wearing a provenance
+    # field's clothes. A subject the census does not know IS refused, because a name the
+    # record asserts and nothing backs is the placeholder-shaped-like-evidence shape.
+    subject_block = subject_provenance(a.subject)
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
@@ -685,6 +776,8 @@ def build_and_write(argv=None):
 
     record = {
         "tool": "build_assembly_payload", "tool_version": TOOL_VERSION,
+        # whose frames these are — or an explicit null with its reason (wave 22, F-27f76c43)
+        "subject": subject_block,
         "chain": "LoadImage x N -> BatchImagesNode -> CreateVideo -> SaveVideo",
         "n_frames": len(names), "fps": float(a.fps),
         "resolution": [WIDTH, HEIGHT],

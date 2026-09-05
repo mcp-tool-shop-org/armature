@@ -1118,6 +1118,17 @@ def main(argv=None):
     # KeyError was the only thing between a wrapped file and a SAVED_ADMISSION_OK over a
     # graph nothing examined. `round_trip`'s indexing stays strict below this line.
     #
+    # ⚠ DATED NOTE, 2026-09-05 (wave 22, F-c222d9ba). The verdict string quoted above is a
+    # RECORD of what was seen on 2026-09-04 and is no longer what `verify` returns; the
+    # licence clause now states three numbers and the seed clause says what it checked.
+    # The measurement is kept rather than edited away — it is what was measured then, and
+    # it is what makes the boundary clause load-bearing — but a session re-deriving the
+    # receipt's contract from this prose would read the pre-wave-12 string. RE-MEASURED on
+    # `e8263a3`, the CURRENT shape is:
+    #   "0 of 0 component(s) classified, 0 unclassified, 0 conditional (credited), 0 attribution entries matching no loaded component, no sampler (asserted and checked), so no seed to pin, 1 of 1 latent(s) checkable, 2 frame(s) checked and generator-legal"
+    # The same note rides `build_lora_arm_payload`'s copy of the same stale quote, in the
+    # same commit. `route_gates.py`'s three are OUT OF DOMAIN (core-gates) and posted.
+    #
     # Wave 8, F-4c5f67de: the block is `_as_saved_graph` now — ONE implementation, shared
     # with `round_trip` and `link_round_trip`, which used to read `saved_graph["nodes"]`
     # directly and disagree with the loader about the same file.

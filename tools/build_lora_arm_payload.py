@@ -555,6 +555,23 @@ def gate_base_licence(graph, path=None):
     `RULED_COMPONENTS['dwpose']` carries verdict BANNED. That is a BANNED-tier preprocessor
     riding a paid submission past every gate, against the repo's hardest non-negotiable.
 
+    ⚠ **DATED NOTE, 2026-09-05 (wave 22, F-c222d9ba). The quoted verdict string above is a
+    RECORD of what was seen on 2026-09-04 and is no longer what `verify` returns.** The
+    licence clause was rewritten in wave 12 to state three numbers rather than one, and the
+    seed clause to say what it checked. The measurement is not edited away — it is what was
+    measured then, and it is why this gate exists — but a session re-deriving the receipt's
+    contract from this prose would read the pre-wave-12 string. RE-MEASURED on `e8263a3` by
+    calling `RG.verify({'5': EmptyHunyuanLatentVideo 832x480x81}, frame=(832,480,81),
+    carries_no_sampler=True)`, the CURRENT shape is:
+
+        "0 of 0 component(s) classified, 0 unclassified, 0 conditional (credited), 0 attribution entries matching no loaded component, no sampler (asserted and checked), so no seed to pin, 1 of 1 latent(s) checkable, 2 frame(s) checked and generator-legal"
+
+    No reader in this domain KEYS on the old phrase — grep for "weight file(s)" over
+    `tools/` returns this comment, one in `gate_saved_graph.py` (given the same note in the
+    same commit) and three inside core-gates' own `route_gates.py` (OUT OF DOMAIN; posted).
+    So the consequence was confined to a reader, which is why this is a note and not a
+    rewrite.
+
     **The census is core-gates' and is CALLED, never re-implemented here.**
     `route_gates.ruled_node_classes(graph)` reads node `class_type` against
     `RULED_COMPONENTS` through `RULED_COMPONENT_CLASSES` (a licence row's class aliases —
@@ -807,8 +824,42 @@ def main(argv=None):
     # change rather than crashing on the older one.
     attribution = conditional_attribution(built)
     verify_kwargs = {"frame": (1024, 576, 81)}
+    # ---- ANDON, wave 22 (F-83829789). Two compatibility shims guard against a
+    # `route_gates` that predates the CONDITIONAL tier, and only ONE of them refused.
+    # `conditional_attribution` (twelve lines up in this file) does it correctly: when the
+    # two readers are absent it checks whether the licence table still rules any row
+    # CONDITIONAL and raises `conditional_tier_without_its_readers` if so — "an unknown
+    # answer here is a refusal, not an empty list". Nine lines from the spend, this shim
+    # did the OPPOSITE: a `verify` whose signature does not advertise `attribution` caused
+    # the computed credit list to be DROPPED with no clause, no evidence and no line in
+    # the record.
+    #
+    # HONEST BOUND, measured on the merged tree: `attribution` IS in `verify`'s signature
+    # and `RULED_COMPONENTS` carries one CONDITIONAL row (`technically_color`), so both
+    # false branches are unreachable today and the failure would be closed anyway (`verify`
+    # then raises `uncredited_conditional_component` on arm T). What is filed, and fixed
+    # here, is the ASYMMETRY: a shim that decides a licence-adjacent fact by introspection,
+    # in the file that AUTHORS the spend, refuses when its premise fails — exactly as its
+    # sibling twelve lines up does. `inspect.signature` is also defeated by any
+    # `*args, **kwargs` wrapper, which is a second way for the premise to be wrong.
     if "attribution" in inspect.signature(route_gates.verify).parameters:
         verify_kwargs["attribution"] = attribution
+    elif attribution:
+        raise route_gates.RouteGate(
+            f"this build computed {len(attribution)} attribution entry(s) from the licence "
+            f"table — {[e.get('component') for e in attribution if isinstance(e, dict)]} — "
+            f"and `route_gates.verify`'s signature does not advertise an `attribution` "
+            f"parameter, so the credit that PAYS a CONDITIONAL licence row would be dropped "
+            f"on the way to the gate that checks it. A shim that cannot pass a "
+            f"licence-adjacent fact refuses, as `conditional_attribution` refuses when its "
+            f"own readers are absent; it does not proceed with the fact deleted. "
+            f"(`inspect.signature` is also defeated by a `*args, **kwargs` wrapper, so a "
+            f"False here is not proof the parameter is unsupported.)",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "attribution_cannot_reach_the_gate_that_checks_it",
+             "attribution": attribution,
+             "verify_parameters": sorted(
+                 inspect.signature(route_gates.verify).parameters)})
     route = route_gates.verify(built, **verify_kwargs)
     disclosure_block = disclosure(args.arm, attribution, route)
 
