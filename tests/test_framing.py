@@ -273,3 +273,101 @@ def test_the_unreachable_composition_refusal_carries_the_range_it_searched():
     ev = exc.value.evidence
     assert ev["gate"] is None and ev["andon"] == "FramingError"
     assert ev["wanted"] == 5.0 and ev["value_range"] == [0.0, 1.0]
+
+
+# ---------------- wave 22, F-c6124fe0: the SOLVER half of the composition-fraction bound
+#
+# The only clause in this module that could refuse a composition was `_bisect`'s bracket
+# test, `if (flo - want) * (fhi - want) > 0`, and a non-finite `want` makes it False; the
+# loop's `(f(lo) - want) * (f(mid) - want) <= 0` is False for the same reason, so the search
+# walked to its own bound and returned it.
+#
+# MEASURED on `e8263a3` on an eight-point body cloud at 832x480, lens 50 / sensor 36: the
+# legal call returns radius 5.566204 with `achieved.union_height_frac` 0.8; `height_frac=nan`
+# RETURNED radius 40.0 — the `radius_bounds` ceiling — with `union_height_frac` 0.106,
+# `in_frame: True` and `requested.height_frac: nan`; `end_x_frac=nan` RETURNED with
+# `achieved.end_centre_x = -1.0042`, the subject a full frame-width off the left edge, and no
+# refusal; `target_y_frac=nan` RETURNED with `achieved.union_y [2.223, 3.023]`, the union
+# entirely below the frame. `_bisect(lambda t: t, 0.0, 1.0, nan)` returns 1.0.
+#
+# This is the SOLVER half of closed F-f0c261c1, whose own measurement was taken on this
+# function and whose fix went to one tool's parser (`render_start_frame.require_shot_fraction`).
+# `end_x_frac` and `target_y_frac` are bounded at NO parser in the tree — measured by grep,
+# only `--height-frac` exists as a flag — so an importer or a new tool exposing a composition
+# fraction gets the whole escape. The clause words below are the parser's own
+# (`not_a_finite_positive_fraction`), so one grep finds the flag and the solver.
+
+_C8 = [(0.0, 0.0, -0.5), (0.0, 0.0, 0.5), (0.15, 0.0, 0.0), (-0.15, 0.0, 0.0),
+       (0.0, 0.15, 0.0), (0.0, -0.15, 0.0), (0.1, 0.1, 0.2), (-0.1, -0.1, -0.2)]
+
+
+def test_the_solver_still_returns_on_a_reachable_composition():
+    """The control: the arm can still do nothing wrong."""
+    sol = framing.solve_camera(_C8, _C8, 205.0, 6.0, LENS, SENSOR, W, H,
+                               height_frac=0.8, end_x_frac=0.5)
+    assert sol["achieved"]["union_height_frac"] == pytest.approx(0.8, abs=1e-3)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("field", ["height_frac", "end_x_frac", "target_y_frac"])
+def test_a_non_finite_composition_fraction_refuses_rather_than_returning_a_record(
+        field, bad):
+    kw = {"height_frac": 0.8, "end_x_frac": 0.5, "target_y_frac": 0.52}
+    kw[field] = bad
+    with pytest.raises(framing.FramingError) as exc:
+        framing.solve_camera(_C8, _C8, 205.0, 6.0, LENS, SENSOR, W, H, **kw)
+    ev = exc.value.evidence
+    assert ev["flag"] == field
+    assert ev["who"] == "framing.solve_camera"
+    assert ev["clause"] in ("not_a_finite_positive_fraction", "not_a_finite_fraction")
+
+
+def test_the_height_fraction_keeps_the_parsers_clause_word_so_one_grep_finds_both():
+    """SEAM 5's rule from wave 18: the andon goes inside the function performing the step
+    AND the flag is bounded at the parser — complementary, not redundant — but they say the
+    same word, so a halt reader keys one triage on both."""
+    with pytest.raises(framing.FramingError) as exc:
+        framing.solve_camera(_C8, _C8, 205.0, 6.0, LENS, SENSOR, W, H,
+                             height_frac=float("nan"), end_x_frac=0.5)
+    assert exc.value.evidence["clause"] == "not_a_finite_positive_fraction"
+
+
+@pytest.mark.parametrize("bad", [0.0, -0.5])
+def test_a_non_positive_height_fraction_refuses_by_the_same_clause(bad):
+    """`0.0` and `-0.5` raised before — by ACCIDENT, through the reachability clause, whose
+    message names a bracket rather than the operand. They now name the operand."""
+    with pytest.raises(framing.FramingError) as exc:
+        framing.solve_camera(_C8, _C8, 205.0, 6.0, LENS, SENSOR, W, H,
+                             height_frac=bad, end_x_frac=0.5)
+    assert exc.value.evidence["clause"] == "not_a_finite_positive_fraction"
+
+
+@pytest.mark.parametrize("bounds", [
+    (float("nan"), 40.0), (0.5, float("nan")), (0.0, 40.0), (-1.0, 40.0), (40.0, 0.5),
+])
+def test_the_radius_bounds_are_bounded_too_since_the_solver_returns_one_of_them(bounds):
+    """The value a non-finite request came back as, in the measurement above, IS a radius
+    bound. A search whose own bracket is not two finite positive numbers cannot refuse
+    anything."""
+    with pytest.raises(framing.FramingError) as exc:
+        framing.solve_camera(_C8, _C8, 205.0, 6.0, LENS, SENSOR, W, H,
+                             height_frac=0.8, end_x_frac=0.5, radius_bounds=bounds)
+    assert exc.value.evidence["clause"] in ("radius_bounds_not_finite_and_positive",
+                                            "radius_bounds_not_an_interval")
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_bisect_refuses_a_non_finite_target_which_is_the_clause_that_could_not_fire(bad):
+    """The bound in the function performing the step, for the importer that never goes
+    through `solve_camera`. `_bisect(lambda t: t, 0.0, 1.0, nan)` returned 1.0."""
+    with pytest.raises(framing.FramingError) as exc:
+        framing._bisect(lambda t: t, 0.0, 1.0, bad)
+    assert exc.value.evidence["clause"] == "bisect_target_not_finite"
+
+
+def test_bisect_still_refuses_an_unreachable_bracket_and_still_solves_a_reachable_one():
+    """Both directions, so the new clause has not replaced the old one."""
+    assert framing._bisect(lambda t: t, 0.0, 1.0, 0.25) == pytest.approx(0.25)
+    with pytest.raises(framing.FramingError,
+                       match=r"the requested framing is not reachable"):
+        framing._bisect(lambda t: t, 0.0, 1.0, 5.0)

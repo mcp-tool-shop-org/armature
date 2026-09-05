@@ -311,6 +311,15 @@ def _refusal_aapose_confidence():
     aapose.draw_frame(256, 256, body, draw_hands=False)
 
 
+def _refusal_solve_camera():
+    """Driven through `render_start_frame.py`, whose plate conditions a paid I2V
+    submission. The clause word is that tool's parser's, so one grep finds both."""
+    from armature_core import framing
+    cloud = [(0.0, 0.0, -0.5), (0.0, 0.0, 0.5), (0.15, 0.0, 0.0), (-0.15, 0.0, 0.0)]
+    framing.solve_camera(cloud, cloud, 270, 8, 50.0, 36.0, 832, 480,
+                         height_frac=0.8, end_x_frac=float("nan"))
+
+
 HALT_ROWS = [
     # (finding, tool, sentinel, raiser, error class name, evidence key that must be there)
     ("F-cfb560aa", "rig_parts.py", "RIG_PARTS_HALT", _refusal_gate_d,
@@ -322,6 +331,8 @@ HALT_ROWS = [
      "NormalError", "n_non_finite"),
     ("F-6bdd660a", "render_pose_sticks.py", "RENDER_STICKS_HALT",
      _refusal_aapose_confidence, "ConventionError", "indices"),
+    ("F-c6124fe0", "render_start_frame.py", "RENDER_START_FRAME_HALT",
+     _refusal_solve_camera, "FramingError", "end_x_frac"),
 ]
 
 

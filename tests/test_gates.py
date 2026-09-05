@@ -1159,8 +1159,13 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # merge. The two are `channels.require_readable_normals`' clauses
     # (`non_finite_geometry_normal`, `zero_length_geometry_normal`), the normal half of the
     # non-finite census wave 18 landed on the depth half only (F-4efe0fad).
-    assert total == 348, (
-        f"{total} family raises in armature_core; this pin asserts 348, RE-DERIVED on the "
+    # And 348 -> 353 in the same wave, RE-DERIVED with `==` after each step: +5 in
+    # `framing` (F-c6124fe0) — `_bisect`'s `bisect_target_not_finite`, `solve_camera`'s
+    # `height_frac` clause, its `end_x_frac`/`target_y_frac` clause, and the two
+    # `radius_bounds` clauses. The SOLVER half of F-f0c261c1, whose fix went to one tool's
+    # parser while `end_x_frac` and `target_y_frac` were bounded at no parser in the tree.
+    assert total == 353, (
+        f"{total} family raises in armature_core; this pin asserts 353, RE-DERIVED on the "
         f"wave-22 core-solvers branch. This is the denominator every ratio below is quoted against — "
         f"re-measure it deliberately")
 

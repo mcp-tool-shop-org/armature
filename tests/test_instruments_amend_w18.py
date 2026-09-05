@@ -94,19 +94,32 @@ def _fn(filename, name):
 # form — each one is exactly what a user got on `6b984dd`.
 
 
-def test_a_nan_height_frac_returns_a_camera_and_a_passing_gate_whole():
-    """F-f0c261c1's operand, at the level below the flag. Nothing here is fixed by this
-    wave: `framing.solve_camera` is core-solvers' file. This pins WHAT the bound stands in
-    front of — a solve that returns the bisection ceiling and a Gate WHOLE that certifies
-    it."""
-    sol = framing.solve_camera(CLOUD, CLOUD, 270, 8, 50.0, 36.0, 832, 480,
-                               height_frac=float("nan"), end_x_frac=0.5)
-    assert sol["radius"] == 40.0, sol
-    extent = SF.silhouette_extent(CLOUD, tuple(sol["target"]), float(sol["radius"]),
-                                  270, 8, 50.0, 36.0, 832, 480)
-    whole = SF.gate_whole(extent, 832, 480, 24)
-    assert "whole silhouette in frame" in json.dumps(whole), whole
-    assert whole["height_frac"] < 0.2, whole
+def test_a_nan_height_frac_is_now_refused_by_the_solver_this_bound_stood_in_front_of():
+    """F-f0c261c1's operand, at the level below the flag — and the day the level below
+    closed.
+
+    **This fixture used to assert the DEFECT and now asserts its refusal.** Until wave 22 it
+    read `sol["radius"] == 40.0` and went on to show `SF.gate_whole` certifying the result:
+    "This pins WHAT the bound stands in front of — a solve that returns the bisection
+    ceiling and a Gate WHOLE that certifies it", written when `framing.solve_camera` was
+    another domain's file and its half of F-f0c261c1 could not be closed from here. Wave 22
+    closed it (F-c6124fe0, core-solvers): the SOLVER now refuses a non-finite composition
+    fraction under the same clause word this tool's parser uses, so the operand no longer
+    reaches a returned record and there is nothing left for Gate WHOLE to certify.
+
+    The measurement that used to live here is not deleted, it is recorded: on `6b984dd` and
+    still on `e8263a3`, this call RETURNED `radius=40.0` — the `radius_bounds` ceiling —
+    over a subject filling 0.106 of the frame, with `in_frame: True`, and Gate WHOLE read
+    "whole silhouette in frame; smallest margin 206.1 px" over it.
+
+    The parser's bound above is unaffected and still stands: complementary, not redundant.
+    """
+    with pytest.raises(framing.FramingError) as exc:
+        framing.solve_camera(CLOUD, CLOUD, 270, 8, 50.0, 36.0, 832, 480,
+                             height_frac=float("nan"), end_x_frac=0.5)
+    assert exc.value.evidence["clause"] == "not_a_finite_positive_fraction"
+    assert exc.value.evidence["flag"] == "height_frac"
+    assert exc.value.evidence["who"] == "framing.solve_camera"
 
 
 @pytest.mark.parametrize("hf", [0.0, -0.5, float("inf")])
