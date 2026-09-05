@@ -240,9 +240,49 @@ def summarise(v):
             "p90": float(np.percentile(a, 90)), "max": float(a.max()), "min": float(a.min())}
 
 
+def gate_detector_rate(fps):
+    """ANDON — the source clip's rate, which the detector's timestamp axis divides by.
+
+    Wave 22, F-afa9c41e's SIBLING half. `--fps` is `type=int, default=16` with no bound and
+    it is read at `detect_for_video(image, int(round(i * 1000.0 / fps)))` — MediaPipe's
+    monotonic video-mode timestamp. Measured on `e8263a3`: `--fps=0` reaches that line and
+    raises a bare `ZeroDivisionError` naming neither the flag nor the value, and `--fps=-16`
+    hands the landmarker a DECREASING timestamp axis, which is not a rate error the detector
+    reports — it is a tracking axis running backwards, recorded in the output as
+    `"fps": a.fps` with no gate having read it.
+
+    This flag is the ELEVENTH and last of the `--*fps*` flags across this domain's 42 owned
+    modules, and it was the one this domain could not close alone. Its
+    `lift_solve.round_trip_report` call sits INSIDE `main` (its twin `measure_lift`'s sits
+    above `main`, which is why that one closed first), and that call site was cited three
+    times as a LINE NUMBER in `tools/armature_core/lift_solve.py` — core-solvers' file.
+    Measured on this branch: adding this bound moved the call from `:275` to `:309` and
+    turned `test_lift_solve.py::test_the_two_docstrings_name_the_call_sites_the_tree_actually_has`
+    red, so it was reverted and posted as wave-22 SEAM 7. core-solvers took SEAM 8 and
+    re-anchored all three citations on the SYMBOL (`lift_clip.py::main`), rewriting that
+    test's derivation to resolve the enclosing FUNCTION — which removes the blocker
+    exactly, because a bound added inside `main` no longer moves an anchor that is not a
+    line. It is the same lesson as this domain's own F-405baf98, one file over.
+    """
+    if fps <= 0:
+        raise DetectionGate(
+            f"--fps={fps} is not a rate; the detector is driven in VIDEO mode, whose "
+            f"per-frame timestamp is round(i * 1000 / --fps) ms, so a rate that is zero "
+            f"divides by zero and a negative one hands the landmarker a timestamp axis "
+            f"that runs backwards",
+            {"gate": "ARGS", "andon": "DetectionGate",
+             "clause": "source_rate_not_positive", "flag": "--fps", "value": fps,
+             "minimum_exclusive": 0})
+    return fps
+
+
 def main():
     started = time.time()
     a = parse_args()
+
+    # ---- ANDON, before a single frame is opened: the detector's timestamp axis
+    #      divides by this rate. See `gate_detector_rate` above.
+    gate_detector_rate(a.fps)
     out = os.path.abspath(a.out)
 
     rest, man = read_rest(a.manifest)

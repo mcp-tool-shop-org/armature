@@ -165,6 +165,7 @@ def _rate_refusals():
     fires after the write ordering has already been decided).
     """
     import encode_control as EC
+    import lift_clip as LC
     import make_ab_clip as AB
     import make_review_clip as MRC
     import measure_cascade_clip as MCC
@@ -176,6 +177,7 @@ def _rate_refusals():
     return [
         ("encode_control", "--fps",
          lambda: EC.main(["--frames=nope", "--out=nope.mkv", "--fps=0"])),
+        ("lift_clip", "--fps", lambda: LC.gate_detector_rate(0)),
         ("make_ab_clip", "--a-fps",
          lambda: AB.main(["--a=nope", "--b=nope", "--out=x.webp",
                           "--a-fps=0", "--b-fps=16"])),
@@ -206,15 +208,16 @@ def test_the_eleven_rate_flags_in_this_domain_are_all_bounded():
     once while writing this file.
 
     Four of the eleven were bounded in waves 16 and 18 (`make_review_clip` x2,
-    `pack_pose_pack`, `resample_motion`); six more were open on `e8263a3` and are closed
-    together here, because a fix whose red proof runs only on the member the finding
-    happened to name is the shape that rule ends. The ELEVENTH — `lift_clip --fps` — is
-    blocked outside this domain and carries its own measured test below.
+    `pack_pose_pack`, `resample_motion`); the other SEVEN were open on `e8263a3` and are
+    closed together here, because a fix whose red proof runs only on the member the finding
+    happened to name is the shape that rule ends. The eleventh, `lift_clip --fps`, was
+    blocked on three line citations in another domain's file until core-solvers re-anchored
+    them on the symbol — the test below carries that measurement.
     """
     from armature_core.errors import ArmatureError
 
     rows = _rate_refusals()
-    assert len(rows) == 10, rows
+    assert len(rows) == 11, rows
     for module, flag, call in rows:
         with pytest.raises(ArmatureError) as exc:
             call()
@@ -227,11 +230,13 @@ def test_the_eleven_rate_flags_in_this_domain_are_all_bounded():
 def test_no_accepted_rate_reaches_a_tool_through_a_flag_no_gate_read():
     """The falsifiability half: each of the eleven ACCEPTS its ordinary value, so the
     census above is not passing because everything refuses."""
+    import lift_clip as LC
     import make_ab_clip as AB
     import measure_cascade_clip as MCC
     import measure_lift as ML
     import project_pose_keypoints as PPK
 
+    assert LC.gate_detector_rate(16) == 16
     assert ML.gate_detector_rate(16) == 16
     assert PPK.gate_authoring_rate(16) == 16
     assert AB.require_rate("--a-fps", 16.0) == 16.0
@@ -632,50 +637,53 @@ def test_the_control_video_receipt_identifies_the_encoder_that_produced_it(tmp_p
     assert on_disk["ffmpeg"] == EC.FFMPEG
 
 
-def test_the_eleventh_rate_flag_is_blocked_on_another_domains_file():
-    """`lift_clip --fps` is the one member of the eleven this domain cannot close alone,
-    and the block is MEASURED here rather than asserted away.
+def test_the_eleventh_rate_flag_is_bounded_now_that_its_blocker_is_a_symbol():
+    """RETIRED AND REPLACED, in the commit that lands the bound this test used to pin OPEN.
 
-    `lift_clip --fps` is `type=int, default=16` and is read at
-    `detect_for_video(image, int(round(i * 1000.0 / fps)))`, exactly as its sibling
-    `measure_lift --fps` is — and `measure_lift` is bounded in this wave. The difference is
-    where each file's `round_trip_report` call sits. In `measure_lift` it is at `:481`,
-    ABOVE `def main()`, so an andon added to `main` does not move it. In `lift_clip` it is
-    at `:275`, INSIDE `main`, so ANY bound placed above the detector run moves it — measured
-    on this branch: adding the andon moved the call to `:309`.
+    `lift_clip --fps` was the one member of the eleven this domain could not close alone.
+    It is character-identical to `measure_lift --fps` — both `type=int, default=16`, both
+    read at `detect_for_video(image, int(round(i * 1000.0 / fps)))` — and the difference was
+    never in the code. In `measure_lift` the `round_trip_report` call sits at `:481`, ABOVE
+    `def main()`, so an andon added to `main` does not move it. In `lift_clip` it sits INSIDE
+    `main`, so ANY bound above the detector run moved it: measured on this branch, `:275` ->
+    `:309`. That anchor was cited three times as a LINE NUMBER in
+    `tools/armature_core/lift_solve.py` — core-solvers' file — and
+    `test_lift_solve.py::test_the_two_docstrings_name_the_call_sites_the_tree_actually_has`
+    asserted the docstrings named exactly the anchors an AST walk found, so the bound was
+    reverted and the block posted as wave-22 SEAM 7.
 
-    That anchor is cited three times as a LINE NUMBER in
-    `tools/armature_core/lift_solve.py` (`:626`, `:632`, `:703`), which is core-solvers'
-    file in the frozen domain map, and
-    `tests/test_lift_solve.py::test_the_two_docstrings_name_the_call_sites_the_tree_actually_has`
-    asserts the docstrings name exactly the anchors the AST walk finds. Re-deriving the
-    tests-side pin is this domain's to do; editing the three prose citations is not. So the
-    bound is HELD and the block is posted to the wave-22 inbox — and this test pins the two
-    facts a later session needs: the flag is still unbounded, and the reason is the line
-    citation, not the code.
+    core-solvers took SEAM 8 and re-anchored all three on the SYMBOL (`lift_clip.py::main`),
+    rewriting that test's derivation to resolve the enclosing FUNCTION. A bound inside `main`
+    cannot move an anchor that is not a line, so the blocker is gone and the bound lands.
+    That is this repo's own F-405baf98 in another file, and it is why the fix for these
+    citations is the symbol rather than a re-derived number.
 
-    It is also this repo's own F-405baf98 in another file: a citation by line number does
-    not survive an edit above it, where a citation by symbol does.
+    The old test asserted the flag was still UNBOUNDED and that the three citations still
+    read `lift_clip.py:275`, so that it would go red on the day either changed. Both changed;
+    it went red; this is the re-derivation.
     """
-    import ast
-
     import lift_clip as LC
+    import measure_lift as ML
 
-    src = open(os.path.join(TOOLS, "lift_clip.py"), encoding="utf-8").read()
-    assert 'ap.add_argument("--fps", type=int, default=16)' in src, (
-        "the flag's spelling changed; re-measure the block before trusting this test")
-    assert not hasattr(LC, "gate_detector_rate"), (
-        "lift_clip is bounded now — close this test and the inbox block with it")
+    assert hasattr(LC, "gate_detector_rate"), "the eleventh flag is unbounded again"
+    for mod in (LC, ML):
+        for bad in (0, -16):
+            with pytest.raises(Exception) as exc:
+                mod.gate_detector_rate(bad)
+            ev = exc.value.evidence
+            assert ev["clause"] == "source_rate_not_positive", (mod.__name__, ev)
+            assert ev["flag"] == "--fps" and ev["value"] == bad, (mod.__name__, ev)
+        assert mod.gate_detector_rate(16) == 16
 
-    sites = [n.lineno for n in ast.walk(ast.parse(src))
-             if isinstance(n, ast.Call)
-             and (getattr(n.func, "attr", None) or getattr(n.func, "id", None))
-             == "round_trip_report"]
-    assert sites == [275], sites
+    # The blocker is gone when the CITATION is a symbol, not when the string `:275` has
+    # been scrubbed: this repo corrects in place and keeps the measurement that overturned
+    # a claim, so `lift_solve.py`'s own correction paragraph still narrates the old anchor.
+    # What must be true is that the LIVE citation resolves to a symbol.
     solver = open(os.path.join(TOOLS, "armature_core", "lift_solve.py"),
                   encoding="utf-8").read()
-    assert solver.count("lift_clip.py:275") == 3, (
-        "the three line citations that block this bound have moved; re-measure")
+    assert "lift_clip.py::main" in solver, (
+        "the live citation is not a symbol; re-measure the block before trusting this bound")
+
 
 
 # ===========================================================================

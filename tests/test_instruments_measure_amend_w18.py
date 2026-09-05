@@ -424,43 +424,45 @@ def test_neither_andon_is_an_assert_or_carries_a_skip_flag():
 
 
 def test_the_two_copies_of_the_name_check_are_one_rule_with_one_word():
-    """One family, one clause word, two spellings — and the LOGIC must not drift.
+    """RE-DERIVED WAVE 22 (SEAM 1): there are no longer two copies, and that is the fix.
 
-    `armature_core` is the single home this helper belongs in and is another domain's tree
-    in the frozen map, so it lives beside its callers the way `parts.require_finite` does.
-    That is only defensible while the two are the same rule, so this compares the executable
-    source with every string constant blanked: the predicate, the evidence dict's keys and
-    the control flow must match exactly.
+    What this test asserted until now was that the two byte-identical spellings of
+    `single_path_segment` — one in `pack_pose_pack`, one in `resample_motion` — had not
+    DRIFTED: it compared their executable source with every string constant blanked, because
+    the single home for the helper is `armature_core`, which was another domain's tree in
+    the frozen map, so "the helper lives beside its callers the way `parts.require_finite`
+    does" was the best available answer and the drift check was its price.
 
-    The MESSAGES deliberately differ — one says the pack lands away from the manifest that
-    certifies it, the other says the record lands away from the sentinel line and sha256
-    that describe it — because a refusal's job is to tell THIS operator what THIS tool was
-    about to do. A comparison that demanded identical prose would be pressure to make both
-    messages vaguer, which is the opposite of the point.
+    Wave 22's SEAM 1 removed the reason: core-solvers put the helper in
+    `armature_core.parts` with the same signature, the same argument order, the same clause
+    word and the same evidence keys, and this domain DELETED both copies and imports it.
+    Two spellings that cannot drift because there is only one is a stronger property than
+    two spellings measured not to have drifted, so this test now asserts the stronger one —
+    and keeps the clause-word fingerprint, which is what a census reads the family by.
+
+    The MESSAGES the two tools produce are now one message, which is the visible cost of
+    the merge: it says the artifact lands away from the manifest that certifies it, in the
+    general terms both callers share. The per-tool detail moved into the `extra` evidence
+    each call site passes (`tool`, `out`), which is machine-readable where the prose was not.
     """
     import ast
-    import inspect
 
-    class _Blank(ast.NodeTransformer):
-        def visit_Constant(self, node):
-            if isinstance(node.value, str):
-                return ast.copy_location(ast.Constant(value="<str>"), node)
-            return node
+    from armature_core import parts as PARTS
 
-    def logic(fn):
-        node = ast.parse(inspect.getsource(fn).strip()).body[0]
-        if (node.body and isinstance(node.body[0], ast.Expr)
-                and isinstance(node.body[0].value, ast.Constant)):
-            node.body = node.body[1:]
-        return ast.dump(ast.fix_missing_locations(_Blank().visit(node)))
+    # There is ONE definition, and it is not in either tool.
+    for mod in (PP, RM):
+        tree = ast.parse(open(mod.__file__, encoding="utf-8").read())
+        assert not [n for n in ast.walk(tree)
+                    if isinstance(n, ast.FunctionDef)
+                    and n.name == "single_path_segment"], (
+            f"{mod.__name__} spells the name check again; SEAM 1's home is "
+            f"armature_core.parts")
 
-    assert logic(PP.single_path_segment) == logic(RM.single_path_segment)
-
-    # The one string that MUST be identical is the clause word, and the evidence keys with
-    # it -- that is the fingerprint a census reads the family by.
-    for mod, cls in ((PP, PP.PosePackError), (RM, RM.ResampleArgError)):
+    # Both tools reach that one definition, and the clause word and evidence keys — the
+    # fingerprint a census reads the family by — are unchanged from wave 18.
+    for cls in (PP.PosePackError, RM.ResampleArgError):
         with pytest.raises(cls) as exc:
-            mod.single_path_segment("../x", "--name", cls)
+            PARTS.single_path_segment("../x", "--name", cls)
         assert exc.value.evidence == {"gate": "ARGS", "andon": cls.__name__,
                                       "clause": "output_name_is_not_a_name",
                                       "flag": "--name", "name": "../x"}
