@@ -251,11 +251,109 @@ def _as_api_graph(doc, path=None):
     return doc
 
 
+#: What a save-format node member must carry for THIS module to read it, and what each key
+#: is used for here. Written out rather than implied by the index that raises, because the
+#: refusal names the container it could not read, and a reader keyed on `container` has one
+#: question: did this comparison enter everything it reported on?
+SAVED_NODE_KEYS = {
+    "id": "the node id this comparison keys the saved file by",
+    "type": "the node class name compared against the api graph's `class_type`",
+}
+
+
+def _saved_nodes_by_id(saved_graph, where="the saved file"):
+    """`{str(id): node}` off a save-format graph, every member SHAPE-classified first.
+
+    Wave 22, F-defa6973. `round_trip` and `link_round_trip` each opened with
+    `{str(n["id"]): n for n in saved_graph["nodes"]}` and then read `s["type"]` and
+    `s.get("inputs")` bare, so the SAVE-format side of the last gate before a paid
+    submission had no member-shape clause anywhere: `_as_saved_graph` checks that
+    `doc["nodes"]` is a LIST and never a member of it. Measured on `e8263a3` on the
+    assembly fixture that otherwise prints `SAVED_ADMISSION_OK` at exit 0, one mutation at
+    a time:
+
+      * a node with no `id`        -> `KeyError: 'id'`, `"evidence": null`
+      * a node with no `type`      -> `KeyError: 'type'`, `"evidence": null`
+      * a non-dict member          -> `TypeError: string indices must be integers`
+      * `inputs` spelled as a dict -> `AttributeError: 'str' object has no attribute 'get'`
+        out of `link_round_trip`
+
+    All four surfaced as `SAVED_ADMISSION_HALT` with a stdlib exception name where a clause
+    belongs, at exit 1 -- the code this module's own `__main__` block reserves for "this
+    tool crashed" -- and all four left no out directory. The API side's fifth shape is
+    `_api_nodes` below.
+
+    The classification is core-gates' own, CALLED rather than re-implemented:
+    `route_gates._readable_node` refuses a non-dict member and a node whose own
+    `widgets_values` / `inputs` container is not a list, under the SHARED `unreadable_node`
+    clause with `container` and `expected` in the evidence (wave 20). What it does not
+    answer is the two keys THIS module indexes, so those get the same clause word here --
+    one question, one answer, whichever side of the comparison reads it.
+    """
+    nodes = saved_graph["nodes"]
+    out = {}
+    for index, n in enumerate(nodes):
+        RG._readable_node(where, n, index, len(nodes))
+        for key, why in SAVED_NODE_KEYS.items():
+            if key not in n:
+                raise SavedAdmission(
+                    f"{where}'s node at index {index} declares no `{key}`: it carries "
+                    f"{sorted(map(str, n))!r}. That key is {why}, and a member this "
+                    f"comparison cannot key is a member it would either skip or die "
+                    f"indexing, with a stdlib KeyError naming the key and nothing else -- "
+                    f"on the last gate before a paid submission",
+                    {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                     "clause": "unreadable_node", "container": key,
+                     "expected": why, "where": where, "index": index,
+                     "entry_keys": sorted(map(str, n)), "n_nodes": len(nodes)})
+        out[str(n["id"])] = n
+    return out
+
+
+def _api_nodes(api_graph, where="the api graph"):
+    """`{key: node}` for every top-level API entry that IS a node, `inputs` guaranteed.
+
+    Wave 22, F-defa6973, the API half. The wave-18 merge fix-up (`475f4eb`) classified
+    every top-level entry through `RG._api_entry_kind` before any class is read, which made
+    `node["class_type"]` safe -- and left the SECOND bare index in the same loop untouched.
+    Measured on `e8263a3` on the green assembly fixture with the `inputs` key deleted from
+    ONE api node: `SAVED_ADMISSION_HALT {"error": "KeyError", "message": "'inputs'",
+    "evidence": null}` at exit 1, no out directory.
+
+    `RG._readable_containers(..., api=True)` is core-gates' clause for an `inputs` that is
+    present and is not a mapping; an ABSENT `inputs` is this module's own read -- both
+    halves of this admission iterate it unconditionally -- and is refused here under the
+    same clause word.
+    """
+    nodes = {}
+    for key, value in api_graph.items():
+        if RG._api_entry_kind(key, value, api_graph) != "node":
+            continue
+        RG._readable_containers(where, value, api=True, node_id=str(key),
+                                population=len(api_graph))
+        if "inputs" not in value:
+            raise SavedAdmission(
+                f"{where}'s node {str(key)!r} ({value.get('class_type')!r}) declares no "
+                f"`inputs` mapping: it carries {sorted(map(str, value))!r}. Both halves of "
+                f"this admission iterate that container for every node, so a node without "
+                f"one raised a stdlib `KeyError: 'inputs'` at the exit code this module "
+                f"reserves for a crash, on the last gate before a paid submission",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "unreadable_node", "container": "inputs",
+                 "expected": "a mapping of API input name to literal-or-link",
+                 "where": where, "node_id": str(key),
+                 "class": value.get("class_type"),
+                 "entry_keys": sorted(map(str, value)),
+                 "n_nodes": len(api_graph)})
+        nodes[key] = value
+    return nodes
+
+
 def round_trip(api_graph, saved_graph):
     """Every pinned value we wrote, found again in the saved file. Raises on any mismatch."""
     api_graph = _as_api_graph(api_graph)
     saved_graph = _as_saved_graph(saved_graph)
-    saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
+    saved_by_id = _saved_nodes_by_id(saved_graph)
     # WAVE-18 MERGE (coordinator, 2026-09-05): classify every top-level entry by SHAPE through Gate ROUTE's own
     # `_api_entry_kind` BEFORE any class is read. Measured on the merged tree `64a9fd3` with the F-7eb1ba2a
     # operand (one node with its `class_type` deleted among readable ones): `_as_api_graph` passed, because the
@@ -264,8 +362,9 @@ def round_trip(api_graph, saved_graph):
     # ran. The refusal is Gate ROUTE's own (`unreadable_node`, the SHARED clause word, the node's key in its
     # evidence); envelope metadata (`version`, `extra_data`, …) is skipped here exactly as the walk skips it,
     # and is never counted as a node absent from the saved file.
-    nodes = {key: value for key, value in api_graph.items()
-             if RG._api_entry_kind(key, value, api_graph) == "node"}
+    # WAVE 22 (F-defa6973): the same loop's SECOND bare index, `node["inputs"]`, is answered
+    # by the same classification -- `_api_nodes` is that filter plus the container clause.
+    nodes = _api_nodes(api_graph)
     checked, problems = [], []
     for node_id, node in nodes.items():
         s = saved_by_id.get(str(node_id))
@@ -458,10 +557,14 @@ def link_round_trip(api_graph, saved_graph):
     """
     api_graph = _as_api_graph(api_graph)
     saved_graph = _as_saved_graph(saved_graph)
-    saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
+    # WAVE 22 (F-defa6973). Both members are SHAPE-classified before either is read: this
+    # function indexed `n["id"]` and `node["inputs"]` bare and reached `slot.get(...)` on
+    # whatever a node's `inputs` container held, so a mapping there died `AttributeError` --
+    # not an `ArmatureError`, so the halt contract's exit-2 branch was bypassed entirely.
+    saved_by_id = _saved_nodes_by_id(saved_graph)
     table = link_table(saved_graph)
     wired, empty, problems = [], [], []
-    for node_id, node in api_graph.items():
+    for node_id, node in _api_nodes(api_graph).items():
         s = saved_by_id.get(str(node_id))
         if s is None:
             continue                                  # `round_trip` already raised on this
