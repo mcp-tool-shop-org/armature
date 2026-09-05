@@ -73,6 +73,56 @@ DIAGNOSTIC_BONES = ("hips", "chest", "head",
 MIN_DST_FRAMES = 2
 
 
+def single_path_segment(value, flag, exc, extra=None):
+    """`value` if it names ONE path component, else raise `exc` naming the flag. · ANDON
+
+    A `--name` is a NAME, not a path. `os.path.join(out_dir, name + ".motion.json")` with
+    `name="../escaped"` writes OUTSIDE `--out` while the sentinel line reports success --
+    measured on the base tree (F-db1de39d) on a 4-frame motion record:
+    `--out=<base>/o/inner --name=../escaped --frames=6` printed `RESAMPLE_MOTION_OK` with
+    `"out": "<out>/inner/../escaped.motion.json"` (backslashes on Windows), returned 0,
+    and left the record at
+    `<base>/o/escaped.motion.json` while `<base>/o/inner`, which `os.makedirs` had just
+    created, stayed empty. `_sha256(path)` still hashed the file that was written, so the
+    receipt was correct about the bytes and wrong about the place.
+
+    The neighbouring spelling refuses by accident rather than by name: measured the same
+    way, `--name=a/b` died with an untyped `FileNotFoundError` whose halt record read
+    `"evidence": null`, so a run that was refused looked like a run that crashed.
+
+    `os.path.basename` alone is not the check: it is platform-dependent (on POSIX
+    `basename("a\b")` is the whole string) and it accepts `.` and `..` unchanged. Both
+    separators, the drive-relative spellings, the two dot names and an absent name are
+    refused explicitly, so the same call answers the same way on either platform. An
+    ABSENT `--name` is not a defect here and never reaches this function: `a.name or
+    (derived)` at the write site substitutes the derived stem, which is measured -- on the
+    base tree `--name=` (empty) wrote `motion.6.motion.json`, the default.
+
+    ⚠ **This is the second spelling of one rule, not a second rule.** `pack_pose_pack`
+    carries a character-identical copy under the same clause word
+    (`output_name_is_not_a_name`); the single home for it is `armature_core`, which is
+    another domain's tree in the frozen map, so the helper lives beside its callers the way
+    `parts.require_finite` does. The third instance in this domain -- `make_review_clip`'s
+    `--run`, which reaches `clip_name`'s `f"{run}_{stem}"` -- is a DEFERRED Stage B item
+    and is deliberately NOT fixed here.
+    """
+    text = "" if value is None else str(value)
+    sep = {"/", "\\"} | {c for c in (os.sep, os.altsep) if c}
+    if (not text.strip() or text in (".", "..") or os.path.isabs(text)
+            or any(c in text for c in sep) or os.path.basename(text) != text):
+        ev = {"gate": "ARGS", "andon": exc.__name__,
+              "clause": "output_name_is_not_a_name", "flag": flag, "name": text}
+        ev.update(extra or {})
+        raise exc(
+            f"{flag}={text!r} is not a name; it is pasted into the output path as one "
+            f"component of a filename, so a separator, an absolute path or a dot name "
+            f"writes the record somewhere other than the directory this tool was told to "
+            f"write into, while the sentinel line and the sha256 beside it describe a file "
+            f"that is not there",
+            ev)
+    return text
+
+
 class ResampleArgError(ArmatureError):
     """A flag this tool was given is not a value it can resample with.
 
@@ -157,6 +207,26 @@ def main(argv=None):
              "clause": ("source_rate_not_finite" if not math.isfinite(a.fps_src)
                         else "source_rate_not_positive"),
              "fps_src": a.fps_src, "minimum_exclusive": 0.0})
+
+    # ---- ANDON, the same block, the flag that names the OUTPUT (F-db1de39d, wave 18).
+    #      `--name` is pasted into `os.path.join(out_dir, name + ".motion.json")` below,
+    #      and it was checked for nothing. Third measured instance of one family in this
+    #      domain; `pack_pose_pack --name` is the second and is fixed in the same wave,
+    #      `make_review_clip --run` is the first and is a DEFERRED Stage B item. The
+    #      refusal sits HERE, above `os.makedirs` and above the record read, because a
+    #      refused run must leave no directory behind: that is the ordering rule the
+    #      `--frames` andon above was moved for (F-6a18f6d5).
+    #
+    #      The guard is TRUTHINESS, not `is not None`, because that is exactly the
+    #      population the paste happens for: the write site reads `a.name or (derived)`,
+    #      so a falsy `--name` never reaches the join. Measured on the base tree,
+    #      `--name=` (empty) wrote the derived `motion.6.motion.json`; refusing it here
+    #      would refuse an input this tool accepts today, and a bound belongs where the
+    #      value is READ.
+    if a.name:
+        single_path_segment(a.name, "--name", ResampleArgError,
+                            extra={"tool": "resample_motion",
+                                   "out": out_dir, "motion": a.motion})
 
     with open(a.motion, encoding="utf-8") as fh:
         src = json.load(fh)

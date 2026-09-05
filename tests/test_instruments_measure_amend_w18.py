@@ -1,6 +1,6 @@
 """Wave 18, instruments-measure: the two flags the UPLOADED pack is written from.
 
-Two findings, one family and one bound:
+Three findings, one family and one bound:
 
 * **F-6bb38028** — `pack_pose_pack --fps` divides in `write_pack` and in the manifest, and
   was unbounded. On the base tree `--fps=0` died with a bare `ZeroDivisionError` and
@@ -10,17 +10,19 @@ Two findings, one family and one bound:
   that it names one path component. `--name=../escaped` printed `PACK_POSE_PACK_OK` with
   `"gate_R": "identical"`, exited 0, and put the pack one directory ABOVE the manifest that
   certifies it.
+* **F-db1de39d** — `resample_motion --name`, the same paste, the same escape.
 
 **The rule this file is written to (wave-18 brief, rule 2): a fix's red proof runs against
 its SIBLINGS.** So the operand each finding named is proven red, and so is every neighbour
 of it in the same parser and the same family: both pack formats, both signs of the rate,
 both path separators on either platform, the two dot names, an absolute path, an empty
-name. The population these two tools sit in (every `--name`/`--out`/rate flag
+name — and the ONE spelling that must stay legal, `resample_motion --name=` falling back to
+its derived stem. The population these two tools sit in (every `--name`/`--out`/rate flag
 pasted into a path or divided by, across the domain's 42 instruments) is enumerated in the
-wave-18 seams inbox, SEAM 10; the rest, including `make_review_clip --run` and
-`make_ab_clip --a-fps/--b-fps`, are DEFERRED Stage B items and are deliberately untouched.
+wave-18 seams inbox, SEAM 10; three of it are fixed, `make_review_clip --run` and
+`make_ab_clip --a-fps/--b-fps` are DEFERRED Stage B items and are deliberately untouched.
 
-Everything here drives the tool the way a caller does — `main(argv)` in-process for the
+Everything here drives the tools the way a caller does — `main(argv)` in-process for the
 refusals, a real subprocess for the halt records — because the property under test is what
 lands on disk and what the operator reads, not what a function returns.
 """
@@ -37,6 +39,8 @@ from PIL import Image
 from conftest import REPO, TOOLS  # noqa: F401
 
 import pack_pose_pack as PP
+import resample_motion as RM
+from armature_core import sitelist
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +57,29 @@ def stick_frames(directory, n=4, width=64, height=48):
         a[:, 20 + i % 7] = (0, 85, 255)
         Image.fromarray(a, "RGB").save(os.path.join(directory, f"{i:05d}.png"))
     return directory
+
+
+def motion_record(path, n=4):
+    """A record that passes every gate above the write, so only the flag can refuse it.
+
+    Every registered bone carries a rotation, because `lift_solve.validate_motion_record`
+    refuses a frame that leaves one out — and a fixture that dies on THAT andon would prove
+    nothing about the flag this file is here for.
+    """
+    def rot(t):
+        import math
+        c, s = math.cos(t), math.sin(t)
+        return [[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]]
+
+    frames = [{"frame": i,
+               "local": {b: rot((i + k) * 0.01) for k, b in enumerate(sitelist.ALL_NAMES)},
+               "root": [0.0, 0.0, float(i) * 0.01]}
+              for i in range(n)]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump({"tool": "fixture", "tool_version": "w18", "frames": frames,
+                   "source": "fixture", "ema_alpha": None}, fh)
+    return path
 
 
 def tree_under(root):
@@ -220,6 +247,57 @@ def test_both_pack_andons_sit_above_the_makedirs_they_protect():
 # ===========================================================================
 
 
+def test_a_resample_name_that_escapes_out_refuses_and_writes_nothing(tmp_path):
+    """THE OPERAND the finding named.
+
+    On the base tree this call printed `RESAMPLE_MOTION_OK` with
+    `"out": "<out>/inner/../escaped.motion.json"`, returned 0, and left the record one
+    directory above the `--out` `os.makedirs` had just created and left empty. `_sha256`
+    still hashed the file that was written, so the receipt was right about the bytes and
+    wrong about the place.
+    """
+    motion = motion_record(str(tmp_path / "src" / "motion.json"))
+    root = tmp_path / "o"
+    with pytest.raises(RM.ResampleArgError) as exc:
+        RM.main([f"--motion={motion}", f"--out={root / 'inner'}", "--frames=6",
+                 "--name=../escaped"])
+    ev = exc.value.evidence
+    assert ev["clause"] == "output_name_is_not_a_name"
+    assert ev["gate"] == "ARGS" and ev["andon"] == "ResampleArgError"
+    assert ev["flag"] == "--name" and ev["name"] == "../escaped"
+    assert tree_under(str(root)) == []
+
+
+@pytest.mark.parametrize("name", [n for n in NOT_A_NAME if n.strip()])
+def test_every_sibling_spelling_refuses_in_resample_too(tmp_path, name):
+    """The same family answering with the same word in the second tool.
+
+    The empty and whitespace-only spellings are excluded HERE and only here, because the
+    write site reads `a.name or (derived)`: a falsy `--name` never reaches the join, and
+    the test below pins that it still resolves to the derived stem.
+    """
+    motion = motion_record(str(tmp_path / "src" / "motion.json"))
+    out = tmp_path / "o" / "inner"
+    with pytest.raises(RM.ResampleArgError) as exc:
+        RM.main([f"--motion={motion}", f"--out={out}", "--frames=6", f"--name={name}"])
+    assert exc.value.evidence["clause"] == "output_name_is_not_a_name"
+    assert tree_under(str(tmp_path / "o")) == []
+
+
+def test_an_absent_or_empty_resample_name_still_falls_back_to_the_derived_stem(tmp_path):
+    """The bound is drawn where the value is READ, so a falsy `--name` stays legal.
+
+    Measured on the base tree: `--name=` wrote `motion.6.motion.json`, the derived default.
+    Refusing it here would refuse an input this tool accepts, which is how a bound that was
+    supposed to catch an escape ends up catching a caller.
+    """
+    motion = motion_record(str(tmp_path / "src" / "motion.json"))
+    for argv_tail, out_name in ((["--name="], "o_empty"), ([], "o_absent")):
+        out = tmp_path / out_name
+        assert RM.main([f"--motion={motion}", f"--out={out}", "--frames=6"] + argv_tail) == 0
+        assert tree_under(str(out)) == ["motion.6.motion.json"]
+
+
 # ===========================================================================
 # The halt records, READ (wave-18 brief, rule 4)
 # ===========================================================================
@@ -228,6 +306,29 @@ def test_both_pack_andons_sit_above_the_makedirs_they_protect():
 def _run_tool(tool, argv, tmp_path):
     return subprocess.run([sys.executable, os.path.join(TOOLS, tool)] + argv,
                           capture_output=True, text=True, cwd=str(tmp_path))
+
+
+def test_the_resample_halt_record_names_the_class_the_clause_and_the_operand(tmp_path):
+    """Driven through `__main__`, and the printed record is READ, not assumed.
+
+    `resample_motion` has a halt printer, so the whole receipt reaches the operator. On the
+    base tree the neighbouring spelling `--name=a/b` printed
+    `{"error": "FileNotFoundError", ..., "evidence": null}` — a refused run that read as a
+    crash — which is the shape this assertion locks out.
+    """
+    motion = motion_record(str(tmp_path / "src" / "motion.json"))
+    proc = _run_tool("resample_motion.py",
+                     [f"--motion={motion}", f"--out={tmp_path / 'o'}", "--frames=6",
+                      "--name=a/b"], tmp_path)
+    line = [ln for ln in proc.stdout.splitlines() if ln.startswith("RESAMPLE_MOTION_HALT")]
+    assert len(line) == 1, proc.stdout
+    rec = json.loads(line[0][len("RESAMPLE_MOTION_HALT "):])
+    assert rec["error"] == "ResampleArgError"
+    assert rec["evidence"]["clause"] == "output_name_is_not_a_name"
+    assert rec["evidence"]["flag"] == "--name" and rec["evidence"]["name"] == "a/b"
+    assert set(rec["evidence"]) >= {"gate", "andon", "clause", "flag", "name", "tool", "out"}
+    assert proc.returncode == 2, "a deliberate refusal is exit 2 under this tool's handler"
+    assert tree_under(str(tmp_path / "o")) == []
 
 
 def test_the_pack_refusal_reaches_the_operator_and_records_what_it_cannot_say(tmp_path):
@@ -264,16 +365,17 @@ def test_the_pack_refusal_reaches_the_operator_and_records_what_it_cannot_say(tm
 # ===========================================================================
 
 
-def test_every_refusal_this_commit_adds_survives_python_optimize(tmp_path):
+def test_all_three_refusals_survive_python_optimize(tmp_path):
     """`PYTHONOPTIMIZE=1` in the ENVIRONMENT, because a child inherits that and not `-O`."""
     frames = stick_frames(str(tmp_path / "frames"))
+    motion = motion_record(str(tmp_path / "src" / "motion.json"))
     script = r"""
 import json, os, sys
 sys.path.insert(0, os.path.join(os.environ["ARMATURE_REPO"], "tools"))
 if __debug__:
     raise SystemExit("PYTHONOPTIMIZE did not reach this interpreter")
-import pack_pose_pack
-frames, out = sys.argv[1], sys.argv[2]
+import pack_pose_pack, resample_motion
+frames, motion, out = sys.argv[1], sys.argv[2], sys.argv[3]
 fired = []
 for argv, cls, tag in (
         ([f"--frames={frames}", f"--out={out}1", "--fps=0"],
@@ -285,16 +387,22 @@ for argv, cls, tag in (
         pack_pose_pack.main(argv)
     except cls as exc:
         fired.append((tag, exc.evidence["clause"], os.path.exists(argv[1][6:])))
+try:
+    resample_motion.main([f"--motion={motion}", f"--out={out}3", "--frames=6",
+                          "--name=../x"])
+except resample_motion.ResampleArgError as exc:
+    fired.append(("resample_name", exc.evidence["clause"], os.path.exists(out + "3")))
 print(json.dumps(fired))
 """
     env = dict(os.environ, PYTHONOPTIMIZE="1", ARMATURE_REPO=REPO)
     proc = subprocess.run(
-        [sys.executable, "-c", script, frames, str(tmp_path / "opt")],
+        [sys.executable, "-c", script, frames, motion, str(tmp_path / "opt")],
         capture_output=True, text=True, env=env)
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout.strip().splitlines()[-1]) == [
         ["pack_rate", "pack_rate_not_positive", False],
         ["pack_name", "output_name_is_not_a_name", False],
+        ["resample_name", "output_name_is_not_a_name", False],
     ]
 
 
@@ -305,9 +413,52 @@ def test_neither_andon_is_an_assert_or_carries_a_skip_flag():
     reached from a `raise` statement, and neither file grew an environment read or a
     `--no-*` / `--skip-*` / `--force` flag alongside them.
     """
-    for name in ("pack_pose_pack.py",):
+    for name in ("pack_pose_pack.py", "resample_motion.py"):
         src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
         assert "assert " not in src, name
         for escape in ("os.environ", "getenv", "--skip", "--no-check", "--force"):
             assert escape not in src, (name, escape)
 
+
+def test_the_two_copies_of_the_name_check_are_one_rule_with_one_word():
+    """One family, one clause word, two spellings — and the LOGIC must not drift.
+
+    `armature_core` is the single home this helper belongs in and is another domain's tree
+    in the frozen map, so it lives beside its callers the way `parts.require_finite` does.
+    That is only defensible while the two are the same rule, so this compares the executable
+    source with every string constant blanked: the predicate, the evidence dict's keys and
+    the control flow must match exactly.
+
+    The MESSAGES deliberately differ — one says the pack lands away from the manifest that
+    certifies it, the other says the record lands away from the sentinel line and sha256
+    that describe it — because a refusal's job is to tell THIS operator what THIS tool was
+    about to do. A comparison that demanded identical prose would be pressure to make both
+    messages vaguer, which is the opposite of the point.
+    """
+    import ast
+    import inspect
+
+    class _Blank(ast.NodeTransformer):
+        def visit_Constant(self, node):
+            if isinstance(node.value, str):
+                return ast.copy_location(ast.Constant(value="<str>"), node)
+            return node
+
+    def logic(fn):
+        node = ast.parse(inspect.getsource(fn).strip()).body[0]
+        if (node.body and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Constant)):
+            node.body = node.body[1:]
+        return ast.dump(ast.fix_missing_locations(_Blank().visit(node)))
+
+    assert logic(PP.single_path_segment) == logic(RM.single_path_segment)
+
+    # The one string that MUST be identical is the clause word, and the evidence keys with
+    # it -- that is the fingerprint a census reads the family by.
+    for mod, cls in ((PP, PP.PosePackError), (RM, RM.ResampleArgError)):
+        with pytest.raises(cls) as exc:
+            mod.single_path_segment("../x", "--name", cls)
+        assert exc.value.evidence == {"gate": "ARGS", "andon": cls.__name__,
+                                      "clause": "output_name_is_not_a_name",
+                                      "flag": "--name", "name": "../x"}
+        assert "--name='../x'" in str(exc.value)
