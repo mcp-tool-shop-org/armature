@@ -326,7 +326,35 @@ jobs:
 
       # `npm test` is `node bin/armature.mjs --node-selftest`: it proves the launcher parses
       # and reports honestly, which is the half of it that must work before Python is even
-      # looked for. release.yml runs the same command in its publish job.
+      # looked for.
+      #
+      # THIS JOB IS THE ONLY PLACE `npm test` RUNS. The line here read "release.yml runs the
+      # same command in its publish job" and that has not been true since the `Launcher
+      # self-test` step was deleted from release.yml's `npm` job: re-measured on `63191ee`,
+      # `grep -n -E 'npm test|self-?test' .github/workflows/release.yml` returns COMMENT LINES
+      # ONLY — no `run: npm test` and no such step anywhere in the file. release.yml records
+      # the deletion itself ("NO GATE LIVES DOWNSTREAM OF THE FORK… `npm test` itself is not
+      # retired: ci.yml's `launcher` job still runs it"), so the file that no longer has the
+      # step knew, and this citation did not move with it — pointing the wrong way round, the
+      # holder of the only copy claiming the other file held one too.
+      #
+      # What release.yml's `verify` job DOES run is `./.github/actions/npm-clean-room`, which
+      # packs the package, installs the TARBALL into a scratch prefix and runs
+      # `"$SHIM" --node-selftest` on the INSTALLED shim — a strictly stronger artifact, and
+      # upstream of the publish fork, where every gate in that file now lives. So this job's
+      # 2-entry node matrix is the only checkout-level launcher coverage in the repository,
+      # and trimming it under the CI-minutes rule would remove it entirely.
+      #
+      # THE FACT IS PINNED, AND THE PIN IS DERIVED.
+      # `tests/test_ci_workflows.py::test_npm_test_runs_only_where_it_is_measured_to_run`
+      # walks every `run:` script under `.github/` through `_code_only` and holds the sources
+      # that EXECUTE `npm test` to `NPM_TEST_SOURCES_TODAY = ["ci.yml"]`, so deleting this
+      # step, or adding one back to release.yml, turns the suite red and brings a reader here.
+      # What is NOT asserted, stated so the next seat does not assume it: there is no census
+      # parsing coverage comments in general. That form was attempted and withdrawn -- every
+      # regex shape flagged this very paragraph, which names `npm test`, `run: npm test`,
+      # ci.yml and release.yml in ordinary prose. The pin is a claim about the code; the
+      # sentences above it are the reasoning, and only the pin is enforced.
       - name: launcher self-test
         working-directory: npm
         run: npm test

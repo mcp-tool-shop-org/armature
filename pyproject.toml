@@ -34,7 +34,30 @@ readme = "README.pypi.md"
 # that would prove 3.10 cannot collect on it, and a promise nothing can run is a promise
 # this repo does not make. tests/test_ci_workflows.py reads the interval out of these two
 # fields, so changing either moves the matrix with it.
-requires-python = ">=3.11"
+#
+# AND `<3.15`, WHICH IS THE HALF pip ENFORCES. This field stated a floor and no ceiling, so
+# pip installed this distribution on every future CPython — while
+# `tests/test_ci_workflows.py::test_the_declared_python_interval_is_the_one_ci_runs` derived
+# its CEILING from the `Programming Language :: Python :: 3.13` classifier below, which is
+# metadata pip reads for DISPLAY and never for resolution. So the census could assert that
+# the floor and the ceiling were both exercised while the interval the artifact actually
+# promised was open at the top and exercised nowhere. The ceiling now lives here, where pip
+# reads it, and the census reads it from here; the classifier list is held INSIDE the
+# interval rather than defining it.
+#
+# `<3.15` and not `<3.14`, measured: this rig's venv — the interpreter every leg of
+# `verify.ps1` runs, including both clean-room installs of the built wheel — reports Python
+# 3.14.5. So 3.14 IS exercised, by the rig and not by CI, and a `<3.14` bound would refuse
+# the pre-tag gate's own installs. The matrix in ci.yml stays `["3.11", "3.13"]` under the
+# studio's CI-minutes rule; what is claimed and what each version is exercised BY is now
+# written down rather than inferred:
+#   3.11  ci.yml python-tests (the declared floor)
+#   3.12  claimed by a classifier, inside the interval, run by no job — an interpolation
+#   3.13  ci.yml python-tests and release.yml verify (the top classifier)
+#   3.14  the rig's venv, through verify.ps1's four legs; no runner runs it
+# Raising this bound is the same deliberate edit `npm@^11.5.1` and `trove-classifiers<2027`
+# already are.
+requires-python = ">=3.11,<3.15"
 # PEP 639, and not the `{ file = "LICENSE" }` table this carried until 2026-09-04. Measured
 # from one `python -m build` on this tree: the table raised
 # `SetuptoolsDeprecationWarning: 'project.license' as a TOML table is deprecated ... By
@@ -85,12 +108,30 @@ classifiers = [
 # package is for, and an extra a user has to know about reproduces the same "no error
 # naming the fix" failure one step later.
 #
-# The floors are the versions this rig and CI have actually run, not the oldest that would
-# resolve: cv2 is the rasterizer the aapose golden frames were measured against, and a
-# raster that disagrees with the goldens is a recipe that does not reproduce its output.
-# The exact byte-stable pins stay in ci.yml, where the golden-frame suite runs.
-# `opencv-python-headless` and not `opencv-python`: nothing here opens a window, and the
-# GUI build pulls a desktop stack onto servers and runners that have none.
+# WHAT THE FLOORS ARE, corrected in place with the measurement that overturned the earlier
+# sentence. They are the OLDEST VERSIONS THE MAINTAINERS ARE WILLING TO SUPPORT — not
+# versions that were exercised. The line here used to read "the floors are the versions this
+# rig and CI have actually run, not the oldest that would resolve", and re-measured with
+# `importlib.metadata` on the repo venv (E:\AI\armature\.venv, Python 3.14.5) that is false
+# for every row: numpy 2.5.2 against a `>=1.24` floor, pillow 12.3.0 against `>=10.0`,
+# matplotlib 3.11.1 against `>=3.7`. CI pins matplotlib==3.11.1 and
+# opencv-python-headless==5.0.0.93 (ci.yml, release.yml), so three of the four floors name
+# versions neither the rig nor CI has ever run. A resolver may legitimately install numpy
+# 1.24 / pillow 10.0 / matplotlib 3.7 here, and no job in this repository has.
+#
+# THE OPENCV DISTRIBUTION SPLIT, recorded rather than implied. Three distributions provide
+# the `cv2` module and this repository touches two of them:
+#   declared here / installed by CI : `opencv-python-headless` (==5.0.0.93 in ci.yml and
+#                                     release.yml) — nothing here opens a window, and the GUI
+#                                     build pulls a desktop stack onto runners that have none
+#   installed on the rig            : `opencv-contrib-python` 5.0.0.93 — measured 2026-09-05,
+#                                     `opencv-python-headless` and `opencv-python` are BOTH
+#                                     ABSENT from the repo venv, and `cv2.__version__` reads
+#                                     5.0.0
+# Same upstream version, different distribution: the rasterizer the aapose golden frames were
+# measured against is the one CI pins, and the rig satisfies the same import by another
+# package. `pip install armature-studio` gets the headless build, which is the promise this
+# row makes. The exact byte-stable pins stay in ci.yml, where the golden-frame suite runs.
 # `tests/test_packaging.py` fails if a new third-party import is added without a row here.
 dependencies = [
     "numpy>=1.24",
@@ -143,26 +184,32 @@ Issues = "https://github.com/mcp-tool-shop-org/armature/issues"
 [project.scripts]
 armature = "armature_core.cli:main"
 
-# WHAT THE SDIST CARRIES, MEASURED AND NOT YET DECIDED (2026-09-04). Built from this tree
-# with the repo venv: armature_studio-0.3.0.tar.gz is 609,406 bytes and 156 files — 112
-# `tests/test_*.py`, 32 armature_core modules, 6 of this build's own egg-info files, and the
-# six root documents. It carries NONE of `tests/conftest.py`, `tests/blender_stub.py`,
-# `tests/fake_backend.py`, `tests/fixtures/**`, `tests/blender/**`, or the 84 top-level
-# `tools/*.py` those tests import. Unpacked and run against its own `testpaths`: 509 tests
-# collected, 84 errors, `Interrupted: 84 errors during collection`. The same command in the
-# repo collects 2380. The wheel is complete and correct; the defect is confined to what the
-# SDIST claims to carry, and a downstream packager building from PyPI gets a suite that
-# reads as self-verifying and cannot collect.
+# WHAT THE SDIST CARRIES — DECIDED, LANDED, AND PINNED. Re-measured 2026-09-05 on `63191ee`
+# by building both artifacts from a `git archive` scratch copy with the repo venv:
+# `armature_studio-0.3.0.tar.gz` is 357,553 bytes and 40 files — 32 `armature_core` modules
+# plus LICENSE, MANIFEST.in, PKG-INFO, README.md, README.pypi.md, pyproject.toml, setup.cfg
+# and `tools/armature_studio.egg-info/SOURCES.txt` — and ZERO test files. The archive ships
+# no tests at all.
 #
-# The 112 files are not selected by anything here: they arrive through distutils' sdist
-# `_add_defaults_optional` glob `tests/test*.py`, and the mechanism setuptools offers for
-# overriding it is MANIFEST.in — measured on a `git archive` copy of this tree, where
-# `prune tests` took the sdist to 45 files / 208,811 bytes with zero test files, and adding
-# `recursive-exclude tools/armature_studio.egg-info *` took it to 40 files / 205,772 bytes.
-# No `[tool.setuptools]` key selects sdist contents, so the fix is a file this domain does
-# not own; it is recorded here rather than left as a surprise. Whoever lands MANIFEST.in
-# should land the test that unpacks the built sdist and asserts the choice — ships no tests,
-# or ships a suite that collects.
+# THE BEFORE-STATE this answered, kept as the dated measurement it was (2026-09-04, before
+# MANIFEST.in existed): the sdist was 609,406 bytes and 156 files — 112 `tests/test_*.py`
+# arriving through distutils' sdist `_add_defaults_optional` glob `tests/test*.py`, and NONE
+# of `tests/conftest.py`, `tests/blender_stub.py`, `tests/fake_backend.py`,
+# `tests/fixtures/**`, `tests/blender/**` or the 84 top-level `tools/*.py` those tests import.
+# Unpacked and run against its own `testpaths`: 509 collected, 84 collection errors. A suite
+# that reads as self-verifying and cannot collect is a false record.
+#
+# THE DECISION, and where it lives. `MANIFEST.in` in this tree prunes `tests`, `specs`,
+# `docs`, `site`, `npm` and `outputs`, excludes a stale checked-out egg-info directory and
+# `*.pyc`; the sdist ships the package and the root documents, and the suite is run from the
+# repository (`verify.ps1`, `ci.yml`) where its fixtures and the rig's assets exist.
+# `tests/test_packaging.py` unpacks the BUILT sdist and asserts that choice, so the archive
+# cannot quietly regain a partial suite.
+#
+# This block said the opposite until wave 23 — it described the 156-file archive in the
+# present tense, called the outcome undecided, and said "the fix is a file this domain does
+# not own; whoever lands MANIFEST.in should land the test". Both had been in the tree for
+# waves. Corrected in place with the measurement, which is the more useful record.
 [tool.setuptools]
 package-dir = { "" = "tools" }
 

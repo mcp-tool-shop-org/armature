@@ -897,6 +897,40 @@ def _code_only(script):
     return "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
 
 
+#: The probe the wheel room runs, lifted out of both callers in wave 23 (ci-packaging
+#: `F-1c5dc527`). It was a bash heredoc in `.github/actions/clean-room/action.yml` and a
+#: byte-identical PowerShell here-string in `verify.ps1`, and the census below could see only
+#: the first: `_all_run_scripts()` walks `.github/`. Measured on `e8263a3` with the three
+#: calls replaced by `pass` inside verify.ps1's copy ALONE — 256 tests still passed. One text,
+#: two callers, and the census reads the text rather than either caller's quoting of it.
+LAZY_IMPORT_PROBE = os.path.join(
+    REPO, ".github", "actions", "clean-room", "lazy_import_probe.py")
+
+
+def lazy_import_probe_source():
+    """The probe file both clean-room callers run, read as text."""
+    with open(LAZY_IMPORT_PROBE, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _clean_room_source():
+    """Everything the wheel room RUNS: the action's script plus the probe file it invokes."""
+    return _code_only(clean_room_script()) + "\n" + _code_only(lazy_import_probe_source())
+
+
+def _unreached(script, sites):
+    """The lazy roots `script` reaches nothing of — the census's predicate, lifted.
+
+    Lifted so the red proof below can drive it on a mutated source without re-implementing
+    the comparison it is proving.
+    """
+    return [
+        f"{root} (imported by {', '.join(sorted(set(fns)))})"
+        for root, fns in sorted(sites.items())
+        if not any(fn in script for fn in fns)
+    ]
+
+
 def test_the_clean_room_leg_reaches_every_lazily_imported_dependency():
     """`armature check` executes no function body, so it is green on a wheel that cannot run.
 
@@ -904,20 +938,71 @@ def test_the_clean_room_leg_reaches_every_lazily_imported_dependency():
     third-party import, the leg must CALL one of the functions that performs it. A new lazy
     dependency fails this test until the clean-room leg calls through to it.
     """
-    script = _code_only(clean_room_script())
+    script = _clean_room_source()
     sites = lazy_import_call_sites()
     assert set(sites) == set(lazy_third_party_roots()), (
         f"a lazy dependency has no located call site: {sorted(set(lazy_third_party_roots()) - set(sites))}"
     )
-    unreached = [
-        f"{root} (imported by {', '.join(sorted(set(fns)))})"
-        for root, fns in sorted(sites.items())
-        if not any(fn in script for fn in fns)
-    ]
+    unreached = _unreached(script, sites)
     assert unreached == [], (
         f"the clean-room leg calls nothing that reaches {unreached}; it would pass on a "
         "wheel whose drawing and donor paths raise ModuleNotFoundError on first call"
     )
+
+
+def test_gutting_a_lazy_import_call_site_turns_the_census_red():
+    """WAVE 23, ci-packaging `F-2cb02bed` — the guard was satisfied by an ANNOUNCEMENT.
+
+    The probe used to end
+
+        print("clean room: draw_body, draw_hand and mean_consecutive_frame_difference all ran")
+
+    so all three names sat in the source whether or not the calls happened, and the census
+    above — `any(fn in script for fn in fns)` — passed on the literal. Measured on `e8263a3`
+    with all three call sites replaced by `pass`: `tests/test_ci_workflows.py` = 216 passed,
+    and this census passed on its own (1 passed, 215 deselected).
+
+    Both directions are asserted here. On the probe as it now stands, deleting ANY ONE call
+    site takes that dependency's whole family of function names out of the source and the
+    census goes red. On the shape it replaced — the same mutation plus the old printed
+    literal — the census stays GREEN, which is the defect this proves is gone.
+    """
+    sites = lazy_import_call_sites()
+    probe = lazy_import_probe_source()
+    assert _unreached(_clean_room_source(), sites) == []
+
+    reds = []
+    for root, fns in sorted(sites.items()):
+        mutated = probe
+        for fn in sorted(set(fns)):
+            mutated = re.sub(r"(?m)^(\s*)_ran\(\w+\.%s\b[^\n]*$" % re.escape(fn),
+                             r"\1pass", mutated)
+        assert mutated != probe, (
+            f"no `_ran(<module>.<fn>, ...)` call site reaching {root} could be located; "
+            "the mutation changed nothing, so this row asserts nothing")
+        script = _code_only(clean_room_script()) + "\n" + _code_only(mutated)
+        unreached = _unreached(script, sites)
+        assert unreached, (
+            f"the call sites reaching {root} were replaced by `pass` and the census is still "
+            f"green; its answer does not depend on the calls running")
+        assert any(u.startswith(root + " ") for u in unreached), (
+            f"gutting {root}'s call sites turned the census red about something else: "
+            f"{unreached}")
+        reds.append(root)
+    assert reds == sorted(lazy_third_party_roots()), (
+        f"one red per lazily imported dependency was expected "
+        f"({sorted(lazy_third_party_roots())}) and {reds} were proven; SEAM 3's contract "
+        "is one red per name")
+
+    # The shape that WAS green: the same gutted probe with the announcement put back.
+    announcement = (
+        'print("clean room: draw_body, draw_hand and '
+        'mean_consecutive_frame_difference all ran")')
+    gutted = re.sub(r"(?m)^(\s*)_ran\(\w+\.\w+[^\n]*$", r"\1pass", probe)
+    before = _code_only(clean_room_script()) + "\n" + _code_only(gutted + announcement)
+    assert _unreached(before, sites) == [], (
+        "the pre-fix shape — every call gutted, the literal restored — now fails the census; "
+        "this red proof no longer reproduces the defect it exists to describe")
 
 
 # -- the census tests: what must be true of EVERY workflow, not just the one that broke ----
@@ -2250,6 +2335,22 @@ def declared_python_floor():
     return _version_tuple(match.group(1))
 
 
+def declared_python_ceiling():
+    """The EXCLUSIVE upper bound `requires-python` states, e.g. `<3.15` -> (3, 15), or None.
+
+    WAVE 23, `F-4a74acc0`. This census used to take its ceiling from
+    `max(classifier_pythons())` — the `Programming Language :: Python :: 3.13` row — which is
+    metadata pip reads for DISPLAY and never for resolution. `requires-python = ">=3.11"`
+    stated a floor and no ceiling, so the interval the artifact actually promised was open at
+    the top: pip would install this wheel on every future CPython, and the test could still
+    assert `floor in exercised` and `ceiling in exercised` about a promise nothing bounded.
+    The ceiling is now read from the field pip enforces.
+    """
+    spec = PYPROJECT["project"]["requires-python"]
+    match = re.search(r"<\s*(\d+\.\d+)", spec)
+    return _version_tuple(match.group(1)) if match else None
+
+
 def classifier_pythons():
     """Every `Programming Language :: Python :: X.Y` version claimed, as tuples."""
     out = set()
@@ -2292,27 +2393,53 @@ def _versions_declared_for(key):
 
 
 def test_the_declared_python_interval_is_the_one_ci_runs():
-    """Floor and ceiling both exercised, and no classifier outside them.
+    """The interval pip enforces is BOUNDED at both ends, and the classifiers sit inside it.
 
     What this looks like if wrong: `requires-python = ">=3.10"` with a single 3.13 job — a
-    promise about four interpreters, one of which has ever been run.
+    promise about four interpreters, one of which has ever been run. And the half this test
+    could not see until wave 23: `>=3.11` with no upper bound at all, where the CEILING it
+    was comparing came from a classifier row pip never resolves against.
     """
     exercised = {v for v in _versions_declared_for("python") if v[0] == 3}
     assert exercised, "no workflow pins a python version this check can read"
-    floor, ceiling = declared_python_floor(), max(classifier_pythons())
+    floor, ceiling = declared_python_floor(), declared_python_ceiling()
+    assert ceiling is not None, (
+        f"requires-python is {PYPROJECT['project']['requires-python']!r} and states no upper "
+        "bound; pip installs this distribution on every future CPython, and no job here has "
+        "run one. Decide the ceiling where pip reads it.")
+    assert floor < ceiling, (
+        f"requires-python declares {floor} <= python < {ceiling}, which is empty")
     assert floor in exercised, (
         f"requires-python declares a floor of {floor} and no job runs it; the versions run "
         f"are {sorted(exercised)}")
-    assert ceiling in exercised, (
-        f"the classifiers claim up to {ceiling} and no job runs it; the versions run are "
+    top_claimed = max(classifier_pythons())
+    assert top_claimed in exercised, (
+        f"the classifiers claim up to {top_claimed} and no job runs it; the versions run are "
         f"{sorted(exercised)}")
-    outside = sorted(v for v in classifier_pythons() if v < floor or v > ceiling)
+    outside = sorted(v for v in classifier_pythons() if v < floor or v >= ceiling)
     assert outside == [], (
-        f"these classifiers claim versions outside the interval CI exercises: {outside}")
+        f"these classifiers claim versions outside the interval requires-python promises "
+        f"[{floor}, {ceiling}): {outside}")
     below = sorted(v for v in classifier_pythons() if v < min(exercised))
     assert below == [], (
         f"these classifiers are BELOW the lowest version any job runs: {below}; a version "
         "under the exercised floor is an extrapolation, not an interpolation")
+
+
+def test_the_interval_check_goes_red_on_a_specifier_with_no_upper_bound():
+    """The mutation: the declaration this file carried until wave 23.
+
+    `>=3.11` alone must yield no ceiling, or the assertion above is decoration. The two
+    bounded spellings are driven beside it so the reader is not proven red on a shape the
+    parser simply cannot read.
+    """
+    unbounded = re.search(r"<\s*(\d+\.\d+)", ">=3.11")
+    assert unbounded is None, "the ceiling reader finds a bound in a floor-only specifier"
+    for spec, expected in ((">=3.11,<3.15", (3, 15)), (">=3.11, <4", None),
+                           (">=3.11,<3.14", (3, 14))):
+        match = re.search(r"<\s*(\d+\.\d+)", spec)
+        got = _version_tuple(match.group(1)) if match else None
+        assert got == expected, (spec, got, expected)
 
 
 def test_the_launchers_declared_node_floor_is_the_one_ci_runs():
@@ -2527,6 +2654,15 @@ def paths_the_suite_opens_but_git_ignores():
 #: than reaching main green-by-absence.
 GUARDED_TODAY = [
     ".github/actions",
+    # WAVE 23 (ci-packaging, F-1c5dc527 / F-481b512c / F-83ce864e): the clean room's two
+    # FILES joined when this module started opening them by path -- the lifted lazy-import
+    # probe (one text, two callers) and the classifier gate, whose exit codes and halt line
+    # are now driven as a subprocess. Both are under `.github/actions/**`, which ci.yml
+    # already carries on `push` and `pull_request`, so this is a census widening and not a
+    # trigger gap. Re-derived branch-local with `==` in the commit that added the tests.
+    ".github/actions/clean-room",
+    ".github/actions/clean-room/classifier_gate.py",
+    ".github/actions/clean-room/lazy_import_probe.py",
     ".github/actions/sheet-fonts/action.yml",
     ".github/workflows",
     ".gitignore",
@@ -2551,6 +2687,10 @@ GUARDED_TODAY = [
     # filter; the trigger half is ci-packaging's (F-5d2c6d28) and it is named in
     # `UNFILTERED_PENDING` below until that lands.
     "docs/research-grounding.md",
+    # WAVE 23 (ci-packaging, F-9f395455): the `Publish` step's script reads
+    # `./package.json`, so the harness that drives it with a stubbed registry runs from
+    # `npm/`. Covered by ci.yml's existing `npm/**` filter on both triggers.
+    "npm",
     "npm/bin/armature.mjs",
     "npm/package.json",
     "pyproject.toml",
@@ -4113,3 +4253,522 @@ def test_the_concurrency_census_reads_both_spellings_and_the_setting_itself():
     assert cancel_in_progress(as_action) is True
     assert cancel_in_progress(as_script.replace("true", "false")) is False
     assert cancel_in_progress(no_block) is None
+
+
+# =========================================================================================
+# WAVE 23 — ci-packaging's own contract, in one block (SEAM 1). Everything below pins a
+# property of `.github/**`, `pyproject.toml` or `.gitignore` that a wave-21 finding measured
+# missing. Kept together, and at the end of the file, because the tests domain edits this
+# same module in the same wave.
+# =========================================================================================
+
+
+# -- F-e3e6bdc8: an install in an artifact job STATES what it resolved ---------------------
+#
+# `pip install --quiet dist/*.whl` in `.github/actions/clean-room/action.yml` carried no
+# `--no-deps`, so numpy, opencv-python-headless, pillow and matplotlib were resolved from the
+# index at the unbounded specifiers pyproject declares — and `--quiet` then removed the one
+# line saying what came out. Measured on `e8263a3`: `pip install --quiet` into a scratch venv
+# emitted nothing at all, while the same install without the flag printed
+# `Successfully installed armature-studio-0.3.0`. So the clean room could go red on release
+# day, after `release: published` had fired, without the log saying which numpy or which cv2
+# the probe ran against — a dependency-day break and a wheel defect reading as one red, on
+# the one step with no compensator.
+#
+# The coordinator's wave-23 ruling: the wheel room keeps resolving FRESH (that is a user's
+# experience of `pip install armature-studio`, and the thing the room exercises) and RECORDS
+# what it resolved. This census holds every install in a job that produces or publishes a
+# distribution to that.
+
+#: The flags that suppress pip's report.
+QUIET_FLAGS = ("--quiet", "-q")
+
+
+def _silenced_installs(script):
+    """The `pip install` lines of one script that report nothing.
+
+    An install line is acceptable if it does not silence pip, OR if the script also runs a
+    `pip freeze` — the fuller answer, which names the whole resolved set rather than only the
+    distribution that was asked for.
+    """
+    code = _code_only(script)
+    if "pip freeze" in code:
+        return []
+    bad = []
+    for line in code.splitlines():
+        stripped = line.strip()
+        if "pip install" not in stripped:
+            continue
+        if any(flag in stripped.split() for flag in QUIET_FLAGS):
+            bad.append(stripped)
+    return bad
+
+
+def _artifact_jobs():
+    """Every (workflow, job) that produces or publishes a distribution — both walked."""
+    jobs = set(jobs_that_produce_a_distribution())
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if "npm publish" in _code_only(body) or "gh-action-pypi-publish" in body:
+                jobs.add((name, job))
+    return sorted(jobs)
+
+
+def test_every_install_in_an_artifact_job_reports_what_it_installed():
+    """A silenced install in the job that publishes is a resolution nobody can read back."""
+    assert _artifact_jobs(), "no job produces or publishes a distribution; this asserts nothing"
+    offenders = []
+    for workflow, job in _artifact_jobs():
+        for script in job_scripts(workflow, job):
+            offenders += [f"{workflow}:{job}: {line}" for line in _silenced_installs(script)]
+    assert offenders == [], (
+        f"these installs silence pip in a job that produces or publishes the artifact, and "
+        f"the script never runs `pip freeze` either: {offenders}")
+
+
+def test_the_install_report_check_goes_red_on_the_line_the_clean_room_had():
+    """The mutation: the wheel room's install exactly as it stood before wave 23."""
+    before = (
+        "python -m venv /tmp/cleanroom\n"
+        "/tmp/cleanroom/bin/python -m pip install --quiet dist/*.whl\n"
+    )
+    assert _silenced_installs(before) == [
+        "/tmp/cleanroom/bin/python -m pip install --quiet dist/*.whl"]
+    assert _silenced_installs(before + "/tmp/cleanroom/bin/python -m pip freeze\n") == []
+    assert _silenced_installs("/tmp/cleanroom/bin/python -m pip install dist/*.whl\n") == []
+
+
+# -- F-351f15cb: `npm test` runs where this repository measured it running -----------------
+#
+# ci.yml's `launcher` comment said "release.yml runs the same command in its publish job".
+# Re-measured on `63191ee`: `grep -n -E 'npm test|self-?test' .github/workflows/release.yml`
+# returns COMMENT LINES ONLY — the `Launcher self-test` step was deleted when the rule "no
+# gate lives downstream of the fork" landed, release.yml records that deletion in its own
+# words, and the citation in the file that HOLDS the only copy did not move with it. The
+# consequence is this repository's headline defect class sitting on a coverage claim: a later
+# seat trimming ci.yml's `launcher` job under the CI-minutes rule reads that sentence,
+# concludes release.yml still runs the self-test, and deletes the only checkout-level
+# launcher coverage in the repository.
+#
+# The claim is derived rather than restated, and `_code_only` is what makes it a claim about
+# what RUNS: naming `npm test` in a comment — which both files now do, at length — is not
+# running it.
+
+#: Measured 2026-09-05 on `63191ee` by walking `_all_run_scripts()`: the sources whose run
+#: scripts actually execute `npm test`. release.yml was on this list until the `Launcher
+#: self-test` step was deleted from its `npm` job; ci.yml's comment claimed it still was.
+NPM_TEST_SOURCES_TODAY = ["ci.yml"]
+
+
+def _sources_running(command):
+    """Every source under `.github/` whose run scripts execute `command`, comments excluded."""
+    out = set()
+    for source, script in _all_run_scripts():
+        for line in _code_only(script).splitlines():
+            if re.match(r"^\s*%s(\s|$)" % re.escape(command), line):
+                out.add(source)
+    return sorted(out)
+
+
+def test_npm_test_runs_only_where_it_is_measured_to_run():
+    """The coverage claim, derived. ci.yml's `launcher` job is the only place it runs."""
+    running = _sources_running("npm test")
+    assert running == NPM_TEST_SOURCES_TODAY, (
+        f"`npm test` runs in {running}, and this repository measured it running in "
+        f"{NPM_TEST_SOURCES_TODAY}. ci.yml's launcher comment is the only place that "
+        "coverage is described; if the population moved, move the sentence with it.")
+
+
+def test_the_npm_test_census_reads_what_runs_and_not_what_is_named():
+    """The red proof, in the direction the defect ran: naming it is not running it.
+
+    ci.yml now names `npm test` in prose several times and release.yml names it in the
+    comment recording the deletion. A census that counted those would report the pre-fix
+    sentence as true.
+    """
+    assert "npm test" in _text("release.yml"), (
+        "release.yml no longer mentions `npm test` at all; this proof's operand is gone")
+    assert "release.yml" not in _sources_running("npm test"), (
+        "release.yml is counted as running `npm test`, and its only occurrences are comment "
+        "lines — the census is keying on the text rather than on the code")
+
+
+# -- F-e3c42cc1: a GitHub pre-release reaches neither registry -----------------------------
+#
+# `on.release.types: [published]` is the whole trigger and nothing read
+# `github.event.release.prerelease`. `npm publish` carries no `--tag`, so npm defaults to
+# `latest`: a pre-release published through this workflow would serve itself to every
+# `npm i @mcptoolshop/armature-studio` until somebody ran `npm dist-tag add`. The coordinator
+# ruled the branch fails CLOSED — the studio publishes no pre-release channel — which also
+# makes the unfetched GitHub-side premise (that `published` fires for a pre-release) moot:
+# if it fires, this gate stops it; if it does not, this gate never sees one.
+
+PRERELEASE_STEP = step_containing(RELEASE, "A pre-release must not reach either registry")
+PRERELEASE_SCRIPT = run_script(PRERELEASE_STEP)
+
+
+def test_the_prerelease_gate_is_the_script_this_test_runs():
+    """No runner-side expression inside it — the tag gate's discipline, for its reason."""
+    assert "${{" not in PRERELEASE_SCRIPT, (
+        f"a runner-side expression is inside the gate:\n{PRERELEASE_SCRIPT}")
+    assert "github.event.release.prerelease" in PRERELEASE_STEP, (
+        "the gate no longer reads github.event.release.prerelease into env")
+
+
+def _drive_prerelease(event_name, value):
+    """Run the pre-release gate's real script with an arrival and a flag value."""
+    env = dict(os.environ, GITHUB_EVENT_NAME=event_name, RELEASE_IS_PRERELEASE=value)
+    proc = subprocess.run(
+        [BASH, "-s"],
+        input=PRERELEASE_SCRIPT.replace("\r\n", "\n").encode("utf-8"),
+        cwd=REPO, capture_output=True, env=env,
+    )
+    return subprocess.CompletedProcess(
+        proc.args, proc.returncode,
+        proc.stdout.decode("utf-8", "replace"), proc.stderr.decode("utf-8", "replace"))
+
+
+#: (arrival, the value the runner would substitute, whether the run may continue). The
+#: `workflow_dispatch` rows carry an EMPTY value because `github.event.release` does not
+#: exist on a dispatch — refusing that would delete the documented rehearsal, which is the
+#: only way to exercise this file before a tag is public.
+PRERELEASE_ARRIVALS = [
+    ("release", "false", True),
+    ("release", "true", False),
+    ("release", "", False),
+    ("release", "maybe", False),
+    ("release", "False", False),
+    ("workflow_dispatch", "", True),
+]
+
+
+@needs_shell
+@pytest.mark.parametrize("event_name,value,proceeds", PRERELEASE_ARRIVALS)
+def test_a_pre_release_refuses_before_the_publish_fork(event_name, value, proceeds):
+    """Driven on every value, including the two GitHub can actually deliver."""
+    got = _drive_prerelease(event_name, value)
+    if proceeds:
+        assert got.returncode == 0, (
+            f"{event_name} with prerelease={value!r} halted; the rehearsal and every normal "
+            f"release run through this step.\n{got.stdout}\n{got.stderr}")
+    else:
+        assert got.returncode != 0, (
+            f"{event_name} with prerelease={value!r} passed the gate; npm would publish it "
+            f"to the `latest` dist-tag.\n{got.stdout}\n{got.stderr}")
+        assert "::error::" in got.stdout, got.stdout
+
+
+@needs_shell
+def test_the_prerelease_gate_goes_red_on_the_shape_release_yml_had():
+    """The mutation: no gate at all — every release, pre-release or not, reached both jobs."""
+    absent = subprocess.run([BASH, "-s"], input=b"exit 0\n", capture_output=True)
+    assert absent.returncode == 0, (
+        "the harness itself refuses, so the rows above prove nothing about the gate")
+    assert _drive_prerelease("release", "true").returncode != 0, (
+        "with the gate present a pre-release still reaches the fork; the fix is not armed")
+
+
+# -- F-9f395455: the npm-view probe separates E404 from a transport failure ----------------
+#
+# `if npm view "$NAME@$VER" version >/dev/null 2>&1` sent both streams to /dev/null and
+# branched on the exit code alone, and `npm view` exits 1 for BOTH `not on the registry`
+# (E404) and `could not ask`. Measured on `e8263a3` with no external egress:
+# `npm view ... --registry=http://127.0.0.1:1/` exits 1 with `npm error code ECONNREFUSED`,
+# and the step's own `if` shape took the same branch — fall through to `npm publish` — on a
+# transport failure as on an E404, with the reason discarded. A re-run of a release whose npm
+# publish had already succeeded then meets a blip, publishes, and is refused a version that
+# already exists: red for having already succeeded, which is the outcome the step's own
+# comment says it exists to prevent.
+
+PUBLISH_SCRIPT = run_script(step_containing(RELEASE, "repository is private — publishing"))
+
+
+def _publish_room(tmp_path, npm_stdout, npm_code):
+    """A directory holding a stubbed `npm` and `node`, first on PATH.
+
+    `npm publish` must never really run here, so the stub answers `view` and announces
+    anything else — a publish that happened would otherwise be invisible to this harness.
+    """
+    room = tmp_path / "bin"
+    room.mkdir()
+    (room / "npm").write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "view" ]; then\n'
+        "  printf '%s\\n' " + json.dumps(npm_stdout) + "\n"
+        "  exit " + str(npm_code) + "\n"
+        "fi\n"
+        'echo "STUB-NPM-RAN: $*"\n'
+        "exit 0\n", encoding="utf-8", newline="\n")
+    (room / "node").write_text(
+        "#!/bin/sh\n"
+        'case "$*" in\n'
+        "  *name*) echo '@mcptoolshop/armature-studio' ;;\n"
+        "  *) echo '0.3.0' ;;\n"
+        "esac\n", encoding="utf-8", newline="\n")
+    for name in ("npm", "node"):
+        os.chmod(room / name, 0o755)
+    return room
+
+
+def _drive_publish(tmp_path, npm_stdout, npm_code, private="false", script=None):
+    """Run the Publish step's real script against the stubbed registry."""
+    room = _publish_room(tmp_path, npm_stdout, npm_code)
+    env = dict(os.environ,
+               PATH=str(room).replace("\\", "/") + os.pathsep + os.environ.get("PATH", ""),
+               REPOSITORY_IS_PRIVATE=private)
+    body = PUBLISH_SCRIPT if script is None else script
+    proc = subprocess.run(
+        [BASH, "-s"],
+        input=("set -e\n" + body).replace("\r\n", "\n").encode("utf-8"),
+        cwd=os.path.join(REPO, "npm"), capture_output=True, env=env,
+    )
+    return subprocess.CompletedProcess(
+        proc.args, proc.returncode,
+        proc.stdout.decode("utf-8", "replace"), proc.stderr.decode("utf-8", "replace"))
+
+
+@needs_shell
+def test_the_probe_reads_a_registry_answer_as_already_published(tmp_path):
+    got = _drive_publish(tmp_path, "0.3.0", 0)
+    assert got.returncode == 0, got.stdout + got.stderr
+    assert "already on the registry" in got.stdout, got.stdout
+    assert "STUB-NPM-RAN: publish" not in got.stdout, (
+        "the version is already on the registry and this step published anyway")
+
+
+@needs_shell
+def test_the_probe_reads_an_E404_as_not_published_and_publishes(tmp_path):
+    got = _drive_publish(tmp_path, "npm error code E404\nnpm error 404 Not Found", 1)
+    assert got.returncode == 0, got.stdout + got.stderr
+    assert "E404" in got.stdout, got.stdout
+    assert "STUB-NPM-RAN: publish" in got.stdout, (
+        "the registry said the version is absent and this step did not publish")
+
+
+@needs_shell
+def test_the_probe_refuses_a_transport_failure_instead_of_publishing(tmp_path):
+    """The measured operand: ECONNREFUSED, which exits 1 exactly as an E404 does."""
+    got = _drive_publish(
+        tmp_path, "npm error code ECONNREFUSED\nnpm error network request to registry failed", 1)
+    assert got.returncode != 0, (
+        "a transport failure fell through to `npm publish`; the probe cannot tell 'not "
+        f"published' from 'could not ask'.\n{got.stdout}\n{got.stderr}")
+    assert "STUB-NPM-RAN: publish" not in got.stdout, got.stdout
+    assert "ECONNREFUSED" in got.stdout, (
+        "the refusal discards the registry's own message, so the log does not say why")
+
+
+@needs_shell
+def test_the_probe_check_goes_red_on_the_shape_the_publish_step_had(tmp_path):
+    """The mutation: both streams discarded, branching on the exit code alone.
+
+    Fed the same ECONNREFUSED stub, the pre-fix shape PUBLISHES. That is what makes the row
+    above a proof rather than a description.
+    """
+    before = (
+        'NAME=$(node -p "x.name")\n'
+        'VER=$(node -p "x.version")\n'
+        'if npm view "$NAME@$VER" version >/dev/null 2>&1; then\n'
+        '  echo "::notice::already on the registry"\n'
+        "else\n"
+        "  npm publish --access public\n"
+        "fi\n"
+    )
+    got = _drive_publish(
+        tmp_path, "npm error code ECONNREFUSED\nnpm error network request to registry failed",
+        1, script=before)
+    assert got.returncode == 0 and "STUB-NPM-RAN: publish" in got.stdout, (
+        "the pre-fix shape no longer publishes on a transport failure; this red proof no "
+        f"longer reproduces the defect it describes.\n{got.stdout}\n{got.stderr}")
+
+
+# -- F-2cb02bed / F-1c5dc527 / F-481b512c / F-83ce864e: the clean room's two files ---------
+#
+# The probe and the classifier gate are both FILES beside the action now, run by the action
+# and by `verify.ps1`'s leg 3. The classifier gate's own contract — exit 2 for a refusal,
+# 1 for a crash, a `CLASSIFIER_GATE_HALT ` line carrying gate, clause and evidence, a
+# `CLASSIFIER_GATE_OK ` line stating judged AND skipped — is driven here as a subprocess,
+# because the gate runs on a runner python with only `trove-classifiers` installed and cannot
+# import `armature_core.parts.run_tool_main`.
+
+CLEAN_ROOM_DIR = os.path.join(REPO, ".github", "actions", "clean-room")
+CLASSIFIER_GATE = os.path.join(CLEAN_ROOM_DIR, "classifier_gate.py")
+
+needs_trove = pytest.mark.skipif(
+    __import__("importlib.util", fromlist=["util"]).find_spec("trove_classifiers") is None,
+    reason="the classifier gate reads PyPI's own list through trove-classifiers")
+
+
+def test_both_clean_room_callers_run_the_one_probe_file():
+    """One text, two callers — the law the classifier gate beside it already followed."""
+    with open(os.path.join(REPO, "verify.ps1"), encoding="utf-8") as fh:
+        verify = fh.read()
+    assert "lazy_import_probe.py" in clean_room_script(), (
+        "the clean-room action no longer runs the probe FILE; a heredoc copy is a second "
+        "implementation of one gate, and no census under `.github/` can see verify.ps1's")
+    assert "lazy_import_probe.py" in verify, (
+        "verify.ps1 no longer runs the probe file; its leg 3 mirrors the release gate and "
+        "its DESCRIPTION equates a green local run to a green CI run")
+    probe = lazy_import_probe_source()
+    for caller, text in (("the clean-room action", clean_room_script()),
+                         ("verify.ps1", verify)):
+        assert "aapose.blank_canvas" not in _code_only(text), (
+            f"{caller} carries an inline copy of the probe body again")
+    assert "aapose.blank_canvas" in probe, "the probe file no longer holds the probe"
+
+
+def _run_gate(dist_dir):
+    return subprocess.run(
+        [sys.executable, CLASSIFIER_GATE, str(dist_dir)],
+        capture_output=True, text=True, cwd=REPO)
+
+
+def _halt_record(stdout):
+    """The strict-JSON record on the `CLASSIFIER_GATE_HALT ` line."""
+    for line in stdout.splitlines():
+        if line.startswith("CLASSIFIER_GATE_HALT "):
+            return json.loads(line[len("CLASSIFIER_GATE_HALT "):])
+    raise AssertionError(f"no halt line in:\n{stdout}")
+
+
+def _wheel(path, rows):
+    """A minimal `.whl` whose METADATA carries `rows`."""
+    import zipfile as _zip
+    body = "Metadata-Version: 2.1\nName: fake\nVersion: 0.1\n"
+    body += "".join("Classifier: %s\n" % r for r in rows)
+    with _zip.ZipFile(path, "w") as archive:
+        archive.writestr("fake-0.1.dist-info/METADATA", body)
+    return path
+
+
+@needs_trove
+def test_the_classifier_gate_passes_a_clean_dist_and_states_both_counts(tmp_path):
+    """The success direction, and the sentinel earned by an effect."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    _wheel(dist / "fake-0.1-py3-none-any.whl", ["Development Status :: 4 - Beta"])
+    got = _run_gate(dist)
+    assert got.returncode == 0, got.stdout + got.stderr
+    line = [x for x in got.stdout.splitlines() if x.startswith("CLASSIFIER_GATE_OK ")]
+    assert len(line) == 1, got.stdout
+    record = json.loads(line[0][len("CLASSIFIER_GATE_OK "):])
+    assert record["judged"] == 1 and record["skipped"] == [], record
+
+
+@needs_trove
+def test_the_classifier_gate_refuses_the_row_pypi_400d_this_project_on(tmp_path):
+    """The failure class this gate exists for, and the exit code the convention reserves."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    _wheel(dist / "fake-0.1-py3-none-any.whl",
+           ["Development Status :: 4 - Beta", "Topic :: Scientific :: Image Processing"])
+    got = _run_gate(dist)
+    assert got.returncode == 2, (
+        f"a refusal exited {got.returncode}; this repository's convention gives a deliberate "
+        f"refusal 2 and reserves 1 for a crash.\n{got.stdout}\n{got.stderr}")
+    record = _halt_record(got.stdout)
+    assert record["gate"] == "CLASSIFIER", record
+    assert record["evidence"]["clause"] == "classifier-row-pypi-does-not-have", record
+    assert any("Image Processing" in r for r in record["evidence"]["rows"]), record
+
+
+@needs_trove
+def test_the_classifier_gate_refuses_an_empty_population(tmp_path):
+    """An affirmative verdict over nothing, upstream of the publish fork."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    got = _run_gate(dist)
+    assert got.returncode == 2, got.stdout + got.stderr
+    assert _halt_record(got.stdout)["evidence"]["clause"] == "empty-population"
+
+
+@needs_trove
+def test_the_classifier_gate_refuses_a_file_it_cannot_read(tmp_path):
+    """WAVE 23, `F-83ce864e` — the population is the DIRECTORY, not an extension.
+
+    Measured on `e8263a3` with the pre-fix gate: a valid wheel beside a `fake-0.1.zip` whose
+    PKG-INFO carried the banned row printed `every row present`, exited 0, and never
+    mentioned the `.zip` — while `release.yml` uploads the whole of `dist/` and the publish
+    action publishes that directory. `.zip` is in twine's own `DIST_EXTENSIONS`.
+    """
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    _wheel(dist / "fake-0.1-py3-none-any.whl", ["Development Status :: 4 - Beta"])
+    (dist / "fake-0.1.zip").write_bytes(b"PK\x03\x04 not really")
+    got = _run_gate(dist)
+    assert got.returncode == 2, (
+        f"a file this gate cannot read sat in dist/ and the gate exited {got.returncode}; "
+        f"the publish step uploads the whole directory.\n{got.stdout}\n{got.stderr}")
+    record = _halt_record(got.stdout)
+    assert record["evidence"]["clause"] == "dist-holds-a-file-this-gate-cannot-read", record
+    assert record["evidence"]["skipped"] == ["fake-0.1.zip"], record
+    assert record["evidence"]["judged"] == 1, record
+
+
+@needs_trove
+def test_a_classifier_gate_crash_exits_1_and_a_refusal_exits_2(tmp_path):
+    """THREE outcomes, not two — the shape `armature_core.parts.halt_outcome` defines."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    _wheel(dist / "fake-0.1-py3-none-any.whl", ["Development Status :: 4 - Beta"])
+    crash = subprocess.run(
+        [sys.executable, "-c",
+         "import runpy,sys;sys.argv=['g','%s'];"
+         "m=runpy.run_path(r'%s');"
+         "m['run_gate_main'](lambda a: (_ for _ in ()).throw(ValueError('boom')), sys.argv)"
+         % (str(dist).replace("\\", "/"), CLASSIFIER_GATE)],
+        capture_output=True, text=True, cwd=REPO)
+    assert crash.returncode == 1, crash.stdout + crash.stderr
+    record = _halt_record(crash.stdout)
+    assert record["error"] == "ValueError" and record["evidence"] is None, record
+    assert record["outcome"].startswith("FAILED"), record
+
+
+def test_the_classifier_gate_refuses_by_a_named_andon_and_never_by_a_bare_exit():
+    """WAVE 23, `F-481b512c` — six bare `raise SystemExit("::error::...")` refusals.
+
+    No class, no clause, no evidence, and exit 1 — the code
+    `tests/test_packaging.py::test_a_gate_refusal_exits_2_with_its_sentinel_and_a_crash_exits_1`
+    reserves for `this tool crashed`. Read by AST so a seventh refusal added in the old shape
+    joins this census on the day it lands.
+    """
+    with open(CLASSIFIER_GATE, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    bare = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Raise) or node.exc is None:
+            continue
+        call = node.exc
+        if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)):
+            continue
+        if call.func.id != "SystemExit" or not call.args:
+            continue
+        # `raise SystemExit(main(argv))` is the handler's own idiom, lifted from
+        # `armature_core.parts.run_tool_main` -- an exit code, not a message. What this
+        # census is looking for is the shape the six refusals had: a SystemExit carrying a
+        # STRING, which is a refusal with no class, no clause and no evidence, exiting 1.
+        arg = call.args[0]
+        speaks = (isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+                  or isinstance(arg, ast.JoinedStr)
+                  or (isinstance(arg, ast.BinOp)
+                      and isinstance(arg.left, ast.Constant)
+                      and isinstance(arg.left.value, str)))
+        if speaks:
+            bare.append(getattr(node, "lineno", "?"))
+    assert bare == [], (
+        f"classifier_gate.py raises a bare SystemExit at lines {bare}; a refusal in this "
+        "repository is a NAMED andon carrying a clause and evidence, and exits 2")
+    raises = [n for n in ast.walk(tree)
+              if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
+              and isinstance(n.exc.func, ast.Name)
+              and n.exc.func.id == "ClassifierGateFailure"]
+    assert len(raises) >= 6, (
+        f"{len(raises)} typed refusals; the six the gate had before wave 23 were all "
+        "converted, so this population cannot have shrunk")
+    for node in raises:
+        assert len(node.exc.args) >= 2, (
+            f"the refusal at line {node.lineno} names no clause")
+        assert isinstance(node.exc.args[1], ast.Constant), (
+            f"the clause at line {node.lineno} is not a literal a reader can grep for")

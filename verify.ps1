@@ -1,6 +1,26 @@
+#requires -Version 7.4
 <#
 .SYNOPSIS
   One command that runs everything CI runs, plus the site build, and refuses on any leg.
+
+.NOTES
+  THE HOST THIS SCRIPT IS, AND WAS NOT SAYING. `Invoke-Leg`'s outcome recording is PowerShell
+  7 only: `$PSNativeCommandUseErrorActionPreference` is inert before 7.3, and
+  `catch [System.Management.Automation.NativeCommandExitException]` names a type Windows
+  PowerShell 5.1 does not have. Nothing guarded the host -- `grep -i requires verify.ps1` on
+  `e8263a3` returned only the `[build-system].requires` prose, and neither of the two ANDONs
+  below checks `$PSVersionTable`. Measured on this rig by driving both hosts: under pwsh
+  7.6.5 the type resolves and the preference variable exists; under Windows PowerShell
+  5.1.26100.9233 the script terminates with `Unable to find type
+  [System.Management.Automation.NativeCommandExitException]` and
+  `Get-Variable PSNativeCommandUseErrorActionPreference` returns nothing -- so the rig's
+  pre-tag gate died mid-run without ever printing the summary the DESCRIPTION promises.
+  `#requires -Version 7.4` above is the halt, and 7.4 is the version at which BOTH constructs
+  exist and are non-experimental. It is deliberately a `#requires` and not a
+  `$PSVersionTable` andon beside the other two: the directive refuses before a single line of
+  this script runs, where an in-script check would be unreachable underneath it, and a check
+  that cannot fail is not a check. `tests/test_verify_script.py` asserts the directive is
+  here and names a version at or above the one `Invoke-Leg`'s constructs need.
 
 .DESCRIPTION
   The legs are the same ones `.github/workflows/ci.yml` runs, in the same order and with
@@ -236,9 +256,34 @@ if ($NoPackage) {
             # class `.github/actions/npm-clean-room/action.yml:42-49` calls "the bad kind". CI
             # reproduces neither half (fresh checkout, empty `dist/`), so the two
             # implementations of one leg behaved differently on the same command.
+            #
+            # AND THE INVARIANT IS ESTABLISHED, NOT ASSUMED. The clear below suppresses its
+            # own failure: the explicit `-ErrorAction SilentlyContinue` overrides the
+            # `$ErrorActionPreference = 'Stop'` `Invoke-Leg` sets, and nothing between the
+            # clear and `twine check` asked whether the directory was actually empty. The two
+            # artifacts are selected BY NAME below, which protects the two clean rooms -- but
+            # `twine check dist\*` and the classifier gate both range over `dist\*` and would
+            # still issue their verdicts over a file this run did not build. Measured on
+            # `e8263a3` under pwsh 7.6.5 with `$ErrorActionPreference = 'Stop'` and
+            # `$PSNativeCommandUseErrorActionPreference = $true` set: `Remove-Item
+            # <held-open file> -Recurse -Force -ErrorAction SilentlyContinue` raised no
+            # terminating error, left `$LASTEXITCODE` null, recorded one object in `$Error`
+            # that nothing reads, and both stale files remained on disk. The flag stays -- a
+            # locked file is not a reason to halt before the check that would name it -- and
+            # the CHECK is the fix, in the by-name refusal's own shape.
+            # `tests/test_verify_script.py::test_leg_three_refuses_a_dist_it_could_not_clear`
+            # lifts this block out and drives it against a file another process holds open.
             $dist = Join-Path $repo 'dist'
             if (Test-Path $dist) {
                 Remove-Item (Join-Path $dist '*') -Recurse -Force -ErrorAction SilentlyContinue
+                $left = @(Get-ChildItem $dist -Force -ErrorAction SilentlyContinue)
+                if ($left.Count -gt 0) {
+                    Write-Host "  dist/ could not be cleared; $($left.Count) item(s) remain:" -ForegroundColor Red
+                    $left | ForEach-Object { Write-Host "    $($_.Name)" -ForegroundColor Red }
+                    Write-Host '  every verdict below is a claim about what THIS run built; refusing.' -ForegroundColor Red
+                    $global:LASTEXITCODE = 1
+                    return
+                }
             }
 
             # The two filenames this run must produce, read out of the manifest rather than
@@ -312,7 +357,9 @@ if ($NoPackage) {
                 if ($LASTEXITCODE -ne 0) { return }
                 $sdistPython = Join-Path $sdistRoom "$binDir\python$exe"
                 $sdistArmature = Join-Path $sdistRoom "$binDir\armature$exe"
-                & $sdistPython -m pip install --quiet --no-deps $sdistPath
+                & $sdistPython -m pip install --no-deps $sdistPath
+                if ($LASTEXITCODE -ne 0) { return }
+                & $sdistPython -m pip freeze
                 if ($LASTEXITCODE -ne 0) { return }
                 if (-not (Test-Path $sdistArmature)) {
                     Write-Host "  the sdist install provides no armature command at $sdistArmature" -ForegroundColor Red
@@ -341,37 +388,40 @@ if ($NoPackage) {
                 if ($LASTEXITCODE -ne 0) { return }
                 $cleanPython = Join-Path $cleanroom "$binDir\python$exe"
                 $cleanArmature = Join-Path $cleanroom "$binDir\armature$exe"
-                & $cleanPython -m pip install --quiet $wheelPath
+                # WHAT THIS ROOM RESOLVED, STATED -- `--quiet` used to remove the one line
+                # that said. This install carries no `--no-deps`, so numpy, cv2, pillow and
+                # matplotlib are resolved FRESH from the index at the unbounded specifiers
+                # `pyproject.toml` declares (that is deliberate: it is a user's experience of
+                # `pip install armature-studio`, and the thing this room exercises). Measured
+                # on the rig 2026-09-04, `pip install --quiet` emitted nothing at all while
+                # the same install without the flag printed `Successfully installed
+                # armature-studio-0.3.0`. `pip freeze` states the whole resolved set, so a
+                # dependency-day break and a wheel defect are two different reds rather than
+                # one silent one. `.github/actions/clean-room/action.yml` carries the same
+                # two lines.
+                & $cleanPython -m pip install $wheelPath
+                if ($LASTEXITCODE -ne 0) { return }
+                & $cleanPython -m pip freeze
                 if ($LASTEXITCODE -ne 0) { return }
                 & $cleanArmature check
                 if ($LASTEXITCODE -ne 0) { return }
                 & $cleanArmature modules --json > $null
                 if ($LASTEXITCODE -ne 0) { return }
 
-                $probe = Join-Path $cleanroom 'clean_room_probe.py'
-                @'
-import os, tempfile
-import numpy as np
-from armature_core import aapose, donor_gate, pngio
-
-if "site-packages" not in aapose.__file__.replace("\\", "/"):
-    raise SystemExit("clean-room probe imported the source tree: " + aapose.__file__)
-
-canvas = aapose.blank_canvas(64, 64)
-body = np.zeros((aapose.KEYPOINT_COUNT, 3)); body[:, :2] = 32.0; body[:, 2] = 1.0
-aapose.draw_body(canvas, body)
-hand = np.zeros((aapose.HAND_KEYPOINT_COUNT, 3)); hand[:, :2] = 32.0; hand[:, 2] = 1.0
-aapose.draw_hand(canvas, hand)
-
-frames = tempfile.mkdtemp()
-paths = []
-for i in range(2):
-    p = os.path.join(frames, "%05d.png" % i)
-    pngio.write_png(p, np.full((8, 8, 3), i * 40, dtype=np.uint8))
-    paths.append(p)
-donor_gate.mean_consecutive_frame_difference(paths)
-print("clean room: draw_body, draw_hand and mean_consecutive_frame_difference all ran")
-'@ | Set-Content -Path $probe -Encoding utf8
+                # THE PROBE IS THE SAME FILE THE RELEASE GATE RUNS, not a here-string
+                # copy of it. It was a copy: `.github/actions/clean-room/action.yml`'s
+                # heredoc and this here-string were two implementations of one probe, and
+                # NO census could see this one -- `tests/test_ci_workflows.py`'s lazy-import
+                # guard derives the leg from `_all_run_scripts()`, which walks `.github/`
+                # only. Measured on `e8263a3` in a `git archive` scratch copy with
+                # `aapose.draw_body`, `aapose.draw_hand` and
+                # `donor_gate.mean_consecutive_frame_difference` replaced by `pass` inside
+                # THIS here-string alone: `tests/test_verify_script.py` +
+                # `tests/test_ci_workflows.py` = 256 passed. The two copies were still
+                # code-identical at that point, so this is drift that had not happened yet
+                # -- the classifier gate two paragraphs down was made a FILE for exactly
+                # this reason, and the probe stayed duplicated. One text, two callers.
+                $probe = Join-Path $repo '.github/actions/clean-room/lazy_import_probe.py'
                 & $cleanPython $probe
                 if ($LASTEXITCODE -ne 0) { return }
             } finally {
