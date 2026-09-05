@@ -37,8 +37,8 @@ import math
 import numpy as np
 
 from . import framing
-from .errors import GateFailure
-from .parts import require_finite
+from .errors import ArmatureError, GateFailure
+from .parts import require_finite, tightened
 
 
 class StartFrameGate(GateFailure):
@@ -57,6 +57,25 @@ class BackdropGate(GateFailure):
     """What stands behind the performer is not the plate the record names."""
 
     gate = "BACKDROP"
+
+
+class ShadowError(ArmatureError):
+    """A bound on the shadow layer's own floor that the layer cannot be authored under.
+
+    F-efd6b45c, wave 25. `shadow_ratio(cast, lit, eps=SHADOW_FLOOR_EPS)` let any caller
+    replace a constant this module owns, in either direction, with no clause; see that
+    function for the measured planes (`eps=0.0` and `eps=nan` both return an all-NaN ratio
+    that `apply_shadow` multiplies the authored plate by; `inf` and a negative return 1.0
+    everywhere).
+
+    **Not a `GateFailure`, and deliberately not `StartFrameGate`.** The three gate classes
+    above carry gate ids — WHOLE, ALPHA, BACKDROP — and each names an andon standing in
+    front of an irreversible step. `shadow_ratio` is arithmetic that authors a layer; there
+    is no gate here, and raising `StartFrameGate` would put "WHOLE" on a halt line about a
+    shadow floor, which is a refusal naming an andon that did not pull. Same reasoning, and
+    the same shape, as `channels.DepthError` / `NormalError` / `ChannelEncodeError`: halt
+    record "REFUSED", `gate` null, the class name under `andon`.
+    """
 
 
 def composite_colour(text):
@@ -282,7 +301,49 @@ def shadow_ratio(cast_srgb, lit_srgb, eps=SHADOW_FLOOR_EPS):
     below `eps` the ratio is held at 1 — dividing two near-black pixels turns render noise
     into bright speckle, and a shadow layer that invents light in the dark corners is worse
     than no shadow layer.
+
+    **`eps` is a caller-supplied bound on a module constant and it goes through the home
+    that bounds those** (F-efd6b45c, wave 25). `SHADOW_FLOOR_EPS` is owned twenty lines
+    above, with its reason; this keyword let any caller replace it, in either direction,
+    with no clause at all. MEASURED in this worktree on `580af47`, on a black
+    cast-and-lit pair:
+
+    * `eps=0.0` -> the whole ratio plane is **nan**. `np.maximum(lit, 0.0)` is a real zero
+      denominator, `0/0` is NaN, `np.clip` passes it through, and `ratio[dark] = 1.0` never
+      restores it because `dark = lit < 0.0` is EMPTY. `apply_shadow` then multiplies the
+      authored plate by it;
+    * `eps=nan` -> **nan** the same way, with no refusal;
+    * `eps=inf` and `eps=-1.0` -> returned 1.0 everywhere, the loosening direction admitting
+      every pixel to the held-at-unshadowed branch (or none to it), silently.
+
+    The sole production call site is `render_start_frame.py::main`, which passes the default
+    and records `"eps": SF.SHADOW_FLOOR_EPS` at :910 — so the freedom bought nothing and
+    only the loosening direction was unbounded, the same sentence `parts.py::RIGID_TRANSFORM_FRAC` already
+    writes about `RIGID_TRANSFORM_FRAC`, which is why that family has ONE home.
+
+    `parts.tightened` refuses a non-finite, a negative and a raise above the module's own in
+    one call. Zero is the tightest legal request THERE and is refused HERE by its own
+    clause, because zero is not a tighter floor — it is no floor, and the measured
+    consequence is a plate multiplied by NaN.
     """
+    eps = tightened(
+        "eps", eps, SHADOW_FLOOR_EPS, ShadowError,
+        {"gate": None, "andon": "ShadowError",
+         "where": "shadow_ratio", "module_eps": SHADOW_FLOOR_EPS,
+         "eps_requested": eps})
+    if eps == 0.0:
+        raise ShadowError(
+            f"eps=0.0 is not a tighter shadow floor, it is no floor: the held-at-unshadowed "
+            f"branch is keyed on `lit < eps`, which is EMPTY at zero, while the division "
+            f"below becomes `cast / np.maximum(lit, 0.0)` — a real zero denominator. "
+            f"Measured on a black lit reference: every channel of the returned ratio is "
+            f"nan, `np.clip` passes it through, and `apply_shadow` multiplies the authored "
+            f"start-frame plate by it. The module's own floor is "
+            f"{SHADOW_FLOOR_EPS!r} and its reason is written beside it: dividing two "
+            f"near-black values amplifies render noise into a bright speckle",
+            {"gate": None, "andon": "ShadowError",
+             "clause": "shadow_floor_eps_is_zero", "where": "shadow_ratio",
+             "eps": 0.0, "module_eps": SHADOW_FLOOR_EPS})
     cast = srgb_to_linear(cast_srgb)
     lit = srgb_to_linear(lit_srgb)
     dark = lit < float(eps)

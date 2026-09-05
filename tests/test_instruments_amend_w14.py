@@ -390,11 +390,11 @@ def test_gate_glb_takes_no_default_for_result_or_before(rigchar):
 # WAVE 23, F-bca562a1 — `armature_core/` IS IN THE CENSUS, and the exclusion that kept it
 # out is replaced by the measurement that overturned it.
 #
-# The docstring here read "`armature_core/blender_scene.py:772` is excluded by PATH (another
-# domain's file, and a `write_still=False` MEASUREMENT render rather than a write)". Both
-# halves fail. The site is at `blender_scene.py::render_frame`, not `:772`. It sits inside
+# The docstring here read "a line in `armature_core/blender_scene.py` is excluded by PATH
+# (another domain's file, and a `write_still=False` MEASUREMENT render rather than a
+# write)". Both halves fail. The site is at `blender_scene.py::render_frame`. It sits inside
 # `render_frame`, which writes one EXR per channel through compositor File Output nodes, and
-# whose Gate FRAME andon (`RenderedFrame`, raised at `:958` with clause `operator_status`)
+# whose Gate FRAME andon (`RenderedFrame`, raised there with clause `operator_status`)
 # exists precisely because those writes can silently be the PREVIOUS run's frames — the
 # module's own text at `:938-941` says the check proves each path differs from whatever stood
 # there before the call ran. `write_still=False` is still literally true and is no longer a
@@ -523,9 +523,13 @@ def test_the_widened_census_reaches_the_site_the_exclusion_named():
     """The finding's operand, by name: the site is in `armature_core/blender_scene.py`, it
     is inside `render_frame`, and the census now holds it.
 
-    The stale docstring cited `blender_scene.py:772`; measured 2026-09-05 the call is at
-    `:949` and `RenderedFrame` is raised at `:958` with clause `operator_status`. A
-    line-number citation is prose; the FUNCTION and the clause are what this asserts.
+    The stale docstring cited a line number in `blender_scene.py` that had drifted onto
+    unrelated code. RE-ANCHORED ON THE SYMBOL (wave 25, core-solvers): the call is inside
+    `blender_scene.py::render_frame` and `RenderedFrame` is raised there with clause
+    `operator_status`. The three line numbers this paragraph used to carry all moved AGAIN
+    when wave 25 added the drop census above `render_frame` — which is the argument for the
+    symbol rather than for a fourth re-measurement of the number. A line-number citation is
+    prose; the FUNCTION and the clause are what this asserts.
     """
     sites = [s for s in _operator_call_sites(TOOLS, "bpy.ops.render.render")
              if s[0] == "armature_core/blender_scene.py"]

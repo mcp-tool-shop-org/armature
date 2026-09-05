@@ -424,6 +424,16 @@ def _bisect(f, lo, hi, want, iters=80):
     the andon inside the function performing the step, the bound at the caller that composes
     the request. Complementary, not redundant; an importer that reaches this helper without
     going through `solve_camera` gets the refusal too.
+
+    **The bracket has TWO ends and wave 22 guarded one** (F-526e9069, wave 25). The clause
+    below rules on `want`; `flo` and `fhi` are the values the CLOSURE returns, and the same
+    sentence is true of them — `(flo - want) * (fhi - want) > 0` is False when `flo` is a
+    NaN just as surely as when `want` is. MEASURED in this worktree on `580af47`:
+    `_bisect(lambda t: float('nan'), 0.0, 1.0, 0.5)` returns **1.0**, its own upper bound,
+    with a finite legal target. The closure here is `h_of` / `x_of` / `y_of` in
+    `solve_camera`, each of which measures a screen extent over a point cloud, so a
+    non-finite vertex reaches the bracket test through the closure rather than through the
+    request. Both ends are ruled on now, under their own clause word.
     """
     if not _finite(want):
         raise FramingError(
@@ -436,6 +446,22 @@ def _bisect(f, lo, hi, want, iters=80):
              "clause": "bisect_target_not_finite",
              "search_bounds": [lo, hi], "wanted": want})
     flo, fhi = f(lo), f(hi)
+    for _end, _v in (("flo", flo), ("fhi", fhi)):
+        if not _finite(_v):
+            raise FramingError(
+                f"the bracket end {_end}={_v!r} is not a finite number: the closure this "
+                f"search is solving returned it at {lo if _end == 'flo' else hi!r}, so the "
+                f"bracket test `(flo - want) * (fhi - want) > 0` is False in both "
+                f"directions and so is every comparison the loop makes. The search then "
+                f"terminates at its own bound and returns it, and a returned bound is "
+                f"indistinguishable from a solved composition — the same defect the target "
+                f"clause above refuses, arriving through the closure instead of through "
+                f"the request",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "bisect_bracket_not_finite",
+                 "search_bounds": [lo, hi], "wanted": want,
+                 "end": _end, "value": repr(_v),
+                 "value_range": [repr(flo), repr(fhi)]})
     if (flo - want) * (fhi - want) > 0:
         raise FramingError(
             f"the requested framing is not reachable between {lo} and {hi}: the value "
@@ -543,6 +569,55 @@ def solve_camera(all_points, end_points, azimuth_deg, elevation_deg,
             "no points to frame",
             {"gate": None, "andon": "FramingError", "clause": "empty_point_cloud",
              "n_all_points": len(all_points), "n_end_points": len(end_points)})
+    # THE POINT CLOUD'S CLAUSE (F-526e9069, wave 25). Wave 22 bounded every SCALAR request
+    # above — `height_frac`, `end_x_frac`, `target_y_frac`, `radius_bounds` — on the stated
+    # ground that `(flo - want) * (fhi - want) > 0` is False for a NaN, so "the search
+    # terminates at its own bound and returns it. A returned bound is indistinguishable
+    # from a solved composition". The cloud took no clause: the line above is an EMPTINESS
+    # test and nothing else, and `_extent`'s `min(xs)` / `max(xs)` walk past a NaN exactly
+    # as `min(distances)` did in `turnaround`'s value door (F-8cfaefd9).
+    #
+    # MEASURED in this worktree on `580af47`, an eight-point cloud at 832x480 / lens 50 /
+    # sensor 36: the legal call returns radius 3.70665 with `achieved.union_height_frac`
+    # 0.8 and `in_frame: True`; replacing ONE coordinate with `nan` RETURNS radius **40.0**
+    # — the `radius_bounds` CEILING, the signature the wave-22 comment names — with
+    # `target: [nan, nan, nan]`, `achieved.union_height_frac: nan` and a `requested` block
+    # in which every fraction is finite and legal. An `inf` in one coordinate gives the
+    # identical record. The returned dict is not JSON either:
+    # `json.dumps(record, allow_nan=False)` raises `ValueError: Out of range float values
+    # are not JSON compliant: nan`, and at the default it emits the bare `NaN` token that
+    # `parts.halt_keysafe`'s own docstring records as rejected by JS `JSON.parse`, Go
+    # `encoding/json` and serde.
+    #
+    # Honest about what does NOT happen: `in_frame` is a conjunction of `>=`/`<=` tests,
+    # all False for a NaN, so the live consumers (`render_start_frame.py::main` — the paid
+    # I2V start frame — `render_performer.py::main` and `project_pose_keypoints.py::main`) DO
+    # refuse. They refuse with "the union does not stay inside the frame", which is a
+    # statement about a composition nobody requested, and no clause anywhere said a vertex
+    # was not a number. This is the census `channels._non_finite_census` already uses,
+    # spelled over a list of triples, and it runs on BOTH clouds because `end_points` is
+    # the cloud `x_of` solves against and it is not always a subset of `all_points`.
+    for _name, _cloud in (("all_points", all_points), ("end_points", end_points)):
+        _bad = [i for i, p in enumerate(_cloud)
+                if not all(_finite(c) for c in tuple(p)[:3])]
+        if _bad:
+            _first = _bad[0]
+            raise FramingError(
+                f"{len(_bad)} of {len(_cloud)} point(s) in {_name} carry a coordinate that "
+                f"is not a finite number (first at index {_first}: "
+                f"{tuple(_cloud[_first])!r}). Every bracket test this solver makes is False "
+                f"against a NaN in both directions, so the bisection does not refuse — it "
+                f"walks to its own ceiling and returns it, and the record it returns names "
+                f"a legal `requested` composition beside a `target` and an "
+                f"`achieved.union_height_frac` that are not numbers. Measured: radius 40.0, "
+                f"the `radius_bounds` ceiling, on one non-finite vertex",
+                {"gate": None, "andon": "FramingError", "who": _who,
+                 "clause": "point_cloud_not_finite", "cloud": _name,
+                 "n": len(_cloud), "n_finite": len(_cloud) - len(_bad),
+                 "n_non_finite": len(_bad),
+                 "first_non_finite_index": _first,
+                 "first_non_finite_point": [repr(c) for c in tuple(_cloud[_first])[:3]],
+                 "non_finite_indices": _bad[:12]})
     cx = sum(p[0] for p in all_points) / len(all_points)
     cy = sum(p[1] for p in all_points) / len(all_points)
     cz = sum(p[2] for p in all_points) / len(all_points)

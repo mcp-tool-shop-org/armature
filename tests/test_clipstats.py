@@ -68,10 +68,88 @@ def test_a_frozen_clip_reads_zero_movement_on_every_instrument():
 
 
 def test_distinct_frames_counts_a_clip_that_froze_as_one():
-    """65 files and one picture is a real outcome, and the count is what shows it."""
+    """65 files and one picture is a real outcome, and the count is what shows it.
+
+    The fixture builds BYTE-identical frames, which is why the byte count could see this
+    one — and is exactly the input on which the byte count could not fail (F-4ba279bf,
+    wave 25). Both halves are asserted here: the digests, and the pixels.
+    """
     frames = [studio(subject_x=90) for _ in range(65)]
     frames[10] = studio(subject_x=95)
-    assert CS.distinct_frames(frames) == {"n_frames": 65, "n_distinct": 2}
+    got = CS.distinct_frames(frames)
+    assert got["n_frames"] == 65
+    assert got["n_distinct"] == 2
+    assert got["n_pixel_distinct"] == 2
+    assert got["min_pair_mean_abs_difference"] == 0.0
+    assert got["n_pairs_compared"] == 65 * 64 // 2
+    assert got["n_pairs_non_finite"] == 0
+
+
+def test_the_byte_count_cannot_fail_on_a_decoded_clip_and_the_pixel_count_can():
+    """F-4ba279bf, wave 25 — the reason the pixel half exists.
+
+    CLAUDE.md: "A file-hash mismatch is not evidence a render changed. Compare pixels;
+    reserve byte-hashes for artifacts whose bytes are the contract." Here the bytes are not
+    the contract, the pictures are.
+
+    The RED proof is the frozen clip whose bytes are NOT identical: 65 frames of one
+    picture in which each frame differs from the base by a single byte in a single channel.
+    MEASURED on `580af47`, before the fix, this returned `{'n_frames': 65,
+    'n_distinct': 65}` — the strongest reading the instrument has, on a clip that never
+    moved — while `frame_deltas` beside it in the same module reported a median
+    frame-to-frame mean absolute difference of 5.09e-06. A decoded generation is never
+    byte-identical frame to frame, so the byte count's failing direction is unreachable on
+    its real input.
+
+    The panel the Director reads quotes this dict verbatim (`make_e13_sheet.py:304`,
+    `make_startframe_sheet.py:236`, both filled by `measure_clip.py`), so what it carries
+    now is a MAGNITUDE the arm can move rather than a word.
+    """
+    rng = np.random.default_rng(11)
+    base = rng.integers(0, 255, (64, 64, 3), dtype=np.uint8)
+    frames = []
+    for i in range(12):
+        f = base.copy()
+        # One byte, in one channel, at a pixel the stride reads. Every digest differs.
+        f[0, 0, 0] = np.uint8((int(base[0, 0, 0]) + 1 + i) % 256)
+        frames.append(f)
+    got = CS.distinct_frames(frames)
+    assert got["n_distinct"] == 12, "the byte count cannot see this and never could"
+    # The pixel half reports the magnitude instead of the word. Two frames differing by one
+    # byte out of 12288 are the same picture; the number says how nearly.
+    assert got["min_pair_mean_abs_difference"] < 1e-3
+    assert got["n_pairs_compared"] == 66
+    # And it still separates a clip that really moves.
+    moving = [rng.integers(0, 255, (64, 64, 3), dtype=np.uint8) for _ in range(12)]
+    assert CS.distinct_frames(moving)["min_pair_mean_abs_difference"] > 1.0
+
+
+def test_the_pixel_half_sees_the_repeat_the_byte_half_cannot():
+    """A frame repeated at a distance, with every digest different — the shape
+    `turnaround.gate_set_distinct` was paid for in wave 14 (F-c4cf355d), read here as a
+    diagnostic rather than as a gate, because this module gates nothing."""
+    rng = np.random.default_rng(5)
+    frames = [rng.integers(0, 255, (32, 32, 3), dtype=np.uint8) for _ in range(8)]
+    frames[6] = frames[1].copy()
+    got = CS.distinct_frames(frames)
+    assert got["n_distinct"] == 7          # the bytes agree here too, because the copy is exact
+    assert got["n_pixel_distinct"] == 7
+    assert [1, 6] in got["pairs_identical_in_pixels"]
+    assert got["min_pair_mean_abs_difference"] == 0.0
+
+
+def test_a_non_finite_pair_distance_is_partitioned_rather_than_ruled_on():
+    """The value door, the shape `turnaround._pixel_pairs` settled in wave 22 (F-8cfaefd9):
+    `d == 0.0` is False for a NaN and so is every comparison `min` makes. Frames off
+    `VAEDecode` are uint8 and cannot produce one; this function is public and `_as_float`
+    accepts a float array, so the pairs are COUNTED rather than assumed away."""
+    a = np.zeros((16, 16, 3), dtype=np.float64)
+    b = a.copy()
+    b[0, 0, 0] = np.nan
+    got = CS.distinct_frames([a, b, a.copy()])
+    assert got["n_pairs_non_finite"] == 2
+    assert got["n_pairs_compared"] == 1
+    assert got["min_pair_mean_abs_difference"] == 0.0
 
 
 # ------------------------------------------------------------------------- horizon_row

@@ -349,8 +349,19 @@ def test_a_nan_edge_threshold_writes_a_blank_control_channel():
     non-empty, G4 compares mask against projection and is blind to channel CONTENT, and
     the credits are spent on a generation whose edge control carried no information.
 
-    This asserts the CONSEQUENCE, not the fix — it passes on base too, and it is here so
-    the refusal above cannot be deleted as pedantry."""
+    This asserts the CONSEQUENCE, not the fix — it passed on base too, and it is here so
+    the refusal above cannot be deleted as pedantry.
+
+    **CORRECTED IN PLACE, WAVE 25 (core-solvers, F-075b3af4), with the measurement that
+    overturned the last two lines.** `derive_edge` now REFUSES both thresholds by name —
+    `depth_rel_threshold_not_finite_and_positive` (`DepthError`) and
+    `normal_angle_deg_not_finite` (`NormalError`) — so the blank channel this test used to
+    call for is no longer reachable through that function at all. The consequence is
+    therefore asserted the only honest way left: by disarming the new clause and measuring
+    what the arithmetic underneath still does. Both bounds now exist and they are
+    complementary, not redundant — the spec bound above refuses the REQUEST, and the
+    function bound refuses inside the step, which is where this repo puts an andon. Neither
+    can be deleted as pedantry now, and the reason each exists is written next to it."""
     from armature_core import channels
     z = np.zeros((8, 8), dtype=np.float64)
     z[:, 4:] = 1.0
@@ -358,9 +369,30 @@ def test_a_nan_edge_threshold_writes_a_blank_control_channel():
     n_cam[..., 2] = 1.0
     mask = np.ones((8, 8), dtype=bool)
     _, good = channels.derive_edge(z, n_cam, mask, 0.02, 30.0)
-    _, blank = channels.derive_edge(z, n_cam, mask, NAN, NAN)
     assert good["depth_break_px"] > 0
-    assert blank["depth_break_px"] == 0 and blank["normal_break_px"] == 0
+
+    # The function's own refusals, by clause word — the wave-25 half.
+    with pytest.raises(channels.DepthError) as exc:
+        channels.derive_edge(z, n_cam, mask, NAN, 30.0)
+    assert exc.value.evidence["clause"] == "depth_rel_threshold_not_finite_and_positive"
+    with pytest.raises(channels.NormalError) as exc:
+        channels.derive_edge(z, n_cam, mask, 0.02, NAN)
+    assert exc.value.evidence["clause"] == "normal_angle_deg_not_finite"
+
+    # THE CONSEQUENCE, still asserted, on the arithmetic the clause now stands in front of
+    # — read through this module's OWN neighbour helpers rather than re-typed, so it stays
+    # a statement about `derive_edge` and not about a copy of it. `rel > nan` and
+    # `min_dot < cos(nan)` are all-False in both directions, so a NaN pair reaching the
+    # terms would contribute nothing and the edge channel would be blank: a well-formed PNG
+    # at every frame, which G2 counts as present and non-empty and whose CONTENT G4 is
+    # blind to.
+    grad = channels._neighbour_max(z, mask)
+    local = np.maximum(np.where(mask, z, 1.0), 1e-6)
+    rel = np.where(mask, grad / local, 0.0)
+    assert (rel > 0.02).sum() > 0, "the same term fires on the legal threshold"
+    assert (rel > NAN).sum() == 0, "and contributes nothing against a NaN one"
+    min_dot = channels._neighbour_min_dot(n_cam, mask)
+    assert np.logical_and(mask, min_dot < math.cos(math.radians(NAN))).sum() == 0
 
 
 def test_every_committed_spec_still_parses():

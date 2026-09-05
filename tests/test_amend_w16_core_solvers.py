@@ -1177,7 +1177,15 @@ TESTS_STALE_ANCHORS_RECORDED = {
     ('test_instrument_exits', 'author_walk.py', 13),
     ('test_instruments_amend_w10', 'render_pose_sticks.py', 178),
     ('test_instruments_amend_w10', 'test_check_relift.py', 44),
-    ('test_instruments_amend_w14', 'blender_scene.py', 772),
+    # ROW DELETED, WAVE 25 (core-solvers), in the commit that made it live again — which is
+    # this table's own stated rule. `blender_scene.py:772` was kept as a deliberate stale
+    # citation because the number was quoted inside the sentence recording it as wrong;
+    # wave 25 added the geometry drop census above `render_frame` in that file and line 772
+    # now resolves to real code inside `half_fovs`, so the exemption stopped describing what
+    # it exempted. Both citing sites in `test_instruments_amend_w14.py` are RE-ANCHORED ON
+    # THE SYMBOL (`blender_scene.py::render_frame`) rather than re-measured, because the
+    # same three numbers had already drifted twice before and drifted again here. Nothing
+    # cites that line any more, so there is no row to keep.
     ('test_instruments_amend_w16', 'test_instruments_amend_w14.py', 468),
     ('test_instruments_amend_w18', 'test_amend_w16_builders.py', 815),
     ('test_instruments_amend_w22', 'pack_pose_pack.py', 82),

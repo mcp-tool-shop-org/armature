@@ -233,6 +233,20 @@ RECORDED_POPULATION = frozenset({
     # WAVE 22 (core-solvers, F-4efe0fad) — MEASURED in this worktree, not carried.
     # `channels.NormalError` is `DepthError`'s sibling on the half wave 18 did not cover.
     "NormalError",
+    # WAVE 25 (core-solvers, F-efd6b45c) — MEASURED in this worktree against `580af47`,
+    # which this census read GREEN at 110 first. `startframe.ShadowError` crosses the
+    # two-site threshold the day it lands: the explicit `shadow_floor_eps_is_zero` raise
+    # and the DELEGATED site, `parts.tightened(..., ShadowError, ev)`, which the wave-16
+    # delegated edge (F-d426d4bd) resolves — a refusal class handed to a helper that raises
+    # its own parameter. Measured: `POLICED - RECORDED_POPULATION == ['ShadowError']`,
+    # nothing vanished.
+    #
+    # The wave's OTHER new class is deliberately absent for the reason this table already
+    # gives twice: `channels.ChannelEncodeError` (F-e8074763) has exactly ONE raise site,
+    # inside `encode_u8`, and a class raised once IS its clause. It joins the day a second
+    # site is written. ⚠ BRANCH-LOCAL — five domains move this number in wave 25 and the
+    # coordinator MEASURES on the merged tree, never sums.
+    "ShadowError",
     # WAVE 16 (tests, F-d426d4bd) — MEASURED in this worktree. The derivation gained a
     # second edge: a refusal class handed to a helper that raises its own parameter. Two
     # classes cross the two-site threshold on it. `PosePackError` was raised on every real
@@ -524,7 +538,12 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # exactly these two. One commit later F-76364ac7 adds `E13SheetError` the same way,
     # 107 -> 108, measured. ⚠ BRANCH-LOCAL — a COMPOSITION on the merged tree.
     # WAVE-22 MERGE (coordinator, 2026-09-05): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(POLICED) == 110, sorted(POLICED)
+    # WAVE 25 (core-solvers): 110 -> 111, RE-DERIVED with `==` in this worktree against
+    # `580af47`, which this census read GREEN at 110 before the first edit. BRANCH-LOCAL.
+    #   +1 `startframe.ShadowError` (F-efd6b45c) — two sites, one explicit and one
+    #      delegated through `parts.tightened`. `channels.ChannelEncodeError` (F-e8074763)
+    #      is single-site and stays out; see RECORDED_POPULATION for both derivations.
+    assert len(POLICED) == 111, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -810,7 +829,16 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # names as the thing the wave-14 constructor is "not a licence for"). No class was
     # deleted. ⚠ BRANCH-LOCAL — a COMPOSITION on the merged tree.
     # WAVE-22 MERGE (coordinator, 2026-09-05): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(defined) == 134, len(defined)
+    # WAVE 25 (core-solvers): 134 -> 136, RE-DERIVED with `==` in this worktree against
+    # `580af47`, measured GREEN at 134 first. Two new family classes, both named rather
+    # than counted: `channels.ChannelEncodeError` (F-e8074763 — the shared byte writer's
+    # refusal, channel-neutral because `encode_u8` authors the depth plate, the normal
+    # triple AND `stage_render`'s P3 difference, so naming one channel would be a refusal
+    # naming an andon that did not pull) and `startframe.ShadowError` (F-efd6b45c — a plain
+    # `ArmatureError` sibling rather than a fourth gate class, because `shadow_ratio` is
+    # arithmetic that authors a layer and `StartFrameGate` is Gate WHOLE). No class was
+    # deleted. ⚠ BRANCH-LOCAL — a COMPOSITION on the merged tree; five domains move it.
+    assert len(defined) == 136, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
@@ -1281,6 +1309,25 @@ def test_every_converted_refusal_carries_an_evidence_dict():
 #
 # MEASURED 2026-09-05 over `tools/**` (`armature_core/` included), both spellings that
 # reach a halt line — the literal inside an evidence dict and the assignment into one:
+# (RE-DERIVED wave 25, core-solvers, BRANCH-LOCAL against `580af47`: 385 -> **401** distinct
+# clause words, of which 132 -> **130** are named nowhere in `tests/*.py`. The sixteen this
+# domain adds are all named by fixtures in `tests/test_amend_w25_core_solvers.py`, so none
+# joins the unnamed table. TWO rows LEAVE it in the same commit that names them — which is
+# the rule this table states about itself: `blend_band_not_positive` (F-95c9a97e's fixture)
+# and `min_frac_may_only_tighten`, named by the fixture proving `parts.tightened` DEFERS to
+# a caller's own finer clause instead of overwriting it. The sixteen:
+# `non_finite_encoder_input` (the shared byte writer, F-e8074763);
+# `depth_rel_threshold_not_finite_and_positive`, `normal_angle_deg_not_finite`,
+# `normal_angle_deg_outside_domain` (the edge pass's two thresholds, F-075b3af4);
+# `point_cloud_not_finite`, `bisect_bracket_not_finite` (the camera solver, F-526e9069);
+# `shadow_floor_eps_is_zero` (F-efd6b45c); `bound_not_finite`, `bound_is_negative`,
+# `bound_may_only_tighten`, `allowlist_may_only_narrow` (`parts.tightened` / `narrowed`,
+# whose eight callers passed no clause at all — measured); and the five on
+# `blender_scene.py` from the wave-24 seed: `compositor_link_count`,
+# `compositor_source_is_not_render_layers`, `compositor_socket_is_not_the_pass`,
+# `lens_mm_not_finite_and_positive`, `sensor_mm_not_finite_and_positive`. ⚠ Five domains
+# move this pin in wave 25; the coordinator MEASURES on the merged tree, never sums.)
+#
 # 385 distinct clause words, of which 132 are named nowhere in
 # `tests/*.py`. Two of those are Gate ROUTE's own, on the last gate before a paid
 # submission (`unknown_hosted_tier`, `two_answers`); others sit on the spend and fetch path
@@ -1313,6 +1360,7 @@ RECORDED_CLAUSES = [
     'SEGMENTATION: no image corner is inside the subject mask; a row that fails carries angle_deg_measured null and a failed_reason',
     'above_one',
     'adjacent_pair_shapes_differ',
+    'allowlist_may_only_narrow',
     'allowlist_name_pattern',
     'alpha_declaration_missing',
     'alpha_disagrees_with_the_file',
@@ -1334,6 +1382,7 @@ RECORDED_CLAUSES = [
     'banned_component_in_base',
     'batch_node_is_not_a_batch',
     'batch_node_over_the_slot_ceiling',
+    'bisect_bracket_not_finite',
     'bisect_target_not_finite',
     'bit1_not_grayscale',
     'bit1_values',
@@ -1351,6 +1400,9 @@ RECORDED_CLAUSES = [
     'bone_has_zero_rest_length',
     'bone_radius_not_positive',
     'bone_set_changes_between_frames',
+    'bound_is_negative',
+    'bound_may_only_tighten',
+    'bound_not_finite',
     'bufferview_negative_range',
     'bufferview_no_bytelength',
     'bufferview_not_an_index',
@@ -1379,6 +1431,9 @@ RECORDED_CLAUSES = [
     'composite_colour_not_three_floats',
     'composition_puts_points_behind_the_camera',
     'composition_unreachable',
+    'compositor_link_count',
+    'compositor_socket_is_not_the_pass',
+    'compositor_source_is_not_render_layers',
     'conditional_tier_without_its_readers',
     'convention_nonconformance',
     'convention_pin_disagrees',
@@ -1399,6 +1454,7 @@ RECORDED_CLAUSES = [
     'degenerate_plate',
     'degenerate_target_frame',
     'depth_buffer_is_not_the_frame_size',
+    'depth_rel_threshold_not_finite_and_positive',
     'destination_frame_count_below_two',
     'diagnostic_cannot_be_armed',
     'downloader_job_exits',
@@ -1479,6 +1535,7 @@ RECORDED_CLAUSES = [
     'landmark_table_renamed',
     'landmarks_missing',
     'length_mismatch',
+    'lens_mm_not_finite_and_positive',
     'licence_map_ruling',
     'limb_column_is_discontinuous',
     'limb_trace_too_short',
@@ -1533,9 +1590,12 @@ RECORDED_CLAUSES = [
     'node_map_entry_shape',
     'node_without_a_class_type',
     'non_finite_depth_window',
+    'non_finite_encoder_input',
     'non_finite_geometry_depth',
     'non_finite_geometry_normal',
     'non_finite_pair_distance',
+    'normal_angle_deg_not_finite',
+    'normal_angle_deg_outside_domain',
     'not_a_finite_angle',
     'not_a_finite_fraction',
     'not_a_finite_positive_fraction',
@@ -1573,6 +1633,7 @@ RECORDED_CLAUSES = [
     'plate_source_missing',
     'playback_rate_not_finite',
     'playback_rate_not_positive',
+    'point_cloud_not_finite',
     'points_behind_the_camera',
     'population_is_not_the_spec_names',
     'preview_frame_collapsed',
@@ -1610,7 +1671,9 @@ RECORDED_CLAUSES = [
     'schema',
     'seed_not_registered',
     'segment_has_zero_length',
+    'sensor_mm_not_finite_and_positive',
     'set_short',
+    'shadow_floor_eps_is_zero',
     'shape_mismatch',
     'short_chunk_body',
     'short_chunk_header',
@@ -1716,7 +1779,6 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'bit1_not_grayscale',
     'bit1_values',
     'bit8_dtype',
-    'blend_band_not_positive',
     'body_keypoints_wrong_shape',
     'bone_has_an_unknown_rule',
     'bone_has_no_model_rule',
@@ -1781,7 +1843,6 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'landmarks_missing',
     'licence_map_ruling',
     'measurement_not_positive',
-    'min_frac_may_only_tighten',
     'mitten_hand_wrong_point_count',
     'motion_record_has_no_frames',
     'no_batch_node_to_measure',

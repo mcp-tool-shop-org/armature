@@ -25,6 +25,7 @@ session's — E01 reports both.
 import numpy as np
 
 from .errors import ArmatureError
+from .parts import require_finite
 
 BACKGROUND_DEPTH = 0.0  # black = far, for pixels with no geometry
 
@@ -128,6 +129,51 @@ class NormalError(ArmatureError):
     **Not a `GateFailure`,** for `DepthError`'s reason: these are refusals from a maths
     module, and the honest halt record is "REFUSED" with `gate` null and the class name
     under `andon`.
+    """
+
+
+class ChannelEncodeError(ArmatureError):
+    """The shared byte writer was handed a value it cannot encode. Channel-neutral.
+
+    F-e8074763, wave 25. `DepthError` and `NormalError` above closed the two PRODUCER
+    doors — `depth_extent` / `normalize_depth` in wave 18, `require_readable_normals` in
+    wave 22 — and left the shared WRITER open. `encode_u8` is
+    `np.clip(np.rint(x * 255.0), 0, 255).astype(np.uint8)`, the one function in this module
+    with no clause, and it is the function that writes every control-sequence byte.
+
+    MEASURED in this worktree on `580af47`:
+    `encode_u8([[0.5, nan], [inf, -inf]])` returns `[[128, 0], [255, 0]]`. So:
+
+    * a **NaN** becomes byte **0**, and so does a **-inf**;
+    * `encode_u8(BACKGROUND_DEPTH)` is byte **0** too, and `encode_u8(GEOMETRY_DEPTH_FLOOR)`
+      is byte 1 — measured beside it in the same run. That is exactly the
+      farthest-geometry-vs-void collision `GEOMETRY_DEPTH_FLOOR` exists to prevent,
+      arriving through the writer instead of through the producer;
+    * a **+inf** becomes byte **255**, the NEAREST-geometry byte, so an unreadable pixel is
+      encoded as the closest thing in the shot.
+
+    The only signal the cast gave was a numpy `RuntimeWarning: invalid value encountered in
+    cast` — a warning under the default filter, not a refusal, in a repo whose law is that
+    a check deciding whether an irreversible step proceeds raises inside the tool
+    performing that step.
+
+    **Why channel-neutral rather than `DepthError`.** This writer authors the depth byte,
+    the normal RGB triple (`encode_normal` at the bottom of this module) and
+    `stage_render`'s P3 difference plate, so naming any one channel in the refusal would be
+    a refusal that does not name the andon that pulled. `where` says which caller asked.
+
+    **What was and was not reachable, honestly.** Every producer INSIDE this module is
+    guarded, and the wave-18 test asserting the property
+    (`tests/test_amend_w18_core_solvers.py`,
+    `test_the_encoder_can_never_be_handed_a_non_finite_input_from_this_module`) is scoped to
+    exactly that, over one hand-picked finite fixture. The open door is the PUBLIC
+    signature: `stage_render.py::run_export` already calls `ch.encode_u8(diff)` on an array this
+    module did not normalise, and the next channel or tool that computes its own array gets
+    the whole escape. The cost of closing it is one pass over an array the function already
+    walks twice.
+
+    **Not a `GateFailure`,** for the reason its two siblings give: a refusal from a maths
+    module, halt record "REFUSED" with `gate` null and the class name under `andon`.
     """
 
 
@@ -269,9 +315,46 @@ def normalize_depth(z, mask, z_near, z_far):
     return np.where(mask > 0, d, BACKGROUND_DEPTH)
 
 
-def encode_u8(x01):
-    """[0,1] float -> uint8, half-to-even rounding."""
-    return np.clip(np.rint(np.asarray(x01, dtype=np.float64) * 255.0), 0, 255).astype(np.uint8)
+def encode_u8(x01, where="encode_u8"):
+    """[0,1] float -> uint8, half-to-even rounding. Refuses a value it cannot encode. · ANDON
+
+    The census is INSIDE the writer (F-e8074763, wave 25). See `ChannelEncodeError` for the
+    measured bytes: NaN and -inf both cast to 0 — `BACKGROUND_DEPTH`'s byte — and +inf to
+    255, with a numpy `RuntimeWarning` as the only signal. The population is the WHOLE
+    array, not a selected subset: unlike `depth_extent` and `require_readable_normals`,
+    which are handed a camera measurement and a mask that says which pixels this module
+    authored, everything reaching here is already a value this module is about to write as
+    a byte, so there is no "outside the mask" for it to be excused by.
+
+    `where` names the caller in the evidence, so a halt line distinguishes the depth plate
+    from the normal triple from `stage_render`'s P3 difference. It is a label, never a
+    switch: no value of it changes what is refused.
+    """
+    x = np.asarray(x01, dtype=np.float64)
+    census = _non_finite_census(x)
+    if census["n_non_finite"]:
+        flat = x.ravel()
+        first = int(np.flatnonzero(~np.isfinite(flat))[0])
+        ev = {"gate": None, "andon": "ChannelEncodeError",
+              "clause": "non_finite_encoder_input", "where": where,
+              "n": census["n"], "n_finite": census["n_finite"],
+              "n_non_finite": census["n_non_finite"], "n_nan": census["n_nan"],
+              "n_pos_inf": census["n_pos_inf"], "n_neg_inf": census["n_neg_inf"],
+              "first_non_finite_flat_index": first,
+              "first_non_finite_value": repr(float(flat[first])),
+              "shape": [int(d) for d in x.shape]}
+        raise ChannelEncodeError(
+            f"{census['n_non_finite']} of {census['n']} value(s) handed to the byte writer "
+            f"are not finite ({census['n_nan']} NaN, {census['n_pos_inf']} +inf, "
+            f"{census['n_neg_inf']} -inf; first at flat index {first}). The cast is "
+            f"`np.rint(x * 255.0).astype(np.uint8)`, which takes a NaN and a -inf to byte "
+            f"0 — the byte BACKGROUND_DEPTH already occupies, so 'no geometry' and 'a pixel "
+            f"we could not read' become the same byte, which is the collision "
+            f"GEOMETRY_DEPTH_FLOOR reserves byte 1 to prevent — and a +inf to byte 255, the "
+            f"NEAREST-geometry byte. numpy signals this with a RuntimeWarning, which is "
+            f"silent under the default filter; the byte it writes steers a paid generation",
+            ev)
+    return np.clip(np.rint(x * 255.0), 0, 255).astype(np.uint8)
 
 
 def world_normals_to_camera(n_world, cam_rot_3x3):
@@ -453,7 +536,65 @@ def derive_edge(z, n_cam, mask, depth_rel_threshold, normal_angle_deg):
     two reasons are different and the policy is the same, which is why it is written down
     in one place instead of inferred from three implementations. `silhouette_px` in the
     diagnostics therefore counts real silhouette and not the length of the crop.
+
+    **The two thresholds take a clause of their own** (F-075b3af4, wave 25). They were the
+    only numbers in this module reaching a comparison with no finiteness clause, in the one
+    module whose stated job is that a pixel it could not read never becomes an ordinary
+    byte. MEASURED in this worktree on `580af47`, on a flat camera-facing field:
+
+    * `depth_rel_threshold=nan` and `=inf` both RETURNED, with `depth_break_px: 0` and the
+      threshold itself written back into the diagnostics as `nan` / `inf` — `rel > nan` is
+      False at every pixel, so the depth term contributes nothing and the diagnostic
+      reports the truth about a term that was never asked;
+    * `normal_angle_deg=nan` / `=inf` the same, through
+      `float(np.cos(np.radians(nan)))` and a second numpy RuntimeWarning;
+    * `normal_angle_deg=400.0` RETURNED as well, and silently: `cos(radians(400))` is
+      `cos(40°)`, so a request outside the angle's own domain becomes a DIFFERENT, plausible
+      threshold rather than a refusal;
+    * `None` and `'x'` left as a bare `TypeError` / `ValueError` — not in the
+      `ArmatureError` family, so the halt contract records exit 1 "FAILED — an unhandled
+      error" where a typed refusal at exit 2 belongs. That is the exact shape wave 22 fixed
+      INSIDE `parts.require_finite` (F-fda74b87), and adopting the home carries the fix.
+
+    The diagnostics then published `float(nan)` back into the per-frame record, the bare
+    non-JSON token `parts.halt_keysafe` exists to stop reaching a halt line.
+
+    **Honest about reachability: the live path is guarded upstream.**
+    `shotspec.normalise_spec` refuses both, including the `[0, 180]` domain, and
+    `stage_render.py::run_export` is the only production caller. The gap this closes is that the
+    bound lived at the SPEC and not inside the function performing the step, which is where
+    this repo puts an andon — the wave-18 SEAM-5 shape, complementary to the spec bound and
+    not a second spelling of it. This module already carries two named andons for its other
+    two inputs; these are the third and fourth.
     """
+    _ev_depth = {"gate": None, "andon": "DepthError",
+                 "clause": "depth_rel_threshold_not_finite_and_positive",
+                 "where": "derive_edge",
+                 "depth_rel_threshold_raw": repr(depth_rel_threshold)}
+    depth_rel_threshold = require_finite(
+        "depth_rel_threshold", depth_rel_threshold, DepthError, _ev_depth, positive=True)
+    _ev_normal = {"gate": None, "andon": "NormalError",
+                  "clause": "normal_angle_deg_not_finite",
+                  "where": "derive_edge",
+                  "normal_angle_deg_raw": repr(normal_angle_deg)}
+    normal_angle_deg = require_finite(
+        "normal_angle_deg", normal_angle_deg, NormalError, _ev_normal, positive=False)
+    if not (0.0 <= normal_angle_deg <= 180.0):
+        # The DOMAIN, separately from finiteness, because the two are different facts and
+        # `cos` accepts both. A cosine is periodic: 400 degrees is 40 degrees and 190 is
+        # 170, so an out-of-domain request does not fail here, it succeeds as a threshold
+        # nobody asked for. `[0, 180]` is the range over which `cos` is injective and is the
+        # same interval `shotspec.normalise_spec` bounds this flag to at the spec.
+        raise NormalError(
+            f"normal_angle_deg={normal_angle_deg!r} is outside [0, 180], the interval over "
+            f"which the cosine this threshold is taken through is one-to-one. "
+            f"`cos(radians(400))` is `cos(radians(40))`, so the request does not fire a "
+            f"bound — it becomes a different, plausible break angle, and `normal_break_px` "
+            f"reports honestly on a term nobody asked for",
+            {"gate": None, "andon": "NormalError",
+             "clause": "normal_angle_deg_outside_domain", "where": "derive_edge",
+             "normal_angle_deg": float(normal_angle_deg),
+             "domain_deg": [0.0, 180.0]})
     m = np.asarray(mask) > 0
     # The SECOND consumer of the same unbounded array (F-4efe0fad). `normal_break = m &
     # (min_dot < cos_thresh)` is False for a NaN, so an unreadable normal silently removed
