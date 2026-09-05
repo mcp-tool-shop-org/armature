@@ -288,15 +288,23 @@ def stale_citations(path):
 #: Measured 2026-09-04 per spec. A CEILING, not equality: builders is re-anchoring the 28
 #: stale citations this wave (F-5e7fe9dc), so a spec that gets corrected leaves this file
 #: green and its entry merely becomes deletable. A citation that GOES stale fails here.
+#:
+#: RE-MEASURED 2026-09-05 (wave 25, builders, F-af838b99): **every entry is 0**. Adopting
+#: the ONE halt handler moved six of the seven cited reader lines (`PayloadError`'s
+#: class-level `gate` and the trimmed error imports shift them by 3 to 41 lines), so all
+#: eight specs were re-anchored to the line each `read_seed_registration` call is on TODAY,
+#: derived by `seed_reader_call_lines` rather than counted by hand. The ceiling is
+#: tightened to the measurement rather than left slack: with every entry at 0 the census is
+#: equality in all but name, and the next citation to drift fails here naming its spec.
 STALE_CITATIONS_TODAY = {
     "E08-seeds.json": 0,
-    "E09-A3-seeds.json": 4,
-    "E09-seeds.json": 4,
-    "E10-seeds.json": 4,
-    "E11-seeds.json": 4,
-    "E12-seeds.json": 4,
-    "E13-seeds.json": 4,
-    "E14-seeds.json": 4,
+    "E09-A3-seeds.json": 0,
+    "E09-seeds.json": 0,
+    "E10-seeds.json": 0,
+    "E11-seeds.json": 0,
+    "E12-seeds.json": 0,
+    "E13-seeds.json": 0,
+    "E14-seeds.json": 0,
 }
 
 

@@ -1359,10 +1359,25 @@ def test_the_cpython_halt_line_carries_the_gate_and_its_measurement(filename, ki
 def test_the_one_handlers_adopters_are_derived_and_carry_the_six_key_record():
     """Which members print the six is READ off the tree, not typed: a tool adopts the one
     handler by importing `run_tool_main`, and that is the same set whose halt line carries
-    `tool` / `outcome` / `gate`."""
+    `tool` / `outcome` / `gate`.
+
+    WAVE 25 (builders, F-af838b99): 8 -> 21. The nine builders, both fetchers, `canon_gate`
+    and `gate_saved_graph` each carried a LOCAL three-key handler — thirteen byte-alike
+    copies of the job this home does — and a `NaN` in one evidence value put the bare token
+    on `SAVED_ADMISSION_HALT`, measured as a real subprocess. They are the same 13 members
+    `CPYTHON_WITH_HANDLER` already held (the population does not move; what moves is which
+    handler they print through), so they join the six-key half of the contract here and the
+    stronger `sentinel_violations` check the branch below applies to it.
+    """
     adopters = sorted(f for f in CPYTHON_WITH_HANDLER
                       if "run_tool_main" in read_source(f))
-    assert adopters == ["composite_reference.py", "encode_control.py", "invert_frames.py",
+    assert adopters == ["build_animate_payload.py", "build_assembly_payload.py",
+                        "build_camera_i2v_payload.py", "build_cascade_payload.py",
+                        "build_i2v_payload.py", "build_lora_arm_payload.py",
+                        "build_payload.py", "build_r2v_payload.py",
+                        "build_t2v_payload.py", "canon_gate.py",
+                        "composite_reference.py", "encode_control.py", "fetch_run.py",
+                        "fetch_t2v_run.py", "gate_saved_graph.py", "invert_frames.py",
                         "make_review_clip.py", "measure_clip.py", "pack_pose_pack.py",
                         "render_pose_sticks.py", "resample_motion.py"], adopters
     for filename in adopters:

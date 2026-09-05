@@ -1167,12 +1167,34 @@ TESTS_CITED_FILES_NOT_IN_THE_TREE = {
 #: symbol is not what the sentence claims. Keyed `(citing module, cited file, line)`,
 #: the same shape as `CORRECTED_ANCHORS` above. Checked rather than trusted: a row
 #: that becomes live again fails `test_the_recorded_stale_anchors_are_all_still_stale`.
+#:
+#: WAVE 25 (builders, F-af838b99, 2026-09-05). Adopting the ONE halt handler in this
+#: domain's thirteen tools moved lines under four citing sentences, and the table moved
+#: with them in BOTH directions:
+#:   - two rows DELETED because their anchors resolve to real code again, which is exactly
+#:     what `test_the_recorded_stale_anchors_are_all_still_stale` exists to catch, and it
+#:     caught them (the `build_r2v_payload` row in `test_amend_w18_builders`, and the
+#:     `test_packaging` row in `test_ci_workflows`);
+#:   - two rows ADDED, both numbers quoted INSIDE the sentence that records them as wrong:
+#:     `test_build_animate_payload` cites a `str.replace` site and says in the same breath
+#:     "(now removed)", and `test_seeds_specs` quotes a dated 2026-09-04 example of a stale
+#:     spec citation. Re-anchoring either would delete the correction, which this repo's
+#:     law forbids.
+#: The two LIVE citations this wave broke were re-anchored on their SYMBOLS instead —
+#: `build_camera_i2v_payload::ledger_against_wave1` and `test_packaging`'s
+#: `test_the_two_spend_and_fetch_censuses_are_literally_the_same_function` — the form this
+#: census's own failure message asks for. Each of those two re-anchorings then ADDED a row
+#: itself, for the third time in this note's own shape: the correction sentence quotes the
+#: number it is correcting, so the old anchor survives as a record and the census sees it.
+#: Four rows in, two rows out. (No `<file>` `<line>` pair is written in this prose, for
+#: the reason the block below records: a comment explaining the rule is inside the
+#: population the rule governs.)
 TESTS_STALE_ANCHORS_RECORDED = {
     ('test_amend_w12_core_gates', 'test_route_gates.py', 1893),
     ('test_amend_w16_core_solvers', 'lift_solve.py', 307),
-    ('test_amend_w18_builders', 'build_r2v_payload.py', 69),
     ('test_assembly', 'test_amend_w12_core_solvers.py', 797),
-    ('test_ci_workflows', 'test_packaging.py', 1013),
+    ('test_build_animate_payload', 'build_animate_payload.py', 251),
+    ('test_build_camera_i2v_payload', 'build_camera_i2v_payload.py', 602),
     ('test_donor_gate', 'render_pose_sticks.py', 178),
     ('test_instrument_exits', 'author_walk.py', 13),
     ('test_instruments_amend_w10', 'render_pose_sticks.py', 178),
@@ -1187,6 +1209,8 @@ TESTS_STALE_ANCHORS_RECORDED = {
     ('test_make_rig_sheet', 'rig_repair.py', 150),
     ('test_probe_glb', 'probe_subject.py', 88),
     ('test_refusal_clauses', 'pack_pose_pack.py', 164),
+    ('test_seeds_specs', 'build_animate_payload.py', 475),
+    ('test_sheet_argv_smoke', 'test_packaging.py', 1367),
 }
 
 

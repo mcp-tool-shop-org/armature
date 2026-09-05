@@ -41,8 +41,10 @@ from build_assembly_payload import (  # noqa: E402
 # the directory clause is lifted into `gate_out_writable` there and imported here rather
 # than spelled a second time beside the write it has to bound.
 from build_payload import gate_out_writable  # noqa: E402
-from armature_core.errors import (  # noqa: E402
-    ArmatureError, GateFailure)
+# WAVE 25, F-af838b99: this file's `__main__` block named `GateFailure` and
+# `ArmatureError` to pick its own exit code. That choice belongs to
+# `armature_core.parts.halt_outcome` now and no other line here names either,
+# so the import is dropped rather than left dangling.
 
 TOOL_VERSION = "E10.1"
 
@@ -1330,23 +1332,43 @@ def main(argv=None):
 
 if __name__ == "__main__":
     # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
-    # disagreed three ways on how a refusal leaves the process: three carried this block,
-    # two exited 2 unconditionally (so a programming error was indistinguishable from a
-    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
+    # disagreed three ways on how a refusal leaves the process: three carried a local
+    # handler, two exited 2 unconditionally (so a programming error was indistinguishable
+    # from a gate refusal), and eight had no handler at all — a Gate CANON halt reached the
     # operator as a raw traceback with exit 1 and no machine-readable evidence.
     #
     # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
-    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `SAVED_ADMISSION_HALT`
-    # sentinel below, never on the code alone.
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("SAVED_ADMISSION_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the
+    # `SAVED_ADMISSION_HALT` sentinel this handler prints, never on the code alone.
+    #
+    # ---- WAVE 25, F-af838b99. THE HOME IS ADOPTED, not spelled a fourteenth time. This
+    # was a LOCAL three-key handler — `print(PREFIX + "_HALT " + json.dumps({error,
+    # message, evidence}, default=str))` — one of THIRTEEN byte-alike copies across the
+    # nine builders, both fetchers, `canon_gate` and this tool, while wave 22 built exactly
+    # one home for the job in `armature_core.parts.run_tool_main` / `halt_keysafe`. Outside
+    # that home the block was outside every property the home carries:
+    #
+    #   * STRICT JSON. MEASURED on `580af47` as a real subprocess on the green assembly
+    #     fixture with a `NaN` in one saved widget value:
+    #     `SAVED_ADMISSION_HALT {"error": "RouteGate", ..., "evidence": {"checked":
+    #     [{..., "saved": NaN, ...}]}}`. Python's own `json.loads` accepts that line and
+    #     `json.loads(payload, parse_constant=<raise>)` refuses it with "bare NaN" — which
+    #     is what JS `JSON.parse`, Go `encoding/json` and serde do. `run_tool_main` dumps
+    #     with `allow_nan=False` and `halt_keysafe` writes the float as its `repr`, so the
+    #     operand that caused the halt survives as `"nan"` rather than deleting the line.
+    #   * KEYSAFE and CIRCULAR. `json.dumps(default=str)` applies `default` to VALUES only,
+    #     so a tuple or numpy evidence KEY raises `TypeError` INSIDE the handler and
+    #     `sys.exit` never runs (21 of 21 Blender handlers escaped that way before wave 22),
+    #     and a self-referencing evidence dict recursed out of it. LATENT here rather than
+    #     measured — no reachable non-str evidence key was found in this domain on
+    #     `580af47` — and stated as latent rather than sold as a closed defect.
+    #   * `tool` / `outcome` / `gate`. The three keys `halt_outcome` uses to separate "a
+    #     gate fired" from "the tool declined to proceed" from "an unhandled error"; the
+    #     local copy printed three keys and a reader could not tell the three apart.
+    #
+    # The prefix is UNCHANGED (it is not the module stem for most of these thirteen, and
+    # `blender_stub.halt_handler` reads it off this block rather than guessing); renaming
+    # prefixes is explicitly not this wave's work.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "SAVED_ADMISSION")
