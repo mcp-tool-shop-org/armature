@@ -865,19 +865,29 @@ def test_stage_renders_halt_line_is_unchanged_by_the_adoption(tmp_path, capsys):
 # ===========================================================================
 
 
-def _p3_run(root, count=2, size=(4, 4)):
+#: The synthetic run's per-shot normalisation is `+20` below a chosen depth level and `-40`
+#: above it, over a per-frame depth ramp that covers EVERY 8-bit level, so the 8-level bin
+#: sweep this tool actually publishes has a populated bin on both sides of the change and a
+#: crossover it can find. A narrower ramp leaves most bins empty, the sweep's `continue`
+#: skips them, and `crossover` comes back None — which would make the assertion below pass
+#: for the wrong reason.
+P3_FLIP_LEVEL = 128
+
+
+def _p3_run(root, count=2, rows=4):
     os.makedirs(root, exist_ok=True)
     with open(os.path.join(root, "manifest.json"), "w", encoding="utf-8") as fh:
         json.dump({"frame_count": count}, fh)
     for sub in ("mask", "depth_perframe", "depth_pershot"):
         os.makedirs(os.path.join(root, sub), exist_ok=True)
+    pf = np.tile(np.arange(256, dtype=np.uint8), (rows, 1))
+    ps = np.clip(pf.astype(np.int16) + 20 - (pf > P3_FLIP_LEVEL) * 60,
+                 0, 255).astype(np.uint8)
     for i in range(count):
         name = f"{i:05d}.png"
-        Image.fromarray(np.full(size, 255, np.uint8), mode="L").convert("1").save(
+        Image.fromarray(np.full(pf.shape, 255, np.uint8), mode="L").convert("1").save(
             os.path.join(root, "mask", name))
-        pf = np.tile(np.linspace(0, 255, size[1], dtype=np.uint8), (size[0], 1))
         Image.fromarray(pf, mode="L").save(os.path.join(root, "depth_perframe", name))
-        ps = np.clip(pf.astype(np.int16) + 20 - (pf > 128) * 60, 0, 255).astype(np.uint8)
         Image.fromarray(ps, mode="L").save(os.path.join(root, "depth_pershot", name))
     return root
 
@@ -900,12 +910,21 @@ def test_the_dead_crossover_expression_is_gone_and_the_number_is_unchanged(tmp_p
 
     run = _p3_run(str(tmp_path / "run"))
     report = AP3.analyze(run)
-    # the derivation that survives is the bin sweep, and it is the one that produces the key
-    assert "crossover_d_perframe_level" in report
-    means = report["binned_means"] if "binned_means" in report else None
-    assert report["crossover_d_perframe_level"] is None or isinstance(
-        report["crossover_d_perframe_level"], int), report["crossover_d_perframe_level"]
-    assert means is None or isinstance(means, list)
+    # The derivation that survives is the 8-level bin sweep, and it produces a REAL number
+    # on a run built to have one: the per-shot normalisation lightens every level up to 128
+    # and darkens every level above it, so the first bin boundary where the binned mean
+    # signed difference stops being positive is the bin that STARTS at 128 -- that bin holds
+    # level 128 (+20) and levels 129-135 (-40), mean -32.5, so the sign changes across the
+    # [120,128) -> [128,136) boundary and the reported crossover is 128. The straddling bin
+    # is deliberately excluded from the two partitions below rather than fudged.
+    means = report["binned_mean_signed"]
+    assert isinstance(means, list) and len(means) == 32, len(means)
+    assert report["crossover_d_perframe_level"] == 128, (
+        report["crossover_d_perframe_level"], means[14:20])
+    below = [m for m in means if m["d_perframe_bin"][1] <= P3_FLIP_LEVEL]
+    above = [m for m in means if m["d_perframe_bin"][0] > P3_FLIP_LEVEL]
+    assert all(m["mean_signed_levels"] == 20.0 for m in below), below
+    assert all(m["mean_signed_levels"] == -40.0 for m in above), above
 
 
 # ===========================================================================
