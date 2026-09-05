@@ -2666,6 +2666,33 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # function returns — and every refusal evidence it raises — answers the same questions.
     # `_seed_population_andon` still writes `carries_no_sampler_asserted` for its own other
     # caller (`gate_s_registration`), with the same value.
+    #
+    # ⚠ **THE INVARIANT THAT TELLS A RETURNED RECEIPT FROM A CAUGHT REFUSAL: a receipt this
+    # function RETURNS never carries `clause`; only a refusal it RAISES does.** Both are
+    # stamped `gate: "ROUTE"`, `andon: "RouteGate"`, `receipt: "verify"` and both fact keys,
+    # written in this literal before the first clause can raise — so the ONLY thing
+    # separating them downstream is the absence of `clause`.
+    #
+    # It is stated here because it is read there and was written down nowhere on this page.
+    # `gate_saved_graph.route_facts` reads `refusals = [r for r in receipts if
+    # r.get("clause")]` and raises `record_carries_a_caught_refusal` on a hit; the sentence
+    # that says a returned receipt never carries `clause` lives at `gate_saved_graph.py`,
+    # in another domain's file, and in `tests/test_amend_w18_builders.py`. Re-measured
+    # 2026-09-05 on `e8263a3`: a passing `verify` returns with `"clause" in ev` False and
+    # `receipt == "verify"`, and a caught refusal (an `attribution` naming a component the
+    # graph does not load) raises with evidence carrying `receipt: "verify"`, both fact keys
+    # AND `clause: "orphan_attribution"` — told apart by an absence nothing in this module
+    # pinned.
+    #
+    # Three OTHER dicts in this module stamped `gate: "ROUTE", andon: "RouteGate"` DO carry
+    # `clause` on a pass — `gate_s_registration` (`clause: "gate_s_registration"`),
+    # `camera_widget_order_evidence` (`clause: "camera_widget_order"`) and
+    # `gate_alias_table` (`clause: "orphaned_component_class_alias"`). Measured,
+    # `gate_saved_graph.verify_receipts` admits none of the three, but only because it ALSO
+    # requires `receipt == "verify"` or both fact keys. So the day a clause name is added to
+    # THIS literal for symmetry with those three, every builder's payload record starts
+    # refusing at the last gate before a paid submission with
+    # `record_carries_a_caught_refusal` naming the wrong defect. Do not add one.
     ev = {"gate": "ROUTE", "andon": "RouteGate", "receipt": "verify",
           "carries_no_sampler_asserted": bool(carries_no_sampler),
           "require_pinned_seeds": bool(require_pinned_seeds),

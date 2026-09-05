@@ -1007,3 +1007,165 @@ def test_the_check_cause_reaches_the_real_main_block(tmp_path):
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert "UNRESOLVED: shotspec" in proc.stdout
     assert "ValueError: boom: a table in this module is malformed" in proc.stdout
+
+
+# ---------------------------------------------------------------------------
+# F-4bb6aa47 — the package docstring enumerated seven modules of thirty and named a
+# gate range that has been wrong since G6 was added. It points at the pinned list now.
+# ---------------------------------------------------------------------------
+
+def _core_dir():
+    return os.path.join(TOOLS, "armature_core")
+
+
+def test_the_package_docstring_no_longer_carries_a_second_module_list():
+    """RED on base: the docstring listed `errors, gates, shotspec, pngio, channels,
+    openpose, blender_scene` — seven of the package's 30 content modules — in a
+    two-column layout, and every gate module added since was absent. It was pinned by
+    nothing, which is why it drifted while `cli.SURFACE` (census-pinned in both
+    directions) did not.
+
+    The census keys on the RESOLVED shape rather than on the seven names: ANY line of the
+    form `<indent><a module on disk><whitespace><prose>` is a second module list, whichever
+    modules it happens to name."""
+    import armature_core
+    import re
+
+    doc = armature_core.__doc__ or ""
+    on_disk = {f[:-3] for f in os.listdir(_core_dir()) if f.endswith(".py")}
+    listed = [ln for ln in doc.splitlines()
+              if re.match(r"^\s+(" + "|".join(sorted(on_disk)) + r")(\.py)?\s{2,}\S", ln)]
+    assert listed == [], listed
+    assert "cli.SURFACE" in doc, "the docstring must name where the one list lives"
+
+
+def test_the_docstring_names_no_gate_id_the_package_does_not_carry():
+    """The row that named gates read "gates.py G1..G5", where `gates.py` raises eight andon
+    classes (G1, G2, G4, G5, G6, R, B, S) and G3 does not exist anywhere in the tree. The
+    census: no `G<n>` token in the docstring that is not an andon class the package
+    defines."""
+    import armature_core
+    import re
+
+    from armature_core import errors as E
+
+    doc = armature_core.__doc__ or ""
+    defined = {n[:2] for n in dir(E) if re.match(r"^G\d", n)}
+    assert defined == {"G1", "G2", "G4", "G5", "G6"}, sorted(defined)
+    # A RANGE is the resolved shape of the defect: "G1..G5" names G3, which does not exist
+    # anywhere in the tree, and no census can check a range against a set. Ranges are
+    # refused outright; individual ids must be ones the package defines.
+    assert re.findall(r"G\d\s*\.\.\s*G\d", doc) == []
+    named = set(re.findall(r"\bG\d\b", doc))
+    assert named <= defined, sorted(named - defined)
+
+
+def test_the_one_module_list_is_still_the_census_pinned_one():
+    """The half that must stay true for the deletion to be a fix rather than a loss:
+    `cli.SURFACE` still covers the package on disk in both directions."""
+    listed = {m for m, _ in cli.SURFACE}
+    on_disk = {f[:-3] for f in os.listdir(_core_dir())
+               if f.endswith(".py") and f not in ("__init__.py", "cli.py")}
+    assert listed == on_disk, {"listed only": sorted(listed - on_disk),
+                               "on disk only": sorted(on_disk - listed)}
+
+
+# ---------------------------------------------------------------------------
+# F-b293a633 — the comment above GRAPH_WRAPPER_KEYS was contradicted by the code it
+# annotates.
+# ---------------------------------------------------------------------------
+
+def test_the_wrapper_key_comment_states_what_the_loader_does():
+    """RED on base: the comment read "route_gates.load_graph unwraps the first two;
+    `prompt` is the standard submission envelope" — true before wave 6, and contradicted
+    since by `load_graph` returning `normalise_graph(doc)`, whose loop reads the whole
+    tuple. A reader taking it as the contract would believe a `{"prompt": ...}` envelope
+    still reaches the gates wrapped: the exact false belief the wave-6 fix removed."""
+    src = open(os.path.join(_core_dir(), "canon.py"), encoding="utf-8").read()
+    head = src.split("GRAPH_WRAPPER_KEYS = ")[0].rsplit("\n\n", 1)[-1]
+    assert "unwraps the first" not in head, head
+    assert "normalise_graph" in head and "ALL THREE" in head
+
+
+def test_the_behaviour_the_comment_now_describes(tmp_path):
+    """The comment is checked against the loader rather than trusted: all three keys
+    unwrap, through `load_graph` and through `normalise_graph` alike."""
+    for key in C.GRAPH_WRAPPER_KEYS:
+        f = tmp_path / f"{key}.json"
+        f.write_text(json.dumps({key: _clean_api()}), encoding="utf-8")
+        assert RG.load_graph(str(f)) == _clean_api()
+        assert RG.normalise_graph({key: _clean_api()}) == _clean_api()
+    assert C.GRAPH_WRAPPER_KEYS is RG.GRAPH_WRAPPER_KEYS, "one tuple, both readers"
+
+
+# ---------------------------------------------------------------------------
+# F-9d9bd735 — the premise that tells a CAUGHT Gate ROUTE refusal from a PASS receipt
+# at the spend boundary was stated only in another domain's file.
+# ---------------------------------------------------------------------------
+
+def _passing_graph():
+    return {"nodes": [
+        {"id": 1, "type": "UNETLoader",
+         "widgets_values": ["wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"]},
+        {"id": 2, "type": "KSampler",
+         "widgets_values": [7, "fixed", 20, 1.0, "euler", "normal", 1.0]},
+        {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]}]}
+
+
+def test_a_returned_verify_receipt_carries_no_clause():
+    """The missing half of the pin. `gate_saved_graph.route_facts` reads
+    `refusals = [r for r in receipts if r.get("clause")]` and raises
+    `record_carries_a_caught_refusal` on a hit — and the sentence that says a RETURNED
+    receipt never carries `clause` lived at `gate_saved_graph.py:665-671` and in
+    `tests/test_amend_w18_builders.py`, not here, with no test in this repo asserting it of
+    this function."""
+    ev = RG.verify(_passing_graph(), frame=(832, 480, 81))
+    assert "clause" not in ev
+    assert ev["receipt"] == "verify"
+    assert set(ev) >= {"attribution", "carries_no_sampler_asserted"}
+
+
+def test_a_caught_verify_refusal_carries_the_clause_and_the_same_receipt_keys():
+    """The other side of the same absence, on the auditor's operand: an `attribution`
+    naming a component the graph does not load. Both dicts are stamped `gate: ROUTE`,
+    `andon: RouteGate`, `receipt: verify` and both fact keys — the ONLY thing separating
+    them is `clause`."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_passing_graph(), frame=(832, 480, 81),
+                  attribution=[{"creditor": "nobody this graph loads"}])
+    ev = exc.value.evidence
+    assert ev["clause"] == "orphan_attribution"
+    assert ev["receipt"] == "verify"
+    assert set(ev) >= {"attribution", "carries_no_sampler_asserted"}
+
+
+def test_the_invariant_is_written_down_beside_the_literal_it_governs():
+    """A premise a downstream gate rests on, stated only in the downstream file, is a
+    premise the upstream edit cannot see. It is in `verify`'s own comment block now."""
+    src = open(os.path.join(_core_dir(), "route_gates.py"), encoding="utf-8").read()
+    block = src.split('ev = {"gate": "ROUTE", "andon": "RouteGate", "receipt": "verify"')[0]
+    block = block.rsplit("def verify", 1)[-1]
+    assert "never carries `clause`" in block
+    assert "record_carries_a_caught_refusal" in block
+
+
+@pytest.mark.parametrize("fn,kwargs", [
+    ("gate_s_registration", {}),
+    ("camera_widget_order_evidence", {}),
+    ("gate_alias_table", {}),
+])
+def test_the_three_siblings_that_do_carry_a_clause_on_a_pass_are_named(fn, kwargs):
+    """The reason the invariant is fragile, pinned: three other dicts in this module stamped
+    `gate: ROUTE, andon: RouteGate` DO carry `clause` on a pass, so "a ROUTE dict carrying a
+    clause is a caught refusal" is false of the module and true only of `verify`."""
+    if fn == "gate_s_registration":
+        ev = RG.gate_s_registration(_passing_graph(), [7])
+    elif fn == "camera_widget_order_evidence":
+        ev = RG.camera_widget_order_evidence(
+            _passing_graph(), {"width": 832, "height": 480, "length": 81})
+    else:
+        ev = RG.gate_alias_table()
+    assert ev["gate"] == "ROUTE" and ev["andon"] == "RouteGate"
+    assert ev.get("clause"), fn
+    assert ev.get("receipt") != "verify"
+    assert not {"attribution", "carries_no_sampler_asserted"} <= set(ev)

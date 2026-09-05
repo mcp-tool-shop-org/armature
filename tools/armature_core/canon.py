@@ -845,8 +845,22 @@ def require_canon(
     return covered
 
 
-#: Wrapper keys a graph can arrive under. `route_gates.load_graph` unwraps the first
-#: two; `prompt` is the standard submission envelope.
+#: Wrapper keys a graph can arrive under. `route_gates.normalise_graph` — THE loader, which
+#: `route_gates.load_graph` returns through — unwraps ALL THREE, and this tuple is the
+#: single list both it and `canon.texts_from_api_graph` read, so the two cannot drift apart.
+#: A document declaring more than one of them refuses (`multiple_graph_declarations`).
+#:
+#: ⚠ **This comment used to say that `route_gates.load_graph` unwraps only the first TWO of
+#: these keys, and that `prompt` is merely the standard submission envelope.** That was true
+#: before wave 6 and was then
+#: contradicted by the code it annotates: `load_graph` returns `normalise_graph(doc)`, whose
+#: unwrap loop reads this whole tuple, and `route_gates.load_graph`'s own docstring records
+#: the fix explicitly ("This function used to unwrap `workflow_json` and `workflow` and NOT
+#: `prompt`"). A reader taking the comment as the contract would believe a `{"prompt": ...}`
+#: envelope still reaches the gates wrapped — the exact false belief the wave-6 fix removed,
+#: and the one under which every clause of `verify` reported its zero-population verdict as
+#: a pass. Corrected in place 2026-09-05; the behavioural pin is
+#: `tests/test_route_gates.py`'s wrapper-unwrap cases.
 GRAPH_WRAPPER_KEYS = ("prompt", "workflow_json", "workflow")
 
 
