@@ -737,12 +737,19 @@ def test_the_delegated_edge_sees_the_three_classes_the_literal_walk_could_not():
     # WAVE-16 MERGE (coordinator, 2026-09-04): the site LINES below are re-measured through `RAISE_SITES` itself —
     # instruments-measure deleted 27 four-line constructors and every line below each moved
     # (`pack_pose_pack.py` 115 → 111, 164 → 160).
+    # WAVE-18 MERGE (coordinator, 2026-09-05): `PosePackError` gained a LITERAL raise site — the `--fps` andon
+    # instruments-measure landed (F-6bb38028, `pack_pose_pack.py:231`) — so it leaves the zero-literal pair and
+    # is stated as its own row: the literal walk sees ONE of its four sites, the delegated edge all four. Every
+    # line below is re-measured on the merged tree through `RAISE_SITES` and the literal walk (SEAM 9's numbers
+    # were one docstring re-wrap stale by SEAM 15 — a line pinned from a branch is stale by construction).
     old = literal_sites_only(TOOLS)
-    for name in ("MakeSheetError", "PosePackError", "AnalyzeP3Error"):
+    for name in ("MakeSheetError", "AnalyzeP3Error"):
         assert old.get(name, set()) == set(), (name, sorted(old.get(name, ())))
         assert RAISE_SITES[name], name
+    assert sorted(old.get("PosePackError", ())) == [("pack_pose_pack.py", 231)]   # literal-blind until wave 18
 
-    assert sorted(RAISE_SITES["PosePackError"]) == [("pack_pose_pack.py", 111), ("pack_pose_pack.py", 160)]
+    assert sorted(RAISE_SITES["PosePackError"]) == [("pack_pose_pack.py", 163), ("pack_pose_pack.py", 231),
+                                                    ("pack_pose_pack.py", 241), ("pack_pose_pack.py", 245)]
     assert sorted(RAISE_SITES["MakeSheetError"]) == [("make_sheet.py", 48)]
     assert sorted(RAISE_SITES["AnalyzeP3Error"]) == [("analyze_p3.py", 168)]
     # `PlateError` had ONE literal site and gains two delegated ones, so the edge moves a

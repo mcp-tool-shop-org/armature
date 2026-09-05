@@ -255,8 +255,18 @@ def round_trip(api_graph, saved_graph):
     api_graph = _as_api_graph(api_graph)
     saved_graph = _as_saved_graph(saved_graph)
     saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
+    # WAVE-18 MERGE (coordinator, 2026-09-05): classify every top-level entry by SHAPE through Gate ROUTE's own
+    # `_api_entry_kind` BEFORE any class is read. Measured on the merged tree `64a9fd3` with the F-7eb1ba2a
+    # operand (one node with its `class_type` deleted among readable ones): `_as_api_graph` passed, because the
+    # OTHER nodes carry the key, and this loop crashed at `node["class_type"]` — `KeyError`, exit 1,
+    # `"evidence": null` — before Gate ROUTE's walk, which core-gates taught to refuse that node by name, ever
+    # ran. The refusal is Gate ROUTE's own (`unreadable_node`, the SHARED clause word, the node's key in its
+    # evidence); envelope metadata (`version`, `extra_data`, …) is skipped here exactly as the walk skips it,
+    # and is never counted as a node absent from the saved file.
+    nodes = {key: value for key, value in api_graph.items()
+             if RG._api_entry_kind(key, value, api_graph) == "node"}
     checked, problems = [], []
-    for node_id, node in api_graph.items():
+    for node_id, node in nodes.items():
         s = saved_by_id.get(str(node_id))
         if s is None:
             problems.append(f"node {node_id} ({node['class_type']}) is absent from the "
@@ -288,7 +298,7 @@ def round_trip(api_graph, saved_graph):
                             "equal": bool(same)})
             if not same:
                 problems.append(f"node {node_id}.{name}: built {value!r}, saved {got!r}")
-    extra = sorted(set(saved_by_id) - {str(k) for k in api_graph})
+    extra = sorted(set(saved_by_id) - {str(k) for k in nodes})
     if extra:
         problems.append(f"the saved file carries nodes we did not build: {extra}")
     if problems:
