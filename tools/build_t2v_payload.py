@@ -112,8 +112,20 @@ from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 from build_assembly_payload import (  # noqa: E402
-    SeedRegistrationError, canonical_payload_digest, read_seed_registration)
+    SeedRegistrationError, canonical_payload_digest, read_seed_registration,
+    single_path_segment)
 from canon_gate import canon_line, canon_spend  # noqa: E402
+
+class PayloadError(ArmatureError):
+    """This tool cannot build an honest payload from what it was given.
+
+    The class its three sibling builders already declare (`build_animate_payload:138`,
+    `build_i2v_payload:183`, `build_camera_i2v_payload:321`), added here in wave 22 for
+    F-7e45e62b: `--tag` is pasted into two written filenames and its own help says so, and
+    the refusal has to name an andon rather than the bare base (wave-18 rule 3). One
+    wording, every builder.
+    """
+
 
 TOOL_VERSION = "E09.2"
 
@@ -482,6 +494,22 @@ def main(argv=None):
     ap.add_argument("--tag", default="A3", help="goes in the written filenames")
     add_spend_flags(ap)
     a = ap.parse_args(argv)
+    # ---- ANDON, wave 22 (F-7e45e62b, sibling carry). `--tag` is pasted into this tool's
+    # written filenames with no clause, exactly as `fetch_run --run` was. Census over this
+    # domain, 2026-09-05: FIVE free-string flags reach a written filename -- `--experiment`
+    # in `build_animate_payload`, `build_i2v_payload` and `build_camera_i2v_payload`,
+    # `--tag` in `build_t2v_payload` (whose own help says "goes in the written filenames"),
+    # and `fetch_run --run`. `build_camera_i2v_payload --wave` also reaches a filename and
+    # is ALREADY BOUNDED by `type=int` -- measured, argparse refuses `--wave=a/b` before
+    # `main` is entered -- so it takes no clause of its own. The bounded convention already
+    # exists in this domain: `build_payload --experiment` and `build_r2v` /
+    # `build_lora_arm --arm` are `choices=`-bounded.
+    #
+    # The clause is `single_path_segment`'s, imported from its ONE home (SEAM 1): same
+    # clause word `output_name_is_not_a_name`, same evidence keys.
+    single_path_segment(a.tag, "--tag", PayloadError,
+                        extra={"pasted_into": ["<out>/E09-B2-{tag}-t2v.api.json",
+                                        "<out>/E09-B2-{tag}-payload-record.json"]})
 
     # `--canon-prompt` has ONE meaning across all seven spend builders: it is the text the
     # router is asked to check, cross-checked against the text this payload SHIPS, and it

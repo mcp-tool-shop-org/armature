@@ -821,29 +821,19 @@ def route_facts(record_path, api_graph=None):
     # and anything else in that shape is a caught refusal whatever it does or does not say
     # about why. The clause reading is KEPT beside it rather than replaced, because it names
     # the refusal when the raise site did write one, which is the more useful halt.
-    refusals = [r for r in receipts
-                if r.get("clause")
-                or not str(r.get(VERIFY_RECEIPT_RETURNED_KEY) or "").strip()]
+    refusals = [r for r in receipts if r.get("clause")]
     if refusals:
-        named = sorted({str(r["clause"]) for r in refusals if r.get("clause")})
-        unmarked = sum(1 for r in refusals
-                       if not str(r.get(VERIFY_RECEIPT_RETURNED_KEY) or "").strip())
         raise RG.RouteGate(
             f"--record={record_path!r} carries the evidence of a CAUGHT Gate ROUTE "
-            f"REFUSAL, not a passing receipt"
-            + (f": {named}" if named else
-               f": {unmarked} of {len(receipts)} carry no "
-               f"`{VERIFY_RECEIPT_RETURNED_KEY}`, the key `verify` writes only on its way "
-               f"out")
-            + f". `verify` writes its declared kind and both fact keys before the first "
-            f"clause can raise, so a refusal looks like a receipt to this reader; 14 of its "
-            f"17 raise sites write no `clause` either, so absence of a clause is not "
-            f"evidence of a return. A record of a gate that FIRED may not supply the facts "
-            f"that admit the next submission",
+            f"REFUSAL, not a passing receipt: "
+            f"{sorted({str(r.get('clause')) for r in refusals})}. `verify` writes its "
+            f"declared kind and both fact keys before the first clause can raise, so a "
+            f"refusal looks like a receipt to this reader; a record of a gate that FIRED "
+            f"may not supply the facts that admit the next submission",
             {"gate": "ROUTE", "andon": "RouteGate",
              "clause": "record_carries_a_caught_refusal", "record": path,
-             "refusal_clauses": named,
-             "n_unmarked_receipts": unmarked,
+             "refusal_clauses": sorted({str(r.get("clause")) for r in refusals}),
+             "n_unmarked_receipts": 0,
              "returned_receipt_key": VERIFY_RECEIPT_RETURNED_KEY,
              "n_receipts": len(receipts)})
     if not receipts:
@@ -875,6 +865,32 @@ def route_facts(record_path, api_graph=None):
              "required_keys": list(VERIFY_RECEIPT_KEYS),
              "missing": sorted({k for r in thin for k in VERIFY_RECEIPT_KEYS
                                 if k not in r})})
+    # ---- ANDON, wave 22 (F-9ad5cbc2). The clause above reads the CLAUSE key, and 14 of the
+    # 17 `RouteGate` raise sites inside `verify` write none — see
+    # `VERIFY_RECEIPT_RETURNED_KEY` for the AST measurement and for the auditor's admitted
+    # operand. This is the same refusal keyed on the property the RETURN establishes rather
+    # than on the one a raise site may or may not write. It sits BELOW the two clauses that
+    # name a thinner defect (`record_carries_no_verify_receipt`, thin above), so a receipt
+    # with a more specific problem still refuses under its own name.
+    unmarked = [r for r in receipts
+                if not str(r.get(VERIFY_RECEIPT_RETURNED_KEY) or "").strip()]
+    if unmarked:
+        raise RG.RouteGate(
+            f"--record={record_path!r} carries {len(unmarked)} of {len(receipts)} "
+            f"`route_gates.verify` receipt(s) that carry no "
+            f"`{VERIFY_RECEIPT_RETURNED_KEY}` — the key `verify` writes ONLY on its way "
+            f"out, at the two statements immediately above its two `return` statements. "
+            f"That is the evidence of a CAUGHT REFUSAL, not a passing receipt: `verify` "
+            f"writes its declared kind and both fact keys before the first clause can "
+            f"raise, and 14 of its 17 raise sites write no `clause` either, so the absence "
+            f"of a clause is not evidence of a return. A record of a gate that FIRED may "
+            f"not supply the facts that admit the next submission",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "record_carries_a_caught_refusal", "record": path,
+             "refusal_clauses": [],
+             "n_unmarked_receipts": len(unmarked),
+             "returned_receipt_key": VERIFY_RECEIPT_RETURNED_KEY,
+             "n_receipts": len(receipts)})
     asserted = sorted({bool(r["carries_no_sampler_asserted"]) for r in receipts})
     if len(asserted) != 1:
         raise RG.RouteGate(

@@ -120,7 +120,8 @@ from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, gate_create_video_fps, read_seed_registration)
+    canonical_payload_digest, gate_create_video_fps, read_seed_registration,
+    single_path_segment)
 
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
 import build_i2v_payload as W1  # noqa: E402  - wave 1's trajectory, weights and frame
@@ -1167,6 +1168,23 @@ def verify_topology(wf, start_name):
 
 def main(argv=None):
     a = parse_args(argv)
+    # ---- ANDON, wave 22 (F-7e45e62b, sibling carry). `--experiment` is pasted into this tool's
+    # written filenames with no clause, exactly as `fetch_run --run` was. Census over this
+    # domain, 2026-09-05: FIVE free-string flags reach a written filename -- `--experiment`
+    # in `build_animate_payload`, `build_i2v_payload` and `build_camera_i2v_payload`,
+    # `--tag` in `build_t2v_payload` (whose own help says "goes in the written filenames"),
+    # and `fetch_run --run`. `build_camera_i2v_payload --wave` also reaches a filename and
+    # is ALREADY BOUNDED by `type=int` -- measured, argparse refuses `--wave=a/b` before
+    # `main` is entered -- so it takes no clause of its own. The bounded convention already
+    # exists in this domain: `build_payload --experiment` and `build_r2v` /
+    # `build_lora_arm --arm` are `choices=`-bounded.
+    #
+    # The clause is `single_path_segment`'s, imported from its ONE home (SEAM 1): same
+    # clause word `output_name_is_not_a_name`, same evidence keys.
+    single_path_segment(a.experiment, "--experiment", PayloadError,
+                        extra={"pasted_into": ["<out>/{experiment}-w{wave}-camera-i2v.api.json",
+                                        "<out>/{experiment}-w{wave}-payload-record.json",
+                                        "the server-side filename prefixes"]})
     out = os.path.abspath(a.out)
 
     with open(a.uploads, encoding="utf-8") as fh:

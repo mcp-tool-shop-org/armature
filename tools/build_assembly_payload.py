@@ -146,6 +146,25 @@ def canonical_payload_digest(graph):
         json.dumps(graph, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+# ---- SEAM 1 (wave 22): `single_path_segment`'s ONE home is `armature_core.parts`
+# (core-solvers' tree, landing in the same merge as this commit). It is ADOPTED BY IMPORT,
+# never spelled a third time -- instruments-measure held two byte-identical copies at
+# `pack_pose_pack.py:82` and `resample_motion.py:76` and SEAM 1 retires both. The fallback
+# names the SECOND of those copies rather than re-typing its body, so this file is an
+# importer under either tree and never a third spelling; the branch is dead the moment
+# core-solvers' commit is in the tree.
+try:                                                     # pragma: no cover - see above
+    from armature_core.parts import single_path_segment   # noqa: E402
+except ImportError:                                      # pragma: no cover - see above
+    from resample_motion import single_path_segment       # noqa: E402
+
+# `single_path_segment` above is IMPORTED, never defined here, and is re-exported to the
+# four sibling builders that paste a free string into a written filename
+# (`build_animate_payload`, `build_i2v_payload`, `build_camera_i2v_payload`,
+# `build_t2v_payload`). Every one of them already imports from this module, so the ONE home
+# is reached through ONE shim rather than five.
+
+
 def read_seed_registration(path, *, flag="--seeds"):
     """The committed seed list, READ through clauses rather than indexed.
 

@@ -1087,13 +1087,45 @@ def test_a_gate_refusal_exits_2_with_its_sentinel_and_a_crash_exits_1(tmp_path):
     assert "GateCanon" in refusal.stdout
     assert not (tmp_path / "fresh").exists()
 
-    crash = subprocess.run(
+    # ⚠ **CORRECTION, wave 22 (builders, F-2380aca9), with the measurement that overturned
+    # it.** This arm used to be `--dump=<a path naming nothing>` out of `fetch_run`,
+    # asserted to exit **1** with `FileNotFoundError` — this file's example of the CRASH
+    # half of the convention. That operand is no longer a crash: `--dump` is the one
+    # operator-supplied input both fetchers take, it was read as
+    # `json.load(fh)["results"]` with no clause, and it now goes through
+    # `fetch_run.read_results_dump`, which refuses a missing file by name. Measured in this
+    # worktree: exit **2**, `FETCH_RUN_HALT`, `"error": "FetchHalt"`, clause
+    # `dump_missing`. The old assertion is not deleted — it is kept as the refusal arm it
+    # became, because what it pinned (this operand reaches a machine-readable line) still
+    # holds and is now stronger.
+    dump_refusal = subprocess.run(
         [sys.executable, os.path.join(REPO, "tools", "fetch_run.py"),
          f"--dump={tmp_path / 'nothing.json'}", "--run=r", f"--root={tmp_path / 'runs'}"],
         capture_output=True, text=True, env=env, cwd=REPO)
+    assert dump_refusal.returncode == 2, dump_refusal.stdout + dump_refusal.stderr
+    assert "FETCH_RUN_HALT" in dump_refusal.stdout
+    assert "dump_missing" in dump_refusal.stdout
+
+    # The CRASH half still needs an operand that actually crashes, or this test asserts one
+    # direction of a two-direction convention. Measured in this worktree on the same tool:
+    # a `--root` naming an existing FILE reaches `os.makedirs` under it and dies
+    # `FileNotFoundError` / `NotADirectoryError` with `"evidence": null` at exit 1. That is
+    # a real remaining hole and is recorded as one — `--root` is a DIRECTORY path, so it is
+    # not the `single_path_segment` family `--run` joined this wave, and no approved wave-22
+    # finding names it.
+    root_file = tmp_path / "rootfile"
+    root_file.write_text("not a directory", encoding="utf-8")
+    dump = tmp_path / "dump.json"
+    dump.write_text(json.dumps({"results": [
+        {"source_node_id": "302", "filename": "00000.png",
+         "url": "https://example.invalid/0"}]}), encoding="utf-8")
+    crash = subprocess.run(
+        [sys.executable, os.path.join(REPO, "tools", "fetch_run.py"),
+         f"--dump={dump}", "--run=r", f"--root={root_file}"],
+        capture_output=True, text=True, env=env, cwd=REPO)
     assert crash.returncode == 1, crash.stdout + crash.stderr
     assert "FETCH_RUN_HALT" in crash.stdout
-    assert "FileNotFoundError" in crash.stdout
+    assert '"evidence": null' in crash.stdout
 
 
 # -- 3a-bis. the SUCCESS direction of the same convention (wave 10, F-4e011521) -----------

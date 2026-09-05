@@ -1078,8 +1078,20 @@ def test_every_clause_name_in_the_two_fetchers_is_distinct():
 # record says which one found them.
 
 def _receipt(**over):
+    """A hand-typed `verify` receipt, as `verify` HANDS ONE BACK.
+
+    ⚠ `verdict` is not decoration (wave 22, F-9ad5cbc2, builders). `route_facts` told a
+    returned receipt from a CAUGHT REFUSAL by the absence of `clause`, and an AST walk of
+    `route_gates.verify` on `e8263a3` found 17 RouteGate raise sites inside it of which 14
+    write no `clause` at all — so absence of a clause was not evidence of a return. The
+    reader is keyed on the RETURN's own mark now: `ev["verdict"]`, written at exactly two
+    statements in `verify`, each immediately above one of its two `return ev` statements.
+    A fixture that omits it is a fixture of a receipt `verify` never returned.
+    """
     ev = {"gate": "ROUTE", "andon": "RouteGate",
-          "carries_no_sampler_asserted": False, "attribution": []}
+          "carries_no_sampler_asserted": False, "attribution": [],
+          "verdict": ("0 of 0 component(s) classified, no sampler (asserted and checked), "
+                      "so no seed to pin")}
     ev.update(over)
     return ev
 

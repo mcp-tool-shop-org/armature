@@ -58,6 +58,10 @@ from armature_core.errors import (  # noqa: E402
 from fetch_run import (  # noqa: E402,F401
     EXITS_NAME, FetchHalt, PNG_SIGNATURE, verify_downloads)
 from fetch_run import download as fetch_download  # noqa: E402
+# The ONE dump reader (wave 22, F-2380aca9). This module carried the identical two lines and
+# RE-MEASURED identically on `e8263a3`: a non-JSON dump -> FETCH_T2V_HALT `JSONDecodeError`
+# `"evidence": null`; a dump with no `results` -> `KeyError: 'results'`, same shape.
+from fetch_run import read_results_dump  # noqa: E402
 
 TOOL_VERSION = "E09.A3"
 
@@ -284,8 +288,7 @@ def main(argv=None):
     ap.add_argument("--prompt-id", default=None)
     a = ap.parse_args(argv)
 
-    with open(a.dump, encoding="utf-8") as fh:
-        results = json.load(fh)["results"]
+    results = read_results_dump(a.dump, flag="--dump", exc=FetchHalt)
     try:
         jobs = plan(results, a.out)
     except FetchHalt as exc:

@@ -622,3 +622,256 @@ def test_the_frame_source_reaches_the_subprocess_line_too(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     printed = json.loads(line[-1][len("SAVED_ADMISSION_OK "):])
     assert printed["gate_L_frame_source"] == "graph alone, no independent frame supplied"
+
+
+# ===========================================================================
+# F-2380aca9 — the ONE operator-supplied input both fetchers take reached the operator as a
+#              bare stdlib traceback, in the modules whose own `__main__` comments tell
+#              wrappers to key on a sentinel.
+#
+# Operands (the auditor's, RE-MEASURED on `e8263a3` as five `fetch_run` subprocesses, every
+# one exit 1 with `"evidence": null`): `--dump` naming no file -> FileNotFoundError; no
+# `results` key -> KeyError 'results'; not JSON -> JSONDecodeError; a row with no `url` ->
+# KeyError 'url'; `results` holding strings -> TypeError. The sibling `fetch_t2v_run`
+# carried the identical two lines and RE-MEASURED identically on two of them.
+#
+# reverted-red: yes — measured in this worktree before the reader landed, both fetchers.
+# ===========================================================================
+
+
+def _dump(tmp_path, doc, name="dump.json", raw=None):
+    p = tmp_path / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    if raw is not None:
+        p.write_text(raw, encoding="utf-8")
+    else:
+        p.write_text(json.dumps(doc), encoding="utf-8")
+    return str(p)
+
+
+#: Every shape the finding enumerates, with the clause each must now name. Driven against
+#: BOTH fetchers — the sibling was in the same condition and is not carried on faith.
+W22_DUMP_SHAPES = {
+    "no such file": (None, "dump_missing"),
+    "not JSON": ("{not json", "dump_unreadable"),
+    "a JSON list, not an object": ("[1, 2, 3]", "dump_not_a_mapping"),
+    "no `results` key": ('{"outputs": []}', "dump_no_results_key"),
+    "`results` is not a list": ('{"results": {"a": 1}}', "dump_results_not_a_list"),
+    "`results` holds strings": ('{"results": ["a", "b"]}',
+                                "dump_result_row_not_a_mapping"),
+    "a row with no `url`": ('{"results": [{"source_node_id": "302", '
+                            '"filename": "00000.png"}]}',
+                            "dump_result_row_missing_a_key"),
+    "a row with no `source_node_id`": ('{"results": [{"url": "https://x.invalid/0", '
+                                       '"filename": "00000.png"}]}',
+                                       "dump_result_row_missing_a_key"),
+}
+
+
+@pytest.mark.parametrize("shape", sorted(W22_DUMP_SHAPES))
+def test_the_dump_reader_names_every_shape_it_refuses(shape, tmp_path):
+    raw, clause = W22_DUMP_SHAPES[shape]
+    path = (str(tmp_path / "nope.json") if raw is None
+            else _dump(tmp_path, None, raw=raw))
+    exc, ev = _raises(FR.read_results_dump, path)
+    assert isinstance(exc, FR.FetchHalt), (shape, repr(exc))
+    assert ev["clause"] == clause, (shape, ev)
+    assert ev["gate"] == "FETCH" and ev["andon"] == "FetchHalt", (shape, ev)
+    assert ev["flag"] == "--dump", (shape, ev)
+
+
+@pytest.mark.parametrize("shape", sorted(W22_DUMP_SHAPES))
+@pytest.mark.parametrize("tool", ["fetch_run.py", "fetch_t2v_run.py"])
+def test_both_fetchers_refuse_every_dump_shape_at_the_gate_exit_code(tool, shape,
+                                                                    tmp_path):
+    """Rule 2 — the SIBLING is driven, not carried; and rule 4 — the halt line is READ off
+    each tool's own `__main__`, at the code that means a gate refused."""
+    raw, clause = W22_DUMP_SHAPES[shape]
+    path = (str(tmp_path / "nope.json") if raw is None
+            else _dump(tmp_path, None, raw=raw, name=f"{abs(hash(shape))}.json"))
+    sentinel = ("FETCH_RUN_HALT" if tool == "fetch_run.py" else "FETCH_T2V_HALT")
+    args = ([f"--dump={path}", "--run=r", f"--root={tmp_path / 'runs'}"]
+            if tool == "fetch_run.py" else
+            [f"--dump={path}", f"--out={tmp_path / 'out'}"])
+    proc, halts, oks = _sub(tool, args, sentinel)
+    assert halts, proc.stdout + proc.stderr
+    halt = json.loads(halts[-1][len(sentinel) + 1:])
+    assert proc.returncode == 2, (proc.returncode, halt)
+    assert halt["error"] == "FetchHalt", halt
+    assert halt["evidence"]["clause"] == clause, halt
+    assert not oks, oks
+
+
+def test_a_well_formed_dump_still_reads_the_direction_the_clause_must_not_bound(tmp_path):
+    rows = [{"source_node_id": "302", "filename": "00000.png",
+             "url": "https://example.invalid/0"}]
+    assert FR.read_results_dump(_dump(tmp_path, {"results": rows})) == rows
+
+
+def test_the_two_fetchers_read_the_dump_through_ONE_function():
+    """No second spelling. Keyed on the RESOLVED shape by AST — a bare `json.load(...)`
+    subscripted by `"results"` — rather than on the literal text, which appears in the new
+    reader's own docstring as the measurement it records."""
+    for name in ("fetch_run.py", "fetch_t2v_run.py"):
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        bare = [n.lineno for n in ast.walk(tree)
+                if isinstance(n, ast.Subscript)
+                and isinstance(n.slice, ast.Constant) and n.slice.value == "results"
+                and isinstance(n.value, ast.Call)
+                and getattr(n.value.func, "attr", None) == "load"
+                and getattr(getattr(n.value.func, "value", None), "id", None) == "json"]
+        assert bare == [], (name, bare)
+    assert FT.read_results_dump is FR.read_results_dump
+
+
+# ===========================================================================
+# F-7e45e62b — `--run` is joined into the run root AND pasted into the video tap's filename
+#              with no validation anywhere, and the tool then prints its success sentinel
+#              over a population that is not the population on disk.
+#
+# Operand (the auditor's, MEASURED with the downloader stubbed to write the planned bytes):
+#   `--run=sub/dir --root=runs` -> returned 0 and printed
+#   FETCH_RUN_OK {"run": "sub/dir", "dir": "runs\\sub/dir", "by_node": {"302": 1, "114": 1},
+#                 "video": [], "gate_FETCH": "2 planned file(s), all present and non-empty,
+#                 2 of them content-signature checked, and no unplanned file in 3 swept
+#                 directory(s)"}
+#   while the video was written to runs/sub/dir/sub/dir_00000.mp4.
+# Measured on `plan` alone: `--run=../../escaped` sends the frames to
+# outputs/escaped/lossless/ and the video to `escaped_00000.mp4` in the PROCESS CWD.
+#
+# reverted-red: yes — both measured in this worktree before the bound landed.
+# ===========================================================================
+
+
+def _fr_dump(tmp_path, n_frames=1, video=True, name="dump.json"):
+    rows = [{"source_node_id": "302", "filename": f"{i:05d}.png",
+             "url": f"https://example.invalid/{i}"} for i in range(n_frames)]
+    if video:
+        rows.append({"source_node_id": "114", "filename": "clip.mp4",
+                     "url": "https://example.invalid/v"})
+    return _dump(tmp_path, {"results": rows}, name=name)
+
+
+def _stub_fr(monkeypatch):
+    """A downloader that writes signature-correct bytes for whatever the plan asked for."""
+    def fake_run(cmd, **kw):
+        env = kw.get("env") or {}
+        with open(env[FR.MANIFEST_ENV], encoding="utf-8") as fh:
+            jobs = json.load(fh)
+        for job in jobs:
+            os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
+            body = (FR.PNG_SIGNATURE + b"IHDR-and-the-rest"
+                    if job["out"].lower().endswith(".png") else
+                    b"\x00\x00\x00\x18ftypmp42" + b"rest")
+            with open(job["out"], "wb") as out:
+                out.write(body)
+        target = env.get(FR.EXITS_ENV)
+        if target:
+            with open(target, "w", encoding="utf-8") as fh:
+                json.dump([{"out": j["out"], "url": j["url"], "code": 0, "message": ""}
+                           for j in jobs], fh)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    monkeypatch.setattr(FR.subprocess, "run", fake_run)
+
+
+#: The operands the auditor measured, plus the sibling spellings a census of the predicate
+#: reaches. `A2` is the direction the bound must NOT close.
+W22_RUN_NAMES = ["sub/dir", "../../escaped", "..\\..\\win", "..", ".", "", "/abs"]
+
+
+@pytest.mark.parametrize("run", W22_RUN_NAMES)
+def test_a_run_that_is_not_a_name_is_refused_before_anything_is_created(run, tmp_path,
+                                                                       monkeypatch,
+                                                                       capsys):
+    _stub_fr(monkeypatch)
+    root = tmp_path / "runs"
+    exc, ev = _raises(FR.main, ["--dump", _fr_dump(tmp_path), "--run", run,
+                                "--root", str(root)])
+    assert isinstance(exc, FR.FetchHalt), (run, repr(exc))
+    assert ev["clause"] == "output_name_is_not_a_name", (run, ev)
+    assert ev["flag"] == "--run", (run, ev)
+    assert "FETCH_RUN_OK" not in capsys.readouterr().out
+    assert not root.exists(), sorted(p.name for p in tmp_path.iterdir())
+
+
+def test_an_ordinary_run_name_still_returns_its_video_in_the_reported_population(
+        tmp_path, monkeypatch, capsys):
+    """The direction the bound must not close, and the one the finding names by hand: the
+    video is IN `vids`, which is what the nested spelling silently emptied."""
+    _stub_fr(monkeypatch)
+    root = tmp_path / "runs"
+    assert FR.main(["--dump", _fr_dump(tmp_path), "--run", "A2",
+                    "--root", str(root)]) == 0
+    line = [ln for ln in capsys.readouterr().out.splitlines()
+            if ln.startswith("FETCH_RUN_OK ")]
+    assert line, "no OK line"
+    printed = json.loads(line[-1][len("FETCH_RUN_OK "):])
+    assert printed["video"] == ["A2_00000.mp4"], printed
+    assert (root / "A2" / "A2_00000.mp4").is_file()
+
+
+def test_the_halt_line_reads_the_run_clause(tmp_path):
+    """Rule 4 — driven through `__main__` (no stub: the refusal is above the download)."""
+    proc, halts, oks = _sub("fetch_run.py",
+                            [f"--dump={_fr_dump(tmp_path)}", "--run=sub/dir",
+                             f"--root={tmp_path / 'runs'}"], "FETCH_RUN_HALT")
+    assert halts, proc.stdout + proc.stderr
+    halt = json.loads(halts[-1][len("FETCH_RUN_HALT "):])
+    assert proc.returncode == 2, (proc.returncode, halt)
+    assert halt["error"] == "FetchHalt", halt
+    assert halt["evidence"]["clause"] == "output_name_is_not_a_name", halt
+    assert halt["evidence"]["flag"] == "--run", halt
+    assert not oks
+    assert not (tmp_path / "runs").exists()
+
+
+# ---- the siblings: four more free strings pasted into a written filename.
+
+#: `(module name, argv that reaches the bound, the flag)`. Each bound sits directly under
+#: `parse_args`, so the argv only has to satisfy argparse.
+W22_FILENAME_FLAGS = [
+    ("build_animate_payload",
+     ["--uploads=nope.json", "--out=nope", "--experiment=a/b"], "--experiment"),
+    ("build_i2v_payload",
+     ["--uploads=nope.json", "--out=nope", "--e08-record=nope.json",
+      "--experiment=a/b"], "--experiment"),
+    ("build_camera_i2v_payload",
+     ["--uploads=nope.json", "--out=nope", "--w1-record=nope.json",
+      "--experiment=../escaped"], "--experiment"),
+    ("build_t2v_payload", ["--out=nope", "--tag=../escaped"], "--tag"),
+]
+
+
+@pytest.mark.parametrize("mod,argv,flag", W22_FILENAME_FLAGS,
+                         ids=[r[0] for r in W22_FILENAME_FLAGS])
+def test_every_sibling_flag_pasted_into_a_filename_is_bounded_too(mod, argv, flag):
+    """Rule 2 — the census the wave-16 rate fix did not do. Five free-string flags in this
+    domain reach a written filename; `fetch_run --run` was one and these are the other
+    four."""
+    module = __import__(mod)
+    exc, ev = _raises(module.main, argv)
+    assert type(exc).__name__ == "PayloadError", (mod, repr(exc))
+    assert ev["clause"] == "output_name_is_not_a_name", (mod, ev)
+    assert ev["flag"] == flag, (mod, ev)
+    assert ev["pasted_into"], (mod, ev)
+
+
+def test_the_wave_flag_is_already_bounded_by_argparse_and_takes_no_clause(capsys):
+    """The sibling that needs NOTHING, measured rather than assumed.
+    `build_camera_i2v_payload --wave` also reaches a written filename and is `type=int`, so
+    argparse refuses a separator before `main` is entered — a clause here would be a clause
+    with no caller, which this repo arms or deletes rather than ships."""
+    import build_camera_i2v_payload as CAM
+    with pytest.raises(SystemExit) as exc:
+        CAM.parse_args(["--uploads=x", "--out=y", "--w1-record=z", "--wave=a/b"])
+    assert exc.value.code == 2
+    assert "invalid int value" in capsys.readouterr().err
+
+
+def test_single_path_segment_has_ONE_home_and_this_domain_only_imports_it():
+    """SEAM 1: adopted by import, never a third copy. No file in this domain defines it."""
+    for name in DOMAIN_TOOLS:
+        src = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+        assert "def single_path_segment(" not in src, name
+    assert FR.single_path_segment.__module__ in (
+        "armature_core.parts", "resample_motion"), FR.single_path_segment.__module__

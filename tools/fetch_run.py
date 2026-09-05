@@ -71,6 +71,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
+# ---- SEAM 1 (wave 22): `single_path_segment`'s ONE home is `armature_core.parts`
+# (core-solvers' tree, landing in the same merge as this commit). It is ADOPTED BY IMPORT,
+# never spelled a third time -- instruments-measure held two byte-identical copies at
+# `pack_pose_pack.py:82` and `resample_motion.py:76` and SEAM 1 retires both. The fallback
+# names the SECOND of those copies rather than re-typing its body, so this file is an
+# importer under either tree and never a third spelling; the branch is dead the moment
+# core-solvers' commit is in the tree.
+try:                                                     # pragma: no cover - see above
+    from armature_core.parts import single_path_segment   # noqa: E402
+except ImportError:                                      # pragma: no cover - see above
+    from resample_motion import single_path_segment       # noqa: E402
+
 NODE_DIR = {"301": "batchprobe", "302": "lossless"}
 
 #: Source nodes whose files land beside the run directory rather than in a subdirectory —
@@ -132,6 +144,119 @@ class FetchHalt(GateFailure):
     """
 
     gate = "FETCH"
+
+
+#: Every key a `get_output` result row must carry for a planner to read it, and what each
+#: one is used for. Both planners index all three: `fetch_run.plan` reads `source_node_id`
+#: and `url` for every row and `filename` for a video tap; `fetch_t2v_run.plan` reads all
+#: three for EVERY row (`cloud_name` is `r["filename"]`, and Gate ORDER's manifest is keyed
+#: on it). Written out rather than implied by the index that raises, so a refusal names the
+#: key and what it is for.
+RESULT_ROW_KEYS = {
+    "source_node_id": "the tap this file came from, which is what decides where it lands",
+    "url": "where the file is fetched from",
+    "filename": "the cloud-side name, whose suffix names the artifact's type and which "
+                "Gate ORDER's manifest is keyed on",
+}
+
+
+def read_results_dump(path, *, flag="--dump", exc=None):
+    """The pasted `get_output` dump, READ through clauses rather than indexed. · ANDON
+
+    Wave 22, F-2380aca9. The ONE operator-supplied input both fetchers take reached the
+    operator as a bare stdlib traceback: `json.load(fh)["results"]` with no clause, in a
+    module whose own `__main__` comment tells wrappers to key on the `FETCH_RUN_HALT`
+    sentinel and whose every other refusal is a typed `FetchHalt` with a clause.
+    RE-MEASURED on `e8263a3` as five subprocesses of `fetch_run` — every one exit 1, the
+    code this module reserves for "this tool crashed", with `"evidence": null`:
+
+      * `--dump` naming no file        -> FETCH_RUN_HALT error `FileNotFoundError`
+      * a dump with no `results` key   -> `KeyError: 'results'`
+      * a dump that is not JSON        -> `JSONDecodeError`
+      * a result row with no `url`     -> `KeyError: 'url'`
+      * `results` holding strings      -> `TypeError: string indices must be integers`
+
+    The sibling `fetch_t2v_run` carried the identical two lines and RE-MEASURED identically:
+    a non-JSON dump -> `FETCH_T2V_HALT` `JSONDecodeError` evidence null; a dump with no
+    `results` -> `FETCH_T2V_HALT` `KeyError: 'results'` evidence null.
+
+    This is the same crash-where-a-clause-belongs shape wave 18 closed one tool over for
+    `--saved` / `--api` (`graph_file_missing`) and `--frame`; the fetchers' `--dump` was not
+    in that entry's sibling enumeration. The shape is
+    `build_assembly_payload.read_seed_registration`'s — the reader that already models this
+    for the committed seed registration: open, parse, shape, key, element, each its own
+    clause word, one implementation and both callers.
+
+    `exc` is the andon class the CALLER raises under, so each fetcher's halt names its own
+    class; it defaults to this module's `FetchHalt`.
+    """
+    exc = FetchHalt if exc is None else exc
+    ev = {"gate": "FETCH", "andon": exc.__name__, "flag": flag,
+          "path": os.path.abspath(path)}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except OSError as err:
+        raise exc(
+            f"{flag} {path!r} cannot be opened ({err.__class__.__name__}: {err}). The dump "
+            f"is the one operator-supplied input this fetcher takes, and a path that names "
+            f"nothing supplies no run to fetch",
+            dict(ev, clause="dump_missing", error=err.__class__.__name__,
+                 exists=os.path.exists(path), is_dir=os.path.isdir(path))) from err
+    except json.JSONDecodeError as err:
+        raise exc(
+            f"{flag} {path!r} is not readable JSON ({err}). A dump this tool cannot parse "
+            f"is not a description of a generation it can retrieve",
+            dict(ev, clause="dump_unreadable", error=str(err))) from err
+    if not isinstance(doc, dict):
+        raise exc(
+            f"{flag} {path!r} is a {type(doc).__name__}, not a JSON object with a "
+            f"`results` key. `get_output` returns one record per file inside that key, and "
+            f"the shape is part of what an operator pastes",
+            dict(ev, clause="dump_not_a_mapping", read_as=type(doc).__name__))
+    if "results" not in doc:
+        raise exc(
+            f"{flag} {path!r} declares no `results` key; it carries {sorted(map(str, doc))}. "
+            f"The bare index this replaces raised a stdlib KeyError naming the key and "
+            f"nothing else — no flag, no file, no receipt",
+            dict(ev, clause="dump_no_results_key", keys=sorted(map(str, doc))))
+    results = doc["results"]
+    if not isinstance(results, list):
+        raise exc(
+            f"{flag} {path!r} declares `results` as a {type(results).__name__}, not a list. "
+            f"Both planners iterate it and index each member; a non-list is a population "
+            f"with an accidental answer",
+            dict(ev, clause="dump_results_not_a_list",
+                 read_as=type(results).__name__))
+    bad_rows = [{"index": i, "type": type(r).__name__, "value": repr(r)[:80]}
+                for i, r in enumerate(results) if not isinstance(r, dict)]
+    if bad_rows:
+        raise exc(
+            f"{flag} {path!r} carries {len(bad_rows)} of {len(results)} `results` entries "
+            f"that are not objects: "
+            + "; ".join(f"index {b['index']} is a {b['type']} ({b['value']})"
+                        for b in bad_rows[:5])
+            + ". The planners index each row by name, so a string member raised "
+              "`TypeError: string indices must be integers` at the exit code this module "
+              "reserves for a crash",
+            dict(ev, clause="dump_result_row_not_a_mapping", n_results=len(results),
+                 offending=bad_rows))
+    missing = [{"index": i, "missing": sorted(k for k in RESULT_ROW_KEYS if k not in r),
+                "keys": sorted(map(str, r))}
+               for i, r in enumerate(results)
+               if any(k not in r for k in RESULT_ROW_KEYS)]
+    if missing:
+        raise exc(
+            f"{flag} {path!r} carries {len(missing)} of {len(results)} `results` entries "
+            f"missing a key the planners index: "
+            + "; ".join(f"index {m['index']} lacks {m['missing']}" for m in missing[:5])
+            + ". "
+            + "; ".join(f"`{k}` is {why}" for k, why in RESULT_ROW_KEYS.items())
+            + ". A row this tool cannot read is a file it would either lose or fetch to a "
+              "path nothing planned",
+            dict(ev, clause="dump_result_row_missing_a_key", n_results=len(results),
+                 required_keys=sorted(RESULT_ROW_KEYS), offending=missing))
+    return results
 
 
 def parse_node_map(text):
@@ -720,11 +845,34 @@ def main(argv=None):
                          "review tap (114); pass --video-nodes=none for a graph with no "
                          "video output")
     a = ap.parse_args(argv)
+    # ---- ANDON, wave 22 (F-7e45e62b), bounded where `--run` is READ: above the join into
+    # the run root, above the paste into the video tap's filename, above the first
+    # `os.makedirs`. `--run` was joined into `base` (`os.path.join(a.root, a.run)`) AND
+    # pasted into `f"{run}_{i:05d}{ext}"` with no validation anywhere. MEASURED in this
+    # worktree with the downloader stubbed to write the planned bytes:
+    #   `--run=sub/dir --root=runs` -> exit 0 and `FETCH_RUN_OK {"run": "sub/dir",
+    #   "dir": "runs\\sub/dir", "by_node": {"302": 1, "114": 1}, "video": [],
+    #   "gate_FETCH": "2 planned file(s), all present and non-empty, ... and no unplanned
+    #   file in 3 swept directory(s)"}`
+    # while the video was written to `runs/sub/dir/sub/dir_00000.mp4`. `vids` is computed as
+    # `dirname(abspath(o)) == abspath(base)`, so the nested path DROPS OUT of the reported
+    # population, and `verify_downloads`' root sweep lists `base` itself, so the file is not
+    # called a stray either: a tool reporting a population that is not the population on
+    # disk, under its own success sentinel. Measured on `plan` alone, `--run=../../escaped`
+    # sends the frames to `outputs/escaped/lossless/` and the video to `escaped_00000.mp4`
+    # in the PROCESS CWD, outside the run root entirely; `..\..\win` the same.
+    single_path_segment(a.run, "--run", FetchHalt,
+                        extra={"root": os.path.abspath(a.root),
+                               "pasted_into": ["<root>/<run>/ (the run directory)",
+                                               "<run>_<index><ext> (the video tap)"]})
     node_dir = parse_node_map(a.node_map)
     video_nodes = parse_video_nodes(a.video_nodes)
 
-    with open(a.dump, encoding="utf-8") as fh:
-        results = json.load(fh)["results"]
+    # ONE reader, both fetchers (wave 22, F-2380aca9): the bare `json.load(fh)["results"]`
+    # this replaces reached the operator as a stdlib traceback at exit 1 with
+    # `"evidence": null`, in the module whose own `__main__` comment tells wrappers to key
+    # on the FETCH_RUN_HALT sentinel.
+    results = read_results_dump(a.dump, flag="--dump")
 
     base = os.path.join(a.root, a.run)
     # The plan raises before anything is created, so a dump this tool cannot sort leaves
