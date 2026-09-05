@@ -1072,3 +1072,252 @@ def test_the_interpreter_line_reports_a_version_it_can_read(tmp_path):
     assert expected in line[0], (
         f"the summary reports no readable version for a real interpreter: {line[0]!r}"
     )
+
+
+# =========================================================================================
+# WAVE 23 — ci-packaging's own contract for `verify.ps1` (SEAM 1).
+# =========================================================================================
+
+
+# -- F-da5e552b: the host this script is, declared -----------------------------------------
+#
+# `Invoke-Leg`'s outcome recording is PowerShell 7 only. `$PSNativeCommandUseErrorActionPreference`
+# is inert before 7.3 and `catch [System.Management.Automation.NativeCommandExitException]`
+# names a type Windows PowerShell 5.1 does not have — and nothing guarded the host:
+# `grep -i requires verify.ps1` on `e8263a3` returned only the `[build-system].requires`
+# prose, and neither of the two pre-flight ANDONs reads `$PSVersionTable`. Measured on this
+# rig by driving both hosts: under pwsh 7.6.5 the type resolves and the preference variable
+# exists; under Windows PowerShell 5.1.26100.9233 the script terminates with `Unable to find
+# type [System.Management.Automation.NativeCommandExitException]` and
+# `Get-Variable PSNativeCommandUseErrorActionPreference` returns nothing — so the rig's
+# pre-tag gate died mid-run without printing the summary its DESCRIPTION promises.
+
+#: The floor at which BOTH constructs `Invoke-Leg` uses exist and are non-experimental.
+INVOKE_LEG_POWERSHELL_FLOOR = (7, 4)
+
+WINDOWS_POWERSHELL = shutil.which("powershell")
+
+
+def _requires_version():
+    """The version `#requires -Version` names, or None."""
+    match = re.search(r"(?m)^#requires\s+-Version\s+(\d+(?:\.\d+)*)\s*$", VERIFY)
+    return tuple(int(p) for p in match.group(1).split(".")) if match else None
+
+
+def test_verify_declares_the_powershell_its_own_leg_recorder_needs():
+    """A `#requires` directive, at or above the version the constructs need."""
+    declared = _requires_version()
+    assert declared is not None, (
+        "verify.ps1 carries no `#requires -Version`; its Invoke-Leg uses two PowerShell 7 "
+        "constructs and Windows PowerShell 5.1 terminates on the first of them, mid-run, "
+        "before the summary the DESCRIPTION promises is printed")
+    assert declared >= INVOKE_LEG_POWERSHELL_FLOOR, (
+        f"verify.ps1 requires PowerShell {declared} and Invoke-Leg needs "
+        f"{INVOKE_LEG_POWERSHELL_FLOOR}: `$PSNativeCommandUseErrorActionPreference` is inert "
+        "before 7.3 and the NativeCommandExitException type is 7-only")
+    body = invoke_leg_source()
+    assert "$PSNativeCommandUseErrorActionPreference" in body, (
+        "the preference variable the requirement exists for is gone from Invoke-Leg; the "
+        "floor above is now guarding nothing")
+    assert "NativeCommandExitException" in body, (
+        "the typed catch the requirement exists for is gone from Invoke-Leg")
+
+
+def test_the_directive_is_the_first_thing_in_the_file():
+    """A `#requires` below the first executable line is a halt that arrives too late."""
+    lines = [line for line in VERIFY.splitlines() if line.strip()]
+    assert lines and lines[0].lower().startswith("#requires"), (
+        f"the first non-blank line of verify.ps1 is {lines[0]!r}")
+
+
+def test_the_version_reader_goes_red_on_a_file_with_no_directive():
+    """The mutation: the file as it stood on `e8263a3`, which named no host at all."""
+    assert re.search(r"(?m)^#requires\s+-Version\s+(\d+(?:\.\d+)*)\s*$",
+                     "<#\n.SYNOPSIS\n  x\n#>\nparam()\n") is None
+
+
+@pytest.mark.skipif(
+    WINDOWS_POWERSHELL is None,
+    reason="no Windows PowerShell on this box to measure the 5.1 half against")
+def test_the_constructs_the_directive_guards_are_absent_from_windows_powershell():
+    """The measured operand, driven — not asserted from the version number.
+
+    verify.ps1 itself is NOT run here: with the directive present a 5.1 host refuses it, and
+    with the directive absent it would run the whole suite. The two constructs are probed
+    directly instead, which is the mechanism the directive exists for.
+    """
+    probe = (
+        "$t = [System.Management.Automation.NativeCommandExitException] "
+        "-as [type]; "
+        "$v = Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction "
+        "SilentlyContinue; "
+        "Write-Output ('MAJOR|' + $PSVersionTable.PSVersion.Major); "
+        "Write-Output ('TYPE|' + [bool]$t); "
+        "Write-Output ('PREF|' + [bool]$v)"
+    )
+    got = subprocess.run([WINDOWS_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", probe],
+                         capture_output=True, text=True)
+    fields = dict(line.split("|", 1) for line in got.stdout.splitlines() if "|" in line)
+    if fields.get("MAJOR", "") not in ("5", "4", "3"):
+        pytest.skip(f"`powershell` here is major {fields.get('MAJOR')!r}, not Windows PowerShell")
+    assert fields["TYPE"] == "False", (
+        "Windows PowerShell resolves NativeCommandExitException on this box; the directive's "
+        "operand has moved and its floor should be re-measured")
+    assert fields["PREF"] == "False", (
+        "Windows PowerShell carries $PSNativeCommandUseErrorActionPreference on this box")
+
+
+# -- F-a7b2c2dc: leg 3 ESTABLISHES the cleared-`dist/` invariant ---------------------------
+#
+# The leg's stated invariant — "`dist/` CLEARED so every verdict below is about what this run
+# built" — was never established. `Remove-Item ... -ErrorAction SilentlyContinue` suppresses
+# its own failure (the explicit -EA overrides the `$ErrorActionPreference = 'Stop'` Invoke-Leg
+# sets), and nothing between the clear and `twine check dist\*` asked whether the directory
+# was empty. The two artifacts are selected BY NAME lower down, which protects the two clean
+# rooms and not the two checks that range over `dist\*`. Re-measured on `e8263a3` under pwsh
+# 7.6.5 with `$ErrorActionPreference = 'Stop'` and `$PSNativeCommandUseErrorActionPreference
+# = $true` set: the suppressed Remove-Item raised no terminating error, left `$LASTEXITCODE`
+# null, recorded one object in `$Error` that nothing reads, and the stale files remained.
+
+
+def dist_clear_source():
+    """`$dist = Join-Path $repo 'dist'` through the end of its `if (Test-Path $dist)` block."""
+    start = VERIFY.index("$dist = Join-Path $repo 'dist'")
+    open_brace = VERIFY.index("{", VERIFY.index("if (Test-Path $dist)", start))
+    depth = 0
+    for j in range(open_brace, len(VERIFY)):
+        if VERIFY[j] == "{":
+            depth += 1
+        elif VERIFY[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return VERIFY[start : j + 1]
+    raise AssertionError("the dist clear block is unbalanced")
+
+
+def test_the_clear_is_followed_by_a_check_before_anything_ranges_over_dist():
+    """Statically: the emptiness check sits between the clear and `twine check dist\\*`."""
+    block = dist_clear_source()
+    assert "Remove-Item" in block, "the clear left the block this test lifts"
+    assert "-ErrorAction SilentlyContinue" in block, (
+        "the -EA flag was removed; a locked file is not a reason to halt BEFORE the check "
+        "that would name it — the check, not the flag, is the fix")
+    assert "Get-ChildItem" in block and "$global:LASTEXITCODE = 1" in block, (
+        "nothing in the clear block asks whether dist/ is actually empty, so `twine check "
+        "dist\\*` and the classifier gate can still range over a file this run did not build")
+    twine = VERIFY.index("-m twine check")
+    assert VERIFY.index("Get-ChildItem $dist -Force") < twine, (
+        "the emptiness check runs after `twine check`, which is the verdict it exists to "
+        "protect")
+
+
+def _run_dist_clear(tmp_path):
+    """Drive the lifted clear block with `$repo` pointed at a scratch tree."""
+    script = (
+        "$ErrorActionPreference = 'Stop'\n"
+        "$PSNativeCommandUseErrorActionPreference = $true\n"
+        f"$repo = '{str(tmp_path).replace(chr(92), '/')}'\n"
+        "$global:LASTEXITCODE = 0\n"
+        "function Invoke-Body {\n" + dist_clear_source() + "\n}\n"
+        "Invoke-Body\n"
+        "Write-Output ('CODE|' + $global:LASTEXITCODE)\n"
+    )
+    path = tmp_path / "clear_harness.ps1"
+    path.write_text(script, encoding="utf-8")
+    proc = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(path)],
+                          capture_output=True, text=True)
+    code = None
+    for line in proc.stdout.splitlines():
+        if line.startswith("CODE|"):
+            code = line.split("|", 1)[1].strip()
+    return code, proc.stdout + proc.stderr
+
+
+@needs_pwsh
+def test_a_dist_that_clears_leaves_the_leg_running(tmp_path):
+    """The direction the fix must not break: an empty dist/ is the normal case."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "armature_studio-0.0.1-py3-none-any.whl").write_bytes(b"stale")
+    code, out = _run_dist_clear(tmp_path)
+    assert code == "0", out
+    assert "could not be cleared" not in out, out
+    assert list(dist.iterdir()) == [], list(dist.iterdir())
+
+
+@needs_pwsh
+def test_leg_three_refuses_a_dist_it_could_not_clear(tmp_path):
+    """The red proof: a stale artifact survives the clear and the leg proceeds anyway.
+
+    The file is held open by another process, which is what makes `Remove-Item -Force` fail
+    on Windows — the same shape as a half-written archive or an antivirus hold. Before this
+    fix the block below recorded nothing and `twine check dist\\*` issued its verdict over
+    the survivor.
+    """
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    stale = dist / "armature_studio-0.0.1-py3-none-any.whl"
+    stale.write_bytes(b"stale")
+    holder = subprocess.Popen(
+        [sys.executable, "-c",
+         "import sys,time;f=open(sys.argv[1],'a');print('OPEN',flush=True);time.sleep(60)",
+         str(stale)],
+        stdout=subprocess.PIPE, text=True)
+    try:
+        assert holder.stdout.readline().strip() == "OPEN"
+        code, out = _run_dist_clear(tmp_path)
+    finally:
+        holder.kill()
+        holder.wait()
+    if not stale.exists():
+        pytest.skip("this filesystem removed a file held open by another process")
+    assert code == "1", (
+        f"a stale artifact survived the clear and the leg recorded {code!r}; every verdict "
+        f"below it is then a claim about a file this run did not build.\n{out}")
+    assert "could not be cleared" in out and stale.name in out, (
+        f"the refusal does not name what remained.\n{out}")
+
+
+# -- F-1c5dc527 / F-e3e6bdc8: the probe is one file, and the rooms say what they resolved ---
+
+
+def test_verify_runs_the_one_lazy_import_probe_file():
+    """One text, two callers — and no here-string copy left behind."""
+    assert "lazy_import_probe.py" in VERIFY, (
+        "verify.ps1 no longer runs `.github/actions/clean-room/lazy_import_probe.py`; a "
+        "here-string copy is a second implementation of one probe, and no census under "
+        "`.github/` can see it")
+    assert "aapose.blank_canvas" not in VERIFY, (
+        "verify.ps1 carries an inline copy of the probe body again")
+    assert "lazy_import_probe.py" in clean_room_script(), (
+        "the clean-room action no longer runs the same file")
+
+
+def test_both_clean_rooms_state_the_dependency_set_they_exercised():
+    """`--quiet` removed the one line saying what pip resolved, in both implementations.
+
+    The wheel room resolves the runtime set FRESH — the coordinator's wave-23 ruling, and a
+    user's experience of `pip install armature-studio` — so what it resolved has to be
+    readable, or a dependency-day break and a wheel defect are the same red on the step with
+    no compensator.
+    """
+    for impl, text in (("the clean-room action", clean_room_script()),
+                       ("verify.ps1", VERIFY)):
+        quiet = [line.strip() for line in text.splitlines()
+                 if "pip install" in line and not line.strip().startswith("#")
+                 and ("--quiet" in line.split() or "-q" in line.split())
+                 and ("dist" in line or "$wheelPath" in line or "$sdistPath" in line)]
+        assert quiet == [], (
+            f"{impl} silences the clean-room install: {quiet}")
+        assert "pip freeze" in text, (
+            f"{impl} never states the dependency set the probe ran against")
+    def _freezes(text):
+        # CODE lines only, in either language: `#` opens a comment in bash and in
+        # PowerShell alike, and both files now DESCRIBE the report as well as running it.
+        return [line.strip() for line in text.splitlines()
+                if "pip freeze" in line and not line.strip().startswith("#")]
+
+    assert len(_freezes(VERIFY)) == 2, (
+        f"verify.ps1 reports {_freezes(VERIFY)} for its two clean-room installs")
+    assert len(_freezes(clean_room_script())) == 2, (
+        f"the clean-room action reports {_freezes(clean_room_script())} for its two rooms")

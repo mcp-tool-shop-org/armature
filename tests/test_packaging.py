@@ -2135,3 +2135,100 @@ def test_the_documented_subject_of_a_spend_line_matches_the_census_escape():
                 offenders.append(
                     f"{name}: {line!r} passes --no-canon on a subject that has surfaces")
     assert offenders == [], offenders
+
+
+# =========================================================================================
+# WAVE 23 — ci-packaging `F-8222d591`: the ignore backstop covers every container the repo
+# writes.
+#
+# `.gitignore`'s extension backstop listed `*.mp4`, `*.mov` and `*.webm` and NOT `*.mkv` —
+# the container this repository's own encoder writes by DEFAULT. `tools/encode_control.py`'s
+# CODECS table gives `.mkv` to three of its five profiles including `ffv1-gbrp`, the lossless
+# one and the largest file the pipeline produces; it takes its destination from an
+# operator-supplied `--out` with no directory constraint and creates whatever directory that
+# names. `tools/fetch_run.py` carries `VIDEO_SUFFIXES = ('.mp4', '.webm', '.mkv')`, so the
+# fetcher expects the same container back from a provider. Measured with `git check-ignore -v`
+# from a worktree on `63191ee`: `run/x.mp4` -> IGNORED, `outputs/x.mkv` -> IGNORED (by the
+# directory rule), `a.mkv` at the repo root -> NOT IGNORED.
+#
+# That is the `sheets/control_0001.png` measurement the block's own header records, one
+# container over. The list is DERIVED here rather than maintained, in the shape this file
+# already uses for the credential carriers: the next codec brings its extension with it.
+# =========================================================================================
+
+
+def _gitignore_extension_rules():
+    """Every bare `*.<ext>` rule in `.gitignore`, lowercased."""
+    out = set()
+    with open(os.path.join(REPO, ".gitignore"), encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line.startswith("#") or not line:
+                continue
+            m = re.fullmatch(r"\*(\.[A-Za-z0-9]+)", line)
+            if m:
+                out.add(m.group(1).lower())
+    return out
+
+
+def containers_the_repo_writes():
+    """Every video container this repository encodes to or expects back, derived.
+
+    Two sources, both live objects rather than transcriptions: the encoder's own codec table
+    (what the repo WRITES) and the fetcher's accepted suffixes (what the repo expects a
+    provider to hand back).
+    """
+    import encode_control
+    import fetch_run
+
+    out = {str(row["ext"]).lower() for row in encode_control.CODECS.values()}
+    out |= {str(s).lower() for s in fetch_run.VIDEO_SUFFIXES}
+    return out
+
+
+def test_the_container_census_reads_both_sources_and_is_not_empty():
+    """Size and membership before the property — a census that cannot grow is not one."""
+    containers = containers_the_repo_writes()
+    assert len(containers) >= 3, containers
+    # Measured 2026-09-05 on `63191ee`: the encoder writes .mkv and .mp4; the fetcher also
+    # accepts .webm. `.mkv` is the default profile's container.
+    assert containers == {".mkv", ".mp4", ".webm"}, containers
+
+
+def test_the_ignore_backstop_covers_every_container_the_repo_writes():
+    """A container the repo writes, outside `outputs/`, must not be stageable by `git add -A`."""
+    rules = _gitignore_extension_rules()
+    missing = sorted(containers_the_repo_writes() - rules)
+    assert missing == [], (
+        f".gitignore's extension backstop does not cover {missing}, and the encoder's `--out` "
+        "has no directory constraint — an encode written under `renders/`, `tmp/` or the repo "
+        "root rides the next `git add -A`, against the repo's rule that big binaries stay out "
+        "of git")
+
+
+def test_the_container_check_goes_red_on_the_list_this_repo_had():
+    """The mutation: the three-entry backstop, fed to the same comparison."""
+    before = {".mp4", ".mov", ".webm"}
+    assert sorted(containers_the_repo_writes() - before) == [".mkv"], (
+        "the pre-fix extension list no longer misses a container this repo writes; this red "
+        "proof has stopped reproducing the defect it describes")
+
+
+def test_the_container_backstop_is_measured_against_git_itself(tmp_path):
+    """`git check-ignore` is the authority, not the rule text — driven on the real repo.
+
+    The rules above are read as text; this asks git, from the repository, whether a file at
+    the root with each container's extension would be ignored. That is the measurement the
+    finding used, and the one the block's own header records for the PNG family.
+    """
+    import shutil as _shutil
+    git = _shutil.which("git")
+    if git is None:
+        pytest.skip("no git on PATH to ask")
+    for ext in sorted(containers_the_repo_writes()):
+        probe = "a-w23-container-probe" + ext
+        got = subprocess.run([git, "check-ignore", "-q", probe],
+                             cwd=REPO, capture_output=True, text=True)
+        assert got.returncode == 0, (
+            f"`git check-ignore {probe}` says NOT IGNORED; the encoder writes {ext} and its "
+            "destination is an operator-supplied path with no directory constraint")

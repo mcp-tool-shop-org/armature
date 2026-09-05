@@ -1,0 +1,89 @@
+"""Call every function-local third-party import of an INSTALLED armature-studio.
+
+ONE TEXT, TWO CALLERS. `.github/actions/clean-room/action.yml` runs this file inside the
+wheel room, and so does `verify.ps1`'s leg 3, whose DESCRIPTION says a green local run and a
+green CI run are the same claim ABOUT WHAT RAN. It used to be two copies -- a bash heredoc in
+the action and a PowerShell here-string in the script -- and no census could see the second
+one: `tests/test_ci_workflows.py`'s lazy-import census derives the leg from
+`_all_run_scripts()`, which walks `.github/` only. Measured on `e8263a3` in a `git archive`
+scratch copy with the three calls replaced by `pass` inside verify.ps1's here-string ALONE:
+`tests/test_verify_script.py` + `tests/test_ci_workflows.py` = 256 passed. The classifier
+gate one directory over was made a FILE for exactly this reason and its docstring states the
+law ("One text, two callers"); the probe two paragraphs away stayed duplicated. It does not
+any more.
+
+WHY THE PROBE CALLS FUNCTIONS AT ALL. `armature check` imports each surface module and
+`armature modules` prints a table, so no function body runs and no lazy import is ever
+reached. Measured in this exact clean room -- armature-studio and numpy only -- `armature
+check` printed `all modules resolved` and exited 0 while cv2, matplotlib and PIL were absent
+and both the drawing path and Gate DONOR raised ModuleNotFoundError on first call. The leg
+was green on precisely the wheel defect it exists to catch.
+
+WHY THE PRINTED LINE IS BUILT AND NOT WRITTEN, AND WHY NO FUNCTION IS NAMED IN PROSE HERE.
+This file used to end with a `print` whose literal spelled out all three function names, and
+`tests/test_ci_workflows.py::test_the_clean_room_leg_reaches_every_lazily_imported_dependency`
+decides "the leg reaches this lazy dependency" with `any(fn in script for fn in fns)` over a
+source with only `#` comment lines dropped. So all three names sat in the text whether or not
+the calls happened, and the guard was satisfied by the probe's own ANNOUNCEMENT. Measured on
+`e8263a3` with the three call sites replaced by `pass`: `tests/test_ci_workflows.py` = 216
+passed, and the guard passed on its own (`-k clean_room_leg_reaches` -> 1 passed, 215
+deselected). That is this repository's "placeholder shaped like evidence" rule broken by an
+unconditional print claiming three calls ran.
+
+`_ran` is the fix: each name appears in this file EXACTLY ONCE, as the function object handed
+to the call that runs it, and the printed list is appended to by the call itself. Delete a
+call site and the name leaves the source with it, so the census goes red -- and the line
+cannot claim a function ran that did not. That is also why this docstring describes the three
+function-local dependencies rather than listing them: `_code_only` strips comment lines and
+not string literals, so a name written HERE would restore exactly the hole the printed
+literal was.
+"""
+
+import os
+import sys
+import tempfile
+
+import numpy as np
+
+from armature_core import aapose, donor_gate, pngio
+
+#: The functions that actually ran, in order, appended by `_ran` AFTER each call returns.
+RAN = []
+
+
+def _ran(fn, *args):
+    """Call `fn(*args)` and record its name. The record is a CONSEQUENCE of the call."""
+    fn(*args)
+    RAN.append(fn.__name__)
+
+
+def main():
+    # The leg's own premise, checked rather than assumed: this must be the wheel, not a
+    # checkout sitting one directory up. `sys.path[0]` is this file's directory inside the
+    # repository when `verify.ps1` runs it, so the check is load-bearing on the rig too.
+    if "site-packages" not in aapose.__file__.replace("\\", "/"):
+        raise SystemExit("clean-room probe imported the source tree: " + aapose.__file__)
+
+    canvas = aapose.blank_canvas(64, 64)
+    body = np.zeros((aapose.KEYPOINT_COUNT, 3))
+    body[:, :2] = 32.0
+    body[:, 2] = 1.0
+    _ran(aapose.draw_body, canvas, body)
+    hand = np.zeros((aapose.HAND_KEYPOINT_COUNT, 3))
+    hand[:, :2] = 32.0
+    hand[:, 2] = 1.0
+    _ran(aapose.draw_hand, canvas, hand)
+
+    frames = tempfile.mkdtemp()
+    paths = []
+    for i in range(2):
+        p = os.path.join(frames, "%05d.png" % i)
+        pngio.write_png(p, np.full((8, 8, 3), i * 40, dtype=np.uint8))
+        paths.append(p)
+    _ran(donor_gate.mean_consecutive_frame_difference, paths)
+
+    print("clean room: " + ", ".join(RAN) + " all ran")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

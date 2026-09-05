@@ -16,7 +16,11 @@
 # were absent and both the drawing path and Gate DONOR raised ModuleNotFoundError on first
 # call. The leg was green on precisely the wheel defect it exists to catch.
 # tests/test_ci_workflows.py derives the required call sites from the source, so a new lazy
-# dependency fails until this probe reaches it.
+# dependency fails until this probe reaches it -- and the source it now reads is
+# `lazy_import_probe.py`, where each function name appears ONCE, at the call site. That
+# sentence was false when the probe was a heredoc ending in a printed literal naming all
+# three functions: measured on `e8263a3` with every call site replaced by `pass`, the census
+# passed on the announcement alone (216 passed; `-k clean_room_leg_reaches` -> 1 passed).
 #
 # WHY build AND twine ARE CONSTRAINED. These are the two tools that PRODUCE the artifact
 # published irreversibly, and they were resolved fresh on release day. The repo already
@@ -67,38 +71,31 @@ runs:
         # rig 2026-09-04 against this tree's sdist -- `pip install --no-deps` exit 0,
         # `armature modules --json` exit 0, `armature_core` imported from that venv's
         # site-packages -- so this is a guard on a path that works today, not a repair.
+        #
+        # WHAT EACH ROOM RESOLVED, STATED. Both installs carried `--quiet`, which removes the
+        # one line saying what came out of the index. The wheel room deliberately resolves the
+        # runtime set FRESH (that is a user's experience of `pip install armature-studio`, and
+        # the thing this room exists to exercise) at the unbounded specifiers pyproject
+        # declares -- so when this step goes red on release day, after `release: published`
+        # has fired, the log has to say which numpy and which cv2 the probe ran against.
+        # Measured on the rig 2026-09-04: `pip install --quiet` emitted nothing at all, while
+        # the same install without the flag printed `Successfully installed
+        # armature-studio-0.3.0`. `pip freeze` after each install is the full answer: a
+        # dependency-day break and a wheel defect are then two different reds.
         python -m venv /tmp/cleanroom-sdist
-        /tmp/cleanroom-sdist/bin/python -m pip install --quiet --no-deps dist/*.tar.gz
+        /tmp/cleanroom-sdist/bin/python -m pip install --no-deps dist/*.tar.gz
+        /tmp/cleanroom-sdist/bin/python -m pip freeze
         /tmp/cleanroom-sdist/bin/armature modules --json > /dev/null
         python -m venv /tmp/cleanroom
-        /tmp/cleanroom/bin/python -m pip install --quiet dist/*.whl
+        /tmp/cleanroom/bin/python -m pip install dist/*.whl
+        /tmp/cleanroom/bin/python -m pip freeze
         /tmp/cleanroom/bin/armature check
         /tmp/cleanroom/bin/armature modules --json > /dev/null
-        /tmp/cleanroom/bin/python - <<'PROBE'
-        import os, tempfile
-        import numpy as np
-        from armature_core import aapose, donor_gate, pngio
-
-        # The leg's own premise, checked rather than assumed: this must be the wheel, not
-        # the checkout sitting one directory up.
-        if "site-packages" not in aapose.__file__.replace("\\", "/"):
-            raise SystemExit("clean-room probe imported the source tree: " + aapose.__file__)
-
-        canvas = aapose.blank_canvas(64, 64)
-        body = np.zeros((aapose.KEYPOINT_COUNT, 3)); body[:, :2] = 32.0; body[:, 2] = 1.0
-        aapose.draw_body(canvas, body)
-        hand = np.zeros((aapose.HAND_KEYPOINT_COUNT, 3)); hand[:, :2] = 32.0; hand[:, 2] = 1.0
-        aapose.draw_hand(canvas, hand)
-
-        frames = tempfile.mkdtemp()
-        paths = []
-        for i in range(2):
-            p = os.path.join(frames, "%05d.png" % i)
-            pngio.write_png(p, np.full((8, 8, 3), i * 40, dtype=np.uint8))
-            paths.append(p)
-        donor_gate.mean_consecutive_frame_difference(paths)
-        print("clean room: draw_body, draw_hand and mean_consecutive_frame_difference all ran")
-        PROBE
+        # THE PROBE IS A FILE, NOT A HEREDOC, for the reason the classifier gate beside it is
+        # one: `verify.ps1`'s leg 3 runs the SAME text, and a copy forks. Its own docstring
+        # carries the measurement (one copy gutted, 256 tests still green) and the reason the
+        # printed line is BUILT from the calls rather than written as a literal.
+        /tmp/cleanroom/bin/python "$GITHUB_ACTION_PATH/lazy_import_probe.py"
 
     # THE ONE FAILURE CLASS THIS PROJECT HAS ALREADY PAID FOR, AND THE ONLY GATE THAT CAN
     # SEE IT. `twine check` above validates metadata STRUCTURE, not classifier MEMBERSHIP:

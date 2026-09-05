@@ -39,10 +39,11 @@ on:
   # has `workflow_dispatch:` with no `inputs:` block beneath it, no `refs/tags/` anywhere,
   # and `npm publish --provenance --access public` unconditional at its :126.
   #
-  # The consequence for the tag-ref gate below, the visibility gate beside it,
-  # `npm-clean-room`, the clean-room action's sdist and classifier rooms, the `-O` step's
-  # `PYTHONOPTIMIZE` env and BOTH arms of the npm `Publish` branch is unchanged: none of
-  # them has ever executed in a `release: published` run. Nothing green anywhere says
+  # The consequence for the tag-ref gate below, the visibility gate beside it, the
+  # pre-release gate added in wave 23, `npm-clean-room`, the clean-room action's sdist and
+  # classifier rooms, the `-O` step's `PYTHONOPTIMIZE` env and BOTH arms of the npm
+  # `Publish` branch is unchanged: none of them has ever executed in a
+  # `release: published` run. Nothing green anywhere says
   # otherwise -- the suite reads these files as TEXT, which is a claim about what they SAY,
   # not about what they DO on a runner.
   #
@@ -65,11 +66,12 @@ on:
   #
   # WHY NOT `--ref main`, WHICH DOES CARRY THE GATES. The tag gate at :179 refuses any
   # `GITHUB_REF` that is not `refs/tags/*`, deliberately and by its own comment ("Dispatch
-  # from a branch and it refuses here"). It is step 9 of the 11 steps in `verify`
+  # from a branch and it refuses here"). It is step 9 of the 12 steps in `verify`
   # (checkout, setup-python, Install, sheet-fonts, Suite, Suite under -O, clean-room,
-  # npm-clean-room, TAG GATE, visibility gate, upload-artifact). So a `main` dispatch
-  # exercises the suite twice and both clean rooms and then HALTS -- the visibility gate
-  # and the artifact upload never run. That is a useful partial run and it is not what the
+  # npm-clean-room, TAG GATE, visibility gate, PRE-RELEASE GATE, upload-artifact -- the
+  # eleventh joined in wave 23). So a `main` dispatch exercises the suite twice and both
+  # clean rooms and then HALTS -- the visibility gate, the pre-release gate and the
+  # artifact upload never run. That is a useful partial run and it is not what the
   # sentence below claims, so it is not the command this block prints.
   #
   # THE ORDERING, which is the actual fix: a tag alone does not fire `release: published`
@@ -302,6 +304,65 @@ jobs:
               exit 1
               ;;
           esac
+      - name: A pre-release must not reach either registry
+        # THE ONE FACT ABOUT THE RELEASE OBJECT NOTHING HERE READ. `on.release.types:
+        # [published]` is the whole trigger and, measured on `63191ee`, a grep for
+        # `prerelease`, `dist-tag` or `--tag ` across `.github/`, `npm/package.json`,
+        # `verify.ps1` and `pyproject.toml` returned NOTHING: no job, step or manifest read
+        # `github.event.release.prerelease`, and the step that reaches the registry below
+        # carries no `--tag` of its own, so npm defaults the dist-tag to
+        # `latest`. A GitHub pre-release released through this workflow would therefore move
+        # `@mcptoolshop/armature-studio`'s `latest` onto it, and `npm i
+        # @mcptoolshop/armature-studio` would serve a pre-release to every user until somebody
+        # ran `npm dist-tag add`. PyPI's half is benign — PEP 440 pre-releases are not
+        # installed by default — so npm is the half with a user-visible effect.
+        #
+        # THE DECISION IS TO FAIL CLOSED, and the studio publishes no pre-release channel: a
+        # release marked pre-release REFUSES here, upstream of the fork, rather than
+        # publishing under `--tag next`. That also makes the one premise this gate rests on
+        # moot. It was NOT fetched: whether the `published` activity type fires for a
+        # pre-release is asserted from documented activity-type semantics and was not
+        # retrieved with the network. If it does fire, this gate stops it; if it does not,
+        # this gate never sees one. Either way nothing depends on the unfetched half.
+        #
+        # WHY THE EVENT NAME IS READ FIRST, deliberately and against the visibility gate's
+        # shape. `github.event.release` exists only on a release event, so on the documented
+        # rehearsal (`gh workflow run release.yml --ref vX.Y.Z -f rehearse=true`) this
+        # expression is EMPTY. Refusing an unreadable value unconditionally — the visibility
+        # gate's rule, correct there because `github.event.repository` is present on every
+        # event — would halt the rehearsal at this very step and delete the only way to
+        # exercise this file before a tag is public. So: on `release` the value must be
+        # `true` or `false` and `true` refuses; on any other arrival there is no release
+        # object and the run says so.
+        #
+        # No `${{ }}` inside the script, the same discipline as the two gates above: the
+        # expression rides `env:` so tests/test_ci_workflows.py can extract this script and
+        # drive it on every value of both variables.
+        env:
+          RELEASE_IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            release)
+              case "$RELEASE_IS_PRERELEASE" in
+                false)
+                  echo "::notice::the release is not a pre-release; both publish jobs may run."
+                  ;;
+                true)
+                  echo "::error::this release is marked PRE-RELEASE, and the step that reaches the registry carries no --tag, so npm would move the latest dist-tag onto it for every user of @mcptoolshop/armature-studio."
+                  echo "::error::This studio publishes no pre-release channel. Refusing before either registry is reached; unmark the release, or cut a normal version."
+                  exit 1
+                  ;;
+                *)
+                  echo "::error::github.event.release.prerelease read as '${RELEASE_IS_PRERELEASE:-<empty>}', which is neither true nor false."
+                  echo "::error::This gate decides whether the publish fork may run; refusing rather than guessing."
+                  exit 1
+                  ;;
+              esac
+              ;;
+            *)
+              echo "::notice::$GITHUB_EVENT_NAME carries no release object, so there is no pre-release flag to read; the tag gate above is what constrains this arrival."
+              ;;
+          esac
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
@@ -429,15 +490,42 @@ jobs:
         run: |
           NAME=$(node -p "require('./package.json').name")
           VER=$(node -p "require('./package.json').version")
-          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
-            echo "::notice::$NAME@$VER is already on the registry — nothing to publish."
-          elif [ "$REPOSITORY_IS_PRIVATE" = "false" ]; then
-            echo "::notice::$NAME@$VER: repository is public — publishing WITH provenance."
-            npm publish --provenance --access public
-          elif [ "$REPOSITORY_IS_PRIVATE" = "true" ]; then
-            echo "::notice::$NAME@$VER: repository is private — publishing WITHOUT provenance."
-            npm publish --access public
-          else
-            echo "::error::github.event.repository.private read as '${REPOSITORY_IS_PRIVATE:-<empty>}'; refusing to publish on a visibility this job could not read."
+          # THE PROBE KEEPS BOTH ANSWERS. It was
+          # `if npm view "$NAME@$VER" version >/dev/null 2>&1; then` — both streams to
+          # /dev/null, branching on the exit code alone — and `npm view` exits 1 for
+          # `this version is not on the registry` (E404) AND for `this job could not ask`.
+          # Measured on `e8263a3` with no external egress:
+          # `npm view @mcptoolshop/armature-studio@0.3.0 version --registry=http://127.0.0.1:1/`
+          # exits 1 with `npm error code ECONNREFUSED`, the same code an E404 produces, and
+          # driving this step's own `if` shape over a transport failure and over an E404 took
+          # the SAME branch — fall through to `npm publish` — with the reason discarded in
+          # both. So a re-run of a release whose npm publish had already succeeded would meet
+          # a registry blip here, publish, and be refused a version that already exists: the
+          # job turns red for having already succeeded, which is the outcome the comment
+          # above says this step exists to prevent, with nothing in the log naming the
+          # probe's failure.
+          #
+          # Only an E404 means "not published". Anything else is a refusal that halts with
+          # the registry's own message. The verdict is echoed either way.
+          VIEW_CODE=0
+          VIEW=$(npm view "$NAME@$VER" version 2>&1) || VIEW_CODE=$?
+          if [ "$VIEW_CODE" = "0" ]; then
+            echo "::notice::$NAME@$VER is already on the registry (npm view answered '$VIEW') — nothing to publish."
+          elif case "$VIEW" in *E404*) false ;; *) true ;; esac; then
+            echo "::error::npm view $NAME@$VER exited $VIEW_CODE and the answer was not an E404, so this job cannot tell 'not published' from 'could not ask'."
+            echo "::error::$VIEW"
+            echo "::error::Refusing rather than publishing on an unanswered probe; publishing is the one step here with no compensator."
             exit 1
+          else
+            echo "::notice::$NAME@$VER: the registry answered E404 — not on the registry, so this run publishes."
+            if [ "$REPOSITORY_IS_PRIVATE" = "false" ]; then
+              echo "::notice::$NAME@$VER: repository is public — publishing WITH provenance."
+              npm publish --provenance --access public
+            elif [ "$REPOSITORY_IS_PRIVATE" = "true" ]; then
+              echo "::notice::$NAME@$VER: repository is private — publishing WITHOUT provenance."
+              npm publish --access public
+            else
+              echo "::error::github.event.repository.private read as '${REPOSITORY_IS_PRIVATE:-<empty>}'; refusing to publish on a visibility this job could not read."
+              exit 1
+            fi
           fi

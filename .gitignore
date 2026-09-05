@@ -5,6 +5,19 @@ scratch/
 *.mp4
 *.mov
 *.webm
+# `.mkv` is the container this repository's OWN encoder writes by default, and it was the one
+# missing from this list. `tools/encode_control.py`'s CODECS table gives `.mkv` to three of
+# its five profiles — including the default `--codec ffv1-gbrp`, the lossless one, which is
+# the largest file the pipeline produces — takes its destination from an operator-supplied
+# `--out` with no directory constraint, and creates whatever directory that names;
+# `tools/fetch_run.py` carries `VIDEO_SUFFIXES = ('.mp4', '.webm', '.mkv')`, so the fetcher
+# expects the same container back from a provider. Measured with `git check-ignore -v` from a
+# worktree on `63191ee`: `run/x.mp4` -> IGNORED, `outputs/x.mkv` -> IGNORED (by the directory
+# rule), and `a.mkv` at the repo root -> NOT IGNORED. That is the `sheets/control_0001.png`
+# measurement in the block below, one container over. `tests/test_packaging.py` now DERIVES
+# the requirement from `encode_control.CODECS` and `fetch_run.VIDEO_SUFFIXES`, so the next
+# codec brings its extension with it instead of relying on this list being remembered.
+*.mkv
 *.glb
 *.gltf
 *.blend
