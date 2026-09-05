@@ -43,6 +43,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import clipcompare as CC  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+from armature_core.parts import require_finite  # noqa: E402
 from encode_control import FFMPEG, decode  # noqa: E402
 
 TOOL_VERSION = "E13.1"
@@ -101,28 +102,67 @@ def gate_clip_rate(stream, expect_fps, clip, tolerance=FPS_TOLERANCE):
 
     Returns the evidence dict when it holds: a gate whose passing verdict is never written
     down is a gate nobody can read.
+
+    **Both operands are refused by name when they are not numbers this gate can compare.**
+    F-5250a2ef, wave 22. The comparison was `ev['delta'] = abs(read - float(expect_fps))`
+    followed by `if ev['delta'] > tolerance:` — and `nan > 0.05` is False, so a non-finite
+    expectation returned a PASS. Measured on `e8263a3` in process:
+    `gate_clip_rate({'fps': 16.0, 'stream': 's'}, float('nan'), 'clip.mp4')` returned
+    `delta=nan` and the verdict string "16.0 fps, within 0.05 of the declared nan" — a
+    verdict asserting a property no code checked — where `expect=inf` and `expect=24.0`
+    both raised. The operand is CLI-reachable: `--expect-fps` is `type=float` and argparse
+    accepts `nan`, `NaN` and `-nan` (all measured), which is how a script computing a rate
+    from a record — `frames/duration` with a zero or missing duration — delivers one.
+
+    This is the same latent class `gates.g4_bbox_sanity`'s own comment describes for its
+    bbox edges and that wave 18 closed through `parts.require_finite`; this rate gate was
+    not swept with it, so it is swept here, through the same one helper. The DECODED rate
+    is the other half of the comparison and gets the same treatment: ffmpeg's own report is
+    parsed from text, and a rate that arrives as `nan` walks the comparison in exactly the
+    same way. `tolerance` is bounded too — a non-finite tolerance makes every `>` False.
     """
     read = stream.get("fps")
-    ev = {"gate": "CLIP_RATE", "clip": os.path.abspath(clip), "read": read,
-          "expected": float(expect_fps), "tolerance": float(tolerance),
+    ev = {"gate": "CLIP_RATE", "andon": "ClipRateError",
+          "clip": os.path.abspath(clip), "read": read,
+          "flag": "--expect-fps",
+          "expected": expect_fps, "tolerance": tolerance,
           "stream": stream.get("stream", "NOT PARSED")}
     if read is None:
+        ev["clause"] = "stream_reported_no_rate"
         raise ClipRateError(
             f"{clip}: ffmpeg reported no frame rate for this stream, so the rate every "
             f"timing number below is computed against was never read. `NOT PARSED` beside "
             f"an expectation is not a comparison",
             ev)
-    read = float(read)
+    # ---- ANDON, ABOVE the `abs()`: a non-finite operand does not fire a bound, it walks
+    #      past every bound in both directions and lands on the verdict line.
+    ev["clause"] = "expected_rate_not_finite"
+    expect_fps = require_finite("expect_fps", expect_fps, ClipRateError, ev,
+                                positive=False)
+    ev["expected"] = expect_fps
+    ev["clause"] = "expected_rate_not_positive"
+    if expect_fps <= 0.0:
+        raise ClipRateError(
+            f"--expect-fps={expect_fps!r} is not a rate a decoded clip can be within a "
+            f"tolerance of; every timing number this report quotes is computed against it",
+            ev)
+    ev["clause"] = "tolerance_not_finite"
+    tolerance = require_finite("tolerance", tolerance, ClipRateError, ev, positive=True)
+    ev["tolerance"] = tolerance
+    ev["clause"] = "decoded_rate_not_finite"
+    read = require_finite("read", read, ClipRateError, ev, positive=True)
     ev["read"] = read
-    ev["delta"] = abs(read - float(expect_fps))
+    ev.pop("clause", None)
+    ev["delta"] = abs(read - expect_fps)
     if ev["delta"] > tolerance:
+        ev["clause"] = "decoded_rate_disagrees_with_the_declaration"
         raise ClipRateError(
             f"{clip} decodes at {read} fps and --expect-fps declared "
-            f"{float(expect_fps)} (|delta| {ev['delta']:.4f} > {tolerance}); the clip's "
+            f"{expect_fps} (|delta| {ev['delta']:.4f} > {tolerance}); the clip's "
             f"duration, and therefore every timing number read against it, is computed "
             f"on a rate nobody verified",
             ev)
-    ev["verdict"] = f"{read} fps, within {tolerance} of the declared {float(expect_fps)}"
+    ev["verdict"] = f"{read} fps, within {tolerance} of the declared {expect_fps}"
     return ev
 
 

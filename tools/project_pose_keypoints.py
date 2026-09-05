@@ -303,10 +303,45 @@ def front_gate_detail(body_px, lhand_px, rhand_px):
             f"{per_channel[2] // n if n else 0} right-hand)")
 
 
+def gate_authoring_rate(fps):
+    """ANDON — the rate this record ASSERTS the driving signal was authored at.
+
+    F-7ff7943e, wave 22. `--fps` is `type=int, default=16` with no bound, and it is a pure
+    PROVENANCE value: measured on `e8263a3`, `a.fps` occurs exactly ONCE in this module, at
+    the record write, and `render_pose_sticks` then copies it into `sticks_manifest.json` as
+    `"fps": rec.get("fps")`. Because nothing READS it, no gate could refuse it and no run
+    would ever fail on it — argparse accepted `--fps=-16` and the value simply became the
+    rate the driving sequence's two manifests asserted.
+
+    This is the one shape the repo's three existing rate andons (`resample_motion`'s
+    `--fps-src`, `pack_pose_pack`'s `MIN_FPS` clause, `make_review_clip`'s two rates) cannot
+    catch, because every one of them bounds a rate that a computation divides by. Under this
+    repo's law a recipe that does not reproduce its output is not a recipe, and a provenance
+    field nothing bounds is a placeholder shaped like evidence — so the bound goes where the
+    flag ENTERS THE RECORD rather than where it is divided by.
+    """
+    if fps <= 0:
+        raise ProjectGate(
+            f"--fps={fps} is not an authoring rate; this record and the "
+            f"sticks_manifest.json that copies it from it are the two documents that say "
+            f"at what rate the driving signal was authored, and a later reader deriving a "
+            f"duration or a resample factor from either computes against this number",
+            {"gate": "ARGS", "andon": "ProjectGate",
+             "clause": "authoring_rate_not_positive", "flag": "--fps", "value": fps,
+             "minimum_exclusive": 0,
+             "travels_to": ["<out>/keypoints.json:fps",
+                            "render_pose_sticks -> sticks_manifest.json:fps"]})
+    return fps
+
+
 def main(argv=None):
     started = time.time()
     a = parse_args(argv)
     out = os.path.abspath(a.out)
+
+    # ---- ANDON, before anything is read or written: the authoring rate is a rate. It is
+    #      bounded HERE because nothing downstream divides by it — see the docstring above.
+    gate_authoring_rate(a.fps)
 
     sitelist.validate()
     with open(a.manifest, encoding="utf-8") as fh:

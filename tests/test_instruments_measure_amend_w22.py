@@ -141,31 +141,88 @@ def test_no_accepted_input_produces_a_negative_index(tmp_path):
             assert 0 <= x < na and 0 <= y < nb
 
 
-def test_the_eleven_rate_flags_in_this_domain_are_all_bounded():
-    """THE POPULATION, enumerated and measured — not the two the finding named.
+def _rate_refusals():
+    """The eleven `--*fps*` flags across this domain's 42 owned modules, each paired with
+    the smallest call that reaches its refusal.
 
-    Every `--*fps*` argparse flag across the domain's 42 owned modules. Three tools (four
-    flags) were bounded in waves 16/18; this wave closes the remaining seven. The check
-    is behavioural where it can be: each module's source must carry a refusal naming its
-    rate flag, so a later edit that deletes the bound goes red here.
+    Every andon sits ABOVE its tool's first read, so `main` can be driven with paths that
+    do not exist and the refusal still fires on the rate — which is itself the property
+    under test (a rate bound that only fires after the frames are read is a bound that
+    fires after the write ordering has already been decided).
     """
-    expected = {
-        "encode_control": ["--fps"],
-        "lift_clip": ["--fps"],
-        "make_ab_clip": ["--a-fps", "--b-fps"],
-        "make_review_clip": ["--fps", "--source-fps"],
-        "measure_cascade_clip": ["--expect-fps"],
-        "measure_lift": ["--fps"],
-        "pack_pose_pack": ["--fps"],
-        "project_pose_keypoints": ["--fps"],
-        "resample_motion": ["--fps-src"],
-    }
-    assert sum(len(v) for v in expected.values()) == 11
-    for module, flags in expected.items():
-        src = open(os.path.join(TOOLS, f"{module}.py"), encoding="utf-8").read()
-        for flag in flags:
-            assert f'"flag": "{flag}"' in src or f"'flag': '{flag}'" in src, (
-                f"{module}{flag} reaches no refusal that names it")
+    import encode_control as EC
+    import make_ab_clip as AB
+    import make_review_clip as MRC
+    import measure_cascade_clip as MCC
+    import measure_lift as ML
+    import pack_pose_pack as PP
+    import project_pose_keypoints as PPK
+    import resample_motion as RM
+
+    return [
+        ("encode_control", "--fps",
+         lambda: EC.main(["--frames=nope", "--out=nope.mkv", "--fps=0"])),
+        ("make_ab_clip", "--a-fps",
+         lambda: AB.main(["--a=nope", "--b=nope", "--out=x.webp",
+                          "--a-fps=0", "--b-fps=16"])),
+        ("make_ab_clip", "--b-fps",
+         lambda: AB.main(["--a=nope", "--b=nope", "--out=x.webp",
+                          "--a-fps=16", "--b-fps=0"])),
+        ("make_review_clip", "--fps",
+         lambda: MRC.main(["--frames=nope", "--out=nope", "--fps=0"])),
+        ("make_review_clip", "--source-fps",
+         lambda: MRC.main(["--frames=nope", "--out=nope", "--source-fps=0"])),
+        ("measure_cascade_clip", "--expect-fps",
+         lambda: MCC.gate_clip_rate({"fps": 16.0, "stream": "s"}, 0.0, "clip.mp4")),
+        ("measure_lift", "--fps", lambda: ML.gate_detector_rate(0)),
+        ("pack_pose_pack", "--fps",
+         lambda: PP.main(["--frames=nope", "--out=nope", "--fps=0"])),
+        ("project_pose_keypoints", "--fps", lambda: PPK.gate_authoring_rate(0)),
+        ("resample_motion", "--fps-src",
+         lambda: RM.main(["--motion=nope", "--frames=4", "--out=nope", "--fps-src=0"])),
+    ]
+
+
+def test_the_eleven_rate_flags_in_this_domain_are_all_bounded():
+    """THE POPULATION, enumerated and DRIVEN — not the two the finding named.
+
+    Wave-18 rule 2 in its strongest form: the census is behavioural, so it keys on the
+    RESOLVED shape (does a refusal actually fire, naming this flag and a rate clause) and
+    not on a spelling in the source, which a variable in the evidence dict already defeated
+    once while writing this file.
+
+    Four of the eleven were bounded in waves 16 and 18 (`make_review_clip` x2,
+    `pack_pose_pack`, `resample_motion`); six more were open on `e8263a3` and are closed
+    together here, because a fix whose red proof runs only on the member the finding
+    happened to name is the shape that rule ends. The ELEVENTH — `lift_clip --fps` — is
+    blocked outside this domain and carries its own measured test below.
+    """
+    from armature_core.errors import ArmatureError
+
+    rows = _rate_refusals()
+    assert len(rows) == 10, rows
+    for module, flag, call in rows:
+        with pytest.raises(ArmatureError) as exc:
+            call()
+        ev = exc.value.evidence or {}
+        assert "clause" in ev, (module, flag, ev)
+        assert "rate" in ev["clause"], (module, flag, ev)
+        assert flag in str(exc.value), (module, flag, str(exc.value))
+
+
+def test_no_accepted_rate_reaches_a_tool_through_a_flag_no_gate_read():
+    """The falsifiability half: each of the eleven ACCEPTS its ordinary value, so the
+    census above is not passing because everything refuses."""
+    import make_ab_clip as AB
+    import measure_cascade_clip as MCC
+    import measure_lift as ML
+    import project_pose_keypoints as PPK
+
+    assert ML.gate_detector_rate(16) == 16
+    assert PPK.gate_authoring_rate(16) == 16
+    assert AB.require_rate("--a-fps", 16.0) == 16.0
+    assert MCC.gate_clip_rate({"fps": 16.0, "stream": "s"}, 16.0,
+                              "clip.mp4")["delta"] == pytest.approx(0.0)
 
 
 # ===========================================================================
@@ -428,3 +485,180 @@ def test_a_finite_agreeing_rate_still_passes():
     ev = MCC.gate_clip_rate({"fps": 16.0, "stream": "s"}, 16.0, "clip.mp4")
     assert ev["delta"] == pytest.approx(0.0)
     assert "16.0" in ev["verdict"]
+
+
+# ===========================================================================
+# F-7ff7943e (MEDIUM) — project_pose_keypoints --fps is a PROVENANCE field, bounded
+#                       where it enters the record because nothing divides by it
+# ===========================================================================
+
+def test_the_authoring_rate_refuses_before_the_record_and_before_any_write(tmp_path):
+    """THE AUDITOR'S OPERAND: `--fps=-16`, which argparse accepted.
+
+    Measured on `e8263a3`: `a.fps` occurs exactly ONCE in the module, at the record write,
+    and `render_pose_sticks` copies it into `sticks_manifest.json` as `"fps": rec.get("fps")`.
+    Because nothing READ it, no gate could refuse it and no run would ever fail on it — the
+    value simply became the rate the driving sequence's two manifests asserted. This is the
+    one shape the repo's three existing rate andons cannot catch, because every one of them
+    bounds a rate a computation divides by.
+    """
+    import project_pose_keypoints as PPK
+
+    out = tmp_path / "kp_out"
+    with pytest.raises(PPK.ProjectGate) as exc:
+        PPK.main([f"--motion={tmp_path / 'nope.json'}",
+                  f"--manifest={tmp_path / 'nope.json'}",
+                  f"--out={out}", "--fps=-16"])
+    ev = exc.value.evidence
+    assert ev["clause"] == "authoring_rate_not_positive", ev
+    assert ev["flag"] == "--fps" and ev["value"] == -16, ev
+    assert "sticks_manifest.json" in " ".join(ev["travels_to"]), ev
+    assert not out.exists(), "a refused run created the output directory"
+
+
+def test_the_two_documents_that_state_the_authoring_rate_cannot_drift(tmp_path):
+    """The second half the finding asks for: `render_pose_sticks`' manifest `fps` is read
+    from the pose record's own `fps`, so the two documents that say at what rate the
+    driving signal was authored cannot disagree."""
+    import render_pose_sticks as RPS
+
+    path = _rps_record(str(tmp_path / "kpf.json"), 3)
+    rec = json.loads(open(path, encoding="utf-8").read())
+    rec["fps"] = 24
+    open(path, "w", encoding="utf-8").write(json.dumps(rec))
+    out = tmp_path / "sticks_fps"
+    assert RPS.main([f"--keypoints={path}", f"--out={out}", "--strip=0"]) == 0
+    man = json.loads((out / "sticks_manifest.json").read_text(encoding="utf-8"))
+    assert man["fps"] == rec["fps"] == 24
+
+
+# ===========================================================================
+# F-e0f1f520 (HIGH) — encode_control's --fps and its ffmpeg binary, both named
+# F-7c1f4117 (MEDIUM) — and the receipt identifies the encoder that produced the video
+# ===========================================================================
+
+def test_a_non_positive_encode_rate_refuses_before_the_subprocess_runs(tmp_path):
+    """THE AUDITOR'S OPERAND: `--fps=0` and `--fps=-16`.
+
+    Measured on `e8263a3` through the real CLI: both exited 1 with stdout EMPTY and the raw
+    line `Error opening input files: Invalid argument` — naming neither the flag, nor the
+    value, nor this tool. `--fps` is `type=int, default=16` at the parser with no bound and
+    reaches ffmpeg as `-r str(fps)`.
+    """
+    import encode_control as EC
+
+    for bad in (0, -16):
+        with pytest.raises(EC.EncodeFailure) as exc:
+            EC.main([f"--frames={tmp_path / 'nope'}",
+                     f"--out={tmp_path / 'c.mkv'}", f"--fps={bad}"])
+        ev = exc.value.evidence
+        assert ev["clause"] == "encode_rate_not_positive", ev
+        assert ev["flag"] == "--fps" and ev["value"] == bad, ev
+    assert not (tmp_path / "c.mkv").exists()
+
+
+def test_a_missing_ffmpeg_binary_names_the_variable_and_the_path(tmp_path, monkeypatch):
+    """THE AUDITOR'S OPERAND: `ARMATURE_FFMPEG` pointed at a path that does not exist.
+
+    Measured on `e8263a3`: exit 1 and a bare
+    `FileNotFoundError: [WinError 2] The system cannot find the file specified` — naming
+    neither the variable, nor the path, nor ffmpeg. Gate R compares an encode against its
+    own decode, so BOTH halves of the losslessness proof run through this one binary.
+    """
+    import encode_control as EC
+
+    missing = str(tmp_path / "no-such-ffmpeg.exe")
+    monkeypatch.setattr(EC, "FFMPEG", missing)
+    monkeypatch.setenv("ARMATURE_FFMPEG", missing)
+    with pytest.raises(EC.EncodeFailure) as exc:
+        EC.main([f"--frames={tmp_path / 'nope'}", f"--out={tmp_path / 'c2.mkv'}"])
+    ev = exc.value.evidence
+    assert ev["clause"] == "ffmpeg_binary_not_found", ev
+    assert ev["ffmpeg"] == missing, ev
+    assert ev["from_env"] is True and ev["env_var"] == "ARMATURE_FFMPEG", ev
+
+
+def test_an_unknown_codec_refuses_with_a_clause_rather_than_a_bare_message(tmp_path):
+    """SIBLING in the same function: the codec check one line above the two new andons
+    raised the family class with no evidence at all."""
+    import encode_control as EC
+
+    frames = [np.zeros((8, 8, 3), dtype=np.uint8)]
+    with pytest.raises(EC.EncodeFailure) as exc:
+        EC.encode(frames, str(tmp_path / "x.mkv"), "not-a-codec")
+    assert exc.value.evidence["clause"] == "unknown_codec", exc.value.evidence
+    assert exc.value.evidence["flag"] == "--codec", exc.value.evidence
+
+
+def test_the_control_video_receipt_identifies_the_encoder_that_produced_it(tmp_path):
+    """F-7c1f4117. The receipt beside the control video — the artifact that is uploaded,
+    and the record carrying `gate_R: {verdict: PASS}` — named the codec, the codec args, the
+    resolution, the fps, the video sha256 and the source-frame sha256, and NOT the ffmpeg
+    binary, which is selected at import from `ARMATURE_FFMPEG`. This module's own `CODECS`
+    table records that the build matters ("this build's ffv1 lists bgr0 but not plain
+    gbrp"), so losslessness — the single property this receipt certifies — was a property of
+    an encoder the receipt did not identify. Its three siblings all record it.
+    """
+    import encode_control as EC
+
+    if not os.path.isfile(EC.FFMPEG):
+        pytest.skip(f"the pinned ffmpeg binary is not on this rig: {EC.FFMPEG}")
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+    for i in range(2):
+        Image.fromarray(np.full((16, 16, 3), 10 * (i + 1), dtype=np.uint8)).save(
+            frames_dir / f"{i:05d}.png")
+    out = tmp_path / "control.mkv"
+    receipt = EC.build(str(frames_dir), str(out), "ffv1-bgr0")
+    assert receipt["ffmpeg"] == EC.FFMPEG
+    assert receipt["ffmpeg_version"] and receipt["ffmpeg_version"] != "NOT REPORTED"
+    assert receipt["ffmpeg_from_env"] == ("ARMATURE_FFMPEG" in os.environ)
+    on_disk = json.loads((tmp_path / "control.mkv.receipt.json").read_text(
+        encoding="utf-8"))
+    assert on_disk["ffmpeg"] == EC.FFMPEG
+
+
+def test_the_eleventh_rate_flag_is_blocked_on_another_domains_file():
+    """`lift_clip --fps` is the one member of the eleven this domain cannot close alone,
+    and the block is MEASURED here rather than asserted away.
+
+    `lift_clip --fps` is `type=int, default=16` and is read at
+    `detect_for_video(image, int(round(i * 1000.0 / fps)))`, exactly as its sibling
+    `measure_lift --fps` is — and `measure_lift` is bounded in this wave. The difference is
+    where each file's `round_trip_report` call sits. In `measure_lift` it is at `:481`,
+    ABOVE `def main()`, so an andon added to `main` does not move it. In `lift_clip` it is
+    at `:275`, INSIDE `main`, so ANY bound placed above the detector run moves it — measured
+    on this branch: adding the andon moved the call to `:309`.
+
+    That anchor is cited three times as a LINE NUMBER in
+    `tools/armature_core/lift_solve.py` (`:626`, `:632`, `:703`), which is core-solvers'
+    file in the frozen domain map, and
+    `tests/test_lift_solve.py::test_the_two_docstrings_name_the_call_sites_the_tree_actually_has`
+    asserts the docstrings name exactly the anchors the AST walk finds. Re-deriving the
+    tests-side pin is this domain's to do; editing the three prose citations is not. So the
+    bound is HELD and the block is posted to the wave-22 inbox — and this test pins the two
+    facts a later session needs: the flag is still unbounded, and the reason is the line
+    citation, not the code.
+
+    It is also this repo's own F-405baf98 in another file: a citation by line number does
+    not survive an edit above it, where a citation by symbol does.
+    """
+    import ast
+
+    import lift_clip as LC
+
+    src = open(os.path.join(TOOLS, "lift_clip.py"), encoding="utf-8").read()
+    assert 'ap.add_argument("--fps", type=int, default=16)' in src, (
+        "the flag's spelling changed; re-measure the block before trusting this test")
+    assert not hasattr(LC, "gate_detector_rate"), (
+        "lift_clip is bounded now — close this test and the inbox block with it")
+
+    sites = [n.lineno for n in ast.walk(ast.parse(src))
+             if isinstance(n, ast.Call)
+             and (getattr(n.func, "attr", None) or getattr(n.func, "id", None))
+             == "round_trip_report"]
+    assert sites == [275], sites
+    solver = open(os.path.join(TOOLS, "armature_core", "lift_solve.py"),
+                  encoding="utf-8").read()
+    assert solver.count("lift_clip.py:275") == 3, (
+        "the three line citations that block this bound have moved; re-measure")
