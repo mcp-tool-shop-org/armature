@@ -545,3 +545,132 @@ def test_the_source_pin_is_complete_enough_to_refetch():
     assert len(aapose.SOURCE["commit"]) == 40
     assert len(aapose.SOURCE["sha256"]) == 64
     assert json.dumps(aapose.SOURCE)        # it has to survive into a provenance record
+
+
+# ------------- wave 22, F-6bdd660a: confidence is a MEASUREMENT and is bounded like one
+#
+# The convention that draws the pose-stick control frame reads confidence at four sites —
+# `draw_body` twice, `draw_hand` twice — and every one was a bare `< threshold` with no
+# finiteness bound anywhere in the module (`aapose` was one of nine `armature_core` modules
+# that did not import `parts.require_finite`). A NaN confidence fails `<` in BOTH
+# directions, so the keypoint was treated as fully confident and DRAWN.
+#
+# MEASURED on `e8263a3` on a 20x3 body at 256x256: baseline 2075 non-black pixels; the same
+# body with keypoint 5's confidence set to NaN drew 2075 non-black pixels — byte-identical
+# ink to confidence 1.0 — with no refusal, where a real detector's low confidence would have
+# dropped the joint. The coordinate direction escaped the family instead: keypoint 5's x set
+# to NaN raised a bare `ValueError: cannot convert float NaN to integer` (from `int(mY)` /
+# `int(point[0])`) and +inf raised a bare `OverflowError`, NEITHER in the `ArmatureError`
+# family, so the 21-tool halt contract recorded exit 1 "FAILED — an unhandled error" where a
+# typed refusal at exit 2 belongs.
+#
+# Reachability: the keypoint record is read from JSON (`render_pose_sticks.py`, and Python's
+# `json.load` accepts the literal `NaN`), so the moment a producer other than
+# `project_pose_keypoints` supplies confidences — which the record's own note anticipates,
+# "a real detector would report low confidence on an occluded joint" — an occluded joint
+# whose confidence is not a number is drawn as certain into the control frame that steers a
+# paid generation, and `gate_INK` cannot see it because the ink is there.
+
+
+def _plain_body(size=256):
+    """A 20x3 body inside a square canvas, every joint fully confident."""
+    c = size / 2.0
+    s = size / 12.0
+    return [[c + (i % 5 - 2) * s, c + (i // 5 - 2) * s, 1.0] for i in range(20)]
+
+
+def _ink(canvas):
+    return int((canvas.reshape(-1, 3).max(axis=1) > 0).sum())
+
+
+def test_the_baseline_ink_is_what_a_fully_confident_body_draws():
+    """The control. Without it, "the NaN drew the same ink" is a number with no reading."""
+    body = _plain_body()
+    canvas = aapose.draw_frame(256, 256, body, draw_hands=False)
+    assert _ink(canvas) > 0
+
+
+def test_a_non_finite_confidence_is_refused_rather_than_drawn_as_certain():
+    body = _plain_body()
+    body[5][2] = float("nan")
+    with pytest.raises(aapose.ConventionError) as exc:
+        aapose.draw_frame(256, 256, body, draw_hands=False)
+    ev = exc.value.evidence
+    assert ev["clause"] == "confidence_not_a_number"
+    assert ev["where"] == "draw_body"
+    assert ev["indices"] == [5]
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_every_non_finite_confidence_spelling_takes_the_same_door(bad):
+    """`nan` walks past `<` in both directions; `+inf` reads as certain; `-inf` reads as
+    absent. Three different readings of one unreadable measurement, one clause."""
+    body = _plain_body()
+    body[11][2] = bad
+    with pytest.raises(aapose.ConventionError, match=r"confidence"):
+        aapose.draw_frame(256, 256, body, draw_hands=False)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_a_non_finite_coordinate_on_a_DRAWN_keypoint_leaves_in_the_family(bad):
+    """The direction that escaped the family instead of walking past it: `int(nan)` is a
+    bare `ValueError` and `int(inf)` a bare `OverflowError`, and the halt contract records
+    either as a crash at exit 1."""
+    from armature_core.errors import ArmatureError
+
+    body = _plain_body()
+    body[5][0] = bad
+    with pytest.raises(aapose.ConventionError) as exc:
+        aapose.draw_frame(256, 256, body, draw_hands=False)
+    assert isinstance(exc.value, ArmatureError)
+    assert exc.value.evidence["clause"] == "drawn_keypoint_coordinate_not_a_number"
+    assert exc.value.evidence["indices"] == [5]
+
+
+def test_a_non_finite_coordinate_on_a_keypoint_BELOW_the_threshold_is_not_drawn_and_not_refused():
+    """Grade the clause only on what it can move: a keypoint the convention skips is not a
+    pixel this frame carries, and refusing it would be a bound on a population the drawing
+    never reads."""
+    body = _plain_body()
+    body[5][0] = float("nan")
+    body[5][2] = 0.0
+    canvas = aapose.draw_frame(256, 256, body, draw_hands=False)
+    assert _ink(canvas) > 0
+
+
+def test_a_non_finite_threshold_is_refused_rather_than_silently_drawing_nothing():
+    """`c < nan` is False at every keypoint, so a NaN threshold draws EVERYTHING; `c < inf`
+    is True at every keypoint, so it draws NOTHING. Neither is a decision."""
+    with pytest.raises(aapose.ConventionError) as exc:
+        aapose.draw_frame(256, 256, _plain_body(), threshold=float("nan"),
+                          draw_hands=False)
+    assert exc.value.evidence["clause"] == "threshold_not_a_number"
+
+
+def test_the_hand_pass_carries_the_same_two_clauses():
+    """The four reading sites are two per function; the sibling half is `draw_hand`'s."""
+    body = _plain_body()
+    hand = [[100.0 + i, 100.0 + i, 1.0] for i in range(aapose.HAND_KEYPOINT_COUNT)]
+    aapose.draw_frame(256, 256, body, left_hand=hand, draw_hands=True)   # control
+
+    bad_conf = [list(p) for p in hand]
+    bad_conf[3][2] = float("nan")
+    with pytest.raises(aapose.ConventionError) as exc:
+        aapose.draw_frame(256, 256, body, left_hand=bad_conf, draw_hands=True)
+    assert exc.value.evidence["clause"] == "confidence_not_a_number"
+    assert exc.value.evidence["where"] == "draw_hand"
+
+    bad_xy = [list(p) for p in hand]
+    bad_xy[3][1] = float("inf")
+    with pytest.raises(aapose.ConventionError) as exc:
+        aapose.draw_frame(256, 256, body, left_hand=bad_xy, draw_hands=True)
+    assert exc.value.evidence["clause"] == "drawn_keypoint_coordinate_not_a_number"
+
+
+def test_dropping_the_head_still_works_because_a_zeroed_confidence_is_a_number():
+    """`draw_head=False` sets five confidences to 0. A bound that refused it would have
+    deleted the flag."""
+    body = _plain_body()
+    with_head = aapose.draw_frame(256, 256, body, draw_hands=False, draw_head=True)
+    without = aapose.draw_frame(256, 256, body, draw_hands=False, draw_head=False)
+    assert _ink(without) < _ink(with_head)

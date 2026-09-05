@@ -303,6 +303,14 @@ def _refusal_encode_normal():
     channels.encode_normal(n, np.ones((4, 4), dtype=np.uint8))
 
 
+def _refusal_aapose_confidence():
+    """Driven through `render_pose_sticks.py`, the tool that writes the control frames."""
+    from armature_core import aapose
+    body = [[128.0 + (i % 5), 128.0 + (i // 5), 1.0] for i in range(20)]
+    body[5][2] = float("nan")
+    aapose.draw_frame(256, 256, body, draw_hands=False)
+
+
 HALT_ROWS = [
     # (finding, tool, sentinel, raiser, error class name, evidence key that must be there)
     ("F-cfb560aa", "rig_parts.py", "RIG_PARTS_HALT", _refusal_gate_d,
@@ -312,6 +320,8 @@ HALT_ROWS = [
      "transparent_fraction_raw"),
     ("F-4efe0fad", "stage_render.py", "STAGE_RENDER_HALT", _refusal_encode_normal,
      "NormalError", "n_non_finite"),
+    ("F-6bdd660a", "render_pose_sticks.py", "RENDER_STICKS_HALT",
+     _refusal_aapose_confidence, "ConventionError", "indices"),
 ]
 
 
