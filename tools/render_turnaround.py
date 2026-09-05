@@ -379,9 +379,11 @@ def parse_args():
     # inside `main`'s try, so a raised `RenderTurnaroundGate` reaches the halt contract and
     # prints RENDER_TURNAROUND_HALT with the gate id, the clause and the operand, where
     # `ap.error`'s `SystemExit(2)` is re-raised untouched by the `__main__` block and leaves
-    # an argparse usage message no log reader can key on. `--ortho-scale`'s older clause
-    # still uses `ap.error`; changing a shipped refusal is a separate decision and is not
-    # smuggled in under this finding.
+    # an argparse usage message no log reader can key on. (CORRECTED IN PLACE, wave 22,
+    # F-0befca53: this paragraph used to end "`--ortho-scale`'s older clause still uses
+    # `ap.error`; changing a shipped refusal is a separate decision and is not smuggled in
+    # under this finding." That decision was taken and measured — both `--ortho-scale`
+    # clauses below are typed raises now, and the domain holds ZERO `ap.error` call sites.)
     # ONE FINGERPRINT ACROSS THE FLAG AND THE SOLVER. The clause words below are the ones
     # `armature_core.framing.half_fovs`, its `blender_scene` byte-twin and
     # `turnaround.projection_plan`'s perspective branch use for the same two numbers, so a
@@ -393,7 +395,8 @@ def parse_args():
                                     "sensor_mm_not_finite_and_positive")):
         parts.require_finite(
             _flag, _value, RenderTurnaroundGate,
-            {"gate": "TURNAROUND_OPTICS", "andon": RenderTurnaroundGate.__name__,
+            {"gate": RenderTurnaroundGate.gate, "sub_gate": "TURNAROUND_OPTICS",
+             "andon": RenderTurnaroundGate.__name__,
              "who": "render_turnaround", "flag": _flag, "clause": _clause},
             positive=True)
 
@@ -412,27 +415,58 @@ def parse_args():
                           ("--sweep", a.sweep)):
         parts.require_finite(
             _flag, _value, RenderTurnaroundGate,
-            {"gate": "TURNAROUND_ORBIT", "andon": RenderTurnaroundGate.__name__,
+            {"gate": RenderTurnaroundGate.gate, "sub_gate": "TURNAROUND_ORBIT",
+             "andon": RenderTurnaroundGate.__name__,
              "who": "render_turnaround", "flag": _flag,
              "clause": "not_a_finite_angle"},
             positive=False)
 
     # The two refusals, at the parser, where the mistake is still free. `projection_plan`
-    # refuses the same two for callers who never reach this function.
+    # refuses the same two for callers who never reach this function, so the clause words
+    # are shared and one grep finds both halves.
+    #
+    # F-0befca53, wave 22 — WHY THESE ARE RAISES AND NO LONGER `ap.error`. The comment six
+    # lines above this block used to say "`--ortho-scale`'s older clause still uses
+    # `ap.error`; changing a shipped refusal is a separate decision and is not smuggled in
+    # under this finding". This IS that decision, filed and measured rather than smuggled.
+    # `ap.error` raises `SystemExit(2)` from inside `parse_args`, and the `__main__` block
+    # re-raises `SystemExit` untouched — so the two refusals guarding the ortho pin, the
+    # number a whole ROSTER's shared frame span stands on, exited with the SAME code the
+    # halt contract uses for a gate refusal while printing NO halt record at all. MEASURED
+    # on `e8263a3` through `blender_stub.exit_code_of_main_block('render_turnaround.py')`:
+    # a typed `RenderTurnaroundGate` gives exit 2 AND `RENDER_TURNAROUND_HALT {...
+    # "gate": "TURNAROUND", "evidence": {"clause": "ortho_scale_not_finite_positive", ...}}`;
+    # `ap.error`'s `SystemExit(2)` gives exit 2 and stdout EMPTY — no sentinel, no gate id,
+    # no clause, no evidence. An operator keying on the halt line saw a run that refused
+    # nothing; one keying on the exit code could not tell a gate refusal from an argparse
+    # usage error. An AST walk over the 21 owned tools finds these two the ONLY `ap.error`
+    # refusals in the domain; every other refusal was already typed.
     if a.ortho_scale is not None:
         if not a.ortho:
-            ap.error(
+            raise RenderTurnaroundGate(
                 "--ortho-scale pins the parallel-projection frame span, and there is no "
                 "such span on the perspective path — what is shared there is the radius. "
                 "Accepting it here would render a perspective turnaround that silently "
                 "ignored the one number the run was pinned on. Pass --ortho, or drop the "
-                "pin")
+                "pin",
+                {"gate": RenderTurnaroundGate.gate,
+                 "sub_gate": "TURNAROUND_ORTHO_SCALE",
+                 "andon": RenderTurnaroundGate.__name__, "who": "render_turnaround",
+                 "flag": "--ortho-scale",
+                 "clause": "ortho_scale_pinned_without_ortho",
+                 "ortho_scale": a.ortho_scale, "ortho": bool(a.ortho)})
         if not (math.isfinite(a.ortho_scale) and a.ortho_scale > 0.0):
-            ap.error(
+            raise RenderTurnaroundGate(
                 f"--ortho-scale={a.ortho_scale!r} is not a finite positive world span. A "
                 "non-positive span collapses every point onto the frame centre and a "
                 "non-finite one sends them nowhere at all; both still write a well-formed, "
-                "correctly-sized RGBA PNG that no later check reports on")
+                "correctly-sized RGBA PNG that no later check reports on",
+                {"gate": RenderTurnaroundGate.gate,
+                 "sub_gate": "TURNAROUND_ORTHO_SCALE",
+                 "andon": RenderTurnaroundGate.__name__, "who": "render_turnaround",
+                 "flag": "--ortho-scale",
+                 "clause": "ortho_scale_not_finite_positive",
+                 "ortho_scale": a.ortho_scale, "ortho": bool(a.ortho)})
 
     #: What was typed, kept beside what was parsed. `float(repr(x)) == x` already makes the
     #: recorded double re-typable on its own; this is the other half of the recipe law —

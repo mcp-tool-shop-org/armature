@@ -102,7 +102,12 @@ def test_gate_arrived_refuses_an_all_nan_performance_instead_of_passing_it():
     with pytest.raises(ls.LiftGate) as exc:
         ls.gate_arrived(_heads(NAN3), _heads(ORIGIN), 1.0)
     ev = exc.value.evidence
-    assert ev["gate"] == "ARRIVED"
+    # RE-DERIVED wave 22, F-6381b9ff (branch-local): `evidence["gate"]` is the RAISING
+    # CLASS's id and the clause's own finer id is `evidence["sub_gate"]`, so one halt
+    # event prints one gate id and a census enumerating ids from the family's
+    # `gate = "..."` class literals can see this site.
+    assert ev["gate"] == ls.LiftGate.gate == "LIFT"
+    assert ev["sub_gate"] == "ARRIVED"
     assert "not a finite" in str(exc.value)
     assert any(isinstance(v, float) and math.isnan(v) for v in ev.values()), ev
 

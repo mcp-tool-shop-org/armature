@@ -372,6 +372,13 @@ def test_every_turnaround_raise_site_passes_an_evidence_dict():
     `select_engine`'s exhausted-candidates refusal (F-0bf74152) and the render operator's
     non-FINISHED status set (F-6a9a0f72); both carry an evidence dict, which is what this
     census is about. The number is re-measured rather than re-typed, per the wave-14 rule.
+
+    RE-DERIVED wave 22, F-0befca53 (branch-local): 7 -> 9. The two new sites are
+    `--ortho-scale`'s pair of parser clauses, which called `ap.error` until this wave.
+    `ap.error` raises `SystemExit(2)`, which the `__main__` block re-raises untouched, so
+    both refusals exited with the code the halt contract reserves for a fired andon while
+    printing NO halt record at all. Both carry an evidence dict, which is what this
+    census is about.
     """
     import ast
 
@@ -382,7 +389,7 @@ def test_every_turnaround_raise_site_passes_an_evidence_dict():
              if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
              and isinstance(n.exc.func, ast.Name)
              and n.exc.func.id == "RenderTurnaroundGate"]
-    assert len(sites) == 7, [n.lineno for n in sites]
+    assert len(sites) == 9, [n.lineno for n in sites]
     bare = [n.lineno for n in sites if len(n.exc.args) < 2]
     assert bare == [], (
         f"RenderTurnaroundGate raised with a message only at lines {bare}; the halt record "

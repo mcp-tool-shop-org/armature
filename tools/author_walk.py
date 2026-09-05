@@ -117,7 +117,7 @@ def mesh_sample_frames(n_frames):
             f"to {frames}, and a single-frame comparison is the rest pose alone. Bone "
             f"agreement does not prove the skin followed, so this run would report a "
             f"clause that cannot fail",
-            {"gate": "A", "n_frames": n, "frames": frames,
+            {"gate": WalkGate.gate, "sub_gate": "A", "n_frames": n, "frames": frames,
              "minimum": GATE_A_MESH_FRAMES_MIN})
     return frames
 
@@ -367,7 +367,11 @@ def gate_space_is_identity(arm_obj, tol=None):
     """
     M = arm_obj.matrix_world
     ident = Matrix.Identity(4)
-    ev = {"gate": "SPACE", "andon": "WalkGate", "module_tol": GATE_SPACE_TOL,
+    # F-6381b9ff: "gate" is the RAISING CLASS's id; the clause's own finer id is
+    # "sub_gate". One halt event, one gate id — and a census that enumerates ids from
+    # the family's `gate = "..."` class literals can see this site.
+    ev = {"gate": WalkGate.gate, "sub_gate": "SPACE",
+          "andon": "WalkGate", "module_tol": GATE_SPACE_TOL,
           "tol_requested": tol, "matrix_world": [list(r) for r in M]}
     tol = parts.tightened("tol", tol, GATE_SPACE_TOL, WalkGate, ev)
     deltas = []
@@ -416,7 +420,8 @@ def gate_f_fk_agreement(fk, heads, performer, arm_obj, diagonal, tol_frac=None):
     statement this gate can make (F-524f0a25). Every distance, in the floor loop as well
     as the reading loop, goes through `parts.require_finite`.
     """
-    ev = {"gate": "F", "andon": "WalkGate", "module_tol_frac": GATE_F_TOL_FRAC,
+    ev = {"gate": WalkGate.gate, "sub_gate": "F",           # F-6381b9ff
+          "andon": "WalkGate", "module_tol_frac": GATE_F_TOL_FRAC,
           "tol_frac_requested": tol_frac, "bbox_diagonal": diagonal}
     parts.require_finite("bbox_diagonal", diagonal, WalkGate, ev)
     tol_frac = parts.tightened("tol_frac", tol_frac, GATE_F_TOL_FRAC, WalkGate, ev)
@@ -486,7 +491,8 @@ def gate_a_arrival(authored_heads, reimported_heads, authored_verts, reimported_
     performance made entirely of NaN otherwise reached the verdict line as a full PASS
     reading "max 0.000e+00" (F-524f0a25, wave 10's rule 4, one implementation).
     """
-    ev = {"gate": "A", "andon": "WalkGate", "module_tol_frac": GATE_A_TOL_FRAC,
+    ev = {"gate": WalkGate.gate, "sub_gate": "A",           # F-6381b9ff
+          "andon": "WalkGate", "module_tol_frac": GATE_A_TOL_FRAC,
           "tol_frac_requested": tol_frac, "bbox_diagonal": diagonal,
           "n_frames": len(authored_heads)}
     parts.require_finite("bbox_diagonal", diagonal, WalkGate, ev)

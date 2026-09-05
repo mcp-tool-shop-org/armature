@@ -234,7 +234,8 @@ def gate_coverage(paths, empty_plate, min_frac=MIN_SUBJECT_FRAC):
             f"{MIN_SUBJECT_FRAC}. A caller may TIGHTEN this gate and may not loosen it: "
             f"what counts as a picture of the performer is the gate's decision, not the "
             f"caller's, and a loosened threshold leaves a record saying the gate passed",
-            {"gate": "COVERAGE", "requested_min_fraction": min_frac,
+            {"gate": RenderGate.gate, "sub_gate": "COVERAGE",
+             "requested_min_fraction": min_frac,
              "gate_floor": MIN_SUBJECT_FRAC})
     base = _pixels(empty_plate)
     per_frame, worst = [], {"frame": None, "frac": 1.0}
@@ -246,7 +247,8 @@ def gate_coverage(paths, empty_plate, min_frac=MIN_SUBJECT_FRAC):
         per_frame.append(frac)
         if frac < worst["frac"]:
             worst = {"frame": i, "frac": frac}
-    ev = {"gate": "COVERAGE", "min_fraction": min_frac, "worst": worst,
+    ev = {"gate": RenderGate.gate, "sub_gate": "COVERAGE",
+          "min_fraction": min_frac, "worst": worst,
           "empty_plate": empty_plate, "per_frame_subject_fraction": per_frame,
           "note": ("fraction of pixels differing from an empty-plate render of the same "
                    "camera, lights and floor with the character hidden; a frame with "

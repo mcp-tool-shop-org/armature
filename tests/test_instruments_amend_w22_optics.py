@@ -249,3 +249,178 @@ def test_the_turnaround_manifest_records_both_cloud_populations():
         "the manifest's camera block does not record which population the gate measured")
     for field in ("n_vertices", "n_solved_against", "cap"):
         assert field in keys, field
+
+
+# ===========================================================================
+# F-3990e197 (panel HIGH, ground F-fd559fc6) — `preview_walk --scale` bounded.
+# ===========================================================================
+#
+# THE POPULATION, re-enumerated on `e8263a3` by grep over the 21 owned tools: SEVEN sites
+# assign `scene.render.resolution_x`. Four take a module constant no flag can move
+# (`make_binding_sheet:150`, `make_parts_sheet:302`, `make_skeleton_sheet:261`,
+# `preview_glb:140` — a `res` constant; `render_performer:334` — `WIDTH, HEIGHT`). Two are
+# bounded through `require_frame_size` (`render_start_frame:595`, `render_turnaround:801`).
+# `preview_walk:171` was the one whose resolution is DERIVED FROM A FLAG and bounded
+# nowhere.
+
+
+@pytest.fixture(scope="module")
+def pw():
+    return load_tool("preview_walk.py")
+
+
+@pytest.mark.parametrize("scale", [float("nan"), float("inf"), float("-inf"), 0.0, -0.5,
+                                   1e6])
+def test_preview_walk_refuses_a_scale_that_is_not_a_fraction_of_the_shot(pw, scale):
+    """The auditor's five operands plus `-inf`, each refused BY NAME.
+
+    On `e8263a3` `nan` raised a bare `ValueError: cannot convert float NaN to integer`,
+    `inf` a bare `OverflowError`, and `0` / `-0.5` / `1e6` raised nothing at all and were
+    assigned to `scene.render.resolution_x`.
+    """
+    with pytest.raises(pw.PreviewWalkGate) as exc:
+        pw.preview_frame(832, 480, scale)
+    ev = exc.value.evidence
+    assert ev["flag"] == "--scale"
+    assert ev["who"] == "preview_walk"
+    assert ev["gate"] == pw.PreviewWalkGate.gate
+    assert "--scale" in str(exc.value)
+
+
+def test_preview_walk_refuses_a_legal_fraction_that_collapses_the_frame(pw):
+    """The direction neither borrowed bound covers: the PRODUCT rounds to zero.
+
+    `--scale=1e-9` is a perfectly good fraction and 832x480 is a perfectly good shot; the
+    preview is 0x0. The clause is this module's own, named, above the assignment.
+    """
+    with pytest.raises(pw.PreviewWalkGate) as exc:
+        pw.preview_frame(832, 480, 1e-9)
+    ev = exc.value.evidence
+    assert ev["clause"] == "preview_frame_collapsed"
+    assert ev["preview"] == [0, 0]
+    assert ev["collapsed"] == ["width", "height"]
+
+
+def test_preview_walk_accepts_the_scales_the_repo_actually_runs(pw):
+    """A bound that refuses correct work is the defect, not the fix.
+
+    Measured over every `specs/*.json` resolution in this tree (480x832 and 512x768) at the
+    module default: both preview frames are drawn.
+    """
+    assert pw.preview_frame(480, 832, 0.5) == (240, 416)
+    assert pw.preview_frame(512, 768, 0.5) == (256, 384)
+    assert pw.preview_frame(480, 832, 1.0) == (480, 832)
+    assert pw.preview_frame(480, 832, 0.3) == (144, 250)
+
+
+def test_preview_walk_derives_its_frame_through_the_bound():
+    """Census on the RESOLVED shape: `main` no longer multiplies the flag itself.
+
+    Red on `e8263a3`, where `main` held `int(round(spec["resolution"]["width"] * a.scale))`
+    twice with no bound between it and `scene.render.resolution_x`.
+    """
+    src = read_source("preview_walk.py")
+    main = _fn(src, "main")
+    bound = _calls(main, "preview_frame")
+    assert bound, "main no longer derives its frame through the bound"
+    #: `a.scale` may appear ONCE and only as an argument to the bound.
+    inside = {id(n) for call in bound for arg in call.args for n in ast.walk(arg)}
+    reads = [n for n in ast.walk(main)
+             if isinstance(n, ast.Attribute) and n.attr == "scale"
+             and isinstance(n.value, ast.Name) and n.value.id == "a"]
+    assert reads, "main no longer reads --scale at all"
+    for node in reads:
+        assert id(node) in inside, (
+            "main reads `a.scale` at line %d outside `preview_frame`; the flag is bounded "
+            "where it is READ" % node.lineno)
+
+
+def test_the_preview_walk_scale_refusal_reaches_the_halt_line(pw, capsys):
+    """THE HALT LINE, READ. `PREVIEW_WALK_HALT`, exit 2, the flag in the evidence."""
+    def raiser():
+        pw.preview_frame(832, 480, float("nan"))
+
+    code = _halt_line("preview_walk.py", "PREVIEW_WALK", raiser)
+    out = capsys.readouterr().out
+    line = [l for l in out.splitlines() if l.startswith("PREVIEW_WALK_HALT ")]
+    assert len(line) == 1, out
+    rec = json.loads(line[0].split(" ", 1)[1])
+    assert code == 2
+    assert rec["outcome"].startswith("HALTED")
+    assert rec["error"] == "PreviewWalkGate"
+    assert rec["evidence"]["flag"] == "--scale"
+
+
+# ===========================================================================
+# F-0befca53 — the ortho pin's two refusals are the ANDON, not `ap.error`.
+# ===========================================================================
+
+
+@pytest.mark.parametrize("argv,clause", [
+    (["--glb=x.glb", "--out=o", "--ortho-scale=1.0"],
+     "ortho_scale_pinned_without_ortho"),
+    (["--glb=x.glb", "--out=o", "--ortho", "--ortho-scale=0.0"],
+     "ortho_scale_not_finite_positive"),
+    (["--glb=x.glb", "--out=o", "--ortho", "--ortho-scale=nan"],
+     "ortho_scale_not_finite_positive"),
+    (["--glb=x.glb", "--out=o", "--ortho", "--ortho-scale=-2.0"],
+     "ortho_scale_not_finite_positive"),
+])
+def test_the_ortho_scale_clauses_raise_the_andon(rt, monkeypatch, argv, clause):
+    """On `e8263a3` both clauses called `ap.error`, whose `SystemExit(2)` the `__main__`
+    block re-raises untouched: exit 2 with stdout EMPTY — no sentinel, no gate id, no
+    clause, no evidence, on the two refusals guarding the number a whole roster's shared
+    frame span stands on."""
+    monkeypatch.setattr(rt.sys, "argv", ["blender", "-b", "-P", "x", "--"] + argv)
+    with pytest.raises(rt.RenderTurnaroundGate) as exc:
+        rt.parse_args()
+    ev = exc.value.evidence
+    assert ev["clause"] == clause, ev
+    assert ev["flag"] == "--ortho-scale", ev
+    assert ev["gate"] == rt.RenderTurnaroundGate.gate, ev
+    assert "--ortho-scale" in str(exc.value)
+
+
+def test_the_instruments_domain_holds_no_ap_error_call_site():
+    """The population, closed. A `ap.error` refusal prints an argparse usage line no log
+    reader can key on and exits 2 — the same code the halt contract gives a fired andon.
+
+    Measured on `e8263a3`: two sites, both in `render_turnaround.parse_args`. The only
+    remaining call site anywhere under `tools/` is `measure_tracking.py:323`, which is
+    instruments-measure's file and is posted to the inbox rather than edited here.
+    """
+    owned = (
+        "author_walk.py", "check_relift.py", "diagnose_bone_heat.py", "lift_solve.py",
+        "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
+        "make_skeleton_sheet.py", "make_test_armature.py", "preview_glb.py",
+        "preview_walk.py", "probe_glb.py", "probe_subject.py", "render_performer.py",
+        "render_start_frame.py", "render_turnaround.py", "rig_bake.py",
+        "rig_character.py", "rig_parts.py", "rig_repair.py", "rig_retopo.py",
+    )
+    sites = []
+    for fn in owned:
+        for node in ast.walk(ast.parse(read_source(fn))):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "error"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in ("ap", "p", "parser")):
+                sites.append((fn, node.lineno))
+    assert sites == [], sites
+
+
+def test_the_ortho_scale_refusal_reaches_the_halt_line(rt, capsys):
+    """THE HALT LINE, READ — the record `ap.error` printed nothing of."""
+    def raiser():
+        rt.sys.argv = ["blender", "-b", "-P", "x", "--", "--glb=x.glb", "--out=o",
+                       "--ortho", "--ortho-scale=0.0"]
+        rt.parse_args()
+
+    code = _halt_line("render_turnaround.py", "RENDER_TURNAROUND", raiser)
+    out = capsys.readouterr().out
+    line = [l for l in out.splitlines() if l.startswith("RENDER_TURNAROUND_HALT ")]
+    assert len(line) == 1, out
+    rec = json.loads(line[0].split(" ", 1)[1])
+    assert code == 2
+    assert rec["gate"] == "TURNAROUND"
+    assert rec["evidence"]["clause"] == "ortho_scale_not_finite_positive", rec
+    assert rec["evidence"]["flag"] == "--ortho-scale", rec

@@ -235,7 +235,12 @@ def require_frame_size(width, height, *, who="render_start_frame",
     """
     gate = gate or RenderGate
     module_frame = list(module_frame or (WIDTH, HEIGHT))
-    ev = {"gate": gate_id, "andon": gate.__name__, "who": who,
+    # F-6381b9ff, wave 22: `evidence["gate"]` is the RAISING CLASS's id, so the halt
+    # line's `[<gate>]` prefix, `exc.gate` and this key are ONE id; the caller's
+    # declared `gate_id` is the SUB-id and says which clause of that andon pulled.
+    # Until wave 22 a single halt event printed two different gate ids, and
+    # "TURNAROUND_FRAME" belonged to no class at all.
+    ev = {"gate": gate.gate, "sub_gate": gate_id, "andon": gate.__name__, "who": who,
           "width": width, "height": height,
           "divisor": FRAME_DIVISOR, "module_frame": module_frame}
     bad = [name for name, v in (("width", width), ("height", height))
@@ -301,8 +306,10 @@ def require_shot_fraction(name, value, *, who="render_start_frame", gate=None,
     domain's globs, so the lift is FILED, not done.
     """
     gate = gate or RenderGate
-    ev = {"gate": gate_id, "andon": gate.__name__, "who": who, "flag": name,
-          "clause": "not_a_finite_positive_fraction"}
+    # F-6381b9ff: the class's id under "gate", the caller's declared id under
+    # "sub_gate" — see `require_frame_size` above.
+    ev = {"gate": gate.gate, "sub_gate": gate_id, "andon": gate.__name__, "who": who,
+          "flag": name, "clause": "not_a_finite_positive_fraction"}
     v = parts.require_finite(name, value, gate, ev, positive=True)
     if v > 1.0:
         # The operand rides the evidence in BOTH clauses. `require_finite` writes
@@ -914,7 +921,8 @@ def main():
             plate=backdrop_for_composite,
             plate_sha256=_sha256(backdrop_for_composite))
     ev_cov = {
-        "gate": "COVERAGE", "min_fraction": MIN_SUBJECT_FRAC, "subject_fraction": frac,
+        "gate": RenderGate.gate, "sub_gate": "COVERAGE",    # F-6381b9ff
+        "min_fraction": MIN_SUBJECT_FRAC, "subject_fraction": frac,
         "empty_plate": plate_path,
         "note": ("fraction of pixels differing from an empty-plate render of the same "
                  "camera, lights and floor with the character hidden. It INCLUDES the "

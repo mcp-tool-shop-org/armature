@@ -147,7 +147,10 @@ def test_the_start_frame_refuses_a_height_frac_that_is_not_a_fraction(rsf, bad, 
     assert ev["clause"] == clause, ev
     assert ev["flag"] == "--height-frac"
     assert ev["who"] == "render_start_frame"
-    assert ev["gate"] == "STARTFRAME_FRACTION"
+    # RE-DERIVED wave 22, F-6381b9ff (branch-local): the class id under "gate", the
+    # caller's declared id under "sub_gate".
+    assert ev["gate"] == rsf.RenderGate.gate == "STARTFRAME"
+    assert ev["sub_gate"] == "STARTFRAME_FRACTION"
     assert ev["andon"] == "RenderGate"
     # The evidence carries the OPERAND, not just its name (wave-16 rule).
     assert repr(bad) in repr(ev["--height-frac"]) or ev["--height-frac"] == bad, ev
@@ -178,12 +181,14 @@ def test_the_turnaround_gets_the_same_clause_under_its_own_andon(turn, bad):
                                    gate=turn.RenderTurnaroundGate,
                                    gate_id="TURNAROUND_FRACTION")
     ev = exc.value.evidence
-    assert ev["gate"] == "TURNAROUND_FRACTION"
+    # RE-DERIVED wave 22, F-6381b9ff (branch-local).
+    assert ev["gate"] == turn.RenderTurnaroundGate.gate == "TURNAROUND"
+    assert ev["sub_gate"] == "TURNAROUND_FRACTION"
     assert ev["andon"] == "RenderTurnaroundGate"
     assert ev["who"] == "render_turnaround"
 
 
-def test_there_is_one_require_shot_fraction_and_two_callers():
+def test_there_is_one_require_shot_fraction_and_three_callers():
     """One implementation, imported — never a second copy. `armature_core.startframe` is
     where it belongs and is outside this domain's globs, so the lift is FILED, not done,
     exactly as `require_frame_size` is."""
@@ -203,7 +208,13 @@ def test_there_is_one_require_shot_fraction_and_two_callers():
         and any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                 and n.func.id == "require_shot_fraction"
                 for n in ast.walk(ast.parse(read_source(fn)))))
-    assert callers == ["render_start_frame.py", "render_turnaround.py"], callers
+    # RE-DERIVED wave 22, F-3990e197 (branch-local): `preview_walk` is the THIRD caller.
+    # It is the third renderer that assigns `scene.render.resolution_x`, and its
+    # `--scale` — declared "fraction of shot resolution" in its own help string — was
+    # bounded nowhere: nan raised a bare ValueError, inf a bare OverflowError, and 0,
+    # -0.5 and 1e6 raised nothing at all and were assigned.
+    assert callers == ["preview_walk.py", "render_start_frame.py",
+                       "render_turnaround.py"], callers
 
 
 @pytest.mark.parametrize("filename", ["render_start_frame.py", "render_turnaround.py"])
@@ -286,17 +297,33 @@ def test_the_height_frac_refusal_reaches_the_halt_line_intact(rsf, capsys):
           "outcome": "HALTED — a gate fired", "gate": "STARTFRAME",
           "error": "RenderGate", "message": "--height-frac=nan is not a finite positive
           number, so it cannot be compared against. ...",
-          "evidence": {"gate": "STARTFRAME_FRACTION", "andon": "RenderGate",
+          "evidence": {"gate": "STARTFRAME", "sub_gate": "STARTFRAME_FRACTION",
+                       "andon": "RenderGate",
                        "who": "render_start_frame", "flag": "--height-frac",
-                       "clause": "not_a_finite_positive_fraction", "--height-frac": NaN}}
+                       "clause": "not_a_finite_positive_fraction",
+                       "--height-frac": "nan"}}
 
-    Two things in that record are worth naming. `"gate"` at the TOP level is the CLASS
-    attribute `STARTFRAME`, while `evidence["gate"]` is this refusal's own id — the shape
-    `require_frame_size` established, and the reason a reader can tell which of the two
-    STARTFRAME refusals fired. And `"evidence"` carries the operand as a bare `NaN`
-    token, which is JSON the standard library writes and reads and no other parser
-    accepts; that is the halt contract's existing `json.dumps` behaviour, unchanged by
-    this wave, and it is posted to the inbox rather than altered here."""
+    ⚠ TWO CLAIMS IN THIS DOCSTRING WERE OVERTURNED IN WAVE 22, and the corrections are
+    kept in place with the measurements rather than deleted.
+
+    (1) It read: "`\"gate\"` at the TOP level is the CLASS attribute `STARTFRAME`, while
+    `evidence[\"gate\"]` is this refusal's own id — the shape `require_frame_size`
+    established, and the reason a reader can tell which of the two STARTFRAME refusals
+    fired." F-6381b9ff measured what that costs: ONE halt event printing TWO different
+    gate ids, and `STARTFRAME_FRACTION` / `TURNAROUND_FRAME` / `TURNAROUND_FRACTION` /
+    `TURNAROUND_OPTICS` / `TURNAROUND_ORBIT` declared by no `GateFailure` subclass at
+    all, so a census enumerating gate ids from the family's `gate = "..."` literals
+    reported zero sites for any of them. The repo had already closed this family twice
+    in the builders domain (`tests/test_amend_w16_builders.py:815-823`, rule at :879-886:
+    `ev["gate"] == type(exc).gate`). `evidence["gate"]` is now the class id and the
+    refusal's own id is `evidence["sub_gate"]` — one event, one gate id, and a reader
+    can still tell the two STARTFRAME refusals apart.
+
+    (2) It read that the bare `NaN` token "is the halt contract's existing `json.dumps`
+    behaviour, unchanged by this wave, and it is posted to the inbox rather than altered
+    here." F-897a3329 closed it: the halt line is `json.dumps(..., allow_nan=False)` and
+    `_halt_keysafe` writes a non-finite float as its `repr` string, so the record is
+    strict JSON and the operand is still readable."""
     def raiser():
         rsf.require_shot_fraction("--height-frac", float("nan"))
 
@@ -306,7 +333,9 @@ def test_the_height_frac_refusal_reaches_the_halt_line_intact(rsf, capsys):
     assert code == 2, code
     assert rec["outcome"].startswith("HALTED"), rec
     assert rec["error"] == "RenderGate", rec
-    assert rec["evidence"]["gate"] == "STARTFRAME_FRACTION", rec
+    # RE-DERIVED wave 22, F-6381b9ff (branch-local).
+    assert rec["evidence"]["gate"] == "STARTFRAME", rec
+    assert rec["evidence"]["sub_gate"] == "STARTFRAME_FRACTION", rec
     assert rec["evidence"]["clause"] == "not_a_finite_positive_fraction", rec
     assert rec["evidence"]["flag"] == "--height-frac", rec
     assert "--height-frac" in rec["evidence"], rec

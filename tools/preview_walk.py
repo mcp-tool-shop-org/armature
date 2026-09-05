@@ -26,8 +26,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-from armature_core import blender_scene, framing, shotspec  # noqa: E402
+from armature_core import blender_scene, framing, parts, shotspec  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+# CARRIED, not copied (the `render_turnaround` idiom, F-267361f5): the repo has ONE bound on
+# a frame that reaches `scene.render.resolution_x` and ONE bound on a fraction of a shot,
+# both in the sibling renderer. This is their third caller. Stage B: they belong in
+# `armature_core.startframe`.
+from render_start_frame import require_frame_size, require_shot_fraction  # noqa: E402
 
 
 #: The engine identifiers this tool will accept, in the order it tries them.
@@ -115,6 +120,60 @@ def parse_args():
     return ap.parse_args(argv)
 
 
+def preview_frame(shot_width, shot_height, scale):
+    """`(w, h)` for the preview, refused by name before any of it reaches the scene.
+
+    F-3990e197, wave 22. `--scale` was a bare `type=float, default=0.5` with no bound
+    anywhere; it was read into the frame at `w = int(round(spec["resolution"]["width"] *
+    a.scale))` and assigned straight to `scene.render.resolution_x`. MEASURED on the repo
+    venv over an 832x480 shot: `--scale=nan` raises a bare `ValueError: cannot convert
+    float NaN to integer`; `--scale=inf` a bare `OverflowError`; both are recorded by this
+    tool's halt contract as "FAILED — an unhandled error" at exit 1, on the tool whose
+    stated purpose (module docstring, line 9) is to be looked at BEFORE a credit is spent.
+    `--scale=0` yields `(0, 0)`, `--scale=-0.5` yields `(-416, -240)` and `--scale=1e6`
+    yields `(832000000, 480000000)` — all three silent, all three assigned.
+
+    THREE bounds, on three different quantities, and each is asked by the one implementation
+    that already owns it rather than by a fourth copy of `math.isfinite`:
+
+    * **The flag is a FRACTION of the shot** — its own `help` string says so — so it goes
+      through `require_shot_fraction`, the repo's bound on exactly that (`0 < f <= 1`,
+      finiteness through `parts.require_finite`). That refuses nan, inf, 0, -0.5 and 1e6 by
+      name, at the flag, with the operand in the evidence.
+    * **The SHOT's own resolution** goes through `require_frame_size`, the same bound the
+      two sibling renderers put on the frame that conditions a generation — this is the
+      same quantity, read out of the spec instead of off a flag, and this is that bound's
+      third caller.
+    * **The derived preview frame** can still collapse to zero from a legal fraction
+      (`--scale=1e-9` on a 480-wide shot rounds to 0), and neither bound above can see
+      that: it is a property of the PRODUCT. So it gets its own named clause here, above
+      the assignment. The generator-bucket clause deliberately does NOT ride this one — the
+      preview is never submitted and never conditions a generation, and 480x832 admits only
+      `--scale` of 0.5 and 1.0 under a divisor of 16, so imposing it would refuse correct
+      work, which is the failure `parts.tightened`'s docstring records.
+    """
+    who = "preview_walk"
+    shot_w, shot_h = require_frame_size(
+        int(shot_width), int(shot_height), who=who,
+        module_frame=(int(shot_width), int(shot_height)),
+        gate=PreviewWalkGate, gate_id="PREVIEW_SHOT_FRAME")
+    s = require_shot_fraction("--scale", scale, who=who, gate=PreviewWalkGate,
+                              gate_id="PREVIEW_SCALE")
+    w, h = int(round(shot_w * s)), int(round(shot_h * s))
+    collapsed = [n for n, v in (("width", w), ("height", h)) if v <= 0]
+    if collapsed:
+        raise PreviewWalkGate(
+            f"--scale={s!r} of the {shot_w}x{shot_h} shot rounds to {w}x{h}: "
+            f"{' and '.join(collapsed)} is not a positive number of pixels. A zero "
+            f"dimension is assigned to scene.render.resolution_x and the preview this "
+            f"tool exists to have LOOKED at cannot be drawn at all",
+            {"gate": PreviewWalkGate.gate, "sub_gate": "PREVIEW_SCALE",
+             "andon": PreviewWalkGate.__name__, "who": who, "flag": "--scale",
+             "clause": "preview_frame_collapsed", "scale": s,
+             "shot": [shot_w, shot_h], "preview": [w, h], "collapsed": collapsed})
+    return w, h
+
+
 def resolve_camera(spec, bounds, width, height):
     """`camera.target` and `camera.radius`, resolved the way `stage_render` resolves them.
 
@@ -157,8 +216,11 @@ def main():
 
     fps = spec["frames"]["fps"]
     count = spec["frames"]["count"]
-    w = int(round(spec["resolution"]["width"] * a.scale))
-    h = int(round(spec["resolution"]["height"] * a.scale))
+    # BOUNDED where it is READ, and above every assignment — F-3990e197. See
+    # `preview_frame` for the three quantities and why the generator-bucket clause is on
+    # the shot's resolution and not on the preview's.
+    w, h = preview_frame(spec["resolution"]["width"], spec["resolution"]["height"],
+                         a.scale)
 
     # fps FIRST, on an empty scene, before the import. glTF key times are seconds.
     bpy.ops.wm.read_factory_settings(use_empty=True)

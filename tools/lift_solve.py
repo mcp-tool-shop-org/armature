@@ -169,7 +169,8 @@ def gate_space_is_identity(arm_obj, tol=None):
     """
     M = arm_obj.matrix_world
     ident = Matrix.Identity(4)
-    ev = {"gate": "SPACE", "andon": "LiftGate", "module_tol": GATE_SPACE_TOL,
+    ev = {"gate": LiftGate.gate, "sub_gate": "SPACE",       # F-6381b9ff
+          "andon": "LiftGate", "module_tol": GATE_SPACE_TOL,
           "tol_requested": tol, "matrix_world": [list(r) for r in M]}
     tol = parts.tightened("tol", tol, GATE_SPACE_TOL, LiftGate, ev)
     deltas = []
@@ -314,7 +315,8 @@ def gate_arrived(keyed, reimported, diagonal, tol_frac=None):
     NARROW it, and the NaN clause comes with it since `tightened` refuses a non-finite
     request.
     """
-    ev = {"gate": "ARRIVED", "andon": "LiftGate",
+    ev = {"gate": LiftGate.gate, "sub_gate": "ARRIVED",     # F-6381b9ff
+          "andon": "LiftGate",
           "module_tol_frac": GATE_ARRIVED_TOL_FRAC, "tol_frac_requested": tol_frac,
           "bbox_diagonal": diagonal, "n_frames": len(keyed)}
     parts.require_finite("bbox_diagonal", diagonal, LiftGate, ev)
