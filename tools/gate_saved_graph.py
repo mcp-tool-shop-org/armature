@@ -984,6 +984,62 @@ def route_facts(record_path, api_graph=None):
                        "record; neither fact is typed at this call site — " + tie)}
 
 
+def gate_l_frame_source(checked, supplied, hosted_tier=None):
+    """WHERE Gate L's verdict came from, said in words rather than left inferable.
+
+    Wave 22, F-f97b0bb3. `--frame` is optional on this tool, and without it `RG.verify` is
+    handed `frame=None`, so `route_gates`' clash clause — the ONLY thing that can contradict
+    a graph's own pinned frame — never runs (`if supplied is not None`). MEASURED on
+    `e8263a3` as subprocesses on a graph whose `EmptyHunyuanLatentVideo` pins 832x480x81:
+
+      * WITHOUT `--frame`          -> exit 0, `gate_L: 832x480x81 legal (PROVEN)`,
+                                      `gates.ROUTE.frame_legality_verdict` PROVEN,
+                                      `gates.L` sources `['graph']`
+      * WITH `--frame=832,480,81`  -> exit 0, the printed `gate_L` line BYTE-IDENTICAL,
+                                      verdict PROVEN, sources `['graph', 'supplied']`
+      * WITH `--frame=832,480,65`  -> exit 2, RouteGate, verdict CONTRADICTED
+
+    So the operator-facing line said `PROVEN` in both of the first two cases, and the only
+    difference between "checked against an independently supplied frame" and "checked
+    against nothing" was a COUNT buried inside another gate's verdict string
+    (`2 frame(s) checked` vs `1 frame(s) checked`) plus a `source` field inside
+    `gates.L`. A verdict naming a property (the frame that runs is the frame the builder
+    computed) that no code checked is this repo's most expensive defect class, and this is
+    the last check before credits are spent.
+
+    `--frame` is NOT made required, and the reason is measured rather than preferred: the
+    `--hosted-tier` routes carry no pixel dimension at all (`route_gates.HOSTED_TIER_RULES`;
+    `wan2.7-r2v` takes a resolution enum, a ratio enum and an integer duration and never
+    receives a width or a frame count from us), so a required `--frame` would demand a
+    number that route does not have. The omission is RECORDED as a fact instead — by name,
+    on the printed line and in the written record — so a receipt reader can tell the two
+    apart without parsing a count out of another gate's string.
+    """
+    sources = sorted({f.get("source") for f in checked
+                      if isinstance(f, dict) and f.get("source")})
+    independent = "supplied" in sources
+    ev = {"gate": "L", "andon": "SavedAdmission", "clause": "gate_l_frame_source",
+          "flag": "--frame", "supplied": supplied, "sources": sources,
+          "independently_checked": bool(independent),
+          "hosted_tier": hosted_tier}
+    if hosted_tier:
+        ev["verdict"] = (
+            f"hosted tier {hosted_tier}: the pixel clause is INAPPLICABLE, so there is no "
+            f"frame for an independent --frame to agree with; the tier's own enum "
+            f"constraints are what was checked")
+    elif independent:
+        ev["verdict"] = (
+            f"supplied and agreed: --frame={supplied} was checked against the graph's own "
+            f"{len(sources)} source(s) {sources} and did not contradict it")
+    else:
+        ev["verdict"] = (
+            "Gate L proven off the graph alone — NO independent frame was supplied, so "
+            "the only thing this verdict rests on is the graph agreeing with itself. The "
+            "clash clause that can contradict a graph's own pinned frame runs only when "
+            "--frame is given (pass --frame=width,height,length to have it run)")
+    return ev
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--saved", required=True)
@@ -1143,6 +1199,12 @@ def main(argv=None):
         shapes = [f"{t['resolution']} {t['ratio']} {t['duration_s']}s"]
     else:
         shapes = sorted({f"{f['width']}x{f['height']}x{f['length']}" for f in checked})
+    # ---- Gate L's SOURCE, named (wave 22, F-f97b0bb3). `shapes` above is a DE-DUPLICATED
+    # set, so a supplied frame that agrees with the graph collapses into the graph's own
+    # entry and the printed line is byte-identical to the one printed with no `--frame` at
+    # all. The distinction the operator needs is not in the shapes; it is in where they
+    # came from.
+    gate_l_source = gate_l_frame_source(checked, a.frame, hosted_tier=a.hosted_tier)
 
     # ---- Gate OUT · ANDON, wave 22 (F-1b6be488). ABOVE `os.makedirs` and above the write,
     # so a refusal leaves no output directory — the invariant `build_payload` states for
@@ -1165,7 +1227,8 @@ def main(argv=None):
         "round_trip": equality,
         "topology_round_trip": topology,
         "route_facts": facts,
-        "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked, "OUT": gate_out},
+        "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked, "OUT": gate_out,
+                  "L_source": gate_l_source},
     }
     # BELOW every check, not above them. `build_payload.py` states the repo's invariant —
     # a refuse must leave no output directory — and until 2026-09-03 it held for Gate CANON
@@ -1187,7 +1250,14 @@ def main(argv=None):
                                         for e in facts["attribution"]]},
         "gate_ROUTE": gate_route["verdict"], "gate_S": gate_s["verdict"],
         "gate_OUT": gate_out["verdict"],
-        "gate_L": f"{', '.join(shapes)} legal ({gate_route['frame_legality_verdict']})",
+        "gate_L": (f"{', '.join(shapes)} legal "
+                   f"({gate_route['frame_legality_verdict']}) — "
+                   f"{gate_l_source['verdict']}"),
+        "gate_L_frame_source": ("supplied and agreed"
+                                if gate_l_source["independently_checked"] else
+                                "hosted tier: pixel clause inapplicable"
+                                if a.hosted_tier else
+                                "graph alone, no independent frame supplied"),
         "record": a.out}))
     return 0
 

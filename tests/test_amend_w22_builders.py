@@ -488,3 +488,137 @@ def test_gate_out_writable_is_the_ONE_home_of_the_directory_clause():
             if "is a DIRECTORY, so" in line and "raise" not in line:
                 spellings.append((name, lineno))
     assert [n for n, _ln in spellings] == ["build_payload.py"], spellings
+
+
+# ===========================================================================
+# F-f97b0bb3 (panel CRITICAL) — Gate L's verdict said PROVEN whether or not an independent
+#              frame was ever supplied, and neither the printed line nor the written record
+#              carried a key saying which.
+#
+# Operand (the auditor's, MEASURED on `e8263a3` as subprocesses on a graph whose
+# EmptyHunyuanLatentVideo pins 832x480x81):
+#   WITHOUT --frame           -> exit 0, `gate_L: 832x480x81 legal (PROVEN)`, sources ['graph']
+#   WITH --frame=832,480,81   -> exit 0, gate_L line BYTE-IDENTICAL, sources ['graph','supplied']
+#   WITH --frame=832,480,65   -> exit 2, RouteGate, frame_legality_verdict CONTRADICTED
+# The only tell between "checked against an independently supplied frame" and "checked
+# against nothing" was a count buried inside gate_ROUTE's string.
+#
+# reverted-red: yes — the byte-identity of the two printed lines IS the reverted tree, and
+# the first assertion below is exactly that comparison.
+# ===========================================================================
+
+
+LATENT_API = {
+    "5": {"class_type": "EmptyHunyuanLatentVideo",
+          "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1}},
+}
+
+LATENT_SAVED = {"nodes": [
+    {"id": 5, "type": "EmptyHunyuanLatentVideo", "inputs": [],
+     "widgets_values": [832, 480, 81, 1]},
+], "links": []}
+
+
+def _latent_cli(tmp_path, frame=None, out_name="admission.json"):
+    api = _write(tmp_path, "in/l.api.json", LATENT_API)
+    saved = _write(tmp_path, "in/l.saved.json", LATENT_SAVED)
+    seeds = _write(tmp_path, "in/seeds.json", {"seeds": [2026081233]})
+    record = _write(tmp_path, "in/rec.json", _builder_record(
+        LATENT_API, family="wan", carries_no_sampler=True, frame=(832, 480, 81)))
+    argv = [f"--saved={saved}", f"--api={api}", f"--seeds={seeds}",
+            f"--out={tmp_path / 'out' / out_name}", f"--record={record}"]
+    if frame is not None:
+        argv.append(f"--frame={frame}")
+    return argv
+
+
+def _ok_line(tmp_path, capsys, frame=None, out_name="admission.json"):
+    assert GSG.main(_latent_cli(tmp_path, frame=frame, out_name=out_name)) == 0
+    printed = [ln for ln in capsys.readouterr().out.splitlines()
+               if ln.startswith("SAVED_ADMISSION_OK ")]
+    assert printed, "no OK line"
+    return json.loads(printed[-1][len("SAVED_ADMISSION_OK "):])
+
+
+def test_the_printed_gate_L_line_DIFFERS_between_a_supplied_frame_and_none(tmp_path,
+                                                                          capsys):
+    """The operand, exactly: one graph, two invocations, the printed line compared.
+
+    On `e8263a3` the two `gate_L` strings were byte-identical, so an operator reading the
+    last check before a paid submission could not tell a verdict checked against an
+    independent frame from one proven off the graph agreeing with itself."""
+    alone = _ok_line(tmp_path, capsys, frame=None, out_name="alone.json")
+    supplied = _ok_line(tmp_path, capsys, frame="832,480,81", out_name="supplied.json")
+    assert alone["gate_L"] != supplied["gate_L"], alone["gate_L"]
+    assert "graph alone" in alone["gate_L"], alone["gate_L"]
+    assert "supplied and agreed" in supplied["gate_L"], supplied["gate_L"]
+
+
+def test_the_OK_line_carries_the_frame_source_as_its_own_key(tmp_path, capsys):
+    """A reader keys on a KEY, never on a substring of a sentence."""
+    alone = _ok_line(tmp_path, capsys, frame=None, out_name="alone.json")
+    supplied = _ok_line(tmp_path, capsys, frame="832,480,81", out_name="supplied.json")
+    assert alone["gate_L_frame_source"] == "graph alone, no independent frame supplied"
+    assert supplied["gate_L_frame_source"] == "supplied and agreed"
+
+
+def test_the_written_record_says_it_too_and_names_the_flag(tmp_path, capsys):
+    """The receipt a later session reconciles, not only the line the operator saw."""
+    _ok_line(tmp_path, capsys, frame=None, out_name="alone.json")
+    written = json.loads((tmp_path / "out" / "alone.json").read_text(encoding="utf-8"))
+    block = written["gates"]["L_source"]
+    assert block["clause"] == "gate_l_frame_source", block
+    assert block["flag"] == "--frame" and block["supplied"] is None, block
+    assert block["independently_checked"] is False, block
+    assert block["sources"] == ["graph"], block
+    assert "proven off the graph alone" in block["verdict"].lower(), block
+
+
+def test_a_supplied_frame_that_CONTRADICTS_the_graph_still_refuses(tmp_path):
+    """The direction the new key must not soften: recording the source is not a substitute
+    for the clash clause, and the clash clause still fires."""
+    exc, ev = _raises(GSG.main, _latent_cli(tmp_path, frame="832,480,65"))
+    assert isinstance(exc, RG.RouteGate), repr(exc)
+    assert "CONTRADICTED" in json.dumps(ev, default=str), sorted(ev)
+
+
+def test_the_frame_source_block_is_derived_from_gate_L_not_from_the_flag(tmp_path):
+    """Rule 1 — keyed on the RESOLVED shape. The block reads the `source` field Gate L
+    itself stamps on each checked frame, so a route that acquires a second independent
+    source joins the reading without a new branch; the raw flag is recorded beside it as
+    context, never as the answer."""
+    checked = RG.verify(LATENT_API, family="wan", carries_no_sampler=True,
+                        frame=(832, 480, 81))["frame_legality"]
+    block = GSG.gate_l_frame_source(checked, "832,480,81")
+    assert block["sources"] == ["graph", "supplied"], block
+    assert block["independently_checked"] is True, block
+    # and the same call with the flag's text present but Gate L having seen only the graph
+    # reads FALSE — the flag is not what the block is keyed on.
+    graph_only = RG.verify(LATENT_API, family="wan",
+                           carries_no_sampler=True)["frame_legality"]
+    lying = GSG.gate_l_frame_source(graph_only, "832,480,81")
+    assert lying["independently_checked"] is False, lying
+
+
+def test_the_hosted_tier_route_is_named_rather_than_called_graph_alone():
+    """Why `--frame` is recorded-not-required, measured rather than preferred: the hosted
+    tiers carry no pixel dimension at all, so a required `--frame` would demand a number
+    that route does not have. The block says so in its own words."""
+    block = GSG.gate_l_frame_source([], None, hosted_tier="wan2.7-r2v")
+    assert "INAPPLICABLE" in block["verdict"], block
+    assert block["independently_checked"] is False, block
+    assert "wan2.7-r2v" in RG.HOSTED_TIER_RULES, sorted(RG.HOSTED_TIER_RULES)
+
+
+def test_the_frame_source_reaches_the_subprocess_line_too(tmp_path):
+    """Rule 4 — read off the tool's own `__main__`, not off an in-process return."""
+    proc = subprocess.run(
+        [sys.executable, os.path.join(TOOLS, "gate_saved_graph.py"),
+         *_latent_cli(tmp_path)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=REPO)
+    line = [ln for ln in proc.stdout.splitlines()
+            if ln.startswith("SAVED_ADMISSION_OK ")]
+    assert line, proc.stdout + proc.stderr
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    printed = json.loads(line[-1][len("SAVED_ADMISSION_OK "):])
+    assert printed["gate_L_frame_source"] == "graph alone, no independent frame supplied"
