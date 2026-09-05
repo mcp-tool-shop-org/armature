@@ -291,7 +291,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
         #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
         #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-        "resample": 8, "rig_gates": 17, "route_gates": 49, "startframe": 21, "turnaround": 13,
+        "resample": 8, "rig_gates": 17, "route_gates": 50, "startframe": 21, "turnaround": 13,
         "walk": 3,
         # WAVE 22 (core-gates, F-682ce228): `canon_census` joins the population with its
         # first gate raise — `gate_census_table`'s `_refuse`, six clauses through one site.
@@ -329,7 +329,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
     # WAVE 22 (core-gates, 2026-09-05): 202 → 203, the `canon_census` row above.
-    assert sum(with_gates.values()) == 203
+    assert sum(with_gates.values()) == 204
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

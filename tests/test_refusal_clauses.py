@@ -601,7 +601,9 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-    assert len(RAISE_SITES["RouteGate"]) == 71, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 22 (core-gates, F-0d33958f): 71 → 72. `_one_graph_declaration`'s
+    # `multiple_graph_declarations`. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    assert len(RAISE_SITES["RouteGate"]) == 72, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside

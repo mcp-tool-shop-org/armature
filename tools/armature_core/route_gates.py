@@ -512,6 +512,57 @@ def _shape_of(doc):
     return None
 
 
+def _one_graph_declaration(doc):
+    """The ONE wrapper key `doc` declares a graph under, or Gate ROUTE's refusal.
+
+    Returns `None` when the mapping declares none — the ordinary "this is not an envelope"
+    answer `normalise_graph` breaks its loop on.
+
+    ⚠ **A document declaring TWO graphs was resolved by wrapper-key ORDER, and the second
+    declaration was recorded nowhere.** `next((doc[k] for k in GRAPH_WRAPPER_KEYS if
+    isinstance(doc.get(k), dict)), None)` takes the first of `('prompt', 'workflow_json',
+    'workflow')` that is a mapping. Measured 2026-09-05 in this worktree on
+    `{"prompt": <API graph, clean>, "workflow": <save-format graph loading
+    causvid_x.safetensors>}` — the shape a ComfyUI queue/history record carries:
+    `_shape_of(doc)` returned `None`, `components(doc)` returned only the API half's one
+    weight, and `verify(doc, frame=(832,480,81))` RETURNED the verdict "0 of 1
+    component(s) classified, ... 1 frame(s) checked and generator-legal" with the BANNED
+    CC-BY-NC file named nowhere in the receipt and no key naming a second declaration.
+    `load_graph` of the same document written to disk returned a graph equal to the API
+    half. Reversing the two keys in the document changed nothing: the TUPLE is the
+    selector, not dict order, so this is not a shape a caller can spell around.
+
+    Bounded as the auditor filed it: `gate_saved_graph.round_trip(api, load_graph(<that
+    file>))` still refused with `SavedAdmission` "the saved graph argument is not a
+    save-format graph", so what was open is any caller handing such a document straight to
+    `verify` / `components` / `is_api_format`, and the receipt's silence about the choice.
+
+    It REFUSES rather than recording the choice, which is what this module does with
+    ambiguity everywhere else in exactly this family: `duplicate_subgraph_id` and
+    `duplicate_subgraph_label` here, `duplicate_link_id` and `duplicate_socket_name` in
+    `gate_saved_graph.link_table`, `node_map_duplicate_id` in `fetch_run.parse_node_map`.
+    Two declarations are two different graphs and one of them is what would run.
+    """
+    declaring = [k for k in GRAPH_WRAPPER_KEYS if isinstance(doc.get(k), dict)]
+    if not declaring:
+        return None
+    if len(declaring) > 1:
+        raise RouteGate(
+            f"this document declares {len(declaring)} graphs — {declaring!r} — and the "
+            f"loader would have taken {declaring[0]!r} by the order of "
+            f"{list(GRAPH_WRAPPER_KEYS)}, reading nothing at all from the other(s). Two "
+            f"declarations are two different graphs and one of them is what runs; a "
+            f"licence, seed and frame walk that reads one of them reports a verdict about "
+            f"a graph the submission may not carry",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "multiple_graph_declarations",
+             "declaring_keys": declaring, "would_have_taken": declaring[0],
+             "wrapper_keys": list(GRAPH_WRAPPER_KEYS),
+             "top_level_keys": sorted(map(str, doc)),
+             "shapes": {k: _shape_of(doc[k]) for k in declaring}})
+    return declaring[0]
+
+
 def normalise_graph(graph):
     """THE loader. Every gate in this module reads its graph through this one function.
 
@@ -544,8 +595,12 @@ def normalise_graph(graph):
             return doc
         inner = None
         if isinstance(doc, dict):
-            inner = next((doc[k] for k in GRAPH_WRAPPER_KEYS
-                          if isinstance(doc.get(k), dict)), None)
+            # · ANDON — TWO declarations, before either is taken. See
+            # `_one_graph_declaration`; the selector is this tuple and not dict order, so
+            # reversing the keys in the document changes nothing and the ambiguity is not
+            # a property a caller can spell their way out of.
+            declaring = _one_graph_declaration(doc)
+            inner = doc[declaring] if declaring is not None else None
         if inner is None:
             break
         doc = inner
@@ -621,8 +676,34 @@ def _walk_nodes(graph):
             inputs = node.get("inputs") or {}
             # A link is [node_id, slot]; anything else is a literal this graph pins.
             widgets = [v for v in inputs.values() if not isinstance(v, list)]
+            # ⚠ **An API entry that declares its OWN `widgets_values` had it DISCARDED.**
+            # This branch synthesised the node's widgets from `inputs.values()` alone and
+            # `NODE_CONTAINERS[True]` recorded only `("inputs", dict)`, so a value spelled
+            # there was neither read nor refused. Measured 2026-09-05 in this worktree on
+            # an API graph of `UNETLoader(wan2.2_t2v_high_noise_14B_fp8_scaled)` +
+            # `KSampler(seed 7, fixed)` + `{"class_type": "LoraLoaderModelOnly",
+            # "inputs": {}, "widgets_values": ["causvid_x.safetensors", 1.0]}` (BANNED,
+            # CC-BY-NC): `components()` named ONLY the UNETLoader, `verify(g,
+            # frame=(832,480,81))` RETURNED "0 of 1 component(s) classified, 1
+            # unclassified, ... 1 frame(s) checked and generator-legal",
+            # `json.dumps(ev)` contained "causvid" zero times, and `walk_census.
+            # n_nodes_walked` read 3. The control — the same file spelled in the API
+            # `inputs` mapping — raised naming it. That is the wave-20 CRITICAL
+            # F-f9ab0645 one container over, on the format every builder submits.
+            #
+            # It is READ rather than refused, because a converter that emits `class_type`
+            # beside `widgets_values` is producing a node whose values ARE pinned and the
+            # honest reading is to test them; the SHAPE is refused instead, by the
+            # `widgets_values` row now in `NODE_CONTAINERS[True]`, so a mapping or a bare
+            # string here meets `unreadable_node` exactly as it does in save format.
+            # The `inputs` literals keep the positions they had, and the declared values
+            # are appended: nothing in API format is positional (every reader keys inputs
+            # by NAME — see `seeds`, `latents`, `cameras`, `hosted_enums`), so the union
+            # adds a population to the weight and class readers without moving an index.
+            declared = node.get("widgets_values") or []
             yield ("api", {"id": node_id, "type": node["class_type"],
-                           "widgets_values": widgets, "inputs": inputs})
+                           "widgets_values": widgets + list(declared),
+                           "inputs": inputs})
         return
     for i, n in enumerate(graph.get("nodes") or []):
         # · ANDON — the save-format branch used to yield whatever the array held, and it
@@ -820,7 +901,16 @@ _UNSET = object()
 NODE_CONTAINERS = {
     False: (("widgets_values", list, "a list of widget values"),
             ("inputs", list, "a list of save-format input slots")),
-    True: (("inputs", dict, "a mapping of API input name to literal-or-link"),),
+    # ⚠ `widgets_values` joined the API row 2026-09-05 (F-ddfb61e6). The comment above
+    # read "API format ... carries no `widgets_values` at all", and that is what the
+    # standard envelope carries — but a converter or a hand-edit that emits `class_type`
+    # BESIDE a `widgets_values` array produced a node whose declared values were neither
+    # read by the walk nor refused by this table, and a BANNED weight inside one reached
+    # a green `verify`. `_walk_nodes` now unions the declared values into the widgets it
+    # synthesises from the literal inputs, and this row is what refuses the container
+    # shapes that cannot be read (a mapping yields its KEYS, a string its CHARACTERS).
+    True: (("inputs", dict, "a mapping of API input name to literal-or-link"),
+           ("widgets_values", list, "a list of widget values")),
 }
 
 

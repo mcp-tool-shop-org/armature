@@ -133,7 +133,13 @@ RECORDED_GATE_RAISES = {
     #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-    ("route_gates.py", "RouteGate"): 46,  # +3 w12: unreadable_node,
+    # WAVE 22 (core-gates, F-0d33958f): +1 = 47. `_one_graph_declaration`'s
+    # `multiple_graph_declarations` — a document declaring TWO graphs was resolved by
+    # wrapper-key ORDER and the second declaration was recorded nowhere, so a queue/history
+    # record `{'prompt': <clean api>, 'workflow': <save graph loading causvid_x.safetensors>}`
+    # returned a GREEN `verify` verdict with the BANNED CC-BY-NC file named nowhere in the
+    # receipt. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    ("route_gates.py", "RouteGate"): 47,  # +3 w12: unreadable_node,
                                           # uncredited_conditional_component,
                                           # attribution_for_unconditional_row
                                           # +1 w14: orphan_attribution (F-74787978) — the
@@ -278,7 +284,7 @@ def test_the_derived_population_is_the_one_this_file_records():
     # at its entry above. RE-DERIVED with `==` in this worktree against `e8263a3`, which
     # every census here read GREEN first. BRANCH-LOCAL — five domains move pins this wave
     # and the coordinator re-measures on the merged tree rather than summing.
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 102
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 103
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

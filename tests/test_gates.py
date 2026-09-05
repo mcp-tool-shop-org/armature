@@ -1157,8 +1157,8 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # `gate_census_table`'s `_refuse`, the module's first raise (F-682ce228). RE-DERIVED
     # with `==` in this worktree against `e8263a3`. BRANCH-LOCAL — the coordinator
     # re-measures on the merged tree, never sums.
-    assert total == 347, (
-        f"{total} family raises in armature_core; this pin asserts 347, RE-DERIVED on the "
+    assert total == 348, (
+        f"{total} family raises in armature_core; this pin asserts 348, RE-DERIVED on the "
         f"wave-22 core-gates branch. This is the denominator every ratio below is quoted against — "
         f"re-measure it deliberately")
 
