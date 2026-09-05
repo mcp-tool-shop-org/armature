@@ -38,6 +38,8 @@ import fit_reference as FR  # noqa: E402
 import make_plate as MP  # noqa: E402
 import pack_pose_pack as PPP  # noqa: E402
 
+import _census_nodes as CN  # noqa: E402
+
 #: The RGB hiding under alpha=0 in every fixture below. If it reaches an output, the tool
 #: read the part the author made invisible.
 HIDDEN = (128, 128, 128)
@@ -242,15 +244,11 @@ TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(TOOLS, "tools")
 
 
-def _calls(tree, name):
-    out = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            func = node.func
-            called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-            if called == name:
-                out.append(node.lineno)
-    return sorted(out)
+# WAVE 26, F-f893634d — `_calls` was this walk, written out; `tests/test_render_visibility.py`
+# held a byte-identical copy under the name `_call_lines`, and both re-inlined the callee
+# resolution that `_census_nodes.called_name` owns. ONE home now, aliased here; the identity
+# is asserted in `tests/test_amend_w26_suite.py`.
+_calls = CN.call_lines
 
 
 def _defines(tree, name):

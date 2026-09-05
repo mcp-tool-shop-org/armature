@@ -29,7 +29,7 @@ import textwrap
 
 import pytest
 
-from conftest import REPO, TOOLS, repo_file
+from conftest import REPO, TOOLS, payload_record, payload_record_branch, repo_file
 
 sys.path.insert(0, TOOLS)
 
@@ -48,14 +48,47 @@ SPEC = os.path.join(REPO, "docs", "experiments", "E04-the-between-generation-flo
 # before the lossless tap existed and carries no node 302.
 E04_BASE = {"C-bright": "A0", "C-dark": "A1b"}
 
-#: The built payloads themselves are ~9.5 KB of gitignored output and are NOT committed —
-#: unlike the name maps, they are the thing under test's own product. The guard stays, but
-#: anchored on the repo and printing the absolute path, so a misfire is visible in the log
-#: rather than reading as "this repo has no run in it".
-E02_PAYLOAD_PATHS = {a: repo_file(f"outputs/E02/payloads/{b}.json")
+# WAVE 26, F-4c22f096 — the comment that stood here said the built payloads "are the thing
+# under test's own product" and so could not be committed, and the skip guard beneath it
+# decided the load-bearing comparison of a reported experiment. `git check-ignore -v` names
+# `.gitignore:3 outputs/`, so the twelve collected items skipped on every clone, in every
+# isolated worktree and on every ubuntu-latest job; measured on `81d6c07`, `HAVE_E02_PAYLOADS`
+# was False and both paths absent, and those twelve were twelve of the fifteen skips in the
+# worktree-to-checkout delta.
+#
+# The stated reason is contradicted by the test body four lines below: the E04 side is BUILT
+# in process (`bp.build(arm, "E04", seed=seed)`) and the E02 side is READ as an archive of
+# what was submitted. The E02 payloads are a record, exactly like the upload name maps this
+# same file records as committed under `tests/fixtures/uploads/` eight lines above — 9,566
+# bytes each. They are committed under `tests/fixtures/records/E02/payloads/` and resolved by
+# `conftest.payload_record`, through the same three functions the name maps use, and held to
+# the same byte-equality check the uploads gained in wave 23
+# (`tests/test_measure_tracking.py::test_every_committed_record_fixture_is_a_byte_copy_of_the_live_record`),
+# so the fixture cannot drift from the live record. The guard is gone: this comparison now
+# rides every run.
+#: `(live, fixture)` per arm are kept beside the resolved path so a failing run can say WHICH
+#: copy it graded, the way `upload_record_branch` does for the name maps.
+E02_PAYLOAD_PATHS = {a: payload_record(f"outputs/E02/payloads/{b}.json")
                      for a, b in E04_BASE.items()}
-HAVE_E02_PAYLOADS = all(os.path.isfile(p) for p in E02_PAYLOAD_PATHS.values())
-MISSING_PAYLOADS = sorted(p for p in E02_PAYLOAD_PATHS.values() if not os.path.isfile(p))
+E02_PAYLOAD_BRANCHES = {a: payload_record_branch(f"outputs/E02/payloads/{b}.json")
+                        for a, b in E04_BASE.items()}
+
+
+def test_every_E02_base_payload_resolves_to_a_file_that_exists():
+    """Size, membership and existence before the comparison — on every machine.
+
+    The property the deleted skipif hid: if neither copy is present, `payload_record` hands
+    back the live path so the caller's own error names it, and the comparison below would
+    fail with a `FileNotFoundError` rather than skip. This says so first, and RECORDS which
+    branch each arm took so a reader of a passing run knows what was graded.
+    """
+    print("payload_record branches: " + json.dumps(E02_PAYLOAD_BRANCHES, sort_keys=True))
+    assert sorted(E02_PAYLOAD_PATHS) == ["C-bright", "C-dark"], sorted(E02_PAYLOAD_PATHS)
+    absent = sorted(p for p in E02_PAYLOAD_PATHS.values() if not os.path.isfile(p))
+    assert absent == [], (
+        f"no E02 base payload at {absent}; neither the live run nor the committed fixture "
+        f"is present, so the load-bearing comparison has nothing to compare against")
+    assert set(E02_PAYLOAD_BRANCHES.values()) <= {"live", "fixture"}, E02_PAYLOAD_BRANCHES
 
 
 # ------------------------------------------------------- the gate function, in isolation
@@ -151,18 +184,27 @@ def test_each_seed_writes_to_its_own_output_names():
 
 # ------------------------------------------------- E04 really is E02's conditions re-run
 #
-# WAVE 16, F-665cd590. The 12 collected items below (4 arms x 3 seeds) are 12 of the 15
-# skips that separate a fresh worktree from a checkout carrying `outputs/`; the other 3 are
-# `test_measure_tracking.py:211/219/228`. That delta is now PINNED BY PATH rather than
-# re-measured — `tests/test_measure_tracking.py::
+# WAVE 16, F-665cd590. The 12 collected items below (4 arms x 3 seeds) WERE 12 of the 15
+# skips that separated a fresh worktree from a checkout carrying `outputs/`. That delta was
+# PINNED BY PATH rather than re-measured — `tests/test_measure_tracking.py::
 # test_the_worktree_to_checkout_skip_delta_is_read_off_the_suite_not_re_measured` derives
 # the population from the guards themselves and multiplies this function out by its own
 # parametrize arguments, so adding a seed here moves the pin without anybody typing a
 # number. The standing seed that attributed the delta to "12 test_gate_s + 3
 # test_aapose_convention" is wrong: the aapose trio skips in BOTH trees.
+#
+# WAVE 26, F-4c22f096 — these twelve no longer skip anywhere: the two E02 bases are
+# committed and resolved by `conftest.payload_record`, so the delta falls from 15 to 3 and
+# this function leaves the gated population entirely. WAVE 26, F-a15086f0 — the three that
+# remain were cited here as `test_measure_tracking.py:211/219/228` and those three lines
+# name unrelated code (an assertion on `tool_version`, a `def` of a test that does not skip,
+# and a `for` inside a body); the citation was wrong on `ce66e1f` too, so it was never right
+# rather than moved by a merge. They are named here by TEST NAME, which is how the census
+# that owns them derives them:
+#   test_the_anchor_reproduces_every_published_E02_figure
+#   test_the_anchor_CAN_fail
+#   test_A1a_lossless_and_A1a_H264_are_NOT_the_same_number
 
-@pytest.mark.skipif(not HAVE_E02_PAYLOADS,
-                    reason=f"E02 payloads are gitignored output; absent: {MISSING_PAYLOADS}")
 @pytest.mark.parametrize("arm", sorted(E04_BASE))
 @pytest.mark.parametrize("seed", bp.E04_SEEDS)
 def test_an_E04_payload_differs_from_its_E02_base_ONLY_in_the_seed(arm, seed):

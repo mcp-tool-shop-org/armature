@@ -110,6 +110,25 @@ def read_source(filename):
         return fh.read()
 
 
+def fn_source(filename, name):
+    """The source of one top-level function of `tools/<filename>`, for a mutation fixture.
+
+    WAVE 26, F-f893634d — this walk was written out byte for byte in
+    `tests/test_instruments_amend_w14.py:49` and `tests/test_instruments_amend_w16.py:52`,
+    both under the name `_fn_source`, both reading `read_source` from this module. Same
+    class as the call-site walk the finding names: two copies of one walk, no disagreement
+    today because they are byte-identical, and no census that would say so once one of
+    them is edited. ONE home, aliased at both sites; the duplicate-walk census in
+    `tests/test_amend_w26_suite.py` holds it.
+    """
+    src = read_source(filename)
+    tree = ast.parse(src)
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return ast.get_source_segment(src, node)
+    raise LookupError(f"{filename} has no top-level function {name!r}")
+
+
 class _BruteForceKDTree:
     """A stand-in for `mathutils.kdtree.KDTree` — exact, and O(n*m).
 

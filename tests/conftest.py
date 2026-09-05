@@ -99,6 +99,13 @@ def rt():
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 UPLOAD_FIXTURES = os.path.join(FIXTURES, "uploads")
+#: The committed byte copies of gitignored `outputs/` RECORDS, laid out exactly as the live
+#: tree lays them out, minus the leading `outputs/` — so `outputs/E02/payloads/A0.json`
+#: is `tests/fixtures/records/E02/payloads/A0.json`. The root is NOT called `outputs`:
+#: measured 2026-09-05, `git check-ignore -v tests/fixtures/outputs/E02/payloads/A0.json`
+#: answers `.gitignore:3:outputs/` — the pattern has no leading slash, so it matches at any
+#: depth and the fixtures would have been ignored wherever they were put under that name.
+PAYLOAD_FIXTURES = os.path.join(FIXTURES, "records")
 
 #: The upload name maps `build_payload.EXPERIMENTS` names as `outputs/E0x/uploads_*.json`.
 #: They are content-addressed server filenames and nothing else — no pixels, ~2.7 KB each —
@@ -114,6 +121,24 @@ UPLOAD_RECORDS = (
     "outputs/E03/uploads_static.json",
 )
 
+#: The two E02 payloads `test_gate_s.py` compares every E04 submission against, committed as
+#: byte copies (wave 26, F-4c22f096). They are 9,566 bytes each and they are a RECORD of what
+#: was submitted, not a product of the code under test — the E04 side of every comparison is
+#: built in process. `A0` is C-bright's base and `A1b` is C-dark's; `A1a` is deliberately not
+#: here, because it ran before the lossless tap existed and carries no node 302.
+PAYLOAD_RECORDS = (
+    "outputs/E02/payloads/A0.json",
+    "outputs/E02/payloads/A1b.json",
+)
+
+#: `family -> (population, fixture root)`. ONE table, so the byte-copy census and the
+#: branch-agreement census in `tests/test_measure_tracking.py` walk every committed record
+#: family rather than only the one that happened to be written first (wave 26, F-4c22f096).
+RECORD_FAMILIES = {
+    "uploads": (UPLOAD_RECORDS, UPLOAD_FIXTURES),
+    "payloads": (PAYLOAD_RECORDS, PAYLOAD_FIXTURES),
+}
+
 
 def repo_file(relpath):
     """An absolute path under the repo root for a `outputs/...`-style relative path.
@@ -128,27 +153,82 @@ def repo_file(relpath):
     return os.path.join(REPO, *str(relpath).split("/"))
 
 
-def upload_record_paths(relpath):
-    """`(live, fixture)` — both candidate paths for one upload name map, resolved.
+def _record_paths(relpath, fixture_root):
+    """`(live, fixture)` — both candidate paths for one committed record, resolved.
 
     Split out of `upload_record` (wave 23, F-ef2a00e9) so the two copies can be COMPARED,
-    not only chosen between. Nothing about the choice changes.
+    not only chosen between. Nothing about the choice changes. Wave 26 (F-4c22f096) gave it
+    a `fixture_root` so the E02 payload records resolve through the SAME three functions the
+    upload name maps do, rather than through a second spelling of them.
     """
     return (repo_file(relpath),
-            os.path.join(UPLOAD_FIXTURES, *str(relpath).split("/")[1:]))
+            os.path.join(fixture_root, *str(relpath).split("/")[1:]))
 
 
-def upload_record_branch(relpath):
-    """Which copy `upload_record` would return, and what exists — for a test to RECORD.
+def _record_branch(relpath, fixture_root):
+    """Which copy `_record` would return, and what exists — for a test to RECORD.
 
     `"live"`, `"fixture"` or `"neither"`. A run that grades the live record and a run that
     grades the fixture are grading different inputs under one function name; a test that
     quotes a pinned hash needs to be able to say which one it read.
     """
-    live, fixture = upload_record_paths(relpath)
+    live, fixture = _record_paths(relpath, fixture_root)
     if os.path.isfile(live):
         return "live"
     return "fixture" if os.path.isfile(fixture) else "neither"
+
+
+def _record(relpath, fixture_root):
+    """The real run if this rig has one, else the committed byte copy — see `upload_record`."""
+    live, fixture = _record_paths(relpath, fixture_root)
+    if os.path.isfile(live):
+        return live
+    if os.path.isfile(fixture):
+        return fixture
+    # Neither: hand back the path the caller asked for so its own error names it.
+    return live
+
+
+def upload_record_paths(relpath):
+    """`(live, fixture)` for one upload name map."""
+    return _record_paths(relpath, UPLOAD_FIXTURES)
+
+
+def upload_record_branch(relpath):
+    """`"live"` / `"fixture"` / `"neither"` for one upload name map."""
+    return _record_branch(relpath, UPLOAD_FIXTURES)
+
+
+def payload_record_paths(relpath):
+    """`(live, fixture)` for one committed E02 payload."""
+    return _record_paths(relpath, PAYLOAD_FIXTURES)
+
+
+def payload_record_branch(relpath):
+    """`"live"` / `"fixture"` / `"neither"` for one committed E02 payload."""
+    return _record_branch(relpath, PAYLOAD_FIXTURES)
+
+
+def payload_record(relpath):
+    """Resolve one E02 payload: the real run if this rig has one, else the committed copy.
+
+    WAVE 26, F-4c22f096 — the twelve collected items of
+    `tests/test_gate_s.py::test_an_E04_payload_differs_from_its_E02_base_ONLY_in_the_seed`
+    (4 arms x 3 seeds) skipped on every clone, in every isolated worktree and on every
+    ubuntu-latest job, because `outputs/` is gitignored (`git check-ignore -v` names
+    `.gitignore:3 outputs/`). That is the test the file's own comment calls "the load-bearing
+    test of the whole experiment" — the one that stops a refactor silently re-topologising an
+    experiment that has already been run and reported — and it ran on exactly one machine.
+
+    The stated reason it could not be committed was that the payloads are "the thing under
+    test's own product". The test body contradicts that four lines below: it BUILDS the E04
+    side in process (`bp.build(arm, "E04", seed=seed)`) and READS the E02 side as an archive
+    of what was submitted. So the E02 payloads are a record, exactly like the upload name maps
+    committed under `tests/fixtures/uploads/` — 9,566 bytes each — and they are resolved here
+    the same way, through the same three functions, with the same byte-equality check in
+    `tests/test_measure_tracking.py`.
+    """
+    return _record(relpath, PAYLOAD_FIXTURES)
 
 
 def upload_record(relpath):
@@ -168,13 +248,7 @@ def upload_record(relpath):
     Measured 2026-09-05: all five maps match their fixtures byte for byte, so this was an
     absent guard rather than a live divergence.
     """
-    live, fixture = upload_record_paths(relpath)
-    if os.path.isfile(live):
-        return live
-    if os.path.isfile(fixture):
-        return fixture
-    # Neither: hand back the path the caller asked for so its own error names it.
-    return live
+    return _record(relpath, UPLOAD_FIXTURES)
 
 
 @pytest.fixture(scope="session", autouse=True)

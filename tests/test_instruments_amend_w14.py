@@ -46,14 +46,10 @@ class FakeScene:
         self.layer_collection = root or FakeCollection()
 
 
-def _fn_source(filename, name):
-    """The source of one top-level function, for a mutation fixture."""
-    src = read_source(filename)
-    tree = ast.parse(src)
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == name:
-            return ast.get_source_segment(src, node)
-    raise LookupError(f"{filename} has no top-level function {name!r}")
+# WAVE 26, F-f893634d — `_fn_source` was this walk written out, byte-identical with the
+# copy in the sibling amend file. ONE home now, in `blender_stub` beside the
+# `read_source` both copies already called.
+_fn_source = blender_stub.fn_source
 
 
 # ============================================================ F-4392a2c1 — the isolation

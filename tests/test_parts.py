@@ -446,7 +446,7 @@ def test_no_gate_in_this_tool_raises_an_andon_whose_id_is_not_its_own():
 # --- routed family (core-gates, wave 8): a threshold the CALLER can loosen -------------
 
 
-def _threshold_keyword_defaults():
+def _threshold_keyword_defaults(source=None):
     """Every gate function in `parts.py` whose signature declares a numeric tolerance
     default a caller could raise.
 
@@ -454,12 +454,19 @@ def _threshold_keyword_defaults():
     `tol`, `eps` or `threshold` and whose default is a numeric literal. That is the shape
     core-gates removed from four rig gates in the same wave; the population here is
     whatever the source declares, not a list typed into this test.
+
+    WAVE 26, F-a89efade — `source` is the seam that lets the red direction below drive
+    THIS walk over a decoy instead of re-implementing it inline. A proof that parses
+    its own scratch source and re-writes the predicate demonstrates that `ast` finds
+    the node; it cannot fail when the production walk is loosened, which is the one
+    thing a red proof exists to make impossible.
     """
     import ast
     import inspect
 
     hits = []
-    for node in ast.walk(ast.parse(inspect.getsource(parts))):
+    src = inspect.getsource(parts) if source is None else source
+    for node in ast.walk(ast.parse(src)):
         if not isinstance(node, ast.FunctionDef):
             continue
         args = node.args.args + node.args.kwonlyargs
@@ -488,18 +495,29 @@ def test_no_gate_here_takes_a_loosenable_tolerance_default():
 
 
 def test_the_threshold_census_goes_red_on_a_reintroduced_default():
-    """Prove it can fail: the same walk over a source that declares one."""
-    import ast
+    """Prove it can fail — driving `_threshold_keyword_defaults` itself (F-a89efade).
 
-    mutated = "def gate_x(a, b, length_frac=1e-6):\n    return a\n"
-    hits = []
-    for node in ast.walk(ast.parse(mutated)):
-        if isinstance(node, ast.FunctionDef):
-            for arg, default in zip(node.args.args[-len(node.args.defaults):],
-                                    node.args.defaults):
-                if arg.arg.endswith("_frac") and isinstance(default, ast.Constant):
-                    hits.append((node.name, arg.arg, default.value))
-    assert hits == [("gate_x", "length_frac", 1e-6)]
+    What stood here walked its own two-line source with its own predicate, and that predicate
+    was NARROWER than the production one (it read only `node.args.args`, only `_frac`, and no
+    `kwonlyargs`), so it could not have caught a keyword-only `eps=` default at all. The
+    production walk is called now, and the decoy exercises the parts of it the inline copy
+    did not have: a positional `_frac` default, a keyword-only `eps` default, a
+    `threshold`-named one, and two parameters that must NOT be reported — a bool default and
+    a tolerance with no default at all.
+    """
+    mutated = (
+        "def gate_x(a, b, length_frac=1e-6, *, eps=1e-9, strict_tol=True):\n"
+        "    return a\n"
+        "def gate_y(a, threshold_frac):\n"
+        "    return a\n"
+        "def gate_z(a, angle_threshold=0.5):\n"
+        "    return a\n"
+    )
+    assert _threshold_keyword_defaults(source=mutated) == [
+        ("gate_x", "length_frac", 1e-6),
+        ("gate_x", "eps", 1e-9),
+        ("gate_z", "angle_threshold", 0.5),
+    ], _threshold_keyword_defaults(source=mutated)
 
 
 def test_the_module_owns_the_tolerances_and_a_caller_may_only_tighten():

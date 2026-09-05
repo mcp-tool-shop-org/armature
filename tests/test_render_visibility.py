@@ -93,6 +93,8 @@ import ast
 from blender_stub import TOOLS as TOOLS_DIR
 from blender_stub import read_source
 
+import _census_nodes as CN
+
 #: The mesh objects `import_glb` hands back are filtered on `o.type == "MESH"` alone. Any
 #: tool that MEASURES them — framing, bbox, ground height, vertex cloud — must select
 #: through `render_visible_meshes` first.
@@ -108,16 +110,11 @@ from blender_stub import read_source
 #: near `import_glb`.
 
 
-def _call_lines(tree, name):
-    """Every line at which `name` appears as the callee of an `ast.Call`."""
-    out = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            func = node.func
-            called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-            if called == name:
-                out.append(node.lineno)
-    return sorted(out)
+# WAVE 26, F-f893634d — `_call_lines` was this walk, written out; `tests/test_alpha_law.py`
+# held a byte-identical copy under the name `_calls`, and both re-inlined the callee
+# resolution that `_census_nodes.called_name` owns. ONE home now, aliased here; the identity
+# is asserted in `tests/test_amend_w26_suite.py`.
+_call_lines = CN.call_lines
 
 
 def _selects_mesh_objects_by_type(tree):
@@ -277,13 +274,19 @@ def test_the_call_site_census_goes_red_when_the_call_goes_and_the_comment_stays(
                        "never_heard_of_it.py": False}, verdict
 
 
-def _measurement_loops_over_unfiltered_meshes(filename):
+def _measurement_loops_over_unfiltered_meshes(filename, source=None):
     """`for o in meshes` inside an arithmetic expression, i.e. a MEASUREMENT.
 
     Naming the objects for a record (`[o.name for o in meshes]`) is not the defect and is
     how `probe_subject.py:46` reports what it excluded; measuring their geometry is.
+
+    WAVE 26, F-a89efade — `source` is the seam that lets the red direction below drive
+    THIS walk over a decoy instead of re-implementing it inline. A proof that parses
+    its own scratch source and re-writes the predicate demonstrates that `ast` finds
+    the node; it cannot fail when the production walk is loosened, which is the one
+    thing a red proof exists to make impossible.
     """
-    tree = ast.parse(read_source(filename))
+    tree = ast.parse(read_source(filename) if source is None else source)
     hits = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.ListComp, ast.GeneratorExp, ast.SetComp)):
@@ -311,24 +314,31 @@ def test_no_tool_measures_the_unfiltered_mesh_list(filename):
         f"Select through blender_scene.render_visible_meshes first.")
 
 
-def test_the_scan_would_catch_the_defect_it_was_written_for(tmp_path):
-    """The red direction — a check that cannot fail is not a check."""
-    probe = tmp_path / "probe_tool.py"
-    probe.write_text(
-        "def f(meshes):\n"
+def test_the_scan_would_catch_the_defect_it_was_written_for():
+    """The red direction, driving `_measurement_loops_over_unfiltered_meshes` (F-a89efade).
+
+    The inline copy that stood here was narrower than the production walk in two ways — it
+    read only `meshes` and not `imported_meshes`, and it did not carry the `bound_box` /
+    `vertices` clauses — so loosening any of those left it green. The decoy now also carries
+    the case the scan must NOT report: `[o.name for o in meshes]`, naming the objects for a
+    record, which is how `probe_subject.py` reports what it excluded.
+
+    Measured while writing this: the walk reads the COMPREHENSION ELEMENT, not the
+    generators, so `[v.co for o in imported_meshes for v in o.data.vertices]` is NOT
+    reported — `vertices` appears in the iterator, and the element is `v.co`. The decoy uses
+    `[len(o.data.vertices) for o in imported_meshes]` instead, which is the shape the
+    `vertices` clause was written for. That asymmetry is the walk's, recorded here rather
+    than tuned around.
+    """
+    decoy = (
+        "def f(meshes, imported_meshes):\n"
         "    subject = [o for o in meshes]\n"
         "    zs = [(o.matrix_world @ Vector(c)).z for o in meshes for c in o.bound_box]\n"
-        "    return subject, zs\n", encoding="utf-8")
-    tree = ast.parse(probe.read_text(encoding="utf-8"))
-    hits = []
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.ListComp, ast.GeneratorExp)):
-            over = any(isinstance(g.iter, ast.Name) and g.iter.id == "meshes"
-                       for g in node.generators)
-            elt = ast.dump(node.elt)
-            if over and ("matrix_world" in elt or isinstance(node.elt, ast.Name)):
-                hits.append(node.lineno)
-    assert hits == [2, 3], hits
+        "    named = [o.name for o in meshes]\n"
+        "    vs = [len(o.data.vertices) for o in imported_meshes]\n"
+        "    return subject, zs, named, vs\n")
+    hits = _measurement_loops_over_unfiltered_meshes("probe_subject.py", source=decoy)
+    assert hits == [2, 3, 5], hits
 
 
 def test_no_tool_reaches_into_the_private_vertex_primitive():

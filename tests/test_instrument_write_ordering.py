@@ -141,6 +141,112 @@ def derive_population():
     return out
 
 
+#: WAVE 26, F-12aacdc4 — the tools whose CLI body reaches disk through a module-local helper
+#: that ALSO refuses, so the one-hop write is deliberately not recorded and no ordering
+#: verdict is issued. MEASURED on `81d6c07`; an equality, so a third tool in this shape lands
+#: here loudly instead of sitting outside every category the way `stage_render` did.
+HELPER_BOTH_REFUSES_AND_WRITES = {
+    # `export_rigged` writes the GLB and raises the family; `rig_character` is in the ordering
+    # population anyway, because its CLI body also writes directly (`os.makedirs` at :1691).
+    "rig_character": ["export_rigged"],
+    # `run_export` does `os.makedirs(out_dir)`, writes `.armature_run` and writes
+    # `manifest.json`, and raises. `stage_render` has NO write its CLI body performs itself,
+    # so before this wave it had `gates_at` and an EMPTY `writes_at` and `derive_population()`
+    # — which keeps a module only when `gates_at and writes_at` — left it out of the census
+    # entirely. It is the tool that creates the run directory every downstream payload
+    # consumes, and the one `_census_nodes.documents_blender_invocation` was written to reach.
+    "stage_render": ["run_export"],
+}
+
+
+def test_the_helper_that_both_refuses_and_writes_population_is_derived_and_named():
+    """The residue of the one-hop widening, asserted rather than silent (F-12aacdc4).
+
+    Before this wave the write half of the ratchet stopped at the CLI body while the refusal
+    half followed one hop, so a tool whose first byte to disk went through a helper had zero
+    visible writes and fell out of `derive_population()`. The hop is followed now; these two
+    are what remains, because a helper that ALSO refuses is claimed by the refusal branch —
+    see `_census_nodes.helpers_that_refuse_and_write` for the measurement that made that the
+    right call rather than the convenient one.
+    """
+    import ast
+
+    derived = {}
+    for path in CN.tool_paths():
+        name = os.path.basename(path)[:-3]
+        hits = CN.helpers_that_refuse_and_write(ast.parse(CN.read_source(name)))
+        if hits:
+            derived[name] = sorted(hits)
+    assert derived == HELPER_BOTH_REFUSES_AND_WRITES, {
+        "appeared": sorted(set(derived) - set(HELPER_BOTH_REFUSES_AND_WRITES)),
+        "vanished": sorted(set(HELPER_BOTH_REFUSES_AND_WRITES) - set(derived)),
+        "derived": derived,
+    }
+
+
+def test_stage_render_reaches_disk_through_a_helper_and_this_file_says_where():
+    """The pointed case, named on the real tree rather than described.
+
+    `stage_render` is not in `POPULATION_MEASURED_2026_09_04` and the reason is now a fact
+    this file asserts instead of an absence nobody could see: its CLI body performs no write
+    of its own, and `run_export` — which it calls — creates the run directory, writes
+    `.armature_run` and writes `manifest.json`.
+    """
+    import ast
+
+    tree = ast.parse(CN.read_source("stage_render"))
+    hits = CN.helpers_that_refuse_and_write(tree)
+    assert sorted(hits) == ["run_export"], hits
+
+    gates_at, writes_at = gate_and_write_lines(CN.read_source("stage_render"), "stage_render")
+    assert gates_at, "stage_render's CLI body refuses somewhere; if not, this file is stale"
+    assert writes_at == {}, (
+        "stage_render's CLI body now writes directly; it should be in "
+        "POPULATION_MEASURED_2026_09_04 and this test replaced by the ordering property")
+    assert "stage_render" not in POPULATION_MEASURED_2026_09_04
+
+    assert "run_export" in CN.functions_that_write(tree), (
+        "run_export stopped writing; then the whole reason stage_render sits outside the "
+        "ordering population has changed and this file must be re-derived")
+
+
+def test_the_one_hop_write_predicate_is_strict_about_copy_and_replace():
+    """The red proof for the hop, driving `_census_nodes.functions_that_write` itself.
+
+    `WRITE_CALLS` is keyed on the callee TAIL, and `copy`, `copy2`, `rename`, `replace` and
+    `save` are also ordinary method names. Measured on `81d6c07`: following the hop with the
+    tail-keyed predicate admitted five helpers that never touch disk — `make_e08_sheet.label`
+    (an image `.copy()`), `make_parts_sheet.corner_bounds`, `measure_cascade_clip.
+    ffprobe_stream` (a `str.replace()`), `rig_parts.observe_under_pose` and
+    `rig_retopo._duplicate` — and each moved its tool's first-write line hundreds of lines
+    earlier, taking the ratchet's numbers with it for a reason that had nothing to do with
+    bytes reaching disk.
+    """
+    import ast
+
+    decoy = "\n".join([
+        "def a(x):",
+        "    return x.copy()",
+        "def b(s):",
+        "    return s.replace('a', 'b')",
+        "def c(obj):",
+        "    return obj.save()",
+        "def d(src, dst):",
+        "    return shutil.copy(src, dst)",
+        "def e(path):",
+        "    os.makedirs(path)",
+        "def f(path):",
+        "    with open(path, 'w') as fh:",
+        "        fh.write('x')",
+        "def g(path):",
+        "    with open(path) as fh:",
+        "        return fh.read()",
+        "",
+    ])
+    assert CN.functions_that_write(ast.parse(decoy)) == {"d", "e", "f"}, \
+        CN.functions_that_write(ast.parse(decoy))
+
+
 def imports_bpy(name):
     """The module reaches Blender — a Blender tool renders into its own out dir.
 
@@ -164,6 +270,25 @@ def imports_bpy(name):
 #: `make_rig_sheet` is the pointed one: it creates `<out>/` and `<out>/panels/` and then
 #: raises `ArmatureError` inline at three lines below them.
 POPULATION_MEASURED_2026_09_04 = {
+    # WAVE 26 (tests, F-12aacdc4): 69 -> 70, RE-DERIVED with `==` on `81d6c07`. ONE joins,
+    # `encode_control`, and it is the measurement of that finding: the write half of the
+    # ratchet now follows the SAME one hop into a module-local helper that the refusal half
+    # has followed since wave 12 (`_census_nodes.functions_that_write`). `encode_control`'s
+    # CLI body performs no write of its own outside its returning `--survey` branch; it calls
+    # `build(...)`, whose body writes the receipt, so it had `gates_at` and an EMPTY
+    # `writes_at` and `derive_population()` — which keeps a module only when
+    # `gates_at and writes_at` — left it out. It orders correctly today: its refusals are at
+    # 537, 561 and 563 and the hop is at 564.
+    #
+    # `stage_render` does NOT join, and that is deliberate rather than an oversight: its
+    # helper `run_export` BOTH refuses and writes, so the refusal branch claims the call line
+    # first. `HELPER_BOTH_REFUSES_AND_WRITES` above names it, with the measurement, so it is
+    # asserted by a test instead of sitting outside every category.
+    #
+    # The three ratchet pins are UNMOVED by the widening — re-derived with this file's own
+    # command on the branch that widened it: 27 modules / 55 names / 78 sites, the same three
+    # numbers. The population is a floor by construction, and the one tool that joined orders
+    # correctly, so nothing is stranded that was not stranded before.
     # WAVE 25 (instruments-measure, F-c66ad0c4): FOUR JOIN, and they are the measurement of
     # that finding. `analyze_p3`, `make_cast_sheet`, `make_hole_survey` and
     # `rig_sheet_compose` were the modules in that domain with NO refusal of their own —
@@ -234,6 +359,8 @@ POPULATION_MEASURED_2026_09_04 = {
     "make_shotset_sheet", "make_test_armature", "make_zoom_sheet", "measure_arm",
     "measure_cascade_clip", "measure_clip", "measure_smoothness", "measure_tracking",
     "preview_walk", "probe_glb", "probe_subject", "rig_bake", "rig_repair", "rig_retopo",
+    # WAVE 26, F-12aacdc4 — the one-hop write half; see the note at the top of this table.
+    "encode_control",
 }
 
 #: The write IS the thing the later gate measures. Named, dated 2026-09-04, and each
@@ -247,12 +374,25 @@ GATES_READ_BACK_WHAT_THEY_WROTE = {
 
 def test_the_branch_correction_is_exercised_and_can_still_see_a_real_write():
     """Both directions of `_returning_branch_spans`, so the correction is not a blanket
-    excuse: `encode_control.main` writes only inside its returning `--survey` branch and
-    so has no comparable write, while a write in a branch that FALLS THROUGH is still
-    counted."""
+    excuse: `encode_control.main`'s DIRECT write is inside its returning `--survey` branch and
+    is dropped, while a write in a branch that FALLS THROUGH is still counted.
+
+    WAVE 26, F-12aacdc4 — this used to assert `writes_at == {}` for `encode_control`, which
+    was true only because the write half of the ratchet stopped at the CLI body. It follows
+    one hop now, the same hop the refusal half has always followed, so `build(...)` — whose
+    body writes the receipt — is a write at its CALL line. The `--survey` correction is still
+    the thing under test and is still exercised: the direct write inside the returning branch
+    is absent from `writes_at`, and the only entry is the hop.
+    """
     gates_at, writes_at = gate_and_write_lines(_source("encode_control"), "encode_control")
     assert gates_at, "encode_control.main runs no in-tool refusal"
-    assert writes_at == {}, writes_at
+    assert sorted(writes_at.values()) == ["build()"], writes_at
+    survey_spans = CN.returning_branch_spans(CN.cli_body(ast.parse(_source("encode_control"))))
+    assert survey_spans, "encode_control.main has no returning branch; the correction is unexercised"
+    inside = [ln for ln in writes_at if any(lo <= ln <= hi for lo, hi in survey_spans)]
+    assert inside == [], (
+        f"a write inside a returning branch survived the correction: {inside}; it is on a "
+        f"path that never reaches the code below it")
 
     falls_through = (
         "import os\n"

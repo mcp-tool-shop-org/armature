@@ -475,9 +475,69 @@ def golden_frame(width, height, hands=True):
         draw_hands=hands)
 
 
-#: Measured 2026-08-12 on this rig (numpy 2.4.6 / cv2 4.13.0, trellis2-env py3.13.13).
+#: The four golden frames, and the environment they were LAST VERIFIED in.
+#:
+#: WAVE 26, F-b460731c — the line here read "Measured 2026-08-12 on this rig (numpy 2.4.6 /
+#: cv2 4.13.0, trellis2-env py3.13.13)". Re-measured 2026-09-05 in the repo venv that
+#: verifies these hashes today: **numpy 2.5.2, cv2 5.0.0 (opencv-contrib-python 5.0.0.93),
+#: Python 3.14.5** — and all four hashes still pass. So every version named in the old
+#: comment was stale, and the pin is MORE version-stable than the comment claimed: the
+#: rasterisation of these four frames did not move across the cv2 4.13 -> 5.0 boundary, nor
+#: across numpy 2.4 -> 2.5, nor across CPython 3.13 -> 3.14.
+#:
+#: That matters because the comment's whole job is to let a human rule on whether a moved
+#: hash was intended: with a stale baseline the operator diffs against the wrong environment.
+#: `.github/workflows/ci.yml` compounded it — it installs `opencv-python-headless==5.0.0.93`
+#: under a comment saying opencv "is pinned to the rig's verified version", contradicting the
+#: 4.13.0 written here, and it is a DIFFERENT DISTRIBUTION of the library from the one
+#: installed locally (`opencv-contrib-python`). The two are reconciled below by measurement
+#: rather than by a second literal: `test_the_recorded_environment_is_the_one_verifying_these_hashes`
+#: derives the CI pin from `ci.yml` and states plainly which distribution each side installs.
+#:
 #: A cv2 or numpy change that alters the rasterisation moves these, and a human rules on
 #: whether the move was intended. They are a regression pin, not a claim about correctness.
+ENVIRONMENT_VERIFIED_2026_09_05 = {
+    "python": "3.14.5",
+    "numpy": "2.5.2",
+    "cv2": "5.0.0",
+    "cv2 distribution": "opencv-contrib-python 5.0.0.93",
+}
+
+
+def observed_environment():
+    """The numpy / cv2 / Python triple this run is actually using, plus the distribution.
+
+    Quoted in the golden assertion's failure message (F-b460731c), so a moved hash carries
+    its own environment instead of sending the reader to a dated comment.
+    """
+    import sys
+
+    import cv2
+    import numpy
+
+    try:
+        import importlib.metadata as md
+        dists = [f"{name} {md.version(name)}" for name in
+                 ("opencv-python", "opencv-python-headless", "opencv-contrib-python")
+                 if _installed(md, name)]
+    except Exception:                                        # pragma: no cover
+        dists = []
+    return {
+        "python": ".".join(str(v) for v in sys.version_info[:3]),
+        "numpy": numpy.__version__,
+        "cv2": cv2.__version__,
+        "cv2 distribution": ", ".join(dists) or "unknown",
+    }
+
+
+def _installed(md, name):
+    try:
+        md.version(name)
+        return True
+    except Exception:
+        return False
+
+
 GOLDEN = {
     (832, 480, True): "5ebc3e11588ca39331738a3f3889e6be688c5865568dbaa75b8138d1f6f3bbad",
     (832, 480, False): "da7ed08df72ed8e09efd92e924d23d3fce4efd70f764484f3f440c2d0882d7f4",
@@ -491,7 +551,66 @@ def test_golden_frames_are_byte_stable(width, height, hands):
     canvas = golden_frame(width, height, hands)
     assert canvas.shape == (height, width, 3)
     assert canvas.dtype == np.uint8
-    assert hashlib.sha256(canvas.tobytes()).hexdigest() == GOLDEN[(width, height, hands)]
+    got = hashlib.sha256(canvas.tobytes()).hexdigest()
+    # WAVE 26, F-b460731c: the message carries the environment that produced the hash, so a
+    # human ruling on a moved rasterisation has the axis in front of them rather than in a
+    # comment that may be three cv2 majors old.
+    assert got == GOLDEN[(width, height, hands)], {
+        "frame": (width, height, hands),
+        "expected": GOLDEN[(width, height, hands)],
+        "got": got,
+        "observed environment": observed_environment(),
+        "last verified in": ENVIRONMENT_VERIFIED_2026_09_05,
+    }
+
+
+def test_the_recorded_environment_is_the_one_verifying_these_hashes():
+    """The dated comment above may not go stale silently again (F-b460731c).
+
+    RECORDS the observed triple in the run's own output, and holds the recorded one to it.
+    A version bump on this rig now fails HERE — naming both triples — instead of leaving a
+    reader of the golden pin diffing against an environment nobody has run since 2026-08-12.
+    """
+    observed = observed_environment()
+    print("aapose golden environment: " + json.dumps(observed, sort_keys=True))
+    drifted = {k: (ENVIRONMENT_VERIFIED_2026_09_05[k], observed[k])
+               for k in ("python", "numpy", "cv2")
+               if ENVIRONMENT_VERIFIED_2026_09_05[k] != observed[k]}
+    assert drifted == {}, (
+        f"the golden frames are being verified in an environment the record does not name: "
+        f"{drifted}. If the four hashes still pass, re-date the record above with these "
+        f"versions — that is evidence the pin is stable across the boundary, and it is the "
+        f"whole reason the comment exists.")
+
+
+def test_the_ci_opencv_pin_and_the_local_one_are_reconciled_by_measurement():
+    """The other half of F-b460731c: `ci.yml` pins a DIFFERENT DISTRIBUTION.
+
+    `.github/workflows/ci.yml` installs `opencv-python-headless==<v>` under a comment saying
+    opencv "is pinned to the rig's verified version"; this rig has `opencv-contrib-python`.
+    Both ship the same `cv2` rasteriser at the same version, which is the axis these hashes
+    are pinned on — so the two are compatible, and that is stated by DERIVING the CI version
+    from the workflow rather than typing a second literal here (a second literal is how the
+    4.13.0 / 5.0.0.93 contradiction survived in the first place).
+
+    The workflow is ci-packaging's file and is read here as TEXT only.
+    """
+    import re
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(repo, ".github", "workflows", "ci.yml"), encoding="utf-8") as fh:
+        ci = fh.read()
+    pinned = re.findall(r"opencv-python-headless==([0-9][0-9.]*)", ci)
+    assert len(pinned) == 1, pinned
+    ci_version = pinned[0]
+
+    local = ENVIRONMENT_VERIFIED_2026_09_05["cv2 distribution"].rsplit(" ", 1)[-1]
+    assert ci_version == local, (
+        f"ci.yml pins opencv {ci_version} and this rig's record names {local}; the golden "
+        f"hashes are verified against one rasteriser version, so the two must agree "
+        f"(the distributions deliberately differ — headless on a runner, contrib here)")
+    assert ci_version.startswith(observed_environment()["cv2"]), (
+        ci_version, observed_environment()["cv2"])
 
 
 def test_the_canvas_is_zeroed_black_outside_the_figure():

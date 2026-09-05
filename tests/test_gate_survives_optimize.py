@@ -322,11 +322,23 @@ def test_the_route_optimization_actually_took_effect(tmp_path):
 REWRITTEN_BY_PYTEST = ("conftest.py",)
 
 
-def _asserts_in_test_helpers():
-    """`(relpath, lineno)` for every `assert` statement in a non-rewritten tests/ module."""
+def _asserts_in_test_helpers(root=None):
+    """`(relpath, lineno)` for every `assert` statement in a non-rewritten tests/ module.
+
+    WAVE 26, F-66b07477 — `root` exists so the red direction below drives THIS walk. What it
+    used to do was write an assert-carrying helper into a scratch tree and then re-implement
+    the scan inline (`ast.parse` + `[n.lineno for n in ast.walk(tree) if isinstance(n,
+    ast.Assert)]`), which proves that `ast.walk` finds an `Assert` node — a property of the
+    standard library — and left the production walk's FILE SELECTION unproven. That is the
+    half that can go wrong: the prune list below drops `fixtures` from `dirs`, and the name
+    filter skips anything starting with `test_` or listed in `REWRITTEN_BY_PYTEST`, so a
+    helper placed under `tests/fixtures/` would never be scanned while the green direction
+    still reported `scanned` non-empty. Latent rather than live on `81d6c07`:
+    `find tests/fixtures -name '*.py'` returned 0 files.
+    """
     import ast
 
-    here = os.path.dirname(os.path.abspath(__file__))
+    here = os.path.dirname(os.path.abspath(__file__)) if root is None else str(root)
     found, scanned = [], []
     for root, dirs, files in os.walk(here):
         dirs[:] = [d for d in dirs if d not in ("__pycache__", "fixtures")]
@@ -363,14 +375,65 @@ def test_no_helper_under_tests_checks_anything_with_assert():
         f"and `ci.yml`'s -O leg would report green over them. Raise instead.")
 
 
-def test_the_helper_walk_would_catch_one(tmp_path, monkeypatch):
-    """The red direction. A helper carrying an `assert` is written into a scratch tree and
-    the same walk must find it -- otherwise this is a check that cannot fail, which is the
-    class of defect the file it lives in exists to prevent."""
-    import ast
+def test_the_helper_walk_would_catch_one(tmp_path):
+    """The red direction, driven through the PRODUCTION walk (wave 26, F-66b07477).
 
-    helper = tmp_path / "fake_helper.py"
-    helper.write_text("def check(x):\n    assert x, 'nope'\n", encoding="utf-8")
-    tree = ast.parse(helper.read_text(encoding="utf-8"))
-    hits = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Assert)]
-    assert hits == [2], hits
+    A scratch tests-tree carrying four modules, so the walk's FILE SELECTION is what is
+    exercised and not `ast.walk`'s ability to see an `Assert`:
+
+      * `fake_helper.py`        — a helper with an assert: MUST be found
+      * `test_something.py`     — a test module with an assert: must be SKIPPED (pytest
+                                  rewrites it, so `-O` does not delete it)
+      * `conftest.py`           — a plugin with an assert: must be SKIPPED, by name
+      * `fixtures/planted.py`   — a helper with an assert under the pruned directory
+
+    The last one is the reason this test was rewritten. Nothing under `tests/fixtures/`
+    carries Python today, so the prune could never have been caught by the real tree; here it
+    is asserted directly, in whichever direction the prune is set to.
+    """
+    (tmp_path / "fixtures").mkdir()
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "fake_helper.py").write_text(
+        "def check(x):\n    assert x, 'nope'\n", encoding="utf-8")
+    (tmp_path / "test_something.py").write_text(
+        "def test_x():\n    assert True\n", encoding="utf-8")
+    (tmp_path / "conftest.py").write_text(
+        "def assert_gate(x):\n    assert x\n", encoding="utf-8")
+    (tmp_path / "fixtures" / "planted.py").write_text(
+        "def check(x):\n    assert x\n", encoding="utf-8")
+    (tmp_path / "__pycache__" / "cached.py").write_text(
+        "def check(x):\n    assert x\n", encoding="utf-8")
+
+    found, scanned = _asserts_in_test_helpers(tmp_path)
+
+    assert ("fake_helper.py", 2) in found, found
+    assert "fake_helper.py" in scanned, scanned
+    assert "test_something.py" not in scanned, scanned
+    assert "conftest.py" not in scanned, scanned
+    assert not any(rel.startswith("__pycache__/") for rel, _ in found), found
+
+    # The prune, stated in whichever direction it holds: `fixtures/` is dropped from `dirs`,
+    # so a helper planted there is invisible to the production walk. This is a RECORD of the
+    # selection rule, not an endorsement of it — the green direction above asserts that the
+    # real `tests/fixtures/` carries no Python for the rule to hide.
+    assert not any(rel.startswith("fixtures/") for rel, _ in found), (
+        "the `fixtures` prune has been dropped; if that is deliberate, this clause and the "
+        "one below it move together")
+
+
+def test_the_pruned_fixtures_directory_carries_no_python_for_the_prune_to_hide():
+    """The other half of F-66b07477: the prune is only harmless while it hides nothing.
+
+    `_asserts_in_test_helpers` drops `fixtures` from `dirs`, so an assert-carrying helper
+    placed there would never be scanned and the green direction would still report `scanned`
+    non-empty. Measured on `81d6c07`: `tests/fixtures/**` holds 0 `.py` files. This says so
+    on every run, so the day a fixture tree grows a helper is the day this fails and the
+    prune has to be argued for rather than inherited.
+    """
+    import glob
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    planted = sorted(glob.glob(os.path.join(here, "fixtures", "**", "*.py"), recursive=True))
+    assert planted == [], (
+        f"`tests/fixtures/` now carries Python that `_asserts_in_test_helpers` prunes: "
+        f"{planted}; either drop the prune or move these under a scanned directory")

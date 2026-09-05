@@ -1248,7 +1248,13 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # homework. (Posted independently by instruments-measure in the wave-25 inbox after
     # they hit the same shape on two rows they were adding; recorded here so the number is
     # not "helpfully" restored at the merge.)
-    ('test_instruments_amend_w16', 'test_instruments_amend_w14.py', 468),
+    # WAVE 26 (tests, F-f893634d): ('test_instruments_amend_w16',
+    # 'test_instruments_amend_w14.py', 468) DELETED here, in the commit that made it live
+    # again -- this table's own rule, the same one wave 25 applied two rows down. Aliasing
+    # `_fn_source` onto `blender_stub.fn_source` shortened that file by eight lines and
+    # pushed a docstring onto the cited line, so the anchor resolved. The citing site is
+    # RE-ANCHORED ON THE SYMBOL rather than re-measured (`test_instruments_amend_w16.py`,
+    # the F-39381793 block), so nothing cites that line now and there is no row to keep.
     ('test_instruments_amend_w18', 'test_amend_w16_builders.py', 815),
     ('test_instruments_amend_w22', 'pack_pose_pack.py', 82),
     ('test_instruments_amend_w22', 'resample_motion.py', 76),
