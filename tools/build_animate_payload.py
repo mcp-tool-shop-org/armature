@@ -73,7 +73,8 @@ from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, gate_create_video_fps, read_seed_registration)
+    canonical_payload_digest, gate_create_video_fps, read_seed_registration,
+    single_path_segment)
 
 TOOL_VERSION = "E10.1"
 EXPERIMENT = "E08"
@@ -205,8 +206,19 @@ def parse_args(argv=None):
                          "rather than retyped")
     ap.add_argument("--reference-fit", default="as-is", choices=("as-is", "letterbox"),
                     help="'as-is' hands the reference to the node unchanged and lets it "
-                         "center-crop; 'letterbox' names a pre-fitted reference. The choice "
-                         "and its measured consequence are recorded either way")
+                         "center-crop; 'letterbox' names a pre-fitted reference, which "
+                         "ASSERTS the file is already the generation frame. Pass "
+                         "--reference-file to have that assertion MEASURED against the "
+                         "artifact; without it the record says DECLARED-not-measured "
+                         "rather than stating the fit as a fact")
+    ap.add_argument("--reference-file", default=None,
+                    help="the LOCAL path of the reference image that was uploaded. "
+                         "`--uploads` carries only the server-side name, so without this "
+                         "nothing here can open the file the record describes. Given, the "
+                         "PNG header is read and a `letterbox` declaration that "
+                         "contradicts the file raises `fit_disagrees_with_the_file` "
+                         "(the clause `build_i2v_payload`'s start-frame path already "
+                         "carries)")
     ap.add_argument("--seeds-registry", default=None)
     ap.add_argument("--experiment", default=EXPERIMENT,
                     help="names the output files and the server-side filename prefixes")
@@ -277,14 +289,138 @@ def identity_clause(path=TWIN_PROMPT_JSON):
     return text.strip().strip(",").strip(), original, log
 
 
+#: What each `--reference-fit` choice ASSERTS about the file, and therefore what a
+#: measurement can contradict. `letterbox` names a pre-fitted plate — a claim about the
+#: artifact's dimensions. `as-is` claims nothing about size: the node center-crops it
+#: (`common_upscale(..., "area", "center")`), so any size is consistent with the sentence.
+#: Written out rather than implied by the clause, because "which declarations are checkable"
+#: is the thing a reader of the record needs and the thing a new choice has to answer.
+REFERENCE_FIT_ASSERTS_THE_GENERATION_FRAME = {"as-is": False, "letterbox": True}
+
+
+def gate_reference_fit(fit, path, width=None, height=None):
+    """Gate PAYLOAD · ANDON — the record's `fit` sentence, MEASURED where it is checkable.
+
+    Wave 22, F-40220b64. `--reference-fit` is a two-choice label that performs no fitting:
+    it was stored verbatim as `meta['reference_image']['fit']` and reached the record
+    unexamined. RE-READ on `e8263a3`: the flag is declared with
+    `choices=('as-is','letterbox')` and its help said "The choice and its measured
+    consequence are recorded either way"; grepped over the whole file, nothing opened or
+    measured the uploaded reference — no PNG header read, no IHDR, no size comparison — so
+    the record could state 'as-is' over a letterboxed plate, or 'letterbox' over a plate
+    that had never been fitted.
+
+    The sibling precedent is in this domain and is ARMED: `build_i2v_payload` raises
+    `fit_disagrees_with_the_file` when the declared fit contradicts the file it measured
+    (wave 14, F-e17613c2), with `measured`, `generation_frame`, `path` and `sha256` in the
+    evidence. This is the same clause, keyed on the caller's OWN sentence rather than on a
+    constant here — a future fit that claims something else states its own assertion in
+    `REFERENCE_FIT_ASSERTS_THE_GENERATION_FRAME` and is checked against that.
+
+    CLAUDE.md names the grey letterbox pads on E08's reference as the standing suspect for
+    its washed bands, which makes this the one field in the record most worth measuring
+    rather than asserting.
+
+    **Where no local path is available the record says so.** `--uploads` carries only the
+    server-side name, so with no `--reference-file` there is nothing to open; the block
+    returned then is explicitly DECLARED-not-measured, which is a recorded fact rather than
+    a fit stated as one.
+    """
+    width = WIDTH if width is None else width
+    height = HEIGHT if height is None else height
+    asserts_frame = REFERENCE_FIT_ASSERTS_THE_GENERATION_FRAME.get(fit)
+    if asserts_frame is None:
+        raise PayloadError(
+            f"--reference-fit {fit!r} has no recorded assertion about the file, so nothing "
+            f"here can say whether a measurement would contradict it. Add the choice to "
+            f"`REFERENCE_FIT_ASSERTS_THE_GENERATION_FRAME` in the same commit that adds it "
+            f"to the parser",
+            {"gate": "PAYLOAD", "andon": "reference_image",
+             "clause": "reference_fit_has_no_recorded_assertion", "flag": "--reference-fit",
+             "fit": fit,
+             "known": sorted(REFERENCE_FIT_ASSERTS_THE_GENERATION_FRAME)})
+    if path is None:
+        return {
+            "fit": fit,
+            "measured": None,
+            "declared_not_measured": True,
+            "asserts_the_generation_frame": asserts_frame,
+            "generation_frame": [width, height],
+            "why_not_measured": (
+                "--reference-file was not supplied. `--uploads` carries only the "
+                "server-side name of the reference, so this build opened no file and the "
+                "`fit` above is a DECLARATION, not a measurement. Pass --reference-file "
+                "with the local artifact to have it checked"),
+        }
+    resolved = os.path.abspath(path)
+    if not os.path.isfile(resolved):
+        raise PayloadError(
+            f"--reference-file {path!r} is not a file. The flag exists so the record's "
+            f"`fit` sentence can be a measurement; a path that names nothing measures "
+            f"nothing, and a build that silently fell back to the unmeasured branch would "
+            f"record DECLARED-not-measured while the operator believed otherwise",
+            {"gate": "PAYLOAD", "andon": "reference_image",
+             "clause": "reference_file_missing", "flag": "--reference-file",
+             "path": resolved, "exists": os.path.exists(resolved),
+             "is_dir": os.path.isdir(resolved)})
+    # `png_header` has ONE home — `build_camera_i2v_payload` — and this reads the reference
+    # through it rather than writing a second IHDR reader (wave 22, F-40220b64). The import
+    # is LOCAL because a module-level one closes a cycle: `build_camera_i2v_payload` imports
+    # `build_i2v_payload`, which imports THIS module for the prompt's source of record.
+    # Measured: a top-level import raised `AttributeError: partially initialized module
+    # 'build_i2v_payload' ... (most likely due to a circular import)` at collection.
+    import build_camera_i2v_payload as CAM
+
+    header = CAM.png_header(resolved)
+    digest = hashlib.sha256(open(resolved, "rb").read()).hexdigest()
+    if header is None:
+        with open(resolved, "rb") as fh:
+            head = fh.read(8)
+        raise PayloadError(
+            f"--reference-file {path!r} is not a PNG this tool can read: its first 8 bytes "
+            f"are {head.hex()!r} and no IHDR chunk follows them, so its width and height "
+            f"cannot be measured and the record's `fit` sentence stays a claim",
+            {"gate": "PAYLOAD", "andon": "reference_image",
+             "clause": "reference_file_not_a_png", "flag": "--reference-file",
+             "path": resolved, "first_8_bytes": head.hex(), "sha256": digest,
+             "read_by": "IHDR, stdlib struct - no image library"})
+    measured = [header["width"], header["height"]]
+    if asserts_frame and measured != [width, height]:
+        raise PayloadError(
+            f"--reference-fit {fit!r} asserts a reference already fitted to this "
+            f"generation's frame, and --reference-file is "
+            f"{header['width']}x{header['height']} while the frame is {width}x{height}. "
+            f"The record's own `fit` sentence would be untrue about the image this route "
+            f"performs from. Re-fit the plate to {width}x{height}, or state the route's "
+            f"real fit ('as-is' hands the reference to the node and lets it center-crop, "
+            f"and passes this clause with its own words)",
+            {"gate": "PAYLOAD", "andon": "reference_image",
+             "clause": "fit_disagrees_with_the_file", "flag": "--reference-fit",
+             "fit": fit, "asserts_the_generation_frame": True,
+             "measured": measured, "generation_frame": [width, height],
+             "path": resolved, "sha256": digest})
+    return {
+        "fit": fit,
+        "measured": dict(header, path=resolved, sha256=digest),
+        "declared_not_measured": False,
+        "asserts_the_generation_frame": asserts_frame,
+        "generation_frame": [width, height],
+    }
+
+
 def build(uploads, seed, negative, positive, registry, reference_fit,
-          experiment=EXPERIMENT, length=LENGTH, fps=FPS):
+          experiment=EXPERIMENT, length=LENGTH, fps=FPS, reference_file=None):
     """The API-format graph, plus its meta. Gate L and Gate S raise before anything exists."""
     # ---- Gate ROUTE - ANDON on `CreateVideo.fps` (wave 10, F-29693a0e, family carry).
     # `--fps` reached the node with no clause in all five builders that take the flag,
     # while every one of their records states the node's measured contract as
     # "fps FLOAT (1-120)". One implementation, in `build_assembly_payload`, imported here.
     gate_create_video_fps(fps)
+    # ---- Gate PAYLOAD · ANDON on the record's `fit` sentence (wave 22, F-40220b64). Above
+    # everything that writes, so a build whose declared fit contradicts the artifact leaves
+    # no output directory.
+    reference_block = gate_reference_fit(reference_fit, reference_file,
+                                         width=WIDTH, height=HEIGHT)
     # The default is resolved BEFORE Gate S, not after it. The old order put
     # `seed_used = seed if seed is not None else (sorted(registry)[0] if registry else 0)`
     # BELOW a gate that refuses a non-int first, so the fallback was dead code and the
@@ -293,11 +429,27 @@ def build(uploads, seed, negative, positive, registry, reference_fit,
     # The `else 0` branch was worse than dead: it read as a working default and would have
     # shipped an unregistered seed the moment the ordering changed.
     if seed is None and not registry:
+        # ---- wave 22, F-87600738. This raise carried NO second argument at all, so under
+        # the wave-16 rule-5 base (`armature_core/errors.py`: a bare message stores `None`)
+        # the halt line printed `"evidence": null` and the refusal carried no `gate`, no
+        # `andon` and no `clause`. RE-MEASURED on `e8263a3` by grep across `tools/`: the
+        # string `no_seed_and_no_registration` occurred at exactly ONE site,
+        # `build_t2v_payload.py`, while THREE builders — this one, `build_i2v_payload` and
+        # `build_camera_i2v_payload` — raised the same refusal as a sentence. Confirmed by
+        # calling `build(...)` with `seed=None` and an empty registry: `PayloadError`
+        # raised, `evidence` None, `gate` None. So of the four callers that default a seed
+        # off the registration, one was machine-readable and three were prose: the clause
+        # census that wave 16 built to prove every refusal is reachable and NAMED saw 1 of
+        # the 4 sites, and an operator hitting it on three of the four routes got a halt a
+        # wrapper cannot classify.
         raise PayloadError(
             "no --seed and no --seeds-registry: this experiment pre-registered no seeds, "
             "so there is no committed number to default to, and Gate S refuses a seed "
             "varied without a registration. Pass --seeds-registry with the experiment's "
-            "committed list, or pass --seed with a number that is on it")
+            "committed list, or pass --seed with a number that is on it",
+            {"gate": "PAYLOAD", "andon": "seed_registration",
+             "clause": "no_seed_and_no_registration", "flag": "--seeds-registry",
+             "registered": list(registry or [])})
     seed_used = seed if seed is not None else sorted(registry)[0]
     gate_s = gates.gate_s_seed_registration(seed_used, registry, experiment,
                                             seed_was_explicit=seed is not None)
@@ -392,8 +544,11 @@ def build(uploads, seed, negative, positive, registry, reference_fit,
                     "source": SETTINGS_SOURCE},
         "positive": positive,
         "negative": negative,
-        "reference_image": {"server_name": upload_value(uploads, "reference"),
-                            "fit": reference_fit},
+        # `fit` is no longer a bare label: the block carries whether the declaration
+        # ASSERTS anything about the file, what was measured, and — when nothing was — that
+        # it is DECLARED-not-measured and why (wave 22, F-40220b64).
+        "reference_image": dict(reference_block,
+                                server_name=upload_value(uploads, "reference")),
         "pose_video": {"bridge": ("1 x LoadImage on a lossless animated WebP; "
                                   "LoadImage concatenates every frame into one IMAGE "
                                   "batch (ComfyUI/nodes.py, PIL fallback)"),
@@ -473,6 +628,23 @@ def verify_topology(wf):
 
 def main(argv=None):
     a = parse_args(argv)
+    # ---- ANDON, wave 22 (F-7e45e62b, sibling carry). `--experiment` is pasted into this tool's
+    # written filenames with no clause, exactly as `fetch_run --run` was. Census over this
+    # domain, 2026-09-05: FIVE free-string flags reach a written filename -- `--experiment`
+    # in `build_animate_payload`, `build_i2v_payload` and `build_camera_i2v_payload`,
+    # `--tag` in `build_t2v_payload` (whose own help says "goes in the written filenames"),
+    # and `fetch_run --run`. `build_camera_i2v_payload --wave` also reaches a filename and
+    # is ALREADY BOUNDED by `type=int` -- measured, argparse refuses `--wave=a/b` before
+    # `main` is entered -- so it takes no clause of its own. The bounded convention already
+    # exists in this domain: `build_payload --experiment` and `build_r2v` /
+    # `build_lora_arm --arm` are `choices=`-bounded.
+    #
+    # The clause is `single_path_segment`'s, imported from its ONE home (SEAM 1): same
+    # clause word `output_name_is_not_a_name`, same evidence keys.
+    single_path_segment(a.experiment, "--experiment", PayloadError,
+                        extra={"pasted_into": ["<out>/{experiment}-probe-animate.api.json",
+                                        "<out>/{experiment}-probe-payload-record.json",
+                                        "the server-side filename prefixes"]})
     out = os.path.abspath(a.out)
 
     with open(a.uploads, encoding="utf-8") as fh:
@@ -500,7 +672,8 @@ def main(argv=None):
                            canon_prompt=a.canon_prompt)
 
     wf, meta = build(uploads, a.seed, negative, positive, registry, a.reference_fit,
-                     experiment=a.experiment, length=a.length, fps=a.fps)
+                     experiment=a.experiment, length=a.length, fps=a.fps,
+                     reference_file=a.reference_file)
     meta["gate_CANON"] = canon_ev
     meta["prompt_record"] = {
         "identity_clause_source": TWIN_PROMPT_JSON,

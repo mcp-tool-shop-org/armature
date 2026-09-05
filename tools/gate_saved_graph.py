@@ -36,6 +36,11 @@ from armature_core import route_gates as RG  # noqa: E402
 from armature_core.route_gates import RouteGate  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
     canonical_payload_digest, read_seed_registration)
+# Gate OUT's ONE home (wave 22, F-1b6be488). `build_payload.gate_out_paths` was, re-censused
+# on `e8263a3`, the only Gate OUT in this domain and no other builder or fetcher called it;
+# the directory clause is lifted into `gate_out_writable` there and imported here rather
+# than spelled a second time beside the write it has to bound.
+from build_payload import gate_out_writable  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
@@ -251,11 +256,109 @@ def _as_api_graph(doc, path=None):
     return doc
 
 
+#: What a save-format node member must carry for THIS module to read it, and what each key
+#: is used for here. Written out rather than implied by the index that raises, because the
+#: refusal names the container it could not read, and a reader keyed on `container` has one
+#: question: did this comparison enter everything it reported on?
+SAVED_NODE_KEYS = {
+    "id": "the node id this comparison keys the saved file by",
+    "type": "the node class name compared against the api graph's `class_type`",
+}
+
+
+def _saved_nodes_by_id(saved_graph, where="the saved file"):
+    """`{str(id): node}` off a save-format graph, every member SHAPE-classified first.
+
+    Wave 22, F-defa6973. `round_trip` and `link_round_trip` each opened with
+    `{str(n["id"]): n for n in saved_graph["nodes"]}` and then read `s["type"]` and
+    `s.get("inputs")` bare, so the SAVE-format side of the last gate before a paid
+    submission had no member-shape clause anywhere: `_as_saved_graph` checks that
+    `doc["nodes"]` is a LIST and never a member of it. Measured on `e8263a3` on the
+    assembly fixture that otherwise prints `SAVED_ADMISSION_OK` at exit 0, one mutation at
+    a time:
+
+      * a node with no `id`        -> `KeyError: 'id'`, `"evidence": null`
+      * a node with no `type`      -> `KeyError: 'type'`, `"evidence": null`
+      * a non-dict member          -> `TypeError: string indices must be integers`
+      * `inputs` spelled as a dict -> `AttributeError: 'str' object has no attribute 'get'`
+        out of `link_round_trip`
+
+    All four surfaced as `SAVED_ADMISSION_HALT` with a stdlib exception name where a clause
+    belongs, at exit 1 -- the code this module's own `__main__` block reserves for "this
+    tool crashed" -- and all four left no out directory. The API side's fifth shape is
+    `_api_nodes` below.
+
+    The classification is core-gates' own, CALLED rather than re-implemented:
+    `route_gates._readable_node` refuses a non-dict member and a node whose own
+    `widgets_values` / `inputs` container is not a list, under the SHARED `unreadable_node`
+    clause with `container` and `expected` in the evidence (wave 20). What it does not
+    answer is the two keys THIS module indexes, so those get the same clause word here --
+    one question, one answer, whichever side of the comparison reads it.
+    """
+    nodes = saved_graph["nodes"]
+    out = {}
+    for index, n in enumerate(nodes):
+        RG._readable_node(where, n, index, len(nodes))
+        for key, why in SAVED_NODE_KEYS.items():
+            if key not in n:
+                raise SavedAdmission(
+                    f"{where}'s node at index {index} declares no `{key}`: it carries "
+                    f"{sorted(map(str, n))!r}. That key is {why}, and a member this "
+                    f"comparison cannot key is a member it would either skip or die "
+                    f"indexing, with a stdlib KeyError naming the key and nothing else -- "
+                    f"on the last gate before a paid submission",
+                    {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                     "clause": "unreadable_node", "container": key,
+                     "expected": why, "where": where, "index": index,
+                     "entry_keys": sorted(map(str, n)), "n_nodes": len(nodes)})
+        out[str(n["id"])] = n
+    return out
+
+
+def _api_nodes(api_graph, where="the api graph"):
+    """`{key: node}` for every top-level API entry that IS a node, `inputs` guaranteed.
+
+    Wave 22, F-defa6973, the API half. The wave-18 merge fix-up (`475f4eb`) classified
+    every top-level entry through `RG._api_entry_kind` before any class is read, which made
+    `node["class_type"]` safe -- and left the SECOND bare index in the same loop untouched.
+    Measured on `e8263a3` on the green assembly fixture with the `inputs` key deleted from
+    ONE api node: `SAVED_ADMISSION_HALT {"error": "KeyError", "message": "'inputs'",
+    "evidence": null}` at exit 1, no out directory.
+
+    `RG._readable_containers(..., api=True)` is core-gates' clause for an `inputs` that is
+    present and is not a mapping; an ABSENT `inputs` is this module's own read -- both
+    halves of this admission iterate it unconditionally -- and is refused here under the
+    same clause word.
+    """
+    nodes = {}
+    for key, value in api_graph.items():
+        if RG._api_entry_kind(key, value, api_graph) != "node":
+            continue
+        RG._readable_containers(where, value, api=True, node_id=str(key),
+                                population=len(api_graph))
+        if "inputs" not in value:
+            raise SavedAdmission(
+                f"{where}'s node {str(key)!r} ({value.get('class_type')!r}) declares no "
+                f"`inputs` mapping: it carries {sorted(map(str, value))!r}. Both halves of "
+                f"this admission iterate that container for every node, so a node without "
+                f"one raised a stdlib `KeyError: 'inputs'` at the exit code this module "
+                f"reserves for a crash, on the last gate before a paid submission",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "unreadable_node", "container": "inputs",
+                 "expected": "a mapping of API input name to literal-or-link",
+                 "where": where, "node_id": str(key),
+                 "class": value.get("class_type"),
+                 "entry_keys": sorted(map(str, value)),
+                 "n_nodes": len(api_graph)})
+        nodes[key] = value
+    return nodes
+
+
 def round_trip(api_graph, saved_graph):
     """Every pinned value we wrote, found again in the saved file. Raises on any mismatch."""
     api_graph = _as_api_graph(api_graph)
     saved_graph = _as_saved_graph(saved_graph)
-    saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
+    saved_by_id = _saved_nodes_by_id(saved_graph)
     # WAVE-18 MERGE (coordinator, 2026-09-05): classify every top-level entry by SHAPE through Gate ROUTE's own
     # `_api_entry_kind` BEFORE any class is read. Measured on the merged tree `64a9fd3` with the F-7eb1ba2a
     # operand (one node with its `class_type` deleted among readable ones): `_as_api_graph` passed, because the
@@ -264,8 +367,9 @@ def round_trip(api_graph, saved_graph):
     # ran. The refusal is Gate ROUTE's own (`unreadable_node`, the SHARED clause word, the node's key in its
     # evidence); envelope metadata (`version`, `extra_data`, …) is skipped here exactly as the walk skips it,
     # and is never counted as a node absent from the saved file.
-    nodes = {key: value for key, value in api_graph.items()
-             if RG._api_entry_kind(key, value, api_graph) == "node"}
+    # WAVE 22 (F-defa6973): the same loop's SECOND bare index, `node["inputs"]`, is answered
+    # by the same classification -- `_api_nodes` is that filter plus the container clause.
+    nodes = _api_nodes(api_graph)
     checked, problems = [], []
     for node_id, node in nodes.items():
         s = saved_by_id.get(str(node_id))
@@ -458,10 +562,14 @@ def link_round_trip(api_graph, saved_graph):
     """
     api_graph = _as_api_graph(api_graph)
     saved_graph = _as_saved_graph(saved_graph)
-    saved_by_id = {str(n["id"]): n for n in saved_graph["nodes"]}
+    # WAVE 22 (F-defa6973). Both members are SHAPE-classified before either is read: this
+    # function indexed `n["id"]` and `node["inputs"]` bare and reached `slot.get(...)` on
+    # whatever a node's `inputs` container held, so a mapping there died `AttributeError` --
+    # not an `ArmatureError`, so the halt contract's exit-2 branch was bypassed entirely.
+    saved_by_id = _saved_nodes_by_id(saved_graph)
     table = link_table(saved_graph)
     wired, empty, problems = [], [], []
-    for node_id, node in api_graph.items():
+    for node_id, node in _api_nodes(api_graph).items():
         s = saved_by_id.get(str(node_id))
         if s is None:
             continue                                  # `round_trip` already raised on this
@@ -551,6 +659,37 @@ VERIFY_RECEIPT_KEYS = ("attribution", "carries_no_sampler_asserted")
 #: evidence literal, before any clause can raise). Keyed on the VALUE, never on the key's
 #: presence — a dict carrying `receipt: "something-else"` is not a verify receipt.
 VERIFY_RECEIPT_KIND = "verify"
+
+#: The key that is written ONLY on the way out of `route_gates.verify`, and the positive
+#: mark this reader tells a RETURNED receipt by (wave 22, F-9ad5cbc2).
+#:
+#: The wave-18 reader told a returned receipt from a caught refusal by the ABSENCE of
+#: `clause`, on the comment "a returned receipt never carries `clause`; that is the reading
+#: that tells them apart". That proposition is true and it is not the one the reader needs;
+#: the converse — every caught refusal carries `clause` — is what it was actually asking,
+#: and it is FALSE. RE-MEASURED on `e8263a3` by an AST walk of `route_gates.verify`
+#: (spanning :2448-:2865): **17 `RouteGate` raise sites inside it, 14 of which pass evidence
+#: carrying no `clause` key at all** (:2574, :2586, :2698, :2718, :2728, :2740, :2765,
+#: :2773, :2782, :2798, :2805, :2824, :2833, :2850); across the whole module 23 of 46
+#: `RouteGate` raises are clause-less. Driving `RG.verify` on a two-node graph
+#: (`WanCameraEmbedding` with width/height/length wired as LINKS, plus a `PrimitiveInt`)
+#: raised with `receipt: "verify"`, `gate: "ROUTE"`, `andon: "RouteGate"` and BOTH
+#: `VERIFY_RECEIPT_KEYS` — and no `clause`. Written into a record as
+#: `{"gates": {"ROUTE": <that evidence>}}` it was ADMITTED here: `n_verify_receipts` 1,
+#: `found_by` "declared receipt kind", `carries_no_sampler` False, `attribution` []. The
+#: clause that exists to stop exactly that could not fire on 14 of the 17 sites.
+#:
+#: So the reader is keyed on a property the RETURN establishes rather than on one 14 raise
+#: sites do not write. Measured on the same tree: `ev["verdict"]` is assigned at exactly two
+#: statements in `verify`, each immediately above one of its two `return ev` statements, and
+#: no raise site is reachable after either — so `verdict` is present on every receipt
+#: `verify` HANDS BACK and absent from every evidence dict it RAISES.
+#:
+#: HONEST BOUND, unchanged from wave 18: no builder in this domain writes a caught refusal
+#: into its record (the only two catch-and-re-raise sites, `build_payload._carry` and
+#: `build_i2v_payload`, re-raise and record nothing), so the exposure is latent. What is new
+#: is the size of the blind spot the wave-18 clause left: 14 of 17, not 3.
+VERIFY_RECEIPT_RETURNED_KEY = "verdict"
 
 
 def verify_receipts(doc):
@@ -675,6 +814,13 @@ def route_facts(record_path, api_graph=None):
     # `clause`; that is the reading that tells them apart. No builder records a caught
     # refusal today, which is the only thing that kept this closed — and a latent shape at
     # the spend boundary is refused by name rather than left to a future builder.
+    # ---- ANDON, wave 22 (F-9ad5cbc2). The reader above was keyed on the ABSENCE of
+    # `clause`, and 14 of the 17 `RouteGate` raise sites inside `verify` write no `clause`
+    # at all — see `VERIFY_RECEIPT_RETURNED_KEY`. It is keyed on the RETURN's own mark now:
+    # a receipt is a receipt when it carries the `verdict` `verify` writes on its way out,
+    # and anything else in that shape is a caught refusal whatever it does or does not say
+    # about why. The clause reading is KEPT beside it rather than replaced, because it names
+    # the refusal when the raise site did write one, which is the more useful halt.
     refusals = [r for r in receipts if r.get("clause")]
     if refusals:
         raise RG.RouteGate(
@@ -687,6 +833,8 @@ def route_facts(record_path, api_graph=None):
             {"gate": "ROUTE", "andon": "RouteGate",
              "clause": "record_carries_a_caught_refusal", "record": path,
              "refusal_clauses": sorted({str(r.get("clause")) for r in refusals}),
+             "n_unmarked_receipts": 0,
+             "returned_receipt_key": VERIFY_RECEIPT_RETURNED_KEY,
              "n_receipts": len(receipts)})
     if not receipts:
         raise RG.RouteGate(
@@ -717,6 +865,32 @@ def route_facts(record_path, api_graph=None):
              "required_keys": list(VERIFY_RECEIPT_KEYS),
              "missing": sorted({k for r in thin for k in VERIFY_RECEIPT_KEYS
                                 if k not in r})})
+    # ---- ANDON, wave 22 (F-9ad5cbc2). The clause above reads the CLAUSE key, and 14 of the
+    # 17 `RouteGate` raise sites inside `verify` write none — see
+    # `VERIFY_RECEIPT_RETURNED_KEY` for the AST measurement and for the auditor's admitted
+    # operand. This is the same refusal keyed on the property the RETURN establishes rather
+    # than on the one a raise site may or may not write. It sits BELOW the two clauses that
+    # name a thinner defect (`record_carries_no_verify_receipt`, thin above), so a receipt
+    # with a more specific problem still refuses under its own name.
+    unmarked = [r for r in receipts
+                if not str(r.get(VERIFY_RECEIPT_RETURNED_KEY) or "").strip()]
+    if unmarked:
+        raise RG.RouteGate(
+            f"--record={record_path!r} carries {len(unmarked)} of {len(receipts)} "
+            f"`route_gates.verify` receipt(s) that carry no "
+            f"`{VERIFY_RECEIPT_RETURNED_KEY}` — the key `verify` writes ONLY on its way "
+            f"out, at the two statements immediately above its two `return` statements. "
+            f"That is the evidence of a CAUGHT REFUSAL, not a passing receipt: `verify` "
+            f"writes its declared kind and both fact keys before the first clause can "
+            f"raise, and 14 of its 17 raise sites write no `clause` either, so the absence "
+            f"of a clause is not evidence of a return. A record of a gate that FIRED may "
+            f"not supply the facts that admit the next submission",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "record_carries_a_caught_refusal", "record": path,
+             "refusal_clauses": [],
+             "n_unmarked_receipts": len(unmarked),
+             "returned_receipt_key": VERIFY_RECEIPT_RETURNED_KEY,
+             "n_receipts": len(receipts)})
     asserted = sorted({bool(r["carries_no_sampler_asserted"]) for r in receipts})
     if len(asserted) != 1:
         raise RG.RouteGate(
@@ -826,6 +1000,62 @@ def route_facts(record_path, api_graph=None):
                        "record; neither fact is typed at this call site — " + tie)}
 
 
+def gate_l_frame_source(checked, supplied, hosted_tier=None):
+    """WHERE Gate L's verdict came from, said in words rather than left inferable.
+
+    Wave 22, F-f97b0bb3. `--frame` is optional on this tool, and without it `RG.verify` is
+    handed `frame=None`, so `route_gates`' clash clause — the ONLY thing that can contradict
+    a graph's own pinned frame — never runs (`if supplied is not None`). MEASURED on
+    `e8263a3` as subprocesses on a graph whose `EmptyHunyuanLatentVideo` pins 832x480x81:
+
+      * WITHOUT `--frame`          -> exit 0, `gate_L: 832x480x81 legal (PROVEN)`,
+                                      `gates.ROUTE.frame_legality_verdict` PROVEN,
+                                      `gates.L` sources `['graph']`
+      * WITH `--frame=832,480,81`  -> exit 0, the printed `gate_L` line BYTE-IDENTICAL,
+                                      verdict PROVEN, sources `['graph', 'supplied']`
+      * WITH `--frame=832,480,65`  -> exit 2, RouteGate, verdict CONTRADICTED
+
+    So the operator-facing line said `PROVEN` in both of the first two cases, and the only
+    difference between "checked against an independently supplied frame" and "checked
+    against nothing" was a COUNT buried inside another gate's verdict string
+    (`2 frame(s) checked` vs `1 frame(s) checked`) plus a `source` field inside
+    `gates.L`. A verdict naming a property (the frame that runs is the frame the builder
+    computed) that no code checked is this repo's most expensive defect class, and this is
+    the last check before credits are spent.
+
+    `--frame` is NOT made required, and the reason is measured rather than preferred: the
+    `--hosted-tier` routes carry no pixel dimension at all (`route_gates.HOSTED_TIER_RULES`;
+    `wan2.7-r2v` takes a resolution enum, a ratio enum and an integer duration and never
+    receives a width or a frame count from us), so a required `--frame` would demand a
+    number that route does not have. The omission is RECORDED as a fact instead — by name,
+    on the printed line and in the written record — so a receipt reader can tell the two
+    apart without parsing a count out of another gate's string.
+    """
+    sources = sorted({f.get("source") for f in checked
+                      if isinstance(f, dict) and f.get("source")})
+    independent = "supplied" in sources
+    ev = {"gate": "L", "andon": "SavedAdmission", "clause": "gate_l_frame_source",
+          "flag": "--frame", "supplied": supplied, "sources": sources,
+          "independently_checked": bool(independent),
+          "hosted_tier": hosted_tier}
+    if hosted_tier:
+        ev["verdict"] = (
+            f"hosted tier {hosted_tier}: the pixel clause is INAPPLICABLE, so there is no "
+            f"frame for an independent --frame to agree with; the tier's own enum "
+            f"constraints are what was checked")
+    elif independent:
+        ev["verdict"] = (
+            f"supplied and agreed: --frame={supplied} was checked against the graph's own "
+            f"{len(sources)} source(s) {sources} and did not contradict it")
+    else:
+        ev["verdict"] = (
+            "Gate L proven off the graph alone — NO independent frame was supplied, so "
+            "the only thing this verdict rests on is the graph agreeing with itself. The "
+            "clash clause that can contradict a graph's own pinned frame runs only when "
+            "--frame is given (pass --frame=width,height,length to have it run)")
+    return ev
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--saved", required=True)
@@ -887,6 +1117,17 @@ def main(argv=None):
     # seed(s), all pinned", because `_iter_nodes` reads a wrapper-key doc as no nodes. The
     # KeyError was the only thing between a wrapped file and a SAVED_ADMISSION_OK over a
     # graph nothing examined. `round_trip`'s indexing stays strict below this line.
+    #
+    # ⚠ DATED NOTE, 2026-09-05 (wave 22, F-c222d9ba). The verdict string quoted above is a
+    # RECORD of what was seen on 2026-09-04 and is no longer what `verify` returns; the
+    # licence clause now states three numbers and the seed clause says what it checked.
+    # The measurement is kept rather than edited away — it is what was measured then, and
+    # it is what makes the boundary clause load-bearing — but a session re-deriving the
+    # receipt's contract from this prose would read the pre-wave-12 string. RE-MEASURED on
+    # `e8263a3`, the CURRENT shape is:
+    #   "0 of 0 component(s) classified, 0 unclassified, 0 conditional (credited), 0 attribution entries matching no loaded component, no sampler (asserted and checked), so no seed to pin, 1 of 1 latent(s) checkable, 2 frame(s) checked and generator-legal"
+    # The same note rides `build_lora_arm_payload`'s copy of the same stale quote, in the
+    # same commit. `route_gates.py`'s three are OUT OF DOMAIN (core-gates) and posted.
     #
     # Wave 8, F-4c5f67de: the block is `_as_saved_graph` now — ONE implementation, shared
     # with `round_trip` and `link_round_trip`, which used to read `saved_graph["nodes"]`
@@ -985,6 +1226,23 @@ def main(argv=None):
         shapes = [f"{t['resolution']} {t['ratio']} {t['duration_s']}s"]
     else:
         shapes = sorted({f"{f['width']}x{f['height']}x{f['length']}" for f in checked})
+    # ---- Gate L's SOURCE, named (wave 22, F-f97b0bb3). `shapes` above is a DE-DUPLICATED
+    # set, so a supplied frame that agrees with the graph collapses into the graph's own
+    # entry and the printed line is byte-identical to the one printed with no `--frame` at
+    # all. The distinction the operator needs is not in the shapes; it is in where they
+    # came from.
+    gate_l_source = gate_l_frame_source(checked, a.frame, hosted_tier=a.hosted_tier)
+
+    # ---- Gate OUT · ANDON, wave 22 (F-1b6be488). ABOVE `os.makedirs` and above the write,
+    # so a refusal leaves no output directory — the invariant `build_payload` states for
+    # Gate CANON and this file states for its own `os.makedirs`. RE-MEASURED on `e8263a3`
+    # as a subprocess on the assembly fixture that runs GREEN, with `--out` pointing at an
+    # existing DIRECTORY: every gate above PASSED and the tool then exited 1 —
+    # `SAVED_ADMISSION_HALT {"error": "PermissionError", ..., "evidence": null}`
+    # (`IsADirectoryError` on POSIX) — the code this module reserves for "this tool
+    # crashed", leaving no admission record for the spend it had just cleared.
+    gate_out = gate_out_writable(a.out, flag="--out",
+                                 what="the admission record this gate writes")
 
     record = {
         "tool": "gate_saved_graph", "tool_version": TOOL_VERSION,
@@ -996,7 +1254,8 @@ def main(argv=None):
         "round_trip": equality,
         "topology_round_trip": topology,
         "route_facts": facts,
-        "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked},
+        "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked, "OUT": gate_out,
+                  "L_source": gate_l_source},
     }
     # BELOW every check, not above them. `build_payload.py` states the repo's invariant —
     # a refuse must leave no output directory — and until 2026-09-03 it held for Gate CANON
@@ -1017,7 +1276,15 @@ def main(argv=None):
                         "attribution": [e.get("component") if isinstance(e, dict) else e
                                         for e in facts["attribution"]]},
         "gate_ROUTE": gate_route["verdict"], "gate_S": gate_s["verdict"],
-        "gate_L": f"{', '.join(shapes)} legal ({gate_route['frame_legality_verdict']})",
+        "gate_OUT": gate_out["verdict"],
+        "gate_L": (f"{', '.join(shapes)} legal "
+                   f"({gate_route['frame_legality_verdict']}) — "
+                   f"{gate_l_source['verdict']}"),
+        "gate_L_frame_source": ("supplied and agreed"
+                                if gate_l_source["independently_checked"] else
+                                "hosted tier: pixel clause inapplicable"
+                                if a.hosted_tier else
+                                "graph alone, no independent frame supplied"),
         "record": a.out}))
     return 0
 

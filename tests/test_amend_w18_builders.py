@@ -322,8 +322,24 @@ def _record(tmp_path, doc, name="rec.json"):
 
 
 def _receipt(**over):
+    """A hand-typed `verify` receipt, as `verify` HANDS ONE BACK.
+
+    ⚠ **`verdict` is not decoration** (wave 22, F-9ad5cbc2, builders). `route_facts` used to
+    tell a returned receipt from a CAUGHT REFUSAL by the absence of `clause`, and an AST walk
+    of `route_gates.verify` on `e8263a3` found 17 `RouteGate` raise sites inside it of which
+    14 pass evidence carrying no `clause` key at all — so absence of a clause was not
+    evidence of a return, and a caught refusal's evidence was ADMITTED as a source of the two
+    facts that admit a paid submission. The reader is keyed on the RETURN's own mark now:
+    `ev["verdict"]`, assigned at exactly two statements in `verify`, each immediately above
+    one of its two `return ev` statements, reachable from no raise site.
+
+    A fixture that omits it is a fixture of a receipt `verify` never returned, so it carries
+    the key, and `_receipt(verdict="")` is the way this file spells the unmarked shape.
+    """
     ev = {"gate": "ROUTE", "andon": "RouteGate", "receipt": "verify",
-          "carries_no_sampler_asserted": False, "attribution": []}
+          "carries_no_sampler_asserted": False, "attribution": [],
+          "verdict": ("0 of 0 component(s) classified, no sampler (asserted and checked), "
+                      "so no seed to pin")}
     ev.update(over)
     return ev
 

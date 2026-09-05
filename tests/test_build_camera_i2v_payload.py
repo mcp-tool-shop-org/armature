@@ -721,9 +721,16 @@ def test_breaks_verified_differs_is_NOT_in_that_class(w1_path):
 
 def test_every_payload_error_in_this_tree_can_carry_its_evidence():
     """family: derived by AST over `tools/*.py` for a `class PayloadError` definition ->
-    4 sites — build_animate_payload.py, build_camera_i2v_payload.py, build_i2v_payload.py,
-    build_payload.py. All four take an optional evidence dict now, so a halt in any of them
-    can carry the measurement that fired it rather than a sentence alone.
+    5 sites — build_animate_payload.py, build_camera_i2v_payload.py, build_i2v_payload.py,
+    build_payload.py and, from wave 22, build_t2v_payload.py. All five take an optional
+    evidence dict, so a halt in any of them can carry the measurement that fired it rather
+    than a sentence alone.
+
+    ⚠ RE-DERIVED with `==` (wave 22, builders, F-7e45e62b). `build_t2v_payload` declared no
+    named andon of its own while `--tag` — a free string its own help says "goes in the
+    written filenames" — was pasted into two written paths with no clause. The refusal has
+    to name an andon rather than the bare base (wave-18 rule 3), so the class its three
+    sibling builders already declare is declared there too: one wording, every builder.
 
     NOTE: four identical three-line `__init__`s is four implementations of one thing; the
     single one belongs beside `GateFailure` in `armature_core/errors.py`, which is
@@ -742,7 +749,8 @@ def test_every_payload_error_in_this_tree_can_carry_its_evidence():
             if isinstance(node, ast.ClassDef) and node.name == "PayloadError":
                 derived.append(name)
     assert derived == ["build_animate_payload.py", "build_camera_i2v_payload.py",
-                       "build_i2v_payload.py", "build_payload.py"], derived
+                       "build_i2v_payload.py", "build_payload.py",
+                       "build_t2v_payload.py"], derived
 
     import importlib
 

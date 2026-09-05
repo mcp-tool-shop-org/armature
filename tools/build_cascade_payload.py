@@ -66,7 +66,8 @@ from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 from build_assembly_payload import (  # noqa: E402
     FRAME_KEY, canonical_payload_digest, frame_order, frame_source_ids,
-    gate_create_video_fps, gate_slot_frame_index)
+    gate_create_video_fps, gate_slot_frame_index,
+    subject_provenance)
 
 TOOL_VERSION = "E13.2"
 
@@ -143,15 +144,28 @@ def build_and_write(argv=None):
     ap.add_argument("--fps", type=float, default=16.0)
     ap.add_argument("--group", type=int, default=AS.GROUP_SIZE)
     ap.add_argument("--prefix", default="video/E13_cascade")
+    ap.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
-    # Not a spend: same frames->VIDEO pack as assembly, batched. Gate CANON
-    # is not armed here because there is no generation to refuse.
+    # ⚠ **Not a PARTNER-CREDIT spend, which is narrower than "not a spend"** (wave 22,
+    # F-27f76c43, second half; the same correction as `build_assembly_payload`, one
+    # wording). This read "Not a spend: same frames->VIDEO pack as assembly, batched."
+    # MEASURED: `armature_core.assembly.gate_no_paid_nodes` returns a verdict about
+    # allowlisted classes and their recorded `api_node` receipts — a proof about
+    # PARTNER-CREDIT nodes. Ordinary Comfy Cloud workflow compute is outside everything it
+    # measures. So: no partner-credit node (allowlist-enforced); ordinary Comfy Cloud
+    # compute still bills. Gate CANON is not armed here because there is no generation to
+    # refuse; the subject rides the record instead (below).
     #
     # `os.makedirs` used to sit HERE, above --uploads being read and above every gate. A
     # refused build therefore left an empty run directory beside real ones. It now sits
     # below the last in-tool gate.
+
+    # ---- wave 22, F-27f76c43. See `build_assembly_payload.subject_provenance`: this
+    # record and its sibling's are the two this repo writes for the artefact a Director
+    # opens, and neither could say whose frames it held.
+    subject_block = subject_provenance(a.subject)
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
@@ -194,6 +208,8 @@ def build_and_write(argv=None):
 
     record = {
         "tool": "build_cascade_payload", "tool_version": TOOL_VERSION,
+        # whose frames these are — or an explicit null with its reason (wave 22, F-27f76c43)
+        "subject": subject_block,
         "chain": ("LoadImage x N -> BatchImagesNode x G (group) -> BatchImagesNode (final) "
                   "-> CreateVideo -> SaveVideo"),
         "n_frames": len(names), "fps": float(a.fps),

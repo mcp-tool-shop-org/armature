@@ -94,7 +94,8 @@ from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, gate_create_video_fps, read_seed_registration)
+    canonical_payload_digest, gate_create_video_fps, read_seed_registration,
+    single_path_segment)
 
 import build_animate_payload as E08  # noqa: E402  - the prompt's source of record
 
@@ -554,11 +555,27 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
     # The `else 0` branch was worse than dead: it read as a working default and would have
     # shipped an unregistered seed the moment the ordering changed.
     if seed is None and not registry:
+        # ---- wave 22, F-87600738. This raise carried NO second argument at all, so under
+        # the wave-16 rule-5 base (`armature_core/errors.py`: a bare message stores `None`)
+        # the halt line printed `"evidence": null` and the refusal carried no `gate`, no
+        # `andon` and no `clause`. RE-MEASURED on `e8263a3` by grep across `tools/`: the
+        # string `no_seed_and_no_registration` occurred at exactly ONE site,
+        # `build_t2v_payload.py`, while THREE builders — this one, `build_i2v_payload` and
+        # `build_camera_i2v_payload` — raised the same refusal as a sentence. Confirmed by
+        # calling `build(...)` with `seed=None` and an empty registry: `PayloadError`
+        # raised, `evidence` None, `gate` None. So of the four callers that default a seed
+        # off the registration, one was machine-readable and three were prose: the clause
+        # census that wave 16 built to prove every refusal is reachable and NAMED saw 1 of
+        # the 4 sites, and an operator hitting it on three of the four routes got a halt a
+        # wrapper cannot classify.
         raise PayloadError(
             "no --seed and no --seeds-registry: this experiment pre-registered no seeds, "
             "so there is no committed number to default to, and Gate S refuses a seed "
             "varied without a registration. Pass --seeds-registry with the experiment's "
-            "committed list, or pass --seed with a number that is on it")
+            "committed list, or pass --seed with a number that is on it",
+            {"gate": "PAYLOAD", "andon": "seed_registration",
+             "clause": "no_seed_and_no_registration", "flag": "--seeds-registry",
+             "registered": list(registry or [])})
     seed_used = seed if seed is not None else sorted(registry)[0]
     gate_s = gates.gate_s_seed_registration(seed_used, registry, experiment,
                                             seed_was_explicit=seed is not None)
@@ -778,6 +795,23 @@ def verify_topology(wf, start_name):
 
 def main(argv=None):
     a = parse_args(argv)
+    # ---- ANDON, wave 22 (F-7e45e62b, sibling carry). `--experiment` is pasted into this tool's
+    # written filenames with no clause, exactly as `fetch_run --run` was. Census over this
+    # domain, 2026-09-05: FIVE free-string flags reach a written filename -- `--experiment`
+    # in `build_animate_payload`, `build_i2v_payload` and `build_camera_i2v_payload`,
+    # `--tag` in `build_t2v_payload` (whose own help says "goes in the written filenames"),
+    # and `fetch_run --run`. `build_camera_i2v_payload --wave` also reaches a filename and
+    # is ALREADY BOUNDED by `type=int` -- measured, argparse refuses `--wave=a/b` before
+    # `main` is entered -- so it takes no clause of its own. The bounded convention already
+    # exists in this domain: `build_payload --experiment` and `build_r2v` /
+    # `build_lora_arm --arm` are `choices=`-bounded.
+    #
+    # The clause is `single_path_segment`'s, imported from its ONE home (SEAM 1): same
+    # clause word `output_name_is_not_a_name`, same evidence keys.
+    single_path_segment(a.experiment, "--experiment", PayloadError,
+                        extra={"pasted_into": ["<out>/{experiment}-probe-i2v.api.json",
+                                        "<out>/{experiment}-probe-payload-record.json",
+                                        "the server-side filename prefixes"]})
     out = os.path.abspath(a.out)
 
     with open(a.uploads, encoding="utf-8") as fh:

@@ -71,6 +71,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
+# ---- SEAM 1 (wave 22): `single_path_segment`'s ONE home is `armature_core.parts`
+# (core-solvers' tree, landing in the same merge as this commit). It is ADOPTED BY IMPORT,
+# never spelled a third time -- instruments-measure held two byte-identical copies at
+# `pack_pose_pack.py:82` and `resample_motion.py:76` and SEAM 1 retires both. The fallback
+# names the SECOND of those copies rather than re-typing its body, so this file is an
+# importer under either tree and never a third spelling; the branch is dead the moment
+# core-solvers' commit is in the tree.
+try:                                                     # pragma: no cover - see above
+    from armature_core.parts import single_path_segment   # noqa: E402
+except ImportError:                                      # pragma: no cover - see above
+    from resample_motion import single_path_segment       # noqa: E402
+
 NODE_DIR = {"301": "batchprobe", "302": "lossless"}
 
 #: Source nodes whose files land beside the run directory rather than in a subdirectory —
@@ -132,6 +144,119 @@ class FetchHalt(GateFailure):
     """
 
     gate = "FETCH"
+
+
+#: Every key a `get_output` result row must carry for a planner to read it, and what each
+#: one is used for. Both planners index all three: `fetch_run.plan` reads `source_node_id`
+#: and `url` for every row and `filename` for a video tap; `fetch_t2v_run.plan` reads all
+#: three for EVERY row (`cloud_name` is `r["filename"]`, and Gate ORDER's manifest is keyed
+#: on it). Written out rather than implied by the index that raises, so a refusal names the
+#: key and what it is for.
+RESULT_ROW_KEYS = {
+    "source_node_id": "the tap this file came from, which is what decides where it lands",
+    "url": "where the file is fetched from",
+    "filename": "the cloud-side name, whose suffix names the artifact's type and which "
+                "Gate ORDER's manifest is keyed on",
+}
+
+
+def read_results_dump(path, *, flag="--dump", exc=None):
+    """The pasted `get_output` dump, READ through clauses rather than indexed. · ANDON
+
+    Wave 22, F-2380aca9. The ONE operator-supplied input both fetchers take reached the
+    operator as a bare stdlib traceback: `json.load(fh)["results"]` with no clause, in a
+    module whose own `__main__` comment tells wrappers to key on the `FETCH_RUN_HALT`
+    sentinel and whose every other refusal is a typed `FetchHalt` with a clause.
+    RE-MEASURED on `e8263a3` as five subprocesses of `fetch_run` — every one exit 1, the
+    code this module reserves for "this tool crashed", with `"evidence": null`:
+
+      * `--dump` naming no file        -> FETCH_RUN_HALT error `FileNotFoundError`
+      * a dump with no `results` key   -> `KeyError: 'results'`
+      * a dump that is not JSON        -> `JSONDecodeError`
+      * a result row with no `url`     -> `KeyError: 'url'`
+      * `results` holding strings      -> `TypeError: string indices must be integers`
+
+    The sibling `fetch_t2v_run` carried the identical two lines and RE-MEASURED identically:
+    a non-JSON dump -> `FETCH_T2V_HALT` `JSONDecodeError` evidence null; a dump with no
+    `results` -> `FETCH_T2V_HALT` `KeyError: 'results'` evidence null.
+
+    This is the same crash-where-a-clause-belongs shape wave 18 closed one tool over for
+    `--saved` / `--api` (`graph_file_missing`) and `--frame`; the fetchers' `--dump` was not
+    in that entry's sibling enumeration. The shape is
+    `build_assembly_payload.read_seed_registration`'s — the reader that already models this
+    for the committed seed registration: open, parse, shape, key, element, each its own
+    clause word, one implementation and both callers.
+
+    `exc` is the andon class the CALLER raises under, so each fetcher's halt names its own
+    class; it defaults to this module's `FetchHalt`.
+    """
+    exc = FetchHalt if exc is None else exc
+    ev = {"gate": "FETCH", "andon": exc.__name__, "flag": flag,
+          "path": os.path.abspath(path)}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except OSError as err:
+        raise exc(
+            f"{flag} {path!r} cannot be opened ({err.__class__.__name__}: {err}). The dump "
+            f"is the one operator-supplied input this fetcher takes, and a path that names "
+            f"nothing supplies no run to fetch",
+            dict(ev, clause="dump_missing", error=err.__class__.__name__,
+                 exists=os.path.exists(path), is_dir=os.path.isdir(path))) from err
+    except json.JSONDecodeError as err:
+        raise exc(
+            f"{flag} {path!r} is not readable JSON ({err}). A dump this tool cannot parse "
+            f"is not a description of a generation it can retrieve",
+            dict(ev, clause="dump_unreadable", error=str(err))) from err
+    if not isinstance(doc, dict):
+        raise exc(
+            f"{flag} {path!r} is a {type(doc).__name__}, not a JSON object with a "
+            f"`results` key. `get_output` returns one record per file inside that key, and "
+            f"the shape is part of what an operator pastes",
+            dict(ev, clause="dump_not_a_mapping", read_as=type(doc).__name__))
+    if "results" not in doc:
+        raise exc(
+            f"{flag} {path!r} declares no `results` key; it carries {sorted(map(str, doc))}. "
+            f"The bare index this replaces raised a stdlib KeyError naming the key and "
+            f"nothing else — no flag, no file, no receipt",
+            dict(ev, clause="dump_no_results_key", keys=sorted(map(str, doc))))
+    results = doc["results"]
+    if not isinstance(results, list):
+        raise exc(
+            f"{flag} {path!r} declares `results` as a {type(results).__name__}, not a list. "
+            f"Both planners iterate it and index each member; a non-list is a population "
+            f"with an accidental answer",
+            dict(ev, clause="dump_results_not_a_list",
+                 read_as=type(results).__name__))
+    bad_rows = [{"index": i, "type": type(r).__name__, "value": repr(r)[:80]}
+                for i, r in enumerate(results) if not isinstance(r, dict)]
+    if bad_rows:
+        raise exc(
+            f"{flag} {path!r} carries {len(bad_rows)} of {len(results)} `results` entries "
+            f"that are not objects: "
+            + "; ".join(f"index {b['index']} is a {b['type']} ({b['value']})"
+                        for b in bad_rows[:5])
+            + ". The planners index each row by name, so a string member raised "
+              "`TypeError: string indices must be integers` at the exit code this module "
+              "reserves for a crash",
+            dict(ev, clause="dump_result_row_not_a_mapping", n_results=len(results),
+                 offending=bad_rows))
+    missing = [{"index": i, "missing": sorted(k for k in RESULT_ROW_KEYS if k not in r),
+                "keys": sorted(map(str, r))}
+               for i, r in enumerate(results)
+               if any(k not in r for k in RESULT_ROW_KEYS)]
+    if missing:
+        raise exc(
+            f"{flag} {path!r} carries {len(missing)} of {len(results)} `results` entries "
+            f"missing a key the planners index: "
+            + "; ".join(f"index {m['index']} lacks {m['missing']}" for m in missing[:5])
+            + ". "
+            + "; ".join(f"`{k}` is {why}" for k, why in RESULT_ROW_KEYS.items())
+            + ". A row this tool cannot read is a file it would either lose or fetch to a "
+              "path nothing planned",
+            dict(ev, clause="dump_result_row_missing_a_key", n_results=len(results),
+                 required_keys=sorted(RESULT_ROW_KEYS), offending=missing))
+    return results
 
 
 def parse_node_map(text):
@@ -517,20 +642,56 @@ def derived_root_artifacts(run):
     `A2_review_8fps.mp4` matches pattern 0; `A0r1_review_8fps.mp4` matches neither (correct
     — another run's clip does raise); and `review_0.50x_8fps.mp4` matches pattern 1, a name
     carrying no run identity at all, so ANY run's review clip is exempted by it.
+    RE-MEASURED on `e8263a3`, unchanged, plus the third row the wave-14 note did not take:
+    `A2_review_0.50x_8fps.mp4` matches pattern 0, and `A0r1_review_0.50x_8fps.mp4` — another
+    run's TOKENED clip — matches neither and correctly raises.
 
-    It cannot be otherwise from here: `make_review_clip.clip_name` returns
-    `review_{rate:.2f}x_{fps}fps.<ext>` with no run token, and that tool is not this one's
-    to change. Today the live consequence is nil — the canonical suffix is `.webp` and
-    `VIDEO_SUFFIXES` is (.mp4, .webm, .mkv), so the name never reaches the sweep — but the
-    pattern exists precisely to survive a change of suffix, and on the day that change
-    happens a PREVIOUS run's review clip in a re-used run root is exempted rather than
-    raised: the exact stray class the sweep was added for. Binding the second pattern to the
-    run needs `clip_name` to carry the run token first (instruments-measure owns it); until
-    then the honest sentence is the one above, and `tests/test_amend_w14_builders.py` pins
-    the three measurements so the claim cannot drift back.
+    ⚠⚠ **The wave-14 paragraph's PREMISE is stale, and this is its correction in place
+    (wave 22, F-a25a7db9).** It closed "It cannot be otherwise from here:
+    `make_review_clip.clip_name` returns `review_{rate:.2f}x_{fps}fps.<ext>` with no run
+    token, and that tool is not this one's to change." READ in this worktree at
+    `tools/make_review_clip.py:144-160`: `clip_name(fps, source_fps, run=None)` returns
+    `f"{run}_{stem}"` when a token is KNOWN, and `run_token` (`:68-93`) derives one from
+    `--frames`' own run root. That landed in wave 16 (F-78f49c7c), whose docstring names
+    this function as the beneficiary. So the condition the block said blocked the fix was
+    removed two waves before the block was read, and a session reading the correction was
+    being told not to try.
+
+    **What is NOT stale is the residue.** An UN-TOKENED clip is still produced whenever no
+    token can be derived, so an exemption for that name is still needed — and it cannot be
+    bound to a run, because the name carries no run. The fix is therefore not to delete it
+    but to stop it being SILENT: `derived_root_artifact_rules` labels each rule, and
+    `verify_downloads` records `root_exempt_matched_by`, so a reader of the receipt sees
+    that a tolerated file was tolerated by a rule that could not tell which run produced it.
+    `VIDEO_SUFFIXES` re-read on `e8263a3` as ('.mp4', '.webm', '.mkv'), so the canonical
+    `.webp` clip still never reaches the sweep and today's live consequence remains nil; the
+    pattern exists to survive a change of suffix, and on that day the receipt says which
+    rule tolerated what. `tests/test_amend_w14_builders.py` pins the three measurements so
+    the claim cannot drift back.
     """
-    return (re.compile(r"^" + re.escape(str(run)) + r"_review[_.].*$", re.IGNORECASE),
-            re.compile(r"^review_[0-9.]+x_[0-9]+fps\.[a-z0-9]+$", re.IGNORECASE))
+    return tuple(rx for _label, _bound, rx in derived_root_artifact_rules(run))
+
+
+#: The two exemption rules, each with the sentence a receipt records when it fires and
+#: whether it can tell WHICH run produced the file it tolerated. Wave 22 (F-a25a7db9): the
+#: second rule cannot, because `make_review_clip.clip_name` still returns an UN-TOKENED name
+#: when no run token can be derived — and an exemption that cannot say which run it is about
+#: may be kept only if the receipt says so.
+def derived_root_artifact_rules(run):
+    """`[(label, run_bound, compiled)]` — the exemptions, each able to name itself.
+
+    `derived_root_artifacts` above returns just the patterns, for the callers that only
+    need to match; `main` passes THESE, so the receipt records which rule tolerated what.
+    """
+    return (
+        ("this run's own review clip, bound to the run token", True,
+         re.compile(r"^" + re.escape(str(run)) + r"_review[_.].*$", re.IGNORECASE)),
+        ("an UN-TOKENED review clip: `make_review_clip.clip_name` returns "
+         "`review_<rate>x_<fps>fps.<ext>` with no run token when none can be derived from "
+         "`--frames`, so this rule CANNOT tell which run produced the file it tolerated",
+         False,
+         re.compile(r"^review_[0-9.]+x_[0-9]+fps\.[a-z0-9]+$", re.IGNORECASE)),
+    )
 
 
 def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
@@ -584,7 +745,13 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
     swept = [(d, tuple(s.lower() for s in suffixes)) for d in directories]
     if root:
         swept.append((root, tuple(s.lower() for s in root_suffixes)))
-    extra, exempted = [], []
+    extra, exempted, exempted_by = [], [], []
+    # Wave 22 (F-a25a7db9): a rule may arrive as a bare compiled pattern (the wave-10 shape,
+    # still used by every caller that only needs to match) or as
+    # `(label, run_bound, compiled)` from `derived_root_artifact_rules`. Normalised here so
+    # the receipt can name the rule that tolerated a file rather than only the file.
+    exempt_rules = [r if isinstance(r, tuple) else (None, None, r)
+                    for r in root_exempt]
     root_abs = os.path.abspath(root) if root else None
     for d, want in swept:
         if not os.path.isdir(d):
@@ -597,9 +764,13 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
                 continue
             # The exemption applies to the run ROOT only, and it is RECORDED, never silent:
             # a reader of this evidence sees which files were tolerated and by which rule.
-            if (root_abs is not None and os.path.abspath(d) == root_abs
-                    and any(rx.match(name) for rx in root_exempt)):
+            fired = ([(label, bound, rx) for label, bound, rx in exempt_rules
+                      if rx.match(name)]
+                     if root_abs is not None and os.path.abspath(d) == root_abs else [])
+            if fired:
+                label, bound, _rx = fired[0]
                 exempted.append(p)
+                exempted_by.append({"path": p, "rule": label, "run_bound": bound})
                 continue
             extra.append(p)
     # ---- ANDON, wave 12 (F-ef81516f). "Present and non-empty" is satisfied by an HTTP
@@ -668,7 +839,14 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
           "wrong_type": wrong_type, "content_checked": content_checked,
           "content_signature_suffixes": sorted(CONTENT_SIGNATURES),
           "root_exempt_matched": exempted,
-          "root_exempt_patterns": [rx.pattern for rx in root_exempt],
+          # Wave 22 (F-a25a7db9): WHICH rule tolerated each file, and whether that rule can
+          # tell which run produced it. An exemption a receipt cannot attribute is the
+          # thing the correction block above is about.
+          "root_exempt_matched_by": exempted_by,
+          "root_exempt_patterns": [rx.pattern for _l, _b, rx in exempt_rules],
+          "root_exempt_rules": [{"rule": label, "run_bound": bound,
+                                 "pattern": rx.pattern}
+                                for label, bound, rx in exempt_rules],
           "landed": len(outs) - len(missing),
           "swept_directories": [os.path.abspath(d) for d, _ in swept],
           "swept_suffixes": {os.path.abspath(d): list(w) for d, w in swept}}
@@ -698,9 +876,14 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
                         if n_unjudged else "")
                      + f", and no "
                      f"unplanned file in {len(ev['swept_directories'])} swept directory(s)"
-                     + (f"; {len(exempted)} derived artifact(s) of this run's own were "
-                        f"tolerated by name: "
-                        f"{[os.path.basename(x) for x in exempted]}" if exempted else ""))
+                     + (f"; {len(exempted)} derived artifact(s) were tolerated by name: "
+                        + "; ".join(
+                            f"{os.path.basename(x['path'])} "
+                            + ("(this run's own)" if x["run_bound"] else
+                               "(an UN-TOKENED name: the rule cannot say which run "
+                               "produced it)")
+                            for x in exempted_by)
+                        if exempted else ""))
     return ev
 
 
@@ -720,11 +903,34 @@ def main(argv=None):
                          "review tap (114); pass --video-nodes=none for a graph with no "
                          "video output")
     a = ap.parse_args(argv)
+    # ---- ANDON, wave 22 (F-7e45e62b), bounded where `--run` is READ: above the join into
+    # the run root, above the paste into the video tap's filename, above the first
+    # `os.makedirs`. `--run` was joined into `base` (`os.path.join(a.root, a.run)`) AND
+    # pasted into `f"{run}_{i:05d}{ext}"` with no validation anywhere. MEASURED in this
+    # worktree with the downloader stubbed to write the planned bytes:
+    #   `--run=sub/dir --root=runs` -> exit 0 and `FETCH_RUN_OK {"run": "sub/dir",
+    #   "dir": "runs\\sub/dir", "by_node": {"302": 1, "114": 1}, "video": [],
+    #   "gate_FETCH": "2 planned file(s), all present and non-empty, ... and no unplanned
+    #   file in 3 swept directory(s)"}`
+    # while the video was written to `runs/sub/dir/sub/dir_00000.mp4`. `vids` is computed as
+    # `dirname(abspath(o)) == abspath(base)`, so the nested path DROPS OUT of the reported
+    # population, and `verify_downloads`' root sweep lists `base` itself, so the file is not
+    # called a stray either: a tool reporting a population that is not the population on
+    # disk, under its own success sentinel. Measured on `plan` alone, `--run=../../escaped`
+    # sends the frames to `outputs/escaped/lossless/` and the video to `escaped_00000.mp4`
+    # in the PROCESS CWD, outside the run root entirely; `..\..\win` the same.
+    single_path_segment(a.run, "--run", FetchHalt,
+                        extra={"root": os.path.abspath(a.root),
+                               "pasted_into": ["<root>/<run>/ (the run directory)",
+                                               "<run>_<index><ext> (the video tap)"]})
     node_dir = parse_node_map(a.node_map)
     video_nodes = parse_video_nodes(a.video_nodes)
 
-    with open(a.dump, encoding="utf-8") as fh:
-        results = json.load(fh)["results"]
+    # ONE reader, both fetchers (wave 22, F-2380aca9): the bare `json.load(fh)["results"]`
+    # this replaces reached the operator as a stdlib traceback at exit 1 with
+    # `"evidence": null`, in the module whose own `__main__` comment tells wrappers to key
+    # on the FETCH_RUN_HALT sentinel.
+    results = read_results_dump(a.dump, flag="--dump")
 
     base = os.path.join(a.root, a.run)
     # The plan raises before anything is created, so a dump this tool cannot sort leaves
@@ -739,8 +945,10 @@ def main(argv=None):
 
     _proc, gate_exits = download(manifest)
     mapped = sorted({os.path.join(base, sub) for sub in node_dir.values()})
+    # The LABELLED rules (wave 22, F-a25a7db9), so the receipt records which exemption
+    # tolerated what and whether that rule can name the run it is about.
     landed = verify_downloads(jobs, directories=mapped, root=base,
-                              root_exempt=derived_root_artifacts(a.run))
+                              root_exempt=derived_root_artifact_rules(a.run))
 
     # Counted from the PLAN, never from the directory. The two numbers used to be computed
     # from different populations and printed beside each other, so a re-fetch into a
