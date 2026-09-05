@@ -90,12 +90,26 @@ RECORDED_GATE_RAISES = {
     # it, so in production a renamed table raised a bare `ValueError` from inside
     # `ankle_framing` — not an `ArmatureError`, and after the function had been entered.
     # RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
-    ("donor_gate.py", "DonorGate"): 11,
+    # WAVE 25 (core-gates, F-99164b72): 11 -> 15. `_readable_gate_record`'s two clauses
+    # (the record that is not a mapping, the record whose key moved) and
+    # `_readable_per_ankle`'s two — Gate DONOR read `motion["mean"]`,
+    # `framing["both_ankles_in_image"]` and the failure message's two per-ankle values
+    # with bare subscripts, so a record whose key moved reached the operator as a
+    # `KeyError` (not an `ArmatureError`: exit 1, no receipt) on the REFUSAL path.
+    # RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    ("donor_gate.py", "DonorGate"): 15,
     ("gates.py", "G1GeneratorLegality"): 2,
     ("gates.py", "G2Completeness"): 2,
-    ("gates.py", "G4BboxSanity"): 4,
+    # WAVE 25 (core-gates, F-35820295): 4 -> 7. G4 wrote `width` and `height` into its
+    # receipt and let them decide nothing, and never checked a bbox's own corner order:
+    # `resolution_is_not_a_frame_size`, `bbox_corners_out_of_order`,
+    # `bbox_outside_the_frame`. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    ("gates.py", "G4BboxSanity"): 7,
     ("gates.py", "G5ConventionConformance"): 2,  # +1 w12: empty-reference refusal
-    ("gates.py", "G6SubjectMotion"): 2,
+    # WAVE 25 (core-gates, F-a546b5ce): 2 -> 3. `unknown_animation_mode` — G6's "not
+    # applicable" branch was an inequality against ONE literal, so it disarmed itself in
+    # the affirmative on any mode it did not recognise. RE-DERIVED with `==`; BRANCH-LOCAL.
+    ("gates.py", "G6SubjectMotion"): 3,
     ("gates.py", "GateBBatching"): 3,  # +1 w12: expectation-of-zero refusal
     ("gates.py", "GateRRoundTrip"): 4,
     # WAVE 18: 4 → 5 (core-gates, F-d83e5879). `registry_member_not_an_int` — the gate
@@ -146,7 +160,13 @@ RECORDED_GATE_RAISES = {
     # record `{'prompt': <clean api>, 'workflow': <save graph loading causvid_x.safetensors>}`
     # returned a GREEN `verify` verdict with the BANNED CC-BY-NC file named nowhere in the
     # receipt. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
-    ("route_gates.py", "RouteGate"): 47,  # +3 w12: unreadable_node,
+    # WAVE 25 (core-gates): 47 -> 50. `ruled_name_with_unknown_suffix` (F-ebb1ebb4 — the
+    # licence walk stopped being filtered by a seven-extension tuple before the ruling
+    # table was asked), `hosted_nodes_without_a_tier` (F-6fcab339 — the converse of the
+    # hosted block, which reached the pixel clause instead) and
+    # `generator_family_contradicted` (F-f1234354 — Gate L's family is now reconciled
+    # against the loaded weights). RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    ("route_gates.py", "RouteGate"): 50,  # +3 w12: unreadable_node,
                                           # uncredited_conditional_component,
                                           # attribution_for_unconditional_row
                                           # +1 w14: orphan_attribution (F-74787978) — the
@@ -291,7 +311,13 @@ def test_the_derived_population_is_the_one_this_file_records():
     # at its entry above. RE-DERIVED with `==` in this worktree against `e8263a3`, which
     # every census here read GREEN first. BRANCH-LOCAL — five domains move pins this wave
     # and the coordinator re-measures on the merged tree rather than summing.
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 104
+    # WAVE 25 (core-gates, 2026-09-05): 104 -> 115. +11, itemised at the four rows above:
+    # `donor_gate.DonorGate` +4 (F-99164b72), `gates.G4BboxSanity` +3 and
+    # `gates.G6SubjectMotion` +1 (F-35820295, F-a546b5ce), `route_gates.RouteGate` +3
+    # (F-ebb1ebb4, F-6fcab339, F-f1234354). RE-DERIVED with `==` in this worktree against
+    # `580af47`, which every census here read GREEN first. BRANCH-LOCAL — five domains move
+    # pins this wave and the coordinator re-measures on the merged tree rather than summing.
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 115
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

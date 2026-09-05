@@ -1181,7 +1181,9 @@ def test_a_scheduler_picker_is_not_mistaken_for_an_unrecorded_seed_source():
 
 # Every fixture in the seed-population block above is API format. There was no SAVE-format
 # fixture anywhere in this suite for this andon, and `unrecorded_seed_sources` gates its
-# input-name half behind `if api:` (route_gates.py:667). Measured 2026-09-04 on ONE graph
+# input-name half behind `if api:` (route_gates.py::unrecorded_seed_sources — RE-ANCHORED
+# on the symbol 2026-09-05, wave 25: the clause words this domain added moved the line
+# it used to cite, `:667`, into a docstring). Measured 2026-09-04 on ONE graph
 # expressed both ways — a UNETLoader, a pinned KSamplerAdvanced, an EmptyHunyuanLatentVideo,
 # and a node of class `SeedGeneratorAdvanced` carrying a seed input with no SEED_NODES row
 # (it ends in neither `Sampler` nor `Noise`, so the class-name half cannot see it either):

@@ -291,6 +291,33 @@ CAMERA_NODES = {
 }
 
 #: Widget values that name a weight file. Anything ending in one of these is a component.
+#:
+#: ⚠ **It stopped being the licence walk's DENOMINATOR on 2026-09-05 (wave 25,
+#: F-ebb1ebb4).** `components()` read `if not v.lower().endswith(WEIGHT_SUFFIXES):
+#: continue` BEFORE `rulings_for` was ever consulted, so a hand-maintained tuple of seven
+#: extensions decided which names the licence table was allowed to rule on. Measured in
+#: this worktree on `580af47` on an API graph of `UNETLoader(wan2.2_t2v_high_noise_14B_
+#: fp8_scaled.safetensors)` + `KSampler(seed 7, fixed)` + `LoraLoaderModelOnly(<name>)`:
+#: with `causvid_x.safetensors` (BANNED, CC-BY-NC) `verify(g, frame=(832,480,81))` raised
+#: naming the file; with the SAME file spelled `causvid_x.bin` — and identically with
+#: `causvid_x`, `causvid_x.onnx` and `lightx2v_lora.bin` — `verify` RETURNED "0 of 1
+#: component(s) classified, 1 unclassified, … 1 frame(s) checked and generator-legal",
+#: `ev["unclassified"]` named only the `UNETLoader`, and `json.dumps(ev)` contained
+#: "causvid" zero times. `rulings_for('causvid_x.bin')` returns the BANNED row: the ruling
+#: existed and the walk never asked for it.
+#:
+#: The order is inverted now — **the table is asked first** (`_component_hits`), and this
+#: tuple is only the predicate for "this UNRULED string looks like a weight file, so count
+#: it as unclassified". A ruled name wearing an unrecorded suffix is refused BY NAME in
+#: `verify` (`clause: ruled_name_with_unknown_suffix`) rather than dropped, so the
+#: extension list can never again decide a licence verdict.
+#:
+#: `model_weights` (Gate PAIR) keeps reading this tuple, deliberately: its two readers fail
+#: in OPPOSITE directions, and PAIR's is CLOSED — a diffusion model it cannot see leaves
+#: `families_present` empty and PAIR raises INDETERMINATE or CONTRADICTED. The licence
+#: walk's was the one that failed OPEN. `test_amend_w25_core_gates.py` pins that
+#: `components()`' weight population is a SUPERSET of `model_weights`', so the two can no
+#: longer diverge in the direction that matters.
 WEIGHT_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".task")
 
 #: Extra node-CLASS-NAME substrings that identify a `RULED_COMPONENTS` row, beyond the
@@ -365,6 +392,31 @@ WEIGHT_FAMILIES = {
     "t2v": ("t2v",),
 }
 
+#: Weight-file substrings that identify the GENERATOR family whose `GENERATOR_RULES` row
+#: grades a frame — a DIFFERENT question from `WEIGHT_FAMILIES`, which answers "which
+#: conditioning variant is this" (i2v / t2v / vace / fun_camera) for Gate PAIR.
+#:
+#: ⚠ **Gate L's generator family was ASSERTED by the caller and reconciled against
+#: nothing.** `verify(graph, *, family='wan', ...)` forwards `family` straight to
+#: `frame_legality`, whose `GENERATOR_RULES.get(family)` raises `unknown_generator_family`
+#: only for a name absent from the table — and the table has exactly one row, so the
+#: keyword default is always accepted and that refusal cannot fire on any caller that
+#: leaves it alone. Measured 2026-09-05 in this worktree on `580af47`: nothing in `verify`,
+#: `frame_legality` or `_frame_form` read `components()`, `model_weights()` or
+#: `families_of()` when choosing the rules, and no map anywhere in the module took a loaded
+#: weight name to a GENERATOR family. So the divisibility rule, the frame form and the
+#: trained horizon a submission is graded on were chosen by an ARGUMENT rather than by the
+#: model, and on the first non-wan route the receipt would name family 'wan' beside a
+#: weight file that is not wan.
+#:
+#: The module already refuses the two sibling shapes of this question by name — an unknown
+#: hosted tier (`unknown_hosted_tier`) and an unparseable frame form (`frame_form`, added
+#: because "a second family declaring 8n+1 would have been graded on wan's temporal rule
+#: while its own row said otherwise, and nothing would have printed differently").
+GENERATOR_FAMILIES = {
+    "wan": ("wan",),
+}
+
 #: Conditioning class -> the weight family the loaded model MUST belong to.
 #:
 #: `WanFirstLastFrameToVideo` pairs with `i2v` on the same grounds as `WanImageToVideo`: it
@@ -434,6 +486,52 @@ def families_of(filename):
                   if any(p in low for p in pats))
 
 
+def generator_families_of(filename):
+    """Every GENERATOR family a weight filename matches. See `GENERATOR_FAMILIES`."""
+    low = str(filename).lower()
+    return sorted(fam for fam, pats in GENERATOR_FAMILIES.items()
+                  if any(p in low for p in pats))
+
+
+def generator_family_reading(graph):
+    """What the LOADED diffusion weights say Gate L's generator family is.
+
+    Three answers, never two — the shape every other clause on this page has:
+
+    * `PROVEN`     at least one loaded diffusion weight names a recorded generator family;
+                   `families` lists them.
+    * `INDETERMINATE` diffusion weights are loaded and none of their names matches any
+                   recorded family. The reading cannot contradict the caller and says so.
+    * `not_applicable` the graph loads no diffusion model this gate can read at all — the
+                   assemblers' shape (`build_assembly_payload`, `build_cascade_payload`
+                   call `verify(..., carries_no_sampler=True)` on LoadImage /
+                   BatchImagesNode / CreateVideo / SaveVideo graphs).
+
+    `verify` RAISES on a contradiction and RECORDS the other two. Why the unproven
+    directions are recorded rather than refused, measured rather than preferred: on
+    `580af47` the two assemblers above reach `verify` with `model_weights(graph) == []`,
+    so an INDETERMINATE refusal would halt two production builders on correct work — and
+    "an andon that fires on correct work is the andon nobody keeps" is this package's own
+    rule (see `cover`'s prompt-population note). The direction the invariant does not bound
+    is the CONTRADICTION: a weight naming a family the caller did not declare, graded on
+    the caller's rules with a receipt naming the caller's family. That one raises.
+    """
+    loaded = model_weights(graph)
+    rows = [{"file": w["file"], "node_id": w["node_id"], "class": w["class"],
+             "where": w["where"], "generator_families": generator_families_of(w["file"])}
+            for w in loaded]
+    families = sorted({f for r in rows for f in r["generator_families"]})
+    if not rows:
+        verdict = "not_applicable — the graph loads no diffusion model this gate can read"
+    elif not families:
+        verdict = ("INDETERMINATE — none of the loaded diffusion weight names matches a "
+                   "recorded generator family")
+    else:
+        verdict = "PROVEN — read off the loaded diffusion weight name(s)"
+    return {"verdict": verdict, "families_read": families,
+            "model_weights": rows, "recorded_families": sorted(GENERATOR_FAMILIES)}
+
+
 def model_weights(graph):
     """Every DIFFUSION-model weight file the graph loads, with the families it matches."""
     graph = normalise_graph(graph)
@@ -489,6 +587,7 @@ def pairing(graph):
                       and n["type"] not in CONDITIONING_FAMILY_EXEMPT})
     if unknown:
         ev["verdict"] = "INDETERMINATE"
+        ev["clause"] = "unknown_conditioning_class"
         raise PairGate(
             f"conditioning class(es) {', '.join(unknown)} are in neither "
             f"CONDITIONING_WEIGHT_FAMILY nor CONDITIONING_FAMILY_EXEMPT, so this gate "
@@ -500,6 +599,7 @@ def pairing(graph):
                 if c in CONDITIONING_WEIGHT_FAMILY]
     if required and not loaded:
         ev["verdict"] = "INDETERMINATE"
+        ev["clause"] = "no_readable_model"
         raise PairGate(
             f"the graph wires {len(required)} conditioning node(s) "
             f"({', '.join(f'{w}/{i}' for w, i, _c, _f in required)}) but loads no "
@@ -509,6 +609,7 @@ def pairing(graph):
     missing = [(w, i, c, fam) for w, i, c, fam in required if fam not in present]
     if missing:
         ev["verdict"] = "CONTRADICTED"
+        ev["clause"] = "conditioning_family_absent"
         raise PairGate(
             "; ".join(
                 f"node {w}/{i} is {c}, which requires a {fam!r} model, but the graph "
@@ -1535,6 +1636,33 @@ def ruled_node_classes(graph):
     return out
 
 
+def _is_name_shaped(value):
+    """Could this widget value be a component NAME rather than prose?
+
+    A widget list holds prompts as well as filenames, and `rulings_for` is a SUBSTRING
+    test over the licence map's row keys — so "a candid_photography of a knight" typed
+    into a `CLIPTextEncode` would match a row. A name has no whitespace in it; prose does.
+    Used only to decide whether an UNRULED-suffix string is worth asking the table about,
+    never to decide a verdict.
+    """
+    return (isinstance(value, str) and bool(value.strip())
+            and not any(ch.isspace() for ch in value))
+
+
+def _component_hits(value):
+    """`(hits, looks_like_a_weight_file)` for one widget value — the table asked FIRST.
+
+    See `WEIGHT_SUFFIXES` for the measurement this inversion closes. `hits` is
+    `rulings_for(value)` for any name-shaped string; the suffix test is only the predicate
+    for counting an UNRULED string as an unclassified component.
+    """
+    if not isinstance(value, str):
+        return [], False
+    looks_like_weight = value.lower().endswith(WEIGHT_SUFFIXES)
+    hits = rulings_for(value) if (looks_like_weight or _is_name_shaped(value)) else []
+    return hits, looks_like_weight
+
+
 def components(graph):
     """Every ruled thing the graph carries: weight files loaded, and ruled node CLASSES.
 
@@ -1546,22 +1674,28 @@ def components(graph):
     brings no filename with it and was invisible to every clause here until 2026-09-04).
     Both carry `verdict` at the top level as well as inside `ruling`, so one filter
     reads both kinds.
+
+    ⚠ **The ruling is asked FIRST and the suffix tuple no longer decides membership** —
+    see `WEIGHT_SUFFIXES` for the measurement (`causvid_x.bin`, BANNED, returned a green
+    `verify` and was named nowhere in the receipt). A row carries `suffix_recorded`, which
+    is False for a ruled name wearing an unrecorded extension; `verify` refuses those by
+    name (`ruled_name_with_unknown_suffix`) after the licence kill, so a BANNED row stays
+    the headline and an ALLOWED one still cannot enter on an extension nobody recorded.
     """
     graph = normalise_graph(graph)
     out = []
     for where, n in _iter_nodes(graph):
         for v in (n.get("widgets_values") or []):
-            if not isinstance(v, str):
+            hits, looks_like_weight = _component_hits(v)
+            if not hits and not looks_like_weight:
                 continue
-            if not v.lower().endswith(WEIGHT_SUFFIXES):
-                continue
-            hits = rulings_for(v)
             ruling = dict(hits[0]) if hits else {"verdict": "NOT IN THIS TABLE",
                                                  "reason": "check docs/license-map.md"}
             ruling["matches"] = [{"matched_on": h["matched_on"], "verdict": h["verdict"],
                                   "licence": h.get("licence")} for h in hits]
             out.append({"kind": "weight", "file": v, "node_id": n.get("id"),
                         "class": n.get("type"), "where": where,
+                        "suffix_recorded": looks_like_weight,
                         "verdict": ruling["verdict"], "licence": ruling.get("licence"),
                         "reason": ruling.get("reason"),
                         "matched_on": ruling.get("matched_on"), "ruling": ruling})
@@ -1789,6 +1923,7 @@ def _seed_population_andon(graph, found, ev, carries_no_sampler):
     ev["carries_no_sampler_asserted"] = bool(carries_no_sampler)
     if unrecorded:
         ev["seed_clause_verdict"] = "INDETERMINATE"
+        ev["clause"] = "unrecorded_seed_source"
         raise RouteGate(
             "the seed clause is INDETERMINATE: " + "; ".join(
                 f"node {u['node_id']} is {u['class']}, which has no SEED_NODES row and "
@@ -1799,6 +1934,7 @@ def _seed_population_andon(graph, found, ev, carries_no_sampler):
     if carries_no_sampler:
         if found:
             ev["seed_clause_verdict"] = "CONTRADICTED"
+            ev["clause"] = "sampler_assertion_contradicted"
             raise RouteGate(
                 f"the caller asserted this graph carries no sampler and it carries "
                 f"{len(found)} seed-bearing node(s): " + ", ".join(
@@ -1807,6 +1943,7 @@ def _seed_population_andon(graph, found, ev, carries_no_sampler):
         return
     if not found:
         ev["seed_clause_verdict"] = "INDETERMINATE"
+        ev["clause"] = "no_seed_population"
         raise RouteGate(
             "the seed clause is INDETERMINATE on this graph and therefore UNPROVEN: it "
             "found no seed at all, and 'no seed was found' and 'every seed is pinned' "
@@ -2785,18 +2922,28 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     banned_allowed = sorted(k for k in allow
                             if RULED_COMPONENTS.get(k, {}).get("verdict") == "BANNED")
     if banned_allowed:
+        # The operand rides `ev` rather than a `dict(ev, ...)` wrapper: the suite's one
+        # evidence judge resolves `ev["k"] = ...` writes only when the raise is handed the
+        # NAME (`_evidence_name` returns None for `dict(ev, …)`), so the wrapper hid the
+        # clause word from the census that exists to police it. Mutating here is safe
+        # because the next statement raises — the receipt this function RETURNS never
+        # reaches a mutation (see the invariant note above the `ev` literal).
+        ev["clause"] = "conditional_allow_on_a_banned_row"
+        ev["allow"] = list(allow)
         raise RouteGate(
             "allow= names " + ", ".join(
                 f"{k!r} ({RULED_COMPONENTS[k]['licence']}: "
                 f"{RULED_COMPONENTS[k]['reason']})" for k in banned_allowed) +
             ". A BANNED row is a LICENCE ruling and no keyword argument waves one; "
             "`allow` exists for the EXCLUDED rows, which are methodology rulings",
-            dict(ev, allow=list(allow)))
+            ev)
 
     bad = [c for c in comp
            if c["ruling"]["verdict"] in ("BANNED", "EXCLUDED")
            and c["ruling"].get("matched_on") not in allow]
     if bad:
+        ev["clause"] = "banned_or_excluded_component"
+        ev["banned_or_excluded"] = [_component_label(c) for c in bad]
         raise RouteGate(
             "the graph loads " + ", ".join(
                 f"{_component_label(c)} ({c['ruling']['verdict']}: "
@@ -2808,7 +2955,34 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                    if len(c["ruling"].get("matches") or []) > 1 else "")
                 for c in bad) +
             ". The licence map's ruling is that presence is presence — a bypassed node "
-            "still counts, and these are not even bypassed", ev)
+            "still counts, and these are not even bypassed",
+            ev)
+
+    # · ANDON — the direction `WEIGHT_SUFFIXES` leaves unbounded, placed AFTER the licence
+    # kill so a BANNED row stays the headline. A name the table rules on that wears an
+    # extension this repo has not recorded is refused BY NAME rather than classified on
+    # trust: the seven-suffix tuple used to decide which names the table was allowed to
+    # rule on at all (see `WEIGHT_SUFFIXES` for the `causvid_x.bin` measurement), and a
+    # ruled name in an unrecorded artifact format is exactly the input class that walked
+    # past it. Refusing here means the extension list is extended deliberately, in a
+    # commit, rather than by a converter's choice of filename.
+    unrecorded_suffix = [c for c in comp
+                         if c.get("kind") == "weight" and not c.get("suffix_recorded")]
+    if unrecorded_suffix:
+        ev["clause"] = "ruled_name_with_unknown_suffix"
+        ev["ruled_names_with_unknown_suffix"] = [c["file"] for c in unrecorded_suffix]
+        ev["recorded_suffixes"] = list(WEIGHT_SUFFIXES)
+        raise RouteGate(
+            "the graph loads " + ", ".join(
+                f"{c['file']!r} (the licence map rules on {c['ruling']['matched_on']!r}: "
+                f"{c['ruling']['verdict']})" for c in unrecorded_suffix) +
+            f", whose name the licence table rules on but whose extension is not one of "
+            f"{list(WEIGHT_SUFFIXES)}. The suffix list is not a licence authority: until "
+            f"this clause existed it decided which names the table was allowed to rule "
+            f"on, and a BANNED weight spelled `.bin` returned a green receipt naming it "
+            f"nowhere. Record the extension in WEIGHT_SUFFIXES, in a commit, if this "
+            f"artifact format is one this pipeline loads",
+            ev)
 
     # · ANDON — a CONDITIONAL grant is a grant with an obligation attached, and the
     # obligation is checked here rather than remembered. `docs/license-map.md` rules
@@ -2896,6 +3070,33 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # model can receive what the graph wires at it. Wave 2 was internally consistent.
     ev["pairing"] = pairing(graph)
 
+    # · ANDON — the generator family Gate L is about to grade this frame on, RECONCILED
+    # against the weights the graph actually loads instead of taken from the caller's
+    # keyword default. See `GENERATOR_FAMILIES` for the measurement: `family='wan'` was an
+    # assertion nothing checked, `GENERATOR_RULES` has one row so the default could never
+    # be refused, and `families_of` / `WEIGHT_FAMILIES` answers the OTHER question (the
+    # conditioning variant Gate PAIR needs). The reading's three answers all ride the
+    # receipt; only the contradiction raises — the unproven directions would halt the two
+    # assemblers, which reach here with no diffusion model at all.
+    generator = generator_family_reading(graph)
+    ev["generator_family"] = dict(generator, declared=family)
+    if generator["families_read"] and family not in generator["families_read"]:
+        ev["clause"] = "generator_family_contradicted"
+        ev["declared_family"] = family
+        ev["families_read"] = generator["families_read"]
+        ev["recorded_families"] = sorted(GENERATOR_FAMILIES)
+        raise RouteGate(
+            f"verify() was called with family={family!r} and the graph loads " +
+            ", ".join(f"{r['file']!r} ({r['where']}/{r['node_id']}, families "
+                      f"{r['generator_families']})"
+                      for r in generator["model_weights"]
+                      if r["generator_families"]) +
+            f". Gate L's divisibility rule, frame form and trained horizon come from "
+            f"GENERATOR_RULES[{family!r}], so the frame would be graded against one "
+            f"generator's constraints while a different one runs, and the receipt would "
+            f"name family {family!r} beside a weight file that is not it",
+            ev)
+
     # The verdict must describe what RAN. `require_pinned_seeds=False` skipped the clause
     # and still returned "N seed(s) all pinned" — the string `build_t2v_payload` and
     # `gate_saved_graph` store in the spend meta and `make_startframe_sheet` renders onto
@@ -2909,10 +3110,11 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         # all pinned" over it. See `_seed_population_andon`.
         _seed_population_andon(graph, sd, ev, carries_no_sampler)
     elif carries_no_sampler:
+        ev["clause"] = "sampler_assertion_unchecked"
         raise RouteGate(
             "verify() was given carries_no_sampler=True with require_pinned_seeds=False; "
             "one asserts a property of the graph and the other says nobody looked, and "
-            "the assertion would go unchecked", dict(ev, seeds=sd))
+            "the assertion would go unchecked", ev)
 
     if not require_pinned_seeds:
         ev["seed_clause_verdict"] = "NOT CHECKED (require_pinned_seeds=False)"
@@ -2929,6 +3131,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     if require_pinned_seeds:
         loose = [s for s in sd if not s["pinned"]]
         if loose:
+            ev["clause"] = "seed_not_pinned"
             raise RouteGate(
                 "Gate S cannot be armed on this graph: " + ", ".join(
                     f"node {s['node_id']} ({s['class']}) has control_after_generate="
@@ -2939,6 +3142,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
 
     illegal = [f for f in ev["frame_legality"] if not f["legal"]]
     if illegal:
+        ev["clause"] = "frame_illegal"
         raise RouteGate(
             "Gate L: " + "; ".join("; ".join(f["problems"]) for f in illegal), ev)
 
@@ -2951,6 +3155,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                  and (f["width"], f["height"], f["length"]) != want]
         if clash:
             ev["frame_legality_verdict"] = "CONTRADICTED"
+            ev["clause"] = "supplied_frame_contradicts_graph"
             raise RouteGate(
                 "Gate L: the caller supplied {}x{}x{} and the graph's {} node {} pins "
                 "{}x{}x{}. Both are legal, so nothing downstream would notice that the "
@@ -2976,6 +3181,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         unchecked = [c for c in cams if not c["checkable"]]
         if unchecked:
             ev["camera_agreement_verdict"] = "INDETERMINATE"
+            ev["clause"] = "camera_frame_unreadable"
             raise RouteGate(
                 "the camera trajectory's frame is UNPROVEN: " + ", ".join(
                     f"node {c['node_id']} ({c['class']}) does not pin width, height and "
@@ -2984,6 +3190,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                 "one being generated, and every other clause here passes either way", ev)
         if target is None:
             ev["camera_agreement_verdict"] = "INDETERMINATE"
+            ev["clause"] = "camera_frame_has_no_target"
             raise RouteGate(
                 f"the graph carries {len(cams)} camera-trajectory node(s) but no single "
                 f"frame to check them against: the graph pins {sorted(graph_frames)} and "
@@ -2993,6 +3200,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                if (c["width"], c["height"], c["length"]) != target]
         if off:
             ev["camera_agreement_verdict"] = "CONTRADICTED"
+            ev["clause"] = "camera_frame_contradicted"
             raise RouteGate(
                 "the camera trajectory is solved for a different frame than the one being "
                 "generated: " + "; ".join(
@@ -3030,24 +3238,79 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # it — is theirs, in their file.
     ev["camera_widget_order"] = _camera_widget_order_receipt(graph, ev, supplied)
 
+    # · ANDON — the CONVERSE of the hosted block below, which nothing checked. The block's
+    # own inside bounds ONE direction ("verify() was told this is hosted tier X, but no node
+    # in the graph carries that tier's enum inputs … which is the vacuous state this
+    # argument exists to remove"); the other direction — the graph carries hosted nodes and
+    # the CALLER said nothing — reached the PIXEL clause instead, which this function's own
+    # inapplicability text calls a category error on such a tier.
+    #
+    # Measured 2026-09-05 in this worktree on `580af47`: a save-format graph whose one node
+    # is `Wan2ReferenceVideoApi` with `widgets_values` placing the enums at ('4K', '99:1',
+    # 900) — every one illegal against `HOSTED_TIER_RULES['wan2.7-r2v']` — returned from
+    # `verify(g, frame=(832,480,81), require_pinned_seeds=False)` with
+    # `frame_legality_verdict: 'PROVEN'`, the verdict "… 1 frame(s) checked and
+    # generator-legal", and NO key beginning `hosted_` in the evidence at all, while
+    # `hosted_enums(g)` on the same graph returned `[('top', 1, '4K', '99:1', 900)]`. The
+    # values were readable and no clause read them; the tier's per-node billing clause never
+    # ran either, so a two-node hosted graph was two charges under one unexamined verdict.
+    # `tools/gate_saved_graph.py` declares `--hosted-tier` with `default=None` as an ordinary
+    # optional flag, so the omission is one keystroke at the last gate before a paid
+    # submission. Posted to builders in the wave-25 inbox before this landed.
+    #
+    # It sits HERE, last of the clauses that can raise, rather than at the top of the
+    # function: measured on `tests/test_route_gates.py::test_one_graph_two_formats_gets_one_
+    # verdict_on_an_unrecorded_hosted_node`, the top placement made the API spelling of that
+    # graph refuse on THIS clause while the save spelling refused on the seed andon — one
+    # graph, two formats, two different verdicts, which is the exact property that test
+    # exists to pin. Ordering is the licence kill, then the seeds, then Gate L; this is a
+    # Gate L clause and it raises in Gate L's place.
+    if hosted_tier is None:
+        declared = hosted_enums(graph)
+        if declared:
+            tiers = sorted(HOSTED_TIER_RULES)
+            classes = {(w, str(n.get("id"))): n.get("type")
+                       for w, n in _iter_nodes(graph)}
+            rows = [{"where": w, "node_id": i,
+                     "class": classes.get((w, str(i))),
+                     "resolution": r, "ratio": ra, "duration": d}
+                    for w, i, r, ra, d in declared]
+            ev["clause"] = "hosted_nodes_without_a_tier"
+            ev["hosted_nodes_without_a_tier"] = rows
+            ev["recorded_hosted_tiers"] = tiers
+            raise RouteGate(
+                f"the graph carries {len(rows)} hosted partner node(s) carrying a tier's "
+                f"enum inputs — " + ", ".join(
+                    f"{r['where']}/{r['node_id']} ({r['class']}) at "
+                    f"{r['resolution']!r} {r['ratio']!r} {r['duration']!r}" for r in rows) +
+                f" — and verify() was not told which tier they are. The enum clause that "
+                f"decides legality on such a tier (resolution, ratio and duration — the "
+                f"three things it bills and refuses on) is then not posed at all, and the "
+                f"graph is graded on the pixel rules of family {family!r} instead, which "
+                f"this function's own inapplicability text calls a category error on a "
+                f"hosted tier. Pass hosted_tier=<tier> (recorded tiers: {tiers})", ev)
+
     # · ANDON — the clause E08 found passing vacuously. "Nothing to check" and "everything
     # checked out" must not be the same verdict. On a hosted tier the honest third answer
     # is INAPPLICABLE: there is no pixel dimension in the graph to check, and the enum
     # clause below is what decides legality instead. It still raises on an illegal enum.
     if hosted_tier is not None:
         if lat:
+            ev["clause"] = "hosted_tier_with_latent_nodes"
+            ev["hosted_tier"] = hosted_tier
             raise RouteGate(
                 f"verify() was told this is hosted tier {hosted_tier!r}, but the graph "
                 f"carries {len(lat)} latent-sizing node(s). One of those two is wrong, and "
-                f"the pixel clause would go unchecked either way",
-                dict(ev, hosted_tier=hosted_tier))
+                f"the pixel clause would go unchecked either way", ev)
         found = hosted_enums(graph)
         if not found:
+            ev["clause"] = "hosted_tier_without_hosted_nodes"
+            ev["hosted_tier"] = hosted_tier
             raise RouteGate(
                 f"verify() was told this is hosted tier {hosted_tier!r}, but no node in the "
                 f"graph carries that tier's enum inputs. Gate L would then have nothing to "
                 f"decide in EITHER clause, which is the vacuous state this argument exists "
-                f"to remove", dict(ev, hosted_tier=hosted_tier))
+                f"to remove", ev)
         # EVERY hosted node is graded, and every one is recorded, before anything raises.
         # `hosted_enums` used to return the first match and this branch checked only that
         # tuple: a second node at an illegal resolution, ratio or duration was named
@@ -3065,6 +3328,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             f"constraints are checked instead and are reported in `hosted_frame_legality`")
         illegal_rows = [r for r in rows if not r["legal"]]
         if illegal_rows:
+            ev["clause"] = "hosted_frame_illegal"
             raise RouteGate(
                 "Gate L (hosted tier): " + "; ".join(
                     f"node {r['where']}/{r['node_id']}: " + "; ".join(r["problems"])
@@ -3074,6 +3338,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             # graph carrying two of them is one submission and two charges, and a single
             # tier verdict would be the number nobody checked — the argument this
             # function already makes for `frame` and `hosted_tier` together.
+            ev["clause"] = "hosted_multiple_billable_nodes"
             raise RouteGate(
                 f"the graph carries {len(rows)} {hosted_tier} node(s) "
                 f"({', '.join(str(r['where']) + '/' + str(r['node_id']) for r in rows)}); "
@@ -3092,6 +3357,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
 
     if not ev["frame_legality"]:
         ev["frame_legality_verdict"] = "INDETERMINATE"
+        ev["clause"] = "frame_legality_indeterminate"
         raise RouteGate(
             f"Gate L is INDETERMINATE on this graph and therefore UNPROVEN: none of its "
             f"{len(lat)} latent-sizing node(s) pins width, height and length as literals, "

@@ -137,6 +137,7 @@ def gate_n_names(observed, registered, where):
     # reproducible with this gate reporting 0 / 0. The other direction is already safe —
     # an empty `observed` against a non-empty registry raises, measured.
     if not registered:
+        ev["clause"] = "registry_is_empty"
         raise GateNNames(
             f"Gate N was asked to check {len(observed)} bone name(s) against a registry "
             f"of ZERO registered sites, which is not a coverage verdict: nothing would be "
@@ -169,6 +170,7 @@ def gate_n_names(observed, registered, where):
         )
 
     if problems:
+        ev["clause"] = "bone_names_do_not_match_registry"
         raise GateNNames(
             f"the rig at {where} does not match the registered site list "
             f"({ev['mapped']} / {len(registered)} mapped): " + "; ".join(problems),
@@ -205,6 +207,7 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
           "n_bound": int(b.shape[0]) if b.ndim == 2 else None}
 
     if a.shape != b.shape:
+        ev["clause"] = "vertex_arrays_do_not_correspond"
         raise GatePRestPose(
             f"the bound mesh has a different vertex array than the source: {a.shape} vs "
             f"{b.shape}. Rest-pose fidelity is undefined when the vertices do not "
@@ -213,6 +216,7 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
             ev,
         )
     if a.ndim != 2 or a.shape[1] != 3 or a.shape[0] == 0:
+        ev["clause"] = "vertex_array_is_empty"
         raise GatePRestPose(f"expected a non-empty (N, 3) vertex array, got {a.shape}", ev)
     # · ANDON — `> 0` covered HALF this quantity: `nan > 0` is False and refused, but
     # `inf > 0` is True and walked straight through into `epsilon_frac * inf`, giving an
@@ -234,6 +238,7 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
     # closed for the empty-array case. `gate_d_determinism` already had the order right.
     ev["bbox_diagonal"] = bbox_diagonal
     if not (bbox_diagonal > 0):
+        ev["clause"] = "bbox_diagonal_is_degenerate"
         raise GatePRestPose(
             f"bbox diagonal is {bbox_diagonal}; the threshold is a fraction of the mesh's "
             f"own size and cannot be computed from a degenerate one",
@@ -261,6 +266,7 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
     })
 
     if d[i] > threshold:
+        ev["clause"] = "binding_moved_the_mesh"
         raise GatePRestPose(
             f"binding moved the mesh: max vertex displacement {d[i]:.9f} exceeds "
             f"{epsilon_frac:g} × bbox diagonal ({threshold:.9f}) at vertex {i}, and "
@@ -324,6 +330,7 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
     # about two meshes nobody read.
     for label, arr in (("source", raw_a), ("roundtrip", raw_b)):
         if arr.ndim != 2 or arr.shape[1] != 3 or arr.shape[0] == 0:
+            ev["clause"] = "vertex_array_is_empty"
             raise GatePRestPose(
                 f"expected a non-empty (N, 3) vertex array for the {label}, got "
                 f"{arr.shape}", ev)
@@ -334,6 +341,7 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
     # · As `gate_p_rest_pose`: the coerced value enters the receipt after the refusal.
     ev["bbox_diagonal"] = bbox_diagonal
     if not (bbox_diagonal > 0):
+        ev["clause"] = "bbox_diagonal_is_degenerate"
         raise GatePRestPose(f"bbox diagonal is {bbox_diagonal}; no threshold can be derived",
                             ev)
 
@@ -371,6 +379,7 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
             ev["probe_truncated_at"] = int(max_probe)
             ev["probe_population"] = int(len(pts))
             ev["probe_unexamined"] = int(len(pts) - max_probe)
+            ev["clause"] = "round_trip_probe_window_too_small"
             raise GatePRestPose(
                 f"the round-trip probe cannot examine this population: {len(pts)} "
                 f"position(s) are present on only one side and the probe window is "
@@ -393,6 +402,7 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
     ev.update({"threshold": threshold, "max_deviation": worst})
 
     if worst > threshold:
+        ev["clause"] = "round_trip_moved_the_surface"
         raise GatePRestPose(
             f"the export round trip moved the surface: {len(only_source)} position(s) only "
             f"in the source and {len(only_roundtrip)} only in the export, the worst of them "
@@ -435,6 +445,7 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
           "n_rest": int(a.shape[0]) if a.ndim == 2 else None,
           "n_probe": int(b.shape[0]) if b.ndim == 2 else None}
     if a.shape != b.shape:
+        ev["clause"] = "liveness_probe_shape_changed"
         raise GatePRestPose(
             f"liveness probe returned a different vertex array ({a.shape} vs {b.shape}); "
             f"the probe cannot say whether the deform is live",
@@ -457,6 +468,7 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
     # "the deform is live" on a probe that measured nothing — the andon inverted, which is
     # exactly what this function's docstring says a caller-supplied floor of 0 would do.
     if a.ndim != 2 or a.shape[1] != 3 or a.shape[0] == 0:
+        ev["clause"] = "vertex_array_is_empty"
         raise GatePRestPose(f"expected a non-empty (N, 3) vertex array, got {a.shape}", ev)
     # · ANDON — as above, and this clause is the one an INFINITY inverts hardest: an
     # infinite floor makes `d.max() <= threshold` True for every real displacement, so the
@@ -468,6 +480,7 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
     # · As `gate_p_rest_pose`: the coerced value enters the receipt after the refusal.
     ev["bbox_diagonal"] = bbox_diagonal
     if not (bbox_diagonal > 0):
+        ev["clause"] = "bbox_diagonal_is_degenerate"
         raise GatePRestPose(
             f"bbox diagonal is {bbox_diagonal}; the liveness floor is a fraction of the "
             f"mesh's own size and a floor of 0 makes this andon pass on a dead evaluation",
@@ -484,6 +497,7 @@ def gate_p_evaluation_is_live(rest_world, probe_world, bbox_diagonal):
                "mean_displacement": float(d.mean()),
                "n_vertices_moved": int((d > threshold).sum())})
     if d.max() <= threshold:
+        ev["clause"] = "evaluation_is_not_live"
         raise GatePRestPose(
             f"the evaluated mesh did not move when a bone was posed (max displacement "
             f"{d.max():.3e} ≤ {threshold:.3e}), so the armature modifier is not live on "
@@ -580,6 +594,7 @@ def gate_d_determinism(a, b, bbox_diagonal):
                                   positive=False)
     ev["bbox_diagonal"] = bbox_diagonal
     if not (bbox_diagonal > 0):
+        ev["clause"] = "bbox_diagonal_is_degenerate"
         raise GateDDeterminism(
             f"bbox diagonal is {bbox_diagonal}; the length tolerance is a fraction of the "
             f"subject's own size and cannot be computed from a degenerate one. This is the "
@@ -593,6 +608,7 @@ def gate_d_determinism(a, b, bbox_diagonal):
 
     # · ANDON — a comparison over zero bones is not a determinism verdict.
     if not a["bones"] and not b["bones"]:
+        ev["clause"] = "fingerprints_carry_no_bones"
         raise GateDDeterminism(
             "both fingerprints carry ZERO bones, so nothing about the skeleton was "
             "compared and 'the two builds agree' would be a statement about an empty "
@@ -667,6 +683,7 @@ def gate_d_determinism(a, b, bbox_diagonal):
     if problems:
         ev["problems"] = problems[:16]
         ev["n_problems"] = len(problems)
+        ev["clause"] = "rig_builds_disagree"
         raise GateDDeterminism(
             f"two builds from identical inputs produced different rigs "
             f"({len(problems)} difference(s)): " + "; ".join(problems[:6])

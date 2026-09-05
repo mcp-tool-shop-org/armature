@@ -1060,10 +1060,15 @@ EVIDENCE_NO_EVIDENCE_ROUTED = {
     # WAVE-14 MERGE (coordinator, 2026-09-04): 8 routed entries left this set because they carry a receipt on the merged tree
     # (core-solvers gave every `aapose.py` refusal `gate: None` + andon + clause, F-d0de0c2d/F-d59fab92);
     # measured as `ROUTED - no_evidence`, deleted rather than commented.
-    "shotspec.py:_require (SpecError)",
-    "shotspec.py:_require_positive (SpecError)",
-    "shotspec.py:normalise_spec (SpecError)",
-    "shotspec.py:resolve_asset (SpecError)",
+    #
+    # WAVE 25 (core-gates, F-b333ba7c): the LAST FOUR left, and the set is now EMPTY. They
+    # were `shotspec.py`'s `_require`, `_require_positive`, `normalise_spec` and
+    # `resolve_asset` — 23 of the module's 25 refusals raised with no evidence argument at
+    # all, so `errors.py`'s `self.evidence = evidence or {}` wrote `"evidence": null` into
+    # the halt line for, among others, the sha256 mismatch this module's own docstring says
+    # it exists to fix. Every refusal there now goes through one `_refuse(message,
+    # evidence)` helper. Deleted rather than commented, in the commit that adds the
+    # receipts, which is what the converse assertion below requires.
     # WAVE 22 (core-solvers, F-8759b386): TWENTY-SEVEN entries left this set in one commit,
     # deleted rather than commented, in the same commit that gives each site its receipt —
     # which is what the converse assertion below requires. They were `binding`,
@@ -1086,6 +1091,10 @@ EVIDENCE_NO_EVIDENCE_ROUTED = {
     # converse assertion below requires: a routed entry that names no live site re-admits
     # that site in silence.
 }
+#: Spelled as a `set()` rather than as an empty `{}` LITERAL, which Python reads as a dict:
+#: the two assertions below subtract it from `no_evidence` and vice versa, and a dict there
+#: is a `TypeError` rather than a green census. Measured on the way to writing this line.
+EVIDENCE_NO_EVIDENCE_ROUTED = set(EVIDENCE_NO_EVIDENCE_ROUTED)
 
 
 def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention():
@@ -1214,9 +1223,28 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # WAVE-22 MERGE (coordinator, 2026-09-05): 365 on the MERGED tree, measured by calling `family_raise_count()` on it — never a sum of
     # branches (core-solvers froze 361 and core-gates 350, each branch-local by its own note; four other
     # domains moved siblings of this census in the same wave).
-    assert total == 365, (
-        f"{total} family raises in armature_core; this pin asserts 365, MEASURED on the wave-22 merged "
-        f"tree. This is the denominator every ratio below is quoted against — re-measure it deliberately")
+    # WAVE 25 (core-gates, 2026-09-05): 365 -> 353. RE-DERIVED with `==` in this worktree
+    # against `580af47`, which this census read GREEN at 365 first. BRANCH-LOCAL — five
+    # domains move this denominator at once and the coordinator re-measures at the merge.
+    # It went DOWN, which is the interesting direction and is itemised rather than asserted:
+    #   -22  `shotspec.py` (F-b333ba7c): twenty-two `raise SpecError(...)` sites became calls
+    #        to the module's one `_refuse(message, evidence)` helper — the shape
+    #        `canon._raise` (1 raise for ~40 refusals) and `canon_census._refuse` already use.
+    #        The REFUSALS did not go away; they stopped being twenty-two raise statements, and
+    #        every one of them now carries `{gate: None, andon: "SpecError", clause, operands}`
+    #        where 23 of 25 carried `evidence: null`. `EVIDENCE_NO_EVIDENCE_ROUTED` empties in
+    #        the same commit, which is the receipt for this number moving.
+    #   +10  new andons in this domain's files: `route_gates` +3 (`hosted_nodes_without_a_tier`
+    #        F-6fcab339, `ruled_name_with_unknown_suffix` F-ebb1ebb4,
+    #        `generator_family_contradicted` F-f1234354), `gates` +4 (G4's
+    #        `resolution_is_not_a_frame_size`, `bbox_corners_out_of_order`,
+    #        `bbox_outside_the_frame` F-35820295, and G6's `unknown_animation_mode`
+    #        F-a546b5ce), `donor_gate` +4 (`_readable_gate_record`'s two and
+    #        `_readable_per_ankle`'s two, F-99164b72), `canon` +0 (its one `_raise` already
+    #        carries the new `unreadable_node` re-raise).
+    assert total == 353, (
+        f"{total} family raises in armature_core; this pin asserts 353, RE-DERIVED on the wave-25 "
+        f"core-gates branch. This is the denominator every ratio below is quoted against — re-measure it deliberately")
 
 
 def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():
@@ -1229,10 +1257,20 @@ def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_categor
     lines earlier.
     """
     _offenders, _examined, _unreadable, no_evidence = evidence_dicts_missing("gate")
-    assert no_evidence, (
-        "the no-evidence bucket is empty; either every plain refusal now carries a receipt "
-        "— in which case delete EVIDENCE_NO_EVIDENCE_ROUTED — or the walk has stopped "
-        "classifying")
+    # WAVE 25 (core-gates, F-b333ba7c). This read `assert no_evidence, "…either every plain
+    # refusal now carries a receipt — in which case delete EVIDENCE_NO_EVIDENCE_ROUTED — or
+    # the walk has stopped classifying"`. The first branch is what happened: the last four
+    # entries (all `shotspec.py`'s) were closed and the routed set is empty, so the guard
+    # would now fail on a clean tree. The direction it was guarding — "the walk has stopped
+    # classifying" — is asserted directly instead, on a synthetic module the walk must still
+    # file under `no_evidence`, so the bucket being empty on the real tree is a MEASUREMENT
+    # rather than the census having quietly stopped looking.
+    _tree = _ast.parse('def f():\n    raise AlphaGate("no receipt at all")\n')
+    _synthetic = next(n for n in _ast.walk(_tree) if isinstance(n, _ast.Raise))
+    _fn = next(n for n in _ast.walk(_tree) if isinstance(n, _ast.FunctionDef))
+    assert _evidence_keys(_synthetic, _fn, _tree) == (set(), EV_NONE), (
+        "the walk no longer classifies a receipt-free raise as EV_NONE; the empty bucket "
+        "below would then be a census that stopped looking rather than a clean tree")
     new = sorted(set(no_evidence) - EVIDENCE_NO_EVIDENCE_ROUTED)
     assert new == [], {
         "raises no evidence at all and is not routed": new,
@@ -1257,8 +1295,10 @@ def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_categor
     # then 31 -> 4 (F-8759b386, the 27 entries itemised above). RE-DERIVED with `==` in this
     # worktree at each step; BRANCH-LOCAL. The remaining four are `shotspec.py`'s, another
     # domain's file.
-    assert len(no_evidence) == 4, sorted(no_evidence)
-    assert {n.split(":")[0] for n in no_evidence} == {"shotspec.py"}, sorted(no_evidence)
+    # WAVE 25 (core-gates, F-b333ba7c): 4 -> 0. The four were `shotspec.py`'s, itemised at
+    # EVIDENCE_NO_EVIDENCE_ROUTED above, and they are the reason that set is now empty.
+    # RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    assert len(no_evidence) == 0, sorted(no_evidence)
 
 
 #: Modules of `armature_core` whose classes this census cannot INSTANTIATE on a rig with no

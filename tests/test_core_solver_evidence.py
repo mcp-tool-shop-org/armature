@@ -276,8 +276,20 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # the coordinator re-measures at merge and never sums the branches.
         # WAVE-18 MERGE (coordinator, 2026-09-05): every row MEASURED on the merged tree by this walk (core-gates and core-solvers each
         # moved different rows on their own branches; neither dict was a merged measurement).
-        "assembly": 23, "blender_scene": 8, "canon": 1, "donor_gate": 11, "framing": 6,
-        "gates": 24, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8,
+        # WAVE 25 (core-gates, 2026-09-05): three rows move, RE-DERIVED with `==` in this
+        # worktree against `580af47`, which this walk read GREEN at 208 first. BRANCH-LOCAL.
+        #   donor_gate  11 -> 15  F-99164b72: `_readable_gate_record`'s two clauses and
+        #                       `_readable_per_ankle`'s two — Gate DONOR read its two argument
+        #                       records with bare subscripts, so a record whose key moved
+        #                       reached the operator as a `KeyError` (not an `ArmatureError`,
+        #                       so exit 1 with no receipt) on the REFUSAL path.
+        #   gates       24 -> 28  F-35820295 / F-a546b5ce: G4's frame-size, corner-order
+        #                       and containment clauses, and G6's `unknown_animation_mode`.
+        #   route_gates 50 -> 53  F-ebb1ebb4 / F-6fcab339 / F-f1234354:
+        #                       `ruled_name_with_unknown_suffix`, `hosted_nodes_without_a_tier`
+        #                       and `generator_family_contradicted`.
+        "assembly": 23, "blender_scene": 8, "canon": 1, "donor_gate": 15, "framing": 6,
+        "gates": 28, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8,
                 # WAVE 20 (core-gates, 2026-09-05): +3 in `route_gates.RouteGate`, RE-DERIVED with
         # `==` in this worktree against the merged base `475f4eb`, which every census here read
         # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
@@ -304,7 +316,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
 
         # WAVE-22 MERGE (coordinator, 2026-09-05): every row on this line MEASURED on the merged tree by this walk (core-solvers and core-gates
         # each moved different rows branch-local; neither line was a merged measurement).
-        "resample": 8, "rig_gates": 17, "route_gates": 50, "startframe": 21, "turnaround": 16,
+        "resample": 8, "rig_gates": 17, "route_gates": 53, "startframe": 21, "turnaround": 16,
         "walk": 3,
         # WAVE 22 (core-gates, F-682ce228): `canon_census` joins the population with its
         # first gate raise — `gate_census_table`'s `_refuse`, six clauses through one site.
@@ -345,7 +357,10 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # RE-DERIVED with `==` in this worktree; branch-local.
     # WAVE 22 (core-gates, 2026-09-05): 202 → 203, the `canon_census` row above.
     # WAVE-22 MERGE (coordinator, 2026-09-05): 208 on the MERGED tree, measured — core-solvers froze 205, core-gates 203, both branch-local.
-    assert sum(with_gates.values()) == 208
+    # WAVE 25 (core-gates, 2026-09-05): 208 -> 219, the three rows itemised in the dict
+    # above. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL — the coordinator
+    # re-measures on the merged tree and never sums the branches.
+    assert sum(with_gates.values()) == 219
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

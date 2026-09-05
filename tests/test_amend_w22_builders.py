@@ -250,8 +250,16 @@ def test_four_of_the_six_caught_refusals_carry_no_clause_at_all():
     clauseless = sorted(
         name for name, (g, kw) in W22_CAUGHT_REFUSALS.items()
         if not _caught_refusal(g, **kw).get("clause"))
-    assert clauseless == ["banned component", "camera agreement INDETERMINATE",
-                          "illegal frame", "no latent and no frame"], clauseless
+    # WAVE 25 (core-gates, F-7285034a): the list EMPTIED, which this test's own docstring
+    # names as the outcome that would make the reading below "merely redundant — a different
+    # fact, and this says which". Every `RouteGate` / `PairGate` raise in
+    # `armature_core/route_gates.py` now carries a `clause`, the licence kill and Gate L's
+    # hosted refusals among them, so a halt reader can key on the word at the last gate
+    # before a paid submission. The four that used to sit here were "banned component",
+    # "camera agreement INDETERMINATE", "illegal frame" and "no latent and no frame"; their
+    # clause words are now `banned_or_excluded_component`, `camera_frame_contradicted`,
+    # `frame_illegal` and `frame_legality_indeterminate`.
+    assert clauseless == [], clauseless
 
 
 def _verify_fn_node():
@@ -333,8 +341,18 @@ def test_the_halt_line_reads_the_caught_refusal_clause(tmp_path):
     assert code == 2, halt
     assert halt["error"] == "RouteGate", halt
     assert halt["evidence"]["clause"] == "record_carries_a_caught_refusal", halt
-    assert halt["evidence"]["refusal_clauses"] == [], halt
-    assert halt["evidence"]["n_unmarked_receipts"] == 1, halt
+    # WAVE 25 (core-gates, F-7285034a): was `== []`, because the caught refusal in this
+    # fixture (`CAMERA_LINKED_FRAME`, which reaches `_seed_population_andon`) carried no
+    # clause at all. It now carries `no_seed_population`, which is the point: the reader
+    # `route_facts` keys on — `refusals = [r for r in receipts if r.get("clause")]` — can
+    # now NAME the refusal it caught instead of listing an empty set beside a halt.
+    assert halt["evidence"]["refusal_clauses"] == ["no_seed_population"], halt
+    # WAVE 25 (core-gates, F-7285034a): was `== 1`. The same fix moves this number the other
+    # way and for the same reason — a receipt is "unmarked" when it carries neither `clause`
+    # nor the returned-receipt key, and this one now carries a clause, so it is a NAMED
+    # refusal rather than an unclassifiable record. `route_facts`' two categories still
+    # partition the receipts; what changed is which side this fixture lands on.
+    assert halt["evidence"]["n_unmarked_receipts"] == 0, halt
     assert halt["evidence"]["returned_receipt_key"] == "verdict", halt
 
 

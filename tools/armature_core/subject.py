@@ -48,6 +48,7 @@ def extent_summary(half_extent):
     # missed. They raise the family now, with the offending value in the evidence.
     ev = {"gate": None, "andon": "SubjectExtentError", "half_extent": repr(half_extent)}
     if half_extent is None:
+        ev["clause"] = "half_extent_absent"
         raise SubjectExtentError(
             "half_extent is None: the subject has no geometry to measure", ev)
     # · ANDON — the coercion sits ONE LINE ABOVE the guards, and the wave-14 fix that
@@ -68,9 +69,11 @@ def extent_summary(half_extent):
     try:
         half = [float(v) for v in half_extent]
     except (TypeError, ValueError) as err:
+        ev["clause"] = "half_extent_not_numbers"
         raise SubjectExtentError(
             f"half_extent {half_extent!r} is not three numbers: {err}", ev) from None
     if len(half) != 3:
+        ev["clause"] = "half_extent_wrong_arity"
         raise SubjectExtentError(
             f"half_extent must have 3 components, got {len(half)}", ev)
 
@@ -100,6 +103,7 @@ def extent_summary(half_extent):
         require_finite(f"half_extent.{axis}", v, SubjectExtentError, ev, positive=False)
 
     if any(v < 0 for v in half):
+        ev["clause"] = "half_extent_negative"
         raise SubjectExtentError(
             f"half_extent components must be non-negative, got {half}", ev)
 
