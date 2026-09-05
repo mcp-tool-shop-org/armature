@@ -1463,3 +1463,225 @@ def test_the_paid_node_gate_returns_a_verdict_about_partner_nodes_and_says_so(tm
     verdict = AS.gate_no_paid_nodes(wf)["verdict"]
     assert "partner class" in verdict, verdict
     assert "allowlist" in verdict, verdict
+
+
+# ===========================================================================
+# F-40220b64 — `--reference-fit` is a two-choice label that performs no fitting.
+#
+# RE-READ on `e8263a3`: the flag is declared with `choices=('as-is','letterbox')`, its help
+# said "The choice and its measured consequence are recorded either way", it was stored
+# verbatim as `meta['reference_image']['fit']`, and grepped over the whole file nothing
+# opened or measured the uploaded reference — no PNG header read, no IHDR, no size
+# comparison. So the record could state 'letterbox' over a plate that was never fitted.
+# The sibling precedent is in this domain and ARMED: `build_i2v_payload` raises
+# `fit_disagrees_with_the_file` when the declared fit contradicts the file it measured
+# (wave 14, F-e17613c2). CLAUDE.md names the grey letterbox pads on E08's reference as the
+# standing suspect for its washed bands, which makes this the one field in the record most
+# worth measuring rather than asserting.
+#
+# reverted-red: yes — the record carried `{"server_name": ..., "fit": "letterbox"}` over a
+# 640x360 plate and printed BUILD_ANIMATE_OK.
+# ===========================================================================
+
+
+def _plate(path, width, height, alpha=True):
+    """A real PNG with a readable IHDR, at the size asked for."""
+    import struct
+    import zlib
+
+    def chunk(tag, data):
+        return (struct.pack(">I", len(data)) + tag + data
+                + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+
+    ihdr = struct.pack(">II5B", width, height, 8, 6 if alpha else 2, 0, 0, 0)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\x89PNG\r\n\x1a\x0a" + chunk(b"IHDR", ihdr) + chunk(b"IEND", b""))
+    return str(path)
+
+
+def test_a_letterbox_declaration_that_contradicts_the_file_is_refused(tmp_path):
+    """The operand: a plate whose dimensions disagree with the generation frame, under the
+    declaration that ASSERTS they agree."""
+    import build_animate_payload as ANI
+
+    path = _plate(tmp_path / "ref.png", 640, 360)
+    exc, ev = _raises(ANI.gate_reference_fit, "letterbox", path)
+    assert type(exc).__name__ == "PayloadError", repr(exc)
+    assert ev["clause"] == "fit_disagrees_with_the_file", ev
+    assert ev["gate"] == "PAYLOAD" and ev["andon"] == "reference_image", ev
+    assert ev["measured"] == [640, 360], ev
+    assert ev["generation_frame"] == [ANI.WIDTH, ANI.HEIGHT], ev
+    assert len(ev["sha256"]) == 64, ev
+    assert ev["path"].endswith("ref.png"), ev
+
+
+def test_a_letterbox_declaration_that_AGREES_with_the_file_passes(tmp_path):
+    """The direction the clause must not bound."""
+    import build_animate_payload as ANI
+
+    path = _plate(tmp_path / "ok.png", ANI.WIDTH, ANI.HEIGHT)
+    block = ANI.gate_reference_fit("letterbox", path)
+    assert block["declared_not_measured"] is False, block
+    assert block["measured"]["width"] == ANI.WIDTH, block
+    assert block["measured"]["alpha"] is True, block
+
+
+def test_as_is_asserts_nothing_about_size_and_is_recorded_as_measured_anyway(tmp_path):
+    """Grade the clause only on what it can move: `as-is` lets the node center-crop
+    (`common_upscale(..., "area", "center")`), so no size contradicts it — and the
+    measurement still rides the record, which is what makes the sentence checkable later."""
+    import build_animate_payload as ANI
+
+    path = _plate(tmp_path / "any.png", 640, 360)
+    block = ANI.gate_reference_fit("as-is", path)
+    assert block["asserts_the_generation_frame"] is False, block
+    assert block["measured"]["width"] == 640, block
+    assert ANI.REFERENCE_FIT_ASSERTS_THE_GENERATION_FRAME == {
+        "as-is": False, "letterbox": True}
+
+
+def test_with_no_local_path_the_record_says_DECLARED_not_measured(tmp_path):
+    """`--uploads` carries only the server-side name, so a build with no `--reference-file`
+    opened no file. That is recorded as a fact rather than the fit being stated as one."""
+    import build_animate_payload as ANI
+
+    block = ANI.gate_reference_fit("letterbox", None)
+    assert block["declared_not_measured"] is True, block
+    assert block["measured"] is None, block
+    assert "DECLARATION, not a measurement" in block["why_not_measured"], block
+
+
+def test_a_reference_file_that_is_not_a_png_or_not_a_file_is_refused_by_name(tmp_path):
+    """Rule 2's siblings inside the same clause: the two ways the measurement can fail to
+    arrive, each named rather than falling back to the unmeasured branch — a build that
+    silently fell back would record DECLARED-not-measured while the operator believed the
+    file had been checked."""
+    import build_animate_payload as ANI
+
+    exc, ev = _raises(ANI.gate_reference_fit, "letterbox", str(tmp_path / "nope.png"))
+    assert ev["clause"] == "reference_file_missing", ev
+    jpeg = tmp_path / "ref.jpg"
+    jpeg.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 40)
+    exc, ev = _raises(ANI.gate_reference_fit, "letterbox", str(jpeg))
+    assert ev["clause"] == "reference_file_not_a_png", ev
+    assert ev["first_8_bytes"].startswith("ffd8"), ev
+
+
+def test_a_fit_choice_with_no_recorded_assertion_refuses_rather_than_passing(tmp_path):
+    """The direction a future choice opens: a label the table does not know cannot be said
+    to agree or disagree with anything, and an unknown answer is a refusal."""
+    import build_animate_payload as ANI
+
+    path = _plate(tmp_path / "x.png", ANI.WIDTH, ANI.HEIGHT)
+    exc, ev = _raises(ANI.gate_reference_fit, "crop-to-face", path)
+    assert ev["clause"] == "reference_fit_has_no_recorded_assertion", ev
+    assert ev["known"] == ["as-is", "letterbox"], ev
+
+
+def test_the_fit_block_reaches_the_written_record_not_only_the_gate(tmp_path):
+    """A gate whose result no record carries is a gate a later session cannot reconcile."""
+    import build_animate_payload as ANI
+
+    src = open(os.path.join(TOOLS, "build_animate_payload.py"), encoding="utf-8").read()
+    assert "dict(reference_block," in src, "the block must reach `meta`"
+    assert "--reference-file" in src
+    tree = ast.parse(src)
+    reads = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Attribute) and n.attr == "reference_file"]
+    assert reads, "the flag is declared and never read"
+    assert ANI.gate_reference_fit("as-is", None)["fit"] == "as-is"
+
+
+# ===========================================================================
+# F-ea019e85 — the one unrecoverable resource in this repo is bounded by a number with no
+#              counter, and four committed specs are read by no tool at all.
+#
+# RE-MEASURED on `e8263a3`: grep for `ceiling` across `tools/build_*payload.py`,
+# `tools/gate_saved_graph.py` and `tools/canon_gate.py` returns only `armature_core.
+# assembly`'s unrelated CASCADE slot ceiling and `build_assembly_payload`'s flat-slot
+# ceiling gate; grep for `allocation` across `tools/*.py` returns nothing at all.
+#
+# CORRECTION to the filing, carried from the auditor and re-measured here: the half about
+# the next reader believing the ceiling is counted is CLOSED by the spec itself —
+# `ceiling.why_machine_readable` carries a dated CORRECTION paragraph stating that no tool
+# reads `ceiling` or `allocation` and that "the bound is held by the spec and the executor,
+# not by code". What remains is the mechanism, and it is rated LOW deliberately: nothing in
+# this tree submits, so there is no submission step for a counter to live in yet, and no
+# artifact is wrong.
+#
+# So this block adds the half that CAN be closed today: the orphan census. An unconsumed
+# spec becomes a stated, derived fact rather than a later discovery.
+# ===========================================================================
+
+
+#: Measured 2026-09-05 by naming each spec file across `tools/**`. FOUR of the fourteen are
+#: read by no tool. `E10-seeds.json` is the finding's own anchor.
+SPECS_NAMED_BY_NO_TOOL = [
+    "E01-anchor-blackguard.json",
+    "E03-posearc.json",
+    "E03-static.json",
+    "E10-seeds.json",
+]
+
+
+def _spec_consumers():
+    """`{spec filename: [tools that name it]}` — derived, never typed."""
+    sources = {}
+    for name in sorted(os.listdir(TOOLS)):
+        if name.endswith(".py"):
+            sources[name] = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+    out = {}
+    for path in sorted(glob.glob(os.path.join(SPECS, "*.json"))):
+        base = os.path.basename(path)
+        out[base] = sorted(n for n, s in sources.items() if base in s)
+    return out
+
+
+def test_the_orphan_specs_are_a_stated_fact_and_not_a_later_discovery():
+    """`==`, so a spec that GAINS a reader and one that LOSES its last one both fail here."""
+    consumers = _spec_consumers()
+    assert len(consumers) == 14, sorted(consumers)
+    orphans = sorted(k for k, v in consumers.items() if not v)
+    assert orphans == SPECS_NAMED_BY_NO_TOOL, {
+        "orphaned now": orphans, "recorded": SPECS_NAMED_BY_NO_TOOL}
+
+
+def test_the_other_ten_specs_each_name_the_tool_that_reads_them():
+    """The complement, so the census cannot pass by finding nothing at all."""
+    consumers = _spec_consumers()
+    read = {k: v for k, v in consumers.items() if v}
+    assert len(read) == 10, sorted(read)
+    assert all(v for v in read.values()), read
+
+
+def test_no_tool_counts_a_submission_against_the_ceiling_and_the_specs_SAY_so():
+    """The mechanism, kept measurable. `ceiling.submissions` is an int pinned by a shape
+    test and read by nothing; `allocation` has no reader at all. The day a submission step
+    counts against it, this flips and the specs' CORRECTION paragraphs are rewritten."""
+    readers = {"ceiling": [], "allocation": []}
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant)
+                    and node.slice.value in readers):
+                readers[node.slice.value].append((name, node.lineno))
+    assert readers["allocation"] == [], readers["allocation"]
+    # `ceiling` IS subscripted, but never off a seeds spec: every hit is the assembly
+    # module's unrelated CASCADE slot ceiling or a builder passing that one.
+    for name, _lineno in readers["ceiling"]:
+        assert "assembly" in name or "cascade" in name, (name, readers["ceiling"])
+
+
+def test_the_ceiling_specs_keep_the_CORRECTION_that_says_the_bound_is_not_counted():
+    """The honest record the finding asks to keep: never quietly delete a wrong statement."""
+    for path in sorted(glob.glob(os.path.join(SPECS, "*seeds.json"))):
+        why = json.loads(
+            open(path, encoding="utf-8").read())["ceiling"]["why_machine_readable"]
+        assert "CORRECTION" in why, os.path.basename(path)
+        assert "the bound is held by the spec and the executor, not by code" in why, (
+            os.path.basename(path))
+        assert isinstance(
+            json.loads(open(path, encoding="utf-8").read())["ceiling"]["submissions"],
+            int), os.path.basename(path)
