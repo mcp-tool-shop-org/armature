@@ -44,7 +44,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import build_cascade_payload as CASCADE  # noqa: E402
-from build_assembly_payload import read_seed_registration  # noqa: E402
+from build_assembly_payload import (  # noqa: E402
+    canonical_payload_digest, read_seed_registration)
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
 from armature_core.route_gates import RouteGate  # noqa: E402
@@ -427,6 +428,15 @@ def build_and_write(argv=None):
             "receives no width, height or frame count from us. Gate ROUTE records that "
             "verbatim in `frame_legality_verdict` and checks the tier's own enum "
             "constraints instead, which is the clause that binds and can fail."),
+        # ---- Wave 20, F-dba1bcd8. The record this tool writes carries the two facts that
+        # admit a paid submission (`gates.ROUTE`'s `attribution` and its no-sampler
+        # assertion) and, until this line, nothing tying them to the graph written beside
+        # them. This is the HOSTED PARTNER TIER: one submission is one charge, and
+        # `gate_saved_graph.route_facts` reported `payload_sha256: null` on this record and
+        # ADMITTED, with `source` reading "the facts below are NOT tied to the graph being
+        # admitted". The digest is the canonical one the gate compares against - the graph
+        # as an object, not the pretty-printed file - through the one shared function.
+        "payload_sha256": canonical_payload_digest(wf),
     }
 
     # Below the last in-tool gate. `os.makedirs` used to sit above Gate S, so a refused

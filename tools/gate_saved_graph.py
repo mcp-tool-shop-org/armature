@@ -34,7 +34,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates as RG  # noqa: E402
 from armature_core.route_gates import RouteGate  # noqa: E402
-from build_assembly_payload import read_seed_registration  # noqa: E402
+from build_assembly_payload import (  # noqa: E402
+    canonical_payload_digest, read_seed_registration)
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
@@ -588,13 +589,21 @@ def verify_receipts(doc):
 def payload_digests(doc):
     """Every `payload_sha256` a record declares, de-duplicated, full-length only.
 
-    Wave 18, F-5c0f3858. Every builder that writes one writes a canonical digest of the
-    graph it built — `hashlib.sha256(json.dumps(wf, sort_keys=True,
-    separators=(",", ":")).encode()).hexdigest()`, e.g. `build_i2v_payload.py:660` — so the
-    tie between a record and the graph it describes was already in the data and was not
-    read. Values shorter than 64 hex characters are ignored on purpose: the builders' OK
+    Wave 18, F-5c0f3858. A builder that writes one writes a canonical digest of the graph
+    it built — `build_assembly_payload.canonical_payload_digest`, cited by function rather
+    than by a `<file>.py:<line>` that goes stale on the next edit — so the tie between a
+    record and the graph it describes was already in the data and was not read. Values shorter than 64 hex characters are ignored on purpose: the builders' OK
     lines print a TRUNCATED copy (`meta["payload_sha256"][:32]`), and a prefix is not a
     digest this gate can compare.
+
+    **Wave 20, F-dba1bcd8 — what "every builder that writes one" was worth.** Measured by
+    driving all nine builders' own `main()` on 2026-09-05: FOUR wrote the digest and FIVE
+    did not, so this reader returned `[]` on the records of the hosted partner tier that
+    bills per submission, the arm whose graph loads a CONDITIONAL licence component, and
+    three more — and `route_facts` below then admitted with `payload_sha256: None` and a
+    `source` saying so. The comparison this function feeds and the digest every builder
+    now writes are the SAME function, `build_assembly_payload.canonical_payload_digest`,
+    imported above; there is no second spelling of the derivation in this tree.
     """
     out, stack = [], [doc]
     while stack:
@@ -779,9 +788,9 @@ def route_facts(record_path, api_graph=None):
     declared = declared_digests[0] if declared_digests else None
     api_digest = None
     if api_graph is not None:
-        api_digest = hashlib.sha256(
-            json.dumps(api_graph, sort_keys=True,
-                       separators=(",", ":")).encode()).hexdigest()
+        # Wave 20, F-dba1bcd8: the ONE derivation, shared with every builder that declares
+        # the digest, rather than a fifth copy of the expression living at the comparison.
+        api_digest = canonical_payload_digest(api_graph)
     if declared is not None and api_digest is not None and declared != api_digest:
         raise RG.RouteGate(
             f"--record={record_path!r} states `payload_sha256` {declared!r}, and the graph "

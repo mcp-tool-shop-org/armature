@@ -112,7 +112,7 @@ from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 from build_assembly_payload import (  # noqa: E402
-    SeedRegistrationError, read_seed_registration)
+    SeedRegistrationError, canonical_payload_digest, read_seed_registration)
 from canon_gate import canon_line, canon_spend  # noqa: E402
 
 TOOL_VERSION = "E09.2"
@@ -561,8 +561,13 @@ def main(argv=None):
     record = {
         "tool": "build_t2v_payload", "tool_version": TOOL_VERSION,
         "experiment": "E09", "stage": "B2", "amendment": "A3", "profile": a.profile,
+        # `graph.sha256` is the PRETTY-PRINTED FILE's digest and stays that. It is not
+        # the tie `gate_saved_graph.route_facts` reads: that compares the canonical
+        # serialisation of the graph as an object, and the two are not equal (wave 20,
+        # F-dba1bcd8).
         "graph": {"path": os.path.abspath(graph_path), "sha256": graph_sha,
                   "format": "api", "n_nodes": len(graph)},
+        "payload_sha256": canonical_payload_digest(graph),
         "built_not_served": (
             "This graph is built in-repo from the mapped pieces. The template the docs "
             "page serves is used as a REFERENCE for documented VALUES and for node "

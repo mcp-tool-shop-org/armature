@@ -63,7 +63,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates  # noqa: E402
-from build_assembly_payload import read_seed_registration  # noqa: E402
+from build_assembly_payload import (  # noqa: E402
+    canonical_payload_digest, read_seed_registration)
 from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateCanon, GateFailure, GateSSeedRegistration)
@@ -842,7 +843,17 @@ def main(argv=None):
                   "CANON": canon_ev, "CANON_graph_text": gate_canon_graph,
                   "BASE_LICENCE": base_licence},
         "graph": os.path.abspath(graph_path),
+        # The bytes on disk. KEPT under its own name, and it is NOT the tie: this hashes
+        # the PRETTY-PRINTED file, while `gate_saved_graph.route_facts` compares the
+        # canonical serialisation of the graph as an object. Measured on a one-node graph
+        # the two differ (`15ea11c7...` against `163ef2ee...`), which is why renaming this
+        # key would not have closed F-dba1bcd8.
         "graph_sha256": sha256_file(graph_path),
+        # ---- Wave 20, F-dba1bcd8. Arm T is the ONLY arm in this repo whose graph loads a
+        # CONDITIONAL licence component, and the `attribution` entry above IS the fact that
+        # pays that row. Until this line `route_facts` could not tell whether that credit
+        # was asserted about this graph or another one.
+        "payload_sha256": canonical_payload_digest(built),
     }
     record_path = os.path.join(args.out, f"E14-{args.arm}-payload-record.json")
     with open(record_path, "w", encoding="utf-8") as fh:

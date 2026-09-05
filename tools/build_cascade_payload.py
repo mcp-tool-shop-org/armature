@@ -65,8 +65,8 @@ from armature_core import route_gates as RG  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 from build_assembly_payload import (  # noqa: E402
-    FRAME_KEY, frame_order, frame_source_ids, gate_create_video_fps,
-    gate_slot_frame_index)
+    FRAME_KEY, canonical_payload_digest, frame_order, frame_source_ids,
+    gate_create_video_fps, gate_slot_frame_index)
 
 TOOL_VERSION = "E13.2"
 
@@ -226,6 +226,8 @@ def build_and_write(argv=None):
                   "CASCADE_ceiling": gate_ceiling,
                   "CASCADE_topology": gate_topo,
                   "CASCADE_slot_frame_index": gate_index, "ROUTE": gate_route},
+        # Wave 20, F-dba1bcd8. The tie between THIS record and the graph beside it.
+        "payload_sha256": canonical_payload_digest(wf),
     }
 
     # Below the last in-tool gate: a refuse leaves no output directory.
