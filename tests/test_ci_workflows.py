@@ -233,12 +233,78 @@ def test_the_tag_gate_refuses_a_tag_that_does_not_match_the_package():
 # -- job permissions, re-run behaviour, and pinning ---------------------------------------
 
 
-def _code_only(script):
+#: Quote runs a Python string literal can hide a name inside, longest first so a triple
+#: quote is never read as an empty pair.
+_QUOTES = ('"""', "'''", '"', "'")
+
+
+def _strip_string_literals(text):
+    """`text` with the CONTENTS of every quoted string replaced by spaces.
+
+    WAVE 23, F-2cb02bed (tests' half; ci-packaging carries the pass-mutation fixture --
+    coordinator ruling, wave-23 SEAM 3). `_code_only` dropped `#` comment lines and nothing
+    else, so a name appearing in a DOCSTRING or any other string literal read as the leg
+    reaching it. That is not hypothetical: ci-packaging measured it on the first draft of
+    `.github/actions/clean-room/lazy_import_probe.py`, whose module docstring listed
+    `draw_body`, `draw_hand` and `mean_consecutive_frame_difference` -- the lazy-import
+    census went green over a probe that called none of them, because `_code_only` strips
+    `#` lines and not docstrings.
+
+    A character-scanner rather than a regex or a tokeniser: the input is a shell `run:`
+    block, which is not Python and cannot be tokenised, and a regex over quotes cannot see
+    that a `#` inside a string is not a comment. Length is preserved (contents become
+    spaces, quotes are kept) so a caller can still report a line number.
+    """
+    out = []
+    i, n = 0, len(text)
+    while i < n:
+        for q in _QUOTES:
+            if text.startswith(q, i):
+                out.append(q)
+                i += len(q)
+                start = i
+                while i < n and not text.startswith(q, i):
+                    if text[i] == "\\" and i + 1 < n:      # an escaped quote is content
+                        i += 2
+                        continue
+                    i += 1
+                out.append("".join(" " if c != "\n" else "\n"
+                                   for c in text[start:i]))
+                if i < n:
+                    out.append(q)
+                    i += len(q)
+                break
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out)
+
+
+def _code_only(script, *, strings=False):
     """The script with `#` comment lines dropped -- naming a module in a comment is not
-    reaching it, and this test is about what the leg RUNS."""
-    return "\n".join(
+    reaching it, and this test is about what the leg RUNS.
+
+    `strings=True` ALSO blanks every string literal's contents, for a census over a PYTHON
+    source. It is not the default and must not become one: most callers here read a shell
+    `run:` block, where the quoted text IS the command -- `TARBALL="$PWD/$(ls -1 ./*.tgz |
+    head -1)"`, `'build>=1.5,<2'`. Measured 2026-09-05: blanking strings unconditionally
+    turned NINE tests in this file red, each of them correctly reading a quoted argument.
+    Use `_python_code_only` for the Python case, so the distinction has a name rather than
+    resting on a keyword nobody passes.
+    """
+    no_comments = "\n".join(
         line for line in script.splitlines() if not line.lstrip().startswith("#")
     )
+    return _strip_string_literals(no_comments) if strings else no_comments
+
+
+def _python_code_only(script):
+    """`_code_only` for a PYTHON source: comments AND string literals blanked.
+
+    The predicate the lazy-import census needs -- a function named in a docstring is not a
+    function the leg calls.
+    """
+    return _code_only(script, strings=True)
 
 
 
@@ -891,10 +957,13 @@ def test_ci_runs_on_every_docs_file_the_suite_reads(trigger):
     )
 
 
-def _code_only(script):
-    """The script with `#` comment lines dropped -- naming a module in a comment is not
-    reaching it, and this test is about what the leg RUNS."""
-    return "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
+# WAVE 23 (tests, F-2cb02bed): a SECOND, byte-identical `_code_only` was defined here and
+# shadowed the one above it. Measured 2026-09-05 while widening that predicate to blank
+# string literals: the widened version was written once, at its first home, and every test
+# below this line kept the narrow one — including the lazy-import census the widening
+# exists for, which went green over a docstring naming three functions the probe never
+# called. Two definitions of one walk in one module is the shape `tests/_census_nodes.py`
+# was created to end; the duplicate is deleted, not re-widened.
 
 
 def test_the_clean_room_leg_reaches_every_lazily_imported_dependency():
@@ -904,7 +973,7 @@ def test_the_clean_room_leg_reaches_every_lazily_imported_dependency():
     third-party import, the leg must CALL one of the functions that performs it. A new lazy
     dependency fails this test until the clean-room leg calls through to it.
     """
-    script = _code_only(clean_room_script())
+    script = _python_code_only(clean_room_script())
     sites = lazy_import_call_sites()
     assert set(sites) == set(lazy_third_party_roots()), (
         f"a lazy dependency has no located call site: {sorted(set(lazy_third_party_roots()) - set(sites))}"
@@ -4113,3 +4182,85 @@ def test_the_concurrency_census_reads_both_spellings_and_the_setting_itself():
     assert cancel_in_progress(as_action) is True
     assert cancel_in_progress(as_script.replace("true", "false")) is False
     assert cancel_in_progress(no_block) is None
+
+
+# ===========================================================================
+# WAVE 23 (tests) — `_code_only` also blanks STRING LITERALS  ·  F-2cb02bed
+# ===========================================================================
+#
+# Coordinator ruling, wave-23 SEAM 3: ci-packaging carries the pass-mutation fixture beside
+# `lazy_import_probe_source()` in its own commit (a fixture that reads a helper only one
+# branch defines rides that branch); tests widens `_code_only`. This is that half.
+#
+# The measurement that motivates it is ci-packaging's, recorded here because the predicate
+# is this file's: the first draft of `.github/actions/clean-room/lazy_import_probe.py`
+# named all three lazily imported functions in its module DOCSTRING, and the lazy-import
+# census went green over a probe that called none of them — `_code_only` stripped `#` lines
+# and not docstrings. The probe was rewritten to describe them rather than list them, so
+# each name occurs exactly once, at its call site; this widening means the census is right
+# either way rather than right by that accident.
+
+
+def test_code_only_blanks_a_name_that_only_appears_in_a_docstring():
+    """The operand: the shape that went green."""
+    prose_only = (
+        '#!/usr/bin/env python\n'
+        '"""Runs draw_body, draw_hand and mean_consecutive_frame_difference."""\n'
+        'import aapose\n'
+        'print("ok")\n'
+    )
+    code = _python_code_only(prose_only)
+    for name in ("draw_body", "draw_hand", "mean_consecutive_frame_difference"):
+        assert name not in code, (name, code)
+    assert "import aapose" in code, code
+
+
+def test_code_only_keeps_a_name_that_is_actually_called():
+    """The direction the predicate must not bound: a census that blanked everything would
+    report every dependency unreached."""
+    real = (
+        '"""A probe. It calls the lazily imported drawing helpers."""\n'
+        'import aapose\n'
+        '_ran(aapose.draw_body, canvas, body)\n'
+        '_ran(aapose.draw_hand, canvas, hand)\n'
+        '_ran(donor_gate.mean_consecutive_frame_difference, paths)\n'
+        'print("clean room: " + ", ".join(RAN) + " all ran")\n'
+    )
+    code = _python_code_only(real)
+    for name in ("draw_body", "draw_hand", "mean_consecutive_frame_difference"):
+        assert name in code, (name, code)
+    #: …and the printed sentence's own words are gone, so a message that merely SAYS the
+    #: names ran cannot satisfy a census keyed on the calls.
+    assert "all ran" not in code, code
+    assert "clean room" not in code, code
+
+
+def test_the_widened_predicate_leaves_line_numbers_where_they_were():
+    """Contents become spaces, quotes are kept: a caller can still report a line number
+    against the original text."""
+    src = 'a = "one"\nb = 2\nc = """multi\nline\n"""\n'
+    code = _python_code_only(src)
+    assert len(code.splitlines()) == len(src.splitlines()), (src, code)
+    assert code.splitlines()[1] == "b = 2"
+
+
+def test_the_narrow_predicate_could_not_see_the_docstring():
+    """The red proof, reconstructed rather than described: the pre-wave-23 `_code_only`,
+    which dropped `#` lines only, reports the docstring's names as reached."""
+    prose_only = (
+        '"""Runs draw_body and draw_hand."""\n'
+        'import aapose\n'
+    )
+    narrow = "\n".join(l for l in prose_only.splitlines()
+                       if not l.lstrip().startswith("#"))
+    assert "draw_body" in narrow, "the reconstruction does not carry the defect"
+    assert "draw_body" not in _python_code_only(prose_only)
+
+
+def test_a_hash_inside_a_string_is_not_a_comment():
+    """The failure mode a regex over `#` would introduce: `"--tag #1"` is an argument, and
+    blanking from the `#` to the end of the line would delete the rest of the command."""
+    src = 'run("--tag #1", check=True)\nnext_call()\n'
+    code = _python_code_only(src)
+    assert "next_call()" in code, code
+    assert "run(" in code and "check=True" in code, code

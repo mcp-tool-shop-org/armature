@@ -91,6 +91,28 @@ arrives rather than needing to be remembered.
 
 The population is derived (`blender_stub.blender_tools`), never typed out, so a new Blender
 tool joins it the day it lands.
+
+WAVE 23, F-2f1b18c2 — THE SECOND POPULATION, and the derivation hazard it exposed.
+
+Everything above is the Blender side. The 42 CPython instruments were in no equivalent
+census, and that half holds the tools whose artifacts are UPLOADED. The second population
+and its three properties are at the foot of this file; `blender_stub.halt_handler` derives
+each member's halt PREFIX and ENTRY off its `__main__` block, and two hazards make that
+derivation load-bearing rather than a formality:
+
+* **The prefix is not the module stem**, for 20 of the 25 CPython tools that carry a
+  handler. `build_animate_payload.py` prints `BUILD_ANIMATE_HALT`, `gate_saved_graph.py`
+  prints `SAVED_ADMISSION_HALT`, `gate_b_frames.py` prints `GATE_B_HALT`,
+  `project_pose_keypoints.py` prints `PROJECT_POSE_HALT`. `halt_contract_pending` keys on
+  `<STEM>_HALT`, which is correct on the Blender side where every prefix IS the stem; the
+  same predicate applied here reports 20 of 25 as carrying no handler at all.
+* **The entry is not always `main`.** `composite_reference.py` is
+  `run_tool_main(_cli, "COMPOSITE_REFERENCE")`. A driver that substitutes `main` runs the
+  real `_cli`, which fails for its own reasons — measured here as a false exit 1 on a
+  raiser that never ran, i.e. a census reporting a contract violation that does not exist.
+
+Both are read off the block rather than assumed, which is what "keys on the resolved shape"
+means for a population whose members disagree about their own spelling.
 """
 
 import json
