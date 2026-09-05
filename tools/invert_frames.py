@@ -86,7 +86,9 @@ def frame_population(src, expect=None):
                 f"{src} holds {len(names)} frames, expected {expect} named as the spec "
                 f"names them; a short or renumbered control directory becomes a short "
                 f"batch with no error anywhere downstream",
-                {"src": src, "found": names, "expected": want,
+                {"gate": "FRAMES", "andon": "InvertError",
+                 "clause": "population_is_not_the_spec_names",
+                 "src": src, "found": names, "expected": want,
                  "missing": [n for n in want if n not in set(names)],
                  "unexpected": [n for n in names if n not in set(want)]},
             )
@@ -107,19 +109,25 @@ def _read_u8_gray(path):
         raise InvertError(
             f"{path}: mode {im.mode!r} carries alpha; `255 - x` over an alpha channel "
             f"inverts opacity, not polarity",
-            {"path": path, "mode": im.mode},
+            {"gate": "READ", "andon": "InvertError",
+             "clause": "frame_carries_an_alpha_channel",
+             "path": path, "mode": im.mode},
         )
     if im.mode == "P":
         raise InvertError(
             f"{path}: mode 'P' is palette-indexed; inverting an index is not inverting "
             f"a value",
-            {"path": path, "mode": im.mode},
+            {"gate": "READ", "andon": "InvertError",
+             "clause": "frame_is_palette_indexed",
+             "path": path, "mode": im.mode},
         )
     arr = np.array(im)
     if arr.dtype != np.uint8:
         raise InvertError(
             f"{path}: dtype {arr.dtype}; `255 - x` is the polarity flip only for 8-bit data",
-            {"path": path, "mode": im.mode, "dtype": str(arr.dtype),
+            {"gate": "READ", "andon": "InvertError",
+             "clause": "frame_is_not_eight_bit",
+             "path": path, "mode": im.mode, "dtype": str(arr.dtype),
              "shape": [int(v) for v in arr.shape]},
         )
     if arr.ndim == 3:
@@ -127,20 +135,91 @@ def _read_u8_gray(path):
                 or not (arr[..., 1] == arr[..., 2]).all():
             raise InvertError(
                 f"{path}: 3-channel and not R=G=B; this tool inverts a grayscale channel",
-                {"path": path, "mode": im.mode, "dtype": str(arr.dtype),
+                {"gate": "READ", "andon": "InvertError",
+                 "clause": "frame_is_colour_not_grayscale",
+                 "path": path, "mode": im.mode, "dtype": str(arr.dtype),
                  "shape": [int(v) for v in arr.shape]},
             )
         arr = arr[..., 0]
     elif arr.ndim != 2:
         raise InvertError(f"{path}: unsupported array shape {arr.shape}",
-                          {"path": path, "mode": im.mode, "dtype": str(arr.dtype),
+                          {"gate": "READ", "andon": "InvertError",
+                           "clause": "frame_array_shape_is_unsupported",
+                           "path": path, "mode": im.mode, "dtype": str(arr.dtype),
                            "shape": [int(v) for v in arr.shape]})
     return np.ascontiguousarray(arr)
 
 
+def gate_out_directory(dst):
+    """ANDON — `--out` is not a directory that already holds a control population.
+
+    F-7f59629f's second half, wave 22. Re-running into a re-used `--out` was measured on
+    `e8263a3`: a first clean run wrote 4 inverted frames and `<out>.receipt.json`; a second,
+    REFUSED run (frame 2 RGBA) overwrote frames 0-1 and left 2-3 from the first. The
+    directory then read as a complete, spec-length control sequence to every consumer —
+    `encode_control.frame_population(<dir>, expect=4)` returned all four names, no stray, no
+    short-population refusal — while its four frames came from two different arms (measured
+    modal bytes 215, 214 from the refused run beside 53, 52 from the prior one), and the
+    FIRST run's receipt was still on disk asserting `n_frames: 4` and an
+    `out_pixels_sha256` that no longer described the directory (recorded
+    `bc81b9fe7203fe0f12df00c8...`, recomputed over the four files
+    `956a0478ec9e0fb8d6fd9f90...`). Gate R compares the frames a tool loaded against their
+    own decode and is blind to which RUN wrote them.
+
+    The shape is `make_review_clip.gate_out_directory`'s, one tool over.
+    """
+    dst_abs = os.path.abspath(dst)
+    ev = {"gate": "OUT", "andon": "InvertError", "out": dst_abs,
+          "convention": "an inverted control sequence is written into a directory of its own"}
+    if os.path.isdir(dst_abs):
+        numbered = sorted(n for n in os.listdir(dst_abs)
+                          if n.lower().endswith(".png")
+                          and os.path.splitext(n)[0].isdigit())
+        if numbered:
+            raise InvertError(
+                f"--out {dst_abs} already holds {len(numbered)} numbered frame(s); a run "
+                f"refused part-way through would leave a directory whose frames come from "
+                f"two different arms, and every count, every stray check and Gate R stay "
+                f"green on it",
+                dict(ev, clause="out_directory_already_holds_frames",
+                     numbered_frames=numbered[:16], n_numbered=len(numbered)))
+    ev["verdict"] = "an inverted-control directory of its own"
+    return ev
+
+
 def invert_dir(src, dst, expect=None):
-    """Write `255 - x` of every PNG in `src` into `dst`. Returns the receipt dict."""
+    """Write `255 - x` of every PNG in `src` into `dst`. Returns the receipt dict.
+
+    **Every frame is READ AND ACCEPTED before the first byte is written.** F-7f59629f, wave
+    22. `os.makedirs(dst)` used to sit above the loop and each frame was written inside it,
+    while `_read_u8_gray` can refuse frame i+1 on four clauses (alpha, palette, non-uint8,
+    3-channel-not-R=G=B). A mid-loop refusal therefore left a PARTIAL control directory on
+    disk with no receipt and no marker. Measured on `e8263a3` through the real CLI on a
+    4-frame source whose frame 2 is RGBA: exit 1, stdout empty, and `--out` holding
+    `00000.png` and `00001.png`.
+
+    The read pass is repeated rather than kept, for the reason `render_pose_sticks` records
+    for its own draw: holding n arrays costs `n * h * w` bytes and a long control sequence
+    is exactly when this tool is used, while `_read_u8_gray` is pure, so the second pass
+    reads the same bytes. The cost is one extra decode per frame; the property bought is
+    that `--out` does not exist at all unless every frame was accepted.
+
+    The ratchet that exists to catch this could not see the tool: measured with
+    `tests/_census_nodes.refusal_and_write_lines`, `invert_frames` returned `gates={}` —
+    all five refusals sit two hops below `main` (`main` -> `invert_dir` ->
+    `frame_population` / `_read_u8_gray`) and the per-frame write is `pngio.write_png`,
+    neither of the two spellings that census recognises. Keying it on behaviour is the
+    tests domain's half and is named in the seams inbox.
+    """
     names = frame_population(src, expect=expect)
+
+    # ---- ANDON, before `os.makedirs`: the destination is not a used control directory.
+    gate_out_directory(dst)
+
+    # ---- READ PASS. Every one of `_read_u8_gray`'s four clauses fires here, above the
+    #      first write, so a refused run leaves `--out` absent rather than partial.
+    for n in names:
+        _read_u8_gray(os.path.join(src, n))
 
     os.makedirs(dst, exist_ok=True)  # scripts create their own output directories
     src_h, dst_h = hashlib.sha256(), hashlib.sha256()
@@ -198,4 +277,11 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # WAVE 22, SEAM 1 (F-7f59629f's second half): the ONE `__main__` halt handler, adopted
+    # BY IMPORT. This module produces a control sequence that is encoded and uploaded, and
+    # every one of its refusals — the four `_read_u8_gray` clauses, the population clause
+    # and the new `out_directory_already_holds_frames` — exited 1 with stdout empty, which
+    # is "the environment broke, retry" to a chain routing on exit codes.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "INVERT_FRAMES")

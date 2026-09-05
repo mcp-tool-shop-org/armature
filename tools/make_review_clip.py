@@ -90,7 +90,39 @@ def run_token(frames_dir, explicit=None):
     like evidence. `--run=<token>` states it explicitly and wins.
     """
     if explicit is not None and str(explicit).strip():
-        return str(explicit).strip(), "--run"
+        # ---- ANDON, where the token becomes a NAME rather than where it is read.
+        #      F-03bf2b7e, wave 22. `--run` (added wave 16) was pasted into the output
+        #      FILENAME unvalidated: `run_token` returned `str(explicit).strip()`,
+        #      `clip_name` returned `f"{run}_{stem}"`, and `main` joined that onto `--out`.
+        #      Measured on `e8263a3` on a 3-frame `<base>/A2/lossless`:
+        #      `--out=<base>/review --run=../A2/lossless/A2` wrote
+        #      `A2_review_0.50x_8fps.webp` INTO the run's own numbered-frame directory
+        #      (`lossless/` then held `00000.png, 00001.png, 00002.png` and the clip),
+        #      printed `MAKE_REVIEW_CLIP_OK` and returned 0 — so the andon landed in wave 16
+        #      to prevent exactly that outcome (`gate_out_directory`, which refuses that
+        #      destination when it is asked for directly) was walked past by a flag landed
+        #      in the same wave: the gate inspects `--out` only, and the write is `--out`
+        #      plus an operator string. A second measurement, `--run=outputs/E09/A2` — a
+        #      directory-shaped run name, which is how a run is spelled everywhere else on
+        #      this rig — died with a bare `FileNotFoundError` naming a path with mixed
+        #      separators, AFTER `os.makedirs(a.out)` had created the review directory: the
+        #      empty-directory residue the ordering comment in `main` exists to prevent.
+        #      In both cases the sentinel and `review_manifest.json` recorded `clip` as an
+        #      un-normalised `<out>/../...` string.
+        #
+        #      The DERIVED branch below already returns a basename and is unaffected.
+        # WAVE 22, SEAM 1: the ONE home for this check, adopted BY IMPORT (the two
+        # byte-identical copies this domain held are deleted). The import is at the
+        # CALL SITE rather than at module scope for one reason, stated so it is not
+        # read as a cycle break: the helper lands on core-solvers' branch in the same
+        # parallel wave, and a module-scope import makes this file uncollectable on
+        # any tree where that branch has not merged yet. Same object either way.
+        from armature_core.parts import single_path_segment
+
+        return single_path_segment(
+            str(explicit).strip(), "--run", ReviewClipError,
+            extra={"tool": "make_review_clip", "frames": os.path.abspath(frames_dir),
+                   "pasted_into": "the review clip's FILENAME, as f'{run}_{stem}'"}), "--run"
     frames_abs = os.path.abspath(frames_dir)
     if os.path.basename(frames_abs).lower() in FRAME_SUBDIR_NAMES:
         parent = os.path.basename(os.path.dirname(frames_abs))
@@ -239,8 +271,20 @@ def main(argv=None):
     #      reads as an attempt that produced nothing rather than one that was refused.
     #      The clip used to be written between the two andons above, so a run refused
     #      by either left a directory holding a review clip and no stills.
-    os.makedirs(a.out, exist_ok=True)
     clip = os.path.join(a.out, clip_name(a.fps, a.source_fps, token))
+    # ---- Belt and braces for the andon in `run_token` above: whatever the token
+    #      was, the file this tool writes is INSIDE `--out`. A gate that cannot
+    #      fail is not a gate, so this one is stated on the direction the name
+    #      check does not bound — a future spelling that escapes it.
+    if os.path.dirname(os.path.abspath(clip)) != os.path.abspath(a.out):
+        raise ReviewClipError(
+            f"the review clip would be written to {os.path.abspath(clip)}, "
+            f"which is not inside --out={os.path.abspath(a.out)}",
+            {"gate": "OUT", "andon": "ReviewClipError",
+             "clause": "clip_would_be_written_outside_out",
+             "clip": os.path.abspath(clip), "out": os.path.abspath(a.out),
+             "run": token, "run_source": token_source})
+    os.makedirs(a.out, exist_ok=True)
     ims[0].save(clip, save_all=True, append_images=ims[1:],
                 duration=int(round(1000.0 / a.fps)), loop=0, lossless=True, quality=100)
 
@@ -294,4 +338,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # WAVE 22, SEAM 1: the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (core-solvers' file, posted to the wave-22 seams inbox). Never
+    # copied — the whole point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "MAKE_REVIEW_CLIP")

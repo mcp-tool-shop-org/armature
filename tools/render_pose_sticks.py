@@ -37,6 +37,7 @@ delete the directory; owner: the executor session. The keypoint record is read-o
 import argparse
 import hashlib
 import json
+import math
 import os
 import sys
 import time
@@ -77,14 +78,46 @@ def _sha256_bytes(b):
 
 
 def gate_canvas(body, width, height):
-    """Gate CANVAS · ANDON — every body keypoint is inside the frame."""
-    bad = []
+    """Gate CANVAS · ANDON — every body keypoint is inside the frame, and is a NUMBER.
+
+    **The confidence is read, not discarded.** Wave 22, SEAM 9 item 2: this loop unpacked
+    `for j, (x, y, _c) in enumerate(frame)` and threw `_c` away, so it bounded coordinates
+    only. `aapose.draw_body` compares that confidence against a threshold to decide whether
+    a limb is drawn, and `nan < threshold` is False in both directions — so a NaN
+    confidence produced ink byte-identical to a confidence of 1.0, with nothing having read
+    it. core-solvers closed the andon INSIDE `draw_body`/`draw_hand`
+    (`confidence_not_a_number`); this is the complementary bound at the reader, which is
+    the wave-18 SEAM-5 shape: the andon inside the function performing the step, and the
+    reader's bound at the flag. It fires earlier and names the frame and the keypoint.
+
+    A non-finite COORDINATE is caught by the range test below (`nan <= width - 1` is False,
+    so it lands in `bad`), and is named explicitly rather than left to that accident.
+    """
+    bad, not_a_number = [], []
     for i, frame in enumerate(body):
-        for j, (x, y, _c) in enumerate(frame):
+        for j, (x, y, c) in enumerate(frame):
+            if not all(math.isfinite(float(v)) for v in (x, y, c)):
+                not_a_number.append({"frame": i, "index": j,
+                                     "name": aapose.KEYPOINT_NAMES[j],
+                                     "xyc": [x, y, c]})
+                continue
             if not (0 <= x <= width - 1 and 0 <= y <= height - 1):
                 bad.append({"frame": i, "index": j,
                             "name": aapose.KEYPOINT_NAMES[j], "xy": [x, y]})
-    ev = {"gate": "CANVAS", "resolution": [width, height], "n_outside": len(bad),
+    if not_a_number:
+        raise SticksGate(
+            f"{len(not_a_number)} body keypoint(s) carry a value that is not a number, "
+            f"e.g. {not_a_number[0]}. A NaN confidence walks `draw_body`'s threshold "
+            f"comparison in both directions — `nan < threshold` and `nan > threshold` are "
+            f"both False — so the limb is drawn or dropped on a number no code read, and "
+            f"the ink is byte-identical to a confidence of 1.0",
+            {"gate": "CANVAS", "andon": "SticksGate",
+             "clause": "keypoint_value_is_not_a_number",
+             "resolution": [width, height], "n_not_a_number": len(not_a_number),
+             "examples": not_a_number[:8]})
+    ev = {"gate": "CANVAS", "andon": "SticksGate",
+          "clause": "keypoint_outside_the_frame",
+          "resolution": [width, height], "n_outside": len(bad),
           "examples": bad[:8]}
     if bad:
         raise SticksGate(
@@ -359,15 +392,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("RENDER_STICKS_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # WAVE 22, SEAM 1: the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (core-solvers' file, posted to the wave-22 seams inbox). Never
+    # copied — the whole point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "RENDER_STICKS")

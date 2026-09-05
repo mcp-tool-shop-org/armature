@@ -316,5 +316,31 @@ def main(argv=None):
     return record
 
 
+def _cli(argv=None):
+    """The process entry point: an exit code, beside the record `main` returns.
+
+    F-41a09432, wave 22. This module ended in a bare `main()` — the weakest form in the
+    42-tool population, in which the function's return value can never become an exit code
+    at all. It holds the authored-RGBA law's ONE plate parser, called by `encode_control`,
+    `pack_pose_pack`, `fit_reference` and `make_plate`. Measured on `e8263a3` through its
+    real CLI on a one-view kit: a deliberate typed refusal (`--plate=a,b,c` ->
+    `ReferenceGate: [REFERENCE] --plate takes three 0-255 integers ...`) and an untyped
+    crash (`--plate=\u00b2,0,0` -> `ValueError: invalid literal for int()`) BOTH exited 1
+    with stdout empty and no halt line, so the two outcomes the three-outcome contract
+    exists to separate were indistinguishable here.
+
+    `main` keeps returning the record — `tests/test_composite_reference.py` reads it — and
+    this wrapper is what `run_tool_main` runs, so the process gets 0 on success, 2 on a
+    typed refusal and 1 on a crash.
+    """
+    main(argv)
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    # WAVE 22, SEAM 1: the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (core-solvers' file, posted to the wave-22 seams inbox). Never
+    # copied — the whole point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(_cli, "COMPOSITE_REFERENCE")

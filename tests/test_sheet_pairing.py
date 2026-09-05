@@ -318,6 +318,17 @@ def _positional_indexing(tree):
     for node in ast.walk(tree):
         if (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
                 and holds.get(node.value.id) == "positional"):
+            # WAVE 22 (instruments-measure): a SLICE is not a frame number. The detector
+            # flagged `numbered[:16]` — a truncation of a listing built for an evidence
+            # dict — as positional indexing, which is the one shape this census exists to
+            # separate from `paths[frame_number]`. Measured: `invert_frames.py`'s new
+            # `gate_out_directory` (F-7f59629f) was reported as an offender for
+            # `numbered_frames=numbered[:16]`, while the character-identical expression in
+            # `make_review_clip.gate_out_directory` was invisible only because that module
+            # routes through `require_frames`. `ast.Slice` is excluded by SHAPE, not by a
+            # name, so the synthetic `paths[idx]` fixture below stays red.
+            if isinstance(node.slice, ast.Slice):
+                continue
             out.append((node.lineno, node.value.id))
     return sorted(out)
 

@@ -259,6 +259,13 @@ RECORDED_POPULATION = frozenset({
     # ⚠ BRANCH-LOCAL: four sibling domains move this pin in the same wave; the coordinator
     # re-measures on the merged tree and never sums.
     "PickSheetError", "StageRenderError",
+    # WAVE 22, the same domain, one commit later: `make_e13_sheet.E13SheetError` — recorded
+    # in wave 16 as deliberately single-site alongside `PickSheetError`, and crossing the
+    # threshold for the same reason. F-76364ac7 gives the OUTPUT band the `--sample` andon
+    # the REFERENCES band got in wave 16 (four sites: the non-integer component, the empty
+    # list, a negative index, and a frame the extraction does not hold), so it holds 5.
+    # Measured: `POLICED - RECORDED_POPULATION == ['E13SheetError']` on that commit.
+    "E13SheetError",
     # WAVE-14 MERGE (coordinator, 2026-09-04): `aapose.ConventionError` (core-solvers, F-d0de0c2d) — the class landed, the
     # name did not; measured `POLICED - RECORDED_POPULATION == ["ConventionError"]` on the merged tree.
     "ConventionError",
@@ -486,8 +493,9 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # sites) cross the two-site threshold; both are named in RECORDED_POPULATION above with
     # their derivation, and the SET assertion beneath names either if it does not arrive.
     # The base was measured green at 105 in this worktree before any edit, so the delta is
-    # exactly these two. ⚠ BRANCH-LOCAL — a COMPOSITION on the merged tree.
-    assert len(POLICED) == 107, sorted(POLICED)
+    # exactly these two. One commit later F-76364ac7 adds `E13SheetError` the same way,
+    # 107 -> 108, measured. ⚠ BRANCH-LOCAL — a COMPOSITION on the merged tree.
+    assert len(POLICED) == 108, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),

@@ -871,3 +871,366 @@ def test_the_depth_refusal_carries_the_frame_the_count_and_the_sentinel(tmp_path
     assert "masked_geometry_is_all_background_depth" in src
     assert "mask is non-empty but carries no finite depth" not in src, (
         "the refusal still names a condition this branch cannot reach")
+
+
+# ===========================================================================
+# F-405baf98 (LOW) — the seven citations that pointed into the wrong paragraph
+# ===========================================================================
+
+def test_no_module_in_this_domain_still_cites_the_moved_constructor_by_line():
+    """RED on `e8263a3`: seven prose citations in six of this domain's files named
+    `armature_core/errors.py:40-42` as the definition of
+    `ArmatureError.__init__(self, message, evidence=None)`.
+
+    Measured: the constructor is at `errors.py:59-61`; lines 40-42 are prose inside the
+    class docstring, and specifically the middle of the paragraph recording that an EARLIER
+    citation there was wrong — line 40 reads "`ArmatureError`, so a halt line printing
+    `\"evidence\": {}` satisfies every one of the 21". A seat re-checking the family's
+    evidence contract followed the citation, landed on a paragraph asserting that a halt
+    line printing `{}` satisfies the 21-tool census, and took the OPPOSITE of the contract
+    from the file that is supposed to be its statement. The sibling citations of
+    `errors.py:27-33` (the store-what-is-passed paragraph) still resolve correctly, which is
+    what made the wrong one hard to spot.
+    """
+    stale = []
+    for mod in _OWNED_42:
+        src = open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8").read()
+        if "errors.py:40-42" in src:
+            stale.append(mod)
+    assert stale == [], stale
+
+
+def test_the_constructor_is_cited_by_symbol_and_the_symbol_resolves():
+    """The fix is the SYMBOL, not a re-derived line: a symbol survives an edit above it and
+    a line number does not — which is the whole mechanism of this finding. So the census
+    checks that the cited symbol EXISTS, which no line-number citation can offer."""
+    import ast
+
+    citing = [m for m in _OWNED_42
+              if "errors.py::ArmatureError.__init__"
+              in open(os.path.join(TOOLS, f"{m}.py"), encoding="utf-8").read()]
+    assert len(citing) == 6, citing          # 7 citations across 6 files
+    tree = ast.parse(open(os.path.join(TOOLS, "armature_core", "errors.py"),
+                          encoding="utf-8").read())
+    ctor = [n for n in ast.walk(tree)
+            if isinstance(n, ast.ClassDef) and n.name == "ArmatureError"
+            for f in n.body if isinstance(f, ast.FunctionDef) and f.name == "__init__"]
+    assert ctor, "the cited symbol does not exist"
+
+
+def test_every_remaining_line_citation_in_this_domain_resolves():
+    """The weaker half, ownable here: every `<file>.py:<line>` citation still written in the
+    42 owned modules resolves to a file on the tree and to a non-blank line inside it.
+
+    The tree-wide form the finding asks for — every citation under `tools/**` resolving to a
+    line whose text contains the cited SYMBOL — is the tests domain's, and is posted to the
+    wave-22 inbox rather than claimed here.
+    """
+    import re
+
+    CITE = re.compile(r"([A-Za-z0-9_]+\.py):(\d+)")
+    def locate(rel):
+        for root in (TOOLS, os.path.join(TOOLS, "armature_core"),
+                     os.path.dirname(os.path.abspath(__file__))):
+            q = os.path.join(root, rel)
+            if os.path.isfile(q):
+                return q
+        return None
+
+    broken = []
+    for mod in _OWNED_42:
+        src = open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8").read()
+        for m in CITE.finditer(src):
+            rel, line = m.group(1), int(m.group(2))
+            path = locate(rel)
+            if path is None:
+                broken.append(f"{mod}.py cites {m.group(0)}: file not on the tree")
+                continue
+            lines = open(path, encoding="utf-8").read().splitlines()
+            if not (1 <= line <= len(lines)) or not lines[line - 1].strip():
+                broken.append(f"{mod}.py cites {m.group(0)}: out of range or blank")
+    assert broken == [], broken
+
+
+# ===========================================================================
+# F-76364ac7 (MEDIUM) — make_e13_sheet's OUTPUT band is bounded like its REFERENCES band
+# ===========================================================================
+
+def _e13_extraction(tmp_path, n=3):
+    """A 3-frame extraction and the payload the sheet reads, the auditor's operand."""
+    frames = tmp_path / "frames"
+    frames.mkdir(parents=True, exist_ok=True)
+    for i in range(n):
+        Image.new("RGB", (16, 16), (20 * (i + 1), 30, 40)).save(frames / f"{i:05d}.png")
+    (frames / "frames.json").write_text(json.dumps({
+        "n_frames": n, "distinct_frames": n, "clip_bytes": 1234,
+        "clip_sha256": "d" * 64,
+        "stream": {"width": 16, "height": 16, "fps": 16.0, "line": "Stream #0:0 ..."}}),
+        encoding="utf-8")
+    payload = tmp_path / "payload.json"
+    payload.write_text(json.dumps({
+        "experiment": "E13", "arm": "A1", "tier": "t", "seed": 1,
+        "prompt_sha256": "a" * 64, "payload": {}, "slot_order": [], "gates": {}}),
+        encoding="utf-8")
+    return str(frames), str(payload)
+
+
+def test_the_default_sample_over_a_three_frame_extraction_is_refused_by_name(tmp_path):
+    """THE AUDITOR'S OPERAND: a 3-frame extraction whose `frames.json` records
+    `n_frames: 3`, run with the DEFAULT `--sample=0,37,75,112,149`.
+
+    Measured on `e8263a3`: `FileNotFoundError: [Errno 2] No such file or directory:
+    '...\\frames\\00037.png'` — untyped, no clause, naming neither the band nor the
+    denominator, although `fr["n_frames"]` had been read four lines above and is quoted in
+    the provenance panel eleven lines below. Wave 16 guarded the REFERENCES listing and
+    moved `os.makedirs` below the andons, and left the OUTPUT band — the panels the Director
+    judges — indexing an unchecked listing one screen down.
+    """
+    import make_e13_sheet as E13
+
+    frames, payload = _e13_extraction(tmp_path)
+    out = tmp_path / "sheet.png"
+    with pytest.raises(E13.E13SheetError) as exc:
+        E13.main([f"--payload={payload}", f"--frames={frames}", f"--out={out}",
+                  "--arm=A1", "--seed=1"])
+    ev = exc.value.evidence
+    assert ev["clause"] == "sample_frame_not_in_the_extraction", ev
+    assert ev["n_frames"] == 3, ev
+    assert ev["missing"] == [37, 75, 112, 149], ev
+    assert not out.exists()
+
+
+@pytest.mark.parametrize("sample,clause", [
+    ("0,a,2", "sample_component_not_an_integer"),
+    ("", "sample_names_no_frames"),
+    ("0,-1", "sample_index_is_negative"),
+])
+def test_the_sample_flag_refuses_its_other_spellings_by_name(tmp_path, sample, clause):
+    """SIBLINGS of the same flag: the cast sat above every check, so a non-integer died
+    untyped; an empty list and a negative index are the two the count check cannot see."""
+    import make_e13_sheet as E13
+
+    frames, payload = _e13_extraction(tmp_path)
+    out = tmp_path / f"sheet_{clause}.png"
+    with pytest.raises(E13.E13SheetError) as exc:
+        E13.main([f"--payload={payload}", f"--frames={frames}", f"--out={out}",
+                  "--arm=A1", "--seed=1", f"--sample={sample}"])
+    assert exc.value.evidence["clause"] == clause, exc.value.evidence
+    assert not out.exists()
+
+
+def test_a_sample_inside_the_extraction_still_builds(tmp_path):
+    """Grade the arm on what it can move: `--sample=0,1,2` on a 3-frame extraction is
+    correct work and must not be refused."""
+    import make_e13_sheet as E13
+
+    frames, payload = _e13_extraction(tmp_path)
+    out = tmp_path / "sheet_ok.png"
+    # `main` returns the sheet PATH here, not an exit code — this module is one of the ten
+    # that still end in a bare `main()` and is not among the three the halt-contract finding
+    # names, so its return contract is unchanged this wave.
+    assert E13.main([f"--payload={payload}", f"--frames={frames}", f"--out={out}",
+                     "--arm=A1", "--seed=1", "--sample=0,1,2"]) == str(out)
+    assert out.exists()
+
+
+# ===========================================================================
+# F-7f59629f (HIGH) — invert_frames writes nothing until every frame is accepted
+# ===========================================================================
+
+def _control_dir(tmp_path, name, n=4, rgba_at=None):
+    d = tmp_path / name
+    d.mkdir(parents=True, exist_ok=True)
+    for i in range(n):
+        if rgba_at is not None and i == rgba_at:
+            Image.new("RGBA", (8, 8), (50, 50, 50, 255)).save(d / f"{i:05d}.png")
+        else:
+            Image.new("L", (8, 8), 50 + i).save(d / f"{i:05d}.png")
+    return d
+
+
+def test_a_refused_frame_leaves_the_output_directory_ABSENT(tmp_path):
+    """THE AUDITOR'S OPERAND: a 4-frame source whose frame 2 is RGBA.
+
+    Measured on `e8263a3` through the real CLI: exit 1, stdout empty, and `--out` holding
+    `00000.png` and `00001.png` — a PARTIAL control directory with no receipt and no marker,
+    because `os.makedirs(dst)` sat above the loop and each frame was written inside it while
+    `_read_u8_gray` can refuse frame i+1 on four clauses.
+    """
+    import invert_frames as INV
+
+    src = _control_dir(tmp_path, "src", 4, rgba_at=2)
+    out = tmp_path / "dst"
+    with pytest.raises(INV.InvertError) as exc:
+        INV.invert_dir(str(src), str(out))
+    assert exc.value.evidence["clause"] == "frame_carries_an_alpha_channel", (
+        exc.value.evidence)
+    assert not out.exists(), (
+        f"a refused run left {sorted(os.listdir(out)) if out.exists() else None} behind")
+
+
+def test_a_refused_run_into_a_used_output_directory_changes_nothing_in_it(tmp_path):
+    """THE CONSEQUENCE THAT MATTERS, measured on `e8263a3`: a first clean run wrote 4
+    inverted frames and `<out>.receipt.json`; the second, REFUSED run overwrote frames 0-1
+    and left 2-3 from the first. The directory then read as a complete, spec-length control
+    sequence to every consumer — `encode_control.frame_population(<dir>, expect=4)` returned
+    all four names, no stray, no short-population refusal — while its four frames came from
+    two different arms, and the first run's receipt was still on disk asserting `n_frames: 4`
+    and an `out_pixels_sha256` that no longer described the directory.
+    """
+    import invert_frames as INV
+
+    clean = _control_dir(tmp_path, "clean", 4)
+    out = tmp_path / "dst2"
+    first = INV.invert_dir(str(clean), str(out))
+    before = {n: (out / n).read_bytes() for n in sorted(os.listdir(out))}
+
+    bad = _control_dir(tmp_path, "bad", 4, rgba_at=2)
+    with pytest.raises(INV.InvertError) as exc:
+        INV.invert_dir(str(bad), str(out))
+    assert exc.value.evidence["clause"] == "out_directory_already_holds_frames", (
+        exc.value.evidence)
+    after = {n: (out / n).read_bytes() for n in sorted(os.listdir(out))}
+    assert after == before, "a refused run changed the directory it was refused into"
+    assert first["n_frames"] == 4
+
+
+def test_every_one_of_the_five_read_clauses_fires_above_the_first_write(tmp_path):
+    """SIBLINGS, enumerated: all four `_read_u8_gray` clauses plus the population one, each
+    on a frame that is NOT the first — the position that made the old loop partial."""
+    import invert_frames as INV
+
+    cases = []
+    # alpha
+    cases.append(("frame_carries_an_alpha_channel", _control_dir(tmp_path, "a", 4, rgba_at=3)))
+    # palette
+    d = _control_dir(tmp_path, "p", 4)
+    Image.new("P", (8, 8)).save(d / "00003.png")
+    cases.append(("frame_is_palette_indexed", d))
+    # 16-bit
+    d = _control_dir(tmp_path, "b16", 4)
+    Image.fromarray(np.full((8, 8), 300, dtype=np.uint16)).save(d / "00003.png")
+    cases.append(("frame_is_not_eight_bit", d))
+    # colour, not R=G=B
+    d = _control_dir(tmp_path, "c", 4)
+    arr = np.zeros((8, 8, 3), dtype=np.uint8)
+    arr[..., 0] = 200
+    Image.fromarray(arr).save(d / "00003.png")
+    cases.append(("frame_is_colour_not_grayscale", d))
+
+    for clause, src in cases:
+        out = tmp_path / f"out_{clause}"
+        with pytest.raises(INV.InvertError) as exc:
+            INV.invert_dir(str(src), str(out))
+        assert exc.value.evidence["clause"] == clause, (clause, exc.value.evidence)
+        assert not out.exists(), (clause, "the refused run left a partial directory")
+
+
+def test_a_clean_inversion_still_writes_every_frame_and_its_receipt(tmp_path):
+    """Grade the arm on what it can move."""
+    import invert_frames as INV
+
+    src = _control_dir(tmp_path, "ok", 4)
+    out = tmp_path / "ok_out"
+    rec = INV.invert_dir(str(src), str(out))
+    assert rec["n_frames"] == 4
+    assert sorted(os.listdir(out)) == [f"{i:05d}.png" for i in range(4)]
+
+
+# ===========================================================================
+# SEAM 1 — the ONE `__main__` halt handler, adopted by import
+# F-41a09432 / F-af7f5c42 / F-e0f1f520 (handler half) / F-c3dd5ba3 / F-03bf2b7e
+# ===========================================================================
+
+SEAM1_ADOPTERS = {
+    "composite_reference": "COMPOSITE_REFERENCE",
+    "encode_control": "ENCODE_CONTROL",
+    "pack_pose_pack": "PACK_POSE_PACK",
+    "make_review_clip": "MAKE_REVIEW_CLIP",
+    "measure_clip": "MEASURE_CLIP",
+    "resample_motion": "RESAMPLE_MOTION",
+    "render_pose_sticks": "RENDER_STICKS",
+    "invert_frames": "INVERT_FRAMES",
+}
+
+
+def test_the_handler_is_adopted_by_import_and_never_copied():
+    """SEAM 1's contract: ONE handler, ONE home. Each adopter's `__main__` block calls
+    `armature_core.parts.run_tool_main` and none of them spells a handler body."""
+    for mod, prefix in SEAM1_ADOPTERS.items():
+        src = open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8").read()
+        block = src[src.index('if __name__ == "__main__":'):]
+        assert "from armature_core.parts import run_tool_main" in block, mod
+        assert f'run_tool_main({{}}, "{prefix}")'.replace("{}", "main") in block \
+            or f'run_tool_main(_cli, "{prefix}")' in block, (mod, block[-200:])
+        assert "traceback.print_exc" not in block, (mod, "a handler body was copied")
+        assert "_halt_keysafe" not in block, (mod, "a serialiser was copied")
+
+
+def test_single_path_segment_has_exactly_one_home():
+    """SEAM 1's other half: the two byte-identical copies are DELETED, not re-derived, and
+    nobody spells a third."""
+    import ast
+
+    definers = []
+    for mod in _OWNED_42:
+        tree = ast.parse(open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8").read())
+        if any(isinstance(n, ast.FunctionDef) and n.name == "single_path_segment"
+               for n in ast.walk(tree)):
+            definers.append(mod)
+    assert definers == [], definers
+    from armature_core.parts import single_path_segment
+    assert callable(single_path_segment)
+
+
+@pytest.mark.parametrize("run", ["../A2/lossless/A2", "outputs/E09/A2", "a/b", "..", "",
+                                 "C:/abs"])
+def test_the_review_run_token_is_a_name_and_never_a_path(tmp_path, run):
+    """THE AUDITOR'S OPERAND and its siblings, for F-03bf2b7e.
+
+    Measured on `e8263a3` on a 3-frame `<base>/A2/lossless`:
+    `--out=<base>/review --run=../A2/lossless/A2` wrote `A2_review_0.50x_8fps.webp` INTO the
+    run's own numbered-frame directory, printed `MAKE_REVIEW_CLIP_OK` and returned 0 — while
+    the control run, asking for that destination directly with `--out=<frames dir>`, raises
+    `ReviewClipError` from `gate_out_directory`. The andon landed in wave 16 to prevent that
+    outcome was walked past by a flag landed in the same wave: the gate inspects `--out`
+    only, and the write is `--out` plus an operator string. A second measurement,
+    `--run=outputs/E09/A2`, died with a bare `FileNotFoundError` naming a path with mixed
+    separators AFTER `os.makedirs(a.out)` had created the review directory.
+    """
+    import make_review_clip as MRC
+
+    frames = tmp_path / "A2" / "lossless"
+    frames.mkdir(parents=True)
+    for i in range(3):
+        Image.new("RGB", (8, 8), (10 * i, 0, 0)).save(frames / f"{i:05d}.png")
+    out = tmp_path / "review"
+    if run == "":
+        # an empty --run is not a defect: `run_token` falls through to the DERIVED branch,
+        # which returns the frames directory's parent — a basename by construction.
+        token, source = MRC.run_token(str(frames), run)
+        assert token == "A2" and source == "frames_parent"
+        return
+    with pytest.raises(MRC.ReviewClipError) as exc:
+        MRC.main([f"--frames={frames}", f"--out={out}", f"--run={run}", "--stills=0"])
+    ev = exc.value.evidence
+    assert ev["clause"] == "output_name_is_not_a_name", (run, ev)
+    assert ev["flag"] == "--run", ev
+    assert not out.exists(), "a refused run created the review directory"
+    assert sorted(os.listdir(frames)) == ["00000.png", "00001.png", "00002.png"], (
+        "the review pass left an artifact among the run's numbered frames")
+
+
+def test_a_legal_run_token_still_names_the_clip(tmp_path):
+    """Grade the arm on what it can move: a bare token is the documented use and stays."""
+    import make_review_clip as MRC
+
+    frames = tmp_path / "A2" / "lossless"
+    frames.mkdir(parents=True)
+    for i in range(3):
+        Image.new("RGB", (8, 8), (10 * i, 0, 0)).save(frames / f"{i:05d}.png")
+    out = tmp_path / "review_ok"
+    assert MRC.main([f"--frames={frames}", f"--out={out}", "--run=A2",
+                     "--stills=0"]) == 0
+    clips = [n for n in os.listdir(out) if n.endswith(".webp")]
+    assert clips == ["A2_review_0.50x_8fps.webp"], sorted(os.listdir(out))

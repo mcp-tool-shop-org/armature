@@ -600,7 +600,7 @@ def _parse_argv(argv, known=KNOWN_FLAGS, required=REQUIRED_FLAGS):
     `(message, evidence=None)` constructor `GateFailure` already has (core-gates owns it,
     wave 14), the honest place for the flag, the token and the known set is the MESSAGE."
     That condition was SATISFIED at the wave-14 merge and the sentence outlived it.
-    Measured in this worktree 2026-09-04: `armature_core/errors.py:40-42` defines
+    Measured in this worktree 2026-09-04: `armature_core/errors.py::ArmatureError.__init__` defines
     `ArmatureError.__init__(self, message, evidence=None)`, and
     `SpecError("m", {"gate": None, "flag": "--nope"}).evidence` returns the dict with
     `str(exc) == "m"` — no 2-tuple repr. Measured on the live path before the fix,
@@ -746,7 +746,7 @@ def main(argv=None):
         # WAVE 14 (F-8393e66c): the class is `_UnreadablePath`, not the bare base. On that
         # branch the base had no `__init__`, so this dict landed in `args[1]` and the halt
         # line printed `"evidence": null` beside a message that was a 2-tuple repr. The base
-        # carries the constructor now (wave-14 merge, `errors.py:40-42`); the named class
+        # carries the constructor now (wave-14 merge, `errors.py::ArmatureError.__init__`); the named class
         # stays because a halt record names the andon that pulled, never the family.
         raise _UnreadablePath(
             f"{type(exc).__name__}: {exc}",

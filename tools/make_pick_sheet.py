@@ -59,7 +59,7 @@ class PickSheetError(ArmatureError):
 
     A NAMED andon rather than the family base: a halt record names which check pulled, and
     `ArmatureError` is the family, not an andon. It defines no `__init__` — the base stores
-    what it is passed (`armature_core/errors.py:40-42`) and normalising a bare refusal's
+    what it is passed (`armature_core/errors.py::ArmatureError.__init__`) and normalising a bare refusal's
     receipt to `{}` is what wave 16 deleted from thirty classes in this domain.
     """
 

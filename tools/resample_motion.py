@@ -57,6 +57,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core import lift_solve, resample  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
+
 TOOL_VERSION = "E10.1"
 
 #: Bones whose step angles are reported by name. The limbs the Director's eye reads chop
@@ -73,62 +74,12 @@ DIAGNOSTIC_BONES = ("hips", "chest", "head",
 MIN_DST_FRAMES = 2
 
 
-def single_path_segment(value, flag, exc, extra=None):
-    """`value` if it names ONE path component, else raise `exc` naming the flag. · ANDON
-
-    A `--name` is a NAME, not a path. `os.path.join(out_dir, name + ".motion.json")` with
-    `name="../escaped"` writes OUTSIDE `--out` while the sentinel line reports success --
-    measured on the base tree (F-db1de39d) on a 4-frame motion record:
-    `--out=<base>/o/inner --name=../escaped --frames=6` printed `RESAMPLE_MOTION_OK` with
-    `"out": "<out>/inner/../escaped.motion.json"` (backslashes on Windows), returned 0,
-    and left the record at
-    `<base>/o/escaped.motion.json` while `<base>/o/inner`, which `os.makedirs` had just
-    created, stayed empty. `_sha256(path)` still hashed the file that was written, so the
-    receipt was correct about the bytes and wrong about the place.
-
-    The neighbouring spelling refuses by accident rather than by name: measured the same
-    way, `--name=a/b` died with an untyped `FileNotFoundError` whose halt record read
-    `"evidence": null`, so a run that was refused looked like a run that crashed.
-
-    `os.path.basename` alone is not the check: it is platform-dependent (on POSIX
-    `basename("a\b")` is the whole string) and it accepts `.` and `..` unchanged. Both
-    separators, the drive-relative spellings, the two dot names and an absent name are
-    refused explicitly, so the same call answers the same way on either platform. An
-    ABSENT `--name` is not a defect here and never reaches this function: `a.name or
-    (derived)` at the write site substitutes the derived stem, which is measured -- on the
-    base tree `--name=` (empty) wrote `motion.6.motion.json`, the default.
-
-    ⚠ **This is the second spelling of one rule, not a second rule.** `pack_pose_pack`
-    carries a character-identical copy under the same clause word
-    (`output_name_is_not_a_name`); the single home for it is `armature_core`, which is
-    another domain's tree in the frozen map, so the helper lives beside its callers the way
-    `parts.require_finite` does. The third instance in this domain -- `make_review_clip`'s
-    `--run`, which reaches `clip_name`'s `f"{run}_{stem}"` -- is a DEFERRED Stage B item
-    and is deliberately NOT fixed here.
-    """
-    text = "" if value is None else str(value)
-    sep = {"/", "\\"} | {c for c in (os.sep, os.altsep) if c}
-    if (not text.strip() or text in (".", "..") or os.path.isabs(text)
-            or any(c in text for c in sep) or os.path.basename(text) != text):
-        ev = {"gate": "ARGS", "andon": exc.__name__,
-              "clause": "output_name_is_not_a_name", "flag": flag, "name": text}
-        ev.update(extra or {})
-        raise exc(
-            f"{flag}={text!r} is not a name; it is pasted into the output path as one "
-            f"component of a filename, so a separator, an absolute path or a dot name "
-            f"writes the record somewhere other than the directory this tool was told to "
-            f"write into, while the sentinel line and the sha256 beside it describe a file "
-            f"that is not there",
-            ev)
-    return text
-
-
 class ResampleArgError(ArmatureError):
     """A flag this tool was given is not a value it can resample with.
 
     It defines no constructor. The wave-14 note here read "carries its own
     `(message, evidence)` constructor: `ArmatureError` has none" — measured false on this
-    tree, where `armature_core/errors.py:40-42` defines exactly that shape and stores the
+    tree, where `armature_core/errors.py::ArmatureError.__init__` defines exactly that shape and stores the
     dict as passed. What the local copy added was `evidence or {}`, which normalises a bare
     refusal's null receipt into an empty dict and so contradicts the base's own rule
     (`errors.py:27-33`). Deleted wave 16; the two raises below reach the base unchanged.
@@ -224,6 +175,14 @@ def main(argv=None):
     #      would refuse an input this tool accepts today, and a bound belongs where the
     #      value is READ.
     if a.name:
+        # WAVE 22, SEAM 1: the ONE home for this check, adopted BY IMPORT (the two
+        # byte-identical copies this domain held are deleted). The import is at the
+        # CALL SITE rather than at module scope for one reason, stated so it is not
+        # read as a cycle break: the helper lands on core-solvers' branch in the same
+        # parallel wave, and a module-scope import makes this file uncollectable on
+        # any tree where that branch has not merged yet. Same object either way.
+        from armature_core.parts import single_path_segment
+
         single_path_segment(a.name, "--name", ResampleArgError,
                             extra={"tool": "resample_motion",
                                    "out": out_dir, "motion": a.motion})
@@ -316,15 +275,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("RESAMPLE_MOTION_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # WAVE 22, SEAM 1: the ONE `__main__` halt handler, adopted BY IMPORT from
+    # `armature_core.parts` (core-solvers' file, posted to the wave-22 seams inbox). Never
+    # copied — the whole point of the seam is that this block is one function with one home.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "RESAMPLE_MOTION")

@@ -332,32 +332,35 @@ def test_the_resample_halt_record_names_the_class_the_clause_and_the_operand(tmp
 
 
 def test_the_pack_refusal_reaches_the_operator_and_records_what_it_cannot_say(tmp_path):
-    """The pack tool's `__main__` is `raise SystemExit(main())` — there is no halt printer.
+    """RE-DERIVED WAVE 22 (F-af7f5c42): the Stage B item this test pinned is closed.
 
-    So the record an operator sees is a traceback: the CLASS and the MESSAGE reach stderr,
-    the evidence dict — and therefore the `clause` — reach nothing, and the exit code is 1
-    ("an unhandled error") rather than the 2 a deliberate refusal earns under the handler
-    every other tool in this domain carries. That is measured here rather than left as an
-    assumption, and it is filed as a Stage B item (wave-18 seams inbox, SEAM 9): this is the
-    tool whose artifact is UPLOADED, and `tests/test_instrument_exits.py`'s halt census is
-    keyed on `RECORDED_BLENDER_TOOLS`, of which this file is not a member.
-
-    The test asserts what IS true today, so the day the handler lands it fails and says so.
+    What it asserted until now — and what was true on `e8263a3` — was the ABSENCE of a halt
+    printer: `pack_pose_pack.__main__` was a bare `raise SystemExit(main())`, so the record
+    an operator saw was a traceback, the evidence dict (and therefore the `clause`) reached
+    nothing, and the exit code was 1 ("an unhandled error") rather than the 2 a deliberate
+    refusal earns. The test was written to fail on the day the handler landed, and it did.
+    This is that re-derivation, asserting the other side of the same property:
+    `pack_pose_pack` adopts `armature_core.parts.run_tool_main` (wave-22 SEAM 1, the ONE
+    handler with ONE home), so the same refusal now prints one `PACK_POSE_PACK_HALT` line
+    carrying the clause and exits 2.
     """
     frames = stick_frames(str(tmp_path / "frames"))
     proc = _run_tool("pack_pose_pack.py",
                      [f"--frames={frames}", f"--out={tmp_path / 'o'}", "--fps=-16"],
                      tmp_path)
-    assert proc.returncode != 0
-    assert "PosePackError" in proc.stderr
-    assert "--fps=-16 is not a rate" in proc.stderr
+    assert proc.returncode == 2, (proc.returncode, proc.stdout[-400:], proc.stderr[-400:])
     assert "PACK_POSE_PACK_OK" not in proc.stdout
     assert not os.path.exists(str(tmp_path / "o"))
-    src = open(os.path.join(TOOLS, "pack_pose_pack.py"), encoding="utf-8").read()
-    assert "PACK_POSE_PACK_HALT" not in src, (
-        "a halt printer landed; re-derive this test and SEAM 9's Stage B item")
-    assert "pack_rate_not_positive" not in proc.stdout + proc.stderr, (
-        "the clause does not reach any printed line today; that is the Stage B item")
+
+    halt = [l for l in proc.stdout.splitlines() if l.startswith("PACK_POSE_PACK_HALT ")]
+    assert len(halt) == 1, proc.stdout[-600:]
+    rec = json.loads(halt[0][len("PACK_POSE_PACK_HALT "):])
+    assert rec["tool"] == "pack_pose_pack", rec
+    assert rec["error"] == "PosePackError", rec
+    assert "--fps=-16 is not a rate" in rec["message"], rec
+    assert rec["evidence"]["clause"] == "pack_rate_not_positive", rec
+    assert rec["evidence"]["flag"] == "--fps" and rec["evidence"]["value"] == -16, rec
+    assert "REFUSED" in rec["outcome"] or "HALTED" in rec["outcome"], rec
 
 
 # ===========================================================================
