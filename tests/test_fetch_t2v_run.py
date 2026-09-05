@@ -261,6 +261,26 @@ def _dump_of(tmp_path, n_frames=3, video=False):
     return dump
 
 
+def _body_for(path):
+    """Bytes that satisfy `fetch_run.CONTENT_SIGNATURES` for this path's suffix.
+
+    Wave 18 (F-0124c714). This stub wrote `PNG_SIGNATURE` into every planned output, the
+    `donor<ext>` VIDEO job included, because the content clause read only `.png` — the very
+    gap `download`'s docstring named in prose and this wave closed. The clause reaches every
+    planned suffix now, so the stand-in lands what a downloader would.
+    """
+    import fetch_run as F
+
+    suffix = os.path.splitext(path)[1].lower()
+    rules = F.CONTENT_SIGNATURES.get(suffix)
+    if rules is None:
+        return b"\x00\x01\x02\x03 arbitrary bytes for a suffix with no signature"
+    body = bytearray(b"\x00" * 32)
+    for offset, magic, _name in rules:
+        body[offset:offset + len(magic)] = magic
+    return bytes(body)
+
+
 def _writer(skip=(), monkeypatch=None):
     def fake_download(jobs, out=None):   # `out` since wave 14 (F-a3ba416b)
         for j in jobs:
@@ -268,7 +288,7 @@ def _writer(skip=(), monkeypatch=None):
                 continue
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             with open(j["out"], "wb") as fh:
-                fh.write(T.PNG_SIGNATURE)
+                fh.write(_body_for(j["out"]))
     return fake_download
 
 

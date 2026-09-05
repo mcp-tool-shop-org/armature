@@ -584,15 +584,27 @@ def resolve_start_frame(path, declared_sha256):
     So the tool reads the file. A declared digest is kept only as a cross-check, and a
     declared digest that disagrees with the bytes halts the build.
     """
+    # ---- wave 18 (F-c080a03f). These two raises carried NO evidence at all — measured on
+    # the base tree, `exc.evidence` was `None` for both, so `evidence['clause']` was None
+    # and a triage keyed on it could not distinguish "no such file" from "not a PNG this
+    # tool can read". That is the consequence the finding names, one door up from the carry
+    # it names; the third refusal below (a declared digest that disagrees with the bytes)
+    # had the same hole. All three are named now, with the keys `start_frame_not_a_png`
+    # already carried.
+    base = {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
+            "path": os.path.abspath(path) if path else None}
     if not path:
         raise PayloadError(
             "--start-frame is required: this route's whole conditioning is one image, and "
             "a record that cannot name that image's bytes is not a recipe. Pass the local "
-            "path to the re-authored start frame; the tool hashes it")
+            "path to the re-authored start frame; the tool hashes it",
+            dict(base, clause="start_frame_not_supplied", supplied=path))
     if not os.path.isfile(path):
         raise PayloadError(
             f"--start-frame {path!r} is not a file, so there is nothing to hash and no "
-            f"control-input hash to record")
+            f"control-input hash to record",
+            dict(base, clause="start_frame_is_not_a_file",
+                 is_dir=os.path.isdir(path), exists=os.path.exists(path)))
     with open(path, "rb") as fh:
         digest = hashlib.sha256(fh.read()).hexdigest()
     ev = {"path": os.path.abspath(path), "sha256": digest,
@@ -635,7 +647,10 @@ def resolve_start_frame(path, declared_sha256):
             raise PayloadError(
                 f"--start-frame-sha256 {declared_sha256!r} does not hash to the file "
                 f"{path!r}, which is {digest!r}. One of the two names a different "
-                f"artifact, and the record may not carry a digest the bytes do not support")
+                f"artifact, and the record may not carry a digest the bytes do not support",
+                dict(base, clause="start_frame_sha256_disagrees",
+                     declared_sha256=declared_sha256.strip().lower(), sha256=digest,
+                     bytes=ev["bytes"]))
         ev["declared_sha256"] = declared_sha256.strip().lower()
         ev["source"] = "hashed_in_tool_and_confirmed_against_the_declared_value"
     return ev

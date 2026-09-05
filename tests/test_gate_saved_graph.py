@@ -561,7 +561,10 @@ def test_a_link_id_declared_twice_with_different_origins_halts():
     ev = exc.value.evidence
     assert ev["link_id"] == "6"
     assert sorted(map(list, ev["origins"])) == [["30", 0], ["31", 0]]
-    assert ev["andon"] == "duplicate_link_id"
+    # wave 18 (F-c11410c5): `andon` names the CLASS that pulled, one spelling across the
+    # file and the id's own owner; the clause name it displaced is asserted below.
+    assert ev["andon"] == "SavedAdmission"
+    assert ev["clause"] == "duplicate_link_id"
 
 
 def test_the_duplicate_clause_reaches_the_topology_gate_too():

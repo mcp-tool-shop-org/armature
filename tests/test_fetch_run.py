@@ -68,6 +68,22 @@ def _result(nid, i, ext=".png"):
             "url": f"https://example.invalid/{i}{ext}"}
 
 
+def _body_for(path):
+    """Bytes that satisfy `fetch_run.CONTENT_SIGNATURES` for this path's suffix.
+
+    Wave 18 (F-0124c714). The content clause reaches every planned suffix now, so a fixture
+    landing a PNG signature in a `.mp4` is landing something no downloader produces.
+    """
+    suffix = os.path.splitext(path)[1].lower()
+    rules = F.CONTENT_SIGNATURES.get(suffix)
+    if rules is None:
+        return b"\x00\x01\x02\x03 arbitrary bytes for a suffix with no signature"
+    body = bytearray(b"\x00" * 32)
+    for offset, magic, _name in rules:
+        body[offset:offset + len(magic)] = magic
+    return bytes(body)
+
+
 @pytest.fixture()
 def stub_download(monkeypatch):
     """A downloader that lands every planned output, and records its call.
@@ -78,6 +94,12 @@ def stub_download(monkeypatch):
     real `-Parallel` block cannot report a failed curl through the process code, so the
     record IS the observation, and `--fail-with-body` means the bytes on disk are the
     difference between a frame and an HTTP refusal.
+
+    Wave 18 (F-0124c714), the same correction one suffix further: it wrote `PNG_SIGNATURE`
+    into EVERY planned output, `.mp4` taps included, because the content clause read only
+    `.png`. The clause reaches the video tap now, so the stand-in lands bytes that match the
+    suffix it is landing — a stub that writes a PNG into a `.mp4` was standing in for a
+    downloader that never does.
     """
     calls = []
 
@@ -91,7 +113,7 @@ def stub_download(monkeypatch):
                 for job in json.load(fh):
                     os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
                     with open(job["out"], "wb") as out:
-                        out.write(F.PNG_SIGNATURE)
+                        out.write(_body_for(job["out"]))
                     rows.append({"out": job["out"], "url": job["url"], "code": 0,
                                  "message": ""})
         exits = env.get(F.EXITS_ENV)
@@ -454,7 +476,9 @@ def _landed_run(tmp_path, run="A0r1", extra_root_files=()):
         out.write_bytes(F.PNG_SIGNATURE)   # wave 12: a planned .png must BE one
         jobs.append((f"http://x/{i}", str(out)))
     vid = base / f"{run}_00000.mp4"
-    vid.write_bytes(b"mp4")
+    # wave 18 (F-0124c714): a planned `.mp4` must BE one, for the same reason the line
+    # above says a planned `.png` must — the content clause reaches the video tap now.
+    vid.write_bytes(_body_for(str(vid)))
     jobs.append((f"http://x/v", str(vid)))
     for name in extra_root_files:
         (base / name).write_bytes(b"stray")
@@ -753,14 +777,31 @@ def test_a_planned_png_that_IS_a_png_passes_the_content_clause(tmp_path):
     assert "all present and non-empty" in ev["verdict"]
 
 
-def test_the_content_clause_only_binds_what_the_plan_NAMED(tmp_path):
-    """A `.mp4` video tap is not asserted to be a PNG. The clause reads the extension the
-    PLAN wrote, so it says nothing about suffixes it has no signature for."""
+def test_the_content_clause_reaches_the_VIDEO_tap_too(tmp_path):
+    """⚠ **This test pinned the defect.** Until wave 18 it read
+    `test_the_content_clause_only_binds_what_the_plan_NAMED` and asserted that a `.mp4`
+    holding `b"not really an mp4 either"` gave `wrong_type == []` and
+    `content_checked == {"png": 0}` — "the clause says nothing about suffixes it has no
+    signature for". F-0124c714 measured what that bought: a two-job plan whose `.png` was a
+    real PNG and whose `E13_00000.mp4` held a 35-byte `--fail-with-body` error body returned
+    a full PASS, on the tap that carries the whole product of the generation.
+
+    `fetch_run.CONTENT_SIGNATURES` has a row for `.mp4` now (an `ftyp` box at offset 4), so
+    the assertion is inverted rather than deleted, and the receipt states per suffix what it
+    checked and what it could not."""
     p = tmp_path / "r_00000.mp4"
     p.write_bytes(b"not really an mp4 either")
-    ev = F.verify_downloads([("https://example.invalid/x", str(p))], directories=[])
-    assert ev["wrong_type"] == []
-    assert ev["content_checked"] == {"png": 0}
+    with pytest.raises(F.FetchHalt) as exc:
+        F.verify_downloads([("https://example.invalid/x", str(p))], directories=[])
+    ev = exc.value.evidence
+    assert ev["clause"] == "downloaded_body_is_not_the_planned_type", ev
+    assert ev["wrong_type"][0]["expected"] == "mp4", ev
+    assert ev["content_checked"][".mp4"] == {"checked": 1, "unjudged": 0}, ev
+
+    good = tmp_path / "r_00001.mp4"
+    good.write_bytes(b"\x00\x00\x00\x20ftypisom" + b"\x00" * 16)
+    ok = F.verify_downloads([("https://example.invalid/x", str(good))], directories=[])
+    assert ok["wrong_type"] == []
 
 
 # ============================================================ wave 12, F-a72178c2

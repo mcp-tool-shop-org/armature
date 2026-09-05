@@ -776,6 +776,15 @@ class PayloadOutHalt(GateFailure):
     is silent — one artifact replaces the other under a green OK line. So the equality is
     checked, in the tool that performs the write, before either write and before
     `os.makedirs`, so a refusal leaves no output directory.
+
+    ⚠ **Those two clauses could not fire with the suffix this tool ships** (wave 18,
+    F-46bffbb9), and the correction is recorded rather than the sentence deleted. They are
+    reachable only through `gate_out_paths`' `meta_suffix` parameter, which no production
+    caller passes — `main`'s single call at :843 passes one argument — so they are
+    belt-and-braces over a derivation that already forbids what they describe. The andon's
+    production teeth are the two clauses added beside them: a derived path that already
+    exists as a DIRECTORY, which the shipped `META_SUFFIX` reaches and which is the same
+    partial-write family recorded above. Both are proven red without touching the constant.
     """
 
     gate = "OUT"
@@ -793,6 +802,39 @@ def gate_out_paths(out, meta_suffix=None):
     ev = {"gate": "OUT", "andon": "PayloadOutHalt", "clause": "meta_path_equals_graph_path",
           "out": graph, "meta": meta, "meta_suffix": suffix,
           "derived_by": "os.path.splitext(out)[0] + META_SUFFIX"}
+    # ---- ANDON, wave 18 (F-46bffbb9), on the direction the derivation does not bound AND
+    # the SHIPPED suffix can reach. The two clauses below cannot fire with
+    # `META_SUFFIX == ".meta.json"`: `meta == graph` would need
+    # `splitext(graph)[0] == graph[:-len('.meta.json')]`, and for any `graph` ending
+    # `.meta.json` `splitext` strips only `.json` and leaves the `.meta`; and `".meta.json"`
+    # contains no path separator, so the dirnames are equal by construction. Probed on the
+    # base tree over 13 `--out` shapes (`a.json`, `a`, `a.meta.json`, `a.b.json`, `.json`,
+    # `.meta.json`, `a.`, `dir/a.json`, `a.JSON`, `a.meta.JSON`, `..`, `a.json.`, `x.meta`):
+    # ZERO clauses fired and every pair was distinct. The only red proofs that existed
+    # substituted the module constant (`tests/test_build_payload.py:676` passes
+    # `meta_suffix=".json"`; `:684` monkeypatches `META_SUFFIX`), so `PayloadOutHalt` was
+    # counted as an armed andon by the tree's clause censuses while nothing an operator can
+    # type reached it — "a check that cannot fail is not a check".
+    #
+    # A DIRECTORY at either derived path is the direction that is left. It is the same
+    # family this class exists for: `--out=<dir>/run.json.d/A.json` wrote the graph, aimed
+    # the record at a directory that does not exist, died `FileNotFoundError` and printed
+    # `BUILD_PAYLOAD_HALT` with `evidence: null` at exit 1 — a partial write reported as a
+    # crash. `open(<a directory>, "w")` fails the same way, after the first artifact is
+    # already on disk. Checked here, before `os.makedirs` and before either write, so a
+    # refusal leaves no output directory.
+    if os.path.isdir(graph):
+        raise PayloadOutHalt(
+            f"--out {graph!r} is a DIRECTORY, so the graph cannot be written there: the "
+            f"build would open it, fail, and leave the record's path unwritten — a partial "
+            f"write reported as a crash. Give --out a file path",
+            dict(ev, clause="out_path_is_a_directory"))
+    if os.path.isdir(meta):
+        raise PayloadOutHalt(
+            f"the record would be written to {meta!r}, which already exists as a "
+            f"DIRECTORY. The graph would land on disk and the record write would then "
+            f"fail, leaving a graph whose payload_sha256 nothing states",
+            dict(ev, clause="meta_path_is_a_directory"))
     if meta == graph:
         raise PayloadOutHalt(
             f"the graph and its record would both be written to {graph!r}: the second "
