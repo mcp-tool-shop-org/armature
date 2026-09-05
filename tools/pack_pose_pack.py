@@ -68,6 +68,16 @@ class PosePackError(ArmatureError):
 
 TOOL_VERSION = "E08.1"
 
+#: The rate this pack is written at. `--fps` is `type=int`, so a non-finite spelling never
+#: reaches `main`: measured in this worktree on the base tree, `--fps=nan` is refused by
+#: argparse itself with `invalid int value: 'nan'` at exit 2, before `main` is entered. The
+#: bound below is therefore POSITIVITY only — a `math.isfinite` clause here would be a
+#: clause with no caller, which this repo arms or deletes rather than ships, and `math`
+#: is not imported for a clause that does not exist. The day `--fps` becomes a float,
+#: the finiteness half is `resample_motion`'s two lines, in that order (`isfinite` first,
+#: because `nan > 0` is False and `inf > 0` is True).
+MIN_FPS_EXCLUSIVE = 0
+
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser()
@@ -155,6 +165,35 @@ def read_pack(path):
 def main(argv=None):
     a = parse_args(argv)
     out_dir = os.path.abspath(a.out)
+
+    # ---- ANDON, before anything is read or written, and far above `os.makedirs`: the
+    #      pack's rate is a rate. F-6bb38028, wave 18, and the same divisor
+    #      `make_review_clip` (F-e924157e) and `resample_motion` (F-981fe49d) were given a
+    #      bound for in wave 16 while this tool -- the one whose output is UPLOADED as the
+    #      driving signal -- was left open. Measured on the base tree in this worktree, on a
+    #      4-frame stick directory: `--fps=0` raised a bare `ZeroDivisionError` at
+    #      `duration = int(round(1000.0 / fps))` under BOTH `--format=apng` and
+    #      `--format=webp`, naming neither the flag nor the value; `--fps=-16` raised a bare
+    #      `struct.error: 'H' format requires 0 <= number <= 65535` (apng) and a bare
+    #      `RuntimeError: ERROR adding frame: timestamps must be non-decreasing` (webp). In
+    #      all four runs `--out` had already been created by `os.makedirs` below and was
+    #      left behind EMPTY, which a later reader takes for an attempt that produced
+    #      nothing rather than one that was refused.
+    #
+    #      The consequence the bound is really for is the one no gate downstream can see:
+    #      the frame delay of the uploaded pack is `1000/--fps` ms and Gate R compares
+    #      PIXELS, so on the day a Pillow version accepts a negative or absurd delay rather
+    #      than refusing it, the driving signal's timing is written from a value nothing
+    #      checked, under a green gate.
+    if a.fps <= MIN_FPS_EXCLUSIVE:
+        raise PosePackError(
+            f"--fps={a.fps} is not a rate; this pack's frame delay is 1000/--fps ms, "
+            f"written into the animated image the run UPLOADS and quoted in the manifest "
+            f"as `encoding.duration_ms`, and Gate R compares pixels and is blind to it",
+            {"gate": "ARGS", "andon": "PosePackError",
+             "clause": "pack_rate_not_positive",
+             "flag": "--fps", "value": a.fps,
+             "minimum_exclusive": MIN_FPS_EXCLUSIVE})
 
     paths = frame_paths(a.frames)
     frames = load_frames(paths, alpha_over=parse_plate(a.alpha_over, PosePackError))
