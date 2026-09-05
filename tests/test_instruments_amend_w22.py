@@ -651,6 +651,34 @@ def test_the_two_copies_agree_on_everything_except_their_message():
     assert len(set(shapes.values())) == 1, sorted(shapes)
 
 
+def test_seam_1_is_the_one_home_on_a_merged_tree():
+    """SEAM 1's helper is on the tree, or this branch is not mergeable as it stands.
+
+    `preview_glb --name` and `render_turnaround --prefix` call
+    `armature_core.parts.single_path_segment` with no local copy and no fallback, because
+    "nobody spells a third". While core-solvers' commit is in flight, `tests/conftest.py`'s
+    `_seam_1_single_path_segment` bridge stands the byte-equivalent copy up for the suite so
+    the adoption can be exercised rather than skipped. This is the check that keeps the
+    bridge from outliving the seam: it reports the honest state, and after the wave merges a
+    stand-in means the two parsers would raise `AttributeError` in production.
+    """
+    import conftest
+
+    from armature_core import parts
+
+    assert getattr(parts, "single_path_segment", None) is not None, (
+        "neither the merged home nor the bridge resolved `single_path_segment`")
+    if conftest.SEAM_1_LANDED:
+        return
+    pytest.skip(
+        "SEAM 1 (core-solvers) has not merged into this branch: "
+        "`armature_core.parts.single_path_segment` is absent and "
+        "`tests/conftest.py::_seam_1_single_path_segment` is standing in "
+        "`pack_pose_pack`'s byte-equivalent copy. The COORDINATOR must confirm the real "
+        "object exists on the merged tree and delete the bridge; until then this is the "
+        "ONE skip this domain reports, and it names exactly what is missing.")
+
+
 @pytest.fixture
 def one_home(monkeypatch):
     """`armature_core.parts.single_path_segment`, standing one in if SEAM 1 is in flight.
@@ -815,3 +843,648 @@ def _fn_in(filename, name):
         if isinstance(node, ast.FunctionDef) and node.name == name:
             return node
     raise LookupError(name)
+
+
+# ===========================================================================
+# F-0b201a20 — PROBE_GLB_OK is earned by an effect, and a refused run leaves nothing.
+# ===========================================================================
+
+
+@pytest.fixture(scope="module")
+def pglb():
+    return load_tool("probe_glb.py")
+
+
+def test_probe_glb_refuses_named_paths_that_are_not_files(pglb, tmp_path, monkeypatch):
+    """MEASURED on `e8263a3` under `blender_stub.blender_stubbed()`: `probe_one('nope_a.glb')`
+    and `probe_one('nope_b.glb')` returned `{'exists': False, 'clause_A_loads': False,
+    'error': 'file not found'}` rows, `main` never inspected that field, and the summary it
+    builds from them is `{'n_files': 2, 'clause_A_loads': 0, ...}` — `n_files` counting
+    ARGUMENTS. `hasattr(module, 'require_openable')` was False.
+
+    This is the rule E07 earned — "verify a success sentinel in the output, never the exit
+    code alone" — answered with a sentinel counting subjects that were never probed.
+    """
+    a, b = tmp_path / "nope_a.glb", tmp_path / "nope_b.glb"
+    monkeypatch.setattr(pglb.sys, "argv", [
+        "blender", "-b", "-P", "x", "--", "--out=" + str(tmp_path / "out"),
+        "--glb=" + str(a), "--glb=" + str(b)])
+    from armature_core.errors import ArmatureError   # inside the test: Trap A
+    with pytest.raises(ArmatureError) as exc:
+        pglb.main()
+    assert "nope_a.glb" in str(exc.value) and "nope_b.glb" in str(exc.value)
+    assert not (tmp_path / "out").exists(), (
+        "a refused run created its output directory; a later run reads an empty one as used")
+    assert not list(tmp_path.glob("**/p2_armatures.json"))
+
+
+def test_probe_glb_creates_its_directory_below_the_whole_measurement():
+    """`os.makedirs` sat ABOVE the population (`records = [probe_one(p) for p in globs]`)
+    where `probe_subject.py:227` sits below `require_openable` and below the measurement.
+
+    Keyed on the RESOLVED ordering inside `main`, not on the line numbers.
+    """
+    main = _fn_in("probe_glb.py", "main")
+    makedirs = [n.lineno for n in ast.walk(main)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr == "makedirs"]
+    openable = [n.lineno for n in ast.walk(main)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "require_openable"]
+    probes = [n.lineno for n in ast.walk(main)
+              if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+              and n.func.id == "probe_one"]
+    assert len(makedirs) == 1 and openable and probes, (makedirs, openable, probes)
+    assert openable[0] < makedirs[0], (openable, makedirs)
+    assert probes[0] < makedirs[0], (probes, makedirs)
+
+
+def test_there_is_one_require_openable_and_two_callers():
+    """One implementation, imported — never a second copy. The wave-12 fix's own docstring
+    enumerated the tools it had checked (`check_relift.py:185-187` "already refuses
+    outright") and did not name `probe_glb.py`, which carries a character-identical
+    `probe_one` opening and `parse_argv`."""
+    defs = [f for f in OWNED
+            if any(isinstance(n, ast.FunctionDef) and n.name == "require_openable"
+                   for n in _tree(f).body)]
+    assert defs == ["probe_subject.py"], defs
+    callers = sorted(f for f in OWNED
+                     if any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                            and n.func.id == "require_openable"
+                            for n in ast.walk(_tree(f))))
+    assert callers == ["probe_glb.py", "probe_subject.py"], callers
+
+
+def test_the_probe_glb_refusal_reaches_the_halt_line(pglb, tmp_path, capsys):
+    """THE HALT LINE, READ. A bare `ArmatureError` is a REFUSAL, exit 2, gate null."""
+    def raiser():
+        pglb.require_openable([str(tmp_path / "nope.glb")])
+
+    code, rec, _ = _halt_record("probe_glb.py", "PROBE_GLB_HALT", raiser, capsys)
+    assert code == 2
+    assert rec["outcome"].startswith("REFUSED"), rec
+    assert rec["gate"] is None, rec
+    assert "nope.glb" in rec["message"], rec
+
+
+# ===========================================================================
+# F-833343df — two andons, two clause strings, on all three dailies sheets.
+# ===========================================================================
+
+
+class _Verts:
+    """A rest-frame vertex array `subject_scale` can measure a diagonal from."""
+
+    def __init__(self, span=1.0):
+        import numpy as np
+        self.arr = np.array([[0.0, 0.0, 0.0], [span, span, span]], dtype="float64")
+
+
+@pytest.fixture(scope="module")
+def sheet():
+    return load_tool("make_parts_sheet.py")
+
+
+def _at_rest(span=1.0):
+    import numpy as np
+    return np.array([[0.0, 0.0, 0.0], [span, span, span]], dtype="float64")
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_a_non_finite_displacement_gets_its_own_clause_and_its_own_andon(sheet, bad):
+    """RE-MEASURED end-to-end on `e8263a3`: `arc_liveness(nan, 'max_displacement', at_rest,
+    'make_parts_sheet')` halted at exit 2 with `"error": "ArmatureError"` and
+    `"evidence": {"clause": "arc_did_not_survive", ...}` — the bare family, under the OTHER
+    clause's name. Two distinct andons published one clause string and the second named no
+    andon at all."""
+    with blender_stubbed():
+        with pytest.raises(sheet.ArcMeasurementNotFinite) as exc:
+            sheet.arc_liveness(bad, "max_displacement", _at_rest(), "make_parts_sheet")
+    ev = exc.value.evidence
+    assert ev["clause"] == "measurement_not_finite", ev
+    assert ev["andon"] == "ArcMeasurementNotFinite", ev
+    assert ev["measurement"] == "max_displacement", ev
+    assert ev["where"] == "make_parts_sheet", ev
+    assert "bbox_diagonal" in ev and "floor" in ev, ev
+
+
+def test_a_finite_but_too_small_displacement_keeps_the_survival_clause(sheet):
+    """The two must not be confusable from the halt line alone: this one returns the
+    evidence with `survived: False` under `arc_did_not_survive`, and each sheet raises its
+    own `ArcDidNotSurvive` at the line where its own arc died."""
+    with blender_stubbed():
+        ev, diagonal, _lo, _hi = sheet.arc_liveness(
+            0.0, "max_displacement", _at_rest(), "make_parts_sheet")
+    assert ev["clause"] == "arc_did_not_survive", ev
+    assert ev["andon"] == "ArcDidNotSurvive", ev
+    assert ev["survived"] is False
+    assert ev["max_displacement"] == 0.0
+    assert diagonal > 0.0
+
+
+def test_a_live_arc_still_reports_survived(sheet):
+    with blender_stubbed():
+        ev, _d, _lo, _hi = sheet.arc_liveness(
+            0.5, "max_displacement", _at_rest(), "make_parts_sheet")
+    assert ev["survived"] is True
+
+
+def test_all_three_sheets_reach_the_one_arc_liveness():
+    """One change covers all three: `make_binding_sheet` and `make_rig_sheet` import this
+    function from `make_parts_sheet` rather than spelling their own."""
+    defs = [f for f in OWNED
+            if any(isinstance(n, ast.FunctionDef) and n.name == "arc_liveness"
+                   for n in _tree(f).body)]
+    assert defs == ["make_parts_sheet.py"], defs
+    callers = sorted(f for f in OWNED
+                     if any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                            and n.func.id == "arc_liveness"
+                            for n in ast.walk(_tree(f))))
+    assert callers == ["make_binding_sheet.py", "make_parts_sheet.py",
+                       "make_rig_sheet.py"], callers
+
+
+def test_the_non_finite_arc_refusal_reaches_the_halt_line(sheet, capsys):
+    """THE HALT LINE, READ — and it now names which of the two andons pulled."""
+    def raiser():
+        sheet.arc_liveness(float("nan"), "max_displacement", _at_rest(),
+                           "make_parts_sheet")
+
+    code, rec, _ = _halt_record("make_parts_sheet.py", "MAKE_PARTS_SHEET_HALT",
+                                raiser, capsys)
+    assert code == 2
+    assert rec["outcome"].startswith("REFUSED"), rec
+    assert rec["error"] == "ArcMeasurementNotFinite", rec
+    assert rec["evidence"]["clause"] == "measurement_not_finite", rec
+
+
+# ===========================================================================
+# F-897a3329 — the halt line is STRICT JSON, for the family that made it not be.
+# ===========================================================================
+
+
+def _strict(payload):
+    """`json.loads` with `parse_constant` armed — what every parser but CPython's does."""
+    def refuse(token):
+        raise ValueError("not JSON: bare constant " + token)
+
+    return json.loads(payload, parse_constant=refuse)
+
+
+@pytest.mark.parametrize("filename", OWNED)
+def test_a_non_finite_operand_leaves_the_halt_line_strict_json(filename, capsys):
+    """The halt contract promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`",
+    and for exactly the refusal family wave 16 added — the NaN andons — the object was not
+    JSON. `parts.require_finite` writes the offending value into the evidence
+    (`ev[name] = v`, `armature_core/parts.py:342`), the handler serialised it with
+    `json.dumps(_sentinel, default=str)`, and `default=` applies to values Python CANNOT
+    encode, never to a float it can: `allow_nan` defaults True, so the line carried the
+    bare token `NaN`. `json.loads(payload)` ACCEPTS it — which is why every reader in this
+    suite was green — and `json.loads(payload, parse_constant=<raise>)` REJECTS it, as
+    would JS `JSON.parse`, Go `encoding/json` and serde.
+
+    Driven over ALL 21 owned tools, not the one the finding was filed against: the same
+    `json.dumps(_sentinel, default=str)` line was in 22 files (the 22nd, `stage_render.py`,
+    is instruments-measure's and is posted to the inbox).
+    """
+    from armature_core.errors import GateFailure
+
+    class _NaNGate(GateFailure):
+        gate = "NAN_PROBE"
+
+    def raiser():
+        raise _NaNGate("a measurement that is not a number", {
+            "clause": "measurement_not_finite",
+            "floor": 0.00017320508075688773,
+            "max_displacement": float("nan"),
+            "span": float("inf"),
+            "low": float("-inf"),
+            "nested": [{"deep": float("nan")}],
+        })
+
+    code, escaped = exit_code_of_main_block(filename, raiser=raiser)
+    assert escaped is None, escaped
+    assert code == 2, code
+    prefix = filename[:-3].upper() + "_HALT "
+    lines = [l for l in capsys.readouterr().out.splitlines() if l.startswith(prefix)]
+    assert len(lines) == 1, lines
+    payload = lines[0][len(prefix):]
+    rec = _strict(payload)          # RED on e8263a3: ValueError, bare constant NaN
+    ev = rec["evidence"]
+    #: and the operand is still READABLE — not a null that erases which value it was.
+    assert ev["max_displacement"] == "nan", ev
+    assert ev["span"] == "inf" and ev["low"] == "-inf", ev
+    assert ev["nested"][0]["deep"] == "nan", ev
+    assert ev["floor"] == 0.00017320508075688773, ev
+
+
+def test_the_value_clause_is_spelled_the_same_way_in_all_twenty_one():
+    """The 21 copies cannot drift. `tests/test_instruments_amend_w14.py` already asserts
+    every `_render_status` copy is byte-identical; this is the same rule for the clause
+    this wave added, until SEAM 1's `run_tool_main` absorbs all 21 handlers into one."""
+    bodies = {}
+    for fn in OWNED:
+        for node in _tree(fn).body:
+            if isinstance(node, ast.FunctionDef) and node.name == "_halt_keysafe":
+                body = [st for st in node.body
+                        if not (isinstance(st, ast.Expr)
+                                and isinstance(st.value, ast.Constant))]
+                bodies.setdefault(
+                    tuple(ast.unparse(st) for st in body), []).append(fn)
+    assert len(bodies) == 1, {len(v): v for v in bodies.values()}
+    assert len(next(iter(bodies.values()))) == 21
+
+
+def test_every_owned_handler_serialises_with_allow_nan_false():
+    """The census, on the RESOLVED shape: the keyword, wherever the call is spelled."""
+    missing = []
+    for fn in OWNED:
+        for node in ast.walk(_tree(fn)):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "dumps"
+                    and any(isinstance(a, ast.Name) and a.id == "_sentinel"
+                            for a in node.args)
+                    and any(k.arg == "default" for k in node.keywords)):
+                if not any(k.arg == "allow_nan"
+                           and isinstance(k.value, ast.Constant)
+                           and k.value.value is False for k in node.keywords):
+                    missing.append((fn, node.lineno))
+    assert missing == [], missing
+
+
+# ===========================================================================
+# F-e472aa37 — the retopo manifest cannot state two accounts of one voxel size.
+# ===========================================================================
+
+
+@pytest.fixture(scope="module")
+def retopo():
+    return load_tool("rig_retopo.py")
+
+
+@pytest.mark.parametrize("bad", [0.0, -0.0, -0.005, float("nan"), float("inf")])
+def test_an_explicit_voxel_that_is_not_a_size_is_refused_by_name(retopo, bad):
+    """RE-MEASURED on `e8263a3`: `:400` was `args["voxel"] if args["voxel"] else
+    smallest_r * VOXEL_PER_SMALLEST_RADIUS` — a TRUTHINESS test on a float declared
+    `type=float, default=None` — so an explicit `--voxel=0.0` (or `-0.0`) silently fell
+    through to the derived value with nothing saying the given number was discarded. With
+    `VOXEL_PER_SMALLEST_RADIUS = 1/6` and a smallest limb radius of 0.01301, both produced
+    voxel 0.00217 under `voxel_derivation: "smallest measured limb radius"`, the override
+    erased without a word. The wave-16 rule: a clause keys on the VALUE, never on presence
+    or truthiness."""
+    from armature_core import parts
+
+    ev = {"gate": retopo.VoxelOverrideRefused.gate, "flag": "--voxel"}
+    with pytest.raises(retopo.VoxelOverrideRefused) as exc:
+        parts.require_finite("--voxel", bad, retopo.VoxelOverrideRefused, ev,
+                             positive=True)
+    assert "--voxel" in str(exc.value)
+
+
+def test_the_voxel_branch_keys_on_is_not_none(retopo):
+    """The census, on the RESOLVED shape: `main` binds the branch off `is not None`."""
+    main = _fn_in("rig_retopo.py", "main")
+    src = read_source("rig_retopo.py")
+    given = [n for n in ast.walk(main)
+             if isinstance(n, ast.Assign) and len(n.targets) == 1
+             and isinstance(n.targets[0], ast.Name) and n.targets[0].id == "voxel_given"]
+    assert given, "main no longer names the branch"
+    text = ast.get_source_segment(src, given[0].value)
+    assert "is not None" in text, text
+    #: and no truthiness test on the flag survives anywhere in `main`.
+    for node in ast.walk(main):
+        if isinstance(node, ast.IfExp):
+            assert 'args["voxel"]' != ast.get_source_segment(src, node.test), (
+                "the ternary still keys on truthiness at line %d" % node.lineno)
+
+
+def test_the_route_and_the_derivation_are_built_in_one_branch(retopo):
+    """MEASURED on `e8263a3`: `:425-426` wrote `"route": f"voxel remesh at {voxel:.5f} (=
+    {smallest_name} radius {smallest_r:.5f} / 6)"` UNCONDITIONALLY while `:428-431` wrote
+    `voxel_derivation` under the branch — so `--voxel=0.005` on a 0.01301 forearm produced
+    `route: 'voxel remesh at 0.00500 (= forearm radius 0.01301 / 6)'` (0.01301/6 is
+    0.00217, not 0.00500) directly above `voxel_derivation: 'explicit override ...'`. One
+    record, two contradictory accounts of where its voxel size came from, and a reader
+    deciding which arm won reads the false one first."""
+    src = read_source("rig_retopo.py")
+    main = _fn_in("rig_retopo.py", "main")
+    binds = {}
+    for node in ast.walk(main):
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)):
+            binds.setdefault(node.targets[0].id, []).append(node)
+    assert len(binds.get("voxel_route", [])) == 2, binds.get("voxel_route")
+    assert len(binds.get("voxel_derivation", [])) == 2, binds.get("voxel_derivation")
+    #: the two are built in the SAME two branches — the arithmetic clause appears in the
+    #: derived arm only, and nowhere in the override arm.
+    derived_route = [ast.get_source_segment(src, n.value) for n in binds["voxel_route"]]
+    assert sum("/ 6" in t for t in derived_route) == 1, derived_route
+    assert sum("explicit --voxel override" in t for t in derived_route) == 1, derived_route
+    #: and the manifest reads the names rather than rebuilding either string.
+    manifest_route = [n for n in ast.walk(main)
+                      if isinstance(n, ast.Name) and n.id == "voxel_route"]
+    assert len(manifest_route) >= 3, len(manifest_route)
+
+
+def test_the_voxel_refusal_reaches_the_retopo_halt_line(retopo, capsys):
+    """THE HALT LINE, READ."""
+    from armature_core import parts
+
+    def raiser():
+        parts.require_finite(
+            "--voxel", 0.0, retopo.VoxelOverrideRefused,
+            {"gate": retopo.VoxelOverrideRefused.gate, "sub_gate": "VOXEL",
+             "andon": retopo.VoxelOverrideRefused.__name__, "who": "rig_retopo",
+             "flag": "--voxel", "clause": "voxel_not_finite_and_positive"},
+            positive=True)
+
+    code, rec, _ = _halt_record("rig_retopo.py", "RIG_RETOPO_HALT", raiser, capsys)
+    assert code == 2
+    assert rec["gate"] == "RETOPO_ARGS", rec
+    assert rec["evidence"]["clause"] == "voxel_not_finite_and_positive", rec
+    assert rec["evidence"]["flag"] == "--voxel", rec
+
+
+# ===========================================================================
+# F-f25774c2 — gate_coverage's floor goes through the ONE `tightened`.
+# ===========================================================================
+
+
+@pytest.fixture(scope="module")
+def performer():
+    return load_tool("render_performer.py")
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -1.0])
+def test_gate_coverage_refuses_a_floor_the_inline_comparison_walked_past(performer, bad):
+    """RE-MEASURED on `e8263a3` against `MIN_SUBJECT_FRAC`: the inline
+    `if min_frac > MIN_SUBJECT_FRAC` does NOT fire for `nan` or `-1.0`, both of which
+    `parts.tightened` refuses with a typed gate — and with a NaN floor this gate's own
+    refusal clause (`if worst["frac"] < min_frac`) is False for every frame (`0.0 < nan` is
+    False), so `gate_coverage` returned its PASS verdict over a set of frames with nobody in
+    them: precisely the failure its docstring says it exists to catch."""
+    with pytest.raises(performer.RenderGate) as exc:
+        performer.gate_coverage([], "plate.png", min_frac=bad)
+    ev = exc.value.evidence
+    assert ev["gate"] == performer.RenderGate.gate, ev
+    assert repr(bad) in repr(ev), ev
+
+
+def test_a_nan_floor_never_reaches_the_per_frame_loop(performer, monkeypatch):
+    """The andon is on the direction the invariant does not bound: not one pixel is read."""
+    calls = []
+    monkeypatch.setattr(performer, "_pixels", lambda p: calls.append(p))
+    with pytest.raises(performer.RenderGate,
+                       match=r"is not a finite number, so it cannot be compared") as exc:
+        performer.gate_coverage(["a.png", "b.png"], "plate.png", min_frac=float("nan"))
+    assert exc.value.evidence["gate"] == performer.RenderGate.gate
+    assert calls == [], calls
+
+
+def test_gate_coverage_still_accepts_a_tightening_and_the_module_floor(performer,
+                                                                      monkeypatch):
+    """Zero is the tightest legal request, and a bound that refuses correct work is the
+    defect (`parts.tightened`'s own F-2a564189 correction, one band over)."""
+    import numpy as np
+
+    frames = {"plate.png": np.zeros((4, 3), dtype=np.float32),
+              "a.png": np.ones((4, 3), dtype=np.float32)}
+    monkeypatch.setattr(performer, "_pixels", lambda p: frames[p])
+    for good in (performer.MIN_SUBJECT_FRAC, performer.MIN_SUBJECT_FRAC / 10.0, 0.0):
+        ev = performer.gate_coverage(["a.png"], "plate.png", min_frac=good)
+        assert ev["min_fraction"] == float(good), ev
+
+
+def test_the_coverage_floor_is_the_one_implementation():
+    """`armature_core.parts.tightened` is the repo's ONE spelling of this comparison, and
+    this gate is the sixth member of the family F-196c4257 routed — `author_walk`'s Gates
+    F/A/SPACE and `lift_solve`'s Gates SPACE/ARRIVED all go through it, and this one, whose
+    docstring cites that same routed sweep, kept the inline comparison."""
+    fn = None
+    for node in _tree("render_performer.py").body:
+        if isinstance(node, ast.FunctionDef) and node.name == "gate_coverage":
+            fn = node
+    assert fn is not None
+    calls = [n for n in ast.walk(fn)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "tightened"]
+    assert len(calls) == 1, [n.lineno for n in calls]
+    #: and the inline comparison is gone — asked of the AST, never of the text, because
+    #: the comment that records the defect quotes the very line it replaced.
+    inline = [n for n in ast.walk(fn)
+              if isinstance(n, ast.Compare)
+              and isinstance(n.left, ast.Name) and n.left.id == "min_frac"
+              and any(isinstance(o, ast.Gt) for o in n.ops)]
+    assert inline == [], [n.lineno for n in inline]
+
+
+# ===========================================================================
+# F-feb363d9 — the two arc angles join require_subject_args' single clause.
+# ===========================================================================
+
+
+@pytest.fixture(scope="module")
+def subject():
+    return load_tool("make_test_armature.py")
+
+
+def _args(subject_mod, **over):
+    import argparse
+    base = dict(pose_arc="arm_r_raise", frames=33, fps=16, segments=16,
+                thickness=0.03, joint_scale=1.55, arc_start_deg=0.0, arc_end_deg=90.0,
+                out="o")
+    base.update(over)
+    return argparse.Namespace(**base)
+
+
+@pytest.mark.parametrize("flag,attr,bad", [
+    ("--arc-start-deg", "arc_start_deg", float("nan")),
+    ("--arc-start-deg", "arc_start_deg", float("inf")),
+    ("--arc-start-deg", "arc_start_deg", 1e9),
+    ("--arc-end-deg", "arc_end_deg", float("inf")),
+    ("--arc-end-deg", "arc_end_deg", float("nan")),
+    ("--arc-end-deg", "arc_end_deg", -1e9),
+])
+def test_the_two_arc_angles_are_named_in_the_single_clause(subject, flag, attr, bad):
+    """RE-MEASURED on `e8263a3` by an AST walk over this parser: `--arc-start-deg` and
+    `--arc-end-deg` were bare `type=float` and neither identifier appeared anywhere inside
+    `require_subject_args`, whose own docstring calls itself "one clause listing every
+    offending flag by name". They are the ones that BECOME the authored bone rotations in
+    the `.joints.json` ground truth every arc comparison in this repo is measured against.
+    `nan` and `inf` were refused only INCIDENTALLY — `arc_readout` raises `SpecError`
+    because every comparison against a NaN is False, not because any clause examined the
+    flag — and `arc_readout(arc, 33, 1e9, -1e9)` returned a NORMAL readout with no refusal
+    at all, so 2.7 million turns per arm were authored into the ground truth and exported.
+    """
+    with pytest.raises(subject.SubjectArgError) as exc:
+        subject.require_subject_args(_args(subject, **{attr: bad}))
+    ev = exc.value.evidence
+    assert any(flag in row for row in ev["offending"]), ev["offending"]
+    assert ev["arc_deg_bound"] == subject.ARC_DEG_BOUND, ev
+    assert ev[attr] == bad or (bad != bad and ev[attr] != ev[attr]), ev
+
+
+def test_the_arc_angles_this_repo_actually_authors_are_accepted(subject):
+    """The registered arcs are within one turn by construction, and the module defaults
+    (0.0 .. 90.0) must not be refused by their own bound."""
+    for start, end in ((0.0, 90.0), (-30.0, 30.0), (0.0, -360.0), (360.0, 0.0)):
+        got = subject.require_subject_args(
+            _args(subject, arc_start_deg=start, arc_end_deg=end))
+        assert got.arc_start_deg == start and got.arc_end_deg == end
+
+
+def test_the_arc_refusal_lands_above_resolve_arc_and_writes_nothing(subject):
+    """The clause runs FIRST, above `posearc.resolve_arc`, so a refusal leaves no GLB and
+    no `.joints.json` behind — the property the wave-16 fix earned for `--frames`."""
+    main = _fn_in("make_test_armature.py", "main")
+    calls = {}
+    for node in ast.walk(main):
+        if isinstance(node, ast.Call):
+            name = (node.func.attr if isinstance(node.func, ast.Attribute)
+                    else node.func.id if isinstance(node.func, ast.Name) else None)
+            if name in ("require_subject_args", "resolve_arc", "makedirs"):
+                calls.setdefault(name, []).append(node.lineno)
+    assert calls["require_subject_args"][0] < calls["resolve_arc"][0], calls
+    assert all(calls["require_subject_args"][0] < m for m in calls.get("makedirs", [])), calls
+
+
+def test_the_arc_refusal_reaches_the_make_test_armature_halt_line(subject, capsys):
+    """THE HALT LINE, READ — and it names the FLAG, not the arc registry's readout."""
+    def raiser():
+        subject.require_subject_args(_args(subject, arc_start_deg=1e9))
+
+    code, rec, _ = _halt_record("make_test_armature.py", "MAKE_TEST_ARMATURE_HALT",
+                                raiser, capsys)
+    assert code == 2
+    assert rec["outcome"].startswith("REFUSED"), rec
+    assert rec["error"] == "SubjectArgError", rec
+    assert any("--arc-start-deg" in row for row in rec["evidence"]["offending"]), rec
+
+
+# ===========================================================================
+# F-a2630f86 — the render half of Gate GLB's stale-target clause.
+# ===========================================================================
+
+
+@pytest.fixture(scope="module")
+def rigc():
+    return load_tool("rig_character.py")
+
+
+def test_a_finished_render_over_an_untouched_file_is_refused(rigc, tmp_path):
+    """The direction the three existing clauses cannot see. `FINISHED` in the status set,
+    `os.path.isfile` and `getsize != 0` are exactly the three properties
+    `gate_glb_written`'s own docstring names as insufficient: a PREVIOUS run's file at the
+    same path satisfies all three."""
+    target = tmp_path / "turn_0.png"
+    target.write_bytes(b"PNG-from-the-previous-run")
+    before = rigc.render_target_snapshot(str(target))
+    assert before["existed"] is True
+
+    with pytest.raises(rigc.GateGlbWritten) as exc:
+        rigc.require_render_target_moved(str(target), before, rigc.GateGlbWritten,
+                                         {"who": "test"}, what="the rendered frame")
+    ev = exc.value.evidence
+    assert ev["clause"] == "stale_render_target", ev
+    assert ev["before"]["bytes"] == ev["after"]["bytes"], ev
+
+
+def test_a_render_that_moved_the_bytes_passes(rigc, tmp_path):
+    target = tmp_path / "turn_0.png"
+    target.write_bytes(b"old")
+    before = rigc.render_target_snapshot(str(target))
+    target.write_bytes(b"a genuinely new frame")
+    after = rigc.require_render_target_moved(str(target), before, rigc.GateGlbWritten)
+    assert after["bytes"] == len(b"a genuinely new frame")
+
+
+def test_a_first_render_into_an_empty_directory_passes(rigc, tmp_path):
+    target = tmp_path / "turn_0.png"
+    before = rigc.render_target_snapshot(str(target))
+    assert before["existed"] is False
+    target.write_bytes(b"drawn")
+    assert rigc.require_render_target_moved(str(target), before, rigc.GateGlbWritten)
+
+
+@pytest.mark.parametrize("bad", [None, {}, {"existed": None}, {"existed": "yes"}, 4])
+def test_a_snapshot_that_was_never_taken_is_refused(rigc, tmp_path, bad):
+    """Clause 0, keyed on the VALUE — `gate_glb_written`'s F-8548f859 shape carried. An
+    optional-shaped argument IS a skip flag."""
+    target = tmp_path / "turn_0.png"
+    target.write_bytes(b"x")
+    with pytest.raises(rigc.GateGlbWritten) as exc:
+        rigc.require_render_target_moved(str(target), bad, rigc.GateGlbWritten)
+    assert exc.value.evidence["clause"] == "no_pre_render_snapshot", exc.value.evidence
+
+
+def test_every_render_write_site_in_the_five_renderers_takes_a_snapshot():
+    """The census, keyed on the RESOLVED shape: every
+    `bpy.ops.render.render(write_still=True)` in the five renderers is preceded, in its own
+    scope, by a `render_target_snapshot` of the path it is about to write.
+
+    RE-ENUMERATED on `e8263a3`: `export_target_snapshot` had NINE call sites and ZERO
+    callers outside the export family, while the render write sites read only the three
+    properties Gate GLB's docstring names as insufficient. ELEVEN write sites here, MEASURED
+    rather than counted by hand — six in `render_start_frame`, two in `render_performer`,
+    one each in `preview_walk`, `render_turnaround` and `preview_glb`.
+    """
+    renderers = ("preview_glb.py", "preview_walk.py", "render_performer.py",
+                 "render_start_frame.py", "render_turnaround.py")
+    total = 0
+    for fn in renderers:
+        tree = _tree(fn)
+        for scope in ast.walk(tree):
+            body = getattr(scope, "body", None)
+            if not isinstance(body, list):
+                continue
+            for i, st in enumerate(body):
+                if not (isinstance(st, ast.Assign)
+                        and isinstance(st.value, ast.Call)
+                        and ast.unparse(st.value).startswith("bpy.ops.render.render(")):
+                    continue
+                total += 1
+                window = ast.unparse(ast.Module(body=body[max(0, i - 3):i],
+                                                type_ignores=[]))
+                assert "render_target_snapshot" in window, (
+                    "%s:%d renders without a pre-render snapshot in its own scope"
+                    % (fn, st.lineno))
+    assert total == 11, total
+
+
+def test_the_snapshot_helpers_have_exactly_one_home():
+    """One implementation, imported by five renderers -- never a sixth copy."""
+    defs = [f for f in OWNED
+            if any(isinstance(n, ast.FunctionDef)
+                   and n.name in ("render_target_snapshot",
+                                  "require_render_target_moved")
+                   for n in _tree(f).body)]
+    assert defs == ["rig_character.py"], defs
+    callers = sorted(
+        f for f in OWNED
+        if any(isinstance(n, ast.Attribute)
+               and n.attr in ("render_target_snapshot", "require_render_target_moved")
+               for n in ast.walk(_tree(f))))
+    assert callers == ["preview_glb.py", "preview_walk.py", "render_performer.py",
+                       "render_start_frame.py", "render_turnaround.py"], callers
+
+
+def test_the_stale_render_refusal_reaches_a_halt_line(rigc, tmp_path, capsys):
+    """THE HALT LINE, READ, on one of the five."""
+    target = tmp_path / "turn_0.png"
+    target.write_bytes(b"the previous run's frame")
+    before = rigc.render_target_snapshot(str(target))
+
+    turn = load_tool("render_turnaround.py")
+
+    def raiser():
+        turn.rc.require_render_target_moved(
+            str(target), before, turn.RenderTurnaroundGate,
+            {"gate": turn.RenderTurnaroundGate.gate, "sub_gate": "RENDER_TARGET",
+             "who": "render_turnaround"})
+
+    code, rec, _ = _halt_record("render_turnaround.py", "RENDER_TURNAROUND_HALT",
+                                raiser, capsys)
+    assert code == 2
+    assert rec["gate"] == "TURNAROUND", rec
+    assert rec["evidence"]["clause"] == "stale_render_target", rec
+    assert rec["evidence"]["before"]["existed"] is True, rec

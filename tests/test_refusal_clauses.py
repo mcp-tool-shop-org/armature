@@ -211,6 +211,18 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: its raise count, never on its bases, which is the whole reason `FramingError` and
 #: `WalkError` are policed at all.
 RECORDED_POPULATION = frozenset({
+    # WAVE 22 (instruments) — MEASURED on this branch, and a delta of exactly one.
+    # `rig_repair.SourceHasNoFaces` (F-4354f34d, gate REPAIR_SOURCE) crosses the
+    # two-site threshold with the two face-count denominators it guards
+    # (`interior_deleted / before["faces"]` and `removed / shell_faces`), both of which
+    # reached a bare `ZeroDivisionError` inside a helper on the tool whose EXPECTED
+    # input is a broken mesh. The wave's other two new classes are deliberately absent
+    # because each has exactly ONE raise site and a class raised once IS its clause:
+    # `make_parts_sheet.ArcMeasurementNotFinite` (F-833343df — one site inside
+    # `arc_liveness`, reached by all three dailies sheets) and
+    # `rig_retopo.VoxelOverrideRefused` (F-e472aa37 — one `require_finite` call site).
+    # Each joins the day a second site is written.
+    "SourceHasNoFaces",
     # WAVE 18 (core-solvers) — MEASURED in this worktree, not carried. Three new family
     # classes, each with more than one raise site, so each crosses this predicate's
     # threshold: `blender_scene.RenderedFrame` (Gate FRAME, F-25a5ecbf, four sites),
@@ -465,7 +477,11 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     #      delta here is demonstrably this domain's.
     #
     # WAVE-18 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(POLICED) == 105, sorted(POLICED)
+    # RE-DERIVED wave 22 (instruments), BRANCH-LOCAL: 105 -> 106, the one new class with
+    # two raise sites (`SourceHasNoFaces`; see RECORDED_POPULATION for why the wave's
+    # other two new classes are single-site and absent). Four domains move this number
+    # in the same wave — the coordinator MEASURES on the merged tree, never sums.
+    assert len(POLICED) == 106, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -710,7 +726,13 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     #      delta here is demonstrably this domain's.
     #
     # WAVE-18 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(defined) == 129, len(defined)
+    # RE-DERIVED wave 22 (instruments), BRANCH-LOCAL: 129 -> 132. Three family classes
+    # land in this domain — `rig_repair.SourceHasNoFaces` (F-4354f34d),
+    # `make_parts_sheet.ArcMeasurementNotFinite` (F-833343df) and
+    # `rig_retopo.VoxelOverrideRefused` (F-e472aa37). MEASURED on this branch with the
+    # derivation command above; four domains move it in the same wave, so the
+    # coordinator re-derives on the merged tree rather than summing these deltas.
+    assert len(defined) == 132, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}

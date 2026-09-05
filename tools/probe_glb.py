@@ -33,6 +33,13 @@ from mathutils import Euler  # noqa: E402
 
 from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+# CARRIED, not copied (F-0b201a20, wave 22). `probe_subject.require_openable` is the ONE
+# refusal for "a named GLB that is not a file", written for F-5b3ead49 against a
+# `probe_one` and a `parse_argv` character-identical to this module's — and its own fix
+# docstring enumerated the tools it had checked without naming this one. Same idiom as
+# `check_relift` importing `action_frame_range` and `make_rig_sheet` importing
+# `make_parts_sheet.shoot`. Stage B: it belongs in `armature_core`.
+from probe_subject import require_openable  # noqa: E402
 
 # Token sets for the anatomical sites an 18-keypoint body skeleton needs. Matching is
 # substring-on-lowercased-name, side-aware. These are naming conventions (Mixamo,
@@ -299,9 +306,22 @@ def parse_argv(argv, *, known=("out", "glb")):
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     out_dir, globs = parse_argv(argv)
-    os.makedirs(out_dir, exist_ok=True)
+    # F-0b201a20, wave 22 — THE SUCCESS SENTINEL IS EARNED BY AN EFFECT (wave 12's rule,
+    # and the rule E07 earned: "verify a success sentinel in the output, never the exit
+    # code alone"). `probe_one` returns `{"exists": False, "error": "file not found"}`
+    # for a path that is not a file, `main` never inspected that field, and
+    # `summary["n_files"] = len(records)` counted ARGUMENTS — so `PROBE_GLB_OK` printed
+    # `n_files: 2` for a run in which no GLB was opened, leaving an output directory and
+    # a `p2_armatures.json` of error rows behind. This is byte-for-byte the shape
+    # F-5b3ead49 removed from the sibling `probe_subject.py`.
+    require_openable(globs)
 
     records = [probe_one(p) for p in globs]
+    # The directory is created BELOW the whole measurement, where `probe_subject.py:227`
+    # already puts it — above `require_openable` and above the population it sat at the
+    # one place a refused run could still leave an empty directory for a later run to
+    # read as a used one (F-8d2b9d7d's ordering, applied to this file).
+    os.makedirs(out_dir, exist_ok=True)
     summary = {
         "n_files": len(records),
         "clause_A_loads": sum(1 for r in records if r.get("clause_A_loads")),
@@ -344,6 +364,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -414,7 +453,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:

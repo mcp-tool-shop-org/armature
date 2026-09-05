@@ -726,7 +726,18 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     #: does not own.
     # WAVE-16 MERGE (coordinator, 2026-09-04): core-gates' wave-16 raises moved lines in `rig_gates` and `shotspec`;
     # the ceiling is re-MEASURED on the merged tree ({'rig_gates': 2, 'shotspec': 1}), never re-typed.
-    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {'rig_gates': 2, 'shotspec': 1}
+    # RE-DERIVED wave 22 (instruments, F-0b201a20), branch-local, and POSTED as a block
+    # rather than fixed here: `armature_core/subject.py:86` cites
+    # `probe_subject.py:133/:150` as LINES, and the correction this wave folded into
+    # `require_openable`'s docstring -- the enumeration that named `check_relift` and
+    # missed its own twin `probe_glb`, which had no such refusal at all -- moved them
+    # down by 14. `subject.py` is core-solvers' file in the frozen domain map, so the
+    # re-anchor is theirs: the cited line was `rec["summary"] = extent_summary(half)`
+    # and the symbol form is `probe_subject.py::probe_one`. Same shape as SEAM 7/8's
+    # `lift_clip.py:275`, and the same fix: a line citation does not survive an edit
+    # above it; a symbol does.
+    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {'rig_gates': 2, 'shotspec': 1,
+                                                 'subject': 1}
     over = {k: v for k, v in others.items()
             if v > STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN.get(k, 0)}
     assert over == {}, {"stale now": others,

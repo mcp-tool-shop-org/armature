@@ -2642,6 +2642,14 @@ GUARDED_TODAY = [
     "tools/make_test_armature.py",
     # WAVE 16 (core-solvers, SEAM 11 §5) — see the note above `aapose.py`.
     "tools/measure_cascade_clip.py",
+    # WAVE 22 (instruments, F-7cd1b3b7 / F-f7d1f64f): `pack_pose_pack.py` is opened by
+    # path by the wave-22 amend module and by `tests/conftest.py`'s SEAM-1 bridge — it
+    # holds the `single_path_segment` copy SEAM 1 homes in `armature_core.parts`, and
+    # both the byte-equivalence check and the bridge read its SOURCE rather than
+    # importing it (the module imports `bpy`). Under `tools/**`, which BOTH triggers
+    # already carry, so `ci.yml` needs no change and `UNFILTERED_PENDING` stays empty.
+    # The list is SORTED, so this entry sits by name and not by topic.
+    "tools/pack_pose_pack.py",
     "tools/render_pose_sticks.py",
     # WAVE 16 (core-solvers, SEAM 11 §5) — see the note above `aapose.py`.
     "tools/render_start_frame.py",

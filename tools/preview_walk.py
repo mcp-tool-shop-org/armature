@@ -27,6 +27,10 @@ import bpy  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
 from armature_core import blender_scene, framing, parts, shotspec  # noqa: E402
+# F-a2630f86: `render_target_snapshot` / `require_render_target_moved` are
+# `export_target_snapshot`'s twins and live beside it. The idiom is
+# `rig_bake`'s and `make_parts_sheet`'s -- one implementation, imported.
+import rig_character as rc  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 # CARRIED, not copied (the `render_turnaround` idiom, F-267361f5): the repo has ONE bound on
 # a frame that reaches `scene.render.resolution_x` and ONE bound on a fraction of a shot,
@@ -311,6 +315,7 @@ def main():
     for i in range(count):
         blender_scene.set_scene_frame(scene, i)
         frame_path = os.path.join(a.out, f"{i:05d}.png")
+        _before = rc.render_target_snapshot(frame_path)
         scene.render.filepath = frame_path
         render_result = bpy.ops.render.render(write_still=True)
         # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
@@ -325,6 +330,10 @@ def main():
                 f"that path is then the previous run's",
                 {"clause": "operator_status", "status": _status,
                  "path": os.path.abspath(frame_path)})
+        rc.require_render_target_moved(
+            frame_path, _before, PreviewWalkGate,
+            {"gate": PreviewWalkGate.gate, "sub_gate": "RENDER_TARGET",
+             "who": "preview_walk"})
 
 
     # The population is the PLAN, not whatever is in the directory. A bare
@@ -393,6 +402,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -461,7 +489,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:

@@ -205,9 +205,15 @@ def parser_helpers(tree):
             if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
                     and value.func.id == "vars" and value.args):
                 value, kind = value.args[0], "dict"
-            if _is_parse(value) or (isinstance(value, ast.Name)
-                                    and local.get(value.id) == "attr"):
+            # RE-DERIVED wave 22 (instruments, F-798281dc): `local.get(...)` is read for
+            # BOTH kinds. `return a` after `a = vars(p.parse_args(argv))` is a "dict"
+            # helper, and reading only "attr" here dropped `rig_bake` out of the
+            # population the moment its parser gained a refusal.
+            if _is_parse(value):
                 out[node.name] = kind
+                break
+            if isinstance(value, ast.Name) and local.get(value.id) in ("attr", "dict"):
+                out[node.name] = local[value.id]
                 break
     return out
 
@@ -219,8 +225,23 @@ def _namespace_bindings(fn, helpers):
         if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)):
             continue
         func = node.value.func
-        if isinstance(func, ast.Attribute) and func.attr in ("parse_args",
-                                                             "parse_known_args"):
+        # RE-DERIVED wave 22 (instruments, F-798281dc): the `vars(...)` spelling, BOUND.
+        # `parser_helpers` already reads `return vars(p.parse_args(argv))` as kind
+        # "dict"; this walk read only the ATTRIBUTE call, so a helper that binds
+        # `a = vars(p.parse_args(argv))`, refuses on the parsed values and then
+        # `return a` bound nothing -- and its tool left `parser_population` entirely.
+        # MEASURED on this branch when `rig_bake.parse_args` gained its two bounds:
+        # `namespace_reads(rig_bake)` returned `{}` and `CLI_TOOLS` fell from 67 to 66
+        # on a tool that declares five flags and reads four. A census that keys on the
+        # spelling cannot see a tool leaving it (wave-18 rule 1).
+        if (isinstance(func, ast.Name) and func.id == "vars" and node.value.args
+                and isinstance(node.value.args[0], ast.Call)
+                and isinstance(node.value.args[0].func, ast.Attribute)
+                and node.value.args[0].func.attr in ("parse_args",
+                                                     "parse_known_args")):
+            kind = "dict"
+        elif isinstance(func, ast.Attribute) and func.attr in ("parse_args",
+                                                               "parse_known_args"):
             kind = "attr"
         elif isinstance(func, ast.Name) and func.id in helpers and func.id != fn.name:
             kind = helpers[func.id]

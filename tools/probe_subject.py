@@ -51,6 +51,19 @@ def require_openable(paths):
 
     Distinct from the closed F-f3cd559e, which stopped EMPTY `--glb` values from joining
     the population: a named-but-absent path still did.
+
+    ⚠ **THIS DOCSTRING'S ENUMERATION MISSED ITS OWN TWIN** (F-0b201a20, wave 22,
+    corrected in place rather than deleted). The paragraph above lists the tools it
+    checked and names `check_relift.py:185-187` as already refusing outright; it does
+    NOT name `probe_glb.py`, which carries a `probe_one` opening and a `parse_argv`
+    character-identical to this module's and had none of this. MEASURED on `e8263a3` by
+    loading it under `tests/blender_stub.blender_stubbed()`: `probe_one('nope_a.glb')`
+    and `probe_one('nope_b.glb')` returned the two error rows, the summary `main` builds
+    from them is `{"n_files": 2, "clause_A_loads": 0, ...}` — `n_files` counting
+    ARGUMENTS — and `hasattr(module, "require_openable")` was False. `probe_glb` now
+    imports THIS function rather than spelling a second one; it is one implementation
+    with two callers, the idiom `check_relift` uses for `action_frame_range` and
+    `make_rig_sheet` for `make_parts_sheet.shoot`.
     """
     missing = [p for p in paths if not os.path.isfile(p)]
     if missing:
@@ -255,6 +268,25 @@ def _halt_keysafe(value, _seen=None):
     # on the path are written as the literal "<circular>" instead of re-entered.
     if _seen is None:
         _seen = set()
+    # WAVE 22, F-897a3329: the VALUE clause, beside the key clause this walk was written
+    # for. `json.dumps`'s `default=` applies to values Python cannot encode, never to a
+    # float it CAN, and `allow_nan` defaults True -- so a non-finite operand that
+    # `armature_core.parts.require_finite` wrote into the evidence (`ev[name] = v`)
+    # reached the halt line as the bare token `NaN`. MEASURED end-to-end on `e8263a3`:
+    # a sentinel of that shape serialises to `{"evidence": {"max_displacement": NaN}}`;
+    # `json.loads(payload)` ACCEPTS it -- which is why every reader in this suite was
+    # green -- and `json.loads(payload, parse_constant=<raise>)` REJECTS it naming the
+    # constant, as would JS `JSON.parse`, Go `encoding/json` and serde. The halt contract
+    # promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`", and for exactly the
+    # refusal family wave 16 added -- the NaN andons -- the object was not JSON.
+    #
+    # The operand stays READABLE: `repr` gives "nan" / "inf" / "-inf", which is the same
+    # text `require_finite`'s own message carries, rather than a null that erases which
+    # non-finite value it was. `json.dumps(..., allow_nan=False)` below then cannot raise,
+    # so the guard around the sentinel keeps its meaning.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     if isinstance(value, (dict, list, tuple)):
         if id(value) in _seen:
             return "<circular>"
@@ -325,7 +357,9 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            # `allow_nan=False` (F-897a3329): strict JSON, and it cannot raise here because
+            # `_halt_keysafe` above has already replaced every non-finite float with its repr.
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:
