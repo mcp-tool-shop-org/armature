@@ -1,0 +1,569 @@
+"""Wave 20 (core-gates): the walk's own identity, its node containers, and the positional
+tables it reads by index.
+
+Wave 18 keyed Gate S's seed resolution on the pair `(where, id)`, gave `definitions` and
+`definitions.subgraphs` the refusal their entries already had, and taught the hosted enum
+block that a converted widget shifts a positional read. Wave 19's auditors measured that
+all three fixes stop one level short of the thing they are about:
+
+  * **F-400c1df4** `where` is not an identity. `_iter_definitions` refuses a duplicate
+    blueprint `id` and nothing refuses the LABEL the walk actually emits, so two
+    blueprints sharing a `name`, two declaring neither field, or one whose `name` is the
+    walk's own level label `top`, collapse the `(where, id)` pair Gate S keys on — and
+    Gate S RETURNED a PASS naming `expert/3, expert/3` while a blueprint node ran seed
+    999999999;
+  * **F-f9ab0645** `_readable_node` guards the node ENTRY and nothing guards the node's
+    own `widgets_values` CONTAINER, so the same BANNED `causvid_x.safetensors` spelled
+    inside a mapping or a bare string is invisible to every weight reader on the page and
+    `verify` returns GREEN — the level below the one wave 18 closed for `definitions`;
+  * **F-29e1cbb7** the converted-widget shift andon exists for `HOSTED_ENUM_WIDGETS`
+    alone. `latents()`, `cameras()`, `seeds()` and `camera_widget_order_evidence()` read
+    `wv[spec[key]]` positionally with no shift clause, so converting `WanImageToVideo`'s
+    `length` widget left Gate L reading the batch_size slot and reporting
+    `frame_legality_verdict: PROVEN`, "1 frame(s) checked and generator-legal".
+
+Every test here goes RED on the tree at base `475f4eb`, and each red is proved on the
+OPERAND the finding named — the auditor's two-blueprint Gate S graphs; `causvid_x.
+safetensors` in all three container spellings plus the API mirror; a `WanImageToVideo`
+whose `length` widget was converted to an input — and on that operand's enumerated
+SIBLINGS.
+"""
+
+import json
+import os
+import sys
+
+import pytest
+
+TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
+if TOOLS not in sys.path:
+    sys.path.insert(0, TOOLS)
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+
+from armature_core import route_gates as RG  # noqa: E402
+
+BASE = "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+T2V_BASE = "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"
+BANNED = "causvid_x.safetensors"
+
+
+# =======================================================================================
+# F-400c1df4 · CRITICAL (unanimous) — `where` is the label the walk EMITS, and nothing
+# made it unique. The id clause bounds one field over from the invariant Gate S rests on.
+# =======================================================================================
+
+
+def _label_graph(first, second, ids=("bp1", "bp2")):
+    """The auditor's graph: a live top-level `KSamplerAdvanced` (add_noise=enable, seed 7)
+    plus two blueprints each holding their OWN node 3 — the first exempt, the second
+    adding noise at seed 999999999. `first` / `second` are the blueprints' `name` fields
+    (`None` deletes the key); `ids` are their `id` fields (`None` deletes both)."""
+    d1 = {"nodes": [{"id": 3, "type": "KSamplerAdvanced",
+                     "widgets_values": ["disable", 7, "fixed"]}]}
+    d2 = {"nodes": [{"id": 3, "type": "KSamplerAdvanced",
+                     "widgets_values": ["enable", 999999999, "fixed"]}]}
+    if first is not None:
+        d1["name"] = first
+    if second is not None:
+        d2["name"] = second
+    if ids is not None:
+        d1["id"], d2["id"] = ids
+    return {"nodes": [
+        {"id": 1, "type": "UNETLoader", "widgets_values": [T2V_BASE]},
+        {"id": 2, "type": "KSamplerAdvanced", "widgets_values": ["enable", 7, "fixed"]},
+    ], "definitions": {"subgraphs": [d1, d2]}}
+
+
+def test_two_blueprints_sharing_a_name_refuse_instead_of_grading_the_wrong_node():
+    """RED on base: with DISTINCT ids `bp1`/`bp2` and the same `name: "expert"`,
+    `seeds()` correctly returned `[('top',2,7), ('expert',3,7), ('expert',3,999999999)]`
+    and `gate_s_registration(g, [7])` RETURNED `seeds_noise_bearing: 1 of 3` with the
+    verdict "... 2 exempted by add_noise=disable (node(s) expert/3, expert/3)". Seed
+    999999999 was never graded: the second colliding record read its `add_noise` off the
+    FIRST node the walk yielded, because `next(... if (w, str(id)) == ...)` is TOTAL but
+    not UNIQUE."""
+    g = _label_graph("expert", "expert")
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(g, [7])
+    ev = exc.value.evidence
+    assert ev["clause"] == "duplicate_subgraph_label"
+    assert ev["label"] == "expert"
+    assert ev["collides_with"] == {"kind": "subgraph", "index": 0, "id": "bp1"}
+    assert ev["gate"] == "ROUTE" and ev["andon"] == "RouteGate"
+
+
+def test_two_blueprints_declaring_neither_a_name_nor_an_id_refuse():
+    """The auditor's second reproduction. With no `name` and no `id` on either blueprint
+    `where` falls to the literal `"subgraph"` for BOTH, the `bid is not None` guard skips
+    the duplicate-id clause entirely, and the same green PASS came back naming
+    `subgraph/3, subgraph/3`."""
+    g = _label_graph(None, None, ids=None)
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(g, [7])
+    assert exc.value.evidence["clause"] == "duplicate_subgraph_label"
+    assert exc.value.evidence["label"] == "subgraph"
+
+
+def test_a_blueprint_labelled_top_collides_with_the_walks_own_level():
+    """The sibling neither reproduction reaches, and it needs only ONE blueprint: `top` is
+    the label `_walk_nodes` gives the save-format graph's own `nodes` array. Measured on
+    base in this worktree — a live top-level `KSamplerAdvanced` id 2, an exempt top-level
+    id 3, and a blueprint NAMED "top" holding its own id 3 at seed 999999999:
+    `seeds()` returned `[('top',2,7), ('top',3,7), ('top',3,999999999)]` and Gate S
+    RETURNED "1 noise-bearing seed(s) of 3 ... 2 exempted by add_noise=disable (node(s)
+    top/3, top/3)" with `seeds_exempt_nodes` printing one identity twice."""
+    g = {"nodes": [
+        {"id": 1, "type": "UNETLoader", "widgets_values": [T2V_BASE]},
+        {"id": 2, "type": "KSamplerAdvanced", "widgets_values": ["enable", 7, "fixed"]},
+        {"id": 3, "type": "KSamplerAdvanced", "widgets_values": ["disable", 7, "fixed"]},
+    ], "definitions": {"subgraphs": [
+        {"id": "bp1", "name": "top", "nodes": [
+            {"id": 3, "type": "KSamplerAdvanced",
+             "widgets_values": ["enable", 999999999, "fixed"]}]}]}}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(g, [7])
+    ev = exc.value.evidence
+    assert ev["clause"] == "duplicate_subgraph_label"
+    assert ev["label"] == "top"
+    assert ev["collides_with"]["kind"] == "reserved_level_label"
+
+
+def test_a_blueprint_labelled_api_is_refused_on_the_same_clause():
+    """`api` is the other label `_walk_nodes` emits. It cannot collide inside one graph
+    today — the API branch returns before `_iter_definitions` runs — and it is reserved
+    explicitly rather than by omission, the way `CONDITIONING_FAMILY_EXEMPT` records the
+    classes that pair with nothing."""
+    g = _label_graph("api", "other")
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(g)
+    assert exc.value.evidence["clause"] == "duplicate_subgraph_label"
+    assert exc.value.evidence["label"] == "api"
+
+
+def test_the_auditors_control_with_distinct_names_still_grades_the_seed():
+    """The control the auditor measured green-to-red against: the identical graph with
+    the names distinct REFUSED "node 3 would run seed 999999999, which the committed list
+    [7] does not pre-register". The fix may not turn that seed refusal into a label
+    refusal."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(_label_graph("first", "second"), [7])
+    assert exc.value.evidence["clause"] == "gate_s_registration"
+    assert "999999999" in str(exc.value)
+
+
+def test_the_duplicate_id_clause_still_fires_first_when_both_collide():
+    """The auditor's other control: with the ids EQUAL the walk refused
+    `duplicate_subgraph_id`. Two ambiguities are two facts and the id clause is the one
+    wave 18 earned, so it keeps the graph on which both apply."""
+    g = _label_graph("first", "second", ids=("bp", "bp"))
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(g)
+    assert exc.value.evidence["clause"] == "duplicate_subgraph_id"
+
+
+@pytest.mark.parametrize("d,expected", [
+    ({"id": "bp7", "name": "expert"}, "expert"),
+    ({"id": "bp7"}, "bp7"),
+    ({}, "subgraph"),
+])
+def test_the_emitted_label_itself_is_unchanged(d, expected):
+    """SEAM 1's promise to builders: nothing about `where` moves on a graph the walk
+    admits. A labelled blueprint reads its `name`, one with only an `id` reads the `id`,
+    one with neither reads the literal `"subgraph"` — so every Gate S receipt string, the
+    `level/id` verdict wording and `seeds_exempt_nodes`' pairs stay byte-identical."""
+    blueprint = dict(d, nodes=[{"id": 9, "type": "LoraLoaderModelOnly",
+                                "widgets_values": ["clean_style.safetensors"]}])
+    g = {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [T2V_BASE]}],
+         "definitions": {"subgraphs": [blueprint]}}
+    assert [c["where"] for c in RG.components(g)] == ["top", expected]
+
+
+def test_a_self_referencing_blueprint_still_terminates():
+    """The label clause sits AFTER the cycle guard's `continue`, so a blueprint that
+    contains itself declares its label ONCE. Cycle protection is the guard's other job and
+    the gate before a spend must halt or answer, never hang."""
+    inner = {"id": "loop", "name": "loop", "nodes": [
+        {"id": 20, "type": "LoraLoaderModelOnly",
+         "widgets_values": ["clean_style.safetensors"]}]}
+    inner["definitions"] = {"subgraphs": [inner]}
+    g = {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [T2V_BASE]}],
+         "definitions": {"subgraphs": [inner]}}
+    assert [c["file"] for c in RG.components(g)] == [T2V_BASE, "clean_style.safetensors"]
+
+
+def test_a_deeper_self_reference_terminates_too():
+    """A -> B -> A, the wave-18 control. The recursion path pops on the way back up and
+    the label ledger does not, which is the difference between a cycle guard and the
+    ambiguity refusal."""
+    a = {"id": "A", "name": "A", "nodes": [
+        {"id": 30, "type": "LoraLoaderModelOnly", "widgets_values": ["a.safetensors"]}]}
+    b = {"id": "B", "name": "B", "nodes": [
+        {"id": 31, "type": "LoraLoaderModelOnly", "widgets_values": ["b.safetensors"]}],
+        "definitions": {"subgraphs": [a]}}
+    a["definitions"] = {"subgraphs": [b]}
+    g = {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [T2V_BASE]}],
+         "definitions": {"subgraphs": [a]}}
+    assert [c["file"] for c in RG.components(g)] == [
+        T2V_BASE, "a.safetensors", "b.safetensors"]
+
+
+def test_the_id_ledger_and_the_label_ledger_do_not_cross():
+    """The two ledgers are separate namespaces, and one dict keyed by both would have made
+    an ordinary graph refuse. Blueprint one declares the ID "bp1" and the LABEL "keep";
+    blueprint two declares the ID "bp2" and the LABEL "bp1". Nothing is ambiguous — the
+    labels are distinct and so are the ids — so the walk proceeds and both `where` values
+    are the ones `seeds()` and Gate S will key on."""
+    g = _label_graph("keep", "bp1")            # second blueprint's NAME is the first's ID
+    assert [s["where"] for s in RG.seeds(g)] == ["top", "keep", "bp1"]
+
+
+# =======================================================================================
+# F-f9ab0645 · CRITICAL (unanimous) — the node's own containers. `_readable_node` guards
+# the ENTRY; every weight reader on this page iterates `n.get("widgets_values") or []`,
+# which walks the KEYS of a mapping and the CHARACTERS of a string.
+# =======================================================================================
+
+
+def _lora_graph(widgets_values):
+    """The finding's operand: `UNETLoader` + pinned `KSampler` + `WanImageToVideo` +
+    a `LoraLoaderModelOnly` carrying `causvid_x.safetensors` (BANNED, CC-BY-NC)."""
+    return {"nodes": [
+        {"id": 1, "type": "UNETLoader", "widgets_values": [BASE]},
+        {"id": 2, "type": "KSampler", "widgets_values": [7, "fixed"]},
+        {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]},
+        {"id": 4, "type": "LoraLoaderModelOnly", "widgets_values": widgets_values},
+    ]}
+
+
+def test_the_list_spelling_is_the_control_and_still_names_the_banned_file():
+    """The measurement the other two are read against: with `widgets_values` as the
+    ordinary LIST, `components()` returns the file with verdict BANNED and `verify`
+    raises naming it."""
+    comp = [c for c in RG.components(_lora_graph([BANNED])) if c["kind"] == "weight"]
+    assert [c["file"] for c in comp] == [BASE, BANNED]
+    assert comp[1]["verdict"] == "BANNED"
+    with pytest.raises(RG.RouteGate, match=r"causvid"):
+        RG.verify(_lora_graph([BANNED]), family="wan")
+
+
+@pytest.mark.parametrize("spelling,wv", [
+    ("mapping", {"lora_name": BANNED, "strength_model": 1.0}),
+    ("string", BANNED),
+])
+def test_a_widgets_values_that_is_not_a_list_refuses_rather_than_reading_empty(
+        spelling, wv):
+    """RED on base: with the SAME node's `widgets_values` spelled as the mapping,
+    `components()` returned only the UNETLoader's weight and `verify(g)` RETURNED "0 of 1
+    component(s) classified, 1 unclassified, ... 1 frame(s) checked and generator-legal".
+    The bare string produced the identical green receipt. Nothing in the evidence recorded
+    that a node's widget container was entered and read as empty."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(_lora_graph(wv))
+    ev = exc.value.evidence
+    assert ev["clause"] == "unreadable_node"
+    assert ev["container"] == "widgets_values"
+    assert ev["node_id"] == 4
+    assert ev["where"] == "top"
+    assert ev["entry_type"] == type(wv).__name__
+    with pytest.raises(RG.RouteGate, match=r"widgets_values"):
+        RG.verify(_lora_graph(wv), family="wan")
+
+
+@pytest.mark.parametrize("reader", ["components", "model_weights", "seeds", "latents",
+                                    "cameras", "ruled_node_classes", "pairing",
+                                    "unrecorded_seed_sources", "hosted_enums"])
+def test_every_reader_that_walks_nodes_meets_the_same_refusal(reader):
+    """Wave-18 rule 2 — the SIBLINGS, enumerated. Every reader on this page that touches a
+    node reaches it through `_iter_nodes`, so the container guard is on the walk rather
+    than in `components`: `components` and `model_weights` iterate `widgets_values`
+    directly; `seeds`, `latents`, `cameras`, `hosted_enums` index it positionally;
+    `ruled_node_classes`, `pairing` and `unrecorded_seed_sources` read the class beside
+    it. None of the nine may report on a graph carrying a container it cannot read."""
+    g = _lora_graph({"lora_name": BANNED})
+    with pytest.raises(RG.RouteGate) as exc:
+        getattr(RG, reader)(g)
+    assert exc.value.evidence["clause"] == "unreadable_node"
+
+
+def test_a_blueprint_node_container_is_guarded_at_the_level_below_too():
+    """The same refusal one level down: `_readable_node` is the ONE implementation both
+    call sites use, so a container hidden inside a subgraph blueprint is not a second
+    hole to close."""
+    g = {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [BASE]}],
+         "definitions": {"subgraphs": [{"id": "bp", "name": "inner", "nodes": [
+             {"id": 11, "type": "LoraLoaderModelOnly",
+              "widgets_values": {"lora_name": BANNED}}]}]}}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(g)
+    ev = exc.value.evidence
+    assert ev["clause"] == "unreadable_node" and ev["where"] == "inner"
+    assert ev["container"] == "widgets_values"
+
+
+@pytest.mark.parametrize("inputs", [{"lora_name": BANNED}, "x", 3])
+def test_a_save_format_inputs_that_is_not_a_list_refuses(inputs):
+    """The node's OTHER container. Save format spells `inputs` as a LIST of slot dicts and
+    `_save_format_input_names` / `_save_format_converted_widget_names` iterate it; a
+    mapping there yields its string keys, every one fails `isinstance(slot, dict)`, and
+    the converted-widget reading that the shift andon rests on silently answers "none"."""
+    g = _lora_graph([BANNED])
+    g["nodes"][3]["inputs"] = inputs
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(g)
+    ev = exc.value.evidence
+    assert ev["clause"] == "unreadable_node" and ev["container"] == "inputs"
+    assert ev["expected"] == "a list of save-format input slots"
+
+
+def test_the_api_mirror_refuses_instead_of_crashing_with_an_attributeerror():
+    """The API mirror the finding asks for. `_walk_nodes`' API branch reads
+    `inputs.values()`, so an `inputs` spelled as a LIST raised a bare
+    `AttributeError: 'list' object has no attribute 'values'` — measured on base. An
+    `AttributeError` is not an `ArmatureError`, so the halt contract's exit-2 six-key
+    `<TOOL>_HALT` branch is bypassed and Gate ROUTE refusing a shape it cannot read is
+    recorded as an unhandled crash."""
+    api = {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": BASE}},
+           "2": {"class_type": "KSampler", "inputs": {"seed": 7}},
+           "3": {"class_type": "LoraLoaderModelOnly", "inputs": [{"lora_name": BANNED}]}}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.components(api)
+    ev = exc.value.evidence
+    assert ev["clause"] == "unreadable_node" and ev["container"] == "inputs"
+    assert ev["where"] == "api" and ev["node_id"] == "3"
+    assert ev["expected"] == "a mapping of API input name to literal-or-link"
+
+
+@pytest.mark.parametrize("node", [
+    {"id": 4, "type": "LoraLoaderModelOnly"},
+    {"id": 4, "type": "LoraLoaderModelOnly", "widgets_values": None, "inputs": None},
+    {"id": 4, "type": "LoraLoaderModelOnly", "widgets_values": [], "inputs": []},
+])
+def test_absent_and_none_stay_the_ordinary_spelling_of_no_widgets(node):
+    """An andon that fires on a correct graph is not one anybody keeps. `None` and an
+    absent key are how this module already spells "no widgets" and "no inputs" — the
+    same reading `_iter_definitions` gives an absent `definitions`."""
+    g = _lora_graph([BANNED])
+    g["nodes"][3] = node
+    assert [c["file"] for c in RG.components(g) if c["kind"] == "weight"] == [BASE]
+
+
+# =======================================================================================
+# F-29e1cbb7 · CRITICAL (unanimous) — the converted-widget shift andon covered ONE of the
+# four positional tables. `known_widget_indices` unions all four and was already the
+# reading that detects it.
+# =======================================================================================
+
+
+def _i2v(node):
+    return {"nodes": [
+        {"id": 1, "type": "UNETLoader", "widgets_values": [BASE]},
+        {"id": 2, "type": "KSampler", "widgets_values": [7, "fixed"]},
+        node]}
+
+
+_I2V_HONEST = {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]}
+#: The auditor's operand. Converting `length` to an input is an ordinary ComfyUI edit; the
+#: save format then DROPS that value from `widgets_values` and declares the slot as
+#: `{"name": "length", "widget": {"name": "length"}}`.
+_I2V_CONVERTED = {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 1],
+                  "inputs": [{"name": "positive", "type": "CONDITIONING", "link": 1},
+                             {"name": "length", "type": "INT", "link": 9,
+                              "widget": {"name": "length"}}]}
+
+
+def test_the_honest_widget_list_is_the_control():
+    """Measured on base and unchanged: `[832, 480, 81, 1]` gives width 832, height 480,
+    length 81, and `verify` reports the frame PROVEN."""
+    assert RG.latents(_i2v(_I2V_HONEST)) == [
+        {"node_id": 3, "class": "WanImageToVideo", "where": "top",
+         "width": 832, "height": 480, "length": 81, "checkable": True}]
+    ev = RG.verify(_i2v(_I2V_HONEST), family="wan")
+    assert ev["frame_legality_verdict"] == "PROVEN"
+
+
+def test_a_converted_length_widget_refuses_rather_than_reading_the_batch_size_slot():
+    """RED on base: `_save_format_converted_widget_names` returned `['length']` and
+    `known_widget_indices('WanImageToVideo')` returned `{'width':0,'height':1,'length':2}`
+    — the shift is fully readable — yet `latents()` returned
+    `{'width': 832, 'height': 480, 'length': 1, 'checkable': True}` and `verify(g)`
+    RETURNED PROVEN with `frame_legality` `length: 1, legal: true`. `length` is the one
+    conversion of the four that fails OPEN: 1 is a legal 4n+1 count."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.latents(_i2v(_I2V_CONVERTED))
+    ev = exc.value.evidence
+    assert ev["clause"] == "converted_widget_shifts_recorded_indices"
+    assert ev["converted"] == ["length"]
+    assert ev["node_id"] == 3 and ev["class"] == "WanImageToVideo"
+    assert ev["table"] == "LATENT_NODES"
+    assert ev["recorded_widget_indices"] == {"width": 0, "height": 1, "length": 2}
+    with pytest.raises(RG.RouteGate, match=r"converted"):
+        RG.verify(_i2v(_I2V_CONVERTED), family="wan")
+
+
+def test_an_ordinary_link_socket_does_not_fire_the_clause():
+    """The negative direction, and the distinction the andon rests on: a slot with NO
+    `widget` key is an ordinary input socket that never occupied a widget position and
+    shifts nothing. `positive`, `negative` and `vae` arrive over links on every I2V graph
+    this repo builds; an andon that fired on them is not one anybody keeps."""
+    node = dict(_I2V_HONEST, inputs=[
+        {"name": "positive", "type": "CONDITIONING", "link": 1},
+        {"name": "negative", "type": "CONDITIONING", "link": 2},
+        {"name": "vae", "type": "VAE", "link": 3}])
+    assert RG.latents(_i2v(node))[0]["length"] == 81
+    assert RG.verify(_i2v(node), family="wan")["frame_legality_verdict"] == "PROVEN"
+
+
+def test_the_camera_table_gets_the_same_clause():
+    """Sibling 2 of 4, `cameras()` over `CAMERA_NODES`. On base a converted `camera_pose`
+    (index 0 of the declared order, below all three) left `cameras()` reporting
+    `width 480, height 81, length None` — the width read off the HEIGHT field, caught only
+    by the `checkable` flag falling to False further down rather than by any clause."""
+    cam = {"id": 5, "type": "WanCameraEmbedding", "widgets_values": [832, 480, 81],
+           "inputs": [{"name": "camera_pose", "type": "COMBO", "link": 3,
+                       "widget": {"name": "camera_pose"}}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.cameras(_i2v(cam))
+    ev = exc.value.evidence
+    assert ev["clause"] == "converted_widget_shifts_recorded_indices"
+    assert ev["converted"] == ["camera_pose"] and ev["table"] == "CAMERA_NODES"
+
+
+def test_the_camera_order_evidence_gets_the_same_clause():
+    """Sibling 3 of 4. On base `camera_widget_order_evidence` answered `CONTRADICTED` —
+    which is a DISAGREEMENT with the builder's numbers, not "these indices no longer
+    address the fields they name", and it says nothing at all when the shifted values
+    happen to equal what the builder set. This function is the empirical SECOND reading
+    the `LATENT_NODES` warning says is owed; a reading taken off shifted slots is not a
+    reading."""
+    cam = {"id": 5, "type": "WanCameraEmbedding", "widgets_values": [832, 480, 81],
+           "inputs": [{"name": "camera_pose", "widget": {"name": "camera_pose"}}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.camera_widget_order_evidence(
+            _i2v(cam), {"width": 832, "height": 480, "length": 81})
+    assert exc.value.evidence["clause"] == "converted_widget_shifts_recorded_indices"
+
+
+def test_the_seed_table_gets_the_same_clause():
+    """Sibling 4 of 4, `seeds()` over `SEED_NODES`. On base a `KSamplerAdvanced` whose
+    `add_noise` widget (index 0) was converted read seed `'fixed'` and
+    `control_after_generate` `None`, and Gate S refused "node 2 ... is not pinned" — a
+    NEIGHBOURING clause answering about a slot nobody read, which is the state the wave-18
+    andon's own honesty note describes for the hosted tier."""
+    ks = {"nodes": [
+        {"id": 1, "type": "UNETLoader", "widgets_values": [BASE]},
+        {"id": 2, "type": "KSamplerAdvanced", "widgets_values": [999999999, "fixed"],
+         "inputs": [{"name": "add_noise", "type": "COMBO", "link": 4,
+                     "widget": {"name": "add_noise"}}]}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.seeds(ks)
+    ev = exc.value.evidence
+    assert ev["clause"] == "converted_widget_shifts_recorded_indices"
+    assert ev["converted"] == ["add_noise"] and ev["table"] == "SEED_NODES"
+    with pytest.raises(RG.RouteGate) as exc2:
+        RG.gate_s_registration(ks, [7])
+    assert exc2.value.evidence["clause"] == "converted_widget_shifts_recorded_indices"
+
+
+def test_a_converted_name_with_no_recorded_index_also_refuses():
+    """`batch_size` sits at index 3 of `WanImageToVideo`'s declared order and NO table
+    records it, so this module cannot say whether converting it shifts the three slots it
+    reads. That is the third answer the hosted clause already gives: "a name this repo has
+    no recorded index for has an unknown position, and an unknown position is not evidence
+    of no shift"."""
+    node = {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 81],
+            "inputs": [{"name": "batch_size", "widget": {"name": "batch_size"}}]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.latents(_i2v(node))
+    assert exc.value.evidence["converted"] == ["batch_size"]
+    assert exc.value.evidence["recorded_widget_indices"].get("batch_size") is None
+
+
+def test_the_hosted_clause_keeps_its_own_name():
+    """The wave-18 refusal is not renamed by this fix. Both andons read the SAME converted
+    names through `_shifted_widget_names`, and the hosted one keeps
+    `converted_widget_shifts_enum_indices` because its receipts, its evidence keys
+    (`highest_enum_index`) and wave 18's `HALT_ROUTES` already carry that word."""
+    shifted = {"id": 2, "type": "Wan2ReferenceVideoApi",
+               "inputs": [{"name": "duration", "widget": {"name": "duration"}}],
+               "widgets_values": ["wan2.7-r2v", "p", "n", "720P", "16:9", 7, "fixed"]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.hosted_enums({"nodes": [shifted]})
+    assert exc.value.evidence["clause"] == "converted_widget_shifts_enum_indices"
+
+
+def test_an_api_graph_is_untouched_by_the_shift_clause():
+    """Positions are a save-format fact. In API format inputs are keyed by NAME, there is
+    nothing positional to shift, and the andon must not invent a refusal there — the same
+    ground `camera_widget_order_evidence` answers `not_applicable` on."""
+    api = {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": BASE}},
+           "2": {"class_type": "KSampler", "inputs": {"seed": 7}},
+           "3": {"class_type": "WanImageToVideo",
+                 "inputs": {"width": 832, "height": 480, "length": [9, 0]}}}
+    assert RG.latents(api)[0]["length"] is None
+    assert RG.latents(api)[0]["checkable"] is False
+
+
+# =======================================================================================
+# The halt line an operator actually reads (wave-18 rule 4), and the family census.
+# =======================================================================================
+
+
+HALT_ROUTES = [
+    ("duplicate_subgraph_label", "gate_saved_graph.py", "SAVED_ADMISSION_HALT"),
+    ("unreadable_node", "gate_saved_graph.py", "SAVED_ADMISSION_HALT"),
+    ("converted_widget_shifts_recorded_indices", "gate_saved_graph.py",
+     "SAVED_ADMISSION_HALT"),
+]
+
+
+def _refusal_for(clause):
+    """The REAL call that raises `clause`, so the halt record read below is the one an
+    operator gets rather than a hand-built exception wearing the clause's name."""
+    if clause == "duplicate_subgraph_label":
+        return lambda: RG.components(_label_graph("expert", "expert"))
+    if clause == "unreadable_node":
+        return lambda: RG.components(_lora_graph({"lora_name": BANNED}))
+    if clause == "converted_widget_shifts_recorded_indices":
+        return lambda: RG.latents(_i2v(_I2V_CONVERTED))
+    raise AssertionError(clause)
+
+
+@pytest.mark.parametrize("clause,tool,sentinel", HALT_ROUTES)
+def test_the_halt_line_an_operator_reads_names_the_andon_that_pulled(
+        clause, tool, sentinel, capsys):
+    """Wave-18 rule 4, read rather than assumed. Two of this wave's three findings ended
+    in a RETURNED green receipt and the third's API mirror in a bare `AttributeError`; a
+    refusal that does not reach the tool's exit-2 `<TOOL>_HALT` branch is not a refusal an
+    operator sees."""
+    from blender_stub import exit_code_of_main_block
+
+    code, escaped = exit_code_of_main_block(
+        tool, raiser=_refusal_for(clause),
+        argv=["python", tool, "--out", "nope"])
+    out = capsys.readouterr().out
+    assert escaped is None, f"{tool}: {escaped!r} escaped the handler"
+    assert code == 2, f"{tool} ({clause}): exit {code!r}, the contract says 2 for a gate"
+    lines = [ln for ln in out.splitlines() if ln.split(" ", 1)[0] == sentinel]
+    assert len(lines) == 1, f"{tool} ({clause}): {len(lines)} sentinel line(s)"
+    rec = json.loads(lines[0][len(sentinel):].strip())
+    ev = rec["evidence"]
+    assert isinstance(ev, dict), f"{tool} ({clause}): evidence {ev!r}"
+    assert ev["clause"] == clause
+    assert ev["andon"] == rec["error"] == "RouteGate"
+    assert ev["gate"] == "ROUTE"
+
+
+def test_every_clause_added_this_wave_raises_a_named_subclass_with_evidence():
+    """Gates raise, never `assert`; the refusal names the andon that pulled and carries
+    the operand. Driven again under `-O` by the suite's own `-O` leg."""
+    from armature_core.errors import ArmatureError
+
+    for clause, _tool, _sentinel in HALT_ROUTES:
+        with pytest.raises(RG.RouteGate) as exc:
+            _refusal_for(clause)()
+        assert isinstance(exc.value, ArmatureError), clause
+        assert exc.value.evidence["clause"] == clause
+        assert exc.value.evidence.get("andon") == "RouteGate"
+        assert exc.value.evidence.get("gate") == "ROUTE"

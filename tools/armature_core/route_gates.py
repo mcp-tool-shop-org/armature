@@ -613,6 +613,11 @@ def _walk_nodes(graph):
             # bare `continue` on the format every builder submits.
             if _api_entry_kind(node_id, node, graph) == "metadata":
                 continue
+            # · ANDON — the node's own container, before `.values()` is called on it. See
+            # `_readable_containers`: a list here used to raise a bare `AttributeError`,
+            # which is not an `ArmatureError` and so bypasses the halt contract entirely.
+            _readable_containers("api", node, population=len(graph), api=True,
+                                 node_id=node_id)
             inputs = node.get("inputs") or {}
             # A link is [node_id, slot]; anything else is a literal this graph pins.
             widgets = [v for v in inputs.values() if not isinstance(v, list)]
@@ -759,6 +764,36 @@ def _readable_node(where, n, index, population):
 
     One implementation, both call sites, so the two levels cannot drift apart again;
     `where` names which one, and it is the definition's own name or id for a nested node.
+
+    ⚠ **It guarded the node ENTRY and left the node's OWN CONTAINERS unguarded** — the
+    level below the one wave 18 closed for `definitions` / `definitions.subgraphs` and the
+    one wave 14 closed for the `nodes` array. Every weight read on this page is
+    `for v in (n.get("widgets_values") or [])` (`components`, `model_weights`), which
+    iterates the KEYS of a mapping and the CHARACTERS of a string, so no value inside
+    either shape is ever tested against `WEIGHT_SUFFIXES`. Measured 2026-09-05 in this
+    worktree on a save-format graph of `UNETLoader` + pinned `KSampler` +
+    `WanImageToVideo(832,480,81,1)` + a `LoraLoaderModelOnly` carrying
+    `causvid_x.safetensors` (BANNED, CC-BY-NC): with `widgets_values` as the ordinary LIST
+    `components()` returned that file with verdict BANNED and `verify(g)` raised naming
+    it; with the SAME node's `widgets_values` spelled as the mapping
+    `{"lora_name": "causvid_x.safetensors", "strength_model": 1.0}`, and again as the bare
+    string `"causvid_x.safetensors"`, `components()` returned only the `UNETLoader`'s
+    weight and `verify(g)` RETURNED "0 of 1 component(s) classified, 1 unclassified, …
+    1 frame(s) checked and generator-legal". No key in the receipt recorded that a node's
+    widget container had been entered and read as empty.
+
+    The node's `inputs` is guarded on the same clause because the converted-widget reading
+    the shift andons rest on is taken from it: `_save_format_input_names` and
+    `_save_format_converted_widget_names` iterate `node.get("inputs") or []`, and a mapping
+    there yields its string keys, every one of which fails `isinstance(slot, dict)` — so
+    the answer "this node has no converted widgets" is returned about a container nobody
+    read. `None` and an absent key stay the ordinary spelling of "no widgets" / "no
+    inputs", exactly as an absent `definitions` stays the spelling of "no blueprints".
+
+    NOT MEASURED, and stated as this module states its siblings: whether Comfy's own
+    exporter ever emits a non-list `widgets_values`. The input class is the one
+    `load_graph`'s docstring names — the save-format file the cloud converted and handed
+    back, an operator's `--saved` file, a converter or a hand-edit artifact.
     """
     if not isinstance(n, dict):
         raise RouteGate(
@@ -769,7 +804,66 @@ def _readable_node(where, n, index, population):
             {"gate": "ROUTE", "andon": "RouteGate", "clause": "unreadable_node",
              "index": index, "entry_type": type(n).__name__, "entry": repr(n),
              "where": where, "n_nodes": population})
+    # · ANDON — the node's own containers, on the level the wave-14 fix did not reach.
+    _readable_containers(where, n, index=index, population=population, api=False)
     return n
+
+
+#: What each node container is spelled as, per format. Save format spells `inputs` as a
+#: LIST of slot dicts (`{"name", "type", "link"}`, plus `{"widget": {...}}` on a converted
+#: widget) and `widgets_values` as a LIST of positional values; API format keys `inputs` by
+#: NAME and carries no `widgets_values` at all — `_walk_nodes` synthesises one from the
+#: literal inputs, so only `inputs` is read there.
+#: The "caller said nothing" sentinel, distinct from a node id that is legitimately `None`.
+_UNSET = object()
+
+NODE_CONTAINERS = {
+    False: (("widgets_values", list, "a list of widget values"),
+            ("inputs", list, "a list of save-format input slots")),
+    True: (("inputs", dict, "a mapping of API input name to literal-or-link"),),
+}
+
+
+def _readable_containers(where, node, *, index=None, population=None, api=False,
+                         node_id=_UNSET):
+    """Gate ROUTE's `unreadable_node`, raised for a node's OWN container.
+
+    One implementation, both formats and both save-format call sites, for the reason
+    `_unreadable_level` gives one level up: a reader keyed on the clause has one question —
+    *did this walk enter everything it reported on?* — and three spellings of the answer
+    would be three things to remember. `container` names which one and `entry_type` carries
+    the shape that arrived, so the receipt says what was refused rather than only that
+    something was.
+
+    The API half is the same defect wearing the crash hat. `_walk_nodes`' API branch reads
+    `inputs.values()`, so an `inputs` spelled as a LIST raised a bare
+    `AttributeError: 'list' object has no attribute 'values'` — measured 2026-09-05 on the
+    API mirror of the graph in `_readable_node`'s note. An `AttributeError` is not an
+    `ArmatureError`, so the halt contract's exit-2 six-key `<TOOL>_HALT` branch is bypassed
+    and Gate ROUTE refusing a shape it cannot read is recorded as an unhandled crash.
+
+    `node_id` is passed explicitly by the API branch, where a node's id is the MAPPING KEY
+    and never a field inside the entry — an evidence record naming `None` as the operand
+    would name nothing an operator could find in the file.
+    """
+    if node_id is _UNSET:
+        node_id = node.get("id")
+    for name, shape, expected in NODE_CONTAINERS[bool(api)]:
+        value = node.get(name)
+        if value is None or isinstance(value, shape):
+            continue
+        raise RouteGate(
+            f"this graph's node {node_id!r} (in {where!r}) carries a "
+            f"{type(value).__name__} as its `{name}` ({value!r}), which is not "
+            f"{expected}. Every clause on this page reads that container by iterating or "
+            f"indexing it, and a mapping yields its KEYS while a string yields its "
+            f"CHARACTERS — so a weight, a seed or a frame count inside it is tested "
+            f"against nothing and the node is reported clean having been read as empty",
+            {"gate": "ROUTE", "andon": "RouteGate", "clause": "unreadable_node",
+             "container": name, "expected": expected, "where": where,
+             "node_id": node_id, "class": node.get("type"),
+             "entry_type": type(value).__name__, "entry": repr(value),
+             "index": index, "n_nodes": population})
 
 
 def _unreadable_level(where, value, expected, index=None, population=None, extra=None):
@@ -795,6 +889,20 @@ def _unreadable_level(where, value, expected, index=None, population=None, extra
         ". A licence, seed and frame walk cannot enter a container it cannot read, and "
         "reading past it would leave every node inside it unexamined inside a graph "
         "reported clean", ev)
+
+
+#: The level labels `_walk_nodes` emits for the graph's OWN node sources. A blueprint may
+#: not declare one of them, because node identity in this walk is the pair `(where, id)`
+#: and a blueprint named `top` puts its nodes in the top level's namespace.
+#:
+#: `api` cannot collide inside a single graph today — `_walk_nodes`' API branch returns
+#: before `_iter_definitions` runs — and it is recorded here explicitly rather than by
+#: omission, the way `CONDITIONING_FAMILY_EXEMPT` records the conditioning classes that
+#: pair with no model family.
+RESERVED_LEVEL_LABELS = {
+    "top": {"what": "the save-format graph's own top-level `nodes` array"},
+    "api": {"what": "an API-format graph's node map"},
+}
 
 
 def _iter_definitions(container, path=None, declared=None):
@@ -862,6 +970,47 @@ def _iter_definitions(container, path=None, declared=None):
     `_readable_node`'s own comment gives about its array: a skipped blueprint is a
     blueprint no clause examined, and "nothing was checkable" and "everything checked out"
     may not be the same verdict.
+
+    ⚠ **The id clause bounded one field over from the invariant Gate S rests on, and the
+    LABEL this walk emits was left unbounded.** The refusal above is keyed on `id` on the
+    stated ground that "the `where` label a duplicate-id blueprint would carry is ambiguous
+    by construction" — and nothing refused a duplicate `name`, or two blueprints declaring
+    NEITHER field, both of which collapse that same label. `gate_s_registration` resolves
+    each seed record to its node with `next(... if (w, str(x.get("id"))) == (s["where"],
+    str(s["node_id"])))`, which is TOTAL but not UNIQUE, so the second colliding record
+    reads its `add_noise` off the FIRST node the walk yielded.
+
+    Measured 2026-09-05 in this worktree on a save-format graph carrying a live top-level
+    `KSamplerAdvanced` id 2 (`add_noise=enable`, seed 7) plus two blueprints with DISTINCT
+    ids `bp1`/`bp2` and the SAME `name: "expert"`, the first holding `KSamplerAdvanced`
+    id 3 (`add_noise=disable`, seed 7) and the second holding `KSamplerAdvanced` id 3
+    (`add_noise=ENABLE`, seed 999999999): `seeds()` correctly returned
+    `[('top',2,7), ('expert',3,7), ('expert',3,999999999)]` and `gate_s_registration(g,
+    [7])` RETURNED with `seeds_noise_bearing: 1 of 3` and the verdict "… 2 exempted by
+    add_noise=disable (node(s) expert/3, expert/3)". Seed 999999999 was never graded, and
+    the receipt's own tell — one identity printed twice, which the wave-18 fix added
+    `seeds_exempt_nodes` and the `level/id` wording to remove — was back verbatim. Two
+    more spellings of the same collapse: NO `name` and NO `id` on either blueprint (both
+    labels fall to the literal `"subgraph"`, and the `bid is not None` guard skips the id
+    clause entirely), and a single blueprint NAMED `top`, which is the label `_walk_nodes`
+    gives the graph's own `nodes` array.
+
+    **The label is refused, not rewritten.** The other available fix — emitting `where`
+    keyed on the definition's position as well as its label — would have moved every Gate
+    S receipt string, the `level/id` verdict wording, `seeds_exempt_nodes`' `{where,
+    node_id}` pairs and the `where` recorded by `components`, `model_weights`, `seeds`,
+    `latents`, `cameras` and `camera_widget_order_evidence`, on every graph including the
+    ones that were never ambiguous. A refusal leaves all of that byte-identical and states
+    the invariant where the label is BUILT. It is also the answer this module gives to
+    ambiguity everywhere else: `duplicate_subgraph_id` here, `link_table`'s
+    `duplicate_link_id`, `fetch_run.parse_node_map`'s `node_map_duplicate_id`.
+
+    The two ledgers are separate namespaces inside one `declared` dict (`("id", …)` and
+    `("label", …)`), because a blueprint whose `id` is `"x"` and a later blueprint NAMED
+    `"x"` are not ambiguous with each other and a single key space would have refused
+    them. NOT MEASURED: whether Comfy's exporter ever emits two blueprints under one
+    `name`. The cost of the refusal is a halt an operator reads and re-exports past; the
+    cost of its absence is the green PASS measured above.
     """
     path = set() if path is None else path
     declared = {} if declared is None else declared
@@ -892,7 +1041,7 @@ def _iter_definitions(container, path=None, declared=None):
         if bid is not None:
             # · ANDON — ambiguity, which is a different fact from a cycle and gets a
             # different answer. See this function's docstring.
-            prev = declared.get(str(bid))
+            prev = declared.get(("id", str(bid)))
             if prev is not None:
                 raise RouteGate(
                     f"this graph declares two subgraph blueprints under one id "
@@ -907,7 +1056,36 @@ def _iter_definitions(container, path=None, declared=None):
                      "clause": "duplicate_subgraph_id", "subgraph_id": bid,
                      "declared_by": [prev, where], "index": i,
                      "n_subgraphs": len(subs), "where": where})
-            declared[str(bid)] = where
+            declared[("id", str(bid))] = where
+        # · ANDON — the LABEL this walk emits, which is the half of node identity the id
+        # clause above does not bound. See this function's docstring.
+        collides = (RESERVED_LEVEL_LABELS.get(str(where))
+                    or declared.get(("label", str(where))))
+        if collides is not None:
+            reserved = str(where) in RESERVED_LEVEL_LABELS
+            raise RouteGate(
+                f"this graph declares a subgraph blueprint whose level label is "
+                f"{str(where)!r}, which "
+                + (f"is the label this walk already gives {collides['what']}"
+                   if reserved else
+                   f"blueprint #{collides['index']} (id {collides['id']!r}) already "
+                   f"declared")
+                + f". Node identity in this walk is the PAIR (where, id) — blueprint ids "
+                f"are a separate namespace — so two levels emitting one label make that "
+                f"pair total but not unique, and the SECOND record then reads its node's "
+                f"fields off the FIRST node the walk yielded. Measured 2026-09-05 with "
+                f"two blueprints under one name: Gate S RETURNED a PASS naming "
+                f"'expert/3, expert/3' while a blueprint node ran an unregistered seed",
+                {"gate": "ROUTE", "andon": "RouteGate",
+                 "clause": "duplicate_subgraph_label", "label": str(where),
+                 "collides_with": (dict(collides, kind="reserved_level_label")
+                                   if reserved else
+                                   {"kind": "subgraph", "index": collides["index"],
+                                    "id": collides["id"]}),
+                 "declared_by": [None if reserved else collides["id"], bid],
+                 "index": i, "n_subgraphs": len(subs), "where": where,
+                 "reserved_level_labels": sorted(RESERVED_LEVEL_LABELS)})
+        declared[("label", str(where))] = {"index": i, "id": bid}
         path.add(id(d))
         try:
             nodes = d.get("nodes") or []
@@ -1560,6 +1738,16 @@ def seeds(graph):
         # reading a Gate S halt on a truncated save-format sampler was told the seed is a
         # literal beside a `seed` of None. Mirrored on the API branch above: an absent seed
         # is not a literal one.
+        # · ANDON — the positional read is cross-checked against the node's own declared
+        # input names before it is trusted. See `_converted_widget_shift_andon`: a
+        # converted `add_noise` left this function reading the seed as the string
+        # `'fixed'`. `add_noise` rides the index set because `gate_s_registration` reads it
+        # off this same widget list, and the andon must bound every index the family reads.
+        _converted_widget_shift_andon(
+            n, {name: spec[key] for name, key in
+                (("seed", "seed"), ("control_after_generate", "control"),
+                 ("add_noise", "add_noise")) if isinstance(spec.get(key), int)},
+            wv, "SEED_NODES")
         present = len(wv) > spec["seed"]
         control = wv[spec["control"]] if len(wv) > spec["control"] else None
         out.append({"node_id": n.get("id"), "class": cls, "where": where,
@@ -1594,6 +1782,12 @@ def latents(graph):
                 rec[key] = v if not isinstance(v, list) else None
         else:
             wv = n.get("widgets_values") or []
+            # · ANDON — the auditor's operand: a converted `length` widget left this
+            # function reading the batch_size slot and Gate L reporting PROVEN. See
+            # `_converted_widget_shift_andon`.
+            _converted_widget_shift_andon(
+                n, {k: spec[k] for k in ("width", "height", "length")}, wv,
+                "LATENT_NODES")
             for key in ("width", "height", "length"):
                 i = spec[key]
                 rec[key] = wv[i] if len(wv) > i else None
@@ -1625,6 +1819,11 @@ def cameras(graph):
                 rec[key] = v if not isinstance(v, list) else None
         else:
             wv = n.get("widgets_values") or []
+            # · ANDON — sibling 2 of the four positional tables. See
+            # `_converted_widget_shift_andon`.
+            _converted_widget_shift_andon(
+                n, {k: spec[k] for k in ("width", "height", "length")}, wv,
+                "CAMERA_NODES")
             for key in ("width", "height", "length"):
                 i = spec[key]
                 rec[key] = wv[i] if len(wv) > i else None
@@ -1663,6 +1862,15 @@ def camera_widget_order_evidence(graph, expect):
         if not spec or n.get("type") not in set(CAMERA_NODES) | {"WanCameraImageToVideo"}:
             continue
         wv = n.get("widgets_values") or []
+        # · ANDON — sibling 3 of the four positional tables, and the one where a shift is
+        # least visible: this function REPORTS a disagreement with the builder's numbers,
+        # which says nothing at all when the shifted values happen to equal what the
+        # builder set. A reading taken off shifted slots is not the empirical second
+        # reading `LATENT_NODES`' warning says is owed. It raises here for the same reason
+        # its nearest sibling `hosted_enums` raises while returning values.
+        _converted_widget_shift_andon(
+            n, {k: spec[k] for k in ("width", "height", "length")}, wv,
+            "CAMERA_NODES" if n.get("type") in CAMERA_NODES else "LATENT_NODES")
         found = {k: (wv[spec[k]] if len(wv) > spec[k] else None)
                  for k in ("width", "height", "length")}
         ev["nodes"].append({
@@ -1874,6 +2082,85 @@ def hosted_enums(graph):
     return out
 
 
+def _shifted_widget_names(node, highest):
+    """The converted widgets that may have SHIFTED a positional read up to `highest`.
+
+    ONE reading, shared by `_hosted_enum_shift_andon` and `_converted_widget_shift_andon`,
+    so the hosted enum block and the three other positional tables cannot disagree about
+    what a shift is. A converted widget shifts a read unless its own slot is KNOWN to sit
+    above every index the reader touches; a name this repo has no recorded index for has an
+    UNKNOWN position, and an unknown position is not evidence of no shift — the third
+    answer, the same one `latents()` gives a dimension arriving over a link.
+    """
+    known = known_widget_indices(node.get("type"))
+    return sorted({name for name in _save_format_converted_widget_names(node)
+                   if known.get(name) is None or known[name] <= highest})
+
+
+def _converted_widget_shift_andon(node, indices, wv, table):
+    """Refuse a save-format node whose recorded widget positions cannot be trusted.
+
+    ⚠ **The shift clause existed for ONE of the four positional tables.** Wave 18 gave
+    `HOSTED_ENUM_WIDGETS` `_hosted_enum_shift_andon`, whose own honesty note says "a future
+    `HOSTED_ENUM_WIDGETS` row whose seed slot is not last would not be [caught]" — and the
+    siblings were never enumerated. `latents()` over `LATENT_NODES`, `cameras()` and
+    `camera_widget_order_evidence()` over `CAMERA_NODES`, and `seeds()` over `SEED_NODES`
+    all read `wv[spec[key]]` positionally with no shift clause, although
+    `known_widget_indices(cls)` — built in the same wave, over all four tables — is the
+    reading that detects it.
+
+    Measured 2026-09-05 in this worktree on a save-format graph of
+    `UNETLoader('wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors')` + pinned `KSampler` +
+    `WanImageToVideo`: honest widgets `[832, 480, 81, 1]` gave `latents()` width 832,
+    height 480, length 81 and `verify(g)` PROVEN. Converting the `length` widget to an
+    input — an ordinary ComfyUI edit, after which the save format DROPS that value from
+    `widgets_values` and declares the slot as `{"name":"length","widget":{"name":"length"}}`
+    — leaves widgets `[832, 480, 1]`; `_save_format_converted_widget_names` returned
+    `['length']` and `known_widget_indices('WanImageToVideo')` returned
+    `{'width':0,'height':1,'length':2}`, so the shift was fully readable, yet `latents()`
+    returned `{'width': 832, 'height': 480, 'length': 1, 'checkable': True}` — the
+    batch_size slot read as the frame count — and `verify(g)` RETURNED PROVEN with
+    `frame_legality` `length: 1, legal: true`, "1 frame(s) checked and generator-legal".
+    That is the vacuous Gate L state E08 paid for, on the last gate before a paid
+    submission, re-entered through a widget conversion.
+
+    `length` is the one conversion of the four that fails OPEN: converting `width` or
+    `height` shifts a non-multiple-of-16 into the dimension slots and Gate L refuses, while
+    1 is a legal 4n+1 count. The other three tables were caught only by NEIGHBOURING
+    clauses answering about slots nobody read — a converted `camera_pose` left `cameras()`
+    reporting width 480 / height 81 / length None (caught by `checkable` falling to False),
+    and a converted `add_noise` left `seeds()` reading the seed as the string `'fixed'`
+    (caught by Gate S's "not pinned"). A refusal by name is not a neighbour's accident.
+
+    It keeps its OWN clause word rather than reusing the hosted one: the hosted refusal's
+    receipts, its `highest_enum_index` evidence key and wave 18's `HALT_ROUTES` all carry
+    `converted_widget_shifts_enum_indices`, and "enum indices" is not what `LATENT_NODES`
+    records. Both read the same converted names through `_shifted_widget_names`.
+
+    Save format only. In API format inputs are keyed by NAME, there is nothing positional
+    to shift, and inventing a refusal there would be the category error
+    `camera_widget_order_evidence` answers `not_applicable` on.
+    """
+    shifting = _shifted_widget_names(node, max(indices.values()))
+    if not shifting:
+        return
+    raise RouteGate(
+        f"node {node.get('id')} ({node.get('type')}) declares {shifting} as a CONVERTED "
+        f"widget, so this class's recorded widget indices {indices} (from {table}) no "
+        f"longer address the fields they name — every value at or after the converted "
+        f"slot is shifted, and a name with no recorded index could sit anywhere. Reading "
+        f"them anyway would grade a number that is not the field it is quoted as, on the "
+        f"gates that stand before a paid submission",
+        {"gate": "ROUTE", "andon": "RouteGate",
+         "clause": "converted_widget_shifts_recorded_indices",
+         "node_id": node.get("id"), "class": node.get("type"),
+         "converted": shifting, "indices": dict(indices), "table": table,
+         "recorded_widget_indices": known_widget_indices(node.get("type")),
+         "highest_index_read": max(indices.values()),
+         "declared_input_names": sorted(set(_save_format_input_names(node))),
+         "widgets_values": wv})
+
+
 def _hosted_enum_shift_andon(n, idx, wv):
     """Refuse a save-format hosted node whose positional enum indices cannot be trusted.
 
@@ -1910,11 +2197,9 @@ def _hosted_enum_shift_andon(n, idx, wv):
     highest = max(idx.values())
     known = known_widget_indices(n.get("type"))
     # A converted widget shifts the enum block unless its own slot is KNOWN to sit above
-    # every enum index. A name this repo has no recorded index for has an unknown
-    # position, and an unknown position is not evidence of no shift — the third answer,
-    # the same one `latents()` gives a dimension arriving over a link.
-    shifting = sorted({name for name in _save_format_converted_widget_names(n)
-                       if known.get(name) is None or known[name] <= highest})
+    # every enum index. ONE reading, shared with `_converted_widget_shift_andon` — see
+    # `_shifted_widget_names`.
+    shifting = _shifted_widget_names(n, highest)
     if shifting:
         raise RouteGate(
             f"node {n.get('id')} ({n.get('type')}) declares {shifting} as a CONVERTED "
