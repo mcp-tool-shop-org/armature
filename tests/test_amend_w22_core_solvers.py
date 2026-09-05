@@ -350,6 +350,37 @@ def _refusal_ortho_pin_not_a_number():
     turnaround.projection_plan(True, 50.0, 36.0, ortho_scale_pin="wide")
 
 
+def _lift_inputs():
+    import test_lift_solve as TLS
+    from armature_core import lift_solve as LS
+    rest, obs, _ = TLS._round_trip_inputs()
+    return LS, rest, dict(obs)
+
+
+def _refusal_round_trip_residual():
+    """The ANDON half of F-94312e25's operand. The diagnostic must never raise — that is
+    its contract and the reason it is a separate function — so the halt line an operator
+    sees for this operand is `gate_round_trip`'s, and the diagnostic's own fix is a
+    partition read out of the returned record."""
+    LS, rest, obs = _lift_inputs()
+    solved = LS.solve_frame(rest, obs)
+    obs["toe_L"] = (float("nan"), 0.0, 0.0)
+    LS.gate_round_trip(rest, obs, solved, 1.0)
+
+
+def _refusal_twist_tripwire():
+    import pytest as _pytest
+
+    LS, rest, obs = _lift_inputs()
+    mp = _pytest.MonkeyPatch()
+    mp.setattr(LS, "_bind_reference",
+               lambda u_rest, hint, name: tuple(float(c) for c in u_rest))
+    try:
+        LS.solve_frame(rest, obs)
+    finally:
+        mp.undo()
+
+
 HALT_ROWS = [
     # (finding, tool, sentinel, raiser, error class name, evidence key that must be there)
     ("F-cfb560aa", "rig_parts.py", "RIG_PARTS_HALT", _refusal_gate_d,
@@ -370,6 +401,10 @@ HALT_ROWS = [
      "pairs_identical_in_pixels_anywhere"),
     ("F-4ce10f2a", "render_turnaround.py", "RENDER_TURNAROUND_HALT",
      _refusal_ortho_pin_not_a_number, "TurnaroundPlanRefusal", "ortho_scale_pin"),
+    ("F-94312e25", "lift_clip.py", "LIFT_CLIP_HALT", _refusal_round_trip_residual,
+     "SolveGate", "sites_non_finite"),
+    ("F-d255af87", "lift_clip.py", "LIFT_CLIP_HALT", _refusal_twist_tripwire,
+     "SolveError", "clause"),
 ]
 
 

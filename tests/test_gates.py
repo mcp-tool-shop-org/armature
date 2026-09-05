@@ -1172,8 +1172,12 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # And 353 -> 356: +3 in `turnaround` — `orbit_azimuths`' `sweep_revisits_an_azimuth`
     # (F-99e5de1a) and `gate_set_distinct`'s `non_finite_pair_distance` (F-8cfaefd9) and
     # `views_identical_in_pixels_anywhere` (F-99e5de1a). RE-DERIVED with `==`, branch-local.
-    assert total == 356, (
-        f"{total} family raises in armature_core; this pin asserts 356, RE-DERIVED on the "
+    # And 356 -> 357: +1 in `lift_solve` — the twist-datum tripwire (F-d255af87), a guard
+    # the algebra bounds that used to fall through to the COLLINEARITY message the test four
+    # lines above it had already ruled out. Kept as an andon with its own clause rather than
+    # deleted, so a change to the arithmetic above it is loud.
+    assert total == 357, (
+        f"{total} family raises in armature_core; this pin asserts 357, RE-DERIVED on the "
         f"wave-22 core-solvers branch. This is the denominator every ratio below is quoted against — "
         f"re-measure it deliberately")
 
