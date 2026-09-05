@@ -447,15 +447,28 @@ def pairing(graph):
     graph = normalise_graph(graph)
     loaded = model_weights(graph)
     present = sorted({fam for w in loaded for fam in w["families"]})
-    cond = [(str(n.get("id")), n.get("type")) for _, n in _iter_nodes(graph)
+    # ⚠ **`where` — Gate PAIR's rows were the one row family on this page that never
+    # carried it.** The comprehension read `for _, n in _iter_nodes(graph)` and discarded
+    # the level the walk yields, beside `components`, `ruled_node_classes`,
+    # `model_weights`, `seeds`, `latents`, `cameras` and `camera_widget_order_evidence`,
+    # every one of which records `"where": where`. Measured 2026-09-05 in this worktree on
+    # a save-format graph carrying a top-level `WanImageToVideo` id 3 and a blueprint
+    # `WanImageToVideo` id 3: the CONTRADICTED refusal read "node 3 is WanImageToVideo ...;
+    # node 3 is WanImageToVideo ..." and `conditioning_nodes` carried two rows keyed 3 and
+    # 3 — the same duplicate-id tell the wave-18 Gate S fix removed from its own verdict
+    # by printing `level/id`. Node identity in this walk is the PAIR `(where, id)`, because
+    # blueprint ids are a separate namespace. No verdict was wrong (`missing` is computed
+    # per row rather than by a lookup), so what this closes is the RECEIPT and the refusal
+    # an operator reads.
+    cond = [(where, str(n.get("id")), n.get("type")) for where, n in _iter_nodes(graph)
             if n.get("type") in CONDITIONING_WEIGHT_FAMILY
             or n.get("type") in CONDITIONING_FAMILY_EXEMPT]
 
     ev = {"gate": "PAIR", "andon": "PairGate",
           "model_weights": loaded, "families_present": present,
-          "conditioning_nodes": [{"node_id": i, "class": c,
+          "conditioning_nodes": [{"where": w, "node_id": i, "class": c,
                                   "requires": CONDITIONING_WEIGHT_FAMILY.get(c)}
-                                 for i, c in cond]}
+                                 for w, i, c in cond]}
 
     unknown = sorted({n.get("type") for _, n in _iter_nodes(graph)
                       if _looks_like_conditioning(n.get("type"))
@@ -470,23 +483,24 @@ def pairing(graph):
             f"letting a new class through — the class this gate was built for passed every "
             f"other check in this file", ev)
 
-    required = [(i, c, CONDITIONING_WEIGHT_FAMILY[c]) for i, c in cond
+    required = [(w, i, c, CONDITIONING_WEIGHT_FAMILY[c]) for w, i, c in cond
                 if c in CONDITIONING_WEIGHT_FAMILY]
     if required and not loaded:
         ev["verdict"] = "INDETERMINATE"
         raise PairGate(
-            f"the graph wires {len(required)} conditioning node(s) but loads no diffusion "
-            f"model this gate can read ({', '.join(MODEL_LOADER_CLASSES)}), so the pairing "
-            f"is UNPROVEN. A check that cannot fail is not a check", ev)
+            f"the graph wires {len(required)} conditioning node(s) "
+            f"({', '.join(f'{w}/{i}' for w, i, _c, _f in required)}) but loads no "
+            f"diffusion model this gate can read ({', '.join(MODEL_LOADER_CLASSES)}), so "
+            f"the pairing is UNPROVEN. A check that cannot fail is not a check", ev)
 
-    missing = [(i, c, fam) for i, c, fam in required if fam not in present]
+    missing = [(w, i, c, fam) for w, i, c, fam in required if fam not in present]
     if missing:
         ev["verdict"] = "CONTRADICTED"
         raise PairGate(
             "; ".join(
-                f"node {i} is {c}, which requires a {fam!r} model, but the graph loads "
-                f"{', '.join(w['file'] for w in loaded) or 'nothing'} "
-                f"(families present: {present or 'none'})" for i, c, fam in missing) +
+                f"node {w}/{i} is {c}, which requires a {fam!r} model, but the graph "
+                f"loads {', '.join(x['file'] for x in loaded) or 'nothing'} "
+                f"(families present: {present or 'none'})" for w, i, c, fam in missing) +
             ". Measured 2026-08-12: this exact pairing produced 65 frames with no subject "
             "after the first, and every other gate in this file passed on it", ev)
 
@@ -2136,7 +2150,7 @@ HOSTED_ENUM_WIDGETS = {
 
 
 def hosted_enums(graph):
-    """EVERY hosted node's `(node_id, resolution, ratio, duration)`, in EITHER format.
+    """EVERY hosted node's `(where, node_id, resolution, ratio, duration)`, EITHER format.
 
     Found by the field rather than by the class name in API format, because the thing being
     read is the field. In save format there are no field names at all — the values are
@@ -2150,15 +2164,30 @@ def hosted_enums(graph):
     wan2.7-r2v at 720P 16:9 5s — enum-legal". The illegal second node was named nowhere
     in the evidence, so a two-shot hosted graph could carry an out-of-contract resolution,
     ratio or duration under a green Gate L receipt.
+
+    ⚠ **The tuple gained `where` 2026-09-05 (F-2fa07723) and its arity changed from 4 to
+    5.** The loop read `for _where, n in _iter_nodes(graph)` and DISCARDED the level, so
+    the per-node billing andon and the enum refusal above it could not name which node they
+    were about — on the one tier that bills per node. Measured in this worktree on a
+    save-format graph carrying a top-level `Wan2ReferenceVideoApi` id 6 and a blueprint
+    (`name: 'inner'`) `Wan2ReferenceVideoApi` id 6, both at ('720P','16:9',5): this
+    function returned `[(6,'720P','16:9',5), (6,'720P','16:9',5)]`, `verify(g,
+    hosted_tier='wan2.7-r2v')` raised "the graph carries 2 wan2.7-r2v node(s) (6, 6)", and
+    the two rows in `hosted_frame_legality_nodes` were keyed `node_id: 6` and `node_id: 6`
+    and carried no `where`; making the blueprint node illegal instead produced "Gate L
+    (hosted tier): node 6: resolution 4K is not one of ...", which does not say which node
+    6. Node identity in this walk is the PAIR `(where, id)` (wave 18) — what every DICT
+    row family on this page already records, and this was the one TUPLE family that did
+    not. The only consumer is `verify`'s hosted branch, in this module.
     """
     graph = normalise_graph(graph)
     api = is_api_format(graph)
     out = []
-    for _where, n in _iter_nodes(graph):
+    for where, n in _iter_nodes(graph):
         if api:
             inp = n.get("inputs") or {}
             if "model.resolution" in inp:
-                out.append((n.get("id"), inp.get("model.resolution"),
+                out.append((where, n.get("id"), inp.get("model.resolution"),
                             inp.get("model.ratio"), inp.get("model.duration")))
         else:
             idx = HOSTED_ENUM_WIDGETS.get(n.get("type"))
@@ -2167,7 +2196,7 @@ def hosted_enums(graph):
                 # · ANDON — the positional read is cross-checked against the node's own
                 # declared input names before it is trusted. See `_hosted_enum_shift_andon`.
                 _hosted_enum_shift_andon(n, idx, wv)
-                out.append((n.get("id"), wv[idx["resolution"]], wv[idx["ratio"]],
+                out.append((where, n.get("id"), wv[idx["resolution"]], wv[idx["ratio"]],
                             wv[idx["duration"]]))
     return out
 
@@ -2901,8 +2930,11 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         # `hosted_enums` used to return the first match and this branch checked only that
         # tuple: a second node at an illegal resolution, ratio or duration was named
         # nowhere in the evidence.
+        # `where` rides every row: node identity in this walk is the pair, and both
+        # refusals below print `level/id`. See `hosted_enums` for the measurement.
         rows = [dict(hosted_frame_legality(res, ratio, dur, hosted_tier),
-                     source="graph", node_id=nid) for nid, res, ratio, dur in found]
+                     source="graph", where=where, node_id=nid)
+                for where, nid, res, ratio, dur in found]
         ev["hosted_frame_legality_nodes"] = rows
         ev["frame_legality_verdict"] = "INAPPLICABLE — hosted tier, enum clause instead"
         ev["frame_legality_inapplicable_reason"] = (
@@ -2913,7 +2945,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         if illegal_rows:
             raise RouteGate(
                 "Gate L (hosted tier): " + "; ".join(
-                    f"node {r['node_id']}: " + "; ".join(r["problems"])
+                    f"node {r['where']}/{r['node_id']}: " + "; ".join(r["problems"])
                     for r in illegal_rows), ev)
         if len(rows) > 1:
             # Both legal is not the same as one checked. This tier bills per node, so a
@@ -2922,7 +2954,8 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             # function already makes for `frame` and `hosted_tier` together.
             raise RouteGate(
                 f"the graph carries {len(rows)} {hosted_tier} node(s) "
-                f"({', '.join(str(r['node_id']) for r in rows)}); every one is legal and "
+                f"({', '.join(str(r['where']) + '/' + str(r['node_id']) for r in rows)}); "
+                f"every one is legal and "
                 f"reported in `hosted_frame_legality_nodes`, but one submission carrying "
                 f"two billable nodes is two charges against a ceiling counted per "
                 f"submission, and one tier verdict cannot describe both", ev)

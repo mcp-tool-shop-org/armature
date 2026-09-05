@@ -478,3 +478,173 @@ def test_an_api_declared_widget_reaches_the_printed_halt_record_both_ways(tmp_pa
     assert shape["evidence"]["clause"] == "unreadable_node"
     assert shape["evidence"]["container"] == "widgets_values"
     assert shape["evidence"]["where"] == "api"
+
+
+# ---------------------------------------------------------------------------
+# F-2fa07723 / F-94cc5fe1 — the two row families that discarded the level the walk
+# yields. Node identity in this walk is the PAIR `(where, id)` (wave 18).
+# ---------------------------------------------------------------------------
+
+R2V_WIDGETS = ["wan2.7-r2v", "a prompt", "a negative", "720P", "16:9", 5, 7, "fixed"]
+
+
+def _r2v_node(node_id, widgets=None):
+    return {"id": node_id, "type": "Wan2ReferenceVideoApi",
+            "widgets_values": list(widgets if widgets is not None else R2V_WIDGETS)}
+
+
+def _two_level_r2v(top_widgets=None, inner_widgets=None):
+    """The auditor's operand: a top-level `Wan2ReferenceVideoApi` id 6 and a blueprint
+    `Wan2ReferenceVideoApi` id 6, both at ('720P','16:9',5)."""
+    return {"nodes": [_r2v_node(6, top_widgets)],
+            "definitions": {"subgraphs": [
+                {"id": "bp", "name": "inner",
+                 "nodes": [_r2v_node(6, inner_widgets)]}]}}
+
+
+def test_hosted_enums_rows_carry_the_level_the_walk_yields():
+    """RED on base: `hosted_enums` returned `[(6,'720P','16:9',5), (6,'720P','16:9',5)]`
+    — the loop was `for _where, n in _iter_nodes(graph)` and the level was discarded, so
+    two DIFFERENT nodes produced two identical rows on the one tier that bills per node."""
+    rows = RG.hosted_enums(_two_level_r2v())
+    assert rows == [("top", 6, "720P", "16:9", 5), ("inner", 6, "720P", "16:9", 5)]
+    assert len({r[:2] for r in rows}) == 2, "the pair (where, id) is the identity"
+
+
+def test_the_per_node_billing_refusal_names_which_node_it_stopped():
+    """On base the refusal read 'the graph carries 2 wan2.7-r2v node(s) (6, 6)' and the two
+    rows in `hosted_frame_legality_nodes` were keyed `node_id: 6` and `node_id: 6` with no
+    `where`. An operator reading a halt that stopped a per-node-billed submission could not
+    locate the node that stopped it."""
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_two_level_r2v(), hosted_tier="wan2.7-r2v")
+    ev = exc.value.evidence
+    assert "top/6" in str(exc.value) and "inner/6" in str(exc.value)
+    rows = ev["hosted_frame_legality_nodes"]
+    assert [(r["where"], r["node_id"]) for r in rows] == [("top", 6), ("inner", 6)]
+
+
+def test_the_hosted_enum_refusal_names_which_node_is_illegal():
+    """Making the BLUEPRINT node illegal instead: on base the message read 'Gate L (hosted
+    tier): node 6: resolution 4K is not one of ...', which does not say which node 6."""
+    illegal = list(R2V_WIDGETS)
+    illegal[3] = "4K"
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(_two_level_r2v(inner_widgets=illegal), hosted_tier="wan2.7-r2v")
+    assert "node inner/6" in str(exc.value)
+    assert "node top/6" not in str(exc.value), "only the illegal node is named illegal"
+
+
+def test_a_single_hosted_node_still_reads_its_row_and_verdict():
+    """The ordinary population — one hosted node — is unchanged except for the new first
+    member, and `verify` still reaches its enum-legal verdict."""
+    assert RG.hosted_enums({"nodes": [_r2v_node(6)]}) == [
+        ("top", 6, "720P", "16:9", 5)]
+    ev = RG.verify({"nodes": [_r2v_node(6)]}, hosted_tier="wan2.7-r2v",
+                   carries_no_sampler=False)
+    assert ev["hosted_frame_legality"]["where"] == "top"
+    assert "enum-legal" in ev["verdict"]
+
+
+def test_hosted_enums_carries_the_level_in_api_format_too():
+    """API format has its own level label (`api`), and it is recorded for the same reason:
+    the row family's identity is the pair, whichever branch produced it."""
+    api = {"6": {"class_type": "Wan2ReferenceVideoApi",
+                 "inputs": {"model.resolution": "720P", "model.ratio": "16:9",
+                            "model.duration": 5}}}
+    assert RG.hosted_enums(api) == [("api", "6", "720P", "16:9", 5)]
+
+
+def _two_level_i2v():
+    """A save-format graph carrying a top-level `WanImageToVideo` id 3 and a blueprint
+    `WanImageToVideo` id 3 — the auditor's Gate PAIR operand."""
+    node = {"id": 3, "type": "WanImageToVideo", "widgets_values": [832, 480, 81, 1]}
+    return {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [BASE]},
+                      dict(node)],
+            "definitions": {"subgraphs": [
+                {"id": "bp", "name": "inner", "nodes": [dict(node)]}]}}
+
+
+def test_gate_pair_rows_carry_the_level_the_walk_yields():
+    """RED on base: `conditioning_nodes` carried two rows keyed 3 and 3 and no `where`,
+    while `components`, `ruled_node_classes`, `model_weights`, `seeds`, `latents`,
+    `cameras` and `camera_widget_order_evidence` every one record it."""
+    with pytest.raises(RG.PairGate) as exc:
+        RG.pairing(_two_level_i2v())
+    ev = exc.value.evidence
+    assert ev["verdict"] == "CONTRADICTED"
+    rows = ev["conditioning_nodes"]
+    assert [(r["where"], r["node_id"]) for r in rows] == [("top", "3"), ("inner", "3")]
+    assert all(set(r) == {"where", "node_id", "class", "requires"} for r in rows)
+    assert "node top/3" in str(exc.value) and "node inner/3" in str(exc.value)
+
+
+def test_the_pair_indeterminate_refusal_names_level_and_id_too():
+    """The sibling clause in the same function: a graph that wires conditioning nodes and
+    loads no diffusion model this gate can read. It counted them and named none."""
+    g = {"nodes": [{"id": 3, "type": "WanImageToVideo",
+                    "widgets_values": [832, 480, 81, 1]}],
+         "definitions": {"subgraphs": [{"id": "bp", "name": "inner", "nodes": [
+             {"id": 3, "type": "WanImageToVideo",
+              "widgets_values": [832, 480, 81, 1]}]}]}}
+    with pytest.raises(RG.PairGate) as exc:
+        RG.pairing(g)
+    ev = exc.value.evidence
+    assert ev["verdict"] == "INDETERMINATE"
+    assert [(r["where"], r["node_id"]) for r in ev["conditioning_nodes"]] == [
+        ("top", "3"), ("inner", "3")]
+    assert "top/3" in str(exc.value) and "inner/3" in str(exc.value)
+
+
+def test_every_row_family_on_this_page_now_records_where():
+    """The census the two findings are two members of: each row family that names a node
+    records the level the walk yielded it at. `hosted_enums` is a tuple family and is
+    checked by position; the rest are dict rows."""
+    i2v_base = "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+    g = {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [i2v_base]},
+                   {"id": 2, "type": "KSampler",
+                    "widgets_values": [7, "fixed", 20, 1.0, "euler", "normal", 1.0]},
+                   {"id": 3, "type": "WanImageToVideo",
+                    "widgets_values": [832, 480, 81, 1]}]}
+    for reader in ("components", "model_weights", "seeds", "latents", "cameras",
+                   "ruled_node_classes"):
+        rows = getattr(RG, reader)(g)
+        assert all("where" in r for r in rows), reader
+    assert all(r["where"] == "top" for r in RG.pairing(g)["conditioning_nodes"])
+    assert all(len(r) == 5 for r in RG.hosted_enums({"nodes": [_r2v_node(6)]}))
+
+
+def test_the_gate_pair_refusal_reaches_the_printed_halt_record(tmp_path):
+    """The halt line READ. `gate_saved_graph.py` runs Gate PAIR on the saved graph, and its
+    `SAVED_ADMISSION_HALT` carries the evidence dict — where on base the
+    `conditioning_nodes` rows in that printed record carried no `where` at all."""
+    d = _gsg_case(tmp_path)
+    out = tmp_path / "fresh" / "admission.json"
+    payload = _halt_line([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
+                          f"--seeds={d / 'seeds.json'}", f"--out={out}"],
+                         "SAVED_ADMISSION_HALT", "gate_saved_graph.py")
+    assert payload["error"] == "PairGate"
+    rows = payload["evidence"]["conditioning_nodes"]
+    assert rows == [{"where": "top", "node_id": "49", "class": "WanAnimateToVideo",
+                     "requires": "animate"}]
+    assert "top/49" in payload["message"]
+
+
+def test_the_hosted_billing_refusal_reaches_the_printed_halt_record(tmp_path):
+    """The halt line READ for the tier that bills per node. On base the printed message
+    read "the graph carries 2 wan2.7-r2v node(s) (6, 6)" and the two rows in
+    `hosted_frame_legality_nodes` were both keyed `node_id: 6`."""
+    d = _gsg_case(tmp_path, saved_doc=_two_level_r2v(),
+                  api_doc={"6": {"class_type": "Wan2ReferenceVideoApi",
+                                 "inputs": {"model.resolution": "720P",
+                                            "model.ratio": "16:9",
+                                            "model.duration": 5}}})
+    out = tmp_path / "fresh" / "admission.json"
+    payload = _halt_line([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
+                          f"--seeds={d / 'seeds.json'}", f"--out={out}",
+                          "--hosted-tier=wan2.7-r2v"],
+                         "SAVED_ADMISSION_HALT", "gate_saved_graph.py")
+    assert "top/6" in payload["message"] and "inner/6" in payload["message"]
+    rows = payload["evidence"].get("hosted_frame_legality_nodes")
+    if rows is not None:
+        assert [(r["where"], r["node_id"]) for r in rows] == [("top", 6), ("inner", 6)]
