@@ -354,10 +354,6 @@ CHECKOUT_JOBS = {
 }
 
 
-def workflow_files():
-    return sorted(n for n in os.listdir(WORKFLOWS) if n.endswith((".yml", ".yaml")))
-
-
 def _checkout_jobs(text):
     return sorted(name for name in job_names(text)
                   if "actions/checkout" in "\n".join(_job_lines(text, name)))
@@ -4928,3 +4924,30 @@ def test_a_hash_inside_a_string_is_not_a_comment():
     code = _python_code_only(src)
     assert "next_call()" in code, code
     assert "run(" in code and "check=True" in code, code
+
+
+# ============================================================================ wave-23 merge
+#
+# WAVE-23 MERGE (coordinator, 2026-09-05). The tests domain found `_code_only` defined TWICE in this module, the second
+# byte-identical and shadowing the first, which is why its first widening changed nothing (SEAM 6). At the merge the
+# coordinator measured the same shape once more in the whole suite: `workflow_files` was defined at two sites in this
+# file, the later one (with the docstring) shadowing the earlier. The earlier copy is deleted, and this census holds
+# every module under tests/ to one definition per top-level name, so the third instance cannot land quietly.
+
+
+def test_no_top_level_name_is_defined_twice_in_any_test_module():
+    """RED on the wave-23 merge commit: {'test_ci_workflows.py': ['workflow_files']}; green after the deletion."""
+    import ast
+    import glob
+
+    doubled = {}
+    for path in sorted(glob.glob(os.path.join(TESTS_DIR, "*.py"))):
+        with open(path, encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        names = [n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))]
+        dup = sorted({n for n in names if names.count(n) > 1})
+        if dup:
+            doubled[os.path.basename(path)] = dup
+    assert doubled == {}, (
+        f"a top-level name defined twice in one module is a definition nobody reads (the second shadows the "
+        f"first, byte-identical or not): {doubled}")
