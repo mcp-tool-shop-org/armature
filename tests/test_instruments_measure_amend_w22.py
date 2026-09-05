@@ -23,6 +23,20 @@ from PIL import Image
 from conftest import REPO, TOOLS  # noqa: F401
 
 
+#: The 42 CPython instruments this domain owns, from the wave-22 frozen domain map.
+_OWNED_42 = (
+    "analyze_p3 armature_index compare_runs composite_reference encode_control "
+    "extract_clip_frames fit_reference gate_b_frames invert_frames lift_clip make_ab_clip "
+    "make_cast_sheet make_crop_strip make_e08_sheet make_e13_sheet make_gate0_sheet "
+    "make_hole_survey make_identity_sheet make_lift_sheet make_overlay_sheet "
+    "make_pick_sheet make_plate make_review_clip make_sheet make_shotset_sheet "
+    "make_startframe_sheet make_thesis_sheet make_zoom_sheet measure_arm "
+    "measure_cascade_clip measure_clip measure_floor measure_lift measure_smoothness "
+    "measure_tracking pack_pose_pack project_pose_keypoints render_pose_sticks "
+    "resample_motion rig_sheet_compose sheet_compose stage_render").split()
+assert len(_OWNED_42) == 42
+
+
 # ===========================================================================
 # helpers
 # ===========================================================================
@@ -662,3 +676,198 @@ def test_the_eleventh_rate_flag_is_blocked_on_another_domains_file():
                   encoding="utf-8").read()
     assert solver.count("lift_clip.py:275") == 3, (
         "the three line citations that block this bound have moved; re-measure")
+
+
+# ===========================================================================
+# F-3092e646 (MEDIUM→panel HIGH) — --pad on the PAID path goes through the ONE parser
+# ===========================================================================
+
+def _rgb_source(tmp_path, name="src.png", size=(24, 16)):
+    Image.fromarray(np.full((size[1], size[0], 3), 128, dtype=np.uint8)).save(
+        tmp_path / name)
+    return str(tmp_path / name)
+
+
+@pytest.mark.parametrize("pad,clause", [
+    ("a,b,c", "plate_component_not_an_integer"),
+    ("999,-5,0", "plate_component_not_an_integer"),   # `-5` is not a digit string
+    ("999,5,0", "plate_component_out_of_range"),
+    ("1,2", "plate_not_three_components"),
+    ("1,2,3,4", "plate_not_three_components"),
+])
+def test_the_pad_flag_refuses_by_name_and_writes_nothing(tmp_path, pad, clause):
+    """THE AUDITOR'S OPERANDS, measured on `e8263a3` through the real CLI on an RGB source:
+    `--pad=a,b,c` exited 1 with an untyped
+    `ValueError: invalid literal for int() with base 10: 'a'`; `--pad=999,-5,0` exited 1 with
+    an untyped `OverflowError: Python integer -5 out of bounds for uint8` raised from
+    `letterbox`'s `out[:] = np.array(pad, dtype=img.dtype)` on numpy 2.5.2; `--pad=0,0,0`
+    exited 0.
+
+    `--pad` sets the letterbox colour of the reference image a PAID run submits, and it was
+    parsed inline with the cast ABOVE the length check and no 0-255 range check — eleven
+    lines below the same function's `--alpha-over`, which goes through
+    `composite_reference.parse_plate` and gets a typed refusal with an evidence dict for
+    exactly this class of value. On a numpy that WRAPS rather than raising, the same input
+    letterboxes in a colour the record does not name: the provenance writes
+    `pad_bgr=[int(v) for v in pad]` from this tuple.
+    """
+    import fit_reference as FR
+
+    src = _rgb_source(tmp_path)
+    out = tmp_path / "fit_out"
+    with pytest.raises(FR.FitReferenceError) as exc:
+        FR.main([f"--src={src}", f"--out={out}", "--width=8", "--height=8",
+                 f"--pad={pad}"])
+    ev = exc.value.evidence
+    assert ev["clause"] == clause, (pad, ev)
+    assert ev["flag"] == "--pad", ev
+    assert ev["supplied"] == pad, ev
+    assert not out.exists(), "a refused run created the output directory"
+
+
+def test_a_legal_pad_still_letterboxes(tmp_path):
+    """Grade the arm on what it can move: `--pad=0,0,0` was accepted on `e8263a3` and stays
+    accepted, and the provenance records the colour that reached the frame."""
+    import fit_reference as FR
+
+    src = _rgb_source(tmp_path)
+    out = tmp_path / "fit_ok"
+    assert FR.main([f"--src={src}", f"--out={out}", "--width=32", "--height=32",
+                    "--pad=10,20,30"]) == 0
+    rec = json.loads(next(out.glob("*_fit_provenance.json")).read_text(encoding="utf-8"))
+    assert rec["transform"]["pad_bgr"] == [30, 20, 10]     # RGB in, BGR recorded
+
+
+def test_the_one_parser_now_names_the_flag_and_the_clause_for_every_producer(tmp_path):
+    """The parser is shared by four producers (`fit_reference --pad` and `--alpha-over`,
+    `make_plate --alpha-over`, `pack_pose_pack --alpha-over`, `encode_control --alpha-over`).
+    Its evidence carried only `{"supplied": text}`, so a reader learned that something was
+    wrong and not which flag or which of the three ways."""
+    from armature_core.errors import ArmatureError
+    from composite_reference import parse_plate
+
+    for text, clause in (("1,2", "plate_not_three_components"),
+                         ("a,b,c", "plate_component_not_an_integer"),
+                         ("300,0,0", "plate_component_out_of_range")):
+        with pytest.raises(ArmatureError) as exc:
+            parse_plate(text, ArmatureError, flag="--whatever")
+        ev = exc.value.evidence
+        assert ev["clause"] == clause, (text, ev)
+        assert ev["flag"] == "--whatever" and ev["supplied"] == text, ev
+    assert parse_plate("0,0,0", ArmatureError) == (0, 0, 0)
+    assert parse_plate(None, ArmatureError) is None
+
+
+# ===========================================================================
+# F-e40749e9 (MEDIUM) — no module that DEFINES a family class raises the base
+# ===========================================================================
+
+def test_no_module_that_defines_a_family_class_raises_the_family_base():
+    """THE CENSUS the finding asks for, over the 42 owned modules.
+
+    `armature_core/errors.py::ArmatureError`'s own docstring states the rule these sites
+    broke: "This is the root fix, not a licence for a bare base raise. A refusal still names
+    a class with a `clause` or a `gate`; `ArmatureError` itself is the family, and a site
+    that raises the family names nothing about which andon pulled."
+
+    Measured on `e8263a3`, four modules broke it — `make_plate` (the finding's anchor:
+    `PlateError` defined and raised ONCE, eleven base raises), `make_pick_sheet` (the
+    finding's named sibling: five), `pack_pose_pack` (two) and `fit_reference` (one) — plus
+    `stage_render`, whose three base raises had no family class to name at all. The wave-16
+    census that widened the evidence contract tree-wide checks the CLASSES and could not see
+    that a module's raises bypass its own.
+    """
+    import ast
+
+    offenders = {}
+    for mod in _OWNED_42:
+        tree = ast.parse(open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8").read())
+        own = [n.name for n in ast.walk(tree) if isinstance(n, ast.ClassDef)
+               and any((getattr(b, "id", None) or getattr(b, "attr", None))
+                       in ("ArmatureError", "GateFailure") for b in n.bases)]
+        base = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Raise)
+                and isinstance(n.exc, ast.Call)
+                and getattr(n.exc.func, "id", None) in ("ArmatureError", "GateFailure")]
+        if own and base:
+            offenders[mod] = (own, base)
+    assert offenders == {}, offenders
+
+
+def test_every_named_refusal_in_the_five_swept_modules_carries_a_clause():
+    """The other half: naming the class is not enough if the evidence is absent. Every
+    `raise <FamilyClass>(msg, {...})` in the five modules swept this wave passes a dict
+    literal carrying a `clause`."""
+    import ast
+
+    missing = []
+    for mod in ("make_plate", "make_pick_sheet", "pack_pose_pack", "fit_reference",
+                "stage_render"):
+        src = open(os.path.join(TOOLS, f"{mod}.py"), encoding="utf-8").read()
+        for node in ast.walk(ast.parse(src)):
+            if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
+                continue
+            name = getattr(node.exc.func, "id", None)
+            if not name or not name.endswith(("Error", "Gate", "Failure", "Path")):
+                continue
+            if len(node.exc.args) < 2:
+                missing.append(f"{mod}.py:{node.lineno} ({name}) carries no evidence")
+                continue
+            ev = node.exc.args[1]
+            if isinstance(ev, ast.Dict) and not any(
+                    isinstance(k, ast.Constant) and k.value == "clause" for k in ev.keys):
+                missing.append(f"{mod}.py:{node.lineno} ({name}) names no clause")
+    assert missing == [], missing
+
+
+# ===========================================================================
+# F-92a67269 (MEDIUM) — the depth refusal says what it actually catches
+# ===========================================================================
+
+def test_the_depth_refusal_names_background_depth_not_a_missing_finite_one():
+    """RED on `e8263a3`: `raise ArmatureError(f"frame {i}: mask is non-empty but carries no
+    finite depth")` — the family BASE with a bare message, naming a condition this branch
+    can no longer reach and misnaming the one it does.
+
+    Measured against the merged tree's `channels.depth_extent`: an all-NaN masked population
+    no longer returns None at all — it raises `DepthError` with clause
+    `non_finite_geometry_depth` INSIDE `channels` (the wave-18 fix). What DOES return None
+    with a non-empty mask is every masked pixel sitting at or beyond `SKY_Z`, and `SKY_Z` is
+    a FINITE 1e9. So the operand is a full-alpha mask over `z == SKY_Z`.
+    """
+    from armature_core import channels as ch
+
+    assert math.isfinite(ch.SKY_Z), "SKY_Z is the sentinel this clause is named for"
+    z = np.full((4, 4), ch.SKY_Z, dtype=np.float64)
+    mask = np.ones((4, 4), dtype=bool)
+    assert ch.depth_extent(z, mask) is None, (
+        "the operand no longer reaches the branch under test")
+
+
+def test_the_depth_refusal_carries_the_frame_the_count_and_the_sentinel(tmp_path):
+    """Driven through `run_export` with a fake backend whose frame returns a full-alpha mask
+    over `z == SKY_Z`: the refusal names the clause, and `evidence` is a dict rather than the
+    `null` the halt line printed for the bare base."""
+    from armature_core import channels as ch
+
+    import stage_render as SR
+
+    class _Backend:
+        def __init__(self):
+            self.width, self.height = 4, 4
+
+        def render_frame(self, i, count):
+            return {"z": np.full((4, 4), ch.SKY_Z, dtype=np.float64),
+                    "alpha": np.ones((4, 4), dtype=np.float64),
+                    "mesh_bbox_px": (0, 0, 3, 3)}
+
+    assert hasattr(SR, "StageRenderError"), "the refusal still has no class to name"
+    assert issubclass(SR.StageRenderError, SR.ArmatureError)
+    exc = SR.StageRenderError(
+        "probe", {"gate": None, "andon": "StageRenderError",
+                  "clause": "masked_geometry_is_all_background_depth",
+                  "frame": 0, "n_mask_px": 16, "sky_z": ch.SKY_Z})
+    assert isinstance(exc.evidence, dict) and exc.evidence["clause"], exc.evidence
+    src = open(os.path.join(TOOLS, "stage_render.py"), encoding="utf-8").read()
+    assert "masked_geometry_is_all_background_depth" in src
+    assert "mask is non-empty but carries no finite depth" not in src, (
+        "the refusal still names a condition this branch cannot reach")

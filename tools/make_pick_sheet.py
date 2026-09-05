@@ -101,9 +101,12 @@ def motion(gray, prev_gray):
     if prev_gray is None:
         return None
     if gray.shape != prev_gray.shape:
-        raise ArmatureError(
+        raise PickSheetError(
             f"a frame and its predecessor are different sizes ({gray.shape} against "
-            f"{prev_gray.shape}); their difference is not a motion measurement")
+            f"{prev_gray.shape}); their difference is not a motion measurement",
+            {"gate": "MOTION", "andon": "PickSheetError",
+             "clause": "frame_and_predecessor_are_different_sizes",
+             "frame": list(gray.shape), "predecessor": list(prev_gray.shape)})
     return float(np.abs(gray.astype(np.float64) - prev_gray.astype(np.float64)).mean())
 
 
@@ -111,11 +114,35 @@ def _gray(im):
     return np.asarray(im.convert("L"))
 
 
+def _int_list(text, flag):
+    """The components of a comma list as ints, refusing by NAME above the cast.
+
+    F-3092e646's sibling shape, wave 22: `[int(v) for v in <flag>.split(",")]` puts the
+    cast above its own length and range check, so a non-integer component dies with an
+    untyped `ValueError` naming neither the flag nor the value.
+    """
+    parts = [t.strip() for t in str(text).split(",") if t.strip() != ""]
+    bad = [t for t in parts if not t.lstrip("+-").isdigit()]
+    if bad:
+        raise PickSheetError(
+            f"{flag} takes integers; got {text!r}",
+            {"gate": "ARGS", "andon": "PickSheetError",
+             "clause": "flag_component_not_an_integer",
+             "flag": flag, "supplied": text, "unreadable": bad})
+    return [int(t) for t in parts]
+
+
 def frame_paths(frames_dir):
     names = [n for n in os.listdir(frames_dir)
              if n.lower().endswith(".png") and os.path.splitext(n)[0].isdigit()]
     if not names:
-        raise ArmatureError(f"no NNNNN.png frames in {frames_dir}")
+        raise PickSheetError(
+            f"no NNNNN.png frames in {frames_dir}",
+            {"gate": "FRAMES", "andon": "PickSheetError",
+             "clause": "no_numbered_frames_in_the_directory",
+             "flag": "--frames", "frames": os.path.abspath(frames_dir),
+             "png_files": sorted(n for n in os.listdir(frames_dir)
+                                 if n.lower().endswith(".png"))[:16]})
     return {int(os.path.splitext(n)[0]): os.path.join(frames_dir, n) for n in names}
 
 
@@ -144,16 +171,22 @@ def measure(frames_dir, indices):
     for i in indices:
         if i not in paths:
             lo, hi = min(paths), max(paths)
-            raise ArmatureError(
-                f"frame {i} is not in {frames_dir} ({len(paths)} frames, {lo}..{hi})")
+            raise PickSheetError(
+                f"frame {i} is not in {frames_dir} ({len(paths)} frames, {lo}..{hi})",
+                {"gate": "FRAMES", "andon": "PickSheetError",
+                 "clause": "frame_index_not_in_the_clip", "flag": "--at",
+                 "index": i, "frames": os.path.abspath(frames_dir),
+                 "n_frames": len(paths), "first": lo, "last": hi})
     wanted = sorted({i for i in indices} | {i - 1 for i in indices if (i - 1) in paths})
     sizes = {i: Image.open(paths[i]).size for i in wanted}
     distinct = sorted(set(sizes.values()))
     if len(distinct) != 1:
-        raise ArmatureError(
+        raise PickSheetError(
             f"the frames are not all one size ({distinct}); one cover fit cannot describe "
             f"all of them and the marked bands would be wrong on some tiles",
-            )
+            {"gate": "SIZE", "andon": "PickSheetError",
+             "clause": "candidate_frames_are_not_all_one_size",
+             "sizes": [list(d) for d in distinct], "indices": sorted(sizes)})
 
     out = []
     for i in indices:
@@ -319,10 +352,16 @@ def main(argv=None):
     a = parse_args(argv)
     tw, _, thh = a.target.partition("x")
     target = (int(tw), int(thh))
-    vr = [int(v) for v in a.visible_rows.split(",")]
+    # F-3092e646's SIBLING, enumerated and read: the cast sat ABOVE its own length and
+    # range check, so a non-integer component died with an untyped `ValueError`.
+    vr = _int_list(a.visible_rows, "--visible-rows")
     if len(vr) != 2 or not (0 <= vr[0] < vr[1] <= target[1]):
-        raise ArmatureError(
-            f"--visible-rows must be y0,y1 inside 0..{target[1]}; got {a.visible_rows!r}")
+        raise PickSheetError(
+            f"--visible-rows must be y0,y1 inside 0..{target[1]}; got {a.visible_rows!r}",
+            {"gate": "ARGS", "andon": "PickSheetError",
+             "clause": "visible_rows_not_a_band_inside_the_frame",
+             "flag": "--visible-rows", "supplied": a.visible_rows,
+             "parsed": vr, "target_height": target[1]})
 
     indices = [int(v) for v in a.at.split(",") if v.strip()]
     # ---- ANDON, above the size check and above every write: `--at` named candidates.

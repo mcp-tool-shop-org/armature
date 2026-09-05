@@ -98,15 +98,29 @@ def delete_output_dir(run_dir):
         return False
     marker = os.path.join(run_dir, ".armature_run")
     if not os.path.isfile(marker):
-        raise ArmatureError(
+        raise StageRenderError(
             f"refusing to delete {run_dir}: it carries no .armature_run marker, so "
-            f"this tool did not create it"
-        )
+            f"this tool did not create it",
+            {"gate": None, "andon": "StageRenderError",
+             "clause": "compensator_target_carries_no_run_marker",
+             "run_dir": run_dir, "marker": marker})
     shutil.rmtree(run_dir)
     return True
 
 
 # ------------------------------------------------------------------------- backend
+
+
+class StageRenderError(ArmatureError):
+    """This tool declined to proceed — a refusal that reached no gate.
+
+    F-e40749e9's shape, wave 22: `armature_core/errors.py::ArmatureError`'s own docstring
+    states the rule the three sites in this file were breaking — "This is the root fix, not
+    a licence for a bare base raise. A refusal still names a class with a `clause` or a
+    `gate`; `ArmatureError` itself is the family, and a site that raises the family names
+    nothing about which andon pulled." Every refusal here now names this class and carries
+    a `clause`, so a halt record or a reader can tell the three apart.
+    """
 
 
 class BlenderBackend:
@@ -137,7 +151,11 @@ class BlenderBackend:
             asset_path, expected_fps=spec["frames"]["fps"]
         )
         if not imported_meshes:
-            raise SpecError(f"{asset_path} imported no mesh objects; nothing to render")
+            raise SpecError(
+                f"{asset_path} imported no mesh objects; nothing to render",
+                {"gate": None, "andon": "SpecError",
+                 "clause": "asset_imported_no_mesh_objects",
+                 "asset": asset_path, "armatures": len(armatures)})
         bs.configure_render(scene, spec, width, height)
 
         # Only geometry that will actually render may define the framing or G4's
@@ -146,8 +164,11 @@ class BlenderBackend:
         if not meshes:
             raise SpecError(
                 f"{asset_path}: every imported mesh is hidden from render "
-                f"({[o.name for o in imported_meshes]})"
-            )
+                f"({[o.name for o in imported_meshes]})",
+                {"gate": None, "andon": "SpecError",
+                 "clause": "every_imported_mesh_is_hidden_from_render",
+                 "asset": asset_path,
+                 "imported": [o.name for o in imported_meshes]})
         info["mesh_objects_render_visible"] = len(meshes)
         info["mesh_objects_excluded_from_render"] = sorted(
             o.name for o in imported_meshes if o.name not in {m.name for m in meshes}
@@ -166,7 +187,12 @@ class BlenderBackend:
             # day the two lines drift the framing silently includes a hidden decoy.
             bounds = bs.world_bounds(meshes, scene=scene)
         if bounds is None:
-            raise SpecError(f"{asset_path} has no evaluated geometry")
+            raise SpecError(
+                f"{asset_path} has no evaluated geometry",
+                {"gate": None, "andon": "SpecError",
+                 "clause": "asset_has_no_evaluated_geometry",
+                 "asset": asset_path, "animation": animation,
+                 "n_render_visible_meshes": len(meshes)})
         center, half, sphere_r = bounds
 
         cam = bs.make_camera(scene, spec)
@@ -183,8 +209,11 @@ class BlenderBackend:
         if radius + sphere_r >= float(c["clip_end"]):
             raise SpecError(
                 f"camera clip_end {c['clip_end']} is closer than the subject "
-                f"(radius {radius:.3f} + sphere {sphere_r:.3f})"
-            )
+                f"(radius {radius:.3f} + sphere {sphere_r:.3f})",
+                {"gate": None, "andon": "SpecError",
+                 "clause": "clip_end_is_closer_than_the_subject",
+                 "clip_end": float(c["clip_end"]), "radius": float(radius),
+                 "sphere_radius": float(sphere_r)})
 
         exr_dir = os.path.join(work_dir, "master")
         outputs = bs.setup_passes_and_compositor(scene, exr_dir, need_normal=need_normal)
@@ -325,9 +354,12 @@ def run_export(spec, out_dir, backend=None):
         z = np.asarray(f["z"], dtype=np.float64)
         alpha = np.asarray(f["alpha"], dtype=np.float64)
         if z.shape != (height, width):
-            raise ArmatureError(
-                f"frame {i}: depth buffer is {z.shape}, expected {(height, width)}"
-            )
+            raise StageRenderError(
+                f"frame {i}: depth buffer is {z.shape}, expected {(height, width)}",
+                {"gate": None, "andon": "StageRenderError",
+                 "clause": "depth_buffer_is_not_the_frame_size",
+                 "frame": i, "measured": [int(v) for v in z.shape],
+                 "expected": [height, width]})
         mask = ch.mask_from_alpha(alpha)
         mask_bbox = ch.bbox_of(mask)
 
@@ -354,7 +386,32 @@ def run_export(spec, out_dir, backend=None):
 
         extent = ch.depth_extent(z, mask)
         if extent is None:
-            raise ArmatureError(f"frame {i}: mask is non-empty but carries no finite depth")
+            # F-92a67269, wave 22. This raise read "mask is non-empty but carries no finite
+            # depth", which names a condition this branch can no longer reach and misnames
+            # the one it does. Measured on the merged tree against `channels.depth_extent`:
+            # an all-NaN masked population no longer returns None at all — it raises
+            # `DepthError` with clause `non_finite_geometry_depth` INSIDE `channels` (the
+            # wave-18 fix), so "no finite depth" describes a case that never arrives here.
+            # What DOES return None with a non-empty mask is every masked pixel sitting at
+            # or beyond `SKY_Z`, and `SKY_Z` is 1e9, a FINITE value (measured:
+            # `np.isfinite(ch.SKY_Z)` is True, and `depth_extent(full(SKY_Z), ones_mask)`
+            # returns None): the frame's geometry all reads BACKGROUND depth. The
+            # empty-mask half of the old sentence was redundant rather than wrong —
+            # `g4_bbox_sanity` refuses `mask_bbox is None` three statements above.
+            #
+            # It was also the family BASE with a bare message, so the halt line printed
+            # `"gate": null, "evidence": null` for a refusal on the control-sequence
+            # exporter, with the frame index living only in prose.
+            raise StageRenderError(
+                f"frame {i}: every pixel the mask admits reads at or beyond the background "
+                f"sentinel (SKY_Z = {ch.SKY_Z:g}), so this frame carries no geometry depth "
+                f"to normalise. A holdout or shadow-catcher material, geometry past "
+                f"clip_end, or a compositor alpha not sourced from the same objects as the "
+                f"Z pass all land here — the depth pass has no NaNs to go looking for",
+                {"gate": None, "andon": "StageRenderError",
+                 "clause": "masked_geometry_is_all_background_depth",
+                 "frame": i, "n_mask_px": int(np.asarray(mask).astype(bool).sum()),
+                 "sky_z": ch.SKY_Z})
         rec["z_min"], rec["z_max"] = extent
         rec["z_range"] = extent[1] - extent[0]
 

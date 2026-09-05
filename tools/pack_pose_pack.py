@@ -147,7 +147,13 @@ def frame_paths(directory):
     names = [f for f in os.listdir(directory)
              if f.lower().endswith(".png") and os.path.splitext(f)[0].isdigit()]
     if not names:
-        raise ArmatureError(f"no NNNNN.png frames in {directory}")
+        raise PosePackError(
+            f"no NNNNN.png frames in {directory}",
+            {"gate": "FRAMES", "andon": "PosePackError",
+             "clause": "no_numbered_frames_in_the_directory",
+             "flag": "--frames", "frames": os.path.abspath(directory),
+             "png_files": sorted(n for n in os.listdir(directory)
+                                 if n.lower().endswith(".png"))[:16]})
     return [os.path.join(directory, n)
             for n in sorted(names, key=lambda s: int(os.path.splitext(s)[0]))]
 
@@ -168,10 +174,13 @@ def load_frames(paths, alpha_over=None):
         out.append(np.ascontiguousarray(rgb, dtype=np.uint8))
     shapes = {a.shape for a in out}
     if len(shapes) != 1:
-        raise ArmatureError(
+        raise PosePackError(
             f"the frames are not all the same size: {sorted(shapes)}. LoadImage's PIL path "
             f"SKIPS any frame whose size differs from the first, so a mixed-size pack "
-            f"arrives as a short batch with nothing erroring")
+            f"arrives as a short batch with nothing erroring",
+            {"gate": "FRAMES", "andon": "PosePackError",
+             "clause": "frames_are_not_all_one_size",
+             "shapes": [list(sh) for sh in sorted(shapes)], "n_frames": len(out)})
     return out
 
 

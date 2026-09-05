@@ -130,13 +130,41 @@ def compose_over_named_plate(arr, plate, *, label, exc, extra_evidence=None,
 
 
 def parse_plate(text, exc, flag="--alpha-over"):
-    """`R,G,B` of a named plate, or None. Raises `exc` on anything else."""
+    """`R,G,B` of a named plate, or None. Raises `exc` on anything else.
+
+    **The ONE three-integer parser in this domain.** `fit_reference`, `make_plate`,
+    `pack_pose_pack` and `encode_control` all call it rather than splitting the flag
+    themselves — the census that pins that is
+    `tests/test_alpha_law.py::test_the_flag_parser_is_one_implementation_read_off_the_ast`.
+    Wave 22 (F-3092e646) added `fit_reference --pad`, which had its own inline
+    `[int(v) for v in a.pad.split(",")]` with the cast ABOVE the length check and no
+    0-255 range check, eleven lines below this function's own `--alpha-over` call.
+
+    The evidence dict names the andon and the clause as well as the value, because the
+    caller's `flag` is the thing a reader has to retype and `supplied` alone said only that
+    something was wrong. `supplied` is kept — `tests/test_alpha_law.py` reads it across all
+    four producers.
+    """
     if text is None or text == "":
         return None
     parts = [t.strip() for t in str(text).split(",")]
-    if len(parts) != 3 or not all(t.isdigit() and 0 <= int(t) <= 255 for t in parts):
+    if len(parts) != 3:
         raise exc(f"{flag} takes three 0-255 integers, e.g. {flag}=0,0,0; got {text!r}",
-                  {"supplied": text})
+                  {"gate": "ARGS", "andon": exc.__name__,
+                   "clause": "plate_not_three_components", "flag": flag,
+                   "supplied": text, "n_components": len(parts)})
+    if not all(t.isdigit() for t in parts):
+        raise exc(f"{flag} takes three 0-255 integers, e.g. {flag}=0,0,0; got {text!r}",
+                  {"gate": "ARGS", "andon": exc.__name__,
+                   "clause": "plate_component_not_an_integer", "flag": flag,
+                   "supplied": text,
+                   "unreadable": [t for t in parts if not t.isdigit()]})
+    if not all(0 <= int(t) <= 255 for t in parts):
+        raise exc(f"{flag} takes three 0-255 integers, e.g. {flag}=0,0,0; got {text!r}",
+                  {"gate": "ARGS", "andon": exc.__name__,
+                   "clause": "plate_component_out_of_range", "flag": flag,
+                   "supplied": text,
+                   "out_of_range": [int(t) for t in parts if not 0 <= int(t) <= 255]})
     return tuple(int(t) for t in parts)
 
 
