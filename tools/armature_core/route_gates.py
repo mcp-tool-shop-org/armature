@@ -243,8 +243,21 @@ HOSTED_TIER_RULES = {
 #: check it against. The exposure is bounded: widget order is irrelevant in API format,
 #: where inputs are keyed by name, and matters only when re-reading the SAVED file. So the
 #: second reading is taken empirically there instead — `camera_widget_order_evidence`
-#: reports the values standing at these indices on the converted file, and the builder's
-#: saved-graph step requires them to be the ones it set.
+#: reports the values standing at these indices on the converted file.
+#:
+#: ⚠ **The sentence that used to end this paragraph — "and the builder's saved-graph step
+#: requires them to be the ones it set" — described a confirmation that was being taken by
+#: a DIFFERENT implementation.** Measured by grep across the worktree on `e8263a3`: the
+#: only references to `camera_widget_order_evidence` outside its own definition were four
+#: in `tests/test_route_gates.py` (550-568); no builder and no gate called it, and the
+#: saved-graph step reads `gate_saved_graph.WIDGET_INDEX` (`:41`, read at `:141`) — a
+#: second copy of the same table. So the empirical second reading this note claims was
+#: taken by code that does not read this table, and the function the note names was dead.
+#: A clause with no caller is armed or deleted: `verify` is its production caller now (see
+#: the andon near the end of that function), so every save-format graph that reaches Gate
+#: ROUTE with a frame to check against records the values standing at these indices, and a
+#: disagreement halts. Routed to builders as SEAM 5 §2: whether `WIDGET_INDEX`'s camera row
+#: is retired in favour of this one is theirs to decide, in their own file.
 LATENT_NODES = {
     "EmptyHunyuanLatentVideo": {"width": 0, "height": 1, "length": 2},
     "EmptyLatentVideo": {"width": 0, "height": 1, "length": 2},
@@ -2024,6 +2037,32 @@ def camera_widget_order_evidence(graph, expect):
     return ev
 
 
+def _camera_widget_order_receipt(graph, ev, supplied):
+    """`camera_widget_order_evidence` for `verify`, or a row saying why it was not taken.
+
+    The `expect` this reading is checked against is the frame the run is being graded on:
+    the caller's supplied triple when there is one, otherwise the single frame the graph
+    itself pins. When the graph pins several different frames there is no one thing to
+    confirm the indices against — `verify`'s own clash clause is what answers that — and a
+    row saying so is recorded rather than a verdict over a number nobody chose.
+    """
+    frames = {(f["width"], f["height"], f["length"])
+              for f in ev["frame_legality"] if f["source"] == "graph"}
+    if supplied is not None:
+        target = (supplied["width"], supplied["height"], supplied["length"])
+    elif len(frames) == 1:
+        target = next(iter(frames))
+    else:
+        return {"gate": "ROUTE", "andon": "RouteGate", "clause": "camera_widget_order",
+                "verdict": ("NOT TAKEN — the second reading needs one frame to check the "
+                            "declared indices against, and this call supplied none while "
+                            f"the graph pins {sorted(frames)}"),
+                "nodes": [], "agrees": None, "expect": None,
+                "graph_frames": sorted(frames)}
+    return camera_widget_order_evidence(
+        graph, {"width": target[0], "height": target[1], "length": target[2]})
+
+
 def _frame_triple(frame):
     """`(width, height, length)` from a tuple or a mapping, or raise saying what arrived.
 
@@ -2493,6 +2532,25 @@ def gate_s_registration(graph, registered, *, carries_no_sampler=False):
                     not in ("disable", False)
             else:
                 wv = n.get("widgets_values") or []
+                # · ANDON — the positional read, cross-checked in THIS function's own body.
+                # ⚠ Wave 20 wired `_converted_widget_shift_andon` into four readers by hand
+                # and nothing required the fifth. Measured 2026-09-05 by walking this
+                # module's AST for subscripts of a widget list: six functions index widget
+                # values positionally — `seeds`, `latents`, `cameras`,
+                # `camera_widget_order_evidence`, `hosted_enums` and this one — and this
+                # one called no shift andon at all. Its `add_noise` read was bounded only
+                # TRANSITIVELY, by a hand-maintained index set two functions away
+                # (`seeds()` passes `add_noise` into the andon's index dict with the
+                # comment "`add_noise` rides the index set because `gate_s_registration`
+                # reads it off this same widget list"), and by the fact that this
+                # function's population comes from `seeds()`. No shifted graph escaped —
+                # the gap was that the coverage was a comment plus a hand-kept dict, on the
+                # walk that decides whether credits are spent, and the next positional
+                # table or the next reader joined the population only if someone
+                # remembered. The read is behind the andon now, so no exemption is needed
+                # and `tests/test_amend_w22_core_gates.py`'s structural census can require
+                # every member of the family to call one in its own body.
+                _converted_widget_shift_andon(n, {"add_noise": slot}, wv, "SEED_NODES")
                 adds = (wv[slot] if len(wv) > slot else "enable") not in ("disable", False)
         s["adds_noise"] = adds
         if adds:
@@ -2934,6 +2992,33 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                 ". The run would still produce video, and every other gate would pass on "
                 "it", ev)
         ev["camera_agreement_verdict"] = "AGREES"
+
+    # The empirical SECOND reading of the recorded widget indices, RECORDED on the graph
+    # that is about to be graded. `camera_widget_order_evidence` is the function the
+    # `LATENT_NODES` note says takes this confirmation, and until 2026-09-05 nothing in
+    # `tools/` called it at all (see that note for the grep, and for the second copy of the
+    # table that was taking the reading instead). This is its production caller.
+    #
+    # **It is RECORDED and does not raise, and that is a measurement rather than a
+    # preference.** Measured 2026-09-05 in this worktree: every disagreement this reading
+    # can report on a save-format graph is ALREADY refused, earlier, by a clause above —
+    # a `LATENT_NODES` row whose indices are wrong makes `latents()` read the wrong
+    # dimensions, which the supplied-vs-graph clash clause refuses (operand: swapping
+    # `WanCameraImageToVideo`'s width/height indices on a graph verified at (832, 480, 81)
+    # raised "Gate L: the caller supplied 832x480x81 and the graph's WanCameraImageToVideo
+    # node 3 pins 480x832x81"), and a `CAMERA_NODES` row's is refused by the camera
+    # agreement clause on the same operand. A raise here would be a check that cannot fail,
+    # which is the thing this file refuses to ship. What the receipt adds is the reading
+    # itself — the values standing at the declared indices, per node, with `where` — so the
+    # confirmation the `LATENT_NODES` note promises is in the record an operator reads
+    # instead of in a function nobody called.
+    #
+    # Its three answers all ride: the reading, `INDETERMINATE` when no node in the graph
+    # carries a recorded widget-index row, and `not_applicable` in API format where nothing
+    # is positional. Routed to builders as SEAM 5 §2: adopting this function in
+    # `gate_saved_graph`'s camera step — where a disagreement WOULD be the only reading of
+    # it — is theirs, in their file.
+    ev["camera_widget_order"] = _camera_widget_order_receipt(graph, ev, supplied)
 
     # · ANDON — the clause E08 found passing vacuously. "Nothing to check" and "everything
     # checked out" must not be the same verdict. On a hosted tier the honest third answer

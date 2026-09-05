@@ -1169,3 +1169,244 @@ def test_the_three_siblings_that_do_carry_a_clause_on_a_pass_are_named(fn, kwarg
     assert ev.get("clause"), fn
     assert ev.get("receipt") != "verify"
     assert not {"attribution", "carries_no_sampler_asserted"} <= set(ev)
+
+
+# ---------------------------------------------------------------------------
+# F-f2808386 — the structural census over every positional widget reader, and the
+# sixth reader's own andon.
+# ---------------------------------------------------------------------------
+
+#: Functions permitted to index a widget list without calling a shift andon in their OWN
+#: body. EMPTY, and it is meant to stay that way: `gate_s_registration` was the reason this
+#: list would have needed a member, and its `add_noise` read is behind the andon now. A
+#: member added here needs its reasoning written beside it and re-argued when the tables
+#: move.
+SHIFT_ANDON_EXEMPT = {}
+
+SHIFT_ANDONS = ("_converted_widget_shift_andon", "_hosted_enum_shift_andon")
+
+
+def _widget_subscripting_functions():
+    """Every function in `route_gates.py` that SUBSCRIPTS a widget list, from the source.
+
+    The census keys on the RESOLVED shape rather than on a name: a local bound from
+    `n.get("widgets_values")` (however it is spelled) that is then indexed. Reading the
+    source rather than importing is what lets it see which andon each body calls.
+    """
+    import ast
+
+    src = open(os.path.join(TOOLS, "armature_core", "route_gates.py"),
+               encoding="utf-8").read()
+    tree = ast.parse(src)
+    out = {}
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        widget_names = set()
+        for node in ast.walk(fn):
+            # `wv = n.get("widgets_values") or []`  /  `wv = n.get("widgets_values")`
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                    and isinstance(node.targets[0], ast.Name):
+                for sub in ast.walk(node.value):
+                    if (isinstance(sub, ast.Constant)
+                            and sub.value == "widgets_values"):
+                        widget_names.add(node.targets[0].id)
+        indexed = any(isinstance(node, ast.Subscript)
+                      and isinstance(node.value, ast.Name)
+                      and node.value.id in widget_names
+                      for node in ast.walk(fn))
+        if widget_names and indexed:
+            called = {c.func.id for c in ast.walk(fn)
+                      if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
+            out[fn.name] = sorted(called & set(SHIFT_ANDONS))
+    return out
+
+
+def test_the_positional_widget_reader_population_is_the_one_this_census_records():
+    """Size and membership before the property. Measured 2026-09-05 by walking
+    `route_gates.py`'s AST: six functions index widget values positionally."""
+    pop = _widget_subscripting_functions()
+    assert set(pop) == {"seeds", "latents", "cameras", "camera_widget_order_evidence",
+                        "hosted_enums", "gate_s_registration"}, sorted(pop)
+
+
+def test_every_positional_widget_reader_calls_a_shift_andon_in_its_own_body():
+    """RED on base: `gate_s_registration` called none. Its `add_noise` read was
+    `adds = (wv[slot] if len(wv) > slot else 'enable') not in ('disable', False)`, guarded
+    only by a length test and defaulting to 'enable', and bounded TRANSITIVELY by a
+    hand-maintained index set two functions away plus a comment. Five of six called one;
+    the coverage of the sixth was a convention, on the walk that decides whether credits are
+    spent."""
+    pop = _widget_subscripting_functions()
+    unguarded = sorted(name for name, andons in pop.items()
+                       if not andons and name not in SHIFT_ANDON_EXEMPT)
+    assert unguarded == [], (
+        "these functions index a widget list positionally and call no shift andon in "
+        "their own body; either move the read behind one or add a named, reasoned entry "
+        f"to SHIFT_ANDON_EXEMPT: {unguarded}")
+    assert SHIFT_ANDON_EXEMPT == {}, SHIFT_ANDON_EXEMPT
+
+
+def test_the_sixth_reader_refuses_a_shifted_graph_on_its_own():
+    """The behavioural half — and it was ALREADY green on `e8263a3`, transitively: this
+    function's population comes from `seeds()`, which passes `add_noise` into the andon's
+    index dict, and for `KSamplerAdvanced` `add_noise` sits at index 0, BELOW the seed and
+    control slots, so `seeds()`' `highest` covers a superset of this read and refuses
+    first. That is exactly the finding: no shifted graph measured here escaped, and the
+    coverage was a comment plus a hand-kept dict two functions away rather than a clause in
+    this body. The RED proof for the fix is the structural census above, which this test
+    stands beside as the behaviour the census is protecting."""
+    shifted = {"id": 2, "type": "KSamplerAdvanced",
+               "widgets_values": ["enable", 7, "fixed", 20, 1.0],
+               "inputs": [{"name": "add_noise", "widget": {"name": "add_noise"}}]}
+    g = {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [BASE]}, shifted]}
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.gate_s_registration(g, [7])
+    ev = exc.value.evidence
+    assert ev["clause"] == "converted_widget_shifts_recorded_indices"
+    assert ev["converted"] == ["add_noise"] and ev["table"] == "SEED_NODES"
+
+
+def test_an_unshifted_sampler_still_reaches_the_registration_verdict():
+    """The gate that fires on correct work is the gate nobody keeps."""
+    ok = {"id": 2, "type": "KSamplerAdvanced",
+          "widgets_values": ["enable", 7, "fixed", 20, 1.0]}
+    g = {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [BASE]}, ok]}
+    ev = RG.gate_s_registration(g, [7])
+    assert ev["seeds_noise_bearing"] == 1
+
+
+# ---------------------------------------------------------------------------
+# F-e58b94f3 — the empirical second reading the LATENT_NODES note claims is taken.
+# ---------------------------------------------------------------------------
+
+def _camera_graph(width=832, height=480, length=81):
+    return {"nodes": [
+        {"id": 1, "type": "UNETLoader",
+         "widgets_values": ["wan2.2_fun_camera_high_noise_14B_fp8_scaled.safetensors"]},
+        {"id": 2, "type": "KSampler",
+         "widgets_values": [7, "fixed", 20, 1.0, "euler", "normal", 1.0]},
+        {"id": 3, "type": "WanCameraImageToVideo",
+         "widgets_values": [width, height, length, 1]}]}
+
+
+def test_the_second_reading_is_taken_by_verify_and_rides_the_receipt():
+    """RED on base: grep across the worktree found the only references to
+    `camera_widget_order_evidence` outside its own definition were four in
+    `tests/test_route_gates.py`; no builder and no gate called it, and the saved-graph step
+    used `gate_saved_graph.WIDGET_INDEX`, its own second copy of the same table. The
+    function the `LATENT_NODES` note names as taking the confirmation was dead."""
+    ev = RG.verify(_camera_graph(), frame=(832, 480, 81))
+    wo = ev["camera_widget_order"]
+    assert wo["clause"] == "camera_widget_order"
+    assert wo["agrees"] is True
+    assert [(n["where"], n["node_id"], n["found"]) for n in wo["nodes"]] == [
+        ("top", 3, {"width": 832, "height": 480, "length": 81})]
+
+
+def test_a_widget_order_drift_is_already_refused_by_an_earlier_clause():
+    """MEASUREMENT, and the reason this reading is RECORDED rather than raised: every
+    disagreement it can report on a save-format graph is already refused, earlier, by a
+    clause above it. The operand is a `LATENT_NODES` row whose width/height indices have
+    been swapped — the drift the second reading exists to catch — on a graph verified at
+    (832, 480, 81).
+
+    A raise on `camera_widget_order` would therefore be a check that cannot fail, which is
+    the thing this file refuses to ship. What the receipt adds is the reading itself."""
+    g = _camera_graph()
+    saved_rows = dict(RG.LATENT_NODES["WanCameraImageToVideo"])
+    try:
+        RG.LATENT_NODES["WanCameraImageToVideo"] = {"width": 1, "height": 0, "length": 2}
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(g, frame=(832, 480, 81))
+    finally:
+        RG.LATENT_NODES["WanCameraImageToVideo"] = saved_rows
+    assert "the caller supplied 832x480x81" in str(exc.value)
+    assert "480x832x81" in str(exc.value)
+    assert exc.value.evidence["frame_legality_verdict"] == "CONTRADICTED"
+
+
+def test_an_indeterminate_second_reading_is_recorded_and_does_not_halt():
+    """A graph carrying no class with a recorded widget-index row is not a contradiction;
+    refusing it would refuse every graph that has none. It is a row in the receipt."""
+    g = {"nodes": [
+        {"id": 1, "type": "UNETLoader",
+         "widgets_values": ["wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"]},
+        {"id": 2, "type": "KSampler",
+         "widgets_values": [7, "fixed", 20, 1.0, "euler", "normal", 1.0]}]}
+    ev = RG.verify(g, frame=(832, 480, 81))
+    wo = ev["camera_widget_order"]
+    assert wo["agrees"] is None
+    assert wo["verdict"].startswith("INDETERMINATE")
+
+
+def test_the_empty_population_half_was_already_closed_on_the_base_commit():
+    """MEASUREMENT, recorded rather than re-fixed. The wave-21 finding's second sub-claim
+    was that this function returns `agrees=True` over an empty population. It does not on
+    `e8263a3`: wave 20 closed that direction, and the verdict is INDETERMINATE with
+    `agrees=None`. Pinned here so the measurement is a test rather than a sentence."""
+    ev = RG.camera_widget_order_evidence(
+        {"nodes": [{"id": 1, "type": "UNETLoader", "widgets_values": [BASE]}]},
+        {"width": 832, "height": 480, "length": 65})
+    assert ev["nodes"] == []
+    assert ev["agrees"] is None
+    assert ev["verdict"].startswith("INDETERMINATE")
+    assert "classes_with_a_recorded_row" in ev
+
+
+def test_the_api_branch_still_answers_not_applicable():
+    """The third answer stays the third answer: in API format inputs are keyed by NAME,
+    there is nothing positional to confirm, and `verify` records that rather than a
+    verdict."""
+    api = {"1": {"class_type": "UNETLoader",
+                 "inputs": {"unet_name":
+                            "wan2.2_fun_camera_high_noise_14B_fp8_scaled.safetensors"}},
+           "2": {"class_type": "KSampler",
+                 "inputs": {"seed": 7, "control_after_generate": "fixed"}},
+           "3": {"class_type": "WanCameraImageToVideo",
+                 "inputs": {"width": 832, "height": 480, "length": 81}}}
+    ev = RG.verify(api, frame=(832, 480, 81))
+    assert ev["camera_widget_order"]["verdict"].startswith("not_applicable")
+
+
+def test_the_second_reading_records_why_it_was_not_taken_when_there_is_no_one_frame():
+    """A receipt may not assert a property nobody checked. When the caller supplies no
+    frame and the graph pins more than one, the row says so instead of reporting a verdict
+    over a number nobody chose."""
+    ev = RG._camera_widget_order_receipt(
+        _camera_graph(), {"frame_legality": [
+            {"source": "graph", "width": 832, "height": 480, "length": 81},
+            {"source": "graph", "width": 640, "height": 640, "length": 81}]}, None)
+    assert ev["agrees"] is None
+    assert ev["verdict"].startswith("NOT TAKEN")
+    assert ev["graph_frames"] == [(640, 640, 81), (832, 480, 81)]
+
+
+def test_the_shift_clause_reaches_the_printed_halt_record(tmp_path):
+    """The halt line READ for the positional-widget family, through
+    `gate_saved_graph.py`'s real `__main__`: a `KSamplerAdvanced` whose `add_noise` widget
+    has been CONVERTED to an input — the ordinary ComfyUI edit — halts at exit 2 with the
+    clause, the converted name and the table it came from, on the last gate before a paid
+    submission."""
+    shifted = {"id": 2, "type": "KSamplerAdvanced",
+               "widgets_values": ["enable", 7, "fixed", 20, 1.0],
+               "inputs": [{"name": "add_noise", "widget": {"name": "add_noise"}}]}
+    d = _gsg_case(
+        tmp_path,
+        saved_doc={"nodes": [{"id": 49, "type": "WanAnimateToVideo", "inputs": [],
+                              "widgets_values": [832, 480, 81, 1, 5, 0]}, shifted]},
+        api_doc={"49": {"class_type": "WanAnimateToVideo",
+                        "inputs": {"width": 832, "height": 480, "length": 81,
+                                   "batch_size": 1, "continue_motion_max_frames": 5,
+                                   "video_frame_offset": 0}},
+                 "2": {"class_type": "KSamplerAdvanced",
+                       "inputs": {"add_noise": "enable", "noise_seed": 7}}})
+    out = tmp_path / "fresh" / "admission.json"
+    payload = _halt_line([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
+                          f"--seeds={d / 'seeds.json'}", f"--out={out}"],
+                         "SAVED_ADMISSION_HALT", "gate_saved_graph.py")
+    assert payload["error"] == "RouteGate"
+    ev = payload["evidence"]
+    assert ev["clause"] == "converted_widget_shifts_recorded_indices"
+    assert ev["converted"] == ["add_noise"] and ev["table"] == "SEED_NODES"
+    assert not out.parent.exists()
