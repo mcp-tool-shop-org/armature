@@ -128,17 +128,49 @@ def repo_file(relpath):
     return os.path.join(REPO, *str(relpath).split("/"))
 
 
+def upload_record_paths(relpath):
+    """`(live, fixture)` — both candidate paths for one upload name map, resolved.
+
+    Split out of `upload_record` (wave 23, F-ef2a00e9) so the two copies can be COMPARED,
+    not only chosen between. Nothing about the choice changes.
+    """
+    return (repo_file(relpath),
+            os.path.join(UPLOAD_FIXTURES, *str(relpath).split("/")[1:]))
+
+
+def upload_record_branch(relpath):
+    """Which copy `upload_record` would return, and what exists — for a test to RECORD.
+
+    `"live"`, `"fixture"` or `"neither"`. A run that grades the live record and a run that
+    grades the fixture are grading different inputs under one function name; a test that
+    quotes a pinned hash needs to be able to say which one it read.
+    """
+    live, fixture = upload_record_paths(relpath)
+    if os.path.isfile(live):
+        return "live"
+    return "fixture" if os.path.isfile(fixture) else "neither"
+
+
 def upload_record(relpath):
     """Resolve one upload name map: the real run if this rig has one, else the fixture.
 
     `outputs/` is gitignored, so on CI and on any clone the fallback is what exists. The
     fixture is a byte copy of the record the run actually submitted, which is why the
     pinned payload hashes still bind against it.
+
+    **That last sentence is a load-bearing claim and it is now CHECKED** (wave 23,
+    F-ef2a00e9): `tests/test_measure_tracking.py::
+    test_every_upload_record_fixture_is_a_byte_copy_of_the_live_record` compares the two
+    copies wherever both exist. It was prose with nothing behind it, and both branches are
+    live at once across the machines that run this suite — an isolated worktree carries no
+    upload maps under `outputs/` and takes the fixture, while the main checkout has the real
+    files and takes those, so the rig and CI graded different inputs under one function name.
+    Measured 2026-09-05: all five maps match their fixtures byte for byte, so this was an
+    absent guard rather than a live divergence.
     """
-    live = repo_file(relpath)
+    live, fixture = upload_record_paths(relpath)
     if os.path.isfile(live):
         return live
-    fixture = os.path.join(UPLOAD_FIXTURES, *str(relpath).split("/")[1:])
     if os.path.isfile(fixture):
         return fixture
     # Neither: hand back the path the caller asked for so its own error names it.

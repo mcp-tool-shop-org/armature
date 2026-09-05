@@ -18,6 +18,7 @@ that cannot fail is not a check.
 
 import ast
 import importlib
+import json
 import os
 import sys
 
@@ -385,3 +386,105 @@ def test_the_three_anchor_tests_are_the_ones_this_delta_names():
         "test_the_anchor_CAN_fail",
         "test_the_anchor_reproduces_every_published_E02_figure",
     ], mine
+
+
+# ===========================================================================
+# WAVE 23, F-ef2a00e9 — the upload-record fixtures are a BYTE COPY, checked
+# ===========================================================================
+#
+# `conftest.upload_record` prefers the live `outputs/` record when the rig has one and falls
+# back to `tests/fixtures/uploads/...` otherwise, and its docstring stated the load-bearing
+# claim in prose — "the fixture is a byte copy of the record the run actually submitted,
+# which is why the pinned payload hashes still bind against it" — with nothing checking it.
+#
+# Both branches are live at once across the machines that run this suite: an isolated swarm
+# worktree carries no upload maps under `outputs/` and takes the FIXTURE on every one of the
+# five, while the main checkout has the real files and takes THOSE. The rig and CI therefore
+# graded different inputs under one function name, and `UPLOAD_RECORDS` was named by no test
+# at all. Measured 2026-09-05, sha256 over all five maps: each matches its fixture byte for
+# byte, so this is an absent guard rather than a live divergence — which is exactly when it
+# is cheap to add.
+#
+# This census lives beside the `outputs/`-guard census above because it is the same node:
+# what a test reads depends on whether this particular rig has the gitignored run on disk.
+
+
+def test_every_upload_record_fixture_is_a_byte_copy_of_the_live_record():
+    """Where both copies exist, their bytes are equal — per member of `UPLOAD_RECORDS`.
+
+    What this looks like if the tree were wrong in the way this exists to catch: a re-run
+    rewrites a live upload map, the rig's suite keeps passing against the changed file while
+    CI passes against the unchanged fixture, and the byte pin that exists to stop a silent
+    re-topologising of an already-reported experiment binds to whichever copy the runner
+    happened to have.
+    """
+    import hashlib
+
+    from conftest import UPLOAD_RECORDS, upload_record_branch, upload_record_paths
+
+    assert UPLOAD_RECORDS, "the population is empty; nothing below can fire"
+    differing, missing, branches = {}, [], {}
+    for relpath in UPLOAD_RECORDS:
+        live, fixture = upload_record_paths(relpath)
+        branches[relpath] = upload_record_branch(relpath)
+        if not os.path.isfile(fixture):
+            missing.append(relpath)
+            continue
+        if not os.path.isfile(live):
+            continue                       # this rig has no run; the fixture IS the record
+        digests = [hashlib.sha256(open(p, "rb").read()).hexdigest()
+                   for p in (live, fixture)]
+        if digests[0] != digests[1]:
+            differing[relpath] = {"live": digests[0], "fixture": digests[1]}
+
+    # RECORDED in the test's own output, so a reader of a passing run knows which copy was
+    # graded — the thing that was invisible.
+    print("upload_record branches: " + json.dumps(branches, sort_keys=True))
+
+    assert missing == [], (
+        f"no committed fixture for {missing}; `upload_record` would hand a caller on a "
+        f"clone a path that does not exist")
+    assert differing == {}, (
+        f"the live record and its committed fixture differ: {differing}. The pinned payload "
+        f"hashes bind against whichever copy the runner happened to have.")
+
+
+def test_the_upload_record_branch_is_the_one_upload_record_actually_takes():
+    """The reporter above must describe the chooser, not a second opinion of it.
+
+    A branch function that drifted from `upload_record` would make the recorded line a
+    plausible identifier beside a verdict rather than evidence.
+    """
+    from conftest import (UPLOAD_RECORDS, upload_record, upload_record_branch,
+                          upload_record_paths)
+
+    for relpath in UPLOAD_RECORDS:
+        live, fixture = upload_record_paths(relpath)
+        chosen = upload_record(relpath)
+        branch = upload_record_branch(relpath)
+        assert chosen == {"live": live, "fixture": fixture, "neither": live}[branch], (
+            relpath, branch, chosen)
+
+
+def test_the_byte_comparison_can_fail(tmp_path, monkeypatch):
+    """The red proof kept in the tree: the census driven over a fixture root whose copy
+    differs by one byte, and over one that matches.
+
+    Rule 2 — the real tree is clean today, so the check that exists to catch a divergence
+    has nothing to prove it can see one. This drives the same comparison over a synthetic
+    pair, both directions.
+    """
+    import hashlib
+
+    live = tmp_path / "live.json"
+    same = tmp_path / "same.json"
+    other = tmp_path / "other.json"
+    live.write_bytes(b'{"00000": "srv_00000.png"}')
+    same.write_bytes(b'{"00000": "srv_00000.png"}')
+    other.write_bytes(b'{"00000": "srv_00001.png"}')
+
+    def digest(path):
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    assert digest(live) == digest(same)
+    assert digest(live) != digest(other)
