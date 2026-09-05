@@ -1287,7 +1287,7 @@ def test_every_family_class_stores_the_evidence_it_is_passed():
 
     WAVE 14, the seam from instruments-measure (`F-8393e66c`). `stage_render.py:582` raised
     the BASE `ArmatureError(msg, {...})`; the base had no `__init__`, so the second argument
-    (WAVE 16: that line is `stage_render.py:597` on the merged tree — instruments-measure
+    (WAVE 16: that line is `stage_render.py::_parse_argv` on the merged tree — instruments-measure
     measured the move with `difflib.SequenceMatcher` against `git show 041027c:` and posted
     it in SEAM 15; it is still :582 in this worktree. The citation names a HISTORICAL site
     either way, which is why it is prose and not an assertion.)

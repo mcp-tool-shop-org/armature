@@ -374,7 +374,7 @@ def test_a_record_that_PREDATES_the_field_records_null_and_says_so(tmp_path):
     four of the builders write it, the rest do not." Wave 20 (F-dba1bcd8) made that false
     and this test could not notice: it builds a SYNTHETIC record with no such key, so the
     prose and the assertion cannot disagree by any mechanism. Measured on `e8263a3`,
-    `build_assembly_payload.py:695` and `build_r2v_payload.py:439` both write
+    `build_assembly_payload.py::build_and_write` and `build_r2v_payload.py:439` both write
     `"payload_sha256": canonical_payload_digest(wf)`, and all NINE builders do. This is the
     paragraph a seat reads to learn which records are tied to the graph they vouch for, and
     it named two builders as untied that had been tied since `e8263a3`.

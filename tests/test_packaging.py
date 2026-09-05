@@ -1139,7 +1139,7 @@ def test_a_gate_refusal_exits_2_with_its_sentinel_and_a_crash_exits_1(tmp_path):
 # artefacts, printed `BUILD_CASCADE_OK <path>`, and EXITED 1 — because `main()` returns `wf`
 # (build_cascade_payload.py:234) under `raise SystemExit(main())` (:248), and SystemExit
 # with a non-int code prints the object to stderr and exits 1. Same shape at
-# build_r2v_payload.py:329/:343 (`return wf, record`) and build_assembly_payload.py:395/:409.
+# build_r2v_payload.py:329/:343 (`return wf, record`) and build_assembly_payload.py::frame_order/:409.
 # A `verify.ps1` leg, a Makefile step or an operator shell chaining on a builder therefore
 # reads a completed payload build as a failure, and `PSNativeCommandUseErrorActionPreference`
 # halts the leg after a build that in fact succeeded.

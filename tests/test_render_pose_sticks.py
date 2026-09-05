@@ -19,7 +19,7 @@ Measured 2026-09-04 in this worktree, a 3-frame synthetic record: a first run wr
 `gates.COUNT = {"verdict": "PASS", "frames": 3}`. On that same directory the five consumers
 each returned FOUR names. The upper-case arrival is a real shape here:
 `fetch_run.verify_downloads` sweeps `.PNG` as a downloaded frame (cited at
-`measure_floor.py:196-199` as `00099.PNG`) and Windows preserves case.
+`measure_floor.py::frame_population-199` as `00099.PNG`) and Windows preserves case.
 
 The other direction already fired and is kept as the falsifiability fixture: a planted
 `0_debug.png` — first character a digit, stem not numeric — raised `SticksGate` with exit 2

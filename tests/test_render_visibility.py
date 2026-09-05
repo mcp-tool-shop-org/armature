@@ -81,7 +81,7 @@ def test_the_decoys_would_have_moved_the_framing(vis):
 # over the decoy as well as the character, and NO gate here can see it: Gate WHOLE reads
 # the same inflated cloud, and Gate CROP reads the rendered alpha, which a `hide_render`
 # decoy never touches — a figure drawn too SMALL moves away from every border, so CROP
-# passes more easily. `render_performer.py:288` and `preview_walk.py:89` set the ground
+# passes more easily. `render_performer.py::main` and `preview_walk.py::_render_status` set the ground
 # plane's height from the same unfiltered list.
 #
 # `render_start_frame.py:435` already carried the fix under a five-line comment. This is

@@ -11,7 +11,7 @@ cannot proceed without".
 WHAT IT CATCHES THAT NOTHING ELSE DOES. Failure mode 2: glTF stores key times in
 **seconds**, so an export at one fps read back at another lands the keys on different
 frames and the arc arrives compressed or stretched. G6, the andon it defers to, cannot see
-that: G6's quantity is `distinct_signatures` (`tools/stage_render.py:420`, asserted at
+that: G6's quantity is `distinct_signatures` (`tools/stage_render.py::run_export`, asserted at
 `tests/test_gate_g6.py:81`), and a time-warped arc still yields one distinct signature per
 frame, so G6 reads PASS. That claim is pinned below in CPython, without Blender.
 

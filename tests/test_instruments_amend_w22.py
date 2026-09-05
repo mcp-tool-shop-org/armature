@@ -949,7 +949,7 @@ def test_a_non_finite_operand_leaves_the_halt_line_strict_json(filename, capsys)
     """The halt contract promises "stdout EXACTLY ONE line `<STEM>_HALT <json object>`",
     and for exactly the refusal family wave 16 added — the NaN andons — the object was not
     JSON. `parts.require_finite` writes the offending value into the evidence
-    (`ev[name] = v`, `armature_core/parts.py:342`), the handler serialised it with
+    (`ev[name] = v`, `armature_core/parts.py::require_finite`), the handler serialised it with
     `json.dumps(_sentinel, default=str)`, and `default=` applies to values Python CANNOT
     encode, never to a float it can: `allow_nan` defaults True, so the line carried the
     bare token `NaN`. `json.loads(payload)` ACCEPTS it — which is why every reader in this

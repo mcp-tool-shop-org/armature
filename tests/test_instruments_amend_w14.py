@@ -392,7 +392,7 @@ def test_gate_glb_takes_no_default_for_result_or_before(rigchar):
 #
 # The docstring here read "`armature_core/blender_scene.py:772` is excluded by PATH (another
 # domain's file, and a `write_still=False` MEASUREMENT render rather than a write)". Both
-# halves fail. The site is at `blender_scene.py:949`, not `:772`. It sits inside
+# halves fail. The site is at `blender_scene.py::render_frame`, not `:772`. It sits inside
 # `render_frame`, which writes one EXR per channel through compositor File Output nodes, and
 # whose Gate FRAME andon (`RenderedFrame`, raised at `:958` with clause `operator_status`)
 # exists precisely because those writes can silently be the PREVIOUS run's frames — the

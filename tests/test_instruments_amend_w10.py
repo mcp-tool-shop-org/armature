@@ -663,7 +663,7 @@ def _reads_its_own_export_back(filename):
     WAVE 16. The predicate was `"os.path.isfile(" in src and "os.path.getsize(" in src`, and
     seven of the eight exporters skipped on it under a routed-to-a-domain reason.
     Re-measured on `041027c` in this worktree: **all eight call
-    `rig_character.gate_glb_written`**, which IS the read-back — `rig_character.py:291`
+    `rig_character.gate_glb_written`**, which IS the read-back — `rig_character.py::render_target_snapshot`
     `os.path.isfile(p)` and `:296` `os.path.getsize(p)`, plus the operator's own `FINISHED`
     status, each raising `GateGlbWritten`. Wave 14 landed that gate at every export site
     (instruments confirmed it in the wave-16 seams inbox), so the skip reasons described a
@@ -1688,7 +1688,7 @@ def case_sensitive_png_tests(filename):
 
 #: The two `.png` sites outside this domain's globs, measured 2026-09-04 and named rather
 #: than silently excluded: `tools/render_pose_sticks.py:178` (instruments-measure, Gate
-#: COUNT) and `tools/armature_core/donor_gate.py:79` (core-gates, `frame_paths`). Both are
+#: COUNT) and `tools/armature_core/donor_gate.py::frame_paths` (core-gates, `frame_paths`). Both are
 #: being aligned in the same wave; this domain's half is the two renderers below.
 OUT_OF_DOMAIN_PNG_SITES = ("render_pose_sticks.py", "armature_core/donor_gate.py")
 
