@@ -70,6 +70,24 @@ class SavedAdmission(RouteGate):
 
     It is a `RouteGate`, so every caller that catches `RG.RouteGate` still catches it.
 
+    **WAVE 25, F-e62bdc2b — the four raises the wave-18 census could not see.** The census
+    above compared each raise's evidence `gate` LITERAL against the raised class's `gate`
+    attribute, so it found only sites that named a gate id at all. Four raises in this file
+    named NONE: the two headline refusals this module exists to raise — `round_trip`'s "the
+    saved file is not the graph this repo built" and `link_round_trip`'s "the saved file's
+    topology is not the topology this repo built" — and `link_table`'s two entry clauses,
+    each carrying a bare two-key evidence literal (`{checked, problems}`, `{wired,
+    empty_in_both, problems}`, `{entry, n_entries}`). MEASURED as a real subprocess on the
+    green assembly fixture with node 20's `fps` changed in the saved file only: exit 2,
+    `SAVED_ADMISSION_HALT {"error": "RouteGate", "message": "[ROUTE] the saved file is not
+    the graph this repo built: ...", "evidence": {"checked": [...], "problems": [...]}}` —
+    the sentinel said SAVED_ADMISSION, the class and message said ROUTE, and the evidence
+    named neither. All four are `SavedAdmission` now, each with the identity triple and its
+    own clause word: `saved_values_are_not_the_built_values`,
+    `unreadable_link_table_entry`, `link_table_entry_names_no_origin`,
+    `saved_topology_is_not_the_built_topology`. Every caller catching `RG.RouteGate` still
+    catches them.
+
     **The `andon` spelling is one rule now, too.** The key was spelled two ways in this one
     file — `"andon": "RouteGate"` (a class name) at the `route_facts` sites and
     `"andon": "frame"` / `"duplicate_socket_name"` (clause names) at the five above.
@@ -407,9 +425,18 @@ def round_trip(api_graph, saved_graph):
     if extra:
         problems.append(f"the saved file carries nodes we did not build: {extra}")
     if problems:
-        raise RG.RouteGate(
+        # ---- WAVE 25, F-e62bdc2b. THIS file's headline refusal, raised under the id this
+        # file declares. It read `RG.RouteGate` with a TWO-KEY evidence literal, so the halt
+        # at the spend boundary named `[ROUTE]` in its message and `SAVED_ADMISSION` in its
+        # sentinel and carried no `gate`, no `andon` and no `clause` for a reader to branch
+        # on — the exact two-ids-for-one-event ambiguity `SavedAdmission` above was written
+        # to end, re-created by omission. Its own sibling eleven lines below `link_table`'s
+        # first raise (`duplicate_link_id`) already carried all three.
+        raise SavedAdmission(
             "the saved file is not the graph this repo built: " + "; ".join(problems),
-            {"checked": checked, "problems": problems})
+            {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+             "clause": "saved_values_are_not_the_built_values",
+             "checked": checked, "problems": problems})
     return {"n_values_compared": len(checked), "all_equal": True, "values": checked}
 
 
@@ -458,15 +485,22 @@ def link_table(saved_graph):
         elif isinstance(entry, (list, tuple)) and len(entry) >= 3:
             lid, origin, slot = entry[0], entry[1], entry[2]
         else:
-            raise RG.RouteGate(
+            # WAVE 25, F-e62bdc2b: the named class and the identity triple, as the
+            # `duplicate_link_id` sibling twenty lines below already carried.
+            raise SavedAdmission(
                 f"the saved file's link table carries an entry this tool cannot read: "
                 f"{entry!r}. A table that is skipped is a table that vouches for nothing, "
                 f"and the origin of every link in this file would go unchecked",
-                {"entry": entry, "n_entries": len(raw)})
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "unreadable_link_table_entry",
+                 "entry": entry, "n_entries": len(raw)})
         if lid is None or origin is None:
-            raise RG.RouteGate(
+            raise SavedAdmission(
                 f"the saved file's link table entry {entry!r} names no link id or no "
-                f"origin node", {"entry": entry, "n_entries": len(raw)})
+                f"origin node",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "link_table_entry_names_no_origin",
+                 "entry": entry, "n_entries": len(raw)})
         resolved = (str(origin), slot)
         prior = table.get(str(lid))
         if prior is not None and prior != resolved:
@@ -639,10 +673,15 @@ def link_round_trip(api_graph, saved_graph):
             else:
                 empty.append(f"{node_id}.{name}")
     if problems:
-        raise RG.RouteGate(
+        # ---- WAVE 25, F-e62bdc2b. The second headline refusal, under the same id as the
+        # first; see `round_trip`. The `duplicate_socket_name` raise inside THIS function
+        # already carried gate / andon / clause, so the contrast sat within one body.
+        raise SavedAdmission(
             "the saved file's topology is not the topology this repo built: "
             + "; ".join(problems),
-            {"wired": wired, "empty_in_both": empty, "problems": problems})
+            {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+             "clause": "saved_topology_is_not_the_built_topology",
+             "wired": wired, "empty_in_both": empty, "problems": problems})
     return {"n_links": len(wired), "links": sorted(wired),
             "optional_sockets_empty_in_both": sorted(empty)}
 

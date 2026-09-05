@@ -286,8 +286,12 @@ def test_a_refused_admission_leaves_no_output_directory(tmp_path):
     seeds_path.write_text(json.dumps({"seeds": [1]}), encoding="utf-8")
 
     out = tmp_path / "fresh" / "admission.json"
+    # WAVE 25, F-e62bdc2b: the refusal is `SavedAdmission` now — a `RouteGate` subclass,
+    # so this catch is unchanged, but `str(exc)` opens with the id the sentinel already
+    # printed instead of the one the class it used to be declared.
     with pytest.raises(RG.RouteGate,
-                       match=r"\[ROUTE\] the saved file is not the graph this repo built"):
+                       match=r"\[SAVED_ADMISSION\] the saved file is not the graph this "
+                             r"repo built"):
         GSG.main([f"--saved={saved_path}", f"--api={api_path}",
                   f"--seeds={seeds_path}", f"--out={out}"])
     assert not out.exists()

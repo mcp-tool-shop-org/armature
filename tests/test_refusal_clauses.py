@@ -681,7 +681,22 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # WAVE 22 (core-gates, F-0d33958f): 71 → 72. `_one_graph_declaration`'s
     # `multiple_graph_declarations`. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
     # WAVE-22 MERGE (coordinator, 2026-09-05): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(RAISE_SITES["RouteGate"]) == 74, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 25 (builders, F-e62bdc2b, 2026-09-05): 74 -> 70, RE-DERIVED with `==` in
+    # `w25-builders` after reading 74 GREEN in this worktree first, so the delta is
+    # demonstrably this domain's. -4 in `gate_saved_graph.py`, all four raises moving off
+    # the bare `RouteGate` onto `SavedAdmission` — the same "a raise that leaves this count
+    # because it became MORE specific is the fix working" the wave-16 and wave-18 notes
+    # above record for `SpendCeiling` and for wave 18's own five:
+    #   `round_trip`'s "the saved file is not the graph this repo built",
+    #   `link_table`'s two entry clauses (`unreadable_link_table_entry`,
+    #   `link_table_entry_names_no_origin`), and `link_round_trip`'s "the saved file's
+    #   topology is not the topology this repo built". Wave 18 enumerated exactly these
+    #   four as thin-evidence siblings and left them; the halt at the spend boundary
+    #   carried no `gate`, no `andon` and no `clause` while its own sentinel said
+    #   SAVED_ADMISSION. `SavedAdmission`'s own site count moves 8 -> 12 in the same commit.
+    #      ⚠ **BRANCH-LOCAL.** Four sibling domains move this number in the same wave; the
+    #      coordinator MEASURES it on the merged tree and never sums.
+    assert len(RAISE_SITES["RouteGate"]) == 70, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside
@@ -1482,6 +1497,7 @@ RECORDED_CLAUSES = [
     'licence_map_ruling',
     'limb_column_is_discontinuous',
     'limb_trace_too_short',
+    'link_table_entry_names_no_origin',
     'masked_geometry_is_all_background_depth',
     'measurement_dated_in_the_future',
     'measurement_not_positive',
@@ -1606,6 +1622,8 @@ RECORDED_CLAUSES = [
     'sample_index_is_negative',
     'sample_names_no_frames',
     'sampled_window_outside_the_keys',
+    'saved_topology_is_not_the_built_topology',
+    'saved_values_are_not_the_built_values',
     'scene_fps_disagrees_with_the_shot',
     'schema',
     'seed_not_registered',
@@ -1670,6 +1688,7 @@ RECORDED_CLAUSES = [
     'unratified_only',
     'unreadable',
     'unreadable_landmark_row',
+    'unreadable_link_table_entry',
     'unreadable_node',
     'unreadable_shape',
     'unsupported_bit_depth',
