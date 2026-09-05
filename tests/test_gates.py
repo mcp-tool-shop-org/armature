@@ -1104,8 +1104,15 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     #      `views_without_pixels`, `adjacent_pair_shapes_differ`).
     # instruments, instruments-measure and builders add ZERO here — every raise they added
     # is in `tools/*.py`, which this walk does not reach (both confirmed it in the inbox).
-    assert total == 315, (
-        f"{total} family raises in armature_core; this pin asserts 315, composed from the "
+    # WAVE 18 (core-gates): 315 → 325, measured in the core-gates worktree. +5
+    # `route_gates.RouteGate` (the API branch's `unreadable_node`, the walk's
+    # `duplicate_subgraph_id`, Gate S's `seed_node_unresolvable`, and the two hosted
+    # enum-shift clauses), +4 `donor_gate.DonorGate` (`_readable_landmark_row`), +1
+    # `gates.GateSSeedRegistration` (`registry_member_not_an_int`). core-solvers also
+    # edits `armature_core` this wave, so the merged tree will read HIGHER — the
+    # coordinator re-measures at merge and never sums the branches.
+    assert total == 325, (
+        f"{total} family raises in armature_core; this pin asserts 325, measured in the "
         f"branch measurements in the wave-16 seams inbox and NOT re-measured on a merged "
         f"tree. This is the denominator every ratio below is quoted against — re-measure it "
         f"deliberately")
