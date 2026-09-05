@@ -300,17 +300,23 @@ def test_the_two_margins_ride_the_record_as_fractions_of_their_own_structures():
 # --- F-884c0c8e: the figure's own X centreline, not the world's -----------------------
 
 
-def _put_x_literals():
+def _put_x_literals(source=None):
     """Every `put(...)` in `landmarks.derive` whose x coordinate is a bare numeric literal.
 
     Derived by walking the module's own AST — the population is whatever the source
     contains today, not a list typed into this test — so a landmark newly placed at a
     constant world x joins it the moment it is written.
+
+    WAVE 26, F-a89efade — `source` is the seam that lets the red direction below drive
+    THIS walk over a decoy instead of re-implementing it inline. A proof that parses
+    its own scratch source and re-writes the predicate demonstrates that `ast` finds
+    the node; it cannot fail when the production walk is loosened, which is the one
+    thing a red proof exists to make impossible.
     """
     import ast
     import inspect
 
-    src = inspect.getsource(landmarks)
+    src = inspect.getsource(landmarks) if source is None else source
     out = []
     for node in ast.walk(ast.parse(src)):
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
@@ -342,9 +348,15 @@ def test_no_landmark_is_placed_at_a_literal_world_x():
 
 
 def test_the_literal_world_x_census_goes_red_on_a_reintroduced_constant():
-    """Prove the census can fail: the same AST walk over a source that puts one back."""
-    import ast
+    """Prove the census can fail — driving `_put_x_literals` itself (wave 26, F-a89efade).
 
+    What stood here re-implemented the predicate inline over its own scratch source, so it
+    asserted that `ast.walk` finds a `Call` with a `Tuple` first argument. Loosening
+    `_put_x_literals` — dropping the `isinstance(x.value, (int, float))` clause, keying on a
+    different callee, missing a nested `put` — left this proof green. It calls the production
+    walk now, and the decoy carries both directions: one landmark at a literal world x, one
+    placed from measured coordinates, so the walk must report exactly the first.
+    """
     mutated = (
         "def derive(v):\n"
         "    def put(name, point, prov):\n"
@@ -352,14 +364,10 @@ def test_the_literal_world_x_census_goes_red_on_a_reintroduced_constant():
         "    put('crotch', (0.0, 1.0, 2.0), 'MEASURED')\n"
         "    put('hip_L', (cx, cy, cz), 'MEASURED')\n"
     )
-    found = []
-    for node in ast.walk(ast.parse(mutated)):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id == "put" and len(node.args) >= 2
-                and isinstance(node.args[1], ast.Tuple)
-                and isinstance(node.args[1].elts[0], ast.Constant)):
-            found.append(node.args[0].value)
-    assert found == ["crotch"], "the census would not have caught the reintroduced literal"
+    found = _put_x_literals(source=mutated)
+    assert [label for label, _x, _line in found] == ["crotch"], (
+        "the census would not have caught the reintroduced literal: " + repr(found))
+    assert found == [("crotch", 0.0, 4)], found
 
 
 def _shifted(dx):

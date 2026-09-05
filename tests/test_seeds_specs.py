@@ -30,6 +30,8 @@ import os
 
 import pytest
 
+import _census_nodes as CN
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEED_SPECS = sorted(glob.glob(os.path.join(REPO, "specs", "*seeds.json")))
 
@@ -241,8 +243,19 @@ def _citations(path):
 SEED_READER = "read_seed_registration"
 
 
-def seed_reader_call_lines(name):
-    """Every line in `tools/<name>` where `read_seed_registration` is CALLED.
+def seed_reader_call_lines(name, source=None):
+    """Every line where `read_seed_registration` is CALLED — in `tools/<name>`, or in `source`.
+
+    `source` (wave 26, F-a89efade) is the seam that lets the red proof below drive THIS
+    function over a decoy module instead of re-implementing it. Without it, the proof written
+    in wave 23 to protect this predicate walked its own three-line source with its own
+    `isinstance(node, ast.Call) and getattr(node.func, "id", "") == SEED_READER` loop and
+    asserted the comment line was absent — a property of `ast`, not of this module. Measured
+    on `81d6c07` by substituting the PRE-wave-23 predicate (`"seeds" in <the cited line>`) for
+    this function in process and re-running every test in the module: ALL passed, the red
+    proof included, and `stale_citations()` returned `[]` for all eight specs, because every
+    one of the seven citation targets is a real call line that also contains the substring.
+    The correction was protected by nothing.
 
     WAVE 23, F-a5089b5f — the predicate that decides whether a citation still points at the
     reader of the seed registration. It used to be `"seeds" in lines[lineno - 1]`, which a
@@ -260,16 +273,10 @@ def seed_reader_call_lines(name):
     """
     import ast
 
-    tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
-    out = set()
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        func = node.func
-        called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-        if called == SEED_READER:
-            out.add(node.lineno)
-    return out
+    if source is None:
+        source = open(os.path.join(TOOLS, name), encoding="utf-8").read()
+    return {node.lineno for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.Call) and CN.called_name(node) == SEED_READER}
 
 
 def stale_citations(path):
@@ -289,48 +296,58 @@ def stale_citations(path):
     return out
 
 
-#: Measured 2026-09-04 per spec. A CEILING, not equality: builders is re-anchoring the 28
-#: stale citations this wave (F-5e7fe9dc), so a spec that gets corrected leaves this file
-#: green and its entry merely becomes deletable. A citation that GOES stale fails here.
-#:
-#: RE-MEASURED 2026-09-05 (wave 25, builders, F-af838b99): **every entry is 0**. Adopting
-#: the ONE halt handler moved six of the seven cited reader lines (`PayloadError`'s
-#: class-level `gate` and the trimmed error imports shift them by 3 to 41 lines), so all
-#: eight specs were re-anchored to the line each `read_seed_registration` call is on TODAY,
-#: derived by `seed_reader_call_lines` rather than counted by hand. The ceiling is
-#: tightened to the measurement rather than left slack: with every entry at 0 the census is
-#: equality in all but name, and the next citation to drift fails here naming its spec.
-STALE_CITATIONS_TODAY = {
-    "E08-seeds.json": 0,
-    "E09-A3-seeds.json": 0,
-    "E09-seeds.json": 0,
-    "E10-seeds.json": 0,
-    "E11-seeds.json": 0,
-    "E12-seeds.json": 0,
-    "E13-seeds.json": 0,
-    "E14-seeds.json": 0,
-}
+# WAVE 26, F-9473345e — `STALE_CITATIONS_TODAY` stood here: a dated per-spec CEILING that
+# allowed 4 stale citations in each of seven specs and 0 in E08, under a comment reading "A
+# citation that GOES stale fails here". Measured by calling this file's own
+# `stale_citations()` on all eight specs: `[]` for every one. Wave 25 re-derived the table to
+# zeros, at which point it was an equality in all but name AND a second home for a property
+# its sibling `test_every_citation_in_every_seeds_spec_resolves` already asserts at
+# equality strength. The record said a backlog of 28 existed; the measurement said none did,
+# and a session reading it would have budgeted a re-anchoring wave that had already happened
+# (wave 18, then again under wave 25's halt-handler line shifts). The table is gone, its
+# clauses folded into the sibling, and the population pin it also carried survives below as a
+# membership set rather than as a counts dict.
+
+#: The eight committed spend-ceiling specs, by basename. Size and membership BEFORE the
+#: property, so a ninth spec joins the citation census on the day it lands rather than being
+#: guarded by a list somebody forgot — the clause the retired counts dict was really carrying.
+SEEDS_SPECS_TODAY = [
+    "E08-seeds.json",
+    "E09-A3-seeds.json",
+    "E09-seeds.json",
+    "E10-seeds.json",
+    "E11-seeds.json",
+    "E12-seeds.json",
+    "E13-seeds.json",
+    "E14-seeds.json",
+]
+
+
+def test_the_seeds_spec_population_is_the_eight_committed_specs():
+    """The membership pin the retired ceiling table also carried."""
+    assert [os.path.basename(p) for p in SEED_SPECS] == SEEDS_SPECS_TODAY, \
+        [os.path.basename(p) for p in SEED_SPECS]
 
 
 @pytest.mark.parametrize("path", SEED_SPECS, ids=os.path.basename)
 def test_every_specs_citations_resolve_to_the_lines_they_claim(path):
-    """The clause its four siblings already have: run over EVERY spec.
+    """The clause its four siblings already have: run over EVERY spec, at EQUALITY.
 
     A reader re-deriving the ceiling before a spend reads a cited line that says something
     else and concludes the clause moved, while the test written to make exactly that
     impossible passes over one file in eight.
+
+    WAVE 26, F-9473345e — `len(stale) <= STALE_CITATIONS_TODAY[name]` became `stale == []`.
+    The dated ceiling permitted four regressions per spec that the sibling census refused
+    outright, so the two disagreed about the same property; this is the one that reports which
+    citation drifted and on which spec, so it keeps the reporting and drops the slack.
     """
     name = os.path.basename(path)
     assert len(_citations(path)) == 7, (name, _citations(path))
-    assert name in STALE_CITATIONS_TODAY, (
-        f"{name} is a committed seeds spec with no measured citation count; measure it and "
-        f"record it rather than letting it join a census that never opened it")
-    stale = stale_citations(path)
-    assert len(stale) <= STALE_CITATIONS_TODAY[name], {
-        "spec": name,
-        "stale now": stale,
-        "stale on 2026-09-04": STALE_CITATIONS_TODAY[name],
-    }
+    assert name in SEEDS_SPECS_TODAY, (
+        f"{name} is a committed seeds spec that the population pin does not name; record it "
+        f"rather than letting it join a census that never opened it")
+    assert stale_citations(path) == [], {"spec": name, "stale": stale_citations(path)}
 
 
 def test_the_citation_census_opens_every_spec_and_not_the_first_one():
@@ -344,8 +361,11 @@ def test_the_citation_census_opens_every_spec_and_not_the_first_one():
     assert stale_citations(SEED_SPECS[0]) == [], (
         "E08 has stale citations too, so the [0] index was not merely lucky; re-derive this")
     others = {os.path.basename(p): len(stale_citations(p)) for p in SEED_SPECS[1:]}
-    assert sum(others.values()) <= 28, others
-    assert set(others) == set(STALE_CITATIONS_TODAY) - {"E08-seeds.json"}, sorted(others)
+    # WAVE 26, F-9473345e: `sum(others.values()) <= 28` read `0 <= 28` — a clause that cannot
+    # fail, guarding the 28-strong backlog the wave-18 re-anchoring had already cleared. The
+    # 28 is history and stays in the docstring above; the assertion is the measurement.
+    assert sum(others.values()) == 0, others
+    assert set(others) == set(SEEDS_SPECS_TODAY) - {"E08-seeds.json"}, sorted(others)
 
 
 # WAVE-12 MERGE (coordinator, 2026-09-04): builders' appended census (F-5e7fe9dc) carried beside tests' widening.
@@ -444,32 +464,61 @@ def test_the_census_goes_red_on_a_spec_whose_citation_has_drifted(tmp_path):
 # ===========================================================================
 
 
-def test_the_citation_predicate_refuses_a_comment_beside_the_call():
-    """The red proof, kept in the tree.
+#: The decoy the citation predicate must refuse: a `read_seed_registration` call one line
+#: BELOW a comment that mentions seeds. One shape, so the proof and the old-predicate
+#: comparison below are grading the same module.
+DECOY_SOURCE = "\n".join([
+    "def main(argv=None):",
+    "    # the registered seeds are read on the next line",
+    "    registered = read_seed_registration(a.seeds, flag='--seeds')",
+    "    return registered",
+])
 
-    A three-line module whose `read_seed_registration` call sits one line BELOW a comment
-    that mentions seeds. The old predicate (`"seeds" in <the cited line>`) says yes to the
-    comment; the AST predicate says no. Both directions asserted, so the decoy proves the
-    difference rather than only the new answer.
+
+def _old_substring_predicate(source):
+    """The predicate this file used BEFORE wave 23: any line containing `seeds`.
+
+    Kept runnable so the proof below can assert what the correction actually changed, rather
+    than asserting the new answer alone.
     """
-    import ast
+    return {i for i, line in enumerate(source.splitlines(), 1) if "seeds" in line}
 
-    source = "\n".join([
-        "def main(argv=None):",
-        "    # the registered seeds are read on the next line",
-        "    registered = read_seed_registration(a.seeds, flag='--seeds')",
-        "    return registered",
-    ])
-    lines = source.splitlines()
-    calls = set()
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == SEED_READER:
-            calls.add(node.lineno)
 
-    comment_line = 2
-    assert "seeds" in lines[comment_line - 1], "the decoy does not carry the substring"
-    assert comment_line not in calls, "the AST predicate accepted a comment"
-    assert 3 in calls, calls
+def test_the_citation_predicate_refuses_a_comment_beside_the_call():
+    """The red proof, kept in the tree — and driving the PRODUCTION predicate (F-a89efade).
+
+    What stood here parsed `DECOY_SOURCE` with its own `ast.walk` loop and asserted the
+    comment line was not in the result. That is a property of `ast`; `seed_reader_call_lines`
+    was never called, so reverting it to the substring predicate left this proof green along
+    with the rest of the module. It calls the real function now, through the `source` seam,
+    and asserts BOTH directions: the AST predicate refuses the comment and finds the call,
+    and the predicate it replaced accepts the comment — which is the difference the wave-23
+    correction was made for.
+    """
+    calls = seed_reader_call_lines("<decoy>", source=DECOY_SOURCE)
+    assert calls == {3}, calls
+
+    old = _old_substring_predicate(DECOY_SOURCE)
+    assert 2 in old, "the decoy does not carry the substring the old predicate keyed on"
+    assert 2 not in calls, "the AST predicate accepted a comment"
+    assert old != calls, (
+        "the old substring predicate and the AST predicate agree on the decoy, so this proof "
+        "cannot show what the wave-23 correction changed")
+
+
+def test_substituting_the_old_predicate_turns_this_modules_census_red():
+    """The revert, driven: with the substring predicate in place of the AST one, a citation
+    that points at a COMMENT must be accepted — which is the failure mode the census exists
+    to refuse.
+
+    Measured on `81d6c07`: substituting the old predicate module-wide left every test here
+    green, so the census could not tell the two apart on the real tree (every citation target
+    is a real call line that happens to contain `seeds`). The decoy is where they differ, and
+    this drives `stale_citations`' own comparison over it rather than over the tree.
+    """
+    lineno_of_the_comment = 2
+    assert lineno_of_the_comment in _old_substring_predicate(DECOY_SOURCE)
+    assert lineno_of_the_comment not in seed_reader_call_lines("<decoy>", source=DECOY_SOURCE)
 
 
 def test_the_seed_reader_call_lines_are_the_ones_the_specs_cite():

@@ -803,17 +803,18 @@ def _main_of(tree):
     return CN.cli_body(tree)
 
 
-def parser_population():
-    """Every `tools/*.py` whose module-level `main` reads a `parse_args` namespace.
-
-    Walks `tool_trees()`, not `module_trees()`: the latter is keyed by BASENAME and
-    `armature_core/lift_solve.py` shadowed `tools/lift_solve.py` there, so the tool was
-    walked as the solver and reported as having no command line (F-beeab1d0).
-    """
-    trees = CN.tool_trees()
-    return sorted(mod for mod in trees
-                  if os.path.exists(os.path.join(_tools_dir(), mod + ".py"))
-                  and namespace_reads(trees[mod]))
+# WAVE 26, F-1843d5f2 — `parser_population` was re-inlined here (`CN.tool_trees()`, the
+# `os.path.exists` filter, `namespace_reads`) while the five neighbours immediately above
+# WERE aliased, in a file whose shared module states at :23-25 that every walk below it has
+# exactly one home. Measured on `81d6c07`: both returned 67 and the same members, and
+# `test_sheet_pairing.parser_population is _census_nodes.parser_population` was False, so a
+# correction to the membership rule — the `os.path.exists` filter that keeps
+# `armature_core/*` out — could land in one and not the other while
+# `RECORDED_PARSER_POPULATION` below, equality-pinned at 67, pinned only the local copy.
+# `tests/test_sheet_argv_smoke.py:183` already consumes `CN.parser_population` as
+# `CLI_TOOLS`; this file now consumes the same object. The identity is asserted in
+# `tests/test_amend_w26_suite.py`.
+parser_population = CN.parser_population
 
 
 #: Derived 2026-09-04. Size and membership before the property; a new CLI tool joins on the

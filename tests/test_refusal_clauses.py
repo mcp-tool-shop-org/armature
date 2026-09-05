@@ -54,6 +54,8 @@ import os
 
 import pytest  # noqa: F401  (imported so the fixture source below reads as this suite's)
 
+import _census_nodes as _CN
+
 TESTS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TESTS)
 CORE = os.path.join(REPO, "tools", "armature_core")
@@ -155,11 +157,11 @@ def _delegated_raise_sites(tree, defined, raising):
     return out
 
 
-def called_name_of(node):
-    """The bare callee name of a `Call` — `f(...)` and `mod.f(...)` both give `f`."""
-    func = node.func
-    return (func.id if isinstance(func, ast.Name)
-            else func.attr if isinstance(func, ast.Attribute) else "")
+# WAVE 26, F-f893634d — `called_name_of` was `_census_nodes.called_name` written out, byte
+# for byte, in a file that imports `_census_nodes` for the clause vocabulary anyway. Same
+# class as the call-site walk the finding names. ONE home; the duplicate-walk census in
+# `tests/test_amend_w26_suite.py` holds it.
+called_name_of = _CN.called_name
 
 
 def derive_population(tools_root):
@@ -868,17 +870,38 @@ def test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed():
     """The predicate's other half, stated so it cannot drift into "police everything".
 
     A class raised once IS its own clause — `pytest.raises(QuadriflowDeclined)` can only be
-    satisfied by the single refusal that exists. Measured 2026-09-04 (wave 16): 25 such
-    classes, of which 22 are `ArmatureError`-family classes defined under `tools/**`.
+    satisfied by the single refusal that exists.
+
+    WAVE 26, F-a8c32abf — the prose said "Measured 2026-09-04 (wave 16): 25 such classes, of
+    which 22 are `ArmatureError`-family classes defined under `tools/**`". RE-MEASURED on
+    `81d6c07` with this test's own expression: 22 single-site unpoliced classes, 21 of them
+    family classes defined under `tools/**`. Five waves of refusal work moved it and the
+    sentence did not, in the one file where the wave-16 merge conflict was resolved by union
+    plus measurement — so a seat reading this to size the next union would have started from
+    the wrong number, which is the shape that put a 72 in a message asserting 69. Both counts
+    are DERIVED below now rather than written in prose, so the sentence cannot fork from the
+    assertion again; the 2026-09-04 figures stay as history, labelled as history.
     """
     single = {n for n, s in RAISE_SITES.items() if len(s) == 1} & {
         n for n in RAISE_SITES if n not in POLICED}
     assert "QuadriflowDeclined" in single
     assert not (single & POLICED)
+    assert len(single) == 22, sorted(single)
+    family_here = single & _family_classes_defined_under_tools()
+    assert len(family_here) == 21, sorted(family_here)
 
 
 def _family_classes_defined_under_tools():
-    """Every `ArmatureError`-family class DEFINED under `tools/**` — the whole 120."""
+    """Every `ArmatureError`-family class DEFINED under `tools/**`.
+
+    WAVE 26, F-a8c32abf — this docstring ended "the whole 120" while the assertion three
+    lines below it read `len(defined) == 125`, and the merged tree measured 148. The
+    coordinator's merge fix-up moved the assertion and left the sentence above it, twice over,
+    which is exactly the fork this file's own merge history is a record of. The size is not
+    written here any more: it is asserted, once, in
+    `test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_by_nothing`,
+    where every wave's delta is already recorded with the class names that moved it.
+    """
     import _census_nodes as CN
 
     family = CN.armature_error_names()
@@ -2267,6 +2290,24 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     # 'visible_rows_component_not_an_integer', 'visible_rows_not_a_band_inside_the_frame',
     # 'why_not_supplied', 'zero_length_direction', 'zero_quaternion',
     # 'zero_quaternion',    'allowlist_name_pattern', 'anchor_not_a_number', 'anchor_not_a_pair',
+    # WAVE 26, F-15e155cd: 129 -> 136, RE-DERIVED with `==` on `81d6c07` after
+    # `fixture_text()` began reading CODE rather than raw text. SEVEN words join, and every
+    # one of them was "named" only by prose about it:
+    #   'two_answers', 'plan_paths_collide', 'order_unvouched', 'escape_unknown',
+    #   'no_surfaces', 'not_object'  -- spelled in this file's own block comment above
+    #       `RECORDED_CLAUSES`, the sentence that calls them the most consequential words in
+    #       the vocabulary. Two of them are Gate ROUTE's own clauses on the last gate before
+    #       a paid submission.
+    #   'orbit radius'               -- a sentence-shaped value, spelled in
+    #       `SENTENCE_SHAPED_CLAUSES`' neighbouring prose (the table itself is already
+    #       blanked; the paragraph beside it was not).
+    # NONE leave. The four the finding also predicted -- 'unknown_hosted_tier',
+    # 'arm_input_missing', 'missing_arm_input', 'downloader_job_exits' -- do NOT join: they
+    # are named by real fixtures on the merged tree, which is why this was re-derived here
+    # rather than copied from the finding's list of ten.
+    # These seven are a BACKLOG, not an exemption. The words are deliberately NOT re-spelled
+    # outside this comment; a comment is no longer an input to the census, which is the whole
+    # point of the change, so naming them here is safe in a way it was not before.
     'allowlist_name_pattern',
     'anchor_not_a_number',
     'anchor_not_a_pair',
@@ -2316,6 +2357,7 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'degenerate_target_frame',
     'depth_buffer_is_not_the_frame_size',
     'drawing_convention_not_retrieved',
+    'escape_unknown',
     'every_imported_mesh_is_hidden_from_render',
     'expectation_carries_a_duplicated_frame',
     'expectation_is_not_the_frame_list',
@@ -2356,14 +2398,19 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'no_numbered_frames_in_the_directory',
     'no_parts_to_assign_to',
     'no_positive_joint_radius',
+    'no_surfaces',
     'no_trace_to_size_a_ball_against',
     'no_vertices_to_frame',
     'not_a_rotation',
+    'not_object',
     'numpy_unavailable',
     'observed_sites_missing',
+    'orbit radius',
+    'order_unvouched',
     'palm_plane_degenerate',
     'part_radius_not_positive',
     'phase_shorter_than_a_frame',
+    'plan_paths_collide',
     'plate_source_missing',
     'population_is_not_the_spec_names',
     'readout_angle_outside_the_arc',
@@ -2385,6 +2432,7 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'too_few_phase_samples',
     'too_few_points_for_a_sphere_fit',
     'too_few_source_samples',
+    'two_answers',
     'unknown_pose_arc',
     'unsupported_bit_depth',
     'unsupported_shape',
@@ -2417,27 +2465,75 @@ CENSUS_TABLES = ("RECORDED_CLAUSES", "CLAUSES_NAMED_BY_NO_FIXTURE",
                  "SENTENCE_SHAPED_CLAUSES")
 
 
-def fixture_text():
-    """Every `tests/*.py`, with this file's own clause TABLES blanked out.
+def code_only(src, drop_lines=frozenset()):
+    """`src` with every COMMENT and every DOCSTRING removed, plus any line in `drop_lines`.
 
-    A clause is "named by a fixture" when some test spells it somewhere that is not one of
-    the three lists recording that nothing does.
+    WAVE 26, F-15e155cd — the census that asks "is this clause named by a fixture?" used to
+    ask it of the raw text of every `tests/*.py`, so a clause word MENTIONED IN PROSE counted
+    as named. Its own block comment above `RECORDED_CLAUSES` spells the ten words it calls
+    the most consequential — the two Gate ROUTE clauses on the last gate before a paid
+    submission among them, and the doubled hosted-tier pair the wave-23 inbox posted to
+    builders — and every one of those ten fell out of `CLAUSES_NAMED_BY_NO_FIXTURE` because
+    the sentence saying nothing exercised them was itself the thing that "named" them. The
+    docstring of `test_every_clause_word_is_named_by_a_fixture_or_listed_with_a_reason` says
+    in as many words that it deliberately does not spell the four `encode_control` words for
+    exactly this reason; that discipline is now mechanical rather than remembered.
+
+    Measured on `81d6c07` by re-running the census over a comments-and-docstrings-stripped
+    corpus: eight clause words in the tree were named ONLY inside a comment or a docstring.
+
+    A fixture is CODE. Tokenised rather than regexed, so a `#` inside a string literal is
+    not mistaken for a comment and a triple-quoted fixture payload is not mistaken for a
+    docstring.
+    """
+    import io as _io
+    import tokenize
+
+    docstrings = set()
+    for node in ast.walk(ast.parse(src)):
+        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
+                                 ast.ClassDef)):
+            continue
+        body = getattr(node, "body", [])
+        if (body and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)):
+            docstrings.add((body[0].value.lineno, body[0].value.col_offset))
+
+    kept = []
+    for tok in tokenize.generate_tokens(_io.StringIO(src).readline):
+        if tok.type == tokenize.COMMENT:
+            continue
+        if tok.type == tokenize.STRING and tok.start in docstrings:
+            continue
+        if tok.start[0] in drop_lines:
+            continue
+        kept.append(tok.string)
+    return "\n".join(kept)
+
+
+def fixture_text():
+    """Every `tests/*.py` as CODE — comments and docstrings stripped, and this file's own
+    clause TABLES blanked out.
+
+    A clause is "named by a fixture" when some test SPELLS IT IN CODE somewhere that is not
+    one of the three lists recording that nothing does. Prose about a clause is not a fixture
+    for it (F-15e155cd); neither is a table saying nothing exercises it (the earlier half of
+    the same rule, measured 2026-09-05).
     """
     text = []
     for path in sorted(glob.glob(os.path.join(TESTS_DIR, "*.py"))):
         with open(path, encoding="utf-8") as fh:
             src = fh.read()
+        drop = set()
         if os.path.basename(path) == os.path.basename(__file__):
-            lines = src.splitlines()
-            drop = set()
             for node in ast.parse(src).body:
                 if not isinstance(node, ast.Assign):
                     continue
                 names = [t.id for t in node.targets if isinstance(t, ast.Name)]
                 if any(n in CENSUS_TABLES for n in names):
                     drop.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
-            src = "\n".join(ln for i, ln in enumerate(lines, 1) if i not in drop)
-        text.append(src)
+        text.append(code_only(src, drop))
     return "\n".join(text)
 
 
@@ -2466,6 +2562,13 @@ def test_every_clause_word_is_named_by_a_fixture_or_listed_with_a_reason():
     are the state of the tree on 2026-09-05, dated; the table may not grow, and a clause
     that gains a fixture leaves it in the commit that adds the fixture.
 
+    WAVE 26 (F-15e155cd): 129 -> 136 on the merged tree, RE-DERIVED with `==`. `fixture_text()`
+    reads CODE now — comments and docstrings stripped by `code_only` above — so a clause word
+    that is only ever MENTIONED is unnamed again. Seven join, none leave; the block comment
+    above `RECORDED_CLAUSES` spells six of them and this file's own prose the seventh. The
+    paragraph below about deliberately not spelling the four `encode_control` words is now a
+    description of the table rather than an input to it, which is what it always claimed to be.
+
     WAVE 25 (instruments-measure): 132 -> 133 (the clause vocabulary itself moves 385 -> 416). THREE leave — the round-trip diagnostic's
     arming refusal and `measure_arm`'s two sentence-shaped values, all three now named by
     fixtures in `test_instruments_measure_amend_w25.py` — and FOUR join. Every one of the
@@ -2487,6 +2590,63 @@ def test_every_clause_word_is_named_by_a_fixture_or_listed_with_a_reason():
         "listed and now named by a fixture (delete the row)":
             sorted(set(CLAUSES_NAMED_BY_NO_FIXTURE) - set(unnamed)),
     }
+
+
+def test_a_clause_named_only_in_a_comment_or_a_docstring_stays_unnamed():
+    """The red proof for F-15e155cd, driving `code_only` — the production function.
+
+    Three spellings of one invented clause word in a scratch module: a comment, a module
+    docstring and a function docstring. `code_only` must keep none of them, and must keep the
+    same word the moment it is spelled in CODE. Without that, the census's predicate
+    (`clause not in text`) is satisfied by any mention anywhere under `tests/**`, which is
+    the defect class wave 23 closed one file over for the seeds citations.
+    """
+    word = "the_clause_word_this_proof_invented"
+    module = "\n".join([
+        '"""A module docstring that mentions %s."""' % word,
+        "",
+        "",
+        "def helper():",
+        '    """A function docstring that mentions %s too."""' % word,
+        "    return 1",
+        "",
+        "",
+        "def test_a():",
+        "    # a comment that mentions %s" % word,
+        "    assert helper() == 1",
+        "",
+    ])
+    assert module.count(word) == 3, module
+
+    stripped = code_only(module)
+    assert word not in stripped, (
+        "a clause word mentioned only in prose survived `code_only`, so prose still counts "
+        "as a fixture:\n" + stripped)
+
+    fixtured = module + '\n\ndef test_b():\n    assert ev["clause"] == %r\n' % word
+    assert word in code_only(fixtured), (
+        "`code_only` dropped a clause word spelled in CODE; the census would then report "
+        "every fixtured clause as unnamed")
+
+
+def test_code_only_keeps_a_hash_inside_a_string_and_a_triple_quoted_payload():
+    """The tokeniser earns its place here: a regex-and-`splitlines` strip would eat both.
+
+    A `#` inside a string literal is not a comment, and a triple-quoted payload assigned to a
+    name is not a docstring. A census that lost either would start reporting clause words as
+    unnamed that a fixture does spell — the failure in the other direction, and the one that
+    would quietly GROW the table.
+    """
+    src = "\n".join([
+        'HASH = "a value with a # inside it"',
+        'PAYLOAD = """',
+        'clause_spelled_in_a_payload',
+        '"""',
+        "",
+    ])
+    kept = code_only(src)
+    assert "a value with a # inside it" in kept, kept
+    assert "clause_spelled_in_a_payload" in kept, kept
 
 
 def test_a_clause_is_a_word_a_halt_reader_can_key_on():

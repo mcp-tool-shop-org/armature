@@ -42,9 +42,16 @@ def sheet():
 # ------------------------------------------------------------------- (a) the dead loop
 
 
-def _statement_loops_that_do_nothing(filename):
-    """`for ...: continue` with no other statement in the body."""
-    tree = ast.parse(read_source(filename))
+def _statement_loops_that_do_nothing(filename, source=None):
+    """`for ...: continue` with no other statement in the body.
+
+    WAVE 26, F-a89efade — `source` is the seam that lets the red direction below drive
+    THIS walk over a decoy instead of re-implementing it inline. A proof that parses
+    its own scratch source and re-writes the predicate demonstrates that `ast` finds
+    the node; it cannot fail when the production walk is loosened, which is the one
+    thing a red proof exists to make impossible.
+    """
+    tree = ast.parse(read_source(filename) if source is None else source)
     out = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
@@ -70,25 +77,25 @@ def test_no_sheet_builder_carries_a_loop_that_does_nothing(filename):
         f"first.")
 
 
-def test_the_dead_loop_scan_would_catch_the_one_it_was_written_for(tmp_path):
-    """The red direction — a check that cannot fail is not a check."""
-    probe = tmp_path / "probe_dead.py"
-    probe.write_text(chr(10).join([
+def test_the_dead_loop_scan_would_catch_the_one_it_was_written_for():
+    """The red direction, driving `_statement_loops_that_do_nothing` (wave 26, F-a89efade).
+
+    It used to write a probe module to disk and then re-implement the scan inline, which
+    asserted a property of `ast` rather than of the scan: the `elif` branch that catches a
+    `for` whose only statement is an `if ...: continue` could have been deleted and this
+    would still have passed. Both directions in the decoy now — a dead loop and a live one —
+    so the scan must report exactly the first.
+    """
+    decoy = chr(10).join([
         "import bpy",
         "def f():",
         "    for ob in list(bpy.data.objects):",
         "        if ob.type == 'ARMATURE':",
         "            continue",
-        ""]), encoding="utf-8")
-    tree = ast.parse(probe.read_text(encoding="utf-8"))
-    hits = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.For) and len(node.body) == 1:
-            inner = node.body[0]
-            if (isinstance(inner, ast.If) and len(inner.body) == 1
-                    and isinstance(inner.body[0], ast.Continue)):
-                hits.append(node.lineno)
-    assert hits == [3], hits
+        "    for ob in list(bpy.data.objects):",
+        "        ob.hide_render = False",
+        ""])
+    assert _statement_loops_that_do_nothing("make_rig_sheet.py", source=decoy) == [3]
 
 
 # ------------------------------------------------------- (b) which mesh is the reference
@@ -170,8 +177,16 @@ def test_the_before_label_is_read_off_the_object_the_gate_returned():
 # already used.
 
 
-def _subjects_taken_by_index_zero(filename):
-    tree = ast.parse(read_source(filename))
+def _subjects_taken_by_index_zero(filename, source=None):
+    """A subject taken as `[...][0]` of a comprehension over the object table.
+
+    WAVE 26, F-a89efade — `source` is the seam that lets the red direction below drive
+    THIS walk over a decoy instead of re-implementing it inline. A proof that parses
+    its own scratch source and re-writes the predicate demonstrates that `ast` finds
+    the node; it cannot fail when the production walk is loosened, which is the one
+    thing a red proof exists to make impossible.
+    """
+    tree = ast.parse(read_source(filename) if source is None else source)
     return [n.lineno for n in ast.walk(tree)
             if isinstance(n, ast.Subscript) and isinstance(n.value, ast.ListComp)
             and any("objects" in ast.dump(g.iter) for g in n.value.generators)]
@@ -196,19 +211,21 @@ def test_no_blender_tool_takes_its_subject_by_index_zero(filename):
         f"routinely adds a second mesh.")
 
 
-def test_the_index_zero_scan_would_catch_one(tmp_path):
-    """The red direction."""
-    probe = tmp_path / "probe_index.py"
-    probe.write_text(chr(10).join([
+def test_the_index_zero_scan_would_catch_one():
+    """The red direction, driving `_subjects_taken_by_index_zero` (wave 26, F-a89efade).
+
+    The decoy carries the defect on line 3 and a correctly-selected subject on line 5, so
+    the scan is required to answer differently about two comprehensions rather than merely
+    to find a `Subscript`.
+    """
+    decoy = chr(10).join([
         "import bpy",
         "def f():",
         "    return [o for o in bpy.data.objects if o.type == 'MESH'][0]",
-        ""]), encoding="utf-8")
-    tree = ast.parse(probe.read_text(encoding="utf-8"))
-    hits = [n.lineno for n in ast.walk(tree)
-            if isinstance(n, ast.Subscript) and isinstance(n.value, ast.ListComp)
-            and any("objects" in ast.dump(g.iter) for g in n.value.generators)]
-    assert hits == [3], hits
+        "def g(named):",
+        "    return [o for o in named if o.type == 'MESH']",
+        ""])
+    assert _subjects_taken_by_index_zero("make_rig_sheet.py", source=decoy) == [3]
 
 
 # --------------------------- the arc's numbers come from the probe, not from the caption

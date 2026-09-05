@@ -146,14 +146,20 @@ def test_no_sheet_pins_a_side_in_a_bone_name(filename):
         assert pinned not in src, f"{filename} still pins {pinned}"
 
 
-def _emitted_strings(filename):
+def _emitted_strings(filename, source=None):
     """Every string literal a sheet can print, EXCLUDING docstrings.
 
     A docstring recording what the superseded caption said is the repo's method -- "correct
     in place, with the measurement that overturned the claim" -- and must not be what this
     check fires on. What matters is whether a literal side can reach `panels.json`.
+
+    WAVE 26, F-a89efade — `source` is the seam that lets the red direction below drive
+    THIS walk over a decoy instead of re-implementing it inline. A proof that parses
+    its own scratch source and re-writes the predicate demonstrates that `ast` finds
+    the node; it cannot fail when the production walk is loosened, which is the one
+    thing a red proof exists to make impossible.
     """
-    tree = ast.parse(read_source(filename))
+    tree = ast.parse(read_source(filename) if source is None else source)
     docstrings = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
@@ -177,21 +183,27 @@ def test_no_sheet_captions_a_side_it_did_not_measure(filename):
         assert "character's RIGHT arm" not in text, (filename, text)
 
 
-def test_the_emitted_string_scan_would_catch_the_caption_it_was_written_for(tmp_path):
-    """The red direction: the superseded line, in a file of its own, must be found."""
-    probe = tmp_path / "probe_sheet.py"
+def test_the_emitted_string_scan_would_catch_the_caption_it_was_written_for():
+    """The red direction, driving `_emitted_strings` itself (wave 26, F-a89efade).
+
+    The inline copy excluded exactly one docstring — `tree.body[0]` — so the production
+    walk's whole docstring derivation (module, function, async function and class bodies)
+    was unproven, and dropping it would have left this green. The decoy now carries a MODULE
+    docstring and a FUNCTION docstring, both quoting the superseded caption, plus one real
+    emitted literal: the scan must return the emitted one and neither docstring.
+    """
     caption = "the arc is E03s: the character's LEFT arm, 0 to 90 about +Y"
     quote = chr(34) * 3
-    lines = [quote + "A docstring recording the superseded caption: " + caption + quote,
-             "SUB = " + repr(caption),
-             ""]
-    probe.write_text(chr(10).join(lines), encoding="utf-8")
-    tree = ast.parse(probe.read_text(encoding="utf-8"))
-    doc = id(tree.body[0].value)
-    hits = [n.value for n in ast.walk(tree)
-            if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) != doc
-            and "character's LEFT arm" in n.value]
-    assert len(hits) == 1, hits
+    decoy = chr(10).join([
+        quote + "A module docstring recording the superseded caption: " + caption + quote,
+        "SUB = " + repr(caption),
+        "def render():",
+        "    " + quote + "A function docstring quoting it too: " + caption + quote,
+        "    return SUB",
+        ""])
+    hits = [t for t in _emitted_strings("make_rig_sheet.py", source=decoy)
+            if "character's LEFT arm" in t]
+    assert hits == [caption], hits
 
 
 @pytest.mark.parametrize("filename", SHEETS)

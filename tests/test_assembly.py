@@ -784,9 +784,81 @@ def test_both_production_call_sites_pair_the_plan_STRICTLY():
     for name, kwargs in sites:
         assert "strict" in kwargs, f"{name} pairs cascade_plan with an un-strict zip"
 
-    # And the pairing really does raise on a mismatched length, rather than truncating.
-    with pytest.raises(ValueError, match=r"zip\(\) argument"):
-        list(zip(AS.cascade_plan(81, AS.GROUP_SIZE), ["400", "401"], strict=True))
+
+#: The zip site `build_cascade_payload` pairs its plan against, derived rather than typed —
+#: the line the behavioural test below requires the refusal to come FROM.
+def _cascade_zip_line():
+    import ast
+
+    src = open(os.path.join(TOOLS, "build_cascade_payload.py"), encoding="utf-8").read()
+    lines = [n.lineno for n in ast.walk(ast.parse(src))
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "zip"
+             and "cascade_plan" in ast.get_source_segment(src, n)]
+    assert len(lines) == 1, lines
+    return lines[0]
+
+
+def test_a_short_plan_refuses_at_the_pairing_rather_than_building_a_short_graph(
+        tmp_path, monkeypatch):
+    r"""WAVE 26, F-c2b3d97b — the property the literal-zip demonstration could not hold.
+
+    What stood here was `pytest.raises(ValueError, match=r"zip\(\) argument")` around a
+    `zip` of two operands BUILT INLINE. Both were the test's own, so what it demonstrated
+    was that `zip(strict=True)` raises — a property of CPython, whose wording has been
+    reworded across releases. It could go red on an interpreter bump with nothing in this
+    repo changed, and NO change to `build_cascade_payload` or `build_r2v_payload` could
+    ever turn it red. The repo's actual claim is asserted by AST five lines above; what was
+    missing was the behavioural half.
+
+    So: drive the real `main()`, with `assembly.cascade_plan` returning a plan one group
+    short on its SECOND call — the pairing's call, `build()`'s having already produced the
+    full set of group ids. The refusal must arrive, nothing may be written, and the frame
+    it arrives from must be the zip site this file derives by AST. That last clause is what
+    keeps the test keyed on the repo instead of on the interpreter: drop `strict=True` and
+    the pairing truncates, so either nothing raises (red) or the coverage clause in
+    `gate_slot_frame_index` raises from a different line (red). No `match=` on a built-in's
+    text anywhere.
+    """
+    import build_cascade_payload as bcas
+    from conftest import upload_record
+
+    import sys
+
+    zip_line = _cascade_zip_line()
+    real = AS.cascade_plan
+    fired = {"n": 0}
+
+    def short_at_the_pairing_only(n, group_size):
+        """Full everywhere; one group short ONLY when the pairing itself is the caller.
+
+        Keyed on the caller's line, because `gate_slot_ceiling` calls `cascade_plan` too
+        (`armature_core/assembly.py:877`) and a plain call counter shortened THAT plan and
+        refused three lines above the site under test — measured here before this frame
+        check was added. The line is the AST-derived one, so moving the pairing moves the
+        fixture with it.
+        """
+        if sys._getframe(1).f_lineno == zip_line:
+            fired["n"] += 1
+            return real(n, group_size)[:-1]
+        return real(n, group_size)
+
+    monkeypatch.setattr(AS, "cascade_plan", short_at_the_pairing_only)
+    out = tmp_path / "cascaded"
+    with pytest.raises(Exception) as excinfo:
+        bcas.main(["--uploads", upload_record("outputs/E02/uploads_depth_pershot.json"),
+                   "--out", str(out)])
+
+    frames = [(os.path.basename(tb.tb_frame.f_code.co_filename), tb.tb_lineno)
+              for tb in _traceback_frames(excinfo.tb)]
+    assert ("build_cascade_payload.py", zip_line) in frames, frames
+    assert fired["n"] == 1, fired
+    assert not out.exists() or not list(out.iterdir()), sorted(p.name for p in out.iterdir())
+
+
+def _traceback_frames(tb):
+    while tb is not None:
+        yield tb
+        tb = tb.tb_next
 
 
 # ---- the .png case family's last builders site (wave 8, F-d85dafd9, routed by the

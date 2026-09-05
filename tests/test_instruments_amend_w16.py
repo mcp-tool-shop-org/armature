@@ -49,14 +49,10 @@ SIDE_PROBE_BONES = tuple(f"{j}.{s}" for j in ("shoulder", "elbow", "wrist")
                          for s in ("L", "R"))
 
 
-def _fn_source(filename, name):
-    """The source of one top-level function, for a census that must reach a scratch tree."""
-    src = read_source(filename)
-    tree = ast.parse(src)
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == name:
-            return ast.get_source_segment(src, node)
-    raise LookupError(f"{filename} has no top-level function {name!r}")
+# WAVE 26, F-f893634d — `_fn_source` was this walk written out, byte-identical with the
+# copy in the sibling amend file. ONE home now, in `blender_stub` beside the
+# `read_source` both copies already called.
+_fn_source = blender_stub.fn_source
 
 
 # ===================================================== F-8548f859 — the disarming default
@@ -1114,7 +1110,12 @@ def test_the_subject_arg_refusal_is_in_the_family_so_the_halt_is_refused_not_fai
 #
 # THE POPULATION: every definition of `select_engine` under `tools/` and
 # `tools/superseded/` — seven today, derived by AST rather than typed. `_render_status` is
-# held identical across its nine copies by a census (`test_instruments_amend_w14.py:468`);
+# held identical across its nine copies by a census
+# (`test_instruments_amend_w14.py::test_the_render_status_helper_is_one_implementation_in_every_copy`
+# -- RE-ANCHORED ON THE SYMBOL in wave 26, F-f893634d: that file's `_fn_source` became an
+# alias of `blender_stub.fn_source` and the eight lines it lost moved the cited line onto a
+# docstring, so `TESTS_STALE_ANCHORS_RECORDED`'s row for it stopped being stale. A name
+# survives an edit above it; a line number does not);
 # this function had none, and the copy every other one was carried FROM is the copy that
 # lost the `"clause": "engine"` key the halt line is told apart by.
 #

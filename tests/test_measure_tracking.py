@@ -29,6 +29,7 @@ from PIL import Image
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 
 import _census_nodes as CN  # noqa: E402
+from conftest import RECORD_FAMILIES as _RECORD_FAMILIES  # noqa: E402
 from conftest import repo_file  # noqa: E402
 
 import measure_tracking as mt  # noqa: E402
@@ -300,8 +301,10 @@ def _parametrized_item_count(mod_name, test_name):
 def test_every_output_gated_guard_in_the_suite_is_anchored_on_the_repo_root():
     """The POPULATION, not the site the finding named (wave-16 rule 1).
 
-    Seven module-level constants across six test modules resolve a path under `outputs/`.
-    Six were already repo-anchored; the seventh was this file's `E02_ROOT`. A guard that
+    Seven module-level constants across six test modules resolved a path under `outputs/`
+    when this was written; six were already repo-anchored and the seventh was this file's
+    `E02_ROOT`. Re-measured on the wave-26 branch: EIGHT across six modules, the eighth being
+    `test_gate_s.E02_PAYLOAD_BRANCHES` (F-4c22f096), and every one anchored. A guard that
     resolves against `os.getcwd()` answers a different question from the one it is asked,
     in both directions, and the skip reason it prints reads as though the repo simply has
     no run in it.
@@ -311,12 +314,21 @@ def test_every_output_gated_guard_in_the_suite_is_anchored_on_the_repo_root():
     assert drifting == {}, (
         f"{sorted(drifting)} resolve an `outputs/` path against os.getcwd(); anchor them on "
         f"conftest.repo_file() or os.path.join(REPO, ...) like the other guards")
+    # WAVE 26, F-4c22f096: EIGHT now. `test_gate_s.E02_PAYLOAD_BRANCHES` joined beside
+    # `E02_PAYLOAD_PATHS` — both are assigned from `conftest.payload_record*`, which reaches
+    # `repo_file` through `_record_paths`, so both are anchored. That is the widening this
+    # census demanded and got: `_is_repo_anchored` recognised the single call `repo_file(...)`
+    # and nothing built on it, so a constant resolved through a correct resolver read as
+    # cwd-relative. The anchored set is now DERIVED from conftest to a fixed point
+    # (`_census_nodes.repo_anchored_resolvers`) rather than typed, which is why adding
+    # `payload_record` did not require adding a name here.
     assert sorted(constants) == [
         ("test_aapose_convention", "BANKED"),
         ("test_build_i2v_payload", "BANKED"),
         ("test_build_t2v_payload_a3", "BANK"),
         ("test_donor_gate", "PROBE"),
         ("test_donor_gate", "PROBE_MEASURE"),
+        ("test_gate_s", "E02_PAYLOAD_BRANCHES"),
         ("test_gate_s", "E02_PAYLOAD_PATHS"),
         ("test_measure_tracking", "E02_ROOT"),
     ], sorted(constants)
@@ -351,13 +363,37 @@ def test_a_foreign_working_directory_cannot_arm_or_disarm_an_output_gated_guard(
         "fixture is not measuring what it was written to measure")
 
 
+#: The three tests in THIS module that a gitignored `outputs/` run can skip, named rather
+#: than cited by line (wave 26, F-a15086f0). The docstring below used to identify them as
+#: `test_measure_tracking.py:211/219/228`; measured on `81d6c07`, the three
+#: `@pytest.mark.skipif(not HAVE_E02, ...)` decorators are at :224, :232 and :241, while
+#: line 211 is `assert rec["tool_version"] == mt.TOOL_VERSION`, line 219 is the `def` of
+#: `test_the_anchor_reports_NOT_RUN_rather_than_passing_vacuously` (which does not skip) and
+#: line 228 is a `for r in rows:` inside a test body. The same three decorators sat at
+#: 224/232/241 on `ce66e1f` too, so the citation was never right rather than moved by the
+#: merge fix-up — and it had propagated into a coordinator brief. A name survives an edit
+#: above it; a line number does not, which is why this is the spelling now.
+E02_GATED_HERE = [
+    "test_A1a_lossless_and_A1a_H264_are_NOT_the_same_number",
+    "test_the_anchor_CAN_fail",
+    "test_the_anchor_reproduces_every_published_E02_figure",
+]
+
+
 def test_the_worktree_to_checkout_skip_delta_is_read_off_the_suite_not_re_measured():
     """F-665cd590: PIN the delta by PATH, so the fourth wave does not measure it again.
 
     Measured on 041027c by running the six gated modules in both trees under one recipe: a
-    fresh worktree skips 28 of these, a checkout carrying `outputs/` skips 13, and the
-    15-test difference is EXACTLY the E02 subtree — 12 collected items at
-    `test_gate_s.py:154` (4 arms x 3 seeds) and 3 at `test_measure_tracking.py:211/219/228`.
+    fresh worktree skipped 28 of these, a checkout carrying `outputs/` skipped 13, and the
+    15-test difference was EXACTLY the E02 subtree — 12 collected items in `test_gate_s.py`
+    (4 arms x 3 seeds) and the 3 named in `E02_GATED_HERE` above.
+
+    WAVE 26, F-4c22f096 — the twelve are GONE from this population. The two E02 base
+    payloads are committed under `tests/fixtures/records/E02/payloads/` and resolved by
+    `conftest.payload_record`, so `test_gate_s.py`'s comparison rides every run and the
+    module leaves the gated census entirely. Re-derived here on the branch that did it: the
+    population is 16 across FIVE modules, and the worktree-to-checkout delta is 3, not 15.
+
     The other 13 (aapose 3, build_i2v 2, build_t2v_payload_a3 5, donor_gate 3) gate on E08,
     E09 and E11 banks that are absent in BOTH trees and are part of the common baseline.
     """
@@ -367,25 +403,41 @@ def test_the_worktree_to_checkout_skip_delta_is_read_off_the_suite_not_re_measur
         by_module.setdefault(mod, set()).add(name)
     assert sorted(by_module) == [
         "test_aapose_convention", "test_build_i2v_payload", "test_build_t2v_payload_a3",
-        "test_donor_gate", "test_gate_s", "test_measure_tracking"], sorted(by_module)
-    assert len(gated) == 17, sorted(gated)
+        "test_donor_gate", "test_measure_tracking"], sorted(by_module)
+    assert len(gated) == 16, sorted(gated)
+    assert "test_gate_s" not in by_module, (
+        "test_gate_s is gated on `outputs/` again; if a new comparison needs a live run, its "
+        "record belongs in tests/fixtures/records/ beside the two E02 payloads")
 
-    e02 = {(m, n) for (m, n, _l) in gated if m in ("test_gate_s", "test_measure_tracking")}
+    e02 = {(m, n) for (m, n, _l) in gated if m == "test_measure_tracking"}
     items = sum(_parametrized_item_count(m, n) for m, n in sorted(e02))
-    assert items == 15, sorted(e02)
-    assert _parametrized_item_count(
-        "test_gate_s", "test_an_E04_payload_differs_from_its_E02_base_ONLY_in_the_seed") == 12
-    assert len([n for (m, n, _l) in gated if m == "test_measure_tracking"]) == 3
+    assert items == 3, sorted(e02)
+    assert sorted(n for (_m, n) in e02) == E02_GATED_HERE, sorted(e02)
 
 
 def test_the_three_anchor_tests_are_the_ones_this_delta_names():
-    """The membership behind the 3, so a fourth gated test here is not silently absorbed."""
+    """The membership behind the 3, so a fourth gated test here is not silently absorbed.
+
+    WAVE 26, F-a15086f0 — the list is `E02_GATED_HERE` now, one object, read by this test and
+    by the delta test above, so the names cannot fork the way the line numbers did.
+    """
     mine = sorted(n for (m, n, _l) in CN.output_gated_tests() if m == "test_measure_tracking")
-    assert mine == [
-        "test_A1a_lossless_and_A1a_H264_are_NOT_the_same_number",
-        "test_the_anchor_CAN_fail",
-        "test_the_anchor_reproduces_every_published_E02_figure",
-    ], mine
+    assert mine == E02_GATED_HERE, mine
+
+
+def test_every_name_in_the_delta_list_is_a_test_that_exists_in_this_module():
+    """A name that survives an edit is only better than a line number if it is CHECKED.
+
+    F-a15086f0's own defect in its new spelling would be a name that no longer resolves, so
+    the list is held to the module's actual `def`s, read off the AST.
+    """
+    import ast
+
+    with open(__file__, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    defined = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    absent = [n for n in E02_GATED_HERE if n not in defined]
+    assert absent == [], f"the delta list names tests this module does not define: {absent}"
 
 
 # ===========================================================================
@@ -409,24 +461,32 @@ def test_the_three_anchor_tests_are_the_ones_this_delta_names():
 # what a test reads depends on whether this particular rig has the gitignored run on disk.
 
 
-def test_every_upload_record_fixture_is_a_byte_copy_of_the_live_record():
-    """Where both copies exist, their bytes are equal — per member of `UPLOAD_RECORDS`.
+@pytest.mark.parametrize("family", sorted(_RECORD_FAMILIES))
+def test_every_committed_record_fixture_is_a_byte_copy_of_the_live_record(family):
+    """Where both copies exist, their bytes are equal — per member of every record family.
 
     What this looks like if the tree were wrong in the way this exists to catch: a re-run
     rewrites a live upload map, the rig's suite keeps passing against the changed file while
     CI passes against the unchanged fixture, and the byte pin that exists to stop a silent
     re-topologising of an already-reported experiment binds to whichever copy the runner
     happened to have.
+
+    WAVE 26, F-4c22f096 — parametrized over `conftest.RECORD_FAMILIES` rather than written
+    against `UPLOAD_RECORDS`, so the two E02 base payloads committed this wave are held to
+    the same check on the day they land instead of waiting for someone to notice a second
+    family exists. The census was named `..._upload_record_...`; it was never about uploads,
+    it was about a committed copy of a gitignored record.
     """
     import hashlib
 
-    from conftest import UPLOAD_RECORDS, upload_record_branch, upload_record_paths
+    from conftest import RECORD_FAMILIES, _record_branch, _record_paths
 
-    assert UPLOAD_RECORDS, "the population is empty; nothing below can fire"
+    population, fixture_root = RECORD_FAMILIES[family]
+    assert population, f"the {family} population is empty; nothing below can fire"
     differing, missing, branches = {}, [], {}
-    for relpath in UPLOAD_RECORDS:
-        live, fixture = upload_record_paths(relpath)
-        branches[relpath] = upload_record_branch(relpath)
+    for relpath in population:
+        live, fixture = _record_paths(relpath, fixture_root)
+        branches[relpath] = _record_branch(relpath, fixture_root)
         if not os.path.isfile(fixture):
             missing.append(relpath)
             continue
@@ -439,31 +499,38 @@ def test_every_upload_record_fixture_is_a_byte_copy_of_the_live_record():
 
     # RECORDED in the test's own output, so a reader of a passing run knows which copy was
     # graded — the thing that was invisible.
-    print("upload_record branches: " + json.dumps(branches, sort_keys=True))
+    print(f"{family} record branches: " + json.dumps(branches, sort_keys=True))
 
     assert missing == [], (
-        f"no committed fixture for {missing}; `upload_record` would hand a caller on a "
+        f"no committed fixture for {missing}; the {family} resolver would hand a caller on a "
         f"clone a path that does not exist")
     assert differing == {}, (
         f"the live record and its committed fixture differ: {differing}. The pinned payload "
         f"hashes bind against whichever copy the runner happened to have.")
 
 
-def test_the_upload_record_branch_is_the_one_upload_record_actually_takes():
+@pytest.mark.parametrize("family", sorted(_RECORD_FAMILIES))
+def test_the_record_branch_is_the_one_the_resolver_actually_takes(family):
     """The reporter above must describe the chooser, not a second opinion of it.
 
-    A branch function that drifted from `upload_record` would make the recorded line a
-    plausible identifier beside a verdict rather than evidence.
+    A branch function that drifted from the resolver would make the recorded line a
+    plausible identifier beside a verdict rather than evidence. Parametrized over every
+    record family (wave 26, F-4c22f096); the public `upload_record` / `payload_record` pair
+    are thin wrappers on the same `_record`, and the pair-agreement below is asserted on the
+    public spelling as well so a wrapper cannot quietly point somewhere else.
     """
-    from conftest import (UPLOAD_RECORDS, upload_record, upload_record_branch,
-                          upload_record_paths)
+    from conftest import (RECORD_FAMILIES, _record, _record_branch, _record_paths,
+                          payload_record, upload_record)
 
-    for relpath in UPLOAD_RECORDS:
-        live, fixture = upload_record_paths(relpath)
-        chosen = upload_record(relpath)
-        branch = upload_record_branch(relpath)
+    public = {"uploads": upload_record, "payloads": payload_record}[family]
+    population, fixture_root = RECORD_FAMILIES[family]
+    for relpath in population:
+        live, fixture = _record_paths(relpath, fixture_root)
+        chosen = _record(relpath, fixture_root)
+        branch = _record_branch(relpath, fixture_root)
         assert chosen == {"live": live, "fixture": fixture, "neither": live}[branch], (
             relpath, branch, chosen)
+        assert public(relpath) == chosen, (family, relpath, public(relpath), chosen)
 
 
 def test_the_byte_comparison_can_fail(tmp_path, monkeypatch):

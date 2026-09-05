@@ -1607,25 +1607,15 @@ ALL_USES = uses_refs()
 THIRD_PARTY = [row for row in ALL_USES if not row[1].startswith("actions/")]
 
 
-def test_the_repo_still_has_an_action_to_hold_to_the_pin():
-    """The population may not empty itself silently, and may not shrink to the one row an
-    uncommented exemption happened to leave behind.
-
-    A test parametrized over an empty list reports green, and a pinning law with no subject
-    is the shape four prior gates in this repo took: passing N/N because N was zero.
-    """
-    assert ALL_USES, (
-        "no action is used anywhere under .github/ any more; if that is deliberate this "
-        "test and its siblings have no subject and should be retired deliberately, not "
-        "left reporting green"
-    )
-    #: 16 on the tests branch; 17 on the merged tree (measured at the wave-8 merge: ci.yml 8
-    #: rows of which 2 are local `./.github/actions/*` calls, pages.yml 4, release.yml 9 of
-    #: which 2 are local — 21 `uses:` lines, 17 external rows). ci-packaging's estimate was
-    #: 18; the census read 17 on the tree it exists to measure, so 17 is what stands.
-    assert len(ALL_USES) == 17, [(r[0], r[1]) for r in ALL_USES]
-    assert len(THIRD_PARTY) == 1, [(r[0], r[1]) for r in THIRD_PARTY]
-    assert THIRD_PARTY[0][1] == "pypa/gh-action-pypi-publish", THIRD_PARTY
+# WAVE 26, F-dfdbcff1 — `test_the_repo_still_has_an_action_to_hold_to_the_pin` stood here and
+# its three clauses now ride `test_the_pinning_census_is_every_external_action_in_the_tree`
+# below, with their comments intact. Two near-identically named SHA-pinning censuses asserted
+# the same two properties over the same population in the same file: the non-empty clause and
+# the `len(ALL_USES) == 17` size pin here, membership there. Doubled parametrization inflated
+# the count of a law with ONE subject and left it ambiguous which census a future edit was
+# meant to keep in step. `ALL_USES` and `THIRD_PARTY` stay — the fourth-party-name test below
+# reads them, and the size and identity clauses that used to live here now sit beside the
+# membership set they were always about.
 
 
 def test_a_fourth_party_action_cannot_hide_under_an_actions_shaped_name():
@@ -1641,27 +1631,13 @@ def test_a_fourth_party_action_cannot_hide_under_an_actions_shaped_name():
                 f"prefix; the prefix is not provenance")
 
 
-@pytest.mark.parametrize("source,action,ref,line", ALL_USES)
-def test_an_action_is_pinned_to_a_commit_and_says_which_version(source, action, ref, line):
-    """The npm half of this law is pinned by a test; the PyPI half was pinned by a comment.
-
-    `npm install -g npm@^11.5.1` is held to a constraint by
-    `test_the_publish_toolchain_is_not_resolved_on_release_day`. The action beside it — which
-    performs the upload itself, the step with no compensator — carried a 40-hex SHA and a
-    comment ending "Bump deliberately, by re-resolving", and nothing anywhere asserted it:
-    substituting the branch ref it held until 2026-09-04 left both guarding tests green.
-
-    The trailing `# vX.Y.Z` is part of the requirement, not decoration: a bare hash is
-    unreadable, and a bump is reviewed by comparing the version a human can read.
-    """
-    assert re.fullmatch(r"[0-9a-f]{40}", ref), (
-        f"{source} pins {action} to {ref!r}, which is not a full commit SHA; a tag or branch "
-        f"is re-resolved on the day the step runs:\n{line}"
-    )
-    assert re.search(r"#\s*v?\d+\.\d+(\.\d+)?", line), (
-        f"{source} pins {action} to a bare hash with no version beside it; nobody can review "
-        f"a bump they cannot read:\n{line}"
-    )
+# WAVE 26, F-dfdbcff1 — `test_an_action_is_pinned_to_a_commit_and_says_which_version` stood
+# here, parametrized over `ALL_USES` and asserting the same 40-hex clause and the same
+# `# vX.Y.Z` clause, with the same two failure messages, as
+# `test_every_action_is_pinned_to_a_commit_and_says_which_version` below over `uses_refs()`
+# — the same population under a different spelling. Its docstring's own history (the npm half
+# held by a test, the PyPI half held only by a comment, and the branch ref that left both
+# guarding tests green until 2026-09-04) is preserved on the survivor.
 
 
 # -- the dependency scan: does it run on every event a lockfile change can arrive on? -------
@@ -2093,12 +2069,35 @@ EVERY_USE_TODAY = sorted({
 
 
 def test_the_pinning_census_is_every_external_action_in_the_tree():
-    """Size and membership, before the property. `./` paths ride the checkout and are not refs."""
+    """Size and membership, before the property. `./` paths ride the checkout and are not refs.
+
+    WAVE 26, F-dfdbcff1 — the three clauses of the retired
+    `test_the_repo_still_has_an_action_to_hold_to_the_pin` are folded in below, with their
+    comments intact, so the law's size, its non-emptiness and its membership are asserted in
+    ONE place rather than in two that a future edit could keep only half in step with.
+    """
     seen = sorted({(source, action) for source, action, _ref, _line in uses_refs()})
     assert seen == EVERY_USE_TODAY, (
         "the set of external actions under .github/ has changed; each new one needs a SHA "
         "and a version comment before this list is updated:\n  "
         + "\n  ".join(f"{s}: {a}" for s, a in sorted(set(seen) ^ set(EVERY_USE_TODAY))))
+
+    # The population may not empty itself silently, and may not shrink to the one row an
+    # uncommented exemption happened to leave behind. A test parametrized over an empty list
+    # reports green, and a pinning law with no subject is the shape four prior gates in this
+    # repo took: passing N/N because N was zero.
+    assert ALL_USES, (
+        "no action is used anywhere under .github/ any more; if that is deliberate this "
+        "test and its siblings have no subject and should be retired deliberately, not "
+        "left reporting green"
+    )
+    #: 16 on the tests branch; 17 on the merged tree (measured at the wave-8 merge: ci.yml 8
+    #: rows of which 2 are local `./.github/actions/*` calls, pages.yml 4, release.yml 9 of
+    #: which 2 are local — 21 `uses:` lines, 17 external rows). ci-packaging's estimate was
+    #: 18; the census read 17 on the tree it exists to measure, so 17 is what stands.
+    assert len(ALL_USES) == 17, [(r[0], r[1]) for r in ALL_USES]
+    assert len(THIRD_PARTY) == 1, [(r[0], r[1]) for r in THIRD_PARTY]
+    assert THIRD_PARTY[0][1] == "pypa/gh-action-pypi-publish", THIRD_PARTY
 
 
 @pytest.mark.parametrize("source,action,ref,line", uses_refs())
@@ -2109,6 +2108,14 @@ def test_every_action_is_pinned_to_a_commit_and_says_which_version(source, actio
     reviewed" is a property of the ref, not of who owns the repository it points at. The
     trailing `# vX.Y.Z` is part of the requirement: a bare hash is unreadable, and a bump is
     reviewed by comparing the version a human can read.
+
+    WAVE 26, F-dfdbcff1 — this is the law's ONE home in this file now, and it carries the
+    history the retired duplicate above recorded: `npm install -g npm@^11.5.1` is held to a
+    constraint by `test_the_publish_toolchain_is_not_resolved_on_release_day`; the action
+    beside it — which performs the upload itself, the step with no compensator — carried a
+    40-hex SHA and a comment ending "Bump deliberately, by re-resolving", and nothing
+    anywhere asserted it, so substituting the branch ref it held until 2026-09-04 left both
+    guarding tests green.
     """
     assert re.fullmatch(r"[0-9a-f]{40}", ref), (
         f"{source} pins {action} to {ref!r}, which is not a full commit SHA; a tag is "
@@ -2636,8 +2643,14 @@ def _joined_relpath(node, env):
     return "/".join(p.strip("/") for p in parts if p.strip("/"))
 
 
-def paths_the_suite_guards():
-    """Every existing repo path a test module names, walked out of `tests/**` by AST.
+def repo_paths_the_suite_opens(tests_dir=None, repo=None):
+    """Every existing repo path a test module names, walked out of a tests tree by AST.
+
+    WAVE 26, F-ec944439 — this walk was written out TWICE in this file, identically, once in
+    `paths_the_suite_guards` and once in `paths_the_suite_opens_but_git_ignores`, so the two
+    halves of a partition were two walks that happened to agree. It has one home now, and it
+    takes `tests_dir` / `repo` so both halves can be driven against a scratch tree instead of
+    only against the checkout the session happens to be running on.
 
     Derivation, stated because a census whose population is typed is the defect class this
     file keeps finding: each test module is parsed; `REPO` seeds an environment of path
@@ -2647,11 +2660,13 @@ def paths_the_suite_guards():
     disk. Paths that resolve through a variable filename are not resolvable this way and are
     not claimed — this is a floor on what the suite reads, not a ceiling.
     """
+    tests_dir = TESTS_DIR if tests_dir is None else tests_dir
+    repo = REPO if repo is None else repo
     found = set()
-    for name in sorted(os.listdir(TESTS_DIR)):
+    for name in sorted(os.listdir(tests_dir)):
         if not name.endswith(".py"):
             continue
-        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+        with open(os.path.join(tests_dir, name), encoding="utf-8") as fh:
             tree = ast.parse(fh.read())
         env = {"REPO": ""}
         for _ in range(2):
@@ -2664,25 +2679,32 @@ def paths_the_suite_guards():
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 rel = _joined_relpath(node, env)
-                if rel and os.path.exists(os.path.join(REPO, rel)):
+                if rel and os.path.exists(os.path.join(repo, rel)):
                     found.add(rel)
+    return found
+
+
+def paths_the_suite_guards(tests_dir=None, repo=None):
+    """The half of the partition that a commit CAN carry a change to — see the walk above."""
     # WAVE-16 MERGE (coordinator, 2026-09-04): a path git IGNORES exists on this checkout (rig artifacts under
     # `outputs/`) and is opened by a test, but no commit can ever carry a change to it, so no
     # trigger filter can run on it — it is not a file the suite guards in the sense this census
     # measures. Partitioned into its own derived category (`paths_the_suite_opens_but_git_ignores`)
     # rather than dropped: the wave-16 tests amend anchored `E02_ROOT` through `conftest.repo_file`
     # and the walk found `outputs/E02/runs` for the first time.
-    return sorted(found - set(_git_ignored(found)))
+    found = repo_paths_the_suite_opens(tests_dir, repo)
+    return sorted(found - set(_git_ignored(found, repo)))
 
 
-def _git_ignored(paths):
+def _git_ignored(paths, repo=None):
     """The members of `paths` that `git check-ignore` says are ignored — asked of git, not typed."""
+    repo = REPO if repo is None else repo
     paths = sorted(paths)
     if not paths:
         return []
     # NUL-terminated both ways (`-z`): text-mode stdin on Windows turns "\n" into "\r\n" and
     # git then echoes the path quoted with the CR inside it — measured on the first cut.
-    proc = subprocess.run(["git", "-C", REPO, "check-ignore", "--stdin", "-z"],
+    proc = subprocess.run(["git", "-C", repo, "check-ignore", "--stdin", "-z"],
                           input=b"\0".join(x.encode("utf-8") for x in paths) + b"\0",
                           capture_output=True)
     # exit 0: some ignored; 1: none ignored; 128 with "not a git repository" is a synthetic
@@ -2695,28 +2717,14 @@ def _git_ignored(paths):
     return sorted(x.decode("utf-8") for x in proc.stdout.split(b"\0") if x)
 
 
-def paths_the_suite_opens_but_git_ignores():
-    """The partition the walk above sets aside: repo paths a test opens that git ignores."""
-    found = set()
-    for name in sorted(os.listdir(TESTS_DIR)):
-        if not name.endswith(".py"):
-            continue
-        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
-            tree = ast.parse(fh.read())
-        env = {"REPO": ""}
-        for _ in range(2):
-            for node in ast.walk(tree):
-                if (isinstance(node, ast.Assign) and len(node.targets) == 1
-                        and isinstance(node.targets[0], ast.Name)):
-                    rel = _joined_relpath(node.value, env)
-                    if rel is not None:
-                        env[node.targets[0].id] = rel
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                rel = _joined_relpath(node, env)
-                if rel and os.path.exists(os.path.join(REPO, rel)):
-                    found.add(rel)
-    return _git_ignored(found)
+def paths_the_suite_opens_but_git_ignores(tests_dir=None, repo=None):
+    """The partition `paths_the_suite_guards` sets aside: repo paths a test opens that git ignores.
+
+    ONE walk with its sibling (F-ec944439); the two used to be byte-identical copies, so the
+    partition was two independent derivations that could drift apart without either half
+    saying so.
+    """
+    return _git_ignored(repo_paths_the_suite_opens(tests_dir, repo), repo)
 
 
 #: The population as measured 2026-09-04 by the walk above. Asserted, so a test that starts
@@ -2789,6 +2797,14 @@ GUARDED_TODAY = [
     "tests/fixtures/E12-w3-camera-i2v.api.json",
     "tests/fixtures/canon",
     "tests/fixtures/canon/probe.surfaces.json",
+    # WAVE 26 (tests, F-4c22f096): the committed byte copies of two gitignored `outputs/`
+    # RECORDS -- `tests/fixtures/records/E02/payloads/{A0,A1b}.json`, resolved by
+    # `conftest.payload_record` so `test_gate_s.py`'s twelve-item E04-against-E02 comparison
+    # stops skipping on every clone and every CI job. A census widening, not a trigger gap:
+    # ci.yml already carries `tests/**` on push and pull_request, which the property below
+    # re-checks rather than assumes. Re-derived branch-local with `==` in the commit that
+    # added the fixtures: 69 -> 70.
+    "tests/fixtures/records",
     "tests/fixtures/uploads",
     # my own new test opens this by path, to name the site the widening was written for
     "tests/test_openpose_convention.py",
@@ -3019,11 +3035,89 @@ def test_ci_runs_on_every_file_the_suite_guards(trigger):
     )
 
 
+def _scratch_repo_with_an_ignored_path(tmp_path):
+    """A `git init`-ed tree with a `.gitignore`, one ignored file and one tracked file, and a
+    tests/ module that opens both by `os.path.join(REPO, ...)`.
+
+    Built rather than found, so the partition can be exercised on a machine that carries no
+    rig artifacts — which is every CI machine and every fresh clone.
+    """
+    repo = tmp_path / "scratch-repo"
+    (repo / "tests").mkdir(parents=True)
+    (repo / "outputs" / "E99").mkdir(parents=True)
+    (repo / "notes").mkdir()
+    (repo / ".gitignore").write_text("outputs/\n", encoding="utf-8")
+    (repo / "outputs" / "E99" / "run.json").write_text("{}", encoding="utf-8")
+    (repo / "notes" / "kept.md").write_text("# kept\n", encoding="utf-8")
+    (repo / "tests" / "test_scratch.py").write_text(
+        "import os\n"
+        "REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\n"
+        "def test_opens_both():\n"
+        "    open(os.path.join(REPO, 'outputs', 'E99', 'run.json'))\n"
+        "    open(os.path.join(REPO, 'notes', 'kept.md'))\n",
+        encoding="utf-8")
+    proc = subprocess.run(["git", "init", "-q", str(repo)], capture_output=True)
+    assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
+    return str(repo), str(repo / "tests")
+
+
+def test_the_partition_puts_a_gitignored_path_on_one_side_and_only_one(tmp_path):
+    """WAVE 26, F-ec944439 — the property, held on every machine instead of on one.
+
+    What stood here was a `for rel in ignored:` loop plus an
+    `if os.path.isdir(REPO/outputs/E02/runs): assert ...`. Measured on `81d6c07` in an
+    isolated worktree: `paths_the_suite_opens_but_git_ignores()` returned `[]` and
+    `outputs/E02/runs` did not exist, so the loop body never ran and the `if` was false —
+    the test passed having evaluated no assertion. The same holds on every ubuntu-latest
+    job, because a fresh clone carries no gitignored `outputs/`; only the main checkout,
+    which carries the rig artifacts, exercised anything. CI is the one place this census
+    exists to defend, and the partition was its blind spot there.
+
+    So the partition is driven on a tree this test BUILDS: a `git init`-ed scratch repo
+    with `outputs/` ignored, one ignored file and one tracked file, both opened by a
+    test-shaped module. Both halves are the file's own walks, seamed on `(tests_dir, repo)`
+    rather than reimplemented here.
+    """
+    repo, tests_dir = _scratch_repo_with_an_ignored_path(tmp_path)
+    opened = repo_paths_the_suite_opens(tests_dir, repo)
+    ignored = paths_the_suite_opens_but_git_ignores(tests_dir, repo)
+    guarded = paths_the_suite_guards(tests_dir, repo)
+
+    assert opened == {"outputs/E99/run.json", "notes/kept.md"}, sorted(opened)
+    assert ignored == ["outputs/E99/run.json"], ignored
+    assert guarded == ["notes/kept.md"], guarded
+    # A partition, asserted as one: disjoint, and together the whole of what was opened.
+    assert set(ignored).isdisjoint(guarded), (ignored, guarded)
+    assert set(ignored) | set(guarded) == opened, (ignored, guarded, sorted(opened))
+
+
+def test_the_partition_census_goes_red_when_an_ignored_path_reaches_the_guarded_half(tmp_path):
+    """The mutation, on the same scratch tree: drop the `.gitignore` and the ignored file
+    must MOVE to the guarded half rather than staying partitioned.
+
+    Without this direction, a `paths_the_suite_guards` that had stopped subtracting the
+    partition at all would still satisfy the test above's membership clauses only by
+    accident; here the same path is required to answer differently when git's answer
+    changes, which is the one thing the partition is for.
+    """
+    repo, tests_dir = _scratch_repo_with_an_ignored_path(tmp_path)
+    assert paths_the_suite_opens_but_git_ignores(tests_dir, repo) == ["outputs/E99/run.json"]
+    os.remove(os.path.join(repo, ".gitignore"))
+    assert paths_the_suite_opens_but_git_ignores(tests_dir, repo) == []
+    assert paths_the_suite_guards(tests_dir, repo) == ["notes/kept.md", "outputs/E99/run.json"]
+
+
 def test_a_gitignored_path_a_test_opens_is_partitioned_not_filtered():
     """WAVE-16 MERGE (coordinator, 2026-09-04): the partition is DERIVED from git and asserted non-empty on a checkout
     that carries rig artifacts, so the category cannot silently become the whole census's blind spot.
     On a fresh worktree (no `outputs/`) the walk finds nothing to partition and the census is the
-    same list — both directions are stated here."""
+    same list — both directions are stated here.
+
+    WAVE 26, F-ec944439 — kept as the REAL-TREE direction, and no longer the only one: on a
+    machine with no rig artifacts its loop body does not run, which is why the two scratch-tree
+    tests above exist. What it still adds is that the walk's answer on the actual checkout
+    agrees with git's, over paths nobody wrote for a fixture.
+    """
     ignored = paths_the_suite_opens_but_git_ignores()
     for rel in ignored:
         assert subprocess.run(["git", "-C", REPO, "check-ignore", "-q", rel]).returncode == 0, rel

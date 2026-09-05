@@ -1,0 +1,520 @@
+{
+ "106": {
+  "class_type": "UNETLoader",
+  "inputs": {
+   "unet_name": "wan2.1_vace_14B_fp16.safetensors",
+   "weight_dtype": "default"
+  }
+ },
+ "105": {
+  "class_type": "VAELoader",
+  "inputs": {
+   "vae_name": "wan_2.1_vae.safetensors"
+  }
+ },
+ "110": {
+  "class_type": "CLIPLoader",
+  "inputs": {
+   "clip_name": "umt5_xxl_fp16.safetensors",
+   "type": "wan",
+   "device": "default"
+  }
+ },
+ "48": {
+  "class_type": "ModelSamplingSD3",
+  "inputs": {
+   "shift": 8.0,
+   "model": [
+    "106",
+    0
+   ]
+  }
+ },
+ "6": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "text": "A lone armored warrior stands in place and turns slowly on the spot. Dark plate armor, horned helm, heavy cloak. Neutral studio background, even lighting.",
+   "clip": [
+    "110",
+    0
+   ]
+  }
+ },
+ "7": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "text": "blurry, low quality, jpeg artifacts, extra limbs, deformed hands, deformed face, text, watermark, still image, static",
+   "clip": [
+    "110",
+    0
+   ]
+  }
+ },
+ "134": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "71836f47b84b2f8170c6294177b8dff441e92c4529c806b01bd09018566b2d21.png"
+  }
+ },
+ "200": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "1ec650b4fc0e2d68008f9838d76651eb5ce6de1acf34cffd96a23cc548e00039.png"
+  }
+ },
+ "201": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "8003d280895498457d4b1e2fe9329468380902b11f127b78353d7747e7d8d5c1.png"
+  }
+ },
+ "202": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "783ef7f2d292425cd43e3c487e9feca1c8fa2b9ecd3b641e83f5833a669b2264.png"
+  }
+ },
+ "203": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "a84ad72ce51147cf83e56843ec160c200ef9bd04786b54dbadd01080017ec0cf.png"
+  }
+ },
+ "204": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "0affa598e665266b9b1c798cc0108da6a1f6759264ad37b95d11c9405803d75e.png"
+  }
+ },
+ "205": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "da0cb25da7c8e9e988e08767150adf02630189e049c2c546c149522ccbd3193e.png"
+  }
+ },
+ "206": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "0b1fc928c7a862b5bbddfe4b5e5ebfa200a0cf395007297207c6af8400f8bcfa.png"
+  }
+ },
+ "207": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "385906a99886838e6cb52d1f5921fc0633494ece38c1852e0fb794af3accf1cd.png"
+  }
+ },
+ "208": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "01243806900da04c129c204b1738ac835a6c10123d05c56eab561c974dd33cc9.png"
+  }
+ },
+ "209": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "173b2d3d866c9897fe1cde19dd61c0632777e0c5849f6440e35bfe2820b02d41.png"
+  }
+ },
+ "210": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "050580b74247539ab5be519fb2b537c3560d7fc16564d2136cf90ad35f74babb.png"
+  }
+ },
+ "211": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "6941660fb78d164deacb78fe5ba4c80217c43a74fef744272832da5cdc7dd3ad.png"
+  }
+ },
+ "212": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "ab197a207dcb1627811c7ad95e5fbf8215e5c1932c4db77b6a35d3b90243866a.png"
+  }
+ },
+ "213": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "4751a53c9a6456c0bbcc157a83bd1b0c4090edd69d0938be7aa38d43615a94f1.png"
+  }
+ },
+ "214": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "9d98fc6b28f4033bb88b590aaa1c8696d8154e7466ec0316cb68fe1ef1421a76.png"
+  }
+ },
+ "215": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "ae23aa874be9e4c08e6f07f2a3ed13acfb2fc8dd014cb29ee7500700bffdc508.png"
+  }
+ },
+ "216": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "1d12a3fce11983650b2b295c013708cdfc0bd3abd31dcfda0f77d54457449d0f.png"
+  }
+ },
+ "217": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "73275a11d22c368b76b19b4b9249cf57a9a36b1c26d5ea1feaf8693a11bda601.png"
+  }
+ },
+ "218": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "976748a93b1193f1fcdeffad41d14b442d33436f2d8edfaff623767bde1c4251.png"
+  }
+ },
+ "219": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "7a78558fa235b6edb2f8a1b9464af04d9d25b7eaf37fe06f80a80b63fe94143b.png"
+  }
+ },
+ "220": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "68b04c1cb1e01cab4541ad7f965af6a8ee27c80766e5220278fd1273f66d1ad7.png"
+  }
+ },
+ "221": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "9a704efb4d6a305481569ae285a594b32c8bec72877753419869a21aa710da15.png"
+  }
+ },
+ "222": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "92e2857ddff388dbddd37d0d1eebd90c44bb0f430c0f722ff6cdeff50f332a82.png"
+  }
+ },
+ "223": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "269cc478f111bbd71ffd70a291f10c7517fe5740bf0e69f609e9834cea1cf585.png"
+  }
+ },
+ "224": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "225e5a887593c64510470399b115d2931a92cae8146cd06a7973e6847460b74a.png"
+  }
+ },
+ "225": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "28839eb1122c3eb5d9bb82362c7c5f8fc4b2829da2d4e2f3044295263989367e.png"
+  }
+ },
+ "226": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "f02f157b6f1b3b1cb8a882c7530cd90f3835329a326d235b164df87845fc9eac.png"
+  }
+ },
+ "227": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "702071a031690d7a25565253d5ea682874a53aa157c6c41dc4f32bc3594253b4.png"
+  }
+ },
+ "228": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "51af19888a4a99246d543ab3b9ec0953c78a282d7c80ddf64b9c4b2488e6e765.png"
+  }
+ },
+ "229": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "f260e9a5668cfc85acbf9c545b89154d24e7f1e9e17ae6e93feba55566bbdf80.png"
+  }
+ },
+ "230": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "d2df2dd49ef486d6406e5d75c41271a1a39021c9e53b9fbf1e5a4eda7f69bcbd.png"
+  }
+ },
+ "231": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "81714ff4a4eaee70cf508629104c014820aa716cef2ec9dcbca01adb6fb5d736.png"
+  }
+ },
+ "232": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "e87204622c446a988eaee3cb1d1de8a6f0a1b84fed70e6591ab2bd12e1028a2d.png"
+  }
+ },
+ "300": {
+  "class_type": "BatchImagesNode",
+  "inputs": {
+   "images.image0": [
+    "200",
+    0
+   ],
+   "images.image1": [
+    "201",
+    0
+   ],
+   "images.image2": [
+    "202",
+    0
+   ],
+   "images.image3": [
+    "203",
+    0
+   ],
+   "images.image4": [
+    "204",
+    0
+   ],
+   "images.image5": [
+    "205",
+    0
+   ],
+   "images.image6": [
+    "206",
+    0
+   ],
+   "images.image7": [
+    "207",
+    0
+   ],
+   "images.image8": [
+    "208",
+    0
+   ],
+   "images.image9": [
+    "209",
+    0
+   ],
+   "images.image10": [
+    "210",
+    0
+   ],
+   "images.image11": [
+    "211",
+    0
+   ],
+   "images.image12": [
+    "212",
+    0
+   ],
+   "images.image13": [
+    "213",
+    0
+   ],
+   "images.image14": [
+    "214",
+    0
+   ],
+   "images.image15": [
+    "215",
+    0
+   ],
+   "images.image16": [
+    "216",
+    0
+   ],
+   "images.image17": [
+    "217",
+    0
+   ],
+   "images.image18": [
+    "218",
+    0
+   ],
+   "images.image19": [
+    "219",
+    0
+   ],
+   "images.image20": [
+    "220",
+    0
+   ],
+   "images.image21": [
+    "221",
+    0
+   ],
+   "images.image22": [
+    "222",
+    0
+   ],
+   "images.image23": [
+    "223",
+    0
+   ],
+   "images.image24": [
+    "224",
+    0
+   ],
+   "images.image25": [
+    "225",
+    0
+   ],
+   "images.image26": [
+    "226",
+    0
+   ],
+   "images.image27": [
+    "227",
+    0
+   ],
+   "images.image28": [
+    "228",
+    0
+   ],
+   "images.image29": [
+    "229",
+    0
+   ],
+   "images.image30": [
+    "230",
+    0
+   ],
+   "images.image31": [
+    "231",
+    0
+   ],
+   "images.image32": [
+    "232",
+    0
+   ]
+  }
+ },
+ "301": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "filename_prefix": "E02/A1b/batchprobe",
+   "images": [
+    "300",
+    0
+   ]
+  }
+ },
+ "49": {
+  "class_type": "WanVaceToVideo",
+  "inputs": {
+   "width": 480,
+   "height": 832,
+   "length": 33,
+   "batch_size": 1,
+   "strength": 1.0,
+   "positive": [
+    "6",
+    0
+   ],
+   "negative": [
+    "7",
+    0
+   ],
+   "vae": [
+    "105",
+    0
+   ],
+   "reference_image": [
+    "134",
+    0
+   ],
+   "control_video": [
+    "300",
+    0
+   ]
+  }
+ },
+ "3": {
+  "class_type": "KSampler",
+  "inputs": {
+   "seed": 654654950714624,
+   "steps": 30,
+   "cfg": 6,
+   "sampler_name": "uni_pc",
+   "scheduler": "simple",
+   "denoise": 1,
+   "model": [
+    "48",
+    0
+   ],
+   "positive": [
+    "49",
+    0
+   ],
+   "negative": [
+    "49",
+    1
+   ],
+   "latent_image": [
+    "49",
+    2
+   ]
+  }
+ },
+ "58": {
+  "class_type": "TrimVideoLatent",
+  "inputs": {
+   "samples": [
+    "3",
+    0
+   ],
+   "trim_amount": [
+    "49",
+    3
+   ]
+  }
+ },
+ "8": {
+  "class_type": "VAEDecode",
+  "inputs": {
+   "samples": [
+    "58",
+    0
+   ],
+   "vae": [
+    "105",
+    0
+   ]
+  }
+ },
+ "68": {
+  "class_type": "CreateVideo",
+  "inputs": {
+   "fps": 16,
+   "bit_depth": 8,
+   "images": [
+    "8",
+    0
+   ]
+  }
+ },
+ "114": {
+  "class_type": "SaveVideo",
+  "inputs": {
+   "filename_prefix": "video/E02_A1b",
+   "format": "auto",
+   "codec": "auto",
+   "video": [
+    "68",
+    0
+   ]
+  }
+ },
+ "302": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "filename_prefix": "E02/A1b/lossless",
+   "images": [
+    "8",
+    0
+   ]
+  }
+ }
+}

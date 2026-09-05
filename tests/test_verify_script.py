@@ -35,6 +35,7 @@ from conftest import REPO
 
 from test_ci_workflows import (
     CI,
+    _code_only,
     _has_a_ceiling,
     _install_tokens,
     clean_room_script,
@@ -312,6 +313,234 @@ def test_both_implementations_install_the_sdist_and_then_run_it():
             f"archive, so a broken sdist reaches PyPI with this leg green")
         assert re.search(r"armature[\"'\s]+modules", text), (
             f"{impl} installs the sdist and never runs it")
+
+
+# -- WAVE 26, F-1ebf099e: the parity guard counts what the rooms DO ------------------------
+#
+# `test_the_two_implementations_of_the_packaging_leg_have_the_same_number_of_clean_rooms`
+# above counts ROOMS (`-m venv`), and `test_both_implementations_install_the_sdist_and_then_
+# _run_it` asserts both install an sdist. Neither covers a property on which the two
+# implementations actually differ, and both differences are on the artifact the leg judges:
+#
+#   (1) `verify.ps1:233-236` EMPTIES `dist/` before building; the composite action never
+#       clears it. `python -m build` does not clear `dist/` either.
+#   (2) `verify.ps1:246-262` selects the wheel and the sdist BY NAME, derived from
+#       `pyproject.toml` (`$distName-$version.tar.gz` / `-py3-none-any.whl`); the action
+#       installs `dist/*.tar.gz` and `dist/*.whl` — a GLOB.
+#
+# A grep for `distName`, `Remove-Item` and `dist/*` across `tests/*.py` on `81d6c07` found no
+# assertion on either. The consequence is the one `verify.ps1`'s own comment records as
+# MEASURED on this rig: `E:\AI\armature\dist` held an `armature_studio-0.2.1` pair beside the
+# 0.3.0 pair, and `twine check dist\*` issued its verdict over four files, two of them three
+# weeks old. The leg whose whole point is that it runs what CI runs diverges on WHICH artifact
+# it runs and on whether a stale one can be present — and the parity guard reported parity.
+#
+# The census below is keyed on WHAT EACH IMPLEMENTATION DOES per axis, not on a token count.
+
+
+def clears_dist_before_building(text):
+    """Does this implementation remove `dist/` BEFORE it builds? `(cleared, build_at)`.
+
+    Both languages, because the two implementations are written in two: PowerShell's
+    `Remove-Item ... dist` and bash's `rm -rf dist`. The ORDER is the property — a clear that
+    runs after the build judges nothing — so both positions are returned rather than a bool.
+
+    Comments stripped first, through `test_ci_workflows._code_only`. Measured while writing
+    this: `verify.ps1` names `-m build` in TWO comments (`:128` and `:248`) above the line
+    that runs it (`:302`), so a raw-text reader placed the build at offset 8417 and the clear
+    at 17570 and reported the clear as coming second — a census reading prose as code, in the
+    test written to catch exactly that.
+    """
+    text = _code_only(text)
+    clear = None
+    for match in re.finditer(r"(?im)^[^\S\r\n]*(?:Remove-Item[^\r\n]*?\bdist\b"
+                             r"|rm\s+-rf\s+[\"']?dist)", text):
+        clear = match.start() if clear is None else clear
+    build = None
+    for match in re.finditer(r"-m\s+build\b", text):
+        build = match.start() if build is None else build
+    return clear, build
+
+
+def artifact_selection(text):
+    """How this implementation NAMES the two artifacts it installs: `"glob"` or `"derived"`.
+
+    `derived` means the name is computed from `pyproject.toml` (the distribution name and the
+    version), so a stale sibling in `dist/` cannot be selected. `glob` means `dist/*.whl` /
+    `dist/*.tar.gz`, which selects whatever is there.
+
+    Comments are stripped through `test_ci_workflows._code_only` — the home for that
+    predicate — because BOTH implementations discuss their own selection in prose beside it,
+    and a census satisfied by prose is the shape this wave closed twice over.
+    """
+    text = _code_only(text)
+    globbed = bool(re.search(r"dist[/\\]\*\.(?:whl|tar\.gz)", text))
+    derived = bool(re.search(r"(?i)(?:distName|DIST_NAME)", text)
+                   and re.search(r"(?i)(?:\$version|\$\{VERSION\}|\$VERSION)", text))
+    if derived and not globbed:
+        return "derived"
+    if globbed and not derived:
+        return "glob"
+    return "both" if derived else "neither"
+
+
+def _packaging_leg_implementations():
+    """`{name: text}` for the two implementations of one leg. ONE population, both axes."""
+    return {"the clean-room action": clean_room_script(), "verify.ps1": VERIFY}
+
+
+#: The axes on which the two implementations of the packaging leg are MEASURED to disagree on
+#: this branch, with the finding and the domain that closes each. Both are ci-packaging's
+#: half, landing in this same wave (`wave-26/seams-inbox.md` SEAM 4 §2, which carries the
+#: exact strings): `F-1d0f6c82` adds the `rm -rf dist` + emptiness check to the action, and
+#: `F-2a90c1ee` replaces `dist/*.tar.gz` / `dist/*.whl` with names derived from
+#: `pyproject.toml`. This table is NOT a ceiling: the assertions below require each listed
+#: axis to still be OPEN, so the moment the action gains the property its row must be deleted
+#: or this file goes red. It cannot rot into an exemption the way a dated count can.
+AXES_LANDING_THIS_WAVE = {
+    "dist is cleared before the build":
+        "ci-packaging F-1d0f6c82 — the action gains `rm -rf dist` plus an emptiness check "
+        "before `python -m build`; verify.ps1 has carried it since wave 23",
+    "the artifacts are selected by a derived name":
+        "ci-packaging F-2a90c1ee — the action's `dist/*.tar.gz` / `dist/*.whl` become "
+        "`${DIST_NAME}-${VERSION}...` read out of pyproject.toml, the shape verify.ps1 uses",
+}
+
+
+def test_verify_clears_dist_before_it_builds_and_the_clear_comes_first():
+    """Axis (1) on the implementation that carries it, unconditionally.
+
+    An ordering, not a presence: a clear that runs after `-m build` deletes the thing the leg
+    was about to judge, and a leg with no clear at all judges whatever the rig left behind.
+    """
+    clear, build = clears_dist_before_building(VERIFY)
+    assert clear is not None, (
+        "verify.ps1 no longer clears `dist/`; `python -m build` does not clear it either, so "
+        "`twine check dist\\*` would range over artifacts this run did not build")
+    assert build is not None, "verify.ps1 no longer builds anything"
+    assert clear < build, (
+        "verify.ps1 clears `dist/` AFTER building into it; the clear must come first or the "
+        "leg judges nothing")
+
+
+def test_verify_selects_its_artifacts_by_a_derived_name_not_a_glob():
+    """Axis (2) on the implementation that carries it, unconditionally."""
+    assert artifact_selection(VERIFY) == "derived", (
+        "verify.ps1 stopped deriving the wheel and sdist names from pyproject.toml; a glob "
+        "selects whatever version happens to be in `dist/`")
+
+
+def test_the_two_implementations_of_the_packaging_leg_agree_on_every_axis():
+    """The parity claim, keyed on what the rooms DO (F-1ebf099e).
+
+    The pre-existing guard counted rooms; a leg with the same number of rooms can still build
+    from a directory one implementation clears and the other does not, and install an
+    artifact one selects by name and the other selects by glob. Those are the two axes on
+    which they were measured to differ.
+
+    Axes listed in `AXES_LANDING_THIS_WAVE` are exempted here and REQUIRED to still be open by
+    the test below, so this is a hand-off with a deadline rather than an allowlist.
+    """
+    impls = _packaging_leg_implementations()
+    disagreements = {}
+
+    if "dist is cleared before the build" not in AXES_LANDING_THIS_WAVE:
+        cleared = {name: clears_dist_before_building(text)[0] is not None
+                   for name, text in impls.items()}
+        if len(set(cleared.values())) > 1:
+            disagreements["dist is cleared before the build"] = cleared
+
+    if "the artifacts are selected by a derived name" not in AXES_LANDING_THIS_WAVE:
+        selection = {name: artifact_selection(text) for name, text in impls.items()}
+        if len(set(selection.values())) > 1:
+            disagreements["the artifacts are selected by a derived name"] = selection
+
+    assert disagreements == {}, (
+        f"the two implementations of one leg differ on {sorted(disagreements)}: "
+        f"{disagreements}. The leg's whole claim is that a green local run equals the green "
+        f"CI run its DESCRIPTION equates it to.")
+
+
+def test_every_axis_deferred_to_the_other_domain_is_still_actually_open():
+    """The deadline on `AXES_LANDING_THIS_WAVE`, so it cannot become a permanent exemption.
+
+    Each listed axis must name a finding id, and must still be MEASURABLY open on the action
+    side. The moment ci-packaging's half lands — in this wave's merge — the row is false and
+    this test says so, naming the axis to delete. That is the opposite of a dated ceiling,
+    which goes quiet when the backlog it records is cleared (F-9473345e, one file over).
+    """
+    action = clean_room_script()
+    for axis, reason in sorted(AXES_LANDING_THIS_WAVE.items()):
+        assert re.search(r"F-[0-9a-f]{8}", reason), (axis, reason)
+
+    still_open = {}
+    if "dist is cleared before the build" in AXES_LANDING_THIS_WAVE:
+        still_open["dist is cleared before the build"] = (
+            clears_dist_before_building(action)[0] is None)
+    if "the artifacts are selected by a derived name" in AXES_LANDING_THIS_WAVE:
+        still_open["the artifacts are selected by a derived name"] = (
+            artifact_selection(action) == "glob")
+
+    closed = sorted(axis for axis, open_ in still_open.items() if not open_)
+    assert closed == [], (
+        f"{closed} is recorded in AXES_LANDING_THIS_WAVE as ci-packaging's outstanding half, "
+        f"and the clean-room action already carries it. Delete the row: the parity census "
+        f"above then arms on that axis, which is the point of the hand-off.")
+
+
+def test_the_artifact_selection_axis_can_tell_a_glob_from_a_derived_name(tmp_path):
+    """The red proof, on a scratch `dist/` holding TWO versions — the state
+    `verify.ps1`'s own comment records as measured on this rig (a 0.2.1 pair beside the
+    0.3.0 pair, `twine check dist\\*` ruling over four files).
+
+    Both halves are driven through the production readers: `artifact_selection` must call the
+    two spellings differently, and the difference must MATTER — a glob resolves both versions
+    in that directory while a derived name resolves exactly the one this run built.
+    """
+    import glob as _glob
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    for name in ("armature_studio-0.2.1-py3-none-any.whl", "armature_studio-0.2.1.tar.gz",
+                 "armature_studio-0.3.0-py3-none-any.whl", "armature_studio-0.3.0.tar.gz"):
+        (dist / name).write_bytes(b"")
+
+    globbed = sorted(os.path.basename(x) for x in _glob.glob(str(dist / "*.whl")))
+    derived = sorted(os.path.basename(x) for x in
+                     _glob.glob(str(dist / "armature_studio-0.3.0-py3-none-any.whl")))
+    assert len(globbed) == 2, globbed
+    assert derived == ["armature_studio-0.3.0-py3-none-any.whl"], derived
+
+    assert artifact_selection('"$SDIST_ROOM/bin/python" -m pip install dist/*.tar.gz\n'
+                              'pip install dist/*.whl') == "glob"
+    assert artifact_selection('$distName = "armature_studio"\n'
+                              '$sdist = "dist/$distName-$version.tar.gz"') == "derived"
+    assert artifact_selection("python -m build") == "neither"
+
+
+def test_the_dist_clear_axis_reads_both_languages_and_the_order():
+    """The other red proof: the axis must see PowerShell's clear and bash's, and must fail a
+    clear that runs after the build.
+
+    Two implementations in two languages is why this axis is a function rather than a
+    substring: a guard that only knew `Remove-Item` would report the bash side as never
+    clearing, and a guard that ignored order would pass a leg that empties `dist/` after
+    building into it.
+    """
+    ps_ok = 'Remove-Item -Recurse -Force dist\n& $python -m build\n'
+    sh_ok = 'rm -rf dist\npython -m build\n'
+    reversed_order = 'python -m build\nrm -rf dist\n'
+    none_at_all = 'python -m build\ntwine check dist/*\n'
+
+    for text in (ps_ok, sh_ok):
+        clear, build = clears_dist_before_building(text)
+        assert clear is not None and build is not None and clear < build, text
+
+    clear, build = clears_dist_before_building(reversed_order)
+    assert clear is not None and build is not None and clear > build, reversed_order
+
+    clear, _build = clears_dist_before_building(none_at_all)
+    assert clear is None, none_at_all
 
 
 def test_verify_describes_the_legs_it_actually_has():

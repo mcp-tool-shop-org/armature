@@ -124,6 +124,28 @@ def called_name(node):
             else func.attr if isinstance(func, ast.Attribute) else "")
 
 
+def call_lines(tree, name):
+    """Every line at which `name` is the callee of an `ast.Call`, sorted.
+
+    WAVE 26, F-f893634d — this two-line walk was implemented TWICE, byte for byte, on top
+    of a primitive that already had a home. An AST sweep over `tests/*.py` on `81d6c07`
+    found `test_alpha_law._calls` and `test_render_visibility._call_lines` with identical
+    body dumps (1359 characters), both re-inlining the
+    `func.attr if isinstance(func, ast.Attribute) else getattr(func, 'id', '')` expression
+    that `called_name` above exists to own. Both censuses are load-bearing — the alpha
+    law's producer population and the visibility ban's measurement doors — and neither
+    file's population pin would have reported a drift, because each pins only its own
+    walk's output. They did not disagree; being byte-identical, they could not, until one
+    was edited. That is the F-e63ce880 shape at small scale, and the answer is the same
+    one: ONE home, aliased at both sites.
+
+    Resolution is `called_name`'s, so a correction there — a decorated call, a
+    `functools.partial`, a call through an alias — reaches both populations at once.
+    """
+    return sorted(node.lineno for node in ast.walk(tree)
+                  if isinstance(node, ast.Call) and called_name(node) == name)
+
+
 def cli_body(tree):
     """The module-level function that IS the tool's command line — derived, not named.
 
@@ -588,6 +610,134 @@ def functions_that_refuse(tree, error_names):
     return out
 
 
+#: The `WRITE_CALLS` tails that can ONLY mean a filesystem write, whatever the receiver.
+#: `mkdir` is in this set because every `mkdir` in this tree is `os.mkdir` or `Path.mkdir`.
+_UNAMBIGUOUS_WRITE_TAILS = frozenset({
+    "makedirs", "mkdir", "imwrite", "imsave", "savez", "savefig",
+    "write_text", "write_bytes", "copyfile", "copytree",
+})
+
+#: The `WRITE_CALLS` tails that are ALSO ordinary method names on ordinary objects, with the
+#: module receivers that make them a filesystem write. `copy` is `list.copy`, `dict.copy` and
+#: `numpy.copy`; `replace` is `str.replace`; `save` is `PIL.Image.save` but also anything
+#: else somebody called `save`.
+_AMBIGUOUS_WRITE_TAILS = {
+    "copy": ("shutil",),
+    "copy2": ("shutil",),
+    "rename": ("os", "shutil"),
+    "replace": ("os", "shutil"),
+    "save": ("np", "numpy"),
+}
+
+
+def _is_an_unambiguous_write(node):
+    """Is this `Call` a filesystem write on ANY reading of it? — the STRICT predicate.
+
+    WAVE 26, F-12aacdc4. `WRITE_CALLS` is keyed on the callee TAIL, which is the right
+    resolution inside a CLI body where the surrounding code is read by a human alongside it,
+    and it is the resolution three pins are measured under. It is NOT safe to follow one hop
+    deeper: measured on `81d6c07` with the tail-keyed predicate, following the hop admitted
+    five helpers that never touch disk —
+
+        make_e08_sheet.label            -> an image `.copy()` at :157
+        make_parts_sheet.corner_bounds  -> a `.copy()` at :438
+        measure_cascade_clip.ffprobe_stream -> a `str.replace()` at :197
+        rig_parts.observe_under_pose    -> a `.copy()` at :509
+        rig_retopo._duplicate           -> two `.copy()` at :216-217
+
+    — and each of those moved its tool's FIRST WRITE line hundreds of lines earlier, which
+    would have moved the ratchet's numbers for a reason that has nothing to do with bytes
+    reaching disk. So the hop uses the strict predicate: a tail that can only be a write, a
+    module-qualified `shutil.copy` / `os.replace` kin, or an `open(..., "w")`.
+
+    `WRITE_CALLS` itself is deliberately UNCHANGED — widening or narrowing it moves the
+    27 / 54 / 77 pins, which is a different finding from this one. The ambiguity it carries
+    inside a CLI body is posted to the wave-26 seams inbox as a measurement rather than fixed
+    here.
+    """
+    called = called_name(node)
+    if called == "open":
+        return _open_mode_writes(node)
+    if called in _UNAMBIGUOUS_WRITE_TAILS:
+        return True
+    if called in _AMBIGUOUS_WRITE_TAILS:
+        func = node.func
+        return (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)
+                and func.value.id in _AMBIGUOUS_WRITE_TAILS[called])
+    return False
+
+
+def functions_that_write(tree):
+    """Module-level function names whose own body puts bytes (or a directory) on disk.
+
+    WAVE 26, F-12aacdc4 — the symmetry the gate-before-write ratchet was missing. Refusals
+    are followed ONE HOP into a module-local helper (`functions_that_refuse` above, and the
+    `called in refusing` branch in `refusal_and_write_lines`); writes were not, because
+    `walk_scope(fn)` stops at the CLI body. So a tool whose first byte to disk goes through a
+    helper the CLI body calls had ZERO visible writes, and `derive_population()` keeps a
+    module only when `gates_at and writes_at` — which put such a tool OUTSIDE the census
+    entirely rather than merely mis-ordering it.
+
+    Measured on `81d6c07` over every tool the census admits: exactly two tools had refusals,
+    no visible write, and a real disk write inside a helper their CLI body calls —
+    `stage_render` (`run_export(spec, args["out"])`, whose body does `os.makedirs(out_dir)`,
+    writes `.armature_run` and writes `manifest.json`) and `encode_control` (`build(...)`,
+    whose body writes the receipt). `stage_render` is the tool that CREATES the run directory
+    every downstream payload consumes, and the one `tests/_census_nodes.py`'s own
+    `documents_blender_invocation` census was written to reach; it was not in
+    `POPULATION_MEASURED_2026_09_04`.
+
+    The wave-23 half of the same row is closed and stays closed: `WRITE_CALLS` above sees
+    `cv2.imwrite`, `Image.save`, `np.save`, `shutil.copy*`, `Path.write_*` and
+    `open(path, mode="w")`. This is the OTHER half — the asymmetry, not the vocabulary.
+    """
+    out = set()
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if any(isinstance(inner, ast.Call) and _is_an_unambiguous_write(inner)
+               for inner in ast.walk(node)):
+            out.add(node.name)
+    return out
+
+
+def helpers_that_refuse_and_write(tree, error_names=None):
+    """Module-local helpers the CLI body calls that BOTH refuse and write — `{helper: line}`.
+
+    WAVE 26, F-12aacdc4 — the residue of the one-hop widening, named rather than left silent.
+
+    `refusal_and_write_lines` follows the hop for refusals FIRST, so a helper that does both
+    is recorded as a refusal at its call line and contributes no write. That choice is
+    deliberate and it is measured: recording the same line as both would make
+    `max(gates_at) == min(writes_at)` and manufacture an ordering violation out of a nesting
+    the census does not claim to resolve. Measured on `81d6c07`, `stage_render.main`'s three
+    refusals are at 718 (`_parse_argv`), 722 (`run_export`) and 740 — and 740 is a
+    `raise _UnreadablePath` inside an `except OSError:` handler, i.e. a refusal on the ERROR
+    path of the very call that writes. Recording a write at 722 would report `stage_render`
+    as refusing below its first write on a path that can only be reached when the write
+    already failed. That is a false alarm, and the ratchet has no `except`-handler correction
+    the way it has `returning_branch_spans` for `if` bodies.
+
+    So the ordering verdict is withheld and the FACT is asserted instead: this function is the
+    population `tests/test_instrument_write_ordering.py` pins, so a tool in this shape is
+    named by a test rather than sitting outside every category. Two tools are in it —
+    `rig_character` (`export_rigged`), which is in the ordering population anyway because its
+    CLI body writes directly too, and `stage_render` (`run_export`), which is NOT and is the
+    tool that creates the run directory every downstream payload consumes.
+    """
+    error_names = armature_error_names() if error_names is None else error_names
+    fn = cli_body(tree)
+    if fn is None:
+        return {}
+    both = functions_that_refuse(tree, error_names) & functions_that_write(tree)
+    out = {}
+    for node in walk_scope(fn):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id in both and node.func.id != fn.name):
+            out.setdefault(node.func.id, node.lineno)
+    return out
+
+
 def returning_branch_spans(fn):
     """Line spans of `if` bodies that end in a `return` or a `raise`.
 
@@ -689,6 +839,7 @@ def refusal_and_write_lines(src, *, error_names=None, canon_calls=CANON_CALLS,
     if fn is None:
         return None, None
     refusing = () if by_name_only else functions_that_refuse(tree, error_names)
+    writing = () if by_name_only else functions_that_write(tree)
     gates_at = {} if by_name_only else dict(raise_sites(fn, error_names))
     writes_at = {}
     for node in walk_scope(fn):
@@ -703,6 +854,15 @@ def refusal_and_write_lines(src, *, error_names=None, canon_calls=CANON_CALLS,
             writes_at.setdefault(node.lineno, WRITE_CALLS[called])
         elif called == "open" and _open_mode_writes(node):
             writes_at.setdefault(node.lineno, 'open(..., "w")')
+        elif isinstance(node.func, ast.Name) and called in writing and called != fn.name:
+            # WAVE 26, F-12aacdc4: the write half follows the SAME one hop the refusal half
+            # follows four lines above. The call line is the write, because that is where the
+            # bytes reach disk from the CLI body's point of view — the same convention the
+            # refusal hop uses. A helper that REFUSES is claimed by the branch above and is
+            # not double-counted here: a line that is both would read as `max(gates) ==
+            # min(writes)` and manufacture an ordering violation out of a nesting the census
+            # does not claim to resolve.
+            writes_at.setdefault(node.lineno, f"{called}()")
     spans = returning_branch_spans(fn)
     for line in list(writes_at):
         for lo, hi in spans:
@@ -1096,14 +1256,45 @@ def _names_an_output_path(node):
     return found
 
 
-def _is_repo_anchored(node):
+def repo_anchored_resolvers():
+    """Every `conftest` function that reaches `repo_file` — derived, not typed.
+
+    WAVE 26, F-4c22f096 — `_is_repo_anchored` below recognised the single call `repo_file(...)`
+    and nothing built on it. `conftest.payload_record` and `conftest.upload_record` resolve
+    through `_record` -> `_record_paths` -> `repo_file`, so a constant assigned from one of
+    them IS repo-anchored, and typing their names here would have been the fifth guard
+    landing unenumerated that this census exists to prevent. The set is walked out of
+    `tests/conftest.py` to a fixed point instead: `repo_file` itself, plus every module-level
+    function whose body calls something already in the set.
+    """
+    with open(os.path.join(TESTS_DIR, "conftest.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    fns = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    anchored = {"repo_file"}
+    grew = True
+    while grew:
+        grew = False
+        for name, node in fns.items():
+            if name in anchored:
+                continue
+            if any(isinstance(c, ast.Call) and called_name(c) in anchored
+                   for c in ast.walk(node)):
+                anchored.add(name)
+                grew = True
+    return anchored
+
+
+def _is_repo_anchored(node, anchored=None):
     """The expression resolves against the REPO root, not against `os.getcwd()`.
 
-    Two spellings, both live in this suite: `conftest.repo_file("outputs/E02")` and
-    `os.path.join(REPO, "outputs", ...)`. A bare `"outputs/E02"` is neither.
+    Three spellings, all live in this suite: `conftest.repo_file("outputs/E02")`, any
+    conftest resolver built on it (`upload_record`, `payload_record` and the `_paths` /
+    `_branch` pairs beside them — derived by `repo_anchored_resolvers`), and
+    `os.path.join(REPO, "outputs", ...)`. A bare `"outputs/E02"` is none of them.
     """
+    anchored = repo_anchored_resolvers() if anchored is None else anchored
     for n in ast.walk(node):
-        if isinstance(n, ast.Call) and called_name(n) == "repo_file":
+        if isinstance(n, ast.Call) and called_name(n) in anchored:
             return True
         if isinstance(n, ast.Name) and n.id in ("REPO", "TESTS", "FIXTURES"):
             return True
@@ -1119,6 +1310,7 @@ def output_path_constants(trees=None):
     from the tree, so a sixth cannot land unenumerated the way the fifth did.
     """
     trees = test_module_trees() if trees is None else trees
+    anchored = repo_anchored_resolvers()
     out = {}
     for mod, tree in trees.items():
         for node in tree.body:
@@ -1129,7 +1321,8 @@ def output_path_constants(trees=None):
                 continue
             for target in node.targets:
                 if isinstance(target, ast.Name):
-                    out[(mod, target.id)] = (tuple(paths), _is_repo_anchored(node.value))
+                    out[(mod, target.id)] = (tuple(paths),
+                                             _is_repo_anchored(node.value, anchored))
     return out
 
 
