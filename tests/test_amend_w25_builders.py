@@ -584,3 +584,159 @@ def test_the_new_clause_words_are_distinct_and_none_was_already_taken():
     # object, with the same sentence. `built_graph_is_not_the_spec_graph` is the same shape
     # across the three graph builders that carry `verify_topology`.
     assert repeated == [], repeated
+
+
+# ===========================================================================
+# F-edf3a80b (panel HIGH) — the downloader launch is a named refusal, not a crash
+#
+# `fetch_run.download` launched `subprocess.run(["pwsh", "-NoProfile", "-Command", ps], …)`
+# and the launch was the ONE step in that function with no clause, two lines above four
+# clauses that exist for every other way the downloader can fail
+# (`downloader_process_exit_nonzero`, `downloader_exits_unobserved`,
+# `downloader_exits_unreadable`, `downloader_exits_incomplete`).
+#
+# MEASURED on `580af47` as a real subprocess of the tool with `PATH` set to a directory
+# that does not exist:
+#   FETCH_RUN_HALT {"error": "FileNotFoundError",
+#                   "message": "[WinError 2] The system cannot find the file specified",
+#                   "evidence": null}                                          exit 1
+# — the code this module reserves for "this tool crashed" — with a raw traceback on stderr
+# and a message naming neither `pwsh` nor the flag nor anything an operator can act on.
+#
+# `fetch_t2v_run` imports this exact function (`from fetch_run import download as
+# fetch_download`), so both fetchers shared the one unguarded site — and BOTH run AFTER
+# credits have been spent, where the only thing left to protect is the operator's ability
+# to tell an environment fault from a broken fetch.
+
+FETCHERS = [("fetch_run.py", "FETCH_RUN"), ("fetch_t2v_run.py", "FETCH_T2V")]
+
+
+def _fetch_dump(tmp_path, name, node="302"):
+    """A dump each fetcher's own `plan` accepts, so the halt under test is the launch."""
+    rows = [{"source_node_id": node, "filename": "00000.png",
+             "url": "https://example.invalid/0"}]
+    p = tmp_path / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"results": rows}), encoding="utf-8")
+    return p
+
+
+def _no_pwsh_env(tmp_path):
+    """The process environment of a rig with no downloader on PATH."""
+    env = dict(os.environ)
+    env["PATH"] = str(tmp_path / "an-empty-directory-that-does-not-exist")
+    env["PATHEXT"] = ".COM;.EXE;.BAT;.CMD"
+    env["PYTHONPATH"] = os.pathsep.join(
+        [TOOLS, *(p for p in (os.environ.get("PYTHONPATH") or "").split(os.pathsep) if p)])
+    return env
+
+
+@pytest.mark.parametrize("tool,prefix", FETCHERS, ids=[t for t, _ in FETCHERS])
+def test_a_missing_downloader_is_a_named_refusal_in_both_fetchers(tool, prefix, tmp_path):
+    """F-edf3a80b · rule 2: the sibling is DRIVEN, not carried. Rule 4: the halt line read.
+
+    reverted-red: yes. On `580af47` both print
+    `{"error": "FileNotFoundError", ..., "evidence": null}` at exit 1.
+    """
+    import fetch_t2v_run as FT
+
+    node = "302" if tool == "fetch_run.py" else FT.LOSSLESS_NODE
+    dump = _fetch_dump(tmp_path, f"{prefix.lower()}-dump.json", node=node)
+    out = tmp_path / prefix.lower() / "run"
+    argv = ([f"--dump={dump}", "--run=r", f"--root={out}"] if tool == "fetch_run.py"
+            else [f"--dump={dump}", f"--out={out}"])
+    proc = subprocess.run([sys.executable, os.path.join(TOOLS, tool), *argv],
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", cwd=REPO, env=_no_pwsh_env(tmp_path))
+    lines = [ln for ln in proc.stdout.splitlines()
+             if ln.startswith(prefix + "_HALT ")]
+    assert lines, proc.stdout + proc.stderr
+    halt = json.loads(lines[-1][len(prefix) + 6:])
+    assert proc.returncode == 2, (proc.returncode, halt)
+    assert halt["error"] == "FetchHalt", halt
+    ev = halt["evidence"]
+    assert isinstance(ev, dict), halt                      # it was `null`
+    assert ev["gate"] == "FETCH" and ev["andon"] == "FetchHalt", ev
+    assert ev["clause"] == "downloader_shell_not_found", ev
+    assert ev["executable"] == "pwsh", ev
+    assert "searched" in ev, sorted(ev)
+    # the invariant a refusal must keep: nothing on disk to be read as a run that happened
+    assert not out.exists(), sorted(p.name for p in out.iterdir())
+
+
+def test_the_gate_is_one_implementation_shared_by_both_fetchers():
+    """Adopt the home, do not spell a second. `fetch_t2v_run` imports the function object
+    itself, exactly as it already imports `download`."""
+    import fetch_run as FR
+    import fetch_t2v_run as FT
+
+    assert FT.gate_downloader_shell is FR.gate_downloader_shell
+    assert FT.fetch_download is FR.download
+    src = open(os.path.join(TOOLS, "fetch_t2v_run.py"), encoding="utf-8").read()
+    assert "shutil.which" not in src, "the sibling spelled its own copy"
+
+
+def test_the_gate_returns_a_receipt_when_the_downloader_is_present():
+    """The direction the invariant does not bound: a check that refuses everything is not a
+    check. On this rig `pwsh` resolves, and the gate says so with the path it found."""
+    import fetch_run as FR
+
+    if shutil.which("pwsh") is None:                      # pragma: no cover - rig-dependent
+        pytest.skip("no pwsh on PATH; the refusal direction is covered above")
+    ev = FR.gate_downloader_shell()
+    assert ev["gate"] == "FETCH" and ev["executable"] == "pwsh", ev
+    assert os.path.basename(ev["resolved"]).lower().startswith("pwsh"), ev
+    assert "clause" not in ev, ev                          # a receipt is not a refusal
+
+
+def test_a_downloader_that_exists_and_cannot_start_is_named_by_the_same_clause(
+        tmp_path, monkeypatch):
+    """`shutil.which` cannot see a `pwsh` that resolves and will not exec — a broken shim, a
+    permission bit, an exec-format error — so the launch is caught too, under one word."""
+    import fetch_run as FR
+
+    manifest = tmp_path / "urls.json"
+    manifest.write_text(json.dumps([{"url": "https://example.invalid/0",
+                                     "out": str(tmp_path / "00000.png")}]),
+                        encoding="utf-8")
+
+    def refuse_to_start(cmd, **kw):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(FR.subprocess, "run", refuse_to_start)
+    with pytest.raises(FR.FetchHalt) as caught:
+        FR.download(str(manifest))
+    ev = caught.value.evidence
+    assert ev["clause"] == "downloader_shell_not_found", ev
+    assert ev["error"] == "PermissionError", ev
+    assert ev["resolved"], ev
+
+
+def test_the_four_downloader_clauses_below_the_launch_still_fire_on_their_own_operands(
+        tmp_path, monkeypatch):
+    """The direction the new clause must not bound (rule 2): with a downloader present, the
+    clauses that decide on the per-job exit record are unchanged and still fire."""
+    import fetch_run as FR
+
+    manifest = tmp_path / "urls.json"
+    manifest.write_text(json.dumps([{"url": "https://example.invalid/0",
+                                     "out": str(tmp_path / "00000.png")}]),
+                        encoding="utf-8")
+
+    def nonzero(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, 7, "", "boom")
+
+    monkeypatch.setattr(FR.subprocess, "run", nonzero)
+    with pytest.raises(FR.FetchHalt) as caught:
+        FR.download(str(manifest))
+    assert caught.value.evidence["clause"] == "downloader_process_exit_nonzero", \
+        caught.value.evidence
+
+    def silent(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(FR.subprocess, "run", silent)
+    with pytest.raises(FR.FetchHalt) as caught:
+        FR.download(str(manifest))
+    assert caught.value.evidence["clause"] == "downloader_exits_unobserved", \
+        caught.value.evidence

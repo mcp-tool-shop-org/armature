@@ -1445,6 +1445,7 @@ RECORDED_CLAUSES = [
     'diagnostic_cannot_be_armed',
     'distinct_uploads_disagree_with_the_rendered_control',
     'downloader_job_exits',
+    'downloader_shell_not_found',
     'drawing_constant_outside_the_record',
     'drawing_convention_not_retrieved',
     'duplicate_link_id',

@@ -63,6 +63,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -430,6 +431,58 @@ DOWNLOAD_PS_NO_URLS = (
 )
 
 
+#: The downloader this module launches. Named once, so the gate below, the refusal's
+#: evidence and the command line cannot drift apart.
+DOWNLOADER = "pwsh"
+
+
+def gate_downloader_shell(executable=DOWNLOADER):
+    """Gate FETCH · ANDON — the downloader exists and can be started. Returns its path.
+
+    Wave 25, F-edf3a80b. `download` launched `subprocess.run(["pwsh", "-NoProfile",
+    "-Command", ps], ...)` and the launch was the ONE step in that function with no clause,
+    two lines above four clauses that exist for every other way the downloader can fail
+    (`downloader_process_exit_nonzero`, `downloader_exits_unobserved`,
+    `downloader_exits_unreadable`, `downloader_exits_incomplete`). MEASURED on `580af47` as
+    a real subprocess of the tool with `PATH` set to a directory that does not exist:
+
+        FETCH_RUN_HALT {"error": "FileNotFoundError",
+                        "message": "[WinError 2] The system cannot find the file specified",
+                        "evidence": null}                                       exit **1**
+
+    — the code this module reserves for "this tool crashed" — with a raw traceback on stderr
+    and a message naming neither `pwsh`, nor the flag, nor anything an operator can act on.
+    Confirmed at the function level too: `download(<manifest>)` under the same `PATH` raises
+    `FileNotFoundError` with `evidence` None.
+
+    The module's stated contract is that a downloader failure is a typed FETCH refusal at
+    exit 2, and the most likely environment failure of all — no `pwsh` on `PATH`; the repo
+    requires PowerShell 7.4 in `verify.ps1` and CLAUDE.md, and CI and a fresh clone are not
+    this rig — was the one that was not. This is the crash-where-a-clause-belongs shape wave
+    18 closed for `--saved` / `--api` / `--frame` and wave 22 closed for `--dump`; the launch
+    was in neither entry's sibling enumeration.
+
+    ONE home, TWO arming points: `download` calls it so an in-process caller and
+    `fetch_t2v_run` (which imports this very function) are covered, and each fetcher's
+    `main` calls it ABOVE its first `os.makedirs` so a refusal leaves no run directory to be
+    read later as a run that happened — the invariant `build_payload` states for Gate CANON.
+    """
+    found = shutil.which(executable)
+    if found is None:
+        raise FetchHalt(
+            f"the downloader {executable!r} is not on PATH, so nothing can be fetched. "
+            f"Every clause below the launch decides on the per-job exit record that "
+            f"downloader writes, so with no downloader there is no evidence any of them "
+            f"could read; this repo requires PowerShell 7.4 (verify.ps1, CLAUDE.md) and a "
+            f"fresh clone or a CI runner is not this rig",
+            {"gate": "FETCH", "andon": "FetchHalt",
+             "clause": "downloader_shell_not_found",
+             "executable": executable, "searched": os.environ.get("PATH", "")})
+    return {"gate": "FETCH", "andon": "FetchHalt", "executable": executable,
+            "resolved": found,
+            "verdict": f"{executable} resolves to {found}"}
+
+
 def download(manifest_path, exits_path=None, record_urls=True):
     """pwsh + curl, with each job's own exit code recorded where this process can read it.
 
@@ -476,6 +529,10 @@ def download(manifest_path, exits_path=None, record_urls=True):
     missing or short record is a refusal too** — a gate whose evidence never arrived has not
     run, which is the exact shape this finding is about.
     """
+    # ---- Gate FETCH · ANDON, wave 25 (F-edf3a80b): ABOVE the launch, so a missing
+    # downloader is a named refusal at exit 2 rather than a bare `FileNotFoundError` at the
+    # code this module reserves for a crash.
+    shell = gate_downloader_shell()
     manifest_abs = os.path.abspath(manifest_path)
     exits_abs = os.path.abspath(
         exits_path or os.path.join(os.path.dirname(manifest_abs), EXITS_NAME))
@@ -492,8 +549,24 @@ def download(manifest_path, exits_path=None, record_urls=True):
     env[EXITS_ENV] = exits_abs
     with open(manifest_abs, encoding="utf-8") as fh:
         planned = json.load(fh)
-    proc = subprocess.run(["pwsh", "-NoProfile", "-Command", ps],
-                          capture_output=True, text=True, env=env)
+    try:
+        proc = subprocess.run([DOWNLOADER, "-NoProfile", "-Command", ps],
+                              capture_output=True, text=True, env=env)
+    except OSError as exc:
+        # The other half of the same clause: a `pwsh` that EXISTS and cannot start (a
+        # broken shim, a permission bit, an exec-format error) raised the same untyped
+        # `OSError` at exit 1. `shutil.which` cannot see that, so the launch is caught too
+        # and named under the same word rather than left as the one uncaught path.
+        raise FetchHalt(
+            f"the downloader {DOWNLOADER!r} resolves to {shell['resolved']!r} and could "
+            f"not be started ({type(exc).__name__}: {exc}). A downloader that cannot run "
+            f"writes no per-job exit record, so every clause below this line would be "
+            f"deciding on evidence that was never produced",
+            {"gate": "FETCH", "andon": "FetchHalt",
+             "clause": "downloader_shell_not_found",
+             "executable": DOWNLOADER, "resolved": shell["resolved"],
+             "error": type(exc).__name__,
+             "searched": os.environ.get("PATH", "")}) from exc
     base = {"gate": "FETCH", "andon": "FetchHalt", "process_returncode": proc.returncode,
             # the key wave 8's halt carried; kept so a reader of an older receipt and a
             # reader of this one are looking at the same field name
@@ -922,6 +995,11 @@ def main(argv=None):
                         extra={"root": os.path.abspath(a.root),
                                "pasted_into": ["<root>/<run>/ (the run directory)",
                                                "<run>_<index><ext> (the video tap)"]})
+    # ---- Gate FETCH · ANDON, wave 25 (F-edf3a80b), armed at the BOUNDARY as well as
+    # inside `download`: above the first `os.makedirs`, so a rig with no downloader leaves
+    # no run directory behind for a later step to read as a run that happened. One
+    # implementation, two arming points.
+    gate_downloader_shell()
     node_dir = parse_node_map(a.node_map)
     video_nodes = parse_video_nodes(a.video_nodes)
 

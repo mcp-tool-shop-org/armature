@@ -58,7 +58,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # `armature_core.parts.halt_outcome` now and no other line here names either,
 # so the import is dropped rather than left dangling.
 from fetch_run import (  # noqa: E402,F401
-    EXITS_NAME, FetchHalt, PNG_SIGNATURE, verify_downloads)
+    EXITS_NAME, FetchHalt, PNG_SIGNATURE, gate_downloader_shell, verify_downloads)
 from fetch_run import download as fetch_download  # noqa: E402
 # The ONE dump reader (wave 22, F-2380aca9). This module carried the identical two lines and
 # RE-MEASURED identically on `e8263a3`: a non-JSON dump -> FETCH_T2V_HALT `JSONDecodeError`
@@ -297,6 +297,10 @@ def main(argv=None):
         # The operator's own input, named in the receipt: the halt is about THIS dump.
         exc.evidence["dump"] = os.path.abspath(a.dump)
         raise
+    # ---- Gate FETCH · ANDON, wave 25 (F-edf3a80b). The sibling's ONE implementation,
+    # imported like `download` itself rather than spelled again, armed above the first
+    # `os.makedirs` so a rig with no downloader leaves no run directory behind.
+    gate_downloader_shell()
     os.makedirs(a.out, exist_ok=True)
     with open(os.path.join(a.out, "download_manifest.json"), "w", encoding="utf-8") as fh:
         json.dump({"tool": "fetch_t2v_run", "tool_version": TOOL_VERSION,

@@ -553,15 +553,26 @@ def test_the_temporary_url_file_is_removed_when_the_download_SUCCEEDS(tmp_path, 
 def test_the_temporary_url_file_is_removed_when_the_downloader_RAISES(tmp_path, monkeypatch):
     """The third path — an exception from `subprocess.run` itself, which neither the old
     ordering nor a `raise`-only clause covers. This is what `finally` buys over moving the
-    remove above the refusal."""
+    remove above the refusal.
+
+    ⚠ CORRECTED 2026-09-05 (wave 25, F-edf3a80b). The raise this drove was a bare `OSError`
+    reaching the operator as `{"error": "OSError", ..., "evidence": null}` at exit 1 — the
+    code this tree reserves for a crash — and the launch is a typed FETCH refusal now. The
+    property under test is UNCHANGED and is the `finally`: `_urls.json` holds signed
+    download links (wave 12, F-8ccedf71) and must not survive any path. What is asserted
+    alongside it is stronger, because the halt now names the clause a reader keys on.
+    """
     def boom(cmd, **kw):
         raise OSError("pwsh is not on PATH")
 
     monkeypatch.setattr(T.subprocess, "run", boom)
     jobs = T.plan([{"source_node_id": 70, "filename": "a.png", "url": "u"}],
                   str(tmp_path / "run"))
-    with pytest.raises(OSError):
+    with pytest.raises(T.FetchHalt) as caught:
         T.download(jobs, out=str(tmp_path / "run"))
+    assert caught.value.evidence["clause"] == "downloader_shell_not_found",         caught.value.evidence
+    assert caught.value.evidence["error"] == "OSError", caught.value.evidence
+    assert isinstance(caught.value.__cause__, OSError), caught.value.__cause__
     assert not (tmp_path / "run" / "lossless" / "_urls.json").exists()
 
 
