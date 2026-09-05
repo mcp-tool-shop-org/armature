@@ -58,15 +58,18 @@ def resolve_arc(name):
     arc = POSE_ARCS.get(name)
     if arc is None:
         raise SpecError(
-            f"unknown pose arc {name!r}; known: {sorted(POSE_ARCS)}"
-        )
+            f"unknown pose arc {name!r}; known: {sorted(POSE_ARCS)}",
+            {"gate": None, "andon": "SpecError",
+             "clause": "unknown_pose_arc"})
     return arc
 
 
 def angle_at_frame(index, count, start_deg, end_deg):
     """The authored angle at control frame `index`, in degrees."""
     if count < 2:
-        raise SpecError(f"a pose arc needs at least 2 frames, got {count}")
+        raise SpecError(f"a pose arc needs at least 2 frames, got {count}",
+            {"gate": None, "andon": "SpecError",
+             "clause": "too_few_frames_for_an_arc"})
     return start_deg + (end_deg - start_deg) * (index / float(count - 1))
 
 
@@ -149,15 +152,17 @@ def arc_readout(arc, count, start_deg, end_deg):
         raise SpecError(
             f"pose arc start and end are both {start_deg}°; that is a held pose, not a "
             f"performance. Render a held pose with subject.animation='static' instead — "
-            f"an arc that does not move would trip G6 after 33 frames of work"
-        )
+            f"an arc that does not move would trip G6 after 33 frames of work",
+            {"gate": None, "andon": "SpecError",
+             "clause": "arc_does_not_move"})
     readout_deg = arc["readout_deg"]
     span = end_deg - start_deg
     if not (min(start_deg, end_deg) <= readout_deg <= max(start_deg, end_deg)):
         raise SpecError(
             f"readout angle {readout_deg}° lies outside the arc {start_deg}°..{end_deg}°; "
-            f"it would never be crossed"
-        )
+            f"it would never be crossed",
+            {"gate": None, "andon": "SpecError",
+             "clause": "readout_angle_outside_the_arc"})
     exact = (readout_deg - start_deg) / span * (count - 1)
     # The midpoint of THIS arc, computed rather than assumed (F-314c4a79). It is reported
     # beside the registered readout so a reader can see when the two coincide instead of

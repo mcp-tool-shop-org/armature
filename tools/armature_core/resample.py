@@ -134,7 +134,8 @@ def require_rotation(m, where, tol=None):
             f"det {det:.12f}, against a tolerance of {tol:.1e}. Interpolating it would "
             f"produce a plausible pose that shears the body, and nothing downstream checks "
             f"for that",
-            {"gate": "RESAMPLE", "andon": "ResampleGate", "where": where,
+            {"clause": "not_a_rotation",
+             "gate": "RESAMPLE", "andon": "ResampleGate", "where": where,
              "orthonormality_error": worst, "determinant": det, "tolerance": tol})
     return {"orthonormality_error": worst, "determinant": det}
 
@@ -172,7 +173,9 @@ def quat_normalise(q):
     n = math.sqrt(sum(c * c for c in q))
     if n < 1e-12:
         raise ResampleError("a zero quaternion names no orientation and cannot be "
-                            "normalised")
+                            "normalised",
+            {"gate": None, "andon": "ResampleError",
+             "clause": "zero_quaternion"})
     return tuple(c / n for c in q)
 
 
@@ -242,9 +245,13 @@ def sample_map(n_src, n_dst):
     on an integer, and every position is strictly increasing, which `monotonic` gates.
     """
     if n_src < 2:
-        raise ResampleError(f"a {n_src}-sample record carries no interval to resample over")
+        raise ResampleError(f"a {n_src}-sample record carries no interval to resample over",
+            {"gate": None, "andon": "ResampleError",
+             "clause": "too_few_source_samples"})
     if n_dst < 2:
-        raise ResampleError(f"resampling to {n_dst} samples would discard the performance")
+        raise ResampleError(f"resampling to {n_dst} samples would discard the performance",
+            {"gate": None, "andon": "ResampleError",
+             "clause": "too_few_destination_samples"})
     out = []
     span = n_src - 1
     for j in range(n_dst):
@@ -352,19 +359,25 @@ def resample_frames(frames, n_dst):
 
     bones = list(frames[0].get("local") or {})
     if not bones:
-        raise ResampleError("frame 0 carries no bone rotations to resample")
+        raise ResampleError("frame 0 carries no bone rotations to resample",
+            {"gate": None, "andon": "ResampleError",
+             "clause": "frame_zero_carries_no_bones"})
     for k, fr in enumerate(frames):
         names = list(fr.get("local") or {})
         if set(names) != set(bones):
             raise ResampleError(
                 f"frame {k} disagrees with frame 0 about which bones exist "
                 f"({sorted(set(names) ^ set(bones))}); interpolating across a changing bone "
-                f"set would hold the missing bone's last pose with nothing reporting it")
+                f"set would hold the missing bone's last pose with nothing reporting it",
+                {"gate": None, "andon": "ResampleError",
+                 "clause": "bone_set_changes_between_frames"})
         for name in names:
             require_rotation(_as_mat(fr["local"][name]), f"frame {k}, bone {name!r}")
         root = fr.get("root")
         if not (isinstance(root, (list, tuple)) and len(root) == 3):
-            raise ResampleError(f"frame {k}: root is {root!r}, not a 3-vector")
+            raise ResampleError(f"frame {k}: root is {root!r}, not a 3-vector",
+                {"gate": None, "andon": "ResampleError",
+                 "clause": "root_is_not_a_3_vector"})
 
     out = []
     for j, (i, t) in enumerate(sample_map(n_src, n_dst)):

@@ -66,7 +66,9 @@ def sphere_fit(points):
     """Least-squares sphere through a vertex cloud: centre, mean radius, relative residual."""
     p = np.asarray(points, dtype=np.float64)
     if p.ndim != 2 or p.shape[1] != 3 or len(p) < 4:
-        raise LandmarkError(f"a sphere fit needs at least 4 points in 3D, got {p.shape}")
+        raise LandmarkError(f"a sphere fit needs at least 4 points in 3D, got {p.shape}",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "too_few_points_for_a_sphere_fit"})
     a = np.hstack([2.0 * p, np.ones((len(p), 1))])
     sol, *_ = np.linalg.lstsq(a, (p ** 2).sum(axis=1), rcond=None)
     centre = sol[:3]
@@ -111,7 +113,9 @@ def _limb_radius(derived, trace_key, z):
     """That limb's own measured cross-section radius nearest a height. Sizes the window."""
     trace = derived["traces"].get(trace_key) or []
     if not trace:
-        raise LandmarkError(f"no trace {trace_key!r} to size a ball against")
+        raise LandmarkError(f"no trace {trace_key!r} to size a ball against",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "no_trace_to_size_a_ball_against"})
     near = min(trace, key=lambda p: abs(p["z"] - z))
     return float(near["r_mean"])
 
@@ -135,12 +139,16 @@ def snap_sites_to_balls(derived, balls, snappable=SNAPPABLE,
     proposals = []
     for site, (trace_key, (seg_a, seg_b)) in snappable.items():
         if site not in marks:
-            raise LandmarkError(f"snappable site {site!r} is not a derived landmark")
+            raise LandmarkError(f"snappable site {site!r} is not a derived landmark",
+                {"gate": None, "andon": "LandmarkError",
+                 "clause": "snappable_site_is_not_a_landmark"})
         here = np.asarray(marks[site], dtype=np.float64)
         seg_len = float(np.linalg.norm(np.asarray(marks[seg_a]) - np.asarray(marks[seg_b])))
         if seg_len <= 0:
             raise LandmarkError(f"segment {seg_a}->{seg_b} has zero length; it cannot bound "
-                                f"a search radius for {site!r}")
+                                f"a search radius for {site!r}",
+                {"gate": None, "andon": "LandmarkError",
+                 "clause": "segment_has_zero_length"})
         limb_r = _limb_radius(derived, trace_key, here[2])
         lo, hi = radius_window[0] * limb_r, radius_window[1] * limb_r
         tol = search_fraction * seg_len

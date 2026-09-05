@@ -270,7 +270,9 @@ def _norm(a):
 def _unit(a, what="a direction"):
     n = _norm(a)
     if n < 1e-12:
-        raise SolveError(f"{what} has zero length; it cannot be normalised")
+        raise SolveError(f"{what} has zero length; it cannot be normalised",
+            {"gate": None, "andon": "SolveError",
+             "clause": "vector_has_zero_length"})
     return _scale(a, 1.0 / n)
 
 
@@ -346,7 +348,9 @@ def frame_from(x_hint, y_hint, what="a frame"):
     y = _sub(y_hint, _scale(ex, _dot(y_hint, ex)))
     if _norm(y) < 1e-9 * max(_norm(y_hint), 1e-12):
         raise SolveError(f"{what}: the y hint is parallel to the x hint, so the frame is "
-                         f"degenerate and any rotation read from it would be noise")
+                         f"degenerate and any rotation read from it would be noise",
+            {"gate": None, "andon": "SolveError",
+             "clause": "frame_hints_are_parallel"})
     ey = _unit(y)
     ez = _cross(ex, ey)
     return ((ex[0], ey[0], ez[0]), (ex[1], ey[1], ez[1]), (ex[2], ey[2], ez[2]))
@@ -369,7 +373,9 @@ def _bind_reference(u_rest, hint, bone):
         raise SolveError(
             f"bone {bone!r}: the hinge hint {hint} is parallel to its rest direction, so "
             f"the bind twist datum is undefined and any twist solved against it would be "
-            f"noise. Declare a different hinge_hint for this bone in MODEL")
+            f"noise. Declare a different hinge_hint for this bone in MODEL",
+            {"gate": None, "andon": "SolveError",
+             "clause": "hinge_hint_is_parallel_to_the_bone"})
     return _unit(perp)
 
 
@@ -415,7 +421,9 @@ def sites_from_landmarks(world_landmarks):
     if len(world_landmarks) != len(POSE_LANDMARKS):
         raise SolveError(
             f"expected {len(POSE_LANDMARKS)} world landmarks, got {len(world_landmarks)}; "
-            f"a partial landmark list would solve into a pose with invented joints")
+            f"a partial landmark list would solve into a pose with invented joints",
+            {"gate": None, "andon": "SolveError",
+             "clause": "landmark_list_is_partial"})
     out = {}
     for site, idx in SITE_FROM_LANDMARK.items():
         p = world_landmarks[idx]
@@ -463,10 +471,14 @@ def solve_frame(rest, obs):
     missing = [s for s in SITE_FROM_LANDMARK if s not in obs]
     if missing:
         raise SolveError(f"observed sites missing: {sorted(missing)}; the solve would place "
-                         f"those joints at invented positions with nothing pointing at it")
+                         f"those joints at invented positions with nothing pointing at it",
+            {"gate": None, "andon": "SolveError",
+             "clause": "observed_sites_missing"})
     rest_missing = [s for s in SITE_FROM_LANDMARK if s not in rest]
     if rest_missing:
-        raise SolveError(f"the rest landmark table is missing {sorted(rest_missing)}")
+        raise SolveError(f"the rest landmark table is missing {sorted(rest_missing)}",
+            {"gate": None, "andon": "SolveError",
+             "clause": "rest_landmarks_missing"})
 
     r = _derived_points(rest)
     o = _derived_points(obs)
@@ -480,7 +492,9 @@ def solve_frame(rest, obs):
         if rule is None:
             raise SolveError(f"bone {name!r} is registered in sitelist but MODEL says "
                              f"nothing about it; a bone with no recorded rule would be "
-                             f"silently held at identity")
+                             f"silently held at identity",
+                {"gate": None, "andon": "SolveError",
+                 "clause": "bone_has_no_model_rule"})
         parent_total = total[bone.parent] if bone.parent else IDENTITY
 
         if rule[0] == "hold":
@@ -581,7 +595,9 @@ def solve_frame(rest, obs):
                     f"the segment to {twist_site} is collinear with this bone on this "
                     f"frame, so there is no bend plane for the hinge datum to land on")
         else:
-            raise SolveError(f"bone {name!r} has unknown rule {rule[0]!r}")
+            raise SolveError(f"bone {name!r} has unknown rule {rule[0]!r}",
+                {"gate": None, "andon": "SolveError",
+                 "clause": "bone_has_an_unknown_rule"})
 
         total[name] = mat_mul(parent_total, local[name])
 
@@ -854,7 +870,9 @@ def bone_length_residuals(rest, obs):
         rest_len = _norm(_sub(rest[tail], rest[head]))
         obs_len = _norm(_sub(obs[tail], obs[head]))
         if rest_len <= 0:
-            raise SolveError(f"bone {bone.name!r} has zero rest length")
+            raise SolveError(f"bone {bone.name!r} has zero rest length",
+                {"gate": None, "andon": "SolveError",
+                 "clause": "bone_has_zero_rest_length"})
         out[bone.name] = {
             "rest_length": rest_len, "observed_length": obs_len,
             "residual_fraction": (obs_len - rest_len) / rest_len,
@@ -874,14 +892,16 @@ def validate_motion_record(frames):
     """
     if not frames:
         raise SolveGate("the motion record carries no frames",
-                        {"gate": "SOLVE", "andon": "SolveGate", "n": 0})
+                        {"clause": "motion_record_has_no_frames",
+             "gate": "SOLVE", "andon": "SolveGate", "n": 0})
     for i, fr in enumerate(frames):
         if fr.get("frame") != i:
             raise SolveGate(
                 f"the solved frames are not a contiguous run from 0: entry {i} says frame "
                 f"{fr.get('frame')!r}. A gap filled by the neighbouring pose would play as "
                 f"a stutter and be read as detector noise",
-                {"gate": "SOLVE", "andon": "SolveGate",
+                {"clause": "frames_are_not_contiguous",
+                 "gate": "SOLVE", "andon": "SolveGate",
                  "index": i, "says": fr.get("frame"), "n": len(frames)})
         local = fr.get("local") or {}
         missing = [b for b in sitelist.ALL_NAMES if b not in local]
@@ -889,7 +909,8 @@ def validate_motion_record(frames):
             raise SolveGate(
                 f"frame {i} carries no rotation for {missing}; a bone left out here would "
                 f"hold its previous pose while every gate downstream stayed green",
-                {"gate": "SOLVE", "andon": "SolveGate", "frame": i, "missing": missing})
+                {"clause": "frame_is_missing_a_bone",
+                 "gate": "SOLVE", "andon": "SolveGate", "frame": i, "missing": missing})
     return {"gate": "SOLVE", "andon": "SolveGate", "n_frames": len(frames),
             "verdict": f"{len(frames)} contiguous frames, all {len(sitelist.ALL_NAMES)} "
                        f"registered bones present on each"}

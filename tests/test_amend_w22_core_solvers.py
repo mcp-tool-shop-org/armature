@@ -587,7 +587,7 @@ SURVIVING_LINE_CITATIONS = {
     "posearc": {("rig_character.py", 661)},
     # F-b3ff3a57's own correction record: the three anchors the paragraph quotes as what it
     # USED to say, the one it measured as moved, and the sibling fix it points at.
-    "sitelist": {("lift_clip.py", 275), ("project_pose_keypoints.py", 229),
+    "sitelist": {("project_pose_keypoints.py", 229),
                  ("rig_character.py", 1135), ("rig_parts.py", 480)},
     "startframe": {("render_start_frame.py", 142)},
 }
@@ -661,3 +661,174 @@ def test_no_prose_in_this_domain_makes_a_LIVE_claim_about_a_line_number():
         assert symbol in src, symbol
     assert "MEASURED on `e8263a3`" in src
     assert "citations are on the SYMBOL and the line numbers are gone" in src
+
+
+# =========================== wave 22, F-8759b386: every refusal carries a receipt
+#
+# CENSUSED on `e8263a3` over the 21 owned modules by AST, resolving each raised name to a
+# runtime class: 221 raises with a call, of which 217 resolve into the `ArmatureError`
+# family (101 of them `GateFailure` subclasses, 116 not). **52 of the 217 passed NO evidence
+# argument at all**, and a further 17 passed a literal dict carrying `gate` and `andon` but
+# no `clause`.
+#
+# All 17 `raise LandmarkError` sites in `landmarks.py` were among the 52, as were the four in
+# `joints.py` that raise the same class — 21 `LandmarkError` raises in the domain, 21 with no
+# receipt — as were all six `resample.ResampleError`, nine of ten `lift_solve.SolveError`,
+# all four `posearc.SpecError`, both ortho `turnaround.TurnaroundPlanRefusal` and ten bare
+# `ArmatureError(...)` raises in `binding.py`, `openpose.py` and `parts.py`. All 19 bare
+# family raises in `armature_core` were in this domain's files, which `errors.py`'s own
+# docstring names as the thing the wave-14 constructor fix was "not a licence for".
+#
+# `LandmarkError`'s own docstring argues that a mesh which does not present the anatomy "is a
+# subject this derivation cannot place bones on ... Halting is the only signal that
+# survives" — and the signal it emitted was a prose sentence and two nulls: a halt reaching
+# `tools/diagnose_bone_heat.py` or `tools/make_parts_sheet.py` read `gate: null, evidence:
+# null`, so a triage that wanted to know WHICH of seventeen anatomical refusals fired had to
+# grep the message.
+#
+# The reason none of it was red: `tests/test_core_solver_evidence.py`'s derived census walks
+# only raises whose class resolves to a `GateFailure` SUBCLASS, and the non-Gate subtree is
+# spot-checked for a hand-typed trio and only for the constructor property. No census
+# anywhere required a `clause`. Widening that census to the resolved `ArmatureError` family
+# is the tests domain's (wave 23); what is asserted here is the property itself, derived.
+
+
+def family_raises_without_a_clause():
+    """Every family raise in the 21 owned modules whose evidence carries no `clause`.
+
+    Keyed on the RESOLVED class (wave-18 rule 1): the raised NAME is looked up in its own
+    module and then in `errors`, and only classes that actually subclass `ArmatureError`
+    count — a census that keyed on the spelling would miss a re-exported name and invent a
+    member out of any local variable that happens to be called `SolveError`.
+    """
+    import importlib
+
+    out = []
+    for name in OWNED:
+        try:
+            mod = importlib.import_module("armature_core." + name)
+        except Exception:                       # blender_scene imports bpy
+            mod = None
+        tree = ast.parse(_owned_source(name))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+                continue
+            fn = node.exc.func
+            cname = getattr(fn, "id", None) or getattr(fn, "attr", None)
+            if not cname:
+                continue
+            cls = getattr(mod, cname, None) if mod is not None else None
+            if cls is None:
+                import armature_core.errors as E
+                cls = getattr(E, cname, None)
+            if not (isinstance(cls, type) and issubclass(cls, ArmatureError)):
+                continue
+            ev = node.exc.args[1] if len(node.exc.args) > 1 else None
+            if ev is None and not node.exc.keywords:
+                out.append((name, node.lineno, cname, "no evidence at all"))
+                continue
+            if isinstance(ev, ast.Dict):
+                keys = [k.value for k in ev.keys if isinstance(k, ast.Constant)]
+                if "clause" not in keys:
+                    out.append((name, node.lineno, cname, "evidence without a clause"))
+    return sorted(out)
+
+
+def test_every_family_raise_in_this_domain_names_the_clause_that_pulled():
+    """The property, over the whole resolved family and not the `GateFailure` half of it."""
+    bad = family_raises_without_a_clause()
+    assert bad == [], {
+        "raises with no clause a reader can key on": bad,
+        "why it matters": "a halt line reading `gate: null, evidence: null` is a prose "
+                          "sentence; a triage that wants to know WHICH of seventeen "
+                          "anatomical refusals fired has to grep the message",
+    }
+
+
+#: Clause words spelled at more than one raise site inside one module, MEASURED on this
+#: branch, with the reason each repeat is ONE refusal rather than two sharing a word. A new
+#: entry is two different refusals a triage cannot split — the defect one level up from the
+#: one this wave fixed.
+REPEATED_CLAUSE_WORDS = {
+    # One refusal, two profiles: `stickwidth` and `hand_stickwidth` refuse the same unknown
+    # `stickwidth_type` with the same message shape.
+    "aapose": {"unknown_stickwidth_type"},
+    # `depth_extent` and `normalize_depth` refuse the same population — the geometry pixels
+    # — under one word, deliberately (wave 18, F-476a4ee8).
+    "channels": {"non_finite_geometry_depth"},
+    # `frame_fidelity` and `gradient_split` now answer the same question about what a frame
+    # is, under the same two words, which is the whole point of F-e15d9de2.
+    "clipcompare": {"frame_not_hw3", "shape_mismatch"},
+    # `half_fovs` and `require_frame_size` refuse a non-positive frame size the same way.
+    "framing": {"frame_size_not_positive"},
+}
+
+
+def test_a_repeated_clause_word_in_this_domain_is_one_refusal_and_not_two():
+    """A clause is an identity. Two DIFFERENT refusals under one word are one word a triage
+    cannot split, which is the defect one level up from the one this wave fixed."""
+    import collections
+    import re
+
+    got = {}
+    for name in OWNED:
+        words = re.findall(r'"clause": "([a-z0-9_]+)"', _owned_source(name))
+        dupes = {w for w, n in collections.Counter(words).items() if n > 1}
+        if dupes:
+            got[name] = dupes
+    assert got == REPEATED_CLAUSE_WORDS, {
+        "appeared": {m: sorted(v - REPEATED_CLAUSE_WORDS.get(m, set()))
+                     for m, v in got.items() if v - REPEATED_CLAUSE_WORDS.get(m, set())},
+        "vanished": {m: sorted(v - got.get(m, set()))
+                     for m, v in REPEATED_CLAUSE_WORDS.items() if v - got.get(m, set())},
+    }
+
+
+LANDMARK_CLAUSES = {
+    "vertices_not_n_by_3", "too_few_vertices_for_bands", "degenerate_bounding_box",
+    "silhouette_is_not_a_standing_figure", "limb_column_is_discontinuous",
+    "too_few_bands_for_a_centreline", "centreline_has_zero_length",
+    "no_slab_to_read_facing_from", "trunk_holds_no_clusters",
+    "no_neck_between_two_wider_sections", "too_few_leg_bands_for_an_ankle",
+    "trunk_column_too_short", "limb_trace_too_short",
+    "no_foot_vertices_below_the_ankle", "no_head_vertices_above_the_head_base",
+    "no_trace_to_size_a_bone_against", "bone_has_no_registered_cross_section",
+}
+
+
+def test_the_seventeen_anatomical_refusals_are_seventeen_distinct_clauses():
+    """`LandmarkError`'s docstring says halting is the only signal that survives. Seventeen
+    refusals under one class need seventeen words, or the signal is the class name."""
+    import re
+
+    words = re.findall(r'"clause": "([a-z0-9_]+)"', _owned_source("landmarks"))
+    assert set(words) == LANDMARK_CLAUSES, {
+        "appeared": sorted(set(words) - LANDMARK_CLAUSES),
+        "vanished": sorted(LANDMARK_CLAUSES - set(words)),
+    }
+    assert len(words) == 17, words
+
+
+def test_a_landmark_refusal_reaches_a_halt_line_with_its_clause_on_it(capsys):
+    """The receipt an operator actually gets, READ rather than assumed — driven through
+    `diagnose_bone_heat.py`, one of the two tools the finding names."""
+    from blender_stub import exit_code_of_main_block
+
+    def raiser():
+        from armature_core import landmarks
+        landmarks.band_profile(np.zeros((2, 2)), 8)
+
+    code, escaped = exit_code_of_main_block(
+        "diagnose_bone_heat.py", raiser=raiser,
+        argv=["python", "diagnose_bone_heat.py", "--out", "nope"])
+    out = capsys.readouterr().out
+    assert escaped is None, escaped
+    assert code == 2, code
+    lines = [ln for ln in out.splitlines()
+             if ln.split(" ", 1)[0] == "DIAGNOSE_BONE_HEAT_HALT"]
+    assert len(lines) == 1, out
+    rec = json.loads(lines[0][len("DIAGNOSE_BONE_HEAT_HALT"):].strip())
+    assert rec["error"] == "LandmarkError"
+    assert rec["evidence"]["clause"] == "vertices_not_n_by_3"
+    assert rec["evidence"]["andon"] == "LandmarkError"
+    assert rec["evidence"]["gate"] is None

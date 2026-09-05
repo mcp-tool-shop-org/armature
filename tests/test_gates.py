@@ -1027,37 +1027,25 @@ EVIDENCE_NO_EVIDENCE_ROUTED = {
     # WAVE-14 MERGE (coordinator, 2026-09-04): 8 routed entries left this set because they carry a receipt on the merged tree
     # (core-solvers gave every `aapose.py` refusal `gate: None` + andon + clause, F-d0de0c2d/F-d59fab92);
     # measured as `ROUTED - no_evidence`, deleted rather than commented.
-    "binding.py:rigid_segment_weights (ArmatureError)",
-    "joints.py:_limb_radius (LandmarkError)",
-    "joints.py:snap_sites_to_balls (LandmarkError)",
-    "joints.py:sphere_fit (LandmarkError)",
-    "landmarks.py:_point_along (LandmarkError)",
-    "landmarks.py:_prune_discontinuities (LandmarkError)",
-    "landmarks.py:_region_runs (LandmarkError)",
-    "landmarks.py:band_profile (LandmarkError)",
-    "landmarks.py:bone_radii (LandmarkError)",
-    "landmarks.py:cross_section_radius (LandmarkError)",
-    "landmarks.py:derive (LandmarkError)",
-    "landmarks.py:facing (LandmarkError)",
-    "lift_solve.py:_bind_reference (SolveError)",
-    "lift_solve.py:_unit (SolveError)",
-    "lift_solve.py:bone_length_residuals (SolveError)",
-    "lift_solve.py:frame_from (SolveError)",
-    "lift_solve.py:sites_from_landmarks (SolveError)",
-    "lift_solve.py:solve_frame (SolveError)",
-    "openpose.py:require_drawing_convention (ArmatureError)",
-    "parts.py:assign_faces (ArmatureError)",
-    "parts.py:joint_planes (ArmatureError)",
-    "posearc.py:angle_at_frame (SpecError)",
-    "posearc.py:arc_readout (SpecError)",
-    "posearc.py:resolve_arc (SpecError)",
-    "resample.py:quat_normalise (ResampleError)",
-    "resample.py:resample_frames (ResampleError)",
-    "resample.py:sample_map (ResampleError)",
     "shotspec.py:_require (SpecError)",
     "shotspec.py:_require_positive (SpecError)",
     "shotspec.py:normalise_spec (SpecError)",
     "shotspec.py:resolve_asset (SpecError)",
+    # WAVE 22 (core-solvers, F-8759b386): TWENTY-SEVEN entries left this set in one commit,
+    # deleted rather than commented, in the same commit that gives each site its receipt —
+    # which is what the converse assertion below requires. They were `binding`,
+    # `joints` (3), `landmarks` (8), `lift_solve` (6), `openpose`, `parts` (2),
+    # `posearc` (3) and `resample` (3): 50 family raises across those files carried NO
+    # evidence argument at all, so `errors.py`'s `self.evidence = evidence or {}` recorded a
+    # null evidence value and the receipt for a refused stage could not name what refused
+    # it. All 21 `LandmarkError` raises in the domain were among them, and
+    # `LandmarkError`'s own docstring argues that halting "is the only signal that
+    # survives" — a signal that was a prose sentence and two nulls.
+    #
+    # The FOUR that remain are `shotspec.py`'s, which is core-gates' file in the frozen
+    # domain map. Measured after the sweep: `no_evidence` is 4 and every one of them is
+    # `shotspec.py`.
+    #
     # WAVE 22 (core-solvers, F-4ce10f2a): `turnaround.py:projection_plan
     # (TurnaroundPlanRefusal)` LEFT this set — both ortho raises now carry a literal
     # evidence dict with a clause, matching the perspective sibling twenty lines below.
@@ -1223,10 +1211,12 @@ def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_categor
     # The census on the page, pinned `==` (wave 14, rule 4). Re-derive with the command
     # beside EVIDENCE_NO_EVIDENCE_ROUTED.
     # WAVE-14 MERGE (coordinator, 2026-09-04): 40 → 32, measured on the merged tree.
-    # WAVE 22 (core-solvers, F-4ce10f2a): 32 -> 31, RE-DERIVED with `==` in this worktree.
-    # `turnaround.py:projection_plan` is the entry that left; its two one-argument
-    # `TurnaroundPlanRefusal` raises now carry `gate`, `andon`, `clause` and the operand.
-    assert len(no_evidence) == 31, sorted(no_evidence)
+    # WAVE 22 (core-solvers): 32 -> 31 (F-4ce10f2a, `turnaround.py:projection_plan`) and
+    # then 31 -> 4 (F-8759b386, the 27 entries itemised above). RE-DERIVED with `==` in this
+    # worktree at each step; BRANCH-LOCAL. The remaining four are `shotspec.py`'s, another
+    # domain's file.
+    assert len(no_evidence) == 4, sorted(no_evidence)
+    assert {n.split(":")[0] for n in no_evidence} == {"shotspec.py"}, sorted(no_evidence)
 
 
 #: Modules of `armature_core` whose classes this census cannot INSTANTIATE on a rig with no

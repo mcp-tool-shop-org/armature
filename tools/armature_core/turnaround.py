@@ -115,7 +115,8 @@ def orbit_azimuths(n_views, start_deg, sweep_deg):
     if n < 1:
         raise TurnaroundGate(
             f"a turnaround of {n} view(s) is not a turnaround",
-            {"gate": "TURN", "andon": "TurnaroundGate", "n_views": n})
+            {"clause": "no_views",
+             "gate": "TURN", "andon": "TurnaroundGate", "n_views": n})
     out = [float(start_deg) + float(sweep_deg) * (i / float(n)) for i in range(n)]
     # WAVE 22, F-99e5de1a — the mechanism that produces a NON-ADJACENT revisit, bounded at
     # the function that produces it. `orbit_azimuths(8, 0, 720)` returned

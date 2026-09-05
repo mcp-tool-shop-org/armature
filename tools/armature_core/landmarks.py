@@ -70,18 +70,23 @@ def band_profile(verts, n_bands=200, gap_frac=GAP_FRAC, min_cluster_frac=MIN_CLU
     """
     verts = np.asarray(verts, dtype=np.float64)
     if verts.ndim != 2 or verts.shape[1] != 3:
-        raise LandmarkError(f"expected an (N, 3) vertex array, got shape {verts.shape}")
+        raise LandmarkError(f"expected an (N, 3) vertex array, got shape {verts.shape}",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "vertices_not_n_by_3"})
     if len(verts) < n_bands:
         raise LandmarkError(
             f"{len(verts)} vertices cannot be resolved into {n_bands} bands; "
-            f"the profile would be mostly empty and every landmark read off noise"
-        )
+            f"the profile would be mostly empty and every landmark read off noise",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "too_few_vertices_for_bands"})
 
     lo, hi = verts.min(axis=0), verts.max(axis=0)
     height = hi[2] - lo[2]
     width = hi[0] - lo[0]
     if height <= 0 or width <= 0:
-        raise LandmarkError(f"degenerate bounding box: dims {(hi - lo).tolist()}")
+        raise LandmarkError(f"degenerate bounding box: dims {(hi - lo).tolist()}",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "degenerate_bounding_box"})
     gap_thr = width * gap_frac
 
     order = np.argsort(verts[:, 2], kind="stable")
@@ -165,8 +170,9 @@ def _region_runs(bands):
             f"(legs alone → legs+arms → trunk+arms → trunk). Every landmark below is "
             f"read off those transitions, so placing bones anyway would put joints in "
             f"invented positions that no downstream gate can see. Runs: "
-            f"{[(v, s, e) for v, s, e in runs]}"
-        )
+            f"{[(v, s, e) for v, s, e in runs]}",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "silhouette_is_not_a_standing_figure"})
     return {"legs_only": runs[0], "legs_and_arms": runs[1],
             "trunk_and_arms": runs[2], "trunk": runs[3], "counts": counts}
 
@@ -235,8 +241,9 @@ def _prune_discontinuities(trace, label):
             f"{label}: only {len(kept)} of {len(trace)} bands form a continuous column "
             f"(jump bound {max_jump:.5f}, this limb's own median width). A centreline read "
             f"off a column that keeps jumping is not a centreline, and the joints placed "
-            f"along it would land in invented positions with every gate still green"
-        )
+            f"along it would land in invented positions with every gate still green",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "limb_column_is_discontinuous"})
     return kept, {"kept": len(kept), "dropped": dropped, "max_jump": float(max_jump)}
 
 
@@ -244,11 +251,15 @@ def _point_along(trace, frac):
     """Point at `frac` of the arc length of a centroid trace, ordered high z to low z."""
     pts = [np.array([t["cx"], t["cy"], t["z"]]) for t in trace]
     if len(pts) < 2:
-        raise LandmarkError("a limb centreline needs at least two bands to have a length")
+        raise LandmarkError("a limb centreline needs at least two bands to have a length",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "too_few_bands_for_a_centreline"})
     seg = [float(np.linalg.norm(pts[i + 1] - pts[i])) for i in range(len(pts) - 1)]
     total = sum(seg)
     if total <= 0:
-        raise LandmarkError("limb centreline has zero length")
+        raise LandmarkError("limb centreline has zero length",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "centreline_has_zero_length"})
     target = total * frac
     acc = 0.0
     for i, s in enumerate(seg):
@@ -322,7 +333,9 @@ def facing(verts, z_ankle, height, z_ground):
     foot = verts[verts[:, 2] < z_ground + 0.03 * height]
     shin = verts[(verts[:, 2] >= z_ankle) & (verts[:, 2] < z_ankle + 0.05 * height)]
     if len(foot) == 0 or len(shin) == 0:
-        raise LandmarkError("no foot or shin slab to read facing from")
+        raise LandmarkError("no foot or shin slab to read facing from",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "no_slab_to_read_facing_from"})
     y_shin = float(shin[:, 1].mean())
     fwd = float(foot[:, 1].max()) - y_shin
     back = y_shin - float(foot[:, 1].min())
@@ -399,7 +412,9 @@ def derive(verts, n_bands=200):
     t0, t1 = reg["trunk"][1], reg["trunk"][2]
     trunk = [(i, bands[i]["clusters"][0]) for i in range(t0, t1) if bands[i]["clusters"]]
     if not trunk:
-        raise LandmarkError("the trunk region holds no clusters to find a neck in")
+        raise LandmarkError("the trunk region holds no clusters to find a neck in",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "trunk_holds_no_clusters"})
     i_neck, c_neck = min(trunk, key=lambda p: p[1]["x_hi"] - p[1]["x_lo"])
     w_neck = c_neck["x_hi"] - c_neck["x_lo"]
     below = [i for i, c in trunk if i < i_neck and (c["x_hi"] - c["x_lo"]) >= 2.0 * w_neck]
@@ -409,8 +424,9 @@ def derive(verts, n_bands=200):
             f"no neck found: the narrowest trunk band (width {w_neck:.5f} at z "
             f"{bands[i_neck]['z']:.5f}) is not flanked above and below by sections at "
             f"least twice as wide, so what was found is not a neck between a head and a "
-            f"pair of shoulders"
-        )
+            f"pair of shoulders",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "no_neck_between_two_wider_sections"})
     i_neck_base, i_head_base = max(below), min(above)
     z_neck_base, z_head_base = bands[i_neck_base]["z"], bands[i_head_base]["z"]
     y_trunk = float(np.mean([c["cy"] for _, c in trunk]))
@@ -420,7 +436,9 @@ def derive(verts, n_bands=200):
     leg_widths = [(i, max(c["x_hi"] - c["x_lo"] for c in bands[i]["clusters"]))
                   for i in range(l0, l1) if bands[i]["clusters"]]
     if len(leg_widths) < 4:
-        raise LandmarkError("too few leg-only bands to locate an ankle")
+        raise LandmarkError("too few leg-only bands to locate an ankle",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "too_few_leg_bands_for_an_ankle"})
     shin_ref = float(np.median([w for _, w in leg_widths[len(leg_widths) // 2:]]))
     flare = [i for i, w in leg_widths if w >= 1.6 * shin_ref]
     i_ankle = (max(flare) + 1) if flare else leg_widths[0][0]
@@ -471,8 +489,9 @@ def derive(verts, n_bands=200):
     if len(trunk_trace) < 4:
         raise LandmarkError(
             f"the trunk column resolves to {len(trunk_trace)} bands; a torso read off fewer "
-            f"than four is noise"
-        )
+            f"than four is noise",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "trunk_column_too_short"})
     x_axis = float(np.median([t["cx"] for t in trunk_trace]))
 
     def trunk_x_at(z):
@@ -536,8 +555,9 @@ def derive(verts, n_bands=200):
         if len(arm) < 4 or len(leg) < 4:
             raise LandmarkError(
                 f"side {side}: arm trace has {len(arm)} bands and leg trace {len(leg)}; "
-                f"a limb centreline read off fewer than four bands is noise"
-            )
+                f"a limb centreline read off fewer than four bands is noise",
+                {"gate": None, "andon": "LandmarkError",
+                 "clause": "limb_trace_too_short"})
         arm, arm_health = _prune_discontinuities(arm, f"arm_{side}")
         leg, leg_health = _prune_discontinuities(leg, f"leg_{side}")
         traces[f"arm_{side}"], traces[f"leg_{side}"] = arm, leg
@@ -577,7 +597,9 @@ def derive(verts, n_bands=200):
         foot = verts[(verts[:, 2] < z_ankle) &
                      ((verts[:, 0] > x_axis) == ((side == "L") == (left_sign > 0)))]
         if len(foot) == 0:
-            raise LandmarkError(f"side {side}: no foot vertices below the ankle")
+            raise LandmarkError(f"side {side}: no foot vertices below the ankle",
+                {"gate": None, "andon": "LandmarkError",
+                 "clause": "no_foot_vertices_below_the_ankle"})
         toe_y = float(foot[:, 1].max() if face["facing_y_sign"] > 0 else foot[:, 1].min())
         put(f"toe_{side}", (ank["cx"], toe_y, z_ground),
             "MEASURED — furthest foot vertex in the measured facing direction, at ground")
@@ -590,7 +612,9 @@ def derive(verts, n_bands=200):
     # --- head markers. Nose is measured; eyes and ears are not on a clay mannequin.
     head = verts[verts[:, 2] >= z_head_base]
     if len(head) == 0:
-        raise LandmarkError("no head vertices above the measured head base")
+        raise LandmarkError("no head vertices above the measured head base",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "no_head_vertices_above_the_head_base"})
     hz = float(head[:, 2].mean())
     face_slab = head[(head[:, 2] > hz - 0.06 * height) & (head[:, 2] < hz + 0.06 * height)]
     slab = face_slab if len(face_slab) else head
@@ -678,7 +702,9 @@ def cross_section_radius(derived, trace_key, z_lo, z_hi):
     """
     trace = (derived.get("traces") or {}).get(trace_key) or []
     if not trace:
-        raise LandmarkError(f"no trace {trace_key!r} to size a bone against")
+        raise LandmarkError(f"no trace {trace_key!r} to size a bone against",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "no_trace_to_size_a_bone_against"})
     lo, hi = (z_lo, z_hi) if z_lo <= z_hi else (z_hi, z_lo)
     band = [p["r_mean"] for p in trace if lo - 1e-9 <= p["z"] <= hi + 1e-9]
     if not band:
@@ -698,8 +724,9 @@ def bone_radii(derived, bones):
         if key is None:
             raise LandmarkError(
                 f"bone {b.name!r} has no cross-section trace registered in "
-                f"BONE_CROSS_SECTION; it cannot be sized from a measurement"
-            )
+                f"BONE_CROSS_SECTION; it cannot be sized from a measurement",
+                {"gate": None, "andon": "LandmarkError",
+                 "clause": "bone_has_no_registered_cross_section"})
         out[b.name] = cross_section_radius(derived, key,
                                            marks[b.head][2], marks[b.tail][2])
     return out

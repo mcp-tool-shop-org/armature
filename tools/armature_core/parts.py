@@ -77,15 +77,21 @@ def assign_faces(centroids, bones, radii, normalise=False):
     """
     c = np.asarray(centroids, dtype=np.float64)
     if c.ndim != 2 or c.shape[1] != 3 or not len(c):
-        raise ArmatureError(f"expected a non-empty (N, 3) centroid array, got {c.shape}")
+        raise ArmatureError(f"expected a non-empty (N, 3) centroid array, got {c.shape}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "centroids_not_n_by_3"})
     if not bones:
-        raise ArmatureError("no parts to assign faces to")
+        raise ArmatureError("no parts to assign faces to",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "no_parts_to_assign_to"})
     if normalise:
         missing = [b["name"] for b in bones if not (radii.get(b["name"], 0) > 0)]
         if missing:
             raise ArmatureError(
                 f"no positive measured radius for {missing}; normalised assignment divides "
-                f"by each part's own radius and will not fall back to a length in metres")
+                f"by each part's own radius and will not fall back to a length in metres",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "part_radius_not_positive"})
 
     u = np.empty((len(c), len(bones)), dtype=np.float64)
     for j, b in enumerate(bones):
@@ -172,7 +178,9 @@ def joint_planes(bones, marks, ball_radius, limb_radius,
         length = float(np.linalg.norm(axis))
         if length <= 0:
             raise ArmatureError(f"joint {parent}->{b['name']}: the child bone has no length, "
-                                f"so the cut plane has no normal")
+                                f"so the cut plane has no normal",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "child_bone_has_no_length"})
         r = ball_radius.get(b["name"])
         source = "measured sculpted ball radius"
         if r is None or not (r > 0):
@@ -184,7 +192,9 @@ def joint_planes(bones, marks, ball_radius, limb_radius,
             # instead of the ArmatureError it exists to raise, so the failure path was
             # broken in exactly the case it was written for.
             raise ArmatureError(f"joint {parent}->{b['name']}: no positive radius from a "
-                                f"ball or a cross-section; the collar cannot be sized")
+                                f"ball or a cross-section; the collar cannot be sized",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "no_positive_joint_radius"})
         out.append({
             "parent": parent, "child": b["name"],
             "point": [float(v) for v in head],

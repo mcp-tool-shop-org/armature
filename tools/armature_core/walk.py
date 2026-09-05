@@ -247,7 +247,8 @@ def gate_stance_frac_is_modelled(stance_frac, where="GaitParams"):
         f"baked into the authored ground truth every downstream measurement is graded "
         f"against, with every gate green. A general gait derives all four together; until "
         f"it exists this refuses rather than pretending",
-        {"gate": "GAIT", "andon": "GaitGate", "stance_frac": sf,
+        {"clause": "stance_frac_not_modelled",
+         "gate": "GAIT", "andon": "GaitGate", "stance_frac": sf,
          "modelled": STANCE_FRAC_MODELLED,
          "flight_fraction_of_cycle": flight, "double_support_fraction_of_cycle": double,
          "where": where})
@@ -310,7 +311,8 @@ def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
             f"the cadence was gated over {n} phase sample(s) ({where}); a walk cannot be "
             f"checked for representability on fewer than two frames, and a gate that "
             f"compares no interval is a check that cannot fail",
-            {"gate": "CADENCE", "andon": "CadenceGate", "where": where,
+            {"clause": "too_few_phase_samples",
+             "gate": "CADENCE", "andon": "CadenceGate", "where": where,
              "n_phase_samples": n})
 
     du = [(phase[i] - phase[i - 1]) / (2.0 * math.pi) for i in range(1, n)]

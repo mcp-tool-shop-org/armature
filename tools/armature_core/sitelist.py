@@ -50,7 +50,7 @@ class SiteListError(ArmatureError):
     distrusts the paragraph entirely.
 
     **So the citations are on the SYMBOL and the line numbers are gone.** That is the general
-    form, and it is the same fix `lift_solve.py`'s three `lift_clip.py:275` citations take in
+    form, and it is the same fix `lift_solve.py`'s three `lift_clip.py` citations take in
     this wave: a line citation does not survive an edit above it, a symbol does, and prose
     that cites functions needs no census to keep it true. A CENSUS over all 17
     `<file>.py:<line>` prose citations in this domain's 21 modules resolved 14 to a non-blank
