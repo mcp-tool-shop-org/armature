@@ -295,7 +295,9 @@ def pin_against_e08(positive, negative, e08_record_path):
         raise PayloadError(
             "the prompt this graph would submit is not the one E08 submitted, so the "
             "two-pipeline sheet would be comparing two prompts as well as two routes: "
-            + "; ".join(problems))
+            + "; ".join(problems),
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "prompt_is_not_the_e08_prompt", "problems": problems})
     ev["verdict"] = "positive and negative byte-identical to E08's submitted strings"
     return ev
 
@@ -340,7 +342,12 @@ def resolve_start_frame(path, declared_sha256=None):
     try:
         return CAM.resolve_start_frame(path, declared_sha256)
     except CAM.PayloadError as exc:
-        floor = {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
+        # The FLOOR carries a clause too (wave 25, F-d30bb5fb): the sibling's own keys
+        # still win, so a refusal that names its clause keeps it, and one that does not
+        # reaches the halt line with a word rather than with `clause` absent entirely.
+        floor = {"gate": "PAYLOAD", "andon": "start_frame",
+                 "clause": "start_frame_refused_by_the_sibling",
+                 "flag": "--start-frame",
                  "path": path, "declared_sha256": declared_sha256}
         raise PayloadError(
             str(exc),
@@ -544,7 +551,8 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
             "whole of the conditioning, and `meta['start_image']` used to identify it only "
             "by a server-side content-addressed name in a separate uploads file. Call "
             "`resolve_start_frame(path, declared)` and pass its evidence",
-            {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
+            {"gate": "PAYLOAD", "andon": "start_frame",
+             "clause": "start_frame_was_not_resolved", "flag": "--start-frame",
              "start_frame": start_frame})
     # ---- and the measurement, not only the digest (wave 12, F-08853dfb). A record whose
     # `fit` line is a sentence about an image nothing opened is the claim wave 10 set out to
@@ -806,8 +814,10 @@ def verify_topology(wf, start_name):
             problems.append(f"{dead} is present; the licence map bans or excludes this tier")
 
     if problems:
-        raise PayloadError("the built graph is not the graph the spec describes: "
-                           + "; ".join(problems))
+        raise PayloadError(
+            "the built graph is not the graph the spec describes: " + "; ".join(problems),
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "built_graph_is_not_the_spec_graph", "problems": problems})
     return True
 
 
@@ -835,7 +845,11 @@ def main(argv=None):
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
     if "start_frame" not in uploads:
-        raise PayloadError(f"{a.uploads} carries no `start_frame` upload name")
+        raise PayloadError(
+            f"{a.uploads} carries no `start_frame` upload name",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "uploads_carry_no_start_frame", "flag": "--uploads",
+             "path": os.path.abspath(a.uploads)})
 
     registry = None
     if a.seeds_registry:
@@ -847,7 +861,9 @@ def main(argv=None):
     if not a.negative_source:
         raise PayloadError(
             "--negative-source is required: Wan's sample_neg_prompt is READ from the "
-            "banked config, never retyped. E09's citation check fired on this string")
+            "banked config, never retyped. E09's citation check fired on this string",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "negative_source_not_supplied", "flag": "--negative-source"})
     negative = E08.read_negative(a.negative_source)
     ident, ident_original, drops = E08.identity_clause()
     positive = ident + ". " + E08.SCENE_CLAUSE

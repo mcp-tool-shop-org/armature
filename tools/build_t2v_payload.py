@@ -372,11 +372,17 @@ def boundary_step(steps, shift, boundary):
     if crossing is None:
         raise RG.RouteGate(
             f"the shifted sigma never falls below the boundary {boundary} across {steps} "
-            f"steps, so the low-noise expert would never run", {"table": table[:6]})
+            f"steps, so the low-noise expert would never run",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "boundary_is_never_crossed",
+             "boundary": boundary, "steps": steps, "table": table[:6]})
     if crossing == 0:
         raise RG.RouteGate(
             f"the shifted sigma is below the boundary {boundary} from step 0, so the "
-            f"high-noise expert would never run", {"table": table[:6]})
+            f"high-noise expert would never run",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "boundary_is_crossed_at_step_zero",
+             "boundary": boundary, "steps": steps, "table": table[:6]})
     return crossing, table
 
 
@@ -402,7 +408,11 @@ def trajectory(profile):
                 "split_origin": "SOLVED from boundary x shift",
                 "schedule": table, "values": REFERENCE}
     if profile != "reference":
-        raise RG.RouteGate(f"unknown profile {profile!r}", {"known": ["reference", "derived"]})
+        raise RG.RouteGate(
+            f"unknown profile {profile!r}",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "unknown_trajectory_profile",
+             "profile": profile, "known": ["reference", "derived"]})
 
     steps = COMFY_REFERENCE["sample_steps"]["value"]
     shift = COMFY_REFERENCE["sample_shift"]["value"]

@@ -384,3 +384,203 @@ def test_payload_error_names_its_own_gate_id(module):
     assert not issubclass(mod.PayloadError, GateFailure), module
     assert str(mod.PayloadError("m")) == "m", module          # no `[PAYLOAD]` prefix
     assert mod.PayloadError("m").evidence is None, module     # wave 16's property, unmoved
+
+
+# ===========================================================================
+# F-d30bb5fb (panel HIGH) — this domain's share of the evidence-triple census
+#
+# `tests/test_gates.evidence_dicts_missing(key, root=None)` defaults `root` to
+# `tools/armature_core` and is called with that default at every production site, so the
+# layer that PRINTS the receipt — `tools/*.py` — was examined by nothing and the ratchet
+# `EVIDENCE_WITHOUT_GATE_ID_ROUTED` read as an empty set. Filed as instruments-measure's
+# SEAM 1 asks, and widened to the two keys that post did not quote.
+#
+# CALLED with `root=TOOLS_DIR` on `580af47`, re-derived branch-local before the first edit:
+#   gate    75 offenders tools-wide / 492 examined / 8 unreadable / 50 with no evidence
+#   andon  118
+#   clause 119   <- the key a halt reader branches on
+# Builders' share, by site identity `(file, function, class)`: 9 missing `gate`, 15 missing
+# `andon`, 19 missing `clause`, and 19 sites passing NO evidence argument at all.
+#
+# THE ANCHOR the finding names is the seed's own site: `build_animate_payload.upload_value`
+# raised `{"clause": "missing_upload_key", ...}` — a clause and no `gate`, no `andon` —
+# while `gate_reference_fit` sixty lines above it carried all three.
+#
+# WHAT IS NOT DONE HERE, and why: the census WIDENING itself (pointing
+# `evidence_dicts_missing` at `TOOLS_DIR` in a tree-wide test with a dated ratchet routed
+# per domain) is the tests domain's, wave 26. This block closes builders' rows against the
+# call, and asserts them by CALLING the census with `root=TOOLS_DIR` here rather than by
+# listing sites — so the property is held by a derivation and cannot be satisfied by a
+# table going stale.
+#
+# MEASURED AND OUT OF DOMAIN, filed rather than fixed (the finding asks for it):
+# `tests/test_amend_w16_builders._refusals_with_thin_evidence` raises
+# `TypeError: '<' not supported between instances of 'str' and 'NoneType'` on
+# `tools/build_i2v_payload.py`, because `_evidence_keys` takes `{k.arg for k in
+# ev.keywords}` and a `**spread` keyword's `arg` is None. That helper is not called by any
+# test today; it is a tests-domain object and is posted, not touched.
+
+#: The thirteen modules this domain owns, in the frozen domain map's order.
+W25_DOMAIN_MODULES = [
+    "build_animate_payload.py", "build_assembly_payload.py",
+    "build_camera_i2v_payload.py", "build_cascade_payload.py", "build_i2v_payload.py",
+    "build_lora_arm_payload.py", "build_payload.py", "build_r2v_payload.py",
+    "build_t2v_payload.py", "canon_gate.py", "fetch_run.py", "fetch_t2v_run.py",
+    "gate_saved_graph.py",
+]
+
+#: Every clause word this wave ADDS to the vocabulary, spelled here so none of them joins
+#: `test_refusal_clauses.CLAUSES_NAMED_BY_NO_FIXTURE` — a receipt word no fixture names is
+#: a word no test would notice changing. Grouped by the module that raises it.
+W25_NEW_CLAUSE_WORDS = {
+    "build_animate_payload.py": [
+        "negative_source_has_no_sample_neg_prompt", "identity_clause_absent",
+        "identity_clause_phrase_absent", "pose_pack_frames_are_not_the_shot_length",
+        "built_graph_is_not_the_spec_graph", "negative_source_not_supplied",
+    ],
+    "build_assembly_payload.py": [
+        "flat_slot_ceiling_exceeded", "frame_key_is_not_a_frame_name",
+        "frame_key_shapes_are_mixed", "frame_indices_have_a_hole",
+        "slot_plan_does_not_cover_the_clip", "slot_does_not_hold_its_frame",
+        "two_frames_share_one_server_name",
+    ],
+    "build_camera_i2v_payload.py": [
+        "performance_clause_does_not_dominate", "payload_is_not_the_ruling_it_describes",
+        "start_frame_was_not_resolved", "uploads_carry_no_start_frame",
+        "override_names_no_trajectory_field", "override_field_is_structural",
+        "override_does_not_move_the_field",
+    ],
+    "build_i2v_payload.py": [
+        "prompt_is_not_the_e08_prompt", "start_frame_refused_by_the_sibling",
+    ],
+    "build_lora_arm_payload.py": [
+        "positive_encoder_is_not_reachable", "baseline_is_not_the_two_expert_split",
+        "experts_read_different_positives", "positive_prompt_is_empty",
+        "tier_matched_pair_is_crossed", "tier_is_not_in_the_lora_name",
+        "unnamed_difference_from_the_baseline", "baseline_node_was_removed",
+        "insertions_are_not_the_named_ones", "named_break_did_not_happen",
+        "seed_is_not_in_the_committed_registry",
+        "noise_adding_sampler_carries_another_seed", "model_chain_loops",
+        "conditioning_chain_loops", "inserted_node_id_already_exists",
+        "expected_model_sampling_node", "expected_unet_loader_node",
+    ],
+    "build_payload.py": [
+        "upload_count_is_not_the_shot_length",
+        "control_source_directory_holds_no_frames", "no_uploaded_control_frames",
+        "distinct_uploads_disagree_with_the_rendered_control",
+        "control_names_not_supplied", "built_graph_link_topology_is_wrong",
+        "carried_from_an_assembly_gate",
+    ],
+    "build_t2v_payload.py": [
+        "boundary_is_never_crossed", "boundary_is_crossed_at_step_zero",
+        "unknown_trajectory_profile",
+    ],
+    "gate_saved_graph.py": [
+        "saved_values_are_not_the_built_values", "unreadable_link_table_entry",
+        "link_table_entry_names_no_origin", "saved_topology_is_not_the_built_topology",
+    ],
+}
+
+#: The ONE site in this domain the walk cannot judge, named rather than left in a count.
+#: `build_payload.gate_out_writable` builds its evidence as a literal carrying all three
+#: keys and then, only when the caller supplied `extra`, rebinds it to `dict(extra, **ev)`.
+#: `_resolve_dict_expr` follows the Name to that latest assignment and cannot know what a
+#: parameter holds, so the site is UNREADABLE rather than an offender. Its literal is
+#: asserted directly below, which is what the walk would have proved if it could.
+W25_UNREADABLE_BY_THE_WALK = ["build_payload.py:gate_out_writable (PayloadOutHalt)"]
+
+
+@pytest.mark.parametrize("key", ["gate", "andon", "clause"])
+def test_no_raise_in_this_domain_omits_the_identity_triple(key):
+    """F-d30bb5fb · the property, held by CALLING the census rather than by a list.
+
+    reverted-red: yes. On `580af47` this call returns 9 / 15 / 19 offender sites in these
+    thirteen modules for `gate` / `andon` / `clause`, plus 19 sites passing no evidence
+    argument at all.
+    """
+    import test_gates as TG
+
+    offenders, examined, unreadable, no_evidence = TG.evidence_dicts_missing(
+        key, root=os.path.join(REPO, "tools"))
+    assert examined > 400, examined          # a census over nothing is not a clean tree
+    mine = sorted(s for s in offenders if s.split(":")[0] in W25_DOMAIN_MODULES)
+    assert mine == [], mine
+    mine_none = sorted(s for s in no_evidence if s.split(":")[0] in W25_DOMAIN_MODULES)
+    assert mine_none == [], mine_none
+    mine_unreadable = sorted(s for s in unreadable
+                             if s.split(":")[0] in W25_DOMAIN_MODULES)
+    assert mine_unreadable == W25_UNREADABLE_BY_THE_WALK, mine_unreadable
+
+
+def test_the_one_unreadable_site_carries_the_triple_the_walk_cannot_see():
+    """The half a census that cannot judge a site must not be allowed to skip.
+
+    `gate_out_writable`'s evidence is unreadable to the AST walk only because a caller may
+    merge `extra` under it. Both branches are driven and both carry the three keys.
+    """
+    import build_payload as BP
+
+    plain = BP.gate_out_writable(os.path.join(REPO, "does", "not", "exist.json"),
+                                 flag="--out", what="a record")
+    assert {"gate", "andon", "clause"} <= set(plain), sorted(plain)
+    with pytest.raises(BP.PayloadOutHalt) as caught:
+        BP.gate_out_writable(REPO, flag="--out", what="a record",
+                             extra={"tool": "a caller's own key"})
+    ev = caught.value.evidence
+    assert ev["gate"] == "OUT" and ev["andon"] == "PayloadOutHalt", ev
+    assert ev["clause"] and ev["tool"] == "a caller's own key", ev
+
+
+def test_the_census_still_goes_red_on_a_raise_that_drops_the_triple(tmp_path):
+    """A census that cannot fail is not a census. A module shaped like this domain's, with
+    one refusal carrying a clause and no gate — the anchor's exact shape — is walked and
+    must be reported."""
+    import test_gates as TG
+
+    root = tmp_path / "tools"
+    root.mkdir()
+    (root / "errors.py").write_text(
+        "class ArmatureError(RuntimeError):\n    pass\n", encoding="utf-8")
+    (root / "build_probe_payload.py").write_text(
+        "from errors import ArmatureError\n\n\n"
+        "class ProbeError(ArmatureError):\n    pass\n\n\n"
+        "def upload_value(key):\n"
+        "    raise ProbeError('no such key', {'clause': 'missing_upload_key'})\n",
+        encoding="utf-8")
+    offenders, examined, _unreadable, _none = TG.evidence_dicts_missing("gate", root=root)
+    assert examined == 1, examined
+    assert sorted(offenders) == ["build_probe_payload.py:upload_value (ProbeError)"],         offenders
+
+
+@pytest.mark.parametrize("filename", sorted(W25_NEW_CLAUSE_WORDS),
+                         ids=sorted(W25_NEW_CLAUSE_WORDS))
+def test_every_new_clause_word_is_raised_by_the_module_that_records_it(filename):
+    """The table above is a claim about the tree; this reads the tree back.
+
+    Each word must appear as a `clause` value in the module it is listed under, so a
+    renamed clause fails here rather than leaving a fixture naming a word nothing raises.
+    """
+    import _census_nodes as CN
+
+    src = open(os.path.join(TOOLS, filename), encoding="utf-8").read()
+    for word in W25_NEW_CLAUSE_WORDS[filename]:
+        assert '"' + word + '"' in src, (filename, word)
+    vocabulary = CN.clause_literals()
+    missing = [w for w in W25_NEW_CLAUSE_WORDS[filename] if w not in vocabulary]
+    assert missing == [], missing
+
+
+def test_the_new_clause_words_are_distinct_and_none_was_already_taken():
+    """Rule: one condition, one word. A word reused across two modules would put two
+    conditions behind one key a halt reader branches on — except where the SAME condition
+    is raised by two tools from one implementation, which is enumerated rather than assumed.
+    """
+    from collections import Counter
+
+    seen = Counter(w for words in W25_NEW_CLAUSE_WORDS.values() for w in words)
+    repeated = sorted(w for w, n in seen.items() if n > 1)
+    # `two_frames_share_one_server_name` is ONE condition in TWO tools: the assembly and
+    # cascade builders each refuse a upload map whose frames collapse onto one server
+    # object, with the same sentence. `built_graph_is_not_the_spec_graph` is the same shape
+    # across the three graph builders that carry `verify_topology`.
+    assert repeated == [], repeated

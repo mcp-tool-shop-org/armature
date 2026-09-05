@@ -158,7 +158,13 @@ def _carry(gate, *args, **kwargs):
     except AS.AssemblyGate as exc:
         raise PayloadError(
             str(exc),
-            dict(exc.evidence or {},
+            # The FLOOR under the sibling's own keys (wave 25, F-d30bb5fb), in the shape
+            # `build_i2v_payload.resolve_start_frame` already carries: the carried refusal's
+            # `gate` / `andon` / `clause` still win, and a sibling clause this tool cannot
+            # see keeps its own word.
+            dict({"gate": "PAYLOAD", "andon": "PayloadError",
+                  "clause": "carried_from_an_assembly_gate"},
+                 **(exc.evidence or {}),
                  carried_from=f"build_assembly_payload.{gate.__name__}")) from exc
 
 
@@ -390,7 +396,11 @@ def _load_uploads(arm="A1a", experiment="E02"):
     # (`^[0-9]{5}(\.png)?$`, one spelling per map) and the gap check over `0..n-1`.
     keys = _carry(frame_order, control)
     if len(keys) != LENGTH:
-        raise PayloadError(f"expected {LENGTH} uploaded control frames, have {len(keys)}")
+        raise PayloadError(
+            f"expected {LENGTH} uploaded control frames, have {len(keys)}",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "upload_count_is_not_the_shot_length",
+             "expected": LENGTH, "got": len(keys)})
     names = [control[k] for k in keys]
 
     # Server names are content-addressed (measured: re-uploading a frame returns the same
@@ -418,11 +428,17 @@ def _load_uploads(arm="A1a", experiment="E02"):
             f"{got} distinct server name(s) in the upload map are bound to nothing. A "
             f"directory whose frames were cleaned up, moved, renamed or converted is not "
             f"an arm with one held pose, and a check that cannot tell them apart is the "
-            f"one that lets a collapsed batch through"
-        )
+            f"one that lets a collapsed batch through",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "control_source_directory_holds_no_frames",
+             "source_dir": os.path.abspath(source_dir),
+             "distinct_server_names": got})
     if expected is None:
         if got < 1:
-            raise PayloadError("no uploaded control frames at all")
+            raise PayloadError(
+                "no uploaded control frames at all",
+                {"gate": "PAYLOAD", "andon": "PayloadError",
+                 "clause": "no_uploaded_control_frames"})
         comparison = (f"{got} distinct server name(s) >= 1 — DEGRADED: {source_dir!r} is "
                       f"not on this rig, so nothing local bounds the batch. The check is "
                       f"'at least one distinct server name' and no more")
@@ -430,8 +446,11 @@ def _load_uploads(arm="A1a", experiment="E02"):
         raise PayloadError(
             f"{LENGTH} uploaded frames map to {got} distinct server name(s), but "
             f"{source_dir} holds {expected} distinct image(s); the batch the "
-            f"sampler receives would not be the control that was rendered"
-        )
+            f"sampler receives would not be the control that was rendered",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "distinct_uploads_disagree_with_the_rendered_control",
+             "source_dir": os.path.abspath(source_dir),
+             "distinct_server_names": got, "distinct_images": expected})
     else:
         comparison = (f"{got} distinct server name(s) == {expected} distinct local "
                       f"image(s)")
@@ -683,6 +702,7 @@ def verify_topology(wf, arm, use_control, expects_reference=None, control_names=
             f"frame order lives in the upload map, not in the graph - with no names the "
             f"slot->frame andon inspects nothing and returns green",
             {"gate": "PAYLOAD", "andon": "slot_frame_index_population",
+             "clause": "control_names_not_supplied",
              "arm": arm, "use_control": True, "control_names": None})
 
     problems = []
@@ -747,7 +767,11 @@ def verify_topology(wf, arm, use_control, expects_reference=None, control_names=
             problems.append(f"{dead} present; the video bridge was not removed")
 
     if problems:
-        raise PayloadError(f"[{arm}] link topology is wrong: " + "; ".join(problems))
+        raise PayloadError(
+            f"[{arm}] link topology is wrong: " + "; ".join(problems),
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "built_graph_link_topology_is_wrong",
+             "arm": arm, "problems": problems})
 
     # ---- ANDON, on the direction none of the clauses above bounds: slot k of the batch
     # node holds the upload name of frame k. Everything above reads names, counts and

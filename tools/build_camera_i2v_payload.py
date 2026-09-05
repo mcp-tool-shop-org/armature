@@ -429,7 +429,11 @@ def build_prompt():
             f"dressing's {dress_words} (ratio {ratio:.2f}, floor "
             f"{PROMPT_DOMINANCE['min_ratio']}). The wave exists to invert wave 1's "
             f"proportion, and a prompt that did not would be measuring the camera lever "
-            f"alone while the report described two")
+            f"alone while the report described two",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "performance_clause_does_not_dominate",
+             "performance_words": perf_words, "dressing_words": dress_words,
+             "ratio": ratio, "min_ratio": PROMPT_DOMINANCE["min_ratio"]})
 
     log = {
         "carried_verbatim": {"identity_clause": ident,
@@ -698,7 +702,8 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
     """
     with open(w1_record_path, encoding="utf-8") as fh:
         w1 = json.load(fh)
-    ev = {"gate": "LEDGER_W3", "wave_1_record": os.path.abspath(w1_record_path),
+    ev = {"gate": "LEDGER_W3", "andon": "PayloadError",
+          "wave_1_record": os.path.abspath(w1_record_path),
           "wave_1_seed": w1.get("seed"),
           "comparison_is": ("ROUTE-LEVEL, not single-variable. Four properties break "
                             "deliberately and are listed below; no number from this run may "
@@ -810,9 +815,11 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
         # The evidence rides the HALT, not only the pass. It was built, filled, and then
         # dropped on the floor here, so the failing measurement — the interesting one —
         # reached no record at all.
+        ev["clause"] = "payload_is_not_the_ruling_it_describes"
+        ev["problems"] = problems
         raise PayloadError("wave 3's payload is not the one the ruling describes: "
                            + "; ".join(problems),
-                           dict(ev, problems=problems))
+                           ev)
     moved = sorted(overrides)
     ev["verdict"] = (
         f"{len(DELIBERATE_BREAKS)} deliberate breaks verified as actual; "
@@ -842,18 +849,27 @@ def effective_trajectory(overrides=None):
         if field not in out:
             raise PayloadError(
                 f"{field!r} is not a trajectory field; the trajectory is "
-                f"{sorted(out)}")
+                f"{sorted(out)}",
+                {"gate": "PAYLOAD", "andon": "PayloadError",
+                 "clause": "override_names_no_trajectory_field",
+                 "field": field, "trajectory_fields": sorted(out)})
         if field not in OVERRIDABLE:
             raise PayloadError(
                 f"{field!r} is structural to the two-expert split and is not overridable "
                 f"here. Moving it would make the wave incomparable rather than informative; "
-                f"overridable fields are {list(OVERRIDABLE)}")
+                f"overridable fields are {list(OVERRIDABLE)}",
+                {"gate": "PAYLOAD", "andon": "PayloadError",
+                 "clause": "override_field_is_structural",
+                 "field": field, "overridable": list(OVERRIDABLE)})
         was = out[field]["value"]
         if spec["value"] == was:
             raise PayloadError(
                 f"the override for {field!r} sets it to {was!r}, which is what it already "
                 f"was. A break that did not happen is wave 2's failure shape: the report "
-                f"would describe a lever that never moved")
+                f"would describe a lever that never moved",
+                {"gate": "PAYLOAD", "andon": "PayloadError",
+                 "clause": "override_does_not_move_the_field",
+                 "field": field, "value": was})
         out[field] = {"value": spec["value"], "source": spec["source"],
                       "was": was, "moved_by": "an explicit override on this wave"}
     return out
@@ -883,7 +899,8 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
             "whole of the conditioning, and `meta['start_image']` used to identify it only "
             "by a server-side content-addressed name beside a `fit` sentence nothing "
             "checked. Call `resolve_start_frame(path, declared)` and pass its evidence",
-            {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
+            {"gate": "PAYLOAD", "andon": "start_frame",
+             "clause": "start_frame_was_not_resolved", "flag": "--start-frame",
              "start_frame": start_frame})
     if not start_frame.get("image"):
         raise PayloadError(
@@ -1195,8 +1212,10 @@ def verify_topology(wf, start_name):
             problems.append(f"{dead} is present; the licence map bans or excludes this tier")
 
     if problems:
-        raise PayloadError("the built graph is not the graph the spec describes: "
-                           + "; ".join(problems))
+        raise PayloadError(
+            "the built graph is not the graph the spec describes: " + "; ".join(problems),
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "built_graph_is_not_the_spec_graph", "problems": problems})
     return True
 
 
@@ -1224,7 +1243,11 @@ def main(argv=None):
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
     if "start_frame" not in uploads:
-        raise PayloadError(f"{a.uploads} carries no `start_frame` upload name")
+        raise PayloadError(
+            f"{a.uploads} carries no `start_frame` upload name",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "uploads_carry_no_start_frame", "flag": "--uploads",
+             "path": os.path.abspath(a.uploads)})
 
     registry = None
     if a.seeds_registry:
@@ -1236,7 +1259,9 @@ def main(argv=None):
     if not a.negative_source:
         raise PayloadError(
             "--negative-source is required: Wan's sample_neg_prompt is READ from the banked "
-            "config, never retyped. E09's citation check fired on this string")
+            "config, never retyped. E09's citation check fired on this string",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "negative_source_not_supplied", "flag": "--negative-source"})
 
     positive, prompt_log = build_prompt()
     # The SHIPPED positive is what the router checks; `--canon-prompt` is compared

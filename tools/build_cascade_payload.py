@@ -178,7 +178,9 @@ def build_and_write(argv=None):
             f"the upload map carries {len(names)} frames but only {len(set(names))} "
             f"distinct server names: two local frames uploaded to the same object, so the "
             f"cascade would carry a duplicate while every count still read right",
-            {"n": len(names), "distinct": len(set(names))})
+            {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+             "clause": "two_frames_share_one_server_name",
+             "n": len(names), "distinct": len(set(names))})
 
     wf, group_ids = build(names, fps=a.fps, group_size=a.group, prefix=a.prefix)
 

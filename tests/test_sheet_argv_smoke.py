@@ -319,9 +319,10 @@ def test_the_two_walks_are_literally_the_same_function():
     is one walk". A second implementation of a law drifts, and this pair had drifted into
     disagreeing about six modules.
 
-    ⚠ RE-ANCHORED 2026-09-05 (wave 25, F-af838b99): the citation was
-    `tests/test_packaging.py:1367`, and teaching `_exit_convention` to read the one
-    handler's prefix argument moved it onto a blank line. The symbol does not move.
+    ⚠ RE-ANCHORED 2026-09-05 (wave 25): the citation was a bare line number in
+    `test_packaging.py`, and teaching `_exit_convention` to read the one handler's prefix
+    argument moved it onto a blank line. The number is dropped rather than re-measured —
+    the symbol does not move.
     """
     import test_sheet_pairing as SP
 

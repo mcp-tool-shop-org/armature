@@ -200,7 +200,8 @@ def upload_value(uploads, key, source=None):
         raise PayloadError(
             f"{where}carries no `{key}` entry: it is {UPLOAD_KEYS[key]}. Pass an "
             f"--uploads map that names it",
-            {"clause": "missing_upload_key", "key": key,
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "missing_upload_key", "key": key,
              "source": os.path.abspath(source) if source else None,
              "present": sorted(uploads)})
     return uploads[key]
@@ -262,7 +263,10 @@ def read_negative(path):
     if not m:
         raise PayloadError(
             f"{path} carries no `sample_neg_prompt` assignment to read; the negative is not "
-            f"retyped from memory, so the build halts rather than inventing one")
+            f"retyped from memory, so the build halts rather than inventing one",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "negative_source_has_no_sample_neg_prompt",
+             "flag": "--negative-source", "path": os.path.abspath(path)})
     return m.group(2)
 
 
@@ -272,7 +276,10 @@ def identity_clause(path=TWIN_PROMPT_JSON):
         doc = json.load(fh)
     text = doc.get("_entry_verbatim")
     if not isinstance(text, str) or not text.strip():
-        raise PayloadError(f"{path} carries no `_entry_verbatim` identity clause")
+        raise PayloadError(
+            f"{path} carries no `_entry_verbatim` identity clause",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "identity_clause_absent", "path": os.path.abspath(path)})
     original = text
     log = []
     for phrase, reason in IDENTITY_DROPS:
@@ -295,7 +302,9 @@ def identity_clause(path=TWIN_PROMPT_JSON):
                 f"the identity clause no longer contains {phrase!r} as a whole phrase, so "
                 f"this shot's recorded drop cannot be applied. The clause has changed under "
                 f"the experiment and the change log would be describing a different string",
-                {"phrase": phrase, "clause_sha256":
+                {"gate": "PAYLOAD", "andon": "PayloadError",
+                 "clause": "identity_clause_phrase_absent",
+                 "phrase": phrase, "clause_sha256":
                     hashlib.sha256(original.encode("utf-8")).hexdigest()})
         before, after = text[:idx], text[idx + len(phrase):]
         if before.rstrip().endswith(","):
@@ -483,7 +492,10 @@ def build(uploads, seed, negative, positive, registry, reference_fit,
             f"the pose pack declares {packed} frames and the shot is {length}. The "
             f"conditioning node pads a short pose video by REPEATING its last frame and "
             f"truncates a long one, both silently — so a miscount arrives as a performance "
-            f"that freezes or ends early, with every gate green")
+            f"that freezes or ends early, with every gate green",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "pose_pack_frames_are_not_the_shot_length",
+             "pose_pack_frames": packed, "shot_length": length})
 
     wf = {
         "106": {"class_type": "UNETLoader",
@@ -639,8 +651,10 @@ def verify_topology(wf):
             problems.append(f"{dead} is present; the licence map bans or excludes this tier")
 
     if problems:
-        raise PayloadError("the built graph is not the graph the spec describes: "
-                           + "; ".join(problems))
+        raise PayloadError(
+            "the built graph is not the graph the spec describes: " + "; ".join(problems),
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "built_graph_is_not_the_spec_graph", "problems": problems})
     return True
 
 
@@ -680,7 +694,9 @@ def main(argv=None):
     if not neg_path:
         raise PayloadError(
             "--negative-source is required: Wan's sample_neg_prompt is READ from the banked "
-            "config, never retyped. E09's citation check fired on exactly this string")
+            "config, never retyped. E09's citation check fired on exactly this string",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "negative_source_not_supplied", "flag": "--negative-source"})
     negative = read_negative(neg_path)
     ident, ident_original, drops = identity_clause()
     positive = ident + ". " + SCENE_CLAUSE

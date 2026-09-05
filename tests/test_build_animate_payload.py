@@ -379,8 +379,9 @@ def test_the_missing_drop_halt_carries_its_evidence(tmp_path, monkeypatch):
 
 def test_the_phrase_matcher_is_canons_and_not_a_second_one():
     """family: derived by AST over `tools/*.py` for a `str.replace` call whose argument is
-    built from a phrase constant -> 1 site — tools/build_animate_payload.py:251 (now
-    removed). The locator this file uses is `armature_core.canon._find_phrase`, the same
+    built from a phrase constant -> 1 site, in `build_animate_payload` (now removed; the
+    line number that stood here drifted three times and is dropped rather than re-measured
+    a fourth — wave 25). The locator this file uses is `armature_core.canon._find_phrase`, the same
     object `canon.cover` and `canon.residue` search with."""
     from armature_core import canon as C
 

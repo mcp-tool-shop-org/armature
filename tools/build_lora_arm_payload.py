@@ -131,6 +131,32 @@ class TierGate(GateFailure):
     gate = "PAIR_TIER"
 
 
+class UnknownBaseline(ArmatureError):
+    """The baseline graph is not the E12 two-expert split-step route this tool arms.
+
+    Wave 25, F-d30bb5fb. Nine refusals in this module raised the BARE `ArmatureError` with
+    a message and no evidence at all — the model chain looping, the conditioning chain
+    looping, a baseline that presents no high/low expert pair, two experts reading
+    different positive prompts, an empty positive, an insertion id already in the baseline,
+    and the two "expected class X feeding node Y" shape checks. Every one of them says the
+    same thing about the same operand: the graph handed to `--baseline` is not the route
+    this tool knows how to arm, so it will not guess.
+
+    They could not simply GAIN an evidence dict where they stood.
+    `tests/test_instruments_measure_amend_w14.py::
+    test_no_tool_in_this_domain_raises_the_bare_base_with_an_evidence_argument` holds
+    the bare-base shape at zero across `tools/**`, and `errors.py`'s own
+    docstring says why in the same words wave 18's rule 3 does: the two-argument
+    constructor "is the root fix, not a licence for a bare base raise … a site that raises
+    the family names nothing about which andon pulled". So the andon gets a name.
+
+    It is an `ArmatureError` and NOT a `GateFailure`: no gate fired here — the tool
+    declined to proceed on an input it cannot read — so `halt_outcome` records these as
+    "REFUSED — the tool declined to proceed" and the evidence carries `gate: None` beside
+    the clause, which is the honest shape `errors.py` describes for a plain refusal.
+    """
+
+
 def sha256_file(path):
     with open(path, "rb") as fh:
         return hashlib.sha256(fh.read()).hexdigest()
@@ -165,10 +191,12 @@ def experts(graph):
         elif ins.get("add_noise") == "disable":
             found["low"] = nid
     if set(found) != {"high", "low"}:
-        raise ArmatureError(
+        raise UnknownBaseline(
             "the baseline does not present one noise-adding sampler starting at step 0 and "
             f"one noise-free sampler; found {found!r}. This tool only knows the E12 "
-            "two-expert split-step route")
+            "two-expert split-step route",
+            {"gate": None, "andon": "UnknownBaseline",
+             "clause": "baseline_is_not_the_two_expert_split", "found": found})
     return found
 
 
@@ -183,7 +211,11 @@ def model_lineage(graph, node_id):
             return chain
         nxt = str(link[0])
         if nxt in seen:
-            raise ArmatureError(f"the MODEL chain from node {node_id} loops at {nxt}")
+            raise UnknownBaseline(
+                f"the MODEL chain from node {node_id} loops at {nxt}",
+                {"gate": None, "andon": "UnknownBaseline",
+                 "clause": "model_chain_loops", "from_node": str(node_id),
+                 "loops_at": str(nxt)})
         seen.add(nxt)
         chain.append(nxt)
         cur = nxt
@@ -206,18 +238,23 @@ def positive_text_node(graph, sampler_id, max_hops=8):
             break
         nxt = str(link[0])
         if nxt in seen:
-            raise ArmatureError(
-                f"the CONDITIONING chain from node {sampler_id} loops at {nxt}")
+            raise UnknownBaseline(
+                f"the CONDITIONING chain from node {sampler_id} loops at {nxt}",
+                {"gate": None, "andon": "UnknownBaseline",
+                 "clause": "conditioning_chain_loops", "from_node": str(sampler_id),
+                 "loops_at": str(nxt)})
         seen.add(nxt)
         cand = graph.get(nxt) or {}
         text = (cand.get("inputs") or {}).get("text")
         if cand.get("class_type") == "CLIPTextEncode" and isinstance(text, str):
             return nxt, text
         cur = nxt
-    raise ArmatureError(
+    raise UnknownBaseline(
         f"no CLIPTextEncode is reachable along the positive CONDITIONING chain from "
         f"sampler {sampler_id}. This tool gates the text it ships, and a graph whose "
-        f"positive it cannot LOCATE is a graph it must not gate by guessing")
+        f"positive it cannot LOCATE is a graph it must not gate by guessing",
+        {"gate": None, "andon": "UnknownBaseline",
+         "clause": "positive_encoder_is_not_reachable", "sampler": str(sampler_id)})
 
 
 def positive_prompt_from_graph(graph):
@@ -240,15 +277,20 @@ def positive_prompt_from_graph(graph):
         found[tier] = positive_text_node(graph, ks[tier])
     texts = {t for _, t in found.values()}
     if len(texts) != 1:
-        raise ArmatureError(
+        raise UnknownBaseline(
             f"the two experts read different positive prompts ({sorted(texts)!r}); gating "
             f"one of them would leave the other ungoverned, and this tool only knows the "
-            f"E12 two-expert split-step route")
+            f"E12 two-expert split-step route",
+            {"gate": None, "andon": "UnknownBaseline",
+             "clause": "experts_read_different_positives",
+             "texts": sorted(texts)})
     text = texts.pop()
     if not text.strip():
-        raise ArmatureError(
+        raise UnknownBaseline(
             "the positive prompt this graph carries is empty; a spend gated on an empty "
-            "string is a check that cannot fail")
+            "string is a check that cannot fail",
+            {"gate": None, "andon": "UnknownBaseline",
+             "clause": "positive_prompt_is_empty"})
     return text, {tier: nid for tier, (nid, _) in found.items()}
 
 
@@ -261,7 +303,8 @@ def gate_canon_text_is_in_graph(gated, graph):
     that is about to be written and require byte equality.
     """
     shipped, nodes = positive_prompt_from_graph(graph)
-    ev = {"gate": "CANON", "text_nodes": nodes, "gated_len": len(gated or ""),
+    ev = {"gate": "CANON", "andon": "GateCanon",
+          "text_nodes": nodes, "gated_len": len(gated or ""),
           "shipped_len": len(shipped)}
     if gated != shipped:
         raise GateCanon(
@@ -282,9 +325,11 @@ def build_arm(base, arm):
 
     for nid in (LORA_HIGH_ID, LORA_LOW_ID):
         if nid in wf:
-            raise ArmatureError(
+            raise UnknownBaseline(
                 f"node id {nid} already exists in the baseline — this tool would overwrite "
-                "it, which is a silent edit to a byte-pinned graph")
+                "it, which is a silent edit to a byte-pinned graph",
+                {"gate": None, "andon": "UnknownBaseline",
+                 "clause": "inserted_node_id_already_exists", "node": str(nid)})
 
     ks = experts(wf)
     # The ModelSamplingSD3 immediately feeding each expert is where the insertion goes: the
@@ -294,15 +339,23 @@ def build_arm(base, arm):
         chain = model_lineage(wf, ks[tier])
         sampling_id = chain[0]
         if wf[sampling_id].get("class_type") != "ModelSamplingSD3":
-            raise ArmatureError(
+            raise UnknownBaseline(
                 f"expected ModelSamplingSD3 feeding the {tier}-noise expert, found "
-                f"{wf[sampling_id].get('class_type')!r} at node {sampling_id}")
+                f"{wf[sampling_id].get('class_type')!r} at node {sampling_id}",
+                {"gate": None, "andon": "UnknownBaseline",
+                 "clause": "expected_model_sampling_node", "tier": tier,
+                 "node": str(sampling_id),
+                 "class": wf[sampling_id].get("class_type")})
         unet_link = wf[sampling_id]["inputs"]["model"]
         unet_id = str(unet_link[0])
         if wf[unet_id].get("class_type") != "UNETLoader":
-            raise ArmatureError(
+            raise UnknownBaseline(
                 f"expected UNETLoader feeding node {sampling_id}, found "
-                f"{wf[unet_id].get('class_type')!r} at node {unet_id}")
+                f"{wf[unet_id].get('class_type')!r} at node {unet_id}",
+                {"gate": None, "andon": "UnknownBaseline",
+                 "clause": "expected_unet_loader_node", "node": str(unet_id),
+                 "feeds": str(sampling_id),
+                 "class": wf[unet_id].get("class_type")})
 
         wf[lora_id] = {"class_type": LORA_CLASS,
                        "inputs": {"model": [unet_id, 0],
@@ -339,7 +392,7 @@ def gate_pair_tier(inserts, arm):
     Arm T's single served file carries no tier in its name, so this clause reports NOT
     VISIBLE and does not pretend to have verified a match.
     """
-    ev = {"gate": "PAIR_TIER", "arm": arm,
+    ev = {"gate": "PAIR_TIER", "andon": "TierGate", "arm": arm,
           "tier_checkable": ARMS[arm]["tier_checkable"], "attachments": inserts}
     if not ARMS[arm]["tier_checkable"]:
         ev["verdict"] = ("NOT VISIBLE — one served file on both experts; its tier is not in "
@@ -350,18 +403,22 @@ def gate_pair_tier(inserts, arm):
     crossed = [t for t, rec in inserts.items()
                if rec["lora_tier_in_name"] and rec["lora_tier_in_name"] != rec["expert_tier"]]
     if crossed:
+        ev["clause"] = "tier_matched_pair_is_crossed"
         raise TierGate(
             "a tier-matched pair is wired CROSSED: " + "; ".join(
                 f"the {inserts[t]['lora_tier_in_name']}-noise LoRA "
                 f"{inserts[t]['lora_name']!r} is attached to the {t}-noise expert "
                 f"(sampler {inserts[t]['feeds_expert_sampler']})" for t in crossed) +
             ". This is the E11-w2 class of wiring error: every other gate passes it, and the "
-            "run would be reported as a LoRA-transfer result when it is a wiring result", ev)
+            "run would be reported as a LoRA-transfer result when it is a wiring result",
+            ev)
     unlabelled = [t for t, rec in inserts.items() if not rec["lora_tier_in_name"]]
     if unlabelled:
+        ev["clause"] = "tier_is_not_in_the_lora_name"
         raise TierGate(
             f"arm {arm} is declared tier-checkable but the file(s) on {unlabelled} carry no "
-            "tier in the name; the check would pass without checking anything", ev)
+            "tier in the name; the check would pass without checking anything",
+            ev)
     ev["verdict"] = "tier-matched on both experts, verified from the served filenames"
     return ev
 
@@ -405,7 +462,8 @@ def gate_ledger(base, built, inserts):
                 unnamed.append(rec)
 
     ev = {
-        "gate": "LEDGER", "baseline_is": "the byte-pinned E12 wave-3 seed-1 graph",
+        "gate": "LEDGER", "andon": "LedgerGate",
+        "baseline_is": "the byte-pinned E12 wave-3 seed-1 graph",
         "nodes_added": added, "nodes_removed": removed,
         "named_breaks": {
             "insertions": expected_added,
@@ -417,16 +475,21 @@ def gate_ledger(base, built, inserts):
     }
 
     if unnamed:
+        ev["clause"] = "unnamed_difference_from_the_baseline"
         raise LedgerGate(
             "differences from the baseline that nothing named in advance: " + "; ".join(
                 f"node {d['node']}.{d['field']}: {d['base']!r} -> {d['built']!r}"
                 for d in unnamed) +
             ". Every unnamed field must hold byte-identical: the LoRA is the only "
-            "generation-reaching difference this experiment is allowed to have", ev)
+            "generation-reaching difference this experiment is allowed to have",
+            ev)
     if removed:
+        ev["clause"] = "baseline_node_was_removed"
         raise LedgerGate(f"the baseline lost node(s) {removed} — nothing authorises a "
-                         "deletion from a byte-pinned graph", ev)
+                         "deletion from a byte-pinned graph",
+                         ev)
     if added != expected_added:
+        ev["clause"] = "insertions_are_not_the_named_ones"
         raise LedgerGate(f"expected exactly the insertions {expected_added}, found {added}",
                          ev)
 
@@ -437,9 +500,11 @@ def gate_ledger(base, built, inserts):
     missing += [f"{nid}.{field} did not move" for (nid, field) in sorted(OUTPUT_ROUTING)
                 if (nid, field) not in set(routing_moved) and nid in base]
     if missing:
+        ev["clause"] = "named_break_did_not_happen"
         raise LedgerGate("named breaks that did NOT actually happen: " + "; ".join(missing) +
                          ". A report describing an insertion that did not occur is the "
-                         "failure this gate exists to refuse", ev)
+                         "failure this gate exists to refuse",
+                         ev)
 
     ev["verdict"] = (
         f"{len(ev['generation_reaching_differences'])} generation-reaching difference(s), "
@@ -468,18 +533,22 @@ def gate_s(graph, registry_path, seed):
     live = [(nid, n["inputs"].get("noise_seed")) for nid, n in graph.items()
             if isinstance(n, dict) and n.get("class_type") == "KSamplerAdvanced"
             and (n.get("inputs") or {}).get("add_noise") == "enable"]
-    ev = {"gate": "S", "seed": seed, "registry": os.path.abspath(registry_path),
+    ev = {"gate": "S", "andon": "GateSSeedRegistration",
+          "seed": seed, "registry": os.path.abspath(registry_path),
           "registered": registered, "noise_adding_samplers": live}
     if seed not in registered:
+        ev["clause"] = "seed_is_not_in_the_committed_registry"
         raise GateSSeedRegistration(
             f"Gate S: seed {seed} is not in {registry_path} ({registered}). A number the "
             "committed list never pre-registered is a number nobody can hold this run to",
             ev)
     off = [(nid, s) for nid, s in live if s != seed]
     if off:
+        ev["clause"] = "noise_adding_sampler_carries_another_seed"
+        ev["off_seed_samplers"] = off
         raise GateSSeedRegistration(
             f"Gate S: noise-adding sampler(s) {off} do not carry {seed}",
-            dict(ev, off_seed_samplers=off))
+            ev)
     return {"gate": "S", "seed": seed, "registry": os.path.abspath(registry_path),
             "registered": registered, "noise_adding_samplers": live,
             "inert_zero_seed_note": ("the low-noise expert carries noise_seed 0 with "
