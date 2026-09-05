@@ -28,7 +28,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig_character as rc                                            # noqa: E402
-from armature_core import blender_scene                               # noqa: E402
+from armature_core import blender_scene, parts                        # noqa: E402
 from armature_core.errors import GateFailure                          # noqa: E402
 
 #: Bake resolution. The Director's deliverable atlas.
@@ -69,7 +69,34 @@ def parse_args():
     p.add_argument("--max-deviation", type=float, required=True,
                    help="stage 1's measured max deviation — the cage is derived from it")
     p.add_argument("--atlas", type=int, default=ATLAS)
-    return vars(p.parse_args(argv))
+    a = vars(p.parse_args(argv))
+    # F-798281dc, wave 22 — THE TWO FLAGS THAT SIZE THE BAKE, bounded at the parser
+    # where the mistake is still free. MEASURED on `e8263a3`: `grep require_finite
+    # tools/rig_bake.py` returned NOTHING — this module had no finiteness bound
+    # anywhere, and it is the same NaN family the repo has swept four times.
+    #
+    #   --atlas         a bare `type=int` with no bound, and it is the flag that SIZES
+    #                   the image `atlas_health` then measures. `--atlas=0` builds a
+    #                   zero-pixel atlas, whose `non_black_fraction` is NaN, and
+    #                   `nan < 0.20` is False — so the "the baked atlas is mostly empty"
+    #                   andon does not fire on the TOTAL failure it exists for.
+    #   --max-deviation a required `type=float` with no bound, reaching
+    #                   `cage = args["max_deviation"] * CAGE_PER_DEVIATION` and then
+    #                   `bpy.ops.object.bake(cage_extrusion=...)` unexamined. A NaN
+    #                   cage is a ray distance no comparison in Blender can fail.
+    #
+    # `parts.require_finite` is the repo's ONE implementation of wave 10's rule 4; the
+    # evidence dict is this module's, so the andon keeps its own id (F-6381b9ff) and the
+    # operand rides the halt line.
+    for _flag, _key, _clause in (("--atlas", "atlas", "atlas_not_a_positive_size"),
+                                 ("--max-deviation", "max_deviation",
+                                  "max_deviation_not_finite_and_positive")):
+        parts.require_finite(
+            _flag, a[_key], BakeEmpty,
+            {"gate": BakeEmpty.gate, "sub_gate": "BAKE_ARGS",
+             "andon": BakeEmpty.__name__, "who": "rig_bake", "flag": _flag,
+             "clause": _clause}, positive=True)
+    return a
 
 
 class ImportEmpty(GateFailure):
@@ -258,9 +285,34 @@ def bake(source, target, cage, margin, atlas):
 
 
 def atlas_health(img):
-    """Is there actually a texture in there? A blank bake is the failure this catches."""
+    """Is there actually a texture in there? A blank bake is the failure this catches.
+
+    **The vacuity clause, F-798281dc (wave 22).** `float(lit.mean())` over a ZERO-pixel
+    image is `nan` (numpy raises `RuntimeWarning: Mean of empty slice` and returns it),
+    and `main`'s one clause that decides whether the bake produced anything is
+    `if health["non_black_fraction"] < 0.20` — which is False for a NaN, in both
+    directions, like every comparison against one. RE-MEASURED on `e8263a3` under
+    `blender_stub.blender_stubbed()` with a zero-pixel image: `atlas_health` returned
+    `{'pixels': 0, 'non_black_fraction': nan, ...}`, the andon did NOT fire,
+    `os.makedirs` ran below it, the GLB was exported, Gate GLB passed on a real
+    non-empty file, and the manifest published `non_black_fraction: NaN`.
+
+    So the refusal is here, where the measurement is taken, rather than left to a bound
+    that structurally cannot see it: an atlas with no pixels is refused by name with the
+    count in the evidence. `--atlas` is bounded at the parser too — the two are
+    complementary, not redundant, and this one holds for every caller.
+    """
     px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)
     rgb = px[:, :3]
+    if len(rgb) == 0:
+        raise BakeEmpty(
+            "the baked atlas has NO PIXELS, so there is no fraction to compare against "
+            "the emptiness floor: `float(lit.mean())` over an empty array is a NaN, and "
+            "`nan < 0.20` is False — the one clause that decides whether this bake "
+            "produced anything cannot fire on the total failure",
+            {"gate": BakeEmpty.gate, "sub_gate": "ATLAS_HEALTH",
+             "andon": BakeEmpty.__name__, "who": "rig_bake",
+             "clause": "atlas_has_no_pixels", "pixels": 0})
     lit = rgb.max(axis=1) > 0.02
     return {"pixels": int(len(rgb)), "non_black_fraction": float(lit.mean()),
             "mean_rgb": [float(v) for v in rgb[lit].mean(axis=0)] if lit.any() else [0, 0, 0],

@@ -313,3 +313,222 @@ def test_the_static_siblings_agree_with_their_own_class(filename, cls, call):
     assert ev["gate"] == gate_cls.gate, ev
     assert str(exc.value).startswith("[%s] " % gate_cls.gate)
     assert "sub_gate" in ev, ev
+
+
+# ===========================================================================
+# F-798281dc (panel HIGH, ground F-333cefd8) — rig_bake's empty-atlas andon can fire.
+# ===========================================================================
+
+
+class _ZeroPixelImage:
+    """A Blender image with no pixels — what `--atlas=0` builds."""
+
+    pixels = ()
+    size = (0, 0)
+
+
+class _LitImage:
+    """A 2x2 RGBA image whose pixels are lit, so `atlas_health` has a fraction to report."""
+
+    pixels = tuple([0.5, 0.5, 0.5, 1.0] * 4)
+    size = (2, 2)
+
+
+@pytest.fixture(scope="module")
+def bake():
+    return load_tool("rig_bake.py")
+
+
+def test_atlas_health_refuses_a_zero_pixel_atlas_by_name(bake):
+    """RE-MEASURED on `e8263a3` under the stub with a zero-pixel image: `atlas_health`
+    returned `{'pixels': 0, 'non_black_fraction': nan, ...}` (numpy "Mean of empty slice"),
+    `nan < 0.20` is False, so the "the baked atlas is mostly empty" andon did NOT fire on
+    the TOTAL failure it exists for — `os.makedirs` ran below it, the GLB was exported,
+    Gate GLB passed on a real non-empty file, and the manifest published
+    `non_black_fraction: NaN`.
+    """
+    with blender_stubbed():
+        with pytest.raises(bake.BakeEmpty) as exc:
+            bake.atlas_health(_ZeroPixelImage())
+    ev = exc.value.evidence
+    assert ev["clause"] == "atlas_has_no_pixels", ev
+    assert ev["pixels"] == 0, ev
+    assert ev["gate"] == bake.BakeEmpty.gate, ev
+
+
+def test_atlas_health_still_reports_a_fraction_when_there_are_pixels(bake):
+    """A refusal that also refuses correct work is the defect, not the fix."""
+    with blender_stubbed():
+        health = bake.atlas_health(_LitImage())
+    assert health["pixels"] == 4
+    assert health["non_black_fraction"] == 1.0
+
+
+@pytest.mark.parametrize("argv,flag", [
+    (["--retopo=r.glb", "--source=s.glb", "--out=o", "--max-deviation=0.003",
+      "--atlas=0"], "--atlas"),
+    (["--retopo=r.glb", "--source=s.glb", "--out=o", "--max-deviation=0.003",
+      "--atlas=-4096"], "--atlas"),
+    (["--retopo=r.glb", "--source=s.glb", "--out=o", "--max-deviation=nan"],
+     "--max-deviation"),
+    (["--retopo=r.glb", "--source=s.glb", "--out=o", "--max-deviation=inf"],
+     "--max-deviation"),
+    (["--retopo=r.glb", "--source=s.glb", "--out=o", "--max-deviation=0"],
+     "--max-deviation"),
+    (["--retopo=r.glb", "--source=s.glb", "--out=o", "--max-deviation=-0.003"],
+     "--max-deviation"),
+])
+def test_the_two_flags_that_size_the_bake_are_bounded(bake, monkeypatch, argv, flag):
+    """`grep require_finite tools/rig_bake.py` returned NOTHING on `e8263a3`: this module
+    had no finiteness bound anywhere. `--atlas` sizes the image `atlas_health` measures;
+    `--max-deviation` reaches `cage_extrusion` and `max_ray_distance` unexamined.
+    """
+    monkeypatch.setattr(bake.sys, "argv", ["blender", "-b", "-P", "x", "--"] + argv)
+    with pytest.raises(bake.BakeEmpty) as exc:
+        bake.parse_args()
+    ev = exc.value.evidence
+    assert ev["flag"] == flag, ev
+    assert ev["gate"] == bake.BakeEmpty.gate, ev
+    assert flag in str(exc.value)
+
+
+def test_the_good_bake_arguments_still_parse(bake, monkeypatch):
+    monkeypatch.setattr(bake.sys, "argv", [
+        "blender", "-b", "-P", "x", "--", "--retopo=r.glb", "--source=s.glb",
+        "--out=o", "--max-deviation=0.00358"])
+    a = bake.parse_args()
+    assert a["atlas"] == bake.ATLAS and a["max_deviation"] == 0.00358
+
+
+def test_the_empty_atlas_refusal_reaches_the_rig_bake_halt_line(bake, capsys):
+    """THE HALT LINE, READ."""
+    def raiser():
+        bake.atlas_health(_ZeroPixelImage())
+
+    code, rec, _ = _halt_record("rig_bake.py", "RIG_BAKE_HALT", raiser, capsys)
+    assert code == 2
+    assert rec["error"] == "BakeEmpty"
+    assert rec["evidence"]["clause"] == "atlas_has_no_pixels", rec
+    assert rec["evidence"]["pixels"] == 0, rec
+
+
+# ===========================================================================
+# F-4354f34d (panel HIGH, ground F-3551d50a) — rig_repair's two vacuity holes.
+# ===========================================================================
+
+
+class _FakeElem:
+    is_manifold = True
+    is_boundary = False
+    link_faces = ()
+
+
+class _FakeSeq(list):
+    def __init__(self, n):
+        super().__init__(_FakeElem() for _ in range(n))
+
+    def ensure_lookup_table(self):
+        pass
+
+
+class _FakeBMesh:
+    """Just enough bmesh for `manifold_stats` and `extract_and_weld`'s guard."""
+
+    def __init__(self, faces=0, verts=0, edges=0):
+        self.faces = _FakeSeq(faces)
+        self.verts = _FakeSeq(verts)
+        self.edges = _FakeSeq(edges)
+        self.freed = False
+
+    def from_mesh(self, data):
+        pass
+
+    def free(self):
+        self.freed = True
+
+
+class _FakeObject:
+    name = "broken_source"
+    data = object()
+
+
+@pytest.fixture(scope="module")
+def repair():
+    return load_tool("rig_repair.py")
+
+
+def _with_bmesh(monkeypatch, mod, bm):
+    fake = type("bmesh_stub", (), {})()
+    fake.new = lambda: bm
+    fake.ops = mod.bmesh.ops
+    monkeypatch.setattr(mod, "bmesh", fake)
+
+
+def test_an_empty_mesh_is_not_a_closed_manifold(repair, monkeypatch):
+    """MEASURED on `e8263a3` by evaluating `closed_manifold`'s expression on the zero-count
+    dict: `True`. Gate REPAIR's `if not final["closed_manifold"]` therefore PASSED a mesh
+    deleted entirely, and total deletion was caught one clause LOWER by the face budget —
+    the second gate carrying the first gate's load, which CLAUDE.md rules against.
+    """
+    _with_bmesh(monkeypatch, repair, _FakeBMesh(faces=0, verts=0, edges=0))
+    stats = repair.manifold_stats(_FakeObject())
+    assert stats["faces"] == 0
+    assert stats["closed_manifold"] is False
+
+
+def test_a_real_closed_shell_is_still_a_closed_manifold(repair, monkeypatch):
+    _with_bmesh(monkeypatch, repair, _FakeBMesh(faces=12, verts=8, edges=18))
+    stats = repair.manifold_stats(_FakeObject())
+    assert stats["closed_manifold"] is True
+
+
+def test_a_source_with_no_faces_is_refused_by_name(repair, monkeypatch):
+    """`"interior_fraction": interior_deleted / before["faces"]` divided by a measured face
+    count with no guard, on the tool whose EXPECTED input is a broken mesh. A source with
+    vertices and no polygons reached a bare `ZeroDivisionError` inside a helper, recorded by
+    the halt contract as "FAILED — an unhandled error" at exit 1 rather than as a refusal
+    naming the asset.
+    """
+    _with_bmesh(monkeypatch, repair, _FakeBMesh(faces=0, verts=140))
+    with pytest.raises(repair.SourceHasNoFaces) as exc:
+        repair.extract_and_weld(_FakeObject(), 1.0)
+    ev = exc.value.evidence
+    assert ev["clause"] == "source_has_no_faces", ev
+    assert ev["object"] == "broken_source", ev
+    assert ev["verts"] == 140, ev
+    assert ev["gate"] == repair.SourceHasNoFaces.gate == "REPAIR_SOURCE"
+
+
+def test_the_repair_source_refusal_reaches_the_halt_line(repair, capsys, monkeypatch):
+    """THE HALT LINE, READ — and it names the asset, not `ZeroDivisionError`."""
+    _with_bmesh(monkeypatch, repair, _FakeBMesh(faces=0, verts=140))
+
+    def raiser():
+        repair.extract_and_weld(_FakeObject(), 1.0)
+
+    code, rec, _ = _halt_record("rig_repair.py", "RIG_REPAIR_HALT", raiser, capsys)
+    assert code == 2
+    assert rec["error"] == "SourceHasNoFaces", rec
+    assert rec["evidence"]["clause"] == "source_has_no_faces", rec
+    assert rec["evidence"]["object"] == "broken_source", rec
+
+
+def test_both_denominators_are_guarded_above_their_division():
+    """The census: every division by a measured face count in this module sits BELOW a
+    clause that refuses zero. Keyed on the resolved shape — the two divisions are spelled
+    differently (`interior_deleted / before["faces"]` and `removed / shell_faces`) and both
+    are in the population.
+    """
+    tree = _tree("rig_repair.py")
+    divisions = [n for n in ast.walk(tree)
+                 if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)]
+    counted = [n for n in divisions
+               if "faces" in ast.dump(n.right) or "shell_faces" in ast.dump(n.right)]
+    assert len(counted) == 2, [ast.dump(n) for n in counted]
+    guards = [n.lineno for n in ast.walk(tree)
+              if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
+              and isinstance(n.exc.func, ast.Name)
+              and n.exc.func.id == "SourceHasNoFaces"]
+    assert len(guards) == 2, guards
+    for div in counted:
+        assert any(g < div.lineno for g in guards), (div.lineno, guards)
