@@ -304,7 +304,28 @@ def main(argv=None):
                                   "shuffles the clip"),
                    "files": [{k: v for k, v in j.items() if k != "url"} for j in jobs]},
                   fh, indent=2)
-    download(jobs, out=a.out)
+    # ---- wave 22, F-894dffb2. Both return values were DISCARDED. `fetch_run.download`
+    # returns `(proc, {"gate": "FETCH", "clause": "downloader_job_exits", "record": ...,
+    # "jobs": n, "verdict": ...})` and the sibling prints it as `gate_EXITS` in FETCH_RUN_OK
+    # (`fetch_run.py`), while FETCH_T2V_OK carried `gate_ORDER` and `gate_FETCH` and no
+    # `gate_EXITS`, and nothing wrote the receipt into any of the four JSON records this
+    # tool leaves in the run root. Stated as the bound: the gate itself still RAISES inside
+    # `download`, so this was a missing RECEIPT rather than a missing check — but the two
+    # fetchers printed different evidence for the same shared andon, and this module's own
+    # docstring explains at length that the pwsh process code CANNOT see a failed curl in a
+    # `-Parallel` runspace and that the per-job record is therefore the only evidence the
+    # gate decides on. A later session reading this run's receipts could not tell a gate
+    # that passed from a gate that was never run.
+    _proc, gate_exits = download(jobs, out=a.out)
+    # The receipt SURVIVES THE PROCESS. The manifest is written above rather than here so it
+    # outlives a halt inside `download`; the gates block is added once the gate has actually
+    # run, which is the only moment it can be recorded honestly.
+    manifest_path = os.path.join(a.out, "download_manifest.json")
+    with open(manifest_path, encoding="utf-8") as fh:
+        manifest_doc = json.load(fh)
+    manifest_doc["gates"] = {"EXITS": gate_exits}
+    with open(manifest_path, "w", encoding="utf-8") as fh:
+        json.dump(manifest_doc, fh, indent=2)
 
     # Gate FETCH · ANDON, carried from `fetch_run.verify_downloads` rather than written a
     # second time. This tool had NO plan-to-disk check: the frame population came from
@@ -337,12 +358,24 @@ def main(argv=None):
     with open(os.path.join(a.out, "frame_order_evidence.json"), "w", encoding="utf-8") as fh:
         json.dump(ev, fh, indent=2)
 
-    empty = [f for f, m in manifest.items() if m["bytes"] == 0]
-    if empty:
-        raise FetchHalt(f"FETCH_HALT zero-length frames: {empty}",
-                        {"gate": "FETCH", "andon": "FetchHalt", "clause": "zero_length_frames",
-                         "zero_length": empty,
-                         "frames": len(frames)})
+    # ---- wave 22, F-c03a23c5. A `zero_length_frames` clause stood here and COULD NOT FIRE.
+    # `verify_downloads(jobs, directories=[...], root=a.out)` above already raises when any
+    # planned output has `os.path.getsize(o) == 0`, across the frame jobs AND the video job;
+    # `manifest` is built from a strict subset of the same planned frames
+    # (`j["array_index"] is not None`), read from the same paths, and nothing between the
+    # two lines writes to them. RE-MEASURED on `e8263a3` by calling
+    # `fetch_run.verify_downloads` directly on a single planned zero-byte
+    # `lossless/00000.png`: it raised `FetchHalt` with clause
+    # `downloaded_population_is_not_the_planned_one` before any manifest existed. By the
+    # time the deleted branch ran, every entry it inspected had already been shown non-zero
+    # by a raise-or-return above it, so no input could reach it.
+    #
+    # It read as a live zero-length safety check sitting between the andon and Gate ORDER,
+    # and a later session could have deleted the REAL one believing the coverage lived here.
+    # The tree's own rule decides: a check that cannot fail is not a check. THE COVERAGE
+    # LIVES IN `verify_downloads` ABOVE — its `empty` list, its clause
+    # `downloaded_population_is_not_the_planned_one`, over a WIDER population than this
+    # branch ever saw (the video job included).
 
     # The evidence file is already on disk above, so a halt here leaves the measurement
     # that fired it behind rather than making the next session re-fetch to see it.
@@ -356,7 +389,10 @@ def main(argv=None):
         "array_order_mean_diff": order["array_order_mean_diff"],
         "hash_sorted_mean_diff": order["hash_sorted_mean_diff"],
         "ratio": order["ratio"], "gate_ORDER": order["verdict"],
-        "gate_FETCH": landed["verdict"]}))
+        "gate_FETCH": landed["verdict"],
+        # wave 22, F-894dffb2: the same gate key the sibling fetcher prints, off the same
+        # shared andon, so a reader can reconcile the two tools' receipts against each other.
+        "gate_EXITS": gate_exits["verdict"]}))
     return 0
 
 

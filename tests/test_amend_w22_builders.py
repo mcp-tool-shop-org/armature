@@ -875,3 +875,238 @@ def test_single_path_segment_has_ONE_home_and_this_domain_only_imports_it():
         assert "def single_path_segment(" not in src, name
     assert FR.single_path_segment.__module__ in (
         "armature_core.parts", "resample_motion"), FR.single_path_segment.__module__
+
+
+# ===========================================================================
+# F-894dffb2 — the per-job download-exit gate's receipt reached neither the FETCH_T2V_OK
+#              line nor any of the four JSON records this tool leaves in the run root.
+#
+# `download(jobs, out=a.out)` discarded BOTH return values. `fetch_run.download` returns
+# `(proc, {"gate": "FETCH", "clause": "downloader_job_exits", "record": ..., "jobs": n,
+# "verdict": ...})` and the sibling prints it as `gate_EXITS` in FETCH_RUN_OK. Read on
+# `e8263a3`: FETCH_T2V_OK carried `gate_ORDER` and `gate_FETCH` and no `gate_EXITS`.
+# Stated as the bound: the gate itself still RAISED inside `download`, so this is a missing
+# RECEIPT rather than a missing check — but the two fetchers printed different evidence for
+# the same shared andon, and a later session reading this run's receipts could not tell a
+# gate that passed from a gate that was never run.
+#
+# reverted-red: yes — measured in this worktree, the key was absent from the OK line and
+# from `download_manifest.json`.
+# ===========================================================================
+
+
+def _t2v_run(tmp_path, monkeypatch, n_frames=2):
+    """Drive `fetch_t2v_run.main` with the downloader stubbed, and return the OK line."""
+    rows = [{"source_node_id": FT.LOSSLESS_NODE, "filename": f"{i:012x}.png",
+             "url": f"https://example.invalid/{i}"} for i in range(n_frames)]
+    dump = _dump(tmp_path, {"results": rows}, name="t2v-dump.json")
+    out = tmp_path / "run"
+
+    def fake_download(jobs, out=None):
+        for j in jobs:
+            os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
+            with open(j["out"], "wb") as fh:
+                fh.write(FR.PNG_SIGNATURE + b"IHDR-and-the-rest")
+        return None, {"gate": "FETCH", "clause": "downloader_job_exits",
+                      "record": "download_exits.json", "jobs": len(jobs),
+                      "n_recorded": len(jobs), "n_unrecorded": 0,
+                      "verdict": (f"{len(jobs)} download(s), each recording its own exit, "
+                                  f"all zero")}
+
+    monkeypatch.setattr(FT, "download", fake_download)
+    monkeypatch.setattr(FT, "order_evidence", lambda o: {
+        "results_array_order": {"mean": 0.7}, "hash_sorted_order": {"mean": 5.3},
+        "what_this_shows": "x"})
+    return dump, out
+
+
+def test_the_t2v_OK_line_carries_the_same_gate_keys_as_its_sibling(tmp_path, monkeypatch,
+                                                                   capsys):
+    dump, out = _t2v_run(tmp_path, monkeypatch)
+    assert FT.main([f"--dump={dump}", f"--out={out}"]) == 0
+    line = [ln for ln in capsys.readouterr().out.splitlines()
+            if ln.startswith("FETCH_T2V_OK ")]
+    assert line, "no OK line"
+    printed = json.loads(line[-1][len("FETCH_T2V_OK "):])
+    assert "gate_EXITS" in printed, sorted(printed)
+    assert printed["gate_EXITS"].endswith("all zero"), printed["gate_EXITS"]
+    assert {"gate_FETCH", "gate_ORDER", "gate_EXITS"} <= set(printed), sorted(printed)
+
+
+def test_the_exit_receipt_survives_the_process_in_the_run_root(tmp_path, monkeypatch):
+    """Observability is a receipt a reader can reconcile, not only a line that scrolled by."""
+    dump, out = _t2v_run(tmp_path, monkeypatch)
+    assert FT.main([f"--dump={dump}", f"--out={out}"]) == 0
+    doc = json.loads((out / "download_manifest.json").read_text(encoding="utf-8"))
+    assert doc["gates"]["EXITS"]["clause"] == "downloader_job_exits", doc.get("gates")
+    assert doc["gates"]["EXITS"]["jobs"] == 2, doc["gates"]["EXITS"]
+    # the record it replaces is still there: the manifest keeps its own `files` block
+    assert [f["out"] for f in doc["files"]], doc
+
+
+def test_both_fetchers_print_the_same_gate_key_for_the_shared_andon():
+    """Keyed on the RESOLVED shape: the OK payload literal in each `main`, read by AST, must
+    carry the same gate keys — the two tools share ONE andon and printed two receipts."""
+    keys = {}
+    for name, sentinel in (("fetch_run.py", "FETCH_RUN_OK "),
+                           ("fetch_t2v_run.py", "FETCH_T2V_OK ")):
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        found = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            names = [k.value for k in node.keys
+                     if isinstance(k, ast.Constant) and isinstance(k.value, str)]
+            if any(n.startswith("gate_") for n in names):
+                found.append(sorted(n for n in names if n.startswith("gate_")))
+        keys[name] = found
+    assert any("gate_EXITS" in row for row in keys["fetch_run.py"]), keys
+    assert any("gate_EXITS" in row for row in keys["fetch_t2v_run.py"]), keys
+
+
+# ===========================================================================
+# F-a25a7db9 — Gate FETCH's stray-detection exemption kept exempting EVERY run's review clip
+#              rather than this run's, and the module's own record stated the fix was
+#              blocked by a condition removed in wave 16.
+#
+# RE-MEASURED on `e8263a3`: `derived_root_artifacts('A2')` exempts `review_0.50x_8fps.mp4`
+# and `review_0.50x_8fps.webp` by pattern 1 whatever run produced them;
+# `A0r1_review_0.50x_8fps.mp4` (another run's TOKENED clip) matches neither and correctly
+# raises; `A2_review_0.50x_8fps.mp4` matches pattern 0. The CORRECTION block above the
+# patterns still closed "`make_review_clip.clip_name` returns `review_{rate:.2f}x_{fps}fps.
+# <ext>` with no run token, and that tool is not this one's to change" — READ in this
+# worktree at `tools/make_review_clip.py:144-160`, `clip_name(fps, source_fps, run=None)`
+# returns `f"{run}_{stem}"` when a token is known and `run_token` derives one (wave 16,
+# F-78f49c7c).
+#
+# reverted-red: yes — the receipt carried no `root_exempt_matched_by` at all, and the
+# premise sentence read as above.
+# ===========================================================================
+
+
+def _landed(tmp_path, run="A0r1", extra_root=()):
+    base = tmp_path / "runs" / run
+    (base / "lossless").mkdir(parents=True)
+    jobs = [(f"https://example.invalid/{i}", str(base / "lossless" / f"{i:05d}.png"))
+            for i in range(2)]
+    for _u, o in jobs:
+        with open(o, "wb") as fh:
+            fh.write(FR.PNG_SIGNATURE + b"IHDR")
+    for name in extra_root:
+        (base / name).write_bytes(b"\x00\x00\x00\x18ftypmp42rest")
+    return base, jobs
+
+
+def test_an_UNTOKENED_review_clip_is_still_tolerated_and_the_receipt_SAYS_it_is_untokened(
+        tmp_path):
+    """The operand the finding names: another run's UN-TOKENED clip left in a re-used run
+    root. It is still exempt — `clip_name` still emits an un-tokened name when no token can
+    be derived — but the exemption is no longer silent about being unattributable."""
+    base, jobs = _landed(tmp_path, extra_root=("review_0.50x_8fps.mp4",))
+    ev = FR.verify_downloads(jobs, directories=[str(base / "lossless")], root=str(base),
+                             root_exempt=FR.derived_root_artifact_rules("A0r1"))
+    assert ev["extra"] == []
+    by = ev["root_exempt_matched_by"]
+    assert [os.path.basename(x["path"]) for x in by] == ["review_0.50x_8fps.mp4"], by
+    assert by[0]["run_bound"] is False, by
+    assert "CANNOT tell which run" in by[0]["rule"], by
+    assert "UN-TOKENED" in ev["verdict"], ev["verdict"]
+
+
+def test_this_runs_OWN_tokened_clip_is_tolerated_and_recorded_as_run_bound(tmp_path):
+    base, jobs = _landed(tmp_path, extra_root=("A0r1_review_0.50x_8fps.mp4",))
+    ev = FR.verify_downloads(jobs, directories=[str(base / "lossless")], root=str(base),
+                             root_exempt=FR.derived_root_artifact_rules("A0r1"))
+    by = ev["root_exempt_matched_by"]
+    assert by[0]["run_bound"] is True, by
+    assert "this run's own" in ev["verdict"], ev["verdict"]
+
+
+def test_another_runs_TOKENED_clip_still_raises(tmp_path):
+    """The direction the labelling must not soften."""
+    base, jobs = _landed(tmp_path, extra_root=("A2_review_0.50x_8fps.mp4",))
+    exc, ev = _raises(FR.verify_downloads, jobs,
+                      directories=[str(base / "lossless")], root=str(base),
+                      root_exempt=FR.derived_root_artifact_rules("A0r1"))
+    assert isinstance(exc, FR.FetchHalt), repr(exc)
+    assert [os.path.basename(x) for x in ev["extra"]] == ["A2_review_0.50x_8fps.mp4"]
+
+
+def test_the_stale_premise_is_corrected_in_place_with_the_measurement():
+    """Rule 2 for an advisor's prose: never quietly delete a wrong statement. The block says
+    what was measured, names the function that overturned it, and states the residue."""
+    doc = FR.derived_root_artifacts.__doc__
+    assert "PREMISE is stale" in doc, doc[-800:]
+    assert "make_review_clip.py:144-160" in doc, "the measurement, not a summary of it"
+    assert "run_token" in doc and "wave 16" in doc, "and what overturned it"
+    assert "residue" in doc, "and what remains true"
+
+
+def test_the_run_token_the_stale_premise_said_did_not_exist_does(tmp_path):
+    """The measurement itself, kept runnable rather than quoted."""
+    import make_review_clip
+
+    assert make_review_clip.clip_name(8, 16) == "review_0.50x_8fps.webp"
+    assert make_review_clip.clip_name(8, 16, run="A2") == "A2_review_0.50x_8fps.webp"
+    assert callable(getattr(make_review_clip, "run_token", None))
+
+
+# ===========================================================================
+# F-c03a23c5 — a `zero_length_frames` clause that could not fire, sitting between the real
+#              andon and Gate ORDER.
+#
+# RE-MEASURED on `e8263a3` by calling `fetch_run.verify_downloads` directly on a single
+# planned zero-byte `lossless/00000.png`: it raised `FetchHalt` with clause
+# `downloaded_population_is_not_the_planned_one` before any manifest existed. `manifest` is
+# built from a strict subset of the same planned frames, read from the same paths, and
+# nothing between the two lines writes to them — so by the time the branch ran, every entry
+# it inspected had already been shown non-zero by a raise-or-return above it.
+#
+# The tree's own rule decides which way it goes: a check that cannot fail is not a check.
+# reverted-red: n/a for a deletion — what is asserted instead is that the coverage the
+# deleted branch appeared to provide is REAL and lives where the comment now says it does,
+# over a WIDER population (the video job included).
+# ===========================================================================
+
+
+def test_the_zero_length_coverage_lives_in_verify_downloads_and_fires_first(tmp_path):
+    base = tmp_path / "run"
+    (base / "lossless").mkdir(parents=True)
+    out = base / "lossless" / "00000.png"
+    out.write_bytes(b"")
+    exc, ev = _raises(FR.verify_downloads, [{"out": str(out), "array_index": 0}],
+                      directories=[str(base / "lossless")], root=str(base))
+    assert isinstance(exc, FR.FetchHalt), repr(exc)
+    assert ev["clause"] == "downloaded_population_is_not_the_planned_one", ev
+    assert [os.path.basename(x) for x in ev["empty"]] == ["00000.png"], ev
+
+
+def test_the_zero_length_coverage_reaches_the_VIDEO_job_the_deleted_branch_never_saw(
+        tmp_path):
+    """The reason the deletion is not a loss: the real andon's population is WIDER. The
+    deleted branch read `manifest`, built only from frames with an `array_index`."""
+    base = tmp_path / "run"
+    (base / "lossless").mkdir(parents=True)
+    frame = base / "lossless" / "00000.png"
+    frame.write_bytes(FR.PNG_SIGNATURE + b"IHDR")
+    donor = base / "donor.mp4"
+    donor.write_bytes(b"")
+    exc, ev = _raises(FR.verify_downloads,
+                      [{"out": str(frame), "array_index": 0},
+                       {"out": str(donor), "array_index": None}],
+                      directories=[str(base / "lossless")], root=str(base))
+    assert isinstance(exc, FR.FetchHalt), repr(exc)
+    assert [os.path.basename(x) for x in ev["empty"]] == ["donor.mp4"], ev
+
+
+def test_the_vacuous_clause_is_gone_and_the_comment_says_where_the_coverage_is():
+    """The vacuous-clause census, keyed on the resolved shape: the clause word is raised
+    nowhere in the module, and the comment that replaces it names the function that holds
+    the coverage so a later session cannot delete the real one believing it lives here."""
+    src = open(os.path.join(TOOLS, "fetch_t2v_run.py"), encoding="utf-8").read()
+    tree = ast.parse(src)
+    raised = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Raise)
+              for d in ast.walk(n)
+              if isinstance(d, ast.Constant) and d.value == "zero_length_frames"]
+    assert raised == [], raised
+    assert "THE COVERAGE" in src and "verify_downloads" in src

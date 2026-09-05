@@ -193,6 +193,7 @@ def _run_main(tmp_path, monkeypatch, ev):
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             with open(j["out"], "wb") as fh:
                 fh.write(T.PNG_SIGNATURE)
+        return None, _exits_receipt(jobs)   # wave 22, F-894dffb2
 
     monkeypatch.setattr(T, "download", fake_download)
     monkeypatch.setattr(T, "order_evidence", lambda out: ev)
@@ -236,6 +237,7 @@ def test_a_zero_length_frame_still_halts(tmp_path, monkeypatch, capsys):
         for j in jobs:
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             open(j["out"], "wb").close()
+        return None, _exits_receipt(jobs)   # wave 22, F-894dffb2
 
     monkeypatch.setattr(T, "download", fake_download)
     monkeypatch.setattr(T, "order_evidence", lambda out: _ev(E09_ARRAY, E09_HASH))
@@ -281,6 +283,23 @@ def _body_for(path):
     return bytes(body)
 
 
+#: What `fetch_t2v_run.download` HANDS BACK — `(proc, gate_exits)`, where `gate_exits` is
+#: `fetch_run.download`'s Gate FETCH receipt for the per-job download exits. A stub that
+#: returns `None` is a stub of a function this tool does not have: `download` has returned
+#: the pair since wave 14 (F-a3ba416b) and `main` DISCARDED it, which is the wave-22 finding
+#: F-894dffb2 — the FETCH_T2V_OK line and the run directory carried no record that the
+#: per-job exit gate had run at all, on the fetcher whose own docstring explains that the
+#: pwsh process code cannot see a failed curl in a `-Parallel` runspace and that the per-job
+#: record is therefore the only evidence the gate decides on. `main` binds the pair now, so
+#: these fixtures return it.
+def _exits_receipt(jobs):
+    return {"gate": "FETCH", "clause": "downloader_job_exits",
+            "record": "download_exits.json", "jobs": len(jobs),
+            "n_recorded": len(jobs), "n_unrecorded": 0,
+            "verdict": (f"{len(jobs)} download(s), each recording its own exit, "
+                        f"all zero")}
+
+
 def _writer(skip=(), monkeypatch=None):
     def fake_download(jobs, out=None):   # `out` since wave 14 (F-a3ba416b)
         for j in jobs:
@@ -289,6 +308,7 @@ def _writer(skip=(), monkeypatch=None):
             os.makedirs(os.path.dirname(j["out"]), exist_ok=True)
             with open(j["out"], "wb") as fh:
                 fh.write(_body_for(j["out"]))
+        return None, _exits_receipt(jobs)   # wave 22, F-894dffb2 — see `_exits_receipt`
     return fake_download
 
 
