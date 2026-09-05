@@ -2611,6 +2611,15 @@ GUARDED_TODAY = [
     "tools/armature_core/blender_scene.py",
     # WAVE-12 MERGE (coordinator, 2026-09-04): `canon.py` opened by path by a wave-12 test; under `tools/**`.
     "tools/armature_core/canon.py",
+    # WAVE 22 (core-gates, F-682ce228): `tests/test_amend_w22_core_gates.py` opens
+    # `canon_census.py` by path to assert that `gate_census_table()` is CALLED at import —
+    # a run-time-only check is the half of the andon that a module read once does not
+    # have, and asserting the call site means reading the source rather than importing it.
+    # Under `tools/**`, which BOTH triggers already carry, so `ci.yml` needs no change and
+    # `UNFILTERED_PENDING` stays empty. RE-DERIVED, not typed: this list is asserted with
+    # `==` and was measured red at exactly this one member. (The list is SORTED; the entry
+    # sits here for that reason, not by topic.)
+    "tools/armature_core/canon_census.py",
     "tools/armature_core/framing.py",
     # WAVE-10 MERGE (coordinator, 2026-09-04): `glb.py` (core-solvers' MalformedGLB census) and
     # `render_pose_sticks.py` (instruments-measure's Gate COUNT census) are opened by path by

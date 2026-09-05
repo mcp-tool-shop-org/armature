@@ -64,6 +64,18 @@ OWNED = (
 #: Recorded in the same commit as the raises, which is what this ratchet asks for.
 RECORDED_GATE_RAISES = {
     ("canon.py", "GateCanon"): 1,
+    # WAVE 22 (core-gates, F-682ce228): the file's first raise. `canon_census.CENSUS` is a
+    # hand-edited table whose docstring states the contract the spend helpers rest on, and
+    # NO clause checked a row against it: a misspelled `surface:` key returned
+    # `verdict: UNGATED` from `--no-canon` for a subject that HAS a ratified surfaces file
+    # (the `clause: checkbox` refusal inoperative because `.get` reads None), an
+    # identity-only row with no `reason` announced an escape it could not explain, and a
+    # non-mapping row raised a bare `AttributeError` from BOTH `require_canon` and
+    # `resolve`. ONE raise site — `_refuse`, the module's own andon, reached by six clauses
+    # (`census_is_not_a_mapping`, `subject_is_not_a_name`, `row_is_not_a_mapping`,
+    # `unknown_census_key`, `surfaces_is_not_a_path`, `hole_without_a_reason`), the shape
+    # `canon._raise` already uses. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    ("canon_census.py", "GateCanon"): 1,
     # WAVE 18: 6 → 10 (core-gates, F-04197047). `_readable_landmark_row` — Gate DONOR
     # guarded its EMPTY population and never the SHAPE of a row it reads, so a
     # 17-landmark (COCO-topology) record raised IndexError, a None landmark TypeError
@@ -262,7 +274,11 @@ def test_the_derived_population_is_the_one_this_file_records():
     #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 101
+    # WAVE 22 (core-gates, 2026-09-05): 101 → 102. +1 `canon_census.GateCanon` — itemised
+    # at its entry above. RE-DERIVED with `==` in this worktree against `e8263a3`, which
+    # every census here read GREEN first. BRANCH-LOCAL — five domains move pins this wave
+    # and the coordinator re-measures on the merged tree rather than summing.
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 102
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

@@ -305,7 +305,10 @@ def resolve(subject, *, census=None, search_roots=None):
             "no subject: a spend with no census id has no answer",
             {"clause": "missing_subject"},
         )
-    table = canon_census.CENSUS if census is None else census
+    # · ANDON — the table BEFORE any row is read off it. `canon_census.gate_census_table`
+    # is the one implementation; see its docstring for the three readings measured on
+    # `e8263a3`, one of which raised a bare `AttributeError` out of this very function.
+    table = canon_census.gate_census_table(census)
     if subject not in table:
         _raise(
             f"unknown subject {subject!r} (census has {sorted(table)})",
@@ -716,6 +719,42 @@ def cover(doc, prompt):
     return ev
 
 
+def _gate_out_dir(out_dir):
+    """Gate CANON's refusal for a spend directory that is already occupied.
+
+    `None` is "the caller is not telling this gate where the spend lands", which is the
+    shape every in-package test uses and is not a defect. A path that does not exist is the
+    shape `canon_gate.py` uses: the builder mkdirs AFTER the gate returns, and this
+    function creating it would be the exact thing `require_canon`'s docstring promises it
+    never does.
+    """
+    if out_dir is None:
+        return None
+    path = str(out_dir)
+    if not os.path.exists(path):
+        return path
+    if not os.path.isdir(path):
+        _raise(
+            f"--out {path!r} exists and is not a directory, so the spend cannot land "
+            f"there and `os.listdir` on it raises `NotADirectoryError` — not an "
+            f"`ArmatureError`, so the halt contract's exit-2 receipt branch would be "
+            f"bypassed",
+            {"clause": "out_dir_is_not_a_directory", "out_dir": path,
+             "entries": None},
+        )
+    entries = sorted(os.listdir(path))
+    if entries:
+        _raise(
+            f"--out {path!r} already holds {len(entries)} entr"
+            f"{'y' if len(entries) == 1 else 'ies'} ({entries[:8]}). A spend writes its "
+            f"payload, its record and its gate receipts into this directory, and a re-run "
+            f"over a half-finished one leaves a mixture no later reader can attribute to "
+            f"either run. Point --out at a fresh directory, or move the existing one aside",
+            {"clause": "out_dir_not_empty", "out_dir": path, "entries": entries},
+        )
+    return path
+
+
 def require_canon(
     subject,
     prompt,
@@ -725,8 +764,32 @@ def require_canon(
     census=None,
     search_roots=None,
 ):
-    """Fail-closed spend helper. Never creates out_dir. Raises or returns evidence."""
-    table = canon_census.CENSUS if census is None else census
+    """Fail-closed spend helper. Never creates out_dir. Raises or returns evidence.
+
+    ⚠ **`out_dir` was a parameter both helpers declared, forwarded between them, and
+    neither body READ.** Measured on `e8263a3` by grep across this module: four lines
+    mentioned it — this signature, the docstring sentence above, `gate_write`'s signature
+    and `gate_write`'s forward — and no statement anywhere looked at the value, while
+    `tools/canon_gate.py:75` hands it a real directory. The docstring's negative was true
+    (nothing here creates a directory) and it was the whole of the contract; a reader of
+    that call site had no way to tell that the gate is handed the path it must protect and
+    ignores it, and the next edit that added an `out_dir`-dependent clause — or the next
+    caller that stopped passing it — would have been invisible at every existing call site.
+
+    It is a check now rather than a deleted parameter, because deleting it would have
+    broken `canon_gate.py`'s call and because there IS a real question to ask of the path:
+    **a re-run may not write into a half-finished spend.** The directory is refused when it
+    exists and holds anything, and when something that is not a directory stands there.
+    `out_dir=None` and a path that does not exist yet are the ordinary spellings and are
+    unchanged — and the sentence above still holds, because refusing is not creating.
+    """
+    # · ANDON — the table, before the escape below reads `surfaces` and `reason` off a
+    # row with `.get`. A misspelled `surface:` key made the `clause: "checkbox"` refusal
+    # inoperative and returned UNGATED for a subject that HAS a ratified surfaces file;
+    # `.get` cannot tell an absent key from a misspelled one. One implementation, called
+    # here and from `resolve`, so a table supplied through `census=` or mutated at run
+    # time meets the same clause the import-time call meets.
+    table = canon_census.gate_census_table(census)
     if no_canon:
         if not subject:
             _raise(
@@ -747,6 +810,10 @@ def require_canon(
                 {"subject": subject, "surfaces": rec.get("surfaces"),
                  "clause": "checkbox"},
             )
+        # · ANDON — the destination, checked at the point the spend PROCEEDS rather than
+        # at the top of the function: an identity refusal stays the headline, and a
+        # caller whose subject is wrong should read about the subject.
+        _gate_out_dir(out_dir)
         return {
             "verdict": "UNGATED",
             "subject": subject,
@@ -769,6 +836,9 @@ def require_canon(
              "clause": "unratified_only", **ev},
         )
     covered = cover(doc, prompt)
+    # · ANDON — the destination, on the other path the spend proceeds down. See the
+    # sibling call in the `--no-canon` branch above.
+    _gate_out_dir(out_dir)
     covered["subject"] = subject
     covered["path"] = doc.get("_path")
     covered["verdict"] = "ARMED"
