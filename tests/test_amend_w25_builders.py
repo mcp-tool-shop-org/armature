@@ -740,3 +740,318 @@ def test_the_four_downloader_clauses_below_the_launch_still_fire_on_their_own_op
         FR.download(str(manifest))
     assert caught.value.evidence["clause"] == "downloader_exits_unobserved", \
         caught.value.evidence
+
+
+# ===========================================================================
+# F-2c15e4e8 (panel HIGH) — the tie between the record and the graph is REQUIRED
+#
+# `route_facts` refuses `record_describes_a_different_graph` when the record's
+# `payload_sha256` disagrees with `canonical_payload_digest(api_graph)` — but when the
+# record declared NO digest it set
+#   tie = "the record declares no `payload_sha256`, so the facts below are NOT tied to the
+#          graph being admitted"
+# and ADMITTED, returning that sentence inside `source`. The tie was COMPUTED, RECORDED and
+# never REQUIRED.
+#
+# MEASURED on `580af47`: a record carrying a real `RG.verify` receipt and no digest is
+# admitted on the green assembly fixture — `SAVED_ADMISSION_OK`, exit 0,
+# `route_facts.payload_sha256: null`, and `source` ending in that sentence. So the
+# provenance document for an irreversible spend stated in prose that its two
+# spend-admitting facts are not tied to the graph, while the verdict line said OK.
+#
+# THE POPULATION THAT NEEDED THE ESCAPE IS EMPTY. The wave-18 entry that added the
+# comparison (F-5c0f3858) accepted the bound explicitly, on the ground that wave 20 had
+# re-measured only FOUR of the nine builders writing the digest. Wave 23 closed that half.
+# Re-derived here from the tree, not quoted: the census below reads every builder.
+#
+# BOUNDED at what there is to tie the record TO: with no `api_graph` there is no graph
+# being admitted, and that reading records the absence as before. `--api` is
+# `required=True` on this tool's parser and `main` is its only caller, so every CLI path is
+# inside the refusal.
+
+W25_NINE_BUILDERS = [
+    "build_animate_payload.py", "build_assembly_payload.py",
+    "build_camera_i2v_payload.py", "build_cascade_payload.py", "build_i2v_payload.py",
+    "build_lora_arm_payload.py", "build_payload.py", "build_r2v_payload.py",
+    "build_t2v_payload.py",
+]
+
+
+def test_an_untied_record_is_refused_at_the_admission_boundary(tmp_path):
+    """F-2c15e4e8 · the operand: a record with a REAL `verify` receipt and no digest.
+
+    reverted-red: yes — on `580af47` this exact invocation prints `SAVED_ADMISSION_OK` at
+    exit 0 with `route_facts.payload_sha256: null`.
+    """
+    record = _builder_record(ASSEMBLY_API, family="wan", carries_no_sampler=True,
+                             frame=(832, 480, 81))
+    record.pop("payload_sha256")
+    rec_path = _write(tmp_path, "in/untied-record.json", record)
+    argv = [a for a in _assembly_cli(tmp_path, record=False)] + [f"--record={rec_path}"]
+    proc, halt, oks = _drive("gate_saved_graph.py", argv, "SAVED_ADMISSION")
+    assert halt is not None, proc.stdout + proc.stderr
+    assert proc.returncode == 2, (proc.returncode, halt)
+    assert oks == [], oks
+    assert halt["error"] == "SavedAdmission", halt
+    ev = halt["evidence"]
+    assert ev["clause"] == "record_is_not_tied_to_the_graph", ev
+    assert ev["gate"] == "SAVED_ADMISSION" and ev["andon"] == "SavedAdmission", ev
+    assert ev["declared_payload_sha256"] is None, ev
+    assert ev["api_payload_sha256"], ev
+    assert ev["n_verify_receipts"] >= 1, ev      # the receipt was real; the TIE was missing
+    assert not (tmp_path / "out").exists(), "a refusal left an out directory"
+
+
+def test_the_same_record_with_its_digest_is_admitted(tmp_path):
+    """The direction the clause must not bound — and the green half of the red proof: the
+    ONLY difference between this run and the one above is the digest the builders write."""
+    proc, halt, oks = _gsg(tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert halt is None and len(oks) == 1, (halt, oks)
+    printed = json.loads(oks[0][len("SAVED_ADMISSION_OK "):])
+    assert printed["route_facts"]["payload_sha256"], printed
+    written = json.loads((tmp_path / "out" / "admission.json").read_text(encoding="utf-8"))
+    assert written["route_facts"]["source"].endswith(
+        "graph this admission vouches for"), written["route_facts"]["source"]
+
+
+def test_the_refusals_premise_cannot_go_stale_without_failing_here():
+    """The census the refusal rests on: the untied branch's population is EMPTY because
+    every builder writes the digest. Derived from the tree, so the day one stops, this
+    fails rather than the refusal quietly becoming wrong about its own reason."""
+    import ast
+
+    silent = []
+    for name in W25_NINE_BUILDERS:
+        tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
+        writes = [n for n in ast.walk(tree)
+                  if isinstance(n, ast.Constant) and n.value == "payload_sha256"]
+        if not writes:
+            silent.append(name)
+    assert silent == [], silent
+    assert len(W25_NINE_BUILDERS) == 9
+
+
+def test_the_facts_only_reading_still_records_an_absence_it_cannot_judge(tmp_path):
+    """The bound, stated as a test: with no graph to tie to, the absence is a RECORDED FACT
+    and not a refusal — because there is no graph being admitted for it to be untied from.
+    Unreachable from the CLI (`--api` is required), and kept for an in-process caller."""
+    import gate_saved_graph as GSG
+
+    record = _builder_record(ASSEMBLY_API, family="wan", carries_no_sampler=True,
+                             frame=(832, 480, 81))
+    record.pop("payload_sha256")
+    rec_path = _write(tmp_path, "in/untied-record.json", record)
+    facts = GSG.route_facts(str(rec_path))
+    assert facts["payload_sha256"] is None, facts
+    assert "nothing was tied and nothing was checked" in facts["source"], facts["source"]
+
+    src = open(os.path.join(TOOLS, "gate_saved_graph.py"), encoding="utf-8").read()
+    assert 'ap.add_argument("--api", required=True)' in src, "the bound rests on this"
+
+
+def test_the_disagreeing_digest_clause_beside_it_is_unchanged(tmp_path):
+    """Rule 2 — the sibling clause on the same field still fires on its own operand, and
+    still under its own word."""
+    import gate_saved_graph as GSG
+
+    record = _builder_record(ASSEMBLY_API, family="wan", carries_no_sampler=True,
+                             frame=(832, 480, 81))
+    record["payload_sha256"] = "0" * 64
+    rec_path = _write(tmp_path, "in/wrong-record.json", record)
+    with pytest.raises(RG.RouteGate) as caught:
+        GSG.route_facts(str(rec_path), ASSEMBLY_API)
+    ev = caught.value.evidence
+    assert ev["clause"] == "record_describes_a_different_graph", ev
+    assert ev["declared_payload_sha256"] == "0" * 64, ev
+
+
+# ===========================================================================
+# F-db6ec1f4 (panel MEDIUM) — an unknown `--hosted-tier` refuses on the FLAG
+#
+# `--hosted-tier` took any string and was never checked against the table its own help text
+# names ("a tier from route_gates.HOSTED_TIER_RULES"), which has exactly one key.
+#
+# MEASURED on `580af47` as three subprocesses on the green assembly fixture:
+# `--hosted-tier=bogus-tier`, `--hosted-tier=wan2.7-r2v` and `--hosted-tier=WAN2.7-R2V` all
+# exit 2 with the IDENTICAL `SAVED_ADMISSION_HALT` message — "verify() was told this is
+# hosted tier '<x>', but no node in the graph carries that tier's enum inputs. Gate L would
+# then have nothing to decide in EITHER clause, which is the vacuous state …" — a sentence
+# about the GRAPH, on an argument that names no tier at all. The refusal is fail-closed;
+# what it costs is the operator's next hour, at the boundary of the one route in this repo
+# that bills per submission.
+#
+# core-gates' `hosted_nodes_without_a_tier` (their SEAM 3 / SEAM 11) is the CONVERSE and
+# the two do not overlap: theirs fires when NO tier is declared and the graph carries
+# hosted nodes; this fires when a tier IS declared and is not in the table.
+
+#: The operand family, driven through the CLI. The case-shifted spelling is the one an
+#: operator actually types, and it is not a key.
+W25_UNKNOWN_TIERS = ["bogus-tier", "WAN2.7-R2V", "wan2.7", "", "wan2.7-r2v "]
+
+
+@pytest.mark.parametrize("tier", W25_UNKNOWN_TIERS)
+def test_an_unknown_hosted_tier_refuses_on_the_flag_not_on_the_graph(tier, tmp_path):
+    """F-db6ec1f4 · rule 4: the halt line READ, on a flag value that names no tier.
+
+    reverted-red: yes. On `580af47` every one of these exits 2 with the graph-shaped
+    message quoted above and `evidence['clause'] == 'hosted_tier_enums_absent'`.
+    """
+    proc, halt, oks = _drive(
+        "gate_saved_graph.py",
+        _assembly_cli(tmp_path, extra=[f"--hosted-tier={tier}"]), "SAVED_ADMISSION")
+    assert halt is not None, proc.stdout + proc.stderr
+    assert proc.returncode == 2, (proc.returncode, halt)
+    assert halt["error"] == "SavedAdmission", halt
+    ev = halt["evidence"]
+    assert ev["clause"] == "unknown_hosted_tier", ev
+    assert ev["flag"] == "--hosted-tier", ev
+    assert ev["supplied"] == tier, ev
+    assert ev["known"] == ["wan2.7-r2v"], ev
+    # the message is about the FLAG, not about the graph
+    assert "--hosted-tier" in halt["message"], halt["message"]
+    assert "no node in the graph" not in halt["message"], halt["message"]
+    assert not (tmp_path / "out").exists(), "a refusal left an out directory"
+
+
+def test_the_known_set_is_read_off_the_table_and_not_frozen_in_this_file(monkeypatch):
+    """A tier ADDED to `route_gates.HOSTED_TIER_RULES` joins without an edit here — which
+    an argparse `choices=` would not do, and which is why this is a raise and not a
+    parser constraint."""
+    import ast
+
+    import gate_saved_graph as GSG
+
+    monkeypatch.setitem(RG.HOSTED_TIER_RULES, "probe-tier",
+                        dict(RG.HOSTED_TIER_RULES["wan2.7-r2v"]))
+    assert "probe-tier" in sorted(RG.HOSTED_TIER_RULES)
+    assert GSG.RG is RG                             # the same module object is read
+
+    # Read off the PARSER (the resolved shape), not off the file's text: this module's own
+    # prose says why `choices=` is the wrong instrument here, and a text search would find
+    # the sentence saying so.
+    src = open(os.path.join(TOOLS, "gate_saved_graph.py"), encoding="utf-8").read()
+    tree = ast.parse(src)
+    frozen = [n.lineno for n in ast.walk(tree)
+              if isinstance(n, ast.Call)
+              and getattr(n.func, "attr", "") == "add_argument"
+              and any(kw.arg == "choices" for kw in n.keywords)]
+    assert frozen == [], frozen
+    # and the refusal reads the table by NAME at call time, so a new key is admitted
+    reads = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Attribute) and n.attr == "HOSTED_TIER_RULES"]
+    assert len(reads) >= 2, len(reads)              # the membership test and the evidence
+
+
+def test_the_real_tier_on_a_graph_that_carries_its_enums_still_reaches_gate_L(tmp_path):
+    """The direction the invariant must NOT bound (rule 2): the recorded tier is admitted
+    and Gate L decides on the tier's own enum clauses.
+
+    This is the invocation `tests/test_packaging.py`'s success fixture drives, so the
+    property is measured twice from two directions.
+    """
+    import test_gate_saved_graph as G
+
+    api = _write(tmp_path, "in/g.api.json", G.REF_API)
+    saved = _write(tmp_path, "in/g.saved.json", G.ref_saved())
+    seeds = _write(tmp_path, "in/seeds.json", {"seeds": [2026081351]})
+    proc, halt, oks = _drive("gate_saved_graph.py", [
+        f"--saved={saved}", f"--api={api}", f"--seeds={seeds}",
+        f"--out={tmp_path / 'out' / 'admission.json'}",
+        "--hosted-tier=wan2.7-r2v"], "SAVED_ADMISSION")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert halt is None and len(oks) == 1, (halt, oks)
+    printed = json.loads(oks[0][len("SAVED_ADMISSION_OK "):])
+    assert "pixel clause inapplicable" in printed["gate_L_frame_source"], printed
+
+
+def test_the_flag_is_refused_above_the_loader(tmp_path):
+    """The PLACEMENT, not only the clause: the refusal runs before either graph is opened,
+    so a typo is answered without reading two files off disk — the shape wave 23's
+    `encode_control` commit established and `--saved` / `--api` already follow."""
+    argv = _assembly_cli(tmp_path, extra=["--hosted-tier=bogus-tier"])
+    argv = [a if not a.startswith("--saved=") else "--saved=no-such-file.json"
+            for a in argv]
+    proc, halt, oks = _drive("gate_saved_graph.py", argv, "SAVED_ADMISSION")
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    # the TIER clause wins, because it is above the file clause
+    assert halt["evidence"]["clause"] == "unknown_hosted_tier", halt["evidence"]
+
+
+# ===========================================================================
+# F-9dd141d9 (panel MEDIUM) — one condition, ONE clause word
+#
+# `build_r2v_payload` raised `arm_input_missing` from `build()` for arms A1 and A2 and
+# `missing_arm_input` from `build_and_write` for the same two arms off its own local copy
+# of the same table. Both words were live in the vocabulary census and neither was in
+# `CLAUSES_NAMED_BY_NO_FIXTURE`, so the census carried two live clauses where one condition
+# exists. Via the CLI only `missing_arm_input` was ever printed, because the CLI check ran
+# first; a library caller of `build()` saw only `arm_input_missing`.
+#
+# Rated LOW by its author and MEDIUM by the panel, deliberately in both cases: no artifact
+# is wrong and the refusal was correct in both spellings. What was wrong is that a wrapper
+# keyed on the clause word had to know which layer refused.
+#
+# The surviving word is `missing_arm_input` — the one the CLI printed, whose message names
+# the flag and says what the file is for — and `build()` CALLS the same check rather than
+# carrying a second one, so there is one raise and not two words agreeing.
+
+
+@pytest.mark.parametrize("arm,flag", [("A1", "--refs"), ("A2", "--uploads")])
+def test_the_library_call_and_the_cli_refuse_under_one_word(arm, flag, tmp_path):
+    """F-9dd141d9 · both layers, one clause.
+
+    reverted-red: yes — on `580af47` `build()` answers `arm_input_missing` here.
+    """
+    import build_r2v_payload as R2V
+
+    with pytest.raises(RG.RouteGate) as caught:
+        R2V.build(arm=arm, seed=123456789, prompt="p", negative="n")
+    ev = caught.value.evidence
+    assert ev["clause"] == "missing_arm_input", ev
+    assert ev["arm"] == arm and ev["flag"] == flag, ev
+    assert ev["gate"] == "ROUTE" and ev["andon"] == "RouteGate", ev
+
+
+def test_the_retired_spelling_is_gone_from_the_vocabulary():
+    """The census that holds the pair (wave 23's `ONE_CONDITION_TWO_SPELLINGS`) asserted
+    BOTH words still existed, so retiring one forces its row to be deleted in the same
+    commit. Read off the walk, not off the row."""
+    import _census_nodes as CN
+
+    vocabulary = CN.clause_literals()
+    assert "arm_input_missing" not in vocabulary, vocabulary.get("arm_input_missing")
+    sites = vocabulary["missing_arm_input"]
+    assert [s for s in sites if s.startswith("build_r2v_payload.py")] == sites, sites
+    assert len(sites) == 1, sites               # one condition, one word, one raise
+
+
+def test_the_two_layers_share_one_table_and_one_raise():
+    """Adopt the home: `build_and_write`'s local `ARM_INPUT` is gone and both layers read
+    the module-level table through the same gate function."""
+    import ast
+
+    import build_r2v_payload as R2V
+
+    assert sorted(R2V.ARM_INPUT) == ["A1", "A2"]
+    src = open(os.path.join(TOOLS, "build_r2v_payload.py"), encoding="utf-8").read()
+    tree = ast.parse(src)
+    assigns = [n for n in ast.walk(tree)
+               if isinstance(n, ast.Assign)
+               and any(isinstance(t, ast.Name) and t.id == "ARM_INPUT" for t in n.targets)]
+    assert len(assigns) == 1, [n.lineno for n in assigns]
+    fn = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+          and n.name == "gate_arm_input"]
+    assert len(fn) == 1
+    raises = [n for n in ast.walk(fn[0]) if isinstance(n, ast.Raise)]
+    assert len(raises) == 1, [n.lineno for n in raises]
+
+
+def test_the_gate_admits_an_arm_that_has_its_input():
+    """The direction the check must not bound: a call WITH the input is not refused, and an
+    arm the table does not name is not refused by this check either."""
+    import build_r2v_payload as R2V
+
+    assert R2V.gate_arm_input("A1", ["a-plate.png"]) is None
+    assert R2V.gate_arm_input("A2", ["00000.png"]) is None
+    assert R2V.gate_arm_input("A9", None) is None     # not this check's business

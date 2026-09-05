@@ -109,6 +109,54 @@ class SpendCeiling(RouteGate):
     gate = "CEILING"
 
 
+#: What each arm's ONE input is: the flag that supplies it, the `build()` keyword and the
+#: `argparse` dest that carry it, and what the file is for. Lifted to module level in wave
+#: 25 (F-9dd141d9) from a local inside `build_and_write`, so the CLI and the library call
+#: read the same table.
+ARM_INPUT = {
+    "A1": {"flag": "--refs", "arg": "refs", "dest": "refs",
+           "what": ("the reference record JSON whose views become this arm's reference "
+                    "image slots")},
+    "A2": {"flag": "--uploads", "arg": "upload_names", "dest": "uploads",
+           "what": ("the frame uploads map JSON the in-graph cascade assembles the "
+                    "reference VIDEO from")},
+}
+
+
+def gate_arm_input(arm, value):
+    """One condition, ONE clause word: this arm was given no input. · ANDON
+
+    Wave 25, F-9dd141d9. The condition carried TWO clause words on the hosted partner tier
+    that bills per submission: `build()` raised `arm_input_missing` for arm A1 (`--refs`)
+    and arm A2 (`--uploads`), while `build_and_write` raised `missing_arm_input` for the
+    same two arms off its own local copy of this table. (The clause key and its value are
+    written apart here on purpose — a census that regexes module SOURCE for the pair reads
+    a quotation as a raise site.) Both words were live in the vocabulary census
+    (`_census_nodes.clause_literals`, re-derived at the time as 385 distinct literals with
+    both present) and neither was in `CLAUSES_NAMED_BY_NO_FIXTURE`, so the census carried
+    two live clauses where one condition exists.
+
+    Via the CLI only `missing_arm_input` was ever printed, because the CLI check ran BEFORE
+    `build()`; a library caller of `build()` saw only `arm_input_missing`. No artifact was
+    wrong and the refusal was correct in both spellings — what was wrong is that a wrapper
+    keyed on the clause word had to know which layer refused.
+
+    `missing_arm_input` is the word that survives: it is the one the CLI actually printed,
+    and its message names the flag and says what the file is for. The other spelling is
+    deleted, and `build()` calls this check rather than carrying a second one — so there is
+    ONE raise, not two words agreeing.
+    """
+    spec = ARM_INPUT.get(arm)
+    if spec is None or value:
+        return
+    raise RG.RouteGate(
+        f"arm {arm} needs {spec['flag']}: it is {spec['what']}, and this arm cannot be "
+        f"built without it. The omission used to surface as a NoneType traceback from "
+        f"`open`, two gates later",
+        {"gate": "ROUTE", "andon": "RouteGate", "clause": "missing_arm_input",
+         "arm": arm, "flag": spec["flag"]})
+
+
 def build(*, arm, seed, prompt, negative, refs=None, upload_names=None,
           resolution="720P", ratio="16:9", duration=5, watermark=False,
           prefix="video/E13_r2v", group_size=AS.GROUP_SIZE):
@@ -130,22 +178,17 @@ def build(*, arm, seed, prompt, negative, refs=None, upload_names=None,
     }
     cascade_ids = None
 
+    # ONE check, both layers (wave 25, F-9dd141d9): the same call `build_and_write` makes
+    # before it opens anything, so a library caller and the CLI refuse the same condition
+    # under the same word.
+    gate_arm_input(arm, {"A1": refs, "A2": upload_names}.get(arm))
+
     if arm == "A1":
-        if not refs:
-            raise RG.RouteGate(
-                "arm A1 needs reference images",
-                {"gate": "ROUTE", "andon": "RouteGate", "clause": "arm_input_missing",
-                 "arm": arm, "flag": "--refs"})
         for i, name in enumerate(refs):
             nid = str(FIRST_IMAGE_ID + i)
             wf[nid] = {"class_type": "LoadImage", "inputs": {"image": name}}
             inputs[f"model.reference_images.image{i + 1}"] = [nid, 0]
     elif arm == "A2":
-        if not upload_names:
-            raise RG.RouteGate(
-                "arm A2 needs the cascade's frame uploads",
-                {"gate": "ROUTE", "andon": "RouteGate", "clause": "arm_input_missing",
-                 "arm": arm, "flag": "--uploads"})
         cascade, group_ids = CASCADE.build(upload_names, fps=16.0, group_size=group_size)
         # Everything the cascade builds EXCEPT its own SaveVideo: here the constructed
         # VIDEO goes into the reference slot instead of to disk.
@@ -305,20 +348,10 @@ def build_and_write(argv=None):
     # The check runs on the invocation itself, before anything is read.
     # `build_camera_i2v_payload.resolve_start_frame` is the shape carried: name the flag,
     # name what the file is for.
-    ARM_INPUT = {"A1": ("--refs", "refs",
-                        "the reference record JSON whose views become this arm's "
-                        "reference image slots"),
-                 "A2": ("--uploads", "uploads",
-                        "the frame uploads map JSON the in-graph cascade assembles the "
-                        "reference VIDEO from")}
-    flag, attr, what = ARM_INPUT[a.arm]
-    if not getattr(a, attr):
-        raise RG.RouteGate(
-            f"arm {a.arm} needs {flag}: it is {what}, and this arm cannot be built "
-            f"without it. The omission used to surface as a NoneType traceback from "
-            f"`open`, two gates later",
-            {"gate": "ROUTE", "andon": "RouteGate", "clause": "missing_arm_input",
-             "arm": a.arm, "flag": flag})
+    # ONE table, ONE raise (wave 25, F-9dd141d9): the local copy this replaces spelled the
+    # same condition `missing_arm_input` here and `arm_input_missing` inside `build()`, so
+    # which word a halt reader saw depended on which layer refused.
+    gate_arm_input(a.arm, getattr(a, ARM_INPUT[a.arm]["dest"]))
 
     out = os.path.abspath(a.out)
 

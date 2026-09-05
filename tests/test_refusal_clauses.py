@@ -709,7 +709,22 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     #   SAVED_ADMISSION. `SavedAdmission`'s own site count moves 8 -> 12 in the same commit.
     #      ⚠ **BRANCH-LOCAL.** Four sibling domains move this number in the same wave; the
     #      coordinator MEASURES it on the merged tree and never sums.
-    assert len(RAISE_SITES["RouteGate"]) == 70, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 25 (builders, F-2c15e4e8 + F-9dd141d9, 2026-09-05): 70 -> 68, and the -2 hides
+    # moves in both directions, so it is itemised:
+    #   -1 `gate_saved_graph.route_facts`' untied branch, which ADMITTED and returned a
+    #      sentence saying the facts were not tied to the graph; it is a `SavedAdmission`
+    #      refusal now (`record_is_not_tied_to_the_graph`), so it leaves this count by
+    #      becoming MORE specific — the same direction the wave-16 and wave-18 notes above
+    #      record.
+    #   -2 `build_r2v_payload.build`'s two `arm_input_missing` raises, DELETED: one
+    #      condition had two clause words across two layers, and `build()` now calls the
+    #      same `gate_arm_input` the CLI calls. A refusal site disappearing because two
+    #      sites became one is as much a finding as one appearing.
+    #   +1 `build_r2v_payload.gate_arm_input`, the ONE raise those two collapsed into.
+    # 70 - 1 - 2 + 1 = 68, MEASURED with `len(RAISE_SITES["RouteGate"])`, never summed.
+    #      ⚠ **BRANCH-LOCAL.** core-gates posts 74 -> 77 on its own branch; the coordinator
+    #      MEASURES on the merged tree.
+    assert len(RAISE_SITES["RouteGate"]) == 68, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside
@@ -1353,7 +1368,6 @@ RECORDED_CLAUSES = [
     'anchor_outside_unit_interval',
     'arc_did_not_survive',
     'arc_does_not_move',
-    'arm_input_missing',
     'arm_not_in_experiment',
     'asset_has_no_evaluated_geometry',
     'asset_imported_no_mesh_objects',
@@ -1656,6 +1670,7 @@ RECORDED_CLAUSES = [
     'record_carries_no_verify_receipt',
     'record_describes_a_different_graph',
     'record_frame_counts_disagree',
+    'record_is_not_tied_to_the_graph',
     'record_route_facts_disagree',
     'record_unreadable',
     'recorded_convention_digest_drift',
@@ -2027,13 +2042,20 @@ def test_a_clause_is_a_word_a_halt_reader_can_key_on():
 
 
 #: MEASURED 2026-09-05 and OUT OF DOMAIN: one condition, two clause words, in the builder
-#: for the hosted partner tier that bills per submission. `arm_input_missing` at
-#: `build_r2v_payload.py:134` and `:144`; `missing_arm_input` at `:317`. Posted to the
-#: wave-23 seams inbox for builders. Asserted as a PAIR that still exists, so the row cannot
-#: rot: closing it deletes the row in the same commit.
-ONE_CONDITION_TWO_SPELLINGS = {
-    "build_r2v_payload.py": ("arm_input_missing", "missing_arm_input"),
-}
+#: for the hosted partner tier that bills per submission. `arm_input_missing` was raised by
+#: `build()` for arms A1 and A2 and `missing_arm_input` by `build_and_write` for the same
+#: two arms off its own local copy of the same table. Posted to the wave-23 seams inbox for
+#: builders. Asserted as a PAIR that still exists, so the row could not rot: closing it
+#: deletes the row in the same commit.
+#:
+#: ⚠ EMPTY as of wave 25 (builders, F-9dd141d9, 2026-09-05). `arm_input_missing` is retired
+#: and `build()` CALLS the check `build_and_write` uses, so there is one raise rather than
+#: two words agreeing; `missing_arm_input` survives because it is the word the CLI actually
+#: printed and its message names the flag. The row is deleted here, in that commit, which
+#: is this table's own rule. The table is KEPT and the test below still runs over it: a new
+#: pair recorded here is asserted the same way, and an empty table is the state this census
+#: was written to reach.
+ONE_CONDITION_TWO_SPELLINGS = {}
 
 
 def test_the_doubled_clause_spelling_is_recorded_where_it_still_lives():

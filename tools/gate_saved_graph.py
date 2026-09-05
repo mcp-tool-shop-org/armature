@@ -1020,9 +1020,53 @@ def route_facts(record_path, api_graph=None):
                            "separators=(',',':')) — the builders' own derivation")})
     n_declaring = sum(1 for r in receipts if r.get("receipt") == VERIFY_RECEIPT_KIND)
     if declared is None:
-        tie = ("the record declares no `payload_sha256`, so the facts below are NOT tied "
-               "to the graph being admitted")
+        # ---- ANDON, wave 25 (F-2c15e4e8). This branch used to ADMIT, returning the
+        # sentence below inside `source`: the tie between the record and the graph it
+        # vouches for was COMPUTED, RECORDED and never REQUIRED. MEASURED on `580af47`: a
+        # record carrying a real `RG.verify` receipt and no digest was admitted on the
+        # green assembly fixture — SAVED_ADMISSION_OK, exit 0,
+        # `route_facts.payload_sha256: null`, and `source` ending in that sentence. So the
+        # provenance document for an irreversible spend stated in prose that its two
+        # spend-admitting facts are NOT tied to the graph, beside a verdict line reading OK.
+        #
+        # The wave-18 entry that added the comparison (F-5c0f3858, quoted above) accepted
+        # that bound explicitly, on the ground that wave 20 had re-measured only FOUR of the
+        # nine builders that write the digest. Wave 23 closed that half: RE-DERIVED here on
+        # this branch, `grep -c payload_sha256` over the nine returns 2 / 4 / 2 / 1 / 2 / 1
+        # / 3 / 2 / 1 — non-zero in every one — so NO record this tree produces reaches this
+        # branch. The escape's population is empty, and `--record` accepts any path, so an
+        # older or hand-written record is the reachable operand.
+        #
+        # Diagnostics may gate nothing in this repo; a tie that decides whether an
+        # irreversible step proceeds is a gate, and this one returned a string.
+        #
+        # BOUNDED at what there is to tie the record TO. With no `api_graph` there is no
+        # graph being admitted and nothing for the record to be untied FROM, so that
+        # reading records the absence as it always did (the `tie` sentence below). `--api`
+        # is `required=True` on this tool's parser and `main` is the only caller that
+        # reaches here with a graph, so every CLI path is inside the refusal.
+        if api_digest is not None:
+            raise SavedAdmission(
+                "the record declares no `payload_sha256`, so the facts below are NOT "
+                "tied to the graph being admitted: the credit that pays a CONDITIONAL "
+                "licence row and the no-sampler assertion would be read off a document "
+                f"nothing ties to the graph hashing to {api_digest!r}. All nine builders "
+                f"write the digest, so a record without one was written by something else "
+                f"or by hand",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "record_is_not_tied_to_the_graph", "record": path,
+                 "declared_payload_sha256": None, "api_payload_sha256": api_digest,
+                 "n_verify_receipts": len(receipts),
+                 "written_by": ("every builder under tools/build_*_payload.py and "
+                                "tools/build_payload.py writes `payload_sha256` into its "
+                                "record; canonical_payload_digest is the one derivation")})
+        tie = ("the record declares no `payload_sha256` and no api graph was supplied to "
+               "compare one against, so nothing was tied and nothing was checked")
     elif api_digest is None:
+        # A RECORDED FACT rather than a clause: `--api` is `required=True` on this tool's
+        # parser, and `main` is the only caller that passes `api_graph`, so this branch is
+        # unreachable from the CLI. It is kept for an in-process caller that asks for the
+        # facts alone, and it says plainly that no comparison was made.
         tie = (f"the record declares `payload_sha256` {declared}, and no api graph was "
                f"supplied to compare it against")
     else:
@@ -1136,6 +1180,46 @@ def main(argv=None):
     # (`registration_missing`, `record_unreadable`); these two did not. The loader is
     # core-gates' file, so the clause lives here, at the boundary, exactly as the shape
     # clauses below do.
+    # ---- ANDON, wave 25 (F-db6ec1f4). `--hosted-tier` took ANY string and was never
+    # checked against the table its own help text names, so an operator typo and a real
+    # graph defect produced the SAME refusal. MEASURED on `580af47` as three subprocesses
+    # on the green assembly fixture: `--hosted-tier=bogus-tier`, `--hosted-tier=wan2.7-r2v`
+    # and `--hosted-tier=WAN2.7-R2V` all exit 2 with the identical `SAVED_ADMISSION_HALT`
+    # message — "verify() was told this is hosted tier '<x>', but no node in the graph
+    # carries that tier's enum inputs. Gate L would then have nothing to decide in EITHER
+    # clause, which is the vacuous state …" — a sentence about the GRAPH, on an argument
+    # that names no tier at all. Fail-closed, and what it costs is the operator's next hour
+    # at the boundary of the one route in this repo that bills per submission.
+    #
+    # Refused HERE, above `RG.load_graph`, for the reason the coordinator's wave-23
+    # portability commit `63191ee` made `encode_control` refuse the operator's arguments
+    # before inspecting the encoder, and for the reason `--saved` / `--api` are refused by
+    # name eight lines down and `--frame`'s components are counted before they are
+    # converted.
+    #
+    # The known set is READ OFF the table rather than typed, so a tier added to
+    # `route_gates.HOSTED_TIER_RULES` joins without a new pin here. A bare argparse
+    # `choices=` would freeze the list in this file, which is the second spelling that
+    # rule exists to prevent — and it would also print argparse's own usage error rather
+    # than this tool's sentinel line, which its `__main__` tells wrappers to key on.
+    #
+    # core-gates' half of this seam is the CONVERSE and they do not overlap: `verify`
+    # refuses `hosted_nodes_without_a_tier` when NO tier is declared and the graph carries
+    # hosted nodes; this refuses a tier that IS declared and is not in the table.
+    if a.hosted_tier is not None and a.hosted_tier not in RG.HOSTED_TIER_RULES:
+        raise SavedAdmission(
+            f"--hosted-tier={a.hosted_tier!r} is not a recorded hosted tier. A tier's "
+            f"constraints are recorded in the spec that first uses it, from that tier's "
+            f"own node contract, and this flag selects WHICH set of enum rules Gate L "
+            f"checks; a tier that names no rules would send this admission's verdict "
+            f"through a clause with nothing in it. Known tiers: "
+            f"{sorted(RG.HOSTED_TIER_RULES)}",
+            {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+             "clause": "unknown_hosted_tier", "flag": "--hosted-tier",
+             "supplied": a.hosted_tier, "known": sorted(RG.HOSTED_TIER_RULES),
+             "read_from": ("route_gates.HOSTED_TIER_RULES, so a tier added there joins "
+                           "without an edit here")})
+
     for flag, given in (("--saved", a.saved), ("--api", a.api)):
         if not os.path.isfile(given):
             raise SavedAdmission(
