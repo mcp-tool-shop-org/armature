@@ -270,7 +270,9 @@ def _norm(a):
 def _unit(a, what="a direction"):
     n = _norm(a)
     if n < 1e-12:
-        raise SolveError(f"{what} has zero length; it cannot be normalised")
+        raise SolveError(f"{what} has zero length; it cannot be normalised",
+            {"gate": None, "andon": "SolveError",
+             "clause": "vector_has_zero_length"})
     return _scale(a, 1.0 / n)
 
 
@@ -346,7 +348,9 @@ def frame_from(x_hint, y_hint, what="a frame"):
     y = _sub(y_hint, _scale(ex, _dot(y_hint, ex)))
     if _norm(y) < 1e-9 * max(_norm(y_hint), 1e-12):
         raise SolveError(f"{what}: the y hint is parallel to the x hint, so the frame is "
-                         f"degenerate and any rotation read from it would be noise")
+                         f"degenerate and any rotation read from it would be noise",
+            {"gate": None, "andon": "SolveError",
+             "clause": "frame_hints_are_parallel"})
     ey = _unit(y)
     ez = _cross(ex, ey)
     return ((ex[0], ey[0], ez[0]), (ex[1], ey[1], ez[1]), (ex[2], ey[2], ez[2]))
@@ -369,7 +373,9 @@ def _bind_reference(u_rest, hint, bone):
         raise SolveError(
             f"bone {bone!r}: the hinge hint {hint} is parallel to its rest direction, so "
             f"the bind twist datum is undefined and any twist solved against it would be "
-            f"noise. Declare a different hinge_hint for this bone in MODEL")
+            f"noise. Declare a different hinge_hint for this bone in MODEL",
+            {"gate": None, "andon": "SolveError",
+             "clause": "hinge_hint_is_parallel_to_the_bone"})
     return _unit(perp)
 
 
@@ -415,7 +421,9 @@ def sites_from_landmarks(world_landmarks):
     if len(world_landmarks) != len(POSE_LANDMARKS):
         raise SolveError(
             f"expected {len(POSE_LANDMARKS)} world landmarks, got {len(world_landmarks)}; "
-            f"a partial landmark list would solve into a pose with invented joints")
+            f"a partial landmark list would solve into a pose with invented joints",
+            {"gate": None, "andon": "SolveError",
+             "clause": "landmark_list_is_partial"})
     out = {}
     for site, idx in SITE_FROM_LANDMARK.items():
         p = world_landmarks[idx]
@@ -463,10 +471,14 @@ def solve_frame(rest, obs):
     missing = [s for s in SITE_FROM_LANDMARK if s not in obs]
     if missing:
         raise SolveError(f"observed sites missing: {sorted(missing)}; the solve would place "
-                         f"those joints at invented positions with nothing pointing at it")
+                         f"those joints at invented positions with nothing pointing at it",
+            {"gate": None, "andon": "SolveError",
+             "clause": "observed_sites_missing"})
     rest_missing = [s for s in SITE_FROM_LANDMARK if s not in rest]
     if rest_missing:
-        raise SolveError(f"the rest landmark table is missing {sorted(rest_missing)}")
+        raise SolveError(f"the rest landmark table is missing {sorted(rest_missing)}",
+            {"gate": None, "andon": "SolveError",
+             "clause": "rest_landmarks_missing"})
 
     r = _derived_points(rest)
     o = _derived_points(obs)
@@ -480,7 +492,9 @@ def solve_frame(rest, obs):
         if rule is None:
             raise SolveError(f"bone {name!r} is registered in sitelist but MODEL says "
                              f"nothing about it; a bone with no recorded rule would be "
-                             f"silently held at identity")
+                             f"silently held at identity",
+                {"gate": None, "andon": "SolveError",
+                 "clause": "bone_has_no_model_rule"})
         parent_total = total[bone.parent] if bone.parent else IDENTITY
 
         if rule[0] == "hold":
@@ -524,26 +538,54 @@ def solve_frame(rest, obs):
                     n_tgt = _sub(n_tgt, _scale(v, _dot(n_tgt, v)))
                     n_sw = mat_vec(swing, n_ref)
                     n_sw = _sub(n_sw, _scale(v, _dot(n_sw, v)))
-                    if _norm(n_tgt) > 1e-12 and _norm(n_sw) > 1e-12:
-                        n_tgt, n_sw = _unit(n_tgt), _unit(n_sw)
-                        theta = math.atan2(_dot(_cross(n_sw, n_tgt), v), _dot(n_sw, n_tgt))
-                        # **A hinge is a LINE, not a ray**, and this is the second defect
-                        # the tests caught. An elbow that bends the other way flips the
-                        # observed bend normal, and matching the datum to that ray forced a
-                        # 180-degree twist onto the PARENT — 178.9 degrees of error on a
-                        # bone whose authored motion was a clean swing. What the constraint
-                        # actually says is that the hinge axis lies IN the bend plane's
-                        # normal direction, either way round, so theta is determined only
-                        # modulo pi. The representative taken is the smallest one: a hinge
-                        # joint's twist relative to its parent is near zero, and choosing
-                        # the minimal-twist branch is that assumption made explicit rather
-                        # than left to which way the limb happened to bend.
-                        if theta > math.pi / 2.0:
-                            theta -= math.pi
-                        elif theta <= -math.pi / 2.0:
-                            theta += math.pi
-                        local[name] = mat_mul(axis_angle(v, theta), swing)
-                        twist_ok = True
+                    # WAVE 22, F-d255af87 — A TRIPWIRE, NOT A FALLBACK. This condition
+                    # cannot be false: `n_obs` is `cross(u_obs, nxt)` so it is
+                    # perpendicular to `u_obs`; rotations preserve dot products, so `n_tgt`
+                    # is perpendicular to `v` and the projection two lines above removes
+                    # nothing, leaving |n_tgt| == 1; `n_sw` is the swing applied to `n_ref`,
+                    # and the swing carries `u_rest` onto `v` while `n_ref` is perpendicular
+                    # to `u_rest`, so |n_sw| == 1 likewise. When it WAS an `if`, a false
+                    # reading fell through to `if not twist_ok` and recorded "the segment to
+                    # X is collinear with this bone on this frame" — the wrong explanation,
+                    # because the collinearity test four lines above has already passed.
+                    # Dead code carrying a borrowed message; a check that cannot fail is not
+                    # a check. It is kept — the algebra above is an argument, not a
+                    # measurement — but it is kept as an andon with its OWN clause, so if
+                    # the arithmetic above ever changes the violation is loud rather than
+                    # silently mislabelled.
+                    if not (_norm(n_tgt) > 1e-12 and _norm(n_sw) > 1e-12):
+                        raise SolveError(
+                            f"bone {name!r}: the twist datum collapsed on this frame "
+                            f"(|n_tgt|={_norm(n_tgt)!r}, |n_sw|={_norm(n_sw)!r}). Both are "
+                            f"unit by construction — `n_obs` is perpendicular to `u_obs`, "
+                            f"rotations preserve dot products, and the projections onto the "
+                            f"plane normal to `v` therefore remove nothing — so this is an "
+                            f"arithmetic invariant of the lines above, not a shape of "
+                            f"input. It is reported rather than absorbed because the "
+                            f"absorbing branch used to record the COLLINEARITY reason, "
+                            f"which the test four lines above has already ruled out",
+                            {"gate": None, "andon": "SolveError",
+                             "clause": "twist_datum_collapsed", "bone": name,
+                             "n_tgt_norm": _norm(n_tgt), "n_sw_norm": _norm(n_sw)})
+                    n_tgt, n_sw = _unit(n_tgt), _unit(n_sw)
+                    theta = math.atan2(_dot(_cross(n_sw, n_tgt), v), _dot(n_sw, n_tgt))
+                    # **A hinge is a LINE, not a ray**, and this is the second defect
+                    # the tests caught. An elbow that bends the other way flips the
+                    # observed bend normal, and matching the datum to that ray forced a
+                    # 180-degree twist onto the PARENT — 178.9 degrees of error on a
+                    # bone whose authored motion was a clean swing. What the constraint
+                    # actually says is that the hinge axis lies IN the bend plane's
+                    # normal direction, either way round, so theta is determined only
+                    # modulo pi. The representative taken is the smallest one: a hinge
+                    # joint's twist relative to its parent is near zero, and choosing
+                    # the minimal-twist branch is that assumption made explicit rather
+                    # than left to which way the limb happened to bend.
+                    if theta > math.pi / 2.0:
+                        theta -= math.pi
+                    elif theta <= -math.pi / 2.0:
+                        theta += math.pi
+                    local[name] = mat_mul(axis_angle(v, theta), swing)
+                    twist_ok = True
             if not twist_ok:
                 local[name] = swing
                 underdetermined[name] = (
@@ -553,7 +595,9 @@ def solve_frame(rest, obs):
                     f"the segment to {twist_site} is collinear with this bone on this "
                     f"frame, so there is no bend plane for the hinge datum to land on")
         else:
-            raise SolveError(f"bone {name!r} has unknown rule {rule[0]!r}")
+            raise SolveError(f"bone {name!r} has unknown rule {rule[0]!r}",
+                {"gate": None, "andon": "SolveError",
+                 "clause": "bone_has_an_unknown_rule"})
 
         total[name] = mat_mul(parent_total, local[name])
 
@@ -623,16 +667,21 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
 
     **This never raises on the measurement.** It was one function with a `raise_on_fail`
     keyword defaulting to True, and every non-test call site in the tree passed False
-    (`lift_clip.py:275 (main)`, `measure_lift.py:481 (solve_series)`) - so the only paths that ever armed the
+    (`lift_clip.py::main`, `measure_lift.py::solve_series`) - so the only paths that ever armed the
     andon were the tests, and a keyword that turns an andon into a return value is a skip
     flag whatever it is called. The two behaviours are now two functions: this one
     measures, `gate_round_trip` below halts, and no caller can disarm the second by
     keyword because it has no keyword to pass.
 
-    **The two call-site anchors above are `lift_clip.py:275 (main)` and
-    `measure_lift.py:481 (solve_series)`**, re-derived by grep 2026-09-04 (F-8cd65665) and
-    qualified with the symbol that holds each line 2026-09-04 (F-0f035830), because a bare
-    line number is not an identity that survives an edit. Both docstrings said
+    **The two call-site anchors above are `lift_clip.py::main` and
+    `measure_lift.py::solve_series`**, re-derived by grep 2026-09-04 (F-8cd65665), qualified
+    with the symbol that holds each line 2026-09-04 (F-0f035830), and reduced to the SYMBOL
+    ALONE 2026-09-05 (wave 22, SEAM 7/8) because a bare line number is not an identity that
+    survives an edit and these three citations were themselves the blocker: they read
+    `lift_clip.py:275` and `measure_lift.py:481`, and instruments-measure measured that
+    adding the `--fps` bound `lift_clip` needs moves its call to `:309`, which turned
+    `tests/test_lift_solve.py`'s derived-anchor census red. Prose cites FUNCTIONS, not
+    lines. Both docstrings said
     `lift_clip.py:276 (main)`; this one said `measure_lift.py:334 (detect)` and
     `gate_round_trip`'s said `measure_lift.py:468 (summarise)` for the SAME two call sites,
     so the pair disagreed with each other and all four were wrong — the recorded-count-measured-on-a-
@@ -667,13 +716,42 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
     per_site, worst = {}, {"site": None, "d": 0.0}
     not_placed = [s for s in expected if s not in got]
     not_observed = [s for s in expected if s in got and s not in obs]
+    # WAVE 22, F-94312e25 — THE POPULATION, PARTITIONED BEFORE IT IS READ. `worst` is
+    # seeded `{"site": None, "d": 0.0}` and was updated only at `if d > worst["d"]`;
+    # `nan > 0.0` is False, so a non-finite residual never entered `worst`,
+    # `within_tolerance` read `bool(0.0 <= tol)` and the verdict quoted `max 0.000e+00`.
+    # MEASURED on `e8263a3` on `tests/test_lift_solve.synthetic_rest()` with one observed
+    # site (`toe_L`) at `(nan, 0.0, 0.0)`: this function RETURNED `worst {'site': None,
+    # 'd': 0.0}`, `within_tolerance True`, `population_complete True` and the verdict
+    # `max 0.000e+00 over 19 of 19 sites (tolerance 1.000e-09)` — while `per_site['toe_L']`
+    # was `nan` in the same dict. The lift record a motion control sequence is built from
+    # read as a perfect inversion.
+    #
+    # F-5733588e's per-residual sweep was applied ONLY inside `gate_round_trip`, whose own
+    # docstring records that NO TOOL CALLS IT; both production callers call this
+    # diagnostic. The fix landed on the function with zero production callers while the two
+    # that ship read the number the NaN was dropped from.
+    #
+    # This function still NEVER RAISES on the measurement — that is the whole reason it is
+    # separate from `gate_round_trip`, and a diagnostic that raises is an andon with a
+    # different name. So the partition is reported instead: `n_sites_non_finite` and
+    # `sites_non_finite` are their own keys, `worst` NAMES a site whenever one exists
+    # rather than staying at its seed, and `within_tolerance` is False — never True — over a
+    # population carrying a residual that is not a number. `lift_clip`'s
+    # `[r["worst"]["d"] for r in rt]` still reduces over floats.
+    non_finite = []
     for site in expected:
         if site not in got or site not in obs:
             continue
         d = _norm(_sub(got[site], obs[site]))
         per_site[site] = d
+        if not math.isfinite(d):
+            non_finite.append(site)
+            continue
         if d > worst["d"]:
             worst = {"site": site, "d": d}
+    if non_finite:
+        worst = {"site": non_finite[0], "d": float("inf")}
     ev = {"gate": "SOLVE", "andon": "SolveGate",
           "tolerance": tol, "tolerance_frac_of_diagonal": tol_frac,
           "bbox_diagonal": diagonal, "worst": worst, "per_site": per_site,
@@ -681,13 +759,19 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
           "sites_expected": expected,
           "sites_not_placed_by_fk": not_placed,
           "sites_not_observed": not_observed,
+          "n_sites_non_finite": len(non_finite), "sites_non_finite": non_finite,
           "population_complete": not (not_placed or not_observed),
-          "within_tolerance": bool(worst["d"] <= tol),
+          "within_tolerance": bool(not non_finite and worst["d"] <= tol),
           "note": ("distance between each observed site and where the solved rotations "
                    "put it; exact by construction when the observation came from this "
                    "rig's own kinematics inside this model")}
-    ev["verdict"] = (f"max {worst['d']:.3e} over {len(per_site)} of {len(expected)} sites "
-                     f"(tolerance {tol:.3e})")
+    ev["verdict"] = (
+        (f"{len(non_finite)} of {len(per_site)} site residual(s) are not a number "
+         f"({non_finite[:6]}), so no maximum over this population is a measurement "
+         f"(tolerance {tol:.3e})")
+        if non_finite else
+        (f"max {worst['d']:.3e} over {len(per_site)} of {len(expected)} sites "
+         f"(tolerance {tol:.3e})"))
     return ev
 
 
@@ -700,8 +784,8 @@ def gate_round_trip(rest, obs, solved, diagonal, tol_frac=None):
     quoted against a wrong pose while every other number looked reasonable.
 
     The synthetic path is the one whose invariant is exactness, and this is the function
-    it calls. **No tool implements that path**: grep finds `lift_clip.py:275 (main)` and
-    `measure_lift.py:481 (solve_series)`, both on the DIAGNOSTIC `round_trip_report`, and this gate's only
+    it calls. **No tool implements that path**: grep finds `lift_clip.py::main` and
+    `measure_lift.py::solve_series`, both on the DIAGNOSTIC `round_trip_report`, and this gate's only
     callers are `tests/test_lift_solve.py` and `tests/test_amend_w3_andons.py`. The
     docstring used to name a caller that does not exist in the tree; corrected here rather
     than deleted, because the correction is the useful part (F-1831f75d).
@@ -786,7 +870,9 @@ def bone_length_residuals(rest, obs):
         rest_len = _norm(_sub(rest[tail], rest[head]))
         obs_len = _norm(_sub(obs[tail], obs[head]))
         if rest_len <= 0:
-            raise SolveError(f"bone {bone.name!r} has zero rest length")
+            raise SolveError(f"bone {bone.name!r} has zero rest length",
+                {"gate": None, "andon": "SolveError",
+                 "clause": "bone_has_zero_rest_length"})
         out[bone.name] = {
             "rest_length": rest_len, "observed_length": obs_len,
             "residual_fraction": (obs_len - rest_len) / rest_len,
@@ -806,14 +892,16 @@ def validate_motion_record(frames):
     """
     if not frames:
         raise SolveGate("the motion record carries no frames",
-                        {"gate": "SOLVE", "andon": "SolveGate", "n": 0})
+                        {"clause": "motion_record_has_no_frames",
+             "gate": "SOLVE", "andon": "SolveGate", "n": 0})
     for i, fr in enumerate(frames):
         if fr.get("frame") != i:
             raise SolveGate(
                 f"the solved frames are not a contiguous run from 0: entry {i} says frame "
                 f"{fr.get('frame')!r}. A gap filled by the neighbouring pose would play as "
                 f"a stutter and be read as detector noise",
-                {"gate": "SOLVE", "andon": "SolveGate",
+                {"clause": "frames_are_not_contiguous",
+                 "gate": "SOLVE", "andon": "SolveGate",
                  "index": i, "says": fr.get("frame"), "n": len(frames)})
         local = fr.get("local") or {}
         missing = [b for b in sitelist.ALL_NAMES if b not in local]
@@ -821,7 +909,8 @@ def validate_motion_record(frames):
             raise SolveGate(
                 f"frame {i} carries no rotation for {missing}; a bone left out here would "
                 f"hold its previous pose while every gate downstream stayed green",
-                {"gate": "SOLVE", "andon": "SolveGate", "frame": i, "missing": missing})
+                {"clause": "frame_is_missing_a_bone",
+                 "gate": "SOLVE", "andon": "SolveGate", "frame": i, "missing": missing})
     return {"gate": "SOLVE", "andon": "SolveGate", "n_frames": len(frames),
             "verdict": f"{len(frames)} contiguous frames, all {len(sitelist.ALL_NAMES)} "
                        f"registered bones present on each"}

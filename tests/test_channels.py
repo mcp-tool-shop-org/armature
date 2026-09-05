@@ -244,3 +244,114 @@ def test_the_erosion_border_argument_is_the_whole_policy_and_can_be_read_both_wa
     m[2:, :] = 1
     assert ch._erode3(m, border=False)[-1, :].sum() == 0
     assert ch._erode3(m, border=True)[-1, 1:-1].all()
+
+
+# ------------------- wave 22, F-4efe0fad: the normal half of the non-finite census
+#
+# Wave 18 gave this module a non-finite clause (`DepthError` + `_non_finite_census`) and it
+# landed on the DEPTH half only. `encode_normal` read `n_cam` with no census at all, and its
+# normalisation is `np.divide(n, norm, out=np.zeros_like(n), where=norm > 1e-8)` — `nan >
+# 1e-8` is False, so an unreadable normal silently took the ZERO fallback and encoded as if
+# it were the zero vector. MEASURED on `e8263a3` on a 4x4 field of camera-facing normals
+# (baseline (128, 128, 255) everywhere): one NaN component -> (128, 128, 128); one +inf ->
+# (0, 128, 128); one -inf -> (0, 128, 128), the SAME byte, so the sign was lost too; a
+# legitimately zero-length normal -> (128, 128, 128), indistinguishable from the unreadable
+# one; an all-NaN field -> a UNIFORM (128, 128, 128) plate, returned with no refusal and no
+# key naming the population that took the fallback. The depth sibling, in the same run and
+# the same module, raises `DepthError` with a seven-key census.
+#
+# These fixtures mirror the depth ones one for one — the depth ones are the template, and
+# their absence on the normal side was the gap.
+
+
+def _facing_field(h=4, w=4):
+    n = np.zeros((h, w, 3))
+    n[..., 2] = 1.0
+    return n, np.ones((h, w), dtype=np.uint8)
+
+
+def test_the_normal_baseline_is_camera_facing_everywhere():
+    """What the arm looks like when it does nothing — the control the four rows below are
+    read against."""
+    n, mask = _facing_field()
+    rgb = ch.encode_normal(n, mask)
+    assert set(map(tuple, rgb.reshape(-1, 3).tolist())) == {(128, 128, 255)}
+
+
+@pytest.mark.parametrize("bad,key", [
+    (float("nan"), "n_nan"),
+    (float("inf"), "n_pos_inf"),
+    (float("-inf"), "n_neg_inf"),
+])
+def test_encode_normal_refuses_one_non_finite_component_by_name(bad, key):
+    n, mask = _facing_field()
+    n[1, 2, 0] = bad
+    with pytest.raises(ch.NormalError, match=r"non-finite camera-space normal") as exc:
+        ch.encode_normal(n, mask)
+    ev = exc.value.evidence
+    assert ev["clause"] == "non_finite_geometry_normal"
+    assert ev[key] == 1 and ev["n_non_finite"] == 1
+    assert ev["n"] == 48 and ev["n_finite"] == 47 and ev["n_geometry_px"] == 16
+
+
+def test_encode_normal_refuses_an_all_nan_field_rather_than_returning_a_grey_plate():
+    """The worst realistic consequence, on the path `stage_render.py` actually runs: the
+    encoder writes straight to `out_dir/normal/` with no gate between them, so a flat grey
+    plate is hashed into the manifest and steers a paid generation."""
+    n, mask = _facing_field()
+    n[:] = float("nan")
+    with pytest.raises(ch.NormalError) as exc:
+        ch.encode_normal(n, mask)
+    assert exc.value.evidence["n_non_finite"] == 48
+
+
+def test_encode_normal_refuses_a_zero_length_normal_inside_the_mask_by_its_own_clause():
+    """It encodes to the SAME byte as the unreadable one, so the two are named apart."""
+    n, mask = _facing_field()
+    n[0, 0, :] = 0.0
+    with pytest.raises(ch.NormalError) as exc:
+        ch.encode_normal(n, mask)
+    ev = exc.value.evidence
+    assert ev["clause"] == "zero_length_geometry_normal"
+    assert ev["n_zero_length_px"] == 1 and ev["n_geometry_px"] == 16
+
+
+def test_a_non_finite_normal_OUTSIDE_the_mask_is_background_and_not_this_gate_s_business():
+    """The population is the SELECTED one — the same rule `depth_extent` states. A value
+    outside the mask is not a normal this module authored."""
+    n, mask = _facing_field()
+    mask[0, 0] = 0
+    n[0, 0, 1] = float("nan")
+    rgb = ch.encode_normal(n, mask)
+    assert tuple(int(v) for v in rgb[0, 0]) == (0, 0, 0)
+    assert tuple(int(v) for v in rgb[1, 1]) == (128, 128, 255)
+
+
+def test_derive_edge_refuses_the_same_field_rather_than_dropping_the_normal_break():
+    """The second consumer of the same unbounded array. `normal_break = m & (min_dot <
+    cos_thresh)` is False for a NaN, so the break was silently NOT drawn and
+    `diag['normal_break_px']` counted fewer, with no clause."""
+    z = np.full((4, 4), 3.0)
+    n, mask = _facing_field()
+    n[2, 2, 1] = float("nan")
+    with pytest.raises(ch.NormalError) as exc:
+        ch.derive_edge(z, n, mask, 0.02, 30.0)
+    assert exc.value.evidence["clause"] == "non_finite_geometry_normal"
+    assert exc.value.evidence["where"] == "derive_edge"
+
+
+def test_the_normal_refusal_is_in_the_family_and_carries_the_depth_sibling_s_key_set():
+    """The seven keys `DepthError`'s census carries, so a reader that can reconcile one
+    receipt can reconcile the other."""
+    from armature_core.errors import ArmatureError
+
+    assert issubclass(ch.NormalError, ArmatureError)
+    n, mask = _facing_field()
+    n[0, 1, 2] = float("nan")
+    with pytest.raises(ch.NormalError) as exc:
+        ch.encode_normal(n, mask)
+    assert set(exc.value.evidence) >= {
+        "gate", "andon", "clause", "where", "n", "n_finite", "n_non_finite", "n_nan",
+        "n_pos_inf", "n_neg_inf", "n_geometry_px"}
+    assert exc.value.evidence["gate"] is None
+    assert exc.value.evidence["andon"] == "NormalError"

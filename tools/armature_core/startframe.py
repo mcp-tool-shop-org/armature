@@ -77,23 +77,27 @@ def composite_colour(text):
             "no composite colour was named: under the alpha law the render is authored "
             "RGBA and the RGB actually submitted is composited over a NAMED background. "
             "Pass linear floats, e.g. 0.035,0.022,0.014, with a reason",
-            {"gate": "ALPHA", "andon": "AlphaGate", "supplied": text})
+            {"clause": "no_composite_colour_named",
+             "gate": "ALPHA", "andon": "AlphaGate", "supplied": text})
     parts = [p.strip() for p in str(text).split(",")]
     if len(parts) != 3:
         raise AlphaGate(
             f"the composite colour must be three linear floats `r,g,b`, got {text!r}",
-            {"gate": "ALPHA", "andon": "AlphaGate", "supplied": text})
+            {"clause": "composite_colour_not_three_floats",
+             "gate": "ALPHA", "andon": "AlphaGate", "supplied": text})
     try:
         rgb = tuple(float(p) for p in parts)
     except ValueError:
         raise AlphaGate(f"the composite colour carries a non-number: {text!r}",
-                        {"gate": "ALPHA", "andon": "AlphaGate", "supplied": text}) from None
+                        {"clause": "composite_colour_carries_a_non_number",
+             "gate": "ALPHA", "andon": "AlphaGate", "supplied": text}) from None
     if any(c < 0.0 or c > 1.0 for c in rgb):
         raise AlphaGate(
             f"composite values are linear scene-referred floats in [0,1], got {rgb}. sRGB "
             f"bytes like 52,41,31 are NOT linear floats — that form would render as a "
             f"blown white void, which is the failure this law exists to end",
-            {"gate": "ALPHA", "andon": "AlphaGate", "supplied": list(rgb)})
+            {"clause": "composite_colour_not_linear_unit_floats",
+             "gate": "ALPHA", "andon": "AlphaGate", "supplied": list(rgb)})
     return rgb
 
 
@@ -189,19 +193,22 @@ def cover_fit(src_w, src_h, width, height, anchor_x=0.5, anchor_y=0.5):
     if src_w <= 0 or src_h <= 0:
         raise BackdropGate(
             f"degenerate plate of {src_w}x{src_h}; there is no image to stand behind the "
-            f"performer", {"gate": "BACKDROP", "andon": "BackdropGate",
+            f"performer", {"clause": "degenerate_plate",
+             "gate": "BACKDROP", "andon": "BackdropGate",
              "source_size": [src_w, src_h]})
     if width <= 0 or height <= 0:
         raise BackdropGate(
             f"degenerate target frame of {width}x{height}",
-            {"gate": "BACKDROP", "andon": "BackdropGate", "target_size": [width, height]})
+            {"clause": "degenerate_target_frame",
+             "gate": "BACKDROP", "andon": "BackdropGate", "target_size": [width, height]})
     for name, v in (("anchor_x", anchor_x), ("anchor_y", anchor_y)):
         if not (0.0 <= float(v) <= 1.0):
             raise BackdropGate(
                 f"{name}={v} is outside 0..1; an anchor is the fraction of the overhang "
                 f"taken off the near side, and a value outside that range would place the "
                 f"crop box off the resized image",
-                {"gate": "BACKDROP", "andon": "BackdropGate",
+                {"clause": "anchor_outside_unit_interval",
+                 "gate": "BACKDROP", "andon": "BackdropGate",
                  "anchor_x": anchor_x, "anchor_y": anchor_y})
 
     scale = max(width / src_w, height / src_h)
@@ -412,11 +419,13 @@ def framing_cloud(points, cap=1500):
     if not pts:
         raise StartFrameGate(
             "no vertices to frame; a camera solved against nothing frames the origin and "
-            "the render would be of an empty room", {"gate": "WHOLE", "andon": "StartFrameGate", "n_points": 0})
+            "the render would be of an empty room", {"clause": "no_vertices_to_frame",
+             "gate": "WHOLE", "andon": "StartFrameGate", "n_points": 0})
     if cap < 8:
         raise StartFrameGate(
             f"cap={cap} is below the 8 bbox corners this reduction must keep",
-            {"gate": "WHOLE", "andon": "StartFrameGate", "cap": cap})
+            {"clause": "cap_below_the_bbox_corners",
+             "gate": "WHOLE", "andon": "StartFrameGate", "cap": cap})
     if len(pts) <= cap:
         return list(pts)
 

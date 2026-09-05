@@ -66,22 +66,28 @@ def rigid_segment_weights(verts, bones, radii, blend_band=BLEND_BAND):
     name / head / tail / parent. Returns (weights by bone name, diagnostics)."""
     p = np.asarray(verts, dtype=np.float64)
     if p.ndim != 2 or p.shape[1] != 3 or not len(p):
-        raise ArmatureError(f"expected a non-empty (N, 3) vertex array, got {p.shape}")
+        raise ArmatureError(f"expected a non-empty (N, 3) vertex array, got {p.shape}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "vertices_not_n_by_3"})
     if not bones:
-        raise ArmatureError("no deforming bones to assign vertices to")
+        raise ArmatureError("no deforming bones to assign vertices to",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "no_deforming_bones"})
     if not (blend_band > 0):
         raise ArmatureError(
             f"blend band must be positive, got {blend_band}; a zero band is a hard seam at "
-            f"every joint and would be a different arm than the one specified"
-        )
+            f"every joint and would be a different arm than the one specified",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "blend_band_not_positive"})
 
     names = [b["name"] for b in bones]
     missing = [n for n in names if n not in radii or not (radii[n] > 0)]
     if missing:
         raise ArmatureError(
             f"no positive measured radius for {missing}; the assignment normalises by each "
-            f"bone's own radius and cannot fall back to a length in metres"
-        )
+            f"bone's own radius and cannot fall back to a length in metres",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "bone_radius_not_positive"})
 
     n, m = len(p), len(bones)
     u = np.empty((n, m), dtype=np.float64)

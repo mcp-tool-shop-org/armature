@@ -108,6 +108,16 @@ def _norm(a):
     return _scale(a, 1.0 / n)
 
 
+def _finite(value):
+    """Is `value` a number that is finite? A PREDICATE, never a raiser — `_finite_positive`'s
+    sibling for the quantities that may legitimately be zero or negative (a screen fraction
+    measured from the frame's left edge, a vertical offset)."""
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
 def _finite_positive(value):
     """Is `value` a number that is finite and strictly greater than zero?
 
@@ -400,7 +410,31 @@ def _extent(points, target, radius, az, el, lens, sensor, width, height):
 
 def _bisect(f, lo, hi, want, iters=80):
     """Solve f(t) = want on a monotone f. Bisection, because it cannot diverge and the
-    residuals here are smooth but not analytically invertible."""
+    residuals here are smooth but not analytically invertible.
+
+    **The bracket test is the only clause here, and a non-finite target deletes it**
+    (F-c6124fe0, wave 22). `(flo - want) * (fhi - want) > 0` is False for a NaN and the
+    loop's `(f(lo) - want) * (f(mid) - want) <= 0` is False for the same reason, so the
+    search walked to its own bound and RETURNED it: measured on `e8263a3`,
+    `_bisect(lambda t: t, 0.0, 1.0, nan)` returns 1.0. A solver that returns a bound looks
+    exactly like a solver that succeeded, which is the difference this module's own
+    reachability refusal exists to draw.
+
+    The clause is here as well as in `solve_camera` deliberately — the wave-18 SEAM 5 shape:
+    the andon inside the function performing the step, the bound at the caller that composes
+    the request. Complementary, not redundant; an importer that reaches this helper without
+    going through `solve_camera` gets the refusal too.
+    """
+    if not _finite(want):
+        raise FramingError(
+            f"the framing target {want!r} is not a finite number, so the bracket test "
+            f"below cannot rule on it: `(flo - want) * (fhi - want) > 0` is False for a "
+            f"NaN in both directions and so is every comparison the loop makes, which "
+            f"means the search terminates at its own bound and returns it. A returned "
+            f"bound is indistinguishable from a solved composition",
+            {"gate": None, "andon": "FramingError",
+             "clause": "bisect_target_not_finite",
+             "search_bounds": [lo, hi], "wanted": want})
     flo, fhi = f(lo), f(hi)
     if (flo - want) * (fhi - want) > 0:
         raise FramingError(
@@ -443,6 +477,67 @@ def solve_camera(all_points, end_points, azimuth_deg, elevation_deg,
     trusting the iteration, which is why `make_shot_spec` prints them and the report
     quotes them against the render's own measured bbox.
     """
+    # WAVE 22, F-c6124fe0 — THE SOLVER HALF of the composition-fraction bound. Measured on
+    # `e8263a3` on an eight-point cloud at 832x480, lens 50 / sensor 36: the legal call
+    # returns radius 5.566204 with `achieved.union_height_frac` 0.8, while
+    # `height_frac=nan` RETURNS radius 40.0 — the `radius_bounds` CEILING — with
+    # `union_height_frac` 0.106, `in_frame: True` and `requested.height_frac: nan`;
+    # `end_x_frac=nan` RETURNS with `achieved.end_centre_x = -1.0042`, the subject a full
+    # frame-width off the left edge; `target_y_frac=nan` RETURNS with `achieved.union_y
+    # [2.223, 3.023]`, the union entirely below the frame. In every case the record is
+    # complete and well-formed, and publishes the unreadable REQUEST beside the achieved
+    # numbers as though the two were related.
+    #
+    # F-f0c261c1 measured this same defect ON THIS FUNCTION and its fix went to one tool's
+    # PARSER (`render_start_frame.require_shot_fraction`). `end_x_frac` and `target_y_frac`
+    # are bounded at NO parser in the tree — measured by grep, `--height-frac` is the only
+    # such flag — so an importer, or a new tool exposing a composition fraction, got the
+    # whole escape. The clause WORDS are that parser's, so one grep against
+    # `STARTFRAME_FRACTION`'s vocabulary finds the flag and the solver both.
+    #
+    # `height_frac` is a fraction of the frame HEIGHT and must be positive; `end_x_frac` and
+    # `target_y_frac` are positions measured across the frame and may legitimately sit
+    # outside [0, 1] while a shot is being composed, so only finiteness is bounded there —
+    # the direction that walks past every comparison rather than the direction a composition
+    # may deliberately want.
+    _who = "framing.solve_camera"
+    if not _finite_positive(height_frac):
+        raise FramingError(
+            f"height_frac={height_frac!r} is not a finite positive fraction of the frame. "
+            f"A NaN fails every comparison in both directions, so the bisection's bracket "
+            f"test cannot fire and the search returns its own ceiling — measured, radius "
+            f"40.0 over a subject filling 0.106 of the frame, with `in_frame: True` and a "
+            f"complete record naming the unreadable request beside the achieved numbers",
+            {"gate": None, "andon": "FramingError", "who": _who, "flag": "height_frac",
+             "clause": "not_a_finite_positive_fraction", "height_frac": height_frac})
+    for _name, _value in (("end_x_frac", end_x_frac), ("target_y_frac", target_y_frac)):
+        if not _finite(_value):
+            raise FramingError(
+                f"{_name}={_value!r} is not a finite fraction of the frame. Measured: a "
+                f"non-finite `end_x_frac` returns a camera whose subject arrives a full "
+                f"frame-width off the left edge, and a non-finite `target_y_frac` one whose "
+                f"union sits entirely below the frame — both with no refusal anywhere, "
+                f"because the only clause that could rule on the request is a bracket test "
+                f"a NaN makes False",
+                {"gate": None, "andon": "FramingError", "who": _who, "flag": _name,
+                 "clause": "not_a_finite_fraction", _name: _value})
+    _bounds = list(radius_bounds)
+    if len(_bounds) != 2 or not all(_finite_positive(b) for b in _bounds):
+        raise FramingError(
+            f"radius_bounds={radius_bounds!r} is not two finite positive radii. This is "
+            f"the interval the search returns a member of when it cannot refuse, so a "
+            f"bracket that is not itself two real distances makes every verdict below "
+            f"unreadable",
+            {"gate": None, "andon": "FramingError", "who": _who, "flag": "radius_bounds",
+             "clause": "radius_bounds_not_finite_and_positive",
+             "radius_bounds": list(radius_bounds)})
+    if not float(_bounds[0]) < float(_bounds[1]):
+        raise FramingError(
+            f"radius_bounds={radius_bounds!r} is not an interval: the lower bound is not "
+            f"below the upper one, so bisection has nothing to halve",
+            {"gate": None, "andon": "FramingError", "who": _who, "flag": "radius_bounds",
+             "clause": "radius_bounds_not_an_interval",
+             "radius_bounds": [float(_bounds[0]), float(_bounds[1])]})
     if not all_points or not end_points:
         raise FramingError(
             "no points to frame",

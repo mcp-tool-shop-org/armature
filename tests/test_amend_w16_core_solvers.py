@@ -365,6 +365,13 @@ def test_a_sixth_drawing_constant_cannot_be_added_silently(tmp_path):
     # be spelled absolutely. Nothing else about the source changes but the sixth constant.
     src = src.replace("from .errors import ArmatureError",
                       "from armature_core.errors import ArmatureError", 1)
+    # WAVE 22 (core-solvers, F-6bdd660a): `aapose` gained a second package-relative import
+    # when it took the repo's ONE non-finite helper for its confidence bound. A scratch copy
+    # executed outside the package has to spell that one absolutely too, or this fixture
+    # fails on an `ImportError` from the module it is meant to be exercising rather than on
+    # the property it asserts.
+    src = src.replace("from .parts import require_finite",
+                      "from armature_core.parts import require_finite", 1)
     src = src.replace("\nHAND_EPS = 0.01\n",
                       "\nHAND_EPS = 0.01\nSIXTH_DRAWING_CONSTANT = 3\n", 1)
     src = src.replace("    H, W = canvas.shape[:2]\n    sw = hand_stickwidth(H, W, stickwidth_type)\n",
@@ -559,6 +566,23 @@ CORRECTED_ANCHORS = {
     ("sitelist.py", "project_pose_keypoints.py", 229),
     # startframe.gate_whole — the parser anchor F-dc4cf57e corrected
     ("startframe.py", "render_start_frame.py", 142),
+    # WAVE 22 (core-solvers, SEAM 7/8 + F-b3ff3a57). `lift_solve`'s three call-site
+    # citations moved from `lift_clip.py:275 (main)` / `measure_lift.py:481 (solve_series)`
+    # to the SYMBOL alone, because the LINE form was itself the blocker: instruments-measure
+    # measured that the `--fps` bound `lift_clip` needs moves that call to `:309`, which
+    # turned `test_lift_solve.py`'s derived-anchor census red from a file that domain does
+    # not own. The two retired numbers survive in the docstrings' CORRECTION RECORD — this
+    # repo corrects in place with the measurement rather than deleting — so they are
+    # recorded here, which is what this set is for.
+    ("lift_solve.py", "lift_clip.py", 275),
+    ("lift_solve.py", "measure_lift.py", 481),
+    # `sitelist.py`'s own second correction (F-b3ff3a57) needs no new entry: the paragraph
+    # that corrected the three-caller claim quoted `project_pose_keypoints.py:229` as the
+    # one anchor that was right, and the wave-16 constructor deletions moved it — that line
+    # is now the middle of a `ProjectGate` refusal message. Its three anchors are already
+    # recorded above; what changed is that the callers are cited by SYMBOL, the paragraph
+    # carries the measurement that overturned it, and its reference to `lift_solve`'s
+    # sibling fix names the FILE rather than a line, so it adds no citation of its own.
 }
 
 #: Where a cited basename is looked up, in order. `tools/superseded/` is included because a
@@ -726,7 +750,17 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     #: does not own.
     # WAVE-16 MERGE (coordinator, 2026-09-04): core-gates' wave-16 raises moved lines in `rig_gates` and `shotspec`;
     # the ceiling is re-MEASURED on the merged tree ({'rig_gates': 2, 'shotspec': 1}), never re-typed.
-    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {'rig_gates': 2, 'shotspec': 1}
+    # WAVE 22 (core-solvers, F-8759b386): `rig_gates` 2 -> 3, RE-MEASURED in this worktree
+    # after the receipt sweep and NOT re-typed. THE CAUSE IS THIS DOMAIN'S EDIT: `rig_gates`
+    # cites `lift_solve.py:307` as one of the live call sites passing `sitelist.ALL_NAMES`,
+    # and the 12 evidence dicts this wave added to `lift_solve` pushed that line down — it
+    # is blank now. The other two are the pre-existing duplicate `rig_character.py:1050`.
+    # `rig_gates.py` is core-gates' file in the frozen map, so the re-anchor is theirs and
+    # is posted to the inbox: the symbol is `lift_solve.py::validate_motion_record`, which
+    # is where `sitelist.ALL_NAMES` is read (`:907`, `:915`). This is a CEILING, so their
+    # correction leaves this green and merely makes this entry reducible — which is exactly
+    # what the ceiling is for, and why it is not an equality.
+    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {'rig_gates': 3, 'shotspec': 1}
     over = {k: v for k, v in others.items()
             if v > STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN.get(k, 0)}
     assert over == {}, {"stale now": others,

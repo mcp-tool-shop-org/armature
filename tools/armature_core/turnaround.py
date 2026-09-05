@@ -115,8 +115,35 @@ def orbit_azimuths(n_views, start_deg, sweep_deg):
     if n < 1:
         raise TurnaroundGate(
             f"a turnaround of {n} view(s) is not a turnaround",
-            {"gate": "TURN", "andon": "TurnaroundGate", "n_views": n})
-    return [float(start_deg) + float(sweep_deg) * (i / float(n)) for i in range(n)]
+            {"clause": "no_views",
+             "gate": "TURN", "andon": "TurnaroundGate", "n_views": n})
+    out = [float(start_deg) + float(sweep_deg) * (i / float(n)) for i in range(n)]
+    # WAVE 22, F-99e5de1a — the mechanism that produces a NON-ADJACENT revisit, bounded at
+    # the function that produces it. `orbit_azimuths(8, 0, 720)` returned
+    # `[0, 90, 180, 270, 360, 450, 540, 630]` — the same four azimuths twice, at stride 4 —
+    # and `render_turnaround` bounds `--sweep` for FINITENESS only, so a doubled sweep wrote
+    # eight well-formed RGBA files of four pictures with eight different digests. Gate TURN
+    # ranged over ADJACENT pairs, and a revisit at stride 4 is never adjacent.
+    #
+    # Keyed on the azimuth MODULO a full turn, because 0 and 360 point the camera at the same
+    # place. A NaN azimuth is not compared here (every comparison against it is False, so no
+    # duplicate is claimed); `--sweep` and `--azimuth-start` are bounded for finiteness at
+    # the parser, which is the complementary half.
+    seen = {a % 360.0 for a in out}
+    if len(seen) != n:
+        raise TurnaroundGate(
+            f"a sweep of {sweep_deg} over {n} view(s) revisits an azimuth: the plan names "
+            f"{len(seen)} distinct direction(s) for {n} views, so the camera returns to a "
+            f"place it has already photographed. The run writes {n} well-formed RGBA files "
+            f"with {n} different digests over {len(seen)} pictures, every per-view gate "
+            f"passes on every one of them, and Gate TURN's pixel clause ranges over "
+            f"adjacent pairs — a revisit at stride {n // max(len(seen), 1)} is never "
+            f"adjacent",
+            {"gate": "TURN", "andon": "TurnaroundGate",
+             "clause": "sweep_revisits_an_azimuth", "n_views": n,
+             "n_distinct_azimuths": len(seen), "start_deg": float(start_deg),
+             "sweep_deg": float(sweep_deg), "azimuths": out[:16]})
+    return out
 
 
 #: The two projections a turnaround can stand on. `PERSPECTIVE` is the one the tool shipped
@@ -179,6 +206,22 @@ def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
     pinned = ortho_scale_pin is not None
     if pinned:
         if not ortho:
+            # WAVE 22, F-4ce10f2a — THE RECEIPT. Both ortho raises were ONE-ARGUMENT raises
+            # while the PERSPECTIVE sibling twenty lines below passed a literal evidence
+            # dict with a `clause`. MEASURED on `e8263a3` through `render_turnaround`'s own
+            # handler: an ortho pin of `nan`, of `-1.0`, and this
+            # perspective-with-a-pin refusal each produced exit 2 and
+            # `{"outcome": "REFUSED — the tool declined to proceed", "gate": null,
+            #   "error": "TurnaroundPlanRefusal", "evidence": null}` — a typed refusal at
+            # the right exit code carrying no receipt and no clause — while `lens_mm=nan`
+            # on the same function produced exit 2 with a full evidence dict naming its
+            # clause. An operator whose pinned turnaround halts could not key a triage on a
+            # clause the way every wave-20 receipt reader does.
+            #
+            # `TurnaroundPlanRefusal` derives from `ArmatureError` and NOT from
+            # `GateFailure`, so `tests/test_core_solver_evidence.py`'s derived evidence
+            # census — which walks raises whose class resolves to a `GateFailure` subclass —
+            # cannot see either site, which is why neither was red.
             raise TurnaroundPlanRefusal(
                 f"an ortho_scale pin ({ortho_scale_pin!r}) was given for a PERSPECTIVE "
                 "plan. There is no shared world span on the perspective path — the "
@@ -186,8 +229,23 @@ def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
                 "the pin dropped, and the run would render a perfectly well-formed "
                 "turnaround that silently ignored the one number it was pinned on. A "
                 "roster rendered that way is eight characters each framed to his own "
-                "height, which is the failure the pin exists to prevent")
-        pin = float(ortho_scale_pin)
+                "height, which is the failure the pin exists to prevent",
+                {"gate": None, "andon": "TurnaroundPlanRefusal",
+                 "clause": "ortho_scale_pin_on_a_perspective_plan",
+                 "projection": PERSPECTIVE,
+                 "ortho_scale_pin": repr(ortho_scale_pin)})
+        # THE COERCION IS INSIDE THE GUARD (F-4ce10f2a, second half). `pin =
+        # float(ortho_scale_pin)` ran ABOVE `if not (math.isfinite(pin) and pin > 0.0)`, so
+        # a pin that is not a real number left the family entirely: measured through the
+        # same handler, a string pin `'wide'` exited **1** as a bare `ValueError` and a list
+        # pin `[1.0]` exited **1** as a bare `TypeError`, both recorded as "FAILED — an
+        # unhandled error". A pin that is a bad NUMBER and a pin that is not a number at all
+        # left by two different doors at two different exit codes, and neither carried a
+        # clause. This is the idiom the perspective branch below already spells.
+        try:
+            pin = float(ortho_scale_pin)
+        except (TypeError, ValueError):
+            pin = float("nan")
         if not (math.isfinite(pin) and pin > 0.0):
             raise TurnaroundPlanRefusal(
                 f"an ortho_scale pin of {ortho_scale_pin!r} is not a finite positive world "
@@ -195,7 +253,12 @@ def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
                 "a non-finite one sends them nowhere at all; either way the render still "
                 "saves as a well-formed, correctly-sized RGBA PNG. `ortho_half_spans` "
                 "refuses <= 0 downstream but takes nan and inf, so this is the check that "
-                "binds those")
+                "binds those",
+                {"gate": None, "andon": "TurnaroundPlanRefusal",
+                 "clause": "ortho_scale_pin_not_finite_and_positive",
+                 "projection": ORTHOGRAPHIC,
+                 "ortho_scale_pin": repr(ortho_scale_pin),
+                 "ortho_scale_pin_as_read": pin})
     else:
         for name, value in (("lens_mm", lens_mm), ("sensor_mm", sensor_mm)):
             try:
@@ -428,7 +491,11 @@ def _pixel_pairs(view_records):
         if why is not None:
             unreadable.append(why)
         planes.append(plane)
-    identical, distances, skipped = [], [], []
+    import math as _math
+
+    import numpy as np
+
+    identical, distances, skipped, non_finite = [], [], [], []
     for i in range(1, len(planes)):
         a, b = planes[i - 1], planes[i]
         if a is None or b is None:
@@ -437,13 +504,47 @@ def _pixel_pairs(view_records):
             skipped.append({"pair": [i - 1, i],
                             "shapes": [list(a.shape), list(b.shape)]})
             continue
-        import numpy as np
         d = float(np.abs(a - b).mean())
+        # THE VALUE DOOR (F-8cfaefd9, wave 22). `d == 0.0` is False for a NaN and so is
+        # every comparison `min` makes, so a pair whose planes carry a non-finite value was
+        # APPENDED to `distances`, counted as compared, and ruled on by nothing: measured on
+        # `e8263a3` on eight distinct 32x32x4 planes with one NaN element in view 3, the gate
+        # RETURNED with `min_adjacent_pixel_distance = 0.29889835824724287` and a verdict
+        # reading "distinct in PIXELS over 7 of 7 adjacent pair(s)", while the two pairs
+        # touching view 3 carried `nan`. That is the population-vs-comparisons defect
+        # F-1935e0e1 and F-e207fd20 closed through the SHAPE and UNREADABLE doors, arriving
+        # through the VALUE door those two fixes left open. Partitioned, not dropped: the
+        # pair count the verdict quotes is now the count of pairs actually ruled on.
+        if not _math.isfinite(d):
+            non_finite.append({"pair": [i - 1, i], "distance": repr(d)})
+            continue
         distances.append(d)
         if d == 0.0:
             identical.append([i - 1, i])
-    return (sum(1 for p in planes if p is not None), identical, distances, skipped,
-            unreadable)
+    # F-99e5de1a — EVERY unordered pair, which is what this gate's docstring already claimed
+    # ("compared in pixel space against every other view that carries one") while the walk
+    # above ranged over neighbours. 64 views is 2016 mean-absolute-difference comparisons,
+    # which is cheap; the ADJACENT population above is kept and counted separately because
+    # wave 16 established that a verdict names only clauses that ran against a population
+    # that could fail them, and the adjacent minimum is the magnitude the Director's eye
+    # reads.
+    anywhere, n_pairs_all = [], 0
+    for i in range(len(planes)):
+        for j in range(i + 1, len(planes)):
+            a, b = planes[i], planes[j]
+            if a is None or b is None:
+                continue
+            if getattr(a, "shape", None) != getattr(b, "shape", None):
+                continue
+            n_pairs_all += 1
+            if float(np.abs(a - b).mean()) == 0.0:
+                anywhere.append([i, j])
+    return {
+        "carrying": sum(1 for p in planes if p is not None),
+        "identical": identical, "distances": distances, "skipped": skipped,
+        "unreadable": unreadable, "non_finite": non_finite,
+        "identical_anywhere": anywhere, "n_unordered_pairs_compared": n_pairs_all,
+    }
 
 
 def gate_set_distinct(view_records, expected):
@@ -474,7 +575,13 @@ def gate_set_distinct(view_records, expected):
     So a record that carries `pixels` (an `(H, W, C)` array, or anything `numpy` will read
     as one) is compared in pixel space against every other view that carries one, and a
     pair whose mean absolute difference is 0.0 while their digests differ is refused by
-    its own clause. Zero is a STRUCTURAL reading, not a tuned floor: two renders whose
+    its own clause. **That sentence was a claim this gate did not keep until wave 22**
+    (F-99e5de1a): `_pixel_pairs` ranged over `range(1, len(planes))` — ADJACENT pairs only —
+    so two views identical in pixels but different in bytes passed unseen whenever they were
+    not neighbours, which is exactly the shape a revisited azimuth produces. Both
+    populations are walked now and both are counted, separately: the ADJACENT pairs, whose
+    minimum distance is the magnitude the verdict quotes, and EVERY unordered pair, which is
+    what the identity clause ranges over. Zero is a STRUCTURAL reading, not a tuned floor: two renders whose
     every pixel agrees are the same picture whatever their PNG bytes say, and this repo
     does not invent a threshold for "different enough" where no calibrated one exists —
     the measured `min_adjacent_pixel_distance` rides the evidence and the verdict so the
@@ -528,7 +635,9 @@ def gate_set_distinct(view_records, expected):
             "camera did not move between them. Every per-view check passes on this set — "
             "the files are RGBA, the count is right, the figure is in all of them", ev)
 
-    carrying, identical, distances, skipped, unreadable = _pixel_pairs(view_records)
+    _pp = _pixel_pairs(view_records)
+    carrying, identical, distances = _pp["carrying"], _pp["identical"], _pp["distances"]
+    skipped, unreadable = _pp["skipped"], _pp["unreadable"]
     n_pairs = max(len(view_records) - 1, 0)
     if unreadable:
         first = unreadable[0]
@@ -553,6 +662,13 @@ def gate_set_distinct(view_records, expected):
     ev["pairs_identical_in_pixels"] = identical[:12]
     ev["adjacent_pixel_distances"] = [round(d, 9) for d in distances]
     ev["min_adjacent_pixel_distance"] = min(distances) if distances else None
+    ev["n_adjacent_pairs_non_finite"] = len(_pp["non_finite"])
+    ev["adjacent_pairs_non_finite"] = _pp["non_finite"][:12]
+    n_unordered = len(view_records) * (len(view_records) - 1) // 2
+    ev["n_unordered_pairs"] = n_unordered
+    ev["n_unordered_pairs_compared"] = _pp["n_unordered_pairs_compared"]
+    ev["n_pairs_identical_in_pixels_anywhere"] = len(_pp["identical_anywhere"])
+    ev["pairs_identical_in_pixels_anywhere"] = _pp["identical_anywhere"][:12]
 
     # A set where SOME records carry a plane is refused rather than partly compared: the
     # views that carry none are the ones nothing rules on, and a verdict quoting a
@@ -586,6 +702,21 @@ def gate_set_distinct(view_records, expected):
             f"render or a different subject, and either way the pair is dropped from the "
             f"comparison rather than passing it", ev)
 
+    # The VALUE door, refused before any verdict quotes a pair count (F-8cfaefd9).
+    if _pp["non_finite"]:
+        ev["clause"] = "non_finite_pair_distance"
+        raise TurnaroundGate(
+            f"{len(_pp['non_finite'])} of {n_pairs} adjacent pair(s) have a mean absolute "
+            f"difference that is not a number "
+            f"({[k['pair'] for k in _pp['non_finite'][:4]]}). `d == 0.0` is False for a NaN "
+            f"and so is every comparison `min` makes, so such a pair used to be counted as "
+            f"COMPARED and ruled on by nothing while the verdict quoted a magnitude taken "
+            f"over the pairs that happened to be readable. This gate accepts anything numpy "
+            f"will read as an (H, W, C) plane — `render_turnaround._alpha_stats` builds one "
+            f"with `np.empty(w*h*4, float32)` and `foreach_get`, a FLOAT read — so a plane "
+            f"from the render buffer, an EXR or a compositor output arrives here with values "
+            f"this gate never asked about", ev)
+
     if identical:
         ev["clause"] = "views_identical_in_pixels"
         raise TurnaroundGate(
@@ -595,6 +726,23 @@ def gate_set_distinct(view_records, expected):
             f"byte-identical — an orbit helper that advanced by a rounding error rather "
             f"than by zero writes {len(digests)} different digests over one picture. "
             f"Every per-view check passes on this set", ev)
+
+    # And the same clause over EVERY unordered pair (F-99e5de1a, wave 22). The adjacent
+    # clause above is the one a stopped camera trips; this one is the one a REVISITED
+    # azimuth trips, and a revisit is never adjacent. Measured on `e8263a3` with eight
+    # 64x64x4 random planes, view 4 replaced by a copy of view 0 and eight distinct sha256
+    # values: the gate RETURNED its strongest verdict with `n_pairs_identical_in_pixels: 0`
+    # while `np.abs(planes[0] - planes[4]).mean()` was exactly 0.0.
+    if _pp["identical_anywhere"]:
+        ev["clause"] = "views_identical_in_pixels_anywhere"
+        raise TurnaroundGate(
+            f"{len(_pp['identical_anywhere'])} view pair(s) are identical in PIXELS while "
+            f"their sha256 digests differ ({_pp['identical_anywhere'][:6]}), at a distance "
+            f"the adjacent clause above cannot see. A turnaround that revisits an azimuth "
+            f"— `orbit_azimuths(8, 0, 720)` returns the same four directions twice, at "
+            f"stride 4 — writes {len(digests)} well-formed RGBA files with "
+            f"{len(digests)} different digests over fewer pictures, and every per-view gate "
+            f"passes on every one of them", ev)
 
     # Keyed on `distances`, the population `min` is taken over, never on the count of
     # records carrying a plane (F-e207fd20): the two are different numbers, and the

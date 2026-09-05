@@ -82,6 +82,7 @@ import os
 import numpy as np
 
 from .errors import ArmatureError
+from .parts import require_finite
 
 
 class ConventionError(ArmatureError):
@@ -855,6 +856,76 @@ def blank_canvas(height, width):
     return np.zeros((int(height), int(width), 3), dtype=np.uint8)
 
 
+def require_readable_keypoints(kp, threshold, where):
+    """Refuse a keypoint record this convention cannot draw from. · ANDON
+
+    F-6bdd660a, wave 22. Confidence is read at four sites — twice in `draw_body`, twice in
+    `draw_hand` — and every one was a bare `< threshold`, with no finiteness bound anywhere
+    in this module: `aapose` was one of nine `armature_core` modules that did not import
+    `parts.require_finite`. **A NaN fails `<` in both directions**, so the keypoint was
+    treated as fully confident and DRAWN.
+
+    MEASURED on `e8263a3` on a 20x3 body at 256x256: baseline 2075 non-black pixels; the
+    same body with keypoint 5's confidence set to NaN drew **2075** non-black pixels —
+    byte-identical ink to confidence 1.0 — with no refusal, where a real detector's low
+    confidence would have dropped the joint. The three unreadable spellings each read
+    differently and none of them is a decision: `nan` draws the joint as certain, `+inf`
+    reads as certain, `-inf` reads as absent.
+
+    The COORDINATE direction escaped the family instead of walking past it: keypoint 5's x
+    set to NaN raised a bare `ValueError: cannot convert float NaN to integer` (from
+    `int(mY)` / `int(point[0])`) and `+inf` a bare `OverflowError`, NEITHER in the
+    `ArmatureError` family — so the 21-tool halt contract recorded exit 1 "FAILED — an
+    unhandled error" where a typed refusal at exit 2 belongs.
+
+    And the THRESHOLD itself: `c < nan` is False at every keypoint, so a NaN threshold draws
+    everything; `c < inf` is True at every keypoint, so it draws nothing. Neither is a
+    decision, and nothing downstream could tell which had happened.
+
+    **The coordinate clause is graded only on what it can move**: a keypoint the convention
+    skips is not a pixel this frame carries, so only the coordinates of keypoints that will
+    actually be DRAWN are bounded. The confidence clause runs over the whole record, and
+    over the record as GIVEN — before `draw_head=False` zeroes five of them — because a
+    confidence that is not a number is a broken record whatever a flag then does with it.
+
+    Reachability: the keypoint record is read from JSON (`render_pose_sticks`, and Python's
+    `json.load` accepts the literal `NaN`), so the moment a producer other than
+    `project_pose_keypoints` supplies confidences — which the record's own note anticipates,
+    "a real detector would report low confidence on an occluded joint" — an occluded joint
+    whose confidence is not a number is drawn as certain into the control frame that steers a
+    paid generation, and `gate_INK` cannot see it because the ink is there.
+
+    ⚠ **SEAM, routed to instruments-measure.** `render_pose_sticks.gate_canvas` unpacks
+    `for j, (x, y, _c) in enumerate(frame)` and DISCARDS the confidence, so it bounds
+    coordinates only; `make_overlay_sheet` calls `draw_frame` with no canvas gate at all.
+    The bound here is inside the function performing the step, which is where this repo puts
+    an andon; a complementary bound at the reader is theirs to add.
+    """
+    ev = {"gate": None, "andon": "ConventionError", "where": where}
+    require_finite("threshold", threshold, ConventionError,
+                   dict(ev, clause="threshold_not_a_number"), positive=False)
+    t = float(threshold)
+    conf = [float(c) for c in np.asarray(kp, dtype=np.float64)[:, 2]]
+    bad = [i for i, c in enumerate(conf) if not math.isfinite(c)]
+    if bad:
+        detail = dict(ev, clause="confidence_not_a_number", indices=bad,
+                      n_keypoints=len(conf))
+        for i in bad:
+            require_finite(f"confidence[{i}]", conf[i], ConventionError, detail,
+                           positive=False)
+    drawn = [i for i, c in enumerate(conf) if not (c < t)]
+    arr = np.asarray(kp, dtype=np.float64)
+    bad_xy = [i for i in drawn
+              if not (math.isfinite(float(arr[i, 0])) and math.isfinite(float(arr[i, 1])))]
+    if bad_xy:
+        detail = dict(ev, clause="drawn_keypoint_coordinate_not_a_number",
+                      indices=bad_xy, threshold=t, n_drawn=len(drawn))
+        for i in bad_xy:
+            for axis, name in ((0, "x"), (1, "y")):
+                require_finite(f"{name}[{i}]", arr[i, axis], ConventionError, detail,
+                               positive=False)
+
+
 def draw_body(canvas, kp2ds, threshold=DEFAULT_THRESHOLD, stickwidth_type="v2",
               draw_head=True):
     """`draw_aapose_new`'s body pass, transcribed.
@@ -872,6 +943,7 @@ def draw_body(canvas, kp2ds, threshold=DEFAULT_THRESHOLD, stickwidth_type="v2",
             f"{kp.shape}",
             {"gate": None, "andon": "ArmatureError", "clause": "body_keypoints_wrong_shape",
              "shape": list(kp.shape), "expected": [KEYPOINT_COUNT, 3]})
+    require_readable_keypoints(kp, threshold, "draw_body")
     if not draw_head:
         kp[[0, 14, 15, 16, 17], 2] = 0
 
@@ -911,6 +983,7 @@ def draw_hand(canvas, keypoints, threshold=DEFAULT_THRESHOLD, stickwidth_type="v
             f"hand keypoints must be ({HAND_KEYPOINT_COUNT}, 3), got {kp.shape}",
             {"gate": None, "andon": "ArmatureError", "clause": "hand_keypoints_wrong_shape",
              "shape": list(kp.shape), "expected": [HAND_KEYPOINT_COUNT, 3]})
+    require_readable_keypoints(kp, threshold, "draw_hand")
     H, W = canvas.shape[:2]
     sw = hand_stickwidth(H, W, stickwidth_type)
 

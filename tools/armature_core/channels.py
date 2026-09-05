@@ -88,6 +88,49 @@ class DepthError(ArmatureError):
     """
 
 
+class NormalError(ArmatureError):
+    """A camera-space normal this module was asked to encode is not a direction.
+
+    F-4efe0fad, wave 22 — the half wave 18's `DepthError` did not cover. This module
+    authors every control-sequence pixel, and the non-finite clause landed on the DEPTH
+    side only: `encode_normal` read `n_cam` with `np.asarray(..., float64)` and no census
+    at all, and its normalisation is
+    `np.divide(n, norm, out=np.zeros_like(n), where=norm > 1e-8)`. `nan > 1e-8` is False,
+    so an unreadable normal took the ZERO fallback and encoded as if it were the zero
+    vector.
+
+    Measured on `e8263a3`, on a 4x4 field of camera-facing normals whose baseline encodes
+    uniformly to (128, 128, 255):
+
+    * one NaN component -> pixel **(128, 128, 128)**, no refusal;
+    * one **+inf** component -> **(0, 128, 128)**;
+    * one **-inf** component -> **(0, 128, 128)** — the SAME byte as +inf, so the sign is
+      lost too;
+    * a legitimately **zero-length** normal -> **(128, 128, 128)**, indistinguishable from
+      the unreadable one, which is why it is refused here under its own clause rather than
+      folded into the census;
+    * an **all-NaN** field -> a UNIFORM (128, 128, 128) plate, returned with no refusal, no
+      census and no key naming the population that took the fallback.
+
+    The realistic consequence is `DepthError`'s own, word for word, on the path
+    `stage_render.py::run_export` actually runs: `world_normals_to_camera` then
+    `encode_normal` writes the PNG straight to `out_dir/normal/` with **no gate between
+    them** — the depth line four above it, `depth_extent`, DOES refuse — so a normal
+    control sequence that is a flat grey plate, or that carries silently unmarked pixels,
+    is written, hashed into the manifest and used to steer a paid generation.
+
+    The second consumer of the same unbounded array is `_neighbour_min_dot` /
+    `derive_edge`: `normal_break = m & (min_dot < cos_thresh)` is False for a NaN, so the
+    normal break is silently NOT drawn and `diag['normal_break_px']` counts fewer, with no
+    clause. Both consumers now run the same census, and the evidence names which one under
+    `where`.
+
+    **Not a `GateFailure`,** for `DepthError`'s reason: these are refusals from a maths
+    module, and the honest halt record is "REFUSED" with `gate` null and the class name
+    under `andon`.
+    """
+
+
 def _non_finite_census(vals):
     """`{n, n_finite, n_non_finite, n_nan, n_pos_inf, n_neg_inf}` over a float array.
 
@@ -244,9 +287,65 @@ def world_normals_to_camera(n_world, cam_rot_3x3):
     return out.reshape(np.asarray(n_world).shape)
 
 
-def encode_normal(n_cam, mask):
-    """Camera-space normals -> uint8 RGB, background black."""
+def require_readable_normals(n_cam, mask, where):
+    """Refuse a camera-space normal field this module cannot encode. · ANDON
+
+    The population is the SELECTED one — the pixels the mask admits — which is the rule
+    `depth_extent` already states: a value OUTSIDE the mask is background, not a normal
+    this module authored, and is not this function's business.
+
+    Two clauses, because the two inputs encode to the SAME byte and are different facts
+    about a render: `non_finite_geometry_normal` (a component that is not a number, which
+    `np.divide`'s `where=norm > 1e-8` reads as "do not divide" and leaves as the zero
+    vector) and `zero_length_geometry_normal` (a direction of length zero, which the same
+    guard also leaves at the origin). The census keys are `_non_finite_census`'s, so a
+    reader that can reconcile a `DepthError` receipt can reconcile this one.
+    """
     n = np.asarray(n_cam, dtype=np.float64)
+    m = np.asarray(mask) > 0
+    if not m.any():
+        return n
+    sel = n[m]
+    census = _non_finite_census(sel)
+    n_geometry_px = int(m.sum())
+    if census["n_non_finite"]:
+        # A LITERAL evidence dict carrying `gate` and `andon`, not `dict(census, ...)`:
+        # `tests/test_gates.evidence_dicts_missing` is the suite's one evidence walk and it
+        # returns `unreadable` — policed by nothing — for a dict whose base is a call
+        # result it cannot resolve. `depth_extent` spells its own for the same reason.
+        ev = {"gate": None, "andon": "NormalError",
+              "clause": "non_finite_geometry_normal", "where": where,
+              "n": census["n"], "n_finite": census["n_finite"],
+              "n_non_finite": census["n_non_finite"], "n_nan": census["n_nan"],
+              "n_pos_inf": census["n_pos_inf"], "n_neg_inf": census["n_neg_inf"],
+              "n_geometry_px": n_geometry_px}
+        raise NormalError(
+            f"{census['n_non_finite']} of {census['n']} normal component(s) inside the "
+            f"mask are a non-finite camera-space normal ({census['n_nan']} NaN, "
+            f"{census['n_pos_inf']} +inf, {census['n_neg_inf']} -inf) over "
+            f"{n_geometry_px} geometry pixel(s). `np.divide(..., where=norm > 1e-8)` is "
+            f"False for a NaN, so the pixel takes the ZERO fallback and encodes to "
+            f"(128, 128, 128) — the same byte a legitimately zero-length normal produces, "
+            f"and +inf and -inf both encode to (0, 128, 128), so the sign is lost as well. "
+            f"An all-non-finite field returns a uniform grey plate with no refusal at all, "
+            f"and nothing between here and `out_dir/normal/` looks at channel content", ev)
+    zero = int((np.linalg.norm(sel, axis=-1) <= 1e-8).sum())
+    if zero:
+        ev = {"gate": None, "andon": "NormalError",
+              "clause": "zero_length_geometry_normal", "where": where,
+              "n": census["n"], "n_zero_length_px": zero,
+              "n_geometry_px": n_geometry_px}
+        raise NormalError(
+            f"{zero} of {n_geometry_px} geometry pixel(s) carry a normal of length zero, "
+            f"which is not a direction. It takes the same `where=norm > 1e-8` fallback an "
+            f"unreadable normal takes and encodes to the same (128, 128, 128) byte, so the "
+            f"two are named apart here rather than left to a reader of the PNG", ev)
+    return n
+
+
+def encode_normal(n_cam, mask):
+    """Camera-space normals -> uint8 RGB, background black. Refuses what it cannot read."""
+    n = require_readable_normals(n_cam, mask, "encode_normal")
     norm = np.linalg.norm(n, axis=-1, keepdims=True)
     n = np.divide(n, norm, out=np.zeros_like(n), where=norm > 1e-8)
     rgb = encode_u8(n * 0.5 + 0.5)
@@ -356,6 +455,11 @@ def derive_edge(z, n_cam, mask, depth_rel_threshold, normal_angle_deg):
     diagnostics therefore counts real silhouette and not the length of the crop.
     """
     m = np.asarray(mask) > 0
+    # The SECOND consumer of the same unbounded array (F-4efe0fad). `normal_break = m &
+    # (min_dot < cos_thresh)` is False for a NaN, so an unreadable normal silently removed
+    # its own break from the edge pass and `diag["normal_break_px"]` counted fewer, with no
+    # clause anywhere. Same census, same class; `where` says which consumer refused.
+    require_readable_normals(n_cam, m, "derive_edge")
     z = np.asarray(z, dtype=np.float64)
     z_safe = np.where(m, z, np.nan)
 

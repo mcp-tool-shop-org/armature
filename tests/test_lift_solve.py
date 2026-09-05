@@ -791,8 +791,16 @@ def test_the_two_docstrings_name_the_call_sites_the_tree_actually_has():
     measure_lift.py:334 lands on unrelated code.
 
     Derived here rather than typed: the anchors come from an AST walk of `tools/` for calls
-    to `round_trip_report`, and the docstrings must name exactly those `file:line` pairs.
-    The fifth stale anchor now fails on the day it is written.
+    to `round_trip_report`, and the docstrings must name exactly those call sites.
+
+    **WAVE 22 (SEAM 7/8): the derived identity is now `file.py::function`, not
+    `file.py:line`.** The line form was itself the blocker instruments-measure hit: adding
+    the `--fps` bound that `lift_clip` needs moves its `round_trip_report` call from `:275`
+    to `:309`, which turned this assertion red from a file that domain does not own — so a
+    prose citation in `armature_core` was preventing a bound on a rate flag two domains
+    over. A line citation does not survive an edit above it; a symbol does. This is the same
+    fix `sitelist.py` takes for its own stale anchor in the same wave: prose cites
+    FUNCTIONS, not lines.
     """
     import ast
     import os
@@ -810,13 +818,20 @@ def test_the_two_docstrings_name_the_call_sites_the_tree_actually_has():
             path = os.path.join(root, fname)
             with open(path, encoding="utf-8") as fh:
                 tree = ast.parse(fh.read())
+            # The ENCLOSING function, resolved from the tree rather than guessed from a
+            # line number: that is the identity the docstrings cite now.
+            holder = {}
+            for fn in ast.walk(tree):
+                if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for n in ast.walk(fn):
+                        holder.setdefault(n, fn.name)
             for node in ast.walk(tree):
                 if (isinstance(node, ast.Call)
                         and (getattr(node.func, "attr", None)
                              or getattr(node.func, "id", None)) == "round_trip_report"):
-                    sites.add(f"{fname}:{node.lineno}")
+                    sites.add(f"{fname}::{holder.get(node, '<module>')}")
 
-    assert sites == {"lift_clip.py:275", "measure_lift.py:481"}, sorted(sites)
+    assert sites == {"lift_clip.py::main", "measure_lift.py::solve_series"}, sorted(sites)
 
     docs = LS.round_trip_report.__doc__ + LS.gate_round_trip.__doc__
     for doc in (LS.round_trip_report.__doc__, LS.gate_round_trip.__doc__):
@@ -827,8 +842,133 @@ def test_the_two_docstrings_name_the_call_sites_the_tree_actually_has():
     #: because this repo corrects in place with the measurement rather than deleting — so
     #: the census cannot simply ban them. It bans an anchor that is neither derived nor
     #: recorded as corrected, which is what a fifth stale one would be.
-    corrected = {"lift_clip.py:276", "measure_lift.py:334", "measure_lift.py:468"}
+    # WAVE 22: the two LINE anchors this pair used to carry join the correction record for
+    # the same reason the other three are in it — the docstrings now cite the symbol, and
+    # they say in prose that they used to cite `lift_clip.py:275` / `measure_lift.py:481`
+    # and why that form was abandoned. Correct in place with the measurement; never delete.
+    corrected = {"lift_clip.py:276", "measure_lift.py:334", "measure_lift.py:468",
+                 "lift_clip.py:275", "measure_lift.py:481"}
     mentioned = set(re.findall(r"[A-Za-z_]+[.]py:[0-9]+", docs))
     unexplained = mentioned - sites - corrected
     assert unexplained == set(), sorted(unexplained)
     assert corrected <= mentioned, "the correction record was deleted rather than kept"
+
+
+# ------------- wave 22, F-94312e25: the DIAGNOSTIC the two production callers actually read
+#
+# `worst` is seeded `{"site": None, "d": 0.0}` and updated only at `if d > worst["d"]`;
+# `nan > 0.0` is False, so a non-finite residual never entered `worst`, `within_tolerance`
+# read `bool(0.0 <= tol)` and the verdict quoted `max 0.000e+00`.
+#
+# MEASURED on `e8263a3` on `synthetic_rest()` with one observed site (`toe_L`) at
+# `(nan, 0.0, 0.0)`: `round_trip_report` RETURNED `worst {'site': None, 'd': 0.0}`,
+# `within_tolerance True`, `population_complete True`, verdict
+# `max 0.000e+00 over 19 of 19 sites (tolerance 1.000e-09)` — while `per_site['toe_L']` was
+# `nan` in the same dict. The lift record a motion control sequence is built from carried a
+# round-trip summary of exactly 0.0 over a population one of whose residuals is not a number,
+# and read as a perfect inversion.
+#
+# This is the defect `gate_round_trip`'s own docstring names in the present tense, and
+# F-5733588e's per-residual `require_finite` sweep was applied ONLY inside `gate_round_trip`
+# — whose docstring records that NO TOOL CALLS IT. Both production callers call the unswept
+# diagnostic: `lift_clip.py::main` and `measure_lift.py::solve_series`, and `lift_clip` then
+# summarises `[r["worst"]["d"] for r in rt]`. The fix landed on the function with zero
+# production callers while the two that ship read the number the NaN was dropped from.
+#
+# The diagnostic still NEVER RAISES — that is its whole contract, and `gate_round_trip` is
+# the andon. What changes is that it partitions the population before it reads it.
+
+
+def _nan_observation():
+    rest, obs, solved = _round_trip_inputs()
+    obs = dict(obs)
+    obs["toe_L"] = (float("nan"), 0.0, 0.0)
+    return rest, obs, solved
+
+
+def test_the_diagnostic_does_not_report_a_perfect_inversion_over_an_unreadable_residual():
+    rest, obs, solved = _nan_observation()
+    ev = LS.round_trip_report(rest, obs, solved, DIAGONAL)
+    assert ev["within_tolerance"] is False
+    assert ev["worst"]["site"] is not None
+    assert ev["n_sites_non_finite"] == 1
+    assert ev["sites_non_finite"] == ["toe_L"]
+    assert "0.000e+00" not in ev["verdict"]
+
+
+def test_the_diagnostic_still_reads_a_clean_solve_the_way_it_always_did():
+    """The control: the partition is not a check that always fires."""
+    rest, obs, solved = _round_trip_inputs()
+    ev = LS.round_trip_report(rest, obs, solved, DIAGONAL)
+    assert ev["within_tolerance"] is True
+    assert ev["n_sites_non_finite"] == 0 and ev["sites_non_finite"] == []
+    assert ev["population_complete"] is True
+
+
+def test_the_gate_still_raises_on_the_same_input_and_names_the_site():
+    """The andon half is unchanged — `gate_round_trip` sweeps its own residuals and this
+    fix does not remove that. Both halves now refuse; complementary, not redundant."""
+    rest, obs, solved = _nan_observation()
+    with pytest.raises(LS.SolveGate, match=r"residual[.]toe_L"):
+        LS.gate_round_trip(rest, obs, solved, DIAGONAL)
+
+
+def test_the_summary_the_production_caller_builds_is_still_a_float():
+    """`lift_clip` reduces `[r["worst"]["d"] for r in rt]`; the partition must not hand it
+    a `None` or a string."""
+    rest, obs, solved = _nan_observation()
+    worst = LS.round_trip_report(rest, obs, solved, DIAGONAL)["worst"]["d"]
+    assert isinstance(worst, float)
+    assert max([0.0, worst]) == worst
+
+
+# --------------- wave 22, F-d255af87: a guard that cannot be false, borrowing a message
+#
+# `if _norm(n_tgt) > 1e-12 and _norm(n_sw) > 1e-12` cannot be false: `n_obs` is
+# `cross(u_obs, nxt)` so it is perpendicular to `u_obs`; rotations preserve dot products, so
+# `n_tgt` is perpendicular to `v` and the projection removes nothing, leaving |n_tgt| == 1;
+# `n_sw` is the swing applied to `n_ref`, and the swing carries `u_rest` onto `v` while
+# `n_ref` is perpendicular to `u_rest`, so |n_sw| == 1 likewise. If it WERE false the code
+# fell into `if not twist_ok` and recorded "the segment to X is collinear with this bone on
+# this frame" — the wrong explanation, since the collinearity test four lines above has
+# already passed. Dead code carrying a misleading message.
+
+
+def test_the_twist_datum_norms_are_unit_by_construction_on_a_real_solve():
+    """The measurement behind the finding, executable: over a real solve, every projected
+    datum this guard would have caught is unit length, so the branch is unreachable."""
+    rest, obs, _solved = _round_trip_inputs()
+    out = LS.solve_frame(rest, obs)
+    assert out["local"], out
+    # The underdetermined reasons that DO occur name the collinearity or the missing child;
+    # neither is the borrowed message the dead branch would have produced.
+    for _bone, why in out.get("underdetermined", {}).items():
+        assert ("collinear" in why) or ("no child landmark" in why), why
+
+
+def test_the_twist_tripwire_names_its_own_clause_instead_of_borrowing_the_collinearity_one(
+        monkeypatch):
+    """The red proof for a branch the algebra says is unreachable: break the ALGEBRA'S OWN
+    PRECONDITION and read what comes out.
+
+    `n_sw` is `swing` applied to the bind reference, and the swing carries `u_rest` onto
+    `v`; the datum is unit AFTER the projection onto the plane normal to `v` only because
+    the reference is PERPENDICULAR to `u_rest`. Hand `_bind_reference` a vector PARALLEL to
+    `u_rest` instead and the projection removes the whole vector, which is precisely the
+    condition this guard tests and the algebra above it rules out.
+
+    Before this wave the same forced condition produced no refusal at all: it fell into
+    `if not twist_ok` and recorded "the segment to X is collinear with this bone on this
+    frame" — the wrong explanation, because the collinearity test four lines above had
+    already passed. The branch is KEPT rather than deleted because the algebra above it is an
+    argument, not a measurement; it now raises because a check that cannot fail is not a
+    check, and a check that fails into somebody else's message is worse than none.
+    """
+    rest, obs, _solved = _round_trip_inputs()
+    monkeypatch.setattr(LS, "_bind_reference",
+                        lambda u_rest, hint, name: tuple(float(c) for c in u_rest))
+    with pytest.raises(LS.SolveError) as exc:
+        LS.solve_frame(rest, obs)
+    assert exc.value.evidence["clause"] == "twist_datum_collapsed"
+    assert exc.value.evidence["bone"]
+    assert "collinear" not in str(exc.value).split("absorbing branch")[0]

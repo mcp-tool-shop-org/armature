@@ -291,7 +291,17 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
         #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
         #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-        "resample": 8, "rig_gates": 17, "route_gates": 49, "startframe": 21, "turnaround": 13,
+        # WAVE 22 (core-solvers, 2026-09-05): `turnaround` 13 -> 16, RE-DERIVED with `==`
+        # in this worktree against `e8263a3`, which this walk read GREEN at 13 first.
+        # BRANCH-LOCAL — five domains move this dict at once and the coordinator
+        # re-measures on the merged tree, never sums.
+        #   `orbit_azimuths`' `sweep_revisits_an_azimuth` — the mechanism that produces a
+        #   NON-ADJACENT revisit, bounded where it is produced (F-99e5de1a).
+        #   `gate_set_distinct`'s `non_finite_pair_distance` — the VALUE door left open by
+        #   the wave-16 shape and unreadable fixes (F-8cfaefd9).
+        #   `gate_set_distinct`'s `views_identical_in_pixels_anywhere` — the identity clause
+        #   over EVERY unordered pair, which the docstring already claimed (F-99e5de1a).
+        "resample": 8, "rig_gates": 17, "route_gates": 49, "startframe": 21, "turnaround": 16,
         "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
@@ -324,7 +334,9 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-    assert sum(with_gates.values()) == 202
+    # WAVE 22 (core-solvers): 202 -> 205, the three `turnaround` clauses itemised above.
+    # RE-DERIVED with `==` in this worktree; branch-local.
+    assert sum(with_gates.values()) == 205
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

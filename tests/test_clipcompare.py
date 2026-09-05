@@ -166,3 +166,73 @@ def test_a_two_dimensional_frame_raises_rather_than_changing_the_unit():
     ev = CC.frame_fidelity(a3, b3)
     assert ev["frac_differing"] == pytest.approx(1.0 / 400.0)
     assert "PIXELS" in ev["frac_differing_reduced_over"]
+
+
+# ------------- wave 22, F-e15d9de2: two holes in the band split, both closed one function up
+#
+# (1) The band selections are unguarded slices: `top = order[int(round(n * (1.0 -
+# top_frac))):]` and `flat = order[:int(round(n * flat_frac))]`, so a zero fraction selects
+# NOTHING and `err[...].mean()` over an empty array is returned as the band's error.
+# MEASURED on `e8263a3` on a 16x16x3 pair: `gradient_split(a, b, top_frac=0.0)` returned
+# `mean_err_top_gradient: nan` and `gradient_split(a, b, flat_frac=0.0)` returned
+# `mean_err_flat: nan` — a mean over nothing reported as a measurement, with no refusal and
+# nothing in the dict saying the band was empty.
+#
+# (2) It had no shape check, while `frame_fidelity` twenty lines above was given one
+# precisely because a reduction over the channel axis silently changes what the number
+# counts. MEASURED on the same pair reshaped to (16, 16, 1): `frame_fidelity` REFUSED
+# (`ClipCompareError: expected an (H, W, 3) frame, got shape (16, 16, 1)`) and
+# `gradient_split` RETURNED `{'mean_err_top_gradient': 0.01, 'mean_err_flat': 0.01}` — so the
+# two functions in one module disagreed about what a frame is, and a fidelity table built
+# from both would carry one refused population beside one accepted.
+
+
+def _pair(h=16, w=16, c=3):
+    a = np.zeros((h, w, c), dtype=np.float64)
+    a[:, w // 2:, :] = 1.0
+    b = a + 0.01
+    return a, b
+
+
+def test_the_band_split_still_reads_a_normal_pair():
+    """The control."""
+    out = CC.gradient_split(*_pair())
+    assert out["mean_err_top_gradient"] == pytest.approx(0.01)
+    assert out["mean_err_flat"] == pytest.approx(0.01)
+
+
+@pytest.mark.parametrize("kw,band", [
+    ({"top_frac": 0.0}, "top_gradient"),
+    ({"flat_frac": 0.0}, "flat"),
+])
+def test_a_band_that_selects_no_pixel_is_refused_rather_than_reported_as_nan(kw, band):
+    a, b = _pair()
+    with pytest.raises(CC.ClipCompareError) as exc:
+        CC.gradient_split(a, b, **kw)
+    ev = exc.value.evidence
+    assert ev["clause"] == "empty_gradient_band"
+    assert ev["band"] == band
+    assert ev["n"] == 256
+    assert ev["top_gradient_frac"] == kw.get("top_frac", 0.10)
+    assert ev["flat_frac"] == kw.get("flat_frac", 0.50)
+
+
+def test_the_band_split_refuses_a_single_channel_frame_the_way_its_sibling_does():
+    """One module, one answer to "what is a frame" — same class, same clause word."""
+    a, b = _pair(c=1)
+    with pytest.raises(CC.ClipCompareError) as fid:
+        CC.frame_fidelity(a, b)
+    with pytest.raises(CC.ClipCompareError) as grad:
+        CC.gradient_split(a, b)
+    assert fid.value.evidence["clause"] == grad.value.evidence["clause"] == "frame_not_hw3"
+    assert grad.value.evidence["source_shape"] == [16, 16, 1]
+
+
+def test_a_mismatched_pair_is_refused_by_the_band_split_too():
+    """The sibling clause `frame_fidelity` carries beside the shape one; a band split over
+    two frames of different sizes compares a gradient to somebody else's error."""
+    a, _ = _pair()
+    _, d = _pair(h=8)
+    with pytest.raises(CC.ClipCompareError) as exc:
+        CC.gradient_split(a, d)
+    assert exc.value.evidence["clause"] == "shape_mismatch"

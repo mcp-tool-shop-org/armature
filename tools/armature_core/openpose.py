@@ -55,6 +55,7 @@ def require_drawing_convention():
             f"{', '.join(missing)} unresolved. F20 pins limbSeq and the keypoint "
             "count but does not record the palette or the keypoint order, and this "
             "tool does not write conventions from memory. Retrieve them into "
-            "docs/research-grounding.md before emitting a pose channel."
-        )
+            "docs/research-grounding.md before emitting a pose channel.",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "drawing_convention_not_retrieved"})
     return True

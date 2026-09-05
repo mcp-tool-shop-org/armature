@@ -1027,38 +1027,31 @@ EVIDENCE_NO_EVIDENCE_ROUTED = {
     # WAVE-14 MERGE (coordinator, 2026-09-04): 8 routed entries left this set because they carry a receipt on the merged tree
     # (core-solvers gave every `aapose.py` refusal `gate: None` + andon + clause, F-d0de0c2d/F-d59fab92);
     # measured as `ROUTED - no_evidence`, deleted rather than commented.
-    "binding.py:rigid_segment_weights (ArmatureError)",
-    "joints.py:_limb_radius (LandmarkError)",
-    "joints.py:snap_sites_to_balls (LandmarkError)",
-    "joints.py:sphere_fit (LandmarkError)",
-    "landmarks.py:_point_along (LandmarkError)",
-    "landmarks.py:_prune_discontinuities (LandmarkError)",
-    "landmarks.py:_region_runs (LandmarkError)",
-    "landmarks.py:band_profile (LandmarkError)",
-    "landmarks.py:bone_radii (LandmarkError)",
-    "landmarks.py:cross_section_radius (LandmarkError)",
-    "landmarks.py:derive (LandmarkError)",
-    "landmarks.py:facing (LandmarkError)",
-    "lift_solve.py:_bind_reference (SolveError)",
-    "lift_solve.py:_unit (SolveError)",
-    "lift_solve.py:bone_length_residuals (SolveError)",
-    "lift_solve.py:frame_from (SolveError)",
-    "lift_solve.py:sites_from_landmarks (SolveError)",
-    "lift_solve.py:solve_frame (SolveError)",
-    "openpose.py:require_drawing_convention (ArmatureError)",
-    "parts.py:assign_faces (ArmatureError)",
-    "parts.py:joint_planes (ArmatureError)",
-    "posearc.py:angle_at_frame (SpecError)",
-    "posearc.py:arc_readout (SpecError)",
-    "posearc.py:resolve_arc (SpecError)",
-    "resample.py:quat_normalise (ResampleError)",
-    "resample.py:resample_frames (ResampleError)",
-    "resample.py:sample_map (ResampleError)",
     "shotspec.py:_require (SpecError)",
     "shotspec.py:_require_positive (SpecError)",
     "shotspec.py:normalise_spec (SpecError)",
     "shotspec.py:resolve_asset (SpecError)",
-    "turnaround.py:projection_plan (TurnaroundPlanRefusal)",
+    # WAVE 22 (core-solvers, F-8759b386): TWENTY-SEVEN entries left this set in one commit,
+    # deleted rather than commented, in the same commit that gives each site its receipt —
+    # which is what the converse assertion below requires. They were `binding`,
+    # `joints` (3), `landmarks` (8), `lift_solve` (6), `openpose`, `parts` (2),
+    # `posearc` (3) and `resample` (3): 50 family raises across those files carried NO
+    # evidence argument at all, so `errors.py`'s `self.evidence = evidence or {}` recorded a
+    # null evidence value and the receipt for a refused stage could not name what refused
+    # it. All 21 `LandmarkError` raises in the domain were among them, and
+    # `LandmarkError`'s own docstring argues that halting "is the only signal that
+    # survives" — a signal that was a prose sentence and two nulls.
+    #
+    # The FOUR that remain are `shotspec.py`'s, which is core-gates' file in the frozen
+    # domain map. Measured after the sweep: `no_evidence` is 4 and every one of them is
+    # `shotspec.py`.
+    #
+    # WAVE 22 (core-solvers, F-4ce10f2a): `turnaround.py:projection_plan
+    # (TurnaroundPlanRefusal)` LEFT this set — both ortho raises now carry a literal
+    # evidence dict with a clause, matching the perspective sibling twenty lines below.
+    # Deleted rather than commented in the commit that adds the receipt, which is what the
+    # converse assertion below requires: a routed entry that names no live site re-admits
+    # that site in silence.
 }
 
 
@@ -1153,9 +1146,34 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-    assert total == 346, (
-        f"{total} family raises in armature_core; this pin asserts 346, RE-DERIVED on the "
-        f"wave-20 core-gates branch. This is the denominator every ratio below is quoted against — "
+    # WAVE 22 (core-solvers, 2026-09-05): 346 -> 348, RE-DERIVED with `==` in this
+    # worktree against `e8263a3`, which this census read GREEN at 346 first. BRANCH-LOCAL —
+    # five domains move this denominator at once and the coordinator re-measures at the
+    # merge. The two are `channels.require_readable_normals`' clauses
+    # (`non_finite_geometry_normal`, `zero_length_geometry_normal`), the normal half of the
+    # non-finite census wave 18 landed on the depth half only (F-4efe0fad).
+    # And 348 -> 353 in the same wave, RE-DERIVED with `==` after each step: +5 in
+    # `framing` (F-c6124fe0) — `_bisect`'s `bisect_target_not_finite`, `solve_camera`'s
+    # `height_frac` clause, its `end_x_frac`/`target_y_frac` clause, and the two
+    # `radius_bounds` clauses. The SOLVER half of F-f0c261c1, whose fix went to one tool's
+    # parser while `end_x_frac` and `target_y_frac` were bounded at no parser in the tree.
+    # And 353 -> 356: +3 in `turnaround` — `orbit_azimuths`' `sweep_revisits_an_azimuth`
+    # (F-99e5de1a) and `gate_set_distinct`'s `non_finite_pair_distance` (F-8cfaefd9) and
+    # `views_identical_in_pixels_anywhere` (F-99e5de1a). RE-DERIVED with `==`, branch-local.
+    # And 356 -> 357: +1 in `lift_solve` — the twist-datum tripwire (F-d255af87), a guard
+    # the algebra bounds that used to fall through to the COLLINEARITY message the test four
+    # lines above it had already ruled out. Kept as an andon with its own clause rather than
+    # deleted, so a change to the arithmetic above it is loud.
+    # And 357 -> 360: +3 in `clipcompare.gradient_split` (F-e15d9de2) — the (H, W, 3)
+    # clause and the shape-mismatch clause its sibling `frame_fidelity` twenty lines above
+    # already carried, and `empty_gradient_band` for a band that selects no pixel and
+    # returned a mean over nothing as the band error.
+    # And 360 -> 361: +1 in `resample.sample_map` (F-60909e5b) — the unreachable clamp
+    # converted to a raise, so an arithmetic change above it is loud rather than silently
+    # resampling the timeline onto a shorter one.
+    assert total == 361, (
+        f"{total} family raises in armature_core; this pin asserts 361, RE-DERIVED on the "
+        f"wave-22 core-solvers branch. This is the denominator every ratio below is quoted against — "
         f"re-measure it deliberately")
 
 
@@ -1193,7 +1211,12 @@ def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_categor
     # The census on the page, pinned `==` (wave 14, rule 4). Re-derive with the command
     # beside EVIDENCE_NO_EVIDENCE_ROUTED.
     # WAVE-14 MERGE (coordinator, 2026-09-04): 40 → 32, measured on the merged tree.
-    assert len(no_evidence) == 32, sorted(no_evidence)
+    # WAVE 22 (core-solvers): 32 -> 31 (F-4ce10f2a, `turnaround.py:projection_plan`) and
+    # then 31 -> 4 (F-8759b386, the 27 entries itemised above). RE-DERIVED with `==` in this
+    # worktree at each step; BRANCH-LOCAL. The remaining four are `shotspec.py`'s, another
+    # domain's file.
+    assert len(no_evidence) == 4, sorted(no_evidence)
+    assert {n.split(":")[0] for n in no_evidence} == {"shotspec.py"}, sorted(no_evidence)
 
 
 #: Modules of `armature_core` whose classes this census cannot INSTANTIATE on a rig with no
