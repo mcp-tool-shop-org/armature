@@ -709,10 +709,16 @@ def test_the_clip_read_refusal_carries_the_stream_line_it_could_not_parse(monkey
     `tests/test_extract_clip_frames.py:57` constructs the class and never reads its
     evidence, which is how this survived."""
     import extract_clip_frames as ECF
+    import encode_control as EC
 
     class _Proc:
         stderr = "  Stream #0:0: Video: h264, yuv420p, 25 fps\n"
 
+    # WAVE-25 CI FIX-UP (coordinator, 2026-09-06): `probe` now arms `encode_control.gate_ffmpeg_binary` before it runs
+    # the subprocess (wave 25, F-a19ebe73), and that gate reads `encode_control.FFMPEG` — on a host with no
+    # ffmpeg it refuses `ffmpeg_binary_not_found` before the stubbed report is ever parsed (measured on
+    # ubuntu-latest). The subprocess is stubbed here, so an existing file stands in for the binary.
+    monkeypatch.setattr(EC, "FFMPEG", sys.executable)
     monkeypatch.setattr(ECF.subprocess, "run", lambda *a, **k: _Proc())
     with pytest.raises(ECF.ClipReadError) as exc:
         ECF.probe(str(tmp_path / "clip.mp4"))

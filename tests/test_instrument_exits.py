@@ -1233,6 +1233,26 @@ def test_stage_render_writes_a_non_finite_operand_as_strict_json(tmp_path, capsy
 
 CPYTHON_WITH_HANDLER = [f for f in cpython_tools() if halt_handler(f)]
 
+
+#: WAVE-25 CI FIX-UP (coordinator, 2026-09-06). `armature_index.py` (a wave-25 adopter of the one handler) imports the sibling
+#: working copy `record_index` at module level — on the rig through PYTHONPATH, on ubuntu-latest not at all —
+#: so every census below that RUNS its `__main__` read `ModuleNotFoundError` there (8 reds on the first CI run of
+#: the wave-25 merge). The suite's standing idiom for that sibling is `tests/test_record_index_binding.py`'s
+#: `importorskip` with a reason naming it; this table gives the census the same reason for the same member.
+#: Keyed on the resolved shape (the module the tool imports), not on the tool's name alone.
+SIBLING_REPO_IMPORTS = {"armature_index.py": "record_index"}
+
+
+def _sibling_repo_absent(filename):
+    """The skip reason when `filename` imports a sibling working copy this interpreter cannot see, else None."""
+    import importlib.util
+    module = SIBLING_REPO_IMPORTS.get(filename)
+    if module is None or importlib.util.find_spec(module) is not None:
+        return None
+    return (f"{filename} imports `{module}`, a sibling working copy that is not a dependency of this venv "
+            f"(PYTHONPATH=E:/AI/record-index on the rig; absent here) — the same skip "
+            f"`tests/test_record_index_binding.py` records for the same reason")
+
 #: DERIVED 2026-09-05 by `[f for f in cpython_tools() if halt_handler(f)]`. Equality, so a
 #: CPython tool that loses its handler — or a new one that never gets one — fails HERE,
 #: naming itself, rather than falling silently out of the three properties below.
@@ -1334,6 +1354,9 @@ def _run_cpython(filename, kind):
 def test_the_cpython_exit_code_is_the_one_the_outcome_earns(filename, kind, capsys):
     """2 for a deliberate refusal, 1 for a crash — the property the uploaded-artifact tools
     did not have, over every CPython tool that claims to have it."""
+    reason = _sibling_repo_absent(filename)
+    if reason:
+        pytest.skip(reason)
     want_code = CONTRACT[kind][0]
     code, escaped = _run_cpython(filename, kind)
     capsys.readouterr()
@@ -1345,6 +1368,9 @@ def test_the_cpython_exit_code_is_the_one_the_outcome_earns(filename, kind, caps
 def test_a_cpython_refusal_and_crash_do_not_answer_with_the_same_code(filename, capsys):
     """The divergence itself. Every one of these collapsed to 1 before its handler landed,
     which is the state `code not in (0, None)` cannot see."""
+    reason = _sibling_repo_absent(filename)
+    if reason:
+        pytest.skip(reason)
     refusal, _ = _run_cpython(filename, "refusal")
     crash, _ = _run_cpython(filename, "crash")
     capsys.readouterr()
@@ -1364,6 +1390,9 @@ def test_the_cpython_halt_line_carries_the_gate_and_its_measurement(filename, ki
     prints; the error class named; and, for a fired gate, the measurement that fired it —
     which is the half that "reached nothing" on the uploaded pose pack.
     """
+    reason = _sibling_repo_absent(filename)
+    if reason:
+        pytest.skip(reason)
     handler = halt_handler(filename)
     prefix = handler["prefix"]
     code, escaped = _run_cpython(filename, kind)
@@ -1430,7 +1459,10 @@ def test_the_one_handlers_adopters_are_derived_and_carry_the_six_key_record():
         "pack_pose_pack.py", "render_pose_sticks.py", "resample_motion.py",
         "rig_sheet_compose.py", "sheet_compose.py",
     ], adopters
+    skipped_for_a_sibling_repo = [f for f in adopters if _sibling_repo_absent(f)]
     for filename in adopters:
+        if filename in skipped_for_a_sibling_repo:
+            continue                       # see SIBLING_REPO_IMPORTS; the reason is recorded there
         import io as _io
         import contextlib as _contextlib
 

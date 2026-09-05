@@ -197,8 +197,12 @@ def test_the_control_video_halt_names_the_andon_that_pulled(tmp_path):
     """
     frames = tmp_path / "empty"
     frames.mkdir()
+    # WAVE-25 CI FIX-UP (coordinator, 2026-09-06): the encoder is inspected after the operator's arguments (wave 23)
+    # and BEFORE the frame population is read, so on a host with no ffmpeg the environment refusal
+    # (`ffmpeg_binary_not_found`) preempts the one this test drives — measured on ubuntu-latest. The
+    # refusal driven here fires before any encode, so an existing file stands in for the binary.
     proc = _run("encode_control.py", [f"--frames={frames}", f"--out={tmp_path / 'c.mkv'}"],
-                tmp_path)
+                tmp_path, env={"ARMATURE_FFMPEG": sys.executable})
     assert proc.returncode == 2, (proc.returncode, proc.stderr[-600:])
     rec = _halt(proc, "ENCODE_CONTROL")
     assert rec["gate"] == "ENCODE", rec
