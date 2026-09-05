@@ -17,6 +17,20 @@ proportions for a figure-plus-phantom-ball and read as authoritative while doing
 
 No verdict is emitted. There is no `is_character` field and no threshold, because
 whether the figure is the right character is canon and the Director's to judge.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is writing one JSON record under `--out`. Compensator:
+delete `--out`; owner: the executor session. The record's filename is a fixed literal
+and `--out` is refused if it is given twice, so one run writes one record. Every
+probed GLB is opened read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 
 import json
@@ -30,6 +44,17 @@ import bpy  # noqa: E402
 from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.subject import extent_summary  # noqa: E402
+
+
+class ProbeArgError(ArmatureError):
+    """A probe run cannot be assembled from these arguments, or measured nothing.
+
+    Wave 25, F-3b71c0aa. Seven refusals here and five in `probe_glb` (which imports this
+    class rather than spelling a second) raised the family BASE with no evidence at all:
+    the four `parse_argv` clauses, the missing-file clause and the
+    nothing-was-measured clause that earns the success sentinel. One class, six clause
+    words, two callers -- the idiom `require_openable` already established between these
+    two modules."""
 
 
 def require_openable(paths):
@@ -67,11 +92,13 @@ def require_openable(paths):
     """
     missing = [p for p in paths if not os.path.isfile(p)]
     if missing:
-        raise ArmatureError(
+        raise ProbeArgError(
             f"{len(missing)} of {len(paths)} named GLB(s) are not files: {missing}. Each "
             f"would have joined the probed population as an error row while the success "
             f"sentinel counted it as a subject probed, and a record whose rows are all "
-            f"errors is not a measurement of anything")
+            f"errors is not a measurement of anything",
+            {"clause": "named_glb_is_not_a_file", "andon": "ArmatureError",
+             "missing": missing, "n_named": len(paths)})
     return paths
 
 
@@ -96,10 +123,13 @@ def require_something_measured(records):
     """
     summary = probe_summary(records)
     if summary["n_probed"] and not summary["n_measured"]:
-        raise ArmatureError(
+        raise ProbeArgError(
             f"this run measured 0 of {summary['n_probed']} subject(s); every row is an "
             f"error: {[r.get('error') for r in records]}. A PROBE_SUBJECT_OK line here "
-            f"would report subjects probed that were never opened")
+            f"would report subjects probed that were never opened",
+            {"clause": "nothing_was_measured", "andon": "ArmatureError",
+             "n_probed": summary["n_probed"],
+             "errors": [r.get("error") for r in records]})
     return None
 
 
@@ -190,30 +220,40 @@ def parse_argv(argv, *, known=("out", "glb")):
     out_dir, paths = None, []
     for token in argv:
         if not token.startswith("--"):
-            raise ArmatureError(
+            raise ProbeArgError(
                 f"unexpected argument {token!r}: every value is attached to its flag with "
                 f"'=' ({' '.join('--' + k + '=<value>' for k in known)}). The space form "
                 f"is not accepted, because `token[2:]` on a bare path silently produced a "
-                f"second empty member of the probed population")
+                f"second empty member of the probed population",
+                {"clause": "argument_is_not_attached_with_equals", "andon": "ArmatureError",
+                 "token": token, "known": sorted(known)})
         key, sep, value = token[2:].partition("=")
         key = key.replace("-", "_")
         if key not in known:
-            raise ArmatureError(
-                f"unknown argument {token!r}; known: {sorted(known)}")
+            raise ProbeArgError(
+                f"unknown argument {token!r}; known: {sorted(known)}",
+                {"clause": "unknown_argument", "andon": "ArmatureError",
+                 "token": token, "known": sorted(known)})
         if not sep or not value:
-            raise ArmatureError(
+            raise ProbeArgError(
                 f"{token!r} carries no value; an empty --{key} would join the population "
-                f"as a file that does not exist and be counted in every denominator")
+                f"as a file that does not exist and be counted in every denominator",
+                {"clause": "argument_carries_no_value", "andon": "ArmatureError",
+                 "token": token, "flag": "--" + key})
         if key == "out":
             if out_dir is not None:
-                raise ArmatureError(
+                raise ProbeArgError(
                     f"--out given twice ({out_dir!r} then {value!r}); one run writes one "
-                    f"record")
+                    f"record",
+                    {"clause": "out_given_twice", "andon": "ArmatureError",
+                     "first": out_dir, "second": value})
             out_dir = value
         else:
             paths.append(value)
     if not out_dir or not paths:
-        raise ArmatureError("usage: -- --out=<dir> --glb=<path> [--glb=<path> ...]")
+        raise ProbeArgError("usage: -- --out=<dir> --glb=<path> [--glb=<path> ...]",
+            {"clause": "no_out_or_no_glb", "andon": "ArmatureError",
+             "out": out_dir, "n_glb": len(paths)})
     return out_dir, paths
 
 

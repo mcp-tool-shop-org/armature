@@ -14,6 +14,21 @@ surface would hide the exact thing being judged. No gate states, no debug text.
 **The arc is checked, not assumed.** A re-imported GLB whose parts sit still at frame 33 would
 produce a sheet of matching panels reading as "this route does not move", when the truth would
 be that the animation did not survive the round trip. It raises instead.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is writing the rendered panels under `--out/frames` and
+one `panels.json` under `--out`. Compensator: delete `--out`; owner: the executor
+session. Every path it writes is composed from `--out` and a fixed literal, so no
+operator-supplied name component can carry a panel outside the directory the
+compensator names. The GLB is opened read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 
 import argparse
@@ -104,10 +119,12 @@ def articulated_side(arm_obj, scene, rest_frame, posed_frame,
                     if f"{j}.{side}" in arm_obj.pose.bones]
              for side in ("L", "R")}
     if not names["L"] or not names["R"]:
-        raise ArmatureError(
+        raise PartsSheetGate(
             f"the armature does not name both sides of {list(joints)}: "
             f"L={names['L']} R={names['R']}. Which arm the arc moves cannot be measured, "
-            f"and a sheet that guessed would caption the wrong limb")
+            f"and a sheet that guessed would caption the wrong limb",
+            {"clause": "armature_does_not_name_both_sides", "andon": "ArmatureError",
+             "joints": list(joints), "L": names["L"], "R": names["R"]})
 
     def heads(frame):
         scene.frame_set(frame)
@@ -139,17 +156,19 @@ def articulated_side(arm_obj, scene, rest_frame, posed_frame,
     lo = "R" if hi == "L" else "L"
 
     if disp[hi] <= 0.0:
-        raise ArmatureError(
+        raise PartsSheetGate(
             f"neither arm moved between frames {rest_frame} and {posed_frame} "
             f"(L={disp['L']:.3e} R={disp['R']:.3e}); there is no articulated side for the "
-            f"insets to be about. {ev}")
+            f"insets to be about. {ev}",
+            {**ev, "clause": "neither_arm_moved", "andon": "ArmatureError"})
     # Bounded as a fraction of the WINNER'S OWN displacement, not by a metric constant: a
     # global constant must not govern a local feature.
     if disp[lo] > 0.5 * disp[hi]:
-        raise ArmatureError(
+        raise PartsSheetGate(
             f"both arms move across the arc (L={disp['L']:.3e} R={disp['R']:.3e}); there "
             f"is no single articulated side, and picking one silently is how a caption "
-            f"stops describing the picture. {ev}")
+            f"stops describing the picture. {ev}",
+            {**ev, "clause": "both_arms_move_across_the_arc", "andon": "ArmatureError"})
     ev["side"] = hi
     ev["side_word"] = side_word(hi)
     return ev
@@ -314,7 +333,9 @@ def light_the_scene(scene):
         raise PartsSheetGate(
             "none of the candidate render engines is valid on this Blender, so the sheet "
             "would be drawn by whatever the factory settings left in place",
-            {"candidates": list(ENGINE_CANDIDATES), "blender": bpy.app.version_string})
+            {"clause": "no_valid_render_engine",
+             "candidates": list(ENGINE_CANDIDATES),
+             "blender": bpy.app.version_string})
     scene.view_settings.view_transform = "Standard"
     world = bpy.data.worlds.new("w")
     scene.world = world
@@ -351,6 +372,23 @@ def shoot(scene, path):
     scene.render.film_transparent = False
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGB"
+    # WAVE 25, F-c05e8b32 (ground F-4925f60f, moved) -- THE PRE-RENDER SNAPSHOT, at the
+    # sheet tools the wave-22 enumeration dropped. Wave 22 added
+    # `rig_character.render_target_snapshot` / `require_render_target_moved` and adopted
+    # them at the FIVE renderers; the wave-21 re-sighting's list of render write sites
+    # stopped before the three sheets. Re-counted in this worktree:
+    # `scene.render.filepath` assignments / snapshots / moved-checks per owned module --
+    # preview_glb 2/3/1, preview_walk 1/2/2, render_performer 2/3/3,
+    # render_start_frame 6/7/7, render_turnaround 2/2/2, and make_binding_sheet 1/0/0,
+    # make_parts_sheet 1/0/0, make_skeleton_sheet 1/0/0.
+    #
+    # The comment below states the premise itself -- the existence and size clauses are
+    # properties a PREVIOUS run's file at the same path satisfies -- and no clause
+    # measured the target before the write, on the artefact the Director approves the
+    # skeleton at. Consequence stays bounded as the ground row framed it: no realistic
+    # FINISHED-without-write was constructed on this rig. The home is ADOPTED, not
+    # respelled.
+    _before = rig_character.render_target_snapshot(path)
     scene.render.filepath = path
     render_result = bpy.ops.render.render(write_still=True)
     # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
@@ -377,9 +415,14 @@ def shoot(scene, path):
             f"the render operator returned without writing "
             f"{os.path.basename(path)}; the panel does not exist or is zero bytes, and "
             f"the sheet would name a file that is not there",
-            {"path": os.path.abspath(path),
+            {"clause": "render_wrote_nothing", "path": os.path.abspath(path),
              "exists": os.path.isfile(path),
              "bytes": os.path.getsize(path) if os.path.isfile(path) else None})
+    rig_character.require_render_target_moved(
+        path, _before, PartsSheetGate,
+        {"gate": PartsSheetGate.gate, "sub_gate": "RENDER_TARGET",
+         "who": "make_parts_sheet"},
+        what="the sheet panel")
     return path
 
 
@@ -424,14 +467,20 @@ def main():
     frames_dir = os.path.join(out, "frames")
 
     scene = rig_character.fresh_scene(rig_character.PROBE_FPS)
-    bpy.ops.import_scene.gltf(filepath=args.glb)
+    _import = bpy.ops.import_scene.gltf(filepath=args.glb)
+    rig_character.require_import_status(_import, args.glb, PartsSheetGate,
+                                       {"who": "make_parts_sheet"})
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     visible = blender_scene.render_visible_meshes(scene, meshes)
     if not visible:
-        raise ArmatureError(f"{args.glb}: no render-visible mesh objects")
+        raise PartsSheetGate(f"{args.glb}: no render-visible mesh objects",
+            {"clause": "glb_has_no_render_visible_mesh", "andon": "ArmatureError",
+             "glb": args.glb, "mesh_objects": [o.name for o in meshes]})
     arms = [o for o in bpy.data.objects if o.type == "ARMATURE"]
     if len(arms) != 1:
-        raise ArmatureError(f"{args.glb}: expected one armature, found {len(arms)}")
+        raise PartsSheetGate(f"{args.glb}: expected one armature, found {len(arms)}",
+            {"clause": "subject_is_not_one_armature", "andon": "ArmatureError",
+             "glb": args.glb, "armatures": [o.name for o in arms]})
     arm_obj = arms[0]
     engine = light_the_scene(scene)
 

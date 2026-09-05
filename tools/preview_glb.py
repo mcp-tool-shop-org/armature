@@ -260,7 +260,9 @@ def gate_previews_written(written):
 def main():
     args = parse_args()
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=args.glb)
+    _import = bpy.ops.import_scene.gltf(filepath=args.glb)
+    rc.require_import_status(_import, args.glb, PreviewGlbGate,
+                             {"who": "preview_glb"})
 
     scn = bpy.context.scene
     all_meshes = [o for o in bpy.data.objects if o.type == "MESH"]

@@ -154,7 +154,8 @@ def _evidence_dicts(filename):
         """Every node in `scope`'s own body — NOT inside a nested def.
 
         Measured while writing this: walking the module and every function separately
-        paired `rig_character.py:302`'s `ev` with a class raised in a DIFFERENT function,
+        paired `rig_character.py::require_render_target_moved`'s `ev` with a class raised
+        in a DIFFERENT function,
         because `ast.walk` on the module descends into every body. A name binding is a
         property of one scope; the walk has to be one too.
         """
@@ -1365,7 +1366,18 @@ def test_every_render_write_site_in_the_five_renderers_takes_a_snapshot():
 
 
 def test_the_snapshot_helpers_have_exactly_one_home():
-    """One implementation, imported by five renderers -- never a sixth copy."""
+    """One implementation, imported by EIGHT render write sites -- never a ninth copy.
+
+    WAVE 25 (instruments, F-c05e8b32 / ground F-4925f60f, moved): FIVE became EIGHT,
+    CORRECTED IN PLACE with the measurement that moved it. This wave's enumeration of
+    `scene.render.filepath` assignments against snapshots per owned module read
+    preview_glb 2/3/1, preview_walk 1/2/2, render_performer 2/3/3,
+    render_start_frame 6/7/7, render_turnaround 2/2/2 -- and make_binding_sheet 1/0/0,
+    make_parts_sheet 1/0/0, make_skeleton_sheet 1/0/0. The three SHEET tools each have a
+    render write site and took no pre-render snapshot at all, on the artefact the
+    Director approves the skeleton at. They adopt the same home; the count moves, the
+    property does not.
+    """
     defs = [f for f in OWNED
             if any(isinstance(n, ast.FunctionDef)
                    and n.name in ("render_target_snapshot",
@@ -1377,8 +1389,10 @@ def test_the_snapshot_helpers_have_exactly_one_home():
         if any(isinstance(n, ast.Attribute)
                and n.attr in ("render_target_snapshot", "require_render_target_moved")
                for n in ast.walk(_tree(f))))
-    assert callers == ["preview_glb.py", "preview_walk.py", "render_performer.py",
-                       "render_start_frame.py", "render_turnaround.py"], callers
+    assert callers == ["make_binding_sheet.py", "make_parts_sheet.py",
+                       "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py",
+                       "render_performer.py", "render_start_frame.py",
+                       "render_turnaround.py"], callers
 
 
 def test_the_stale_render_refusal_reaches_a_halt_line(rigc, tmp_path, capsys):

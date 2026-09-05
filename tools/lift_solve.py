@@ -145,7 +145,8 @@ def pick_subject(scene):
         raise LiftGate(
             f"expected exactly one render-visible mesh and one armature, found "
             f"{len(visible)} mesh(es) and {len(arms)} armature(s)",
-            {"meshes": [o.name for o in meshes], "armatures": [o.name for o in arms]})
+            {"clause": "subject_is_not_one_mesh_and_one_armature",
+             "meshes": [o.name for o in meshes], "armatures": [o.name for o in arms]})
     return visible[0], arms[0]
 
 
@@ -241,7 +242,7 @@ def author(arm_obj, scene, frames, rest, fps):
 
     action = arm_obj.animation_data.action if arm_obj.animation_data else None
     if action is None:
-        raise LiftGate("keying produced no action at all", {})
+        raise LiftGate("keying produced no action at all", {"clause": "keying_produced_no_action"})
     n = 0
     for fc in _action_fcurves(action):
         n += 1

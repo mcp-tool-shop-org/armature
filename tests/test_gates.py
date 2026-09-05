@@ -2042,14 +2042,30 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
         "core_only_definitions": sum(len(v) for v in core.values()),
         "core_only_modules": len(core),
     }
+    # WAVE 25 (instruments), BRANCH-LOCAL and MEASURED: 134 → 142 names, 140 → 148
+    # definitions, 79 → 82 modules. EIGHT classes, all in `tools/*.py`:
+    #   `diagnose_bone_heat.BandCountError` (F-a4f7b3c9) — the andon for `--bands`,
+    #     the last bare numeric flag in the 21 Blender-side tools reached by no bound;
+    #   and seven NAMED refusal classes (F-3b71c0aa) replacing the family BASE at the
+    #     sites whose refusals carried no evidence at all — `ReliftError`,
+    #     `BoneHeatSubjectError`, `RigSheetSubjectError`, `ProbeArgError`,
+    #     `RigCharacterError`, `RigPartsError`, `RigRepairSubjectError`. Raising
+    #     `ArmatureError` itself names nothing about which andon pulled, which is what
+    #     that class’s own docstring says the wave-14 constructor is not a licence for.
+    # `modules` moves by three because `diagnose_bone_heat`, `probe_subject` and
+    # `rig_parts` defined no family class before. Nothing was deleted and no name is
+    # defined twice that was not already. ⚠ five domains move this in wave 25; the
+    # coordinator MEASURES on the merged tree, never sums.
     assert measured == {
-        "names": 134,
-        "definitions": 140,
-        "modules": 79,
+        "names": 142,
+        "definitions": 148,
+        "modules": 82,
         "defined_more_than_once": {"DetectionGate": 2, "PayloadError": 5, "RenderGate": 2},
         "core_only_definitions": 58,
         "core_only_modules": 20,
     }, measured
-    # the quantity the comment's last clause is about: 82 definitions sit outside the
-    # core-only walk, which is the gap the tree-wide census exists to close
-    assert measured["definitions"] - measured["core_only_definitions"] == 82
+    # the quantity the comment's last clause is about: definitions that sit outside the
+    # core-only walk, which is the gap the tree-wide census exists to close. 82 on
+    # `580af47`; 90 here — all eight classes above are tool-side, so the whole delta
+    # lands on this side of the subtraction and `core_only_definitions` is unmoved.
+    assert measured["definitions"] - measured["core_only_definitions"] == 90

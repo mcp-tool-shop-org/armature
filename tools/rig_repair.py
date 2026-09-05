@@ -18,6 +18,22 @@ takes it to **0 / 0 / 0**, costing **593 faces of 147,450 (0.40 %)**, and bone h
 Because nothing is resampled, this route also **keeps the original UVs and the original
 atlas**: there is no unwrap and no bake, so texture fidelity is exact everywhere except the
 few filled holes. Those are counted and located rather than assumed harmless.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The world-touching acts are EXPORTING the repaired GLB and writing
+`repair_manifest.json` under `--out`, plus `halt.json` on the refusal path.
+Compensator: delete `--out`; owner: the executor session. Every path it writes is
+composed from `--out` and a fixed literal, so no operator-supplied name component can
+carry the exported GLB outside the directory the compensator names. The source GLB is
+opened read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 from __future__ import annotations
 
@@ -46,6 +62,14 @@ from armature_core.errors import ArmatureError, GateFailure           # noqa: E4
 #: How many repair passes before giving up. One is enough on this figure; the loop exists so
 #: a mesh needing two does not silently ship at 1.
 MAX_REPAIR_PASSES = 8
+
+
+class RigRepairSubjectError(ArmatureError):
+    """The asset this repair was pointed at is not one identifiable subject.
+
+    Wave 25, F-3b71c0aa. The render-visible ambiguity refused through the family BASE
+    with no evidence; `SourceHasNoFaces` above is the gate for an asset with no polygons
+    at all, and this is the one for an asset with more than one candidate."""
 
 
 class NotManifoldAfterRepair(GateFailure):
@@ -195,7 +219,9 @@ def main():
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
 
     scene = rc.fresh_scene(16)
-    bpy.ops.import_scene.gltf(filepath=args["glb"])
+    _import = bpy.ops.import_scene.gltf(filepath=args["glb"])
+    rc.require_import_status(_import, args["glb"], RigRepairSubjectError,
+                             {"who": "rig_repair"})
     # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
     # object index 0 is depends on file order, and the glTF importer routinely adds a
     # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
@@ -204,10 +230,13 @@ def main():
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     visible = blender_scene.render_visible_meshes(scene, meshes)
     if len(visible) != 1:
-        raise ArmatureError(
+        raise RigRepairSubjectError(
             f"{args['glb']} presents {len(visible)} render-visible mesh object(s) "
             f"{[o.name for o in visible]} (all meshes {[o.name for o in meshes]}); "
-            f"the repair would run on whichever one file order put first")
+            f"the repair would run on whichever one file order put first",
+            {"clause": "subject_is_not_one_render_visible_mesh", "andon": "ArmatureError",
+             "glb": args["glb"], "render_visible": [o.name for o in visible],
+             "all_meshes": [o.name for o in meshes]})
     ob = visible[0]
     ob.name = ob.data.name = "performer_repaired"
     src = rc.world_verts(ob)
@@ -243,12 +272,12 @@ def main():
     if not final["closed_manifold"]:
         raise NotManifoldAfterRepair(
             "the shell is still not a closed manifold after repair",
-            {"final": final, "passes": passes})
+            {"clause": "still_not_manifold_after_repair", "final": final, "passes": passes})
     removed = shell_faces - final["faces"]
     if removed > REPAIR_FACE_BUDGET * shell_faces:
         raise TooMuchRemoved(
             "repair removed more of the character than a stitch-fixing pass should",
-            {"faces_removed": removed, "of": shell_faces,
+            {"clause": "repair_removed_too_much", "faces_removed": removed, "of": shell_faces,
              "budget_fraction": REPAIR_FACE_BUDGET})
 
     if not ob.data.validate(verbose=False):

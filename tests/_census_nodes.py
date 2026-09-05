@@ -844,6 +844,67 @@ def clause_literals(trees=None):
     return {k: sorted(set(v)) for k, v in sorted(out.items())}
 
 
+# ------------------------------- the clause-less family raise (wave 25, F-3b71c0aa)
+#
+# ADOPTED, not re-derived. This walk was written for wave 22 as
+# `tests/test_amend_w22_core_solvers.family_raises_without_a_clause`, where it ranged over
+# the 21 `armature_core` modules and nothing else — so the property it asserts
+# (`== []`) was true of `armature_core/**` and unasked of `tools/*.py`, where 78 of 150
+# resolved family raises carried no `clause` a halt reader could key on. Rather than write
+# a second walk for the second population, the walk moved HERE and took a POPULATION and a
+# RESOLVER as arguments; a parameter is not a second implementation (this module's own
+# opening records why that rule exists).
+#
+# The two callers differ only in how a raised NAME becomes a runtime class:
+#
+#   * `armature_core` modules import directly (`importlib.import_module`);
+#   * `tools/*.py` modules `import bpy` at module scope and are imported through
+#     `tests/blender_stub.load_tool`.
+#
+# Keyed on the RESOLVED class (wave-18 rule 1): a census that keyed on the spelling would
+# miss a re-exported name and invent a member out of any local variable that happens to be
+# called `SolveError`.
+
+
+def family_raises_without_a_clause(trees, resolve, base):
+    """Every family raise in `trees` whose evidence carries no `clause`.
+
+    `trees` is `{module name: ast.Module}`; `resolve(module_name, class_name)` returns the
+    runtime class or None; `base` is the family root (`errors.ArmatureError`). Only raises
+    whose resolved class actually subclasses `base` count.
+
+    Returns `[(module, lineno, class name, reason)]`, sorted. Two reasons are reported and
+    a third shape is deliberately NOT reported:
+
+    * `"no evidence at all"` — no second positional argument and no keyword. The shared
+      halt handler serialises these as `"evidence": null`.
+    * `"evidence without a clause"` — a dict LITERAL with no `clause` key.
+    * an evidence expression that is not a dict literal is passed over, because what it
+      carries cannot be read from the tree; the clause may well be inside it.
+    """
+    out = []
+    for name, tree in sorted(trees.items()):
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
+                continue
+            fn = node.exc.func
+            cname = getattr(fn, "id", None) or getattr(fn, "attr", None)
+            if not cname:
+                continue
+            cls = resolve(name, cname)
+            if not (isinstance(cls, type) and issubclass(cls, base)):
+                continue
+            ev = node.exc.args[1] if len(node.exc.args) > 1 else None
+            if ev is None and not node.exc.keywords:
+                out.append((name, node.lineno, cname, "no evidence at all"))
+                continue
+            if isinstance(ev, ast.Dict):
+                keys = [k.value for k in ev.keys if isinstance(k, ast.Constant)]
+                if "clause" not in keys:
+                    out.append((name, node.lineno, cname, "evidence without a clause"))
+    return sorted(out)
+
+
 # ------------------------------------------ the pasted-name node (wave 23, F-54179a94)
 #
 # "A name pasted into an output path is a name" was enumerated one domain at a time and

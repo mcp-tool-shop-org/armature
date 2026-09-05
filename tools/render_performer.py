@@ -255,6 +255,30 @@ def gate_coverage(paths, empty_plate, min_frac=MIN_SUBJECT_FRAC):
                 "gate_floor": MIN_SUBJECT_FRAC}
     min_frac = parts.tightened("min_frac", min_frac, MIN_SUBJECT_FRAC, RenderGate,
                                ev_bound)
+    # WAVE 25, F-8c2ad415, the second half -- THE VACUITY THIS GATE COULD NOT SEE.
+    # `worst` is seeded `{"frame": None, "frac": 1.0}` and updated ONLY inside the
+    # loop below, so on an empty plan the refusal clause reads `1.0 < 0.01` -- False
+    # -- and this function RETURNS `{'min_fraction': 0.01, 'worst': {'frame': None,
+    # 'frac': 1.0}, 'verdict': 'min 1.0000 at frame None over 0 frames'}`: a full
+    # PASS over zero frames from the gate whose stated job is that the performer is
+    # in every frame. MEASURED in this worktree with the module loaded under
+    # `blender_stub` and a real 16x16 empty plate.
+    #
+    # The empty-record refusal in `main` shields this today, which is exactly why
+    # the clause belongs HERE as well: a gate whose andon is load-bearing only in
+    # another statement's presence is the direction CLAUDE.md rules against, and
+    # the next caller of this function would inherit the vacuity. Same family as
+    # F-1dd37d93 (Gate D on `{}` vs `{}`) and F-2c39d08d (two empty weight dicts).
+    if not paths:
+        raise RenderGate(
+            "gate COVERAGE was asked to rule over zero frames: `worst` never leaves "
+            "its seed, so the gate would report its strongest verdict -- min 1.0000 "
+            "-- about a plan with no performance in it at all",
+            {"gate": RenderGate.gate, "sub_gate": "COVERAGE",
+             "andon": RenderGate.__name__, "who": "render_performer",
+             "clause": "coverage_has_no_frames_to_rule_on",
+             "n_frames": 0, "min_fraction": min_frac,
+             "empty_plate": empty_plate})
     base = _pixels(empty_plate)
     per_frame, worst = [], {"frame": None, "frac": 1.0}
     for i, p in enumerate(paths):
@@ -291,7 +315,7 @@ def main():
             "give either --motion (authored ground truth) or --lift (a solved record); the "
             "camera is SOLVED against where the body actually goes, and framing a "
             "performance against nothing would fit the rest pose and clip the performance",
-            {})
+            {"clause": "no_motion_source_given"})
     with open(a.manifest, encoding="utf-8") as fh:
         rig = json.load(fh)
     lo, hi = rig["bbox"]["lo"], rig["bbox"]["hi"]
@@ -328,6 +352,30 @@ def main():
         frame_source = {"kind": "solved_lift", "path": os.path.abspath(a.lift)}
 
     count = len(clouds)
+    # WAVE 25, F-8c2ad415 -- THE EMPTY RECORD, REFUSED WHERE IT IS READ.
+    # `clouds` is built at the two branches above from a JSON list nothing
+    # bounds, and `clouds[-1]` on an empty one raises `IndexError`. MEASURED in
+    # this worktree by driving this file's own `__main__` handler with that
+    # exception through `blender_stub.exit_code_of_main_block`:
+    # `RENDER_PERFORMER_HALT {"outcome": "FAILED -- an unhandled error",
+    # "gate": null, "error": "IndexError", "message": "list index out of range",
+    # "evidence": null}` at exit 1 -- no gate, no clause, no operand, and the halt
+    # contract's own three-outcome rule (a deliberate refusal exits 2, a crash
+    # exits 1) recording an ordinary input mistake as a crash.
+    #
+    # Above `clouds[-1]` AND above `os.makedirs` further down, so a truncated
+    # record leaves nothing behind.
+    if count == 0:
+        raise RenderGate(
+            f"the {frame_source['kind']} motion record at "
+            f"{frame_source['path']} carries no frames: there is no performance "
+            f"to frame, to render or to measure, and every gate below this line "
+            f"would rule over an empty plan",
+            {"gate": RenderGate.gate, "sub_gate": "FRAMES",
+             "andon": RenderGate.__name__, "who": "render_performer",
+             "clause": "motion_record_has_no_frames",
+             "source": frame_source["path"], "source_kind": frame_source["kind"],
+             "n_frames": 0})
     all_points = [p for c in clouds for p in c]
     end_points = clouds[-1]
 
@@ -340,7 +388,7 @@ def main():
             f"the solved composition puts part of the performance outside the frame: "
             f"x {sol['achieved']['union_x']} y {sol['achieved']['union_y']}. A detector "
             f"fed a clipped figure returns landmarks for the part it can see and no "
-            f"error at all", {"solution": sol})
+            f"error at all", {"clause": "performance_outside_the_frame", "solution": sol})
 
     target, radius = tuple(sol["target"]), float(sol["radius"])
 
@@ -390,7 +438,8 @@ def main():
         if not zs:
             raise RenderGate(
                 "the GLB imported no render-visible mesh, so the floor has no height to "
-                "sit at", {"glb": a.glb, "mesh_objects": [o.name for o in meshes]})
+                "sit at", {"clause": "glb_has_no_render_visible_mesh",
+                           "glb": a.glb, "mesh_objects": [o.name for o in meshes]})
         gob.location = (0.0, 0.0, min(zs))
 
     # Every refusal above this line can fire before a single pixel exists; the output
@@ -467,7 +516,7 @@ def main():
             f"the performance is not complete: {len(missing)} of {count} frames were "
             f"never written {[os.path.basename(p) for p in missing[:8]]} and "
             f"{len(empty)} are zero bytes {[os.path.basename(p) for p in empty[:8]]}",
-            {"out": out, "planned": count,
+            {"clause": "performance_is_incomplete", "out": out, "planned": count,
              "missing": [os.path.basename(p) for p in missing],
              "empty": [os.path.basename(p) for p in empty],
              "unexpected_files_in_out_dir": strays})

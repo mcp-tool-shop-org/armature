@@ -11,6 +11,21 @@ Inset cameras are aimed from the **posed bone positions read out of the armature
 guessed fractions of the figure's height. Arm (d)'s first comparison sheet framed the "mitten
 hand" panel on a forearm and a shin, which is a sheet that cannot answer the question it was
 built to ask.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is writing the rendered panels under `--out/panels` and
+one `panels.json` under `--out`. Compensator: delete `--out`; owner: the executor
+session. Every path it writes is composed from `--out` and a fixed literal, so no
+operator-supplied name component can carry a panel outside the directory the
+compensator names. Both GLBs are opened read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 from __future__ import annotations
 
@@ -30,6 +45,15 @@ from armature_core.errors import ArmatureError                        # noqa: E4
 from make_parts_sheet import (ArcDidNotSurvive, arc_liveness,         # noqa: E402
                               articulated_side, light_the_scene,
                               ortho_camera, shoot)
+
+
+class RigSheetSubjectError(ArmatureError):
+    """A panel's subject cannot be identified without guessing which mesh it is.
+
+    Wave 25, F-3b71c0aa. The reference import, the skinned mesh and the armature each
+    refused through the family BASE with no evidence; each names this class and its own
+    `clause` now. `ReferenceFileError` above stays what it is -- `--reference` naming an
+    unreadable file -- so the two refusals a reader has to tell apart are two classes."""
 
 
 def parse_args():
@@ -119,16 +143,23 @@ def import_reference(path, scene, skinned):
     `rig_character.build_pass` already use.
     """
     before = {o.name for o in bpy.data.objects}
-    bpy.ops.import_scene.gltf(filepath=path)
+    _import = bpy.ops.import_scene.gltf(filepath=path)
+    rc.require_import_status(_import, path, RigSheetSubjectError,
+                             {"who": "make_rig_sheet", "role": "reference"},
+                             what="the reference GLB")
     added = [o for o in bpy.data.objects if o.name not in before]
     meshes = [o for o in added if o.type == "MESH" and o is not skinned]
     visible = blender_scene.render_visible_meshes(scene, meshes)
     if len(visible) != 1:
-        raise ArmatureError(
+        raise RigSheetSubjectError(
             f"the reference import of {path} contributed {len(visible)} render-visible "
             f"mesh object(s) {[o.name for o in visible]} (from added "
             f"{[o.name for o in added]}); exactly one is needed, and taking index 0 is how "
-            f"a decoy once became the 'before' panel and its triangle count")
+            f"a decoy once became the 'before' panel and its triangle count",
+            {"clause": "reference_import_is_not_one_render_visible_mesh",
+             "andon": "ArmatureError", "path": path,
+             "render_visible": [o.name for o in visible],
+             "added": [o.name for o in added]})
     return visible[0]
 
 
@@ -138,7 +169,9 @@ def main():
     panel_dir = os.path.join(out_dir, "panels")
 
     scene = rc.fresh_scene(16)
-    bpy.ops.import_scene.gltf(filepath=args["glb"])
+    _import = bpy.ops.import_scene.gltf(filepath=args["glb"])
+    rc.require_import_status(_import, args["glb"], RigSheetSubjectError,
+                             {"who": "make_rig_sheet"})
     # Pick the mesh that is actually SKINNED, not the first mesh in the file. The exported
     # GLB also contains a stray `Icosphere` with no vertex groups and no modifier; taking
     # index 0 picked that, and it of course never moves -- this tool's own liveness check
@@ -148,17 +181,21 @@ def main():
                if o.type == "MESH" and o.vertex_groups
                and any(m.type == "ARMATURE" for m in o.modifiers)]
     if len(skinned) != 1:
-        raise ArmatureError(
+        raise RigSheetSubjectError(
             f"expected exactly one skinned mesh in {args['glb']}, found {len(skinned)}: "
             f"{[o.name for o in skinned]} (all meshes: "
-            f"{[o.name for o in bpy.data.objects if o.type == 'MESH']})")
+            f"{[o.name for o in bpy.data.objects if o.type == 'MESH']})",
+            {"clause": "subject_is_not_one_skinned_mesh", "andon": "ArmatureError",
+             "glb": args["glb"], "skinned": [o.name for o in skinned]})
     mesh = skinned[0]
     arms = [o for o in bpy.data.objects if o.type == "ARMATURE"]
     if len(arms) != 1:
-        raise ArmatureError(
+        raise RigSheetSubjectError(
             f"expected exactly one armature in {args['glb']}, found "
             f"{[o.name for o in arms]}; index 0 is whichever the file happened to "
-            f"list first")
+            f"list first",
+            {"clause": "subject_is_not_one_armature", "andon": "ArmatureError",
+             "glb": args["glb"], "armatures": [o.name for o in arms]})
     arm = arms[0]
     stray = [o.name for o in bpy.data.objects if o.type == "MESH" and o is not mesh]
     for name in stray:

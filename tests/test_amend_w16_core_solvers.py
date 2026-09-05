@@ -789,7 +789,20 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     # (`rig_character.py::export_rigged` / `::run_skeleton`, `probe_subject.py::probe_one`) and
     # recorded `lift_solve.py:307` in `CORRECTED_ANCHORS`, after which the loop reads EMPTY — so
     # the ceiling is now the floor: any stale citation in a non-owned `armature_core` module fails here.
-    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {}
+    # WAVE 25 (instruments), BRANCH-LOCAL and posted to core-gates: back to
+    # {'rig_gates': 1}. `armature_core/rig_gates.py` carries a BARE LINE citation into
+    # `rig_character.py` as one of the live call sites passing `sitelist.ALL_NAMES`,
+    # and the evidence dicts, clause words and named classes this wave added to that
+    # module pushed the cited line onto a blank one. (The number is deliberately not
+    # repeated here: a bare `<file>.py:<line>` written in this file would itself be a
+    # citation this census walks, and it would rot the same way.) `rig_gates.py` is core-gates' file in the frozen domain
+    # map, so the re-anchor is theirs and is posted to the wave-25 inbox: the live
+    # anchor is `rig_character.py::export_and_verify`, where `gate_n_names(reimported,
+    # sitelist.ALL_NAMES, ...)` reads the constant. This is a CEILING, so their
+    # correction leaves this green and merely makes the entry deletable -- which is
+    # exactly what the ceiling is for, and the same treatment wave 22 gave the same
+    # file.
+    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {"rig_gates": 1}
     over = {k: v for k, v in others.items()
             if v > STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN.get(k, 0)}
     assert over == {}, {"stale now": others,
@@ -1184,8 +1197,11 @@ TESTS_STALE_ANCHORS_RECORDED = {
     ('test_instruments_amend_w22', 'resample_motion.py', 76),
     ('test_instruments_amend_w22', 'test_amend_w16_builders.py', 815),
     ('test_instruments_amend_w8', 'test_retopo_and_bake.py', 122),
-    ('test_make_rig_sheet', 'rig_repair.py', 150),
-    ('test_probe_glb', 'probe_subject.py', 88),
+    # WAVE 25 (instruments): ('test_make_rig_sheet', 'rig_repair.py', 150) and
+    # ('test_probe_glb', 'probe_subject.py', 88) DELETED here, in the commit that made
+    # them live again -- this table's own rule. Both cited lines were blank; the named
+    # refusal classes and the evidence dicts this wave added pushed real code back onto
+    # them. A row kept after its anchor resolves is a record of nothing.
     ('test_refusal_clauses', 'pack_pose_pack.py', 164),
 }
 
