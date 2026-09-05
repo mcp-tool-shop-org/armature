@@ -255,6 +255,12 @@ RECORDED_POPULATION = frozenset({
     "SeedRegistrationError", "SpendCeiling",
     # WAVE-14 MERGE (coordinator, 2026-09-04, after #159/#160 and receipt #287): `make_rig_sheet.ReferenceFileError` — two raise sites, a plain refusal.
     "ReferenceFileError",
+    # WAVE 18 (builders, F-c11410c5): `gate_saved_graph.SavedAdmission` — Gate
+    # SAVED_ADMISSION raised under its own id, six raise sites. Declared with a PLAIN-NAME
+    # base (`from armature_core.route_gates import RouteGate`) for F-d8593862's reason: the
+    # one family class in the tree with a dotted base was invisible to every census that
+    # walks `ast.Name` bases. MEASURED in the builders worktree, not carried.
+    "SavedAdmission",
     "CadenceGate", "PinnedCameraGate",
     "CropStripError", "GateMode", "GateSubject", "MalformedGLB", "PreviewGlbGate",
     "PreviewWalkGate",
@@ -442,7 +448,24 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     #   `blender_scene.RenderedFrame` (F-25a5ecbf, Gate FRAME, four raise sites)
     #   `blender_scene.CameraGeometry` (F-329a9555, two raise sites)
     #   `channels.DepthError`          (F-476a4ee8, three raise sites)
-    assert len(POLICED) == 104, sorted(POLICED)
+    # WAVE 18 (builders, F-c11410c5): 101 → 102, MEASURED in the builders worktree with the
+    # derivation command written out above —
+    #   +1 `gate_saved_graph.SavedAdmission`, the owner the id `SAVED_ADMISSION` never had.
+    #      Five refusals in the last gate before a paid submission raised the bare
+    #      `RouteGate` (class attribute `gate = "ROUTE"`) while their evidence said
+    #      `{"gate": "SAVED_ADMISSION"}`, so one halt line carried two gate ids for one
+    #      event — the shape wave 16 fixed one file over with `SpendCeiling`. Six raise
+    #      sites (the five, plus `graph_file_missing` on `--saved` / `--api`), so it crosses
+    #      the two-site threshold. `POLICED - RECORDED_POPULATION == ['SavedAdmission']` and
+    #      nothing vanished, both measured before this line was moved.
+    #      ⚠ **BRANCH-LOCAL.** This is measured in `w18-builders` and is a COMPOSITION on the
+    #      merged tree (core-solvers posts +3 and core-gates +5 on the sibling pins); it must be
+    #      RE-DERIVED there by measurement, never summed. tests' SEAM 11 carries the
+    #      derivation command; the base was measured green in this worktree first, so every
+    #      delta here is demonstrably this domain's.
+    #
+    # WAVE-18 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(POLICED) == 105, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -532,7 +555,30 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # raise remains there. If none does, that set loses a member at merge — flagged in the
     # inbox rather than guessed at here.
     # WAVE-16 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(RAISE_SITES["RouteGate"]) == 64, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 18 (builders): 64 → 63, MEASURED, and the −1 hides moves in both directions, so
+    # it is itemised rather than left as a number:
+    #   −5 in `gate_saved_graph.py`, where the five raises whose evidence already said
+    #      `{"gate": "SAVED_ADMISSION"}` moved off the bare `RouteGate` onto the class whose
+    #      own gate id that is (`SavedAdmission`, F-c11410c5) — the same "a raise that
+    #      leaves this count because it became MORE specific is the fix working" the wave-16
+    #      note above records for `SpendCeiling`.
+    #   +4 in `gate_saved_graph.route_facts`, which is Gate ROUTE's own id and so stays
+    #      `RouteGate`: `record_carries_a_caught_refusal` (a caught `verify` refusal's
+    #      evidence is shaped like a PASS receipt, because `verify` writes its declared kind
+    #      and both fact keys before the first clause can raise — F-6d68f4c5),
+    #      `record_route_facts_disagree` on `attribution` (the fact that was silently
+    #      UNIONED across receipts while its sibling refused a disagreement — F-6d68f4c5),
+    #      the same clause on `payload_sha256`, and `record_describes_a_different_graph`
+    #      (the `--record` is TIED to the graph it vouches for — F-5c0f3858).
+    # 64 − 5 + 4 = 63, measured with
+    # `len(M.RAISE_SITES["RouteGate"])`, never summed.
+    #      ⚠ **BRANCH-LOCAL.** This is measured in `w18-builders` and is a COMPOSITION on the
+    #      merged tree (core-solvers posts +3 and core-gates +5 on the sibling pins); it must be
+    #      RE-DERIVED there by measurement, never summed. tests' SEAM 11 carries the
+    #      derivation command; the base was measured green in this worktree first, so every
+    #      delta here is demonstrably this domain's.
+    #
+    assert len(RAISE_SITES["RouteGate"]) == 63, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside
@@ -628,7 +674,20 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # three are declared with a PLAIN-NAME base, so this walk and every other AST census
     # in the suite can see them; the dotted-base blind spot wave 17 found on
     # `SpendCeiling` is deliberately not reproduced here.
-    assert len(defined) == 128, len(defined)
+    # WAVE 18 (builders): 125 → 126 — +1 `gate_saved_graph.SavedAdmission` (F-c11410c5).
+    # ⚠ `build_r2v_payload.SpendCeiling` does NOT move this number: it was already visible
+    # here, because THIS file's `_family_classes_defined_under_tools` resolves a dotted base
+    # while `tests/test_gates._armature_error_family` does not — which is precisely the
+    # F-d8593862 defect (two censuses of one family disagreeing about its membership).
+    # Widening the other walk is Stage B.
+    #      ⚠ **BRANCH-LOCAL.** This is measured in `w18-builders` and is a COMPOSITION on the
+    #      merged tree (core-solvers posts +3 and core-gates +5 on the sibling pins); it must be
+    #      RE-DERIVED there by measurement, never summed. tests' SEAM 11 carries the
+    #      derivation command; the base was measured green in this worktree first, so every
+    #      delta here is demonstrably this domain's.
+    #
+    # WAVE-18 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
+    assert len(defined) == 129, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}

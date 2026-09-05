@@ -172,6 +172,55 @@ def read_seed_registration(path, *, flag="--seeds"):
             f"membership test against a non-list is a question with an accidental answer",
             dict(ev, clause="registration_seeds_not_a_list",
                  read_as=type(seeds).__name__))
+    # ---- ANDON, wave 18 (F-3f285caa). The clause above refuses a non-list on the ground
+    # that "a membership test against a non-list is a question with an accidental answer",
+    # and then the list was returned with NO clause on its ELEMENTS — so the membership test
+    # stayed accidental one level down. Measured on the base tree by calling this reader on
+    # committed-shape files, all ACCEPTED: `["2026081351","2026081352"]`, `[[2026081351]]`,
+    # `[{"seed": 2026081351}]`, `[2026081351, null]`, `[True, False]`, `[1.5]`. All eight
+    # committed registrations under `specs/*seeds.json` are lists of ints, so the five
+    # clauses above hold over the real population today — this is the direction they do not
+    # bound.
+    #
+    # The three consequences, measured at the callers:
+    #   * a QUOTED registration makes `2026081351 in ['2026081351','2026081352']` False, so
+    #     `build_r2v_payload.gate_seed_registered` and `build_lora_arm_payload.gate_s`
+    #     refuse the operator's seed as UNREGISTERED while the defect is the file's shape —
+    #     a refusal naming the wrong problem, the exact complaint this docstring makes about
+    #     the disarming `registry.get("seeds") or []`.
+    #   * a MIXED list makes `sorted(registry)[0]` — the documented default path in
+    #     `build_animate_payload:301`, `build_i2v_payload:539` and
+    #     `build_camera_i2v_payload:880` — raise `TypeError: '<' not supported between
+    #     instances of 'NoneType' and 'int'`, an untyped exit-1 crash: the family this
+    #     reader was created to end.
+    #   * `1 in [True]` is True in CPython, so a BOOLEAN registration admits an
+    #     unregistered number.
+    #
+    # `bool` is excluded explicitly because `isinstance(True, int)` is True: the two
+    # spellings are indistinguishable to a check that does not ask, which is the same
+    # reason `gate_saved_graph._same_value` guards it.
+    #
+    # No numeric RANGE is invented here. This module records no measured bound for a seed's
+    # magnitude, and CLAUDE.md forbids a global constant governing a local feature; the
+    # generator-side enums that ARE measured live in `route_gates.HOSTED_TIER_RULES`. The
+    # clause bounds the TYPE the callers index and test membership against, which is what
+    # the five clauses above already promised.
+    offending = [{"index": i, "value": repr(v), "type": type(v).__name__}
+                 for i, v in enumerate(seeds)
+                 if isinstance(v, bool) or not isinstance(v, int)]
+    if offending:
+        raise SeedRegistrationError(
+            f"{flag} {path!r} declares {len(offending)} of {len(seeds)} `seeds` entries "
+            f"that are not integers: "
+            + "; ".join(f"index {o['index']} is a {o['type']} ({o['value']})"
+                        for o in offending[:5])
+            + ". The callers index this list and test membership against it, so a quoted "
+              "or boxed seed makes the operator's number read as UNREGISTERED and a mixed "
+              "list makes `sorted(registry)[0]` raise a stdlib TypeError. A boolean is "
+              "refused for the same reason `1 in [True]` is True",
+            dict(ev, clause="registration_seed_is_not_an_integer",
+                 n_seeds=len(seeds), offending=offending,
+                 read_as=sorted({type(v).__name__ for v in seeds})))
     return seeds
 
 

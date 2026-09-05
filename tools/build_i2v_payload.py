@@ -293,17 +293,40 @@ def resolve_start_frame(path, declared_sha256=None):
     Its `PayloadError` is a different class from this module's, and every refusal this
     module makes is this module's `PayloadError`, so it is re-raised in this family with
     the sibling named in the evidence — the same carry shape `build_payload._carry` uses.
+
+    ⚠ **It was NOT that shape, on the route whose entire conditioning is one image**
+    (wave 18, F-c080a03f). The carry DISCARDED `exc.evidence` and built a fresh dict from
+    the operator's inputs, while the exemplar it cites does the opposite — `_carry` is
+    `dict(exc.evidence or {}, carried_from=...)`, evidence verbatim. Measured on the base
+    tree against one JPEG-headed file:
+
+        build_camera_i2v_payload.resolve_start_frame -> keys ['andon', 'bytes', 'clause',
+            'first_8_bytes', 'flag', 'gate', 'path', 'read_by', 'sha256'],
+            clause 'start_frame_not_a_png'
+        build_i2v_payload.resolve_start_frame (SAME file) -> keys ['andon', 'carried_from',
+            'declared_sha256', 'flag', 'gate', 'path'], clause None
+
+    Every measured fact — the first eight bytes, the size, the digest and the clause name —
+    was dropped and replaced by the path and the operator's `--start-frame-sha256`. An
+    operator halted at the one input F-08853dfb established is the whole of this route's
+    conditioning got a message with no machine-readable clause.
+
+    The sibling's evidence rides verbatim now. The operator's inputs are kept as a FLOOR
+    under it rather than in place of it, because two of the sibling's three refusals used to
+    carry no evidence at all — they carry their own clauses as of the same wave, and every
+    key they set wins over the floor.
     """
     import build_camera_i2v_payload as CAM  # noqa: PLC0415 - deferred: see the docstring
 
     try:
         return CAM.resolve_start_frame(path, declared_sha256)
     except CAM.PayloadError as exc:
+        floor = {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
+                 "path": path, "declared_sha256": declared_sha256}
         raise PayloadError(
             str(exc),
-            {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
-             "path": path, "declared_sha256": declared_sha256,
-             "carried_from": "build_camera_i2v_payload.resolve_start_frame"}) from exc
+            dict(floor, **(exc.evidence or {}),
+                 carried_from="build_camera_i2v_payload.resolve_start_frame")) from exc
 
 
 

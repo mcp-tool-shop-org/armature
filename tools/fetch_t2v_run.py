@@ -142,11 +142,18 @@ def download(jobs, out=None):
     fact, and that claim is corrected in place there; it is also the reason this fetcher was
     left without the per-job `download_exits.json` record the sibling gained.
 
-    The backstop was only partial: `verify_downloads` PNG-signature-checks every planned
-    `.png`, so a mid-loop FRAME failure that lands a `--fail-with-body` HTTP error body
-    still raises — but the VIDEO job's `donor<ext>` carries a suffix this tool has no
-    signature for and is counted, not judged, so a failed donor download that lands a
-    35-byte error body read as present, non-empty, no stray, and FETCH_T2V_OK was printed.
+    The backstop was only partial, and this paragraph used to record that and stop there.
+    `verify_downloads` PNG-signature-checked every planned `.png`, so a mid-loop FRAME
+    failure that lands a `--fail-with-body` HTTP error body still raised — but the VIDEO
+    job's `donor<ext>` carried a suffix the clause had no signature for, so a failed donor
+    download that lands a 35-byte error body read as present, non-empty, no stray, and
+    FETCH_T2V_OK was printed. **Naming a defect in prose is how it is RECORDED, not how it
+    is closed** (wave 18, F-0124c714): `fetch_run.CONTENT_SIGNATURES` now carries `.mp4`,
+    `.m4v`, `.mov`, `.webm`, `.mkv` and `.webp` beside `.png`, and every planned output
+    whatever its suffix is refused if its first bytes parse as the start of a JSON document.
+    A suffix with no signature row is now COUNTED as unjudged in the receipt's own
+    `content_checked[<suffix>]` rather than being absent from every key — the sentence
+    "counted, not judged" was not true of the old receipt either.
 
     `record_urls=False`: the exit record lands in the run directory as the sibling's does,
     but WITHOUT the urls. `_urls.json` is deleted on every path here precisely because it

@@ -33,11 +33,46 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates as RG  # noqa: E402
+from armature_core.route_gates import RouteGate  # noqa: E402
 from build_assembly_payload import read_seed_registration  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure)
 
 TOOL_VERSION = "E10.1"
+
+
+class SavedAdmission(RouteGate):
+    """Gate SAVED_ADMISSION, raised under its own id.
+
+    Wave 18, F-c11410c5. Five refusals in the last gate before a paid submission named TWO
+    different gate ids for one event: the class raised was `RG.RouteGate`, whose class
+    attribute is `gate = "ROUTE"` — so `str(exc)` opened `[ROUTE]` and `exc.gate` read
+    `"ROUTE"` — while the evidence dict beside it said `{"gate": "SAVED_ADMISSION"}`, and
+    the `__main__` block prints both into one `SAVED_ADMISSION_HALT` line. Measured by AST
+    census over the builders domain, comparing each raise's evidence `gate` literal against
+    the raised class's `gate` attribute: 5 sites, all in this file — :180
+    `not_a_save_format_graph`, :206 `not_an_api_format_graph`, :323 `duplicate_link_id`,
+    :445 `duplicate_socket_name`, :716 `frame_not_three_integers`. Two of the five were
+    ADDED in wave 16, AFTER `build_r2v_payload.SpendCeiling` recorded the rule in its own
+    docstring. A wrapper or a later session triaging a halt at the spend boundary keys on
+    whichever id it read first and looks for a gate that did not fire.
+
+    This is the fix wave 16 applied one file over, carried here: the id gets an owner.
+    Declared with a PLAIN-NAME base rather than `RG.RouteGate`, because F-d8593862 measured
+    that a dotted base is invisible to `tests/test_gates._armature_error_family` and so to
+    every census that polices this family.
+
+    It is a `RouteGate`, so every caller that catches `RG.RouteGate` still catches it.
+
+    **The `andon` spelling is one rule now, too.** The key was spelled two ways in this one
+    file — `"andon": "RouteGate"` (a class name) at the `route_facts` sites and
+    `"andon": "frame"` / `"duplicate_socket_name"` (clause names) at the five above.
+    `tests/test_core_solver_evidence.py:344` states the tree's law: `ev["gate"]` is the
+    class's own `.gate` and `ev["andon"]` is its class name. The clause name it displaced
+    was never lost — every one of these raises already carried it under `clause`.
+    """
+
+    gate = "SAVED_ADMISSION"
 
 #: Where each API-format input lands in a save-format node's `widgets_values`. Written out
 #: rather than zipped positionally, because the whole point is to catch a positional slip.
@@ -177,12 +212,12 @@ def _as_saved_graph(doc, path=None):
     if not isinstance(doc, dict) or not isinstance(doc.get("nodes"), list):
         keys = sorted(map(str, doc)) if isinstance(doc, dict) else []
         where = f"{path} is" if path else "the saved graph argument is"
-        raise RG.RouteGate(
+        raise SavedAdmission(
             f"{where} not a save-format graph: it carries no `nodes` list. Its "
             f"top-level keys are {keys}; the loader unwraps "
             f"{list(UNWRAPPED_BY_LOAD_GRAPH)} and hands anything else back as the wrapper "
             f"it found. Paste the workflow itself, not the tool result around it",
-            {"gate": "SAVED_ADMISSION", "andon": "not_a_save_format_graph",
+            {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
              "path": os.path.abspath(path) if path else None, "top_level_keys": keys,
              "unwrapped_by_load_graph": list(UNWRAPPED_BY_LOAD_GRAPH),
              "clause": "not_a_save_format_graph"})
@@ -203,12 +238,12 @@ def _as_api_graph(doc, path=None):
     if not RG.is_api_format(doc):
         keys = sorted(map(str, doc)) if isinstance(doc, dict) else []
         where = f"{path} is" if path else "the api graph argument is"
-        raise RG.RouteGate(
+        raise SavedAdmission(
             f"{where} not an API-format graph: its values carry no `class_type`. Its "
             f"top-level keys are {keys}; a `nodes` list means this is the SAVE format and "
             f"the two arguments are the wrong way round. The loader unwraps "
             f"{list(UNWRAPPED_BY_LOAD_GRAPH)}, so a submission envelope is read for you",
-            {"gate": "SAVED_ADMISSION", "andon": "not_an_api_format_graph",
+            {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
              "path": os.path.abspath(path) if path else None, "top_level_keys": keys,
              "unwrapped_by_load_graph": list(UNWRAPPED_BY_LOAD_GRAPH),
              "clause": "not_an_api_format_graph"})
@@ -320,13 +355,13 @@ def link_table(saved_graph):
         resolved = (str(origin), slot)
         prior = table.get(str(lid))
         if prior is not None and prior != resolved:
-            raise RG.RouteGate(
+            raise SavedAdmission(
                 f"the saved file's link table declares link {lid!r} TWICE with different "
                 f"origins — node {prior[0]} slot {prior[1]!r} and node {resolved[0]} slot "
                 f"{resolved[1]!r}. Which one a socket carrying that id resolves to is an "
                 f"accident of array order, and a file that is ambiguous about where its "
                 f"conditioning comes from is not a file this gate can vouch for",
-                {"gate": "SAVED_ADMISSION", "andon": "duplicate_link_id",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
                  "link_id": str(lid), "origins": [list(prior), list(resolved)],
                  "n_entries": len(raw), "clause": "duplicate_link_id"})
         table[str(lid)] = resolved
@@ -442,14 +477,14 @@ def link_round_trip(api_graph, saved_graph):
         for slot in (s.get("inputs") or []):
             slot_name = slot.get("name")
             if slot_name in saved_slots:
-                raise RG.RouteGate(
+                raise SavedAdmission(
                     f"the saved file's node {node_id} declares the input socket "
                     f"{slot_name!r} TWICE, carrying link {saved_slots[slot_name].get('link')!r} "
                     f"and link {slot.get('link')!r}. Which one this comparison resolves is "
                     f"an accident of array order, the other is never visited, and a file "
                     f"that is ambiguous about where its conditioning comes from is not a "
                     f"file this gate can vouch for",
-                    {"gate": "SAVED_ADMISSION", "andon": "duplicate_socket_name",
+                    {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
                      "clause": "duplicate_socket_name", "node": str(node_id),
                      "name": slot_name,
                      "links": [saved_slots[slot_name].get("link"), slot.get("link")],
@@ -540,7 +575,36 @@ def verify_receipts(doc):
     return out
 
 
-def route_facts(record_path):
+def payload_digests(doc):
+    """Every `payload_sha256` a record declares, de-duplicated, full-length only.
+
+    Wave 18, F-5c0f3858. Every builder that writes one writes a canonical digest of the
+    graph it built — `hashlib.sha256(json.dumps(wf, sort_keys=True,
+    separators=(",", ":")).encode()).hexdigest()`, e.g. `build_i2v_payload.py:660` — so the
+    tie between a record and the graph it describes was already in the data and was not
+    read. Values shorter than 64 hex characters are ignored on purpose: the builders' OK
+    lines print a TRUNCATED copy (`meta["payload_sha256"][:32]`), and a prefix is not a
+    digest this gate can compare.
+    """
+    out, stack = [], [doc]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            v = node.get("payload_sha256")
+            if isinstance(v, str) and len(v.strip()) == 64:
+                out.append(v.strip().lower())
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return sorted(set(out))
+
+
+def _attribution_key(entry):
+    """One canonical string per attribution entry, so two lists compare as SETS."""
+    return json.dumps(entry, sort_keys=True, default=str)
+
+
+def route_facts(record_path, api_graph=None):
     """The two facts every builder passes `verify`, READ OFF the record beside the graph.
 
     Wave 14, F-2da88c51. This tool is the LAST gate before a paid submission and it called
@@ -583,6 +647,28 @@ def route_facts(record_path):
             {"gate": "ROUTE", "andon": "RouteGate", "clause": "record_unreadable",
              "record": path, "error": type(exc).__name__}) from exc
     receipts = verify_receipts(doc)
+    # ---- ANDON, wave 18 (F-6d68f4c5, second half). `route_gates.verify` writes
+    # `receipt: "verify"` AND both fact keys into its opening `ev` literal, explicitly
+    # "before the first clause can raise" — so the evidence of a CAUGHT REFUSAL is
+    # indistinguishable from a PASS receipt to the reader above. Measured in this worktree:
+    # `RG.verify(<graph loading an unmapped LoRA>, attribution=[...])` raises with
+    # `receipt: "verify"`, both fact keys, AND a `clause`. A returned receipt never carries
+    # `clause`; that is the reading that tells them apart. No builder records a caught
+    # refusal today, which is the only thing that kept this closed — and a latent shape at
+    # the spend boundary is refused by name rather than left to a future builder.
+    refusals = [r for r in receipts if r.get("clause")]
+    if refusals:
+        raise RG.RouteGate(
+            f"--record={record_path!r} carries the evidence of a CAUGHT Gate ROUTE "
+            f"REFUSAL, not a passing receipt: "
+            f"{sorted({str(r.get('clause')) for r in refusals})}. `verify` writes its "
+            f"declared kind and both fact keys before the first clause can raise, so a "
+            f"refusal looks like a receipt to this reader; a record of a gate that FIRED "
+            f"may not supply the facts that admit the next submission",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "record_carries_a_caught_refusal", "record": path,
+             "refusal_clauses": sorted({str(r.get("clause")) for r in refusals}),
+             "n_receipts": len(receipts)})
     if not receipts:
         raise RG.RouteGate(
             f"--record={record_path!r} carries no `route_gates.verify` receipt: no dict in "
@@ -616,29 +702,109 @@ def route_facts(record_path):
     if len(asserted) != 1:
         raise RG.RouteGate(
             f"--record={record_path!r} carries {len(receipts)} verify receipts that "
-            f"DISAGREE about whether the graph carries a sampler ({asserted}). One of them "
+            f"DISAGREE about `carries_no_sampler_asserted` ({asserted}). One of them "
             f"describes the graph about to be submitted and this gate cannot tell which",
             {"gate": "ROUTE", "andon": "RouteGate",
              "clause": "record_route_facts_disagree", "record": path,
+             "field": "carries_no_sampler_asserted",
              "carries_no_sampler_values": asserted, "n_receipts": len(receipts)})
+    # ---- ANDON, wave 18 (F-6d68f4c5). This function bounded ONE of the two facts across
+    # receipts and silently MERGED the other: the clause above refuses a disagreement about
+    # the sampler on the stated ground that "one of them describes the graph about to be
+    # submitted and this gate cannot tell which", and eleven lines down `attribution` was
+    # resolved by UNION — every entry from every receipt de-duplicated into one list and
+    # handed to `RG.verify`. The reasoning that makes the first a refusal applies unchanged
+    # to the second: a union INVENTS a credit list no builder wrote, on the last gate before
+    # a spend, and `attribution` is the fact that PAYS a CONDITIONAL licence row.
+    #
+    # Measured on the tree: each builder writes exactly ONE verify receipt (`gates.ROUTE` in
+    # the assemblers / lora / r2v, `gate_ROUTE_built` in the two i2v builders), so no
+    # committed record has two today and the exposure was latent — but `--record` accepts
+    # any path, and a concatenated or hand-merged record is the reachable shape. A repeat
+    # that AGREES with itself is admitted, as `link_table`'s duplicate clause admits an
+    # agreeing repeat.
+    att_lists = {tuple(sorted(_attribution_key(e) for e in (r.get("attribution") or [])))
+                 for r in receipts}
+    if len(att_lists) != 1:
+        raise RG.RouteGate(
+            f"--record={record_path!r} carries {len(receipts)} verify receipts that "
+            f"DISAGREE about `attribution`: {sorted(sorted(x) for x in att_lists)}. One of "
+            f"them describes the graph about to be submitted and this gate cannot tell "
+            f"which; unioning them would hand Gate ROUTE a credit list no builder wrote",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "record_route_facts_disagree", "record": path,
+             "field": "attribution",
+             "attribution_values": sorted(sorted(x) for x in att_lists),
+             "n_receipts": len(receipts)})
     attribution, seen = [], set()
     for rec in receipts:
         for entry in rec.get("attribution") or []:
-            key = json.dumps(entry, sort_keys=True, default=str)
+            key = _attribution_key(entry)
             if key not in seen:
                 seen.add(key)
                 attribution.append(entry)
-    declared = sum(1 for r in receipts if r.get("receipt") == VERIFY_RECEIPT_KIND)
+    # ---- ANDON, wave 18 (F-5c0f3858). The two facts that admit a paid submission were read
+    # off an operator-named `--record` that was never TIED to the graph being admitted. This
+    # function walked ANY JSON document for a dict carrying the receipt shape and returned
+    # its facts; `main` separately hashed `--saved` and `--api` into its own record and
+    # compared neither to anything in `--record`.
+    #
+    # HONEST BOUND, so the fix is not oversold: both facts fail CLOSED today — a mismatched
+    # record produces a FALSE REFUSAL, not a false admission (`verify` checks the
+    # no-sampler claim against the graph and raises `orphan_attribution` on a credit for a
+    # component the graph does not load). The defect closed here is the RECORD: this tool
+    # writes `route_facts.record: <path>` and its `SAVED_ADMISSION_OK` line quotes the
+    # attribution, ASSERTING that these facts came from the builder that built this graph —
+    # an assertion nothing checked, in the provenance document for an irreversible spend.
+    # The exposure widens the moment a third fact is added that `verify` cannot cross-check.
+    declared_digests = payload_digests(doc)
+    if len(declared_digests) > 1:
+        raise RG.RouteGate(
+            f"--record={record_path!r} declares {len(declared_digests)} different "
+            f"`payload_sha256` values ({declared_digests}). One of them describes the graph "
+            f"about to be submitted and this gate cannot tell which",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "record_route_facts_disagree", "record": path,
+             "field": "payload_sha256", "payload_sha256_values": declared_digests})
+    declared = declared_digests[0] if declared_digests else None
+    api_digest = None
+    if api_graph is not None:
+        api_digest = hashlib.sha256(
+            json.dumps(api_graph, sort_keys=True,
+                       separators=(",", ":")).encode()).hexdigest()
+    if declared is not None and api_digest is not None and declared != api_digest:
+        raise RG.RouteGate(
+            f"--record={record_path!r} states `payload_sha256` {declared!r}, and the graph "
+            f"this admission is about to vouch for hashes to {api_digest!r}. The record "
+            f"describes a DIFFERENT graph, so the two facts it supplies — the credit that "
+            f"pays a CONDITIONAL licence row and the no-sampler assertion — were asserted "
+            f"about something else",
+            {"gate": "ROUTE", "andon": "RouteGate",
+             "clause": "record_describes_a_different_graph", "record": path,
+             "declared_payload_sha256": declared, "api_payload_sha256": api_digest,
+             "digest_of": ("json.dumps(api_graph, sort_keys=True, "
+                           "separators=(',',':')) — the builders' own derivation")})
+    n_declaring = sum(1 for r in receipts if r.get("receipt") == VERIFY_RECEIPT_KIND)
+    if declared is None:
+        tie = ("the record declares no `payload_sha256`, so the facts below are NOT tied "
+               "to the graph being admitted")
+    elif api_digest is None:
+        tie = (f"the record declares `payload_sha256` {declared}, and no api graph was "
+               f"supplied to compare it against")
+    else:
+        tie = (f"tied: the record's `payload_sha256` {declared} is the digest of the api "
+               f"graph this admission vouches for")
     return {"record": path, "n_verify_receipts": len(receipts),
+            "payload_sha256": declared, "api_payload_sha256": api_digest,
             # which reading found them, so a record's reader can see whether the receipts
             # declared their own kind or were recognised by the facts they carry.
-            "n_declaring_their_kind": declared,
-            "found_by": ("declared receipt kind" if declared == len(receipts) else
-                         "the two facts they carry" if declared == 0 else
+            "n_declaring_their_kind": n_declaring,
+            "found_by": ("declared receipt kind" if n_declaring == len(receipts) else
+                         "the two facts they carry" if n_declaring == 0 else
                          "a mix: some declare their kind, some are read by their facts"),
             "carries_no_sampler": asserted[0], "attribution": attribution,
             "source": ("route_gates.verify's own receipt inside the builder's payload "
-                       "record; neither fact is typed at this call site")}
+                       "record; neither fact is typed at this call site — " + tie)}
 
 
 def main(argv=None):
@@ -670,6 +836,27 @@ def main(argv=None):
                          "its own latent states the shape here (argparse eats leading "
                          "minus signs: pass as --frame=832,480,81)")
     a = ap.parse_args(argv)
+
+    # ---- ANDON, wave 18 (F-c7294bc6's sibling half). Rule 2 asks for every flag in this
+    # parser. Measured on the base tree: `--saved=<no such file>` and `--api=<no such file>`
+    # each raised a bare `FileNotFoundError` out of `route_gates.load_graph`, with no
+    # `evidence` attribute at all — exit 1, `"evidence": null`, "this tool crashed" — two
+    # lines above a `--saved` that IS refused by name for its SHAPE. `--seeds` and
+    # `--record` already carry named clauses for the same operator mistake
+    # (`registration_missing`, `record_unreadable`); these two did not. The loader is
+    # core-gates' file, so the clause lives here, at the boundary, exactly as the shape
+    # clauses below do.
+    for flag, given in (("--saved", a.saved), ("--api", a.api)):
+        if not os.path.isfile(given):
+            raise SavedAdmission(
+                f"{flag} {given!r} is not a file. The last gate before a paid submission "
+                f"reads its two graphs off disk, and a path that names nothing supplies "
+                f"neither; the bare `FileNotFoundError` this replaces printed "
+                f"`\"evidence\": null` at the exit code this tool reserves for a crash",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "graph_file_missing", "flag": flag,
+                 "path": os.path.abspath(given),
+                 "is_dir": os.path.isdir(given), "exists": os.path.exists(given)})
 
     saved = RG.load_graph(a.saved)
     # Refuse by NAME at the boundary. `load_graph` unwraps a known key list and hands back
@@ -710,18 +897,49 @@ def main(argv=None):
         # One clause for both shapes: split, COUNT, then convert. The shape is
         # `composite_reference.parse_plate`'s, which counts its three components before
         # reading any of them.
+        # ⚠ **The fix recurred inside itself** (wave 18, F-c7294bc6). The clause above
+        # counted before it converted, as it must — but the count was taken through a GUARD
+        # that only APPROXIMATES `int()`, and the guard is WIDER than `int()` on two
+        # families. `v.lstrip("+-")` strips EVERY leading character in that set, so `'--832'`
+        # and `'+-8'` reach `int()` and raise; and `str.isdigit()` is true for superscripts
+        # `int()` rejects, so `'²'` does too. Measured on the base tree by calling
+        # `main()` on the same three fixture files the suite builds:
+        #     --frame=--832,480,81 -> ValueError: invalid literal for int() ... '--832'
+        #     --frame=+-8,480,81   -> ValueError ... '+-8'
+        #     --frame=²,480,81     -> ValueError ... '²'
+        #     --frame=832,480,²   -> ValueError ... '²'
+        # each with NO `evidence` attribute at all, rendered by the `__main__` block as
+        # `SAVED_ADMISSION_HALT {"error": "ValueError", ..., "evidence": null}` at exit 1 —
+        # the code this module reserves for "this tool crashed" — on the last check before
+        # an irreversible spend. Only `--frame=832,480,eighty` reached the named refusal.
+        # The flag's OWN help text warns that argparse eats leading minus signs, so a
+        # doubled dash is the operator error it invites.
+        #
+        # So the predicate is `int()` itself, caught. Nothing approximates it: `'٥'`
+        # (Arabic-Indic five) is the one wide `str.isdigit()` case `int()` DOES accept, and
+        # it is admitted here exactly as `int()` admits it.
         raw = [v.strip() for v in a.frame.split(",")]
-        parts = [int(v) for v in raw if v.lstrip("+-").isdigit()]
+        parts, unreadable = [], []
+        for v in raw:
+            try:
+                parts.append(int(v))
+            except (TypeError, ValueError):
+                unreadable.append(v)
         if len(raw) != 3 or len(parts) != 3:
-            raise RG.RouteGate(
+            raise SavedAdmission(
                 f"--frame={a.frame!r} is not width,height,length: it reads as "
-                f"{raw!r}, of which {len(parts)} of {len(raw)} are integers. Two out of "
+                f"{raw!r}, of which {len(parts)} of {len(raw)} are integers"
+                + (f" and {unreadable!r} " + ("is" if len(unreadable) == 1 else "are")
+                   + " not" if unreadable else "")
+                + ". Two out of "
                 f"three proves nothing, and a component this tool cannot read is not a "
                 f"dimension it can hand Gate L (argparse eats leading minus signs: pass "
                 f"as --frame=832,480,81)",
-                {"gate": "SAVED_ADMISSION", "andon": "frame",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
                  "clause": "frame_not_three_integers", "flag": "--frame",
-                 "supplied": a.frame, "parts": raw, "n_integers": len(parts)})
+                 "supplied": a.frame, "parts": raw, "n_integers": len(parts),
+                 "unreadable": unreadable,
+                 "read_by": "int(), not a predicate that approximates it"})
         frame = tuple(parts)
 
     equality = round_trip(api, saved)                       # 0 — is it even our graph
@@ -729,9 +947,9 @@ def main(argv=None):
     # The facts the BUILDER passed `verify`, read off its record rather than re-typed here
     # (wave 14, F-2da88c51). With no `--record` they are `verify`'s own defaults, and the
     # recorded `route_facts` block says which of the two this admission ran under.
-    facts = (route_facts(a.record) if a.record else
+    facts = (route_facts(a.record, api) if a.record else
              {"record": None, "n_verify_receipts": 0, "carries_no_sampler": False,
-              "attribution": [],
+              "attribution": [], "payload_sha256": None, "api_payload_sha256": None,
               "source": "no --record supplied; route_gates.verify's defaults"})
     gate_route = RG.verify(saved, frame=frame, hosted_tier=a.hosted_tier,
                            carries_no_sampler=facts["carries_no_sampler"],
@@ -775,6 +993,7 @@ def main(argv=None):
         "links_compared": topology["n_links"],
         "optional_sockets_empty_in_both": topology["optional_sockets_empty_in_both"],
         "route_facts": {"record": facts["record"],
+                        "payload_sha256": facts.get("payload_sha256"),
                         "carries_no_sampler": facts["carries_no_sampler"],
                         "attribution": [e.get("component") if isinstance(e, dict) else e
                                         for e in facts["attribution"]]},

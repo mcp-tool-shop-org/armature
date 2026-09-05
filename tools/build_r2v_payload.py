@@ -47,6 +47,7 @@ import build_cascade_payload as CASCADE  # noqa: E402
 from build_assembly_payload import read_seed_registration  # noqa: E402
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
+from armature_core.route_gates import RouteGate  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateFailure, GateSSeedRegistration)
@@ -66,7 +67,7 @@ SAVE_ID = 501
 SAVE_CLASS = "SaveVideo"
 
 
-class SpendCeiling(RG.RouteGate):
+class SpendCeiling(RouteGate):
     """Gate CEILING, raised under its own id.
 
     Wave 16, F-f85c37f0. `gate_one_paid_node` built `ev = {"gate": "CEILING", ...}` and
@@ -79,6 +80,26 @@ class SpendCeiling(RG.RouteGate):
     andon already uses. No class owned `CEILING`, so this one is defined.
 
     It is a `RouteGate`, so every caller that catches `RG.RouteGate` still catches it.
+
+    ⚠ **The base is imported BY NAME, and that is load-bearing** (wave 18, F-d8593862).
+    This was declared `class SpendCeiling(RG.RouteGate)` — the one family class in the
+    whole tree with a DOTTED base — and `tests/test_gates._armature_error_family` builds
+    its transitive base map from `b.id for b in node.bases if isinstance(b, ast.Name)`, so
+    an `ast.Attribute` base contributes nothing and this class never joined the family.
+    Measured on the base tree: `'SpendCeiling' in _armature_error_family(TOOLS_DIR)` was
+    **False**, while `GateSSeedRegistration`, `PayloadOutHalt`, `SeedRegistrationError`,
+    `FetchHalt`, `LedgerGate`, `TierGate` and `PayloadError` were all True; an AST sweep of
+    `tools/**` for family classes with a dotted base returned exactly ONE row — this one.
+    So the wave-16 evidence contract, the `POLICED` partition and the very clause this
+    docstring cites (`tests/test_gates.py` forbidding a second andon on an id another andon
+    already uses) all SKIPPED it. It happens to define no `__init__` today, so rule 5 held
+    by luck rather than by check.
+
+    The plain name changes no behaviour — `RouteGate` here is the same object `RG.RouteGate`
+    names, and every caller catching `RG.RouteGate` still catches this class. It changes
+    only whether the censuses can SEE it. Widening `test_gates`' own walk to resolve an
+    `ast.Attribute` base by its final attribute name is the out-of-domain half and is a
+    Stage B item; this half stands alone.
     """
 
     gate = "CEILING"

@@ -94,6 +94,32 @@ EXITS_NAME = "download_exits.json"
 #: spec, the same source `build_camera_i2v_payload.png_header` reads its IHDR layout from.
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\x0a"
 
+#: What the first bytes of a planned output must look like, keyed on the suffix the PLAN
+#: wrote. Wave 18 (F-0124c714): this was a single `.png` branch, so the content clause —
+#: the one that exists because `curl --fail-with-body` WRITES an HTTP error body to the
+#: `-o` path — was bounded to the FRAME population and never reached the video tap, which
+#: is the whole product of the generation.
+#:
+#: Each entry is `(offset, magic, human name)`: the bytes at `offset` must equal `magic`.
+#:   * PNG        — the 8-byte signature at 0.
+#:   * MP4 / MOV  — ISO base media: a box length, then the `ftyp` type at offset 4. The
+#:     length varies, so only the type is asserted.
+#:   * WebM / MKV — the EBML header `1A 45 DF A3` at 0.
+#:   * WebP       — `RIFF` at 0, and the `WEBP` form type at 8 as a second entry.
+CONTENT_SIGNATURES = {
+    ".png": ((0, PNG_SIGNATURE, "png"),),
+    ".mp4": ((4, b"ftyp", "mp4"),),
+    ".m4v": ((4, b"ftyp", "m4v"),),
+    ".mov": ((4, b"ftyp", "mov"),),
+    ".webm": ((0, b"\x1a\x45\xdf\xa3", "webm"),),
+    ".mkv": ((0, b"\x1a\x45\xdf\xa3", "mkv"),),
+    ".webp": ((0, b"RIFF", "webp"), (8, b"WEBP", "webp")),
+}
+
+#: The bytes a JSON document can begin with. The cheap floor under every suffix the table
+#: has no row for: `--fail-with-body` bodies are JSON, and a planned artifact never is.
+JSON_FIRST_BYTES = (b"{", b"[")
+
 
 class FetchHalt(GateFailure):
     """A retrieval did not happen, or did not happen the way the plan says.
@@ -582,26 +608,65 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
     # `{"error":"AccessDenied","code":403}` bodies returned missing=[], empty=[], extra=[]
     # and the verdict "3 planned file(s), all present and non-empty" — and a measurement
     # taken from that directory is a measurement of a paid generation that was never
-    # retrieved. The clause binds only what the PLAN named: a `.png` output must begin with
-    # the PNG signature. Suffixes this tool has no signature for are counted, not judged.
-    wrong_type, content_checked = [], {"png": 0}
+    # retrieved.
+    #
+    # ⚠ **It reached the FRAMES and not the VIDEO** (wave 18, F-0124c714). The branch was
+    # `if os.path.splitext(o)[1].lower() != ".png": continue`, while `plan` writes the video
+    # result to `<run>_<index><ext>` with `ext` taken from the result filename — `.mp4`,
+    # `.webm`, `.mkv` or `.bin`. Measured on the base tree: a two-job plan whose `.png`
+    # carries a real PNG signature and whose `E13_00000.mp4` holds the same 35-byte
+    # `{"error":"AccessDenied","code":403}` body returned a full PASS — "2 planned file(s),
+    # all present and non-empty, 1 of them PNG-signature checked, and no unplanned file in 2
+    # swept directory(s)", `wrong_type: []`. The gap was NAMED in prose one file over
+    # (`fetch_t2v_run.download`), and naming a defect in prose is how it is RECORDED, not
+    # how it is closed. In the scenario that module's own comment says is unbackstopped —
+    # a re-fetch into a re-used run directory whose planned frames are already present from
+    # a PRIOR run — the clip a measurement or a review sheet is built from is an error body
+    # under a green gate_FETCH.
+    #
+    # Two readings, so a suffix with no row is still bounded:
+    #   1. the SIGNATURE table, keyed on the suffix the plan wrote;
+    #   2. the JSON floor, applied to every planned output whatever its suffix — a planned
+    #      artifact never begins `{` or `[`, and an HTTP error body does.
+    #
+    # ⚠ **"Counted, not judged" was not true either.** `content_checked` carried a single
+    # `png` key, so a non-PNG output incremented nothing and the receipt had NO key naming
+    # the population that was never judged. It is per-suffix now, and each entry states both
+    # halves: `{"checked": n, "unjudged": m}`.
+    wrong_type, content_checked = [], {}
     for o in outs:
-        if os.path.splitext(o)[1].lower() != ".png" or not os.path.isfile(o):
+        if not os.path.isfile(o):
             continue
         if os.path.getsize(o) == 0:
             continue          # the `empty` clause below names that better than this one
-        content_checked["png"] += 1
+        suffix = os.path.splitext(o)[1].lower()
+        rules = CONTENT_SIGNATURES.get(suffix)
+        cell = content_checked.setdefault(suffix, {"checked": 0, "unjudged": 0})
         with open(o, "rb") as fh:
-            head = fh.read(8)
-        if head != PNG_SIGNATURE:
-            wrong_type.append({"out": os.path.abspath(o), "expected": "png",
-                               "first_8_bytes": head.hex(),
+            head = fh.read(16)
+        if rules is None:
+            # No signature for this suffix — the floor is all this tool can say, and the
+            # receipt records that the rest of the question went unanswered.
+            cell["unjudged"] += 1
+            if head[:1] in JSON_FIRST_BYTES:
+                wrong_type.append({"out": os.path.abspath(o),
+                                   "expected": "not a JSON error body",
+                                   "suffix": suffix, "first_8_bytes": head[:8].hex(),
+                                   "bytes": os.path.getsize(o)})
+            continue
+        cell["checked"] += 1
+        if any(head[off:off + len(magic)] != magic for off, magic, _n in rules):
+            wrong_type.append({"out": os.path.abspath(o), "expected": rules[0][2],
+                               "suffix": suffix, "first_8_bytes": head[:8].hex(),
                                "bytes": os.path.getsize(o)})
+    n_checked = sum(c["checked"] for c in content_checked.values())
+    n_unjudged = sum(c["unjudged"] for c in content_checked.values())
 
     ev = {"gate": "FETCH", "andon": "FetchHalt",
           "planned": len(outs), "missing": missing, "empty": empty,
           "extra": extra,
           "wrong_type": wrong_type, "content_checked": content_checked,
+          "content_signature_suffixes": sorted(CONTENT_SIGNATURES),
           "root_exempt_matched": exempted,
           "root_exempt_patterns": [rx.pattern for rx in root_exempt],
           "landed": len(outs) - len(missing),
@@ -617,16 +682,21 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
             dict(ev, clause="downloaded_population_is_not_the_planned_one"))
     if wrong_type:
         raise FetchHalt(
-            f"{len(wrong_type)} of the {content_checked['png']} planned .png file(s) on "
-            f"disk are not the content type the plan asked for: "
+            f"{len(wrong_type)} of the {len(outs)} planned file(s) on disk are not the "
+            f"content type the plan asked for: "
             + "; ".join(f"{os.path.basename(w['out'])} begins {w['first_8_bytes']!r} "
-                        f"({w['bytes']} bytes)" for w in wrong_type[:5])
+                        f"({w['bytes']} bytes, expected {w['expected']})"
+                        for w in wrong_type[:5])
             + ". curl runs --fail-with-body, so an HTTP error body lands at the -o path and "
               "satisfies `present and non-empty`. A measurement taken from this directory "
               "would be a measurement of a generation that was never retrieved",
             dict(ev, clause="downloaded_body_is_not_the_planned_type"))
     ev["verdict"] = (f"{len(outs)} planned file(s), all present and non-empty, "
-                     f"{content_checked['png']} of them PNG-signature checked, and no "
+                     f"{n_checked} of them content-signature checked"
+                     + (f", {n_unjudged} unjudged beyond the JSON floor "
+                        f"({sorted(k for k, c in content_checked.items() if c['unjudged'])})"
+                        if n_unjudged else "")
+                     + f", and no "
                      f"unplanned file in {len(ev['swept_directories'])} swept directory(s)"
                      + (f"; {len(exempted)} derived artifact(s) of this run's own were "
                         f"tolerated by name: "

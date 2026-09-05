@@ -84,7 +84,9 @@ def test_a_saved_node_declaring_one_socket_twice_is_refused_by_name():
     ev = exc.value.evidence
     assert ev["clause"] == "duplicate_socket_name", ev
     assert ev["gate"] == "SAVED_ADMISSION", ev
-    assert ev["andon"] == "duplicate_socket_name", ev
+    # wave 18 (F-c11410c5): `andon` is the class, `clause` is the clause. Both are here.
+    assert ev["andon"] == "SavedAdmission", ev
+    assert ev["clause"] == "duplicate_socket_name", ev
     assert ev["node"] == "49", ev
     assert ev["name"] == "positive", ev
     assert sorted(ev["links"]) == [6, 7], ev
@@ -590,7 +592,10 @@ def test_a_frame_that_is_not_three_integers_is_ONE_named_clause(tmp_path, suppli
     ev = exc.value.evidence
     assert ev["clause"] == "frame_not_three_integers", ev
     assert ev["gate"] == "SAVED_ADMISSION", ev
-    assert ev["andon"] == "frame", ev
+    # wave 18 (F-c11410c5): the raise moved onto `gate_saved_graph.SavedAdmission`, the
+    # class that owns the id its evidence names, and `andon` names that class. The clause
+    # assertion above is unchanged and is what a triage keys on.
+    assert ev["andon"] == "SavedAdmission", ev
     assert ev["supplied"] == supplied, ev
     assert ev["flag"] == "--frame", ev
     assert isinstance(ev["parts"], list), ev
@@ -787,13 +792,25 @@ def test_no_lint_step_would_have_caught_the_duplicate_so_the_census_is_the_check
 def test_a_bare_builder_refusal_reaches_the_halt_record_as_null(tmp_path):
     """The halt-line consequence SEAM 1 asks every deleting domain to re-read. A refusal
     raised with a message and no dict prints `"evidence": null`, which the 21-tool halt
-    contract calls the honest record; it printed `{}` before."""
-    with pytest.raises(CAM.PayloadError) as exc:
-        CAM.resolve_start_frame(None, None)          # a message, no dict
-    detail = getattr(exc.value, "evidence", None)
+    contract calls the honest record; it printed `{}` before.
+
+    ⚠ **The exemplar moved** (wave 18, F-c080a03f). This drove
+    `CAM.resolve_start_frame(None, None)`, which raised a message and no dict — and that
+    was the defect one door down: `build_i2v_payload.resolve_start_frame` relays this
+    refusal, so `evidence['clause']` was None for every start-frame halt on the route whose
+    entire conditioning is one image, and a triage could not tell "no such file" from "not a
+    PNG this tool can read". All three of that resolver's refusals name a clause now. The
+    property under test is the BASE CLASS's — it stores what it is passed and invents
+    nothing — so it is driven directly, which is where it lives."""
+    exc = CAM.PayloadError("a message, no dict")
+    detail = getattr(exc, "evidence", None)
     assert detail is None
     assert json.dumps({"evidence": detail if isinstance(detail, dict) else None}) == \
         '{"evidence": null}'
+    # and the site this used to drive now names its clause
+    with pytest.raises(CAM.PayloadError) as caught:
+        CAM.resolve_start_frame(None, None)
+    assert caught.value.evidence["clause"] == "start_frame_not_supplied"
 
 
 # ================================================================ F-f85c37f0 (panel MEDIUM)
