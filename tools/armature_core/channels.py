@@ -24,6 +24,8 @@ session's — E01 reports both.
 
 import numpy as np
 
+from .errors import ArmatureError
+
 BACKGROUND_DEPTH = 0.0  # black = far, for pixels with no geometry
 
 #: The lowest value a GEOMETRY pixel may take, so that "farthest geometry" and "no
@@ -48,12 +50,102 @@ def alpha_binarity(alpha):
     return float(soft.mean())
 
 
+class DepthError(ArmatureError):
+    """A depth this module was asked to encode is not a number an encoder can read.
+
+    F-476a4ee8, wave 18. This module authors every depth control-sequence pixel and had no
+    non-finite clause anywhere: `require_finite` appears in `parts`, `gates`, `donor_gate`,
+    `lift_solve`, `resample`, `rig_gates` and `turnaround`, and zero times here. Both
+    non-finite doors reopened the exact byte collision `GEOMETRY_DEPTH_FLOOR` was
+    introduced to close, per pixel.
+
+    Measured on the wave-18 base, on a 2x2 all-geometry mask:
+
+    * `z = [[1, 2], [nan, 3]]` — `nan < SKY_Z` is False, so the NaN was dropped from the
+      extent and left in the array. `depth_extent` returned `(1.0, 3.0)`,
+      `normalize_depth` returned `nan` at that pixel, and `encode_u8` cast it to byte
+      **0** — byte-identical to `BACKGROUND_DEPTH`, the farthest-geometry-vs-void
+      collision the reserved floor exists to prevent.
+    * `z = [[1, 2], [3, -inf]]` — `-inf < SKY_Z` is True, so `-inf` became `z_min`. `span`
+      was `+inf`, the `span <= 0` guard was False, and every finite geometry pixel encoded
+      to byte **1**: the whole depth frame a flat plate with no gradient at all, and the
+      offending pixel byte 0.
+
+    The realistic consequence rides `stage_render.py::run_export`, where the per-shot window is
+    `float(min(mins))` over every frame's `z_min`: ONE `-inf` pixel on ONE frame makes
+    `shot_min` `-inf` and EVERY frame's `depth_pershot` control image a flat byte-1 plate.
+    The PNGs open, are the right size, are hashed into the manifest, and a paid video
+    generation is steered by a depth sequence carrying no depth.
+
+    `stage_render.py::run_export` raises "frame {i}: mask is non-empty but carries no finite
+    depth" when `depth_extent` returns None — a message asserting a finiteness property
+    the function never measured. It measures it now, and the message is true.
+
+    **Not a `GateFailure`.** No andon stands here: these are refusals from a maths module,
+    and the honest halt record is "REFUSED" with `gate` null and the class name under
+    `andon`. It defines no `__init__`, so the base stores the receipt the raising line
+    passes and manufactures none when a raise carries none.
+    """
+
+
+def _non_finite_census(vals):
+    """`{n, n_finite, n_non_finite, n_nan, n_pos_inf, n_neg_inf}` over a float array.
+
+    The shape `clipstats._stats` already uses: partition, then REPORT the count. A caller
+    that refuses and a caller that only wants to know both read the same dict.
+    """
+    v = np.asarray(vals, dtype=np.float64).ravel()
+    finite = np.isfinite(v)
+    nan = np.isnan(v)
+    return {
+        "n": int(v.size),
+        "n_finite": int(finite.sum()),
+        "n_non_finite": int((~finite).sum()),
+        "n_nan": int(nan.sum()),
+        "n_pos_inf": int((v == np.inf).sum()),
+        "n_neg_inf": int((v == -np.inf).sum()),
+    }
+
+
 def depth_extent(z, mask):
-    """(min, max) camera-Z over the pixels where geometry exists, or None."""
-    sel = np.logical_and(mask > 0, z < SKY_Z)
+    """(min, max) camera-Z over the pixels where geometry exists, or None — else raise.
+
+    The population is the SELECTED one: the pixels the mask admits and the sky test does
+    not exclude. A non-finite value OUTSIDE the mask is background, not a depth this
+    module authored, and is not this function's business; `SKY_Z` is a finite 1e10 and
+    stays excluded by value rather than refused. See `DepthError` for what the two
+    non-finite doors did to the encoded byte.
+    """
+    z = np.asarray(z, dtype=np.float64)
+    geometry = np.asarray(mask) > 0
+    sel = np.logical_and(geometry, np.logical_or(~np.isfinite(z), z < SKY_Z))
     if not sel.any():
         return None
     vals = z[sel]
+    census = _non_finite_census(vals)
+    if census["n_non_finite"]:
+        # The evidence is spelled as a LITERAL carrying `gate` and `andon`, not built by
+        # `dict(census, ...)`: `tests/test_gates.evidence_dicts_missing` is the suite's one
+        # evidence walk and it returns `unreadable` — policed by nothing — for a dict whose
+        # base is a call result it cannot resolve. A raise the judge cannot read is the
+        # spelling a new raise would take to be invisible to the census.
+        ev = {"gate": None, "andon": "DepthError",
+              "clause": "non_finite_geometry_depth",
+              "n": census["n"], "n_finite": census["n_finite"],
+              "n_non_finite": census["n_non_finite"], "n_nan": census["n_nan"],
+              "n_pos_inf": census["n_pos_inf"], "n_neg_inf": census["n_neg_inf"],
+              "n_geometry_px": int(geometry.sum()), "sky_z": SKY_Z}
+        raise DepthError(
+            f"{census['n_non_finite']} of {census['n']} selected geometry pixel(s) carry "
+            f"a non-finite camera-Z ({census['n_nan']} NaN, {census['n_pos_inf']} +inf, "
+            f"{census['n_neg_inf']} -inf). Neither reaches this function's extent as a "
+            f"number: `nan < SKY_Z` is False so a NaN is dropped from the extent and left "
+            f"in the array, where `encode_u8` casts it to byte 0 — the void byte "
+            f"GEOMETRY_DEPTH_FLOOR reserves so that farthest geometry and no geometry are "
+            f"not the same byte; and `-inf < SKY_Z` is True so a -inf becomes z_min, the "
+            f"span becomes +inf, and every finite geometry pixel encodes to byte 1. "
+            f"'No geometry' and 'a pixel we could not read' must not be the same byte",
+            ev)
     return float(vals.min()), float(vals.max())
 
 
@@ -73,8 +165,55 @@ def normalize_depth(z, mask, z_near, z_far):
     normalisation it is a band of pixels on every frame where the subject sits furthest,
     not one pixel. So 0 is reserved for "not geometry" and the geometry range starts one
     byte above it.
+
+    **Two non-finite clauses** (F-476a4ee8, wave 18), because there are two doors into the
+    same encoder and only one of them goes through `depth_extent`:
+
+    * the WINDOW. `span <= 0` is False for a NaN `z_near`/`z_far`, and `(z_far - z) / nan`
+      sends the whole frame to `nan`, which `encode_u8` casts to byte 0 — the void byte,
+      for every geometry pixel in the frame. That door is closed upstream today by
+      `shotspec`'s `_require_finite_number` on `depth.window`, but only for callers who
+      arrive through a normalised spec, and this module is imported directly.
+    * the PIXELS inside the mask, for a caller that supplies its own window rather than
+      `depth_extent`'s.
+
+    The decision on a non-finite pixel is REFUSE and say how many, not "write BACKGROUND
+    and record it": writing the void byte is the collision itself, and a depth frame with
+    unreadable pixels in it is not a control image this pipeline can honestly submit.
     """
     z = np.asarray(z, dtype=np.float64)
+    for name, v in (("z_near", z_near), ("z_far", z_far)):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            f = float("nan")
+        if not np.isfinite(f):
+            raise DepthError(
+                f"{name}={v!r} is not a finite depth, so the normalisation window is not a "
+                f"window. `span <= 0` is False for a NaN, so the guard below does not "
+                f"fire, `(z_far - z) / span` is NaN at every pixel, and `encode_u8` casts "
+                f"every one of them to byte 0 — the value BACKGROUND_DEPTH reserves for "
+                f"'no geometry'. The frame opens, is the right size, and carries no depth",
+                {"gate": None, "andon": "DepthError",
+                 "clause": "non_finite_depth_window",
+                 "z_near": z_near, "z_far": z_far, name: v})
+    inside = np.asarray(mask) > 0
+    if inside.any():
+        census = _non_finite_census(z[inside])
+        if census["n_non_finite"]:
+            ev = {"gate": None, "andon": "DepthError",
+                  "clause": "non_finite_geometry_depth",
+                  "n": census["n"], "n_finite": census["n_finite"],
+                  "n_non_finite": census["n_non_finite"], "n_nan": census["n_nan"],
+                  "n_pos_inf": census["n_pos_inf"], "n_neg_inf": census["n_neg_inf"],
+                  "n_geometry_px": int(inside.sum())}
+            raise DepthError(
+                f"{census['n_non_finite']} of {census['n']} pixel(s) inside the mask carry "
+                f"a non-finite depth ({census['n_nan']} NaN, {census['n_pos_inf']} +inf, "
+                f"{census['n_neg_inf']} -inf). `encode_u8` casts a NaN to byte 0, which is "
+                f"BACKGROUND_DEPTH — so the pixel we could not read and the void we did "
+                f"read become the same byte, which is the collision GEOMETRY_DEPTH_FLOOR "
+                f"exists to prevent", ev)
     span = float(z_far) - float(z_near)
     if span <= 0:
         # A shot with zero depth extent has no gradient to encode. Everything that

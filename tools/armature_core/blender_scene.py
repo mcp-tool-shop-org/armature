@@ -586,8 +586,66 @@ def evaluated_geometry_signature(objects, scene=None):
 # -------------------------------------------------------------------------- camera
 
 
+class CameraGeometry(ArmatureError):
+    """A camera number the projection divides by is not one a shot can be composed from.
+
+    F-329a9555, wave 18. `half_fovs` here is the byte-twin `tests/test_framing.py::
+    test_half_fovs_matches_blenders` pins `framing.half_fovs` against, and neither copy
+    carried a clause. Measured on the wave-18 base: `half_fovs(50.0, 0.0, 832, 480)`
+    returns `(0.0, 0.0)`, so `auto_radius`' `sphere_radius / math.sin(min(hx, hy))` is a
+    bare `ZeroDivisionError`; `half_fovs(nan, 36.0, ...)` returns `(nan, nan)` and places
+    the orbit camera at a NaN radius; and a negative lens returns a NEGATIVE half-FOV,
+    which point-mirrors every projected point about the frame centre.
+
+    The refusal lives in `half_fovs` rather than in `auto_radius` because that is the
+    function performing the step both of them divide by — one clause per copy, not one per
+    division.
+
+    It is a plain refusal, not a gate: nothing here is an andon standing in front of an
+    irreversible step, and the honest halt record is "REFUSED" with `gate` null and the
+    class name under `andon`. It carries no `__init__` of its own, so
+    `armature_core.errors.ArmatureError` stores the receipt the raising line passes and
+    manufactures nothing when a raise carries none.
+    """
+
+
 def half_fovs(lens_mm, sensor_mm, width, height):
-    """Half field-of-view in radians per axis, matching Blender's AUTO sensor fit."""
+    """Half field-of-view in radians per axis, matching Blender's AUTO sensor fit.
+
+    The clauses are spelled inline rather than factored into a helper because
+    `tests/test_framing.py::test_half_fovs_matches_blenders` slices this function's SOURCE
+    out of the file and executes it in an isolated namespace to compare it against
+    `framing.half_fovs`; a helper call would be a name that slice cannot resolve. See
+    `CameraGeometry` for what each clause stands on.
+    """
+    for _name, _v in (("width", width), ("height", height)):
+        try:
+            _f = float(_v)
+        except (TypeError, ValueError):
+            _f = float("nan")
+        if not (math.isfinite(_f) and _f > 0.0):
+            raise CameraGeometry(
+                f"{_name}={_v!r} is not a finite positive number of pixels; the AUTO "
+                f"sensor fit divides one sensor dimension by the frame's aspect and "
+                f"`width >= height` chooses which",
+                {"gate": None, "andon": "CameraGeometry",
+                 "clause": "frame_size_not_positive", _name: _v,
+                 "width": width, "height": height})
+    for _name, _v in (("sensor_mm", sensor_mm), ("lens_mm", lens_mm)):
+        try:
+            _f = float(_v)
+        except (TypeError, ValueError):
+            _f = float("nan")
+        if not (math.isfinite(_f) and _f > 0.0):
+            raise CameraGeometry(
+                f"{_name}={_v!r} is not a finite positive camera number. A zero divides, "
+                f"a NaN walks past every comparison in both directions, and a negative "
+                f"one returns a negative half-FOV that point-mirrors the frame about its "
+                f"centre while every extent and crop check still reads a plausible box",
+                {"gate": None, "andon": "CameraGeometry",
+                 "clause": f"{_name}_not_finite_and_positive",
+                 "lens_mm": lens_mm, "sensor_mm": sensor_mm,
+                 "width": width, "height": height})
     if width >= height:
         sx = sensor_mm
         sy = sensor_mm * height / width
@@ -796,15 +854,153 @@ def setup_passes_and_compositor(scene, exr_dir, need_normal=True):
     return outputs
 
 
+class RenderedFrame(GateFailure):
+    """Gate FRAME — the EXRs this function names are not the ones this call drew.
+
+    F-25a5ecbf, wave 18. `bpy.ops.render.render(write_still=False)` at `render_frame` was
+    the ONE render invocation in the live tree whose operator status set was neither
+    captured nor read. Measured by grep over `tools/` on the wave-18 base: 17 live
+    `bpy.ops.render.render` sites, 16 of which assign `render_result = ...` and pass it
+    through a `_render_status` copy, and this one discarded it. It is the single member of
+    the population `_render_status` was written for that wave 14's sweep could not reach,
+    because that sweep enumerated `tools/*.py` and this call lives in `armature_core`.
+
+    **Why the operator's own verdict is the only clause that can tell.** The operator
+    returns `{'CANCELLED'}` without raising. `exr_dir` is `os.path.join(work_dir,
+    "master")` (`stage_render.py::BlenderBackend.prepare`), stable across runs, and the filename stem is the
+    frame index — so nothing distinguishes this run's frame 7 EXRs from the previous run's.
+    Every check the consumer has downstream (`os.path.isfile`, `getsize`, a re-read of the
+    pixels, and `stage_render`'s `z.shape != (height, width)` shape check) is a property a
+    PREVIOUS run's file at the same path satisfies. The frame is then hashed into the
+    manifest and becomes a per-frame control image driving a paid generation, with the
+    geometry signature and camera matrix of THIS run recorded beside pixels from another.
+
+    On a FIRST run the same cancelled render instead reached `bpy.data.images.load` on an
+    absent path and raised an untyped `RuntimeError` — exit 1, "an unhandled error", where
+    a refusal at exit 2 belongs.
+
+    **The writer verifies its own output**, so the five clauses are all here rather than at
+    the consumer: the operator status; the file reaching disk; a zero-byte file; and the
+    stale-target clause, which is `rig_character.gate_glb_written`'s fourth clause applied
+    one channel at a time — size AND nanosecond mtime both unchanged from a snapshot taken
+    before the render is the file that was already there.
+    """
+
+    gate = "FRAME"
+
+
+def _render_status(result):
+    """The render operator's status set as a sorted list of strings, `[]` if unreadable.
+
+    WAVE 18, F-25a5ecbf. The EXECUTABLE BODY is copied verbatim from
+    `tools/render_start_frame.py::_render_status` — all nine tool-side copies are one AST
+    body (`distinct bodies: 1`, re-derived on this worktree). The helper is COPIED and not
+    lifted: `tests/test_instruments_amend_w14.py::
+    test_the_render_status_helper_is_byte_identical_in_every_copy` pins nine copies across
+    `tools/` and `tools/superseded/`, and moving the implementation here is a filed Stage B
+    item, not this wave's.
+
+    The docstring differs from the tool-side one deliberately, because the tool-side one
+    gives the wrong reason for THIS copy: it says the helper is spelled per tool "because
+    these modules share no parent inside `tools/` -- `armature_core` is where one
+    implementation belongs and it is outside this domain's globs". `armature_core` is
+    inside this domain's globs, and this is that module.
+    `tests/test_amend_w18_core_solvers.py::
+    test_the_render_status_helper_here_matches_the_body_the_instruments_spelled` compares
+    the executable bodies, so the copy cannot drift while the reason stays honest.
+
+    An unreadable return is `[]`, which FAILS the `'FINISHED' in ...` clause rather than
+    passing it — the direction the invariant does not bound.
+    """
+    try:
+        return sorted(str(s) for s in result)
+    except TypeError:
+        return []
+
+
+def _channel_snapshot(path):
+    """What is at `path` before the render runs, so a file this call did not write shows.
+
+    The shape of `rig_character.export_target_snapshot`, per channel. `mtime_ns` rather
+    than `mtime`: the float seconds a `stat` reports are rounded, and two writes inside one
+    tick would compare equal.
+    """
+    if not os.path.isfile(path):
+        return {"path": path, "existed": False, "bytes": None, "mtime_ns": None}
+    st = os.stat(path)
+    return {"path": path, "existed": True, "bytes": st.st_size,
+            "mtime_ns": st.st_mtime_ns}
+
+
 def render_frame(scene, outputs, frame_index, exr_dir):
-    """Render one camera position and return the EXR path per channel tag."""
+    """Render one camera position and return the EXR path per channel tag, or raise.
+
+    Gate FRAME · ANDON. See `RenderedFrame` for what each clause stands on. The return
+    contract is unchanged — `{tag: path}` for every tag in `outputs` — and every path it
+    now names has been shown to exist, to be non-empty, and to differ from whatever stood
+    at that path before this call ran.
+    """
     stem = f"{frame_index:05d}_"
+    paths = {tag: os.path.join(exr_dir, tag, f"{stem}{tag}.exr") for tag in outputs}
+    before = {tag: _channel_snapshot(p) for tag, p in paths.items()}
     for node in outputs.values():
         node.file_name = stem
-    bpy.ops.render.render(write_still=False)
-    return {
-        tag: os.path.join(exr_dir, tag, f"{stem}{tag}.exr") for tag in outputs
-    }
+
+    render_result = bpy.ops.render.render(write_still=False)
+    status = _render_status(render_result)
+
+    ev = {"gate": "FRAME", "andon": "RenderedFrame", "frame_index": int(frame_index),
+          "stem": stem, "exr_dir": exr_dir, "status": status,
+          "tags": sorted(paths), "paths": dict(sorted(paths.items())),
+          "before": {t: dict(s) for t, s in sorted(before.items())}}
+
+    if "FINISHED" not in status:
+        ev["clause"] = "operator_status"
+        raise RenderedFrame(
+            f"frame {frame_index}: the render operator did not report FINISHED; it "
+            f"returned {status!r}. `bpy.ops.render.render` returns an operator status set "
+            f"and can return CANCELLED without raising, and the EXRs at this stem are then "
+            f"the PREVIOUS run's frames — which `os.path.isfile`, `getsize`, a re-read of "
+            f"the pixels and a shape check all pass on", ev)
+
+    for tag in sorted(paths):
+        p = paths[tag]
+        ev["tag"] = tag
+        ev["path"] = p
+        if not os.path.isfile(p):
+            ev["clause"] = "channel_never_reached_disk"
+            raise RenderedFrame(
+                f"frame {frame_index}: the {tag!r} channel never reached disk at {p}. The "
+                f"render reported FINISHED and the compositor wrote nothing, so returning "
+                f"this path would hand the consumer an absent file to load — an untyped "
+                f"error at exit 1 where a refusal belongs", ev)
+        n = os.path.getsize(p)
+        ev["bytes"] = n
+        if n == 0:
+            ev["clause"] = "channel_is_zero_bytes"
+            raise RenderedFrame(
+                f"frame {frame_index}: the {tag!r} channel at {p} is zero bytes. A file "
+                f"that exists and holds nothing is what an interrupted write leaves "
+                f"behind, and every consumer downstream reads the path rather than the "
+                f"size", ev)
+        after_mtime_ns = os.stat(p).st_mtime_ns
+        ev["after"] = {"bytes": n, "mtime_ns": after_mtime_ns}
+        snap = before[tag]
+        if (snap["existed"] and snap["bytes"] == n
+                and snap["mtime_ns"] == after_mtime_ns):
+            ev["clause"] = "stale_channel"
+            raise RenderedFrame(
+                f"frame {frame_index}: the {tag!r} channel at {p} is byte-for-byte the "
+                f"file that was already there before this render ran (same size, same "
+                f"mtime to the nanosecond). The stem is the frame index and `exr_dir` is "
+                f"stable across runs, so this is the PREVIOUS run's frame; a manifest "
+                f"naming its hash would record this run's geometry signature and camera "
+                f"matrix beside another run's pixels, and the control sequence built from "
+                f"it would steer a paid generation", ev)
+
+    for key in ("tag", "path", "bytes", "after"):
+        ev.pop(key, None)
+    return paths
 
 
 def read_exr(path):

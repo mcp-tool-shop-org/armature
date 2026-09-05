@@ -165,6 +165,16 @@ def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
     **The ortho plan carries no focal length, and that is the assertion, not an omission.**
     Blender keeps a `lens` value on an ORTHO camera and ignores it; a plan that passed one
     along would let a reader believe the lens still composes the shot.
+
+    **The perspective branch RECORDS two camera numbers and bounded neither** (F-329a9555,
+    wave 18, sibling carried). The ortho branch's pin is refused by name unless it is a
+    finite positive world span, and twenty lines below it `float(lens_mm)` and
+    `float(sensor_mm)` took any float at all — a NaN, a zero, or a negative — and wrote it
+    into the plan a whole run is composed from. This branch divides by nothing, which is
+    exactly why it stayed open: the division happens later, in `framing.half_fovs` and
+    `blender_scene.auto_radius`, both of which now refuse. The plan refuses too, in the
+    same words as its ortho sibling, so a caller that never reaches a projection still
+    cannot record a camera that cannot compose a shot.
     """
     pinned = ortho_scale_pin is not None
     if pinned:
@@ -186,6 +196,24 @@ def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
                 "saves as a well-formed, correctly-sized RGBA PNG. `ortho_half_spans` "
                 "refuses <= 0 downstream but takes nan and inf, so this is the check that "
                 "binds those")
+    else:
+        for name, value in (("lens_mm", lens_mm), ("sensor_mm", sensor_mm)):
+            try:
+                v = float(value)
+            except (TypeError, ValueError):
+                v = float("nan")
+            if not (math.isfinite(v) and v > 0.0):
+                raise TurnaroundPlanRefusal(
+                    f"a PERSPECTIVE plan was asked for with {name}={value!r}, which is "
+                    f"not a finite positive camera number. The plan records both numbers "
+                    f"verbatim and a run is composed from what it records: a zero sensor "
+                    f"divides, a NaN places the orbit camera at a NaN radius, and a "
+                    f"NEGATIVE lens gives a negative half-FOV that point-mirrors every "
+                    f"projected point about the frame centre while Gate WHOLE, Gate CROP "
+                    f"and Gate ALPHA all still read a plausible box",
+                    {"gate": None, "andon": "TurnaroundPlanRefusal",
+                     "clause": f"{name}_not_finite_and_positive",
+                     "projection": PERSPECTIVE, name: value})
 
     if ortho:
         return {

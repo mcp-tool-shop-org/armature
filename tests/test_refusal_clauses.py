@@ -211,6 +211,13 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: its raise count, never on its bases, which is the whole reason `FramingError` and
 #: `WalkError` are policed at all.
 RECORDED_POPULATION = frozenset({
+    # WAVE 18 (core-solvers) — MEASURED in this worktree, not carried. Three new family
+    # classes, each with more than one raise site, so each crosses this predicate's
+    # threshold: `blender_scene.RenderedFrame` (Gate FRAME, F-25a5ecbf, four sites),
+    # `blender_scene.CameraGeometry` (F-329a9555, two sites) and `channels.DepthError`
+    # (F-476a4ee8, three sites). The base was measured GREEN at 101 in this worktree
+    # first, so 104 is a delta of exactly these three and nothing else.
+    "CameraGeometry", "DepthError", "RenderedFrame",
     # WAVE 16 (tests, F-d426d4bd) — MEASURED in this worktree. The derivation gained a
     # second edge: a refusal class handed to a helper that raises its own parameter. Two
     # classes cross the two-site threshold on it. `PosePackError` was raised on every real
@@ -428,7 +435,14 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # The coordinator re-measures at merge; the SET assertion beneath names any member that
     # did not arrive, which is why the pin is a set and not only a count.
     # WAVE-16 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(POLICED) == 101, sorted(POLICED)
+    # WAVE 18 (core-solvers): 101 -> 104, RE-DERIVED with `==` on this worktree (the base
+    # was measured GREEN at 101 here first). The three newcomers each cross the
+    # two-raise-site threshold this predicate uses, and all three are named in
+    # RECORDED_POPULATION below so the SET assertion names any that did not arrive:
+    #   `blender_scene.RenderedFrame` (F-25a5ecbf, Gate FRAME, four raise sites)
+    #   `blender_scene.CameraGeometry` (F-329a9555, two raise sites)
+    #   `channels.DepthError`          (F-476a4ee8, three raise sites)
+    assert len(POLICED) == 104, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -609,7 +623,12 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # WAVE-16 MERGE (coordinator, 2026-09-04): 120 (tests' branch) → 125 on the merged tree — builders +2 (`SeedRegistrationError`,
     # `SpendCeiling`), instruments +1 (`ArcDidNotSurvive`), instruments-measure +2 −1 (`PickSheetError`,
     # `E13SheetError`; `_CarriesEvidence` gone). Measured, never summed.
-    assert len(defined) == 125, len(defined)
+    # WAVE 18 (core-solvers): 125 -> 128, RE-DERIVED with `==` — the same three classes
+    # the POLICED pin above names (`RenderedFrame`, `CameraGeometry`, `DepthError`). All
+    # three are declared with a PLAIN-NAME base, so this walk and every other AST census
+    # in the suite can see them; the dotted-base blind spot wave 17 found on
+    # `SpendCeiling` is deliberately not reproduced here.
+    assert len(defined) == 128, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}

@@ -307,13 +307,33 @@ def test_the_solve_and_the_pin_are_different_kinds_of_number(rt):
     assert pinned == a                             # the same number, whoever is in front
 
 
-def test_math_isfinite_is_what_rejects_inf_since_the_downstream_check_does_not():
-    """`ortho_half_spans` guards `<= 0`, and `inf > 0` is True while `nan <= 0` is False.
-    Both walk straight through it, so the pin's own check is the one that binds them."""
+def test_both_the_pin_and_the_span_function_now_reject_a_non_finite_scale():
+    """CORRECTED IN PLACE, wave 18 (core-solvers, F-329a9555), with the measurement that
+    overturned the claim.
+
+    This test was named `test_math_isfinite_is_what_rejects_inf_since_the_downstream_check
+    _does_not` and asserted `framing.ortho_half_spans(float("inf"), 1024, 1024)` "does not
+    raise" — the premise that `projection_plan`'s own `math.isfinite` pin was the ONLY
+    thing binding a non-finite scale. The premise was true and is now false: the guard read
+    `if ortho_scale <= 0.0`, and `nan <= 0.0` is False while `inf > 0.0` is True, so BOTH
+    walked past the function's own and only clause and it returned `(inf, inf)` /
+    `(nan, nan)`. That is the direction the invariant did not bound, and CLAUDE.md puts the
+    andon inside the function performing the step, so the clause is now
+    `not (math.isfinite(ortho_scale) and ortho_scale > 0.0)`.
+
+    The pin's check is NOT redundant and is asserted below beside the span function's: it
+    fires before any camera exists, names the pin in its message, and reaches a caller who
+    never projects at all. What changed is that it is no longer the only thing standing.
+    """
     from armature_core import framing
 
-    assert framing.ortho_half_spans(float("inf"), 1024, 1024)      # does not raise
     assert not math.isfinite(float("inf"))
+    for scale in (float("inf"), float("-inf"), float("nan")):
+        with pytest.raises(framing.FramingError) as exc:
+            framing.ortho_half_spans(scale, 1024, 1024)
+        assert exc.value.evidence["clause"] == "ortho_scale_not_positive"
     with pytest.raises(framing.FramingError,
                        match=r"ortho_scale is 0\.0, which spans no world at all; a"):
         framing.ortho_half_spans(0.0, 1024, 1024)
+    # a legal span is unchanged, so the guard is not a check that cannot pass
+    assert framing.ortho_half_spans(2.0, 1024, 1024) == (1.0, 1.0)

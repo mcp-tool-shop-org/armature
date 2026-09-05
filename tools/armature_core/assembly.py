@@ -126,6 +126,17 @@ def measurement_age_days(record, today=None):
     dated 2026-08-13 and were 22 days old when this was written, so the defect was the
     shape and not a live escape — but a receipt table with no ageing clause is a licence
     map with no fetch date.
+
+    **The age is SIGNED and the clock had no floor** (F-47db9eff, wave 18). The staleness
+    test is `a > MEASUREMENT_WINDOW_DAYS`, which a negative age can never satisfy, so the
+    one direction a hand-typed date can go wrong without bound is the direction the clause
+    did not bound. Measured on the wave-18 base: a receipt dated `'2126-08-13'` — a single
+    transposed leading digit on the year the four live entries already carry — yields
+    `(-36502, '2126-08-13')`, and `gate_no_paid_nodes` RETURNED the verdict "…oldest
+    reading **-36502 day(s) old, all within the 90-day window**". A receipt dated in the
+    future is permanently current, and the gate says so, in the ageing clause added one
+    wave ago. The sign stays here — this function measures and does not decide — and
+    `measurement_is_dated_in_the_future` below is the reading the gate refuses on.
     """
     raw = None if record is None else record.get("measured_on")
     if not isinstance(raw, str):
@@ -138,10 +149,25 @@ def measurement_age_days(record, today=None):
     return (on - when).days, raw
 
 
+def measurement_is_dated_in_the_future(record, today=None):
+    """Is this receipt's `measured_on` after `today`? `False` when it cannot be aged.
+
+    The clause `gate_no_paid_nodes` refuses on, named so a halt record can carry it:
+    `measurement_dated_in_the_future`, beside `class_with_an_unreadable_measurement_date`.
+    A receipt that cannot be aged and a receipt aged from the wrong side of today are the
+    same defect — a reading whose date is not a statement about a day anybody measured on.
+
+    Zero is legal: a receipt taken today is current, and a gate that refused it would
+    refuse the very diff that takes the `get_node` measurement.
+    """
+    age, _raw = measurement_age_days(record, today=today)
+    return age is not None and age < 0
+
+
 def gate_no_paid_nodes(graph, allowed=None):
     """Gate ASSEMBLY - ANDON - nothing in this graph can bill a partner credit.
 
-    Six clauses now, and the evidence shows every one of them ran, against the
+    Seven clauses now, and the evidence shows every one of them ran, against the
     population each one could have failed on:
 
     * a vacuity guard — an empty graph is refused rather than certified;
@@ -156,7 +182,13 @@ def gate_no_paid_nodes(graph, allowed=None):
       refused — the VALUE, never the presence of the key (F-1f5282d5);
     * the **dating** clause: that receipt's `measured_on` parses as an ISO date, so the
       reading can be aged. Past `MEASUREMENT_WINDOW_DAYS` it is reported ADVISORY in the
-      verdict, the way `docs/license-map.md` rows age.
+      verdict and on `measurement_is_advisory`, the way `docs/license-map.md` rows age;
+    * the **floor** on that clock (F-47db9eff, wave 18): a receipt dated in the FUTURE is
+      refused by name. The staleness test is `age > MEASUREMENT_WINDOW_DAYS` and a
+      negative age can never satisfy it, so before this clause a receipt dated
+      `'2126-08-13'` — one transposed digit on the year the four live entries carry — was
+      permanently current AND the verdict said "oldest reading -36502 day(s) old, all
+      within the 90-day window".
 
     A node carrying **no** `class_type` is refused before anything is sorted. It used to
     contribute `None` to the class set, and `sorted()` then raised `TypeError: '<' not
@@ -319,6 +351,7 @@ def gate_no_paid_nodes(graph, allowed=None):
     # `measured_on` cannot be read as a date, because a receipt that cannot be aged is a
     # licence-map row with no fetch date.
     unmeasured, measured_as_paid, undateable, ages = [], {}, {}, {}
+    future = {}
     for c in classes:
         rec = MEASURED_FREE_CLASSES.get(c)
         if rec is None:
@@ -330,15 +363,31 @@ def gate_no_paid_nodes(graph, allowed=None):
         age, raw = measurement_age_days(rec)
         if age is None:
             undateable[c] = repr(raw)
+        elif age < 0:
+            # F-47db9eff. The ageing clock's floor. A negative age can never satisfy
+            # `a > MEASUREMENT_WINDOW_DAYS`, so a future-dated receipt was permanently
+            # current AND said so in the verdict. It is partitioned out of `ages` so no
+            # `oldest` / `stale` reading is computed from a number measured from the
+            # wrong side of today.
+            future[c] = age
         else:
             ages[c] = age
     ev["classes_without_a_free_measurement"] = unmeasured
     ev["classes_measured_as_paid"] = measured_as_paid
     ev["classes_with_an_unreadable_measurement_date"] = undateable
+    ev["classes_measured_in_the_future"] = future
     ev["measurement_age_days"] = ages
     ev["measurement_window_days"] = MEASUREMENT_WINDOW_DAYS
     stale = sorted(c for c, a in ages.items() if a > MEASUREMENT_WINDOW_DAYS)
     ev["classes_whose_measurement_is_advisory"] = stale
+    # F-47db9eff, the second half, decided contrastively. ADVISORY stays REPORTING-ONLY —
+    # a stale receipt does not refuse, which is what `docs/license-map.md`'s own ageing
+    # rule says ("advisory until re-fetched") — but the state had NO reader: grep over
+    # `tools/` found zero hits for `classes_whose_measurement_is_advisory` outside this
+    # module and its unit test, so the state that begins 2026-11-12 for all four live
+    # entries existed only in a sentence nobody reads. It is a named boolean on the
+    # returned record now, which is the cheapest reader a payload writer can key on.
+    ev["measurement_is_advisory"] = bool(stale)
     ev["n_classes_with_a_free_measurement"] = len(ages)
     if unmeasured or measured_as_paid:
         ev["clause"] = "class_without_a_recorded_free_measurement"
@@ -364,6 +413,19 @@ def gate_no_paid_nodes(graph, allowed=None):
             f"be told from one taken before the node's tier changed, and "
             f"`docs/license-map.md` rows age at {MEASUREMENT_WINDOW_DAYS} days for exactly "
             f"that reason", ev)
+    if future:
+        ev["clause"] = "measurement_dated_in_the_future"
+        raise AssemblyGate(
+            f"{sorted(future)} carry an `api_node: false` reading dated in the FUTURE "
+            f"({sorted(future.values())} day(s) old). The staleness test is "
+            f"`age > {MEASUREMENT_WINDOW_DAYS}`, which a negative age can never satisfy, "
+            f"so such a receipt is permanently current and this gate's verdict says so — "
+            f"a verdict stating a licence-adjacent property nothing measured, on the last "
+            f"free-chain gate before an assembly or cascade payload is written. A receipt "
+            f"that cannot be aged and a receipt aged from the wrong side of today are the "
+            f"same defect: the date is not a statement about a day anybody measured on. "
+            f"The reachability is the clause's own — `MEASURED_FREE_CLASSES` is hand-typed, "
+            f"in the same diff that widens `ALLOWED_CLASSES`", ev)
 
     flagged = [c for c in allowed if any(m in c.lower() for m in API_MARKERS)]
     ev["name_pattern_flagged"] = flagged
@@ -434,6 +496,33 @@ def _links_equal(got, want):
     return a is not None and a == _link(want)
 
 
+def _problem(problems, clause, detail):
+    """Append one `{clause, detail}` record to a topology gate's problem list.
+
+    F-8d0e4cf1, wave 18. `gate_batch_topology` and `gate_cascade_topology` accumulate up to
+    eight and eleven structurally different failures respectively and then raise ONE prose
+    string over them — a bare `images` list, the wrong slot count, slot k bound to the wrong
+    frame, a duplicated LoadImage, a missing node, a non-LoadImage source, CreateVideo not
+    fed by the batch, SaveVideo not fed by CreateVideo. The message distinguishes all of
+    them and the RECEIPT distinguished none: no `clause` field at all, on the andons that
+    stand between this repo and a submitted assembly or cascade payload.
+
+    An ASSEMBLY or CASCADE halt is a record an orchestrator, the swarm's own receipts and a
+    later session all key on. Without a clause a recurrence cannot be fingerprinted and a
+    regression on one clause cannot be told from a regression on another. So the message
+    stays the same sentence — `"; ".join` over the details, in the same order — and the
+    evidence gains `problems` as `{clause, detail}` records, `clauses` as the list, and
+    `ev["clause"]` as the first.
+
+    The vocabulary is `gate_no_paid_nodes`' own, established in this file: a lowercase
+    snake_case noun phrase naming what failed, never what to do about it. A clause name
+    shared between the two gates (`bare_images_list`, `wrong_slot_key_set`,
+    `duplicated_load_image`, `slot_bound_to_the_wrong_frame`) is deliberately the same
+    word in both, so one fingerprint reads across the flat chain and the cascade.
+    """
+    problems.append({"clause": clause, "detail": detail})
+
+
 def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expected_sources):
     """Gate ASSEMBLY - ANDON - all `n_frames` reach the batch in order, and it is wired.
 
@@ -459,34 +548,38 @@ def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expecte
     problems = []
 
     if n < 1:
+        ev["clause"] = "no_frames_to_gate"
         raise AssemblyGate(
             f"the batch was gated over {n} frame(s): every count clause would compare 0 to "
             f"0 and the verdict would report a wired chain over an empty clip. A comparison "
             f"over nothing must not report agreement", ev)
     if len(exp) != n:
+        ev["clause"] = "expectation_is_not_the_frame_list"
         raise AssemblyGate(
             f"{len(exp)} expected per-frame source id(s) against {n} frame(s); the gate "
             f"cannot relate slot k to frame k on a list that is not the frame list", ev)
     if len(set(exp)) != len(exp):
+        ev["clause"] = "expectation_carries_a_duplicated_frame"
         raise AssemblyGate(
             f"the {len(exp)} expected per-frame source id(s) are not distinct, so the "
             f"expectation itself already carries a duplicated frame", ev)
 
     batch = graph.get(str(batch_id))
     if batch is None or batch.get("class_type") != "BatchImagesNode":
+        ev["clause"] = "batch_node_is_not_a_batch"
         raise AssemblyGate(f"node {batch_id} is not a BatchImagesNode", ev)
     bi = batch["inputs"]
     ev["n_slot_keys"] = len(bi)
 
     if "images" in bi:
-        problems.append(
-            "the batch uses a bare `images` list; COMFY_AUTOGROW_V3 needs dotted "
-            "`images.image<N>` keys, and dry_run does NOT catch this (measured, E02)")
+        _problem(problems, "bare_images_list",
+                 "the batch uses a bare `images` list; COMFY_AUTOGROW_V3 needs dotted "
+                 "`images.image<N>` keys, and dry_run does NOT catch this (measured, E02)")
     want = batch_slot_keys(n)
     if sorted(bi) != sorted(want):
-        problems.append(
-            f"batch slot keys are wrong: {len(bi)} key(s), expected {n} named "
-            f"images.image0..images.image{n - 1}")
+        _problem(problems, "wrong_slot_key_set",
+                 f"batch slot keys are wrong: {len(bi)} key(s), expected {n} named "
+                 f"images.image0..images.image{n - 1}")
     else:
         got = [_link(bi[k]) for k in want]
         expect = [[e, 0] for e in exp]
@@ -494,7 +587,7 @@ def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expecte
         if got != expect:
             bad = [j for j in range(n) if got[j] != expect[j]]
             j = bad[0]
-            problems.append(
+            _problem(problems, "slot_bound_to_the_wrong_frame",
                 f"batch slot images.image{j} is bound to {got[j]!r}, not frame {j}'s "
                 f"LoadImage {expect[j]!r} ({len(bad)} slot(s) differ): the clip would play "
                 f"its frames out of sequence while the count and the distinct-source "
@@ -502,40 +595,47 @@ def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expecte
     sources = [v[0] for v in bi.values() if isinstance(v, list) and len(v) == 2]
     ev["distinct_sources"] = len(set(sources))
     if len(sources) != len(bi):
-        problems.append("a batch slot is not bound to a link at all")
+        _problem(problems, "slot_not_bound_to_a_link",
+                 "a batch slot is not bound to a link at all")
     elif len(set(sources)) != n:
-        problems.append(
+        _problem(problems, "duplicated_load_image",
             f"the batch's {len(bi)} slot(s) name only {len(set(sources))} distinct "
             f"LoadImage node(s): a link is bound twice and a frame is duplicated while "
             f"the count still reads right")
     for src in sources:
         node = graph.get(str(src))
         if node is None:
-            problems.append(f"batch slot names missing node {src}")
+            _problem(problems, "slot_names_a_missing_node",
+                     f"batch slot names missing node {src}")
         elif node.get("class_type") != "LoadImage":
-            problems.append(f"batch slot names {node.get('class_type')} node {src}, "
-                            f"not a LoadImage")
+            _problem(problems, "slot_source_is_not_a_load_image",
+                     f"batch slot names {node.get('class_type')} node {src}, "
+                     f"not a LoadImage")
 
     video = graph.get(str(video_id))
     if video is None or video.get("class_type") != "CreateVideo":
-        problems.append(f"node {video_id} is not a CreateVideo")
+        _problem(problems, "video_node_is_not_a_create_video",
+                 f"node {video_id} is not a CreateVideo")
     elif not _links_equal(video["inputs"].get("images"), [str(batch_id), 0]):
-        problems.append(
+        _problem(problems, "create_video_not_fed_by_the_batch",
             f"CreateVideo.images is {video['inputs'].get('images')!r}, not the batch "
             f"node's output - the video would be assembled from something other than the "
             f"frames that were uploaded")
 
     save = graph.get(str(save_id))
     if save is None or save.get("class_type") != "SaveVideo":
-        problems.append(f"node {save_id} is not a SaveVideo")
+        _problem(problems, "save_node_is_not_a_save_video",
+                 f"node {save_id} is not a SaveVideo")
     elif not _links_equal(save["inputs"].get("video"), [str(video_id), 0]):
-        problems.append(
+        _problem(problems, "save_video_not_fed_by_create_video",
             f"SaveVideo.video is {save['inputs'].get('video')!r}, not CreateVideo's "
             f"output; CreateVideo is `output_node: false`, so nothing would be saved at all")
 
     if problems:
         ev["problems"] = problems
-        raise AssemblyGate("; ".join(problems), ev)
+        ev["clauses"] = [p["clause"] for p in problems]
+        ev["clause"] = problems[0]["clause"]
+        raise AssemblyGate("; ".join(p["detail"] for p in problems), ev)
 
     ev["verdict"] = (f"{n} distinct LoadImage nodes -> batch -> CreateVideo -> SaveVideo, "
                      f"dotted slot keys, slot k bound to frame k, every link resolved")
@@ -584,6 +684,7 @@ def cascade_plan(n, group_size=GROUP_SIZE):
     if group_size < 1:
         raise CascadeGate("group size must be at least 1",
                           {"gate": "CASCADE", "andon": "CascadeGate",
+                           "clause": "group_size_below_one",
                            "group_size": group_size})
     return [(s, min(s + group_size, n)) for s in range(0, n, group_size)]
 
@@ -654,6 +755,7 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
 
     if cap is not None:
         if int(cap) > ceiling:
+            ev["clause"] = "cap_would_loosen_the_module_ceiling"
             raise CascadeGate(
                 f"a caller asked this gate to run with a ceiling of {int(cap)}, above the "
                 f"module's own MAX_SLOTS_PER_NODE={ceiling}. `cap` may only TIGHTEN: a "
@@ -665,6 +767,7 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
         ev["ceiling"] = ceiling
 
     if group_size is not None and int(group_size) > ceiling:
+        ev["clause"] = "declared_group_size_above_the_ceiling"
         raise CascadeGate(
             f"the declared group size {int(group_size)} is above the ceiling {ceiling}. "
             f"The runtime cap is INFERRED at {INFERRED_SLOT_CAP} from a single error "
@@ -686,6 +789,7 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
             over.append((nid, k))
 
     if not ev["per_node"]:
+        ev["clause"] = "no_batch_node_to_measure"
         raise CascadeGate(
             "the graph carries no BatchImagesNode at all, so this gate walked every node "
             "and measured nothing: its verdict would read '0 batch node(s), largest "
@@ -694,6 +798,7 @@ def gate_slot_ceiling(graph, group_size=None, cap=None):
 
     if over:
         ev["over"] = over
+        ev["clause"] = "batch_node_over_the_slot_ceiling"
         raise CascadeGate(
             f"batch node(s) {over} carry more than {ceiling} auto-grow slot(s). The runtime "
             f"cap is INFERRED at {INFERRED_SLOT_CAP} from a single error message and was "
@@ -746,15 +851,18 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
           "n_expected_sources": len(exp)}
 
     if n < 1:
+        ev["clause"] = "no_frames_to_gate"
         raise CascadeGate(
             f"the cascade was gated over {n} frame(s): the plan is empty, the group loop "
             f"never runs, and every count clause would compare 0 to 0. A comparison over "
             f"nothing must not report agreement", ev)
     if len(exp) != n:
+        ev["clause"] = "expectation_is_not_the_frame_list"
         raise CascadeGate(
             f"{len(exp)} expected per-frame source id(s) against {n} frame(s); the gate "
             f"cannot relate slot k to frame k on a list that is not the frame list", ev)
     if len(set(exp)) != len(exp):
+        ev["clause"] = "expectation_carries_a_duplicated_frame"
         raise CascadeGate(
             f"the {len(exp)} expected per-frame source id(s) are not distinct, so the "
             f"expectation itself already carries a duplicated frame", ev)
@@ -765,6 +873,7 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
     problems = []
 
     if len(group_ids) != len(plan):
+        ev["clause"] = "group_node_count_disagrees_with_the_plan"
         raise CascadeGate(
             f"{len(group_ids)} group node(s) for a plan that needs {len(plan)}", ev)
 
@@ -774,24 +883,27 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
     for (start, stop), gid in zip(plan, group_ids):
         g = graph.get(str(gid))
         if g is None or g.get("class_type") != "BatchImagesNode":
-            problems.append(f"group node {gid} is not a BatchImagesNode")
+            _problem(problems, "group_node_is_not_a_batch",
+                     f"group node {gid} is not a BatchImagesNode")
             per_group.append([])
             continue
         gi = g["inputs"]
         want = batch_slot_keys(stop - start)
         if "images" in gi:
-            problems.append(f"group {gid} uses a bare `images` list; dry_run does NOT catch "
-                            f"this (measured, E02)")
+            _problem(problems, "bare_images_list",
+                     f"group {gid} uses a bare `images` list; dry_run does NOT catch "
+                     f"this (measured, E02)")
         if sorted(gi) != sorted(want):
-            problems.append(f"group {gid} has {len(gi)} slot(s), expected {stop - start} "
-                            f"named images.image0..images.image{stop - start - 1}")
+            _problem(problems, "wrong_slot_key_set",
+                     f"group {gid} has {len(gi)} slot(s), expected {stop - start} "
+                     f"named images.image0..images.image{stop - start - 1}")
         else:
             got = [_link(gi[k]) for k in want]
             expect = [[exp[start + j], 0] for j in range(stop - start)]
             if got != expect:
                 bad = [j for j in range(len(want)) if got[j] != expect[j]]
                 j = bad[0]
-                problems.append(
+                _problem(problems, "slot_bound_to_the_wrong_frame",
                     f"group {gid} slot images.image{j} is bound to {got[j]!r}, not frame "
                     f"{start + j}'s LoadImage {expect[j]!r} ({len(bad)} slot(s) differ): "
                     f"the clip would play its frames out of sequence while the count, the "
@@ -802,53 +914,61 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
         for src in srcs:
             node = graph.get(str(src))
             if node is None:
-                problems.append(f"group {gid} names missing node {src}")
+                _problem(problems, "slot_names_a_missing_node",
+                         f"group {gid} names missing node {src}")
             elif node.get("class_type") != "LoadImage":
-                problems.append(f"group {gid} names {node.get('class_type')} node {src}, "
-                                f"not a LoadImage")
+                _problem(problems, "slot_source_is_not_a_load_image",
+                         f"group {gid} names {node.get('class_type')} node {src}, "
+                         f"not a LoadImage")
 
     ev["n_sources"] = len(seen_sources)
     ev["n_distinct_sources"] = len(set(seen_sources))
     if len(seen_sources) != n:
-        problems.append(f"the groups carry {len(seen_sources)} frame slot(s) for {n} frames")
+        _problem(problems, "group_slot_count_disagrees_with_the_frames",
+                 f"the groups carry {len(seen_sources)} frame slot(s) for {n} frames")
     elif len(set(seen_sources)) != n:
-        problems.append(f"the groups' {len(seen_sources)} slot(s) name only "
-                        f"{len(set(seen_sources))} distinct LoadImage node(s): a frame is "
-                        f"duplicated and another is missing while the count reads right")
+        _problem(problems, "duplicated_load_image",
+                 f"the groups' {len(seen_sources)} slot(s) name only "
+                 f"{len(set(seen_sources))} distinct LoadImage node(s): a frame is "
+                 f"duplicated and another is missing while the count reads right")
 
     # ---- the final batch: one slot per group, IN GROUP ORDER.
     final = graph.get(str(final_id))
     if final is None or final.get("class_type") != "BatchImagesNode":
-        problems.append(f"node {final_id} is not a BatchImagesNode")
+        _problem(problems, "final_node_is_not_a_batch",
+                 f"node {final_id} is not a BatchImagesNode")
     else:
         fi = final["inputs"]
         want = batch_slot_keys(len(plan))
         if sorted(fi) != sorted(want):
-            problems.append(f"the final batch has {len(fi)} slot(s), expected {len(plan)}")
+            _problem(problems, "final_batch_wrong_slot_count",
+                     f"the final batch has {len(fi)} slot(s), expected {len(plan)}")
         else:
             got = [_link(fi[k]) for k in want]
             expect = [[str(g), 0] for g in group_ids]
             ev["final_links"] = got
             if got != expect:
-                problems.append(
+                _problem(problems, "groups_out_of_order_in_the_final_batch",
                     f"the final batch's slots are {got!r}, not the group nodes in order "
                     f"{expect!r} - the clip's frames would be assembled out of sequence "
                     f"while every count still read right")
 
     video = graph.get(str(video_id))
     if video is None or video.get("class_type") != "CreateVideo":
-        problems.append(f"node {video_id} is not a CreateVideo")
+        _problem(problems, "video_node_is_not_a_create_video",
+                 f"node {video_id} is not a CreateVideo")
     elif not _links_equal(video["inputs"].get("images"), [str(final_id), 0]):
-        problems.append(
+        _problem(problems, "create_video_not_fed_by_the_final_batch",
             f"CreateVideo.images is {video['inputs'].get('images')!r}, not the FINAL "
             f"batch's output - the video would carry one group instead of the clip")
 
     consumer = graph.get(str(consumer_id))
     if consumer is None:
-        problems.append(f"the constructed VIDEO's consumer, node {consumer_id}, is not in "
-                        f"the graph")
+        _problem(problems, "video_consumer_is_not_in_the_graph",
+                 f"the constructed VIDEO's consumer, node {consumer_id}, is not in "
+                 f"the graph")
     elif not _links_equal(consumer["inputs"].get(consumer_input), [str(video_id), 0]):
-        problems.append(
+        _problem(problems, "video_consumer_not_fed_by_create_video",
             f"{consumer.get('class_type')}.{consumer_input} is "
             f"{consumer['inputs'].get(consumer_input)!r}, not CreateVideo's output. "
             f"CreateVideo is `output_node: false`, so a VIDEO nothing consumes is a VIDEO "
@@ -856,7 +976,9 @@ def gate_cascade_topology(graph, n_frames, group_ids, final_id, video_id, consum
 
     if problems:
         ev["problems"] = problems
-        raise CascadeGate("; ".join(problems), ev)
+        ev["clauses"] = [p["clause"] for p in problems]
+        ev["clause"] = problems[0]["clause"]
+        raise CascadeGate("; ".join(p["detail"] for p in problems), ev)
 
     ev["verdict"] = (f"{n} distinct LoadImage nodes -> {len(plan)} group batch(es) of at "
                      f"most {group_size} -> final batch -> CreateVideo -> "
