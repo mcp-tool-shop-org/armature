@@ -238,8 +238,23 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # refusal with `gate: None`, and this walk counts `GateFailure` subclasses only.
         # `rig_gates`, `donor_gate` and `parts` are unchanged — core-gates' two new donor
         # clauses raise from `parts.require_finite`, already a `parts` site.
-        "assembly": 22, "blender_scene": 4, "canon": 1, "donor_gate": 6, "framing": 6,
-        "gates": 23, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 4,
+        # WAVE 18 (core-solvers): three rows move, RE-DERIVED with `==` on this worktree.
+        # The base was measured GREEN here first, so every one of the +9 is this branch's.
+        # This walk counts `GateFailure`-subclass raises inside `gate_*`-shaped bodies, so
+        # a plain refusal (`gate: None`) does not join it — which is why `channels` and
+        # `framing` do NOT appear below even though both gained refusals this wave, and
+        # why `turnaround`'s new `TurnaroundPlanRefusal` raise does not move row 13.
+        #   assembly       22 -> 23  F-47db9eff, `gate_no_paid_nodes`'
+        #                            `measurement_dated_in_the_future` clause.
+        #   blender_scene   4 ->  8  F-25a5ecbf, Gate FRAME's four clauses in
+        #                            `render_frame` (`operator_status`,
+        #                            `channel_never_reached_disk`, `channel_is_zero_bytes`,
+        #                            `stale_channel`). `CameraGeometry` is a plain refusal
+        #                            and does not join.
+        #   resample        4 ->  8  F-62774c72, `endpoints_match`' two vacuity clauses and
+        #                            its two bone-population clauses.
+        "assembly": 23, "blender_scene": 8, "canon": 1, "donor_gate": 6, "framing": 6,
+        "gates": 23, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8, "resample": 8,
         "rig_gates": 17, "route_gates": 41, "startframe": 21, "turnaround": 13, "walk": 3,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
@@ -252,7 +267,10 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # WAVE-14 MERGE (coordinator, 2026-09-04): 170 (core-gates alone) → 174, MEASURED on the merged tree.
     # WAVE 16: 174 → 180 (+2 core-gates in `route_gates`, +1 core-solvers in `assembly`,
     # +3 core-solvers in `turnaround`). COMPOSED, not measured on a merged tree.
-    assert sum(with_gates.values()) == 180
+    # WAVE 18: 180 -> 189 (+1 assembly, +4 blender_scene, +4 resample), all core-solvers
+    # and all MEASURED on this branch against a base measured green at 180 in the same
+    # worktree — never summed from prose.
+    assert sum(with_gates.values()) == 189
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

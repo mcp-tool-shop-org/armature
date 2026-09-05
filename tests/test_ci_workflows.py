@@ -2508,6 +2508,15 @@ GUARDED_TODAY = [
     # `paths_the_suite_guards()` reads 53 here and 57 on the merged tree. The list is
     # SORTED, so each entry sits by name and not by topic.
     "tools/armature_core/aapose.py",
+    # WAVE 18 (core-solvers): `assembly.py` is opened by path by the wave-18 amend's AST
+    # census over the three assembly gates' raises (F-8d0e4cf1) — the census keys on the
+    # RESOLVED shape (an `ev["clause"] = ...` assignment immediately above each raise),
+    # which means reading the module's source rather than importing it. Under `tools/**`,
+    # which BOTH triggers already carry, so `ci.yml` needs no change and
+    # `UNFILTERED_PENDING` stays empty. RE-DERIVED, not typed: this list is asserted with
+    # `==` by the test below and was measured red at exactly this one member. (The list is
+    # SORTED; this entry sits here for that reason, not by topic.)
+    "tools/armature_core/assembly.py",
     "tools/armature_core/blender_scene.py",
     # WAVE-12 MERGE (coordinator, 2026-09-04): `canon.py` opened by path by a wave-12 test; under `tools/**`.
     "tools/armature_core/canon.py",

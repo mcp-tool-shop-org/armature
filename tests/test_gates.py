@@ -378,6 +378,12 @@ def test_the_subclass_walk_sees_every_andon_not_just_the_imported_ones():
 #: list after the merge — never hand-edit it to make the merge green.
 RECORDED_ANDON_CLASSES = [
     "assembly.AssemblyGate", "assembly.CascadeGate", "blender_scene.CompositorWiring",
+    # WAVE 18 (core-solvers, F-25a5ecbf): `blender_scene.RenderedFrame`, gate `FRAME` —
+    # `render_frame` was the one `bpy.ops.render.render` site in the live tree whose
+    # operator status set was neither captured nor read, and the andon it now raises is a
+    # `GateFailure` subclass, so it joins this population by construction. RE-DERIVED, not
+    # typed: 35 -> 36, measured red at exactly this one member.
+    "blender_scene.RenderedFrame",
     "donor_gate.DonorGate", "errors.G1GeneratorLegality", "errors.G2Completeness",
     "errors.G4BboxSanity", "errors.G5ConventionConformance", "errors.G6SubjectMotion",
     "errors.GateBBatching", "errors.GateCanon", "errors.GateDDeterminism",
@@ -1104,11 +1110,31 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     #      `views_without_pixels`, `adjacent_pair_shapes_differ`).
     # instruments, instruments-measure and builders add ZERO here — every raise they added
     # is in `tools/*.py`, which this walk does not reach (both confirmed it in the inbox).
-    assert total == 315, (
-        f"{total} family raises in armature_core; this pin asserts 315, composed from the "
-        f"branch measurements in the wave-16 seams inbox and NOT re-measured on a merged "
-        f"tree. This is the denominator every ratio below is quoted against — re-measure it "
-        f"deliberately")
+    # WAVE 18 (core-solvers): 315 -> 333. RE-DERIVED with `==` on this worktree against
+    # `git show 6b984dd:<path>` for the same walk, per module, not summed from prose. The
+    # base was measured GREEN at 315 here first, so all eighteen are this branch's:
+    #   assembly.py      22 -> 23  (+1)  F-47db9eff: `measurement_dated_in_the_future`,
+    #                                    the ageing clock's floor.
+    #   blender_scene.py  7 -> 13  (+6)  F-25a5ecbf: Gate FRAME's four clauses
+    #                                    (`operator_status`, `channel_never_reached_disk`,
+    #                                    `channel_is_zero_bytes`, `stale_channel`) plus
+    #                                    F-329a9555's two in the `half_fovs` byte-twin.
+    #   channels.py       0 -> 3   (+3)  F-476a4ee8: the module had NO refusal of any kind;
+    #                                    `depth_extent`'s non-finite clause and
+    #                                    `normalize_depth`'s window and pixel clauses.
+    #   framing.py       12 -> 15  (+3)  F-329a9555: `half_fovs`' frame-size and
+    #                                    camera-number clauses and `ortho_half_spans`' own
+    #                                    frame-size clause.
+    #   resample.py      10 -> 14  (+4)  F-62774c72: `endpoints_match`' vacuity pair and
+    #                                    the two bone-population clauses.
+    #   turnaround.py    15 -> 16  (+1)  F-329a9555 sibling: `projection_plan`'s
+    #                                    PERSPECTIVE branch refusing the camera numbers it
+    #                                    records.
+    # Nothing in `tools/*.py` reaches this walk, so sibling domains add zero here.
+    assert total == 333, (
+        f"{total} family raises in armature_core; this pin asserts 333, RE-DERIVED on the "
+        f"wave-18 core-solvers branch and itemised per module above. This is the "
+        f"denominator every ratio below is quoted against — re-measure it deliberately")
 
 
 def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():
