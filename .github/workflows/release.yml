@@ -199,9 +199,17 @@ jobs:
         # input, carries none of the three composite actions (`git ls-tree -r --name-only
         # v0.3.0 -- .github/actions` returns nothing), has no `refs/tags/` gate at all, and
         # publishes to both registries unconditionally. A re-run dispatched at it would reach
-        # `pypa/gh-action-pypi-publish` and `npm publish` past every gate this comment is
-        # describing. The tag to re-run at is the tag of the release being re-run, and the
-        # error annotation below already prints it in exactly this placeholder form.
+        # BOTH PUBLISH STEPS past every gate this comment is describing. The tag to re-run at
+        # is the tag of the release being re-run, and the error annotation below already
+        # prints it in exactly this placeholder form.
+        #
+        # (Neither publish step is named here in the spelling its own `uses:` line carries.
+        # `tests/test_ci_workflows.py:375` locates that step with
+        # `step_containing(RELEASE, <the action ref>)` and takes the FIRST match, with no
+        # comment stripping -- so an earlier step whose PROSE quotes the ref becomes the step
+        # it reads, and its `skip-existing: true` assertion goes red against a gate that was
+        # never the subject. Measured: naming it here failed exactly that test, 1 failed /
+        # 5319 passed, while the publish step it judges was untouched.)
         #
         # No `${{ }}` in this script, deliberately: a runner-side expression is interpolated
         # before the shell sees it, so a gate written with one cannot be exercised by
