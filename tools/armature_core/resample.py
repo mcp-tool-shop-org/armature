@@ -257,8 +257,28 @@ def sample_map(n_src, n_dst):
         u = j * span / (n_dst - 1)
         i = int(math.floor(u))
         t = u - i
-        if i >= span:                     # u landed on (or past) the last source sample
-            i, t = span, 0.0
+        # WAVE 22, F-60909e5b — A RAISE, NOT A CLAMP. This branch cannot fire: it is
+        # reached only for `0 < j < n_dst - 1`, where `u = j * span / (n_dst - 1) < span`,
+        # so `floor(u) <= span - 1` always. SWEPT every `(n_src, n_dst)` pair over
+        # 2..59 x 2..59 on `e8263a3`: zero interior samples reach it. It was a silent clamp
+        # — dead defensive code in a module whose comments otherwise distinguish gates from
+        # diagnostics carefully, and a clamp is the one shape that would hide the very
+        # arithmetic change it was written to survive. Converted rather than deleted,
+        # because the argument above is algebra and not a measurement of every future
+        # edit: if the arithmetic on the two lines above ever changes, the violation is
+        # loud.
+        if i >= span:
+            raise ResampleError(
+                f"sample_map({n_src}, {n_dst}) put destination sample {j} at source "
+                f"position {u!r}, index {i} against a span of {span}. The interior of the "
+                f"map is bounded by construction — `u = j * span / (n_dst - 1) < span` for "
+                f"every `0 < j < n_dst - 1`, so `floor(u) <= span - 1` — and the endpoints "
+                f"are appended verbatim above. Reaching here means the arithmetic two "
+                f"lines up has changed; clamping it silently would resample the timeline "
+                f"onto a shorter one and every gate downstream would rule on the result",
+                {"gate": None, "andon": "ResampleError",
+                 "clause": "interior_sample_past_the_span", "n_src": n_src,
+                 "n_dst": n_dst, "j": j, "u": u, "i": i, "span": span})
         out.append((i, t))
     return out
 
@@ -283,7 +303,21 @@ def monotonic(n_src, n_dst):
         raise ResampleGate(
             f"the resampled timeline is not strictly increasing at {len(bad)} position(s), "
             f"first at destination sample {bad[0][0]}: {bad[0][1]} -> {bad[0][2]}", ev)
+    # WAVE 22, F-63a37caf — LABELLED, and labelled as what it is. This clause cannot fire
+    # against today's `sample_map`, which hard-codes both endpoints (`out.append((0, 0.0))`
+    # at `j == 0` and `out.append((span, 0.0))` at `j == n_dst - 1`) while `positions` is
+    # just `i + t` over that map. SWEPT every `(n_src, n_dst)` pair over 2..80 x 2..80 on
+    # `e8263a3`: 6241 pairs, 0 violations. The clause ABOVE it — strict increase — is live.
+    #
+    # It is kept rather than deleted because it is a CROSS-FUNCTION REGRESSION GUARD: it
+    # protects `monotonic` against a future change in `sample_map`'s endpoint construction,
+    # which is a legitimate reason to keep a check that cannot fire today — but only if it
+    # is labelled as one, which is the treatment `binding.rigid_segment_weights` already
+    # gives its three `invariant_by_construction` diagnostics. The distinction that matters:
+    # the increase clause is an ANDON on this function's own input, this one is a TRIPWIRE
+    # on a sibling function's contract.
     if u[0] != 0.0 or u[-1] != float(n_src - 1):
+        ev["invariant_by_construction"] = "sample_map hard-codes both endpoints"
         raise ResampleGate(
             f"the resampled timeline spans {u[0]}..{u[-1]} where the source spans "
             f"0..{n_src - 1}; the performance would be cropped or extrapolated", ev)

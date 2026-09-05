@@ -253,10 +253,10 @@ SEEDED_EXTREMA_TODAY = {
     ("lift_solve", "round_trip_report", "d > worst['d']"): "swept (wave 22)",
     # F-cfb560aa — swept by `require_finite` before either `>` is asked.
     ("parts", "gate_parts_determinism", "d > worst['delta']"): "swept (wave 22)",
-    # F-60909e5b — the unreachable clamp, converted to a raise this wave. `i` and `span`
-    # are ints derived from `math.floor` of a bounded ratio.
-    ("resample", "sample_map", "i >= span"): "integer index, refusal (wave 22)",
 }
+#: `resample.sample_map`'s `if i >= span` LEFT this census in the same wave (F-60909e5b):
+#: the branch no longer assigns to a seeded name, it RAISES, so the shape this walk keys on
+#: is gone from that function rather than exempted in a list.
 
 
 def test_no_seeded_extremum_in_this_domain_walks_past_a_non_finite_measurement():
@@ -464,3 +464,200 @@ def test_every_refusal_this_wave_adds_is_in_the_armature_error_family():
         with pytest.raises(ArmatureError, match=r"is not a number at all"):
             parts.require_finite("x", raw, parts.GatePartsDeterminism, ev)
     assert math.isnan(ev["x"])
+
+
+# =================================================== wave 22: the four LOW findings
+#
+# Three of them are checks that cannot fail and one is a stale citation. None has a red proof
+# in the ordinary sense — an unreachable branch has no input that reaches it — so each is
+# proven the only honest way: SWEEP the population to show the branch is unreachable, then
+# BREAK THE PRECONDITION the unreachability rests on and read what comes out.
+
+
+def test_the_interior_of_the_sample_map_never_reaches_the_span_clamp():
+    """F-60909e5b, the sweep. `u = j * span / (n_dst - 1) < span` for every
+    `0 < j < n_dst - 1`, so `floor(u) <= span - 1` always."""
+    from armature_core import resample as RS
+
+    checked = 0
+    for n_src in range(2, 60):
+        for n_dst in range(2, 60):
+            span = n_src - 1
+            for j, (i, _t) in enumerate(RS.sample_map(n_src, n_dst)):
+                if 0 < j < n_dst - 1:
+                    assert i < span, (n_src, n_dst, j, i, span)
+                    checked += 1
+    assert checked > 50000, checked
+
+
+def test_the_span_clamp_is_now_a_raise_that_names_the_arithmetic_it_guards(monkeypatch):
+    """The red proof for an unreachable branch: break the arithmetic the unreachability
+    rests on. Before this wave the same broken arithmetic was CLAMPED silently, which is
+    the one shape that would hide the change it was written to survive."""
+    import math as _math
+
+    from armature_core import resample as RS
+
+    class _Floor:
+        def __getattr__(self, name):
+            return getattr(_math, name)
+
+        @staticmethod
+        def floor(u):
+            return _math.floor(u) + 99
+
+    monkeypatch.setattr(RS, "math", _Floor())
+    with pytest.raises(RS.ResampleError) as exc:
+        RS.sample_map(8, 5)
+    ev = exc.value.evidence
+    assert ev["clause"] == "interior_sample_past_the_span"
+    assert ev["n_src"] == 8 and ev["n_dst"] == 5 and ev["span"] == 7
+
+
+def test_the_endpoint_clause_cannot_fire_against_todays_map_and_says_so():
+    """F-63a37caf, the sweep the finding recorded: 2..80 x 2..80, 6241 pairs, 0 violations.
+
+    Kept as a CROSS-FUNCTION REGRESSION GUARD on `sample_map`'s endpoint construction — a
+    legitimate reason to keep a check that cannot fire today, but only if it is labelled as
+    one, which is the treatment `binding.rigid_segment_weights` already gives its three
+    `invariant_by_construction` diagnostics.
+    """
+    from armature_core import resample as RS
+
+    pairs = 0
+    for n_src in range(2, 81):
+        for n_dst in range(2, 81):
+            u = RS.positions(n_src, n_dst)
+            assert u[0] == 0.0 and u[-1] == float(n_src - 1), (n_src, n_dst, u[0], u[-1])
+            pairs += 1
+    assert pairs == 79 * 79
+    src = _owned_source("resample")
+    assert "invariant_by_construction" in src
+    assert "CROSS-FUNCTION REGRESSION GUARD" in src
+
+
+def test_the_live_clause_beside_it_is_still_live(monkeypatch):
+    """Both directions: the STRICT-INCREASE clause in the same function is not labelled a
+    tripwire, because it is an andon on this function's own input and it fires."""
+    from armature_core import resample as RS
+
+    monkeypatch.setattr(RS, "positions", lambda n_src, n_dst: [0.0, 0.0, float(n_src - 1)])
+    with pytest.raises(RS.ResampleGate, match=r"not strictly increasing"):
+        RS.monotonic(4, 3)
+
+
+def test_the_cadence_gate_walks_every_consecutive_interval():
+    """F-aee5d2a8, the coverage measurement the disposition rests on: n-1 intervals for n
+    phase samples, which is every consecutive pair — so the stance-exchange clause inside
+    `_integrate_forward` can never be the first to see an over-long interval."""
+    import math as _math
+
+    from armature_core import walk as W
+
+    for n, want in ((2, 1), (5, 4), (41, 40), (65, 64)):
+        phase = [k * 2.0 * _math.pi * 0.01 for k in range(n)]
+        ev = W.gate_cadence_is_representable(phase, W.STANCE_FRAC_MODELLED, where="t")
+        assert ev["n_intervals"] == want, (n, ev)
+
+
+def test_the_stance_exchange_refusal_is_labelled_a_tripwire_not_a_live_andon():
+    """It carries its OWN clause word and a `reachability` key, so a reader who finds a
+    `raise WalkError` there does not conclude the top-of-function gate misses the exchange
+    frames. Same disposition as `resample.sample_map`'s clamp, recorded in one place."""
+    src = _owned_source("walk")
+    assert "cadence_outruns_frame_rate_at_a_stance_exchange" in src
+    assert "structural tripwire on " in src
+    assert "F-aee5d2a8" in src and "F-60909e5b" in src
+
+
+#: Every `<file>.py:<line>` prose citation surviving in this domain's 21 modules, MEASURED
+#: on this branch, with the reason each is allowed to remain. The rule this wave adopts is
+#: "prose cites FUNCTIONS, not lines" (F-b3ff3a57, and `lift_solve`'s three via SEAM 7/8) —
+#: so a LIVE citation is a defect and the only line numbers left are inside CORRECTION
+#: RECORDS, which this repo keeps rather than deletes because the correction is the useful
+#: part. A new entry here is a new line citation somebody wrote as a live claim.
+SURVIVING_LINE_CITATIONS = {
+    # Named in the prose as blank and re-anchored on the symbol in the same sentence — the
+    # correction discipline working, measured on `e8263a3` as part of this census.
+    "blender_scene": {("probe_subject.py", 75), ("stage_render.py", 508)},
+    # The correction record for the four stale anchors this pair used to carry, plus the two
+    # LINE anchors retired this wave when the citations moved to the symbol form.
+    "lift_solve": {("lift_clip.py", 275), ("lift_clip.py", 276), ("measure_lift.py", 334),
+                   ("measure_lift.py", 468), ("measure_lift.py", 481)},
+    "posearc": {("rig_character.py", 661)},
+    # F-b3ff3a57's own correction record: the three anchors the paragraph quotes as what it
+    # USED to say, the one it measured as moved, and the sibling fix it points at.
+    "sitelist": {("lift_clip.py", 275), ("project_pose_keypoints.py", 229),
+                 ("rig_character.py", 1135), ("rig_parts.py", 480)},
+    "startframe": {("render_start_frame.py", 142)},
+}
+
+
+def line_citations_by_module():
+    """`{module: {(file, line)}}` over the 21 owned modules' source text."""
+    import re
+
+    out = {}
+    for name in OWNED:
+        rows = {(f, int(n)) for f, n
+                in re.findall(r"([a-z_]+\.py):([0-9]+)", _owned_source(name))}
+        if rows:
+            out[name] = rows
+    return out
+
+
+def test_no_prose_in_this_domain_makes_a_LIVE_claim_about_a_line_number():
+    """F-b3ff3a57. The coordinator's 57-moved-citations seed, measured across this domain
+    and confirmed on exactly one line — the line whose own purpose was to correct a stale
+    citation.
+
+    A census over all 17 `<file>.py:<line>` prose citations in the 21 modules resolved 14 to
+    a non-blank line and found 3 pointing at blank lines, all three of which the surrounding
+    prose ALREADY names as blank and re-anchors on the symbol. The one that did not:
+    `sitelist.py` read "Of the three line numbers, only `project_pose_keypoints.py:229` was
+    right". MEASURED on `e8263a3`, that line is now the middle of a `ProjectGate` refusal
+    message and `grep -n validate tools/project_pose_keypoints.py` returns exactly one line,
+    which is not that one — the wave-16 constructor deletions moved it, so the wave-15
+    correction that quoted it as the surviving-correct citation was itself wrong.
+
+    The general form is taken rather than a line census: prose cites FUNCTIONS. What is
+    asserted here is (a) the population of surviving line citations, each of which is inside
+    a correction record, so a new LIVE one fails on the day it is written; (b) that every
+    surviving citation still resolves to a line that exists in the file it names; and (c)
+    that `sitelist`'s paragraph now names its callers by symbol and carries the measurement
+    that overturned its own citation.
+    """
+    import os
+
+    import armature_core
+
+    got = line_citations_by_module()
+    assert got == SURVIVING_LINE_CITATIONS, {
+        "appeared": {m: sorted(v - SURVIVING_LINE_CITATIONS.get(m, set()))
+                     for m, v in got.items()
+                     if v - SURVIVING_LINE_CITATIONS.get(m, set())},
+        "vanished": {m: sorted(v - got.get(m, set()))
+                     for m, v in SURVIVING_LINE_CITATIONS.items()
+                     if v - got.get(m, set())},
+        "why it matters": "prose cites FUNCTIONS, not lines; a new line citation is a "
+                          "claim that stops being true the next time anything above it "
+                          "is edited",
+    }
+
+    tools_dir = os.path.dirname(os.path.dirname(os.path.abspath(armature_core.__file__)))
+    for _mod, rows in got.items():
+        for fname, lineno in rows:
+            path = os.path.join(tools_dir, fname)
+            if not os.path.exists(path):
+                continue
+            with open(path, encoding="utf-8") as fh:
+                n_lines = len(fh.read().split("\n"))
+            assert 1 <= lineno <= n_lines, (fname, lineno, n_lines)
+
+    src = _owned_source("sitelist")
+    for symbol in ("tools/rig_character.py::validate_sitelist",
+                   "tools/project_pose_keypoints.py::main",
+                   "tools/rig_parts.py::main"):
+        assert symbol in src, symbol
+    assert "MEASURED on `e8263a3`" in src
+    assert "citations are on the SYMBOL and the line numbers are gone" in src

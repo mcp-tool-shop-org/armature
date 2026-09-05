@@ -32,12 +32,32 @@ class SiteListError(ArmatureError):
     `tools/project_pose_keypoints.py:229`)". Re-derived by grep: `validate()` has TWO direct
     callers — `tools/rig_character.py::validate_sitelist` and
     `tools/project_pose_keypoints.py::main` — and ONE indirect, `tools/rig_parts.py::main`,
-    which calls `rig_character.validate_sitelist()` and reaches this refusal through it. Of
-    the three line numbers, only `project_pose_keypoints.py:229` was right; the other two
-    landed on a docstring line and on a `np.linalg.norm` call, and `grep -n validate
-    tools/rig_parts.py` returns exactly one line, the wrapper call. Two direct and one
-    through the wrapper, then — the re-classing argument below is unaffected and reads
-    stronger for being the tree's own count.
+    which calls `rig_character.validate_sitelist()` and reaches this refusal through it.
+    Two direct and one through the wrapper, then — the re-classing argument below is
+    unaffected and reads stronger for being the tree's own count.
+
+    **The correction's own citation went stale, and this is the second correction**
+    (F-b3ff3a57, wave 22). The paragraph above used to end "Of the three line numbers, only
+    `project_pose_keypoints.py:229` was right; the other two landed on a docstring line and
+    on a `np.linalg.norm` call". MEASURED on `e8263a3`: `tools/project_pose_keypoints.py:229`
+    is now the middle of a `ProjectGate` refusal message (`'span_stats was given no frames;
+    a min/median/max over an empty keypoint '`), and `grep -n validate
+    tools/project_pose_keypoints.py` returns exactly one line — `sitelist.validate()`, and
+    not that one. The wave-16 constructor deletions moved it, so the wave-15 correction that
+    quoted it as the surviving-correct citation is itself now wrong. A session sent to that
+    line to re-derive the caller population opens an unrelated refusal string, cannot confirm
+    the count, and either re-files the finding this paragraph was written to close or
+    distrusts the paragraph entirely.
+
+    **So the citations are on the SYMBOL and the line numbers are gone.** That is the general
+    form, and it is the same fix `lift_solve.py`'s three `lift_clip.py:275` citations take in
+    this wave: a line citation does not survive an edit above it, a symbol does, and prose
+    that cites functions needs no census to keep it true. A CENSUS over all 17
+    `<file>.py:<line>` prose citations in this domain's 21 modules resolved 14 to a non-blank
+    line and found 3 pointing at blank lines — all three of which the surrounding prose
+    already names as blank and re-anchors on the symbol, so the correction discipline held
+    everywhere except here, on the one line whose own purpose was to correct a stale
+    citation.
 
     The 21-tool halt contract classifies on the
     `ArmatureError` family, so measured 2026-09-04 by driving that classifier with the

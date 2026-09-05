@@ -1180,8 +1180,11 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # clause and the shape-mismatch clause its sibling `frame_fidelity` twenty lines above
     # already carried, and `empty_gradient_band` for a band that selects no pixel and
     # returned a mean over nothing as the band error.
-    assert total == 360, (
-        f"{total} family raises in armature_core; this pin asserts 360, RE-DERIVED on the "
+    # And 360 -> 361: +1 in `resample.sample_map` (F-60909e5b) — the unreachable clamp
+    # converted to a raise, so an arithmetic change above it is loud rather than silently
+    # resampling the timeline onto a shorter one.
+    assert total == 361, (
+        f"{total} family raises in armature_core; this pin asserts 361, RE-DERIVED on the "
         f"wave-22 core-solvers branch. This is the denominator every ratio below is quoted against — "
         f"re-measure it deliberately")
 

@@ -626,17 +626,36 @@ def _integrate_forward(performer, p, phase, speed, legs):
             key = "psi_L" if b["stance_L"] else "psi_R"
             y += -L * (s_of(b[key], amp_b) - s_of(a[key], amp_a))
         else:
-            # Defensive floor only. `gate_cadence_is_representable` above has already
-            # walked every interval, including the ones where no exchange is detected -
-            # which is the case this clause could never see (F-84f8fd3b).
+            # WAVE 22, F-aee5d2a8 — A STRUCTURAL ASSERTION, SAID SO. This refusal cannot
+            # fire and its own comment already said so: `gate_cadence_is_representable` is
+            # called at the top of this function (and again in `build_gait`) and raises on
+            # ANY interval over the limit before this branch is reachable. CONFIRMED by
+            # measuring that gate's coverage on `e8263a3`: it walks n-1 intervals for n
+            # phase samples (1 / 4 / 40 / 64 at n = 2 / 5 / 41 / 65) — every consecutive
+            # pair, which is the seam the coordinator carried, and it holds.
+            #
+            # So this is not a live andon and must not read as one: a reader who finds a
+            # `raise WalkError` here reasonably concludes the top-of-function gate does not
+            # cover the exchange frames. It is kept — one line of arithmetic above a
+            # branch this repo has already been wrong about (F-84f8fd3b re-derived the
+            # clause once) — but kept as a TRIPWIRE under its own clause word, so a change
+            # to the gate's coverage is loud rather than absorbed. Same disposition as
+            # `resample.sample_map`'s unreachable clamp (F-60909e5b), landed in the same
+            # commit and recorded in one place.
             du = (phase[i] - phase[i - 1]) / (2.0 * math.pi)
             if du > MAX_CYCLES_PER_FRAME:
                 raise WalkError(
                     f"frame {i}: the gait advances {du:.3f} of a cycle in one frame, so "
                     f"more than one stance exchange falls between two samples; the walk "
-                    f"cannot be represented at this frame rate",
+                    f"cannot be represented at this frame rate. "
+                    f"`gate_cadence_is_representable` walks every consecutive interval at "
+                    f"the top of this function and refuses this input before the loop "
+                    f"starts, so reaching here means that gate's coverage has changed",
                     {"gate": None, "andon": "WalkError",
-                     "clause": "cadence_outruns_frame_rate",
+                     "clause": "cadence_outruns_frame_rate_at_a_stance_exchange",
+                     "reachability": "structural tripwire on "
+                                     "gate_cadence_is_representable's coverage, not a "
+                                     "reachable refusal",
                      "frame": i, "cycles_this_frame": du,
                      "max_cycles_per_frame": MAX_CYCLES_PER_FRAME}
                 )
