@@ -592,21 +592,22 @@ def test_every_builder_refuses_through_its_own_main_block_with_the_halt_contract
     assert rec["message"], (name, rec)
 
 
-#: MEASURED 2026-09-05 by driving all nine refusals below: eight name the gate and the
-#: andon in their evidence and ONE does not. `build_animate_payload`'s `missing_upload_key`
-#: prints `{"clause": ..., "key": ..., "source": ..., "present": []}` — the clause and the
+#: MEASURED 2026-09-05 by driving all nine refusals below: eight named the gate and the
+#: andon in their evidence and ONE did not. `build_animate_payload`'s `missing_upload_key`
+#: printed `{"clause": ..., "key": ..., "source": ..., "present": []}` — the clause and the
 #: operand, and nothing that names the check that pulled. A halt reader keyed on
-#: `evidence["gate"]` (the shape the other eight and every Blender-side handler carry) reads
-#: `None` on the E08 builder's uploads refusal.
+#: `evidence["gate"]` (the shape the other eight and every Blender-side handler carry) read
+#: `None` on the E08 builder's uploads refusal. The gap was in the builders domain's own
+#: file, so it was COUNTED here rather than fixed here and posted to the wave-23 inbox.
 #:
-#: The gap is in `tools/build_animate_payload.py`, which is the builders domain's file, so
-#: it is COUNTED here rather than fixed here (wave 12, rule 3: a walk that cannot judge a
-#: site reports it in its own category) and posted to the wave-23 seams inbox. This table
-#: may not grow: a tenth builder, or a second refusal, arriving without the two keys fails
-#: below rather than joining it.
-EVIDENCE_WITHOUT_A_GATE_KEY = {
-    "build_animate_payload": "missing_upload_key",
-}
+#: ⚠ EMPTY as of wave 25 (builders, F-d30bb5fb, 2026-09-05). That refusal now prints
+#: `{"gate": "PAYLOAD", "andon": "PayloadError", "clause": "missing_upload_key", …}`, and
+#: it was the ANCHOR the wave-24 audit named for this domain's whole census gap: 9 sites
+#: missing `gate`, 15 missing `andon`, 19 missing `clause` and 19 passing no evidence at
+#: all, all closed in the same commit. The row is deleted here, in that commit, which is
+#: this table's own rule. The table is kept rather than removed: it may not grow, so a
+#: tenth builder or a second refusal arriving without the two keys fails below.
+EVIDENCE_WITHOUT_A_GATE_KEY = {}
 
 
 @pytest.mark.parametrize("name", BUILDERS)

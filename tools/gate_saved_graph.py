@@ -41,8 +41,10 @@ from build_assembly_payload import (  # noqa: E402
 # the directory clause is lifted into `gate_out_writable` there and imported here rather
 # than spelled a second time beside the write it has to bound.
 from build_payload import gate_out_writable  # noqa: E402
-from armature_core.errors import (  # noqa: E402
-    ArmatureError, GateFailure)
+# WAVE 25, F-af838b99: this file's `__main__` block named `GateFailure` and
+# `ArmatureError` to pick its own exit code. That choice belongs to
+# `armature_core.parts.halt_outcome` now and no other line here names either,
+# so the import is dropped rather than left dangling.
 
 TOOL_VERSION = "E10.1"
 
@@ -69,6 +71,24 @@ class SavedAdmission(RouteGate):
     every census that polices this family.
 
     It is a `RouteGate`, so every caller that catches `RG.RouteGate` still catches it.
+
+    **WAVE 25, F-e62bdc2b — the four raises the wave-18 census could not see.** The census
+    above compared each raise's evidence `gate` LITERAL against the raised class's `gate`
+    attribute, so it found only sites that named a gate id at all. Four raises in this file
+    named NONE: the two headline refusals this module exists to raise — `round_trip`'s "the
+    saved file is not the graph this repo built" and `link_round_trip`'s "the saved file's
+    topology is not the topology this repo built" — and `link_table`'s two entry clauses,
+    each carrying a bare two-key evidence literal (`{checked, problems}`, `{wired,
+    empty_in_both, problems}`, `{entry, n_entries}`). MEASURED as a real subprocess on the
+    green assembly fixture with node 20's `fps` changed in the saved file only: exit 2,
+    `SAVED_ADMISSION_HALT {"error": "RouteGate", "message": "[ROUTE] the saved file is not
+    the graph this repo built: ...", "evidence": {"checked": [...], "problems": [...]}}` —
+    the sentinel said SAVED_ADMISSION, the class and message said ROUTE, and the evidence
+    named neither. All four are `SavedAdmission` now, each with the identity triple and its
+    own clause word: `saved_values_are_not_the_built_values`,
+    `unreadable_link_table_entry`, `link_table_entry_names_no_origin`,
+    `saved_topology_is_not_the_built_topology`. Every caller catching `RG.RouteGate` still
+    catches them.
 
     **The `andon` spelling is one rule now, too.** The key was spelled two ways in this one
     file — `"andon": "RouteGate"` (a class name) at the `route_facts` sites and
@@ -407,9 +427,18 @@ def round_trip(api_graph, saved_graph):
     if extra:
         problems.append(f"the saved file carries nodes we did not build: {extra}")
     if problems:
-        raise RG.RouteGate(
+        # ---- WAVE 25, F-e62bdc2b. THIS file's headline refusal, raised under the id this
+        # file declares. It read `RG.RouteGate` with a TWO-KEY evidence literal, so the halt
+        # at the spend boundary named `[ROUTE]` in its message and `SAVED_ADMISSION` in its
+        # sentinel and carried no `gate`, no `andon` and no `clause` for a reader to branch
+        # on — the exact two-ids-for-one-event ambiguity `SavedAdmission` above was written
+        # to end, re-created by omission. Its own sibling eleven lines below `link_table`'s
+        # first raise (`duplicate_link_id`) already carried all three.
+        raise SavedAdmission(
             "the saved file is not the graph this repo built: " + "; ".join(problems),
-            {"checked": checked, "problems": problems})
+            {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+             "clause": "saved_values_are_not_the_built_values",
+             "checked": checked, "problems": problems})
     return {"n_values_compared": len(checked), "all_equal": True, "values": checked}
 
 
@@ -458,15 +487,22 @@ def link_table(saved_graph):
         elif isinstance(entry, (list, tuple)) and len(entry) >= 3:
             lid, origin, slot = entry[0], entry[1], entry[2]
         else:
-            raise RG.RouteGate(
+            # WAVE 25, F-e62bdc2b: the named class and the identity triple, as the
+            # `duplicate_link_id` sibling twenty lines below already carried.
+            raise SavedAdmission(
                 f"the saved file's link table carries an entry this tool cannot read: "
                 f"{entry!r}. A table that is skipped is a table that vouches for nothing, "
                 f"and the origin of every link in this file would go unchecked",
-                {"entry": entry, "n_entries": len(raw)})
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "unreadable_link_table_entry",
+                 "entry": entry, "n_entries": len(raw)})
         if lid is None or origin is None:
-            raise RG.RouteGate(
+            raise SavedAdmission(
                 f"the saved file's link table entry {entry!r} names no link id or no "
-                f"origin node", {"entry": entry, "n_entries": len(raw)})
+                f"origin node",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "link_table_entry_names_no_origin",
+                 "entry": entry, "n_entries": len(raw)})
         resolved = (str(origin), slot)
         prior = table.get(str(lid))
         if prior is not None and prior != resolved:
@@ -639,10 +675,15 @@ def link_round_trip(api_graph, saved_graph):
             else:
                 empty.append(f"{node_id}.{name}")
     if problems:
-        raise RG.RouteGate(
+        # ---- WAVE 25, F-e62bdc2b. The second headline refusal, under the same id as the
+        # first; see `round_trip`. The `duplicate_socket_name` raise inside THIS function
+        # already carried gate / andon / clause, so the contrast sat within one body.
+        raise SavedAdmission(
             "the saved file's topology is not the topology this repo built: "
             + "; ".join(problems),
-            {"wired": wired, "empty_in_both": empty, "problems": problems})
+            {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+             "clause": "saved_topology_is_not_the_built_topology",
+             "wired": wired, "empty_in_both": empty, "problems": problems})
     return {"n_links": len(wired), "links": sorted(wired),
             "optional_sockets_empty_in_both": sorted(empty)}
 
@@ -979,9 +1020,53 @@ def route_facts(record_path, api_graph=None):
                            "separators=(',',':')) — the builders' own derivation")})
     n_declaring = sum(1 for r in receipts if r.get("receipt") == VERIFY_RECEIPT_KIND)
     if declared is None:
-        tie = ("the record declares no `payload_sha256`, so the facts below are NOT tied "
-               "to the graph being admitted")
+        # ---- ANDON, wave 25 (F-2c15e4e8). This branch used to ADMIT, returning the
+        # sentence below inside `source`: the tie between the record and the graph it
+        # vouches for was COMPUTED, RECORDED and never REQUIRED. MEASURED on `580af47`: a
+        # record carrying a real `RG.verify` receipt and no digest was admitted on the
+        # green assembly fixture — SAVED_ADMISSION_OK, exit 0,
+        # `route_facts.payload_sha256: null`, and `source` ending in that sentence. So the
+        # provenance document for an irreversible spend stated in prose that its two
+        # spend-admitting facts are NOT tied to the graph, beside a verdict line reading OK.
+        #
+        # The wave-18 entry that added the comparison (F-5c0f3858, quoted above) accepted
+        # that bound explicitly, on the ground that wave 20 had re-measured only FOUR of the
+        # nine builders that write the digest. Wave 23 closed that half: RE-DERIVED here on
+        # this branch, `grep -c payload_sha256` over the nine returns 2 / 4 / 2 / 1 / 2 / 1
+        # / 3 / 2 / 1 — non-zero in every one — so NO record this tree produces reaches this
+        # branch. The escape's population is empty, and `--record` accepts any path, so an
+        # older or hand-written record is the reachable operand.
+        #
+        # Diagnostics may gate nothing in this repo; a tie that decides whether an
+        # irreversible step proceeds is a gate, and this one returned a string.
+        #
+        # BOUNDED at what there is to tie the record TO. With no `api_graph` there is no
+        # graph being admitted and nothing for the record to be untied FROM, so that
+        # reading records the absence as it always did (the `tie` sentence below). `--api`
+        # is `required=True` on this tool's parser and `main` is the only caller that
+        # reaches here with a graph, so every CLI path is inside the refusal.
+        if api_digest is not None:
+            raise SavedAdmission(
+                "the record declares no `payload_sha256`, so the facts below are NOT "
+                "tied to the graph being admitted: the credit that pays a CONDITIONAL "
+                "licence row and the no-sampler assertion would be read off a document "
+                f"nothing ties to the graph hashing to {api_digest!r}. All nine builders "
+                f"write the digest, so a record without one was written by something else "
+                f"or by hand",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "record_is_not_tied_to_the_graph", "record": path,
+                 "declared_payload_sha256": None, "api_payload_sha256": api_digest,
+                 "n_verify_receipts": len(receipts),
+                 "written_by": ("every builder under tools/build_*_payload.py and "
+                                "tools/build_payload.py writes `payload_sha256` into its "
+                                "record; canonical_payload_digest is the one derivation")})
+        tie = ("the record declares no `payload_sha256` and no api graph was supplied to "
+               "compare one against, so nothing was tied and nothing was checked")
     elif api_digest is None:
+        # A RECORDED FACT rather than a clause: `--api` is `required=True` on this tool's
+        # parser, and `main` is the only caller that passes `api_graph`, so this branch is
+        # unreachable from the CLI. It is kept for an in-process caller that asks for the
+        # facts alone, and it says plainly that no comparison was made.
         tie = (f"the record declares `payload_sha256` {declared}, and no api graph was "
                f"supplied to compare it against")
     else:
@@ -1095,6 +1180,46 @@ def main(argv=None):
     # (`registration_missing`, `record_unreadable`); these two did not. The loader is
     # core-gates' file, so the clause lives here, at the boundary, exactly as the shape
     # clauses below do.
+    # ---- ANDON, wave 25 (F-db6ec1f4). `--hosted-tier` took ANY string and was never
+    # checked against the table its own help text names, so an operator typo and a real
+    # graph defect produced the SAME refusal. MEASURED on `580af47` as three subprocesses
+    # on the green assembly fixture: `--hosted-tier=bogus-tier`, `--hosted-tier=wan2.7-r2v`
+    # and `--hosted-tier=WAN2.7-R2V` all exit 2 with the identical `SAVED_ADMISSION_HALT`
+    # message — "verify() was told this is hosted tier '<x>', but no node in the graph
+    # carries that tier's enum inputs. Gate L would then have nothing to decide in EITHER
+    # clause, which is the vacuous state …" — a sentence about the GRAPH, on an argument
+    # that names no tier at all. Fail-closed, and what it costs is the operator's next hour
+    # at the boundary of the one route in this repo that bills per submission.
+    #
+    # Refused HERE, above `RG.load_graph`, for the reason the coordinator's wave-23
+    # portability commit `63191ee` made `encode_control` refuse the operator's arguments
+    # before inspecting the encoder, and for the reason `--saved` / `--api` are refused by
+    # name eight lines down and `--frame`'s components are counted before they are
+    # converted.
+    #
+    # The known set is READ OFF the table rather than typed, so a tier added to
+    # `route_gates.HOSTED_TIER_RULES` joins without a new pin here. A bare argparse
+    # `choices=` would freeze the list in this file, which is the second spelling that
+    # rule exists to prevent — and it would also print argparse's own usage error rather
+    # than this tool's sentinel line, which its `__main__` tells wrappers to key on.
+    #
+    # core-gates' half of this seam is the CONVERSE and they do not overlap: `verify`
+    # refuses `hosted_nodes_without_a_tier` when NO tier is declared and the graph carries
+    # hosted nodes; this refuses a tier that IS declared and is not in the table.
+    if a.hosted_tier is not None and a.hosted_tier not in RG.HOSTED_TIER_RULES:
+        raise SavedAdmission(
+            f"--hosted-tier={a.hosted_tier!r} is not a recorded hosted tier. A tier's "
+            f"constraints are recorded in the spec that first uses it, from that tier's "
+            f"own node contract, and this flag selects WHICH set of enum rules Gate L "
+            f"checks; a tier that names no rules would send this admission's verdict "
+            f"through a clause with nothing in it. Known tiers: "
+            f"{sorted(RG.HOSTED_TIER_RULES)}",
+            {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+             "clause": "unknown_hosted_tier", "flag": "--hosted-tier",
+             "supplied": a.hosted_tier, "known": sorted(RG.HOSTED_TIER_RULES),
+             "read_from": ("route_gates.HOSTED_TIER_RULES, so a tier added there joins "
+                           "without an edit here")})
+
     for flag, given in (("--saved", a.saved), ("--api", a.api)):
         if not os.path.isfile(given):
             raise SavedAdmission(
@@ -1291,23 +1416,43 @@ def main(argv=None):
 
 if __name__ == "__main__":
     # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
-    # disagreed three ways on how a refusal leaves the process: three carried this block,
-    # two exited 2 unconditionally (so a programming error was indistinguishable from a
-    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
+    # disagreed three ways on how a refusal leaves the process: three carried a local
+    # handler, two exited 2 unconditionally (so a programming error was indistinguishable
+    # from a gate refusal), and eight had no handler at all — a Gate CANON halt reached the
     # operator as a raw traceback with exit 1 and no machine-readable evidence.
     #
     # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
-    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `SAVED_ADMISSION_HALT`
-    # sentinel below, never on the code alone.
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("SAVED_ADMISSION_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the
+    # `SAVED_ADMISSION_HALT` sentinel this handler prints, never on the code alone.
+    #
+    # ---- WAVE 25, F-af838b99. THE HOME IS ADOPTED, not spelled a fourteenth time. This
+    # was a LOCAL three-key handler — `print(PREFIX + "_HALT " + json.dumps({error,
+    # message, evidence}, default=str))` — one of THIRTEEN byte-alike copies across the
+    # nine builders, both fetchers, `canon_gate` and this tool, while wave 22 built exactly
+    # one home for the job in `armature_core.parts.run_tool_main` / `halt_keysafe`. Outside
+    # that home the block was outside every property the home carries:
+    #
+    #   * STRICT JSON. MEASURED on `580af47` as a real subprocess on the green assembly
+    #     fixture with a `NaN` in one saved widget value:
+    #     `SAVED_ADMISSION_HALT {"error": "RouteGate", ..., "evidence": {"checked":
+    #     [{..., "saved": NaN, ...}]}}`. Python's own `json.loads` accepts that line and
+    #     `json.loads(payload, parse_constant=<raise>)` refuses it with "bare NaN" — which
+    #     is what JS `JSON.parse`, Go `encoding/json` and serde do. `run_tool_main` dumps
+    #     with `allow_nan=False` and `halt_keysafe` writes the float as its `repr`, so the
+    #     operand that caused the halt survives as `"nan"` rather than deleting the line.
+    #   * KEYSAFE and CIRCULAR. `json.dumps(default=str)` applies `default` to VALUES only,
+    #     so a tuple or numpy evidence KEY raises `TypeError` INSIDE the handler and
+    #     `sys.exit` never runs (21 of 21 Blender handlers escaped that way before wave 22),
+    #     and a self-referencing evidence dict recursed out of it. LATENT here rather than
+    #     measured — no reachable non-str evidence key was found in this domain on
+    #     `580af47` — and stated as latent rather than sold as a closed defect.
+    #   * `tool` / `outcome` / `gate`. The three keys `halt_outcome` uses to separate "a
+    #     gate fired" from "the tool declined to proceed" from "an unhandled error"; the
+    #     local copy printed three keys and a reader could not tell the three apart.
+    #
+    # The prefix is UNCHANGED (it is not the module stem for most of these thirteen, and
+    # `blender_stub.halt_handler` reads it off this block rather than guessing); renaming
+    # prefixes is explicitly not this wave's work.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "SAVED_ADMISSION")

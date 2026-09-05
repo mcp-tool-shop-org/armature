@@ -313,9 +313,16 @@ def test_the_plate_parsing_population_is_the_one_this_file_claims():
 def test_the_two_walks_are_literally_the_same_function():
     """F-1c9d39e2's own fix, asserted rather than trusted.
 
-    The shape `tests/test_packaging.py:1367` already uses for the two import scanners: not
-    "these two walks agree today", but "there is one walk". A second implementation of a
-    law drifts, and this pair had drifted into disagreeing about six modules.
+    The shape
+    `tests/test_packaging.py::test_the_two_spend_and_fetch_censuses_are_literally_the_same_function`
+    already uses for the two import scanners: not "these two walks agree today", but "there
+    is one walk". A second implementation of a law drifts, and this pair had drifted into
+    disagreeing about six modules.
+
+    ⚠ RE-ANCHORED 2026-09-05 (wave 25): the citation was a bare line number in
+    `test_packaging.py`, and teaching `_exit_convention` to read the one handler's prefix
+    argument moved it onto a blank line. The number is dropped rather than re-measured —
+    the symbol does not move.
     """
     import test_sheet_pairing as SP
 

@@ -114,6 +114,16 @@ def halt_prefix(tree):
     `BUILD_ASSEMBLY_HALT`, `gate_saved_graph.py` prints `SAVED_ADMISSION_HALT`, and
     `fetch_t2v_run.py` prints `FETCH_T2V_HALT`. One AST read of this literal derives both
     directions of the convention from one node.
+
+    **WAVE 25, F-af838b99 — BOTH spellings, because the thirteen adopted the ONE handler.**
+    The prefix used to live only in a `print("<PREFIX>_HALT " + ...)` literal inside a
+    local handler. All thirteen of `CPU_TOOLS` now pass it to
+    `armature_core.parts.run_tool_main(main, "<PREFIX>")`, so a reader that knows only the
+    literal reports every one of them as having NO prefix — and this census's two
+    properties would then be asserted over nothing, which is the shape it exists to refuse.
+    The same two spellings `blender_stub.halt_handler` reads are read here; the identity is
+    the handler's own prefix either way, and the tool's `_OK` line is still checked
+    against it.
     """
     block = _main_block(tree)
     found = set()
@@ -121,6 +131,10 @@ def halt_prefix(tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, str) \
                 and node.value.strip().endswith("_HALT"):
             found.add(node.value.strip()[:-len("_HALT")])
+        if (isinstance(node, ast.Call)
+                and getattr(node.func, "id", "") == "run_tool_main"
+                and len(node.args) >= 2 and isinstance(node.args[1], ast.Constant)):
+            found.add(node.args[1].value)
     return sorted(found)
 
 

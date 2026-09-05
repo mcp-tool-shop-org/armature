@@ -71,7 +71,11 @@ from armature_core import route_gates  # noqa: E402
 from armature_core import canon as C  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
-from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
+# WAVE 25, F-af838b99: `GateFailure` / `ArmatureError` used to be named in this
+# file's own `__main__` block, which chose the exit code by `isinstance`. That
+# choice belongs to `armature_core.parts.halt_outcome` now, so the names that are
+# no longer referenced here are dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
     canonical_payload_digest, gate_create_video_fps, read_seed_registration,
     single_path_segment)
@@ -155,7 +159,21 @@ class PayloadError(ArmatureError):
     index into `ev` while they measure. `PayloadError` is not a gate, so the constructor is
     DELETED and the base's inherited: `PayloadError("m").evidence is None` and
     `PayloadError("m", d).evidence is d`, by identity.
+
+    **WAVE 25, F-af838b99 — the class-level `gate`.** All thirteen tools in this domain
+    print their halt line through `armature_core.parts.run_tool_main` now, which writes
+    `getattr(exc, "gate", None)` into the record's `gate` key. `PayloadError` was the only
+    class raised in this domain carrying none, so a payload refusal read `gate: null` from
+    BOTH sources — the class attribute and, at the sites that pass no dict, the evidence —
+    while fourteen raise sites were already writing `{"gate": "PAYLOAD"}` into their
+    evidence literal. The id gets its owner, the way wave 18 gave `SAVED_ADMISSION` one.
+    `gate` is a plain class attribute here and NOT a `GateFailure`: `__str__`'s `[gate]`
+    prefix is defined on `GateFailure`, so no message text changes, and `halt_outcome`
+    still reads this as "REFUSED — the tool declined to proceed" rather than as a gate
+    that fired.
     """
+
+    gate = "PAYLOAD"
 
 
 #: What each key of `--uploads` IS, so an absence is reported as an absence. Until wave 6
@@ -182,7 +200,8 @@ def upload_value(uploads, key, source=None):
         raise PayloadError(
             f"{where}carries no `{key}` entry: it is {UPLOAD_KEYS[key]}. Pass an "
             f"--uploads map that names it",
-            {"clause": "missing_upload_key", "key": key,
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "missing_upload_key", "key": key,
              "source": os.path.abspath(source) if source else None,
              "present": sorted(uploads)})
     return uploads[key]
@@ -244,7 +263,10 @@ def read_negative(path):
     if not m:
         raise PayloadError(
             f"{path} carries no `sample_neg_prompt` assignment to read; the negative is not "
-            f"retyped from memory, so the build halts rather than inventing one")
+            f"retyped from memory, so the build halts rather than inventing one",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "negative_source_has_no_sample_neg_prompt",
+             "flag": "--negative-source", "path": os.path.abspath(path)})
     return m.group(2)
 
 
@@ -254,7 +276,10 @@ def identity_clause(path=TWIN_PROMPT_JSON):
         doc = json.load(fh)
     text = doc.get("_entry_verbatim")
     if not isinstance(text, str) or not text.strip():
-        raise PayloadError(f"{path} carries no `_entry_verbatim` identity clause")
+        raise PayloadError(
+            f"{path} carries no `_entry_verbatim` identity clause",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "identity_clause_absent", "path": os.path.abspath(path)})
     original = text
     log = []
     for phrase, reason in IDENTITY_DROPS:
@@ -277,7 +302,9 @@ def identity_clause(path=TWIN_PROMPT_JSON):
                 f"the identity clause no longer contains {phrase!r} as a whole phrase, so "
                 f"this shot's recorded drop cannot be applied. The clause has changed under "
                 f"the experiment and the change log would be describing a different string",
-                {"phrase": phrase, "clause_sha256":
+                {"gate": "PAYLOAD", "andon": "PayloadError",
+                 "clause": "identity_clause_phrase_absent",
+                 "phrase": phrase, "clause_sha256":
                     hashlib.sha256(original.encode("utf-8")).hexdigest()})
         before, after = text[:idx], text[idx + len(phrase):]
         if before.rstrip().endswith(","):
@@ -465,7 +492,10 @@ def build(uploads, seed, negative, positive, registry, reference_fit,
             f"the pose pack declares {packed} frames and the shot is {length}. The "
             f"conditioning node pads a short pose video by REPEATING its last frame and "
             f"truncates a long one, both silently — so a miscount arrives as a performance "
-            f"that freezes or ends early, with every gate green")
+            f"that freezes or ends early, with every gate green",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "pose_pack_frames_are_not_the_shot_length",
+             "pose_pack_frames": packed, "shot_length": length})
 
     wf = {
         "106": {"class_type": "UNETLoader",
@@ -621,8 +651,10 @@ def verify_topology(wf):
             problems.append(f"{dead} is present; the licence map bans or excludes this tier")
 
     if problems:
-        raise PayloadError("the built graph is not the graph the spec describes: "
-                           + "; ".join(problems))
+        raise PayloadError(
+            "the built graph is not the graph the spec describes: " + "; ".join(problems),
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "built_graph_is_not_the_spec_graph", "problems": problems})
     return True
 
 
@@ -662,7 +694,9 @@ def main(argv=None):
     if not neg_path:
         raise PayloadError(
             "--negative-source is required: Wan's sample_neg_prompt is READ from the banked "
-            "config, never retyped. E09's citation check fired on exactly this string")
+            "config, never retyped. E09's citation check fired on exactly this string",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "negative_source_not_supplied", "flag": "--negative-source"})
     negative = read_negative(neg_path)
     ident, ident_original, drops = identity_clause()
     positive = ident + ". " + SCENE_CLAUSE
@@ -706,15 +740,15 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("BUILD_ANIMATE_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # The exit convention, wave 8 (F-3f642bd9), through the ONE handler wave 22 built and
+    # wave 25 adopted here (F-af838b99): 2 = a gate refused (any `ArmatureError`;
+    # `GateFailure` is one), 1 = this tool crashed, and the record is the six keys
+    # `run_tool_main` prints — `tool`, `outcome`, `gate`, `error`, `message`, `evidence` —
+    # as strict JSON (`allow_nan=False`) with `halt_keysafe` applied to the evidence.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the
+    # `BUILD_ANIMATE_HALT` sentinel this handler prints, never on the code alone.
+    # The local three-key copy this replaces, and what it cost, are described in full at
+    # `gate_saved_graph.py`'s block — one description, thirteen adopters, no second spelling.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "BUILD_ANIMATE")

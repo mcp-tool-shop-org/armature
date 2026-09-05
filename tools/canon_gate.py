@@ -43,8 +43,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import canon as C  # noqa: E402
 from armature_core import canon_census  # noqa: E402
-from armature_core.errors import (  # noqa: E402
-    ArmatureError, GateCanon, GateFailure)
+from armature_core.errors import GateCanon  # noqa: E402
+# WAVE 25, F-af838b99: `GateFailure` / `ArmatureError` used to be named in this
+# file's own `__main__` block, which chose the exit code by `isinstance`. That
+# choice belongs to `armature_core.parts.halt_outcome` now, so the names that are
+# no longer referenced here are dropped rather than left dangling.
 
 
 def gate_canon_ships_what_it_gated(canon_prompt, shipped):
@@ -230,24 +233,15 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
-    # disagreed three ways on how a refusal leaves the process: three carried this block,
-    # two exited 2 unconditionally (so a programming error was indistinguishable from a
-    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
-    # operator as a raw traceback with exit 1 and no machine-readable evidence.
-    #
-    # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
-    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `CANON_GATE_HALT`
-    # sentinel below, never on the code alone.
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("CANON_GATE_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # The exit convention, wave 8 (F-3f642bd9), through the ONE handler wave 22 built and
+    # wave 25 adopted here (F-af838b99): 2 = a gate refused (any `ArmatureError`;
+    # `GateFailure` is one), 1 = this tool crashed, and the record is the six keys
+    # `run_tool_main` prints — `tool`, `outcome`, `gate`, `error`, `message`, `evidence` —
+    # as strict JSON (`allow_nan=False`) with `halt_keysafe` applied to the evidence.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the
+    # `CANON_GATE_HALT` sentinel this handler prints, never on the code alone.
+    # The local three-key copy this replaces, and what it cost, are described in full at
+    # `gate_saved_graph.py`'s block — one description, thirteen adopters, no second spelling.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "CANON_GATE")

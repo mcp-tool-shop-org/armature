@@ -987,6 +987,16 @@ def _exit_convention(path):
     `BUILD_ASSEMBLY_HALT`, `gate_saved_graph` → `SAVED_ADMISSION_HALT`, …), so a census
     keyed on the stem would have policed a name nobody prints. Still truthy when present,
     so every existing caller reads the same thing.
+
+    **WAVE 25, F-af838b99.** All thirteen members now print through the ONE handler,
+    `armature_core.parts.run_tool_main(main, "<PREFIX>")`, so the prefix is its second
+    ARGUMENT rather than a `print` literal, and the 2-vs-1 discrimination is
+    `parts.halt_outcome`'s rather than an `IfExp` in the block. A reader that knows only
+    the old spelling reports all thirteen as having no halt line at all — which is the
+    state this census exists to refuse — so both spellings are read, exactly as
+    `blender_stub.halt_handler` reads them. The red proofs below are unchanged and still
+    refuse a block with no handler and a block that exits 2 unconditionally; a third
+    covers a module that adopts the home.
     """
     src = open(path, encoding="utf-8").read()
     block = None
@@ -1008,6 +1018,13 @@ def _exit_convention(path):
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                 and node.func.attr == "exit" and node.args
                 and isinstance(node.args[0], ast.IfExp)):
+            discriminates = True
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "run_tool_main" and len(node.args) >= 2
+                and isinstance(node.args[1], ast.Constant)):
+            # The ONE handler: the prefix is its argument, and the 2-vs-1 split is
+            # `parts.halt_outcome`'s three outcomes rather than an `IfExp` written here.
+            sentinel = node.args[1].value
             discriminates = True
     return (True, sentinel, discriminates)
 
@@ -1057,6 +1074,19 @@ def test_the_census_goes_RED_on_a_member_without_the_convention(tmp_path, monkey
     has_main, sentinel, discriminates = _exit_convention(str(blunt))
     assert (has_main, sentinel) == (True, "BUILD_BLUNT")
     assert discriminates is False
+
+    # WAVE 25, F-af838b99 — the THIRD spelling, the one all thirteen members now use. A
+    # module that adopts `armature_core.parts.run_tool_main` reads truthy on both members;
+    # without this branch the reader answers `(True, False, False)` here, which is the
+    # answer it gives a tool with no handler at all, and every property below would then be
+    # asserted over an empty population.
+    adopter = tmp_path / "build_adopting_payload.py"
+    adopter.write_text(
+        'if __name__ == "__main__":\n'
+        '    from armature_core.parts import run_tool_main\n'
+        '\n'
+        '    run_tool_main(main, "BUILD_ADOPTING")\n', encoding="utf-8")
+    assert _exit_convention(str(adopter)) == (True, "BUILD_ADOPTING", True)
 
     # And the walk itself sees a new member rather than a typed list of the old ones.
     real_listdir = os.listdir

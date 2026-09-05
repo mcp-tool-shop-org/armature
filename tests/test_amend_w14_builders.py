@@ -101,8 +101,21 @@ def _builder_record(api_graph, **verify_kwargs):
 
     Built by CALLING `verify`, not by typing a receipt — the facts this admission reads
     back are the facts the builder's own gate recorded.
+
+    ⚠ CORRECTED 2026-09-05 (wave 25, F-2c15e4e8). This fixture omitted `payload_sha256`,
+    and no builder in the tree does: RE-DERIVED on this branch, `grep -c payload_sha256`
+    over the nine returns 2 / 4 / 2 / 1 / 2 / 1 / 3 / 2 / 1 — non-zero in every one, and
+    `test_amend_w18_builders::test_every_builder_writes_the_field_this_legacy_fixture_omits`
+    derives the same thing from the tree. So the fixture was modelling a record shape this
+    repo has not written since wave 20, and the untied branch it exercised is a REFUSAL
+    now. The digest is computed by the builders' own one derivation,
+    `canonical_payload_digest`, not retyped.
     """
-    return {"tool": "a builder", "gates": {"ROUTE": RG.verify(api_graph, **verify_kwargs)}}
+    from build_assembly_payload import canonical_payload_digest
+
+    return {"tool": "a builder",
+            "payload_sha256": canonical_payload_digest(api_graph),
+            "gates": {"ROUTE": RG.verify(api_graph, **verify_kwargs)}}
 
 
 def test_assembly_route_reaches_admission_when_the_record_says_no_sampler(tmp_path, capsys):

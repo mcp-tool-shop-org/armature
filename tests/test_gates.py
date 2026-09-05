@@ -2062,14 +2062,30 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
     # 79 because both land in files that already define family classes, and
     # `defined_more_than_once` is unchanged because both names are new. BRANCH-LOCAL — a
     # COMPOSITION on the merged tree; the coordinator measures, never sums.
+    # WAVE 25 (builders, F-d30bb5fb, 2026-09-05): 134 -> 135 names, 140 -> 141
+    # definitions, RE-DERIVED with `==` in `w25-builders` after reading 134 / 140 GREEN in
+    # this worktree first. `build_lora_arm_payload.UnknownBaseline` — nine refusals in that
+    # module raised the BARE `ArmatureError` with a message and no evidence, and they could
+    # not simply gain a dict where they stood: the tree holds `raise ArmatureError(msg,
+    # {...})` at zero (`test_instruments_measure_amend_w14`), on `errors.py`'s own ground
+    # that the two-argument constructor "is the root fix, not a licence for a bare base
+    # raise". So the andon got a name. `modules` is unchanged: the class is defined in a
+    # module the walk already counted. BRANCH-LOCAL — sibling domains move this in the same
+    # wave and the coordinator re-derives on the merged tree.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): every value below MEASURED on the merged tree with the helpers above — core-solvers
+    # and builders each added family classes branch-local (136 / 142 and 135 / 141); the merged tree is
+    # neither and is not their sum.
     assert measured == {
-        "names": 136,
-        "definitions": 142,
+        "names": 137,
+        "definitions": 143,
         "modules": 79,
         "defined_more_than_once": {"DetectionGate": 2, "PayloadError": 5, "RenderGate": 2},
         "core_only_definitions": 60,
         "core_only_modules": 20,
     }, measured
-    # the quantity the comment's last clause is about: 82 definitions sit outside the
-    # core-only walk, which is the gap the tree-wide census exists to close
-    assert measured["definitions"] - measured["core_only_definitions"] == 82
+    # the quantity the comment's last clause is about: definitions sitting outside the
+    # core-only walk, which is the gap the tree-wide census exists to close. 82 on
+    # `580af47`; 83 on `w25-builders`, the +1 being `build_lora_arm_payload.UnknownBaseline`
+    # — a class defined under `tools/` and not under `tools/armature_core/`, which is
+    # exactly the population this subtraction measures.
+    assert measured["definitions"] - measured["core_only_definitions"] == 83

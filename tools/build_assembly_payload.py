@@ -65,8 +65,11 @@ from armature_core import canon_census  # noqa: E402  - the subject census
 #   (wave 22, F-27f76c43): this chain arms no Gate CANON, so the census is read
 #   here for the RECORD rather than for a refusal about the prompt.
 from armature_core import route_gates as RG  # noqa: E402
-from armature_core.errors import (  # noqa: E402
-    ArmatureError, GateFailure)
+from armature_core.errors import ArmatureError  # noqa: E402
+# WAVE 25, F-af838b99: `GateFailure` / `ArmatureError` used to be named in this
+# file's own `__main__` block, which chose the exit code by `isinstance`. That
+# choice belongs to `armature_core.parts.halt_outcome` now, so the names that are
+# no longer referenced here are dropped rather than left dangling.
 
 TOOL_VERSION = "S03.2"
 
@@ -372,6 +375,7 @@ def gate_flat_slot_ceiling(graph, batch_id):
           "measured_max": int(MEASURED_FLAT_SLOT_MAX), "measured_by": "S03",
           "inferred_cap": int(AS.INFERRED_SLOT_CAP), "boundary_located": False}
     if slots > MEASURED_FLAT_SLOT_MAX:
+        ev["clause"] = "flat_slot_ceiling_exceeded"
         raise AS.AssemblyGate(
             f"the flat chain's batch node {batch_id} carries {slots} slot(s) and the "
             f"largest flat batch anyone has SEEN EXECUTE is "
@@ -382,8 +386,7 @@ def gate_flat_slot_ceiling(graph, batch_id):
             f"measurements has never been located (INFERRED_SLOT_CAP={AS.INFERRED_SLOT_CAP} "
             f"is read off one error message, not measured). Use "
             f"`build_cascade_payload.py`, which batches the batches and is the supported "
-            f"route for a clip of any length",
-            ev)
+            f"route for a clip of any length", ev)
     ev["verdict"] = (f"the flat batch carries {slots} slot(s), within the "
                      f"{MEASURED_FLAT_SLOT_MAX} anyone has seen execute (S03); the "
                      f"boundary above it is NOT located")
@@ -405,8 +408,10 @@ def frame_order(uploads):
     """
     keys = list(uploads)
     malformed = sorted(k for k in keys if not FRAME_KEY.match(str(k)))
-    ev = {"gate": "ASSEMBLY", "n_keys": len(keys), "malformed": malformed}
+    ev = {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+          "n_keys": len(keys), "malformed": malformed}
     if malformed:
+        ev["clause"] = "frame_key_is_not_a_frame_name"
         raise AS.AssemblyGate(
             f"the upload map carries {len(malformed)} key(s) that are not a zero-padded "
             f"frame name — {malformed[:8]}{' …' if len(malformed) > 8 else ''}. Frame "
@@ -429,17 +434,29 @@ def frame_order(uploads):
     # the suffix verbatim also keeps `want` reconstructing the operator's own key spelling.
     suffixes = {str(k)[5:] for k in keys}
     if len(suffixes) > 1:
+        # Written onto `ev` rather than merged with `dict(ev, ...)` at the raise (wave 25,
+        # F-d30bb5fb): `test_gates._evidence_keys` follows a bare Name to its literal AND
+        # collects the subscript writes above the raise, and cannot do either through a
+        # `dict(ev, …)` call — so the merged form hid this refusal's whole key set.
+        ev["clause"] = "frame_key_shapes_are_mixed"
+        ev["suffixes"] = sorted(suffixes)
         raise AS.AssemblyGate(
             f"the upload map mixes frame-key shapes {sorted(suffixes)!r} (bare 00000, "
             f".png-suffixed, or a differently-CASED suffix); a mixed map has no single "
             f"sort order, and '.PNG' sorts before '.png'. Use one shape throughout",
-            {**ev, "suffixes": sorted(suffixes)})
+            # `dict(ev, ...)` rather than `{**ev, ...}` (wave 25, F-d30bb5fb): the two are
+            # the same object at runtime and NOT the same to the census —
+            # `test_gates._evidence_keys` reads a `**spread` as AUGMENTED and cannot prove
+            # the triple is present, so this one site was the only refusal in the function
+            # the walk could not judge.
+            ev)
     suffix = next(iter(suffixes)) if suffixes else ""
     ordered = sorted(keys)
     want = [f"{i:05d}{suffix}" for i in range(len(keys))]
     missing = [w for w in want if w not in uploads]
     ev["missing"] = missing
     if ordered != want:
+        ev["clause"] = "frame_indices_have_a_hole"
         raise AS.AssemblyGate(
             f"the upload map's frame indices are not 0..{len(keys) - 1} with no gaps: "
             f"missing {missing[:8]}{' …' if len(missing) > 8 else ''}. A hole leaves every "
@@ -528,6 +545,7 @@ def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
                    "frames_planned_twice": sorted(overlapping)[:12],
                    "frames_planned_past_the_clip": outside[:12],
                    "coverage_problems": gaps})
+        ev["clause"] = "slot_plan_does_not_cover_the_clip"
         raise AS.AssemblyGate(
             f"the slot plan does not cover the clip: {len(covered)} of {len(names)} "
             f"frame(s) are planned onto a batch node"
@@ -581,9 +599,11 @@ def gate_slot_frame_index(graph, names, slot_plan, first_image_id):
                         f"claim and they must be the same number")
     if problems:
         ev["problems"] = problems
+        ev["clause"] = "slot_does_not_hold_its_frame"
         raise AS.AssemblyGate(
             "a batch slot does not hold the frame the clip's order puts there: "
-            + "; ".join(problems[:6]) + (" …" if len(problems) > 6 else ""), ev)
+            + "; ".join(problems[:6]) + (" …" if len(problems) > 6 else ""),
+            ev)
     ev["verdict"] = (f"every slot across {len(slot_plan)} batch node(s) holds the upload "
                      f"name of its own frame index, {inspected} slot(s) inspected against "
                      f"a clip of {len(names)} frame(s)")
@@ -741,7 +761,9 @@ def build_and_write(argv=None):
             f"the upload map carries {len(names)} frames but only {len(set(names))} "
             f"distinct server names: two local frames uploaded to the same object, so the "
             f"batch would carry a duplicate while every count still read right",
-            {"n": len(names), "distinct": len(set(names))})
+            {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+             "clause": "two_frames_share_one_server_name",
+             "n": len(names), "distinct": len(set(names))})
 
     wf = build(names, fps=a.fps, prefix=a.prefix)
 
@@ -831,24 +853,15 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
-    # disagreed three ways on how a refusal leaves the process: three carried this block,
-    # two exited 2 unconditionally (so a programming error was indistinguishable from a
-    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
-    # operator as a raw traceback with exit 1 and no machine-readable evidence.
-    #
-    # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
-    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `BUILD_ASSEMBLY_HALT`
-    # sentinel below, never on the code alone.
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("BUILD_ASSEMBLY_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # The exit convention, wave 8 (F-3f642bd9), through the ONE handler wave 22 built and
+    # wave 25 adopted here (F-af838b99): 2 = a gate refused (any `ArmatureError`;
+    # `GateFailure` is one), 1 = this tool crashed, and the record is the six keys
+    # `run_tool_main` prints — `tool`, `outcome`, `gate`, `error`, `message`, `evidence` —
+    # as strict JSON (`allow_nan=False`) with `halt_keysafe` applied to the evidence.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the
+    # `BUILD_ASSEMBLY_HALT` sentinel this handler prints, never on the code alone.
+    # The local three-key copy this replaces, and what it cost, are described in full at
+    # `gate_saved_graph.py`'s block — one description, thirteen adopters, no second spelling.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "BUILD_ASSEMBLY")

@@ -62,8 +62,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
-from armature_core.errors import (  # noqa: E402
-    ArmatureError, GateFailure)
+# WAVE 25, F-af838b99: this file's `__main__` block named `GateFailure` and
+# `ArmatureError` to pick its own exit code. That choice belongs to
+# `armature_core.parts.halt_outcome` now and no other line here names either,
+# so the import is dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
     FRAME_KEY, canonical_payload_digest, frame_order, frame_source_ids,
     gate_create_video_fps, gate_slot_frame_index,
@@ -176,7 +178,9 @@ def build_and_write(argv=None):
             f"the upload map carries {len(names)} frames but only {len(set(names))} "
             f"distinct server names: two local frames uploaded to the same object, so the "
             f"cascade would carry a duplicate while every count still read right",
-            {"n": len(names), "distinct": len(set(names))})
+            {"gate": "ASSEMBLY", "andon": "AssemblyGate",
+             "clause": "two_frames_share_one_server_name",
+             "n": len(names), "distinct": len(set(names))})
 
     wf, group_ids = build(names, fps=a.fps, group_size=a.group, prefix=a.prefix)
 
@@ -275,24 +279,15 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
-    # disagreed three ways on how a refusal leaves the process: three carried this block,
-    # two exited 2 unconditionally (so a programming error was indistinguishable from a
-    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
-    # operator as a raw traceback with exit 1 and no machine-readable evidence.
-    #
-    # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
-    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `BUILD_CASCADE_HALT`
-    # sentinel below, never on the code alone.
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("BUILD_CASCADE_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # The exit convention, wave 8 (F-3f642bd9), through the ONE handler wave 22 built and
+    # wave 25 adopted here (F-af838b99): 2 = a gate refused (any `ArmatureError`;
+    # `GateFailure` is one), 1 = this tool crashed, and the record is the six keys
+    # `run_tool_main` prints — `tool`, `outcome`, `gate`, `error`, `message`, `evidence` —
+    # as strict JSON (`allow_nan=False`) with `halt_keysafe` applied to the evidence.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the
+    # `BUILD_CASCADE_HALT` sentinel this handler prints, never on the code alone.
+    # The local three-key copy this replaces, and what it cost, are described in full at
+    # `gate_saved_graph.py`'s block — one description, thirteen adopters, no second spelling.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "BUILD_CASCADE")

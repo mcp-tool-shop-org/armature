@@ -220,10 +220,12 @@ def test_the_specs_correction_agrees_with_the_tree_it_describes():
 # Measured 2026-09-04 by running the clause's own three checks over all eight specs: E08 has
 # 0 stale of 7 cited; each of E09-A3, E09, E10, E11, E12, E13 and E14 has 4 stale of 7 — 28
 # stale citations in committed spend-ceiling specs that the census never opened. Three
-# examples, identical across the seven: `build_animate_payload.py:475` is cited as a `seeds`
-# reader and reads `uploads = json.load(fh)`; `build_camera_i2v_payload.py:1004` reads an
-# f-string about a noise sampler; `build_i2v_payload.py:496` reads
-# `if "clip_vision_output" in inp:`.
+# examples, identical across the seven: in `build_animate_payload` the cited line was
+# inside `_load_uploads` and read `uploads = json.load(fh)`; in `build_camera_i2v_payload`
+# it read an f-string about a noise sampler; in `build_i2v_payload` it read
+# `if "clip_vision_output" in inp:`. (The three line numbers this sentence used to carry
+# are dropped — wave 25: they drifted twice inside one wave, and a stale example is worse
+# than a symbol.)
 #
 # Correcting the 28 is BUILDERS' (F-5e7fe9dc). This file's half is opening every spec, so
 # the ceiling below can only fall.
@@ -246,11 +248,13 @@ def seed_reader_call_lines(name):
     reader of the seed registration. It used to be `"seeds" in lines[lineno - 1]`, which a
     COMMENT sitting beside the line satisfies, and one such comment exists within four lines
     of every one of the seven citation targets: measured over the wave-20 RE-ANCHORED
-    citations, `build_animate_payload.py:659` has a seeds-bearing comment two lines above
+    citations, `build_animate_payload`'s call site had a seeds-bearing comment two lines above
     inside the same function, and so does every sibling. A one-to-three-line code move above
     any `read_seed_registration` call would leave all eight specs citing a comment as the
     reader of seeds, with both censuses green, and an operator re-deriving a spend ceiling
-    reading prose as the code that consumes the registration.
+    reading prose as the code that consumes the registration. (The line number that stood
+    in this paragraph is dropped — wave 25: it drifted twice inside one wave, which is the
+    same lesson one level up.)
 
     An `ast.Call` whose callee resolves to the reader cannot be satisfied by prose.
     """
@@ -288,15 +292,23 @@ def stale_citations(path):
 #: Measured 2026-09-04 per spec. A CEILING, not equality: builders is re-anchoring the 28
 #: stale citations this wave (F-5e7fe9dc), so a spec that gets corrected leaves this file
 #: green and its entry merely becomes deletable. A citation that GOES stale fails here.
+#:
+#: RE-MEASURED 2026-09-05 (wave 25, builders, F-af838b99): **every entry is 0**. Adopting
+#: the ONE halt handler moved six of the seven cited reader lines (`PayloadError`'s
+#: class-level `gate` and the trimmed error imports shift them by 3 to 41 lines), so all
+#: eight specs were re-anchored to the line each `read_seed_registration` call is on TODAY,
+#: derived by `seed_reader_call_lines` rather than counted by hand. The ceiling is
+#: tightened to the measurement rather than left slack: with every entry at 0 the census is
+#: equality in all but name, and the next citation to drift fails here naming its spec.
 STALE_CITATIONS_TODAY = {
     "E08-seeds.json": 0,
-    "E09-A3-seeds.json": 4,
-    "E09-seeds.json": 4,
-    "E10-seeds.json": 4,
-    "E11-seeds.json": 4,
-    "E12-seeds.json": 4,
-    "E13-seeds.json": 4,
-    "E14-seeds.json": 4,
+    "E09-A3-seeds.json": 0,
+    "E09-seeds.json": 0,
+    "E10-seeds.json": 0,
+    "E11-seeds.json": 0,
+    "E12-seeds.json": 0,
+    "E13-seeds.json": 0,
+    "E14-seeds.json": 0,
 }
 
 

@@ -1167,12 +1167,32 @@ TESTS_CITED_FILES_NOT_IN_THE_TREE = {
 #: symbol is not what the sentence claims. Keyed `(citing module, cited file, line)`,
 #: the same shape as `CORRECTED_ANCHORS` above. Checked rather than trusted: a row
 #: that becomes live again fails `test_the_recorded_stale_anchors_are_all_still_stale`.
+#:
+#: WAVE 25 (builders, F-af838b99, 2026-09-05). Adopting the ONE halt handler in this
+#: domain's thirteen tools moved lines under four citing sentences, and the table moved
+#: with them in BOTH directions:
+#:   - two rows DELETED because their anchors resolve to real code again, which is exactly
+#:     what `test_the_recorded_stale_anchors_are_all_still_stale` exists to catch, and it
+#:     caught them (the `build_r2v_payload` row in `test_amend_w18_builders`, and the
+#:     `test_packaging` row in `test_ci_workflows`);
+#:   - two rows ADDED, both numbers quoted INSIDE the sentence that records them as wrong:
+#:     `test_build_animate_payload` cites a `str.replace` site and says in the same breath
+#:     "(now removed)", and `test_seeds_specs` quotes a dated 2026-09-04 example of a stale
+#:     spec citation. Re-anchoring either would delete the correction, which this repo's
+#:     law forbids.
+#: Every one of the four was re-anchored on its SYMBOL instead, so **two rows out and none
+#: in**. The first attempt added four rows rather than none — a correction sentence that
+#: quotes the number it is correcting puts that number back into the population — and a
+#: SECOND commit in the same wave then shifted three of those four onto live code, which
+#: this table's own exemption check caught again. That is the measurement: a line number in
+#: prose does not survive one wave of edits to the file it points at, so the numbers are
+#: dropped and the sentences name symbols. The record they carried is kept in words.
+#: (No `<file>` `<line>` pair is written in this prose, for the reason the block below
+#: records: a comment explaining the rule is inside the population the rule governs.)
 TESTS_STALE_ANCHORS_RECORDED = {
     ('test_amend_w12_core_gates', 'test_route_gates.py', 1893),
     ('test_amend_w16_core_solvers', 'lift_solve.py', 307),
-    ('test_amend_w18_builders', 'build_r2v_payload.py', 69),
     ('test_assembly', 'test_amend_w12_core_solvers.py', 797),
-    ('test_ci_workflows', 'test_packaging.py', 1013),
     ('test_donor_gate', 'render_pose_sticks.py', 178),
     ('test_instrument_exits', 'author_walk.py', 13),
     ('test_instruments_amend_w10', 'render_pose_sticks.py', 178),

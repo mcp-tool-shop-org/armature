@@ -118,7 +118,11 @@ from armature_core import gates  # noqa: E402
 from armature_core import route_gates  # noqa: E402
 from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
-from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+from armature_core.errors import ArmatureError  # noqa: E402
+# WAVE 25, F-af838b99: `GateFailure` / `ArmatureError` used to be named in this
+# file's own `__main__` block, which chose the exit code by `isinstance`. That
+# choice belongs to `armature_core.parts.halt_outcome` now, so the names that are
+# no longer referenced here are dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
     canonical_payload_digest, gate_create_video_fps, read_seed_registration,
     single_path_segment)
@@ -338,7 +342,21 @@ class PayloadError(ArmatureError):
     index into `ev` while they measure. `PayloadError` is not a gate, so the constructor is
     DELETED and the base's inherited: `PayloadError("m").evidence is None` and
     `PayloadError("m", d).evidence is d`, by identity.
+
+    **WAVE 25, F-af838b99 — the class-level `gate`.** All thirteen tools in this domain
+    print their halt line through `armature_core.parts.run_tool_main` now, which writes
+    `getattr(exc, "gate", None)` into the record's `gate` key. `PayloadError` was the only
+    class raised in this domain carrying none, so a payload refusal read `gate: null` from
+    BOTH sources — the class attribute and, at the sites that pass no dict, the evidence —
+    while fourteen raise sites were already writing `{"gate": "PAYLOAD"}` into their
+    evidence literal. The id gets its owner, the way wave 18 gave `SAVED_ADMISSION` one.
+    `gate` is a plain class attribute here and NOT a `GateFailure`: `__str__`'s `[gate]`
+    prefix is defined on `GateFailure`, so no message text changes, and `halt_outcome`
+    still reads this as "REFUSED — the tool declined to proceed" rather than as a gate
+    that fired.
     """
+
+    gate = "PAYLOAD"
 
 
 def parse_args(argv=None):
@@ -411,7 +429,11 @@ def build_prompt():
             f"dressing's {dress_words} (ratio {ratio:.2f}, floor "
             f"{PROMPT_DOMINANCE['min_ratio']}). The wave exists to invert wave 1's "
             f"proportion, and a prompt that did not would be measuring the camera lever "
-            f"alone while the report described two")
+            f"alone while the report described two",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "performance_clause_does_not_dominate",
+             "performance_words": perf_words, "dressing_words": dress_words,
+             "ratio": ratio, "min_ratio": PROMPT_DOMINANCE["min_ratio"]})
 
     log = {
         "carried_verbatim": {"identity_clause": ident,
@@ -680,7 +702,8 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
     """
     with open(w1_record_path, encoding="utf-8") as fh:
         w1 = json.load(fh)
-    ev = {"gate": "LEDGER_W3", "wave_1_record": os.path.abspath(w1_record_path),
+    ev = {"gate": "LEDGER_W3", "andon": "PayloadError",
+          "wave_1_record": os.path.abspath(w1_record_path),
           "wave_1_seed": w1.get("seed"),
           "comparison_is": ("ROUTE-LEVEL, not single-variable. Four properties break "
                             "deliberately and are listed below; no number from this run may "
@@ -792,9 +815,11 @@ def ledger_against_wave1(positive, uploads, length, w1_record_path,
         # The evidence rides the HALT, not only the pass. It was built, filled, and then
         # dropped on the floor here, so the failing measurement — the interesting one —
         # reached no record at all.
+        ev["clause"] = "payload_is_not_the_ruling_it_describes"
+        ev["problems"] = problems
         raise PayloadError("wave 3's payload is not the one the ruling describes: "
                            + "; ".join(problems),
-                           dict(ev, problems=problems))
+                           ev)
     moved = sorted(overrides)
     ev["verdict"] = (
         f"{len(DELIBERATE_BREAKS)} deliberate breaks verified as actual; "
@@ -824,18 +849,27 @@ def effective_trajectory(overrides=None):
         if field not in out:
             raise PayloadError(
                 f"{field!r} is not a trajectory field; the trajectory is "
-                f"{sorted(out)}")
+                f"{sorted(out)}",
+                {"gate": "PAYLOAD", "andon": "PayloadError",
+                 "clause": "override_names_no_trajectory_field",
+                 "field": field, "trajectory_fields": sorted(out)})
         if field not in OVERRIDABLE:
             raise PayloadError(
                 f"{field!r} is structural to the two-expert split and is not overridable "
                 f"here. Moving it would make the wave incomparable rather than informative; "
-                f"overridable fields are {list(OVERRIDABLE)}")
+                f"overridable fields are {list(OVERRIDABLE)}",
+                {"gate": "PAYLOAD", "andon": "PayloadError",
+                 "clause": "override_field_is_structural",
+                 "field": field, "overridable": list(OVERRIDABLE)})
         was = out[field]["value"]
         if spec["value"] == was:
             raise PayloadError(
                 f"the override for {field!r} sets it to {was!r}, which is what it already "
                 f"was. A break that did not happen is wave 2's failure shape: the report "
-                f"would describe a lever that never moved")
+                f"would describe a lever that never moved",
+                {"gate": "PAYLOAD", "andon": "PayloadError",
+                 "clause": "override_does_not_move_the_field",
+                 "field": field, "value": was})
         out[field] = {"value": spec["value"], "source": spec["source"],
                       "was": was, "moved_by": "an explicit override on this wave"}
     return out
@@ -865,7 +899,8 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
             "whole of the conditioning, and `meta['start_image']` used to identify it only "
             "by a server-side content-addressed name beside a `fit` sentence nothing "
             "checked. Call `resolve_start_frame(path, declared)` and pass its evidence",
-            {"gate": "PAYLOAD", "andon": "start_frame", "flag": "--start-frame",
+            {"gate": "PAYLOAD", "andon": "start_frame",
+             "clause": "start_frame_was_not_resolved", "flag": "--start-frame",
              "start_frame": start_frame})
     if not start_frame.get("image"):
         raise PayloadError(
@@ -1177,8 +1212,10 @@ def verify_topology(wf, start_name):
             problems.append(f"{dead} is present; the licence map bans or excludes this tier")
 
     if problems:
-        raise PayloadError("the built graph is not the graph the spec describes: "
-                           + "; ".join(problems))
+        raise PayloadError(
+            "the built graph is not the graph the spec describes: " + "; ".join(problems),
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "built_graph_is_not_the_spec_graph", "problems": problems})
     return True
 
 
@@ -1206,7 +1243,11 @@ def main(argv=None):
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
     if "start_frame" not in uploads:
-        raise PayloadError(f"{a.uploads} carries no `start_frame` upload name")
+        raise PayloadError(
+            f"{a.uploads} carries no `start_frame` upload name",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "uploads_carry_no_start_frame", "flag": "--uploads",
+             "path": os.path.abspath(a.uploads)})
 
     registry = None
     if a.seeds_registry:
@@ -1218,7 +1259,9 @@ def main(argv=None):
     if not a.negative_source:
         raise PayloadError(
             "--negative-source is required: Wan's sample_neg_prompt is READ from the banked "
-            "config, never retyped. E09's citation check fired on this string")
+            "config, never retyped. E09's citation check fired on this string",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "negative_source_not_supplied", "flag": "--negative-source"})
 
     positive, prompt_log = build_prompt()
     # The SHIPPED positive is what the router checks; `--canon-prompt` is compared
@@ -1277,15 +1320,15 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("BUILD_CAMERA_I2V_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # The exit convention, wave 8 (F-3f642bd9), through the ONE handler wave 22 built and
+    # wave 25 adopted here (F-af838b99): 2 = a gate refused (any `ArmatureError`;
+    # `GateFailure` is one), 1 = this tool crashed, and the record is the six keys
+    # `run_tool_main` prints — `tool`, `outcome`, `gate`, `error`, `message`, `evidence` —
+    # as strict JSON (`allow_nan=False`) with `halt_keysafe` applied to the evidence.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the
+    # `BUILD_CAMERA_I2V_HALT` sentinel this handler prints, never on the code alone.
+    # The local three-key copy this replaces, and what it cost, are described in full at
+    # `gate_saved_graph.py`'s block — one description, thirteen adopters, no second spelling.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "BUILD_CAMERA_I2V")

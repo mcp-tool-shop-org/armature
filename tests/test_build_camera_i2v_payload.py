@@ -328,9 +328,14 @@ def test_the_ledger_passes_when_the_breaks_broke_and_the_trajectory_held(w1_path
 
     `ev["positive"]["differs"] is True` and `ev["trajectory"]["held_agrees"] is True`
     cannot be False in a RETURNED record: `ledger_against_wave1` appends to `problems`
-    when `held != w1_held` (build_camera_i2v_payload.py:602-606) and when the positive
-    does not differ (:628-634), and raises `PayloadError` if `problems` is non-empty
-    (:636) BEFORE it returns `ev`. So both lines took the same value when the ledger
+    when `held != w1_held` and when the positive does not differ, and raises
+    `PayloadError` if `problems` is non-empty BEFORE it returns `ev`.
+
+    ⚠ RE-ANCHORED 2026-09-05 (wave 25): this paragraph cited three line numbers inside
+    `ledger_against_wave1`, and two commits in one wave shifted all three. The citation is
+    the SYMBOL now — `build_camera_i2v_payload::ledger_against_wave1` — which no edit above
+    it moves. That is the form `test_amend_w16_core_solvers.stale_tests_citations` asks
+    for, and the old numbers are dropped rather than re-measured a third time. So both lines took the same value when the ledger
     worked and when it did nothing at all. The clause they appeared to cover is pinned by
     the two refusal tests below, and `test_the_agreement_clauses_are_tautologies_on_the_
     returning_path` states the tautology as a fact about the function.

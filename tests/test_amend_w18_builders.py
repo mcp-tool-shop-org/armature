@@ -281,16 +281,23 @@ def test_the_andon_key_is_spelled_ONE_way_across_gate_saved_graph():
 # ---- SIBLINGS (rule 2): the other raises in `gate_saved_graph.py`. Measured on the base
 # tree, `_raise_rows` returns 13 `RouteGate` raises plus one `SystemExit`. Four of the
 # thirteen — lines 260 (`round_trip`), 311 and 317 (`link_table`) and 488
-# (`link_round_trip`) — name NO gate and NO andon at all, so the two-ids defect cannot
-# occur at them (there is no second id to disagree with the class's). They carry thin
-# evidence, which is a DIFFERENT shape and a Stage B candidate; they are enumerated here
-# and deliberately not moved, because raising them under a new class would change their
-# `str(exc)` prefix with no defect closed.
+# (`link_round_trip`) — named NO gate and NO andon at all, so the two-ids defect could not
+# occur at them (there was no second id to disagree with the class's). They carried thin
+# evidence, which is a DIFFERENT shape, and this wave enumerated them and deliberately did
+# not move them.
+#
+# ⚠ CLOSED IN WAVE 25, F-e62bdc2b. The reasoning above ("raising them under a new class
+# would change their `str(exc)` prefix with no defect closed") was wrong about the second
+# half: the defect was that the halt at the spend boundary carried none of the three keys a
+# reader branches on, while the `__main__` sentinel already said `SAVED_ADMISSION` — so the
+# prefix change is the FIX, not a cost. All four are `SavedAdmission` now, each with
+# `gate` / `andon` / `clause`. The census below is inverted rather than deleted: the
+# category is EMPTY, and a raise that rejoins it fails here naming itself.
 
-def test_the_thin_evidence_siblings_are_still_exactly_four_and_still_name_no_gate():
+def test_the_thin_evidence_siblings_are_closed_and_the_category_stays_empty():
     rows = _raise_rows(os.path.join(TOOLS, "gate_saved_graph.py"))
     thin = sorted(r[0] for r in rows if r[1] in CLASS_GATE_OF and r[2] is None)
-    assert len(thin) == 4, thin
+    assert thin == [], thin
 
 
 # ============================================================ F-5c0f3858 (panel CRITICAL)
@@ -383,11 +390,30 @@ def test_a_record_that_PREDATES_the_field_records_null_and_says_so(tmp_path):
     `test_every_builder_writes_the_field_this_legacy_fixture_omits` below. What this test
     holds is the legacy shape itself, which is a real one: `payload_digests` reads records
     this repo wrote before wave 20 as well as records it writes now.
+
+    ⚠ CORRECTED 2026-09-05 (wave 25, F-2c15e4e8), and the correction is the finding. The
+    sentence this test asserted — "the record declares no `payload_sha256`, so the facts
+    below are NOT tied to the graph being admitted" — was returned inside `source` on an
+    ADMITTED run: the provenance document for an irreversible spend stated in prose that
+    its two spend-admitting facts are untied, beside a verdict line reading OK. That branch
+    is a REFUSAL now, because the escape's population is empty (all nine builders write the
+    digest, derived below). The legacy shape is still READ, which is what this test holds:
+    with no api graph there is nothing to be untied from, and the absence is recorded
+    exactly as before. With a graph, it is refused by name.
     """
     path = _record(tmp_path, {"gates": {"ROUTE": _receipt()}})
-    facts = GSG.route_facts(path, _api_graph())
+
+    # the facts-only reading: nothing to tie to, so the absence is a recorded fact
+    facts = GSG.route_facts(path)
     assert facts["payload_sha256"] is None
     assert "no `payload_sha256`" in facts["source"], facts["source"]
+
+    # the admitting reading: a graph is being vouched for, and the record cannot vouch
+    exc, ev = _raises(GSG.route_facts, path, _api_graph())
+    assert isinstance(exc, GSG.SavedAdmission), type(exc).__name__
+    assert ev["clause"] == "record_is_not_tied_to_the_graph", ev
+    assert ev["api_payload_sha256"] == _digest(_api_graph()), ev
+    assert ev["declared_payload_sha256"] is None, ev
 
 
 def test_every_builder_writes_the_field_this_legacy_fixture_omits():

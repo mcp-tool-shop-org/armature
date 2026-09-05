@@ -352,6 +352,10 @@ RECORDED_POPULATION = frozenset({
     # exists to BE reports a malformed subject as a refusal the halt contract can read.
     "SubjectExtentError",
     "TierGate", "TrackingError", "TurnaroundAlphaGate",
+    # wave 25 (builders, F-d30bb5fb): `build_lora_arm_payload`'s nine bare-base refusals
+    # get an andon with a name — the baseline handed to `--baseline` is not the E12
+    # two-expert route this tool knows how to arm.
+    "UnknownBaseline",
     "TurnaroundCropGate", "TurnaroundGate", "TurnaroundPlanRefusal", "WalkError",
     "WalkGate",
     # Joined 2026-09-04 (wave 10, instruments-measure). The census caught the growth
@@ -543,7 +547,18 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     #   +1 `startframe.ShadowError` (F-efd6b45c) — two sites, one explicit and one
     #      delegated through `parts.tightened`. `channels.ChannelEncodeError` (F-e8074763)
     #      is single-site and stays out; see RECORDED_POPULATION for both derivations.
-    assert len(POLICED) == 111, sorted(POLICED)
+    # WAVE 25 (builders, F-d30bb5fb, 2026-09-05): 110 -> 111, RE-DERIVED with `==` in
+    # `w25-builders` after reading 110 GREEN in this worktree first. +1
+    # `build_lora_arm_payload.UnknownBaseline` (9 raise sites, well over the two-site
+    # threshold): nine refusals in that module raised the BARE `ArmatureError` with a
+    # message and no evidence, and the tree holds `raise ArmatureError(msg, {...})` at zero
+    # on `errors.py`'s own ground that the two-argument constructor "is the root fix, not a
+    # licence for a bare base raise". So the andon got a name rather than a dict.
+    #      ⚠ **BRANCH-LOCAL.** Sibling domains move this in the same wave (core-solvers
+    #      posts 110 -> 111 for its own class); the coordinator MEASURES on the merged tree.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): POLICED MEASURED on the merged tree — core-solvers (+ShadowError) and builders
+    # (+UnknownBaseline) each read 111 branch-local; the merged set holds both.
+    assert len(POLICED) == 112, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -700,7 +715,37 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # WAVE 22 (core-gates, F-0d33958f): 71 → 72. `_one_graph_declaration`'s
     # `multiple_graph_declarations`. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
     # WAVE-22 MERGE (coordinator, 2026-09-05): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(RAISE_SITES["RouteGate"]) == 74, sorted(RAISE_SITES["RouteGate"])
+    # WAVE 25 (builders, F-e62bdc2b, 2026-09-05): 74 -> 70, RE-DERIVED with `==` in
+    # `w25-builders` after reading 74 GREEN in this worktree first, so the delta is
+    # demonstrably this domain's. -4 in `gate_saved_graph.py`, all four raises moving off
+    # the bare `RouteGate` onto `SavedAdmission` — the same "a raise that leaves this count
+    # because it became MORE specific is the fix working" the wave-16 and wave-18 notes
+    # above record for `SpendCeiling` and for wave 18's own five:
+    #   `round_trip`'s "the saved file is not the graph this repo built",
+    #   `link_table`'s two entry clauses (`unreadable_link_table_entry`,
+    #   `link_table_entry_names_no_origin`), and `link_round_trip`'s "the saved file's
+    #   topology is not the topology this repo built". Wave 18 enumerated exactly these
+    #   four as thin-evidence siblings and left them; the halt at the spend boundary
+    #   carried no `gate`, no `andon` and no `clause` while its own sentinel said
+    #   SAVED_ADMISSION. `SavedAdmission`'s own site count moves 8 -> 12 in the same commit.
+    #      ⚠ **BRANCH-LOCAL.** Four sibling domains move this number in the same wave; the
+    #      coordinator MEASURES it on the merged tree and never sums.
+    # WAVE 25 (builders, F-2c15e4e8 + F-9dd141d9, 2026-09-05): 70 -> 68, and the -2 hides
+    # moves in both directions, so it is itemised:
+    #   -1 `gate_saved_graph.route_facts`' untied branch, which ADMITTED and returned a
+    #      sentence saying the facts were not tied to the graph; it is a `SavedAdmission`
+    #      refusal now (`record_is_not_tied_to_the_graph`), so it leaves this count by
+    #      becoming MORE specific — the same direction the wave-16 and wave-18 notes above
+    #      record.
+    #   -2 `build_r2v_payload.build`'s two `arm_input_missing` raises, DELETED: one
+    #      condition had two clause words across two layers, and `build()` now calls the
+    #      same `gate_arm_input` the CLI calls. A refusal site disappearing because two
+    #      sites became one is as much a finding as one appearing.
+    #   +1 `build_r2v_payload.gate_arm_input`, the ONE raise those two collapsed into.
+    # 70 - 1 - 2 + 1 = 68, MEASURED with `len(RAISE_SITES["RouteGate"])`, never summed.
+    #      ⚠ **BRANCH-LOCAL.** core-gates posts 74 -> 77 on its own branch; the coordinator
+    #      MEASURES on the merged tree.
+    assert len(RAISE_SITES["RouteGate"]) == 68, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside
@@ -838,7 +883,12 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # `ArmatureError` sibling rather than a fourth gate class, because `shadow_ratio` is
     # arithmetic that authors a layer and `StartFrameGate` is Gate WHOLE). No class was
     # deleted. ⚠ BRANCH-LOCAL — a COMPOSITION on the merged tree; five domains move it.
-    assert len(defined) == 136, len(defined)
+    # WAVE 25 (builders, F-d30bb5fb): 134 -> 135, RE-DERIVED with `==` — the same
+    # `UnknownBaseline` the POLICED pin above names. `tests/test_gates.py`'s twin
+    # measurement moves with it (names 135, definitions 141), which is what
+    # `test_the_two_family_walks_are_one_law` exists to keep true. BRANCH-LOCAL.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree with the derivation above, never summed.
+    assert len(defined) == 137, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
@@ -1369,7 +1419,6 @@ RECORDED_CLAUSES = [
     'anchor_outside_unit_interval',
     'arc_did_not_survive',
     'arc_does_not_move',
-    'arm_input_missing',
     'arm_not_in_experiment',
     'asset_has_no_evaluated_geometry',
     'asset_imported_no_mesh_objects',
@@ -1380,6 +1429,8 @@ RECORDED_CLAUSES = [
     'bad_magic',
     'band_too_narrow',
     'banned_component_in_base',
+    'baseline_is_not_the_two_expert_split',
+    'baseline_node_was_removed',
     'batch_node_is_not_a_batch',
     'batch_node_over_the_slot_ceiling',
     'bisect_bracket_not_finite',
@@ -1403,16 +1454,21 @@ RECORDED_CLAUSES = [
     'bound_is_negative',
     'bound_may_only_tighten',
     'bound_not_finite',
+    'boundary_is_crossed_at_step_zero',
+    'boundary_is_never_crossed',
     'bufferview_negative_range',
     'bufferview_no_bytelength',
     'bufferview_not_an_index',
     'bufferview_out_of_range',
     'bufferview_past_bin_chunk',
+    'built_graph_is_not_the_spec_graph',
+    'built_graph_link_topology_is_wrong',
     'cadence_outruns_frame_rate_at_a_stance_exchange',
     'camera_widget_order',
     'candidate_frames_are_not_all_one_size',
     'cap_below_the_bbox_corners',
     'cap_would_loosen_the_module_ceiling',
+    'carried_from_an_assembly_gate',
     'census_is_not_a_mapping',
     'centreline_has_zero_length',
     'centroids_not_n_by_3',
@@ -1435,6 +1491,9 @@ RECORDED_CLAUSES = [
     'compositor_socket_is_not_the_pass',
     'compositor_source_is_not_render_layers',
     'conditional_tier_without_its_readers',
+    'conditioning_chain_loops',
+    'control_names_not_supplied',
+    'control_source_directory_holds_no_frames',
     'convention_nonconformance',
     'convention_pin_disagrees',
     'converted_widget_shifts_enum_indices',
@@ -1457,7 +1516,9 @@ RECORDED_CLAUSES = [
     'depth_rel_threshold_not_finite_and_positive',
     'destination_frame_count_below_two',
     'diagnostic_cannot_be_armed',
+    'distinct_uploads_disagree_with_the_rendered_control',
     'downloader_job_exits',
+    'downloader_shell_not_found',
     'drawing_constant_outside_the_record',
     'drawing_convention_not_retrieved',
     'duplicate_link_id',
@@ -1482,8 +1543,11 @@ RECORDED_CLAUSES = [
     'every_point_behind_the_camera',
     'expectation_carries_a_duplicated_frame',
     'expectation_is_not_the_frame_list',
+    'expected_model_sampling_node',
     'expected_rate_not_finite',
     'expected_rate_not_positive',
+    'expected_unet_loader_node',
+    'experts_read_different_positives',
     'extent_over_zero_points',
     'extraction_left_no_faces',
     'ffmpeg_binary_not_found',
@@ -1491,6 +1555,7 @@ RECORDED_CLAUSES = [
     'field_disagrees',
     'fit_disagrees_with_the_file',
     'flag_component_not_an_integer',
+    'flat_slot_ceiling_exceeded',
     'forbidden_not_a_list',
     'forbidden_word',
     'frame_absent_from_manifest',
@@ -1500,10 +1565,13 @@ RECORDED_CLAUSES = [
     'frame_form',
     'frame_hints_are_parallel',
     'frame_index_not_in_the_clip',
+    'frame_indices_have_a_hole',
     'frame_is_colour_not_grayscale',
     'frame_is_missing_a_bone',
     'frame_is_not_eight_bit',
     'frame_is_palette_indexed',
+    'frame_key_is_not_a_frame_name',
+    'frame_key_shapes_are_mixed',
     'frame_not_hw3',
     'frame_not_three_integers',
     'frame_size_not_positive',
@@ -1526,8 +1594,12 @@ RECORDED_CLAUSES = [
     'hand_length_not_positive',
     'hinge_hint_is_parallel_to_the_bone',
     'hosted_enum_widgets_truncated',
+    'identity_clause_absent',
+    'identity_clause_phrase_absent',
     'identity_only',
     'import',
+    'inserted_node_id_already_exists',
+    'insertions_are_not_the_named_ones',
     'interior_sample_past_the_span',
     'keypoint_outside_the_frame',
     'keypoint_value_is_not_a_number',
@@ -1539,6 +1611,7 @@ RECORDED_CLAUSES = [
     'licence_map_ruling',
     'limb_column_is_discontinuous',
     'limb_trace_too_short',
+    'link_table_entry_names_no_origin',
     'masked_geometry_is_all_background_depth',
     'measurement_dated_in_the_future',
     'measurement_not_positive',
@@ -1552,8 +1625,12 @@ RECORDED_CLAUSES = [
     'missing_subject',
     'missing_upload_key',
     'mitten_hand_wrong_point_count',
+    'model_chain_loops',
     'motion_record_has_no_frames',
     'multiple_graph_declarations',
+    'named_break_did_not_happen',
+    'negative_source_has_no_sample_neg_prompt',
+    'negative_source_not_supplied',
     'no_batch_node_to_measure',
     'no_camera_block',
     'no_candidate_frames',
@@ -1582,6 +1659,7 @@ RECORDED_CLAUSES = [
     'no_surfaces',
     'no_trace_to_size_a_ball_against',
     'no_trace_to_size_a_bone_against',
+    'no_uploaded_control_frames',
     'no_vertices_to_frame',
     'no_views',
     'node_map_duplicate_id',
@@ -1589,6 +1667,7 @@ RECORDED_CLAUSES = [
     'node_map_entry_empty_side',
     'node_map_entry_shape',
     'node_without_a_class_type',
+    'noise_adding_sampler_carries_another_seed',
     'non_finite_depth_window',
     'non_finite_encoder_input',
     'non_finite_geometry_depth',
@@ -1620,9 +1699,14 @@ RECORDED_CLAUSES = [
     'out_dir_is_not_a_directory',
     'out_dir_not_empty',
     'output_name_is_not_a_name',
+    'override_does_not_move_the_field',
+    'override_field_is_structural',
+    'override_names_no_trajectory_field',
     'pack_rate_not_positive',
     'palm_plane_degenerate',
     'part_radius_not_positive',
+    'payload_is_not_the_ruling_it_describes',
+    'performance_clause_does_not_dominate',
     'phase_shorter_than_a_frame',
     'pixels_not_a_plane',
     'pixels_unreadable',
@@ -1636,7 +1720,11 @@ RECORDED_CLAUSES = [
     'point_cloud_not_finite',
     'points_behind_the_camera',
     'population_is_not_the_spec_names',
+    'pose_pack_frames_are_not_the_shot_length',
+    'positive_encoder_is_not_reachable',
+    'positive_prompt_is_empty',
     'preview_frame_collapsed',
+    'prompt_is_not_the_e08_prompt',
     'radius_bounds_not_an_interval',
     'radius_bounds_not_finite_and_positive',
     'radius_not_a_distance',
@@ -1646,6 +1734,7 @@ RECORDED_CLAUSES = [
     'record_carries_no_verify_receipt',
     'record_describes_a_different_graph',
     'record_frame_counts_disagree',
+    'record_is_not_tied_to_the_graph',
     'record_route_facts_disagree',
     'record_unreadable',
     'recorded_convention_digest_drift',
@@ -1667,8 +1756,11 @@ RECORDED_CLAUSES = [
     'sample_index_is_negative',
     'sample_names_no_frames',
     'sampled_window_outside_the_keys',
+    'saved_topology_is_not_the_built_topology',
+    'saved_values_are_not_the_built_values',
     'scene_fps_disagrees_with_the_shot',
     'schema',
+    'seed_is_not_in_the_committed_registry',
     'seed_not_registered',
     'segment_has_zero_length',
     'sensor_mm_not_finite_and_positive',
@@ -1682,6 +1774,8 @@ RECORDED_CLAUSES = [
     'silhouette_does_not_clear_the_border',
     'silhouette_is_not_a_standing_figure',
     'site_registration_invalid',
+    'slot_does_not_hold_its_frame',
+    'slot_plan_does_not_cover_the_clip',
     'snappable_site_is_not_a_landmark',
     'source_has_no_faces',
     'source_image_has_a_zero_dimension',
@@ -1694,7 +1788,9 @@ RECORDED_CLAUSES = [
     'stance_frac_not_modelled',
     'stance_frac_outside_0_1',
     'start_frame_not_a_png',
+    'start_frame_refused_by_the_sibling',
     'start_frame_unmeasured',
+    'start_frame_was_not_resolved',
     'stream_reported_no_rate',
     'strip_stride_not_positive',
     'subject_args',
@@ -1702,6 +1798,8 @@ RECORDED_CLAUSES = [
     'sweep_revisits_an_azimuth',
     'target_not_a_3_vector',
     'the four image corners are background on a shot framed around the figure; a mask that calls one of them subject has segmented a gradient, not a body',
+    'tier_is_not_in_the_lora_name',
+    'tier_matched_pair_is_crossed',
     'tolerance_not_finite',
     'too_few_bands_for_a_centreline',
     'too_few_destination_samples',
@@ -1716,6 +1814,7 @@ RECORDED_CLAUSES = [
     'trunk_holds_no_clusters',
     'twist_datum_collapsed',
     'two_answers',
+    'two_frames_share_one_server_name',
     'unexpected_source_node',
     'unknown_arm',
     'unknown_axis',
@@ -1729,15 +1828,20 @@ RECORDED_CLAUSES = [
     'unknown_spec_key',
     'unknown_stickwidth_type',
     'unknown_subject',
+    'unknown_trajectory_profile',
+    'unnamed_difference_from_the_baseline',
     'unparseable_file',
     'unratified_only',
     'unreadable',
     'unreadable_landmark_row',
+    'unreadable_link_table_entry',
     'unreadable_node',
     'unreadable_shape',
     'unsupported_bit_depth',
     'unsupported_shape',
     'unsupported_version',
+    'upload_count_is_not_the_shot_length',
+    'uploads_carry_no_start_frame',
     'vector_has_zero_length',
     'verify_receipt_missing_its_facts',
     'vertices_not_n_by_3',
@@ -2002,13 +2106,20 @@ def test_a_clause_is_a_word_a_halt_reader_can_key_on():
 
 
 #: MEASURED 2026-09-05 and OUT OF DOMAIN: one condition, two clause words, in the builder
-#: for the hosted partner tier that bills per submission. `arm_input_missing` at
-#: `build_r2v_payload.py:134` and `:144`; `missing_arm_input` at `:317`. Posted to the
-#: wave-23 seams inbox for builders. Asserted as a PAIR that still exists, so the row cannot
-#: rot: closing it deletes the row in the same commit.
-ONE_CONDITION_TWO_SPELLINGS = {
-    "build_r2v_payload.py": ("arm_input_missing", "missing_arm_input"),
-}
+#: for the hosted partner tier that bills per submission. `arm_input_missing` was raised by
+#: `build()` for arms A1 and A2 and `missing_arm_input` by `build_and_write` for the same
+#: two arms off its own local copy of the same table. Posted to the wave-23 seams inbox for
+#: builders. Asserted as a PAIR that still exists, so the row could not rot: closing it
+#: deletes the row in the same commit.
+#:
+#: ⚠ EMPTY as of wave 25 (builders, F-9dd141d9, 2026-09-05). `arm_input_missing` is retired
+#: and `build()` CALLS the check `build_and_write` uses, so there is one raise rather than
+#: two words agreeing; `missing_arm_input` survives because it is the word the CLI actually
+#: printed and its message names the flag. The row is deleted here, in that commit, which
+#: is this table's own rule. The table is KEPT and the test below still runs over it: a new
+#: pair recorded here is asserted the same way, and an empty table is the state this census
+#: was written to reach.
+ONE_CONDITION_TWO_SPELLINGS = {}
 
 
 def test_the_doubled_clause_spelling_is_recorded_where_it_still_lives():

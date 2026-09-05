@@ -53,10 +53,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # `fetch_run` already carried both; this file carried a second exception class with the
 # same gate id and no plan-to-disk check at all, under a comment claiming the two were the
 # same fix. Wave 6: the sibling's implementation is imported rather than re-written.
-from armature_core.errors import (  # noqa: E402
-    ArmatureError, GateFailure)
+# WAVE 25, F-af838b99: this file's `__main__` block named `GateFailure` and
+# `ArmatureError` to pick its own exit code. That choice belongs to
+# `armature_core.parts.halt_outcome` now and no other line here names either,
+# so the import is dropped rather than left dangling.
 from fetch_run import (  # noqa: E402,F401
-    EXITS_NAME, FetchHalt, PNG_SIGNATURE, verify_downloads)
+    EXITS_NAME, FetchHalt, PNG_SIGNATURE, gate_downloader_shell, verify_downloads)
 from fetch_run import download as fetch_download  # noqa: E402
 # The ONE dump reader (wave 22, F-2380aca9). This module carried the identical two lines and
 # RE-MEASURED identically on `e8263a3`: a non-JSON dump -> FETCH_T2V_HALT `JSONDecodeError`
@@ -295,6 +297,10 @@ def main(argv=None):
         # The operator's own input, named in the receipt: the halt is about THIS dump.
         exc.evidence["dump"] = os.path.abspath(a.dump)
         raise
+    # ---- Gate FETCH · ANDON, wave 25 (F-edf3a80b). The sibling's ONE implementation,
+    # imported like `download` itself rather than spelled again, armed above the first
+    # `os.makedirs` so a rig with no downloader leaves no run directory behind.
+    gate_downloader_shell()
     os.makedirs(a.out, exist_ok=True)
     with open(os.path.join(a.out, "download_manifest.json"), "w", encoding="utf-8") as fh:
         json.dump({"tool": "fetch_t2v_run", "tool_version": TOOL_VERSION,
@@ -397,24 +403,15 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    # The exit convention, wave 8 (F-3f642bd9). The nine builders and the two fetchers
-    # disagreed three ways on how a refusal leaves the process: three carried this block,
-    # two exited 2 unconditionally (so a programming error was indistinguishable from a
-    # gate refusal), and eight had no handler at all — a Gate CANON halt reached the
-    # operator as a raw traceback with exit 1 and no machine-readable evidence.
-    #
-    # 2 = a gate refused (any `ArmatureError`; `GateFailure` is one). 1 = this tool crashed.
-    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the `FETCH_T2V_HALT`
-    # sentinel below, never on the code alone.
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except BaseException as exc:  # noqa: BLE001 - the halt must be legible and loud
-        import traceback
-        traceback.print_exc()
-        detail = getattr(exc, "evidence", None)
-        print("FETCH_T2V_HALT " + json.dumps({
-            "error": type(exc).__name__, "message": str(exc),
-            "evidence": detail if isinstance(detail, dict) else None}, default=str))
-        sys.exit(2 if isinstance(exc, (GateFailure, ArmatureError)) else 1)
+    # The exit convention, wave 8 (F-3f642bd9), through the ONE handler wave 22 built and
+    # wave 25 adopted here (F-af838b99): 2 = a gate refused (any `ArmatureError`;
+    # `GateFailure` is one), 1 = this tool crashed, and the record is the six keys
+    # `run_tool_main` prints — `tool`, `outcome`, `gate`, `error`, `message`, `evidence` —
+    # as strict JSON (`allow_nan=False`) with `halt_keysafe` applied to the evidence.
+    # ⚠ argparse's own usage errors ALSO exit 2, so a wrapper keys on the
+    # `FETCH_T2V_HALT` sentinel this handler prints, never on the code alone.
+    # The local three-key copy this replaces, and what it cost, are described in full at
+    # `gate_saved_graph.py`'s block — one description, thirteen adopters, no second spelling.
+    from armature_core.parts import run_tool_main  # noqa: E402
+
+    run_tool_main(main, "FETCH_T2V")

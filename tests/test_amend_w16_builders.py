@@ -1063,7 +1063,17 @@ def test_every_clause_name_in_the_two_fetchers_is_distinct():
     # `unexpected_source_node` and `empty_results` are ONE clause in two planners by
     # design - the same refusal, one wording, both fetchers - and that is what makes them
     # readable across the pair. Any other repeat is two refusals wearing one name.
-    assert sorted(shared) == ["'empty_results'", "'unexpected_source_node'"], shared
+    #
+    # WAVE 25 (builders, F-edf3a80b): `downloader_shell_not_found` joins them, and its two
+    # sites are BOTH in `fetch_run.py` — `gate_downloader_shell` (the downloader is not on
+    # PATH) and the `except OSError` around the launch (it resolves and will not start).
+    # They are one condition split by what `shutil.which` can and cannot see: a downloader
+    # that cannot run, so no per-job exit record is written and every clause below the
+    # launch would be deciding on evidence that was never produced. A reader keying on the
+    # word learns the same thing from either. The sibling fetcher IMPORTS both the gate and
+    # `download`, so it adds no third site.
+    assert sorted(shared) == ["'downloader_shell_not_found'", "'empty_results'",
+                              "'unexpected_source_node'"], shared
 
 
 # ============ the builders half of core-gates' F-069ae942 (SEAM 5) - the receipt-kind key
