@@ -83,7 +83,8 @@ def extent_summary(half_extent):
     # degenerate** on a mesh whose extent is not a number. `(inf, 1.0, 0.5)` returns
     # finite extents with an infinite aspect.
     #
-    # Two consequences, both on the one caller (`probe_subject.py:133/:150`):
+    # Two consequences, both on the one caller (`probe_subject.py::probe_one`; re-anchored on
+    # the symbol at the wave-22 merge (coordinator, 2026-09-05), the line form having gone stale):
     #   (a) the record it writes is `json.dump(payload, fh, indent=2)` with the stdlib
     #       `allow_nan` default, so `subject_extents.json` gets the bare token `NaN` and
     #       is not RFC-8259 JSON — the identical defect `shotspec.dump_spec` was given

@@ -416,8 +416,12 @@ HALT_ROWS = [
      "SolveGate", "sites_non_finite"),
     ("F-d255af87", "lift_clip.py", "LIFT_CLIP_HALT", _refusal_twist_tripwire,
      "SolveError", "clause"),
+    # WAVE-22 MERGE (coordinator, 2026-09-05): on the merged tree `measure_clip.py` ends in
+    # `parts.run_tool_main` (SEAM 1) and prints the six-key record, so the operand is read out
+    # of `evidence` like every other row; the key is `n_selected` (0), MEASURED. The message
+    # substring this row carried while the narrow record was in the tree is gone with it.
     ("F-e15d9de2", "measure_clip.py", "MEASURE_CLIP_HALT", _refusal_gradient_band_empty,
-     "ClipCompareError", "selects 0 of 256 pixel(s)"),
+     "ClipCompareError", "n_selected"),
 ]
 
 
@@ -435,7 +439,9 @@ def test_the_halt_line_an_operator_reads_carries_this_waves_operand(
     — so for those the operand is read out of the printed MESSAGE. That narrowing is
     instruments-measure's own wave-22 work (F-c3dd5ba3, F-7f59629f) and SEAM 1's handler is
     what closes it; this test is written to read what is there rather than to assert the
-    other domain's fix has landed.
+    other domain's fix has landed. (WAVE-22 MERGE (coordinator, 2026-09-05): it landed for `measure_clip` --
+    the merged tree prints the six-key record there and the F-e15d9de2 row reads `evidence`;
+    the paragraph above is kept as the record of why the two-shape read exists.)
     """
     from blender_stub import exit_code_of_main_block
 

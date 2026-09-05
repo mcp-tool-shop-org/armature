@@ -2662,14 +2662,14 @@ GUARDED_TODAY = [
     "tools/make_test_armature.py",
     # WAVE 16 (core-solvers, SEAM 11 §5) — see the note above `aapose.py`.
     "tools/measure_cascade_clip.py",
-    # WAVE 22 (instruments, F-7cd1b3b7 / F-f7d1f64f): `pack_pose_pack.py` is opened by
-    # path by the wave-22 amend module and by `tests/conftest.py`'s SEAM-1 bridge — it
-    # holds the `single_path_segment` copy SEAM 1 homes in `armature_core.parts`, and
-    # both the byte-equivalence check and the bridge read its SOURCE rather than
-    # importing it (the module imports `bpy`). Under `tools/**`, which BOTH triggers
-    # already carry, so `ci.yml` needs no change and `UNFILTERED_PENDING` stays empty.
-    # The list is SORTED, so this entry sits by name and not by topic.
-    "tools/pack_pose_pack.py",
+    # WAVE 22 (instruments, F-7cd1b3b7 / F-f7d1f64f) added `tools/pack_pose_pack.py` here:
+    # the amend module and `tests/conftest.py`'s SEAM-1 bridge opened it by path to read the
+    # `single_path_segment` copy SEAM 1 homes in `armature_core.parts`. WAVE-22 MERGE
+    # (coordinator, 2026-09-05): the seam landed, the bridge and the byte-equivalence check
+    # were deleted with it, and the walk above no longer returns the file — MEASURED on the
+    # merged tree (`paths_the_suite_guards() ^ GUARDED_TODAY == {'tools/pack_pose_pack.py'}`
+    # before this line was removed, empty after). Recorded so the absence reads as a
+    # measurement, the same way `fetch_t2v_run.py`'s does above.
     "tools/render_pose_sticks.py",
     # WAVE 16 (core-solvers, SEAM 11 §5) — see the note above `aapose.py`.
     "tools/render_start_frame.py",

@@ -669,6 +669,15 @@ def _halt_keysafe(value, _seen=None):
         return {str(k): _halt_keysafe(v, _seen) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_halt_keysafe(v, _seen) for v in value]
+    # WAVE-22 MERGE (coordinator, 2026-09-05): the VALUE clause the 21 Blender-side handlers gained in the same
+    # wave (instruments, F-897a3329), posted to this domain's inbox as the 22nd copy. `default=`
+    # applies to values Python cannot encode, never to a float it CAN, and `allow_nan` defaults
+    # True -- so a non-finite operand reached the halt line as the bare token `NaN`, which the
+    # JSON grammar does not have. `repr` keeps the operand readable ("nan" / "inf" / "-inf"),
+    # and `allow_nan=False` on the two halt dumps below then cannot raise.
+    if isinstance(value, float) and (value != value
+                                     or value in (float("inf"), float("-inf"))):
+        return repr(value)
     return value
 
 
@@ -791,7 +800,7 @@ if __name__ == "__main__":
             "tool": "stage_render", "outcome": _outcome, "gate": None,
             "error": type(exc).__name__,
             "message": "the halt line could not be built", "evidence": None}
-        _line = json.dumps(_sentinel)
+        _line = json.dumps(_sentinel, allow_nan=False)
         try:
             traceback.print_exc()
             _detail = getattr(exc, "evidence", None)
@@ -801,7 +810,7 @@ if __name__ == "__main__":
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (_halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str)
+            _line = json.dumps(_sentinel, default=str, allow_nan=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:

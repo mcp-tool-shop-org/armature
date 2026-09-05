@@ -539,163 +539,76 @@ def test_both_denominators_are_guarded_above_their_division():
 # ===========================================================================
 #
 # SEAM 1 (core-solvers, wave 22) homed `single_path_segment` in `armature_core.parts`;
-# instruments-measure deletes its two byte-identical copies (`pack_pose_pack.py:82`,
-# `resample_motion.py:76`) and builders adopts the same object for `fetch_run --run`.
-# Instruments ADOPTS BY IMPORT and spells nothing locally.
+# instruments-measure deleted its two copies (`pack_pose_pack.py`, `resample_motion.py`) and
+# builders adopts the same object for `fetch_run --run`. Instruments ADOPTS BY IMPORT and
+# spells nothing locally.
 #
-# The helper does not exist on this branch until core-solvers' commit merges, so the
-# BEHAVIOURAL half below is skipped here and runs on the merged tree; the ADOPTION half is
-# an AST census that runs unconditionally, and `test_the_seam_1_block_is_real` fails rather
-# than skips if the premise ever stops being true. That is the shape of a measured block:
-# it goes red the day it is lifted rather than quietly outliving it.
+# WAVE-22 MERGE (coordinator, 2026-09-05): the seam has LANDED. On the branch this module was written on the
+# helper did not exist yet, so `tests/conftest.py` carried a session-scoped bridge that stood
+# the `pack_pose_pack` copy in under the same name, `_STAND_IN_SOURCES` / `_shape_of` measured
+# that the two copies agreed on everything but their refusal sentence, and `one_home` below
+# reported which object answered. All of that was scaffolding for a tree that no longer
+# exists: `armature_core.parts.single_path_segment` is on the merged tree, both copies are
+# deleted, and `test_the_two_copies_agree_on_everything_except_their_message` went red on
+# the merged tree by its own design ("if `armature_core.parts.single_path_segment` has
+# merged this test has done its job"). The bridge, the stand-in sources, the three AST
+# shape helpers and that test are deleted here; what remains asserts the merged state.
 
 
-#: The ONE home, as SEAM 1 names it. On the merged tree this resolves to core-solvers'
-#: object. Until their commit merges into this branch it is `None`, and `_one_home` below
-#: stands the byte-identical copy SEAM 1 says it was lifted from into the same attribute
-#: for the duration of one test — so the tools' OWN routing and refusal behaviour is
-#: exercised here rather than skipped, and the stand-in disappears the moment the real
-#: object arrives. `test_the_stand_in_is_byte_identical_to_what_seam_1_homed` is what makes
-#: that substitution a measured statement instead of a convenience.
-_STAND_IN_SOURCES = ("pack_pose_pack.py", "resample_motion.py")
-
-
-def _source_of(filename, funcname):
-    """The exact source text of one module-level function, by AST segment."""
-    src = read_source(filename)
-    for node in ast.parse(src).body:
-        if isinstance(node, ast.FunctionDef) and node.name == funcname:
-            return ast.get_source_segment(src, node)
-    raise LookupError("%s has no def %s" % (filename, funcname))
-
-
-def _shape_of(filename, funcname):
-    """One function's signature, predicate and evidence — every message string erased.
-
-    The comparison SEAM 1's claim needs is about what the function DOES, and the two copies
-    each name their own module's artifact in the refusal sentence. Every `str` constant
-    longer than 40 characters is replaced by a marker, so the prose cannot make two
-    identical implementations read as different, and the clause word
-    (`output_name_is_not_a_name`, 26 chars) and the evidence keys still count.
+def test_single_path_segment_has_exactly_one_home():
+    """The merged-tree statement of SEAM 1: ONE implementation, in `armature_core.parts`,
+    and no `tools/*.py` spells a copy. RED on `e8263a3`, where `pack_pose_pack.py:82` and
+    `resample_motion.py:76` each held one and the package held none.
     """
-    src = read_source(filename)
-    for node in ast.parse(src).body:
-        if isinstance(node, ast.FunctionDef) and node.name == funcname:
-            body = [st for st in node.body
-                    if not (isinstance(st, ast.Expr)
-                            and isinstance(st.value, ast.Constant)
-                            and isinstance(st.value.value, str))]
-            stripped = ast.FunctionDef(
-                name=node.name, args=node.args, body=body, decorator_list=[],
-                returns=None, type_comment=None, type_params=[])
-            for sub in ast.walk(stripped):
-                if (isinstance(sub, ast.Constant) and isinstance(sub.value, str)
-                        and len(sub.value) > 40):
-                    sub.value = "<message>"
-                if isinstance(sub, ast.JoinedStr):
-                    sub.values = [v for v in sub.values
-                                  if not (isinstance(v, ast.Constant)
-                                          and isinstance(v.value, str))]
-            ast.fix_missing_locations(stripped)
-            return ast.dump(stripped, annotate_fields=True, include_attributes=False)
-    raise LookupError("%s has no def %s" % (filename, funcname))
+    import inspect
 
+    from armature_core import parts
 
-def _code_of(filename, funcname):
-    """One function's SIGNATURE AND EXECUTABLE BODY, docstring stripped, as an AST dump.
-
-    The docstrings of the two copies differ - each records its own module's earning story -
-    and SEAM 1's claim is about what the function DOES. Comparing the prose would call two
-    identical implementations different; comparing the dump keeps the claim on the code.
-    """
-    src = read_source(filename)
-    for node in ast.parse(src).body:
-        if isinstance(node, ast.FunctionDef) and node.name == funcname:
-            body = [st for st in node.body
-                    if not (isinstance(st, ast.Expr)
-                            and isinstance(st.value, ast.Constant)
-                            and isinstance(st.value.value, str))]
-            stripped = ast.FunctionDef(
-                name=node.name, args=node.args, body=body, decorator_list=[],
-                returns=None, type_comment=None, type_params=[])
-            ast.fix_missing_locations(stripped)
-            return ast.dump(stripped, annotate_fields=True, include_attributes=False)
-    raise LookupError("%s has no def %s" % (filename, funcname))
-
-
-def test_the_two_copies_agree_on_everything_except_their_message():
-    """SEAM 1 says `single_path_segment` is "byte-identical to the two copies you already
-    hold" (`pack_pose_pack.py:82`, `resample_motion.py:76`). That is the premise `one_home`
-    stands on while core-solvers' commit is in flight, so it is MEASURED here.
-
-    ⚠ **MEASURED FALSE as stated, and corrected here rather than believed** (2026-09-05,
-    on `e8263a3`, by unparsing both bodies with their docstrings stripped): the two differ
-    in ONE statement — the refusal MESSAGE. `pack_pose_pack` says the escape leaves "the
-    manifest that certifies it ... and every gate above reports on the file that escaped";
-    `resample_motion` says "the sentinel line and the sha256 beside it describe a file that
-    is not there". Each names its own module's artifact.
-
-    What IS identical, and what this domain's two adoptions actually depend on: the
-    signature `(value, flag, exc, extra=None)`, the predicate (the five clauses over
-    separators, absolute paths, the two dot names and an empty name), the clause word
-    `output_name_is_not_a_name`, the evidence keys, and the return. This asserts THAT, and
-    the divergence is posted to the inbox for whoever writes the merged docstring — a home
-    for two implementations that disagree in one sentence has to pick a sentence.
-    """
-    present = [f for f in _STAND_IN_SOURCES
-               if "def single_path_segment" in read_source(f)]
-    assert present, (
-        "neither instruments-measure copy is on this tree any more; if `armature_core."
-        "parts.single_path_segment` has merged this test has done its job")
-    shapes = {f: _shape_of(f, "single_path_segment") for f in present}
-    assert len(set(shapes.values())) == 1, sorted(shapes)
+    fn = getattr(parts, "single_path_segment", None)
+    assert inspect.isfunction(fn), "SEAM 1's home is missing from `armature_core.parts`"
+    assert fn.__module__ == "armature_core.parts", fn.__module__
+    copies = []
+    for name in sorted(os.listdir(TOOLS)):
+        if not name.endswith(".py"):
+            continue
+        with open(os.path.join(TOOLS, name), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        if any(isinstance(n, ast.FunctionDef) and n.name == "single_path_segment"
+               for n in tree.body):
+            copies.append(name)
+    assert copies == [], ("a tool spells its OWN `single_path_segment`; SEAM 1's home is "
+                          "`armature_core.parts` and nobody spells a second", copies)
 
 
 def test_seam_1_is_the_one_home_on_a_merged_tree():
-    """SEAM 1's helper is on the tree, or this branch is not mergeable as it stands.
+    """SEAM 1's helper is on the tree — the object the two parsers call, not a stand-in.
 
     `preview_glb --name` and `render_turnaround --prefix` call
     `armature_core.parts.single_path_segment` with no local copy and no fallback, because
-    "nobody spells a third". While core-solvers' commit is in flight, `tests/conftest.py`'s
-    `_seam_1_single_path_segment` bridge stands the byte-equivalent copy up for the suite so
-    the adoption can be exercised rather than skipped. This is the check that keeps the
-    bridge from outliving the seam: it reports the honest state, and after the wave merges a
-    stand-in means the two parsers would raise `AttributeError` in production.
+    "nobody spells a third". While core-solvers' commit was in flight this test skipped
+    behind `tests/conftest.py`'s bridge; the bridge is gone, so a missing attribute here is
+    the `AttributeError` production would raise, and it fails rather than skips.
     """
-    import conftest
-
     from armature_core import parts
 
-    assert getattr(parts, "single_path_segment", None) is not None, (
-        "neither the merged home nor the bridge resolved `single_path_segment`")
-    if conftest.SEAM_1_LANDED:
-        return
-    pytest.skip(
-        "SEAM 1 (core-solvers) has not merged into this branch: "
-        "`armature_core.parts.single_path_segment` is absent and "
-        "`tests/conftest.py::_seam_1_single_path_segment` is standing in "
-        "`pack_pose_pack`'s byte-equivalent copy. The COORDINATOR must confirm the real "
-        "object exists on the merged tree and delete the bridge; until then this is the "
-        "ONE skip this domain reports, and it names exactly what is missing.")
+    fn = getattr(parts, "single_path_segment", None)
+    assert fn is not None, "the merged home did not resolve `single_path_segment`"
+    assert fn.__module__ == "armature_core.parts", fn.__module__
 
 
 @pytest.fixture
-def one_home(monkeypatch):
-    """`armature_core.parts.single_path_segment`, standing one in if SEAM 1 is in flight.
+def one_home():
+    """`armature_core.parts.single_path_segment`, and the word "merged".
 
-    Returns `(module, "merged"|"stand-in")` so a reader of a failure knows which object
-    answered. `monkeypatch` undoes the substitution, so nothing leaks into another test.
+    WAVE-22 MERGE (coordinator, 2026-09-05): this fixture used to stand the `pack_pose_pack` copy in while
+    SEAM 1 was in flight and returned `(module, "merged"|"stand-in")` so a failure named
+    which object answered. The seam landed; only the merged object exists, and the four
+    tests below keep reading the pair so their failure messages still say so.
     """
     from armature_core import parts
 
-    if getattr(parts, "single_path_segment", None) is not None:
-        return parts, "merged"
-    src = _source_of(_STAND_IN_SOURCES[0], "single_path_segment")
-    ns = {"os": os}
-    exec(compile(src, "<seam1-stand-in>", "exec"), ns)
-    monkeypatch.setattr(parts, "single_path_segment", ns["single_path_segment"],
-                        raising=False)
-    return parts, "stand-in"
+    assert getattr(parts, "single_path_segment", None) is not None
+    return parts, "merged"
 
 
 @pytest.mark.parametrize("filename,flag,attr", [

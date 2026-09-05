@@ -576,6 +576,14 @@ CORRECTED_ANCHORS = {
     # recorded here, which is what this set is for.
     ("lift_solve.py", "lift_clip.py", 275),
     ("lift_solve.py", "measure_lift.py", 481),
+    # WAVE-22 MERGE (coordinator, 2026-09-05): two more quoted-wrong anchors, each inside the sentence that
+    # records it as wrong. `lift_solve.py`'s correction record quotes `lift_clip.py:276 (main)` as
+    # what both docstrings used to say; instruments-measure's `--fps` bound moved that line into
+    # `gate_detector_rate` at the merge, so the qualified form stopped holding. `rig_gates.py`
+    # (core-gates) records "this cited `lift_solve.py:307`" beside its live
+    # `lift_solve.py::validate_motion_record` anchor. Both are records, not citations.
+    ("lift_solve.py", "lift_clip.py", 276),
+    ("rig_gates.py", "lift_solve.py", 307),
     # `sitelist.py`'s own second correction (F-b3ff3a57) needs no new entry: the paragraph
     # that corrected the three-caller claim quoted `project_pose_keypoints.py:229` as the
     # one anchor that was right, and the wave-16 constructor deletions moved it — that line
@@ -770,11 +778,18 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     # and the symbol form is `probe_subject.py::probe_one`. Same shape as SEAM 7/8's
     # `lift_clip.py:275`, and the same fix: a line citation does not survive an edit
     # above it; a symbol does.
-    # WAVE-22 MERGE (coordinator, 2026-09-05): the ceiling is MEASURED on the merged tree with the loop above ({'rig_gates': 3, 'shotspec': 1, 'subject': 1}) — core-solvers
-    # raised rig_gates to 3 and instruments added subject: 1 on different branches; core-gates re-anchored
-    # rig_gates in the same wave, so the merged tree reads what it reads. subject: 1 is the coordinator's
-    # wave-22 fix-up (the symbol form `probe_subject.py::probe_one`), after which that entry is deletable.
-    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {'rig_gates': 3, 'shotspec': 1, 'subject': 1}
+    # WAVE-22 MERGE (coordinator, 2026-09-05): the ceiling is MEASURED on the merged tree with the loop
+    # above. At the merge commit `41124a9`, re-measured on a clean worktree, it read
+    # {'rig_gates': 3, 'subject': 1}: `rig_gates.py` cited `rig_character.py:1050` twice and
+    # `lift_solve.py:307` once, `subject.py` cited `probe_subject.py:133`, all four blank lines. (The
+    # first resolution of this hunk typed {'rig_gates': 3, 'shotspec': 1, 'subject': 1}, measured on
+    # the working tree MID-merge; `shotspec: 1` never held on any committed tree — owned here, and
+    # the reason a ceiling is re-measured on the commit rather than on the tree it was resolved on.)
+    # The coordinator's wave-22 fix-up re-anchored the four on their symbols
+    # (`rig_character.py::export_rigged` / `::run_skeleton`, `probe_subject.py::probe_one`) and
+    # recorded `lift_solve.py:307` in `CORRECTED_ANCHORS`, after which the loop reads EMPTY — so
+    # the ceiling is now the floor: any stale citation in a non-owned `armature_core` module fails here.
+    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {}
     over = {k: v for k, v in others.items()
             if v > STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN.get(k, 0)}
     assert over == {}, {"stale now": others,

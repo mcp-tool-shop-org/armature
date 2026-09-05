@@ -1088,3 +1088,58 @@ def test_the_sentinel_checker_names_each_shape_that_was_measured_here(
     bad = sentinel_violations(stem, stdout, kind, code)
     assert bad, f"{label}: the checker saw nothing wrong"
     assert any(expect in b for b in bad), (label, bad)
+
+
+# ============================================================================ wave-22 merge
+#
+# WAVE-22 MERGE (coordinator, 2026-09-05). Instruments' F-897a3329 made the 21 Blender-side
+# handlers' halt lines strict JSON — `_halt_keysafe` writes a non-finite float as its `repr`
+# and the sentinel is dumped with `allow_nan=False` — and its census
+# (`tests/test_instruments_amend_w22.py::test_a_non_finite_operand_leaves_the_halt_line_strict_json`)
+# runs over OWNED, which is those 21; `stage_render.py` is instruments-measure's, the 22nd
+# copy of the same handler, and was posted to the inbox. The coordinator applied the same
+# two-line change there at the merge, and this is the test that rides it: the one tool the
+# census above does not drive, driven the same way.
+
+
+def _strict_json(payload):
+    """`json.loads` with `parse_constant` armed — what every parser but CPython's does."""
+    def refuse(token):
+        raise ValueError("not JSON: bare constant " + token)
+
+    return json.loads(payload, parse_constant=refuse)
+
+
+def test_stage_render_writes_a_non_finite_operand_as_strict_json(tmp_path, capsys):
+    """RED on `41124a9`: the line carried the bare token `NaN`, which `json.loads` accepts
+    and `parse_constant=<raise>` (JS `JSON.parse`, Go `encoding/json`, serde) rejects."""
+    from armature_core.errors import GateFailure
+
+    class _NaNGate(GateFailure):
+        gate = "NAN_PROBE"
+
+    def raiser():
+        raise _NaNGate("a measurement that is not a number", {
+            "clause": "measurement_not_finite",
+            "floor": 0.00017320508075688773,
+            "max_displacement": float("nan"),
+            "span": float("inf"),
+            "low": float("-inf"),
+            "nested": [{"deep": float("nan")}],
+        })
+
+    code, escaped = exit_code_of_main_block(
+        "stage_render.py", raiser=raiser,
+        argv=["blender", "-b", "-P", "stage_render.py", "--", "--glb=nope.glb",
+              "--out=" + str(tmp_path / "out")])
+    assert escaped is None, escaped
+    assert code == 2, code
+    lines = [l for l in capsys.readouterr().out.splitlines()
+             if l.startswith("STAGE_RENDER_HALT ")]
+    assert len(lines) == 1, lines
+    rec = _strict_json(lines[0][len("STAGE_RENDER_HALT "):])
+    ev = rec["evidence"]
+    assert ev["max_displacement"] == "nan", ev
+    assert ev["span"] == "inf" and ev["low"] == "-inf", ev
+    assert ev["nested"][0]["deep"] == "nan", ev
+    assert ev["floor"] == 0.00017320508075688773, ev

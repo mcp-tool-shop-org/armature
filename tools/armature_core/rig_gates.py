@@ -43,7 +43,9 @@ def _require_numeric(name, value, gate_cls, ev):
     name was deleted at the wave-12 merge.)
 
     `world_bounds` returning None is the plausible producer; today's two call sites
-    (`rig_character.py:1050/:1194`) pass a computed float, so what this costs today is the
+    (`rig_character.py::export_rigged` and `rig_character.py::run_skeleton`; re-anchored on
+    the symbols at the wave-22 merge (coordinator, 2026-09-05), the line form having gone stale) pass a computed
+    float, so what this costs today is the
     receipt rather than the verdict. It refuses `bool` for the reason `shotspec` refuses a
     boolean radius: `True` is an `int`, and a flag is not a length. It ACCEPTS numpy's
     scalar types, which are what `np.linalg.norm` hands a caller that forgets the `float()`.
@@ -562,7 +564,8 @@ def gate_d_determinism(a, b, bbox_diagonal):
     # on two fingerprints whose one bone's tail differs by 4.0 with both weight dicts
     # empty: `bbox_diagonal=inf` returned "two builds agree on bones and hierarchy over 1
     # bone(s)" with `length_tolerance` inf, and `nan` returned the same verdict with a nan
-    # tolerance. The caller: `rig_character.py:1050/:1194` pass `ctx['diagonal']`, which is
+    # tolerance. The callers, `rig_character.py::export_rigged` and `rig_character.py::run_skeleton`
+    # (re-anchored on the symbols at the wave-22 merge (coordinator, 2026-09-05)), pass `ctx['diagonal']`, which is
     # `float(np.linalg.norm(hi - lo))` over the raw imported vertices, with both Gate P
     # clauses inside `if bind:` — so on `--mode=skeleton` (bind=False, deliberate) NOTHING
     # has looked at that number before this line scales a tolerance by it. A GLB carrying
