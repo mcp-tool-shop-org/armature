@@ -92,7 +92,7 @@ from armature_core.errors import (  # noqa: E402
 # `build_cascade_payload` already imports them from that module; this is the third caller,
 # not a third implementation.
 from build_assembly_payload import (  # noqa: E402
-    frame_order, gate_slot_frame_index)
+    canonical_payload_digest, frame_order, gate_slot_frame_index)
 
 WIDTH, HEIGHT, LENGTH, FPS = 480, 832, 33, 16
 SEED = 654654950714624  # pinned from the saved graph, so A0's three repeats are identical
@@ -629,9 +629,11 @@ def build(arm, experiment="E02", seed=None):
             "clip": "umt5_xxl_fp16.safetensors",
             "vae": "wan_2.1_vae.safetensors",
         },
-        "payload_sha256": hashlib.sha256(
-            json.dumps(wf, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest(),
+        # Wave 20, F-dba1bcd8: through the ONE shared derivation, not a copy
+        # of the expression. Four builders each carried their own spelling of it
+        # and `route_facts` carried a fifth, five places for the digest the gate
+        # compares against to drift from the digest a record declares.
+        "payload_sha256": canonical_payload_digest(wf),
     }
     return wf, meta
 

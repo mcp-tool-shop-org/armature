@@ -51,6 +51,7 @@ E12 w2/w3 §7 convention).
 """
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -109,6 +110,40 @@ class SeedRegistrationError(ArmatureError):
     gate of its own beyond the `PAYLOAD` id the builders' own operand refusals use. It
     defines no `__init__`: the base stores what it is passed (wave 16, rule 5).
     """
+
+
+def canonical_payload_digest(graph):
+    """The ONE derivation of a payload record's `payload_sha256`.
+
+    Wave 20, F-dba1bcd8. `gate_saved_graph.route_facts` ties the two facts that admit a paid
+    submission — the credit that pays a CONDITIONAL licence row, and the no-sampler
+    assertion — to the graph they were asserted about, by comparing the record's declared
+    `payload_sha256` against `sha256(json.dumps(api_graph, sort_keys=True,
+    separators=(",", ":")))`. Measured by driving all nine builders' own `main()` on
+    2026-09-05: FOUR wrote that digest and FIVE did not, so on the hosted partner tier that
+    bills per submission (`build_r2v_payload`), on the one arm whose graph loads a
+    CONDITIONAL component (`build_lora_arm_payload`), and on `build_t2v_payload`,
+    `build_assembly_payload` and `build_cascade_payload`, `route_facts` returned
+    `payload_sha256: None`, `source` read "the facts below are NOT tied to the graph being
+    admitted", and the wave-18 tie clause `record_describes_a_different_graph` could not
+    fire at all.
+
+    **The input is the graph as an OBJECT, not the file.** Two of the five wrote a digest of
+    the PRETTY-PRINTED file under their own key names (`build_t2v_payload`'s `graph.sha256`,
+    `build_lora_arm_payload`'s `graph_sha256`), and renaming those would not have closed it:
+    measured on a one-node graph, the canonical digest is `15ea11c72a720cbb…` and the file
+    digest `163ef2eefe7f1985…`. Both are kept — the file digests still name the bytes on
+    disk — but only this one answers "is this record about this graph".
+
+    **Why this function lives here** rather than beside `payload_digests`, its reader:
+    `gate_saved_graph` imports `read_seed_registration` from this module at module level, so
+    a builder importing `gate_saved_graph` would close a cycle that breaks
+    `import build_assembly_payload` outright. This module is the one eight of the nine
+    builders and `gate_saved_graph` itself already import; `gate_saved_graph` imports this
+    name too, so the record's digest and the gate's comparison are the SAME function object.
+    """
+    return hashlib.sha256(
+        json.dumps(graph, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def read_seed_registration(path, *, flag="--seeds"):
@@ -655,6 +690,9 @@ def build_and_write(argv=None):
                   "CREATE_VIDEO_fps": gate_fps,
                   "ASSEMBLY_topology": gate_topo,
                   "ASSEMBLY_slot_frame_index": gate_index, "ROUTE": gate_route},
+        # Wave 20, F-dba1bcd8. The tie between THIS record and the graph beside it, so the
+        # `ROUTE` receipt above cannot be read as describing a different graph.
+        "payload_sha256": canonical_payload_digest(wf),
     }
 
     # Below the last in-tool gate: a refuse leaves no output directory.

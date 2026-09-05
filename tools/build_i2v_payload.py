@@ -94,7 +94,7 @@ from armature_core.canon import add_spend_flags  # noqa: E402
 from canon_gate import canon_line, canon_spend  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    gate_create_video_fps, read_seed_registration)
+    canonical_payload_digest, gate_create_video_fps, read_seed_registration)
 
 import build_animate_payload as E08  # noqa: E402  - the prompt's source of record
 
@@ -680,8 +680,11 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
             "conditioning class, no second uploaded image outside the Gate B probe, and "
             "no clip-vision path. This is E11's defining property"),
         "delta_from_E08": DELTA_FROM_E08,
-        "payload_sha256": hashlib.sha256(
-            json.dumps(wf, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        # Wave 20, F-dba1bcd8: through the ONE shared derivation, not a copy
+        # of the expression. Four builders each carried their own spelling of it
+        # and `route_facts` carried a fifth, five places for the digest the gate
+        # compares against to drift from the digest a record declares.
+        "payload_sha256": canonical_payload_digest(wf),
     }
     return wf, meta
 
