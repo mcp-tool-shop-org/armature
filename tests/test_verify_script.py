@@ -35,6 +35,7 @@ from conftest import REPO
 
 from test_ci_workflows import (
     CI,
+    _code_only,
     _has_a_ceiling,
     _install_tokens,
     clean_room_script,
@@ -1196,7 +1197,33 @@ def dist_clear_source():
 
 
 def test_the_clear_is_followed_by_a_check_before_anything_ranges_over_dist():
-    """Statically: the emptiness check sits between the clear and `twine check dist\\*`."""
+    """Statically: the emptiness check sits between the clear and `twine check dist\\*`.
+
+    WAVE 26, `F-1d0f6c82` — THE FIFTH PARITY AXIS. Wave 23 established this invariant in
+    `verify.ps1` on the stated ground that `twine check dist\\*` and the classifier gate
+    "can still issue their verdicts over an artifact this run did not build". The OTHER
+    implementation of the same leg got neither half: a grep for a remove or a clean over
+    `.github/actions/clean-room/action.yml` returned nothing, and this test lifted `VERIFY`
+    alone — while the four axes beside it (rooms counted, sdist installed and run, two
+    `pip freeze` lines, the toolchain specifiers) all pair the two texts. It now asserts the
+    property of both, so the next hardening of one implementation cannot land in one of them
+    again.
+    """
+    #: CODE ONLY. Both texts now DESCRIBE this invariant as well as running it, and a
+    #: comment quoting `python -m build` would put the ordering assertions below on prose.
+    action = _code_only(clean_room_script())
+    assert re.search(r"(?m)^\s*rm -rf dist\s*$", action), (
+        "the clean-room action never clears dist/ before building into it; `python -m build` "
+        "does not clear it, and release.yml uploads the whole directory to the publish job")
+    assert action.index("rm -rf dist") < action.index("-m build"), (
+        "the action clears dist/ after building into it, which is the artifact the clear "
+        "exists to protect")
+    assert action.index("-m build") < action.index("twine check"), (
+        "the action checks metadata before it builds")
+    assert "ls -la dist/" in action, (
+        "the action's clear is not followed by a refusal that LISTS what survived; an "
+        "unchecked clear is the shape wave 23 replaced in the other implementation")
+
     block = dist_clear_source()
     assert "Remove-Item" in block, "the clear left the block this test lifts"
     assert "-ErrorAction SilentlyContinue" in block, (
@@ -1279,6 +1306,148 @@ def test_leg_three_refuses_a_dist_it_could_not_clear(tmp_path):
 
 
 # -- F-1c5dc527 / F-e3e6bdc8: the probe is one file, and the rooms say what they resolved ---
+
+
+def _uncommented(text):
+    """`verify.ps1` with its `#` comment lines blanked — comments quote the code they
+    replaced, and a census over the raw text would read a correction record as live code."""
+    return "\n".join("" if line.strip().startswith("#") else line
+                      for line in text.splitlines())
+
+
+def test_the_script_carries_no_platform_branch_its_own_interpreter_resolution_made_dead():
+    """WAVE 26, `F-e70bd932` — six branches whose other arm could never be taken.
+
+    `$binDir` / `$exe` were consumed at four constructed paths, every one of them with an
+    embedded backslash, so the non-Windows arm would have built a `bin\\python` name no POSIX
+    layout has; `$shimName` was the sixth site. None could run: the interpreter is resolved
+    as a hard-coded `.venv\\Scripts\\python.exe` and the ANDON exits 2 when that exact path
+    is absent, and `#requires -Version 7.4` under pwsh 7 makes `$IsWindows` true. Nothing
+    reported a green it had not earned — a constructed path that does not exist raises inside
+    `Invoke-Leg` — but the branches said this script runs on the Mac rig and the interpreter
+    line said it does not.
+
+    The rule is CONDITIONAL, not a ban: a platform branch may return the day the interpreter
+    resolution has a POSIX arm, and this test says so by requiring the two together.
+    """
+    code = _uncommented(VERIFY)
+    branches = [ln.strip() for ln in code.splitlines() if "$IsWindows" in ln]
+    posix_interpreter = "bin/python" in code or "bin\\python'" in code
+    if not posix_interpreter:
+        assert branches == [], (
+            "verify.ps1 branches on $IsWindows while resolving its interpreter at a "
+            f"hard-coded Windows venv layout, so the other arm is unreachable: {branches}")
+    assert "$exe" not in code, (
+        "the `$exe` suffix is back; it exists only to serve the branch above")
+    for embedded in (r'"$binDir\python$exe"', r'"$binDir\armature$exe"'):
+        assert embedded not in VERIFY.replace("# ", "#"), (
+            f"{embedded} builds a path segment by string interpolation with an embedded "
+            "backslash; Join-Path is what the sibling npm room already uses")
+
+
+def pin_report_source():
+    """The summary block that resolves ci.yml's `==` specifiers, lifted by its own marker."""
+    start = VERIFY.index("$pinReport = @(")
+    end = VERIFY.index("foreach ($line in @($pinReport))")
+    return VERIFY[start:VERIFY.index("\n", end) + 1]
+
+
+def test_the_summary_states_which_build_of_the_pinned_suite_dependencies_it_ran():
+    """WAVE 26, `F-9c05e7b3` — the THIRD runtime axis the summary said nothing about.
+
+    The block reports the interpreter and node because a green local run is not a green CI
+    run on those axes. Two suite dependencies are pinned with `==` for the same reason —
+    their exact build decides a result — and pyproject records that the rig satisfies `cv2`
+    from a DIFFERENT DISTRIBUTION than every CI install line names
+    (`opencv-contrib-python` here, `opencv-python-headless` there). Re-measured on the repo
+    venv 2026-09-05: `opencv-python-headless` and `opencv-python` both ABSENT. So the aapose
+    golden-frame tests run against another rasterizer's distribution and the RUN did not say
+    so. The specifiers are READ OUT OF ci.yml rather than written here, so a re-pin moves
+    this report with it.
+    """
+    block = pin_report_source()
+    assert "ci.yml" in block, (
+        "the pin report no longer reads ci.yml's install line; a list written here would be "
+        "a fourth copy of the dependency set the manifest already holds to CI's")
+    assert "importlib.metadata" in block or "PackageNotFoundError" in block, (
+        "the report does not resolve the installed version through importlib.metadata")
+    assert "(absent)" in block, (
+        "a distribution that is not installed must be reported as absent, never guessed at")
+    assert "cv2" in block, (
+        "the report does not name the distribution that actually provides cv2, which is the "
+        "half pyproject says diverges between the rig and CI")
+    assert "-m pip" in block, (
+        "the report's marker for CI's install line changed; `pip` and `install` spelled "
+        "together here would be read as an install line by the artifact-toolchain census")
+
+
+@needs_pwsh
+def test_the_pin_report_resolves_the_specifiers_and_names_the_cv2_provider(tmp_path):
+    """Driven, not read: the block runs against the real ci.yml on the real venv.
+
+    A static assertion alone would pass on a block that prints nothing. This one has to
+    produce a row per `==` specifier ci.yml installs, and a row naming the distribution that
+    answers `import cv2`.
+    """
+    script = (
+        f"$repo = '{REPO.replace(chr(92), '/')}'\n"
+        f"$python = '{sys.executable.replace(chr(92), '/')}'\n"
+        + pin_report_source()
+    )
+    path = tmp_path / "pin_report.ps1"
+    path.write_text(script, encoding="utf-8")
+    got = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(path)],
+                         capture_output=True, text=True, encoding="utf-8",
+                         errors="replace")
+    out = got.stdout or ""
+    assert "pinned suite dependencies" in out, f"{out}\n{got.stderr}"
+    rows = [ln.strip() for ln in out.splitlines() if "->" in ln or "provided by" in ln]
+    assert any("opencv-python-headless==" in r for r in rows), rows
+    assert any("matplotlib==" in r for r in rows), rows
+    assert any(r.startswith("cv2 ") and "provided by" in r for r in rows), rows
+    #: the measurement this block exists for, asserted as a PROPERTY rather than as a
+    #: number: whatever provides cv2 here is named, and if it is not the distribution CI
+    #: installs, the run says which one it is.
+    provider = [r for r in rows if r.startswith("cv2 ")][0]
+    assert "opencv" in provider, provider
+
+
+@needs_pwsh
+def test_a_statement_after_a_failing_native_command_does_not_run(tmp_path):
+    """WAVE 26, `F-4f8a2d16` — the reachability claim, driven rather than reasoned.
+
+    `Invoke-Leg` sets `$ErrorActionPreference = 'Stop'` and
+    `$PSNativeCommandUseErrorActionPreference = $true`, which promote a native command's
+    non-zero exit to a terminating error caught by the function — so every
+    `if ($LASTEXITCODE -ne 0) { return }` guard in a leg body is unreachable, and the
+    comment block above `Invoke-Leg` now says they are belt-and-braces rather than the
+    mechanism. A future edit that removed the promotion would make that comment false and
+    the guards load-bearing again, silently. This is what catches it.
+
+    BOTH DIRECTIONS MEASURED at wave 26, by lifting this function and driving it twice with
+    a body running a command that exits 7, then the guard, then a marker write, then a
+    command that exits 0. As the function stands: recorded ExitCode 7, Raised False,
+    Established True, and NEITHER the guard nor the marker ran. With the two preference
+    lines stripped out: recorded ExitCode 0 -- a PASS on a leg whose first command exited 7
+    -- and the guard AND the marker both ran. So the promotion is the mechanism, the guards
+    are what would be left without it, and this fixture can tell the two apart.
+    """
+    marker = (tmp_path / "after.txt").as_posix()
+    guard = (tmp_path / "guard.txt").as_posix()
+    body = (f"{SEVEN}; "
+            f"if ($LASTEXITCODE -ne 0) {{ Set-Content -Path '{guard}' -Value 'guard' }}; "
+            f"Set-Content -Path '{marker}' -Value 'after'; {OK}")
+    recorded = _run_legs(tmp_path, [("promotion", body)])
+    assert recorded["promotion"] == "7", (
+        "a leg whose first native command exited 7 and whose last exited 0 recorded "
+        f"{recorded['promotion']!r}; the promotion that makes the guards redundant is gone, "
+        "and the 21 `-ne 0` guards in the leg bodies are load-bearing again")
+    assert not os.path.exists(guard), (
+        "the guard after the failing command RAN; it is described in verify.ps1 as "
+        "belt-and-braces, which is only true while the promotion stops the leg first")
+    assert not os.path.exists(marker), (
+        "a statement after a failing native command ran, so a leg no longer stops at the "
+        "first command that failed")
 
 
 def test_verify_runs_the_one_lazy_import_probe_file():

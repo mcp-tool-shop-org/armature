@@ -41,7 +41,54 @@ runs:
       run: |
         set -eu
         python -m pip install "build>=1.5,<2" "twine>=7,<8"
+        # THE LEG JUDGES WHAT THIS RUN BUILT, AND NOTHING ELSE -- the invariant `verify.ps1`
+        # leg 3 established at wave 23 and this implementation of the same leg did not get.
+        # `python -m build` does not clear `dist/`, and until this line nothing here did
+        # either: a grep for a remove or a clean over this file returned nothing, while
+        # `twine check dist/*` below and the classifier gate in the step after it both range
+        # over the whole directory, and release.yml's upload step carries the whole of
+        # `dist/` to the job that publishes it. Not live on today's configuration and said so
+        # plainly -- every caller is a fresh `ubuntu-latest` runner whose `dist/` is empty at
+        # checkout, and the suite builds its sdist with `--outdir` into a tmp path -- but a
+        # self-hosted runner, or a second call to this action in one job, makes the two
+        # implementations of one leg behave differently on the same command, which is what
+        # wave 23 wrote the refusal for. CLEARED, then CHECKED: the clear is not assumed to
+        # have worked, in the by-name refusal's own shape.
+        rm -rf dist
+        if [ -e dist ]; then
+          echo "::error::dist/ could not be cleared; every verdict below is a claim about what THIS run built, so this refuses rather than judging an artifact it did not produce."
+          ls -la dist/
+          exit 1
+        fi
         python -m build
+        # THE ARTIFACTS ARE SELECTED BY NAME, and until this line all three selections here
+        # were globs: `twine check dist/*`, `pip install --no-deps dist/*.tar.gz` and
+        # `pip install dist/*.whl` were each handed to their tool verbatim. Under
+        # `shell: bash` (`-eo pipefail`) plus this script's `set -eu`, an unmatched glob is
+        # passed through as the literal pattern -- so a build that renamed or dropped an
+        # artifact turned the release gate red with a message about a PATH, in the job whose
+        # whole purpose is to say what the artifact IS. The other two implementations of this
+        # selection already refuse by name: verify.ps1's leg 3 derives both filenames from
+        # `project.name` / `project.version` and lists what `dist/` holds, and the sibling
+        # npm clean room refuses an unmatched glob and a missing shim in its own words. The
+        # names here are PEP 503/427 normalisation of `project.name` with `project.version`,
+        # read the way release.yml's tag gate reads the version -- never globbed, never
+        # chosen by timestamp.
+        DIST_NAME="$(python -c "import re,tomllib;print(re.sub(r'[-_.]+','_',tomllib.load(open('pyproject.toml','rb'))['project']['name']).lower())")"
+        VERSION="$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+        WHEEL="dist/${DIST_NAME}-${VERSION}-py3-none-any.whl"
+        SDIST="dist/${DIST_NAME}-${VERSION}.tar.gz"
+        for expected in "$WHEEL" "$SDIST"; do
+          if [ ! -f "$expected" ]; then
+            echo "::error::the build produced no $(basename "$expected"); dist/ holds:"
+            ls -la dist/
+            exit 1
+          fi
+        done
+        # `dist/*` is deliberate HERE and only here: the classifier gate's own docstring
+        # records that the population is the DIRECTORY, because release.yml uploads the whole
+        # of it and the publish action publishes what it uploads. The clear and the two
+        # by-name checks above are what make that range a known quantity rather than a guess.
         python -m twine check dist/*
         # THE SDIST, BUILT FROM AND RUN. Three artifacts leave this repository and, until this
         # line, two of them were installed before the publish: the wheel below, and the npm
@@ -82,26 +129,61 @@ runs:
         # the same install without the flag printed `Successfully installed
         # armature-studio-0.3.0`. `pip freeze` after each install is the full answer: a
         # dependency-day break and a wheel defect are then two different reds.
-        python -m venv /tmp/cleanroom-sdist
-        /tmp/cleanroom-sdist/bin/python -m pip install --no-deps dist/*.tar.gz
-        /tmp/cleanroom-sdist/bin/python -m pip freeze
-        /tmp/cleanroom-sdist/bin/armature modules --json > /dev/null
-        python -m venv /tmp/cleanroom
-        /tmp/cleanroom/bin/python -m pip install dist/*.whl
-        /tmp/cleanroom/bin/python -m pip freeze
-        /tmp/cleanroom/bin/armature check
-        /tmp/cleanroom/bin/armature modules --json > /dev/null
+        #
+        # THE ROOMS ARE REMOVED BEFORE THEY ARE CREATED, and they live under `$RUNNER_TEMP`.
+        # Both were fixed `/tmp` paths with no removal first, and creating a virtual
+        # environment over an existing directory REUSES it rather than emptying it -- the
+        # measurement wave 24 filed this on -- so a room whose whole name
+        # is "clean" could meet a directory it did not create. The sibling written one wave
+        # later already does this character for character (the npm clean room sets its prefix
+        # from `${RUNNER_TEMP:-/tmp}`, removes it, then makes it), and verify.ps1 is
+        # defensible for a different reason: both its rooms are GUID-suffixed and removed in
+        # a `finally`. This was the only one of the three implementations that could meet a
+        # directory it did not create. Not live on the stated configuration -- the studio
+        # Actions rule mandates `ubuntu-latest`, every caller gets a fresh ephemeral runner,
+        # and no job calls this action twice -- and if that changes, the room installs the
+        # wheel into a venv still holding a previous run's packages and goes GREEN on a wheel
+        # missing a module the stale venv still carries, which is the defect class this
+        # repository names first.
+        SDIST_ROOM="${RUNNER_TEMP:-/tmp}/cleanroom-sdist"
+        WHEEL_ROOM="${RUNNER_TEMP:-/tmp}/cleanroom"
+        rm -rf "$SDIST_ROOM" "$WHEEL_ROOM"
+        python -m venv "$SDIST_ROOM"
+        "$SDIST_ROOM/bin/python" -m pip install --no-deps "$SDIST"
+        "$SDIST_ROOM/bin/python" -m pip freeze
+        # The console script the archive installs, checked before it is run. verify.ps1
+        # gained this refusal at wave 23 ("the sdist install provides no armature command
+        # at ...") and the sibling npm room carries the same clause for its shim; this
+        # action, which grew the sdist room at wave 14, had neither. Without it a wheel whose
+        # `[project.scripts]` entry point stopped being installed dies as a bash
+        # `No such file or directory` at exit 127.
+        if [ ! -x "$SDIST_ROOM/bin/armature" ]; then
+          echo "::error::the sdist install provides no armature command at $SDIST_ROOM/bin/armature; check [project.scripts] in pyproject.toml"
+          ls -la "$SDIST_ROOM/bin" || echo "(no bin/ in the sdist room at all)"
+          exit 1
+        fi
+        "$SDIST_ROOM/bin/armature" modules --json > /dev/null
+        python -m venv "$WHEEL_ROOM"
+        "$WHEEL_ROOM/bin/python" -m pip install "$WHEEL"
+        "$WHEEL_ROOM/bin/python" -m pip freeze
+        if [ ! -x "$WHEEL_ROOM/bin/armature" ]; then
+          echo "::error::the wheel install provides no armature command at $WHEEL_ROOM/bin/armature; check [project.scripts] in pyproject.toml"
+          ls -la "$WHEEL_ROOM/bin" || echo "(no bin/ in the wheel room at all)"
+          exit 1
+        fi
+        "$WHEEL_ROOM/bin/armature" check
+        "$WHEEL_ROOM/bin/armature" modules --json > /dev/null
         # THE PROBE IS A FILE, NOT A HEREDOC, for the reason the classifier gate beside it is
         # one: `verify.ps1`'s leg 3 runs the SAME text, and a copy forks. Its own docstring
         # carries the measurement (one copy gutted, 256 tests still green) and the reason the
         # printed line is BUILT from the calls rather than written as a literal.
-        /tmp/cleanroom/bin/python "$GITHUB_ACTION_PATH/lazy_import_probe.py"
+        "$WHEEL_ROOM/bin/python" "$GITHUB_ACTION_PATH/lazy_import_probe.py"
 
     # THE ONE FAILURE CLASS THIS PROJECT HAS ALREADY PAID FOR, AND THE ONLY GATE THAT CAN
     # SEE IT. `twine check` above validates metadata STRUCTURE, not classifier MEMBERSHIP:
     # measured 2026-09-04 on a `git archive` copy of this tree with `Topic :: Scientific ::
     # Image Processing` (the row PyPI 400'd this project's first upload on, recorded in
-    # `pyproject.toml:70-72`) added back beside the valid ones, `python -m build` produced
+    # pyproject.toml's `classifiers` block) added back beside the valid ones, `python -m build` produced
     # both artifacts with no warning and `python -m twine check dist/*` printed PASSED for
     # the wheel AND the sdist and exited 0. So the step above, `verify.ps1`'s leg 3 and every
     # green suite would be green on a wheel PyPI will refuse -- and the 400 would arrive

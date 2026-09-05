@@ -1,7 +1,8 @@
 """Refuse a classifier PyPI does not have, before the publish fork.
 
 THE FAILURE CLASS THIS EXISTS FOR, and the only one in this repository that has already
-been paid for once. `pyproject.toml:70-72` records it in its own words: `Topic ::
+been paid for once. pyproject.toml's `classifiers` block records it in its own words (it was
+cited here as a line range until wave 26, and the PEP 639 licence edit moved it): `Topic ::
 Scientific :: Image Processing` does not exist, PyPI rejected the first upload with a 400
 on it, and `twine check` had passed -- twine validates metadata STRUCTURE, not classifier
 membership. Re-measured 2026-09-04 on a `git archive` copy of this tree with that exact row
@@ -33,8 +34,9 @@ law applied to the probe two paragraphs away, which stayed duplicated until wave
 THE POPULATION IS THE DIRECTORY, NOT AN EXTENSION. `classifier_rows` returns None for any
 path that is neither `.whl` nor `.tar.gz`, `main` used to `continue` past those silently,
 and the success line said `every row present` without ever naming what it had SKIPPED --
-while `release.yml:305-308` uploads the whole of `dist/` and the publish action publishes
-that directory. Re-measured on `e8263a3` with no network: a synthetic `dist/` holding a
+while release.yml's `upload-artifact` step uploads the whole of `dist/` and the publish
+action publishes that directory (a line range here named the visibility gate's `esac`
+instead, after the pre-release gate was inserted ~60 lines above the upload step). Re-measured on `e8263a3` with no network: a synthetic `dist/` holding a
 valid `fake-0.1-py3-none-any.whl` (clean rows) beside `fake-0.1.zip` whose PKG-INFO carried
 the banned row -- `.zip` is in twine's own `DIST_EXTENSIONS` -- printed `classifiers: 1
 artifact(s) judged against trove-classifiers, every row present`, exited 0, and never
@@ -71,7 +73,19 @@ import tarfile
 import traceback
 import zipfile
 
-from trove_classifiers import classifiers as TROVE
+# `trove_classifiers` IS NOT IMPORTED HERE, and the reason is a second caller. WAVE 26
+# (ci-packaging, F-3b17a904): `lazy_import_probe.py` beside this file adopts `run_gate_main`
+# below rather than spelling the halt contract a third time -- and the probe runs under the
+# WHEEL CLEAN ROOM's interpreter, a venv holding armature-studio and its four runtime
+# dependencies and nothing else. Measured in this worktree with the repo venv: a module-level
+# `from trove_classifiers import ...` makes `import classifier_gate` raise ModuleNotFoundError
+# under an interpreter without it, before a single line of `run_gate_main` is reachable. The
+# import moved into `main`, which is the only thing that reads the list, so this module now
+# imports on the stdlib alone -- the constraint the docstring above already states for the
+# runner python, now also true for the clean room. `tests/test_ci_workflows.py::
+# test_the_halt_contract_module_imports_with_no_third_party_package_present` blocks the name
+# with a `sys.meta_path` finder and imports this file, so a module-level import added back
+# fails on the day it lands rather than on release day inside the clean room.
 
 #: The andon's name, carried in every halt record's `gate` field.
 GATE = "CLASSIFIER"
@@ -141,6 +155,8 @@ def classifier_rows(path):
 
 
 def main(argv):
+    from trove_classifiers import classifiers as TROVE
+
     dist = argv[1] if len(argv) > 1 else "dist"
     if len(TROVE) < 100:
         raise ClassifierGateFailure(
@@ -204,25 +220,40 @@ def main(argv):
     }))
 
 
-def run_gate_main(fn, argv):
+def run_gate_main(fn, argv, tool=TOOL, gate=GATE, halt=HALT,
+                  refusal_class=ClassifierGateFailure):
     """Run `fn(argv)` under the halt contract and exit. NEVER RETURNS.
 
     The shape of `armature_core.parts.run_tool_main`, reproduced rather than imported for
     the reason the module docstring records: the step that runs this file installs
-    `trove-classifiers` alone. Exit 2 for a refusal this gate is responsible for, 1 for
+    `trove-classifiers` alone. Exit 2 for a refusal the caller is responsible for, 1 for
     anything else -- and the record is printed either way, because the caller's `set -eu`
     fails the step on both and the distinction would otherwise live nowhere.
+
+    THE FOUR PARAMETERS ARE WHY THIS IS ONE HOME AND NOT TWO. WAVE 26 (ci-packaging,
+    F-3b17a904): `lazy_import_probe.py` beside this file refused with a bare
+    `raise SystemExit("clean-room probe imported the source tree: ...")` -- no class, no
+    clause, no evidence, and exit 1, the code this repository reserves for `this tool
+    crashed`. Driven in a worktree with the venv python before the fix: the refusal path
+    (`PYTHONPATH=<worktree>/tools`, so `armature_core` resolves to the checkout) and a crash
+    path (a stubbed `armature_core` under a `site-packages` directory whose `blank_canvas`
+    raises) BOTH printed one line and exited 1, on the premise guard that decides whether the
+    wheel room's verdict means anything at all. `armature_core.parts.run_tool_main` is not
+    importable there for the same reason it is not importable here, so the probe imports THIS
+    function and passes its own tokens. The defaults are this gate's own, so the call at the
+    bottom of this file is unchanged and no reader of `CLASSIFIER_GATE_HALT ` sees a
+    difference.
     """
     try:
         raise SystemExit(fn(argv))
     except SystemExit:
         raise
     except BaseException as exc:                 # noqa: BLE001 -- the halt must be loud
-        refusal = isinstance(exc, ClassifierGateFailure)
+        refusal = isinstance(exc, refusal_class)
         code = 2 if refusal else 1
         outcome = ("HALTED — a gate fired" if refusal else "FAILED — an unhandled error")
         sentinel = {
-            "tool": TOOL, "outcome": outcome, "gate": GATE,
+            "tool": tool, "outcome": outcome, "gate": gate,
             "error": type(exc).__name__,
             "message": "the halt line could not be built", "evidence": None}
         line = json.dumps(sentinel)
@@ -230,7 +261,7 @@ def run_gate_main(fn, argv):
             traceback.print_exc()
             detail = getattr(exc, "evidence", None)
             sentinel = {
-                "tool": TOOL, "outcome": outcome,
+                "tool": tool, "outcome": outcome,
                 "gate": getattr(exc, "gate", None),
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": detail if isinstance(detail, dict) else None}
@@ -239,7 +270,7 @@ def run_gate_main(fn, argv):
             pass
         finally:
             print("::error::" + str(exc))
-            print(HALT + line)
+            print(halt + line)
             sys.exit(code)
 
 

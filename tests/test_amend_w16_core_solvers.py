@@ -1293,6 +1293,214 @@ def stale_tests_citations():
     return bad
 
 
+# ===========================================================================
+# WAVE 26, F-7c2ea515 — the CITATION census over ci-packaging's files
+# ===========================================================================
+#
+# The THIRD population, added the way the second was. The repo had a citation census for
+# `armature_core/**` (this file, above), one for `specs/**`
+# (`tests/test_seeds_specs.STALE_CITATIONS_TODAY`) and one for `tests/*.py` (the block above)
+# — and none for the twelve files ci-packaging owns, which cite each other constantly. The
+# reason is mechanical: `_LINE_ANCHOR` matches a `.py` basename only, so a `.yml`, `.toml`,
+# `.ps1`, `.in` or `.json` target could not match at all, and `CITATION_SEARCH_DIRS` holds no
+# `.github` directory.
+#
+# WHAT WAS MEASURED, by driving the walk below against the base tree itself (`git archive`
+# of the wave-25 merge into a scratch copy, this module's `REPO` pointed at it): ELEVEN
+# citing files, SIXTEEN citations, fourteen of them in-tree — and EIGHT pointing at a line
+# that is not what the sentence named. The eight, so the count is checkable rather than
+# quoted: the PyPI-400 record cited into the SPDX paragraph from two different files; the
+# artifact upload step cited into the visibility gate's `esac`; the sheet-fonts action cited
+# by a path that resolves to no file (and, by basename, to the WRONG `action.yml`); leg 2's
+# `PYTHONOPTIMIZE` export cited into the node/npm pre-flight comment; the two CI install
+# lines cited into a skip-count comment and into the rehearsal prose; and the clean-room
+# action's three sdist commands cited into the paragraph above them. FIVE of
+# the eight were made stale by waves 22 and 23 themselves — the pre-release gate inserted
+# about sixty lines above release.yml's upload step, wave 23's two `pip freeze` lines pushed
+# the clean-room action's sdist commands down, and the PEP 639 licence edit moved the PyPI
+# 400 record and broke the same citation in two files at once. All eight were corrected in
+# ci-packaging's own files in the same commit as this census, and the correction is the one
+# this repo already ruled for: NAME THE STEP OR THE SYMBOL, not the line. A step name in a
+# workflow, a function name in a gate and a leg name in `verify.ps1` all survive an edit
+# above them; a number does not.
+#
+# WHY `_LINE_ANCHOR` ITSELF IS NOT WIDENED, which is what the finding's fix text asked for.
+# That regex feeds three live censuses — `bad_line_anchors` over `armature_core/**`,
+# `line_anchors_under_tests` (population above 200, with two recorded tables) and the count
+# assertions — and widening the extension set pulls every non-`.py` citation written in
+# `tests/*.py` and in `armature_core/**` into those populations in the same commit, moving
+# pins that belong to another domain. So the extension set is a SIBLING regex here, beside
+# the helpers it reuses, and the resolve/blank/past-the-end predicate is the one
+# `stale_tests_citations` already applies. `bad_line_anchors`' symbol-qualification clause is
+# deliberately NOT applied: a `.yml` step and a `.ps1` leg have no Python symbol to anchor on.
+#
+# THE RESOLVER IS PATH-AWARE HERE AND A BASENAME LOOKUP IS NOT ENOUGH. Two files in this
+# tree are called `action.yml`. Measured while building this census: a basename resolver
+# sent `verify.ps1`'s citation of the npm clean room to the OTHER action and reported a
+# correct citation as stale. So a citation carrying a `/` must resolve as a repo-relative
+# path or relative to the citing file's own directory, and never by falling back to the
+# basename.
+#
+# THIS BLOCK'S OWN PROSE carries no `<file>:<line>` pair, for the reason the block above
+# records: a comment that explains the rule is inside the population the rule governs — and
+# this file is under `tests/`, so a pair written here would join the OTHER census too.
+
+#: The files that CITE. Everything ci-packaging owns that carries prose.
+CI_PACKAGING_CITING = ("verify.ps1", "pyproject.toml", ".gitignore")
+
+#: Where a cited path is looked up when it carries no directory, in order. The two `.github`
+#: action directories are listed for completeness; a citation that needs them to disambiguate
+#: is one that should have been written with its path, which the resolver requires.
+CI_PACKAGING_SEARCH_DIRS = ("", ".github/workflows", ".github/actions/clean-room",
+                            ".github/actions/npm-clean-room", ".github/actions/sheet-fonts",
+                            "tools/armature_core", "tools", "tests")
+
+#: MEASURED at wave 26. Cited files that are in no search directory and are not repo files:
+#: both are setuptools' own modules, quoted from the deprecation warnings `python -m build`
+#: printed on this tree. Named rather than silently skipped, the way
+#: `TESTS_CITED_FILES_NOT_IN_THE_TREE` names its five.
+CI_PACKAGING_CITED_FILES_NOT_IN_THE_TREE = {
+    "_apply_pyprojecttoml.py",
+    "dist.py",
+}
+
+#: MEASURED at wave 26 and EMPTY, kept as an equality rather than deleted: every one of the
+#: eight stale citations was corrected in place rather than recorded, because none of the
+#: eight had its number quoted inside a sentence recording it as wrong — the shape that
+#: forces a row into `TESTS_STALE_ANCHORS_RECORDED`. A row added here needs the same
+#: justification that table's rows carry.
+CI_PACKAGING_STALE_ANCHORS_RECORDED = set()
+
+_ANY_FILE_ANCHOR = re.compile(
+    r"(?<![A-Za-z0-9_/.])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+"
+    r"\.(?:py|yml|toml|ps1|in|json)):([0-9]+)")
+
+
+def ci_packaging_citing_files():
+    """Every file ci-packaging owns that can carry prose, as repo-relative paths."""
+    out = []
+    # The two directories are walked separately and NEVER as a bare `.github`:
+    # `tests/test_ci_workflows.GUARDED_TODAY` holds every repo path the suite opens, and each
+    # member needs a `push` and a `pull_request` filter covering it. `.github/workflows` and
+    # `.github/actions` are both already on that list and both already filtered; a bare
+    # `.github` would be a new member with no filter, which that census refuses by design.
+    for root in (os.path.join(REPO, ".github", "workflows"),
+                 os.path.join(REPO, ".github", "actions")):
+        for dirpath, _dirs, names in os.walk(root):
+            for name in sorted(names):
+                if name.endswith((".yml", ".yaml", ".py")):
+                    out.append(os.path.relpath(os.path.join(dirpath, name),
+                                               REPO).replace("\\", "/"))
+    for name in CI_PACKAGING_CITING:
+        if os.path.isfile(os.path.join(REPO, name)):
+            out.append(name)
+    return sorted(out)
+
+
+def resolve_cited_path(citing_rel, cited):
+    """The file a citation names, or None. A cited path carrying a `/` NEVER falls back to
+    its basename: two `action.yml` files exist and a basename lookup picks the wrong one."""
+    if "/" in cited:
+        for candidate in (os.path.join(REPO, *cited.split("/")),
+                          os.path.join(REPO, os.path.dirname(citing_rel),
+                                       *cited.split("/"))):
+            if os.path.isfile(candidate):
+                return candidate
+        return None
+    here = os.path.join(REPO, os.path.dirname(citing_rel), cited)
+    if os.path.isfile(here):
+        return here
+    for d in CI_PACKAGING_SEARCH_DIRS:
+        candidate = os.path.join(REPO, *[x for x in d.split("/") if x], cited)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def ci_packaging_line_anchors():
+    """`[(citing file, cited path, line)]` over every file ci-packaging owns."""
+    out = []
+    for rel in ci_packaging_citing_files():
+        src = io.open(os.path.join(REPO, rel), encoding="utf-8").read()
+        for m in _ANY_FILE_ANCHOR.finditer(src):
+            out.append((rel, m.group(1), int(m.group(2))))
+    return out
+
+
+def stale_ci_packaging_citations():
+    """`{(citing, cited, line): why}` — every citation that cannot be opened.
+
+    The same three clauses `stale_tests_citations` applies, and only those: the file does not
+    resolve, the line is past the end, or the line is blank. A `.yml` step and a `.ps1` leg
+    have no symbol to qualify on, so the symbol clause is not applied here.
+    """
+    bad = {}
+    for rel, cited, lineno in ci_packaging_line_anchors():
+        if (rel, cited, lineno) in CI_PACKAGING_STALE_ANCHORS_RECORDED:
+            continue
+        path = resolve_cited_path(rel, cited)
+        if path is None:
+            if os.path.basename(cited) not in CI_PACKAGING_CITED_FILES_NOT_IN_THE_TREE:
+                bad[(rel, cited, lineno)] = "the cited file does not resolve"
+            continue
+        lines = io.open(path, encoding="utf-8").read().splitlines()
+        if not 1 <= lineno <= len(lines):
+            bad[(rel, cited, lineno)] = f"past the end of a {len(lines)}-line file"
+        elif not lines[lineno - 1].strip():
+            bad[(rel, cited, lineno)] = "the cited line is blank"
+    return bad
+
+
+def test_the_ci_packaging_citation_population_is_not_empty():
+    """A walk that matched nothing would make the census below vacuously green.
+
+    The population is the citing TREE, enumerated off the disk — a workflow or an action
+    added tomorrow joins it without anyone remembering to add it here.
+    """
+    files = ci_packaging_citing_files()
+    assert len(files) >= 8, files
+    assert "verify.ps1" in files and "pyproject.toml" in files, files
+    anchors = ci_packaging_line_anchors()
+    assert len(anchors) >= 10, anchors
+    assert len({c for c, _n, _l in anchors}) >= 3, (
+        "the walk is reaching one file", anchors)
+
+
+def test_no_citation_in_ci_packagings_files_opens_a_blank_line_or_a_missing_file():
+    """The property. A seat opening a cited line to check a claim must find what was named.
+
+    Eight of these were stale when the census was written, five of them made stale by the two
+    waves that came immediately before. All eight were re-anchored on a step name, a leg name
+    or a symbol rather than re-measured, because a number in prose does not survive one wave
+    of edits to the file it points at.
+    """
+    assert stale_ci_packaging_citations() == {}, stale_ci_packaging_citations()
+
+
+def test_the_ci_packaging_citation_census_goes_red_on_a_line_past_the_end():
+    """The direction the predicate must bound, driven rather than reasoned.
+
+    `_ANY_FILE_ANCHOR` and the resolver are asserted together: a citation written the way
+    this repo's prose writes them, at a line number the target does not have, must be
+    reported — otherwise the census above is green because it matches nothing.
+    """
+    hits = _ANY_FILE_ANCHOR.findall(
+        "the record is in `.github/workflows/ci.yml:999999` and in `verify.ps1:1`")
+    assert [h[0] for h in hits] == [".github/workflows/ci.yml", "verify.ps1"], hits
+    past = resolve_cited_path("pyproject.toml", ".github/workflows/ci.yml")
+    assert past is not None and os.path.isfile(past)
+    lines = io.open(past, encoding="utf-8").read().splitlines()
+    assert not 1 <= 999999 <= len(lines)
+    #: and the ambiguity a basename resolver cannot see: two `action.yml` files exist, so a
+    #: citation naming one by path must not be answered with the other.
+    npm = resolve_cited_path("verify.ps1", ".github/actions/npm-clean-room/action.yml")
+    clean = resolve_cited_path("verify.ps1", ".github/actions/clean-room/action.yml")
+    assert npm != clean and npm is not None and clean is not None
+    assert resolve_cited_path("verify.ps1", "sheet-fonts/action.yml") is None, (
+        "a relative-looking path resolved by falling back to the basename; that is how a "
+        "correct citation gets reported against the wrong file")
+
+
 def test_the_tests_citation_population_is_not_empty():
     """A walk that matched nothing would make the census below vacuously green."""
     anchors = line_anchors_under_tests()

@@ -80,6 +80,9 @@ keywords = [
     "previz", "blender", "video-diffusion", "controlnet", "turnaround",
     "glb", "character", "animation", "comfyui", "sprite",
 ]
+# THE PYPI 400 RECORD lives in this block, and `.github/actions/clean-room/action.yml` and
+# `classifier_gate.py` both cite it. They cited it as a line range, and the PEP 639 licence
+# edit moved it; both now name this block instead.
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -151,11 +154,22 @@ dependencies = [
 # `build`, which is what makes the two tests that pin the published sdist's contents SKIP,
 # the silent-skip this repo already paid to close in CI.
 #
-# The specifiers below are the ones ci.yml:239 and release.yml:69 install, character for
-# character. `numpy` and `pillow` are not repeated here: CI installs them bare and they are
+# The specifiers below are the ones the `install test dependencies` step of ci.yml's
+# `python-tests` job and the `Install` step of release.yml's `verify` job install, character
+# for character — WITH THE THREE DELIBERATE DIFFERENCES NAMED, because a sentence that says
+# `character for character` and overstates by one row is the reason to distrust the whole
+# block. `numpy` and `pillow` are not repeated here: CI installs them bare and they are
 # runtime dependencies above, which is where the requirement already lives. `twine` is not
 # here either — it moves the artifact and never runs the suite, and the toolchain census
-# holds its constraint where it is installed.
+# holds its constraint where it is installed. And `pytest>=8.0` carries a FLOOR that neither
+# CI list has: both install a bare `pytest`, so this row states a minimum the jobs do not
+# state rather than repeating one they do.
+#
+# THE CITATIONS HERE NAME STEPS, NOT LINES, and that is a correction. This sentence read
+# `the ones ci.yml:239 and release.yml:69 install`; re-resolved 2026-09-05 in a worktree,
+# ci.yml:239 is a comment about the honest skip count and release.yml:69 is prose inside the
+# rehearsal block — the two install lines had moved, one of them under wave 23's own
+# pre-release gate. A step name does not move when sixty lines are inserted above it.
 # `tests/test_ci_workflows.py::test_the_manifest_states_the_dependency_list_the_suite_runs_against`
 # derives CI's list from the jobs that run pytest and holds this block to it, so the two
 # cannot fork the way the font dependency did.

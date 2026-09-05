@@ -60,6 +60,26 @@ build/
 # `npm/*.tgz` only covered a pack run from inside npm/; `npm pack npm` from the root drops
 # `armature-studio-0.3.0.tgz` here, and that was NOT IGNORED.
 *.tgz
+# The PyPI half of the same case, and it was still open. `dist/` above catches the artifacts
+# `python -m build` writes by default; `python -m build --outdir .`, or copying an archive
+# out of `dist/` to inspect its contents — which is what the wave-8 sdist work and every
+# later re-measurement of that archive actually did — drops a ~220-350 KB file where nothing
+# caught it. Measured with `git check-ignore -v` from a worktree: `dist/x.whl` IGNORED,
+# `npm/armature-studio-0.3.0.tgz` IGNORED, and `armature_studio-0.3.0.tar.gz` at the repo
+# root NOT IGNORED, nor in a subdirectory.
+#
+# BOTH SUFFIXES, and the second one is a correction. This block was first written with
+# `*.tar.gz` alone, on the reasoning that a wheel is only ever written into `dist/` — and the
+# derived census refused it in the same commit: `armature_studio-0.3.0-py3-none-any.whl` at
+# the repo root and in a subdirectory both read NOT IGNORED. `pip wheel .`, `python -m build
+# --outdir .` and a copied artifact all write one, and it is the file that goes to the
+# registry. That is what deriving the rule is for: the reasoning was wrong and the
+# measurement said so before the line shipped. `tests/test_packaging.py` derives all three
+# published artifact names from `project.name` / `project.version` and `npm/package.json`
+# and drives `git check-ignore` on them at the root and one level down, so a rename moves the
+# rule with it rather than relying on this list being remembered.
+*.tar.gz
+*.whl
 
 # npm dependency trees, at ANY depth. The rule was written `site/node_modules/` for the one
 # npm tree that existed then; `npm/package.json` has carried its own `scripts.test` since

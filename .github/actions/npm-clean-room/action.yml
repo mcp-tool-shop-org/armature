@@ -46,7 +46,10 @@ runs:
         # and `set -e` exits. The window is small, which is what makes it the bad kind: a rare
         # red on the gate standing between the npm package and an irreversible publish,
         # indistinguishable from a real packaging break, green on the retry. The sibling
-        # action says the same thing in its own words at sheet-fonts/action.yml:38-39.
+        # action says the same thing in its own words at
+        # .github/actions/sheet-fonts/action.yml:38-39 -- written with its PATH, because two
+        # files in this tree are called action.yml and a basename resolver answers the
+        # citation with the wrong one.
         #
         # `rm -f ./*.tgz` above guarantees the glob has exactly one match, so the positional
         # is the answer with no plumbing between. The existence check is verify.ps1's

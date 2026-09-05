@@ -39,6 +39,7 @@ not string literals, so a name written HERE would restore exactly the hole the p
 literal was.
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -46,6 +47,59 @@ import tempfile
 import numpy as np
 
 from armature_core import aapose, donor_gate, pngio
+
+# THE HALT CONTRACT IS IMPORTED, NOT SPELLED A THIRD TIME. WAVE 26 (ci-packaging,
+# F-3b17a904). Until this line the premise guard below refused with a bare
+# `raise SystemExit("clean-room probe imported the source tree: " + ...)`: no class, no
+# clause, no evidence, and exit 1 -- the code this repository reserves for `this tool
+# crashed`, pinned by `tests/test_packaging.py::
+# test_a_gate_refusal_exits_2_with_its_sentinel_and_a_crash_exits_1`. Driven in a worktree
+# with the repo venv before the fix, both directions: the refusal path
+# (`PYTHONPATH=<worktree>/tools`, so `armature_core` resolves to the checkout) printed one
+# line on stderr, no halt line, EXIT 1; a crash path (a stub `armature_core` under a
+# directory named `site-packages` whose `blank_canvas` raises) printed a traceback, no halt
+# line, EXIT 1. A refusal and a crash were byte-indistinguishable on the guard that decides
+# whether the wheel room's verdict means anything -- while `release: published` has fired and
+# both registries are waiting.
+#
+# `classifier_gate.py` sits in this directory and already holds the contract, spelled LOCALLY
+# because `armature_core.parts.run_tool_main` is not importable in the clean room. That is a
+# RECORDED EXCEPTION, not an invitation to a third copy: this file imports that function and
+# passes its own tokens. Both callers run this file with its own directory on `sys.path[0]`
+# (`.../clean-room/lazy_import_probe.py` under the action, the same absolute path under
+# `verify.ps1`'s leg 3), so the import resolves with no packaging of any kind -- and
+# `classifier_gate` now reads the trove list inside `main`, so importing it needs nothing but
+# the stdlib, which is all this clean room has.
+from classifier_gate import run_gate_main
+
+#: The andon's name, carried in every halt record's `gate` field.
+GATE = "LAZY_IMPORT"
+
+#: The tool name, the stem, so a reader keying on the printed prefix and a reader keying on
+#: the file agree -- `classifier_gate.py`'s rule, applied here.
+TOOL = "lazy_import_probe"
+
+#: The printed tokens. An operator (and `tests/test_instrument_exits.py`'s population, once
+#: it reaches `.github/actions/**/*.py`) keys on these, never on prose.
+HALT = "LAZY_IMPORT_PROBE_HALT "
+OK = "LAZY_IMPORT_PROBE_OK "
+
+
+class LazyImportProbeFailure(Exception):
+    """A refusal this probe is responsible for. · ANDON
+
+    The shape `ClassifierGateFailure` one file over has, for the reason recorded there:
+    carries the clause that fired and the evidence it fired on, so the halt record names
+    WHICH check refused and on WHAT.
+    """
+
+    def __init__(self, message, clause, evidence=None):
+        super().__init__(message)
+        self.gate = GATE
+        self.clause = clause
+        self.evidence = dict(evidence or {})
+        self.evidence["clause"] = clause
+
 
 #: The functions that actually ran, in order, appended by `_ran` AFTER each call returns.
 RAN = []
@@ -57,12 +111,18 @@ def _ran(fn, *args):
     RAN.append(fn.__name__)
 
 
-def main():
+def main(argv):
+    # `argv` is unread and is in the signature because `run_gate_main` calls `fn(argv)`; the
+    # probe takes no arguments and both callers invoke it with none.
     # The leg's own premise, checked rather than assumed: this must be the wheel, not a
     # checkout sitting one directory up. `sys.path[0]` is this file's directory inside the
     # repository when `verify.ps1` runs it, so the check is load-bearing on the rig too.
     if "site-packages" not in aapose.__file__.replace("\\", "/"):
-        raise SystemExit("clean-room probe imported the source tree: " + aapose.__file__)
+        raise LazyImportProbeFailure(
+            "the clean-room probe imported the source tree rather than the installed "
+            "wheel, so nothing below is a claim about the artifact: " + aapose.__file__,
+            "probe-imported-the-source-tree",
+            {"module": "armature_core.aapose", "resolved_to": aapose.__file__})
 
     canvas = aapose.blank_canvas(64, 64)
     body = np.zeros((aapose.KEYPOINT_COUNT, 3))
@@ -83,7 +143,9 @@ def main():
     _ran(donor_gate.mean_consecutive_frame_difference, paths)
 
     print("clean room: " + ", ".join(RAN) + " all ran")
+    print(OK + json.dumps({"tool": TOOL, "gate": GATE, "ran": list(RAN)}))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run_gate_main(main, sys.argv, tool=TOOL, gate=GATE, halt=HALT,
+                  refusal_class=LazyImportProbeFailure)

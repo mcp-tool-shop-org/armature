@@ -4796,15 +4796,69 @@ def test_a_classifier_gate_crash_exits_1_and_a_refusal_exits_2(tmp_path):
     assert record["outcome"].startswith("FAILED"), record
 
 
-def test_the_classifier_gate_refuses_by_a_named_andon_and_never_by_a_bare_exit():
+#: MEASURED at wave 26: the typed refusals each CPython file under `.github/actions/**`
+#: carries. A FLOOR per file, never an equality, so a seventh refusal is welcome and a
+#: deleted one is not — and the KEYS are asserted against the directory below, so the next
+#: file to land there joins this census on that day rather than on the day someone
+#: remembers. `classifier_gate.py`'s six are wave 23's; `lazy_import_probe.py`'s one is the
+#: source-tree premise guard, which until wave 26 was a bare `SystemExit(<string>)` at exit
+#: 1 — the code this repository reserves for `this tool crashed`, on the guard that decides
+#: whether the wheel room's verdict means anything.
+ANDON_REFUSALS_UNDER_ACTIONS = {
+    "classifier_gate.py": 6,
+    "lazy_import_probe.py": 1,
+}
+
+
+def cpython_files_under_actions():
+    """Every `.py` under `.github/actions/`, enumerated off the disk — never a written list.
+
+    WAVE 26, `F-3b17a904`: this census was keyed on ONE PATH CONSTANT (`CLASSIFIER_GATE`),
+    so the second CPython file in that directory — added by the SAME wave, and already named
+    in `GUARDED_TODAY` — joined the tree outside it and kept a bare refusal for three waves.
+    """
+    import glob
+
+    return sorted(glob.glob(os.path.join(REPO, ".github", "actions", "**", "*.py"),
+                            recursive=True))
+
+
+def _local_exception_classes(tree):
+    """The names of the Exception subclasses a module defines itself."""
+    return {n.name for n in ast.walk(tree)
+            if isinstance(n, ast.ClassDef)
+            and any(isinstance(b, ast.Name) and b.id.endswith(("Exception", "Error",
+                                                               "Failure"))
+                    for b in n.bases)}
+
+
+def test_the_actions_cpython_population_is_the_directory_and_not_a_list():
+    """The population before the property: the table's keys ARE the directory."""
+    got = sorted(os.path.basename(p) for p in cpython_files_under_actions())
+    assert got == sorted(ANDON_REFUSALS_UNDER_ACTIONS), (
+        f"{got} sit under .github/actions/ and the refusal census names "
+        f"{sorted(ANDON_REFUSALS_UNDER_ACTIONS)}; a file that joins that directory joins "
+        "this census on the day it lands")
+
+
+@pytest.mark.parametrize("path", cpython_files_under_actions(),
+                         ids=lambda p: os.path.basename(p))
+def test_the_classifier_gate_refuses_by_a_named_andon_and_never_by_a_bare_exit(path):
     """WAVE 23, `F-481b512c` — six bare `raise SystemExit("::error::...")` refusals.
 
     No class, no clause, no evidence, and exit 1 — the code
     `tests/test_packaging.py::test_a_gate_refusal_exits_2_with_its_sentinel_and_a_crash_exits_1`
     reserves for `this tool crashed`. Read by AST so a seventh refusal added in the old shape
     joins this census on the day it lands.
+
+    WAVE 26, `F-3b17a904` — PARAMETRISED OVER THE DIRECTORY. The census opened
+    `classifier_gate.py` alone, so `lazy_import_probe.py` beside it kept exactly the shape
+    this test exists to refuse: `raise SystemExit("clean-room probe imported the source
+    tree: " + ...)`. Driven in a worktree with the venv python before the fix, the refusal
+    path and a crash path both printed one line and EXITED 1 — byte-indistinguishable, on
+    the last packaging step of the release gate, while `release: published` has fired.
     """
-    with open(CLASSIFIER_GATE, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         tree = ast.parse(fh.read())
     bare = []
     for node in ast.walk(tree):
@@ -4827,21 +4881,287 @@ def test_the_classifier_gate_refuses_by_a_named_andon_and_never_by_a_bare_exit()
                       and isinstance(arg.left.value, str)))
         if speaks:
             bare.append(getattr(node, "lineno", "?"))
+    stem = os.path.basename(path)
     assert bare == [], (
-        f"classifier_gate.py raises a bare SystemExit at lines {bare}; a refusal in this "
+        f"{stem} raises a bare SystemExit at lines {bare}; a refusal in this "
         "repository is a NAMED andon carrying a clause and evidence, and exits 2")
+    local = _local_exception_classes(tree)
+    assert local, f"{stem} defines no andon class of its own"
     raises = [n for n in ast.walk(tree)
               if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
               and isinstance(n.exc.func, ast.Name)
-              and n.exc.func.id == "ClassifierGateFailure"]
-    assert len(raises) >= 6, (
-        f"{len(raises)} typed refusals; the six the gate had before wave 23 were all "
-        "converted, so this population cannot have shrunk")
+              and n.exc.func.id in local]
+    floor = ANDON_REFUSALS_UNDER_ACTIONS[stem]
+    assert len(raises) >= floor, (
+        f"{stem} carries {len(raises)} typed refusals and had {floor}; a refusal that "
+        "leaves this file is a check that stopped checking")
     for node in raises:
         assert len(node.exc.args) >= 2, (
             f"the refusal at line {node.lineno} names no clause")
         assert isinstance(node.exc.args[1], ast.Constant), (
             f"the clause at line {node.lineno} is not a literal a reader can grep for")
+
+
+# ===========================================================================
+# WAVE 26 (ci-packaging) — the clean room's two files, and the two rooms
+# ===========================================================================
+#
+# `F-3b17a904` (the probe's halt contract), `F-1d0f6c82` (the cleared-`dist/` invariant
+# reaching the action) and `F-6e4d3b71` (the two scratch rooms). Everything below reads or
+# drives files under `.github/`, which is what this module is for.
+
+LAZY_IMPORT_PROBE_HALT_TOKEN = "LAZY_IMPORT_PROBE_HALT "
+LAZY_IMPORT_PROBE_OK_TOKEN = "LAZY_IMPORT_PROBE_OK "
+
+
+def _run_probe(env_extra=None):
+    """Drive the probe as a subprocess, the way both of its callers do."""
+    env = dict(os.environ)
+    env.pop("PYTHONOPTIMIZE", None)
+    env.update(env_extra or {})
+    return subprocess.run([sys.executable, LAZY_IMPORT_PROBE],
+                          capture_output=True, text=True, cwd=REPO, env=env)
+
+
+def _probe_halt_record(stdout):
+    """The strict-JSON record on the probe's halt line."""
+    for line in stdout.splitlines():
+        if line.startswith(LAZY_IMPORT_PROBE_HALT_TOKEN):
+            return json.loads(line[len(LAZY_IMPORT_PROBE_HALT_TOKEN):])
+    raise AssertionError(f"no halt line in:\n{stdout}")
+
+
+def test_the_probes_source_tree_premise_refuses_by_a_named_andon_and_exits_2():
+    """RED before wave 26: one line on stderr, no halt line, exit 1.
+
+    The premise this guard checks decides whether everything after it is a claim about the
+    ARTIFACT or about the checkout sitting one directory up. With `tools/` on `PYTHONPATH`,
+    `armature_core` resolves to the source tree and the guard must fire — as a refusal a
+    reader can tell apart from a crash, on the last packaging step before an irreversible
+    publish.
+    """
+    got = _run_probe({"PYTHONPATH": os.path.join(REPO, "tools")})
+    assert got.returncode == 2, (
+        f"the probe refused and exited {got.returncode}; this repository's convention gives "
+        f"a deliberate refusal 2 and reserves 1 for a crash.\n{got.stdout}\n{got.stderr}")
+    record = _probe_halt_record(got.stdout)
+    assert record["gate"] == "LAZY_IMPORT", record
+    assert record["evidence"]["clause"] == "probe-imported-the-source-tree", record
+    assert record["evidence"]["resolved_to"].endswith("aapose.py"), record
+    assert record["outcome"].startswith("HALTED"), record
+
+
+def test_a_probe_crash_exits_1_and_is_told_apart_from_its_refusal():
+    """THREE outcomes, not two — the shape the gate one file over already had.
+
+    Before wave 26 a crash and a refusal were the same exit code AND the same shape, so `the
+    probe ran against the checkout instead of the wheel` — a rig or runner configuration
+    fault — was indistinguishable from `the wheel cannot call cv2`, the artifact fault the
+    room exists to catch.
+    """
+    env = dict(os.environ)
+    env.pop("PYTHONOPTIMIZE", None)
+    env["PYTHONPATH"] = os.path.join(REPO, "tools")
+    crash = subprocess.run(
+        [sys.executable, "-c",
+         "import runpy,sys;sys.argv=['probe'];"
+         # `runpy.run_path` does NOT put the file's directory on sys.path; `python <file>`,
+         # which is what both callers run, does. Without this the probe's own
+         # `from classifier_gate import run_gate_main` cannot resolve and this fixture would
+         # report a crash it manufactured rather than the one it is driving.
+         "sys.path.insert(0, r'%s');"
+         "m=runpy.run_path(r'%s');"
+         "m['run_gate_main'](lambda a: (_ for _ in ()).throw(ValueError('boom')), sys.argv,"
+         " tool=m['TOOL'], gate=m['GATE'], halt=m['HALT'],"
+         " refusal_class=m['LazyImportProbeFailure'])"
+         % (CLEAN_ROOM_DIR.replace("\\", "/"),
+            LAZY_IMPORT_PROBE.replace("\\", "/"))],
+        capture_output=True, text=True, cwd=REPO, env=env)
+    assert crash.returncode == 1, crash.stdout + crash.stderr
+    record = _probe_halt_record(crash.stdout)
+    assert record["error"] == "ValueError" and record["evidence"] is None, record
+    assert record["outcome"].startswith("FAILED"), record
+    assert record["tool"] == "lazy_import_probe", record
+
+
+def test_the_probe_adopts_the_handler_beside_it_and_does_not_spell_a_third_one():
+    """ADOPT THE HOME. `armature_core.parts.run_tool_main` is not importable in the clean
+    room — that is the recorded exception `classifier_gate.py` was written under — and the
+    answer to a second caller is to IMPORT that local handler, not to copy it.
+    """
+    with open(LAZY_IMPORT_PROBE, encoding="utf-8") as fh:
+        probe = fh.read()
+    tree = ast.parse(probe)
+    imported = {alias.name for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom) and node.module == "classifier_gate"
+                for alias in node.names}
+    assert "run_gate_main" in imported, (
+        "the probe no longer imports the handler beside it; a copy of the halt contract "
+        "here would be its THIRD spelling in this repository")
+    assert "def run_gate_main" not in probe, (
+        "the probe defines its own `run_gate_main`; that is the copy this rule forbids")
+    for token in (LAZY_IMPORT_PROBE_HALT_TOKEN, LAZY_IMPORT_PROBE_OK_TOKEN):
+        assert token in probe, f"the probe no longer prints {token!r}"
+    assert "CLASSIFIER_GATE_HALT" not in probe, (
+        "the probe prints the OTHER tool's halt prefix; an operator keying on the token "
+        "would attribute its refusal to the classifier gate")
+
+
+def test_the_halt_contract_module_imports_with_no_third_party_package_present():
+    """The blocker that made `adopt the home` impossible until it was measured.
+
+    `classifier_gate.py` read the trove list at MODULE scope, and the probe runs under the
+    wheel clean room's interpreter — a venv holding armature-studio and its four runtime
+    dependencies and nothing else. `import classifier_gate` there was a ModuleNotFoundError
+    before a line of the handler was reachable. The import moved into `main`, which is the
+    only thing that reads the list. Driven here with the name BLOCKED, so a module-level
+    import added back fails on the day it lands rather than on release day inside the room.
+    """
+    probe = subprocess.run(
+        [sys.executable, "-c",
+         "import sys\n"
+         "class Block:\n"
+         "    def find_spec(self, name, path=None, target=None):\n"
+         "        if name.split('.')[0] == 'trove_classifiers':\n"
+         "            raise ModuleNotFoundError(name)\n"
+         "        return None\n"
+         "sys.meta_path.insert(0, Block())\n"
+         "sys.path.insert(0, r'%s')\n"
+         "import classifier_gate\n"
+         "print('imported', classifier_gate.run_gate_main.__name__)\n"
+         % CLEAN_ROOM_DIR.replace("\\", "/")],
+        capture_output=True, text=True, cwd=REPO)
+    assert probe.returncode == 0, (
+        "classifier_gate.py cannot be imported without trove-classifiers, so the probe "
+        f"beside it cannot adopt its handler in the clean room:\n{probe.stderr}")
+    assert "imported run_gate_main" in probe.stdout, probe.stdout
+
+
+def _scratch_dirs_created(script):
+    """Every directory a composite action's script creates a virtual environment in."""
+    return sorted(set(re.findall(r"(?m)^\s*[^#\n]*?-m venv\s+\"?([^\s\"]+)\"?", script)))
+
+
+def test_every_scratch_room_a_composite_action_creates_is_removed_first():
+    """WAVE 26, `F-6e4d3b71` — a room whose whole name is `clean` met a directory it did
+    not create.
+
+    Creating a virtual environment over an existing directory REUSES it rather than emptying
+    it, so a fixed path with no removal first can hold a previous run's packages — and the
+    room whose stated job is catching a wheel that installs but cannot run is then GREEN on
+    a wheel missing a module the stale venv still carries. Derived over `action_files()`, so
+    a third room anywhere under `.github/actions/` is held the day it lands. The sibling npm
+    room already did both halves; this is the census that keeps them together.
+    """
+    for path in action_files():
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        rel = os.path.relpath(path, REPO).replace("\\", "/")
+        rooms = _scratch_dirs_created(text)
+        for room in rooms:
+            assert "RUNNER_TEMP" in room or room.startswith("$"), (
+                f"{rel} creates a scratch room at the fixed path {room!r}; the runner's own "
+                "scratch directory is `$RUNNER_TEMP`, and the sibling npm clean room "
+                "already reads it")
+            assert re.search(r"rm -rf[^\n]*%s" % re.escape(room), text), (
+                f"{rel} creates a scratch room at {room!r} and never removes one first; "
+                "a venv built over an existing directory reuses it")
+
+
+def test_the_scratch_room_census_can_see_a_room(  # noqa: D401
+):
+    """The direction the predicate must not bound: a walk that matched nothing would make
+    the assertion above vacuously green."""
+    assert _scratch_dirs_created(clean_room_script()), (
+        "the clean-room action's rooms are invisible to this walk, so the census above "
+        "asserts nothing about the action it exists for")
+    assert _scratch_dirs_created("echo nothing here") == []
+
+
+# The cleared-`dist/` invariant (`F-1d0f6c82`) is asserted of BOTH implementations in
+# `tests/test_verify_script.py::test_the_clear_is_followed_by_a_check_before_anything_ranges_over_dist`,
+# which is where the other four parity axes already live. A second spelling here is exactly
+# what the finding was about, so there is not one.
+
+
+def _action_names_its_artifacts(text):
+    """Does the clean-room action NAME the two artifacts, or hand a glob to its tools?
+
+    The question is the SELECTION, not a token: `dist/*.whl` and `dist/*.tar.gz` handed to
+    pip are a selection nobody checked, and under `shell: bash` (`-eo pipefail`) plus the
+    step's `set -eu` an unmatched glob reaches the tool as the literal pattern.
+
+    `twine check dist/*` is deliberately NOT in this population, and neither is the
+    classifier gate: both range over the DIRECTORY for the reason the gate's own docstring
+    records — release.yml uploads the whole of `dist/` and the publish action publishes what
+    it uploads, so the directory is the right population for a verdict. What must never be a
+    glob is the selection handed to an INSTALL, which names one file.
+    """
+    derived = "tomllib" in text and "project" in text and "version" in text
+    globbed = [line.strip() for line in text.splitlines()
+               if not line.strip().startswith("#")
+               and re.search(r"pip install[^\n]*dist[/\\]\*", line)]
+    return derived, globbed
+
+
+def test_the_clean_room_action_names_the_artifacts_it_installs_and_checks_its_shims():
+    """WAVE 26, `F-2a90c1ee` — three implementations select the published artifacts and only
+    two named what they were looking for.
+
+    In this action nothing was checked before it was used: `twine check dist/*`,
+    `pip install --no-deps dist/*.tar.gz`, `pip install dist/*.whl`, and an sdist console
+    script run with NO existence check at all — the new half, since wave 14 added that room
+    and wave 23 gave `verify.ps1` a by-name refusal for exactly it. The other two
+    implementations already refuse by name: `verify.ps1`'s leg 3 derives both filenames from
+    `project.name` / `project.version` by PEP 503/427 normalisation and lists what `dist/`
+    holds, and `.github/actions/npm-clean-room/action.yml` refuses an unmatched glob and a
+    missing shim in its own words.
+
+    THE PARITY FRAMING IS NOT HERE, deliberately: tests' `F-1ebf099e` owns the two-text
+    parity census in `tests/test_verify_script.py` (wave-26 SEAM 2), and this asserts the
+    property of the action, which is ci-packaging's own file. One property, two anchors would
+    be the second spelling this wave's method forbids; if the parity census lands with this
+    axis in it, this test is subsumed and deletable.
+    """
+    action = clean_room_script()
+    derived, globbed = _action_names_its_artifacts(action)
+    assert derived, (
+        "the clean-room action does not derive its artifact names from the manifest; a build "
+        "that renames or drops one then fails with a message about a PATH, in the job whose "
+        "whole purpose is to say what the artifact IS")
+    assert globbed == [], (
+        f"the action hands a glob to the tool that installs the artifact: {globbed}")
+    code = _code_only(action)
+    assert "the build produced no" in code, (
+        "the action installs an artifact with no by-name refusal above it")
+    install = re.search(r"pip install[^\n]*(\$SDIST|\$WHEEL|dist)", code)
+    assert install and code.index("the build produced no") < install.start(), (
+        "the action names its artifacts only AFTER installing them")
+    #: the console script each room installs, checked before it is run. `verify.ps1` gained
+    #: this refusal at wave 23 for the sdist room and this action did not move with it; a
+    #: missing `[project.scripts]` entry point otherwise dies as a bash
+    #: `No such file or directory` at exit 127, in the step with no compensator downstream.
+    assert code.count("provides no armature command") == 2, (
+        "both rooms must refuse by name when the install provides no console script; "
+        f"{code.count('provides no armature command')} of them do")
+
+
+def test_the_artifact_selection_census_goes_red_on_the_leg_this_action_had():
+    """The direction the predicate must bound, on the real pre-fix text.
+
+    A census that could not see `pip install dist/*.whl` would be green on the shape it
+    exists to refuse, so the shape is driven rather than reasoned about.
+    """
+    before = ("        python -m build\n"
+              "        python -m twine check dist/*\n"
+              "        python -m venv /tmp/cleanroom-sdist\n"
+              "        /tmp/cleanroom-sdist/bin/python -m pip install --no-deps dist/*.tar.gz\n"
+              "        python -m venv /tmp/cleanroom\n"
+              "        /tmp/cleanroom/bin/python -m pip install dist/*.whl\n")
+    derived, globbed = _action_names_its_artifacts(before)
+    assert not derived, "the pre-fix text reads as deriving its names; the census is blind"
+    assert len(globbed) == 2, globbed
+    assert "provides no armature command" not in before
 
 
 # ===========================================================================
