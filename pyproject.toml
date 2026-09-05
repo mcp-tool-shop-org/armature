@@ -124,6 +124,14 @@ dev = [
     "opencv-python-headless==5.0.0.93",
     "matplotlib==3.11.1",
     "build>=1.5,<2",
+    # `tests/test_packaging.py` derives the netrc carrier names from `requests.utils.NETRC_FILES`
+    # (the credential census, wave 18) and imports `requests` at module level, so three test
+    # modules fail at COLLECTION on an interpreter that lacks it. The rig's venv had it only as
+    # twine's transitive dependency, which is why the suite was green here and red on the first
+    # CI run of the swarm (2026-09-05, `c28feca`). Declared where the suite's other dependencies
+    # are, at the same string ci.yml and release.yml install; the ceiling because the release job
+    # must not pick up a new major on the day it runs.
+    "requests>=2.32,<3",
 ]
 
 [project.urls]

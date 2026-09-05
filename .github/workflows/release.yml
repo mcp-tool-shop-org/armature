@@ -133,7 +133,7 @@ jobs:
         # every copy of it to one string, so the constraint still cannot fork.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest numpy pillow opencv-python-headless==5.0.0.93 matplotlib==3.11.1 "build>=1.5,<2"
+          python -m pip install pytest numpy pillow opencv-python-headless==5.0.0.93 matplotlib==3.11.1 "build>=1.5,<2" "requests>=2.32,<3"
       # The same font ci.yml installs, from the same implementation. This job ran the suite
       # without one: two tests hard-require a permitted face and FAIL rather than skip without
       # it, so this gate depended on exactly what ci.yml refuses to depend on — and by the time
