@@ -14,6 +14,23 @@ from the surface it replaces (measured in stage 1, 0.00358 on this figure). The 
 extrusion is a multiple of that measured number, so the rays always start outside the old
 surface and always land on it. A global constant here would either miss the old surface
 entirely on the thin limbs or punch through the figure at the torso.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The world-touching acts are writing the baked atlas PNG, EXPORTING the textured GLB
+and writing `bake_manifest.json`, all under `--out`. Compensator: delete `--out`;
+owner: the executor session. Every path it writes is composed from `--out` and a
+fixed literal, so no operator-supplied name component can carry the exported GLB
+outside the directory the compensator names -- the property `preview_glb`'s
+compensator records as the condition its own statement rests on. The source GLB is
+opened read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 from __future__ import annotations
 
@@ -124,7 +141,8 @@ def _import(path, name):
     the scene's own object order, not a set's.
     """
     before = {o.name for o in bpy.data.objects}
-    bpy.ops.import_scene.gltf(filepath=path)
+    _import = bpy.ops.import_scene.gltf(filepath=path)
+    rc.require_import_status(_import, path, ImportEmpty, {"who": "rig_bake"})
     added = [o for o in bpy.data.objects if o.name not in before]
     meshes = [o for o in added if o.type == "MESH"]
     visible = blender_scene.render_visible_meshes(bpy.context.scene, meshes)
@@ -132,7 +150,7 @@ def _import(path, name):
         raise ImportEmpty(
             f"{path} contributed {len(visible)} render-visible mesh object(s); exactly one "
             f"is needed and guessing would bake an object nobody asked about",
-            {"path": path,
+            {"clause": "import_is_not_one_render_visible_mesh", "path": path,
              "objects_added": [o.name for o in added],
              "mesh_objects": [o.name for o in meshes],
              "render_visible": [o.name for o in visible]})
@@ -275,7 +293,9 @@ def bake(source, target, cage, margin, atlas):
     target.select_set(True)
     bpy.context.view_layer.objects.active = target
     if arm_bake_target(target) == 0:
-        raise BakeEmpty("no image texture node could be armed on the target material", {})
+        raise BakeEmpty(
+            "no image texture node could be armed on the target material",
+            {"clause": "no_image_texture_node_to_bake_into"})
     t = time.time()
     result = bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"},
                                  use_selected_to_active=True, cage_extrusion=cage,
@@ -337,12 +357,15 @@ def main():
     mat, img, tex = bake_material(target, args["atlas"])
     secs, result = bake(source, target, cage, BAKE_MARGIN, args["atlas"])
     if "FINISHED" not in result:
-        raise BakeEmpty("the bake operator declined", {"returned": result, "cage": cage})
+        raise BakeEmpty("the bake operator declined", {"clause": "bake_operator_declined",
+                                                       "returned": result, "cage": cage})
 
     health = atlas_health(img)
     if health["non_black_fraction"] < 0.20:
-        raise BakeEmpty("the baked atlas is mostly empty", {"health": health, "cage": cage,
-                                                            "returned": result})
+        raise BakeEmpty(
+            "the baked atlas is mostly empty",
+            {"clause": "baked_atlas_is_mostly_empty", "health": health, "cage": cage,
+             "returned": result})
 
     # F-244b2ad5: six refusals sit above this line — two `_import` calls, `unwrap`, `bake`
     # and two inline `raise`s — and not one of them needs a directory. It is created HERE

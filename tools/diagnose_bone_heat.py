@@ -24,6 +24,21 @@ Each arm removes one candidate mechanism:
   figure 1.0 units tall is small for them.
 * **envelope** — `ARMATURE_ENVELOPE` on the same mesh and the same armature, as the contrast
   that says whether the mesh can be weighted at all by anything.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is writing `bone_heat_diagnosis.json` under `--out`.
+Compensator: delete `--out`; owner: the executor session. Every path it writes is
+composed from `--out` and a fixed literal, so no operator-supplied name component can
+carry the artifact outside the directory the compensator names. The GLB is opened
+read-only and is never written.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 
 import argparse
@@ -40,6 +55,20 @@ import numpy as np  # noqa: E402
 from armature_core import landmarks, sitelist  # noqa: E402
 from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+# F-19d4e0f7: `require_import_status` is `require_render_target_moved`'s sibling and
+# lives beside it -- one implementation of the importer's status clause, fourteen
+# callers, with the operator call itself kept here where this module's `bpy` is.
+import rig_character as rc  # noqa: E402
+
+
+class BoneHeatSubjectError(ArmatureError):
+    """The mesh this diagnosis was pointed at is not one identifiable subject.
+
+    Wave 25, F-3b71c0aa. Named rather than the family BASE, for the reason
+    `errors.ArmatureError`'s docstring gives; `BandCountError` above is its sibling for
+    the FLAG, and keeping the two apart is the whole point -- this tool exists to
+    investigate why a mesh binds badly, so a refusal about the MESH and a refusal about
+    an argument must not arrive under one name."""
 
 
 def parse_args():
@@ -51,11 +80,76 @@ def parse_args():
     return p.parse_args(argv)
 
 
+#: The fewest bands `landmarks.derive` can resolve a standing figure out of.
+#:
+#: DERIVED, not chosen. `landmarks._region_runs` reads the band profile bottom-up and
+#: requires FOUR runs -- legs alone, legs+arms, trunk+arms, trunk -- each surviving the
+#: `end - start >= MIN_RUN_BANDS` filter. `_median3` holds its edges and preserves
+#: length, so the floor is exactly four times that constant. It is spelled as an
+#: expression over `landmarks.MIN_RUN_BANDS` rather than as the literal 12 so the number
+#: this clause tests and the number the derivation enforces are the same object: a global
+#: constant must not govern a local feature, and this one is the feature's own.
+MIN_BANDS = 4 * landmarks.MIN_RUN_BANDS
+
+
+class BandCountError(ArmatureError):
+    """`--bands` cannot produce a band profile any landmark could be read off."""
+
+
+def require_band_count(args):
+    """`args` if `--bands` can resolve a figure, else raise naming THE FLAG. · ANDON
+
+    WAVE 25, F-a4f7b3c9. `--bands` was `type=int, default=200` and reached by nothing:
+    an AST sweep of every `type=int` / `type=float` `add_argument` across the 21 owned
+    tools finds every other numeric flag routed through `parts.require_finite`,
+    `require_subject_args`, `require_frame_size`, `require_shot_fraction` or
+    `parts.tightened`, and this one through nothing. It is read at the single call
+    `landmarks.derive(world_verts(ob), n_bands=bands)` and reaches all twelve arms.
+
+    MEASURED in this worktree on the repo venv: `landmarks.band_profile(v, n_bands=0)`
+    and `n_bands=-5` each RETURN with zero bands and no refusal of any kind, and
+    `landmarks.derive` then raises `LandmarkError` under the clause
+    `silhouette_is_not_a_standing_figure` -- a clause about the ASSET, on a run whose
+    only defect is the flag. That is the 'refused, but incidentally' shape the ground row
+    F-114e1c6c described and wave 22 closed at `make_test_armature`; here the incidental
+    refusal is worse than fragile, because this tool's whole purpose is investigating WHY
+    a mesh binds badly, so a message blaming the silhouette is the message the operator is
+    primed to believe. A value of 1 or 2 also passes `band_profile` with no complaint at
+    all while deciding the RESOLUTION of every landmark the twelve arms are built from.
+
+    The shape is `make_test_armature.require_subject_args`'s: ONE clause, listing every
+    offending flag by name, with the value in the evidence, above `load()` and above any
+    write. The complementary half -- `landmarks.band_profile` refusing a band count that
+    produces zero bands, rather than returning an empty profile for `derive` to
+    misattribute -- is `armature_core`'s and is posted to the wave-25 inbox.
+    """
+    ev = {"gate": None, "andon": "BandCountError",
+          "clause": "bands_not_a_usable_band_count",
+          "flag": "--bands", "bands": args.bands, "minimum": MIN_BANDS,
+          "min_run_bands": landmarks.MIN_RUN_BANDS}
+    if not isinstance(args.bands, int) or isinstance(args.bands, bool):
+        raise BandCountError(
+            f"--bands={args.bands!r} is not an integer; it is the number of horizontal "
+            f"sections the silhouette is sliced into", ev)
+    if args.bands < MIN_BANDS:
+        raise BandCountError(
+            f"--bands={args.bands} cannot resolve a standing figure: "
+            f"`landmarks._region_runs` needs four cluster-count runs of at least "
+            f"{landmarks.MIN_RUN_BANDS} bands each (legs, legs+arms, trunk+arms, trunk), "
+            f"so the floor is {MIN_BANDS}. Below it the derivation refuses under "
+            f"`silhouette_is_not_a_standing_figure` -- a clause about the MESH -- on a "
+            f"run whose only defect is this flag, and this tool exists to investigate "
+            f"why a mesh binds badly", ev)
+    return args
+
+
 def load(glb):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
     scene.render.fps, scene.render.fps_base = 16, 1.0
-    bpy.ops.import_scene.gltf(filepath=glb)
+    _import = bpy.ops.import_scene.gltf(filepath=glb)
+    rc.require_import_status(_import, glb, BoneHeatSubjectError,
+                             {"who": "diagnose_bone_heat"})
     # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
     # object index 0 is depends on file order, and the glTF importer routinely adds a
     # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
@@ -64,11 +158,14 @@ def load(glb):
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     visible = blender_scene.render_visible_meshes(scene, meshes)
     if len(visible) != 1:
-        raise ArmatureError(
+        raise BoneHeatSubjectError(
             f"{glb} presents {len(visible)} render-visible mesh object(s) "
             f"{[o.name for o in visible]} (all meshes {[o.name for o in meshes]}); "
             f"which one carries the character is not a question this tool answers by "
-            f"taking index 0")
+            f"taking index 0",
+            {"clause": "subject_is_not_one_render_visible_mesh", "andon": "ArmatureError",
+             "glb": glb, "render_visible": [o.name for o in visible],
+             "all_meshes": [o.name for o in meshes]})
     return scene, visible[0]
 
 
@@ -179,6 +276,10 @@ def build_and_bind(scene, ob, bands, mode="ARMATURE_AUTO", only=None):
 
 def main():
     args = parse_args()
+    # FIRST, above `load` and above `os.makedirs`: nothing exists yet when this
+    # fires, so a refusal leaves nothing behind (the `require_subject_args`
+    # placement, carried).
+    require_band_count(args)
     out = os.path.abspath(args.out)
     arms = {}
 

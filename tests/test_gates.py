@@ -2117,10 +2117,26 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
     # WAVE-25 MERGE (coordinator, 2026-09-05): every value below MEASURED on the merged tree with the helpers above — core-solvers
     # and builders each added family classes branch-local (136 / 142 and 135 / 141); the merged tree is
     # neither and is not their sum.
+    # WAVE 25 (instruments), BRANCH-LOCAL and MEASURED: 134 → 142 names, 140 → 148
+    # definitions, 79 → 82 modules. EIGHT classes, all in `tools/*.py`:
+    #   `diagnose_bone_heat.BandCountError` (F-a4f7b3c9) — the andon for `--bands`,
+    #     the last bare numeric flag in the 21 Blender-side tools reached by no bound;
+    #   and seven NAMED refusal classes (F-3b71c0aa) replacing the family BASE at the
+    #     sites whose refusals carried no evidence at all — `ReliftError`,
+    #     `BoneHeatSubjectError`, `RigSheetSubjectError`, `ProbeArgError`,
+    #     `RigCharacterError`, `RigPartsError`, `RigRepairSubjectError`. Raising
+    #     `ArmatureError` itself names nothing about which andon pulled, which is what
+    #     that class’s own docstring says the wave-14 constructor is not a licence for.
+    # `modules` moves by three because `diagnose_bone_heat`, `probe_subject` and
+    # `rig_parts` defined no family class before. Nothing was deleted and no name is
+    # defined twice that was not already. ⚠ five domains move this in wave 25; the
+    # coordinator MEASURES on the merged tree, never sums.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): every value below MEASURED on the merged tree with the helpers above — never a sum
+    # of the branch-local readings the comments above record.
     assert measured == {
-        "names": 137,
-        "definitions": 143,
-        "modules": 79,
+        "names": 145,
+        "definitions": 151,
+        "modules": 82,
         "defined_more_than_once": {"DetectionGate": 2, "PayloadError": 5, "RenderGate": 2},
         "core_only_definitions": 60,
         "core_only_modules": 20,
@@ -2130,4 +2146,9 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
     # `580af47`; 83 on `w25-builders`, the +1 being `build_lora_arm_payload.UnknownBaseline`
     # — a class defined under `tools/` and not under `tools/armature_core/`, which is
     # exactly the population this subtraction measures.
-    assert measured["definitions"] - measured["core_only_definitions"] == 83
+    # the quantity the comment's last clause is about: definitions that sit outside the
+    # core-only walk, which is the gap the tree-wide census exists to close. 82 on
+    # `580af47`; 90 here — all eight classes above are tool-side, so the whole delta
+    # lands on this side of the subtraction and `core_only_definitions` is unmoved.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree (definitions minus core-only definitions).
+    assert measured["definitions"] - measured["core_only_definitions"] == 91

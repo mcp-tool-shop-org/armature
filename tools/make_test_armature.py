@@ -30,6 +30,23 @@ result off this mesh.
 
 Scale matches the blackguard (~1.0 unit tall) so framing and camera fit are comparable
 between subjects without re-deriving anything.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is EXPORTING the synthetic GLB at `--out` and writing its
+`.joints.json` ground-truth sidecar beside it. Compensator: delete both; owner: the
+executor session. `--out` is the file path itself rather than a directory, so the
+compensator names two files and not a tree; no operator-supplied name component is
+pasted into either beyond that path. This tool authors the ground truth every arc
+comparison in this repo is measured against, so a residue left behind is a matched
+pair a later run would read as authored.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 import argparse
 import json
@@ -176,7 +193,9 @@ def build(thickness, joint_scale, segments, arc=None, frames=33, start_deg=0.0, 
 
     missing = [n for n in arc["moving_parts"] if n not in all_parts]
     if missing:
-        raise SpecError(f"pose arc names parts that this figure has none of: {missing}")
+        raise SpecError(f"pose arc names parts that this figure has none of: {missing}",
+            {"clause": "arc_names_parts_the_figure_has_none_of", "andon": "SpecError",
+             "missing": missing, "figure_parts": sorted(all_parts)})
 
     moving = [all_parts[n] for n in arc["moving_parts"]]
     static = [ob for n, ob in all_parts.items() if n not in set(arc["moving_parts"])]

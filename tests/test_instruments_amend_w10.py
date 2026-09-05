@@ -178,7 +178,15 @@ def test_the_ambiguous_subject_refusal_earns_the_refusal_exit_code(tmp_path, cap
     rec = json.loads(lines[0][len("RIG_REPAIR_HALT"):])
     assert set(rec) == {"tool", "outcome", "gate", "error", "message", "evidence"}
     assert rec["outcome"] == "REFUSED \u2014 the tool declined to proceed", rec
-    assert rec["error"] == "ArmatureError", rec
+    # WAVE 25 (instruments, F-3b71c0aa): `ArmatureError` -> `RigRepairSubjectError`,
+    # CORRECTED IN PLACE rather than loosened. This site raised the family BASE, which
+    # `errors.ArmatureError`'s own docstring calls the thing the wave-14 constructor is
+    # "not a licence for": the family names nothing about which andon pulled, and the
+    # tree-wide census in `test_instruments_measure_amend_w14.py` holds a bare base raise
+    # WITH evidence at zero. The halt line now names the class AND carries the clause,
+    # which is the property this assertion exists to read.
+    assert rec["error"] == "RigRepairSubjectError", rec
+    assert rec["evidence"]["clause"] == "subject_is_not_one_render_visible_mesh", rec
 
 
 # --------------------------------------------------------------------------------------
@@ -815,7 +823,17 @@ RECORDED_COUNTING_SUCCESS_LINES = [
     # a legitimate finding for a diagnostic), so it is exempt from the guard clause below for
     # that stated reason.
     "diagnose_bone_heat.py",
-    "lift_solve.py", "make_parts_sheet.py", "make_rig_sheet.py", "preview_walk.py",
+    "lift_solve.py",
+    # WAVE 25 (instruments, F-f204a6d1): `make_skeleton_sheet` JOINED, for the reason
+    # `diagnose_bone_heat` did in wave 14. Its success line was
+    # `print("MAKE_SKELETON_SHEET_OK " + path)` -- a bare Windows path, the only `_OK`
+    # payload in the 21 owned tools a JSON reader could not parse, and a token earned by
+    # reaching the end of `main` rather than by a measurable effect. It now reports the
+    # gate's own snap counts, the inset-joint count, the panel count and `len(table)` --
+    # and `table` is the operand `gate_any_pivot_matched(table)` refuses over, above the
+    # success line, which is what this census asks of a counting payload.
+    "make_parts_sheet.py",
+    "make_rig_sheet.py", "make_skeleton_sheet.py", "preview_walk.py",
     # WAVE-12 MERGE (coordinator, 2026-09-04): `probe_subject` LEFT — its payload is now
     # `{"n_probed","n_measured","n_errors","json"}` computed from a population guarded by
     # `require_openable` / `require_something_measured` (instruments F-5b3ead49), no longer a bare

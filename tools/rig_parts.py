@@ -27,6 +27,23 @@ Gates, all raising inside this file, before the manifest that would make a run l
 * **D** — a second build produces the same parts, compared as parsed geometry, never bytes.
 * **ATLAS** — the embedded texture is byte-identical in the export. For this asset the image
   bytes ARE the contract, because "no re-bake" is the promise the route was chosen for.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The world-touching acts are EXPORTING the parts GLB and writing `parts_manifest.json`
+under `--out`, plus `halt.json` on the refusal path. Compensator: delete `--out`;
+owner: the executor session. That statement is only true while every written path
+resolves UNDER `--out`, and `--name` is pasted as the NAME COMPONENT of the exported
+GLB -- so `--name` goes through `armature_core.parts.single_path_segment`, the tree's
+one bound on a pasted name, exactly as `preview_glb --name` does. The source GLB is
+opened read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 
 import hashlib
@@ -58,6 +75,15 @@ BISECT_NEIGHBOURHOOD = 3.0
 RIGIDITY_SAMPLE = 400
 
 
+class RigPartsError(ArmatureError):
+    """A plain refusal from this tool that is not one of its gates.
+
+    Wave 25, F-3b71c0aa. Three sites raised the family BASE with no evidence: the two
+    `parse_args` clauses and the subject-ambiguity clause in `build_pass`.
+    `rig_character.RigCharacterError` is the sibling; they are separate classes because
+    a halt line naming one must not be readable as the other tool's."""
+
+
 def sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -74,12 +100,26 @@ def parse_args():
         key, _, value = token[2:].partition("=")
         key = key.replace("-", "_")
         if key not in args:
-            raise ArmatureError(f"unknown argument {token!r}; known: {sorted(args)}")
+            raise RigPartsError(f"unknown argument {token!r}; known: {sorted(args)}",
+                {"clause": "unknown_argument", "andon": "ArmatureError",
+                 "token": token, "known": sorted(args)})
         args[key] = (int(value) if key == "bands"
                      else float(value) if key == "collar_fraction" else value)
     if not args["glb"] or not args["out"]:
-        raise ArmatureError("usage: -- --glb=<path> --out=<dir> [--bands=N] "
-                            "[--collar-fraction=F]")
+        raise RigPartsError("usage: -- --glb=<path> --out=<dir> [--bands=N] "
+                            "[--collar-fraction=F]",
+            {"clause": "glb_and_out_are_required", "andon": "ArmatureError",
+             "glb": args["glb"], "out": args["out"]})
+    # WAVE 25, F-6e1a9d54's premise made TRUE. This module's named compensator is
+    # "delete `--out`", and that statement holds only while every written path resolves
+    # UNDER `--out`. `--name` is pasted as the NAME COMPONENT of the exported GLB, and it
+    # was bounded by nothing. It is invisible to `_census_nodes.pasted_name_flags()`,
+    # which derives its population from argparse `add_argument` calls and this parser is
+    # hand-rolled -- measured on this branch, that census returns the same 12 members
+    # before and after this line, which is the census gap, posted to the wave-25 inbox.
+    # `single_path_segment` is ADOPTED BY IMPORT from wave 22's ONE home, never copied.
+    parts.single_path_segment(args["name"], "--name", RigPartsError,
+                              {"who": "rig_parts", "out": args["out"]})
     return args
 
 
@@ -324,11 +364,15 @@ def fingerprint(part_objs):
 
 def build_pass(args, label):
     scene = rig_character.fresh_scene(rig_character.PROBE_FPS)
-    bpy.ops.import_scene.gltf(filepath=args["glb"])
+    _import = bpy.ops.import_scene.gltf(filepath=args["glb"])
+    rig_character.require_import_status(_import, args["glb"], RigPartsError,
+                                       {"who": "rig_parts"})
 
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     if len(meshes) != 1:
-        raise ArmatureError(f"expected one mesh object, found {[o.name for o in meshes]}")
+        raise RigPartsError(f"expected one mesh object, found {[o.name for o in meshes]}",
+            {"clause": "subject_is_not_one_mesh_object", "andon": "ArmatureError",
+             "glb": args["glb"], "mesh_objects": [o.name for o in meshes]})
     mesh_obj = meshes[0]
     material = mesh_obj.data.materials[0] if mesh_obj.data.materials else None
     uv_name = (mesh_obj.data.uv_layers.active.name if mesh_obj.data.uv_layers.active
@@ -546,7 +590,9 @@ def main():
     gate_atlas = glb.gate_atlas_untouched(args["glb"], out_glb)
 
     rig_character.fresh_scene(rig_character.PROBE_FPS)
-    bpy.ops.import_scene.gltf(filepath=out_glb)
+    _import = bpy.ops.import_scene.gltf(filepath=out_glb)
+    rig_character.require_import_status(_import, out_glb, RigPartsError,
+                                       {"who": "rig_parts", "stage": "readback"})
     reimported = {o.name.rsplit("_", 1)[-1]: o for o in bpy.data.objects
                   if o.type == "MESH" and o.name.startswith(args["name"])}
     gate_names_post = gate_part_names(reimported, "the re-imported exported GLB")

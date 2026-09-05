@@ -348,7 +348,15 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
                           "require_render_target_moved"],
     "rig_bake": ["gate_glb_written"],
     "rig_character": ["build_pass", "export_rigged", "gate_d_determinism", "gate_n_names", "raise GateMode", "unbound_determinism_record"],
-    "rig_parts": ["gate_atlas_untouched", "gate_glb_written", "gate_part_names"],
+    # WAVE 25 (instruments, F-19d4e0f7): `require_import_status` joins, and it is a
+    # genuine READ-BACK -- `rig_parts.main` re-imports the parts GLB it just exported
+    # so Gate PART NAMES can read the names a consumer would actually get, and the
+    # refusal is on THAT import's operator status. It belongs below the write by
+    # construction, so it is entered in `READBACK_REASONS` rather than in the backlog.
+    # The tool's OTHER import (`build_pass`) sits above every write and does not
+    # appear here, which is the measurement that says this entry is the readback one.
+    "rig_parts": ["gate_atlas_untouched", "gate_glb_written", "gate_part_names",
+                  "require_import_status"],
     "rig_repair": ["gate_glb_written"],
     "rig_retopo": ["gate_glb_written"],
 }
@@ -403,6 +411,12 @@ READBACK_REASONS = {
                               "write it just made"),
     "raise SticksGate": ("imwrite",
                          "the refusal IS the `cv2.imwrite` return for the frame just drawn"),
+    "require_import_status": (
+        "require_import_status",
+        "reads back the GLB the export just wrote -- `rig_parts.main` re-imports it so "
+        "Gate PART NAMES can read the names a consumer would get, and this refusal is "
+        "on that import's operator status set (instruments F-19d4e0f7); it is the "
+        "import half of `gate_glb_written`'s family"),
     "require_render_target_moved": (
         "require_render_target_moved",
         "reads back the frame the render just wrote -- `os.stat` against the "
@@ -682,7 +696,11 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # is neither and is not their sum.
     assert len(derived) == 27, sorted(derived)
     names = sum(len(v) for v in derived.values())
-    assert names == 54, sorted(derived.items())
+    # WAVE 25 (instruments, F-19d4e0f7): 54 -> 55, BRANCH-LOCAL and MEASURED. ONE name,
+    # `require_import_status` in `rig_parts` -- the re-import whose names Gate PART
+    # NAMES reads, below the export it reads back. It is a READ-BACK, so it enters
+    # `READBACK_REASONS` and NOT the `NOT_YET_MOVED` backlog, whose size is unchanged.
+    assert names == 55, sorted(derived.items())
     sites = stranded_site_count(members)
     # WAVE 16, F-9b4d01ef: the message used to name 72 — the tests branch's own measurement,
     # which the wave-14 merge overturned when it re-derived 27/51/69 on the merged tree and
@@ -702,8 +720,14 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # one name in the table; only its TOKEN changed, from `raise ArmatureError` to
     # `raise PlateError`, re-derived in `NOT_YET_MOVED` and `READBACK_REASONS` above.
     # ⚠ BRANCH-LOCAL — four sibling domains move this pin in the same wave.
-    assert sites == 77, (
-        f"{sites} refusal SITES below a first write; this pin asserts 77, re-derived on the "
+    # WAVE 25 (instruments, F-19d4e0f7): 77 -> 78, BRANCH-LOCAL and MEASURED. ONE site,
+    # `rig_parts`' `require_import_status` on the re-import Gate PART NAMES reads --
+    # a READ-BACK of the export above it, so it enters `READBACK_REASONS` and the
+    # `NOT_YET_MOVED` backlog is unchanged. The three sheets' new
+    # `require_render_target_moved` calls add NO site: each sits inside a `shoot`
+    # already counted through that name.
+    assert sites == 78, (
+        f"{sites} refusal SITES below a first write; this pin asserts 78, re-derived on the "
         f"merged tree 2026-09-05 (wave 22, all five domains merged; see the comments above for the "
         f"measurements it overturned), and the number falls as the moves land")
 
@@ -836,7 +860,8 @@ def test_the_read_back_table_is_read_and_says_what_it_means():
     # RE-DERIVED wave 22 (instruments, F-a2630f86), branch-local: 12 -> 13.
     # WAVE-22 MERGE (coordinator, 2026-09-05): 12 MEASURED — builders deleted one reason (11) and instruments added one (13) on
     # different branches; the merged table holds what the merged tree holds.
-    assert len(READBACK_REASONS) == 12, sorted(READBACK_REASONS)
+    # WAVE 25 (instruments, F-19d4e0f7): 12 -> 13, `require_import_status`.
+    assert len(READBACK_REASONS) == 13, sorted(READBACK_REASONS)
     # WAVE 16, F-9b4d01ef: the message named 35, which the wave-14 merge overturned when it
     # re-derived 12 / 29 on the merged tree. Same correction as the sites message above.
     assert len(NOT_YET_MOVED) == 29, (
@@ -1018,8 +1043,15 @@ def test_the_nine_tools_the_name_keyed_walk_could_not_see_are_in_the_population_
     # and the claim this list makes about it stopped being true. It remains in the
     # derived population and still strands that refusal below the write, which is what
     # `REFUSALS_BELOW_THE_FIRST_WRITE` records; only "the walk could not see it" is gone.
-    joined = ["extract_clip_frames", "make_parts_sheet",
-              "make_shotset_sheet"]
+    # WAVE 25 (instruments, F-19d4e0f7): `make_parts_sheet` LEAVES this list, corrected
+    # in place for the reason `preview_walk` left it in wave 22 and `make_rig_sheet`
+    # in wave 14 -- it now carries a `require_`-named refusal
+    # (`require_import_status`, the glTF importer's status clause), so the name-keyed
+    # predicate is no longer blind to it and the claim this list makes about it
+    # stopped being true. It remains in the derived population and still strands
+    # `shoot` below its first write, which is what `REFUSALS_BELOW_THE_FIRST_WRITE`
+    # records; only "the walk could not see it" is gone.
+    joined = ["extract_clip_frames", "make_shotset_sheet"]
     # WAVE-14 MERGE (coordinator, 2026-09-04): `make_rig_sheet` stopped stranding too (instruments, F-4db23b72).
     strands_one_today = [n for n in joined if n not in ("make_shotset_sheet", "make_rig_sheet")]
     pop = derive_population()

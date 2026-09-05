@@ -9,7 +9,8 @@ insets while the arc they illustrate CHOOSES its side by measurement:
 
 and poses `shoulder.{side}` — its docstring stressing that `_r` in the generator is a label
 on a planar wire figure, not anatomy, and that which arm lies on +X is measured.
-`make_parts_sheet.py:40`, `make_binding_sheet.py:43` and `make_rig_sheet.py::import_reference` each
+`make_parts_sheet.py::INSET_JOINTS`, `make_binding_sheet.py::INSET_JOINTS` and
+`make_rig_sheet.py::import_reference` each
 pinned `shoulder.L / elbow.L / wrist.L / hip.L` and then wrote a subtitle asserting the arc
 is "the character's LEFT arm". `make_skeleton_sheet.py:199` already derived its side and is
 the pattern the other three now follow.

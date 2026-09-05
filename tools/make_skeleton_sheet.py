@@ -14,6 +14,22 @@ material and light; the skeleton is a second pass composited over it, so a pivot
 *inside* him rather than only where it breaks the silhouette.
 
 No gate state is printed on this sheet, and no debug text.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is writing the rendered panels under `--out/frames` and
+one `panels.json` under `--out` -- the sheet the Director approves the skeleton at.
+Compensator: delete `--out`; owner: the executor session. Every path it writes is
+composed from `--out` and a fixed literal, so no operator-supplied name component can
+carry a panel outside the directory the compensator names. The GLB is opened
+read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 
 import argparse
@@ -229,7 +245,9 @@ def light_the_scene(scene):
         raise SkeletonSheetGate(
             "none of the candidate render engines is valid on this Blender, so the sheet "
             "would be drawn by whatever the factory settings left in place",
-            {"candidates": list(ENGINE_CANDIDATES), "blender": bpy.app.version_string})
+            {"clause": "no_valid_render_engine",
+             "candidates": list(ENGINE_CANDIDATES),
+             "blender": bpy.app.version_string})
     scene.view_settings.view_transform = "Standard"
     world = bpy.data.worlds.new("w")
     scene.world = world
@@ -266,6 +284,23 @@ def shoot(scene, path, transparent):
     scene.render.film_transparent = transparent
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA" if transparent else "RGB"
+    # WAVE 25, F-c05e8b32 (ground F-4925f60f, moved) -- THE PRE-RENDER SNAPSHOT, at the
+    # sheet tools the wave-22 enumeration dropped. Wave 22 added
+    # `rig_character.render_target_snapshot` / `require_render_target_moved` and adopted
+    # them at the FIVE renderers; the wave-21 re-sighting's list of render write sites
+    # stopped before the three sheets. Re-counted in this worktree:
+    # `scene.render.filepath` assignments / snapshots / moved-checks per owned module --
+    # preview_glb 2/3/1, preview_walk 1/2/2, render_performer 2/3/3,
+    # render_start_frame 6/7/7, render_turnaround 2/2/2, and make_binding_sheet 1/0/0,
+    # make_parts_sheet 1/0/0, make_skeleton_sheet 1/0/0.
+    #
+    # The comment below states the premise itself -- the existence and size clauses are
+    # properties a PREVIOUS run's file at the same path satisfies -- and no clause
+    # measured the target before the write, on the artefact the Director approves the
+    # skeleton at. Consequence stays bounded as the ground row framed it: no realistic
+    # FINISHED-without-write was constructed on this rig. The home is ADOPTED, not
+    # respelled.
+    _before = rig_character.render_target_snapshot(path)
     scene.render.filepath = path
     render_result = bpy.ops.render.render(write_still=True)
     # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. The existence and
@@ -292,9 +327,14 @@ def shoot(scene, path, transparent):
             f"the render operator returned without writing "
             f"{os.path.basename(path)}; the panel does not exist or is zero bytes, and "
             f"the sheet would name a file that is not there",
-            {"path": os.path.abspath(path),
+            {"clause": "render_wrote_nothing", "path": os.path.abspath(path),
              "exists": os.path.isfile(path),
              "bytes": os.path.getsize(path) if os.path.isfile(path) else None})
+    rig_character.require_render_target_moved(
+        path, _before, SkeletonSheetGate,
+        {"gate": SkeletonSheetGate.gate, "sub_gate": "RENDER_TARGET",
+         "who": "make_skeleton_sheet"},
+        what="the sheet panel")
     return path
 
 
@@ -304,7 +344,9 @@ def main():
     frames = os.path.join(out, "frames")
 
     scene = rig_character.fresh_scene(rig_character.PROBE_FPS)
-    bpy.ops.import_scene.gltf(filepath=args.glb)
+    _import = bpy.ops.import_scene.gltf(filepath=args.glb)
+    rig_character.require_import_status(_import, args.glb, SkeletonSheetGate,
+                                       {"who": "make_skeleton_sheet"})
     # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
     # object index 0 is depends on file order, and the glTF importer routinely adds a
     # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
@@ -316,7 +358,8 @@ def main():
         raise SkeletonSheetGate(
             f"{args.glb} presents {len(visible)} render-visible mesh object(s); the sheet "
             f"cannot decide which one is the character",
-            {"gate": "SKELETON_SHEET", "glb": args.glb,
+            {"clause": "subject_is_not_one_render_visible_mesh",
+             "gate": "SKELETON_SHEET", "glb": args.glb,
              "render_visible": [o.name for o in visible],
              "all_meshes": [o.name for o in meshes]})
     mesh_obj = visible[0]
@@ -414,7 +457,34 @@ def main():
     path = os.path.join(out, "panels.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
-    print("MAKE_SKELETON_SHEET_OK " + path)
+    # WAVE 25, F-f204a6d1 -- THE SUCCESS SENTINEL SAYS WHAT THE RUN MEASURED.
+    # This line was `print("MAKE_SKELETON_SHEET_OK " + path)`: the only `_OK` line in
+    # the 21 owned tools whose payload a JSON reader cannot parse (an AST walk finds 22
+    # `_OK` prints in 20 modules building their payload with `json.dumps`, and exactly
+    # this one that did not), so a wrapper reading BOTH halves of the halt contract
+    # needed two parsers -- the HALT line is strict JSON everywhere.
+    #
+    # It was also earned by reaching the end of `main` rather than by a measurable
+    # effect (the wave-12 rule, and the shape F-7e7703cb already closed for
+    # `diagnose_bone_heat`): `gate_snap` and the whole `joint_snap_table` are computed
+    # above and none of it reached the line, so a run in which every joint snapped and a
+    # run assembled from a degenerate table read identically to a wrapper. The counts
+    # are the sheet's own summary, from the same objects the record carries.
+    print("MAKE_SKELETON_SHEET_OK " + json.dumps({
+        "tool": "make_skeleton_sheet",
+        "json": path,
+        "gate_SKELETON_SHEET": {"n_matched": gate_snap["n_matched"],
+                                "n_snappable": gate_snap["n_snappable"],
+                                "unmatched": gate_snap["unmatched"]},
+        "n_inset_joints": len(INSET_JOINTS),
+        # The quantity `gate_any_pivot_matched(table)` above actually rules on, so the
+        # count this line reports and the count the gate refused over are the same
+        # object (`test_instruments_amend_w10`'s counting-success census asks exactly
+        # that: a refusal above the success line on the emptiness of what is counted).
+        "n_snap_sites": len(table),
+        "panels": sum(len(r["panels"]) for r in spec["rows"]),
+        "side": side,
+    }))
 
 
 def _halt_keysafe(value, _seen=None):

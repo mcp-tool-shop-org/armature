@@ -54,6 +54,17 @@ from render_start_frame import action_frame_range  # noqa: E402
 TOOL_VERSION = "E12.1"
 
 
+class ReliftError(ArmatureError):
+    """A relift comparison cannot be set up from what this run was given.
+
+    Wave 25, F-3b71c0aa. Three refusals here raised the family BASE with no evidence at
+    all -- a subject that imports no render-visible mesh, a `--pinned`/`--fresh` path
+    that is not a file, and a `--frames` count with nothing to compare. `ArmatureError`
+    is the family; a site that raises it names nothing about which andon pulled, which
+    is what `errors.ArmatureError`'s own docstring says the wave-14 constructor is NOT a
+    licence for. Each of the three now names this class and its own `clause`."""
+
+
 def _sha256(path):
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -244,7 +255,9 @@ def signatures(glb, frames, fps):
     meshes, _arms, _info = blender_scene.import_glb(glb, expected_fps=fps)
     subject = blender_scene.render_visible_meshes(scene, meshes)
     if not subject:
-        raise ArmatureError(f"{glb} imported no render-visible mesh")
+        raise ReliftError(f"{glb} imported no render-visible mesh",
+            {"clause": "import_has_no_render_visible_mesh", "andon": "ArmatureError",
+             "glb": glb, "mesh_objects": [o.name for o in meshes]})
     window = keyed_window(glb, action_frame_range(), frames)
     # F-33fb7947: the selection is named in the record, not left to a reader of the
     # argument. The call below passes `scene=` as well - idempotent, because `subject` is
@@ -277,7 +290,9 @@ def main():
     a = parse_args(sys.argv)
     for p in (a.pinned, a.fresh):
         if not os.path.isfile(p):
-            raise ArmatureError(f"no such GLB: {p}")
+            raise ReliftError(f"no such GLB: {p}",
+                {"clause": "glb_is_not_a_file", "andon": "ArmatureError",
+                 "glb": os.path.abspath(p)})
     # BEFORE either GLB is imported, and on identity of FILE rather than on content
     # (F-94657d8e). `os.path.samefile` compares the filesystem's own identity, so
     # `--pinned=x.glb --fresh=./x.glb`, a relative/absolute pair, a hard link and a symlink
@@ -292,14 +307,17 @@ def main():
             f"every frame identical and every byte identical by construction, and this "
             f"tool's record would publish that as the verdict that the E09 lift solver is "
             f"deterministic",
-            {"gate": "RELIFT_SIDES", "andon": "ReliftSelfComparison",
+            {"clause": "pinned_and_fresh_are_the_same_file",
+             "gate": "RELIFT_SIDES", "andon": "ReliftSelfComparison",
              "pinned": os.path.abspath(a.pinned), "fresh": os.path.abspath(a.fresh),
              "pinned_realpath": os.path.realpath(a.pinned),
              "fresh_realpath": os.path.realpath(a.fresh),
              "compared_on": "os.path.samefile (identity of file, never content)"})
 
     if a.frames < 1:
-        raise ArmatureError(f"--frames={a.frames}: there is nothing to compare")
+        raise ReliftError(f"--frames={a.frames}: there is nothing to compare",
+            {"clause": "frames_is_not_a_comparable_count", "andon": "ArmatureError",
+             "flag": "--frames", "frames": a.frames})
 
     pinned_sha, fresh_sha = _sha256(a.pinned), _sha256(a.fresh)
     pinned_sigs, pinned_window = signatures(a.pinned, a.frames, a.fps)

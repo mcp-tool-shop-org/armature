@@ -144,7 +144,19 @@ def blender_stubbed():
     saved = {k: sys.modules.get(k) for k in keys}
     before = set(sys.modules)
     try:
-        sys.modules["bpy"] = mock.MagicMock(name="bpy")
+        _bpy = mock.MagicMock(name="bpy")
+        # WAVE 25, F-19d4e0f7. The three operators that write or read this tree's
+        # central artefact RETURN AN OPERATOR STATUS SET, and a bare `MagicMock`
+        # returns another mock -- which `blender_scene._render_status` normalises to
+        # `[]` (an unreadable return FAILS the FINISHED clause rather than passing
+        # it, deliberately). Until the import sites started reading their status, no
+        # caller noticed; now a fixture driving a tool under this stub would meet the
+        # import refusal before the branch it was written to reach. The stub models
+        # the ordinary answer, and `FakeBpy(gltf_status=...)` models the other one.
+        _bpy.ops.import_scene.gltf.return_value = {"FINISHED"}
+        _bpy.ops.export_scene.gltf.return_value = {"FINISHED"}
+        _bpy.ops.render.render.return_value = {"FINISHED"}
+        sys.modules["bpy"] = _bpy
         sys.modules["bmesh"] = mock.MagicMock(name="bmesh")
         mathutils = types.ModuleType("mathutils")
         mathutils.Vector = lambda v: v
@@ -381,7 +393,23 @@ class _FakeOps:
         self.object = self
 
     def gltf(self, filepath=None, **kwargs):
+        """Append `adds` and RETURN AN OPERATOR STATUS SET, as Blender does.
+
+        WAVE 25, F-19d4e0f7. This returned `None` while every real
+        `bpy.ops.import_scene.gltf` returns `{'FINISHED'}` or `{'CANCELLED'}`, so a
+        fixture using it modelled a Blender that answers nothing. Nothing read the
+        return, so nothing noticed — until the fifteen import sites started reading
+        it, and four fixtures went red against a fake, not against the tools.
+
+        `FakeBpy.gltf_status` is the hook that makes the OTHER direction testable: set
+        it to `{"CANCELLED"}` and the import declines without raising, which is the
+        state `require_import_status` exists to refuse.
+        """
+        status = getattr(self._outer, "gltf_status", None)
+        if status is not None and "FINISHED" not in status:
+            return set(status)
         self._outer.data.objects.extend(self._outer.adds)
+        return set(status) if status is not None else {"FINISHED"}
 
     def select_all(self, action=None):
         pass
@@ -403,9 +431,13 @@ class FakeBpy:
     twice" a testable claim.
     """
 
-    def __init__(self, present=(), adds=()):
+    def __init__(self, present=(), adds=(), gltf_status=None):
         self.data = _FakeData(present)
         self.adds = list(adds)
+        #: The status set the next `import_scene.gltf` returns. `None` means the
+        #: ordinary `{'FINISHED'}`; a set without FINISHED declines the import and
+        #: appends nothing, which is what a CANCELLED import does in Blender.
+        self.gltf_status = gltf_status
         self.ops = _FakeOps(self)
         self.context = self
         self.scene = self

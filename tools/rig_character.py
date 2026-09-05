@@ -27,6 +27,23 @@ finished — never behind a shell `&&`, never through an `assert`, with no skip 
 to the manifest as diagnostics. Whether the deform is acceptable — whether he still looks
 like *him* when his arm comes up — is the Director's judgement on the sheet, at his zoom, and
 no number here approximates it.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The world-touching acts are EXPORTING the rigged (or skeleton-only) GLB and writing
+its manifest under `--out`, plus `halt.json` on the refusal path. Compensator: delete
+`--out`; owner: the executor session. That statement is only true while every written
+path resolves UNDER `--out`, and `--name` is pasted as the NAME COMPONENT of the
+exported GLB -- so `--name` goes through `armature_core.parts.single_path_segment`,
+the tree's one bound on a pasted name, exactly as `preview_glb --name` does. The
+subject GLB is opened read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 
 import hashlib
@@ -78,6 +95,15 @@ PROBE_END_DEG = 90.0
 #: The value is unchanged from the inherited default so this fix moves no measurement; what
 #: changes is that the choice is stated here and the flag is READ BACK below.
 ROUND_TRIP_MAX_PROBE = 20000
+
+
+class RigCharacterError(ArmatureError):
+    """A plain refusal from this tool that is not one of its gates.
+
+    Wave 25, F-3b71c0aa. Four sites raised the family BASE: the two `parse_args`
+    clauses, the missing vertex group, and the unbound-declaration clause that would
+    otherwise erase a comparison that actually ran. The gates above keep their own
+    classes and gate ids; this is the non-gate half, and it carries a `clause`."""
 
 
 class GateObjects(GateFailure):
@@ -346,6 +372,58 @@ def require_render_target_moved(path, before, gate_cls, ev=None,
     return after
 
 
+def require_import_status(result, path, gate_cls, ev=None, *, what="the subject GLB"):
+    """Raise `gate_cls` unless the glTF importer reported FINISHED. · ANDON
+
+    WAVE 25, F-19d4e0f7. Three Blender operators write or read this tree's central
+    artefact, and until this wave only two of them had their status set read. RE-DERIVED
+    with `test_instruments_amend_w14._operator_call_sites`, the ONE home for that walk:
+    `bpy.ops.export_scene.gltf` 9 sites / 8 modules / 0 uncaptured (pinned),
+    `bpy.ops.render.render` 15 sites / 9 modules / 0 uncaptured (pinned), and
+    `bpy.ops.import_scene.gltf` 16 sites / 13 modules / **16 uncaptured**. The asymmetry
+    was sharpest six lines apart inside `export_and_verify`: the export result is handed
+    straight to `gate_glb_written` under a comment calling it "the export whose manifest
+    is the tree's central artefact", and the re-import whose result Gate N and Gate P then
+    read was a bare call.
+
+    `bpy.ops.import_scene.gltf` returns an operator status set and can return
+    `{'CANCELLED'}` WITHOUT raising, exactly as the render and export operators can. The
+    zero-object direction is caught downstream at most sites by an emptiness or ambiguity
+    clause; what nothing caught is a CANCELLED import that leaves the PREVIOUS import's
+    objects in the scene, which every one of those clauses then rules on happily.
+
+    **The operator CALL stays at the call site and the RESULT is handed here** -- the shape
+    `gate_glb_written(path, result=..., before=...)` already uses for the export half, and
+    the reason is measured rather than stylistic: `bpy` is a module-global in each tool, so
+    performing the import inside THIS module would make every caller's import run against
+    `rig_character.bpy` instead of its own. Under real Blender that is the same object;
+    under `tests/blender_stub` it is not, and four fixtures that monkeypatch their own
+    module's `bpy` went red on exactly that difference. One implementation of the CLAUSE,
+    fifteen captures at fifteen call sites -- which is also what the census asks for.
+
+    The status set is normalised by `blender_scene._render_status` -- the tree's one
+    implementation of that normalisation (an unreadable return is `[]`, which FAILS the
+    `FINISHED` clause rather than passing it: the direction the invariant does not bound).
+    The sixteenth site is inside `blender_scene.import_glb` itself and is core-solvers'
+    file; posted to the wave-25 inbox rather than reached across a domain boundary.
+
+    Returns the normalised status set so a caller can put it in a record.
+    """
+    status = blender_scene._render_status(result)
+    if "FINISHED" not in status:
+        ev = dict(ev or {})
+        ev.update({"andon": gate_cls.__name__, "clause": "operator_status",
+                   "operator": "bpy.ops.import_scene.gltf", "what": what,
+                   "path": os.path.abspath(path), "status": status})
+        raise gate_cls(
+            f"the glTF importer did not report FINISHED for {what} at "
+            f"{os.path.abspath(path)}; it returned {status!r}. The operator returns a "
+            f"status set and can decline without raising, and every object clause below "
+            f"this line would then rule on whatever the PREVIOUS import left in the "
+            f"scene", ev)
+    return status
+
+
 def gate_glb_written(path, *, result, before, what="the exported GLB"):
     """`{"path", "bytes", "sha256", "status", "verdict"}` for a GLB this run wrote, else raise.
 
@@ -483,10 +561,24 @@ def parse_args():
         key, _, value = token[2:].partition("=")
         key = key.replace("-", "_")
         if key not in args:
-            raise ArmatureError(f"unknown argument {token!r}; known: {sorted(args)}")
+            raise RigCharacterError(f"unknown argument {token!r}; known: {sorted(args)}",
+                {"clause": "unknown_argument", "andon": "ArmatureError",
+                 "token": token, "known": sorted(args)})
         args[key] = int(value) if key == "bands" else value
     if not args["glb"] or not args["out"]:
-        raise ArmatureError("usage: -- --glb=<path> --out=<dir> [--measure-only] [--bands=N]")
+        raise RigCharacterError("usage: -- --glb=<path> --out=<dir> [--measure-only] [--bands=N]",
+            {"clause": "glb_and_out_are_required", "andon": "ArmatureError",
+             "glb": args["glb"], "out": args["out"]})
+    # WAVE 25, F-6e1a9d54's premise made TRUE. This module's named compensator is
+    # "delete `--out`", and that statement holds only while every written path resolves
+    # UNDER `--out`. `--name` is pasted as the NAME COMPONENT of the exported GLB, and it
+    # was bounded by nothing. It is invisible to `_census_nodes.pasted_name_flags()`,
+    # which derives its population from argparse `add_argument` calls and this parser is
+    # hand-rolled -- measured on this branch, that census returns the same 12 members
+    # before and after this line, which is the census gap, posted to the wave-25 inbox.
+    # `single_path_segment` is ADOPTED BY IMPORT from wave 22's ONE home, never copied.
+    parts.single_path_segment(args["name"], "--name", RigCharacterError,
+                              {"who": "rig_character", "out": args["out"]})
     return args
 
 
@@ -712,10 +804,12 @@ def _write_weights(mesh_obj, weights, quantisation):
     for name, w in weights.items():
         group = groups.get(name)
         if group is None:
-            raise ArmatureError(
+            raise RigCharacterError(
                 f"no vertex group named {name!r} on the mesh; the armature was parented "
                 f"without empty groups and there is nowhere to write weights"
-            )
+            ,
+                {"clause": "no_vertex_group_for_bone", "andon": "ArmatureError",
+                 "group": name, "groups": sorted(groups)})
         full = np.flatnonzero(w >= 1.0)
         if len(full):
             group.add(full.tolist(), 1.0, "REPLACE")
@@ -869,7 +963,8 @@ def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_mult
         else:
             raise GateMode(
                 f"unknown --envelope-radii={envelope_radii!r}; known: measured, default",
-                {"envelope_radii": envelope_radii, "known": ["measured", "default"]})
+                {"clause": "unknown_envelope_radii",
+                 "envelope_radii": envelope_radii, "known": ["measured", "default"]})
         _parent_to(mesh_obj, arm_obj, "ARMATURE_ENVELOPE")
         rec = {
             "binding": "envelope", "operator": "parent_set(ARMATURE_ENVELOPE)",
@@ -897,7 +992,8 @@ def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_mult
                "radii_source": "measured cross-section (landmarks.bone_radii)"}
     else:
         raise GateMode(f"unknown binding {mode!r}; known: auto, envelope, rigid",
-                       {"binding": mode, "known": ["auto", "envelope", "rigid"]})
+                       {"clause": "unknown_binding_mode",
+                        "binding": mode, "known": ["auto", "envelope", "rigid"]})
     return time.time() - t0, rec
 
 
@@ -980,7 +1076,9 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
     reporting on a thing that does not exist yet.
     """
     scene = fresh_scene(PROBE_FPS)
-    bpy.ops.import_scene.gltf(filepath=glb_path)
+    _import = bpy.ops.import_scene.gltf(filepath=glb_path)
+    require_import_status(_import, glb_path, GateSubject,
+                          {"who": "rig_character", "stage": "build_pass"})
 
     meshes = [o for o in bpy.data.objects if o.type == "MESH"]
     armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
@@ -989,7 +1087,8 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
             f"expected exactly one mesh object in the subject, found {len(meshes)}: "
             f"{[o.name for o in meshes]}. Which one carries the character is a question "
             f"this tool will not answer by picking the biggest",
-            {"glb": glb_path, "mesh_objects": [o.name for o in meshes],
+            {"clause": "subject_is_not_one_mesh_object",
+             "glb": glb_path, "mesh_objects": [o.name for o in meshes],
              "armatures": [o.name for o in armatures]}
         )
     mesh_obj = meshes[0]
@@ -1338,7 +1437,10 @@ def export_rigged(ctx, probe, out_path, animated=True):
 
     # Re-import into a throwaway scene and read the names a consumer would actually get.
     fresh_scene(PROBE_FPS)
-    bpy.ops.import_scene.gltf(filepath=out_path)
+    _import = bpy.ops.import_scene.gltf(filepath=out_path)
+    require_import_status(_import, out_path, GateSubject,
+                          {"who": "rig_character", "stage": "export_and_verify"},
+                          what="the re-imported export")
     arms = [o for o in bpy.data.objects if o.type == "ARMATURE"]
     reimported = sorted(b.name for a in arms for b in a.data.bones)
     gate_n_post = rig_gates.gate_n_names(reimported, sitelist.ALL_NAMES,
@@ -1360,7 +1462,8 @@ def export_rigged(ctx, probe, out_path, animated=True):
             f"({[o.name for o in visible]}, from {[o.name for o in meshes]}); Gate P's "
             f"round-trip clause cannot say which one is the subject, and guessing would "
             f"make it report on geometry nobody asked about",
-            {"glb": out_path, "mesh_objects_all": [o.name for o in meshes],
+            {"clause": "reimport_is_not_one_render_visible_mesh",
+             "glb": out_path, "mesh_objects_all": [o.name for o in meshes],
              "mesh_objects_render_visible": [o.name for o in visible]}
         )
     # `max_probe` passed EXPLICITLY — see ROUND_TRIP_MAX_PROBE for why the choice is stated
@@ -1410,11 +1513,15 @@ def unbound_determinism_record(gate_d, fp_a, fp_b, expect_weights=None):
     """
     has_weights = bool(fp_a.get("weights")) or bool(fp_b.get("weights"))
     if expect_weights is False and has_weights:
-        raise ArmatureError(
+        raise RigCharacterError(
             f"the caller declared this build unbound, but the fingerprints carry weight "
             f"groups ({sorted(set(fp_a.get('weights', {})) | set(fp_b.get('weights', {})))[:8]}). "
             f"Rewriting the weights clause as NOT YET RUN would delete a comparison that "
-            f"actually ran")
+            f"actually ran",
+            {"clause": "unbound_declared_over_weighted_fingerprints",
+             "andon": "ArmatureError",
+             "weight_groups": sorted(set(fp_a.get("weights", {}))
+                                     | set(fp_b.get("weights", {})))[:8]})
     if has_weights:
         return gate_d
 
@@ -1594,7 +1701,8 @@ def main():
         return
     if args["mode"] != "full":
         raise GateMode(f"unknown --mode={args['mode']!r}; known: skeleton, full",
-                       {"mode": args["mode"], "known": ["skeleton", "full"]})
+                       {"clause": "unknown_mode",
+                        "mode": args["mode"], "known": ["skeleton", "full"]})
 
     # Two full builds from the same input. The second is the one kept; Gate D compares.
     mode = args["binding"]

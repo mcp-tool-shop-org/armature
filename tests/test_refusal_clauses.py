@@ -211,6 +211,34 @@ POLICED, RAISE_SITES = derive_population(TOOLS)
 #: its raise count, never on its bases, which is the whole reason `FramingError` and
 #: `WalkError` are policed at all.
 RECORDED_POPULATION = frozenset({
+    # WAVE 25 (instruments) — MEASURED in this worktree, before and after the edit.
+    #   `BandCountError` (diagnose_bone_heat, F-a4f7b3c9): the new andon for `--bands`,
+    #     the last bare numeric flag in the 21 owned tools reached by no bound. Two raise
+    #     sites — a value that is not an integer, and one below the floor
+    #     `4 * landmarks.MIN_RUN_BANDS`, which is derived from the four cluster-count runs
+    #     `landmarks._region_runs` needs rather than chosen.
+    #   `ImportEmpty` (rig_bake): the class is UNCHANGED. It crosses the threshold through
+    #     the wave-16 DELEGATED edge — `rig_character.require_import_status(result, path,
+    #     gate_cls, ...)` raises its `gate_cls` parameter (F-19d4e0f7's ONE home for the
+    #     glTF importer's status clause), so `rc.require_import_status(_import, path,
+    #     ImportEmpty, ...)` is a raise site. The other eleven callers hand over classes that are already
+    #     policed or already single-site-and-named.
+    "BandCountError", "ImportEmpty",
+    # WAVE 25 (instruments, F-3b71c0aa), the second pass — MEASURED. Seven NAMED
+    # classes replacing the family BASE at the 30 sites whose refusals had no
+    # evidence at all. One per module, each carrying that module's own clause words:
+    #   `ReliftError` (check_relift, 3) · `BoneHeatSubjectError` (diagnose_bone_heat,
+    #   1 raise + the import-status delegation) · `RigSheetSubjectError`
+    #   (make_rig_sheet, 3) · `ProbeArgError` (probe_subject, 7, IMPORTED by
+    #   `probe_glb` for its 5 rather than spelled twice) · `RigCharacterError`
+    #   (rig_character, 4) · `RigPartsError` (rig_parts, 3) ·
+    #   `RigRepairSubjectError` (rig_repair, 1 raise + the import-status delegation).
+    # `make_binding_sheet` and `make_parts_sheet` needed no new class: their own
+    # `BindingSheetGate` / `PartsSheetGate` already name the same condition their
+    # sibling `make_skeleton_sheet` raises it under, so those seven sites adopt the
+    # existing gate rather than inventing a class.
+    "BoneHeatSubjectError", "ProbeArgError", "ReliftError", "RigCharacterError",
+    "RigPartsError", "RigRepairSubjectError", "RigSheetSubjectError",
     # WAVE 22 (instruments) — MEASURED on this branch, and a delta of exactly one.
     # `rig_repair.SourceHasNoFaces` (F-4354f34d, gate REPAIR_SOURCE) crosses the
     # two-site threshold with the two face-count denominators it guards
@@ -558,7 +586,29 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     #      posts 110 -> 111 for its own class); the coordinator MEASURES on the merged tree.
     # WAVE-25 MERGE (coordinator, 2026-09-05): POLICED MEASURED on the merged tree — core-solvers (+ShadowError) and builders
     # (+UnknownBaseline) each read 111 branch-local; the merged set holds both.
-    assert len(POLICED) == 112, sorted(POLICED)
+    # WAVE 25 (instruments), BRANCH-LOCAL: 110 → 112, MEASURED in this worktree before and
+    # after the edit (`python -c "import sys;sys.path[:0]=['tests','tools'];
+    # import test_refusal_clauses as M;print(len(M.POLICED))"` read 110 on `580af47`).
+    # Two members, both named in RECORDED_POPULATION above with their derivation:
+    #   +1 `diagnose_bone_heat.BandCountError` — the new andon for `--bands` (F-a4f7b3c9),
+    #      two raise sites (not an integer; below the floor `4 * landmarks.MIN_RUN_BANDS`).
+    #   +1 `rig_bake.ImportEmpty` — UNCHANGED as a class; it crosses the two-site threshold
+    #      through the wave-16 DELEGATED edge (F-d426d4bd): `rig_character.
+    #      require_import_status(result, path, gate_cls, ...)` raises its `gate_cls`
+    #      parameter, so the call filling that slot is a raise site. That is the census working, not a
+    #      new refusal.
+    # ⚠ BRANCH-LOCAL — five domains move this in wave 25; the coordinator MEASURES on the
+    # merged tree, never sums.
+    # CORRECTED IN PLACE while landing the wave: 112 -> 119. The seven added members
+    # are the NAMED classes the 35 no-evidence raises now use. The first pass gave
+    # those raises an evidence dict and left them raising the family BASE, which
+    # `tests/test_instruments_measure_amend_w14.py` holds at zero tree-wide and which
+    # `errors.ArmatureError`'s own docstring calls the thing the wave-14 constructor is
+    # "not a licence for": the family names nothing about which andon pulled. Each
+    # module now names its own class (see RECORDED_POPULATION above), and each crosses
+    # the two-site threshold.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): POLICED MEASURED on the merged tree, never summed.
+    assert len(POLICED) == 121, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -896,7 +946,18 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # measurement moves with it (names 135, definitions 141), which is what
     # `test_the_two_family_walks_are_one_law` exists to keep true. BRANCH-LOCAL.
     # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree with the derivation above, never summed.
-    assert len(defined) == 137, len(defined)
+    # WAVE 25 (instruments), BRANCH-LOCAL: 134 → 135, MEASURED. ONE new family class,
+    # `diagnose_bone_heat.BandCountError` (F-a4f7b3c9) — `--bands` was the last bare
+    # numeric flag in the 21 owned tools reached by no bound, and an out-of-range value
+    # was refused INCIDENTALLY by `landmarks.derive` under
+    # `silhouette_is_not_a_standing_figure`, a clause about the MESH, on a run whose only
+    # defect was the flag. No class was deleted. ⚠ BRANCH-LOCAL — a COMPOSITION on the
+    # merged tree.
+    # CORRECTED IN PLACE: 135 -> 142. `BandCountError` plus the seven named classes
+    # above, which replaced the family BASE at the sites whose refusals carried no
+    # evidence at all. Nothing was deleted.
+    # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree with the derivation above.
+    assert len(defined) == 145, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
@@ -1397,6 +1458,20 @@ def test_every_converted_refusal_carries_an_evidence_dict():
 # regenerated from `_census_nodes.clause_literals()` on the merged tree, and the unnamed table is
 # re-derived by its own test.
 # `tests/*.py`. Two of those are Gate ROUTE's own, on the last gate before a paid
+# 385 distinct clause words, of which 132 were named nowhere in `tests/*.py`.
+#
+# RE-DERIVED 2026-09-05 (wave 25, instruments, F-3b71c0aa), BRANCH-LOCAL: **441**
+# distinct words, of which **130** are named by no fixture. 56 words joined — one per
+# condition at the 78 family raises in the 21 Blender-side tools that carried no
+# `clause` a halt reader could key on (43 with an evidence dict lacking the key, 35
+# with no evidence at all, which the shared handler serialises as `"evidence": null`).
+# The unnamed table SHRANK by two rather than growing, because
+# `tests/test_instruments_amend_w25.py` spells every one of the 56 as well as
+# `asset_has_no_evaluated_geometry` and `motion_record_has_no_frames`, which were
+# listed here and are now named. ⚠ BRANCH-LOCAL — five domains move this number in
+# wave 25; the coordinator MEASURES it on the merged tree, never sums. Two of those are Gate ROUTE's own, on the last gate before a paid
+# WAVE-25 MERGE (coordinator, 2026-09-05): the counts in the paragraphs above are each BRANCH-LOCAL; the list below is regenerated
+# from `_census_nodes.clause_literals()` on the merged tree, and the unnamed table is re-derived by its own test.
 # submission (`unknown_hosted_tier`, `two_answers`); others sit on the spend and fetch path
 # (`arm_input_missing` and `missing_arm_input` in `build_r2v_payload`, `plan_paths_collide`
 # and `downloader_job_exits` in `fetch_run`, `order_unvouched` in `fetch_t2v_run`,
@@ -1437,8 +1512,13 @@ RECORDED_CLAUSES = [
     'animation_mode_unknown',
     'arc_did_not_survive',
     'arc_does_not_move',
+    'arc_names_parts_the_figure_has_none_of',
+    'argument_carries_no_value',
+    'argument_is_not_attached_with_equals',
     'arm_not_in_experiment',
+    'armature_does_not_name_both_sides',
     'asset_has_no_evaluated_geometry',
+    'asset_has_no_render_visible_mesh',
     'asset_imported_no_mesh_objects',
     'asset_missing',
     'asset_sha256_absent',
@@ -1448,7 +1528,10 @@ RECORDED_CLAUSES = [
     'attribution_for_unconditional_row',
     'authoring_rate_not_positive',
     'bad_magic',
+    'bake_operator_declined',
+    'baked_atlas_is_mostly_empty',
     'band_too_narrow',
+    'bands_not_a_usable_band_count',
     'banned_component_in_base',
     'banned_or_excluded_component',
     'baseline_is_not_the_two_expert_split',
@@ -1482,6 +1565,7 @@ RECORDED_CLAUSES = [
     'bone_names_do_not_match_registry',
     'bone_radius_not_positive',
     'bone_set_changes_between_frames',
+    'both_arms_move_across_the_arc',
     'bound_is_negative',
     'bound_may_only_tighten',
     'bound_not_finite',
@@ -1523,6 +1607,7 @@ RECORDED_CLAUSES = [
     'clip_end_is_closer_than_the_subject',
     'clip_has_no_consecutive_pair',
     'clip_would_be_written_outside_out',
+    'comparison_is_not_isolated',
     'compensator_target_carries_no_run_marker',
     'completeness_over_zero_channels',
     'composite_colour_carries_a_non_number',
@@ -1545,6 +1630,7 @@ RECORDED_CLAUSES = [
     'converted_widget_shifts_recorded_indices',
     'cover',
     'cover_crop_produced_the_wrong_size',
+    'coverage_has_no_frames_to_rule_on',
     'create_video_fps',
     'cv2_could_not_read_the_source',
     'cv2_refused_the_frame_write',
@@ -1609,6 +1695,7 @@ RECORDED_CLAUSES = [
     'fit_disagrees_with_the_file',
     'flag_component_not_an_integer',
     'flat_slot_ceiling_exceeded',
+    'floor_material_reads_an_image',
     'forbidden_not_a_list',
     'forbidden_word',
     'frame_absent_from_manifest',
@@ -1631,6 +1718,7 @@ RECORDED_CLAUSES = [
     'frame_not_generator_legal',
     'frame_not_hw3',
     'frame_not_three_integers',
+    'frame_outside_the_keyed_range',
     'frame_size_not_positive',
     'frame_sizes_differ',
     'frame_source_not_callable',
@@ -1640,12 +1728,17 @@ RECORDED_CLAUSES = [
     'frame_zero_carries_no_bones',
     'frames_are_not_all_one_size',
     'frames_are_not_contiguous',
+    'frames_is_not_a_comparable_count',
     'frames_not_numerically_named',
     'frames_without_index',
+    'gait_too_short_for_a_skin_comparison',
     'gate_l_frame_source',
     'gate_s_registration',
     'gated_text_is_not_shipped_text',
     'generator_family_contradicted',
+    'glb_and_out_are_required',
+    'glb_has_no_render_visible_mesh',
+    'glb_is_not_a_file',
     'graph_file_missing',
     'group_node_count_disagrees_with_the_plan',
     'group_size_below_one',
@@ -1667,9 +1760,12 @@ RECORDED_CLAUSES = [
     'identity_clause_phrase_absent',
     'identity_only',
     'import',
+    'import_has_no_render_visible_mesh',
+    'import_is_not_one_render_visible_mesh',
     'inserted_node_id_already_exists',
     'insertions_are_not_the_named_ones',
     'interior_sample_past_the_span',
+    'keying_produced_no_action',
     'keypoint_outside_the_frame',
     'keypoint_value_is_not_a_number',
     'landmark_list_is_partial',
@@ -1703,8 +1799,10 @@ RECORDED_CLAUSES = [
     'motion_undefined_over_one_frame',
     'multiple_graph_declarations',
     'named_break_did_not_happen',
+    'named_glb_is_not_a_file',
     'negative_source_has_no_sample_neg_prompt',
     'negative_source_not_supplied',
+    'neither_arm_moved',
     'no_batch_node_to_measure',
     'no_camera_block',
     'no_candidate_frames',
@@ -1716,12 +1814,15 @@ RECORDED_CLAUSES = [
     'no_frame_carries_landmarks',
     'no_frames_to_gate',
     'no_head_vertices_above_the_head_base',
+    'no_image_texture_node_to_bake_into',
     'no_json_chunk',
     'no_keyed_action',
     'no_legal_clauses',
+    'no_motion_source_given',
     'no_moving_frames',
     'no_neck_between_two_wider_sections',
     'no_numbered_frames_in_the_directory',
+    'no_out_or_no_glb',
     'no_parts_to_assign_to',
     'no_points_given',
     'no_positive_joint_radius',
@@ -1729,6 +1830,7 @@ RECORDED_CLAUSES = [
     'no_pre_render_snapshot',
     'no_readable_model',
     'no_render_visible_mesh',
+    'no_retopo_route_produced_a_mesh',
     'no_seed_and_no_registration',
     'no_seed_population',
     'no_slab_to_read_facing_from',
@@ -1737,6 +1839,8 @@ RECORDED_CLAUSES = [
     'no_trace_to_size_a_ball_against',
     'no_trace_to_size_a_bone_against',
     'no_uploaded_control_frames',
+    'no_valid_render_engine',
+    'no_vertex_group_for_bone',
     'no_vertices_to_frame',
     'no_views',
     'node_map_duplicate_id',
@@ -1761,6 +1865,7 @@ RECORDED_CLAUSES = [
     'not_an_api_format_graph',
     'not_api_format',
     'not_object',
+    'nothing_was_measured',
     'numpy_unavailable',
     'observed_sites_missing',
     'openpose_convention_mismatch',
@@ -1776,24 +1881,31 @@ RECORDED_CLAUSES = [
     'ortho_scale_pinned_without_ortho',
     'out_dir_is_not_a_directory',
     'out_dir_not_empty',
+    'out_given_twice',
     'output_name_is_not_a_name',
     'override_does_not_move_the_field',
     'override_field_is_structural',
     'override_names_no_trajectory_field',
     'pack_rate_not_positive',
     'palm_plane_degenerate',
+    'panel_subject_is_hidden_from_render',
     'part_radius_not_positive',
     'payload_is_not_the_ruling_it_describes',
     'performance_clause_does_not_dominate',
+    'performance_is_incomplete',
+    'performance_outside_the_frame',
     'phase_shorter_than_a_frame',
     'phrase_absent',
     'phrase_negated',
+    'pinned_and_fresh_are_the_same_file',
     'pixels_not_a_plane',
     'pixels_unreadable',
     'plan_paths_collide',
     'plate_component_not_an_integer',
     'plate_component_out_of_range',
+    'plate_is_not_a_file',
     'plate_not_three_components',
+    'plate_size_does_not_match_the_frame',
     'plate_source_missing',
     'playback_rate_not_finite',
     'playback_rate_not_positive',
@@ -1804,8 +1916,10 @@ RECORDED_CLAUSES = [
     'positive_encoder_is_not_reachable',
     'positive_prompt_is_empty',
     'preview_frame_collapsed',
+    'preview_is_incomplete',
     'projected_bbox_is_empty',
     'prompt_is_not_the_e08_prompt',
+    'quadriflow_declined',
     'radius_bounds_not_an_interval',
     'radius_bounds_not_finite_and_positive',
     'radius_not_a_distance',
@@ -1823,13 +1937,17 @@ RECORDED_CLAUSES = [
     'reference_file_missing',
     'reference_file_not_a_png',
     'reference_fit_has_no_recorded_assertion',
+    'reference_import_is_not_one_render_visible_mesh',
     'reference_not_a_file',
     'reference_unreadable',
     'registration_inconsistent',
     'registry_is_empty',
+    'reimport_is_not_one_render_visible_mesh',
     'render visibility',
     'render_engine_unknown',
     'render_target_missing',
+    'render_wrote_nothing',
+    'repair_removed_too_much',
     'request_overruns_the_performance',
     'required_landmark_missing',
     'resolution_is_not_a_frame_size',
@@ -1864,6 +1982,7 @@ RECORDED_CLAUSES = [
     'sensor_mm_not_finite_and_positive',
     'set_short',
     'shadow_floor_eps_is_zero',
+    'shadow_layer_needs_floor_and_plate',
     'shape_mismatch',
     'short_chunk_body',
     'short_chunk_header',
@@ -1894,9 +2013,16 @@ RECORDED_CLAUSES = [
     'start_frame_refused_by_the_sibling',
     'start_frame_unmeasured',
     'start_frame_was_not_resolved',
+    'still_not_manifold_after_repair',
     'stream_reported_no_rate',
     'strip_stride_not_positive',
     'subject_args',
+    'subject_has_no_vertices_at_this_frame',
+    'subject_is_not_one_armature',
+    'subject_is_not_one_mesh_and_one_armature',
+    'subject_is_not_one_mesh_object',
+    'subject_is_not_one_render_visible_mesh',
+    'subject_is_not_one_skinned_mesh',
     'subject_never_moved',
     'subject_not_in_the_canon_census',
     'supplied_frame_contradicts_graph',
@@ -1920,18 +2046,23 @@ RECORDED_CLAUSES = [
     'twist_datum_collapsed',
     'two_answers',
     'two_frames_share_one_server_name',
+    'unbound_declared_over_weighted_fingerprints',
     'unexpected_source_node',
     'unknown_animation_mode',
+    'unknown_argument',
     'unknown_arm',
     'unknown_axis',
+    'unknown_binding_mode',
     'unknown_bone',
     'unknown_codec',
     'unknown_conditioning_class',
+    'unknown_envelope_radii',
     'unknown_experiment',
     'unknown_flag',
     'unknown_generator_family',
     'unknown_generator_profile',
     'unknown_hosted_tier',
+    'unknown_mode',
     'unknown_pose_arc',
     'unknown_spec_key',
     'unknown_stickwidth_type',
@@ -1986,8 +2117,12 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'anchor_not_a_number',
     'anchor_not_a_pair',
     'anchor_outside_unit_interval',
+    # WAVE 25 (instruments): `asset_has_no_evaluated_geometry` and
+    # `motion_record_has_no_frames` LEFT this table in the commit that gave them a
+    # fixture -- `tests/test_instruments_amend_w25.py` names both (the first in
+    # `WAVE_25_CLAUSE_WORDS`, the second there and in the empty-record refusal's own
+    # test). The table may not grow; it may shrink exactly this way.
     'arc_does_not_move',
-    'asset_has_no_evaluated_geometry',
     'asset_imported_no_mesh_objects',
     'bad_magic',
     'band_too_narrow',
@@ -2061,7 +2196,6 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'licence_map_ruling',
     'measurement_not_positive',
     'mitten_hand_wrong_point_count',
-    'motion_record_has_no_frames',
     'no_batch_node_to_measure',
     'no_composite_colour_named',
     'no_deforming_bones',

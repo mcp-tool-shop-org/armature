@@ -117,7 +117,8 @@ def mesh_sample_frames(n_frames):
             f"to {frames}, and a single-frame comparison is the rest pose alone. Bone "
             f"agreement does not prove the skin followed, so this run would report a "
             f"clause that cannot fail",
-            {"gate": WalkGate.gate, "sub_gate": "A", "n_frames": n, "frames": frames,
+            {"clause": "gait_too_short_for_a_skin_comparison",
+             "gate": WalkGate.gate, "sub_gate": "A", "n_frames": n, "frames": frames,
              "minimum": GATE_A_MESH_FRAMES_MIN})
     return frames
 
@@ -193,7 +194,8 @@ def pick_subject(scene):
             f"expected exactly one render-visible mesh and one armature, found "
             f"{len(visible)} mesh(es) {[o.name for o in visible]} and {len(arms)} "
             f"armature(s) {[o.name for o in arms]}",
-            {"meshes": [o.name for o in meshes], "armatures": [o.name for o in arms]},
+            {"clause": "subject_is_not_one_mesh_and_one_armature",
+             "meshes": [o.name for o in meshes], "armatures": [o.name for o in arms]},
         )
     return visible[0], arms[0]
 
@@ -268,7 +270,7 @@ def author(arm_obj, scene, gait, fps):
 
     action = arm_obj.animation_data.action if arm_obj.animation_data else None
     if action is None:
-        raise WalkGate("keying produced no action at all", {})
+        raise WalkGate("keying produced no action at all", {"clause": "keying_produced_no_action"})
     n_curves = 0
     for fc in action_fcurves(action):
         n_curves += 1

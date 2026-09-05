@@ -20,6 +20,24 @@ Two variants, measured side by side:
 Both are graded on whether the sculpted joint balls, the mitten hands and the toes survive —
 those are the character, and a retopology that smooths them away has failed no matter what its
 face count says.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The world-touching acts are EXPORTING the retopologised GLB and the outer shell,
+rendering the comparison panels under `--out/panels`, and writing
+`retopo_manifest.json` and `panels.json` under `--out`, plus `halt.json` on the
+refusal path. Compensator: delete `--out`; owner: the executor session. Every path it
+writes is composed from `--out` and a fixed literal (the panel stems are built from
+the tool's own labels, never from an operator-supplied name), so no name component
+can carry an export outside the directory the compensator names. The source GLB is
+opened read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 from __future__ import annotations
 
@@ -120,7 +138,8 @@ def parse_args():
 
 def import_subject(glb):
     scene = rc.fresh_scene(16)
-    bpy.ops.import_scene.gltf(filepath=glb)
+    _import = bpy.ops.import_scene.gltf(filepath=glb)
+    rc.require_import_status(_import, glb, NoRetopoProduced, {"who": "rig_retopo"})
     # FAMILY of F-cb986eb3 / F-e911313d: `[...][0]` over the object table. Which
     # object index 0 is depends on file order, and the glTF importer routinely adds a
     # second mesh -- the `glTF_not_exported` Icosphere, which make_rig_sheet's own
@@ -132,7 +151,7 @@ def import_subject(glb):
         raise NoRetopoProduced(
             f"{glb} presents {len(visible)} render-visible mesh object(s); exactly one "
             f"is the subject to retopologise",
-            {"gate": "RETOPO", "glb": glb,
+            {"clause": "subject_is_not_one_render_visible_mesh", "gate": "RETOPO", "glb": glb,
              "render_visible": [o.name for o in visible],
              "all_meshes": [o.name for o in meshes]})
     return scene, visible[0]
@@ -271,7 +290,8 @@ def quadriflow(ob, target_faces, scale=QUADRIFLOW_SCALE):
     ob.data.update()
     if "FINISHED" not in str(result):
         raise QuadriflowDeclined("the operator declined the mesh and changed nothing",
-                                 {"returned": str(result), "scale": scale,
+                                 {"clause": "quadriflow_declined",
+                                  "returned": str(result), "scale": scale,
                                   "target_faces": int(target_faces),
                                   "faces_unchanged": len(ob.data.polygons)})
     return secs, str(result)
@@ -348,7 +368,8 @@ def isolate_subject(scene, objects, subject):
             f"{len(still)} object(s) are still in the render beside the panel's subject "
             f"{getattr(subject, 'name', subject)!r}: {still}. Every panel would be a "
             f"composite of the variant it names and something else",
-            {"gate": "ISOLATE", "subject": getattr(subject, "name", None),
+            {"clause": "comparison_is_not_isolated",
+             "gate": "ISOLATE", "subject": getattr(subject, "name", None),
              "still_visible": still,
              "population": f"scene.objects of type {sorted(DRAWN_TYPES)}",
              "n_examined": len([o for o in scene.objects if o.type in DRAWN_TYPES]),
@@ -363,7 +384,8 @@ def isolate_subject(scene, objects, subject):
         raise ComparisonNotIsolated(
             f"the panel's own subject {getattr(subject, 'name', subject)!r} is hidden from "
             f"render; the panel would be empty",
-            {"gate": "ISOLATE", "subject": getattr(subject, "name", None),
+            {"clause": "panel_subject_is_hidden_from_render",
+             "gate": "ISOLATE", "subject": getattr(subject, "name", None),
              "still_visible": []})
     return [o.name for o in objects if o is not subject]
 
@@ -487,7 +509,7 @@ def main():
     live = [k for k, v in results.items() if "FAILED" not in v and v.get("faces", 0) > 0]
     if not live:
         raise NoRetopoProduced("both stock-Blender routes failed to produce a mesh",
-                               {"results": results})
+                               {"clause": "no_retopo_route_produced_a_mesh", "results": results})
 
     # F-244b2ad5: `import_subject` refuses an ambiguous import, `quadriflow` refuses a
     # declined operator (twice), and the `NoRetopoProduced` inline `raise` above says both

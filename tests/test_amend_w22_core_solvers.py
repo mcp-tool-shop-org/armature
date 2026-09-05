@@ -706,38 +706,32 @@ def family_raises_without_a_clause():
     module and then in `errors`, and only classes that actually subclass `ArmatureError`
     count — a census that keyed on the spelling would miss a re-exported name and invent a
     member out of any local variable that happens to be called `SolveError`.
+
+    WAVE 25 (F-3b71c0aa): the WALK moved to `_census_nodes.family_raises_without_a_clause`
+    and is called from here with this domain's population and this domain's resolver.
+    Nothing about the property or the answer changed — what changed is that the SAME walk
+    now also ranges over `tools/*.py`, where 78 of 150 resolved family raises carried no
+    clause and the property `== []` had never been asked. A second copy of this walk for
+    the second population is exactly the defect this module's own opening was written
+    against, so there is not one.
     """
     import importlib
 
-    out = []
-    for name in OWNED:
+    import _census_nodes as _CN
+
+    def _resolve(module, cname):
         try:
-            mod = importlib.import_module("armature_core." + name)
-        except Exception:                       # blender_scene imports bpy
+            mod = importlib.import_module("armature_core." + module)
+        except Exception:                   # blender_scene imports bpy
             mod = None
-        tree = ast.parse(_owned_source(name))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Raise) or not isinstance(node.exc, ast.Call):
-                continue
-            fn = node.exc.func
-            cname = getattr(fn, "id", None) or getattr(fn, "attr", None)
-            if not cname:
-                continue
-            cls = getattr(mod, cname, None) if mod is not None else None
-            if cls is None:
-                import armature_core.errors as E
-                cls = getattr(E, cname, None)
-            if not (isinstance(cls, type) and issubclass(cls, ArmatureError)):
-                continue
-            ev = node.exc.args[1] if len(node.exc.args) > 1 else None
-            if ev is None and not node.exc.keywords:
-                out.append((name, node.lineno, cname, "no evidence at all"))
-                continue
-            if isinstance(ev, ast.Dict):
-                keys = [k.value for k in ev.keys if isinstance(k, ast.Constant)]
-                if "clause" not in keys:
-                    out.append((name, node.lineno, cname, "evidence without a clause"))
-    return sorted(out)
+        cls = getattr(mod, cname, None) if mod is not None else None
+        if cls is None:
+            import armature_core.errors as E
+            cls = getattr(E, cname, None)
+        return cls
+
+    trees = {name: ast.parse(_owned_source(name)) for name in OWNED}
+    return _CN.family_raises_without_a_clause(trees, _resolve, ArmatureError)
 
 
 def test_every_family_raise_in_this_domain_names_the_clause_that_pulled():

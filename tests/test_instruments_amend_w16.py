@@ -950,8 +950,11 @@ def test_no_visibility_andon_carries_its_own_one_level_predicate(filename, funct
     clause is satisfied by code that consults NO collection visibility at all — which is why
     it now sits beside the CALL check rather than instead of one.
 
-    Reverted-red: the base tree carried that comprehension at `rig_character.py:664` and
-    `rig_retopo.py:317`.
+    Reverted-red: the base tree carried that comprehension in
+    `rig_character.py::gate_objects_registered` and `rig_retopo.py::isolate_subject`.
+    RE-ANCHORED 2026-09-05 (wave 25, instruments) on the SYMBOLS: both were bare line
+    citations, and the clause words this wave added pushed the `rig_retopo` one onto a
+    blank line. A line citation does not survive an edit above it; a symbol does.
     """
     tree = ast.parse(read_source(filename))
     for node in ast.walk(tree):

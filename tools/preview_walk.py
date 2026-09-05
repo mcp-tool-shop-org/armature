@@ -13,6 +13,21 @@ similar one. Camera construction is `armature_core.framing`, which the spec was 
 with — one implementation, so the preview cannot drift from the render.
 
 Prints `PREVIEW_WALK_OK`; a crashed `blender -b -P` exits 0, so that line is the contract.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is writing one PNG per planned frame under `--out`.
+Compensator: delete `--out`; owner: the executor session. Every frame path is
+composed from `--out` and `shotspec.frame_names`' fixed `%05d.png` stem, so no
+operator-supplied name component can carry a frame outside the directory the
+compensator names. The GLB and the shot spec are opened read-only.
+
+Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
+question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
+the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
+write, so a halt after the first write is the common case (F-6e1a9d54, wave 25).
 """
 
 import argparse
@@ -274,7 +289,8 @@ def main():
         raise PreviewWalkGate(
             f"{asset} imported {len(meshes)} mesh object(s) and none is render-visible "
             f"({[o.name for o in meshes]}); there is nothing to preview",
-            {"asset": asset, "mesh_objects_all": [o.name for o in meshes],
+            {"clause": "asset_has_no_render_visible_mesh",
+             "asset": asset, "mesh_objects_all": [o.name for o in meshes],
              "mesh_objects_render_visible": []})
     zs = [(o.matrix_world @ Vector(c)).z for o in subject for c in o.bound_box]
     gob.location = (0.0, 0.0, min(zs))
@@ -286,7 +302,8 @@ def main():
     if bounds is None:
         raise PreviewWalkGate(
             f"{asset} has no evaluated geometry to frame",
-            {"asset": asset, "subject": [o.name for o in subject],
+            {"clause": "asset_has_no_evaluated_geometry",
+             "asset": asset, "subject": [o.name for o in subject],
              "animation": spec["subject"]["animation"], "frames": count})
 
     # Every refusal above this line can fire before a single pixel exists; the output
@@ -353,7 +370,7 @@ def main():
         raise PreviewWalkGate(
             f"the preview is not complete: {len(missing)} of {count} frames were never "
             f"written {missing[:8]} and {len(empty)} are zero bytes {empty[:8]}",
-            {"out": os.path.abspath(a.out), "planned": count,
+            {"clause": "preview_is_incomplete", "out": os.path.abspath(a.out), "planned": count,
              "missing": missing, "empty": empty, "unexpected_files_in_out_dir": strays})
     print("PREVIEW_WALK_OK " + json.dumps({
         "tool": "preview_walk", "blender": blender_scene.blender_provenance(),

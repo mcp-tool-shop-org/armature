@@ -462,7 +462,7 @@ def build_wood_material(spec=WOOD):
             "the procedural floor material reads an image, which is the one thing it exists "
             "not to do: an image carries a licence, and this pipeline bans non-commercial "
             "and research-only assets outright",
-            {"image_nodes": image_nodes})
+            {"clause": "floor_material_reads_an_image", "image_nodes": image_nodes})
     return mat, {"kind": "procedural", "reads_image_file": False,
                  "node_types": sorted({n.bl_idname for n in nt.nodes}),
                  "spec": {k: list(v) if isinstance(v, tuple) else v
@@ -624,17 +624,18 @@ def main():
         raise RenderGate(
             "--shadow-layer needs both --floor=1 and --plate: the plane has to exist to "
             "catch a shadow, and the shadow has to be multiplied onto something",
-            {"floor": a.floor, "plate": backdrop})
+            {"clause": "shadow_layer_needs_floor_and_plate", "floor": a.floor, "plate": backdrop})
     if backdrop:
         if not os.path.isfile(backdrop):
-            raise RenderGate("no such plate", {"plate": backdrop})
+            raise RenderGate("no such plate", {"clause": "plate_is_not_a_file", "plate": backdrop})
         pw, ph = _image_size(backdrop)
         if (pw, ph) != (width, height):
             raise RenderGate(
                 f"the plate is {pw}x{ph} and the frame is {width}x{height}. Fitting is not "
                 f"this tool's job precisely so that the fit is an artifact with its own "
                 f"hash and a recorded transform: run make_plate.py first",
-                {"plate": backdrop, "plate_size": [pw, ph],
+                {"clause": "plate_size_does_not_match_the_frame",
+                 "plate": backdrop, "plate_size": [pw, ph],
                  "frame_size": [width, height]})
 
     # `render_visible_meshes` and not `type == 'MESH'`: the glTF importer drops a
@@ -643,7 +644,9 @@ def main():
     # here is *tighter* than that shot's, so the decoy would cost more, not less.
     subject = blender_scene.render_visible_meshes(scene, meshes)
     if not subject:
-        raise RenderGate("the GLB imported no render-visible mesh", {"glb": a.glb})
+        raise RenderGate(
+            "the GLB imported no render-visible mesh",
+            {"clause": "glb_has_no_render_visible_mesh", "glb": a.glb})
 
     span = action_frame_range()
     scene.frame_start, scene.frame_end = 1, max(1, int(span[1]) if span else 1)
@@ -654,13 +657,16 @@ def main():
             f"action's own keyed range {span}. Blender holds the nearest pose and renders "
             f"it with no error, so the start frame would be a well-formed picture of a "
             f"moment the performance never had",
-            {"requested_frame": a.frame, "scene_frame": scene.frame_current,
+            {"clause": "frame_outside_the_keyed_range",
+             "requested_frame": a.frame, "scene_frame": scene.frame_current,
              "action_range": list(span)})
 
     # ---- the silhouette: every evaluated world vertex the renderer is about to draw.
     verts = blender_scene.evaluated_world_vertices(scene, subject)
     if verts.shape[0] == 0:
-        raise RenderGate("the subject evaluates to no vertices at this frame", {})
+        raise RenderGate(
+            "the subject evaluates to no vertices at this frame",
+            {"clause": "subject_has_no_vertices_at_this_frame"})
 
     cloud = [tuple(map(float, p)) for p in verts]
     solve_cloud = SF.framing_cloud(cloud, cap=FRAMING_CLOUD_CAP)
