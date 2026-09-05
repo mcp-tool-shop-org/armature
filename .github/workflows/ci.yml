@@ -277,8 +277,23 @@ jobs:
       # The sheet composers resolve a real font (Arial → Liberation Sans → Noto Sans, all
       # licence-verified) or refuse by name; nothing is bundled, because a font is a binary
       # and the licence gate applies to fonts too. Liberation is installed explicitly rather
-      # than inherited from whatever the runner image happens to carry, so the 23 sheet tests
-      # that used to skip on CI run against a font the repo chose.
+      # than inherited from whatever the runner image happens to carry.
+      #
+      # WHAT THIS STEP ACTUALLY DOES, corrected in place with the measurement that overturned
+      # the earlier sentence. It read "so the 23 sheet tests that used to skip on CI run
+      # against a font the repo chose", and two of those three claims are false. Collected in
+      # a worktree 2026-09-05, `tests/test_sheet_compose.py` + `tests/test_make_shotset_sheet.py`
+      # are 29 tests, not 23; and they do not skip on font absence at all — both modules'
+      # `pytestmark` skip condition is `not pil_has_a_scalable_font()`, a Pillow capability
+      # check, and the `sheet_fonts` fixture substitutes PIL's bundled scalable face whenever
+      # the module's own resolver refuses. So this step UN-SKIPS NOTHING. It supplies the
+      # permitted face to the two tests that drive `rig_sheet_compose` and `make_cast_sheet`
+      # outside that fixture's reach — where it is load-bearing — and it keeps the other 27
+      # measuring the repo's chosen face rather than PIL's fallback. The number is not
+      # derived here on purpose: it is a count of tests in two modules, not a property of
+      # this step, and `tests/test_ci_workflows.py` already derives the FACES this action
+      # must install from `sheet_compose.FONT_ALIASES`, which is the requirement that can
+      # actually go stale.
       #
       # The step lives in a composite action because release.yml's verify job runs the SAME
       # suite and needs the SAME face: two copies of one dependency list is how that job came

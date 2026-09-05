@@ -144,8 +144,9 @@ jobs:
       - name: Suite
         run: python -m pytest -q
       # THE ENV VAR IS THE HALF THAT REACHES A CHILD, and this leg had only the flag.
-      # ci.yml's twin sets `PYTHONOPTIMIZE: "1"` beside its `-O` (ci.yml:297-300) and
-      # verify.ps1's leg 2 exports it around the call (verify.ps1:184-189); this step set
+      # ci.yml's twin sets `PYTHONOPTIMIZE: "1"` beside its `-O` (its
+      # `run tests under -O (gates must still raise)` step) and verify.ps1's leg 2 exports it
+      # around the call (its `tests under -O` leg); this step set
       # neither, so three copies of one leg read identically in a log and were not the same
       # check -- on the exact axis the leg exists for.
       #

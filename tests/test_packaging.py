@@ -468,6 +468,58 @@ def test_the_committed_figures_are_not_ignored():
     assert swallowed == {}, f"the extension rules swallowed committed figures: {swallowed}"
 
 
+def published_artifact_names():
+    """The three artifact filenames this repo publishes, DERIVED from the manifests.
+
+    Two registries, three files: PyPI gets `<dist>-<version>-py3-none-any.whl` and
+    `<dist>-<version>.tar.gz` (PEP 503/427 normalisation of `project.name`), npm gets
+    `<name>-<version>.tgz` with the scope flattened. Read rather than written, so a rename
+    moves the ignore rule with it — the shape `_gitignore_extension_rules`' neighbours
+    already have, where the video suffixes come from `encode_control.CODECS` and the
+    credential carriers from the registries the workflows publish to.
+    """
+    import re as _re
+    import tomllib as _toml
+
+    with open(os.path.join(REPO, "pyproject.toml"), "rb") as fh:
+        project = _toml.load(fh)["project"]
+    dist = _re.sub(r"[-_.]+", "_", project["name"]).lower()
+    names = [f"{dist}-{project['version']}-py3-none-any.whl",
+             f"{dist}-{project['version']}.tar.gz"]
+    with open(os.path.join(REPO, "npm", "package.json"), encoding="utf-8") as fh:
+        pkg = json.load(fh)
+    names.append("%s-%s.tgz" % (pkg["name"].lstrip("@").replace("/", "-"), pkg["version"]))
+    return names
+
+
+@requires_git
+def test_every_published_artifact_name_is_ignored_at_the_root_and_one_level_down():
+    """WAVE 26, `F-08b6ca44` — the PyPI half of the case the `*.tgz` line was added to close.
+
+    `.gitignore` ignores `dist/`, `build/` and `*.tgz`, and the comment beside the last one
+    records why it was added: `npm/*.tgz` only covered a pack run from inside `npm/`, and a
+    pack from the root dropped a tarball nothing caught. The identical case on the PyPI side
+    stayed open. Measured with `git check-ignore -v` before the fix: `dist/x.whl` IGNORED,
+    `npm/<name>-<version>.tgz` IGNORED, and `<dist>-<version>.tar.gz` at the repo root NOT
+    IGNORED, nor in a subdirectory — while `python -m build --outdir .`, or copying an
+    archive out of `dist/` to inspect it (which is what the wave-8 sdist work and every later
+    re-measurement of that archive did), drops a 220-350 KB file exactly there.
+
+    The names are DERIVED, so a version bump or a rename moves the requirement rather than
+    leaving this list to be remembered.
+    """
+    probes = []
+    for name in published_artifact_names():
+        probes.append(name)
+        probes.append("sub/" + name)
+    verdicts = _check_ignore(probes)
+    missing = [p for p, pattern in verdicts.items() if not pattern]
+    assert missing == [], (
+        f"a published artifact could ride a `git add -A` in: {missing}; both registries take "
+        "a version forever, and a build artifact in a commit is the class the `*.tgz` line "
+        "was added to close")
+
+
 @requires_git
 def test_every_negation_points_at_a_path_that_exists():
     """A `!` line aimed at a directory the tree does not have re-includes nothing."""

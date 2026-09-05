@@ -134,6 +134,30 @@ function Invoke-Leg {
     # So a RAISED body establishes no outcome, whatever $LASTEXITCODE currently holds. The
     # commands after the one that raised did not run, and a leg is a claim about all of them.
     #
+    # WHAT THE TWENTY-ONE EXIT-CODE GUARDS IN THE LEG BODIES ARE, NOW THAT THIS
+    # FUNCTION PROMOTES A NATIVE NON-ZERO EXIT. They are BELT-AND-BRACES, not the mechanism.
+    # The two preference variables set below promote a native command's non-zero exit to a
+    # terminating error caught here, so no statement after a failing native command executes
+    # -- which means every one of those guards is unreachable. Re-measured on this rig at
+    # wave 26 by lifting this function verbatim under pwsh (the shape
+    # `tests/test_verify_script.py` uses): a body running a command that exits 7, then the
+    # guard, then a `Write-Host`, then a command that exits 0 printed NEITHER the guard's
+    # output nor the statement after it, and recorded `ExitCode 7 / Raised false /
+    # Established true`. THE OTHER DIRECTION, measured in the same pass: with the two
+    # preference lines stripped out of the lifted copy, the same body recorded `ExitCode 0`
+    # -- a PASS on a leg whose first command exited 7 -- and the guard AND the statement
+    # after it both ran. So the promotion is the mechanism and the guards are what would be
+    # left without it. The two interlocks the guards were originally kept for are also
+    # gone: all five hand-set refusals were rewritten at wave 23 as
+    # `$global:LASTEXITCODE = 1` followed by an in-place `return`, so none of the 21 is one
+    # of them; and `#requires -Version 7.4` on line 1 means Windows PowerShell 5.1, where
+    # the promotion does not exist, cannot reach a line of this script. They are kept rather
+    # than deleted because they cost nothing and they are the only thing that would still
+    # stop a leg if a future edit removed the promotion -- but a reader must not take them
+    # for the mechanism, which is what this paragraph exists to say.
+    # `test_a_statement_after_a_failing_native_command_does_not_run` pins the reachability
+    # claim rather than reasoning it.
+    #
     # AND A NON-ZERO EXIT MID-LEG IS NOT A RAISE. Measured at the wave-8 merge on this exact
     # function: a body running a command that exits 7 and THEN one that exits 0 recorded 0 /
     # PASS, because `$LASTEXITCODE` is whatever the LAST command left. The absent-binary
@@ -334,11 +358,31 @@ if ($NoPackage) {
             & $python (Join-Path $repo '.github/actions/clean-room/classifier_gate.py') $dist
             if ($LASTEXITCODE -ne 0) { return }
 
-            $binDir = if ($IsWindows -eq $false) { 'bin' } else { 'Scripts' }
-            $exe = if ($IsWindows -eq $false) { '' } else { '.exe' }
+            # WINDOWS-ONLY, AND IT NOW SAYS SO ONCE INSTEAD OF BRANCHING SIX TIMES. This
+            # block read `$binDir = if ($IsWindows -eq $false) { 'bin' } else { 'Scripts' }`
+            # with an `$exe` suffix beside it, consumed at four constructed paths -- and
+            # every one of those four embedded a literal backslash, so the non-Windows arm
+            # would have built `/tmp/armature-cleanroom-xxxx/bin\python`, a name no POSIX
+            # layout has. None of the six sites could ever run: the interpreter is resolved
+            # at the top of this script as a hard-coded `.venv\Scripts\python.exe` and the
+            # ANDON above exits 2 when that exact path is absent, and `#requires -Version
+            # 7.4` plus pwsh 7 on this rig makes `$IsWindows` true. Nothing reported a green
+            # it had not earned -- a constructed path that does not exist raises inside
+            # `Invoke-Leg` and is recorded as `FAIL (a command in the leg raised...)`. What
+            # it cost was a reader: the branches said this script runs on the Mac rig, and
+            # the interpreter resolution says it does not. Making it real is the other
+            # half of the fix and is a bigger change than a hygiene item earns -- it needs a
+            # POSIX arm on the interpreter resolution too -- so the script says what it is.
+            # `tests/test_verify_script.py::test_the_script_carries_no_platform_branch_its_
+            # own_interpreter_resolution_has_made_unreachable` holds it: a branch on
+            # `$IsWindows` re-enters this file only alongside a POSIX interpreter path.
+            $binDir = 'Scripts'
 
-            # THE SDIST ROOM, mirroring `.github/actions/clean-room/action.yml:70-72` line for
-            # line and in that action's order (sdist first, then the wheel). Wave 14 added it
+            # THE SDIST ROOM, mirroring the clean-room action's own sdist room command for
+            # command and in that action's order (sdist first, then the wheel). The citation
+            # here was a line range and wave 23's two `pip freeze` lines pushed the commands
+            # it named down the file, so it pointed at a comment; the action is named without
+            # a number, which is what survives an edit above it. Wave 14 added it
             # there -- three artifacts leave this repository and the sdist was the one nothing
             # built from -- and this script, whose DESCRIPTION claims the legs are "the same
             # ones ci.yml runs, in the same order and with the same meaning", did not move
@@ -355,8 +399,8 @@ if ($NoPackage) {
             try {
                 & $python -m venv $sdistRoom
                 if ($LASTEXITCODE -ne 0) { return }
-                $sdistPython = Join-Path $sdistRoom "$binDir\python$exe"
-                $sdistArmature = Join-Path $sdistRoom "$binDir\armature$exe"
+                $sdistPython = Join-Path $sdistRoom (Join-Path $binDir 'python.exe')
+                $sdistArmature = Join-Path $sdistRoom (Join-Path $binDir 'armature.exe')
                 & $sdistPython -m pip install --no-deps $sdistPath
                 if ($LASTEXITCODE -ne 0) { return }
                 & $sdistPython -m pip freeze
@@ -386,8 +430,8 @@ if ($NoPackage) {
             try {
                 & $python -m venv $cleanroom
                 if ($LASTEXITCODE -ne 0) { return }
-                $cleanPython = Join-Path $cleanroom "$binDir\python$exe"
-                $cleanArmature = Join-Path $cleanroom "$binDir\armature$exe"
+                $cleanPython = Join-Path $cleanroom (Join-Path $binDir 'python.exe')
+                $cleanArmature = Join-Path $cleanroom (Join-Path $binDir 'armature.exe')
                 # WHAT THIS ROOM RESOLVED, STATED -- `--quiet` used to remove the one line
                 # that said. This install carries no `--no-deps`, so numpy, cv2, pillow and
                 # matplotlib are resolved FRESH from the index at the unbounded specifiers
@@ -458,8 +502,10 @@ if ($NoPackage) {
                     New-Item -ItemType Directory -Path $npmroom -Force | Out-Null
                     npm install --prefix $npmroom $tarball.FullName
                     if ($LASTEXITCODE -ne 0) { return }
-                    $shimName = if ($IsWindows -eq $false) { 'armature' } else { 'armature.cmd' }
-                    $shim = Join-Path $npmroom (Join-Path 'node_modules/.bin' $shimName)
+                    # The sixth platform branch, deleted with the other five and for the
+                    # same measured reason: this script cannot start on a host where the
+                    # other arm would be the right one.
+                    $shim = Join-Path $npmroom (Join-Path 'node_modules/.bin' 'armature.cmd')
                     if (-not (Test-Path $shim)) {
                         Write-Host "  the installed package provides no armature command at $shim" -ForegroundColor Red
                         Write-Host '  check bin/ and files/ in npm/package.json' -ForegroundColor Red
@@ -556,6 +602,73 @@ if (-not ($NoPackage -and $NoSite)) {
 }
 Write-Host ("  node:        {0}" -f $nodeReport)
 Write-Host ("  npm:         {0}" -f $npmReport)
+
+# WHICH BUILD OF THE PINNED SUITE DEPENDENCIES THE CLAIM WAS MADE ON -- the THIRD runtime
+# axis, and the one the summary named nothing about. The two lines above report the
+# interpreter and node because a green local run is not a green CI run on those axes; the
+# suite also depends on two distributions this repository pins with `==` precisely because
+# their exact build decides a result, and the run said nothing about either. pyproject.toml
+# already records the split in words -- declared here and installed by CI:
+# `opencv-python-headless`; installed on the rig: `opencv-contrib-python` -- and re-measured
+# on the repo venv 2026-09-05 with `importlib.metadata`, `opencv-python-headless` and
+# `opencv-python` are BOTH ABSENT while `opencv-contrib-python` 5.0.0.93 provides `cv2`. So
+# legs 1 and 2, the aapose golden-frame tests included, run against a different DISTRIBUTION
+# than every CI install line names. This block REPORTS that, the same defensive way the two
+# lines above report their runtimes: the pinned specifiers are read out of ci.yml's own
+# install line rather than written here (so a re-pin moves this report with it), each is
+# resolved through `importlib.metadata` on the venv, and a distribution that is not
+# installed prints `(absent)` rather than a guess. The distribution that actually provides
+# `cv2` is printed beside them, because that is the half the manifest says diverges.
+# REPORTING ONLY -- leg 1 does not install them; the rig's venv is the rig's.
+# `tests/test_verify_script.py::test_the_summary_states_which_build_of_the_pinned_suite_
+# dependencies_the_claim_was_made_on` holds this block to ci.yml's line.
+$pinReport = @('(unreadable)')
+try {
+    $ciYml = Join-Path $repo '.github/workflows/ci.yml'
+    $pinReport = & $python -c @'
+import io, os, re, sys
+try:
+    from importlib.metadata import PackageNotFoundError, version
+except Exception:
+    sys.exit(0)
+if not os.path.isfile(sys.argv[1]):
+    # The scratch tree `tests/test_verify_script.py` copies this script into has no
+    # workflows. A report that cannot read its source says nothing rather than guessing.
+    sys.exit(0)
+ci = io.open(sys.argv[1], encoding="utf-8").read()
+pins = []
+for line in ci.splitlines():
+    # `-m pip`, not the two words spelled together: tests/test_ci_workflows' install-token
+    # walk reads THIS file for the artifact toolchain census and would read the marker below
+    # as one of its own install lines.
+    if "-m pip" not in line or line.strip().startswith("#"):
+        continue
+    for name, spec in re.findall(r'([A-Za-z0-9][A-Za-z0-9._-]*)(==[0-9][A-Za-z0-9._-]*)', line):
+        if (name, spec) not in pins:
+            pins.append((name, spec))
+for name, spec in pins:
+    try:
+        got = version(name)
+    except PackageNotFoundError:
+        got = "(absent)"
+    print("%s%s -> %s" % (name, spec, got))
+try:
+    import cv2
+    provider = "(no distribution claims cv2)"
+    for dist in ("opencv-python-headless", "opencv-python", "opencv-contrib-python",
+                 "opencv-contrib-python-headless"):
+        try:
+            provider = "%s %s" % (dist, version(dist))
+            break
+        except PackageNotFoundError:
+            continue
+    print("cv2 %s is provided by %s" % (cv2.__version__, provider))
+except Exception as exc:
+    print("cv2 could not be imported: %s" % exc)
+'@ $ciYml
+} catch { }
+Write-Host '  pinned suite dependencies (ci.yml''s `==` specifiers, resolved on this venv):'
+foreach ($line in @($pinReport)) { Write-Host ("    {0}" -f $line) }
 Write-Host '  (the legs and their order are ci.yml''s; the runtimes are this rig''s venv and PATH)'
 Write-Host ''
 
