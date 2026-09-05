@@ -792,6 +792,58 @@ def spend_and_fetch_tools():
              or n in ("canon_gate.py", "gate_saved_graph.py")))
 
 
+# ------------------------------------------------ the clause node (wave 23, F-5c1b574d)
+#
+# `clause` is the machine-readable word a halt reader keys on — this repo's own stated
+# contract, `tests/test_instruments_amend_w14.py:461`: "a halt reader keys on that string,
+# never on the sentence around it". The vocabulary had NO census, so a clause word could be
+# added, misspelled or duplicated without any test seeing it: measured 2026-09-05 over
+# `tools/**`, 385 distinct clause literals of which 140 are named nowhere in `tests/*.py` —
+# two of them Gate ROUTE's own, on the last gate before a paid submission
+# (`unknown_hosted_tier`, `two_answers`), and others on the spend and fetch path
+# (`arm_input_missing` and `missing_arm_input` in `build_r2v_payload`, `plan_paths_collide`
+# in `fetch_run`, `order_unvouched` in `fetch_t2v_run`, `escape_unknown` / `no_surfaces` /
+# `not_object` in `canon`).
+#
+# BOTH SPELLINGS are read, because both reach the same halt line: the literal inside an
+# evidence dict (`{"clause": "..."}`) and the assignment into one (`ev["clause"] = "..."`,
+# which is how `blender_scene.render_frame` writes it).
+
+
+def clause_literals(trees=None):
+    """`{clause word: [<module>:<line>, ...]}` for every `clause` value under `tools/**`.
+
+    Includes `tools/armature_core/`, because the package raises most of the family.
+    """
+    out = {}
+    paths = tool_paths(include_core=True) if trees is None else None
+    items = []
+    if paths is not None:
+        for path in paths:
+            rel = os.path.relpath(path, TOOLS).replace("\\", "/")
+            with open(path, encoding="utf-8") as fh:
+                items.append((rel, ast.parse(fh.read())))
+    else:
+        items = sorted(trees.items())
+
+    for rel, tree in items:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values):
+                    if (isinstance(key, ast.Constant) and key.value == "clause"
+                            and isinstance(value, ast.Constant)
+                            and isinstance(value.value, str)):
+                        out.setdefault(value.value, []).append(f"{rel}:{node.lineno}")
+            if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Subscript)
+                    and isinstance(node.targets[0].slice, ast.Constant)
+                    and node.targets[0].slice.value == "clause"
+                    and isinstance(node.value, ast.Constant)
+                    and isinstance(node.value.value, str)):
+                out.setdefault(node.value.value, []).append(f"{rel}:{node.lineno}")
+    return {k: sorted(set(v)) for k, v in sorted(out.items())}
+
+
 # ------------------------------------------ the pasted-name node (wave 23, F-54179a94)
 #
 # "A name pasted into an output path is a name" was enumerated one domain at a time and
