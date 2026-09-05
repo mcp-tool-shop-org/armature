@@ -1557,31 +1557,122 @@ def _pattern_hits(patterns, path):
     return any(p == path or (p.endswith("/**") and path.startswith(p[:-3] + "/")) for p in patterns)
 
 
+#: The context objects GitHub exposes to an `if:` expression. The unmodelled-reference
+#: guard below was keyed on the single literal `github.` until wave 18, so `inputs.rehearse`
+#: — the one expression standing between a dispatched rehearsal and an irreversible publish
+#: to two registries — reached `eval` as a bare name and raised `SyntaxError` for every
+#: context, which is why the rehearsal truth table could not be written at all. The guard is
+#: a PREFIX SET now: a reference this evaluator cannot resolve refuses by name whichever
+#: context it comes from, rather than one context being modelled and eight being silent.
+IF_CONTEXTS = ("github", "inputs", "env", "vars", "needs", "matrix", "secrets", "job",
+               "steps", "runner", "strategy")
+
+_IF_REFERENCE = re.compile(
+    r"\b(?:" + "|".join(IF_CONTEXTS) + r")(?:\.[A-Za-z_*][A-Za-z0-9_-]*)*\b")
+
+#: What `_if_reference` returns for a reference no context models. `None` cannot carry this,
+#: because `None` is the value GitHub itself gives a MISSING property of a context that does
+#: exist — the two are different answers and this guard turns on telling them apart.
+_UNMODELLED = object()
+
+
+def _if_reference(name, ctx):
+    """The value of one `a.b.c` context reference, or `_UNMODELLED`.
+
+    Two spellings of a context are accepted, because the workflows need both. A DOTTED LEAF
+    key (`{"github.event_name": "push"}`) is how every caller before wave 18 spelled one. A
+    whole context OBJECT (`{"inputs": {"rehearse": True}}`) is the only way to model the
+    difference GitHub makes between `inputs.rehearse` being `false` and the `inputs` context
+    having no `rehearse` in it at all: a property missing from a modelled context resolves
+    to null, which is exactly what `release: published` feeds `!inputs.rehearse`, and
+    reading that row as "unmodelled" would leave the real-release direction of the
+    rehearsal truth table unassertable.
+    """
+    if name in ctx:
+        return ctx[name]
+    root, _, rest = name.partition(".")
+    if isinstance(ctx.get(root), dict):
+        value = ctx[root]
+        for part in rest.split(".") if rest else []:
+            if not isinstance(value, dict) or part not in value:
+                return None
+            value = value[part]
+        return value
+    return _UNMODELLED
+
+
+def _outside_string_literals(body, fn):
+    """Apply `fn` to the parts of an expression that are NOT inside `'single quotes'`.
+
+    GitHub's only string literal is single-quoted and its content must survive verbatim: a
+    ref compared against `'refs/heads/main'` must not have the boolean or `!` substitutions
+    run over it, and a literal that happens to spell a context root must not be resolved as
+    one.
+    """
+    parts = re.split(r"('(?:[^']|'')*')", body)
+    return "".join(part if index % 2 else fn(part) for index, part in enumerate(parts))
+
+
 def _eval_if(expr, ctx):
     """Evaluate a workflow `if:` expression for one context.
 
-    Only the operators these workflows actually use, and an unmodelled `github.*` reference
+    Only the operators these workflows actually use, and an unmodelled context reference
     raises rather than quietly deciding the answer — a truth table built on a silently
     mis-evaluated condition would be worse than no truth table.
+
+    The refusal `raise`s rather than asserting. `python -O` deletes an `assert`, this suite
+    runs an `-O` leg, and the deleted form of this particular check is an evaluator that
+    decides a publish-or-skip question from whatever an unresolved name leaves behind.
     """
     body = expr.strip()
     if body.startswith("${{") and body.endswith("}}"):
         body = body[3:-2].strip()
-    for name in sorted(ctx, key=len, reverse=True):
-        body = body.replace(name, repr(ctx[name]))
-    body = body.replace("||", " or ").replace("&&", " and ")
-    # GitHub's expression language spells the booleans lowercase; `pages.yml`'s deploy
-    # condition compares against a literal `false` and no caller had ever fed one of those
-    # through here, so this substitution arrived with the first job that needed it.
-    body = re.sub(r"\bfalse\b", "False", body)
-    body = re.sub(r"\btrue\b", "True", body)
-    assert "github." not in body, f"unmodelled context in an if-expression: {expr!r}"
+    unmodelled = []
+
+    def _substitute(chunk):
+        chunk = chunk.replace("||", " or ").replace("&&", " and ")
+        # GitHub's unary `!` is truthiness negation, and `!=` is a different operator that
+        # shares its first character: the lookahead is the whole reason
+        # `github.ref != 'refs/heads/main'` does not become ` not = `.
+        chunk = re.sub(r"!(?!=)", " not ", chunk)
+        # GitHub's expression language spells the booleans lowercase; `pages.yml`'s deploy
+        # condition compares against a literal `false` and no caller had ever fed one of
+        # those through here, so this substitution arrived with the first job that needed
+        # it. It runs BEFORE the reference substitution so that it can never reach inside a
+        # value this evaluator itself inserted.
+        chunk = re.sub(r"\bfalse\b", "False", chunk)
+        chunk = re.sub(r"\btrue\b", "True", chunk)
+
+        def _one(match):
+            value = _if_reference(match.group(0), ctx)
+            if value is _UNMODELLED:
+                unmodelled.append(match.group(0))
+                return match.group(0)
+            return repr(value)
+
+        return _IF_REFERENCE.sub(_one, chunk)
+
+    body = _outside_string_literals(body, _substitute)
+    if unmodelled:
+        raise AssertionError(
+            f"unmodelled context in an if-expression: {expr!r} reads "
+            f"{sorted(set(unmodelled))}, which this context does not model; the answer this "
+            "evaluator would give is not the answer the runner would give")
     return bool(eval(body, {"__builtins__": {}}, {}))  # noqa: S307 - the input is this repo's own YAML
 
 
 def _job_if(text, job):
+    """A job's OWN `if:`, read at the job key's indent — never a step's.
+
+    The indent is the entire difference between a job-level condition and a step-level one,
+    and this reader is what the rehearsal truth table below asks whether a publish job runs.
+    Read loosely, a job whose job-level `if:` had been DELETED — the exact edit that truth
+    table exists to catch, and the shape release.yml carried on 041027c — would answer with
+    the first `if:` of whatever step happened to carry one, and the deletion would read as a
+    condition still in place.
+    """
     for line in _job_lines(text, job):
-        if line.strip().startswith("if:"):
+        if _indent(line) == 4 and line.strip().startswith("if:"):
             return line.strip()[len("if:") :].strip()
     return None
 
@@ -3307,6 +3398,234 @@ def test_the_ref_clause_check_goes_red_on_the_condition_pages_had():
         "github.ref": "refs/heads/topic",
         "github.event.repository.private": False,
     }) is True, "the pre-fix condition reads as refusing a branch dispatch"
+
+
+# -- the rehearsal reaches neither registry (wave 18, F-64d03112) --------------------------
+#
+# `release.yml` grew a `workflow_dispatch` rehearsal so that the roughly two hundred lines of
+# release shell that have never executed in a `release: published` run could be exercised
+# BEFORE the one path in this repository with no compensator runs them for real. The entire
+# difference between a rehearsal and a release is one YAML expression, `if:
+# ${{ !inputs.rehearse }}`, carried by both publish jobs.
+#
+# Measured 2026-09-04 on `6b984dd`: `grep -rn rehearse tests/` returned NOTHING. Not one test
+# named the input, the condition or the truth table, and the helper that would have to
+# evaluate it — `_eval_if` — raised on the expression for every context, because it modelled
+# neither the `inputs.` context nor unary `!`. The worst realistic consequence of that
+# silence is a rehearsal that publishes to PyPI and npm for real, irreversibly.
+#
+# BOTH directions are pinned here. The expression read wrong is one; the other is the shape
+# the file actually had on 041027c, where neither publish job carried an `if:` at all — that
+# shape is fed to this same truth table below and must fail it.
+#
+# THE POPULATION IS WALKED, NOT LISTED: `jobs_that_replace_a_public_surface()` finds these
+# jobs by the step that hands something to a registry, so a third publish job added under any
+# name joins this truth table on the day it lands rather than on the day someone remembers.
+#
+# THE SIBLING CONDITIONS, enumerated: `.github/workflows/` holds exactly four `if:` keys
+# (`grep -n '^\s*if:' .github/workflows/*.yml`, 2026-09-04). ci.yml:204's site-build clause is
+# driven by `test_a_lockfile_change_is_scanned_however_it_arrives`, pages.yml:112's deploy
+# clause by `test_the_pages_deploy_job_runs_only_at_main_on_a_public_repo`, and the remaining
+# two are the pypi and npm clauses this section drives. No `if:` in this repo is unexercised
+# after this wave, and all four now go through the same evaluator.
+
+
+def publish_jobs():
+    """(workflow, job) for every job in release.yml whose steps reach a registry."""
+    return [(w, j) for w, j in jobs_that_replace_a_public_surface() if w == "release.yml"]
+
+
+def _job_runs(text, job, ctx):
+    """Whether `job` runs for one arrival. A job with NO `if:` runs on every event.
+
+    That default is the load-bearing half: the mutation this section proves red is the
+    DELETION of a condition, and a reader that treated a missing condition as "cannot say"
+    would report the deletion as green.
+    """
+    condition = _job_if(text, job)
+    if condition is None:
+        return True
+    return _eval_if(condition, ctx)
+
+
+#: The rehearsal truth table, as the expression is written (ci-packaging's SEAM 2, wave 18).
+#: `inputs` is EMPTY on `release: published`, so `inputs.rehearse` is null there rather than
+#: false — modelled as an `inputs` context object with no `rehearse` in it, which is the row
+#: a dotted-leaf context cannot spell at all. The two `runs` rows are the direction the fix
+#: must not break: a gate that cannot pass would take every real release with it.
+REHEARSE_ARRIVALS = [
+    ("a real release", {"github.event_name": "release", "inputs": {}}, True),
+    ("a dispatch with the rehearse box left unchecked",
+     {"github.event_name": "workflow_dispatch", "inputs": {"rehearse": False}}, True),
+    ("a rehearsal", {"github.event_name": "workflow_dispatch", "inputs": {"rehearse": True}},
+     False),
+]
+
+
+def test_the_rehearsal_truth_table_covers_every_registry_job_release_yml_has():
+    """A parametrised test over an empty population passes having asserted nothing.
+
+    The population is compared against the census this file already pins rather than against
+    a second written-down list, so the two cannot drift into disagreeing about what a
+    publish job is.
+    """
+    assert publish_jobs(), (
+        "no job in release.yml reaches a registry, so the truth table below asserts nothing; "
+        "either the publish jobs moved or the marker walk stopped seeing them")
+    assert publish_jobs() == [(w, j) for w, j in PUBLIC_SURFACE_JOBS_TODAY if w == "release.yml"]
+
+
+def test_both_publish_jobs_carry_the_same_rehearsal_clause():
+    """One clause, twice, character for character — the asymmetric state is the hazard.
+
+    A rehearsal that published to one registry and not the other leaves exactly the split
+    the visibility gate was hoisted into `verify` to prevent: a version taken on one index
+    and absent from the other, with no compensator on either side.
+    """
+    conditions = {job: _job_if(RELEASE, job) for _, job in publish_jobs()}
+    assert all(c is not None for c in conditions.values()), (
+        f"a job that reaches a registry carries no condition at all: {conditions}")
+    assert len(set(conditions.values())) == 1, (
+        f"the publish jobs guard themselves with different expressions: {conditions}; a "
+        "rehearsal that skips one and publishes to the other is the state they exist to rule "
+        "out")
+
+
+def _rehearse_input():
+    """The `rehearse:` input's own keys, read out of release.yml's `workflow_dispatch:`."""
+    out = {}
+    for line in named_block(RELEASE, "rehearse", 6):
+        key, _, value = line.strip().partition(":")
+        if value.strip():
+            out[key.strip()] = value.strip().strip('"').strip("'")
+    return out
+
+
+def test_the_rehearse_input_is_a_boolean_that_defaults_to_not_rehearsing():
+    """The premise of the middle row: a dispatch that sets nothing publishes.
+
+    A default of `true` would invert the file's whole failure direction — every dispatched
+    re-run of a failed release job would silently skip the publish it was dispatched to
+    perform, and the operator would read a green run as a completed release.
+    """
+    declared = _rehearse_input()
+    assert declared.get("type") == "boolean", (
+        f"the rehearse input is declared {declared}; a non-boolean input arrives as a string, "
+        "and every non-empty string is truthy in GitHub's expression language")
+    assert declared.get("default") == "false", (
+        f"the rehearse input defaults to {declared.get('default')!r}; a dispatch that sets "
+        "nothing must publish")
+
+
+@pytest.mark.parametrize("workflow,job", publish_jobs())
+@pytest.mark.parametrize("arrival,ctx,publishes", REHEARSE_ARRIVALS)
+def test_a_rehearsal_reaches_neither_registry(workflow, job, arrival, ctx, publishes):
+    """The truth table, evaluated against the file's own condition, over BOTH publish jobs."""
+    got = _job_runs(_text(workflow), job, ctx)
+    assert got is publishes, (
+        f"on {arrival} the {job} job {'publishes' if got else 'does not publish'}; expected "
+        f"{'publishes' if publishes else 'does not publish'}. Condition: "
+        f"{_job_if(_text(workflow), job)!r}")
+
+
+@pytest.mark.parametrize("arrival,ctx,publishes", REHEARSE_ARRIVALS)
+def test_the_rehearsal_runs_the_gate_job_it_exists_to_exercise(arrival, ctx, publishes):
+    """A rehearsal that skipped `verify` would exercise nothing and prove nothing.
+
+    The rehearsal exists to RUN the never-executed half — the tag gate, the visibility gate,
+    both clean rooms, the `-O` step — and skip only the irreversible half. A condition that
+    arrived on `verify` would leave a dispatch that reports green having done neither.
+    """
+    assert _job_runs(RELEASE, "verify", ctx) is True, (
+        f"on {arrival} release.yml's verify job does not run; the rehearsal would report on "
+        f"gates it never executed. Condition: {_job_if(RELEASE, 'verify')!r}")
+
+
+def test_the_rehearsal_truth_table_goes_red_on_the_shape_release_yml_had():
+    """The mutation: the two `if:` keys deleted, which is what 041027c actually carried.
+
+    A truth table that only ever sees the corrected file proves nothing about the direction
+    it guards. This is the measured pre-fix shape, fed to the same reader and the same
+    evaluator: a rehearsal reaches BOTH registries.
+    """
+    lines = RELEASE.splitlines()
+    mutated = "\n".join(line for line in lines
+                        if line.strip() != "if: ${{ !inputs.rehearse }}")
+    assert len(lines) - len(mutated.splitlines()) == 2, (
+        "the mutation removed a number of lines other than the two publish clauses; it is no "
+        "longer the shape this red proof claims to be")
+    rehearsal = dict(REHEARSE_ARRIVALS[-1][1])
+    for _, job in publish_jobs():
+        assert _job_if(mutated, job) is None
+        assert _job_runs(mutated, job, rehearsal) is True, (
+            f"with its condition deleted, {job} still reads as skipped on a rehearsal; the "
+            "truth table cannot fail on the shape the fix replaced")
+
+
+REHEARSE_EXPRESSION_CASES = [
+    ("the inputs context is empty, as it is on `release: published`", {"inputs": {}}, True),
+    ("the operator dispatched with the box unchecked", {"inputs": {"rehearse": False}}, True),
+    ("the operator dispatched a rehearsal", {"inputs": {"rehearse": True}}, False),
+    ("a dotted-leaf context, the spelling every caller before wave 18 used",
+     {"inputs.rehearse": True}, False),
+    # GitHub's falsy set is null, false, 0 and the empty string; the STRING 'false' is
+    # truthy, so `!` on it is false and the job skips. That row is here because it is the one
+    # the boolean substitution could steal: `false` -> `False` running AFTER the reference
+    # substitution would have read this as a publish.
+    ("an input delivered as the string 'false'", {"inputs": {"rehearse": "false"}}, False),
+]
+
+
+@pytest.mark.parametrize("case,ctx,runs", REHEARSE_EXPRESSION_CASES)
+def test_the_evaluator_reads_the_inputs_context_and_unary_not(case, ctx, runs):
+    """The helper itself, on the live expression, before any job is asked about it.
+
+    Measured on `6b984dd`: this call raised `SyntaxError` for every one of these contexts,
+    because `_eval_if` modelled neither `inputs.` nor `!` and handed both to `eval`.
+    """
+    assert _eval_if("${{ !inputs.rehearse }}", ctx) is runs, f"on {case}"
+
+
+@pytest.mark.parametrize("expr,ctx", [
+    ("${{ !inputs.rehearse }}", {"github.event_name": "release"}),
+    ("${{ !inputs.rehearse }}", {}),
+    ("github.event_name == 'push'", {"inputs": {}}),
+    ("needs.verify.result == 'success'", {"github.event_name": "release"}),
+])
+def test_an_unmodelled_context_reference_refuses_rather_than_deciding(expr, ctx):
+    """A reference no context models has no answer here, and silence is the wrong one.
+
+    The guard was keyed on the single literal `github.`, so every other context — `inputs.`
+    first among them — reached `eval` as a bare name. It is a prefix set now, and it
+    `raise`s: an `assert` here is deleted by the `-O` leg this suite runs, and what the
+    deletion leaves behind is an evaluator that answers a publish-or-skip question from
+    whatever an unresolved name evaluates to.
+    """
+    with pytest.raises(AssertionError, match="unmodelled context"):
+        _eval_if(expr, ctx)
+
+
+def test_the_job_condition_reader_does_not_read_a_step_condition_as_the_jobs():
+    """A step's `if:` is not the job's, and the difference is four spaces of indent.
+
+    Read loosely, a job whose job-level condition had been deleted would answer with the
+    first `if:` of whatever step carried one — and the deletion, which is the exact edit the
+    truth table above exists to catch, would read as a condition still in place.
+    """
+    step_only = "\n".join([
+        "jobs:",
+        "  npm:",
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - name: publish",
+        "        if: ${{ !inputs.rehearse }}",
+        "        run: npm publish",
+    ])
+    assert _job_if(step_only, "npm") is None, (
+        "a step-level condition was read as the job's; the job runs on every arrival and "
+        "this reader says it is guarded")
+    rehearsal = dict(REHEARSE_ARRIVALS[-1][1])
+    assert _job_runs(step_only, "npm", rehearsal) is True
 
 
 # -- the licence map is a CI input (wave 10, seam from core-gates) ------------------------
