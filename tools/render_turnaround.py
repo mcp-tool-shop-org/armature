@@ -329,7 +329,10 @@ def parse_args():
                     help="pinned before the import because glTF key times are SECONDS; a "
                          "static subject has no action, and this keeps that true rather "
                          "than assumed")
-    ap.add_argument("--prefix", default="turn")
+    ap.add_argument("--prefix", default="turn",
+                    help="ONE path component — it is pasted into every written view "
+                         "filename, so a separator or an absolute path writes the "
+                         "views outside --out")
     ap.add_argument("--ortho", action="store_true",
                     help="parallel projection with ONE ortho_scale shared by every view "
                          "— the sprite shot-set. Absent, the perspective path runs "
@@ -340,6 +343,23 @@ def parse_args():
                          "survive into the sheet. Used verbatim; --height-frac does not "
                          "participate. Requires --ortho (S05)")
     a = ap.parse_args(argv)
+
+    # ---- F-f7d1f64f, wave 22. `--prefix` was free text with no `type=`, no `choices=`
+    # and no validation, pasted as the NAME COMPONENT of every written view path
+    # (`os.path.join(out, f"{a.prefix}_{i}.png")`) and assigned straight to
+    # `scene.render.filepath`. MEASURED on the repo venv:
+    # `os.path.join("C:\\tmp\\outdir", "../turn_0.png")` -> `C:\\tmp\\outdir\\../turn_0.png`;
+    # `os.path.join("C:\\tmp\\outdir", "C:\\elsewhere\\turn_0.png")` -> `C:\\elsewhere\\turn_0.png`
+    # — an absolute prefix discards `--out` entirely. The eight RGBA views are the whole
+    # product of this tool, and they would be written outside the directory this file's
+    # own named compensator undertakes to delete, while the manifest, Gate ALPHA, Gate
+    # TURN and Gate CROP all pass and `RENDER_TURNAROUND_OK` prints.
+    #
+    # ADOPTED BY IMPORT from SEAM 1's ONE home (`armature_core.parts`), never copied:
+    # instruments-measure held two byte-identical spellings and deletes both; builders
+    # adopts the same object for `fetch_run --run`. Nobody spells a third.
+    parts.single_path_segment(a.prefix, "--prefix", RenderTurnaroundGate,
+                              {"who": "render_turnaround", "out": a.out})
 
     # ---- F-cc1d17aa, wave 18. THE NUMBERS THAT COMPOSE THE SHOT, bounded beside the
     # `--ortho-scale` clause below because that is where this file already states the
@@ -1033,6 +1053,10 @@ def main():
             "shared_across_views": plan["shared_across_views"],
             "radius_role": plan["radius_role"],
             "azimuth_start_deg": float(a.azimuth_start), "sweep_deg": float(a.sweep),
+            # F-f7d1f64f: `prefix` is a PARAMETER of the run and was recorded nowhere,
+            # only implicitly through each `views[].path`. A recipe that does not
+            # reproduce its output is not a recipe.
+            "prefix": a.prefix,
             "azimuths_deg": azimuths, "elevation_deg": float(a.elevation),
             "lens_mm": plan["lens_mm"], "sensor_mm": plan["sensor_mm"],
             "sensor_fit": "AUTO",

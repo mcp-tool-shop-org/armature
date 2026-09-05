@@ -4,6 +4,20 @@ blender -b --factory-startup -P preview_glb.py -- --glb <path> --out <dir> --nam
 Read-only on the GLB; writes renders + stats.json into --out.
 
 `make_cast_sheet.py` consumes the `<name>_stats.json` this writes.
+
+--------------------------------------------------------------------------------
+Compensator (NAMED_COMPENSATORS)
+
+The only world-touching act is writing four PNGs and `<name>_stats.json` under `--out`.
+Compensator: delete `--out`; owner: the executor session. That statement is only true
+while every written path resolves UNDER `--out`, which is why `--name` is refused unless
+it is a single path component (F-7cd1b3b7, wave 22): `--name` is pasted as the NAME
+COMPONENT of every written path, and MEASURED on the repo venv,
+`os.path.join("C:/tmp/out", "../v3_full_a.png")` and
+`os.path.join("C:/tmp/out", "C:/elsewhere/v3_full_a.png")` both resolve outside `--out`
+— while `gate_previews_written` PASSES (it re-reads the same escaped paths) and
+`PREVIEW_GLB_OK` prints. A compensator that names a directory the artifacts are not in
+undoes nothing. The GLB is opened read-only and is never written.
 """
 import argparse
 import json
@@ -16,7 +30,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 from mathutils import Vector  # noqa: E402
 
-from armature_core import blender_scene  # noqa: E402
+# `single_path_segment` is ADOPTED BY IMPORT from SEAM 1's ONE home, never copied:
+# instruments-measure held two byte-identical spellings (`pack_pose_pack.py:82`,
+# `resample_motion.py:76`) and deletes both; builders adopts the same object for
+# `fetch_run --run`. Nobody spells a third (wave 22, SEAM 1).
+from armature_core import blender_scene, parts  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 #: The engine identifiers this tool will accept, in the order it tries them. The loop
@@ -62,8 +80,24 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--glb", required=True)
     p.add_argument("--out", required=True)
-    p.add_argument("--name", required=True)
-    return p.parse_args(argv)
+    p.add_argument("--name", required=True,
+                   help="ONE path component — it is pasted into every written "
+                        "filename, so a separator, an absolute path or a dot name "
+                        "writes the preview outside --out")
+    a = p.parse_args(argv)
+    # F-7cd1b3b7, wave 22 — REFUSED AT THE PARSER, above `os.makedirs`, which is where
+    # the mistake is still free. `--name` was free text with no `type=`, no `choices=`
+    # and no validation, pasted as the NAME COMPONENT of `os.path.join(out_dir,
+    # f"{args.name}_{suffix}.png")` (:141), assigned to `scn.render.filepath` (:142),
+    # and again into `os.path.join(args.out, f"{args.name}_stats.json")` (:290).
+    # MEASURED on the repo venv: of `perf/v3`, `../v3` and `C:/elsewhere/v3`, the last
+    # two resolve OUTSIDE `--out`. This is the family wave 18 closed one domain over
+    # (`pack_pose_pack --name`, `resample_motion --name`); that census was scoped to
+    # instruments-measure's 42 tools and never ranged over these 21. An equivalent AST
+    # walk over the 21 finds this flag and `render_turnaround --prefix` and nothing else.
+    parts.single_path_segment(a.name, "--name", PreviewGlbGate,
+                              {"who": "preview_glb", "out": a.out})
+    return a
 
 
 def scene_bbox(objs):

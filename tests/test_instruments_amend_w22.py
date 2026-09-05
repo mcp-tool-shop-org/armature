@@ -532,3 +532,286 @@ def test_both_denominators_are_guarded_above_their_division():
     assert len(guards) == 2, guards
     for div in counted:
         assert any(g < div.lineno for g in guards), (div.lineno, guards)
+
+
+# ===========================================================================
+# F-7cd1b3b7 · F-f7d1f64f (panel HIGH) — a --name / --prefix is a NAME, not a path.
+# ===========================================================================
+#
+# SEAM 1 (core-solvers, wave 22) homed `single_path_segment` in `armature_core.parts`;
+# instruments-measure deletes its two byte-identical copies (`pack_pose_pack.py:82`,
+# `resample_motion.py:76`) and builders adopts the same object for `fetch_run --run`.
+# Instruments ADOPTS BY IMPORT and spells nothing locally.
+#
+# The helper does not exist on this branch until core-solvers' commit merges, so the
+# BEHAVIOURAL half below is skipped here and runs on the merged tree; the ADOPTION half is
+# an AST census that runs unconditionally, and `test_the_seam_1_block_is_real` fails rather
+# than skips if the premise ever stops being true. That is the shape of a measured block:
+# it goes red the day it is lifted rather than quietly outliving it.
+
+
+#: The ONE home, as SEAM 1 names it. On the merged tree this resolves to core-solvers'
+#: object. Until their commit merges into this branch it is `None`, and `_one_home` below
+#: stands the byte-identical copy SEAM 1 says it was lifted from into the same attribute
+#: for the duration of one test — so the tools' OWN routing and refusal behaviour is
+#: exercised here rather than skipped, and the stand-in disappears the moment the real
+#: object arrives. `test_the_stand_in_is_byte_identical_to_what_seam_1_homed` is what makes
+#: that substitution a measured statement instead of a convenience.
+_STAND_IN_SOURCES = ("pack_pose_pack.py", "resample_motion.py")
+
+
+def _source_of(filename, funcname):
+    """The exact source text of one module-level function, by AST segment."""
+    src = read_source(filename)
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.FunctionDef) and node.name == funcname:
+            return ast.get_source_segment(src, node)
+    raise LookupError("%s has no def %s" % (filename, funcname))
+
+
+def _shape_of(filename, funcname):
+    """One function's signature, predicate and evidence — every message string erased.
+
+    The comparison SEAM 1's claim needs is about what the function DOES, and the two copies
+    each name their own module's artifact in the refusal sentence. Every `str` constant
+    longer than 40 characters is replaced by a marker, so the prose cannot make two
+    identical implementations read as different, and the clause word
+    (`output_name_is_not_a_name`, 26 chars) and the evidence keys still count.
+    """
+    src = read_source(filename)
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.FunctionDef) and node.name == funcname:
+            body = [st for st in node.body
+                    if not (isinstance(st, ast.Expr)
+                            and isinstance(st.value, ast.Constant)
+                            and isinstance(st.value.value, str))]
+            stripped = ast.FunctionDef(
+                name=node.name, args=node.args, body=body, decorator_list=[],
+                returns=None, type_comment=None, type_params=[])
+            for sub in ast.walk(stripped):
+                if (isinstance(sub, ast.Constant) and isinstance(sub.value, str)
+                        and len(sub.value) > 40):
+                    sub.value = "<message>"
+                if isinstance(sub, ast.JoinedStr):
+                    sub.values = [v for v in sub.values
+                                  if not (isinstance(v, ast.Constant)
+                                          and isinstance(v.value, str))]
+            ast.fix_missing_locations(stripped)
+            return ast.dump(stripped, annotate_fields=True, include_attributes=False)
+    raise LookupError("%s has no def %s" % (filename, funcname))
+
+
+def _code_of(filename, funcname):
+    """One function's SIGNATURE AND EXECUTABLE BODY, docstring stripped, as an AST dump.
+
+    The docstrings of the two copies differ - each records its own module's earning story -
+    and SEAM 1's claim is about what the function DOES. Comparing the prose would call two
+    identical implementations different; comparing the dump keeps the claim on the code.
+    """
+    src = read_source(filename)
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.FunctionDef) and node.name == funcname:
+            body = [st for st in node.body
+                    if not (isinstance(st, ast.Expr)
+                            and isinstance(st.value, ast.Constant)
+                            and isinstance(st.value.value, str))]
+            stripped = ast.FunctionDef(
+                name=node.name, args=node.args, body=body, decorator_list=[],
+                returns=None, type_comment=None, type_params=[])
+            ast.fix_missing_locations(stripped)
+            return ast.dump(stripped, annotate_fields=True, include_attributes=False)
+    raise LookupError("%s has no def %s" % (filename, funcname))
+
+
+def test_the_two_copies_agree_on_everything_except_their_message():
+    """SEAM 1 says `single_path_segment` is "byte-identical to the two copies you already
+    hold" (`pack_pose_pack.py:82`, `resample_motion.py:76`). That is the premise `one_home`
+    stands on while core-solvers' commit is in flight, so it is MEASURED here.
+
+    ⚠ **MEASURED FALSE as stated, and corrected here rather than believed** (2026-09-05,
+    on `e8263a3`, by unparsing both bodies with their docstrings stripped): the two differ
+    in ONE statement — the refusal MESSAGE. `pack_pose_pack` says the escape leaves "the
+    manifest that certifies it ... and every gate above reports on the file that escaped";
+    `resample_motion` says "the sentinel line and the sha256 beside it describe a file that
+    is not there". Each names its own module's artifact.
+
+    What IS identical, and what this domain's two adoptions actually depend on: the
+    signature `(value, flag, exc, extra=None)`, the predicate (the five clauses over
+    separators, absolute paths, the two dot names and an empty name), the clause word
+    `output_name_is_not_a_name`, the evidence keys, and the return. This asserts THAT, and
+    the divergence is posted to the inbox for whoever writes the merged docstring — a home
+    for two implementations that disagree in one sentence has to pick a sentence.
+    """
+    present = [f for f in _STAND_IN_SOURCES
+               if "def single_path_segment" in read_source(f)]
+    assert present, (
+        "neither instruments-measure copy is on this tree any more; if `armature_core."
+        "parts.single_path_segment` has merged this test has done its job")
+    shapes = {f: _shape_of(f, "single_path_segment") for f in present}
+    assert len(set(shapes.values())) == 1, sorted(shapes)
+
+
+@pytest.fixture
+def one_home(monkeypatch):
+    """`armature_core.parts.single_path_segment`, standing one in if SEAM 1 is in flight.
+
+    Returns `(module, "merged"|"stand-in")` so a reader of a failure knows which object
+    answered. `monkeypatch` undoes the substitution, so nothing leaks into another test.
+    """
+    from armature_core import parts
+
+    if getattr(parts, "single_path_segment", None) is not None:
+        return parts, "merged"
+    src = _source_of(_STAND_IN_SOURCES[0], "single_path_segment")
+    ns = {"os": os}
+    exec(compile(src, "<seam1-stand-in>", "exec"), ns)
+    monkeypatch.setattr(parts, "single_path_segment", ns["single_path_segment"],
+                        raising=False)
+    return parts, "stand-in"
+
+
+@pytest.mark.parametrize("filename,flag,attr", [
+    ("preview_glb.py", "--name", "name"),
+    ("render_turnaround.py", "--prefix", "prefix"),
+])
+def test_the_two_pasted_flags_are_routed_through_the_one_home(filename, flag, attr):
+    """The census, keyed on the RESOLVED shape: the flag reaches `single_path_segment`,
+    and it reaches it from `armature_core.parts` rather than from a local copy.
+
+    RED on `e8263a3`, where an AST walk over this tree returned exactly two lines for
+    `prefix` (`render_turnaround.py:292` declaring it and `:878` pasting it) and three for
+    `name` (`preview_glb.py:65`, `:141`, `:290`), with no validation anywhere.
+    """
+    tree = _tree(filename)
+
+    local_defs = [n.name for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "single_path_segment"]
+    assert local_defs == [], (
+        "%s spells its OWN `single_path_segment`; SEAM 1's home is `armature_core.parts` "
+        "and nobody spells a third" % filename)
+
+    calls = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+             and n.func.attr == "single_path_segment"
+             and isinstance(n.func.value, ast.Name) and n.func.value.id == "parts"]
+    assert len(calls) == 1, [n.lineno for n in calls]
+    call = calls[0]
+    assert isinstance(call.args[1], ast.Constant) and call.args[1].value == flag, \
+        ast.dump(call.args[1])
+    assert isinstance(call.args[0], ast.Attribute) and call.args[0].attr == attr, \
+        ast.dump(call.args[0])
+
+    #: and it runs in `parse_args`, ABOVE every `os.makedirs` in the module.
+    parse = [n for n in ast.walk(tree)
+             if isinstance(n, (ast.FunctionDef,)) and n.name == "parse_args"]
+    assert parse and parse[0].lineno < call.lineno < parse[0].end_lineno, call.lineno
+    makedirs = [n.lineno for n in ast.walk(tree)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr == "makedirs"]
+    assert makedirs and all(call.lineno < m for m in makedirs), (call.lineno, makedirs)
+
+
+def test_the_pasted_flag_population_over_the_owned_tools_is_closed():
+    """Wave-18 rule 2, on the population the wave-18 census could not see.
+
+    `pack_pose_pack --name` and `resample_motion --name` were closed one domain over and
+    that census was scoped to instruments-measure's 42 tools. This is the equivalent walk
+    over these 21: every `str`-typed flag whose attribute is interpolated into an
+    `os.path.join` argument. It finds exactly two, and both are routed above.
+    """
+    pasted = {}
+    for filename in OWNED:
+        tree = _tree(filename)
+        joins = [n for n in ast.walk(tree)
+                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                 and n.func.attr == "join"]
+        for join in joins:
+            for arg in join.args:
+                for node in ast.walk(arg):
+                    if (isinstance(node, ast.Attribute)
+                            and isinstance(node.value, ast.Name)
+                            and node.value.id in ("a", "args")
+                            and isinstance(node.ctx, ast.Load)):
+                        pasted.setdefault(filename, set()).add(node.attr)
+    #: `out` is the DIRECTORY argument, not a name component — it is what the name is
+    #: joined ONTO, and bounding it as a single segment would refuse every real path.
+    interpolated = {f: sorted(n for n in names if n != "out")
+                    for f, names in pasted.items()}
+    interpolated = {f: n for f, n in interpolated.items() if n}
+    assert interpolated == {"preview_glb.py": ["name"],
+                            "render_turnaround.py": ["prefix"]}, interpolated
+
+
+@pytest.mark.parametrize("bad", ["../x", "C:/elsewhere/x", "a/b", "a\\b", ".", "..", ""])
+def test_preview_glb_refuses_a_name_that_is_not_a_name(one_home, monkeypatch, bad):
+    mod = load_tool("preview_glb.py")
+    monkeypatch.setattr(mod.sys, "argv", [
+        "blender", "-b", "-P", "x", "--", "--glb=g.glb", "--out=C:/tmp/out",
+        "--name=" + bad])
+    with pytest.raises(mod.PreviewGlbGate) as exc:
+        mod.parse_args()
+    ev = exc.value.evidence
+    assert ev["flag"] == "--name", ev
+    assert ev["clause"] == "output_name_is_not_a_name", ev
+    assert ev["who"] == "preview_glb", ev
+
+
+@pytest.mark.parametrize("bad", ["../x", "C:/elsewhere/x", "a/b", "a\\b", ".", "..", ""])
+def test_render_turnaround_refuses_a_prefix_that_is_not_a_name(one_home, rt, monkeypatch, bad):
+    monkeypatch.setattr(rt.sys, "argv", [
+        "blender", "-b", "-P", "x", "--", "--glb=g.glb", "--out=C:/tmp/outdir",
+        "--prefix=" + bad])
+    with pytest.raises(rt.RenderTurnaroundGate) as exc:
+        rt.parse_args()
+    ev = exc.value.evidence
+    assert ev["flag"] == "--prefix", ev
+    assert ev["clause"] == "output_name_is_not_a_name", ev
+
+
+def test_the_good_names_still_parse(one_home, rt, monkeypatch):
+    """A bound that refuses the module default is a bug, not a bound."""
+    monkeypatch.setattr(rt.sys, "argv", [
+        "blender", "-b", "-P", "x", "--", "--glb=g.glb", "--out=o"])
+    assert rt.parse_args().prefix == "turn"
+    monkeypatch.setattr(rt.sys, "argv", [
+        "blender", "-b", "-P", "x", "--", "--glb=g.glb", "--out=o", "--prefix=blackguard"])
+    assert rt.parse_args().prefix == "blackguard"
+
+
+def test_the_prefix_refusal_reaches_the_turnaround_halt_line(one_home, rt, capsys):
+    """THE HALT LINE, READ."""
+    def raiser():
+        rt.sys.argv = ["blender", "-b", "-P", "x", "--", "--glb=g.glb", "--out=o",
+                       "--prefix=../escaped"]
+        rt.parse_args()
+
+    code, rec, _ = _halt_record("render_turnaround.py", "RENDER_TURNAROUND_HALT",
+                                raiser, capsys)
+    assert code == 2
+    assert rec["evidence"]["flag"] == "--prefix", rec
+    assert rec["evidence"]["clause"] == "output_name_is_not_a_name", rec
+
+
+def test_the_turnaround_manifest_records_the_prefix():
+    """`prefix` was a run PARAMETER recorded nowhere — only implicitly, through each
+    `views[].path`. A recipe that does not reproduce its output is not a recipe."""
+    main = _fn_in("render_turnaround.py", "main")
+    keys = [n.value for n in ast.walk(main)
+            if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+    assert "prefix" in keys
+
+
+def test_preview_glb_declares_its_compensator():
+    """`preview_glb` declared NO named compensator at all, on a tool that creates a
+    directory and writes five files into it (NAMED_COMPENSATORS, the wave-12 rule)."""
+    src = read_source("preview_glb.py")
+    head = src[:src.index("import argparse")]
+    assert "Compensator" in head, head[-400:]
+    assert "--out" in head
+
+
+def _fn_in(filename, name):
+    for node in _tree(filename).body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise LookupError(name)
