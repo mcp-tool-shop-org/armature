@@ -95,18 +95,94 @@ def _encode_control(tmp, alpha_over):
     return EC.load_frames(str(d), alpha_over=alpha_over)
 
 
+# ------------------------------------------- reading back what each producer COMPOSITED
+#
+# WAVE 23, F-d105ab5e. `test_a_named_plate_makes_the_composite_the_choice_it_records`
+# named a property in its own title and asserted nothing: it was `run(tmp_path, PLATE)` and
+# ended there — no return value read, no output file opened, no pixel compared. The
+# ACCEPTING half is the direction that carries the E11 disease: a producer may name the
+# plate and still composite over the hidden RGB behind alpha 0 (`HIDDEN`, :43), and the
+# test was green either way. Measured 2026-09-05 by running all four producers with
+# `--alpha-over=10,20,30` and reading the artifacts the test discarded: the correct value
+# was sitting in every one of them and nothing looked at it. The refusing half beside it
+# reads `e.value.evidence` and asserts three keys, so the file's two halves were not held
+# to the same standard; nor did the property live anywhere else for three of the four —
+# `grep -c alpha` over `tests/test_fit_reference.py`, `tests/test_make_plate.py` and
+# `tests/test_pack_pose_pack.py` returned 0, 0, 0, and only `encode_control` kept a real
+# pixel assertion (`tests/test_encode_control.py:111-124`), which is the shape this family
+# test was written to generalise.
+#
+# So each producer names the ARTIFACT it wrote and how to read one composited pixel out of
+# it. The pixel read is a LETTERBOX/FIELD pixel — the part of the frame that was alpha 0 in
+# the source — because that is the only place the two candidate values differ.
+
+
+# TWO samples where a producer LETTERBOXES, because the two are reached by different code
+# and only one of them was ever measured. Every sample below is a pixel that was alpha 0 in
+# the source; `field` is one the COMPOSITE writes, `pad` one the letterbox writes.
+#
+# Measured 2026-09-05 with `compose_over_named_plate` mutated to `a[..., :3]` (the E11
+# disease): `fit_reference`'s `pad` stayed the plate — its letterbox reads `plate_bgr`
+# directly at `fit_reference.py:197` — and only `field` moved to HIDDEN. A readback that
+# sampled the corner alone would have reported that producer clean while the composite it
+# submits was the RGB behind the alpha.
+#
+# The geometry, from each tool's own record on the 32x48 master these fixtures write:
+#   fit_reference  fits to 64x64 at scale 4/3, so content is x in [11, 53) and the figure
+#                  (the source's centre quarter) lands at x in [21, 43), y in [16, 48).
+#                  (1, 1) is letterbox; (15, 5) is content that was transparent.
+#   make_plate     FILLS 64x64 at scale 2.0 with a crop offset of (0, 16) — no letterbox
+#                  at all, so it has no `pad`. The figure lands at x in [16, 48),
+#                  y in [8, 56); (3, 3) is transparent field clear of the resample blend.
+
+
+def _bgr_file_samples(path, points):
+    """Named (x, y) samples of a written image, as RGB. `cv2` writes BGR."""
+    import cv2
+
+    img = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+    assert img is not None, f"nothing was written at {path}"
+    assert img.ndim == 3 and img.shape[2] == 3, (path, img.shape)
+    return {name: tuple(int(v) for v in img[y, x][::-1]) for name, (x, y) in points.items()}
+
+
+def _pixel_fit_reference(tmp, _result):
+    return _bgr_file_samples(tmp / "out" / "twin_fit_64x64.png",
+                             {"pad": (1, 1), "field": (15, 5)})
+
+
+def _pixel_make_plate(tmp, _result):
+    return _bgr_file_samples(tmp / "out" / "plate.png", {"field": (3, 3)})
+
+
+def _pixel_pack_pose_pack(tmp, _result):
+    """The first frame of the APNG this tool UPLOADS. No fit, so no letterbox: (1, 1) is
+    itself a field pixel that was alpha 0 in the source."""
+    with Image.open(tmp / "out" / "E08_pose_sticks.apng.png") as im:
+        im.seek(0)
+        return {"field": tuple(int(v) for v in im.convert("RGB").getpixel((1, 1)))}
+
+
+def _pixel_encode_control(_tmp, result):
+    """`load_frames` returns `(names, frames)`; the frames are (H, W, 3) uint8 RGB."""
+    names, frames = result
+    assert names and len(frames) == len(names), (names, len(frames))
+    return {"field": tuple(int(v) for v in frames[0][1, 1])}
+
+
+#: `name -> (drive, the typed error it raises with no plate, read one composited pixel)`.
 PRODUCERS = {
-    "fit_reference": (_fit_reference, FR.FitReferenceError),
-    "make_plate": (_make_plate, MP.PlateError),
-    "pack_pose_pack": (_pack_pose_pack, PPP.PosePackError),
-    "encode_control": (_encode_control, EC.EncodeFailure),
+    "fit_reference": (_fit_reference, FR.FitReferenceError, _pixel_fit_reference),
+    "make_plate": (_make_plate, MP.PlateError, _pixel_make_plate),
+    "pack_pose_pack": (_pack_pose_pack, PPP.PosePackError, _pixel_pack_pose_pack),
+    "encode_control": (_encode_control, EC.EncodeFailure, _pixel_encode_control),
 }
 
 
 @pytest.mark.parametrize("name", sorted(PRODUCERS))
 def test_every_producer_of_a_submitted_input_refuses_alpha_with_no_plate_named(
         name, tmp_path):
-    run, exc = PRODUCERS[name]
+    run, exc, _ = PRODUCERS[name]
     with pytest.raises(exc) as e:
         run(tmp_path, None)
     ev = e.value.evidence
@@ -116,9 +192,40 @@ def test_every_producer_of_a_submitted_input_refuses_alpha_with_no_plate_named(
 
 @pytest.mark.parametrize("name", sorted(PRODUCERS))
 def test_a_named_plate_makes_the_composite_the_choice_it_records(name, tmp_path):
-    """The other half of the law: the drop is allowed once the plate is NAMED."""
-    run, _ = PRODUCERS[name]
-    run(tmp_path, PLATE)
+    """The other half of the law: the drop is allowed once the plate is NAMED — and the
+    plate is what actually reaches the artifact.
+
+    What this looks like if the code were wrong in the specific way this check exists to
+    catch: the producer accepts `--alpha-over`, records it in its provenance, and
+    composites over `img[..., :3]` — the RGB the author hid behind alpha 0 — so the pixel
+    read back is `HIDDEN` and the run that was told which plate to use used another.
+    """
+    run, _, pixel = PRODUCERS[name]
+    result = run(tmp_path, PLATE)
+    got = pixel(tmp_path, result)
+    assert "field" in got, (name, got)
+    for where, px in sorted(got.items()):
+        assert px == PLATE, (name, where, px,
+                             "this pixel is not the named plate")
+        assert px != HIDDEN, (name, where, px,
+                              "the RGB behind alpha 0 reached the artifact")
+
+
+@pytest.mark.parametrize("name", sorted(PRODUCERS))
+def test_the_readback_can_tell_the_plate_from_the_hidden_rgb(name, tmp_path):
+    """The decoy, so the assertion above is known to be able to fail.
+
+    Rule 2's red proof, kept in the tree rather than run once: the SAME producer, driven
+    with `HIDDEN` as its named plate, reads back `HIDDEN`. A reader that returned a
+    constant, opened the wrong file, or sampled a pixel the plate never reaches would pass
+    the accepting test above and fail here.
+    """
+    run, _, pixel = PRODUCERS[name]
+    d = tmp_path / "decoy"
+    d.mkdir()
+    result = run(d, HIDDEN)
+    got = pixel(d, result)
+    assert got and set(got.values()) == {HIDDEN}, (name, got)
 
 
 # WAVE 8, F-be95e51f — the two censuses in this file typed their populations and read
