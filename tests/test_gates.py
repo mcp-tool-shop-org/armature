@@ -1153,9 +1153,15 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     #   `_converted_widget_shift_andon`'s `converted_widget_shifts_recorded_indices` — the
     #   converted-widget shift clause over `LATENT_NODES`, `CAMERA_NODES` and `SEED_NODES`,
     #   which wave 18 gave `HOSTED_ENUM_WIDGETS` alone (F-29e1cbb7).
-    assert total == 346, (
-        f"{total} family raises in armature_core; this pin asserts 346, RE-DERIVED on the "
-        f"wave-20 core-gates branch. This is the denominator every ratio below is quoted against — "
+    # WAVE 22 (core-solvers, 2026-09-05): 346 -> 348, RE-DERIVED with `==` in this
+    # worktree against `e8263a3`, which this census read GREEN at 346 first. BRANCH-LOCAL —
+    # five domains move this denominator at once and the coordinator re-measures at the
+    # merge. The two are `channels.require_readable_normals`' clauses
+    # (`non_finite_geometry_normal`, `zero_length_geometry_normal`), the normal half of the
+    # non-finite census wave 18 landed on the depth half only (F-4efe0fad).
+    assert total == 348, (
+        f"{total} family raises in armature_core; this pin asserts 348, RE-DERIVED on the "
+        f"wave-22 core-solvers branch. This is the denominator every ratio below is quoted against — "
         f"re-measure it deliberately")
 
 

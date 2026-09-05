@@ -218,6 +218,9 @@ RECORDED_POPULATION = frozenset({
     # (F-476a4ee8, three sites). The base was measured GREEN at 101 in this worktree
     # first, so 104 is a delta of exactly these three and nothing else.
     "CameraGeometry", "DepthError", "RenderedFrame",
+    # WAVE 22 (core-solvers, F-4efe0fad) — MEASURED in this worktree, not carried.
+    # `channels.NormalError` is `DepthError`'s sibling on the half wave 18 did not cover.
+    "NormalError",
     # WAVE 16 (tests, F-d426d4bd) — MEASURED in this worktree. The derivation gained a
     # second edge: a refusal class handed to a helper that raises its own parameter. Two
     # classes cross the two-site threshold on it. `PosePackError` was raised on every real
@@ -465,7 +468,16 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     #      delta here is demonstrably this domain's.
     #
     # WAVE-18 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(POLICED) == 105, sorted(POLICED)
+    # WAVE 22 (core-solvers): 105 -> 106, RE-DERIVED with `==` in this worktree against
+    # `e8263a3`, which this census read GREEN at 105 first. BRANCH-LOCAL; five domains move
+    # pins this wave and the coordinator MEASURES on the merged tree, never sums.
+    #   +1 `channels.NormalError` (F-4efe0fad) — the normal half of the non-finite census
+    #      wave 18 landed on the depth half only. Two raise sites in
+    #      `require_readable_normals` (`non_finite_geometry_normal`,
+    #      `zero_length_geometry_normal`), so it crosses the two-site threshold on the day
+    #      it lands. Measured: `POLICED - RECORDED_POPULATION == ['NormalError']`, nothing
+    #      vanished.
+    assert len(POLICED) == 106, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -710,7 +722,9 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     #      delta here is demonstrably this domain's.
     #
     # WAVE-18 MERGE (coordinator, 2026-09-04): the number is MEASURED on the merged tree, never summed — see the merge log.
-    assert len(defined) == 129, len(defined)
+    # WAVE 22 (core-solvers): 129 -> 130 — +1 `channels.NormalError` (F-4efe0fad),
+    # RE-DERIVED with `==` in this worktree. Branch-local.
+    assert len(defined) == 130, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}

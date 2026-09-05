@@ -293,6 +293,16 @@ def _refusal_require_finite_unreadable():
     turnaround.gate_view_alpha(0, 0, 255, None)
 
 
+def _refusal_encode_normal():
+    """Driven through `stage_render.py`, the tool that writes `out_dir/normal/` — the path
+    with no gate between `world_normals_to_camera` and the PNG."""
+    from armature_core import channels
+    n = np.zeros((4, 4, 3))
+    n[..., 2] = 1.0
+    n[1, 2, 0] = float("nan")
+    channels.encode_normal(n, np.ones((4, 4), dtype=np.uint8))
+
+
 HALT_ROWS = [
     # (finding, tool, sentinel, raiser, error class name, evidence key that must be there)
     ("F-cfb560aa", "rig_parts.py", "RIG_PARTS_HALT", _refusal_gate_d,
@@ -300,6 +310,8 @@ HALT_ROWS = [
     ("F-fda74b87", "render_turnaround.py", "RENDER_TURNAROUND_HALT",
      _refusal_require_finite_unreadable, "TurnaroundAlphaGate",
      "transparent_fraction_raw"),
+    ("F-4efe0fad", "stage_render.py", "STAGE_RENDER_HALT", _refusal_encode_normal,
+     "NormalError", "n_non_finite"),
 ]
 
 
