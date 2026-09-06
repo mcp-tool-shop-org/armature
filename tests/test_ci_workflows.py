@@ -5365,3 +5365,306 @@ def test_no_top_level_name_is_defined_twice_in_any_test_module():
     assert doubled == {}, (
         f"a top-level name defined twice in one module is a definition nobody reads (the second shadows the "
         f"first, byte-identical or not): {doubled}")
+
+
+# ======================================================= wave 28, F-bbfe5ae4 — gates first
+#
+# THE THREE PURE-SHELL GATES IN `verify` RAN LAST. Measured on `3380ae2`, the job's twelve
+# steps in file order were: checkout, setup-python, Install, sheet-fonts, Suite, Suite under
+# -O, clean-room, npm-clean-room, TAG GATE, visibility gate, PRE-RELEASE GATE,
+# upload-artifact. The three gates decide on `$GITHUB_REF`, two `env:` values and the two
+# manifests, in milliseconds; the six steps that sat above them are two full pytest runs and
+# three clean installs -- the whole cost of the job.
+#
+# Correctness was never at stake: `pypi` and `npm` both sit on `needs: verify`, so a refusal
+# anywhere in this job is a refusal before either registry is reached, which is what the tag
+# gate's own comment claims and all it claims. What the old order cost was a mis-dispatched
+# run -- the one release.yml's rehearsal block actively invites an operator to attempt --
+# burning both hosted runners' clocks through the entire gate job before printing a one-line
+# refusal it could have printed first, against a studio rule whose stated purpose is that CI
+# minutes are finite.
+#
+# THE NODE THIS CENSUS KEYS ON: what a step DOES, read out of its own text. Not its name, not
+# its position, and not a written-down list of three step names -- a fourth gate added
+# tomorrow joins the population without anyone remembering to add it here. WORK is a body
+# step whose script installs, builds, packs, publishes or runs the suite, or a step that
+# `uses:` one of this repository's OWN composite actions (each of the three installs, builds
+# or packs). A GATE is a body step whose `run:` script can exit non-zero and which is not
+# work. The job POPULATION is derived the same way -- `jobs_with_a_gate()` walks all three
+# workflows -- and `actions/upload-artifact` is neither gate nor work, deliberately: it
+# uploads what the clean room built, so it stays last and this census says nothing about it.
+#
+# THE SIBLING THAT MADE THE PREDICATES HONEST, enumerated before the property was written
+# (wave 18, rule 2): the only other step in any workflow carrying `exit 1` in its script is
+# release.yml's `Publish`. A first draft defining a gate as "installs nothing, runs no
+# pytest" read that irreversible publish step as a pure-shell gate and duly reported the npm
+# job as having a gate below its work -- a predicate that calls the publish step a gate is
+# not measuring the arm. `npm publish` is on the work list for that reason, and
+# `test_the_jobs_that_carry_a_gate_are_the_ones_this_file_thinks_they_are` pins the outcome.
+#
+# THE FLOOR IS NOT STEP 1, AND THE CENSUS SAYS SO. The tag gate reads `pyproject.toml` and
+# `npm/package.json` (checkout) with `python` (setup-python) and the runner's own preinstalled
+# `node` -- the argument `.github/actions/npm-clean-room/action.yml` already makes in its
+# header for not installing a node of its own. So the gates may not be hoisted above
+# `setup-python`, and a census that demanded step 1 would be demanding a broken workflow.
+
+#: A `uses:` ref under this prefix is one of this repository's own composite actions, and
+#: every one of them installs, builds or packs. A third-party `uses:` is not work by this
+#: census's definition -- `actions/checkout` and `actions/setup-python` are the floor the
+#: gates sit on, and `actions/upload-artifact` is downstream of the clean room.
+LOCAL_COMPOSITE_PREFIX = "./.github/actions/"
+
+#: The two `actions/*` refs that must precede the gates: the checkout that puts the manifests
+#: on disk and the interpreter the version comparison runs in.
+GATE_FLOOR_PREFIXES = ("actions/checkout", "actions/setup-")
+
+
+def _step_keys(step):
+    """The step's OWN mapping keys, `- key: value` included — never a nested block's.
+
+    Measured while writing this: reading any `name:` in the block labelled
+    `actions/upload-artifact` as `dist`, which is the name of the ARTIFACT inside its `with:`.
+    A key one level down belongs to another mapping and is not this step's.
+    """
+    if not step:
+        return []
+    own = _indent(step[0]) + 2
+    out = []
+    for i, line in enumerate(step):
+        stripped = line.strip()
+        if i == 0 and stripped.startswith("- "):
+            stripped = stripped[2:].lstrip()
+        elif _indent(line) != own or stripped.startswith("- "):
+            continue
+        key, sep, value = stripped.partition(":")
+        if sep and key and " " not in key:
+            out.append((key, value.strip()))
+    return out
+
+
+def _step_uses(step):
+    """The `uses:` ref of one step block, or None."""
+    for key, value in _step_keys(step):
+        if key == "uses":
+            return value.split("#")[0].strip()
+    return None
+
+
+def _step_label(step):
+    """A step's `name:` if it has one, else its `uses:` ref. For REPORTING, never for keying."""
+    for key, value in _step_keys(step):
+        if key == "name":
+            return value
+    return _step_uses(step)
+
+
+#: The verbs that make a step WORK: it installs, builds, packs, publishes, or runs the suite.
+#: Each either spends runner minutes at scale or reaches outside the runner, which is the
+#: class of thing a gate exists to run BEFORE.
+#:
+#: `npm publish` is on this list because of a sibling the first draft of these predicates got
+#: WRONG. Enumerated across all three workflows, the only other step in the tree carrying an
+#: `exit 1` in its script is release.yml's `Publish` -- and an "installs nothing, runs no
+#: pytest" definition read the irreversible publish step as a pure-shell gate, then reported
+#: the npm job as having a gate below its work. A predicate that calls the publish step a
+#: gate is not measuring the arm.
+_WORK_VERBS = re.compile(
+    r"(\bpip\s+install\b|\bnpm\s+(install|publish|pack)\b|\bpython\s+-m\s+build\b|\btwine\b)")
+
+
+def _is_work(step):
+    """A step that spends runner time, or reaches a registry, before anything is decided."""
+    uses = _step_uses(step)
+    if uses and uses.startswith(LOCAL_COMPOSITE_PREFIX):
+        return True
+    script = _run_script_of(step)
+    if script is None:
+        return False
+    return bool(_WORK_VERBS.search(_code_only(script))) or _runs_pytest(script)
+
+
+def _is_pure_shell_gate(step):
+    """A step that can REFUSE, and that does no work while deciding."""
+    script = _run_script_of(step)
+    if script is None:
+        return False
+    if not re.search(r"\bexit\s+[1-9]", _code_only(script)):
+        return False
+    return not _is_work(step)
+
+
+def gate_and_work_order(body):
+    """`(labels, gate indices, work indices, floor indices)` over one job body's steps."""
+    steps = _step_blocks(body)
+    labels = [_step_label(s) for s in steps]
+    gates = [i for i, s in enumerate(steps) if _is_pure_shell_gate(s)]
+    work = [i for i, s in enumerate(steps) if _is_work(s)]
+    floor = [i for i, s in enumerate(steps)
+             if (_step_uses(s) or "").startswith(GATE_FLOOR_PREFIXES)]
+    return labels, gates, work, floor
+
+
+def jobs_with_a_gate():
+    """(workflow, job) for every job carrying a pure-shell gate — read, never written down."""
+    out = []
+    for name in workflow_files():
+        text = _text(name)
+        for job in job_names(text):
+            body = "\n".join(_job_lines(text, job))
+            if any(_is_pure_shell_gate(step) for step in _step_blocks(body)):
+                out.append((name, job))
+    return out
+
+
+VERIFY_BODY = "\n".join(_job_lines(RELEASE, "verify"))
+
+
+def test_the_release_gate_census_reads_the_job_it_claims_to_read():
+    """Size and membership before the property: a walk that matched nothing would pass.
+
+    The three gates are NAMED here only so a reader can see which steps the predicates
+    resolved to. The predicates are what the property below is keyed on; if a fourth gate is
+    added, this assertion is what forces someone to look at it.
+    """
+    labels, gates, work, floor = gate_and_work_order(VERIFY_BODY)
+    assert len(labels) == 12, labels
+    assert [labels[i] for i in gates] == [
+        "The version in the tag must equal the version in the package",
+        "The two workflows must read the same visibility",
+        "A pre-release must not reach either registry",
+    ], [labels[i] for i in gates]
+    assert [labels[i] for i in work] == [
+        "Install",
+        "./.github/actions/sheet-fonts",
+        "Suite",
+        "Suite under -O",
+        "./.github/actions/clean-room",
+        "./.github/actions/npm-clean-room",
+    ], [labels[i] for i in work]
+    assert [labels[i] for i in floor] == [
+        "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+        "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+    ], [labels[i] for i in floor]
+    # The twelfth step is neither, and it is labelled by its OWN `uses:` -- not by the `name:`
+    # inside its `with:` block, which is the name of the artifact and read `dist` until
+    # `_step_keys` was taught the difference.
+    assert labels[-1] == "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", (
+        labels[-1])
+    assert 11 not in gates and 11 not in work and 11 not in floor, (gates, work, floor)
+
+
+def test_the_jobs_that_carry_a_gate_are_the_ones_this_file_thinks_they_are():
+    """The population, derived off the tree, with the sibling that made the predicate honest.
+
+    Enumerated across all three workflows: `release.yml:verify` is the only job with a
+    pure-shell gate. The one other step anywhere carrying `exit 1` in its script is
+    release.yml's `Publish`, which reaches the registry -- it is WORK, and a job whose only
+    `exit` lives in its publish step has no gate to order.
+    """
+    assert jobs_with_a_gate() == [("release.yml", "verify")], jobs_with_a_gate()
+    npm = "\n".join(_job_lines(RELEASE, "npm"))
+    labels, gates, work, _floor = gate_and_work_order(npm)
+    assert gates == [], [labels[i] for i in gates]
+    assert [labels[i] for i in work] == ["Upgrade npm for OIDC", "Publish"], (
+        [labels[i] for i in work])
+
+
+@pytest.mark.parametrize("workflow,job", jobs_with_a_gate())
+def test_a_job_with_a_gate_decides_before_it_spends(workflow, job):
+    """The property: no job spends runner time while a gate below it may still refuse.
+
+    What this looks like if wrong: a `workflow_dispatch` from a branch -- the mis-dispatch
+    release.yml's own rehearsal block invites -- runs the suite twice and three clean installs
+    on two hosted runners and then prints `release.yml requires a tag ref`, which it had
+    everything it needed to print before the first `pip install`.
+    """
+    labels, gates, work, _floor = gate_and_work_order("\n".join(_job_lines(_text(workflow), job)))
+    assert gates and work, (labels, gates, work)
+    assert max(gates) < min(work), (
+        f"{workflow}:{job} runs {labels[min(work)]!r} at step {min(work)} and still has a "
+        f"gate at step {max(gates)} ({labels[max(gates)]!r}); these gates decide on "
+        f"$GITHUB_REF, an env value and the two manifests, so a run that is going to be "
+        f"refused is refused after the whole job has been paid for. Order: {labels}")
+
+
+@pytest.mark.parametrize("workflow,job", jobs_with_a_gate())
+def test_a_gate_sits_on_the_floor_it_actually_needs(workflow, job):
+    """The direction the property above does not bound: hoisting them too far.
+
+    The version comparison reads `pyproject.toml` and `npm/package.json` with `python`, so
+    `actions/checkout` and `actions/setup-python` must precede it. A census that only pushed
+    gates upward would be green on a workflow whose first step ran `python` on a runner that
+    has none, in an empty directory.
+    """
+    labels, gates, _work, floor = gate_and_work_order("\n".join(_job_lines(_text(workflow), job)))
+    assert floor, labels
+    assert max(floor) < min(gates), (
+        f"{workflow}:{job} runs a gate at step {min(gates)} ({labels[min(gates)]!r}) before "
+        f"{labels[max(floor)]!r} at step {max(floor)}; the version comparison needs the "
+        f"checkout for the manifests and setup-python for the interpreter. Order: {labels}")
+
+
+def _verify_body_with_the_gates_last():
+    """The REAL steps of `verify`, permuted back to the order measured on `3380ae2`.
+
+    Not a hand-written toy job: the mutation moves the three gate blocks below the six work
+    steps and changes nothing else, so the predicates it is fed are the ones the property
+    runs.
+    """
+    lines = _job_lines(RELEASE, "verify")
+    first = [i for i, ln in enumerate(lines) if ln.lstrip().startswith("- ")][0]
+    head = lines[:first]
+    steps = _step_blocks("\n".join(lines))
+    gates = [s for s in steps if _is_pure_shell_gate(s)]
+    others = [s for s in steps if not _is_pure_shell_gate(s)]
+    assert len(gates) == 3 and len(others) == 9, (len(gates), len(others))
+    # Back where they were: after `npm-clean-room` and before `upload-artifact`, which is the
+    # last of the nine.
+    reordered = others[:-1] + gates + others[-1:]
+    return "\n".join(head + [ln for step in reordered for ln in step])
+
+
+def test_the_order_census_goes_red_on_the_order_this_job_had():
+    """The red proof, driving the REAL predicates over the REAL steps in the pre-fix order.
+
+    A red proof that re-implements the predicate inline is the shape wave 26 closed
+    (`F-ab2c1d14`), so this one calls `gate_and_work_order` and nothing else.
+    """
+    before = _verify_body_with_the_gates_last()
+    labels, gates, work, floor = gate_and_work_order(before)
+    # The mutation carries the defect rather than deleting the subject: the same twelve steps,
+    # the same three gates, the same six work steps, the same floor.
+    assert len(labels) == 12, labels
+    assert len(gates) == 3 and len(work) == 6 and len(floor) == 2, (gates, work, floor)
+    assert not max(gates) < min(work), (
+        "the reverted order reads as gates-before-work; the property cannot fail")
+    assert min(gates) == 8 and min(work) == 2, (
+        f"the reconstruction is not the measured pre-fix order (tag gate ninth, Install "
+        f"third): gates {gates}, work {work}, labels {labels}")
+    # And the floor clause is unaffected by the mutation, so the two properties are separable.
+    assert max(floor) < min(gates), (floor, gates)
+
+
+def test_the_gate_and_work_predicates_do_not_read_each_other():
+    """The two directions a mis-classification would hide, driven on the real steps.
+
+    A step that installs is never a gate however many `exit` lines its script has, and a step
+    that only refuses is never work. Both are asserted on the job's own text: `Install` and
+    `Suite` are the two steps a naive predicate would misread.
+    """
+    steps = {_step_label(s): s for s in _step_blocks(VERIFY_BODY)}
+    assert _is_work(steps["Install"]) and not _is_pure_shell_gate(steps["Install"])
+    assert _is_work(steps["Suite"]) and not _is_pure_shell_gate(steps["Suite"])
+    tag = steps["The version in the tag must equal the version in the package"]
+    assert _is_pure_shell_gate(tag) and not _is_work(tag)
+    # The tag gate's script RUNS `python` and `node`; that is not installing either of them.
+    assert "python -c" in _code_only(_run_script_of(tag))
+    assert _install_tokens(_run_script_of(tag)) == []
+    # A gate that grew a `pip install` stops reading as a gate -- the mutation, driven.
+    grown = list(tag) + ["          python -m pip install requests"]
+    assert not _is_pure_shell_gate(grown) and _is_work(grown)
+    # And the sibling that made the predicate honest: the step that reaches the registry has
+    # an `exit 1` in it and is not a gate.
+    publish = {_step_label(s): s for s in _step_blocks("\n".join(_job_lines(RELEASE, "npm")))}
+    assert re.search(r"\bexit\s+[1-9]", _code_only(_run_script_of(publish["Publish"])))
+    assert _is_work(publish["Publish"]) and not _is_pure_shell_gate(publish["Publish"])
