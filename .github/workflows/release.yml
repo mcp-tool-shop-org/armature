@@ -64,15 +64,18 @@ on:
   # 0.3.0 is already taken on both registries, which is not a gate. Naming ANY of the six
   # existing tags here has the same shape.
   #
-  # WHY NOT `--ref main`, WHICH DOES CARRY THE GATES. The tag gate at :179 refuses any
+  # WHY NOT `--ref main`, WHICH DOES CARRY THE GATES. The tag/ref gate refuses any
   # `GITHUB_REF` that is not `refs/tags/*`, deliberately and by its own comment ("Dispatch
-  # from a branch and it refuses here"). It is step 9 of the 12 steps in `verify`
-  # (checkout, setup-python, Install, sheet-fonts, Suite, Suite under -O, clean-room,
-  # npm-clean-room, TAG GATE, visibility gate, PRE-RELEASE GATE, upload-artifact -- the
-  # eleventh joined in wave 23). So a `main` dispatch exercises the suite twice and both
-  # clean rooms and then HALTS -- the visibility gate, the pre-release gate and the
-  # artifact upload never run. That is a useful partial run and it is not what the
-  # sentence below claims, so it is not the command this block prints.
+  # from a branch and it refuses here"). Since wave 28 it is step 3 of the 12 steps in
+  # `verify` -- checkout, setup-python, TAG GATE, visibility gate, PRE-RELEASE GATE,
+  # Install, sheet-fonts, Suite, Suite under -O, clean-room, npm-clean-room,
+  # upload-artifact -- because all three gates are pure shell over `GITHUB_REF`, two `env:`
+  # values and the two manifests, and nothing downstream depends on their position. So a
+  # `main` dispatch now refuses at step 3, before the Install line, both suite legs and both
+  # clean rooms; it used to run every one of those first and refuse at step 9. Either way
+  # the visibility gate, the pre-release gate and the artifact upload never run on a branch,
+  # so it is still a partial run and still not what the sentence below claims -- it is not
+  # the command this block prints.
   #
   # THE ORDERING, which is the actual fix: a tag alone does not fire `release: published`
   # -- creating the GitHub RELEASE object does. So the rehearsal fits BETWEEN them.
@@ -117,68 +120,6 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.13"
-      - name: Install
-        # The suite's dependency list is ci.yml's, verbatim including the pins — the
-        # release gate runs the SAME suite CI runs, so a shorter list here would mean the
-        # gate is a weaker check than the one that already passed on the same commit.
-        # It was shorter once, and the first release attempt died on a missing Pillow at
-        # collection rather than on anything about the release.
-        #
-        # `twine` is NOT here: it is installed, under a version constraint, by the
-        # clean-room action that uses it — one place, one constraint.
-        #
-        # `build` IS here, because the SUITE needs it and the suite runs first. Two tests in
-        # `tests/test_packaging.py` build an sdist by subprocess to pin what the published
-        # archive carries, and with the tool absent they skipped — here, in the gate whose
-        # whole job is to be the last thing between a tag and PyPI. The specifier is the
-        # clean-room action's, character for character; `tests/test_ci_workflows.py` holds
-        # every copy of it to one string, so the constraint still cannot fork.
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pytest numpy pillow opencv-python-headless==5.0.0.93 matplotlib==3.11.1 "build>=1.5,<2" "requests>=2.32,<3"
-      # The same font ci.yml installs, from the same implementation. This job ran the suite
-      # without one: two tests hard-require a permitted face and FAIL rather than skip without
-      # it, so this gate depended on exactly what ci.yml refuses to depend on — and by the time
-      # it runs, `release: published` has fired and both registries are waiting.
-      - uses: ./.github/actions/sheet-fonts
-      - name: Suite
-        run: python -m pytest -q
-      # THE ENV VAR IS THE HALF THAT REACHES A CHILD, and this leg had only the flag.
-      # ci.yml's twin sets `PYTHONOPTIMIZE: "1"` beside its `-O` (its
-      # `run tests under -O (gates must still raise)` step) and verify.ps1's leg 2 exports it
-      # around the call (its `tests under -O` leg); this step set
-      # neither, so three copies of one leg read identically in a log and were not the same
-      # check -- on the exact axis the leg exists for.
-      #
-      # Measured on the rig with the repo venv: a parent run as `python -O` spawning
-      # `subprocess.run([sys.executable, "-c", ...])` gives a child with `__debug__` True and
-      # `PYTHONOPTIMIZE` unset; the same parent with `PYTHONOPTIMIZE=1` in the environment
-      # gives a child with `__debug__` False. `-O` governs the pytest process alone. An AST
-      # walk over tests/** counts 57 subprocess calls, 17 of which inherit the environment and
-      # pass no `-O` of their own -- those ran optimised under ci.yml's step and unoptimised
-      # under this one.
-      #
-      # This is the workflow whose Install comment above says a shorter list here would make
-      # the gate a weaker check than the one that already passed on the same commit. It was a
-      # weaker check. By the time it runs, `release: published` has fired.
-      - name: Suite under -O
-        run: python -O -m pytest -q
-        env:
-          PYTHONOPTIMIZE: "1"
-      # ci.yml's packaging leg, from the same implementation. This job built both artifacts
-      # and ran `twine check` on the METADATA, and nothing in this workflow installed either
-      # one — so the artifact handed to the publish step, the one step here with no
-      # compensator, was the one artifact never installed anywhere in the workflow that
-      # publishes it. The action builds, checks, installs the wheel into a clean venv and
-      # calls through to every function-local dependency; `dist/` is left for the upload
-      # step below.
-      - uses: ./.github/actions/clean-room
-      # The npm package's half of the same leg, and for the same reason: the `npm` job below
-      # runs `npm publish --provenance --access public`, and the only thing that had ever
-      # been run was `node bin/armature.mjs --node-selftest` out of the checkout. A `bin`
-      # map that resolves to nothing installs cleanly and provides no command, and a version
-      # on the registry is taken forever.
-      - uses: ./.github/actions/npm-clean-room
       - name: The version in the tag must equal the version in the package
         # A tag that disagrees with the metadata publishes a version nobody asked for.
         #
@@ -194,6 +135,28 @@ jobs:
         # cutting a second tag) but it now fails closed: dispatch AT THE TAG
         # (`gh workflow run release.yml --ref vX.Y.Z`) and the gate reads it like any other
         # tag ref. Dispatch from a branch and it refuses here, before any job that publishes.
+        #
+        # AND NOW BEFORE THE WORK, NOT ONLY BEFORE THE PUBLISH. Until wave 28 this was the
+        # NINTH of the job's twelve steps: `verify` ran the Install line, the font action,
+        # the suite, the suite under `-O` and both clean rooms -- two full pytest runs and
+        # three clean installs, which is the whole of what this job costs -- and only then
+        # read `$GITHUB_REF` and printed a one-line refusal it could have printed first.
+        # Correctness was never the issue: both publish jobs sit on `needs: verify`, so a
+        # refusal anywhere in this job is a refusal before a registry is reached, which is
+        # what the paragraph above says. The COST was, on exactly the mis-dispatch the
+        # rehearsal block in the header invites an operator to attempt, and against a studio
+        # rule whose stated purpose is that CI minutes are finite.
+        #
+        # The three pure-shell gates therefore run immediately after `setup-python`, which is
+        # the earliest point at which THIS one can run: it reads `pyproject.toml` and
+        # `npm/package.json` (checkout) with `python` (setup-python) and the runner's own
+        # preinstalled `node` -- the argument
+        # `.github/actions/npm-clean-room/action.yml` already makes in its header for not
+        # installing a node of its own. The other two need nothing but `env:` and could sit
+        # above `setup-python`; they stay with this one so the three read as one andon.
+        # `tests/test_ci_workflows.py` derives the order from this file and holds it: a step
+        # that can refuse and does no work while deciding may not sit below a step that
+        # installs, builds, packs, publishes or runs the suite.
         #
         # THE REF IS A PLACEHOLDER AND NOT A TAG THIS REPOSITORY HAS. This line read
         # `--ref v0.3.0` until 2026-09-04 -- the same defect the rehearsal block above was
@@ -266,7 +229,10 @@ jobs:
         #
         # WHAT THIS REPOSITORY'S OWN RECORD SAYS, measured with no network: tag v0.3.0
         # (c7549b9, 2026-08-18) carries `npm publish --provenance --access public`
-        # unconditionally at its release.yml:126, and its npm/package.json:39-42 carries
+        # unconditionally in that tag's own `npm` job (a `<file>:<line>` pair pointed at a
+        # TAGGED file resolves against the working tree, where the number means nothing and
+        # moves under any edit -- as this one did when the gates were hoisted in wave 28),
+        # and its npm/package.json:39-42 carries
         # `publishConfig: { access: public, provenance: true }`. That tag is seven days after
         # the ruling that took this repository private (pages.yml records the date,
         # 2026-08-11). So the experiment has been RUN once, from a private source repository,
@@ -364,6 +330,68 @@ jobs:
               echo "::notice::$GITHUB_EVENT_NAME carries no release object, so there is no pre-release flag to read; the tag gate above is what constrains this arrival."
               ;;
           esac
+      - name: Install
+        # The suite's dependency list is ci.yml's, verbatim including the pins — the
+        # release gate runs the SAME suite CI runs, so a shorter list here would mean the
+        # gate is a weaker check than the one that already passed on the same commit.
+        # It was shorter once, and the first release attempt died on a missing Pillow at
+        # collection rather than on anything about the release.
+        #
+        # `twine` is NOT here: it is installed, under a version constraint, by the
+        # clean-room action that uses it — one place, one constraint.
+        #
+        # `build` IS here, because the SUITE needs it and the suite runs first. Two tests in
+        # `tests/test_packaging.py` build an sdist by subprocess to pin what the published
+        # archive carries, and with the tool absent they skipped — here, in the gate whose
+        # whole job is to be the last thing between a tag and PyPI. The specifier is the
+        # clean-room action's, character for character; `tests/test_ci_workflows.py` holds
+        # every copy of it to one string, so the constraint still cannot fork.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest numpy pillow opencv-python-headless==5.0.0.93 matplotlib==3.11.1 "build>=1.5,<2" "requests>=2.32,<3"
+      # The same font ci.yml installs, from the same implementation. This job ran the suite
+      # without one: two tests hard-require a permitted face and FAIL rather than skip without
+      # it, so this gate depended on exactly what ci.yml refuses to depend on — and by the time
+      # it runs, `release: published` has fired and both registries are waiting.
+      - uses: ./.github/actions/sheet-fonts
+      - name: Suite
+        run: python -m pytest -q
+      # THE ENV VAR IS THE HALF THAT REACHES A CHILD, and this leg had only the flag.
+      # ci.yml's twin sets `PYTHONOPTIMIZE: "1"` beside its `-O` (its
+      # `run tests under -O (gates must still raise)` step) and verify.ps1's leg 2 exports it
+      # around the call (its `tests under -O` leg); this step set
+      # neither, so three copies of one leg read identically in a log and were not the same
+      # check -- on the exact axis the leg exists for.
+      #
+      # Measured on the rig with the repo venv: a parent run as `python -O` spawning
+      # `subprocess.run([sys.executable, "-c", ...])` gives a child with `__debug__` True and
+      # `PYTHONOPTIMIZE` unset; the same parent with `PYTHONOPTIMIZE=1` in the environment
+      # gives a child with `__debug__` False. `-O` governs the pytest process alone. An AST
+      # walk over tests/** counts 57 subprocess calls, 17 of which inherit the environment and
+      # pass no `-O` of their own -- those ran optimised under ci.yml's step and unoptimised
+      # under this one.
+      #
+      # This is the workflow whose Install comment above says a shorter list here would make
+      # the gate a weaker check than the one that already passed on the same commit. It was a
+      # weaker check. By the time it runs, `release: published` has fired.
+      - name: Suite under -O
+        run: python -O -m pytest -q
+        env:
+          PYTHONOPTIMIZE: "1"
+      # ci.yml's packaging leg, from the same implementation. This job built both artifacts
+      # and ran `twine check` on the METADATA, and nothing in this workflow installed either
+      # one — so the artifact handed to the publish step, the one step here with no
+      # compensator, was the one artifact never installed anywhere in the workflow that
+      # publishes it. The action builds, checks, installs the wheel into a clean venv and
+      # calls through to every function-local dependency; `dist/` is left for the upload
+      # step below.
+      - uses: ./.github/actions/clean-room
+      # The npm package's half of the same leg, and for the same reason: the `npm` job below
+      # runs `npm publish --provenance --access public`, and the only thing that had ever
+      # been run was `node bin/armature.mjs --node-selftest` out of the checkout. A `bin`
+      # map that resolves to nothing installs cleanly and provides no command, and a version
+      # on the registry is taken forever.
+      - uses: ./.github/actions/npm-clean-room
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
