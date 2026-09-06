@@ -4,9 +4,9 @@
 
 | Surface | Name | Status |
 |---|---|---|
-| GitHub | `mcp-tool-shop-org/armature` | live, public, `main` |
-| PyPI | **`armature-studio`** | Trusted Publisher configured 2026-08-10 |
-| npm | `@mcptoolshop/armature` | available via the scope; not yet claimed |
+| GitHub | `mcp-tool-shop-org/armature` | live, public, `main` (re-measured 2026-09-05: `gh repo view` reports PUBLIC) |
+| PyPI | **`armature-studio`** | Trusted Publisher configured 2026-08-10; **published** — 0.2.1 and 0.3.0 on the index (re-measured 2026-09-05) |
+| npm | **`@mcptoolshop/armature-studio`** | **published** — 0.3.0 on the registry (re-measured 2026-09-05). *Corrected 2026-09-05: this row read `@mcptoolshop/armature`, "not yet claimed"; the package that shipped carries the `-studio` suffix like the PyPI project (`npm/package.json`).* |
 
 Bare `armature` was unavailable on both PyPI (a 0.0.1 "Config package" stub) and npm (an
 abandoned `1.0.0-alpha4`), which is why the PyPI project carries the `-studio` suffix.
@@ -29,13 +29,22 @@ publish job must live in `.github/workflows/release.yml` exactly. A workflow nam
 or `ci-release.yml` will be rejected by PyPI no matter how correct the rest of the build is —
 and the failure surfaces at publish time, after everything else has passed.
 
-The project does not yet exist on PyPI. Under the current bootstrap path, the first successful
-OIDC publish **creates** it; no `v0.0.0` placeholder is required.
+~~The project does not yet exist on PyPI. Under the current bootstrap path, the first successful
+OIDC publish **creates** it; no `v0.0.0` placeholder is required.~~ **Corrected 2026-09-05:** the first OIDC
+publish created it on 2026-08-15 (`release.yml` records the date beside its publish step); the index holds 0.2.1
+and 0.3.0. The bootstrap sentence is kept struck because it was the plan until it ran.
+
+**The release rehearsal, in order** (the ordering `release.yml` carries as a comment beside its steps, written
+here so a reader does not have to open the workflow): (1) `verify.ps1` green on the rig, (2) the tag pushed and the
+GitHub release published, which is the only trigger `release.yml` answers to, (3) the workflow's `verify` job — the
+suite on both CI Pythons, the two clean rooms, the classifier gate — before the publish job runs. A rehearsal that
+skips (1) tests the workflow on a tree the rig never verified.
 
 ## Standing rules that apply here
 
-- **Two workflow files maximum** per repo (the studio's GitHub Actions rule), so this repo gets
-  `ci.yml` and `release.yml` — the publish path is already spoken for by the TP registration.
+- **Two workflow files maximum** per repo (the studio's GitHub Actions rule) was the plan; the repo carries
+  **three** (`ci.yml`, `release.yml`, and `pages.yml` for the site — measured 2026-09-05). The publish path is
+  `release.yml`, spoken for by the TP registration; `pages.yml` fires only on `site/**` and itself.
 - `release.yml` triggers on `release: published` only — never on push.
 - `ci.yml` is paths-gated and carries the required concurrency block.
 - Runner is `ubuntu-latest`. Blender-dependent tests cannot run there; keep them marked and run
@@ -58,4 +67,6 @@ treatment's phases landed the security policy, the changelog, the verify script,
 scanning on the one manifest that exists, the brand logo, the badges, and the repo-knowledge
 entry. *The prior text read: "Neither has run — this repo is at day zero and the roadmap puts
 publishing at P02, after the thesis has been tested."* The day-zero half has expired; the
-roadmap half stands — **nothing has been published, and the names above remain unused.**
+roadmap half has since expired too — **v0.1.0, v0.1.1, v0.2.1 and v0.3.0 are published releases (2026-08-13 to
+2026-08-18), `armature-studio` is on PyPI and `@mcptoolshop/armature-studio` on npm** (measured 2026-09-05). *The
+prior text read: "nothing has been published, and the names above remain unused."*

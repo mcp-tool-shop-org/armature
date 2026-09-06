@@ -205,6 +205,14 @@ exit code alone. Tools additionally catch their own `GateFailure`, write a `halt
 the outputs they did not produce, and call `sys.exit(2)` — a halt that returns success is not
 a halt.
 
+*Corrected 2026-09-05 (the Stage C audit measured this paragraph against the tree): the sentinel vocabulary is
+`<STEM>_OK` per tool — 65 distinct tokens on `bfe5ed7`, e.g. `RIG_OK`, `BUILD_PAYLOAD_OK`, `CAST_SHEET_OK` —
+and `MEASURE_OK`, `SHEET_OK`, `PANELS_OK`, `DIAGNOSIS_OK` are not among them; the binding rule stands, the examples
+were never the tree's spellings. `halt.json` is written by five of the 21 Blender-side tools (`rig_bake`,
+`rig_character`, `rig_parts`, `rig_repair`, `rig_retopo`); every Blender-side tool prints the `<TOOL>_HALT` line
+through its local handler, and that line — not the file — is the contract. The README's "Reading a halt" is the
+current statement.*
+
 ### Amendment 2 — 2026-08-11, advisor ruling on the halt: the arm is amended, not abandoned
 
 **Premise 5 stays FALSIFIED and is not retried.** Bone heat is dead on this mesh as delivered;

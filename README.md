@@ -99,7 +99,7 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** (GPU-hour billing) under per-experiment ceilings; **E13's four generations are the repo's first partner-credit spend, inside their pre-stated 424–844 bracket**; E14's two generations metered **0 partner credits** at a two-generation ceiling, reached exactly |
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
 | Spend gates | **Gate CANON** refuses a paid submission whose subject cannot be named against a machine-readable canon — surface is the row, a null occupant is a **hole rather than an absence**, and both directions are checked (the prompt covers the canon; everything in the prompt *is* canon). It fires **before** the output directory is created, inside each of the seven payload builders, because the irreversible step this repo owns is writing a payload. The escape is census-backed: `--no-canon` on a subject that *has* canon is refused, not honoured — and since the first health pass it is **loud on every spend**: each builder prints `[canon] ARMED\|UNGATED: <subject>` and records the verdict under `gates.CANON`, so no record can leave the question of whether canon was armed or escaped unanswered |
-| Tests | **1781 passing on the rig** (13 skips, measured 2026-09-04 after the first health pass — 1359 before it), identical under `-O`; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
+| Tests | **7181 passing on the rig** (64 skips, measured 2026-09-05 at the close of the Stage B health pass — 1359 before the first pass, 1781 after it), identical under `-O`; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
 | Status | **v0.3.0** — the record gains a spend gate and an index that verifies itself. `armature_core` ships to PyPI as `armature-studio` and npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere |
 
 ### What is measured (the current arc)
@@ -177,17 +177,48 @@ instruments** are this repository, cloned and run — no service, no daemon. Eve
 invoked directly:
 
 ```
-python tools/<name>.py --help                       # measurement, sheets, payload builders
-blender -b -P tools/stage_render.py -- <args>       # staging and render, headless only
+python tools/<name>.py --help                       # the 55 CPython instruments: measurement, sheets, payload builders
+blender -b -P tools/<name>.py -- <args>             # the 21 Blender-side instruments (stage_render, the rig_* tools, the
+                                                    # sheet composers): headless only; `python tools/<name>.py` on one of
+                                                    # these fails with `No module named 'bpy'`
 pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + clean install, site build
 ```
+
+Every tool, by how it runs, with its own one-line description: [docs/tools.md](docs/tools.md)
+(generated from the docstrings, 2026-09-05).
+
+### Reading a halt
+
+Every CPython instrument exits **0** when it did what it says, **2** on a deliberate refusal (a gate fired, a
+premise failed, an argument was refused) and **1** on a crash. A refusal or a crash prints exactly one line of the
+form `<TOOL>_HALT {json}` whose record carries six keys — `tool`, `outcome`, `gate`, `error`, `message`, `evidence` —
+where `outcome` is one of three sentences (`HALTED — a gate fired`, `REFUSED — the tool declined to proceed`, `FAILED — an
+unhandled error`), `message` is the refusal's own text,
+and `evidence.clause` is the machine-readable word a caller branches on; the clause vocabulary is held by the suite
+(`tests/test_refusal_clauses.py`). Success is a sentinel the tool earns by an effect (`BUILD_PAYLOAD_OK`, `RIG_OK`,
+`ENCODE_OK`, …), never the exit code alone — `blender -b -P` exits 0 when a script's exception propagates, which is
+why the Blender-side tools carry the same halt line through a local handler and five of the rig tools also write a
+`halt.json` beside the outputs they did not produce. The one implementation of the CPython contract is
+`armature_core.parts.run_tool_main`; its docstring is the specification.
+
+### Running the suite
+
+```
+E:\AI\armature\.venv\Scripts\python.exe -m pytest -q            # from the repo root, on the repo venv — never the system Python
+```
+
+Three environment levers, all optional: `PYTHONPATH=E:/AI/record-index` (the sibling working copy the index tests
+import; without it those tests skip by name), `ARMATURE_BLENDER` (the Blender executable the Blender-driving fixtures
+run; without it, or off this rig, those tests skip visibly), and `ARMATURE_GIT` (the git the packaging test invokes).
+CI's exact recipe is the `python-tests` job in `.github/workflows/ci.yml`; `verify.ps1` runs the same suite twice
+(once under `-O`) and then the package build.
 
 | | |
 |---|---|
 | Platform | Windows 11 on the rig (Omen 45L, RTX 5090). The hermetic tests also run on `ubuntu-latest` in CI; Blender-dependent tests **skip visibly** where Blender is absent rather than passing silently |
-| Python | 3.10+ per the package; CI runs 3.13, the rig venv runs 3.14. `pip install armature-studio` installs numpy, opencv-python-headless, Pillow and matplotlib — the runtime dependencies the code actually imports (declared since the wave-3 health pass; a clean install used to import `armature_core` and then fail on its first drawing call). pytest is the one test-only dependency; CI pins opencv to the rig's version because the pose-raster tests assert byte-stable rasterization |
+| Python | `>=3.11,<3.15` per the package; CI runs 3.11 and 3.13, the rig venv runs 3.14. `pip install armature-studio` installs numpy, opencv-python-headless, Pillow and matplotlib — the runtime dependencies the code actually imports (declared since the wave-3 health pass; a clean install used to import `armature_core` and then fail on its first drawing call). pytest is the one test-only dependency; CI pins opencv to the rig's version because the pose-raster tests assert byte-stable rasterization |
 | Blender | 5.2, headless only. A live GUI session produces artifacts with no recorded parameters, and a recipe that does not reproduce its output is not a recipe |
-| Node | 22, for the site under `site/` only |
+| Node | the `armature` launcher (`npm/`) is tested on 18 and 22 in CI; the site under `site/` builds on 22 |
 | Generation | runs on Comfy Cloud and is submitted by the operator; rendering and measurement run locally |
 
 Absolute rig paths are baked into many tools and docs — they are not secrets, but they do

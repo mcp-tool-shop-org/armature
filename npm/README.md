@@ -53,6 +53,10 @@ armature modules    # what each module is for  (--json for machine output)
 armature where      # where the docs and the Blender-side scripts live
 ```
 
+`armature --node-selftest` needs no Python at all: it proves this file parses, that the interpreter candidate list
+is non-empty, that the Windows launcher keeps its `-3`, and that `ARMATURE_PYTHON` replaces the search order rather
+than joining it — exit 1 with the reason on any of those. `npm test` runs it in CI, where Python may be absent.
+
 ## The rendering scripts are not here, deliberately
 
 `render_turnaround.py` and its siblings run inside **Blender's own interpreter**:
