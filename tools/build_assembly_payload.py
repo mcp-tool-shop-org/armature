@@ -297,6 +297,180 @@ def read_seed_registration(path, *, flag="--seeds"):
     return seeds
 
 
+def gate_output_not_overwritten(paths, out, overwrite, exc, gate="PAYLOAD"):
+    """Gate <gate> · ANDON — a rebuild does not silently replace an earlier build's artefacts.
+
+    Wave 28, F-5fd16451, and instruments' panel CRITICAL `F-8b7f48a8` is the same mechanism at
+    a different anchor. MEASURED in this worktree before the fix: `build_assembly_payload.main`
+    called twice into ONE `--out` with DIFFERENT upload maps replaced BOTH artefacts
+    (`S03-assembly.api.json` sha256 2c986d17… -> b3e8f53f…, `S03-assembly-payload-record.json`
+    f61a47b7… -> 80ad650f…) and the second run's stdout was BYTE-IDENTICAL to the first — nine
+    lines, none naming an existing file, none carrying a digest or any other value that differs
+    between two builds, so a scrollback of two runs cannot tell them apart. The mechanism is a
+    family, censused across the nine builders: `os.path.exists` / `os.path.isfile` appeared ZERO
+    times in seven of them and the three hits in the other two were INPUT checks; no builder
+    checked its output path before `open(..., "w")`. `build_assembly_payload` and
+    `build_cascade_payload` write FIXED filenames, so a rebuild always lands on the prior one.
+
+    What that costs: a graph is submitted, a later build into the same `--out` — a re-run with
+    a corrected upload map, a second arm, a repeated command from history — replaces the record
+    whose `payload_sha256` was the only tie between the submitted graph and its inputs, and
+    nothing said so. This repo's law is that a recipe which does not reproduce its output is not
+    a recipe. The neighbouring invariant already lives on these paths ("a refuse must leave no
+    output directory"); the write-over-an-existing-record case had no clause.
+
+    **ONE shape across two domains, agreed in the relay before either edit**
+    (`wave-28/seams-inbox.md`: instruments @ 13:20, the coordinator's ruling @ 13:2x). The flag
+    is `--overwrite` (`store_true`, default off); the clause word is `output_already_exists`;
+    the sentence is the one below with a subject slot; the evidence carries
+    `{clause, out, already_present, planned}` — plus, here, the digest of each artefact that
+    would be replaced, which is what makes a builders halt actionable. On `--overwrite` there is
+    no refusal and the run SAYS SO, on stdout and in the record, under two keys spelled the same
+    way in both domains: `out_dir_pre_existed` and `overwrote`.
+
+    The helper lives HERE rather than in `armature_core.parts` for the reason the coordinator
+    ruled: `parts.py` is core-solvers' file and carries no finding for this helper, so a helper
+    there would be an unrequested edit to another domain's module. This module is already this
+    domain's shared home — `gate_saved_graph` and eight of the nine builders import
+    `read_seed_registration` / `canonical_payload_digest` from it — so the builders reach ONE
+    implementation through the import they already have. instruments spells the same words
+    locally in its three renderers; nobody spells a fourth.
+
+    `exc` is the caller's own family class and `gate` its own gate id, exactly as
+    `parts.single_path_segment` takes them — a shared refusal must not smuggle a foreign andon
+    into a tool's halt line.
+
+    Returns the receipt either way, so the record states what was found rather than being silent
+    on a fresh directory: a measured "nothing was there", not an absence.
+    """
+    present = []
+    for path in paths:
+        if os.path.isfile(path):
+            with open(path, "rb") as fh:
+                present.append({"path": os.path.abspath(path),
+                                "name": os.path.basename(path),
+                                "sha256": hashlib.sha256(fh.read()).hexdigest(),
+                                "bytes": os.path.getsize(path)})
+    ev = {"gate": gate, "andon": exc.__name__, "out": os.path.abspath(out),
+          "already_present": [p["name"] for p in present],
+          "digests": {p["name"]: p["sha256"] for p in present},
+          "planned": len(list(paths)),
+          "out_dir_pre_existed": bool(present), "overwrote": [], "flag": "--overwrite"}
+    if present and not overwrite:
+        # Spelled as an ASSIGNMENT, not as `dict(ev, clause=...)`: `_census_nodes.
+        # clause_literals` reads a dict-literal key or `ev["clause"] = ...` and nothing
+        # else, and a keyword to `dict()` is invisible to it at 64 sites tree-wide (recorded
+        # at the wave-25 merge). A new word spelled invisibly is a word no census can pin.
+        ev["clause"] = "output_already_exists"
+        subject = ", ".join(f"{p['name']} (sha256 {p['sha256'][:12]}…)" for p in present)
+        raise exc(
+            f"{subject} already exists from an earlier run and this run would replace it; "
+            f"pass --overwrite to replace it, or point --out at a directory of its own. The "
+            f"payload record is the only tie between a submitted graph and the inputs it was "
+            f"built from — its `payload_sha256` is what `gate_saved_graph.route_facts` "
+            f"compares — so replacing one silently leaves a receipt that describes a graph "
+            f"nobody can reproduce",
+            dict(ev))
+    if present:
+        ev["overwrote"] = [p["name"] for p in present]
+        ev["verdict"] = (
+            f"--overwrite: {len(present)} artefact(s) from an earlier build were replaced "
+            + "; ".join(f"{p['name']} was sha256 {p['sha256'][:12]}…" for p in present))
+    else:
+        ev["verdict"] = (f"{len(list(paths))} artefact(s) planned, none of them already "
+                         f"present in {os.path.abspath(out)}")
+    return ev
+
+
+def disclosure_lines(block):
+    """The operator-facing lines for a per-route disclosure block, one per obligation.
+
+    Wave 28, F-2dcaf53a — lifted here from `build_lora_arm_payload`, where it was written in
+    wave 14 (F-92f67091) for the E14 arm's ONE credits line. `build_r2v_payload` authors the
+    only hosted-partner-tier spend in this repo and had no disclosure surface at all: its nine
+    printed lines named no data-use posture, no AI-content disclosure duty and no watermark
+    policy, and its payload record carried no disclosure key. That is the gap CLAUDE.md's
+    per-route disclosure ruling exists to close, on the route the ruling was born on.
+
+    So the renderer has ONE home and two callers, rather than a second spelling of a shape that
+    already worked. Each obligation names its own `kind`, which becomes the line's label, so the
+    E14 arm still prints `CREDIT OBLIGATION:` and the E13 route prints the words that belong to
+    ITS tier. It returns lines rather than printing them so a test can read the words back
+    without a capture — the property the original had and keeps.
+    """
+    out = [f"  ROUTE: {block.get('route_verdict')}"]
+    obligations = block.get("obligations") or []
+    if not obligations:
+        # The E14 arm's own wording, kept verbatim — a measured "none", not a silence.
+        reason = block.get("empty_reason")
+        if reason is None:
+            reason = (f"the licence map rules no CONDITIONAL component in this arm's graph "
+                      f"({(block.get('credit_obligation') or {}).get('text')})")
+        out.append(f"  {block.get('empty_label', 'CREDIT OBLIGATION')}: none - {reason}")
+        return out
+    for ob in obligations:
+        kind = str(ob.get("kind") or "obligation")
+        if kind == "credit":
+            # byte-for-byte the line wave 14 shipped for the arm that credits a creditor
+            out.append(
+                f"  CREDIT OBLIGATION: this arm credits {ob['creditor']} - {ob['text']} "
+                f"[{ob['kind']}; {ob['applies_to']}; source {ob['source']}; component "
+                f"{ob['component']}]")
+        else:
+            out.append(
+                f"  {kind.upper().replace('_', ' ')}: {ob['text']} "
+                f"[{ob['applies_to']}; source {ob['source']}]")
+    return out
+
+
+def route_report_lines(gate_route):
+    """The two Gate ROUTE lines the assembly builders print, saying what was JUDGED.
+
+    Wave 28, F-8601de91. Both lines were raw Python reprs that named nothing they were about.
+    MEASURED as printed output from a real run in this worktree before the fix:
+
+        route components 0  seeds 0  latents 0
+        frame legality   [True]
+
+    The first is three zeros with no sentence saying whether zero means the gate examined an
+    empty set — which it did; this chain loads no weights and carries no sampler — or found
+    nothing to examine, which is the vacuous state `route_gates.verify` exists to refuse. The
+    second is a bare list of booleans with no width, height or frame count beside it, so a
+    reader cannot tell what shape was judged legal or how many latents were examined.
+
+    The same information is rendered well one file over, on the paid route:
+    `build_r2v_payload` prints `gate L (hosted)  720P 16:9 5s -> legal True`, naming the
+    values judged. These are the graphs whose frames feed the paid A2 arm's reference video,
+    so the reader of these lines is deciding whether to spend on what they describe.
+
+    The wording precedent for the zero clause is this family's own `gate_pair_note` in
+    `build_r2v_payload`'s record — "recorded as n/a, not skipped".
+
+    Returns lines rather than printing them, so a test reads the words back without a
+    capture — the shape `disclosure_lines` above already uses.
+    """
+    n_components = len(gate_route["components"])
+    n_seeds = len(gate_route["seeds"])
+    n_latents = len(gate_route["latents"])
+    line = (f"route components {n_components}  seeds {n_seeds}  latents {n_latents}")
+    if not (n_components or n_seeds or n_latents):
+        line += ("  (each an EMPTY SET examined, not a check skipped: this chain loads no "
+                 "weights, carries no sampler and pins no latent)")
+    out = [line]
+    rows = gate_route.get("frame_legality") or []
+    if not rows:
+        out.append("frame legality   no frame was checkable on this graph")
+        return out
+    for row in rows:
+        out.append(
+            f"frame legality   {row.get('width')}x{row.get('height')}x{row.get('length')} "
+            f"({row.get('source', 'graph')}, {row.get('family')} "
+            f"{row.get('frame_form')}) -> "
+            + ("legal" if row.get("legal")
+               else f"ILLEGAL: {'; '.join(row.get('problems') or [])}"))
+    return out
+
+
 def gate_create_video_fps(fps):
     """Gate ROUTE - ANDON: `CreateVideo.fps` is inside the contract the record states.
 
@@ -705,11 +879,38 @@ def build_and_write(argv=None):
     "this tool crashed". The exit convention and the tests' need for the artifact are two
     different jobs and they get two functions.
     """
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--uploads", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--fps", type=float, default=16.0)
-    ap.add_argument("--prefix", default="video/S03_assembly")
+    ap = argparse.ArgumentParser(
+        description=(
+            "Build and gate the FLAT frames->VIDEO chain (LoadImage x N -> BatchImagesNode "
+            "-> CreateVideo -> SaveVideo) from an upload map. Writes the API graph and its "
+            "payload record; submits nothing and loads no weights."),
+        epilog=(
+            "ROUTE: S03 Task C, the assembly chain. It is BOUNDED at "
+            f"{MEASURED_FLAT_SLOT_MAX} slots - the largest flat batch anyone has seen "
+            "execute - because the 81-slot form was falsified after passing the round trip "
+            "and Gate ROUTE with zero warnings. Use build_cascade_payload for a clip of any "
+            "length. WHAT A REFUSAL COSTS: nothing but your time; the frames these graphs "
+            "carry feed the paid E13 A2 arm's reference video, so every gate here runs "
+            "before a credit is spent downstream."))
+    ap.add_argument("--uploads", required=True,
+                    help="the upload step's JSON: local frame filename -> the server's "
+                         "content-addressed name. Keys must be zero-padded frame names "
+                         "with no gaps; the LOCAL name is the frame order")
+    ap.add_argument("--out", required=True,
+                    help="the directory the graph and its payload record are written into. "
+                         "Created below the last gate, so a refusal leaves nothing behind; "
+                         "an existing build there is refused unless --overwrite is passed")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace an existing graph/record pair in --out. Without it a "
+                         "rebuild over an earlier build refuses by name "
+                         "(`output_already_exists`) and names both digests")
+    ap.add_argument("--fps", type=float, default=16.0,
+                    help=f"the CreateVideo rate, inside its measured contract "
+                         f"{CREATE_VIDEO_FPS_RANGE} (default: %(default)s). Presentation "
+                         f"only - it is downstream of the frames and changes no pixel")
+    ap.add_argument("--prefix", default="video/S03_assembly",
+                    help="the server-side filename prefix for the saved video "
+                         "(default: %(default)s)")
     ap.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
     a = ap.parse_args(argv)
 
@@ -825,13 +1026,24 @@ def build_and_write(argv=None):
         "payload_sha256": canonical_payload_digest(wf),
     }
 
+    graph_path = os.path.join(out, "S03-assembly.api.json")
+    record_path = os.path.join(out, "S03-assembly-payload-record.json")
+    # ---- Gate PAYLOAD · ANDON, wave 28 (F-5fd16451). Both filenames are FIXED, so a
+    # rebuild into the same `--out` always lands on the prior pair; see
+    # `gate_output_not_overwritten` for the measurement and for the one shape both domains
+    # spell. ABOVE `os.makedirs`, like every other refusal in this tool: a refuse leaves no
+    # output directory, and `tests/test_instrument_write_ordering` holds that ratchet.
+    gate_overwrite = gate_output_not_overwritten(
+        [graph_path, record_path], out, a.overwrite, AS.AssemblyGate, gate="PAYLOAD")
+    record["gates"]["PAYLOAD_overwrite"] = gate_overwrite
+    record["out_dir_pre_existed"] = gate_overwrite["out_dir_pre_existed"]
+    record["overwrote"] = gate_overwrite["overwrote"]
+
     # Below the last in-tool gate: a refuse leaves no output directory.
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
-    graph_path = os.path.join(out, "S03-assembly.api.json")
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=1)
-    with open(os.path.join(out, "S03-assembly-payload-record.json"), "w",
-              encoding="utf-8") as fh:
+    with open(record_path, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=1)
 
     print(f"nodes            {len(wf)}")
@@ -839,9 +1051,12 @@ def build_and_write(argv=None):
     print(f"flat slot gate   {gate_flat['verdict']}")
     print(f"topology gate    {gate_topo['verdict']}")
     print(f"slot->frame gate {gate_index['verdict']}")
-    print(f"route components {len(gate_route['components'])}  "
-          f"seeds {len(gate_route['seeds'])}  latents {len(gate_route['latents'])}")
-    print(f"frame legality   {[f['legal'] for f in gate_route['frame_legality']]}")
+    for line in route_report_lines(gate_route):
+        print(line)
+    # Wave 28, F-5fd16451: the digest that ties this record to this graph, and the overwrite
+    # receipt, so two runs into one `--out` are distinguishable in a scrollback.
+    print(f"payload sha256   {record['payload_sha256']}")
+    print(f"overwrite        {gate_overwrite['verdict']}")
     print(f"BUILD_ASSEMBLY_OK {graph_path}")
     return wf
 

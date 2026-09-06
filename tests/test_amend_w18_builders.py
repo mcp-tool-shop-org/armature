@@ -718,9 +718,35 @@ def test_every_committed_registration_in_specs_still_reads():
 # `no_seed_and_no_registration`).
 
 def test_the_reader_still_has_exactly_the_recorded_clause_set():
+    """WAVE 28 — resolved by AST, not by slicing the file between two `def` lines.
+
+    This read `src[src.index("def read_seed_registration("):src.index("\\ndef
+    gate_create_video_fps(")]`, so it graded every character between those two definitions
+    rather than the function it names. Measured the moment a helper was added between them
+    (`gate_output_not_overwritten`, wave 28's F-5fd16451): the slice picked up that helper's
+    `output_already_exists` and the equality failed over a clause belonging to another
+    function. Wave 18's own rule 1 is the one that applies here — a census keys on the
+    RESOLVED shape, never the spelled one — so the body is the function's own AST node, and
+    a neighbour landing beside it cannot move this pin.
+    """
     src = open(os.path.join(TOOLS, "build_assembly_payload.py"), encoding="utf-8").read()
-    body = src[src.index("def read_seed_registration("):src.index("\ndef gate_create_video_fps(")]
-    clauses = sorted(set(__import__("re").findall(r'clause="([a-z_]+)"', body)))
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "read_seed_registration")
+    words = set()
+    for node in ast.walk(fn):
+        # `dict(ev, clause="word")` — the spelling this reader uses
+        if isinstance(node, ast.Call):
+            for kw in node.keywords:
+                if kw.arg == "clause" and isinstance(kw.value, ast.Constant):
+                    words.add(kw.value.value)
+        # `{"clause": "word"}` — the other spelling the vocabulary census reads
+        if isinstance(node, ast.Dict):
+            for k, v in zip(node.keys, node.values):
+                if (isinstance(k, ast.Constant) and k.value == "clause"
+                        and isinstance(v, ast.Constant)):
+                    words.add(v.value)
+    clauses = sorted(words)
     assert clauses == ["registration_missing", "registration_no_seeds_key",
                        "registration_not_a_mapping", "registration_seed_is_not_an_integer",
                        "registration_seeds_not_a_list", "registration_unreadable"], clauses

@@ -215,11 +215,24 @@ def require_uploads(uploads, source=None):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description=(
+            "Build and gate the WanAnimate route's API graph from an uploaded reference and "
+            "pose pack. Writes the graph and its payload record; submits nothing."),
+        epilog=(
+            "ROUTE: E08's Animate arm - a pose sequence driving a reference character. The "
+            "served Animate template is a REFERENCE, never a route (it wires the banned "
+            "detector tier), so this graph is built here and gated here. WHAT A REFUSAL "
+            "COSTS: nothing but your time; every gate runs before anything is submitted, "
+            "and this route's frames are generator-legal or they are refused."))
     ap.add_argument("--uploads", required=True,
                     help="JSON: {reference, pose_pack, pose_frames}")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--out", required=True,
+                    help="the directory the graph and its payload record are written into, "
+                         "created below the last gate so a refusal leaves nothing behind")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="the seed to submit; omitted, the first seed in --seeds-registry "
+                         "is used. Gate S refuses an unregistered number either way")
     ap.add_argument("--negative-source", default=None,
                     help="path to Wan's shared_config.py; the negative is read from it "
                          "rather than retyped")
@@ -238,7 +251,9 @@ def parse_args(argv=None):
                          "contradicts the file raises `fit_disagrees_with_the_file` "
                          "(the clause `build_i2v_payload`'s start-frame path already "
                          "carries)")
-    ap.add_argument("--seeds-registry", default=None)
+    ap.add_argument("--seeds-registry", default=None,
+                    help="the committed seed registration Gate S checks --seed against, and "
+                         "the list the default seed is taken from")
     ap.add_argument("--experiment", default=EXPERIMENT,
                     help="names the output files and the server-side filename prefixes")
     ap.add_argument("--length", type=int, default=LENGTH,

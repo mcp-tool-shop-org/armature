@@ -61,11 +61,13 @@ only `urls.json`.
 
 import argparse
 import json
+import math
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -84,6 +86,18 @@ from armature_core.errors import GateFailure  # noqa: E402
 from armature_core.parts import single_path_segment       # noqa: E402
 
 NODE_DIR = {"301": "batchprobe", "302": "lossless"}
+
+#: The run tree `--root` falls back to. E02's, like `NODE_DIR` and `VIDEO_NODES` beside it —
+#: named as a constant in wave 28 (F-5f51c793) so the flag's help, the boundary refusal below
+#: and the fallback are one string rather than three. Before that the default was an
+#: undocumented literal in the parser: `--root`'s `add_argument` carried no `help=` at all,
+#: while its neighbour `--node-map` spelled its own E02 default out in full and
+#: `parse_node_map` refuses rather than falling back. MEASURED in this worktree by calling
+#: `plan` with the default root and a NON-E02 node map: an E13 run fetched with `--node-map`
+#: supplied and `--root` forgotten plans its frames to
+#: `outputs/E02/runs\E13-A1-seed2026081351\lossless\00000.png` — a paid E13 run's frames
+#: filed under E02's run tree, recoverable only by a reader who opens the receipt's `dir`.
+DEFAULT_ROOT = "outputs/E02/runs"
 
 #: Source nodes whose files land beside the run directory rather than in a subdirectory —
 #: E02's H.264 review tap. Named rather than implied by a fallback branch: the branch is
@@ -402,16 +416,58 @@ def plan(results, base, run, node_dir, video_nodes):
     return jobs, counts
 
 
+#: ---- The BOUNDS on the one operation that runs AFTER the credits are spent (wave 28,
+#: F-a4aac9c2; the wait shape the coordinator ruled at `wave-28/seams-inbox.md` SEAM 6).
+#:
+#: MEASURED on `3380ae2` before this landed: `grep -n "max-time\|connect-timeout\|timeout"`
+#: over both fetchers returned ZERO hits — no `--max-time`, no `--connect-timeout`, and no
+#: `timeout=` on the `subprocess.run` below — while `curl -sS` suppresses curl's own progress
+#: meter and this module held exactly ONE `print` call (its terminal receipt). So an operator
+#: fetching 81 frames plus a video tap saw no character between the shell prompt and the
+#: receipt, could not tell a slow provider from a stalled TCP connection, and a single hung
+#: curl blocked the process for as long as they let it — with a paid result already generated
+#: and billed, and Ctrl-C landing them in the state this module records as un-backstopped.
+#:
+#: Every value is a CONSTANT interpolated from here into the constant command string. Nothing
+#: derived from `--run`, `--root` or the dump reaches the command line, which is the whole of
+#: the wave-12 quoting fix (`download`'s docstring); a module constant cannot reopen it.
+CURL_CONNECT_TIMEOUT_S = 30
+#: Per REQUEST. A single frame or a single video tap; generous, because the bound exists to
+#: end a hang, not to grade a provider.
+CURL_MAX_TIME_S = 600
+#: The `-ThrottleLimit` the command string already carries, named once so the process bound
+#: below and the command cannot disagree about how many requests run at a time.
+DOWNLOAD_THROTTLE = 12
+#: pwsh start, runspace pool, and the JSON write-back — the part of the wall clock that is
+#: not any request's.
+DOWNLOAD_STARTUP_S = 60
+
+
+def timeout_for_jobs(n_jobs):
+    """The process bound for `n_jobs` downloads, DERIVED from the work.
+
+    `CURL_MAX_TIME_S` bounds one request and `DOWNLOAD_THROTTLE` requests run at a time, so
+    the worst case is one per-request bound per wave of the throttle, plus the process's own
+    start-up. A global constant must not govern a local feature (CLAUDE.md), and the number
+    printed as `bound=` IS the number passed as `timeout=` — one derivation, so the sentence
+    and the enforcement cannot drift.
+    """
+    waves = max(1, math.ceil(max(int(n_jobs), 1) / DOWNLOAD_THROTTLE))
+    return DOWNLOAD_STARTUP_S + CURL_MAX_TIME_S * waves
+
+
 #: The downloader command, as a CONSTANT (see `download`). Each runspace records its own
 #: `$LASTEXITCODE` because a native non-zero exit inside `ForEach-Object -Parallel` does not
 #: reach the pwsh process code — measured on this rig, 2026-09-04.
 DOWNLOAD_PS = (
     f"$j = Get-Content -LiteralPath $env:{MANIFEST_ENV} -Raw | ConvertFrom-Json; "
     "$r = $j | ForEach-Object -Parallel "
-    "{ $o = & curl.exe -sS -L --fail-with-body -o $_.out -- $_.url 2>&1; "
+    f"{{ $o = & curl.exe -sS -L --fail-with-body "
+    f"--connect-timeout {CURL_CONNECT_TIMEOUT_S} --max-time {CURL_MAX_TIME_S} "
+    "-o $_.out -- $_.url 2>&1; "
     "[pscustomobject]@{ out = $_.out; url = $_.url; code = $LASTEXITCODE; "
     "message = ($o | Out-String).Trim() } } "
-    "-ThrottleLimit 12; "
+    f"-ThrottleLimit {DOWNLOAD_THROTTLE}; "
     f"ConvertTo-Json -InputObject @($r) -Depth 3 | "
     f"Set-Content -LiteralPath $env:{EXITS_ENV} -Encoding utf8"
 )
@@ -422,10 +478,12 @@ DOWNLOAD_PS = (
 DOWNLOAD_PS_NO_URLS = (
     f"$j = Get-Content -LiteralPath $env:{MANIFEST_ENV} -Raw | ConvertFrom-Json; "
     "$r = $j | ForEach-Object -Parallel "
-    "{ $o = & curl.exe -sS -L --fail-with-body -o $_.out -- $_.url 2>&1; "
+    f"{{ $o = & curl.exe -sS -L --fail-with-body "
+    f"--connect-timeout {CURL_CONNECT_TIMEOUT_S} --max-time {CURL_MAX_TIME_S} "
+    "-o $_.out -- $_.url 2>&1; "
     "[pscustomobject]@{ out = $_.out; code = $LASTEXITCODE; "
     "message = ($o | Out-String).Trim() } } "
-    "-ThrottleLimit 12; "
+    f"-ThrottleLimit {DOWNLOAD_THROTTLE}; "
     f"ConvertTo-Json -InputObject @($r) -Depth 3 | "
     f"Set-Content -LiteralPath $env:{EXITS_ENV} -Encoding utf8"
 )
@@ -481,6 +539,55 @@ def gate_downloader_shell(executable=DOWNLOADER):
     return {"gate": "FETCH", "andon": "FetchHalt", "executable": executable,
             "resolved": found,
             "verdict": f"{executable} resolves to {found}"}
+
+
+def _partial_state(planned):
+    """Which of the planned outputs are on disk NOW, with their sizes.
+
+    Wave 28, F-a4aac9c2 / F-073cdeed. The evidence half of the partial-state sentence: a
+    refusal on the retrieval path is about a run directory that already holds SOMETHING, and
+    the reader of the halt should not have to go and list it themselves. Sizes are included
+    because curl runs `--fail-with-body`, so a present file is not the same claim as a
+    complete one.
+    """
+    rows = []
+    for job in planned:
+        out = job.get("out") if isinstance(job, dict) else None
+        if not out:
+            continue
+        rows.append({"path": out, "present": os.path.isfile(out),
+                     "bytes": os.path.getsize(out) if os.path.isfile(out) else 0})
+    return rows
+
+
+def _partial_sentence(run_dir, planned):
+    """The ONE partial-state wording, shared by every refusal on the retrieval path.
+
+    Wave 28, F-073cdeed, and the coordinator's SEAM 6 §5 — one wording across the four halts
+    that fire after an output directory exists (this module's two download refusals, the new
+    timeout, and the sibling domains' equivalents): name the directory, say it holds partial
+    work, say it is NOT a result, say the supported next step.
+
+    Before this, the two download refusals told the operator everything about WHY the check
+    exists and nothing about what they now hold. Neither said that the run directory contains
+    whatever DID land, that `urls.json` beside it still names every planned job (this
+    fetcher's manifest is deliberately durable), or what to do next — and a plain re-run lands
+    in the state this module records as un-backstopped eleven lines above the refusal: a
+    re-fetch into a re-used run directory whose planned frames are already present from a
+    PRIOR run, which satisfies the plan-to-disk clause and prints a green receipt over a
+    mixture of two fetches.
+    """
+    rows = _partial_state(planned)
+    landed = sum(1 for r in rows if r["present"])
+    return (
+        f"{run_dir!r} now holds a PARTIAL fetch — {landed} of {len(rows)} planned file(s) "
+        f"are present — and it is not a result: nothing downstream should measure it. "
+        f"`urls.json` beside them still names every planned job, so the plan survives. The "
+        f"supported next step is to CLEAR the run directory and re-fetch: a re-run into this "
+        f"directory as it stands finds the earlier run's frames already in place, satisfies "
+        f"the plan-to-disk clause, and prints a green receipt over a mixture of two fetches "
+        f"(the re-use case this module records as un-backstopped)."
+    )
 
 
 def download(manifest_path, exits_path=None, record_urls=True):
@@ -549,9 +656,44 @@ def download(manifest_path, exits_path=None, record_urls=True):
     env[EXITS_ENV] = exits_abs
     with open(manifest_abs, encoding="utf-8") as fh:
         planned = json.load(fh)
+    # ---- the wait says it is alive (wave 28, F-a4aac9c2). Lowercase-led, on STDERR, and not
+    # a sentinel: the success/halt censuses walk this module's stdout prints, and stdout keeps
+    # its ONE `FETCH_RUN_OK` / `FETCH_T2V_OK` line. Two lines, not a per-job counter — every
+    # curl runs inside ONE `pwsh -Parallel` process, so there is no honest `<i>/<n>` between
+    # them and inventing one would be a progress bar that is not measuring the work.
+    bound_s = timeout_for_jobs(len(planned))
+    dest = os.path.dirname(manifest_abs)
+    print(f"[fetch] start download n={len(planned)} bound={bound_s}s -> {dest}",
+          file=sys.stderr, flush=True)
+    started = time.monotonic()
     try:
         proc = subprocess.run([DOWNLOADER, "-NoProfile", "-Command", ps],
-                              capture_output=True, text=True, env=env)
+                              capture_output=True, text=True, env=env, timeout=bound_s)
+    except subprocess.TimeoutExpired as exc:
+        # ---- Gate FETCH · ANDON, wave 28 (F-a4aac9c2). A bound that is reached is a NAMED
+        # refusal carrying the partial state, never a retry: this runs after the credits are
+        # spent, and a retry that re-fetches is the one thing an operator must not have done
+        # for them silently. `subprocess.run` has already killed the child.
+        elapsed = time.monotonic() - started
+        # The six keys its five siblings carry are spelled here as a LITERAL rather than
+        # shared through a helper. `base` below cannot be reused — it reads `proc`, and on
+        # this path there is no `proc`: the child was killed, so it never exited and
+        # `process_returncode` is honestly None. And the tree's evidence censuses
+        # (`test_gates.evidence_dicts_missing`, `_refusals_with_thin_evidence`) resolve an
+        # evidence base only through a dict LITERAL, so a helper here would make seven
+        # unchanged refusals unreadable to them — measured on this branch before it was
+        # reverted to this shape.
+        raise FetchHalt(
+            f"the downloader did not finish within {bound_s}s (elapsed {elapsed:.1f}s) and "
+            f"was killed. {_partial_sentence(dest, planned)} No download was retried: this "
+            f"step runs after the generation has been billed, and a retry this tool started "
+            f"for you would hide which half of the fetch is stale",
+            {"gate": "FETCH", "andon": "FetchHalt", "clause": "downloader_timed_out",
+             "process_returncode": None, "returncode": None,
+             "exits_record": exits_abs, "planned": len(planned),
+             "bound_s": bound_s, "elapsed_s": round(elapsed, 1),
+             "binary": DOWNLOADER, "input": manifest_abs,
+             "partial": _partial_state(planned)}) from exc
     except OSError as exc:
         # The other half of the same clause: a `pwsh` that EXISTS and cannot start (a
         # broken shim, a permission bit, an exec-format error) raised the same untyped
@@ -567,6 +709,9 @@ def download(manifest_path, exits_path=None, record_urls=True):
              "executable": DOWNLOADER, "resolved": shell["resolved"],
              "error": type(exc).__name__,
              "searched": os.environ.get("PATH", "")}) from exc
+    elapsed = time.monotonic() - started
+    print(f"[fetch] done download n={len(planned)} elapsed={elapsed:.1f}s",
+          file=sys.stderr, flush=True)
     base = {"gate": "FETCH", "andon": "FetchHalt", "process_returncode": proc.returncode,
             # the key wave 8's halt carried; kept so a reader of an older receipt and a
             # reader of this one are looking at the same field name
@@ -654,9 +799,14 @@ def download(manifest_path, exits_path=None, record_urls=True):
             + ". The pwsh process itself exited "
             f"{proc.returncode}, because a native non-zero exit inside a -Parallel runspace "
             f"does not reach it; without this record every curl in a fetch could fail under "
-            f"a printed FETCH_RUN_OK",
+            f"a printed FETCH_RUN_OK. "
+            # ---- wave 28, F-073cdeed: what the operator NOW HOLDS and what to do about it.
+            # This refusal told them everything about why the check exists and nothing about
+            # their own state, and there is no `--resume`, `--clean` or `--force` in either
+            # fetcher's parser (measured), so the only way forward is stated in words.
+            + _partial_sentence(dest, planned),
             dict(base, clause="downloader_job_exit_nonzero", failed=failed,
-                 unrecorded=unrecorded))
+                 unrecorded=unrecorded, partial=_partial_state(planned)))
     if unrecorded:
         raise FetchHalt(
             f"{len(unrecorded)} of {len(rows)} download(s) recorded NO exit at all: "
@@ -666,8 +816,11 @@ def download(manifest_path, exits_path=None, record_urls=True):
             f"this gate's own rule is that evidence which never arrived has not run. The "
             f"downloader itself may not have launched — a CommandNotFound inside a "
             f"-Parallel runspace goes to that runspace's error stream and leaves the row's "
-            f"code null while the pwsh process exits 0",
-            dict(base, clause="downloader_job_exit_unrecorded", unrecorded=unrecorded))
+            f"code null while the pwsh process exits 0. "
+            # ---- wave 28, F-073cdeed: the same partial-state sentence its sibling carries.
+            + _partial_sentence(dest, planned),
+            dict(base, clause="downloader_job_exit_unrecorded", unrecorded=unrecorded,
+                 partial=_partial_state(planned)))
     return proc, {"gate": "FETCH", "clause": "downloader_job_exits",
                   "record": exits_abs, "jobs": len(rows),
                   "n_recorded": len(rows) - len(unrecorded), "n_unrecorded": 0,
@@ -960,10 +1113,34 @@ def verify_downloads(jobs, directories=(), suffixes=(".png",), root=None,
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--dump", required=True)
-    ap.add_argument("--run", required=True)
-    ap.add_argument("--root", default="outputs/E02/runs")
+    ap = argparse.ArgumentParser(
+        description=(
+            "Retrieve one generation's results from the cloud into a run directory, and "
+            "prove that what landed is what the dump planned. This is the step that runs "
+            "AFTER the credits are spent, so every clause here is about not mistaking a "
+            "partial fetch for a result."),
+        epilog=(
+            "ROUTE: the E02-shaped retrieval - a results dump in, a run directory out, with "
+            "the frames filed under the taps --node-map names and the video tap beside them. "
+            "WHAT A REFUSAL COSTS: the generation is already billed, so a refusal here costs "
+            "only the fetch. It never retries for you: read the halt's `partial` evidence, "
+            "clear the run directory, and re-fetch. A re-run into a directory that still "
+            "holds an earlier fetch's frames satisfies the plan-to-disk clause and prints a "
+            "green receipt over a mixture of two runs."))
+    ap.add_argument("--dump", required=True,
+                    help="the results JSON the cloud returned for this prompt; every "
+                         "download this tool performs is planned from it and from nothing "
+                         "else")
+    ap.add_argument("--run", required=True,
+                    help="the run's name. It becomes the run directory under --root and is "
+                         "pasted into the video tap's filename, so it must be a single path "
+                         "segment - a nested or escaping name is refused by name")
+    ap.add_argument("--root", default=None,
+                    help=f"the tree the run directory is created under. Defaults to E02's "
+                         f"run tree ({DEFAULT_ROOT}), exactly as --node-map defaults to "
+                         f"E02's taps; supplying --node-map without --root is refused, "
+                         f"because an operator naming another experiment's taps is by "
+                         f"construction not fetching E02")
     ap.add_argument("--node-map", default=None,
                     help="`<node id>=<subdir>` pairs, comma separated, e.g. "
                          "--node-map=41=startprobe,71=lossless. Defaults to E02's taps "
@@ -975,6 +1152,29 @@ def main(argv=None):
                          "review tap (114); pass --video-nodes=none for a graph with no "
                          "video output")
     a = ap.parse_args(argv)
+    # ---- Gate FETCH · ANDON, wave 28 (F-5f51c793), refused at the BOUNDARY the way `--run`
+    # is one line down and `--hosted-tier` is in `gate_saved_graph`. `--root` defaulted to
+    # E02's run tree with no `help=` at all, while its neighbour `--node-map` documents its
+    # own E02 default in full and `parse_node_map` refuses rather than falling back: the
+    # file's own standard for an E02-shaped default was met on one flag and not the other.
+    # An operator who names another experiment's taps is by construction NOT fetching E02, so
+    # the pair is the condition: `--node-map` supplied and `--root` omitted files a paid run's
+    # frames under E02's tree. The receipt does print `dir`, so the misfiling is recoverable
+    # by reading it — which is why this refuses rather than silently correcting a root nobody
+    # stated.
+    if a.node_map is not None and a.root is None:
+        raise FetchHalt(
+            f"--node-map names this graph's own taps ({a.node_map!r}) and --root was not "
+            f"given, so the frames would be filed under E02's run tree "
+            f"({DEFAULT_ROOT!r}/{a.run}). An operator naming another experiment's taps is "
+            f"not fetching E02; pass --root explicitly (--root={DEFAULT_ROOT} if E02 really "
+            f"is where this run belongs)",
+            {"gate": "FETCH", "andon": "FetchHalt",
+             "clause": "node_map_without_a_root",
+             "node_map": a.node_map, "default_root": DEFAULT_ROOT, "run": a.run,
+             "would_have_written": os.path.abspath(os.path.join(DEFAULT_ROOT, a.run))})
+    if a.root is None:
+        a.root = DEFAULT_ROOT
     # ---- ANDON, wave 22 (F-7e45e62b), bounded where `--run` is READ: above the join into
     # the run root, above the paste into the video tap's filename, above the first
     # `os.makedirs`. `--run` was joined into `base` (`os.path.join(a.root, a.run)`) AND

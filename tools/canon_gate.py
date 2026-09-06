@@ -175,29 +175,62 @@ def cmd_spend(args):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--roots", action="append", default=None)
+    ap = argparse.ArgumentParser(
+        description=(
+            "Gate CANON at the command line: resolve a subject to its canon, measure a "
+            "canon's coverage, check a prompt against one, or run the SPEND gate every "
+            "payload builder calls before it authors a submission."),
+        epilog=(
+            "ROUTE: Gate CANON, the check that a prompt about a character is grounded in "
+            "that character's canon rather than improvised at the keyboard. `spend` is the "
+            "subcommand the builders themselves call - what it refuses here, it refuses "
+            "there. WHAT A REFUSAL COSTS: nothing but your time. Read the halt line's "
+            "`clause`; a refusal is not worked around by pasting the refused phrases into "
+            "--canon-prompt, because the SHIPPED prompt is what is gated."))
+    ap.add_argument("--roots", action="append", default=None,
+                    help="a canon root directory to search; repeatable. Omitted, this "
+                         "tool's own recorded roots are used")
     ap.add_argument("--census", default=None, help="override census JSON")
-    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub = ap.add_subparsers(dest="cmd", required=True,
+                            metavar="{resolve,coverage,check,spend}")
 
-    p = sub.add_parser("resolve")
-    p.add_argument("--subject", required=True)
+    p = sub.add_parser(
+        "resolve", help="name the canon file(s) a subject resolves to, and say why",
+        description="Resolve a subject name to the canon documents that ground it.")
+    p.add_argument("--subject", required=True,
+                   help="the character whose canon is being resolved")
     p.set_defaults(func=cmd_resolve)
 
-    p = sub.add_parser("coverage")
-    p.add_argument("--canon", required=True)
+    p = sub.add_parser(
+        "coverage", help="report what a canon file covers, without judging a prompt",
+        description="Measure one canon file's coverage of the census terms.")
+    p.add_argument("--canon", required=True, help="the canon file to measure")
     p.set_defaults(func=cmd_coverage)
 
-    p = sub.add_parser("check")
-    p.add_argument("--subject", default=None)
-    p.add_argument("--canon", default=None)
-    p.add_argument("--prompt", required=True)
+    p = sub.add_parser(
+        "check", help="check a prompt against a canon and REPORT; spends nothing",
+        description=("Check one prompt against a subject's canon and report the result. "
+                     "This is the reporting form; `spend` is the gate."))
+    p.add_argument("--subject", default=None,
+                   help="the character the prompt is about; omitted, --canon names the "
+                        "canon directly")
+    p.add_argument("--canon", default=None,
+                   help="the canon file to check against, instead of resolving --subject")
+    p.add_argument("--prompt", required=True, help="the prompt text to check")
     p.set_defaults(func=cmd_check)
 
-    p = sub.add_parser("spend")
+    p = sub.add_parser(
+        "spend", help="THE GATE every payload builder calls before authoring a submission",
+        description=("Run Gate CANON in its spending form - the same call the payload "
+                     "builders make. It refuses a prompt that is not grounded in the "
+                     "subject's canon, and it gates the SHIPPED prompt, so a refusal "
+                     "cannot be worked around with --canon-prompt."))
     C.add_spend_flags(p)
-    p.add_argument("--prompt", dest="prompt", required=True)
-    p.add_argument("--out", default=None)
+    p.add_argument("--prompt", dest="prompt", required=True,
+                   help="the prompt that will actually be sent; this is what is gated")
+    p.add_argument("--out", default=None,
+                   help="a directory to write the canon evidence JSON into; omitted, the "
+                        "evidence is printed and nothing is written")
     p.set_defaults(func=cmd_spend)
 
     args = ap.parse_args(argv)

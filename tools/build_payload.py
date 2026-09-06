@@ -933,8 +933,19 @@ def gate_out_paths(out, meta_suffix=None):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--experiment", default="E02", choices=sorted(EXPERIMENTS))
+    ap = argparse.ArgumentParser(
+        description=(
+            "Build and gate one experiment arm's API graph from this repo's recorded "
+            "trajectories. Writes the graph and its metadata record; submits nothing."),
+        epilog=(
+            "ROUTE: the general per-experiment builder - --experiment picks the recorded "
+            "trajectory table and --arm picks the arm inside it. WHAT A REFUSAL COSTS: "
+            "nothing but your time, and Gate CANON's invariant holds throughout - a refuse "
+            "leaves no output directory behind for a later step to read as a run that "
+            "happened."))
+    ap.add_argument("--experiment", default="E02", choices=sorted(EXPERIMENTS),
+                    help="which recorded experiment's trajectory table to build from "
+                         "(default: %(default)s)")
     ap.add_argument("--arm", required=True,
                     choices=sorted({a for e in EXPERIMENTS.values() for a in e["arms"]}),
                     help="NOTE: these choices are the UNION across every experiment, "
@@ -943,7 +954,10 @@ def main(argv=None):
                          "against another flag. 30 of the 40 pairs it accepts are invalid, "
                          "and `gate_experiment_arm` refuses them by name, listing the arms "
                          "that experiment actually carries")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=True,
+                    help="the directory the graph and its metadata record are written into. "
+                         "Gate OUT checks the two are distinct paths in one directory before "
+                         "anything is created")
     # Gate S is what makes this flag safe to exist. Any seed given here is checked against
     # the experiment's committed list before a payload is built, and an experiment that
     # pre-registered no seeds refuses the flag outright.

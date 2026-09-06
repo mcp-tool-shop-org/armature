@@ -360,10 +360,24 @@ class PayloadError(ArmatureError):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description=(
+            "Build and gate the Fun-Camera i2v route's API graph: one start frame plus a "
+            "camera trajectory, pinned against wave 1's committed record. Writes the graph "
+            "and its payload record; submits nothing."),
+        epilog=(
+            "ROUTE: E12's camera arm, and the baseline E14's LoRA arms are measured against. "
+            "The trajectory is pinned to --w1-record and every DELIBERATE_BREAK is REQUIRED "
+            "to have actually happened - a report describing a correction that did not occur "
+            "is the failure shape this ledger exists to refuse. WHAT A REFUSAL COSTS: "
+            "nothing but your time; it is spent here rather than on a submission."))
     ap.add_argument("--uploads", required=True, help="JSON: {start_frame: <server name>}")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--out", required=True,
+                    help="the directory the graph and its payload record are written into, "
+                         "created below the last gate so a refusal leaves nothing behind")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="the seed to submit; omitted, the first seed in --seeds-registry "
+                         "is used. Gate S refuses an unregistered number either way")
     ap.add_argument("--negative-source", default=None,
                     help="path to Wan's shared_config.py; the base negative is READ from it "
                          "rather than retyped, then extended")
@@ -382,12 +396,19 @@ def parse_args(argv=None):
                          "the tool computes from --start-frame, or the build halts. It is "
                          "never the recorded value: a digest nothing checks is worse than "
                          "an absent one")
-    ap.add_argument("--seeds-registry", default=None)
-    ap.add_argument("--experiment", default=EXPERIMENT)
+    ap.add_argument("--seeds-registry", default=None,
+                    help="the committed seed registration Gate S checks --seed against, and "
+                         "the list the default seed is taken from")
+    ap.add_argument("--experiment", default=EXPERIMENT,
+                    help="names the output files and the server-side filename prefixes "
+                         "(default: %(default)s)")
     ap.add_argument("--length", type=int, default=LENGTH,
-                    help="frame count (argparse eats leading minus signs, so pass flags "
-                         "as --flag=value)")
-    ap.add_argument("--fps", type=float, default=FPS)
+                    help="frame count, checked by Gate L and Gate ROUTE (argparse eats "
+                         "leading minus signs, so pass flags as --flag=value) "
+                         "(default: %(default)s)")
+    ap.add_argument("--fps", type=float, default=FPS,
+                    help="the CreateVideo rate (default: %(default)s). Presentation only - "
+                         "it is downstream of VAEDecode and changes no generated pixel")
     ap.add_argument("--cfg", type=float, default=None,
                     help="move the sampler cfg off wave 1's value. The ledger then REQUIRES "
                          "it to actually differ, and requires every trajectory field not "

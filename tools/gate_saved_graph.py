@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core import route_gates as RG  # noqa: E402
 from armature_core.route_gates import RouteGate  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, read_seed_registration)
+    canonical_payload_digest, gate_output_not_overwritten, read_seed_registration)
 # Gate OUT's ONE home (wave 22, F-1b6be488). `build_payload.gate_out_paths` was, re-censused
 # on `e8263a3`, the only Gate OUT in this domain and no other builder or fetcher called it;
 # the directory clause is lifted into `gate_out_writable` there and imported here rather
@@ -1142,13 +1142,43 @@ def gate_l_frame_source(checked, supplied, hosted_tier=None):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--saved", required=True)
-    ap.add_argument("--api", required=True)
-    ap.add_argument("--seeds", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--experiment", default="E09")
-    ap.add_argument("--stage", default="B2")
+    ap = argparse.ArgumentParser(
+        description=(
+            "Prove that the SAVED graph the cloud converted is the graph this repo built, "
+            "and admit it for submission. Compares the two files value by value and link by "
+            "link, re-runs Gates ROUTE / S / L on the saved side, and writes the admission "
+            "record a spend is later reconciled against."),
+        epilog=(
+            "ROUTE: the last gate before a paid submission. Everything it checks, it checks "
+            "on the file the CLOUD holds, not on the one the builder wrote - the two are "
+            "different objects and only one of them gets generated from. WHAT A REFUSAL "
+            "COSTS: the run does not submit, and no admission record is written; that is "
+            "cheaper than the alternative, because a submission on this tree's paid tier is "
+            "billed per attempt and spent credits have no compensator. Read the halt line's "
+            "`clause` first - it names which of the checks fired."))
+    ap.add_argument("--saved", required=True,
+                    help="the SAVE-format .json the cloud converted and holds - the file "
+                         "that will actually be run")
+    ap.add_argument("--api", required=True,
+                    help="the API-format graph this repo built and submitted for "
+                         "conversion; the saved file is proven equal to it")
+    ap.add_argument("--seeds", required=True,
+                    help="the committed seed registration Gate S checks the saved file's "
+                         "own seed widgets against")
+    ap.add_argument("--out", required=True,
+                    help="the JSON admission record this gate writes, BELOW every check, "
+                         "so a refusal leaves no receipt behind. An existing record there "
+                         "is refused unless --overwrite is passed")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace an existing admission record at --out. Without it a "
+                         "re-admission over an earlier one refuses by name "
+                         "(`output_already_exists`) and names its digest")
+    ap.add_argument("--experiment", default="E09",
+                    help="recorded in the admission record, for the reader reconciling a "
+                         "spend against it (default: %(default)s)")
+    ap.add_argument("--stage", default="B2",
+                    help="recorded in the admission record beside --experiment "
+                         "(default: %(default)s)")
     ap.add_argument("--hosted-tier", default=None,
                     help="a tier from route_gates.HOSTED_TIER_RULES whose graph carries no "
                          "pixel dimension at all (wan2.7-r2v). Gate L's pixel clause is "
@@ -1382,6 +1412,19 @@ def main(argv=None):
         "gates": {"ROUTE": gate_route, "S": gate_s, "L": checked, "OUT": gate_out,
                   "L_source": gate_l_source},
     }
+    # ---- Gate OUT · ANDON, wave 28 (F-5fd16451). `gate_out_writable` above rules whether
+    # `--out` CAN be written; it says nothing about whether writing it destroys an earlier
+    # admission. This tool overwrote its admission record at `--out` exactly the way the
+    # assembly builders overwrote their graph/record pairs, and an admission record is the
+    # receipt that a specific saved file was proven to be the graph this repo built before
+    # credits were spent — replacing one silently leaves the earlier spend with no receipt.
+    # ONE shape across two domains; see `build_assembly_payload.gate_output_not_overwritten`.
+    gate_overwrite = gate_output_not_overwritten(
+        [a.out], os.path.dirname(os.path.abspath(a.out)), a.overwrite,
+        SavedAdmission, gate="OUT")
+    record["gates"]["OUT_overwrite"] = gate_overwrite
+    record["out_dir_pre_existed"] = gate_overwrite["out_dir_pre_existed"]
+    record["overwrote"] = gate_overwrite["overwrote"]
     # BELOW every check, not above them. `build_payload.py` states the repo's invariant —
     # a refuse must leave no output directory — and until 2026-09-03 it held for Gate CANON
     # alone: this tool created the directory before the round trip, the topology comparison

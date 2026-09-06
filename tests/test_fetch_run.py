@@ -732,12 +732,28 @@ def test_there_is_exactly_ONE_downloader_across_the_two_fetchers():
         "fetch_t2v_run builds a downloader command again; there is one implementation and "
         "it is fetch_run.download")
     assert builders["fetch_run"], "fetch_run stopped building the downloader command"
-    joined = " ".join(builders["fetch_run"])
-    assert "-Parallel" in joined
-    assert "-- $_.url" in joined, "a url in option position is read by curl as a flag"
-    assert "$LASTEXITCODE" in joined, (
-        "curl runs in a -Parallel runspace, whose native non-zero exit does not reach the "
-        "process code, and no per-job exit is recorded")
+
+    # WAVE 28, F-a4aac9c2 — the POSITIVE half reads the RESOLVED command, not the source
+    # literals. A census keys on the resolved shape, never the spelled one (wave 18, rule 1):
+    # the moment a bound was interpolated into the command string, `curl.exe` and
+    # `-- $_.url` landed in two different `ast.Constant` nodes of one f-string, and a walk
+    # that filters literals by `"curl.exe" in v` stopped seeing the terminator it exists to
+    # protect. It read RED — which is the census working — and the fix is to grade the string
+    # that is actually handed to pwsh. The NEGATIVE half above still walks source, because
+    # "this module spells no downloader" is a claim about source and nothing else.
+    for name, command in (("DOWNLOAD_PS", F.DOWNLOAD_PS),
+                          ("DOWNLOAD_PS_NO_URLS", F.DOWNLOAD_PS_NO_URLS)):
+        assert "curl.exe" in command, name
+        assert "-Parallel" in command, name
+        assert "-- $_.url" in command, (
+            f"{name}: a url in option position is read by curl as a flag")
+        assert "$LASTEXITCODE" in command, (
+            f"{name}: curl runs in a -Parallel runspace, whose native non-zero exit does "
+            f"not reach the process code, and no per-job exit is recorded")
+        # the bounds, in the command that enforces them (wave 28, F-a4aac9c2)
+        assert f"--connect-timeout {F.CURL_CONNECT_TIMEOUT_S}" in command, name
+        assert f"--max-time {F.CURL_MAX_TIME_S}" in command, name
+        assert f"-ThrottleLimit {F.DOWNLOAD_THROTTLE}" in command, name
     assert T.fetch_download is F.download, "one downloader, not two"
 
 

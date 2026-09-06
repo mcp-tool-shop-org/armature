@@ -506,9 +506,22 @@ def build_graph(seed, profile="reference", prompt=None, negative=REFERENCE_NEGAT
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--seeds", default="specs/E09-A3-seeds.json")
-    ap.add_argument("--out", default="outputs/E09/route2")
+    ap = argparse.ArgumentParser(
+        description=(
+            "Build and gate the t2v route's API graph on a recorded trajectory. Writes the "
+            "graph and its payload record; submits nothing."),
+        epilog=(
+            "ROUTE: E09's A3 arm. The served T2V template is a REFERENCE, never a route - it "
+            "wires the licence map's EXCLUDED 4-step trajectory at strength 1.0 under a "
+            "randomising seed, with no length or seed slot exposed - so this graph is built "
+            "here and gated here. WHAT A REFUSAL COSTS: nothing but your time; every gate "
+            "runs before anything is submitted."))
+    ap.add_argument("--seeds", default="specs/E09-A3-seeds.json",
+                    help="the committed seed registration Gate S checks --seed against, and "
+                         "the list the default seed is taken from (default: %(default)s)")
+    ap.add_argument("--out", default="outputs/E09/route2",
+                    help="the directory the graph and its payload record are written into "
+                         "(default: %(default)s)")
     ap.add_argument("--seed", type=int, default=None,
                     help="which registered seed to use; defaults to the first")
     ap.add_argument("--profile", default="reference", choices=["reference", "derived"],

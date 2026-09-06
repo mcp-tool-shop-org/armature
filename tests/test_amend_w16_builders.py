@@ -948,6 +948,17 @@ def _refusals_with_thin_evidence(path, required=("gate", "andon", "clause")):
 
     Builtin raises (`SystemExit`) are not refusals and carry no receipt; every raise of a
     class this repo defines does.
+
+    ⚠ **This walk resolves an evidence base ONLY through a dict LITERAL assigned in the same
+    function** (`bases`, below) — and so does `test_gates.evidence_dicts_missing`, which
+    core-gates owns. MEASURED on a wave-28 branch (F-a4aac9c2): lifting `fetch_run.download`'s
+    shared `base = {...}` into a helper that returns the same literal turned SEVEN unchanged
+    refusals thin here and put `fetch_run.py:download (FetchHalt)` into the sibling walk's
+    `unreadable` list. Both censuses were grading the spelling of the base rather than the
+    keys the refusal carries, and the correct wave-18 rule-1 widening spans two domains' test
+    files. So the tree keeps the literal: `download`'s new timeout refusal spells its own six
+    keys inline, with the reason recorded at that raise. Recorded here so the next session
+    reaches for the widening deliberately rather than discovering it as a red suite.
     """
     tree = ast.parse(open(path, encoding="utf-8").read())
     offenders = set()

@@ -222,7 +222,17 @@ class PayloadError(ArmatureError):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description=(
+            "Build and gate the plain i2v route's API graph: ONE start frame conditions the "
+            "whole generation, with E08's prompt and negative pinned byte for byte. Writes "
+            "the graph and its payload record; submits nothing."),
+        epilog=(
+            "ROUTE: E11's i2v arm. The start frame IS this route's entire conditioning, so "
+            "the tool hashes the local file rather than trusting a typed digest, and the "
+            "prompt is compared against --e08-record byte for byte - 'pinned verbatim' is a "
+            "measurement here, not a claim. WHAT A REFUSAL COSTS: nothing but your time; "
+            "every gate runs before anything is submitted."))
     ap.add_argument("--uploads", required=True,
                     help="JSON: {start_frame: <server name>}")
     # Wave 10, F-531c5f1f. On this route the start frame IS the entire image conditioning
@@ -242,8 +252,12 @@ def parse_args(argv=None):
     ap.add_argument("--start-frame-sha256", default=None,
                     help="optional cross-check. It is compared against the digest the "
                          "tool computes from --start-frame, or the build halts")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--out", required=True,
+                    help="the directory the graph and its payload record are written into, "
+                         "created below the last gate so a refusal leaves nothing behind")
+    ap.add_argument("--seed", type=int, default=None,
+                    help="the seed to submit; omitted, the first seed in --seeds-registry "
+                         "is used. Gate S refuses an unregistered number either way")
     ap.add_argument("--negative-source", default=None,
                     help="path to Wan's shared_config.py; the negative is READ from it "
                          "rather than retyped")
@@ -251,12 +265,19 @@ def parse_args(argv=None):
                     help="E08's committed payload record. The prompt and negative built "
                          "here are compared byte for byte against it and the build halts "
                          "on any drift — 'pinned verbatim' is a measurement, not a claim")
-    ap.add_argument("--seeds-registry", default=None)
-    ap.add_argument("--experiment", default=EXPERIMENT)
+    ap.add_argument("--seeds-registry", default=None,
+                    help="the committed seed registration Gate S checks --seed against, and "
+                         "the list the default seed is taken from")
+    ap.add_argument("--experiment", default=EXPERIMENT,
+                    help="names the output files and the server-side filename prefixes "
+                         "(default: %(default)s)")
     ap.add_argument("--length", type=int, default=LENGTH,
-                    help="frame count (argparse eats leading minus signs, so pass flags "
-                         "as --flag=value)")
-    ap.add_argument("--fps", type=float, default=FPS)
+                    help="frame count, checked by Gate L and Gate ROUTE (argparse eats "
+                         "leading minus signs, so pass flags as --flag=value) "
+                         "(default: %(default)s)")
+    ap.add_argument("--fps", type=float, default=FPS,
+                    help="the CreateVideo rate (default: %(default)s). Presentation only - "
+                         "it is downstream of VAEDecode and changes no generated pixel")
     add_spend_flags(ap)
     return ap.parse_args(argv)
 
