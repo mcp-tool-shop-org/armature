@@ -592,8 +592,8 @@ READBACK_REASONS = {
 #:
 #: **This set may only SHRINK.** Its size is pinned `==` beside the ratchet, so a move that
 #: lands deletes its entry in the same commit and the number on the page falls with it.
-#: Re-derive with:
-#:     python -c "import sys;sys.path[:0]=['tests','tools'];\
+#: Re-derive with the suite interpreter (tests/conftest.py module docstring):
+#:     .venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];\
 #:     import test_instrument_write_ordering as M;\
 #:     print(len(M.NOT_YET_MOVED))"
 NOT_YET_MOVED = {
@@ -730,6 +730,32 @@ def refusals_below_the_first_write(name):
     return sorted({gates_at[ln] for ln in gates_at if ln > first_write})
 
 
+def stranded_detail_by_tool(members=None, *, source=None):
+    """Parallel map for the ratchet message (F-0d690499): first write named, not just 'it'.
+
+    `{tool: {'first_write': (line, kind), 'refusals': [names],
+             'refusal_sites': [(line, name), ...]}}`. `stranded_by_tool` keeps the
+    `{tool: [names]}` shape the recorded table compares against; this carries the line and
+    kind a seat needs to move a refusal above, or to tell a false alarm from a real strand.
+    """
+    source = source or {}
+    members = sorted(derive_population()) if members is None else members
+    out = {}
+    for name in members:
+        gates_at, writes_at = gate_and_write_lines(source.get(name, _source(name)), name)
+        if not gates_at or not writes_at:
+            continue
+        first_ln = min(writes_at)
+        sites = sorted((ln, gates_at[ln]) for ln in gates_at if ln > first_ln)
+        if sites:
+            out[name] = {
+                "first_write": (first_ln, writes_at[first_ln]),
+                "refusals": sorted({n for _, n in sites}),
+                "refusal_sites": sites,
+            }
+    return out
+
+
 def stranded_by_tool(members=None, *, source=None):
     """`{tool: [refusal names below its first write]}` over the WHOLE derived population.
 
@@ -748,18 +774,24 @@ def stranded_by_tool(members=None, *, source=None):
 
     `source` maps a tool name to replacement source text, so the red proof below drives THIS
     expression over a mutated tool rather than re-implementing it beside it.
+
+    WAVE 29, F-0d690499: the first-write line and kind ride `stranded_detail_by_tool`; the
+    failure message below names them so a seat is not told to move a refusal above an
+    unnamed 'it'.
     """
-    source = source or {}
-    members = sorted(derive_population()) if members is None else members
+    return {n: v["refusals"] for n, v in stranded_detail_by_tool(members, source=source).items()}
+
+
+def _format_stranded_growth(detail, grew_names):
+    """One sentence per tool: refusal line below the named first write (F-0d690499)."""
     out = {}
-    for name in members:
-        gates_at, writes_at = gate_and_write_lines(source.get(name, _source(name)), name)
-        if not gates_at or not writes_at:
-            continue
-        first_write = min(writes_at)
-        below = sorted({gates_at[ln] for ln in gates_at if ln > first_write})
-        if below:
-            out[name] = below
+    for tool, names in grew_names.items():
+        fw_ln, fw_kind = detail[tool]["first_write"]
+        sites = [f"{n} at :{ln}" for ln, n in detail[tool]["refusal_sites"] if n in names]
+        out[tool] = (
+            f"{tool}: {', '.join(sites)} sit(s) below {fw_kind} at :{fw_ln} "
+            f"(move them above that write, or add with the reason)"
+        )
     return out
 
 
@@ -785,12 +817,14 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     members = sorted(derive_population())
     listed = sorted(REFUSALS_BELOW_THE_FIRST_WRITE)
     assert set(listed) <= set(members), sorted(set(listed) - set(members))
-    derived = stranded_by_tool(members)
+    detail = stranded_detail_by_tool(members)
+    derived = {n: v["refusals"] for n, v in detail.items()}
     grew = {n: sorted(set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, [])))
             for n, v in derived.items()
             if set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, []))}
     assert grew == {}, {
-        "new refusals under a write (move them above it, or add with the reason)": grew}
+        "new refusals under a write (move them above the named first write, or add with the reason)":
+            _format_stranded_growth(detail, grew)}
     # EQUALITY, both directions (wave 14, rule 4). The growth half above names the tool and
     # the refusal, which is the failure an author wants; this half catches the other
     # direction — an entry that has stopped naming a live strand, which is how a ratchet
@@ -818,10 +852,10 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # population had moved. The measurement that overturned the comment, on the full
     # population this test now walks: 30 tools, 58 names, 72 sites.
     #
-    #     python -c "import sys;sys.path[:0]=['tests','tools'];\
+    #     .venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];\
     #     import test_instrument_write_ordering as M;\
     #     d=M.stranded_by_tool();print(len(d),sum(len(v) for v in d.values()),\
-    #     M.stranded_site_count())"
+    #     M.stranded_site_count())"   # suite interpreter: tests/conftest.py
     # WAVE-14 MERGE (coordinator, 2026-09-04): 30 / 58 / 72 → 27 / 51 / 69, MEASURED on the merged tree (never subtracted).
     # WAVE 22 (builders, 2026-09-05): 27 / 51 / 69 → 27 / 50 / 68, RE-DERIVED with `==` by
     # running the derivation above in `w22-builders` after reading 27/51/69 GREEN there
@@ -850,13 +884,22 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # WAVE-22 MERGE (coordinator, 2026-09-05): 27 / 54 / 78 MEASURED on the merged tree with the derivation above —
     # builders (27 / 50 / 68) and instruments (27 / 55 / 79) each moved this census branch-local; the merged value
     # is neither and is not their sum.
-    assert len(derived) == 27, sorted(derived)
+    assert len(derived) == 27, (
+        f"{len(derived)} tools strand a refusal below their first write; this pin asserts 27 "
+        f"(one unit = one tool in derive_population() that still strands). Re-derive with the "
+        f"suite interpreter named in tests/conftest.py via the command in the comment block "
+        f"above (tools/names/sites). Record the wave that moved it BRANCH-LOCAL, never summed. "
+        f"Members: {sorted(derived)}")
     names = sum(len(v) for v in derived.values())
     # WAVE 25 (instruments, F-19d4e0f7): 54 -> 55, BRANCH-LOCAL and MEASURED. ONE name,
     # `require_import_status` in `rig_parts` -- the re-import whose names Gate PART
     # NAMES reads, below the export it reads back. It is a READ-BACK, so it enters
     # `READBACK_REASONS` and NOT the `NOT_YET_MOVED` backlog, whose size is unchanged.
-    assert names == 55, sorted(derived.items())
+    assert names == 55, (
+        f"{names} distinct stranded refusal NAMES; this pin asserts 55 (one unit = one "
+        f"refusal spelling under a tool, collapsed per tool). Re-derive with the suite "
+        f"interpreter named in tests/conftest.py via the command in the comment block above. "
+        f"Record the wave that moved it BRANCH-LOCAL, never summed. Dump: {sorted(derived.items())}")
     sites = stranded_site_count(members)
     # WAVE 16, F-9b4d01ef: the message used to name 72 — the tests branch's own measurement,
     # which the wave-14 merge overturned when it re-derived 27/51/69 on the merged tree and
@@ -898,8 +941,8 @@ def test_no_assertion_message_in_the_suite_quotes_a_ceiling_it_does_not_assert()
     measured", "N was the count"), so a date, a slice bound or an exit code in a message is
     not an offender and a wave number is struck out before the numbers are read.
 
-    Derivation:
-        python -c "import sys;sys.path.insert(0,'tests');import _census_nodes as CN;\\
+    Derivation (suite interpreter — tests/conftest.py):
+        .venv/Scripts/python.exe -c "import sys;sys.path.insert(0,'tests');import _census_nodes as CN;\\
         print(CN.messages_quoting_a_number_they_do_not_assert())"
     """
     stale = CN.messages_quoting_a_number_they_do_not_assert()
@@ -962,12 +1005,17 @@ def test_the_per_refusal_exemption_goes_red_on_a_new_refusal_under_a_write(name)
     """
     mutated = _with_a_refusal_below_the_first_write(name)
     members = sorted(derive_population())
-    derived = stranded_by_tool(members, source={name: mutated})
+    detail = stranded_detail_by_tool(members, source={name: mutated})
+    derived = {n: v["refusals"] for n, v in detail.items()}
     assert "gate_a_brand_new_refusal" in derived.get(name, []), derived.get(name)
     grew = {n: sorted(set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, [])))
             for n, v in derived.items()
             if set(v) - set(REFUSALS_BELOW_THE_FIRST_WRITE.get(n, []))}
     assert grew == {name: ["gate_a_brand_new_refusal"]}, grew
+    # F-0d690499: the message names the first write (line + kind), not an unnamed "it".
+    named = _format_stranded_growth(detail, grew)
+    fw_ln, fw_kind = detail[name]["first_write"]
+    assert name in named and f"below {fw_kind} at :{fw_ln}" in named[name], named
 
 
 def test_the_read_back_table_is_read_and_says_what_it_means():
@@ -1002,9 +1050,9 @@ def test_the_read_back_table_is_read_and_says_what_it_means():
         assert owners and set(owners) <= RUN_DOMAINS, (refusal, owners)
 
     # The backlog, on the page. RE-DERIVED 2026-09-04 (wave 14):
-    #     python -c "import sys;sys.path[:0]=['tests','tools'];\
+    #     .venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];\
     #     import test_instrument_write_ordering as M;\
-    #     print(len(M.READBACK_REASONS), len(M.NOT_YET_MOVED))"
+    #     print(len(M.READBACK_REASONS), len(M.NOT_YET_MOVED))"  # suite interpreter: tests/conftest.py
     # WAVE-14 MERGE (coordinator, 2026-09-04): 12 / 35 → 12 / 29, measured after the six names left.
     # WAVE 22 (builders, 2026-09-05): 12 -> 11, RE-DERIVED with `==`. `raise FetchHalt`
     # leaves the table with the refusal it described: `fetch_t2v_run`'s

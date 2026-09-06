@@ -34,7 +34,9 @@ from armature_core import gates
 from conftest import BLENDER, REPO
 
 pytestmark = pytest.mark.skipif(
-    not os.path.isfile(BLENDER), reason=f"Blender not found at {BLENDER}"
+    not os.path.isfile(BLENDER),
+    reason=(f"Blender not found at {BLENDER}; set ARMATURE_BLENDER to your blender "
+            "executable to run these"),
 )
 
 CHECK = os.path.join(REPO, "tests", "blender", "check_pose_arc_roundtrip.py")

@@ -79,8 +79,19 @@ SOURCE_HAND_EDGES = [
 ]
 
 
+def _transcription_mismatch(what):
+    """Message for a pin against the hand-transcribed upstream tables (F-0d3d5156)."""
+    return (
+        f"{what} disagrees with the hand transcription in this file: "
+        f"`aapose` (this repo's module) moved, or SOURCE_* (the upstream transcription) "
+        f"is wrong — edit only one side. Upstream identity is aapose.SOURCE['commit']="
+        f"{aapose.SOURCE['commit'][:12]}… sha256={aapose.SOURCE['sha256'][:16]}…"
+    )
+
+
 def test_limbseq_matches_the_source_element_for_element():
-    assert [list(p) for p in aapose.LIMB_SEQ] == SOURCE_LIMB_SEQ
+    assert [list(p) for p in aapose.LIMB_SEQ] == SOURCE_LIMB_SEQ, _transcription_mismatch(
+        "aapose.LIMB_SEQ")
 
 
 def test_limbseq_is_nineteen_pairs_over_twenty_keypoints():
@@ -91,21 +102,24 @@ def test_limbseq_is_nineteen_pairs_over_twenty_keypoints():
 
 
 def test_palette_matches_the_source_element_for_element():
-    assert [list(c) for c in aapose.PALETTE] == SOURCE_COLORS
+    assert [list(c) for c in aapose.PALETTE] == SOURCE_COLORS, _transcription_mismatch(
+        "aapose.PALETTE")
     assert len(aapose.PALETTE) == 20
 
 
 def test_keypoint_names_and_count_are_twenty_not_eighteen():
     """G6 called this "the classic 18-point limbSeq". The source carries 20 with two toes,
     and rendering 18 against it omits both feet with nothing erroring."""
-    assert list(aapose.KEYPOINT_NAMES) == SOURCE_KEYPOINT_NAMES
+    assert list(aapose.KEYPOINT_NAMES) == SOURCE_KEYPOINT_NAMES, _transcription_mismatch(
+        "aapose.KEYPOINT_NAMES")
     assert aapose.KEYPOINT_COUNT == 20
     assert aapose.KEYPOINT_NAMES[18] == "LToe"
     assert aapose.KEYPOINT_NAMES[19] == "RToe"
 
 
 def test_hand_edges_match_the_source():
-    assert [list(e) for e in aapose.HAND_EDGES] == SOURCE_HAND_EDGES
+    assert [list(e) for e in aapose.HAND_EDGES] == SOURCE_HAND_EDGES, _transcription_mismatch(
+        "aapose.HAND_EDGES")
     assert aapose.HAND_KEYPOINT_COUNT == 21
 
 

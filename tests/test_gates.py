@@ -485,7 +485,10 @@ def test_the_andon_the_enumerator_used_to_skip_is_asked_the_class_wide_invariant
     # …and calling the enumerator twice returns the same population: the module is imported
     # exactly once and held by a strong reference, so the stub teardown neither unregisters
     # the class nor lets a second import register a duplicate.
-    assert package_andons() == RECORDED_ANDON_CLASSES
+    assert package_andons() == RECORDED_ANDON_CLASSES, (
+        "package_andons() is not idempotent under the blender_scene stub (same call, second "
+        "result differs from RECORDED_ANDON_CLASSES) — this is not a population change; "
+        f"got {sorted(package_andons())}, recorded {sorted(RECORDED_ANDON_CLASSES)}")
 
 
 def test_the_enumeration_would_catch_a_new_andon_that_forgot_its_id():
@@ -1061,8 +1064,8 @@ EVIDENCE_UNREADABLE_EXEMPT = set()
 #: live site fails here rather than sitting as a silent exemption. Entries closed by a receipt
 #: are deleted by the commit that adds it.
 #:
-#: Re-derive with:
-#:     python -c "import sys;sys.path[:0]=['tests','tools'];import test_gates as G;\
+#: Re-derive with the suite interpreter (tests/conftest.py module docstring):
+#:     .venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];import test_gates as G;\
 #:     print(len(G.evidence_dicts_missing('gate')[3]))"
 EVIDENCE_NO_EVIDENCE_ROUTED = {
     # WAVE-14 MERGE (coordinator, 2026-09-04): 8 routed entries left this set because they carry a receipt on the merged tree
@@ -1420,11 +1423,11 @@ def test_every_family_class_stores_the_evidence_it_is_passed():
 #
 # RE-MEASURED on this branch, 2026-09-05, with the file's own helpers:
 #
-#     python -c "import sys,os;sys.path[:0]=['tests','tools'];import test_gates as T;\
+#     .venv/Scripts/python.exe -c "import sys,os;sys.path[:0]=['tests','tools'];import test_gates as T;\
 #     from collections import Counter;d=T._family_classes_defined_under(T.TOOLS_DIR);\
 #     c=Counter(n for v in d.values() for n in v);\
 #     print(len(T._armature_error_family(T.TOOLS_DIR)), sum(c.values()), len(d),\
-#           {k:v for k,v in c.items() if v>1})"
+#           {k:v for k,v in c.items() if v>1})"  # suite interpreter: tests/conftest.py
 #
 #   134 family NAMES · 140 class DEFINITIONS of them · 79 modules · defined more than once:
 #   `PayloadError` ×5, `DetectionGate` ×2, `RenderGate` ×2. The core-only walk reaches 58

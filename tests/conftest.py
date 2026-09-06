@@ -1,3 +1,44 @@
+"""Suite entry point — how to run these tests, and what the skips mean.
+
+From the repo root, with this worktree first on the path and the sibling record-index
+binding available:
+
+    PYTHONPATH=<repo>;<repo>/tools;E:/AI/record-index .venv/Scripts/python.exe -m pytest -q
+
+Use the repo venv interpreter by path (never a bare `python` on PATH — that is the system
+install this suite forbids). Re-derivation recipes in test comments cite this same
+interpreter; they do not retype a different one. CI runs the suite a second time under
+`-O` (verify.ps1), so helpers under tests/ `raise` rather than `assert` — `assert` is
+deleted by optimize and would leave the -O leg unpoliced.
+
+Expected wall-clock on this rig for a full plain-interpreter pass is about 10–15 minutes
+(~11 minutes measured on an isolated checkout of this tree). A progress line that stops
+advancing past that bound is a stall, not a slow suite; external-binary subprocesses in
+the suite carry a short timeout so a hung `git`/`node`/`bash` raises TimeoutExpired.
+
+Operator levers (defaults are this rig's paths; set them on any other machine):
+
+- `ARMATURE_BLENDER` — Blender executable; default
+  `C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe`
+- `ARMATURE_GIT` — git executable; default `git` (resolved on PATH)
+- `ARMATURE_FONT_DIR` — optional extra font directory for sheet/label tests
+
+Skip families, one sentence each:
+
+- Blender missing — modules that drive headless Blender skip when `ARMATURE_BLENDER` is
+  absent; the skip reason names the lever.
+- git missing — packaging ignore-list tests skip when `ARMATURE_GIT`/`git` is absent.
+- bash / node missing — workflow and launcher tests that shell out skip when the binary
+  is not on PATH.
+- record_index absent — `test_record_index_binding.py` skips unless
+  `PYTHONPATH` includes `E:/AI/record-index`.
+- banked / sibling trees — tests that read gitignored `outputs/` banks or a sibling
+  facet tree skip when those paths are not present.
+- fonts — label/sheet tests skip when no permitted face is in `ARMATURE_FONT_DIR` or a
+  platform font directory.
+- platform — a few signal/posix-only cases skip on Windows.
+"""
+
 import copy
 import importlib.util
 import os

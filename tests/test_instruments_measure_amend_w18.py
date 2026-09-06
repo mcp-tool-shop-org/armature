@@ -499,8 +499,8 @@ from blender_stub import load_tool                                   # noqa: E40
 #: that pastes a flag into its output filename joins this census in the commit that adds it
 #: — which is the mechanism wave 18's typed three did not have.
 #:
-#: Re-derive with:
-#:     python -c "import sys,json;sys.path.insert(0,'tests');import _census_nodes as C;
+#: Re-derive with the suite interpreter (tests/conftest.py module docstring):
+#:     .venv/Scripts/python.exe -c "import sys,json;sys.path.insert(0,'tests');import _census_nodes as C;
 #:     print(json.dumps(C.pasted_name_flags(),indent=1))"
 RECORDED_PASTED_NAME_FAMILY = {
     "build_animate_payload": {"--experiment": "single_path_segment"},

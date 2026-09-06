@@ -190,8 +190,8 @@ def halt_contract_pending(filename):
 #: evidence" examined a zero-length population and could not fire. A synthetic member is fed
 #: to `halt_contract_pending` there now, because the real population no longer supplies one.
 #:
-#: Re-derive with:
-#:     python -c "import sys;sys.path[:0]=['tests','tools'];\
+#: Re-derive with the suite interpreter (tests/conftest.py module docstring):
+#:     .venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];\
 #:     import test_instrument_exits as M;\
 #:     print([f for f in M.WITH_MAIN if M.halt_contract_pending(f)])"
 HALT_CONTRACT_PENDING = set()
@@ -1312,8 +1312,8 @@ RECORDED_CPYTHON_WITH_HANDLER = [
 #: BRANCH-LOCAL: builders move the adopter set in the same wave; the coordinator re-measures
 #: on the merged tree and never sums.
 #:
-#: Re-derive with:
-#:     python -c "import sys;sys.path.insert(0,'tests');import blender_stub as B;
+#: Re-derive with the suite interpreter (tests/conftest.py module docstring):
+#:     .venv/Scripts/python.exe -c "import sys;sys.path.insert(0,'tests');import blender_stub as B;
 #:     print([f for f in B.cpython_tools() if not B.halt_handler(f)])"
 CPYTHON_HALT_CONTRACT_PENDING = []
 
