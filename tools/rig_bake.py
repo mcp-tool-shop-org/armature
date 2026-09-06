@@ -63,6 +63,10 @@ BAKE_MARGIN = 16
 #: unwrap has thousands of islands, each demanding that margin, and the packer shrinks every
 #: island to make them all fit. The UNWRAP gate caught this before a single ray was cast.
 ISLAND_MARGIN = 0.0
+#: UV area fraction below which the unwrap has nowhere useful to bake into (F-2e888f20).
+UV_AREA_FLOOR = 0.05
+#: Lit-pixel fraction below which the baked atlas is treated as empty (F-2e888f20).
+ATLAS_LIT_FLOOR = 0.20
 
 
 class BakeEmpty(GateFailure):
@@ -190,6 +194,8 @@ def unwrap(ob, margin_px, atlas):
     ob.data.uv_layers.new(name="retopo")
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
+    print(f"rig_bake unwrap on {ob.name!r} atlas={atlas}",
+          file=sys.stderr, flush=True)
     t = time.time()
     result = bpy.ops.uv.smart_project(angle_limit=1.15192, island_margin=ISLAND_MARGIN,
                                       area_weight=0.0, correct_aspect=True,
@@ -209,10 +215,13 @@ def unwrap(ob, margin_px, atlas):
            "island_margin": ISLAND_MARGIN,
            "island_margin_measured": {"0.0": 0.627, "0.002": 0.0028, "0.0039": 0.00077,
                                       "units": "packed UV area fraction"},
-           "uv_area_fraction": area,
+           "uv_area_fraction": area, "uv_area_floor": UV_AREA_FLOOR,
            "uv_in_unit_square": bool(coords.min() >= -1e-6 and coords.max() <= 1 + 1e-6)}
-    if area < 0.05:
-        raise UnwrapFailed("the unwrap produced almost no UV area", rec)
+    if area < UV_AREA_FLOOR:
+        raise UnwrapFailed(
+            f"the unwrap produced UV area fraction {area:.6f} against a floor of "
+            f"{UV_AREA_FLOOR:.2f} (returned={result!r})",
+            rec)
     return rec
 
 
@@ -314,9 +323,16 @@ def bake(source, target, cage, margin, atlas):
     target.select_set(True)
     bpy.context.view_layer.objects.active = target
     if arm_bake_target(target) == 0:
+        mats = [m.name for m in target.data.materials if m is not None]
         raise BakeEmpty(
-            "no image texture node could be armed on the target material",
-            {"clause": "no_image_texture_node_to_bake_into"})
+            f"no image texture node could be armed on the target material "
+            f"{mats!r} of {target.name!r}; Cycles needs an active selected image "
+            f"texture node to bake into",
+            {"clause": "no_image_texture_node_to_bake_into",
+             "materials": mats, "object": target.name})
+    print(f"rig_bake bake selected-to-active on {target.name!r} "
+          f"cage={cage:.5f} atlas={atlas}",
+          file=sys.stderr, flush=True)
     t = time.time()
     result = bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"},
                                  use_selected_to_active=True, cage_extrusion=cage,
@@ -331,7 +347,7 @@ def atlas_health(img):
     **The vacuity clause, F-798281dc (wave 22).** `float(lit.mean())` over a ZERO-pixel
     image is `nan` (numpy raises `RuntimeWarning: Mean of empty slice` and returns it),
     and `main`'s one clause that decides whether the bake produced anything is
-    `if health["non_black_fraction"] < 0.20` — which is False for a NaN, in both
+    `if health["non_black_fraction"] < ATLAS_LIT_FLOOR` — which is False for a NaN, in both
     directions, like every comparison against one. RE-MEASURED on `e8263a3` under
     `blender_stub.blender_stubbed()` with a zero-pixel image: `atlas_health` returned
     `{'pixels': 0, 'non_black_fraction': nan, ...}`, the andon did NOT fire,
@@ -349,11 +365,12 @@ def atlas_health(img):
         raise BakeEmpty(
             "the baked atlas has NO PIXELS, so there is no fraction to compare against "
             "the emptiness floor: `float(lit.mean())` over an empty array is a NaN, and "
-            "`nan < 0.20` is False — the one clause that decides whether this bake "
-            "produced anything cannot fire on the total failure",
+            f"`nan < {ATLAS_LIT_FLOOR:.2f}` is False — the one clause that decides whether "
+            "this bake produced anything cannot fire on the total failure",
             {"gate": BakeEmpty.gate, "sub_gate": "ATLAS_HEALTH",
              "andon": BakeEmpty.__name__, "who": "rig_bake",
-             "clause": "atlas_has_no_pixels", "pixels": 0})
+             "clause": "atlas_has_no_pixels", "pixels": 0,
+             "floor": ATLAS_LIT_FLOOR})
     lit = rgb.max(axis=1) > 0.02
     return {"pixels": int(len(rgb)), "non_black_fraction": float(lit.mean()),
             "mean_rgb": [float(v) for v in rgb[lit].mean(axis=0)] if lit.any() else [0, 0, 0],
@@ -364,6 +381,7 @@ def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
+    t0 = time.time()
 
     rc.fresh_scene(16)
     source = _import(args["source"], "source_original")
@@ -378,15 +396,22 @@ def main():
     mat, img, tex = bake_material(target, args["atlas"])
     secs, result = bake(source, target, cage, BAKE_MARGIN, args["atlas"])
     if "FINISHED" not in result:
-        raise BakeEmpty("the bake operator declined", {"clause": "bake_operator_declined",
-                                                       "returned": result, "cage": cage})
+        raise BakeEmpty(
+            f"the bake operator did not report FINISHED for selected-to-active DIFFUSE; "
+            f"it returned {result!r} (cage={cage:.5f}, derived from "
+            f"--max-deviation={args['max_deviation']})",
+            {"clause": "bake_operator_declined", "returned": result, "cage": cage,
+             "max_deviation": args["max_deviation"]})
 
     health = atlas_health(img)
-    if health["non_black_fraction"] < 0.20:
+    if health["non_black_fraction"] < ATLAS_LIT_FLOOR:
+        frac = health["non_black_fraction"]
         raise BakeEmpty(
-            "the baked atlas is mostly empty",
+            f"the baked atlas is {frac:.4f} lit against a floor of {ATLAS_LIT_FLOOR:.2f}; "
+            f"the cage is {cage:.5f}, derived from --max-deviation={args['max_deviation']}",
             {"clause": "baked_atlas_is_mostly_empty", "health": health, "cage": cage,
-             "returned": result})
+             "returned": result, "max_deviation": args["max_deviation"],
+             "non_black_fraction": frac, "floor": ATLAS_LIT_FLOOR})
 
     # F-244b2ad5: six refusals sit above this line — two `_import` calls, `unwrap`, `bake`
     # and two inline `raise`s — and not one of them needs a directory. It is created HERE
@@ -417,6 +442,7 @@ def main():
 
     manifest = {
         "tool": "rig_bake", "started": started,
+        "elapsed_s": round(time.time() - t0, 2),
         "gate_GLB_written": gate_glb,
         "blender": blender_scene.blender_provenance(),
         "subject_selection": subject_selection,

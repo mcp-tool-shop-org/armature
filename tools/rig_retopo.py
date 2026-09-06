@@ -299,6 +299,9 @@ def quadriflow(ob, target_faces, scale=QUADRIFLOW_SCALE):
     _select_only(ob)
     ob.data.transform(Matrix.Scale(scale, 4))
     ob.data.update()
+    print(f"rig_retopo quadriflow on {ob.name!r} "
+          f"--target-faces={int(target_faces)} scale={scale}",
+          file=sys.stderr, flush=True)
     t = time.time()
     result = bpy.ops.object.quadriflow_remesh(use_mesh_symmetry=False,
                                               use_preserve_sharp=False,
@@ -310,11 +313,14 @@ def quadriflow(ob, target_faces, scale=QUADRIFLOW_SCALE):
     ob.data.transform(Matrix.Scale(1.0 / scale, 4))
     ob.data.update()
     if "FINISHED" not in str(result):
-        raise QuadriflowDeclined("the operator declined the mesh and changed nothing",
-                                 {"clause": "quadriflow_declined",
-                                  "returned": str(result), "scale": scale,
-                                  "target_faces": int(target_faces),
-                                  "faces_unchanged": len(ob.data.polygons)})
+        raise QuadriflowDeclined(
+            f"quadriflow_remesh returned {result!r} and changed nothing "
+            f"(--target-faces={int(target_faces)}, scale={scale}, "
+            f"faces_unchanged={len(ob.data.polygons)})",
+            {"clause": "quadriflow_declined",
+             "returned": str(result), "scale": scale,
+             "target_faces": int(target_faces),
+             "faces_unchanged": len(ob.data.polygons)})
     return secs, str(result)
 
 
@@ -322,6 +328,8 @@ def voxel_remesh(ob, voxel_size):
     _select_only(ob)
     ob.data.remesh_voxel_size = float(voxel_size)
     ob.data.remesh_voxel_adaptivity = 0.0
+    print(f"rig_retopo voxel_remesh on {ob.name!r} voxel={float(voxel_size):.5f}",
+          file=sys.stderr, flush=True)
     t = time.time()
     bpy.ops.object.voxel_remesh()
     return time.time() - t
@@ -425,12 +433,17 @@ def render_comparison(scene, variants, out_dir, diagonal, centre):
         ("foot and toes", (mid_x + 0.055, 0.0, lo[2] + 0.035 * height), height * 0.15, 18.0),
     ]
     rows = []
+    n_panels = len(regions) * len(variants)
+    panel_i = 0
     for region, target, oscale, azim in regions:
         panels = []
         for label, ob in variants:
+            panel_i += 1
             # Everything render-visible in the SCENE, not only the objects in `variants`:
             # a failed variant never reaches this list and used to be drawn into every
             # panel, on top of the one being shown.
+            print(f"rig_retopo panel {label!r} / {region!r} {panel_i}/{n_panels}",
+                  file=sys.stderr, flush=True)
             isolate_subject(scene, [o for o in bpy.data.objects if o.type == "MESH"], ob)
             ortho_camera(scene, f"cam_{label}_{region}", Vector(target), oscale,
                          (700, 1150) if region == "figure" else (700, 700), azim)
@@ -447,6 +460,7 @@ def main():
     args = parse_args()
     out_dir = os.path.abspath(args["out"])
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
+    t0 = time.time()
 
     scene, ob = import_subject(args["glb"])
     src = rc.world_verts(ob)
@@ -529,8 +543,13 @@ def main():
 
     live = [k for k, v in results.items() if "FAILED" not in v and v.get("faces", 0) > 0]
     if not live:
-        raise NoRetopoProduced("both stock-Blender routes failed to produce a mesh",
-                               {"clause": "no_retopo_route_produced_a_mesh", "results": results})
+        a_fail = results.get("A_quadriflow_direct", {}).get("FAILED", "no failure string")
+        b_fail = results.get("B_voxel_then_quadriflow", {}).get("FAILED", "no failure string")
+        raise NoRetopoProduced(
+            f"both stock-Blender routes failed to produce a mesh: "
+            f"A_quadriflow_direct={a_fail!r}; B_voxel_then_quadriflow={b_fail!r}",
+            {"clause": "no_retopo_route_produced_a_mesh", "results": results,
+             "A_FAILED": a_fail, "B_FAILED": b_fail})
 
     # F-244b2ad5: `import_subject` refuses an ambiguous import, `quadriflow` refuses a
     # declined operator (twice), and the `NoRetopoProduced` inline `raise` above says both
@@ -600,7 +619,9 @@ def main():
                              (lo, hi))
 
     manifest = {
-        "tool": "rig_retopo", "started": started, "source_glb": args["glb"],
+        "tool": "rig_retopo", "started": started,
+        "elapsed_s": round(time.time() - t0, 2),
+        "source_glb": args["glb"],
         "blender": blender_scene.blender_provenance(),
         "variants_removed_before_the_sheet": removed,
         "source_sha256": rc.sha256_file(args["glb"]), "diagonal": diagonal,
