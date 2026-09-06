@@ -15,6 +15,7 @@ ruling, driven end to end.
 
 import ast
 import json
+import locale
 import os
 import subprocess
 import sys
@@ -36,11 +37,35 @@ import blender_stub as B  # noqa: E402
 # ---------------------------------------------------------------------------- helpers
 
 
+def _child_stdout_encoding(env):
+    """The codec a child launched with `env` actually writes its stdout in.
+
+    WAVE 28 (core-solvers, `F-0a27b25c`). `text=True` with no `encoding=` decodes with the
+    LOCALE codec — `cp1252` on this rig — while **pytest exports
+    `PYTHONIOENCODING="utf-8:surrogateescape"`**, so every child of a test process writes
+    UTF-8. Measured from inside pytest: `os.environ["PYTHONIOENCODING"] ==
+    'utf-8:surrogateescape'`, the child's halt line arrives as
+    `b'"outcome": "REFUSED \\xe2\\x80\\x94 the tool declined to proceed"'`, and `text=True`
+    decoded it as cp1252 to `'REFUSED \\xe2\\u20ac\\u201d ...'`.
+
+    The mismatch is older than this wave and was INVISIBLE while every halt line was pure
+    ASCII (`json.dumps` at `ensure_ascii`'s default True), because an ASCII line decodes
+    the same under either codec. It became visible the moment the halt record started
+    carrying its own prose. So the reader decodes with the codec it hands the child rather
+    than with the one the locale happens to have.
+    """
+    declared = env.get("PYTHONIOENCODING")
+    if declared:
+        return declared.split(":", 1)[0]
+    return locale.getencoding()
+
+
 def _run(tool, argv, cwd, env=None):
     """The tool's own `__main__`, as a real process on this interpreter."""
+    child_env = dict(os.environ, **(env or {}))
     return subprocess.run([sys.executable, os.path.join(TOOLS, tool)] + list(argv),
                           capture_output=True, text=True, cwd=str(cwd),
-                          env=dict(os.environ, **(env or {})))
+                          encoding=_child_stdout_encoding(child_env), env=child_env)
 
 
 def _halt(proc, prefix):

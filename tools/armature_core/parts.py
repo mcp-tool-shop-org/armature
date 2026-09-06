@@ -124,6 +124,7 @@ def gate_parts_accounting(labels, n_faces, bone_names):
     problems = []
 
     if not len(bone_names) or not int(n_faces):
+        ev["clause"] = "nothing_to_partition"
         raise GatePartsAccounting(
             f"the partition was gated over {int(n_faces)} face(s) across "
             f"{len(bone_names)} registered part(s): every clause below compares 0 to 0 "
@@ -131,27 +132,45 @@ def gate_parts_accounting(labels, n_faces, bone_names):
             f"must not report agreement", ev)
 
     if len(labels) != n_faces:
-        problems.append(f"{len(labels)} assignments for {n_faces} faces")
+        problems.append({"clause": "assignment_count_is_not_the_face_count",
+                         "detail": f"{len(labels)} assignments for {n_faces} faces"})
     if len(labels):
         if labels.min() < 0:
-            problems.append(f"{int((labels < 0).sum())} face(s) assigned to nothing")
+            problems.append({"clause": "face_assigned_to_nothing",
+                             "detail": f"{int((labels < 0).sum())} face(s) assigned to "
+                                       f"nothing"})
         if labels.max() >= len(bone_names):
-            problems.append(f"a face is assigned to part index {int(labels.max())}, "
-                            f"outside the registered list of {len(bone_names)}")
+            problems.append({"clause": "face_assigned_outside_the_registered_list",
+                             "detail": f"a face is assigned to part index "
+                                       f"{int(labels.max())}, outside the registered list "
+                                       f"of {len(bone_names)}"})
 
     counts = {name: int((labels == i).sum()) for i, name in enumerate(bone_names)}
     empty = sorted(n for n, v in counts.items() if v == 0)
     ev.update({"faces_per_part": counts, "parts_with_no_faces": empty,
                "total_assigned": int(sum(counts.values()))})
     if ev["total_assigned"] != n_faces:
-        problems.append(f"{ev['total_assigned']} faces assigned but the mesh has {n_faces}")
+        problems.append({"clause": "assigned_total_is_not_the_face_count",
+                         "detail": f"{ev['total_assigned']} faces assigned but the mesh "
+                                   f"has {n_faces}"})
     if empty:
-        problems.append(f"{len(empty)} registered part(s) would be an empty object: {empty}")
+        problems.append({"clause": "registered_part_with_no_faces",
+                         "detail": f"{len(empty)} registered part(s) would be an empty "
+                                   f"object: {empty}"})
 
     if problems:
+        # `assembly.gate_batch_topology`'s shape (`assembly._problem`, wave 18): the
+        # message stays the same sentence over the same details in the same order, and the
+        # RECEIPT gains `problems` as `{clause, detail}` records, `clauses` as the list and
+        # `clause` as the first. Spelled as dict LITERALS at each append so the words are
+        # visible to `_census_nodes.clause_literals`, which `assembly`'s own `_problem`
+        # helper is not — measured on `3380ae2`, none of its words is in the vocabulary.
+        ev["problems"] = problems
+        ev["clauses"] = [p["clause"] for p in problems]
+        ev["clause"] = problems[0]["clause"]
         raise GatePartsAccounting(
             "the mesh was not partitioned cleanly into the registered parts: "
-            + "; ".join(problems), ev)
+            + "; ".join(p["detail"] for p in problems), ev)
     ev["verdict"] = (f"{n_faces} faces partitioned across {len(bone_names)} parts, "
                      f"each face exactly once")
     return ev
@@ -387,6 +406,18 @@ def require_finite(name, value, gate_cls, ev, positive=True):
                  if unreadable else
                  f"{name}={v!r} is not a finite "
                  f"{'positive ' if positive else ''}number")
+        # WHERE THE CALLER HAS NONE, NEVER OVER ONE THE CALLER WROTE — `tightened`'s rule,
+        # eleven lines of its docstring, adopted rather than re-derived (F-f7449bc9, wave
+        # 28). Every caller in this package that reaches this raise through a GATE's shared
+        # `ev` had no clause at all: `gate_alpha`, `gate_backdrop`, `gate_view_alpha`,
+        # `gate_round_trip`, `gate_rigid_arrival` and `gate_parts_determinism` each wrote
+        # a receipt a census could only tell apart by regexing 200 characters of English.
+        # A caller that DOES name one is naming the same condition with its own operand in
+        # it, which is the finer id. Spelled as an assignment of a literal, not
+        # `setdefault`, because that is the only shape `_census_nodes.clause_literals`
+        # reads — the lesson `tightened` paid for in wave 25.
+        if "clause" not in ev:
+            ev["clause"] = "value_not_finite"
         raise gate_cls(
             f"{shown}, so it cannot be compared against. "
             f"A NaN fails EVERY comparison in both directions — `nan > x` and `nan < x` "
@@ -613,6 +644,7 @@ def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_
     problems = []
 
     if not observations:
+        ev["clause"] = "no_parts_observed"
         raise GateRigidArrival("no parts were observed under the pose; the gate would be a "
                                "check that cannot fail", ev)
     # The measurement side of the sweep, BEFORE any bound is asked of any of them, and
@@ -625,26 +657,35 @@ def gate_rigid_arrival(observations, bbox_diagonal, epsilon_frac=None, rigidity_
 
     for rec in observations:
         if rec["max_transform_error"] > tol:
-            problems.append(
-                f"{rec['name']}: posed geometry is {rec['max_transform_error']:.3e} from "
-                f"where its bone's own transform puts it (> {tol:.3e})")
+            problems.append({
+                "clause": "part_did_not_land_on_its_bone_transform",
+                "detail": f"{rec['name']}: posed geometry is "
+                          f"{rec['max_transform_error']:.3e} from where its bone's own "
+                          f"transform puts it (> {tol:.3e})"})
         if rec["max_pair_distance_change"] > rig_tol:
-            problems.append(
-                f"{rec['name']}: internal distances changed by up to "
-                f"{rec['max_pair_distance_change']:.3e} (> {rig_tol:.3e}) — this part is "
-                f"deforming, and this route promises no deformation anywhere")
+            problems.append({
+                "clause": "part_deformed_under_the_pose",
+                "detail": f"{rec['name']}: internal distances changed by up to "
+                          f"{rec['max_pair_distance_change']:.3e} (> {rig_tol:.3e}) — this "
+                          f"part is deforming, and this route promises no deformation "
+                          f"anywhere"})
 
     moved = max(r["max_displacement"] for r in observations)
     ev["figure_max_displacement"] = float(moved)
     if moved <= tol:
-        problems.append(
-            f"the whole figure moved at most {moved:.3e} under the authored arc; nothing "
-            f"arrived at all")
+        problems.append({
+            "clause": "the_figure_did_not_move_at_all",
+            "detail": f"the whole figure moved at most {moved:.3e} under the authored arc; "
+                      f"nothing arrived at all"})
 
     if problems:
+        # `gate_batch_topology`'s shape; see `gate_parts_accounting` above for why the
+        # words are spelled as dict literals rather than passed to a helper.
         ev["problems"] = problems[:12]
+        ev["clauses"] = [p["clause"] for p in problems]
+        ev["clause"] = problems[0]["clause"]
         raise GateRigidArrival("the authored arc did not arrive whole: "
-                               + "; ".join(problems[:6]), ev)
+                               + "; ".join(p["detail"] for p in problems[:6]), ev)
     ev["verdict"] = (f"{len(observations)} parts each landed on their own bone transform; "
                      f"figure max displacement {moved:.5f}")
     return ev
@@ -710,12 +751,14 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=None):
     problems = []
 
     if not a or not b:
+        ev["clause"] = "one_build_carries_no_parts"
         raise GatePartsDeterminism(
             f"two builds were compared with {len(a)} and {len(b)} part(s): the set clause "
             f"reads False over an empty pair, the intersection loop never runs, and the "
             f"gate would be a check that cannot fail. A determinism andon that returns "
             f"'0 parts identical across two builds' certifies nothing", ev)
     if not shared:
+        ev["clause"] = "the_two_builds_share_no_part_name"
         raise GatePartsDeterminism(
             f"the two builds share no part name at all ({len(a)} and {len(b)} part(s)), "
             f"so the geometry comparison this gate exists for ran over nothing: only in "
@@ -727,6 +770,7 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=None):
                    or len(np.asarray(b[n]["positions"])) == 0)
     if empty:
         ev["empty_parts"] = empty
+        ev["clause"] = "part_with_no_geometry_to_compare"
         raise GatePartsDeterminism(
             f"{len(empty)} part(s) carry no vertices on one or both sides "
             f"({empty[:8]}), so there is no geometry to compare and the comparison this "
@@ -737,14 +781,18 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=None):
             f"reaching here is itself the finding", ev)
 
     if set(a) != set(b):
-        problems.append(f"part sets differ: only in first {sorted(set(a) - set(b))[:8]}, "
-                        f"only in second {sorted(set(b) - set(a))[:8]}")
+        problems.append({
+            "clause": "part_sets_differ",
+            "detail": f"part sets differ: only in first {sorted(set(a) - set(b))[:8]}, "
+                      f"only in second {sorted(set(b) - set(a))[:8]}"})
     worst = {"part": None, "delta": 0.0}
     for name in shared:
         pa, pb = a[name], b[name]
         if pa["n_verts"] != pb["n_verts"] or pa["n_faces"] != pb["n_faces"]:
-            problems.append(f"{name}: {pa['n_verts']}v/{pa['n_faces']}f vs "
-                            f"{pb['n_verts']}v/{pb['n_faces']}f")
+            problems.append({
+                "clause": "part_topology_differs_between_builds",
+                "detail": f"{name}: {pa['n_verts']}v/{pa['n_faces']}f vs "
+                          f"{pb['n_verts']}v/{pb['n_faces']}f"})
             continue
         d = float(np.abs(np.asarray(pa["positions"]) - np.asarray(pb["positions"])).max())
         # WAVE 22, F-cfb560aa — the sweep before either strict `>` is asked. `worst` is
@@ -764,12 +812,17 @@ def gate_parts_determinism(a, b, bbox_diagonal, length_frac=None):
         if d > worst["delta"]:
             worst = {"part": name, "delta": d}
         if d > tol:
-            problems.append(f"{name}: vertices differ by up to {d:.3e} (> {tol:.3e})")
+            problems.append({
+                "clause": "part_vertices_differ_between_builds",
+                "detail": f"{name}: vertices differ by up to {d:.3e} (> {tol:.3e})"})
     ev["worst"] = worst
     if problems:
+        # `gate_batch_topology`'s shape; see `gate_parts_accounting` above.
         ev["problems"] = problems[:12]
+        ev["clauses"] = [p["clause"] for p in problems]
+        ev["clause"] = problems[0]["clause"]
         raise GatePartsDeterminism("two builds produced different parts: "
-                                   + "; ".join(problems[:6]), ev)
+                                   + "; ".join(p["detail"] for p in problems[:6]), ev)
     ev["verdict"] = f"{len(a)} parts identical across two builds"
     return ev
 
@@ -832,6 +885,57 @@ def halt_keysafe(value, _seen=None):
     return value
 
 
+def printable_halt_line(line, stream=None):
+    """`line` rendered so that printing it to `stream` cannot raise on its encoding.
+
+    F-0a27b25c, wave 28. `run_tool_main` prints the halt line from a `finally`, so an
+    exception raised by that `print` propagates out of the whole `try` statement and the
+    `sys.exit` below it never runs — `blender -b -P` then reports exit 0 on a fired andon.
+    That is why `run_tool_main` cannot simply pass `ensure_ascii=False` and print the
+    result: the halt record's `message` is the refusal's own prose, and 45 of this package's
+    raise sites carry a character (an em dash, a degree sign, `≤`) that a cp1252 stdout
+    opened with `errors="strict"` — **this rig's default; measured, `sys.stdout.encoding ==
+    'cp1252'`** — cannot encode.
+
+    So the escaping decision is made HERE, against the stream that will actually carry the
+    line, rather than globally by `json.dumps`:
+
+    * a stream whose encoding carries the line (a UTF-8 stdout, a pipe under
+      `PYTHONIOENCODING=utf-8`, CI on Linux) gets the line UNCHANGED — the em dash is an em
+      dash;
+    * a stream whose encoding does not gets `backslashreplace` for exactly the characters it
+      cannot carry, so the line still prints, still parses as JSON, and still says which
+      character it could not render;
+    * a stream with no `encoding` attribute at all (`io.StringIO`, pytest's capture) carries
+      any `str` and gets the line unchanged.
+
+    The stream is NOT reconfigured. `sys.stdout.reconfigure(encoding="utf-8")` would change
+    the encoding of every other line the process prints — including the success sentinels
+    the tools earn by an effect — and on a real cp1252 console it substitutes mojibake for
+    the escape rather than removing it. A rendering decision belongs to the line being
+    rendered.
+
+    Total on failure: this returns a `str` for every input it is given and raises nothing;
+    `run_tool_main` still wraps the `print`, because a stream can fail for reasons that have
+    nothing to do with encoding.
+    """
+    text = line if isinstance(line, str) else str(line)
+    stream = sys.stdout if stream is None else stream
+    enc = getattr(stream, "encoding", None)
+    if not isinstance(enc, str) or not enc:
+        return text
+    errors = getattr(stream, "errors", None)
+    try:
+        text.encode(enc, errors if isinstance(errors, str) and errors else "strict")
+        return text
+    except (UnicodeError, LookupError, TypeError, ValueError):
+        pass
+    try:
+        return text.encode(enc, "backslashreplace").decode(enc, "replace")
+    except (UnicodeError, LookupError, TypeError, ValueError):
+        return text.encode("ascii", "backslashreplace").decode("ascii")
+
+
 def halt_outcome(exc):
     """`(exit_code, outcome)` for `exc` under the halt contract. THREE outcomes, not two.
 
@@ -863,12 +967,72 @@ def run_tool_main(main, prefix, tool=None):
 
     `tool` defaults to `prefix.lower()`, which reproduces all 22 spellings on `e8263a3`.
 
+    ── THE CONTRACT, STATED HERE (F-48f0c3d4, wave 28) ──────────────────────────────
+
+    README.md §"Reading a halt" is the operator's half and it ends "the one implementation
+    of the CPython contract is `armature_core.parts.run_tool_main`; its docstring is the
+    specification". This paragraph is that specification, so the reader's half and the
+    code's half cannot drift apart. What the tree looked like before it existed: `grep -rn
+    "_HALT" --include=*.md .` returned ZERO hits, README included — the `<TOOL>_HALT` line,
+    the six keys, the three outcome sentences and the exit-code table lived only in these
+    docstrings and in the suite that drives them.
+
+    **The line.** Exactly one line on stdout, `f"{prefix}_HALT "` followed by a JSON object.
+    Nothing else is printed by this handler on the refusal path.
+
+    **The six keys, in this order and never a seventh:**
+
+      ``tool``      the tool's own name (`tool`, else `prefix.lower()`)
+      ``outcome``   one of the three sentences `halt_outcome` returns, below
+      ``gate``      `exc.gate` — the gate id a typed `GateFailure` names, else null
+      ``error``     `type(exc).__name__`
+      ``message``   `str(exc)` — the refusal's own prose, written for a person
+      ``evidence``  the raise's evidence dict through `halt_keysafe`, else null
+
+    **The three outcomes and the exit codes** (`halt_outcome`, and it is three and not two
+    because a bad `--mode=` is a refusal with no gate behind it):
+
+      exit 2   "HALTED — a gate fired"                   a typed `GateFailure`
+      exit 2   "REFUSED — the tool declined to proceed"   a bare `ArmatureError`
+      exit 1   "FAILED — an unhandled error"              anything else
+      exit 0   never printed here; success is the tool's own sentinel, earned by an effect
+
+    **`evidence.clause`** is the machine-readable word a caller, a census or a later session
+    branches on — the message is for a person, the clause is for a machine, and both must
+    hold. The vocabulary is held by `tests/test_refusal_clauses.py`.
+
     **THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12).** Wave 10 moved `json.dumps`
     inside a try/except/finally so a sentinel that cannot serialise could no longer delete
     `sys.exit` — but the sentinel's CONSTRUCTION stayed ABOVE that guard, and so did
     `traceback.print_exc()`. Everything below that can fail is inside the guard; what is
     above it cannot: `isinstance` on an exception, `type(exc).__name__`, and a
     `json.dumps` of six values that are already strings or None.
+
+    **THE TRACEBACK IS THE CRASH'S DIAGNOSTIC, NOT THE REFUSAL'S** (F-2df6fd1b, wave 28).
+    `traceback.print_exc()` used to run for all three outcomes, so a deliberate refusal and
+    a crash were the same thing on screen inside the one handler whose whole design is to
+    tell them apart: measured in a child process, a `GateFailure`, a bare `ArmatureError`
+    ("--mode=wobble is not a mode") and a `KeyError` each produced the same five-line stack
+    rooted at this function, while the record on the other stream distinguished them at
+    exit 2 / 2 / 1. An operator who mistyped a flag read repo internals as "the tool is
+    broken". It now prints only when `_code == 1`, where the stack IS the diagnostic; a
+    refusal already carries `error`, `message`, `gate` and `evidence`. It stays inside the
+    guarded region, which is the property `tests/test_instruments_amend_w12.py` pins.
+
+    **THE LINE IS UN-CRASHABLE ON ANY STDOUT ENCODING** (F-0a27b25c, wave 28). The record's
+    `message` is the refusal's own prose and 117 of 946 raise-with-a-message sites tree-wide
+    carry a non-ASCII character, so `ensure_ascii`'s default True printed them as
+    backslash-u escapes in the middle of the one sentence a person reads. `ensure_ascii=False`
+    ALONE is not the fix and would be a worse defect than the one it closes: the `print`
+    below sits in the `finally`, so a `UnicodeEncodeError` from it would propagate out of
+    the whole statement and DELETE `sys.exit`, handing `blender -b -P` exit 0 on a fired
+    andon — the exact failure this handler exists to prevent, twice recorded in
+    `halt_keysafe`'s docstring. So the record is dumped with `ensure_ascii=False` and the
+    line is then rendered FOR THE STREAM by `printable_halt_line` before it is printed, and
+    the print itself is wrapped so that nothing it can raise reaches `sys.exit`. Measured
+    both ways, because either one alone would not be a measurement: a UTF-8 stdout carries
+    the character, and a cp1252 stdout opened with `errors="strict"` (this rig's default
+    console encoding) carries a `\\uXXXX` escape for that one character and still exits 2.
     """
     import traceback
 
@@ -885,7 +1049,9 @@ def run_tool_main(main, prefix, tool=None):
             "message": "the halt line could not be built", "evidence": None}
         _line = json.dumps(_sentinel)
         try:
-            traceback.print_exc()
+            if _code == 1:
+                # Only the crash. See "THE TRACEBACK IS THE CRASH'S DIAGNOSTIC" above.
+                traceback.print_exc()
             _detail = getattr(exc, "evidence", None)
             _sentinel = {
                 "tool": name, "outcome": _outcome,
@@ -893,11 +1059,19 @@ def run_tool_main(main, prefix, tool=None):
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": (halt_keysafe(_detail)
                              if isinstance(_detail, dict) else None)}
-            _line = json.dumps(_sentinel, default=str, allow_nan=False)
+            _line = json.dumps(_sentinel, default=str, allow_nan=False,
+                               ensure_ascii=False)
         except BaseException:                                         # noqa: BLE001
             pass
         finally:
-            print(prefix + "_HALT " + _line)
+            try:
+                print(printable_halt_line(prefix + "_HALT " + _line))
+            except BaseException:                                     # noqa: BLE001
+                # NOTHING from the print reaches `sys.exit`. A closed, detached or
+                # exotic stdout costs the halt LINE; it must never cost the exit code,
+                # because an exit 0 on a fired andon is read as a success by every
+                # caller and by `blender -b -P` itself.
+                pass
             sys.exit(_code)
 
 

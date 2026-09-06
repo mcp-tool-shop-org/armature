@@ -196,8 +196,49 @@ def _non_finite_census(vals):
     }
 
 
-def depth_extent(z, mask):
+def _context_prefix(extra):
+    """`"[frame=12, channel=depth_perframe, path=...] "` for `extra`, or `""`.
+
+    F-98b9b966, wave 28 — the message half of the `extra` mapping. See `depth_extent` for
+    why it exists; the ORDER is fixed (`frame`, `view`, `channel`, `path`, then whatever
+    else the caller sent, sorted) so two halt lines from the same shot sort and read the
+    same way, and a `None` value is dropped rather than printed as the word None.
+    """
+    if not extra:
+        return ""
+    lead = ("frame", "view", "channel", "path")
+    shown = [f"{k}={extra[k]}" for k in lead
+             if k in extra and extra[k] is not None]
+    shown += [f"{k}={extra[k]}" for k in sorted(extra)
+              if k not in lead and extra[k] is not None]
+    return f"[{', '.join(shown)}] " if shown else ""
+
+
+def depth_extent(z, mask, extra=None):
     """(min, max) camera-Z over the pixels where geometry exists, or None — else raise.
+
+    **`extra` names WHERE this call is** (F-98b9b966, wave 28), and every raising function
+    in this module takes it as its last parameter, defaulting to None. The mapping is
+    merged into the evidence and rendered into the front of the message by
+    `_context_prefix`; a call without it is byte-identical to the call before this
+    parameter existed.
+
+    The shape is `parts.single_path_segment(value, flag, exc, extra=None)`'s, already in
+    the tree (`parts.py`, `ev.update(extra or {})`), so this is an existing convention
+    rather than a new one. Why it was needed: all seven raises in the module that authors
+    every control-sequence pixel carried pixel counts and NOTHING locating them — no frame
+    index, no path, no channel tag, no view — while `stage_render.run_export` calls them
+    from inside its per-frame loop, whose own gate evidence already spells `"frame": i`. So
+    the tool knows the convention and applied it to its own andon and not to these. An
+    operator staging an 81-frame shot for a paid
+    generation was told a control-sequence frame carried an unreadable depth pixel and not
+    which of the 81, nor which EXR, nor which of depth / normal / edge; the halt record had
+    no field that could answer any of those. The caller's key names are `frame`, `path` and
+    `channel`, agreed with the tool that passes them; a caller may send others and they ride
+    the evidence the same way.
+
+    A key in `extra` OVERWRITES an evidence key of the same name: the caller's frame and
+    path are the more specific fact about where a refusal happened.
 
     The population is the SELECTED one: the pixels the mask admits and the sky test does
     not exclude. A non-finite value OUTSIDE the mask is background, not a depth this
@@ -224,8 +265,10 @@ def depth_extent(z, mask):
               "n_non_finite": census["n_non_finite"], "n_nan": census["n_nan"],
               "n_pos_inf": census["n_pos_inf"], "n_neg_inf": census["n_neg_inf"],
               "n_geometry_px": int(geometry.sum()), "sky_z": SKY_Z}
+        ev.update(extra or {})
         raise DepthError(
-            f"{census['n_non_finite']} of {census['n']} selected geometry pixel(s) carry "
+            _context_prefix(extra)
+            + f"{census['n_non_finite']} of {census['n']} selected geometry pixel(s) carry "
             f"a non-finite camera-Z ({census['n_nan']} NaN, {census['n_pos_inf']} +inf, "
             f"{census['n_neg_inf']} -inf). Neither reaches this function's extent as a "
             f"number: `nan < SKY_Z` is False so a NaN is dropped from the extent and left "
@@ -238,8 +281,10 @@ def depth_extent(z, mask):
     return float(vals.min()), float(vals.max())
 
 
-def normalize_depth(z, mask, z_near, z_far):
+def normalize_depth(z, mask, z_near, z_far, extra=None):
     """Inverse relative depth - near = bright (F19), background reserved.
+
+    `extra` is the caller's location mapping; see `depth_extent` for the shape and why.
 
     z_near/z_far are the window this frame is normalised against. Passing the
     frame's own extent gives per-frame normalisation; passing the shot's extent
@@ -277,15 +322,23 @@ def normalize_depth(z, mask, z_near, z_far):
         except (TypeError, ValueError):
             f = float("nan")
         if not np.isfinite(f):
+            # The evidence stays a LITERAL and `extra` is merged into it afterwards, never
+            # `dict(<literal>, **extra)`: `_census_nodes.clause_literals` reads a Constant
+            # inside a Dict node, and a `dict(...)` CALL is not one — the trap wave 26
+            # recorded at 64 sites tree-wide. Same reason the comment in `depth_extent`
+            # gives for spelling the census keys out rather than `dict(census, ...)`.
+            ev = {"gate": None, "andon": "DepthError",
+                  "clause": "non_finite_depth_window",
+                  "z_near": z_near, "z_far": z_far, name: v}
+            ev.update(extra or {})
             raise DepthError(
-                f"{name}={v!r} is not a finite depth, so the normalisation window is not a "
+                _context_prefix(extra)
+                + f"{name}={v!r} is not a finite depth, so the normalisation window is not a "
                 f"window. `span <= 0` is False for a NaN, so the guard below does not "
                 f"fire, `(z_far - z) / span` is NaN at every pixel, and `encode_u8` casts "
                 f"every one of them to byte 0 — the value BACKGROUND_DEPTH reserves for "
                 f"'no geometry'. The frame opens, is the right size, and carries no depth",
-                {"gate": None, "andon": "DepthError",
-                 "clause": "non_finite_depth_window",
-                 "z_near": z_near, "z_far": z_far, name: v})
+                ev)
     inside = np.asarray(mask) > 0
     if inside.any():
         census = _non_finite_census(z[inside])
@@ -296,8 +349,10 @@ def normalize_depth(z, mask, z_near, z_far):
                   "n_non_finite": census["n_non_finite"], "n_nan": census["n_nan"],
                   "n_pos_inf": census["n_pos_inf"], "n_neg_inf": census["n_neg_inf"],
                   "n_geometry_px": int(inside.sum())}
+            ev.update(extra or {})
             raise DepthError(
-                f"{census['n_non_finite']} of {census['n']} pixel(s) inside the mask carry "
+                _context_prefix(extra)
+                + f"{census['n_non_finite']} of {census['n']} pixel(s) inside the mask carry "
                 f"a non-finite depth ({census['n_nan']} NaN, {census['n_pos_inf']} +inf, "
                 f"{census['n_neg_inf']} -inf). `encode_u8` casts a NaN to byte 0, which is "
                 f"BACKGROUND_DEPTH — so the pixel we could not read and the void we did "
@@ -315,8 +370,12 @@ def normalize_depth(z, mask, z_near, z_far):
     return np.where(mask > 0, d, BACKGROUND_DEPTH)
 
 
-def encode_u8(x01, where="encode_u8"):
+def encode_u8(x01, where="encode_u8", extra=None):
     """[0,1] float -> uint8, half-to-even rounding. Refuses a value it cannot encode. · ANDON
+
+    `extra` is the caller's location mapping; see `depth_extent` for the shape and why.
+    It is the frame-and-file half of the same question `where` answers for the CALL SITE:
+    `where` says which computation, `extra` says which frame of which shot.
 
     The census is INSIDE the writer (F-e8074763, wave 25). See `ChannelEncodeError` for the
     measured bytes: NaN and -inf both cast to 0 — `BACKGROUND_DEPTH`'s byte — and +inf to
@@ -343,8 +402,10 @@ def encode_u8(x01, where="encode_u8"):
               "first_non_finite_flat_index": first,
               "first_non_finite_value": repr(float(flat[first])),
               "shape": [int(d) for d in x.shape]}
+        ev.update(extra or {})
         raise ChannelEncodeError(
-            f"{census['n_non_finite']} of {census['n']} value(s) handed to the byte writer "
+            _context_prefix(extra)
+            + f"{census['n_non_finite']} of {census['n']} value(s) handed to the byte writer "
             f"are not finite ({census['n_nan']} NaN, {census['n_pos_inf']} +inf, "
             f"{census['n_neg_inf']} -inf; first at flat index {first}). The cast is "
             f"`np.rint(x * 255.0).astype(np.uint8)`, which takes a NaN and a -inf to byte "
@@ -370,8 +431,10 @@ def world_normals_to_camera(n_world, cam_rot_3x3):
     return out.reshape(np.asarray(n_world).shape)
 
 
-def require_readable_normals(n_cam, mask, where):
+def require_readable_normals(n_cam, mask, where, extra=None):
     """Refuse a camera-space normal field this module cannot encode. · ANDON
+
+    `extra` is the caller's location mapping; see `depth_extent` for the shape and why.
 
     The population is the SELECTED one — the pixels the mask admits — which is the rule
     `depth_extent` already states: a value OUTSIDE the mask is background, not a normal
@@ -402,8 +465,10 @@ def require_readable_normals(n_cam, mask, where):
               "n_non_finite": census["n_non_finite"], "n_nan": census["n_nan"],
               "n_pos_inf": census["n_pos_inf"], "n_neg_inf": census["n_neg_inf"],
               "n_geometry_px": n_geometry_px}
+        ev.update(extra or {})
         raise NormalError(
-            f"{census['n_non_finite']} of {census['n']} normal component(s) inside the "
+            _context_prefix(extra)
+            + f"{census['n_non_finite']} of {census['n']} normal component(s) inside the "
             f"mask are a non-finite camera-space normal ({census['n_nan']} NaN, "
             f"{census['n_pos_inf']} +inf, {census['n_neg_inf']} -inf) over "
             f"{n_geometry_px} geometry pixel(s). `np.divide(..., where=norm > 1e-8)` is "
@@ -418,20 +483,26 @@ def require_readable_normals(n_cam, mask, where):
               "clause": "zero_length_geometry_normal", "where": where,
               "n": census["n"], "n_zero_length_px": zero,
               "n_geometry_px": n_geometry_px}
+        ev.update(extra or {})
         raise NormalError(
-            f"{zero} of {n_geometry_px} geometry pixel(s) carry a normal of length zero, "
+            _context_prefix(extra)
+            + f"{zero} of {n_geometry_px} geometry pixel(s) carry a normal of length zero, "
             f"which is not a direction. It takes the same `where=norm > 1e-8` fallback an "
             f"unreadable normal takes and encodes to the same (128, 128, 128) byte, so the "
             f"two are named apart here rather than left to a reader of the PNG", ev)
     return n
 
 
-def encode_normal(n_cam, mask):
-    """Camera-space normals -> uint8 RGB, background black. Refuses what it cannot read."""
-    n = require_readable_normals(n_cam, mask, "encode_normal")
+def encode_normal(n_cam, mask, extra=None):
+    """Camera-space normals -> uint8 RGB, background black. Refuses what it cannot read.
+
+    `extra` is the caller's location mapping and is passed straight through to both
+    refusing functions below; see `depth_extent` for the shape and why.
+    """
+    n = require_readable_normals(n_cam, mask, "encode_normal", extra=extra)
     norm = np.linalg.norm(n, axis=-1, keepdims=True)
     n = np.divide(n, norm, out=np.zeros_like(n), where=norm > 1e-8)
-    rgb = encode_u8(n * 0.5 + 0.5)
+    rgb = encode_u8(n * 0.5 + 0.5, extra=extra)
     m = np.asarray(mask) > 0
     return np.where(m[..., None], rgb, np.uint8(0))
 
@@ -523,8 +594,10 @@ def _neighbour_min_dot(n_cam, mask):
     return out
 
 
-def derive_edge(z, n_cam, mask, depth_rel_threshold, normal_angle_deg):
+def derive_edge(z, n_cam, mask, depth_rel_threshold, normal_angle_deg, extra=None):
     """Geometric edge pass: relative depth break OR normal break OR silhouette.
+
+    `extra` is the caller's location mapping; see `depth_extent` for the shape and why.
 
     Returns (uint8 image, diagnostics). The image is near-binary by construction
     (F22): every pixel is 0 or 255.
@@ -571,12 +644,14 @@ def derive_edge(z, n_cam, mask, depth_rel_threshold, normal_angle_deg):
                  "clause": "depth_rel_threshold_not_finite_and_positive",
                  "where": "derive_edge",
                  "depth_rel_threshold_raw": repr(depth_rel_threshold)}
+    _ev_depth.update(extra or {})
     depth_rel_threshold = require_finite(
         "depth_rel_threshold", depth_rel_threshold, DepthError, _ev_depth, positive=True)
     _ev_normal = {"gate": None, "andon": "NormalError",
                   "clause": "normal_angle_deg_not_finite",
                   "where": "derive_edge",
                   "normal_angle_deg_raw": repr(normal_angle_deg)}
+    _ev_normal.update(extra or {})
     normal_angle_deg = require_finite(
         "normal_angle_deg", normal_angle_deg, NormalError, _ev_normal, positive=False)
     if not (0.0 <= normal_angle_deg <= 180.0):
@@ -585,22 +660,25 @@ def derive_edge(z, n_cam, mask, depth_rel_threshold, normal_angle_deg):
         # 170, so an out-of-domain request does not fail here, it succeeds as a threshold
         # nobody asked for. `[0, 180]` is the range over which `cos` is injective and is the
         # same interval `shotspec.normalise_spec` bounds this flag to at the spec.
+        _ev_domain = {"gate": None, "andon": "NormalError",
+                      "clause": "normal_angle_deg_outside_domain", "where": "derive_edge",
+                      "normal_angle_deg": float(normal_angle_deg),
+                      "domain_deg": [0.0, 180.0]}
+        _ev_domain.update(extra or {})
         raise NormalError(
-            f"normal_angle_deg={normal_angle_deg!r} is outside [0, 180], the interval over "
+            _context_prefix(extra)
+            + f"normal_angle_deg={normal_angle_deg!r} is outside [0, 180], the interval over "
             f"which the cosine this threshold is taken through is one-to-one. "
             f"`cos(radians(400))` is `cos(radians(40))`, so the request does not fire a "
             f"bound — it becomes a different, plausible break angle, and `normal_break_px` "
             f"reports honestly on a term nobody asked for",
-            {"gate": None, "andon": "NormalError",
-             "clause": "normal_angle_deg_outside_domain", "where": "derive_edge",
-             "normal_angle_deg": float(normal_angle_deg),
-             "domain_deg": [0.0, 180.0]})
+            _ev_domain)
     m = np.asarray(mask) > 0
     # The SECOND consumer of the same unbounded array (F-4efe0fad). `normal_break = m &
     # (min_dot < cos_thresh)` is False for a NaN, so an unreadable normal silently removed
     # its own break from the edge pass and `diag["normal_break_px"]` counted fewer, with no
     # clause anywhere. Same census, same class; `where` says which consumer refused.
-    require_readable_normals(n_cam, m, "derive_edge")
+    require_readable_normals(n_cam, m, "derive_edge", extra=extra)
     z = np.asarray(z, dtype=np.float64)
     z_safe = np.where(m, z, np.nan)
 

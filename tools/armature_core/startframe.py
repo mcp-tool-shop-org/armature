@@ -93,9 +93,10 @@ def composite_colour(text):
     """
     if not text or not str(text).strip():
         raise AlphaGate(
-            "no composite colour was named: under the alpha law the render is authored "
-            "RGBA and the RGB actually submitted is composited over a NAMED background. "
-            "Pass linear floats, e.g. 0.035,0.022,0.014, with a reason",
+            f"no composite colour was named ({text!r} was supplied): under the alpha law "
+            f"the render is authored RGBA and the RGB actually submitted is composited "
+            f"over a NAMED background. Pass linear floats, e.g. 0.035,0.022,0.014, with a "
+            f"reason",
             {"clause": "no_composite_colour_named",
              "gate": "ALPHA", "andon": "AlphaGate", "supplied": text})
     parts = [p.strip() for p in str(text).split(",")]
@@ -120,8 +121,30 @@ def composite_colour(text):
     return rgb
 
 
-def gate_alpha(transparent_fraction, composite_rgb, why, master_path=None):
+def gate_alpha(transparent_fraction, composite_rgb, why, master_path=None,
+               why_flag="--composite-why"):
     """Gate ALPHA · ANDON — the authored master really carries transparency.
+
+    **THE REFUSAL NAMES THE FLAG THAT SUPPLIES THE MISSING THING** (F-5f8714c8, wave 28).
+    "The composite colour was named but not explained" is correct, well argued, and cost
+    the operator a grep: the reason comes from `render_start_frame.py`'s `--composite-why`
+    (`default=None`, so this refusal is exactly what omitting the flag produces), and the
+    sentence never said so. Measured over all 243 raise-with-a-message sites in the 21
+    modules of this package: not one contained a literal `--flag` spelling, while the
+    convention exists elsewhere in the tree — `parts.single_path_segment` writes
+    `f"{flag}={text!r} is not a name…"` and puts `"flag": flag` in the evidence, and
+    `framing.py` carries `"flag": "radius_bounds"`. The spelling arrives as `why_flag`
+    rather than hard-coded, because a library must not import its caller and these gates
+    may take a second one.
+
+    **AND EVERY REFUSAL NAMES ITS CLAUSE** (F-f7449bc9, same wave). The three raises below
+    shared one `ev` with no `clause` key at all: measured by calling this function three
+    ways — `why=None`, `transparent_fraction=0.0` and `=1.0` — each raised `AlphaGate` with
+    gate `ALPHA` and the IDENTICAL evidence key set, so three different failures wrote one
+    receipt shape and a jury, a census or a later session could only tell them apart by
+    regexing 200 characters of English prose. `assembly.gate_batch_topology` is where this
+    repo settled the shape (F-8d0e4cf1, wave 18); this is the population that fix did not
+    reach.
 
     **The andon goes on the direction the invariant does not bound.** Nothing else in the
     render path can tell a genuine RGBA render from a baked void with a fourth channel full
@@ -153,16 +176,20 @@ def gate_alpha(transparent_fraction, composite_rgb, why, master_path=None):
           "note": ("the world background is alpha=0 and the floor plane is geometry, so an "
                    "opaque floor beneath a transparent void is the expected shape")})
     if not why:
+        ev["clause"] = "composite_reason_not_given"
+        ev["flag"] = why_flag
         raise AlphaGate(
-            "the composite colour was named but not explained. A choice nobody wrote down "
-            "is indistinguishable from a leftover a year later, which is the whole failure "
-            "mode this law addresses", ev)
+            f"the composite colour was named but not explained. A choice nobody wrote down "
+            f"is indistinguishable from a leftover a year later, which is the whole failure "
+            f"mode this law addresses — pass one with {why_flag}=\"...\"", ev)
     if float(transparent_fraction) <= 0.0:
+        ev["clause"] = "master_carries_no_transparent_pixel"
         raise AlphaGate(
             "the authored master carries NO transparent pixels, so it is not an RGBA "
             "render — it is a baked void with a fourth channel. `film_transparent` did not "
             "take effect, and every check after this one passes on the file anyway", ev)
     if float(transparent_fraction) >= 1.0:
+        ev["clause"] = "master_entirely_transparent"
         raise AlphaGate(
             "the authored master is ENTIRELY transparent — nothing was rendered into it. "
             "A fully transparent master would composite to a flat field of the chosen "
@@ -378,8 +405,14 @@ def band_source_rows(target_rows, geom):
 
 
 def gate_backdrop(void_vs_plate_255, plate_vs_flat_255, transparent_fraction, why,
-                  tol_255, min_separation_255, plate=None, plate_sha256=None):
+                  tol_255, min_separation_255, plate=None, plate_sha256=None,
+                  why_flag="--plate-why"):
     """Gate BACKDROP · ANDON — the plate really reached the submitted composite.
+
+    `why_flag` and the four clause words below are `gate_alpha`'s treatment applied to this
+    gate's four refusals; see that function for the two findings (F-5f8714c8, F-f7449bc9)
+    and the measurement behind them. The flag here is `render_start_frame.py`'s
+    `--plate-why`, also `default=None`.
 
     **The andon goes on the direction the invariant does not bound.** Every other check in
     this module looks at the performer: Gate WHOLE says the body is inside the frame, Gate
@@ -433,16 +466,20 @@ def gate_backdrop(void_vs_plate_255, plate_vs_flat_255, transparent_fraction, wh
           "measured_over": ("the master's transparent region only — the part of the frame "
                             "the performer and the floor do not occupy")})
     if not why:
+        ev["clause"] = "plate_reason_not_given"
+        ev["flag"] = why_flag
         raise BackdropGate(
-            "the plate was named but not explained. A backdrop nobody wrote down a reason "
-            "for is indistinguishable from a leftover a year later, which is the failure "
-            "mode THE ALPHA LAW addresses", ev)
+            f"the plate was named but not explained. A backdrop nobody wrote down a reason "
+            f"for is indistinguishable from a leftover a year later, which is the failure "
+            f"mode THE ALPHA LAW addresses — pass one with {why_flag}=\"...\"", ev)
     if float(transparent_fraction) <= 0.0:
+        ev["clause"] = "master_carries_no_transparent_region_for_a_plate"
         raise BackdropGate(
             "the authored master has NO transparent region, so there is nowhere for a plate "
             "to be and nothing for this gate to measure. A green verdict here would be a "
             "check that cannot fail", ev)
     if float(plate_vs_flat_255) < float(min_separation_255):
+        ev["clause"] = "plate_indistinguishable_from_the_flat_fallback"
         raise BackdropGate(
             f"the plate and the flat-colour fallback differ by only "
             f"{float(plate_vs_flat_255):.3f}/255 over the transparent region, below the "
@@ -450,6 +487,7 @@ def gate_backdrop(void_vs_plate_255, plate_vs_flat_255, transparent_fraction, wh
             f"Either this plate is the void it was meant to replace, or the plate never "
             f"loaded — and in both cases a PASS would prove nothing", ev)
     if float(void_vs_plate_255) > float(tol_255):
+        ev["clause"] = "submitted_composite_is_not_the_plate"
         raise BackdropGate(
             f"behind the performer the submitted composite differs from the plate by "
             f"{float(void_vs_plate_255):.3f}/255 (tolerance {float(tol_255)}). The image "
@@ -479,8 +517,9 @@ def framing_cloud(points, cap=1500):
     pts = [tuple(float(c) for c in p) for p in points]
     if not pts:
         raise StartFrameGate(
-            "no vertices to frame; a camera solved against nothing frames the origin and "
-            "the render would be of an empty room", {"clause": "no_vertices_to_frame",
+            f"no vertices to frame (n_points={len(pts)}); a camera solved against nothing "
+            f"frames the origin and the render would be of an empty room",
+            {"clause": "no_vertices_to_frame",
              "gate": "WHOLE", "andon": "StartFrameGate", "n_points": 0})
     if cap < 8:
         raise StartFrameGate(
@@ -545,8 +584,9 @@ def silhouette_extent(points, target, radius, azimuth_deg, elevation_deg,
         # wants a different fix. Both are refused; only the sentence was wrong.
         if not len(points):
             raise StartFrameGate(
-                "no points were given, so there is no silhouette to measure. This is the "
-                "subject selection returning nothing, not a camera pointed the wrong way",
+                f"no points were given (n_points={len(points)}, n_behind={behind}), so "
+                f"there is no silhouette to measure. This is the subject selection "
+                f"returning nothing, not a camera pointed the wrong way",
                 {"gate": "WHOLE", "andon": "StartFrameGate",
                  "clause": "no_points_given",
                  "n_points": 0, "n_behind": behind})

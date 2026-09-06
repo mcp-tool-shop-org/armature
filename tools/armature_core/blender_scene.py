@@ -481,9 +481,11 @@ def world_bounds(objects, scene):
     """
     if scene is None:
         raise MeasurementWithoutScene(
-            "world_bounds measures the geometry that will actually RENDER and needs the "
-            "scene to filter with; `scene=None` is the naive measurement wearing the "
-            "filtered name. Pass the scene, or call "
+            f"world_bounds measures the geometry that will actually RENDER and needs "
+            f"the scene to filter with; `scene=None` is the naive measurement wearing the "
+            f"filtered name over "
+            f"{len(objects) if hasattr(objects, '__len__') else 'an unsized collection of'} "
+            f"object(s). Pass the scene, or call "
             "`blender_scene.unfiltered_world_bounds(objects)` if the naive bounds are what "
             "you want — that name is what a deliberately unfiltered reading is called here",
             {"gate": None, "andon": "MeasurementWithoutScene",
@@ -582,8 +584,9 @@ def union_sphere(frame_points):
         # records as "FAILED - an unhandled error" at exit 1. It is a refusal, and the class
         # that already exists for this function's refusals is `NonReiterableFrames`.
         raise NonReiterableFrames(
-            "union_sphere takes a CALLABLE returning a fresh iterator of per-frame vertex "
-            "arrays, not an iterator: it walks the frames twice (the radius is measured "
+            f"union_sphere takes a CALLABLE returning a fresh iterator of per-frame "
+            f"vertex arrays, and was given a {type(frame_points).__name__}: it walks the "
+            f"frames twice (the radius is measured "
             "about a centre that is not known until the first pass ends), and a "
             "single-use iterator would silently make the second pass read nothing",
             {"gate": None, "andon": "NonReiterableFrames",

@@ -682,7 +682,7 @@ def cascade_plan(n, group_size=GROUP_SIZE):
     """
     n, group_size = int(n), int(group_size)
     if group_size < 1:
-        raise CascadeGate("group size must be at least 1",
+        raise CascadeGate(f"group size must be at least 1, and {group_size} is not",
                           {"gate": "CASCADE", "andon": "CascadeGate",
                            "clause": "group_size_below_one",
                            "group_size": group_size})

@@ -363,6 +363,10 @@ def gate_view_crop(view_index, subject_bbox, width, height, path=None, alpha_thr
         "measured_on": "the rendered alpha channel of the written PNG",
     }
     if subject_bbox is None:
+        # F-f7449bc9, wave 28: the two raises here shared one `ev` with no `clause`, so a
+        # vacuous cell and a cropped figure wrote the same receipt shape. `gate_alpha`
+        # carries the same fix and the same reasoning.
+        ev["clause"] = "view_has_no_subject_pixels"
         raise TurnaroundCropGate(
             f"view {view_index} has no subject pixels at all, so whether it is cropped "
             "cannot be answered. A gate written only against border contact PASSES this "
@@ -377,6 +381,7 @@ def gate_view_crop(view_index, subject_bbox, width, height, path=None, alpha_thr
 
     touching = sorted(side for side, hit in ev["border_contact"].items() if hit)
     if touching:
+        ev["clause"] = "subject_reaches_the_frame_border"
         raise TurnaroundCropGate(
             f"view {view_index}: the subject reaches the frame border on "
             + ", ".join(touching)
@@ -431,6 +436,8 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
                  "field is the expected shape"),
     })
     if lo >= OPAQUE:
+        # F-f7449bc9, wave 28 — see `gate_view_crop` above and `startframe.gate_alpha`.
+        ev["clause"] = "view_carries_no_transparent_pixel"
         raise TurnaroundAlphaGate(
             f"view {view_index} has alpha extrema ({lo}, {hi}): NO pixel is transparent, "
             "so this is not an RGBA render — it is a baked void with a fourth channel. "
@@ -438,6 +445,7 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
             "passes on the file anyway: it opens, it is the right size, the figure is in "
             "it, and a contact sheet cannot tell it from an authored view", ev)
     if hi < OPAQUE:
+        ev["clause"] = "view_carries_no_opaque_pixel"
         raise TurnaroundAlphaGate(
             f"view {view_index} has alpha extrema ({lo}, {hi}): NO pixel is opaque, so "
             "nothing solid was rendered into this view. The file is well-formed, "

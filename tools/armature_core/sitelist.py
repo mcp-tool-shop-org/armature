@@ -200,7 +200,8 @@ def validate():
 
     if problems:
         raise SiteListError(
-            "the registered site list is internally inconsistent: " + "; ".join(problems),
+            f"the registered site list is internally inconsistent over {len(BONES)} "
+            f"registered bone(s) and {len(E01_SITES)} E01 site(s): " + "; ".join(problems),
             {"gate": None, "andon": "SiteListError",
              "clause": "registration_inconsistent",
              "problems": problems, "n_bones": len(BONES),

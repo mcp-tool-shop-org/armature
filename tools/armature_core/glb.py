@@ -290,9 +290,22 @@ def gate_atlas_untouched(source_path, export_path):
           "images_in_export": [{k: v for k, v in i.items() if k != "index"} for i in after]}
     problems = []
 
+    # F-f7449bc9, wave 28. This gate accumulates up to four structurally different failures
+    # and used to raise ONE prose string over them with no `clause` anywhere in the
+    # receipt. `assembly.gate_batch_topology` is where this repo settled the shape
+    # (`assembly._problem`, F-8d0e4cf1): the message stays the same sentence over the same
+    # details in the same order, and the evidence gains `problems` as `{clause, detail}`
+    # records, `clauses`, and `clause` as the first. The records are spelled as dict
+    # LITERALS here rather than through `assembly._problem`, for two reasons: importing
+    # `assembly` would pull `route_gates` into the import graph of a module the Blender
+    # tools import, and `_census_nodes.clause_literals` reads a Constant inside a Dict node,
+    # so a word handed to a helper is invisible to the vocabulary census — measured on
+    # `3380ae2`, not one of `_problem`'s own words is in it.
     if len(before) != len(after):
-        problems.append(f"{len(before)} embedded image(s) in the source, {len(after)} in "
-                        f"the export")
+        problems.append({
+            "clause": "embedded_image_count_differs",
+            "detail": f"{len(before)} embedded image(s) in the source, {len(after)} in "
+                      f"the export"})
     src_hashes = sorted(i["sha256"] for i in before if i["sha256"])
     out_hashes = sorted(i["sha256"] for i in after if i["sha256"])
     ev["source_hashes"] = src_hashes
@@ -304,14 +317,18 @@ def gate_atlas_untouched(source_path, export_path):
     ev["source_images_not_hashable"] = unhashable
 
     if not src_hashes:
-        problems.append("the source carries no embedded image to compare, so this gate "
-                        "would be a check that cannot fail")
+        problems.append({
+            "clause": "source_carries_no_embedded_image",
+            "detail": "the source carries no embedded image to compare, so this gate "
+                      "would be a check that cannot fail"})
     elif unhashable:
-        problems.append(
-            f"{len(unhashable)} of {len(before)} source image(s) cannot be hashed "
-            f"(storage: {sorted({u['storage'] for u in unhashable})}), so 'the atlas "
-            f"survives with zero re-bake' cannot be checked for them and a PASS would "
-            f"certify the promise over a subset without saying so")
+        problems.append({
+            "clause": "source_image_cannot_be_hashed",
+            "detail": f"{len(unhashable)} of {len(before)} source image(s) cannot be "
+                      f"hashed (storage: {sorted({u['storage'] for u in unhashable})}), so "
+                      f"'the atlas survives with zero re-bake' cannot be checked for them "
+                      f"and a PASS would certify the promise over a subset without saying "
+                      f"so"})
     # Multiset, not membership (F-937f8a81). `h not in out_hashes` is satisfied by ONE
     # occurrence, so a source that embeds the same image twice was certified by an export
     # carrying it once and a different image beside it: the count clause did not fire
@@ -326,14 +343,19 @@ def gate_atlas_untouched(source_path, export_path):
     ev["missing_hash_counts"] = dict(sorted(residual.items()))
     if residual:
         short = ", ".join(f"{h[:12]} x{c}" for h, c in sorted(residual.items()))
-        problems.append(f"{sum(residual.values())} source image occurrence(s) do not "
-                        f"appear byte-identical in the export - the texture was "
-                        f"re-encoded or resampled (short by: {short})")
+        problems.append({
+            "clause": "source_image_not_byte_identical_in_the_export",
+            "detail": f"{sum(residual.values())} source image occurrence(s) do not "
+                      f"appear byte-identical in the export - the texture was "
+                      f"re-encoded or resampled (short by: {short})"})
 
     if problems:
+        ev["problems"] = problems
+        ev["clauses"] = [p["clause"] for p in problems]
+        ev["clause"] = problems[0]["clause"]
         raise GateAtlasUntouched(
-            "the texture atlas did not survive the route unchanged: " + "; ".join(problems),
-            ev)
+            "the texture atlas did not survive the route unchanged: "
+            + "; ".join(p["detail"] for p in problems), ev)
     ev["verdict"] = (f"{len(src_hashes)} of {len(before)} embedded image(s) byte-identical "
                      f"through the route, 0 unhashable")
     return ev
@@ -357,10 +379,14 @@ def compare_signatures(pinned, fresh, label=None):
     ev = {"gate": "RELIFT", "andon": "ReliftMismatch", "label": label,
           "n_pinned": len(pinned), "n_fresh": len(fresh)}
     if not pinned or not fresh:
+        # F-f7449bc9, wave 28 — three raises, one `ev`, no `clause`. See
+        # `gate_atlas_untouched` above.
+        ev["clause"] = "one_clip_carries_no_frames"
         raise ReliftMismatch(
             "one of the two clips carries no frames, so there is nothing to compare and a "
             "PASS would be agreement about nothing", ev)
     if len(pinned) != len(fresh):
+        ev["clause"] = "frame_counts_differ"
         raise ReliftMismatch(
             f"frame counts differ: pinned {len(pinned)}, fresh {len(fresh)}. A lift that "
             f"dropped or gained a frame is not the same performance however well the "
@@ -374,6 +400,7 @@ def compare_signatures(pinned, fresh, label=None):
         ev["first_divergent_frame"] = i
         ev["pinned_signature"] = pinned[i]
         ev["fresh_signature"] = fresh[i]
+        ev["clause"] = "resolved_lift_diverges_from_the_pinned_glb"
         raise ReliftMismatch(
             f"the re-solved lift diverges from the pinned GLB at frame {i} "
             f"({len(diverged)} of {len(pinned)} frames differ). Either the solver is not "

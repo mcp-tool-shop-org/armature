@@ -307,6 +307,10 @@ def monotonic(n_src, n_dst):
     ev = {"gate": "RESAMPLE", "andon": "ResampleGate", "n_src": n_src, "n_dst": n_dst,
           "first": u[0], "last": u[-1], "non_increasing": bad}
     if bad:
+        # F-f7449bc9, wave 28 — the two raises shared one `ev` with no `clause`, so the
+        # live andon and the labelled cross-function tripwire below wrote the same receipt
+        # shape. `endpoints_match` in this file already names all four of its clauses.
+        ev["clause"] = "timeline_not_strictly_increasing"
         raise ResampleGate(
             f"the resampled timeline is not strictly increasing at {len(bad)} position(s), "
             f"first at destination sample {bad[0][0]}: {bad[0][1]} -> {bad[0][2]}", ev)
@@ -325,6 +329,7 @@ def monotonic(n_src, n_dst):
     # on a sibling function's contract.
     if u[0] != 0.0 or u[-1] != float(n_src - 1):
         ev["invariant_by_construction"] = "sample_map hard-codes both endpoints"
+        ev["clause"] = "timeline_does_not_span_the_source"
         raise ResampleGate(
             f"the resampled timeline spans {u[0]}..{u[-1]} where the source spans "
             f"0..{n_src - 1}; the performance would be cropped or extrapolated", ev)

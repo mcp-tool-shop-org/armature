@@ -114,7 +114,8 @@ def test_an_unreachable_framing_raises_rather_than_returning_its_nearest_miss():
 def test_a_straight_down_camera_raises():
     t = (0.0, 0.0, 0.0)
     with pytest.raises(framing.FramingError,
-                       match=r"the camera is looking straight up or down; the up vector"):
+                       match=r"the camera is looking straight up or down from "
+                             r"\[.*\] to \[.*\]; the up vector is undefined"):
         framing.project((0.1, 0.0, 0.0), t, 3.0, 0.0, 90.0, LENS, SENSOR, W, H)
 
 

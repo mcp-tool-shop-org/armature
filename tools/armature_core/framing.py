@@ -102,7 +102,8 @@ def _norm(a):
     n = math.sqrt(_dot(a, a))
     if n < 1e-12:
         raise FramingError(
-            "cannot normalise a zero-length direction",
+            f"cannot normalise a zero-length direction: the vector "
+            f"{[float(v) for v in a]} has length {n}",
             {"gate": None, "andon": "FramingError", "clause": "zero_length_direction",
              "vector": [float(v) for v in a], "length": n})
     return _scale(a, 1.0 / n)
@@ -269,8 +270,9 @@ def camera_basis(target, position):
     proj = _sub(up_hint, _scale(back, _dot(up_hint, back)))
     if math.sqrt(_dot(proj, proj)) < 1e-9:
         raise FramingError(
-            "the camera is looking straight up or down; the up vector is undefined and "
-            "the roll of the shot would be arbitrary",
+            f"the camera is looking straight up or down from "
+            f"{[float(v) for v in position]} to {[float(v) for v in target]}; the up "
+            f"vector is undefined and the roll of the shot would be arbitrary",
             {"gate": None, "andon": "FramingError",
              "clause": "view_direction_parallel_to_up",
              "position": [float(v) for v in position],
@@ -566,7 +568,8 @@ def solve_camera(all_points, end_points, azimuth_deg, elevation_deg,
              "radius_bounds": [float(_bounds[0]), float(_bounds[1])]})
     if not all_points or not end_points:
         raise FramingError(
-            "no points to frame",
+            f"no points to frame: {len(all_points)} point(s) in the cloud and "
+            f"{len(end_points)} end point(s)",
             {"gate": None, "andon": "FramingError", "clause": "empty_point_cloud",
              "n_all_points": len(all_points), "n_end_points": len(end_points)})
     # THE POINT CLOUD'S CLAUSE (F-526e9069, wave 25). Wave 22 bounded every SCALAR request
