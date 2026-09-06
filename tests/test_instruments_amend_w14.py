@@ -488,8 +488,8 @@ def test_every_glb_export_site_captures_the_operator_status_set():
 #: offender, which is the honest result: what was outside the census was the requirement,
 #: not a defect.
 #:
-#: Re-derive with:
-#:     python -c "import sys;sys.path[:0]=['tests','tools'];
+#: Re-derive with the suite interpreter (tests/conftest.py module docstring):
+#:     .venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];
 #:     import test_instruments_amend_w14 as M;
 #:     print(len(M._operator_call_sites(M.TOOLS,'bpy.ops.render.render')))"
 RENDER_SITES_TODAY = 15

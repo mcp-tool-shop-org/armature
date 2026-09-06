@@ -551,7 +551,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # WAVE 16: 94 → 99. Composition, because this number cannot be measured on one branch:
     #   +2 MEASURED HERE (tests, F-d426d4bd): `PosePackError`, `PlateError` cross the
     #      threshold on the new `exc=` edge — derivation command:
-    #      python -c "import sys;sys.path[:0]=['tests','tools'];import test_refusal_clauses as M;print(len(M.POLICED))"
+    #      .venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];import test_refusal_clauses as M;print(len(M.POLICED))"  # suite interpreter: tests/conftest.py
     #      reads 96 in this worktree.
     #   +2 CARRIED from instruments-measure's SEAM 5 (`ABClipError`, `ResampleArgError`).
     #   +2 CARRIED from builders' SEAM 10 (`SeedRegistrationError`, 5 raise sites;
@@ -626,7 +626,8 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # WAVE-25 MERGE (coordinator, 2026-09-05): POLICED MEASURED on the merged tree — core-solvers (+ShadowError) and builders
     # (+UnknownBaseline) each read 111 branch-local; the merged set holds both.
     # WAVE 25 (instruments), BRANCH-LOCAL: 110 → 112, MEASURED in this worktree before and
-    # after the edit (`python -c "import sys;sys.path[:0]=['tests','tools'];
+    # after the edit (suite interpreter — tests/conftest.py:
+    # `.venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];
     # import test_refusal_clauses as M;print(len(M.POLICED))"` read 110 on `580af47`).
     # Two members, both named in RECORDED_POPULATION above with their derivation:
     #   +1 `diagnose_bone_heat.BandCountError` — the new andon for `--bands` (F-a4f7b3c9),
@@ -1619,8 +1620,8 @@ def test_every_converted_refusal_carries_an_evidence_dict():
 #
 # The walk has ONE home, `_census_nodes.clause_literals`.
 #
-# Re-derive with:
-#     python -c "import sys,json;sys.path.insert(0,'tests');import _census_nodes as C;
+# Re-derive with the suite interpreter (tests/conftest.py module docstring):
+#     .venv/Scripts/python.exe -c "import sys,json;sys.path.insert(0,'tests');import _census_nodes as C;
 #     print(len(C.clause_literals()))"
 
 import glob  # noqa: E402

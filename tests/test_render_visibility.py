@@ -19,7 +19,9 @@ from conftest import BLENDER, REPO
 #: that has to run on CI, where there is no Blender at all. A census skipped wherever it
 #: would matter polices nothing.
 needs_blender = pytest.mark.skipif(
-    not os.path.isfile(BLENDER), reason=f"Blender not found at {BLENDER}"
+    not os.path.isfile(BLENDER),
+    reason=(f"Blender not found at {BLENDER}; set ARMATURE_BLENDER to your blender "
+            "executable to run these"),
 )
 
 SCRIPT = os.path.join(REPO, "tests", "blender", "check_visibility.py")

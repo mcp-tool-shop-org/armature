@@ -35,6 +35,7 @@ def _launch(args, **env):
         capture_output=True,
         text=True,
         env={**os.environ, **env},
+        timeout=30,
     )
 
 
@@ -119,6 +120,7 @@ def _drive_head(tmp_path, driver, **env):
         capture_output=True,
         text=True,
         env={**os.environ, **env},
+        timeout=30,
     )
 
 
@@ -287,6 +289,7 @@ def test_the_selftest_goes_red_on_the_collapsing_handler_this_launcher_had(tmp_p
     got = subprocess.run(
         [NODE, str(scratch), "--node-selftest"],
         cwd=REPO, capture_output=True, text=True, env={**os.environ},
+        timeout=30,
     )
     assert got.returncode != 0, (
         "the selftest passed on a launcher that collapses every signal death into exit 1:\n"

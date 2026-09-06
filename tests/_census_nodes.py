@@ -765,6 +765,21 @@ def returning_branch_spans(fn):
 #: rig_sheet_compose, sheet_compose.
 #:
 #: Keyed on the callee TAIL, so `cv2.imwrite`, `imwrite` and `_cv.imwrite` are one member.
+#:
+#: WAVE 29, F-7765f498 (measured on the wave-26 SEAM 5a §6.1 seed): of 183 CLI-body write
+#: sites over the 70-tool `derive_population()`, 22 are ambiguous-tail matches the STRICT
+#: predicate (`_is_an_unambiguous_write`) rejects, across 16 tools. Only 4 of those 22 are
+#: genuine non-writes — all four are `str.replace` on label text in `make_hole_survey.py`
+#: (:321, :322, :335, :339). The other 18 are real disk writes a strict CLI-body filter
+#: would wrongly DROP (PIL `Image.save` / `img.save` in the sheet tools and `rig_bake`).
+#: In NO tool is the first-write line one of the 22: `make_hole_survey`'s real first write
+#: is `os.makedirs` at :282, 39 lines above its first false positive. Pins measured BOTH
+#: ways on the same population: 27 / 55 / 78 tail-keyed AND 27 / 55 / 78 strict. So the
+#: failure mode of a false positive is a false ALARM (a seat told to move a refusal already
+#: above the real first write), never a missed strand — which is why WRITE_CALLS stays
+#: tail-keyed inside a CLI body. Do not re-open the pin; do not drop the 18 PIL saves from
+#: visibility. Same shape as the five helpers `_is_an_unambiguous_write` records above as
+#: rejected by the one-hop probe.
 WRITE_CALLS = {
     "makedirs": "os.makedirs",
     "mkdir": "mkdir",

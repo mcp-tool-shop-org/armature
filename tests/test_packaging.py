@@ -388,6 +388,7 @@ def _check_ignore(paths):
         cwd=REPO,
         capture_output=True,
         text=True,
+        timeout=30,
     )
     matched = {}
     for line in proc.stdout.splitlines():
@@ -400,14 +401,18 @@ def _check_ignore(paths):
 
 def _git_present():
     try:
-        return subprocess.run([GIT, "--version"], capture_output=True).returncode == 0
+        return subprocess.run(
+            [GIT, "--version"], capture_output=True, timeout=30
+        ).returncode == 0
     except OSError:
         return False
 
 
 requires_git = pytest.mark.skipif(
     not _git_present(),
-    reason="git is not on PATH; the ignore list can only be read through it",
+    reason=(f"git not found via ARMATURE_GIT={GIT!r}; set ARMATURE_GIT to your git "
+            "executable (default 'git' on PATH) — the ignore list can only be read "
+            "through it"),
 )
 
 CREDENTIAL_SHAPED = [
@@ -1788,8 +1793,8 @@ def _distributions_this_file_skips_on():
 #: installing the way the manifest tells them to runs a suite in which the published sdist's
 #: contents are asserted by nothing).
 #:
-#: Re-derive with:
-#:     python -c "import sys,os,re,tomllib;sys.path[:0]=['tests','tools'];\
+#: Re-derive with the suite interpreter (tests/conftest.py module docstring):
+#:     .venv/Scripts/python.exe -c "import sys,os,re,tomllib;sys.path[:0]=['tests','tools'];\
 #:     import test_packaging as P;\
 #:     cfg=tomllib.load(open(os.path.join(P.REPO,'pyproject.toml'),'rb'));\
 #:     d={re.split(r'[<>=!~\\[ ]',s.strip())[0] for s in \
@@ -2310,7 +2315,7 @@ def test_the_container_backstop_is_measured_against_git_itself(tmp_path):
     for ext in sorted(containers_the_repo_writes()):
         probe = "a-w23-container-probe" + ext
         got = subprocess.run([git, "check-ignore", "-q", probe],
-                             cwd=REPO, capture_output=True, text=True)
+                             cwd=REPO, capture_output=True, text=True, timeout=30)
         assert got.returncode == 0, (
             f"`git check-ignore {probe}` says NOT IGNORED; the encoder writes {ext} and its "
             "destination is an operator-supplied path with no directory constraint")

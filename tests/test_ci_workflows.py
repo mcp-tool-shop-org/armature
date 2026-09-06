@@ -171,6 +171,7 @@ def _drive(ref, ref_name):
         cwd=REPO,
         capture_output=True,
         env=env,
+        timeout=30,
     )
     return subprocess.CompletedProcess(
         proc.args, proc.returncode,
@@ -525,7 +526,7 @@ def repo_root_tracked_files(root=None):
     root = REPO if root is None else root
     try:
         proc = subprocess.run(["git", "-C", root, "ls-files", "-z", "--", ":(top)"],
-                              capture_output=True)
+                              capture_output=True, timeout=30)
     except OSError:  # pragma: no cover - git absent from PATH
         proc = None
     if proc is not None and proc.returncode == 0:
@@ -2706,7 +2707,7 @@ def _git_ignored(paths, repo=None):
     # git then echoes the path quoted with the CR inside it — measured on the first cut.
     proc = subprocess.run(["git", "-C", repo, "check-ignore", "--stdin", "-z"],
                           input=b"\0".join(x.encode("utf-8") for x in paths) + b"\0",
-                          capture_output=True)
+                          capture_output=True, timeout=30)
     # exit 0: some ignored; 1: none ignored; 128 with "not a git repository" is a synthetic
     # tree under tmp_path (the red proofs build one) and ignores nothing; anything else is a
     # git failure worth seeing.
@@ -2939,8 +2940,8 @@ GUARDED_TODAY = [
 #: research-grounding.md's F20, this fails", is green-by-absence on the PR and first surfaces
 #: on some later unrelated push, attributed to whatever that push touched.
 #:
-#: Re-derive with:
-#:     python -c "import sys;sys.path[:0]=['tests','tools'];import test_ci_workflows as C;\
+#: Re-derive with the suite interpreter (tests/conftest.py module docstring):
+#:     .venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];import test_ci_workflows as C;\
 #:     print({t: C._unfiltered(C.paths_the_suite_guards(), t) \
 #:            for t in ('push','pull_request')})"
 UNFILTERED_PENDING = set()
@@ -3074,7 +3075,7 @@ def _scratch_repo_with_an_ignored_path(tmp_path):
         "    open(os.path.join(REPO, 'outputs', 'E99', 'run.json'))\n"
         "    open(os.path.join(REPO, 'notes', 'kept.md'))\n",
         encoding="utf-8")
-    proc = subprocess.run(["git", "init", "-q", str(repo)], capture_output=True)
+    proc = subprocess.run(["git", "init", "-q", str(repo)], capture_output=True, timeout=30)
     assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
     return str(repo), str(repo / "tests")
 
@@ -3138,7 +3139,9 @@ def test_a_gitignored_path_a_test_opens_is_partitioned_not_filtered():
     """
     ignored = paths_the_suite_opens_but_git_ignores()
     for rel in ignored:
-        assert subprocess.run(["git", "-C", REPO, "check-ignore", "-q", rel]).returncode == 0, rel
+        assert subprocess.run(
+            ["git", "-C", REPO, "check-ignore", "-q", rel], timeout=30
+        ).returncode == 0, rel
         assert rel not in paths_the_suite_guards(), rel
     if os.path.isdir(os.path.join(REPO, "outputs", "E02", "runs")):
         assert "outputs/E02/runs" in ignored, ignored
@@ -4645,7 +4648,8 @@ def test_a_pre_release_refuses_before_the_publish_fork(event_name, value, procee
 @needs_shell
 def test_the_prerelease_gate_goes_red_on_the_shape_release_yml_had():
     """The mutation: no gate at all — every release, pre-release or not, reached both jobs."""
-    absent = subprocess.run([BASH, "-s"], input=b"exit 0\n", capture_output=True)
+    absent = subprocess.run(
+        [BASH, "-s"], input=b"exit 0\n", capture_output=True, timeout=30)
     assert absent.returncode == 0, (
         "the harness itself refuses, so the rows above prove nothing about the gate")
     assert _drive_prerelease("release", "true").returncode != 0, (
@@ -4705,6 +4709,7 @@ def _drive_publish(tmp_path, npm_stdout, npm_code, private="false", script=None)
         [BASH, "-s"],
         input=("set -e\n" + body).replace("\r\n", "\n").encode("utf-8"),
         cwd=os.path.join(REPO, "npm"), capture_output=True, env=env,
+        timeout=30,
     )
     return subprocess.CompletedProcess(
         proc.args, proc.returncode,
