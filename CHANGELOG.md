@@ -13,6 +13,75 @@ installs.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.4.0] — 2026-09-06
+
+**The health run: 832 findings fixed across three stages, and a suite that grew from 1,359 tests to 7,538.**
+A dogfood swarm ran 28 waves over four days — ten audit and ten amend waves for defects and safety (Stage A),
+two and four for proactive health (Stage B), one and one for what an operator reads and waits on (Stage C).
+Every wave: seven domains audited in isolated worktrees, a ten-family cross-model panel re-rated every
+finding, a five-seat local jury corroborated each case-file, and every approved finding was fixed with a test
+seen red first and a family line naming the ground it stands on. Thirty Stage C findings are deferred as the
+visual-polish stage's ground; nothing else is open. The floor is law: the last receipt reads 7,538 passed /
+64 skipped, identical under `-O`, with the package build and two clean installs green. The first health pass's
+notes, written at the time, follow the three stage summaries.
+
+### Stage A — defects and safety (waves 1–20, 665 findings)
+
+- **One halt contract for every CPython instrument:** `armature_core.parts.run_tool_main` — exit 0 on success,
+  2 on a deliberate refusal, 1 on a crash, one strict-JSON `<TOOL>_HALT` line with six keys (`tool`, `outcome`,
+  `gate`, `error`, `message`, `evidence`), `evidence.clause` the word a caller branches on; adopted by 50 tools
+  of a population of 54, the rest recorded exceptions (the 21 Blender-side tools keep local handlers of the
+  same shape; the clean-room classifier gate keeps its own because the clean room cannot import the package).
+- **Gates raise named classes with evidence, never `assert`, never a bare `SystemExit`:** 148 family classes,
+  a 698-word clause vocabulary held by the suite, every refusal on the paid path and the control sequence
+  policed by a census keyed on the resolved shape rather than a spelling.
+- **The paid path fails closed before a spend:** Gate ROUTE walks every hosted node and nested subgraph, refuses
+  a graph carrying hosted nodes with no declared tier, asks the licence ruling table before the suffix predicate
+  (a ruled name with an unknown extension is a refusal), and its receipt carries the tool version, the graph
+  digest and the rulings' fetch dates against the licence map's 90-day advisory rule; Gate CANON prints
+  `[canon] ARMED: <subject>` or `[canon] UNGATED: <subject> — <reason>` on every spend builder; every builder
+  record carries `payload_sha256`; `--frame` is required at the saved-graph admission.
+- **Instruments stopped reporting what they had not measured** — unequal runs, empty channel directories,
+  stream-size mismatches, unhashable atlas images, non-finite point clouds, dropped framing objects — and the
+  write-ordering law (refuse before the first write) is a census over the 70-tool population with three pins.
+
+### Stage B — proactive health (waves 21–26, 128 findings)
+
+- **The record index verifies itself** and skips by name where its sibling working copy is absent; the E02
+  payload pins run everywhere from committed fixtures; the golden-frame environment record is a table of every
+  host the hashes were verified on, held at the minor-version boundary.
+- **CI and packaging are runner-honest:** the clean-room action clears `dist/` with an emptiness refusal, selects
+  the wheel and sdist by a name derived from `pyproject.toml`, builds its rooms under `RUNNER_TEMP`; the lazy-import
+  probe refuses by a named andon; `requires-python` is `>=3.11,<3.15`; `verify.ps1` states which pinned build it
+  ran; every dependency the code imports is declared, and four rig-only assumptions the runner exposed were
+  each reproduced under a CI-shaped environment before their fix.
+- **Every census reads a resolved shape:** clause words as dict-literal keys, delegation as an AST call, the
+  guarded-path list derived from what the suite opens, doubled laws and dated ceilings retired to one home each.
+
+### Stage C — what an operator reads and waits on (waves 27–28, 69 findings; 30 deferred to visual polish)
+
+- **Every parser says what its tool does and what every flag means** (69 parsers gained a description, more
+  than 400 flags gained help text, `--codec` gained `choices=`); the four tools that spend or gate a spend carry
+  an epilogue naming the route and what a refusal costs; `docs/tools.md` is generated from the docstrings.
+- **A refusal names what it measured and what to change:** canon's refusals name the file and the valid set,
+  the licence kill names the node, G2 names the run directory, the PNG writer names the path, the channel
+  refusals carry the frame, channel and target path, the ALPHA law's refusals name their flags, 33 evidence
+  dicts gained their clause word, and the halt line prints its own prose on any terminal encoding without
+  ever losing its exit code.
+- **A tool that would write over an earlier run refuses by name** (`output_already_exists`; `--overwrite` replaces
+  and the record says so); **a tool that waits says it is alive** (a lowercase stderr progress line with the
+  bound it will refuse at; every subprocess bounded; `*_exceeded_the_time_bound` refusals that never retry — a
+  retry on the paid path spends credits that have no compensator); **a gate that fires after the output
+  directory exists says what the directory holds.** The control-sequence exporter distinguishes a write failure
+  from an unreadable spec; the eight seed specs share one ceiling-history file instead of eight copies.
+- **README carries the operator contract:** "Reading a halt", "Running the suite", the split route line for the
+  21 Blender-side tools; the publishing page and the ship gate are re-measured and dated.
+
+### The first health pass, as written at the time (waves 1–8)
+
+
 **The first health pass: 89 defects, most of them a check that reported safety it never
 verified.** A dogfood swarm audited the tree in six domains, a cross-family panel re-rated the
 findings, a family-different jury corroborated the wave, and six amend agents fixed every

@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português (BR)</a>
+  <a href="README.md">English</a> | <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português (BR)</a>
 </p>
 
 <p align="center">
@@ -99,8 +99,8 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** (GPU-hour billing) under per-experiment ceilings; **E13's four generations are the repo's first partner-credit spend, inside their pre-stated 424–844 bracket**; E14's two generations metered **0 partner credits** at a two-generation ceiling, reached exactly |
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
 | Spend gates | **Gate CANON** refuses a paid submission whose subject cannot be named against a machine-readable canon — surface is the row, a null occupant is a **hole rather than an absence**, and both directions are checked (the prompt covers the canon; everything in the prompt *is* canon). It fires **before** the output directory is created, inside each of the seven payload builders, because the irreversible step this repo owns is writing a payload. The escape is census-backed: `--no-canon` on a subject that *has* canon is refused, not honoured — and since the first health pass it is **loud on every spend**: each builder prints `[canon] ARMED: <subject>`, and on the census escape `[canon] UNGATED: <subject> — <the census row's reason>`, so a build log distinguishes a ratified hole from a subject whose canon was never written; and records the verdict under `gates.CANON`, so no record can leave the question of whether canon was armed or escaped unanswered |
-| Tests | **7181 passing on the rig** (64 skips, measured 2026-09-05 at the close of the Stage B health pass — 1359 before the first pass, 1781 after it), identical under `-O`; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
-| Status | **v0.3.0** — the record gains a spend gate and an index that verifies itself. `armature_core` ships to PyPI as `armature-studio` and npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere |
+| Tests | **7538 passing on the rig** (64 skips, measured 2026-09-06 at the close of the health run — 1359 before it, 1781 after the first pass, 7181 after Stage B), identical under `-O`; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
+| Status | **v0.4.0** — the health run: 832 findings fixed across three stages, one halt contract for every instrument, every refusal naming what it measured, and a suite five times its size. v0.3.0 gave the record a spend gate and an index that verifies itself. `armature_core` ships to PyPI as `armature-studio` and npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere |
 
 ### What is measured (the current arc)
 

@@ -415,14 +415,22 @@ def test_the_extractor_prints_a_lowercase_progress_line_per_frame(tmp_path):
 
 
 def test_a_clip_that_is_not_a_clip_is_refused_with_its_byte_count_and_the_empty_dir(
-        tmp_path):
+        tmp_path, monkeypatch):
     """The refusal an operator meets when a paid run's download is an HTML error body.
 
     Red on `3380ae2`: the refusal carried a `stderr_tail`, no clause, no gate, no andon, no
     byte count, and no mention of the `frames/` directory the run had already created —
     which then reads as a run that happened and produced nothing.
+
+    V0.4.0 CI FIX-UP (coordinator, 2026-09-06): `probe` arms `encode_control.gate_ffmpeg_binary`
+    before it runs the decoder, and that gate reads `encode_control.FFMPEG` — on a host with no
+    ffmpeg (ubuntu-latest; the first CI run over this test) it refused `ffmpeg_binary_not_found`
+    before the stubbed report was ever parsed. The decoder is stubbed here, so an existing file
+    stands in for the binary — the same idiom `test_instruments_measure_amend_w14.py` records.
     """
     import extract_clip_frames as X
+    import encode_control as EC
+    monkeypatch.setattr(EC, "FFMPEG", sys.executable)
 
     src = tmp_path / "run.mp4"
     src.write_bytes(b"<html><body>403 Forbidden</body></html>")

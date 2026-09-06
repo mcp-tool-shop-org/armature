@@ -2,7 +2,7 @@
 title: The license gate
 description: No non-commercially licensed model, weight, adapter, preprocessor or dependency — including in experiments — and the two traps that stance caught on day one.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 **No non-commercially licensed model, weight, LoRA, preprocessor or code dependency enters this

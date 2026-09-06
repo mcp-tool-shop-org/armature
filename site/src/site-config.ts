@@ -8,7 +8,7 @@ export const config: DefaultSiteConfig = {
   template: 'default',
   title: 'armature — You block the shot. The model shoots it.',
   description:
-    'Stage your character in Blender. Render the control sequence. Let the video model paint the life over it. Twelve experiments in, the thesis is measured at product level.',
+    'Stage your character in Blender. Render the control sequence. Let the video model paint the life over it. Fourteen experiments in, the thesis is measured at product level, and every instrument refuses by name.',
   logoBadge: 'AR',
   brandName: 'armature',
   repoUrl: 'https://github.com/mcp-tool-shop-org/armature',
@@ -16,7 +16,7 @@ export const config: DefaultSiteConfig = {
     'MIT Licensed — built by <a href="https://mcp-tool-shop.github.io/" style="color:var(--color-muted);text-decoration:underline">MCP Tool Shop</a>. Founded 2026-08-10; the record is the repo’s docs tree.',
 
   hero: {
-    badge: 'v0.1.0 released · thirteen experiments closed · identity holds — even on a hosted tier fed only authored references',
+    badge: 'v0.4.0 · fourteen experiments closed · identity holds on a hosted tier fed only authored references · 832 health findings fixed, 7,538 tests',
     headline: 'armature —',
     headlineAccent: 'You block the shot. The model shoots it.',
     description:
@@ -42,7 +42,7 @@ export const config: DefaultSiteConfig = {
         },
         {
           title: 'armature is the handle',
-          desc: 'The previz scene is ground truth. A canonical mesh is staged and animated, and the render becomes a per-frame control sequence the video model works inside. Twelve experiments in, the idea holds at product level — and every claim behind that sentence traces to a numbered experiment in the repo.',
+          desc: 'The previz scene is ground truth. A canonical mesh is staged and animated, and the render becomes a per-frame control sequence the video model works inside. Fourteen experiments in, the idea holds at product level — and every claim behind that sentence traces to a numbered experiment in the repo.',
         },
       ],
     },
@@ -75,7 +75,7 @@ export const config: DefaultSiteConfig = {
       title: 'Where this is',
       subtitle:
         'armature was founded on 2026-08-10. The thesis it exists to test — does a CG-rendered control sequence hold a character through a video model — is now measured at product level across thirteen closed experiments, judged by the Director’s eye, and a negative result remains a full success here. The counters below are dated; README.md in the repo carries the live ones.',
-      columns: ['Counter', 'As of 2026-08-13'],
+      columns: ['Counter', 'As of 2026-09-06'],
       rows: [
         [
           'Experiments',
@@ -103,7 +103,11 @@ export const config: DefaultSiteConfig = {
         ],
         [
           'What exists today',
-          'v0.2.1 — the record’s current marked state, and the first that installs: armature_core on PyPI (armature-studio) and npm (armature-studio), plus the routes, the instrument shelf, the licence map, the experiment record E01–E14, and this page',
+          'v0.4.0 — the record’s current marked state: armature_core on PyPI (armature-studio) and npm (@mcptoolshop/armature-studio), the routes, the instrument shelf (76 tools, every one answering --help), the spend gate, the licence map, the experiment record E01–E14, and this page',
+        ],
+        [
+          'Health run',
+          '28 dogfood-swarm waves over four days (2026-09-03 → 09-06): 832 findings fixed across defects, proactive health and operator-facing behaviour, 30 deferred as the visual-polish stage’s ground; one halt contract for every CPython instrument (exit 0 / 2 / 1, one strict-JSON halt line, a 698-word clause vocabulary held by the suite); the suite grew from 1,359 to 7,538 tests, identical under -O, with the package build and two clean installs green on every wave',
         ],
       ],
     },

@@ -36,6 +36,13 @@ credits have no undo, so the bound used to be a sentence in a spec honoured by w
 It is now a check that runs inside the tools that author a spend — see
 [the spend gate](#the-spend-gate-v030) below.
 
+**v0.4.0 is the health run.** Over four days a dogfood swarm audited the tree in seven domains,
+a ten-family cross-model panel re-rated every finding, a local jury corroborated every wave, and
+832 findings were fixed with a test seen red first: one halt contract for every CPython instrument,
+a refusal that names what it measured and what to change, a progress line for every tool that
+waits, `--help` on every instrument, and a suite that grew from 1,359 tests to 7,538. What an
+operator now reads on screen is on its own page — [Reading a halt](reading-a-halt/).
+
 ## Install
 
 ```bash

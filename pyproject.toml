@@ -25,7 +25,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "armature-studio"
-version = "0.3.0"
+version = "0.4.0"
 description = "Block the shot; the model shoots it — GLB-authored previz, control sequences and gates for video-diffusion generation."
 readme = "README.pypi.md"
 # `>=3.11`, narrowed from `>=3.10` and now EXERCISED: ci.yml runs a 2-entry matrix at this

@@ -2,7 +2,7 @@
 title: Roadmap
 description: The arc session by session, the hinge where the thesis lives or dies, and the drift tripwires named in advance.
 sidebar:
-  order: 5
+  order: 6
 ---
 
 The canonical roadmap is
@@ -130,9 +130,11 @@ carries the measurement that produced it, or it is marked provisional.
 
 Publishing reached its first milestone on 2026-08-13: **v0.1.0**, a GitHub release marking a
 state of the record — twelve experiments, three routes, the laws, with translations landed
-before the tag because a tag is immutable. **Nothing ships to a package registry** — the
-reserved names remain unused, and a version here marks the record, not an installable
-artifact. *(This section read "nothing has been published from this repo yet" until the
-release; the day-zero half expired and the registry half stands.)* The details, including a
+before the tag because a tag is immutable. **v0.2.1 (2026-08-15) was the first that installs** —
+`armature_core` on PyPI as `armature-studio` and on npm as `@mcptoolshop/armature-studio`, published
+from the tag by OIDC; **v0.3.0 (2026-08-18)** put a gate in front of the money; **v0.4.0 (2026-09-06)**
+closed a 28-wave health run — 832 findings fixed, one halt contract for every instrument, a suite of
+7,538 tests. *(This section read "nothing ships to a package registry" until v0.2.1; re-measured
+2026-09-06 against the registries and the release list.)* The details, including a
 load-bearing constraint about which workflow filename the release path authenticates, are in
 [docs/publishing.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/publishing.md).
