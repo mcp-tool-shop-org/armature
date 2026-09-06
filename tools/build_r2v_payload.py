@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import build_cascade_payload as CASCADE  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, read_seed_registration)
+    canonical_payload_digest, disclosure_lines, read_seed_registration)
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
 from armature_core.route_gates import RouteGate  # noqa: E402
@@ -155,6 +155,129 @@ def gate_arm_input(arm, value):
         f"`open`, two gates later",
         {"gate": "ROUTE", "andon": "RouteGate", "clause": "missing_arm_input",
          "arm": arm, "flag": spec["flag"]})
+
+
+#: The **wan2.7-r2v partner tier's disclosure row** — what a user of THIS route is exposed
+#: to, mirrored from the licence map's own FETCHED documents and from the E13 probe report
+#: that recorded them.
+#:
+#: Wave 28, F-2dcaf53a. This tool authors the ONLY hosted-partner-tier spend in this repo and
+#: said nothing about what riding that tier costs its user. MEASURED end to end in this
+#: worktree before the fix (`build_r2v_payload.main` on the committed `specs/E13-seeds.json`
+#: + `specs/E13-prompt.json`, arm A1, seed 2026081351): the whole of stdout was nine lines —
+#: the canon line, `arm`, `nodes`, `seed gate`, `ceiling gate`, `route`, `gate L (hosted)`,
+#: `slots`, `BUILD_R2V_OK` — and not one of them named a data-use posture, an AI-content
+#: disclosure duty or a watermark policy; the payload record beside the graph carried `tier`,
+#: `payload`, `slot_order`, `gate_pair_note`, `gate_l_note` and `payload_sha256` and no
+#: disclosure key either. Meanwhile the E14 sibling had been given exactly that surface a
+#: wave earlier (F-92f67091) for a SMALLER obligation — one credits line on one LoRA.
+#:
+#: CLAUDE.md's per-route disclosure ruling (the Director, 2026-08-12) was born on THIS route:
+#: a route that sends assets through a third-party tier documents its data-use posture, its
+#: AI-content disclosure duty and its watermark policy, grounded in the licence map's fetched
+#: documents. The obligations below are the map's words, not this builder's.
+#:
+#: ⚠ **Where this table would belong if it could.** `route_gates.HOSTED_TIER_RULES` is the
+#: machine-readable home for what a hosted tier ALLOWS (its enums), and the natural home for
+#: what a hosted tier OBLIGES is beside it, the way `RULED_COMPONENTS.condition` holds the
+#: weight rows' obligations and `attribution_entry_for` builds a record entry from them. That
+#: module is core-gates' and carries no finding for this row, so the row is declared here — in
+#: the one tool in this tree that rides this tier — with its source documents named, and the
+#: consolidation is posted to the relay rather than done by reaching into another domain's
+#: file. If a second tool ever rides a hosted tier, this table moves; it does not get copied.
+TIER_DISCLOSURE = {
+    "tier": TIER,
+    "surface": "Comfy Cloud hosted partner tier (Comfy-mediated)",
+    "provider_terms": {
+        "document": "Wan Terms of Service",
+        "url": "https://wan.video/policy/termsofService",
+        "updated": "2026-08-06",
+        "fetched": "2026-08-12 (the Director's local export; fetchers get a JS shell)",
+        "sha256": "26d81f01...cb4cd6",
+        "recorded_in": ("docs/license-map.md, row 'Wan 2.6/2.7 partner tier'; "
+                        "docs/experiments/E13-composed-route-probe.md"),
+    },
+    "output_ownership": ("the provider assigns to the submitter all right, title and "
+                         "interest it has in Outputs (Wan ToS SIII.4), and Comfy's own row "
+                         "fills our side of the chain"),
+    "ruling": ("CONDITIONAL ACCEPTED by the Director, 2026-08-12 — proceed via Comfy. The "
+               "condition he attached is DISCLOSURE, which is why these lines exist and why "
+               "they are printed rather than filed"),
+    "residual": ("WHICH paper governs Comfy-mediated partner calls is NOT established: the "
+                 "Wan ToS governs services accessible via wan.video and its own SII.1(c) "
+                 "bans automated extraction of Outputs, which cannot describe the API tier; "
+                 "Comfy's row says no training on Input/Output; the Comfy-Alibaba reseller "
+                 "agreement is unseeable. The exposure is stated at its WIDEST reading here, "
+                 "because a disclosure that assumes the friendlier paper is not a disclosure"),
+    "obligations": [
+        {"kind": "training_use",
+         "text": ("uploaded User Content — this submission's prompt, its reference images "
+                  "or reference video, and the Outputs — is licensed to the provider "
+                  "'unconditional, irrevocable ... fully transferable, sub-licensable, "
+                  "perpetual, worldwide' (SIII.6), deemed non-confidential and "
+                  "non-proprietary (SIII.3(c)) and expressly usable 'to develop and improve "
+                  "our machine-learning and artificial-intelligence technologies' "
+                  "(SIII.3(e)). That is the trade this route makes: the character plates "
+                  "and frames you send carry a training-and-publication licence to the "
+                  "provider on this surface"),
+         "applies_to": "every asset and prompt this submission uploads",
+         "source": "Wan ToS SIII.6 / SIII.3(c) / SIII.3(e), fetched 2026-08-12"},
+        {"kind": "ai_content_disclosure",
+         "text": ("footage published from this route must 'clearly and conspicuously "
+                  "disclose' that it was generated by artificial intelligence (SIII.8(g)). "
+                  "The duty is on the PUBLICATION, not on this build, so nothing downstream "
+                  "of here will remind you of it — which is exactly why it is said at the "
+                  "moment the spend is authored"),
+         "applies_to": "published footage from this route",
+         "source": "Wan ToS SIII.8(g), fetched 2026-08-12"},
+        {"kind": "watermark",
+         "text": ("`watermark` is a REQUEST in the payload and nothing more: it does not "
+                  "promise the returned footage carries no mark. If a label or watermark IS "
+                  "applied, REMOVING it is banned (SII.1(a)), and the Model Studio "
+                  "service-specific terms repeat the ban on tampering with an 'AI-generated' "
+                  "label. Inspect the returned frames before publishing rather than reading "
+                  "this flag as an answer"),
+         "applies_to": "the footage this submission returns",
+         "source": ("Wan ToS SII.1(a); Model Studio service-specific terms "
+                    "(help.aliyun.com/en/model-studio/bailian-service-notes), "
+                    "fetched 2026-08-12")},
+    ],
+}
+
+
+def disclosure(arm, route_ev, watermark_requested):
+    """The per-route disclosure block for one E13 submission.
+
+    Every field is READ from `TIER_DISCLOSURE` — the licence map's own row — or from Gate
+    ROUTE's own receipt, except the watermark REQUEST, which is read from the payload this
+    build actually sends. Nothing is typed twice, and the block is stored in the payload
+    record under `disclosure` and rendered to stdout by
+    `build_assembly_payload.disclosure_lines`, the ONE renderer the E14 sibling also uses.
+    """
+    obligations = [dict(o) for o in TIER_DISCLOSURE["obligations"]]
+    for ob in obligations:
+        if ob["kind"] == "watermark":
+            ob["text"] = (f"`watermark={bool(watermark_requested)}` was sent. " + ob["text"])
+    return {
+        "route": f"E13 arm {arm} - {TIER} on the {TIER_DISCLOSURE['surface']}",
+        "tier": TIER,
+        "provider_terms": TIER_DISCLOSURE["provider_terms"],
+        "output_ownership": TIER_DISCLOSURE["output_ownership"],
+        "ruling": TIER_DISCLOSURE["ruling"],
+        "residual": TIER_DISCLOSURE["residual"],
+        "watermark_requested": bool(watermark_requested),
+        "obligations": obligations,
+        "route_verdict": route_ev.get("verdict"),
+        "read_from": ("build_r2v_payload.TIER_DISCLOSURE, mirrored from "
+                      "docs/license-map.md's 'Wan 2.6/2.7 partner tier' row and the fetched "
+                      "documents it names"),
+        "checked_by": ("nothing in code: this tier's obligations bind PUBLISHED FOOTAGE and "
+                       "an uploaded asset already sent, neither of which a build-time gate "
+                       "can observe. They are DISCLOSED at the moment the spend is authored, "
+                       "which is the whole of what CLAUDE.md's per-route disclosure ruling "
+                       "asks of this route - stated here rather than left as a silence a "
+                       "reader could mistake for a gate"),
+    }
 
 
 def build(*, arm, seed, prompt, negative, refs=None, upload_names=None,
@@ -324,19 +447,69 @@ def build_and_write(argv=None):
     declares "2 = a gate refused ... 1 = this tool crashed". `verify.ps1` reads `-ne 0`, so
     a wrapper recorded the successful authoring of a paid submission as a failure.
     """
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", required=True, choices=("A1", "A2"))
-    ap.add_argument("--seed", type=int, required=True)
+    tier_rules = RG.HOSTED_TIER_RULES[TIER]
+    ap = argparse.ArgumentParser(
+        description=(
+            "Build and gate ONE E13 submission for the wan2.7-r2v hosted partner tier - the "
+            "only route in this repo that bills per submission. Writes the API graph and its "
+            "payload record; submits nothing."),
+        epilog=(
+            "ROUTE: E13, the composed route - a GLB-staged performance carried into video "
+            "through a reference slot (A1: four composited kit views; A2: a reference VIDEO "
+            "constructed in-graph by the cascade). WHAT A REFUSAL COSTS: nothing but your "
+            "time, and that is the point - every gate here runs BEFORE a credit is spent, "
+            "and spent credits have no compensator. WHAT THIS ROUTE COSTS ITS USER: the "
+            "disclosure lines printed above BUILD_R2V_OK, per CLAUDE.md's per-route "
+            "disclosure ruling - read them before you submit."))
+    ap.add_argument("--arm", required=True, choices=("A1", "A2"),
+                    help="A1 feeds the reference IMAGE slots from --refs; A2 feeds the "
+                         "reference VIDEO slot from a cascade built in this same graph "
+                         "out of --uploads")
+    ap.add_argument("--seed", type=int, required=True,
+                    help="the seed to submit. It must appear in --seeds: Gate S refuses an "
+                         "unregistered number before anything is written")
     ap.add_argument("--seeds", required=True, help="the committed seed registration")
-    ap.add_argument("--prompt-file", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--prompt-file", required=True,
+                    help="JSON carrying `prompt` and `negative_prompt`. The SHIPPED prompt "
+                         "is what Gate CANON gates, so a refusal cannot be worked around "
+                         "with --canon-prompt")
+    # ⚠ No `--overwrite` here, and that is MEASURED rather than an omission (wave 28,
+    # F-5fd16451). This tool's re-run case is ALREADY CLOSED, one gate earlier and by
+    # another domain's file: `canon_spend(..., out_dir=out)` reaches
+    # `armature_core.canon._gate_out_dir`, whose `out_dir_not_empty` clause refuses a
+    # non-empty `--out` outright. MEASURED as three subprocesses in this worktree on the
+    # committed E13 specs, arm A1, seed 2026081351: the first run exits 0 with
+    # BUILD_R2V_OK; the second into the same `--out` exits 2 with
+    # `BUILD_R2V_HALT … "gate": "CANON" … "clause": "out_dir_not_empty" …` naming both
+    # files; and the third with `--overwrite` ALSO halts at CANON, because that gate runs
+    # above this point. So an `--overwrite` flag here would be a flag that cannot fire —
+    # "a check that cannot fail is not a check" — and wiring a bypass around another
+    # domain's gate is not this fix. The half of F-5fd16451 that IS open here is the
+    # printed digest below, so two runs are distinguishable in a scrollback.
+    ap.add_argument("--out", required=True,
+                    help="the directory the graph and its payload record are written into. "
+                         "Created below the last gate, so a refusal leaves nothing behind; "
+                         "Gate CANON refuses a --out that already holds entries, so a "
+                         "rebuild goes to a fresh directory")
     ap.add_argument("--refs", default=None, help="A1: the reference record JSON")
     ap.add_argument("--uploads", default=None, help="A2: the frame uploads map JSON")
-    ap.add_argument("--resolution", default="720P")
-    ap.add_argument("--ratio", default="16:9")
-    ap.add_argument("--duration", type=int, default=5)
-    ap.add_argument("--group", type=int, default=AS.GROUP_SIZE)
-    ap.add_argument("--prefix", default=None)
+    ap.add_argument("--resolution", default="720P",
+                    help=f"one of {tier_rules['resolutions']} - the tier's own enum, "
+                         f"measured by {tier_rules['measured']}. Gate L refuses anything "
+                         f"else by name (default: %(default)s)")
+    ap.add_argument("--ratio", default="16:9",
+                    help=f"one of {tier_rules['ratios']} - the tier's own enum. Gate L "
+                         f"refuses anything else by name (default: %(default)s)")
+    ap.add_argument("--duration", type=int, default=5,
+                    help=f"clip seconds, inside the tier's bound "
+                         f"{tier_rules['duration_s']} inclusive (default: %(default)s)")
+    ap.add_argument("--group", type=int, default=AS.GROUP_SIZE,
+                    help="A2 only: frames per BatchImagesNode in the in-graph cascade. The "
+                         "slot ceiling gate checks it against the cascade's own constant "
+                         "(default: %(default)s)")
+    ap.add_argument("--prefix", default=None,
+                    help="the server-side filename prefix for the saved video; defaults to "
+                         "video/E13_<arm>_seed<seed>, so two arms cannot write to one path")
     add_spend_flags(ap)
     a = ap.parse_args(argv)
 
@@ -427,6 +600,14 @@ def build_and_write(argv=None):
                          "expected_sources": list(ordered_ids)}
 
     node_inputs = wf[str(R2V_ID)]["inputs"]
+    # The per-route disclosure block (wave 28, F-2dcaf53a), built from the licence map's own
+    # row and Gate ROUTE's own receipt. The watermark half is read off the payload THIS build
+    # actually sends, never off the literal at the `build()` call — a disclosure that
+    # describes a value the graph does not carry is the wiring claim CLAUDE.md forbids.
+    # Built ABOVE the record so the record carries it; printed BELOW, so an operator meets it
+    # whether they read stdout or the JSON.
+    disclosure_block = disclosure(a.arm, gate_route, node_inputs.get("watermark"))
+
     record = {
         "tool": "build_r2v_payload", "tool_version": TOOL_VERSION,
         "experiment": "E13", "arm": a.arm, "tier": TIER,
@@ -454,6 +635,12 @@ def build_and_write(argv=None):
         "node_ids": {"first_image": FIRST_IMAGE_ID, "r2v": R2V_ID, "save": SAVE_ID,
                      "cascade": cascade_ids},
         "gates": gates,
+        # The per-route disclosure CLAUDE.md's ruling requires of a route that rides a
+        # third-party tier: the training-use trade, the AI-content disclosure duty on
+        # published footage, and what the watermark request does and does not promise. It
+        # rides the provenance, and `disclosure_lines` says it out loud below (wave 28,
+        # F-2dcaf53a; the E14 sibling's shape, adopted through its renderer, not respelled).
+        "disclosure": disclosure_block,
         "shared_gate_parameters": shared_params,
         "gate_pair_note": (
             "Gate PAIR is n/a on this tier and is RECORDED as n/a, not skipped: the graph "
@@ -478,12 +665,12 @@ def build_and_write(argv=None):
     # Below the last in-tool gate. `os.makedirs` used to sit above Gate S, so a refused
     # spend left an empty run directory beside real ones — the invariant build_payload.py
     # states for Gate CANON, applied to every gate in this tool.
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     graph_path = os.path.join(out, f"E13-{a.arm}-seed{a.seed}.api.json")
+    record_path = os.path.join(out, f"E13-{a.arm}-seed{a.seed}-payload-record.json")
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=1)
-    with open(os.path.join(out, f"E13-{a.arm}-seed{a.seed}-payload-record.json"), "w",
-              encoding="utf-8") as fh:
+    with open(record_path, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=1)
 
     print(canon_line(canon_ev))
@@ -497,6 +684,17 @@ def build_and_write(argv=None):
     print(f"gate L (hosted)  {a.resolution} {a.ratio} {a.duration}s -> legal "
           f"{gate_l['legal']}")
     print(f"slots            {record['slot_order']}")
+    # Wave 28, F-5fd16451, the half that is open on this tool: the digest that ties this
+    # record to this graph, on the success line, so two runs are distinguishable in a
+    # scrollback. Before this, two builds of different arms printed nine lines that carried
+    # no value differing between them. Gate CANON's `out_dir_not_empty` already closes the
+    # re-run-into-one-directory half here (see the note at `--out`).
+    print(f"payload sha256   {record['payload_sha256']}")
+    # Wave 28, F-2dcaf53a. The one route in this repo that bills per submission now says
+    # what riding it costs its user, at the moment the spend is authored — the E14 sibling's
+    # renderer, imported, not respelled.
+    for line in disclosure_lines(disclosure_block):
+        print(line)
     print(f"BUILD_R2V_OK     {graph_path}")
     return wf, record
 

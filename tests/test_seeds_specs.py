@@ -22,6 +22,18 @@ domain's to edit and are routed.
 
 The prose is not deleted. It moves into `ceiling.note` verbatim, and the number a
 submission step can count against sits beside it in `ceiling.submissions`.
+
+WAVE 28, F-7ca576d2 — the paragraph has ONE home. `ceiling.why_machine_readable` used to
+carry a byte-identical 4,984-character copy of the correction history in each of the eight
+specs: 40,048 UTF-8 bytes, 49.9% of every byte under `specs/`, sitting between an operator
+and the bound on the one resource in this repo with no compensator. It now lives at
+`specs/ceiling-why-machine-readable.md` and each spec's `why_machine_readable` is a
+one-sentence pointer at it, beside the values that bind (`submissions`, `counted_in`,
+`note`). MEASURED across `specs/*.json`: 80,321 bytes before, 45,585 after, with the one home
+6,020 bytes. Nothing was deleted — the paragraph is verbatim at that path and its RE-ANCHORED
+notes are still appended in place, once instead of eight times. Every check in this module
+that used to read the copy now resolves it THROUGH the pointer (`_why`), so a spec that stops
+pointing at the home fails here rather than quietly holding no provenance at all.
 """
 
 import glob
@@ -35,10 +47,36 @@ import _census_nodes as CN
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEED_SPECS = sorted(glob.glob(os.path.join(REPO, "specs", "*seeds.json")))
 
+#: The ONE home the eight specs point at (wave 28, F-7ca576d2).
+CEILING_HOME_NAME = "ceiling-why-machine-readable.md"
+CEILING_HOME = os.path.join(REPO, "specs", CEILING_HOME_NAME)
+
 
 def _load(path):
     with open(path, encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _pointer(path):
+    """One spec's `ceiling.why_machine_readable` — which is now a pointer, not a paragraph."""
+    return _load(path)["ceiling"]["why_machine_readable"]
+
+
+def _why(path):
+    """The correction paragraph for one spec, resolved THROUGH that spec's pointer.
+
+    Wave 28, F-7ca576d2. Every clause below used to read the spec's own copy. Resolving it
+    through the pointer keeps each per-spec check per-spec — a spec that drops the pointer,
+    or points somewhere that does not exist, fails on that spec's own parametrised id — while
+    the text itself is read from one file, so a correction is appended once.
+    """
+    pointer = _pointer(path)
+    assert isinstance(pointer, str) and CEILING_HOME_NAME in pointer, (
+        f"{os.path.basename(path)}'s ceiling.why_machine_readable does not point at "
+        f"{CEILING_HOME_NAME}; it reads {pointer!r:.200}")
+    assert os.path.isfile(CEILING_HOME), f"{CEILING_HOME} does not exist"
+    with open(CEILING_HOME, encoding="utf-8") as fh:
+        return fh.read()
 
 
 def test_the_seed_specs_are_found_at_all():
@@ -169,8 +207,14 @@ CORRECTION_MARK = "CORRECTION, 2026-09-04"
 @pytest.mark.parametrize("path", SEED_SPECS, ids=os.path.basename)
 def test_every_spec_carries_the_correction_rather_than_the_original_claim_alone(path):
     """Correct in place, with the measurement that overturned the claim — never a quiet
-    delete. The original sentence stays; the correction stands beside it."""
-    why = _load(path)["ceiling"]["why_machine_readable"]
+    delete. The original sentence stays; the correction stands beside it.
+
+    WAVE 28, F-7ca576d2: read through the spec's pointer at the one home. The property is
+    unchanged — this spec's provenance must still carry the original claim AND the
+    correction — but it is now one text instead of eight copies, and the pointer resolving
+    is part of what is asserted (see `_why`).
+    """
+    why = _why(path)
     assert FALSIFIED_CLAUSE in why, (
         "the original claim was deleted rather than corrected; the correction is more "
         "useful than the original and both belong in the record")
@@ -236,7 +280,7 @@ def test_the_specs_correction_agrees_with_the_tree_it_describes():
 def _citations(path):
     import re
 
-    why = _load(path)["ceiling"]["why_machine_readable"]
+    why = _why(path)
     return re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)\b", why)
 
 
@@ -376,7 +420,7 @@ def test_every_citation_in_every_seeds_spec_resolves(spec):
     """Each cited line must exist AND be the line that reads the key it is cited for."""
     import re
 
-    why = _load(spec)["ceiling"]["why_machine_readable"]
+    why = _why(spec)
     cited = re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)", why)
     assert len(cited) == 7, cited
     for name, lineno in cited:
@@ -400,7 +444,7 @@ def test_every_citation_names_the_function_that_holds_it(spec):
     import ast
     import re
 
-    why = _load(spec)["ceiling"]["why_machine_readable"]
+    why = _why(spec)
     cited = re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+) \(([A-Za-z0-9_<>]+)\)", why)
     assert len(cited) == 7, f"{os.path.basename(spec)} carries {len(cited)} qualified citations"
     for name, lineno, fn in cited:
@@ -417,44 +461,82 @@ def test_every_citation_names_the_function_that_holds_it(spec):
 
 
 def test_the_eight_specs_carry_the_SAME_citations_as_each_other():
-    """They are eight copies of one paragraph. A re-anchoring that fixes some and not others
-    is how seven files came to disagree with the eighth for a whole wave."""
+    """One paragraph, eight readers.
+
+    WAVE 28, F-7ca576d2 — this used to compare eight COPIES, which is how seven files came to
+    disagree with the eighth for a whole wave. There is one text now, so the property that
+    remains checkable is the one that made the copies dangerous: every spec must actually
+    REACH it. Each is resolved through its own pointer (`_why` refuses a spec that points
+    nowhere), and the eight citation lists must still agree — which they now do by
+    construction, and this is where a spec that grows a second, private paragraph beside the
+    pointer would show up.
+    """
     import re
 
     seen = {}
     for spec in SEED_SPECS:
-        why = _load(spec).get("ceiling", {}).get("why_machine_readable")
-        if not isinstance(why, str):
-            continue
         seen[os.path.basename(spec)] = sorted(
-            f"{n}:{l}" for n, l in re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)", why))
+            f"{n}:{l}" for n, l in re.findall(
+                r"\b([A-Za-z0-9_]+[.]py):([0-9]+)", _why(spec)))
     assert len(seen) == 8, sorted(seen)
     distinct = {tuple(v) for v in seen.values()}
     assert len(distinct) == 1, {k: v for k, v in seen.items()}
+    # and no spec keeps a private copy of the paragraph beside the pointer
+    for spec in SEED_SPECS:
+        pointer = _pointer(spec)
+        assert len(pointer) < 1000, (
+            f"{os.path.basename(spec)}'s pointer is {len(pointer)} characters; the "
+            f"paragraph has one home and a spec carries a sentence pointing at it")
+        assert not re.search(r"\b[A-Za-z0-9_]+[.]py:[0-9]+", pointer), (
+            f"{os.path.basename(spec)}'s pointer carries a `<file>.py:<line>` citation of "
+            f"its own; citations live in {CEILING_HOME_NAME}, where one census resolves "
+            f"them, not in eight places where none did")
+
+
+def test_the_paragraph_has_one_home_and_the_specs_are_pointers(tmp_path):
+    """F-7ca576d2's own measurement, kept runnable.
+
+    MEASURED on `3380ae2` before the move: the eight `ceiling.why_machine_readable` values
+    were byte-identical at 4,984 characters / 5,006 UTF-8 bytes each (sha256 381902b323da…),
+    40,048 bytes in total against 80,321 bytes of `specs/*.json` — 49.9%. After: 45,585
+    bytes of `specs/*.json` and one 6,020-byte home.
+
+    The bound below is a ceiling on the RATIO, not on the byte counts, so a ninth spec or a
+    longer `note` does not fail it; what fails it is the paragraph coming back into the specs.
+    """
+    home = open(CEILING_HOME, encoding="utf-8").read()
+    assert "machine-readable siblings" in home, "the paragraph is not at its home"
+    assert len(home) > 4984, "the home is shorter than the paragraph it holds"
+
+    spec_bytes = sum(os.path.getsize(p)
+                     for p in glob.glob(os.path.join(REPO, "specs", "*.json")))
+    pointer_bytes = sum(len(_pointer(p).encode("utf-8")) for p in SEED_SPECS)
+    assert pointer_bytes / spec_bytes < 0.20, {
+        "pointer bytes": pointer_bytes, "specs/*.json bytes": spec_bytes,
+        "was": "40048 / 80321 = 0.499 before the move"}
+    del tmp_path
 
 
 def test_the_census_goes_red_on_a_spec_whose_citation_has_drifted(tmp_path):
-    """The proof that this walk can fail on the shape that hid from the original: a SECOND
-    spec — not `SEED_SPECS[0]` — whose citation points at a line that reads something else.
-    The original census returned green over exactly this."""
+    """The proof that this walk can fail on the shape that hid from the original: a citation
+    that points at a line reading something else. The original census returned green over
+    exactly this.
+
+    WAVE 28, F-7ca576d2 — the drift is applied to the ONE home's text (written into
+    `tmp_path` so nothing on the tree is touched) rather than to `SEED_SPECS[1]`'s private
+    copy, because there are no private copies any more. The predicate driven is the
+    production one, `seed_reader_call_lines`, exactly as `stale_citations` drives it.
+    """
     import re
     import shutil
 
-    assert len(SEED_SPECS) >= 2
-    victim = SEED_SPECS[1]
-    doc = _load(victim)
-    why = doc["ceiling"]["why_machine_readable"]
+    why = _why(SEED_SPECS[1])
     drifted = re.sub(r"\b(build_animate_payload[.]py):([0-9]+)", r"\1:1", why, count=1)
-    assert drifted != why
-
-    copy = tmp_path / os.path.basename(victim)
-    doc["ceiling"]["why_machine_readable"] = drifted
-    copy.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")
+    assert drifted != why, "the home carries no build_animate_payload citation to drift"
+    (tmp_path / CEILING_HOME_NAME).write_text(drifted, encoding="utf-8")
 
     cited = re.findall(r"\b([A-Za-z0-9_]+[.]py):([0-9]+)", drifted)
-    bad = [f"{n}:{l}" for n, l in cited
-           if "seeds" not in open(os.path.join(TOOLS, n), encoding="utf-8")
-           .read().splitlines()[int(l) - 1]]
+    bad = [f"{n}:{l}" for n, l in cited if int(l) not in seed_reader_call_lines(n)]
     assert bad == ["build_animate_payload.py:1"], bad
     shutil.rmtree(tmp_path, ignore_errors=True)
 

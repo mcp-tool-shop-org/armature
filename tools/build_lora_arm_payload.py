@@ -64,7 +64,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, read_seed_registration)
+    canonical_payload_digest, disclosure_lines, read_seed_registration)
 from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateCanon, GateFailure, GateSSeedRegistration)
@@ -836,36 +836,46 @@ def disclosure(arm, attribution, route_ev):
     }
 
 
-def disclosure_lines(block):
-    """The operator-facing lines for a disclosure block, one per obligation.
-
-    `canon_line(canon_ev)` exists one screen away precisely so a census escape "announces
-    itself"; this is the same shape for the obligation an arm incurs. It returns lines
-    rather than printing them so a test can read the words back without a capture.
-    """
-    out = [f"  ROUTE: {block.get('route_verdict')}"]
-    obligations = block.get("obligations") or []
-    if not obligations:
-        out.append(f"  CREDIT OBLIGATION: none - the licence map rules no CONDITIONAL "
-                   f"component in this arm's graph "
-                   f"({block['credit_obligation'].get('text')})")
-        return out
-    for ob in obligations:
-        out.append(
-            f"  CREDIT OBLIGATION: this arm credits {ob['creditor']} - {ob['text']} "
-            f"[{ob['kind']}; {ob['applies_to']}; source {ob['source']}; component "
-            f"{ob['component']}]")
-    return out
+# `disclosure_lines` is IMPORTED from `build_assembly_payload` above, never defined here.
+# Wave 28, F-2dcaf53a: it was written here in wave 14 for this arm's ONE credits line, and
+# `build_r2v_payload` — the tool that authors the only hosted-partner-tier spend in this
+# repo — had no disclosure surface at all. The renderer moved to this domain's shared home
+# (the module `gate_saved_graph` and eight of the nine builders already import
+# `read_seed_registration` from) so the paid route ADOPTS it rather than being given a
+# second spelling of it. The lines this arm prints are unchanged, byte for byte; what
+# changed is that there is now one renderer and two callers.
+#
+# `canon_line(canon_ev)` exists one screen away precisely so a census escape "announces
+# itself"; this is the same shape for the obligation an arm incurs. It returns lines rather
+# than printing them so a test can read the words back without a capture.
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description=(
+            "Build and gate ONE E14 bake-off arm: the byte-pinned E12 baseline graph with "
+            "exactly two style-LoRA nodes inserted. Writes the graph and its payload record; "
+            "submits nothing."),
+        epilog=(
+            "ROUTE: E14, one style LoRA at its trained strength on a baseline that already "
+            "holds. 'Exactly two insertions' is a property of the code here, not a sentence "
+            "in a report: the ledger sorts every difference from the baseline into "
+            "NAMED_BREAK / OUTPUT_ROUTING / UNNAMED and RAISES on the third, and on a named "
+            "break that did not happen. WHAT A REFUSAL COSTS: nothing but your time. WHAT "
+            "THIS ROUTE COSTS ITS USER: arm T's LoRA is the one CONDITIONAL licence row in "
+            "this repo - the credit obligation is printed above BUILD_LORA_ARM_OK and Gate "
+            "ROUTE refuses a build whose record does not carry it."))
     ap.add_argument("--base", required=True,
                     help="the byte-pinned E12 wave-3 seed-1 API graph")
-    ap.add_argument("--arm", required=True, choices=sorted(ARMS))
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--seeds-registry", required=True)
-    ap.add_argument("--seed", type=int, required=True)
+    ap.add_argument("--arm", required=True, choices=sorted(ARMS),
+                    help="which LoRA this arm inserts; each arm names one file in the "
+                         "licence map's E14 field")
+    ap.add_argument("--out", required=True,
+                    help="the directory the graph and its payload record are written into")
+    ap.add_argument("--seeds-registry", required=True,
+                    help="the committed seed registration Gate S checks --seed against")
+    ap.add_argument("--seed", type=int, required=True,
+                    help="the seed to submit; it must appear in --seeds-registry")
     add_spend_flags(ap)
     args = ap.parse_args(argv)
 

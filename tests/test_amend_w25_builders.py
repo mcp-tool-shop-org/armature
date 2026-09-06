@@ -846,8 +846,23 @@ def test_the_facts_only_reading_still_records_an_absence_it_cannot_judge(tmp_pat
     assert facts["payload_sha256"] is None, facts
     assert "nothing was tied and nothing was checked" in facts["source"], facts["source"]
 
+    # WAVE 28 — the bound is that `--api` is REQUIRED, resolved off the parser's own AST
+    # rather than matched as a source string. This asserted the literal
+    # `ap.add_argument("--api", required=True)`, so giving that flag a `help=`
+    # (F-c63c6ba4) failed a test whose subject is CLI reachability and not formatting.
+    # Wave 18's rule 1: a census keys on the resolved shape, never the spelled one.
+    import ast
+
     src = open(os.path.join(TOOLS, "gate_saved_graph.py"), encoding="utf-8").read()
-    assert 'ap.add_argument("--api", required=True)' in src, "the bound rests on this"
+    required_flags = {
+        node.args[0].value: {kw.arg: getattr(kw.value, "value", None)
+                             for kw in node.keywords}
+        for node in ast.walk(ast.parse(src))
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "attr", "") == "add_argument"
+        and node.args and isinstance(node.args[0], ast.Constant)}
+    assert required_flags.get("--api", {}).get("required") is True, (
+        "the bound rests on --api being required from the CLI", sorted(required_flags))
 
 
 def test_the_disagreeing_digest_clause_beside_it_is_unchanged(tmp_path):

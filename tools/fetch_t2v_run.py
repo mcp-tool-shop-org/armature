@@ -284,10 +284,30 @@ def cloud_names(out):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--dump", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--prompt-id", default=None)
+    ap = argparse.ArgumentParser(
+        description=(
+            "Retrieve one t2v generation's frames and donor video into a run directory, "
+            "prove that what landed is what the dump planned, and vouch for the frames' "
+            "temporal ORDER before printing a receipt. Runs AFTER the credits are spent."),
+        epilog=(
+            "ROUTE: the t2v retrieval. The cloud's filenames are content hashes, so sorting "
+            "them shuffles the clip - the results ARRAY's order is the temporal order, and "
+            "Gate ORDER measures that claim against a hash-sorted permutation of the same "
+            "frames rather than asserting it. WHAT A REFUSAL COSTS: the generation is "
+            "already billed; a refusal costs only the fetch, and the frames plus the "
+            "evidence file are left on disk so the measurement that fired it can be read "
+            "without re-fetching. It never retries for you."))
+    ap.add_argument("--dump", required=True,
+                    help="the results JSON the cloud returned for this prompt; every "
+                         "download is planned from it and from nothing else")
+    ap.add_argument("--out", required=True,
+                    help="the run directory. Frames land in <out>/lossless/, the donor "
+                         "video beside them, and the four JSON records this tool writes in "
+                         "the root. A re-fetch into a used --out is refused by the plan-"
+                         "to-disk clause rather than blended with the earlier run")
+    ap.add_argument("--prompt-id", default=None,
+                    help="the cloud prompt id, recorded in download_manifest.json so a run "
+                         "directory can be tied back to the submission that produced it")
     a = ap.parse_args(argv)
 
     results = read_results_dump(a.dump, flag="--dump", exc=FetchHalt)

@@ -2785,6 +2785,14 @@ GUARDED_TODAY = [
     "specs/E13-prompt.json",
     "specs/E13-seeds.json",
     "specs/E14-seeds.json",
+    # WAVE 28 (builders, F-7ca576d2): the ONE home the eight seed specs' correction history
+    # moved to. `tests/test_seeds_specs.py` opens it by path on every check — it resolves each
+    # spec's pointer and then reads this file's seven `<file>.py:<line> (<function>)`
+    # citations against the tree — and `tests/test_amend_w22_builders.py` opens it too. A
+    # census widening, not a trigger gap: ci.yml already carries `specs/**` on `push` and
+    # `pull_request` (:72 and :144), which the property below re-checks rather than assumes.
+    # Re-derived branch-local with `==` in the commit that added the file: 70 -> 71.
+    "specs/ceiling-why-machine-readable.md",
     "tests",
     "tests/blender/check_floor_material.py",
     "tests/blender/check_ortho_convention.py",

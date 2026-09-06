@@ -1692,14 +1692,28 @@ def test_no_tool_counts_a_submission_against_the_ceiling_and_the_specs_SAY_so():
         assert "assembly" in name or "cascade" in name, (name, readers["ceiling"])
 
 
+#: The ONE home the eight specs' `ceiling.why_machine_readable` points at (wave 28,
+#: F-7ca576d2). The paragraph moved there; the specs carry a sentence pointing at it.
+CEILING_HOME_NAME = "ceiling-why-machine-readable.md"
+
+
 def test_the_ceiling_specs_keep_the_CORRECTION_that_says_the_bound_is_not_counted():
-    """The honest record the finding asks to keep: never quietly delete a wrong statement."""
+    """The honest record the finding asks to keep: never quietly delete a wrong statement.
+
+    WAVE 28, F-7ca576d2 — resolved THROUGH each spec's pointer. The correction is not
+    deleted; it has one home instead of eight byte-identical copies (measured: 4,984
+    characters each, 49.9% of every byte under `specs/`). This still fails on a spec that
+    drops its pointer, and it still fails if the correction leaves the tree — which are the
+    two ways the record could actually be lost.
+    """
+    home = os.path.join(SPECS, CEILING_HOME_NAME)
+    assert os.path.isfile(home), f"{CEILING_HOME_NAME} is the one home and does not exist"
+    why = open(home, encoding="utf-8").read()
+    assert "CORRECTION" in why
+    assert "the bound is held by the spec and the executor, not by code" in why
     for path in sorted(glob.glob(os.path.join(SPECS, "*seeds.json"))):
-        why = json.loads(
-            open(path, encoding="utf-8").read())["ceiling"]["why_machine_readable"]
-        assert "CORRECTION" in why, os.path.basename(path)
-        assert "the bound is held by the spec and the executor, not by code" in why, (
-            os.path.basename(path))
-        assert isinstance(
-            json.loads(open(path, encoding="utf-8").read())["ceiling"]["submissions"],
-            int), os.path.basename(path)
+        doc = json.loads(open(path, encoding="utf-8").read())
+        pointer = doc["ceiling"]["why_machine_readable"]
+        assert CEILING_HOME_NAME in pointer, (
+            f"{os.path.basename(path)} points at no provenance: {pointer!r:.200}")
+        assert isinstance(doc["ceiling"]["submissions"], int), os.path.basename(path)

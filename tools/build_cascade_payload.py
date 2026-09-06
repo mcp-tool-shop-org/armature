@@ -68,8 +68,8 @@ from armature_core import route_gates as RG  # noqa: E402
 # so the import is dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
     FRAME_KEY, canonical_payload_digest, frame_order, frame_source_ids,
-    gate_create_video_fps, gate_slot_frame_index,
-    subject_provenance)
+    gate_create_video_fps, gate_output_not_overwritten, gate_slot_frame_index,
+    route_report_lines, subject_provenance)
 
 TOOL_VERSION = "E13.2"
 
@@ -140,12 +140,41 @@ def build_and_write(argv=None):
     lines, stderr received 9,673 bytes of the graph dict, and the exit code was 1. This is
     the builder whose cascade helpers the E13 A2 spend arm shares.
     """
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--uploads", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--fps", type=float, default=16.0)
-    ap.add_argument("--group", type=int, default=AS.GROUP_SIZE)
-    ap.add_argument("--prefix", default="video/E13_cascade")
+    ap = argparse.ArgumentParser(
+        description=(
+            "Build and gate the CASCADED frames->VIDEO chain (LoadImage x N -> "
+            "BatchImagesNode x G -> BatchImagesNode -> CreateVideo -> SaveVideo) from an "
+            "upload map. Writes the API graph and its payload record; submits nothing and "
+            "loads no weights."),
+        epilog=(
+            "ROUTE: E13's re-arm, Stage 0. This is the supported route for a clip of any "
+            "length - build_assembly_payload's flat chain was measured executing at 8 slots "
+            "and failing at 81. The cascade's helpers are the ones the paid E13 A2 arm "
+            "shares: the same construction is wired into build_r2v_payload's graph to make "
+            "the reference VIDEO. WHAT A REFUSAL COSTS: nothing but your time, and it is "
+            "spent here rather than on a submission that bills per attempt."))
+    ap.add_argument("--uploads", required=True,
+                    help="the upload step's JSON: local frame filename -> the server's "
+                         "content-addressed name. Keys must be zero-padded frame names "
+                         "with no gaps; the LOCAL name is the frame order")
+    ap.add_argument("--out", required=True,
+                    help="the directory the graph and its payload record are written into. "
+                         "Created below the last gate, so a refusal leaves nothing behind; "
+                         "an existing build there is refused unless --overwrite is passed")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace an existing graph/record pair in --out. Without it a "
+                         "rebuild over an earlier build refuses by name "
+                         "(`output_already_exists`) and names both digests")
+    ap.add_argument("--fps", type=float, default=16.0,
+                    help="the CreateVideo rate, inside its measured 1-120 contract "
+                         "(default: %(default)s). Presentation only - it is downstream of "
+                         "the frames and changes no pixel")
+    ap.add_argument("--group", type=int, default=AS.GROUP_SIZE,
+                    help="frames per group BatchImagesNode; the slot ceiling gate checks it "
+                         "against the cascade's own constant (default: %(default)s)")
+    ap.add_argument("--prefix", default="video/E13_cascade",
+                    help="the server-side filename prefix for the saved video "
+                         "(default: %(default)s)")
     ap.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
     a = ap.parse_args(argv)
 
@@ -251,12 +280,22 @@ def build_and_write(argv=None):
     }
 
     # Below the last in-tool gate: a refuse leaves no output directory.
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     graph_path = os.path.join(out, "E13-cascade.api.json")
+    record_path = os.path.join(out, "E13-cascade-payload-record.json")
+    # ---- Gate PAYLOAD · ANDON, wave 28 (F-5fd16451). Both filenames are FIXED, so a rebuild
+    # into the same `--out` always lands on the prior pair. ONE implementation, imported from
+    # the module this builder already imports eight names from. ABOVE `os.makedirs`, like
+    # every other refusal here: a refuse leaves no output directory.
+    gate_overwrite = gate_output_not_overwritten(
+        [graph_path, record_path], out, a.overwrite, AS.AssemblyGate, gate="PAYLOAD")
+    record["gates"]["PAYLOAD_overwrite"] = gate_overwrite
+    record["out_dir_pre_existed"] = gate_overwrite["out_dir_pre_existed"]
+    record["overwrote"] = gate_overwrite["overwrote"]
+
+    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=1)
-    with open(os.path.join(out, "E13-cascade-payload-record.json"), "w",
-              encoding="utf-8") as fh:
+    with open(record_path, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=1)
 
     print(f"nodes            {len(wf)}")
@@ -265,9 +304,12 @@ def build_and_write(argv=None):
     print(f"slot ceiling     {gate_ceiling['verdict']}")
     print(f"topology gate    {gate_topo['verdict']}")
     print(f"slot->frame gate {gate_index['verdict']}")
-    print(f"route components {len(gate_route['components'])}  "
-          f"seeds {len(gate_route['seeds'])}  latents {len(gate_route['latents'])}")
-    print(f"frame legality   {[f['legal'] for f in gate_route['frame_legality']]}")
+    for line in route_report_lines(gate_route):
+        print(line)
+    # Wave 28, F-5fd16451: the digest that ties this record to this graph, and the overwrite
+    # receipt, so two runs into one `--out` are distinguishable in a scrollback.
+    print(f"payload sha256   {record['payload_sha256']}")
+    print(f"overwrite        {gate_overwrite['verdict']}")
     print(f"BUILD_CASCADE_OK {graph_path}")
     return wf
 
