@@ -98,19 +98,26 @@ def mean_abs_frame_deltas(paths):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="Gate B: did the driving signal reach the model exactly as it was "
+                    "drawn? Compares what was sent against what the server returned")
     ap.add_argument("--sticks", required=True, help="the local stick frames as drawn")
     ap.add_argument("--batchprobe", required=True,
                     help="the frames the server returned off the pose LoadImage")
     ap.add_argument("--painted", default=None, help="the lossless output frames; diagnostic")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=True,
+                    help="where the gate's evidence JSON is written")
     # The two labels below travel into the evidence file. They are flags as of E11 because
     # this gate is not only about pose sticks: the I2V route's single uploaded artifact is
     # a START FRAME, and evidence reading "N local stick frames" over a comparison of one
     # rendered start frame is a label asserting something that is not true — the defect
     # class E10's closing lesson names.
-    ap.add_argument("--source-label", default=None)
-    ap.add_argument("--decoded-label", default=None)
+    ap.add_argument("--source-label", default=None,
+                    help="what the LOCAL side of the comparison actually is, into the "
+                         "evidence file (e.g. '65 local stick frames', 'one rendered "
+                         "start frame'). Default: derived, never asserted")
+    ap.add_argument("--decoded-label", default=None,
+                    help="what the SERVER side actually is, into the evidence file")
     a = ap.parse_args(argv)
 
     src_paths = frame_paths(a.sticks)

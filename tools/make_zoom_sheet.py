@@ -59,17 +59,23 @@ def crop_box(cx, cy, size, width, height):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="native-resolution crops where structure is hardest, with the boxes "
+                    "they were cut from — a clip that reads well at speed can carry a "
+                    "melted hand in every frame")
     ap.add_argument("--frames", required=True, help="directory of NNNNN.png frames")
-    ap.add_argument("--keypoints", required=True)
+    ap.add_argument("--keypoints", required=True,
+                    help="the keypoints record that says where --site is, per frame")
     ap.add_argument("--site", required=True,
                     help="a name from the record's keypoint_names, e.g. LWrist / Nose")
     ap.add_argument("--at", required=True,
                     help="comma-separated frame indices (argparse eats leading minus "
                          "signs, so pass flags as --flag=value)")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--crop", type=int, default=140)
-    ap.add_argument("--scale", type=int, default=4)
+    ap.add_argument("--out", required=True, help="the zoom sheet image to write")
+    ap.add_argument("--crop", type=int, default=140,
+                    help="the crop's side length in SOURCE pixels, centred on --site")
+    ap.add_argument("--scale", type=int, default=4,
+                    help="integer enlargement of each native-resolution crop")
     a = ap.parse_args(argv)
 
     import cv2

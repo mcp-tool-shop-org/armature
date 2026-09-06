@@ -113,12 +113,19 @@ def measure(frames, label, band=None):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--frames", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--label", default="clip")
-    ap.add_argument("--compare", default=None)
-    ap.add_argument("--compare-label", default="compare")
+    ap = argparse.ArgumentParser(
+        description="the numbers a generated clip can be quoted by — diagnostics, all of "
+                    "them, and the Director's eye is the judge")
+    ap.add_argument("--frames", required=True,
+                    help="the lossless frame directory to measure")
+    ap.add_argument("--out", required=True, help="the measurements JSON to write")
+    ap.add_argument("--label", default="clip",
+                    help="what this clip is called in the record and in the printed lines")
+    ap.add_argument("--compare", default=None,
+                    help="a second frame directory to measure alongside; without it the "
+                         "record carries one clip and no comparison")
+    ap.add_argument("--compare-label", default="compare",
+                    help="what the --compare clip is called in the record")
     ap.add_argument("--horizon-band", default=None,
                     help="lo,hi rows to search for the horizon (argparse eats leading "
                          "minus signs: pass as --horizon-band=0,240)")

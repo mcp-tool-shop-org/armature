@@ -130,24 +130,37 @@ def provenance_lines(rec, prompt_id=None, seeds_file=None, gates=None):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--sticks", default="outputs/E08/sticks")
-    ap.add_argument("--painted", default="outputs/E08/probe/lossless")
-    ap.add_argument("--reference", default="outputs/E08/reference/twin_r3_v0_fit_832x480.png")
+    ap = argparse.ArgumentParser(
+        description="E08's Gate 0 sheet: previz | control | output | reference | "
+                    "provenance, the panel no metric may be quoted before")
+    ap.add_argument("--sticks", default="outputs/E08/sticks",
+                    help="the control column: the drawn pose-stick frames this run was "
+                         "driven by")
+    ap.add_argument("--painted", default="outputs/E08/probe/lossless",
+                    help="the output column: the run's lossless returned frames")
+    ap.add_argument("--reference", default="outputs/E08/reference/twin_r3_v0_fit_832x480.png",
+                    help="the reference column: the image the route submitted as identity "
+                         "conditioning")
     ap.add_argument("--previz", required=True,
                     help="the previz frames this sheet's left column shows. Required, and "
                          "NOT defaulted: the old default named a directory in a different "
                          "working tree, so the failure arrived from somewhere nobody named")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--frames", default="0,16,32,48,64")
-    ap.add_argument("--provenance", default="outputs/E08/route/E08-probe-payload-record.json")
+    ap.add_argument("--out", required=True, help="the sheet image to write")
+    ap.add_argument("--frames", default="0,16,32,48,64",
+                    help="the frame indices each column is sampled at (argparse eats "
+                         "leading minus signs: pass as --frames=0,16,32)")
+    ap.add_argument("--provenance", default="outputs/E08/route/E08-probe-payload-record.json",
+                    help="the run's payload record; every provenance line is READ off it, "
+                         "never typed onto the sheet")
     ap.add_argument("--prompt-id", required=True,
                     help="the run this sheet shows. Required, and NOT defaulted: a sheet "
                          "whose provenance block names another run's id is a placeholder "
                          "shaped like evidence")
     ap.add_argument("--seeds-file", required=True,
                     help="the committed seed registry this run's seed was drawn from")
-    ap.add_argument("--previz-label", default="previz (motion ground truth)")
+    ap.add_argument("--previz-label", default="previz (motion ground truth)",
+                    help="the heading over the previz column; change it when the previz is "
+                         "not the motion ground truth for this route")
     ap.add_argument("--gates", default=None,
                     help="one line naming the gate states this run actually recorded")
     return ap.parse_args(argv)

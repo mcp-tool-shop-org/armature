@@ -243,16 +243,24 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--run", required=True)
-    ap.add_argument("--frames-dir", required=True)
+    ap = argparse.ArgumentParser(
+        description="the Gate 0 panel — control | output | reference | provenance — "
+                    "produced before any metric is quoted")
+    ap.add_argument("--run", required=True,
+                    help="the control run directory; its channel frames are the control "
+                         "column and its manifest supplies the azimuths")
+    ap.add_argument("--frames-dir", required=True,
+                    help="the run's returned output frames, the output column")
     # `none` is a real value, not a missing argument: E03's arms deliberately carry no
     # reference image, and the sheet says so in the column rather than leaving it blank.
     ap.add_argument("--reference", required=True,
                     help="path to the reference plate, or the literal 'none'")
-    ap.add_argument("--meta", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--frames", default="0,8,16,24")
+    ap.add_argument("--meta", required=True,
+                    help="the run's payload record; every provenance line is read off it")
+    ap.add_argument("--out", required=True, help="the sheet image to write")
+    ap.add_argument("--frames", default="0,8,16,24",
+                    help="the frame indices every column is sampled at (argparse eats "
+                         "leading minus signs: pass as --frames=0,8,16)")
     ap.add_argument("--captions", default=None,
                     help="optional 'idx=text,idx=text' per-frame labels, replacing azimuth")
     # DECLARED, not only read. `main` read `a.sheet_plate` and this line did not exist:

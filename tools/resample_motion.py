@@ -87,13 +87,16 @@ class ResampleArgError(ArmatureError):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="the same dance, more in-betweens: resample a motion record to a new "
+                    "sample count without changing the performance's duration")
     ap.add_argument("--motion", required=True,
                     help="a motion record: {frames: [{frame, local: {bone: 3x3}, root}]}")
     ap.add_argument("--frames", type=int, required=True,
                     help="destination sample count (argparse eats leading minus signs, so "
                          "pass flags as --flag=value)")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=True,
+                    help="directory for the resampled motion record")
     ap.add_argument("--fps-src", type=float, default=16.0,
                     help="the source record's sampling rate; used only to report the "
                          "playback rate that preserves the performance's duration")

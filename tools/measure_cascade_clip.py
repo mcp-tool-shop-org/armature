@@ -33,7 +33,6 @@ import glob
 import hashlib
 import json
 import os
-import subprocess
 import sys
 
 import numpy as np
@@ -44,7 +43,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core import clipcompare as CC  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.parts import require_finite  # noqa: E402
-from encode_control import FFMPEG, decode, gate_ffmpeg_binary  # noqa: E402
+from encode_control import (  # noqa: E402
+    FFMPEG, decode, gate_ffmpeg_binary, run_ffmpeg, timeout_for_file,
+)
 
 TOOL_VERSION = "E13.1"
 
@@ -180,10 +181,17 @@ def ffprobe_stream(path):
     Adopt the home, never a second `os.path.isfile(FFMPEG)`. The ordering holds: `main`
     reads the SOURCE frames — the operator's own `--frames` — above this call, so an
     argument defect is refused before the encoder is inspected.
+
+    **The wait is BOUNDED** (F-594d4efc, wave 28): the third of the three subprocess sites
+    in this domain that gave ffmpeg no `timeout=`, and the second of the two that probe a
+    clip which arrived AFTER a credit was spent. `encode_control.run_ffmpeg` is the one
+    home for the bound and the named refusal, adopted by import the same way
+    `gate_ffmpeg_binary` is, with the ceiling derived from this clip's own byte size.
     """
     gate_ffmpeg_binary()
-    proc = subprocess.run([FFMPEG, "-hide_banner", "-i", path],
-                          capture_output=True, text=True)
+    proc = run_ffmpeg([FFMPEG, "-hide_banner", "-i", path],
+                      timeout_s=timeout_for_file(path), subject="stream probe",
+                      input_path=path, text=True)
     text = proc.stderr
     info = {"raw": [l.strip() for l in text.splitlines() if "Stream #" in l
                     or "Duration:" in l]}
@@ -220,13 +228,26 @@ def load_sources(frames_dir):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--clip", required=True)
+    ap = argparse.ArgumentParser(
+        description="decode a cascade-assembled clip and compare it to its sources on "
+                    "three separate questions: count, ORDER, fidelity")
+    ap.add_argument("--clip", required=True,
+                    help="the assembled clip to decode; its dimensions are READ off the "
+                         "stream, never supplied")
     ap.add_argument("--frames", required=True, help="the SOURCE frames, in order")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--expect-frames", type=int, default=81)
-    ap.add_argument("--expect-fps", type=float, default=16.0)
-    ap.add_argument("--step", type=int, default=8)
+    ap.add_argument("--out", required=True,
+                    help="directory for the comparison record and its diff images")
+    ap.add_argument("--expect-frames", type=int, default=81,
+                    help="the frame count the spec declared (default 81). A mismatch "
+                         "RAISES: every per-frame number below it would compare different "
+                         "pictures")
+    ap.add_argument("--expect-fps", type=float, default=16.0,
+                    help="the playback rate the spec declared (default 16.0). A mismatch "
+                         "beyond the tolerance RAISES: the clip's duration, and every "
+                         "timing number read against it, is computed on this rate")
+    ap.add_argument("--step", type=int, default=8,
+                    help="the cascade's chunk length, used to label which chunk each "
+                         "decoded frame came from")
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)

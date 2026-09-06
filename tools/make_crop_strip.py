@@ -248,14 +248,20 @@ def build(by_number, boxes, scale, title):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--frames", required=True)
-    ap.add_argument("--out", required=True)
+    ap = argparse.ArgumentParser(
+        description="named native-resolution crops across frames, in one strip, so "
+                    "structure is judged at the Director's zoom rather than from a "
+                    "contact sheet")
+    ap.add_argument("--frames", required=True,
+                    help="directory of NNNNN.png frames the boxes are cut from")
+    ap.add_argument("--out", required=True, help="the strip image to write")
     ap.add_argument("--boxes", required=True,
                     help="`<frame>:<x0,y0,x1,y1>` entries, semicolon separated "
                          "(argparse eats leading minus signs: pass as --boxes=...)")
-    ap.add_argument("--scale", type=int, default=3)
-    ap.add_argument("--title", default="crop")
+    ap.add_argument("--scale", type=int, default=3,
+                    help="integer enlargement of each native-resolution crop (default 3); "
+                         "must be at least 1")
+    ap.add_argument("--title", default="crop", help="the strip's heading")
     a = ap.parse_args(argv)
 
     # ---- ANDON, before a frame is opened: the enlargement factor is an enlargement.

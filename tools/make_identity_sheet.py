@@ -181,13 +181,22 @@ def build(run_dir, plates, frames, tile_h=360, channel="normal",
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--run", required=True)
-    ap.add_argument("--plates", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--frames", default="0,8,16,24")
-    ap.add_argument("--channel", default="normal")
-    ap.add_argument("--tile-height", type=int, default=360)
+    ap = argparse.ArgumentParser(
+        description="put the candidate reference plates beside the mesh, so the identity "
+                    "question is answered by the eye against the thing it conditions")
+    ap.add_argument("--run", required=True,
+                    help="the control run directory whose channel frames show the mesh")
+    ap.add_argument("--plates", required=True,
+                    help="comma-separated candidate reference images, in column order")
+    ap.add_argument("--out", required=True, help="the sheet image to write")
+    ap.add_argument("--frames", default="0,8,16,24",
+                    help="the run frame indices the mesh row is sampled at (argparse eats "
+                         "leading minus signs: pass as --frames=0,8,16)")
+    ap.add_argument("--channel", default="normal",
+                    help="which control channel of the run to show the mesh in "
+                         "(default normal)")
+    ap.add_argument("--tile-height", type=int, default=360,
+                    help="height each tile is drawn at, in pixels")
     # A turnaround run orbits and a video run does not. The caption says so only when the
     # caller says it is true.
     ap.add_argument("--azimuth-captions", action="store_true",

@@ -313,18 +313,24 @@ def anchor(e02_root="outputs/E02", tolerance=ANCHOR_TOLERANCE):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="the timing-correlation statistic between an output and the control "
+                    "that drove it, as an instrument — a diagnostic, not a verdict")
     ap.add_argument("--run", help="directory of output frames (use the LOSSLESS tap)")
     ap.add_argument("--control", help="directory of control frames")
-    ap.add_argument("--label")
-    ap.add_argument("--out")
+    ap.add_argument("--label",
+                    help="what this pairing is called in the record and the printed row")
+    ap.add_argument("--out",
+                    help="where to write the JSON report; omitted, the numbers only reach "
+                         "stdout")
     ap.add_argument("--anchor", action="store_true",
                     help="reproduce E02's published figures and raise on any miss")
     ap.add_argument("--allow-absent", action="store_true",
                     help="with --anchor: exit 0 when E02's runs are not on disk, instead "
                          "of the ANCHOR_ABSENT_EXIT code. Names itself in the printed "
                          "line, so a green anchor that read nothing says so")
-    ap.add_argument("--e02-root", default="outputs/E02")
+    ap.add_argument("--e02-root", default="outputs/E02",
+                    help="with --anchor: the directory E02's published runs are read from")
     a = ap.parse_args(argv)
 
     if a.anchor:

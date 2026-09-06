@@ -404,9 +404,14 @@ def pair_stats(A, B, big=8, names=None):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--runs", required=True)
-    ap.add_argument("--root", default="outputs/E02/runs")
+    ap = argparse.ArgumentParser(
+        description="the provider's repeat variance per frame index — the noise floor "
+                    "every one-run gap has to be read against")
+    ap.add_argument("--runs", required=True,
+                    help="comma-separated run names to compare; at least two DISTINCT "
+                         "names, since a floor needs repeats of the same request")
+    ap.add_argument("--root", default="outputs/E02/runs",
+                    help="the directory the run names are resolved under")
     ap.add_argument("--early", default=None,
                     help="a-b, inclusive. Omitted, the window is derived from the run's "
                          "own frame count (argparse eats leading minus signs, so pass "
@@ -414,11 +419,14 @@ def main(argv=None):
     ap.add_argument("--late", default=None,
                     help="a-b, inclusive. Omitted, the window is derived from the run's "
                          "own frame count")
-    ap.add_argument("--big", type=int, default=8)
+    ap.add_argument("--big", type=int, default=8,
+                    help="the per-pixel absolute difference at or above which a pixel is "
+                         "counted BIG (default 8, on 0-255 levels)")
     ap.add_argument("--expect", type=int, default=None,
                     help="the frame count the spec declares; every run's numbered frames "
                          "must be exactly shotspec.frame_names(expect, 'png')")
-    ap.add_argument("--out", default="outputs/E02/floor.json")
+    ap.add_argument("--out", default="outputs/E02/floor.json",
+                    help="where the floor record is written")
     a = ap.parse_args(argv)
 
     # ---- ANDON, before a single PNG is opened: distinct runs, at least two of them.

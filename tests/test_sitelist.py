@@ -105,7 +105,7 @@ def _run_validate_with(bones):
 # refusal and only the class was wrong. Measured on the wave-12 base by driving the 21-tool
 # halt contract's own classifier with the exception a duplicated registration raises:
 # ('FAILED - an unhandled error', exit 1, gate None, evidence None), on a tool called by
-# `rig_character.py:1135`, `rig_parts.py:480` and `project_pose_keypoints.py:229`.
+# `rig_character.py:1135`, `rig_parts.py:480` and `project_pose_keypoints.py::span_stats`.
 
 
 def test_validate_fires_on_a_duplicate_name():

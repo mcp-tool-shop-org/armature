@@ -441,7 +441,7 @@ def test_the_png_population_rule_is_the_one_its_producer_and_consumers_use():
     """The family census, derived by walking `tools/` for every `.png` suffix test rather
     than typed: the node it keys on is the `endswith` call itself. `fetch_run.
     verify_downloads` — the PRODUCER andon — was made case-insensitive at the wave-8
-    merge and its comment names `encode_control.py:126` and `invert_frames.py:70` as
+    merge and its comment names `encode_control.py::frame_population` and `invert_frames.py:70` as
     consumers sharing one reading. Gate DONOR decides whether a clip may be a baseline at
     all, so it was the one on the wrong side of that contract inside this package."""
     import ast
@@ -472,7 +472,7 @@ def test_the_png_population_rule_is_the_one_its_producer_and_consumers_use():
 
     assert "armature_core/donor_gate.py" not in " ".join(case_sensitive)
     # WAVE-10 MERGE (coordinator, 2026-09-04): the two survivors this list named — `render_performer.py:359`
-    # (instruments, F-ffdb6d4d) and `render_pose_sticks.py:178` (instruments-measure, F-83998c09) —
+    # (instruments, F-ffdb6d4d) and `render_pose_sticks.py::_written_frames` (instruments-measure, F-83998c09) —
     # both landed in wave 10, so the ratchet reads EMPTY and a new case-sensitive site fails here.
     assert sorted(case_sensitive) == [], case_sensitive
     assert len(case_insensitive) >= 25, len(case_insensitive)

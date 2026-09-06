@@ -81,14 +81,21 @@ MIN_FPS_EXCLUSIVE = 0
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="pack the pose-stick frames into ONE lossless animated file, the "
+                    "single artefact the pose route uploads")
     ap.add_argument("--frames", required=True, help="directory of NNNNN.png stick frames")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--fps", type=int, default=16)
+    ap.add_argument("--out", required=True,
+                    help="directory for the packed animation and its record")
+    ap.add_argument("--fps", type=int, default=16,
+                    help="the rate written into the packed animation and its record "
+                         "(default 16); it is the rate the uploaded artefact plays at")
     ap.add_argument("--alpha-over", default=None,
                     help="R,G,B of the plate an RGBA stick frame is composited over. "
                          "Without it an alpha channel is a refusal, not a silent drop")
-    ap.add_argument("--name", default="E08_pose_sticks")
+    ap.add_argument("--name", default="E08_pose_sticks",
+                    help="the packed file's basename under --out; bounded to a single "
+                         "path segment, so it cannot write outside the run directory")
     ap.add_argument("--format", default="apng", choices=("apng", "webp"),
                     help="apng is the default because Comfy Cloud's upload endpoint "
                          "refused animated WebP with 422 INVALID_IMAGE, measured 2026-08-12")

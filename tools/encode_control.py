@@ -38,6 +38,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 
 import numpy as np
 from PIL import Image
@@ -106,8 +107,77 @@ class EncodeFailure(ArmatureError):
     gate = "ENCODE"
 
 
-def _run(cmd, **kw):
-    return subprocess.run(cmd, capture_output=True, **kw)
+#: The wall-clock allowance for one ffmpeg call, in three DERIVED pieces rather than one
+#: fixed number: a global constant must not govern a local feature (CLAUDE.md), and the
+#: same ceiling cannot honestly bound a header probe of a 39-byte download and a
+#: 500-frame lossless encode. `FFMPEG_STARTUP_S` covers process start, container open and
+#: the stream probe itself; the other two are charged against the structure each call is
+#: actually given — the frame list handed to the encoder, or the bytes of the file handed
+#: to the decoder.
+FFMPEG_STARTUP_S = 120.0
+FFMPEG_PER_FRAME_S = 10.0
+FFMPEG_PER_MB_S = 10.0
+
+
+def timeout_for_frames(n_frames):
+    """The bound for a call whose work is a FRAME LIST — the encode."""
+    return FFMPEG_STARTUP_S + FFMPEG_PER_FRAME_S * max(0, int(n_frames))
+
+
+def timeout_for_file(path):
+    """The bound for a call whose work is a FILE — a decode, or a stream probe.
+
+    A path that is not on disk scores zero megabytes and gets the start-up allowance: the
+    binary will fail fast on it anyway, and `gate_ffmpeg_binary` has already run.
+    """
+    size = os.path.getsize(path) if os.path.isfile(path) else 0
+    return FFMPEG_STARTUP_S + FFMPEG_PER_MB_S * (size / 1e6)
+
+
+def run_ffmpeg(cmd, *, timeout_s, subject, input_path=None, output_path=None, **kw):
+    """Run one ffmpeg call under a BOUND, and make a wait that ended a named refusal.
+
+    F-594d4efc, wave 28. The three subprocess sites in this domain gave ffmpeg no
+    `timeout=`: this wrapper (which both the Gate R encode and the Gate R decode go
+    through), `extract_clip_frames.probe` and `measure_cascade_clip.ffprobe_stream` — the
+    last two being stream probes of a clip that arrived AFTER a credit was spent. Read
+    against F-3dc24905 (33 of this domain's 42 tools print exactly one line, and none of
+    the three printed anything before its result), the operator's picture of a wedged
+    ffmpeg was an empty terminal with no elapsed time, no way to tell a slow decode from a
+    stuck one, and nothing to end it but their own interrupt — with the paid artefact
+    already downloaded and unprocessed. The realistic trigger is a malformed or truncated
+    download from the hosted run.
+
+    This is the ONE home for the bound and for the refusal; the two probes adopt it by
+    import, exactly as they already adopt `gate_ffmpeg_binary` (F-a19ebe73, wave 25).
+    Adopting the home means adopting its exception too, so all three refusals arrive as
+    `EncodeFailure` under gate `ENCODE`; the evidence's `subject`, `binary` and `input`
+    say which of the three calls it was.
+
+    **A timeout is a refusal, never a retry.** `subprocess.run` kills the child, and the
+    evidence states what is on disk now (`partial`) so the operator is not left guessing
+    whether a half-written video exists.
+    """
+    started = time.monotonic()
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=timeout_s, **kw)
+    except subprocess.TimeoutExpired as exc:
+        elapsed = time.monotonic() - started
+        partial = None
+        if output_path and os.path.isfile(output_path):
+            partial = {"path": output_path, "bytes": os.path.getsize(output_path)}
+        raise EncodeFailure(
+            f"ffmpeg did not finish the {subject} within the {timeout_s:.0f}s bound "
+            f"derived for it (elapsed {elapsed:.1f}s) and was killed. The binary is "
+            f"{cmd[0]!r} and the input it was given is {input_path!r}. This is a refusal, "
+            f"not a retry: nothing is re-submitted and no credit is spent on a wait that "
+            f"ended",
+            {"gate": "ENCODE", "andon": "EncodeFailure",
+             "clause": "ffmpeg_exceeded_the_time_bound",
+             "subject": subject, "bound_s": timeout_s,
+             "elapsed_s": round(elapsed, 3), "binary": cmd[0],
+             "input": input_path, "partial": partial},
+        ) from exc
 
 
 def frame_population(frames_dir, expect=None):
@@ -171,8 +241,13 @@ def frame_population(frames_dir, expect=None):
     return names
 
 
-def read_frames(frames_dir, invert=False, expect=None, alpha_over=None):
+def read_frames(frames_dir, invert=False, expect=None, alpha_over=None, progress=None):
     """Read a channel directory as `(names, frames, source)`.
+
+    `progress(stage, done, total)`, when a caller supplies one, is called once per frame
+    opened — this is the other long loop F-3dc24905 names, beside `stage_render.run_export`
+    and `extract_clip_frames`' decode. `main` supplies one and prints it lowercase on
+    stderr; stdout keeps its single sentinel.
 
     `frames` are (H, W, 3) uint8 RGB. Grayscale channels are replicated to R=G=B
     because that is what actually reaches the model: `GetVideoComponents` yields an
@@ -247,6 +322,8 @@ def read_frames(frames_dir, invert=False, expect=None, alpha_over=None):
         if invert:
             a = (255 - a).astype(np.uint8)
         out.append(np.ascontiguousarray(a, dtype=np.uint8))
+        if progress is not None:
+            progress("read", len(out), len(names))
 
     source = {
         "source_modes": modes,
@@ -321,10 +398,17 @@ def ffmpeg_version():
     `--survey` branch.
     """
     try:
-        proc = _run([FFMPEG, "-hide_banner", "-version"])
+        proc = run_ffmpeg([FFMPEG, "-hide_banner", "-version"],
+                          timeout_s=FFMPEG_STARTUP_S, subject="version probe")
         first = proc.stdout.decode("utf-8", "replace").splitlines()
         return first[0].strip() if first else "NOT REPORTED"
     except OSError as exc:                       # the binary vanished between the two calls
+        return f"UNAVAILABLE: {exc}"
+    except EncodeFailure as exc:
+        # WAVE 28 (F-594d4efc): the bound now applies here too, and a `-version` call that
+        # hangs must not take down a receipt that is otherwise complete. This function is a
+        # PROVENANCE reader, not a gate — its two siblings already return a string for the
+        # binary-vanished case, and a wait that ended is the same class of answer.
         return f"UNAVAILABLE: {exc}"
 
 
@@ -347,7 +431,9 @@ def encode(frames, path, codec, fps=16):
         *CODECS[codec]["args"],
         path,
     ]
-    proc = _run(cmd, input=b"".join(f.tobytes() for f in frames))
+    proc = run_ffmpeg(cmd, timeout_s=timeout_for_frames(len(frames)), subject="encode",
+                      input_path=f"{len(frames)} frame(s) on stdin", output_path=path,
+                      input=b"".join(f.tobytes() for f in frames))
     if proc.returncode != 0 or not os.path.isfile(path):
         raise EncodeFailure(
             f"ffmpeg failed to encode {codec}: {proc.stderr.decode('utf-8', 'replace')[:500]}",
@@ -370,7 +456,8 @@ def decode(path, width, height):
         FFMPEG, "-hide_banner", "-loglevel", "error",
         "-i", path, "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
     ]
-    proc = _run(cmd)
+    proc = run_ffmpeg(cmd, timeout_s=timeout_for_file(path), subject="decode",
+                      input_path=path)
     if proc.returncode != 0:
         raise EncodeFailure(
             f"ffmpeg failed to decode {path}: {proc.stderr.decode('utf-8', 'replace')[:500]}",
@@ -452,7 +539,7 @@ def survey_codecs():
 
 
 def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
-          alpha_over=None):
+          alpha_over=None, progress=None):
     """Encode a control sequence and run Gate R on it. **Raises** on any difference.
 
     The gate is called here, inside the function that produces the artifact a later
@@ -460,7 +547,7 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
     exit code, and not as an `assert`, which `-O` deletes.
     """
     names, frames, source = read_frames(frames_dir, invert=invert, expect=expect,
-                                        alpha_over=alpha_over)
+                                        alpha_over=alpha_over, progress=progress)
     h, w = frames[0].shape[:2]
     encode(frames, out_path, codec, fps=fps)
     decoded = decode(out_path, w, h)
@@ -508,20 +595,54 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--frames")
-    ap.add_argument("--out")
-    ap.add_argument("--codec", default="ffv1-gbrp")
-    ap.add_argument("--fps", type=int, default=16)
-    ap.add_argument("--invert", action="store_true")
+    ap = argparse.ArgumentParser(
+        description="build the control video a paid run uploads, and prove the encoder "
+                    "round trip is lossless (Gate R)")
+    ap.add_argument("--frames", help="the channel directory of NNNNN.png control frames "
+                                     "to encode, in index order")
+    ap.add_argument("--out", help="the video file to write; its receipt is written beside "
+                                  "it as <out>.receipt.json")
+    # WAVE 28 (F-7c3f8a26): `choices=` and a `help=`. The legal values are a closed set of
+    # five literal keys in `CODECS` above, and the ONLY place that set reached the operator
+    # was the refusal inside `encode()` — which fires from `build()` AFTER `read_frames` has
+    # listed, opened, coerced and hashed the whole frame population. MEASURED on `3380ae2`
+    # against the real 33-frame `outputs/E02/control_480x832/depth_pershot`: `--codec=ffv1`
+    # exits 2 with `unknown codec 'ffv1'; known: [...]`. So the only way to learn which
+    # names exist was to run the tool wrong and read the refusal, and `x264-qp0-yuv420` —
+    # annotated in this module as THE TRAP, 4:2:0 chroma subsampling that is a no-op on the
+    # grayscale channels and quiet corruption on the true-RGB normal channel — was offered
+    # on the same footing as the four safe ones. `fit_reference:82` uses `choices=` for
+    # exactly this job eleven files over. argparse now refuses the typo before a single
+    # frame is opened; the `unknown_codec` raise in `encode()` STAYS, because it guards
+    # every programmatic caller and the parser guards only this one.
+    ap.add_argument("--codec", default="ffv1-gbrp", choices=sorted(CODECS),
+                    help="the bridge to encode with (default ffv1-gbrp, the spec's stated "
+                         "preference). x264-qp0-yuv420 is THE TRAP: its 4:2:0 chroma "
+                         "subsampling is a no-op on grayscale depth/mask/edge channels and "
+                         "quietly corrupts the true-RGB normal channel. Run --survey to "
+                         "see every candidate measured")
+    ap.add_argument("--fps", type=int, default=16,
+                    help="the rate written into the control video and into its receipt "
+                         "(default 16); it reaches ffmpeg as `-r <fps>` on the INPUT side, "
+                         "so it is the rate the uploaded video plays at. Must be positive")
+    ap.add_argument("--invert", action="store_true",
+                    help="flip the polarity of every frame (255 - value) before encoding, "
+                         "to match a route whose depth convention is near-dark rather than "
+                         "near-bright. Recorded in the receipt as `inverted`; the frames on "
+                         "disk are not modified")
     ap.add_argument("--expect", type=int, default=None,
                     help="the frame count the spec declares; the directory's numbered "
                          "frames must be exactly shotspec.frame_names(expect, 'png')")
     ap.add_argument("--alpha-over", default=None,
                     help="R,G,B of the plate an RGBA source is composited over. Without "
                          "it an alpha channel is a refusal, not a silent drop")
-    ap.add_argument("--survey", action="store_true")
-    ap.add_argument("--survey-out")
+    ap.add_argument("--survey", action="store_true",
+                    help="DIAGNOSTIC: measure every candidate bridge against a grayscale "
+                         "probe and a true-RGB probe, print the table and exit 0. Decides "
+                         "nothing and encodes none of --frames")
+    ap.add_argument("--survey-out",
+                    help="with --survey: also write the table as JSON to this path, with "
+                         "the ffmpeg binary that produced it")
     args = ap.parse_args(argv)
 
     if args.survey:
@@ -561,8 +682,19 @@ def main(argv=None):
     gate_encode_rate(args.fps)
     plate = parse_plate(args.alpha_over, EncodeFailure)
     gate_ffmpeg_binary()
+
+    # The wait says it is alive (F-3dc24905, wave 28). Lowercase, on stderr: stdout carries
+    # exactly one uppercase sentinel per tool and two censuses assert it
+    # (`test_sheet_argv_smoke`, `test_instruments_amend_w10.success_tokens`).
+    _started = time.monotonic()
+
+    def _progress(stage, done, total):
+        print(f"encode_control {stage} {done}/{total}  "
+              f"elapsed {time.monotonic() - _started:.1f}s  bound none",
+              file=sys.stderr, flush=True)
+
     receipt = build(args.frames, args.out, args.codec, invert=args.invert, fps=args.fps,
-                    expect=args.expect, alpha_over=plate)
+                    expect=args.expect, alpha_over=plate, progress=_progress)
     print("ENCODE_CONTROL " + json.dumps({
         "video": receipt["video"],
         "sha256": receipt["video_sha256"][:16],

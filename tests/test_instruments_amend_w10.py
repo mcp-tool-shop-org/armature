@@ -1717,7 +1717,7 @@ def test_the_world_bounds_census_goes_red_on_a_member_with_the_naive_shape(tmp_p
 #
 # `render_performer.py:359` built its stray list with a case-SENSITIVE `.endswith(".png")`
 # while `preview_walk.py:201` took the whole listing with no suffix filter at all, and the
-# consumers that list frames downstream (`encode_control.py:126`, `invert_frames.py:70`)
+# consumers that list frames downstream (`encode_control.py::frame_population`, `invert_frames.py:70`)
 # match case-INSENSITIVELY. A frame arriving as `.PNG` was therefore absent from
 # `render_performer`'s `unexpected_files_in_out_dir` -- the record said nothing unexpected
 # was in the directory -- while a consumer picked it up and encoded it into the clip.
@@ -1742,7 +1742,7 @@ def case_sensitive_png_tests(filename):
 
 
 #: The two `.png` sites outside this domain's globs, measured 2026-09-04 and named rather
-#: than silently excluded: `tools/render_pose_sticks.py:178` (instruments-measure, Gate
+#: than silently excluded: `tools/render_pose_sticks.py::_written_frames` (instruments-measure, Gate
 #: COUNT) and `tools/armature_core/donor_gate.py::frame_paths` (core-gates, `frame_paths`). Both are
 #: being aligned in the same wave; this domain's half is the two renderers below.
 OUT_OF_DOMAIN_PNG_SITES = ("render_pose_sticks.py", "armature_core/donor_gate.py")

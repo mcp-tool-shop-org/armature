@@ -77,12 +77,39 @@ BORDER_FRAC = 0.04
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--src", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--width", type=int, default=832)
-    ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--mode", default="letterbox", choices=("letterbox",))
+    ap = argparse.ArgumentParser(
+        description="letterbox a reference image into a generator's frame without losing "
+                    "the figure, and record the derivation")
+    ap.add_argument("--src", required=True,
+                    help="the reference master to fit; read RGBA, never written to")
+    ap.add_argument("--out", required=True,
+                    help="directory for the fitted image and its provenance JSON")
+    # WAVE 28 (F-01f7eda9): these two decide the pixel size of the image a paid run
+    # SUBMITS and carried no help at all, in a parser whose `--pad` and `--alpha-over`
+    # carry two of the best help strings in the domain. CLAUDE.md's generator-legality
+    # rule — every video model constrains resolution and frame count, and the constraint
+    # is recorded per model in the spec that first uses it — reached the operator nowhere
+    # in this tool, and the defaults are E08-era literals with no note of the route they
+    # came from. The legality table itself is `armature_core.gates.GENERATOR_PROFILES`,
+    # enforced by `gates.g1_generator_legality`; naming it here is what points an operator
+    # fitting for a different route at the rule their route is actually held to.
+    ap.add_argument("--width", type=int, default=832,
+                    help="frame width in pixels. The default 832 is E08's WanAnimate frame "
+                         "(832x480), not a universal legal size: every video model "
+                         "constrains resolution, and the per-model rule this repo holds is "
+                         "armature_core.gates.GENERATOR_PROFILES (wan-vace and "
+                         "wan-fun-control both require width and height divisible by 16), "
+                         "enforced by gates.g1_generator_legality. Fitting for another "
+                         "route means reading that route's row in the spec that introduced "
+                         "it")
+    ap.add_argument("--height", type=int, default=480,
+                    help="frame height in pixels. The default 480 is the other half of "
+                         "E08's 832x480 WanAnimate frame; see --width for the per-model "
+                         "legality table these two are checked against")
+    ap.add_argument("--mode", default="letterbox", choices=("letterbox",),
+                    help="how the source is fitted. Only 'letterbox' exists, and that is "
+                         "the Director's 2026-08-12 ruling: the node's own centre-crop "
+                         "handed the model 19.9 percent of the figure and no face")
     ap.add_argument("--pad", default="auto",
                     help="'auto' samples the source's own border; or R,G,B (argparse eats "
                          "leading minus signs, so pass flags as --flag=value). On an RGBA "

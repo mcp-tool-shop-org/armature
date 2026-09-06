@@ -245,12 +245,14 @@ def _summarisable(block, what, label, record, path):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="how big a step the driving signal takes, per keypoint, per frame — "
+                    "the two records side by side")
     ap.add_argument("--a", required=True, help="the baseline keypoints.json")
     ap.add_argument("--b", required=True, help="the densified keypoints.json")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--label-a", default="A")
-    ap.add_argument("--label-b", default="B")
+    ap.add_argument("--out", required=True, help="the comparison JSON to write")
+    ap.add_argument("--label-a", default="A", help="what --a is called in the record")
+    ap.add_argument("--label-b", default="B", help="what --b is called in the record")
     a = ap.parse_args(argv)
 
     with open(a.a, encoding="utf-8") as fh:

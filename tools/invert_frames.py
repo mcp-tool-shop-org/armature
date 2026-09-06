@@ -269,10 +269,17 @@ def invert_dir(src, dst, expect=None):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--frames", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--expect", type=int, default=None)
+    ap = argparse.ArgumentParser(
+        description="write the near-dark polarity of a rendered control channel, with a "
+                    "receipt naming every frame it inverted")
+    ap.add_argument("--frames", required=True,
+                    help="the source channel directory of NNNNN.png frames, read only")
+    ap.add_argument("--out", required=True,
+                    help="directory for the inverted frames; its receipt is written beside "
+                         "it as <out>.receipt.json")
+    ap.add_argument("--expect", type=int, default=None,
+                    help="the frame count the spec declares; the directory's numbered "
+                         "frames must be exactly shotspec.frame_names(expect, 'png')")
     a = ap.parse_args(argv)
 
     receipt = invert_dir(a.frames, a.out, expect=a.expect)

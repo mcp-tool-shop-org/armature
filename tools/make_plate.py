@@ -63,7 +63,9 @@ class PlateError(ArmatureError):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="turn a picked still into the plate that stands behind the performer, "
+                    "with the reason it was picked in its provenance")
     ap.add_argument("--src", default=None,
                     help="a single image to use as the plate (argparse eats leading minus "
                          "signs: pass flags as --flag=value)")
@@ -71,9 +73,15 @@ def parse_args(argv=None):
                     help="a directory of NNNNN.png frames; use with --index")
     ap.add_argument("--index", type=int, default=None,
                     help="which frame of --frames to lift, by its own filename number")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--width", type=int, required=True)
-    ap.add_argument("--height", type=int, required=True)
+    ap.add_argument("--out", required=True,
+                    help="directory for the plate and its provenance JSON")
+    ap.add_argument("--width", type=int, required=True,
+                    help="the TARGET frame's width in pixels — the frame the plate stands "
+                         "behind the performer in. Required and never defaulted: it is a "
+                         "property of the route, and the per-model legality table is "
+                         "armature_core.gates.GENERATOR_PROFILES")
+    ap.add_argument("--height", type=int, required=True,
+                    help="the TARGET frame's height in pixels; see --width")
     ap.add_argument("--why", default=None,
                     help="one sentence, into the provenance, on why THIS plate. Required — "
                          "a backdrop nobody wrote down a reason for is a leftover")

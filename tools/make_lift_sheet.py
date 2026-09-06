@@ -170,13 +170,22 @@ def main(argv=None):
     `sys.argv` in a subprocess — which is why no test drove any sheet's `main` end to end
     and a sibling shipped a call site with no flag (wave 10, rule 3).
     """
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--source", required=True)
-    ap.add_argument("--detection", required=True)
-    ap.add_argument("--lifted", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--frames", default="0,16,32,48,64")
-    ap.add_argument("--tile-h", type=int, default=420)
+    ap = argparse.ArgumentParser(
+        description="source | what the detector saw | the rig performing the lift — the "
+                    "three columns that say whether a lift is the same performance")
+    ap.add_argument("--source", required=True,
+                    help="the source frame directory the lift was taken FROM")
+    ap.add_argument("--detection", required=True,
+                    help="the detector's raw record (detection_raw.json), drawn as the "
+                         "middle column")
+    ap.add_argument("--lifted", required=True,
+                    help="the render_performer frames of the rig performing the lift")
+    ap.add_argument("--out", required=True, help="the sheet image to write")
+    ap.add_argument("--frames", default="0,16,32,48,64",
+                    help="the frame indices all three columns are sampled at (argparse "
+                         "eats leading minus signs: pass as --frames=0,16,32)")
+    ap.add_argument("--tile-h", type=int, default=420,
+                    help="height each tile is drawn at, in pixels")
     ap.add_argument("--source-uncropped", action="store_true",
                     help="show the source column at full frame. Use when the source is a "
                          "GENERATED clip: there is no empty plate to difference against, "

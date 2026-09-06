@@ -610,9 +610,13 @@ def test_the_exempt_paths_and_the_family_are_the_ones_this_ban_claims():
 #:   stage_render.py::run_export      `evaluated_geometry_signature`  instruments-measure
 #:   stage_render.py::run_export      `projected_bbox_px`             instruments-measure
 #:
-#: WAVE 25: re-anchored on the SYMBOL. `stage_render.py:219` opened a blank line the
-#: moment that module dropped an import it no longer used (F-40316edd), and a routing
-#: table whose rows cannot be opened routes nothing.
+#: WAVE 25: re-anchored on the SYMBOL. The line number this table used to carry in
+#: `stage_render.py` opened a blank line the moment that module dropped an import it no
+#: longer used (F-40316edd), and a routing table whose rows cannot be opened routes
+#: nothing. WAVE 28: the number is deleted from this note rather than kept, because the
+#: progress callback and the split OSError handler (F-3dc24905 / F-18e31b77) moved it onto
+#: live code inside `run_export` — a recorded stale anchor that resolves again excuses
+#: nothing, and the table's own converse assertion refuses the row.
 #:
 #: SUBSET, so a site that starts passing `scene=` leaves this set without failing the file
 #: that named it, and a FIFTH unfiltered site fails loudly.
