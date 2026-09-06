@@ -88,7 +88,7 @@ def frame_paths(frames_dir):
 
     The producer states the contract explicitly: `fetch_run.verify_downloads` was made
     case-insensitive at the wave-8 merge and its comment (fetch_run.py:250) says its
-    consumers `encode_control.py::frame_population` and `invert_frames.py:70` use
+    consumers `encode_control.py:126` and `invert_frames.py:70` use
     `n.lower().endswith('.png')` and that "the andon and its consumers share one"
     population rule. This is the gate that decides whether a clip may be a baseline at
     all, so it reads the population the same way — and the RAW directory count rides in

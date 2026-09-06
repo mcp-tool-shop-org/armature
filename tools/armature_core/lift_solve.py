@@ -682,13 +682,8 @@ def round_trip_report(rest, obs, solved, diagonal, tol_frac=ROUND_TRIP_TOL_FRAC,
     adding the `--fps` bound `lift_clip` needs moves its call to `:309`, which turned
     `tests/test_lift_solve.py`'s derived-anchor census red. Prose cites FUNCTIONS, not
     lines. Both docstrings said
-    `lift_clip.py:276 (main)`; this one said `measure_lift.py:334` and
-    `gate_round_trip`'s said `measure_lift.py:468` for the SAME two call sites,
-    each with a `(<symbol>)` qualifier that wave 28's help-text work then falsified a second
-    time (`measure_lift`'s six silent flags gained their `help=`, twelve lines above both
-    functions, and `:468 (summarise)` came to open a line inside `jitter`) — the qualifiers
-    are dropped here and the two numbers kept as the correction record, recorded in
-    `test_amend_w16_core_solvers.CORRECTED_ANCHORS`;
+    `lift_clip.py:276 (main)`; this one said `measure_lift.py:334 (detect)` and
+    `gate_round_trip`'s said `measure_lift.py:468 (summarise)` for the SAME two call sites,
     so the pair disagreed with each other and all four were wrong — the recorded-count-measured-on-a-
     branch shape, a number that moved at a merge and was never re-derived, presented as a
     grep result. `tests/test_lift_solve.py` now derives the anchors from `tools/` and
