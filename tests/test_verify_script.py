@@ -86,9 +86,11 @@ def _run_legs(tmp_path, legs):
         [PWSH, "-NoProfile", "-NonInteractive", "-File", str(path)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     recorded = {}
-    for line in proc.stdout.splitlines():
+    for line in (proc.stdout or "").splitlines():
         if line.startswith("LEG|"):
             _, name, code = line.split("|", 2)
             recorded[name] = code.strip()
@@ -739,8 +741,11 @@ def legs_and_their_commands():
         end = guards[i + 1][0] if i + 1 < len(guards) else len(VERIFY)
         body = chr(10).join(line for line in VERIFY[start:end].splitlines()
                             if not line.lstrip().startswith("#"))
+        # A command, not a hashtable key. Wave 29's receipt writes
+        # `node = $nodeReport` / `npm = $npmReport` after the last guard;
+        # `^\s*node\s` counted those as invocations.
         found = {c for c in PREFLIGHT_COMMANDS
-                 if re.search(r"^\s*" + c + r"\s", body, re.M)}
+                 if re.search(r"^\s*" + c + r"\s+[^=\s]", body, re.M)}
         if found:
             out["-" + flag] = found
     return out
@@ -1164,9 +1169,9 @@ def test_the_requirement_census_goes_red_on_a_third_tool_under_a_name_it_was_not
     as an Application on this rig and no line of verify.ps1 names.
     """
     mutated = VERIFY.replace(
-        "            & $python -m pip install --quiet 'build>=1.5,<2' 'twine>=7,<8'",
+        "            & $python -m pip install 'build>=1.5,<2' 'twine>=7,<8' 'trove-classifiers>=2026.6.1.19,<2027'",
         "            git rev-parse HEAD\n"
-        "            & $python -m pip install --quiet 'build>=1.5,<2' 'twine>=7,<8'",
+        "            & $python -m pip install 'build>=1.5,<2' 'twine>=7,<8' 'trove-classifiers>=2026.6.1.19,<2027'",
         1,
     )
     assert mutated != VERIFY, "the package leg no longer has the line this mutation hangs on"
@@ -1628,7 +1633,7 @@ def test_the_pin_report_resolves_the_specifiers_and_names_the_cv2_provider(tmp_p
                          capture_output=True, text=True, encoding="utf-8",
                          errors="replace")
     out = got.stdout or ""
-    assert "pinned suite dependencies" in out, f"{out}\n{got.stderr}"
+    assert "pinned dependencies" in out, f"{out}\n{got.stderr}"
     rows = [ln.strip() for ln in out.splitlines() if "->" in ln or "provided by" in ln]
     assert any("opencv-python-headless==" in r for r in rows), rows
     assert any("matplotlib==" in r for r in rows), rows
