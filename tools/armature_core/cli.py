@@ -21,6 +21,7 @@ import importlib
 import importlib.util
 import json
 import os
+import re
 import sys
 
 REPO = "https://github.com/mcp-tool-shop-org/armature"
@@ -29,45 +30,56 @@ DOCS = "https://mcp-tool-shop-org.github.io/armature/"
 #: The modules that make up the installed surface, with what each one is for. Kept as
 #: data rather than prose so `armature modules --json` can hand it to a machine.
 #:
-#: ⚠ **A row may only name a gate the module beside it carries.** The `route_gates` row
+#: ⚠ **A row may only name a gate the module beside it carries**, and **every gate a
+#: SURFACE module carries must be named in a SURFACE row.** The `route_gates` row once
 #: read "graph-level gates: ROUTE, PAIR, PAIR_TIER, LEDGER" and that module defines
 #: exactly two gate classes; PAIR_TIER and LEDGER live in `tools/build_lora_arm_payload.py`
 #: and LEDGER_W3 in `tools/build_camera_i2v_payload.py`, none of which is in the installed
-#: package at all. This is the machine-readable surface — `armature modules --json` — so a
-#: consumer was told a gate exists in a module that does not carry it.
-#: `test_every_gate_named_in_the_surface_exists_in_the_module_beside_it` is the pin.
+#: package at all. The reverse drift was measured 2026-09-06: 19 of 32 package gate ids
+#: (CANON, N, P, D, TURN, …) appeared in no row, so a halt's `"gate"` field could not be
+#: turned back into a module from the installed package. Both directions are pinned:
+#: `test_every_gate_named_in_the_surface_exists_in_the_module_beside_it` and
+#: `test_every_gate_a_surface_module_carries_is_named_in_a_surface_row`. `--json` also
+#: carries a mechanical `gates` list per row.
 SURFACE = [
     ("gates", "pure predicates that RAISE; no bpy, no I/O — gates: G1, G2, G4, G5, G6, "
               "R, B, S"),
     ("route_gates", "graph-level gates: ROUTE, PAIR"),
-    ("canon", "surface-keyed character statement, both-direction router, fail-closed spend"),
-    ("canon_census", "which subjects have a surfaces file, as data"),
-    ("rig_gates", "rig and skeleton gates"),
+    ("canon", "surface-keyed character statement, both-direction router, fail-closed "
+              "spend — Gate CANON"),
+    ("canon_census", "which subjects have a surfaces file, as data — Gate CANON"),
+    ("rig_gates", "rig and skeleton gates: N, P, D"),
     ("donor_gate", "Gate DONOR — is this clip fit to be a baseline before anything is lifted"),
     ("shotspec", "the shot-spec contract: schema, load, resolve, hash"),
     ("subject", "what a subject asset is, as a number rather than as a filename"),
-    ("framing", "camera framing and projection, perspective and orthographic"),
-    ("turnaround", "turnaround planning, the projection plan, Gate ALPHA/CROP"),
-    ("startframe", "start-frame measurement: silhouette extent, Gate WHOLE, mask bbox"),
+    ("framing", "camera framing and projection, perspective and orthographic — Gate PIN"),
+    ("turnaround", "turnaround planning, the projection plan — gates: TURN, ALPHA, CROP"),
+    ("startframe", "start-frame measurement: silhouette extent, mask bbox — "
+                   "gates: WHOLE, ALPHA, BACKDROP"),
     ("channels", "channel maths: normalization, edge derivation, encoding"),
     ("openpose", "the OpenPose-18 convention"),
     ("aapose", "AAPose stick construction"),
-    ("landmarks", "landmark extraction"),
-    ("lift_solve", "land 33 MediaPipe-topology landmarks on the 22-bone rig, as rotations"),
+    ("landmarks", "landmark extraction — Gate FACING"),
+    ("lift_solve", "land 33 MediaPipe-topology landmarks on the 22-bone rig, as rotations "
+                   "— Gate SOLVE"),
     ("joints", "joint and skeleton maths"),
     ("binding", "procedural rigid-per-segment skinning, testable without bpy"),
-    ("parts", "split a shell mesh into rigid per-segment parts"),
+    ("parts", "split a shell mesh into rigid per-segment parts — gates: PARTS, RIGID, D"),
     ("posearc", "authored performances for the procedural wire subject"),
-    ("walk", "the gait model — a walk, a stop and an emote, as numbers"),
-    ("resample", "control-sequence resampling"),
-    ("assembly", "the assembly graph: frames in, one VIDEO out, no partner credit"),
+    ("walk", "the gait model — a walk, a stop and an emote, as numbers — "
+             "gates: GAIT, CADENCE"),
+    ("resample", "control-sequence resampling — Gate RESAMPLE"),
+    ("assembly", "the assembly graph: frames in, one VIDEO out, no partner credit — "
+                 "gates: ASSEMBLY, CASCADE"),
     ("sitelist", "the registered site list, as data"),
     ("clipstats", "clip statistics"),
     ("clipcompare", "clip comparison"),
-    ("glb", "GLB reading helpers"),
+    ("glb", "GLB reading helpers — gates: ATLAS, RELIFT"),
     ("pngio", "a dependency-free PNG writer"),
-    ("errors", "the exception types the gates raise"),
-    ("blender_scene", "the only module that imports bpy — needs Blender's interpreter"),
+    ("errors", "the exception types the gates raise — gates: G1, G2, G4, G5, G6, R, B, S, "
+               "N, P, D, CANON"),
+    ("blender_scene", "the only module that imports bpy — needs Blender's interpreter — "
+                      "gates: COMPOSITOR, FRAME"),
 ]
 
 
@@ -79,6 +91,44 @@ def _version():
         return version("armature-studio")
     except Exception:
         return "0.0.0+source"
+
+
+def _gates_carried(name):
+    """Gate ids this SURFACE module exposes as `GateFailure` subclasses.
+
+    The mechanical half of `armature modules --json`: a consumer holding only a halt
+    record's `"gate"` field can find the module without parsing purpose prose. For
+    `blender_scene` — which cannot import under plain CPython — the ids are read from
+    the source's `gate = "..."` class attributes, the same population an import would
+    expose.
+    """
+    from .errors import GateFailure
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"{name}.py")
+    if name == "blender_scene":
+        try:
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError:
+            return []
+        return sorted(set(
+            m.group(1) for m in re.finditer(
+                r'^\s*gate\s*=\s*"([A-Z][A-Z0-9_]*)"', text, re.M)
+            if m.group(1) != "G?"
+        ))
+    try:
+        mod = importlib.import_module(f"armature_core.{name}")
+    except Exception:  # noqa: BLE001 — a broken module still lists as a row with no gates
+        return []
+    return sorted({
+        getattr(obj, "gate")
+        for obj in vars(mod).values()
+        if isinstance(obj, type)
+        and issubclass(obj, GateFailure)
+        and obj is not GateFailure
+        and getattr(obj, "gate", None)
+        and getattr(obj, "gate") != "G?"
+    })
 
 
 #: Module names that are neither stdlib nor part of this package. Computed rather than
@@ -262,7 +312,8 @@ def main(argv=None):
 
     if a.cmd == "modules":
         if a.json:
-            print(json.dumps([{"module": m, "purpose": d} for m, d in SURFACE], indent=2))
+            print(json.dumps([{"module": m, "purpose": d, "gates": _gates_carried(m)}
+                              for m, d in SURFACE], indent=2))
         else:
             print(f"armature_core — {len(SURFACE)} modules\n")
             for m, d in SURFACE:
@@ -290,11 +341,22 @@ def main(argv=None):
             print(f"armature-studio {_version()}\n")
             for r in rows:
                 print(f"  {r['module']:<16} {r['status']}")
-                # The CAUSE, beside the module, in the output an operator actually reads.
-                if r["error"]:
-                    print(f"  {'':<16} {r['error']}: {r['message']}"
-                          + (f" (no module named {r['missing_root']!r})"
-                             if r["missing_root"] else ""))
+                # `needs-blender` is EXPECTED outside Blender — say so in the same words
+                # `armature where` already prints, not as an exception line that sits next
+                # to "all modules resolved" and reads as a broken install.
+                if r["status"] == "needs-blender":
+                    print(f"  {'':<16} render scripts run inside Blender, "
+                          f"from a repo checkout")
+                elif r["error"]:
+                    # The CAUSE, beside the module. Suppress the parenthetical when
+                    # `missing_root` is already inside `message` — for ModuleNotFoundError
+                    # `str(exc)` IS "No module named '<root>'", so appending the same
+                    # fact duplicated the line the operator reads first.
+                    cause = f"{r['error']}: {r['message']}"
+                    root = r["missing_root"]
+                    if root and root not in (r["message"] or ""):
+                        cause += f" (no module named {root!r})"
+                    print(f"  {'':<16} {cause}")
             print()
             print("all modules resolved" if not missing
                   else f"UNRESOLVED: {', '.join(missing)}")
