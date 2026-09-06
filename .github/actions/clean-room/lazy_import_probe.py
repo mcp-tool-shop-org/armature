@@ -112,8 +112,19 @@ def _ran(fn, *args):
 
 
 def main(argv):
-    # `argv` is unread and is in the signature because `run_gate_main` calls `fn(argv)`; the
-    # probe takes no arguments and both callers invoke it with none.
+    # `argv` is unread for the probe body — `run_gate_main` calls `fn(argv)` — but `-h` /
+    # `--help` is answered here the same way `classifier_gate.py` answers it: a help request
+    # is not a gate firing.
+    if len(argv) > 1 and argv[1] in ("-h", "--help"):
+        print(
+            "Usage: python lazy_import_probe.py\n"
+            "  %s<json> and exit 0 when every lazy third-party import ran against the "
+            "installed wheel\n"
+            "  %s<json> and exit 2 for a refusal; exit 1 for a crash\n"
+            "  -h / --help prints this and exits 0"
+            % (OK, HALT)
+        )
+        return 0
     # The leg's own premise, checked rather than assumed: this must be the wheel, not a
     # checkout sitting one directory up. `sys.path[0]` is this file's directory inside the
     # repository when `verify.ps1` runs it, so the check is load-bearing on the rig too.

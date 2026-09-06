@@ -115,6 +115,10 @@ jobs:
   # the built artifacts have been checked — a broken publish cannot be taken back.
   verify:
     runs-on: ubuntu-latest
+    # Suite twice plus three clean installs after the tag is cut — the expensive gate.
+    # 60 bounds a hung install short of the platform's 360 default (docs.github.com,
+    # fetched 2026-09-06).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -410,6 +414,9 @@ jobs:
     # toward publishing, which nothing fixes.
     if: ${{ !inputs.rehearse }}
     runs-on: ubuntu-latest
+    # Download + publish: minutes. Platform default without this key is 360
+    # (fetched 2026-09-06).
+    timeout-minutes: 15
     environment: release
     permissions:
       id-token: write
@@ -442,6 +449,9 @@ jobs:
     # divergence it exists to rule out.
     if: ${{ !inputs.rehearse }}
     runs-on: ubuntu-latest
+    # Checkout + npm publish: minutes. Platform default without this key is 360
+    # (fetched 2026-09-06).
+    timeout-minutes: 15
     environment: release
     permissions:
       # A job-level `permissions:` block REPLACES the workflow-level grant; every scope it

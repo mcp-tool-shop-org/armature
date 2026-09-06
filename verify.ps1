@@ -95,6 +95,7 @@ param(
 $ErrorActionPreference = 'Continue'
 $repo = $PSScriptRoot
 $python = Join-Path $repo '.venv\Scripts\python.exe'
+$verifyStartedUtc = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
 
 $results = [System.Collections.Generic.List[object]]::new()
 
@@ -266,7 +267,11 @@ if ($NoPackage) {
             # and `test_every_tool_that_makes_or_moves_the_artifact_is_bounded_from_above`
             # named it here as well as in both workflows — a data set resolved fresh on the
             # day is no more verified than a tool resolved fresh on the day.
-            & $python -m pip install --quiet 'build>=1.5,<2' 'twine>=7,<8' 'trove-classifiers>=2026.6.1.19,<2027'
+            # `--quiet` removed for the same reason the clean-room install dropped it
+            # (measured 2026-09-04): the flag erased the only line naming what resolved, so
+            # a red on sdist contents or the classifier gate left no toolchain version in
+            # the run. The summary block below now also resolves these range pins.
+            & $python -m pip install 'build>=1.5,<2' 'twine>=7,<8' 'trove-classifiers>=2026.6.1.19,<2027'
             if ($LASTEXITCODE -ne 0) { return }
 
             # THE LEG JUDGES WHAT THIS RUN BUILT, AND NOTHING ELSE. `python -m build` does
@@ -636,6 +641,12 @@ if not os.path.isfile(sys.argv[1]):
     # workflows. A report that cannot read its source says nothing rather than guessing.
     sys.exit(0)
 ci = io.open(sys.argv[1], encoding="utf-8").read()
+# Match every bounded specifier (==|>=|<=|~=|<|>), not `==` alone: build/twine/
+# trove-classifiers/requests/setuptools are range-bounded and were invisible to the
+# previous regex, so a red on those tools named nothing about which version decided it.
+_SPEC = re.compile(
+    r'([A-Za-z0-9][A-Za-z0-9._-]*)((?:==|>=|<=|~=|<|>)[0-9][A-Za-z0-9._<>,!=]*)'
+)
 pins = []
 for line in ci.splitlines():
     # `-m pip`, not the two words spelled together: tests/test_ci_workflows' install-token
@@ -643,7 +654,19 @@ for line in ci.splitlines():
     # as one of its own install lines.
     if "-m pip" not in line or line.strip().startswith("#"):
         continue
-    for name, spec in re.findall(r'([A-Za-z0-9][A-Za-z0-9._-]*)(==[0-9][A-Za-z0-9._-]*)', line):
+    for name, spec in _SPEC.findall(line):
+        if (name, spec) not in pins:
+            pins.append((name, spec))
+# Also resolve the artifact-toolchain pins this script itself installs (leg 3), read from
+# this file so a re-pin moves the report with it. setuptools resolves inside build's
+# isolated env, not on the venv — say so rather than guess.
+here = io.open(sys.argv[2], encoding="utf-8").read() if len(sys.argv) > 2 else ""
+for line in here.splitlines():
+    if "-m pip" not in line or line.strip().startswith("#"):
+        continue
+    if "build" not in line and "twine" not in line and "trove-classifiers" not in line:
+        continue
+    for name, spec in _SPEC.findall(line):
         if (name, spec) not in pins:
             pins.append((name, spec))
 for name, spec in pins:
@@ -652,6 +675,7 @@ for name, spec in pins:
     except PackageNotFoundError:
         got = "(absent)"
     print("%s%s -> %s" % (name, spec, got))
+print("setuptools -> (resolves inside build's isolated env; not on this venv)")
 try:
     import cv2
     provider = "(no distribution claims cv2)"
@@ -665,13 +689,54 @@ try:
     print("cv2 %s is provided by %s" % (cv2.__version__, provider))
 except Exception as exc:
     print("cv2 could not be imported: %s" % exc)
-'@ $ciYml
+'@ $ciYml (Join-Path $repo 'verify.ps1')
 } catch { }
-Write-Host '  pinned suite dependencies (ci.yml''s `==` specifiers, resolved on this venv):'
+Write-Host '  pinned dependencies (ci.yml + leg-3 toolchain, bounded specifiers, resolved on this venv):'
 foreach ($line in @($pinReport)) { Write-Host ("    {0}" -f $line) }
+
+# WHICH FONT FACE THE CLAIM WAS MADE ON — the FOURTH runtime axis. CI installs Liberation
+# via `.github/actions/sheet-fonts`; this rig resolves Arial from Windows Fonts first.
+# 29 sheet tests ride that difference. Read both lists rather than restating them.
+$fontReport = @('(unreadable)')
+try {
+    $sheetFonts = Join-Path $repo '.github/actions/sheet-fonts/action.yml'
+    $composePy = Join-Path $repo 'tools/sheet_compose.py'
+    $fontReport = & $python -c @'
+import io, os, re, sys
+action = sys.argv[1]
+compose = sys.argv[2]
+ci_faces = []
+if os.path.isfile(action):
+    text = io.open(action, encoding="utf-8").read()
+    m = re.search(r'FACES="([^"]+)"', text)
+    if m:
+        ci_faces = m.group(1).split()
+print("CI (.github/actions/sheet-fonts) installs: %s" % (
+    ", ".join(ci_faces) if ci_faces else "(unreadable)"))
+# Resolve FONT_ALIASES the same defensive way: path or (unresolved), never a guess.
+try:
+    tools = os.path.dirname(compose)
+    if tools and tools not in sys.path:
+        sys.path.insert(0, tools)
+    from sheet_compose import FONT_ALIASES, font_search_paths, resolve_font_path
+except Exception as exc:
+    print("rig FONT_ALIASES: (unreadable: %s)" % exc)
+    sys.exit(0)
+print("rig font search paths: %s" % font_search_paths())
+for requested, aliases in FONT_ALIASES.items():
+    try:
+        path = resolve_font_path(requested)
+        print("rig %s -> %s (aliases %s)" % (requested, path, ", ".join(aliases)))
+    except Exception:
+        print("rig %s -> (unresolved) (aliases %s)" % (requested, ", ".join(aliases)))
+'@ $sheetFonts $composePy
+} catch { }
+Write-Host '  fonts (rig vs CI):'
+foreach ($line in @($fontReport)) { Write-Host ("    {0}" -f $line) }
 Write-Host '  (the legs and their order are ci.yml''s; the runtimes are this rig''s venv and PATH)'
 Write-Host ''
 
+$legRows = @()
 foreach ($r in $results) {
     $verdict = if ($r.Outcome -eq 'PASS') {
         'PASS'
@@ -684,12 +749,55 @@ foreach ($r in $results) {
     }
     $colour = if ($r.Outcome -eq 'PASS') { 'Green' } else { 'Red' }
     Write-Host ("  {0,-52} {1,7}s  {2}" -f $r.Leg, $r.Seconds, $verdict) -ForegroundColor $colour
+    $legRows += [pscustomobject]@{
+        Leg         = $r.Leg
+        ExitCode    = $r.ExitCode
+        Outcome     = $r.Outcome
+        Established = $r.Established
+        Raised      = $r.Raised
+        Seconds     = $r.Seconds
+        Verdict     = $verdict
+    }
 }
 
 $failed = @($results | Where-Object { $_.Outcome -ne 'PASS' })
+$overall = if ($failed.Count -gt 0) {
+    'REFUSED'
+} elseif ($NoSite -or $NoPackage) {
+    'PASS_PARTIAL'
+} else {
+    'PASS'
+}
+
+# The run as JSON beside the console — a green local claim with no artifact is a
+# placeholder shaped like evidence. Path is named on the last line so a redirect is not
+# required; outputs/ is already gitignored.
+$stamp = [datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
+$receiptDir = Join-Path $repo 'outputs/verify'
+$receiptPath = Join-Path $receiptDir "$stamp.json"
+try {
+    New-Item -ItemType Directory -Force -Path $receiptDir | Out-Null
+    $receipt = [ordered]@{
+        started_utc   = $verifyStartedUtc
+        finished_utc  = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+        flags         = @{ NoSite = [bool]$NoSite; NoPackage = [bool]$NoPackage }
+        interpreter   = $interpreter
+        node          = $nodeReport
+        npm           = $npmReport
+        pinned        = @($pinReport)
+        fonts         = @($fontReport)
+        legs          = @($legRows)
+        overall       = $overall
+    }
+    ($receipt | ConvertTo-Json -Depth 6) | Set-Content -Path $receiptPath -Encoding utf8
+} catch {
+    $receiptPath = "(unwritable: $($_.Exception.Message))"
+}
+
 if ($failed.Count -gt 0) {
     Write-Host ''
     Write-Host "REFUSED — $($failed.Count) leg(s) failed." -ForegroundColor Red
+    Write-Host "receipt: $receiptPath"
     exit 1
 }
 
@@ -699,9 +807,11 @@ if ($NoSite -or $NoPackage) {
     if ($NoSite) { $skipped += 'the site build' }
     Write-Host ''
     Write-Host "All run legs passed. NOT a full verify — $($skipped -join ' and ') was skipped." -ForegroundColor Yellow
+    Write-Host "receipt: $receiptPath"
     exit 0
 }
 
 Write-Host ''
 Write-Host 'All legs passed.' -ForegroundColor Green
+Write-Host "receipt: $receiptPath"
 exit 0
