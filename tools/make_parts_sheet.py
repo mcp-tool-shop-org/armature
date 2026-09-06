@@ -251,12 +251,36 @@ def arc_liveness(measured, name, at_rest, where):
     return ev, diagonal, lo, hi
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/make_parts_sheet.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    p = argparse.ArgumentParser()
-    p.add_argument("--glb", required=True)
-    p.add_argument("--out", required=True)
-    p.add_argument("--title", default="E07 arm (c) — the rigid-parts armature")
+    p = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--glb", required=True,
+                   help="the RIGID-PARTS GLB to judge: separate bone-parented parts, no "
+                        "armature modifier. Read only. A skinned figure is refused by "
+                        "name -- one object that never moves has no part transforms to "
+                        "compare, and make_rig_sheet.py is the tool for that")
+    p.add_argument("--out", required=True,
+                   help="the directory panels.json and its frames are written into; "
+                        "`sheet_compose.py <out>/panels.json` composes the sheet. "
+                        "Compensator: delete it; owner: the executor session")
+    p.add_argument("--title", default="E07 arm (c) — the rigid-parts armature",
+                   help="the sheet's heading, as the Director reads it (default names "
+                        "E07 arm (c)); the SUBTITLE beneath it is measured, not typed")
     return p.parse_args(argv)
 
 
@@ -402,7 +426,10 @@ def shoot(scene, path):
             f"{os.path.basename(path)}; it returned {_status!r}, and any file at "
             f"that path is then the previous run's",
             {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(path)})
+             "path": os.path.abspath(path),
+             # F-d6042cf6: where the partial run is, and its named undo.
+             "out": os.path.dirname(os.path.abspath(path)),
+             "compensator": "delete --out; owner: the executor session"})
     # THE WRITER VERIFIES ITS OWN OUTPUT (F-51c5e0ef). `bpy.ops.render.render` returns
     # an operator status set and can return `{'CANCELLED'}` WITHOUT raising; this
     # function discarded it, and no code path in this tool ever opened a rendered file
@@ -459,6 +486,36 @@ def _wv(ob):
     ob.data.vertices.foreach_get("co", flat)
     m = np.array(ob.matrix_world, dtype=np.float64)
     return flat.reshape(n, 3) @ m[:3, :3].T + m[:3, 3]
+
+
+def sheet_subtitle(visible, arc, side_word, last):
+    """The caption under the panels the Director rules on, MEASURED rather than typed.
+
+    WAVE 28, F-e7d3303e. The literal this replaces read "17 rigid parts, bone-parented, no
+    deformation anywhere", and the run checked neither half:
+
+      * **the count was typed.** `visible` -- `blender_scene.render_visible_meshes(scene,
+        meshes)`, bound thirty lines above the spec -- IS the number of parts in a
+        rigid-parts GLB, and `len(visible)` was never asked. Pointed at a 12-part or a
+        21-part figure the sheet still said 17. MEASURED on `3380ae2`: `grep -n '17'` in
+        this file returned the subtitle and `ARC_FRAMES = (17, ...)`, an unrelated frame
+        index, and nothing else.
+      * **"no deformation anywhere" was an unconditional assertion.** What this run
+        measures is `arc_liveness`, a DISPLACEMENT: it says the parts MOVED, not that none
+        of them deformed. The clause is replaced by the measurement, phrased as what it is.
+
+    This is the fix its own sibling already had: `make_skeleton_sheet.sheet_subtitle`
+    exists because its literal read "22 named bones - every limb pivot moved onto the
+    mannequin's own sculpted ball-joint", and its docstring records the same two defects.
+    The fix was applied to one sheet and not to its neighbour; ADOPTED here, at the same
+    shape, rather than respelled.
+    """
+    return (f"{len(visible)} rigid parts, bone-parented   ·   they MOVED through the arc: "
+            f"max displacement {arc['max_displacement']:.3e}, "
+            f"{arc['displacement_over_diagonal']:.3e} of this subject's own bbox diagonal "
+            f"{arc['bbox_diagonal']:.6f}   ·   the arc is E03's: the character's "
+            f"{side_word} arm, 0°→90° about +Y, {last} keys at 16 fps   ·   insets are "
+            f"1:1 at frame {last}, on the joints under articulation")
 
 
 def main():
@@ -549,10 +606,7 @@ def main():
         "out": out,
         "filename": "E07-parts-armature.png",
         "title": args.title,
-        "subtitle": ("17 rigid parts, bone-parented, no deformation anywhere   ·   the arc is "
-                     f"E03's: the character's {side_rec['side_word']} arm, 0°→90° about "
-                     f"+Y, {last} keys at 16 fps   ·   insets are 1:1 at frame {last}, on "
-                     "the joints under articulation"),
+        "subtitle": sheet_subtitle(visible, arc, side_rec["side_word"], last),
         "articulated_side": side_rec,
         "rows": [
             {"title": "The figure through the arc",

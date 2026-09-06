@@ -93,15 +93,39 @@ def _sha256(path):
     return h.hexdigest()
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/lift_solve.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--glb", required=True)
-    ap.add_argument("--manifest", required=True)
-    ap.add_argument("--motion", required=True)
-    ap.add_argument("--out", required=True)
+    ap = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--glb", required=True,
+                    help="the RIGGED performer GLB the solved lift is keyed onto; read only")
+    ap.add_argument("--manifest", required=True,
+                    help="that rig's own rig_manifest.json -- the rest landmark table the "
+                         "solve is expressed against, never typed in")
+    ap.add_argument("--motion", required=True,
+                    help="the SOLVED motion record (armature_core.lift_solve's output): "
+                         "landmarks already turned into rotations, with no bpy involved")
+    ap.add_argument("--out", required=True,
+                    help="the GLB to write, carrying the lifted action. Compensator: "
+                         "delete it; owner: the executor session")
     # argparse eats leading minus signs: pass any negative value as --key=value.
-    ap.add_argument("--fps", type=int, default=16)
+    ap.add_argument("--fps", type=int, default=16,
+                    help="frame rate the action is keyed at (default 16); glTF key times "
+                         "are SECONDS, so this must match the record's own rate")
     return ap.parse_args(argv)
 
 

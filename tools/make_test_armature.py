@@ -384,14 +384,31 @@ def require_subject_args(args):
     return args
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/make_test_armature.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--thickness", type=float, default=0.030,
                     help="limb radius in metres; the bracket variable")
     ap.add_argument("--joint-scale", type=float, default=1.55,
                     help="ball radius as a multiple of limb radius")
-    ap.add_argument("--segments", type=int, default=16)
+    ap.add_argument("--segments", type=int, default=16,
+                    help="radial segments per limb cylinder (default 16); it sets how "
+                         "round the wire reads, and nothing else about the subject")
     # NOTE the `--key=value` form for these: argparse eats leading minus signs, so a
     # negative arc angle must be written --arc-start-deg=-30, never --arc-start-deg -30.
     ap.add_argument("--pose-arc", default=None,
@@ -401,9 +418,16 @@ def main():
                     help="frames the arc spans; must match the shot spec's frame count")
     ap.add_argument("--fps", type=int, default=16,
                     help="MUST match the shot spec's fps: glTF stores key times in seconds")
-    ap.add_argument("--arc-start-deg", type=float, default=0.0)
-    ap.add_argument("--arc-end-deg", type=float, default=90.0)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--arc-start-deg", type=float, default=0.0,
+                    help="the arc's first angle in degrees (default 0.0). Pass a negative "
+                         "value as --arc-start-deg=-30: argparse eats leading minus signs")
+    ap.add_argument("--arc-end-deg", type=float, default=90.0,
+                    help="the arc's last angle in degrees (default 90.0); same "
+                         "--key=value form for a negative value")
+    ap.add_argument("--out", required=True,
+                    help="the GLB to write; its `.joints.json` sidecar is written beside "
+                         "it, and the two are the instrument's whole output. Compensator: "
+                         "delete both; owner: the executor session")
     args = ap.parse_args(argv)
 
     # F-26ee2b03, wave 16. FIRST, above `resolve_arc`: nothing exists yet -- no geometry,

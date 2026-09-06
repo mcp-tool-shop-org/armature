@@ -71,12 +71,34 @@ class BoneHeatSubjectError(ArmatureError):
     an argument must not arrive under one name."""
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/diagnose_bone_heat.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    p = argparse.ArgumentParser()
-    p.add_argument("--glb", required=True)
-    p.add_argument("--out", required=True)
-    p.add_argument("--bands", type=int, default=200)
+    p = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--glb", required=True,
+                   help="the character GLB whose bone-heat binding is being diagnosed; "
+                        "read only")
+    p.add_argument("--out", required=True,
+                   help="the directory the diagnosis is written into. Compensator: delete "
+                        "it; owner: the executor session")
+    p.add_argument("--bands", type=int, default=200,
+                   help="horizontal bands the silhouette is read in (default 200). Bounds "
+                        "the landmark derivation: below MIN_BANDS the figure cannot be "
+                        "resolved and the run is refused on THIS flag, by name")
     return p.parse_args(argv)
 
 

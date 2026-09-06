@@ -549,26 +549,157 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+#: WAVE 28, F-e0ade43a. THE EIGHT ARGUMENTS THIS PARSER KNOWS, in their FLAG spellings,
+#: each with the sentence `--help` prints. This parser is hand-rolled -- `--key=value`,
+#: which `render_turnaround.py:6` states is the form that survives argparse's appetite for
+#: leading minus signs -- so it had no `--help` at all, and the vocabulary it DID print was
+#: the internal key names. MEASURED on `3380ae2` under the bpy stub with argv
+#: `blender -b -P tools/rig_character.py -- --help`:
+#: `RigCharacterError: unknown argument '--help'; known: ['bands', 'binding',
+#: 'envelope_radii', 'glb', 'measure_only', 'mode', 'name', 'out']`, exit 2. Three things
+#: were wrong with that answer and all three are the operator's:
+#:
+#:   * `measure_only` typed back from that list is `--measure_only`, which is NOT the bare
+#:     flag the loop special-cased (`token == "--measure-only"`). It fell through to the
+#:     `partition("=")` line, `value` became `''`, and `args["measure_only"]` became the
+#:     EMPTY STRING -- falsy, so the run did the full skeleton build and GLB export instead
+#:     of the cheap measure pass that was asked for, and nothing said so.
+#:   * the usage line named four of the eight (`--name`, `--mode`, `--binding` and
+#:     `--envelope-radii` appeared in no usage or help string in the file).
+#:   * `--binding` and `--envelope-radii` were accepted with no vocabulary check:
+#:     `--binding=rigidd` parsed clean, and on the DEFAULT route (`--mode=skeleton`) it is
+#:     never read again, so the typo reached no refusal anywhere.
+#:
+#: The table is the ONE home for all four answers below -- the help text, the usage line,
+#: the `known:` list of a refused argument, and which keys are bare flags.
+#: The three closed vocabularies, spelled ONCE and read by both the help table below and
+#: the boundary checks in `parse_args`. `apply_binding` and `main` check the same words
+#: deeper in; these are those words where the mistake is still free -- `--mode` was already
+#: checked immediately, `--binding` only after `os.makedirs` and a whole import-and-
+#: skeleton pass, and `--envelope-radii` deeper still.
+MODES = ("skeleton", "full")
+BINDINGS = ("auto", "envelope", "rigid")
+ENVELOPE_RADII = ("measured", "default")
+
+ARGUMENTS = (
+    ("--glb", "<path>", True,
+     "the canonical character mesh to rig. Read only -- nothing here writes to it"),
+    ("--out", "<dir>", True,
+     "the directory the rigged GLB, its manifest and any halt.json are written into. "
+     "Compensator: delete it; owner: the executor session"),
+    ("--name", "<one path component>", False,
+     "the name component of the exported GLB (default \"performer\"). Bounded to a single "
+     "path segment, because this module's compensator only undertakes to delete --out"),
+    ("--mode", "|".join(MODES), False,
+     "skeleton (default) places the pivots, gates the names and exports -- nothing is "
+     "bound; full runs the binding arms twice and Gate D compares them"),
+    ("--bands", "N", False,
+     "horizontal bands the silhouette is read in to place the pivots (default 200)"),
+    ("--binding", "|".join(BINDINGS), False,
+     "how the mesh is attached to the skeleton (default \"rigid\"). READ ONLY ON "
+     "--mode=full: on the default skeleton route nothing is bound, and the manifest "
+     "records that this value was not used"),
+    ("--envelope-radii", "|".join(ENVELOPE_RADII), False,
+     "where envelope radii come from (default \"measured\"). Read only when "
+     "--binding=envelope, and therefore only on --mode=full"),
+    ("--measure-only", "(bare flag)", False,
+     "measure the subject and write the record, then stop -- no skeleton is built and no "
+     "GLB is exported. It is the ONLY bare flag here; every other argument is --key=value"),
+)
+
+#: The one usage line, built from the table so it cannot name four of eight again.
+USAGE = ("usage: blender -b -P tools/rig_character.py -- "
+         + " ".join((f"{flag}={ph}" if required else
+                     (f"[{flag}]" if ph == "(bare flag)" else f"[{flag}={ph}]"))
+                    for flag, ph, required, _why in ARGUMENTS))
+
+
+def help_text():
+    """`--help`'s answer: the usage line, this module's own sentence, then the eight.
+
+    The flags are printed in the spelling an operator types them in, which is the defect
+    the `known:` list had: `measure_only` is not a flag, `--measure-only` is.
+    """
+    width = max(len(flag) + len(ph) + 1 for flag, ph, _r, _w in ARGUMENTS)
+    lines = [USAGE, "", ((__doc__ or "").strip().splitlines() or [None])[0], "", "arguments:"]
+    for flag, ph, _required, why in ARGUMENTS:
+        head = flag if ph == "(bare flag)" else f"{flag}={ph}"
+        lines.append(f"  {head.ljust(width)}  {why}")
+    return "\n".join(lines)
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     args = {"glb": None, "out": None, "measure_only": False, "bands": 200,
             "name": "performer", "mode": "skeleton", "binding": "rigid",
             "envelope_radii": "measured"}
+    #: The flag spellings, for every sentence an operator is sent back with.
+    flags = [f for f, _ph, _r, _w in ARGUMENTS]
+    bare = {f for f, ph, _r, _w in ARGUMENTS if ph == "(bare flag)"}
     for token in argv:
-        if token == "--measure-only":
-            args["measure_only"] = True
+        # F-e0ade43a: `--help` is answered, not refused as an unknown argument. It prints
+        # and exits 0, which reaches the operator because this file's `__main__` handler
+        # now re-raises `SystemExit` (F-814335e4) instead of recording it as a crash.
+        if token in ("--help", "-h"):
+            print(help_text())
+            raise SystemExit(0)
+        if token in bare:
+            args[token[2:].replace("-", "_")] = True
             continue
-        key, _, value = token[2:].partition("=")
+        key, sep, value = token[2:].partition("=")
         key = key.replace("-", "_")
         if key not in args:
-            raise RigCharacterError(f"unknown argument {token!r}; known: {sorted(args)}",
+            raise RigCharacterError(
+                f"unknown argument {token!r}; known: {flags}. Every argument here is "
+                f"--key=value except --measure-only; run with --help for what each does",
                 {"clause": "unknown_argument", "andon": "ArmatureError",
-                 "token": token, "known": sorted(args)})
+                 "token": token, "known": flags})
+        if not sep:
+            # F-e0ade43a: `--measure_only` used to land HERE, with `value` an empty string.
+            # An empty string is FALSY, so `args["measure_only"]` was False and the run did
+            # the FULL skeleton build and GLB export instead of the cheap measure pass the
+            # operator asked for -- and the underscore spelling is the one the old
+            # `known:` list handed them. Both shapes are refused by name now, and the
+            # sentence says which spelling to type.
+            flag = f"--{key.replace('_', '-')}"
+            if flag in bare:
+                raise RigCharacterError(
+                    f"{token!r} is not how this bare flag is spelled: write {flag}, with "
+                    f"hyphens. As typed it would have been read as {flag}=\"\", and an "
+                    f"empty value is FALSY -- the run would have done the full build "
+                    f"instead of the measure pass",
+                    {"clause": "argument_carries_no_value", "andon": "ArmatureError",
+                     "token": token, "flag": flag, "bare_flags": sorted(bare)})
+            raise RigCharacterError(
+                f"{token!r} carries no value; {flag} is a --key=value argument, so write "
+                f"it as {flag}=<value>. The only bare flag this tool takes is "
+                f"{', '.join(sorted(bare))}",
+                {"clause": "argument_carries_no_value", "andon": "ArmatureError",
+                 "token": token, "flag": flag, "bare_flags": sorted(bare)})
         args[key] = int(value) if key == "bands" else value
     if not args["glb"] or not args["out"]:
-        raise RigCharacterError("usage: -- --glb=<path> --out=<dir> [--measure-only] [--bands=N]",
-            {"clause": "glb_and_out_are_required", "andon": "ArmatureError",
-             "glb": args["glb"], "out": args["out"]})
+        raise RigCharacterError(
+            USAGE, {"clause": "glb_and_out_are_required", "andon": "ArmatureError",
+                    "glb": args["glb"], "out": args["out"]})
+    # F-e0ade43a: THE TWO CLOSED VOCABULARIES THAT HAD NO BOUNDARY CHECK.
+    # `--mode` is deliberately NOT here: `main` checks it immediately, before anything is
+    # imported or written, and moving that check up would leave a refusal that can no
+    # longer fire where the halt record is built. These two were the asymmetry --
+    # `--binding=rigidd` parsed clean and, on the default skeleton route, was never read
+    # again, so the operator who asked for envelope binding got a skeleton-only build
+    # whose manifest never mentioned the request; on `--mode=full` the same typo was
+    # refused inside `apply_binding`, after `os.makedirs` and after the first build pass
+    # had begun. Same andon class and the same clause words as those deeper checks; this
+    # is the boundary copy, not a second vocabulary.
+    for key, flag, known, clause in (
+            ("binding", "--binding", BINDINGS, "unknown_binding_mode"),
+            ("envelope_radii", "--envelope-radii", ENVELOPE_RADII,
+             "unknown_envelope_radii")):
+        if args[key] not in known:
+            raise GateMode(
+                f"unknown {flag}={args[key]!r}; known: {', '.join(known)}",
+                {"clause": clause, key: args[key], "known": list(known),
+                 "flag": flag, "where": "parse_args"})
     # WAVE 25, F-6e1a9d54's premise made TRUE. This module's named compensator is
     # "delete `--out`", and that statement holds only while every written path resolves
     # UNDER `--out`. `--name` is pasted as the NAME COMPONENT of the exported GLB, and it
@@ -1598,6 +1729,23 @@ def run_skeleton(args, out_dir, source_sha, started):
         "offset_table_reproduced_by_second_build":
             offsets_first == ctx["offset_table"],
         "bone_lengths": ctx["bone_lengths"],
+        # WAVE 28, F-e0ade43a. THE TWO ARGUMENTS THIS ROUTE DOES NOT USE, recorded as
+        # having been asked for and not used. `--binding` and `--envelope-radii` are
+        # accepted on every route, and `run_skeleton` passes `bind=False` twice and reads
+        # neither; the manifest had no key for either, so an operator who asked for
+        # envelope binding got a skeleton-only build whose record never mentioned the
+        # request. Their vocabularies are checked at the boundary now (`parse_args`), so
+        # what lands here is a legal word that this route declined to act on -- which is a
+        # different statement from "you typed it wrong", and both now reach the operator.
+        "arguments_not_used_on_this_route": {
+            "binding": args["binding"],
+            "envelope_radii": args["envelope_radii"],
+            "why": ("skeleton mode binds nothing: run_skeleton calls build_pass with "
+                    "bind=False for both passes, so neither value was read. They are "
+                    "recorded because a request the record does not mention is "
+                    "indistinguishable from a request never made. Run --mode=full for "
+                    "them to have an effect."),
+        },
         "gates": {
             "N_pre_export": gate_n_pre,
             "N_post_export": export["gate_n_post"],
@@ -1702,7 +1850,11 @@ def main():
     if args["mode"] != "full":
         raise GateMode(f"unknown --mode={args['mode']!r}; known: skeleton, full",
                        {"clause": "unknown_mode",
-                        "mode": args["mode"], "known": ["skeleton", "full"]})
+                        "mode": args["mode"], "known": ["skeleton", "full"],
+                        # F-d6042cf6: this fires BELOW `os.makedirs(out_dir)`, so the
+                        # directory exists when the operator reads the halt line.
+                        "out": os.path.abspath(out_dir),
+                        "compensator": "delete --out; owner: the executor session"})
 
     # Two full builds from the same input. The second is the one kept; Gate D compares.
     mode = args["binding"]
@@ -1929,6 +2081,24 @@ if __name__ == "__main__":
     # exception used to leave the whole `try` statement with `sys.exit` never reached.
     try:
         main()
+    # WAVE 28, F-814335e4. A DELIBERATE REFUSAL IS NOT A CRASH, and this handler used
+    # to record it as one. `argparse` refuses a missing or mistyped required flag by
+    # raising `SystemExit(2)`; with no re-raise above the `except BaseException`, the
+    # branch below caught it, wrote `"error": "SystemExit", "message": "2"` under
+    # `FAILED - an unhandled error`, and exited **1** -- the code this repo reserves for
+    # a crash. MEASURED on `3380ae2` with `blender_stub.exit_code_of_main_block` and a
+    # `main` replaced by a `SystemExit(2)` raiser: rig_bake, rig_character, rig_parts,
+    # rig_repair and rig_retopo returned 1 with a halt line whose entire message was the
+    # character `2`, while the sixteen siblings (preview_glb.py and kin) returned 2 and
+    # printed nothing. Worse, the halt-record branch re-parses argv to find `--out`, and
+    # on this path argparse raised a SECOND time, so no `halt.json` was written either.
+    # `armature_core.parts.run_tool_main`, the ONE CPython handler, has carried this
+    # same two lines since wave 22; this is the Blender-side local handler adopting the
+    # shape, not a second spelling of it. The three-outcome rule the comment above
+    # states -- "a deliberate refusal exits 2; a crash exits 1" -- is what these two
+    # lines make true for an argument the operator got wrong.
+    except SystemExit:
+        raise
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
         # THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12). Wave 10 moved `json.dumps`

@@ -1412,8 +1412,19 @@ STRING_SYSTEMEXIT_EXEMPT = set()
 def _string_systemexit_sites(path):
     """Every `raise SystemExit(<string-valued expression>)` in one file, by AST.
 
-    A constant, an f-string, or a concatenation — the three spellings a message takes. An
-    argument that is a Call (`SystemExit(main())`) is the exit convention, not a refusal.
+    A STRING constant, an f-string, or a concatenation — the three spellings a message
+    takes. An argument that is a Call (`SystemExit(main())`) is the exit convention, not a
+    refusal.
+
+    WAVE 28 (instruments): the constant branch keys on the constant's TYPE, which is what
+    this docstring always claimed and the code did not do. MEASURED on this branch: the
+    predicate accepted any `ast.Constant`, so `raise SystemExit(0)` — an EXIT CODE, the
+    thing the convention is made of — was reported as a bare-string refusal, and
+    `rig_character.py`'s new `--help` (F-e0ade43a) landed in `offenders` for exiting 0
+    after printing its arguments. An integer is not a message; a census that cannot tell
+    them apart is keyed on the spelling instead of the resolved shape (wave-18 rule 1).
+    The falsifiability fixture below now carries the numeric case in the direction that
+    must NOT be counted, beside the three that must.
     """
     with open(path, encoding="utf-8") as fh:
         tree = _ast.parse(fh.read())
@@ -1427,6 +1438,8 @@ def _string_systemexit_sites(path):
         if not node.exc.args:
             continue
         arg = node.exc.args[0]
+        if isinstance(arg, _ast.Constant) and not isinstance(arg.value, str):
+            continue
         if isinstance(arg, (_ast.Constant, _ast.JoinedStr, _ast.BinOp)):
             out.append(node.lineno)
     return out
@@ -1462,7 +1475,14 @@ def test_the_exemption_is_a_subset_of_the_population_and_still_earns_it():
 
 def test_the_census_goes_red_on_a_module_that_refuses_with_a_string(tmp_path):
     """The falsifiability fixture: a temp module carrying each of the three spellings, and
-    the `raise SystemExit(main())` exit convention, which must NOT be counted."""
+    the two shapes that must NOT be counted — the `raise SystemExit(main())` exit
+    convention and a NUMERIC `raise SystemExit(0)`.
+
+    WAVE 28 (instruments): the numeric direction is the one this fixture was missing, and
+    a predicate that accepted any `ast.Constant` passed it green while reporting every
+    `--help` that exits 0 as a bare-string refusal. `d()` is the site that would be
+    counted if the type check above were deleted.
+    """
     p = tmp_path / "make_fourteenth_thing.py"
     p.write_text(
         "def a():\n"
@@ -1471,6 +1491,8 @@ def test_the_census_goes_red_on_a_module_that_refuses_with_a_string(tmp_path):
         "    raise SystemExit(f'interpolated {x}')\n"
         "def c(x):\n"
         "    raise SystemExit('concatenated ' + str(x))\n"
+        "def d():\n"
+        "    raise SystemExit(0)\n"
         "def main():\n"
         "    return 0\n"
         "if __name__ == '__main__':\n"
@@ -2513,12 +2535,31 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
 ]
 
 #: The clause values that are SENTENCES rather than words, with the site that
-#: spells each. Both files are other domains'; counted, posted, not fixed here.
+#: spells each. Counted, posted, not fixed here.
+#:
+#: WAVE 28 (instruments): the two line anchors are RE-DERIVED on this branch (757 -> 848,
+#: 907 -> 998) because F-2b8afc38's help text and F-8b7f48a8's `gate_output_overwrite`
+#: both land above them in `render_turnaround.py`.
+#:
+#: A CORRECTION IN PLACE, kept because it is more useful than the number it replaces: this
+#: block first recorded 799 / 949, which was the tree BEFORE the overwrite gate's 49-line
+#: helper landed, and the mistake was mine in the reading rather than in the walk — I
+#: printed this TABLE from a probe and read the printed values as a derivation of the
+#: tree. The census itself named the drift on the next run, which is what it is for. The
+#: numbers below are `_census_nodes.clause_literals()`'s answer on this branch.
+#:
+#: The other CORRECTION worth keeping is in the sentence
+#: this replaces: it said "Both files are other domains'", which stopped being true when
+#: wave 25 closed `measure_arm.py`'s two — both remaining rows are instruments' own file.
+#: They stay unfixed here on the wave-28 rule that a clause word is not renamed to fix
+#: prose (`wave-28/coordinator-brief.md` §"What Stage C adds", rule 1): the words are the
+#: machine-readable keys a halt reader branches on, and neither is one of this domain's
+#: seven approved findings.
 SENTENCE_SHAPED_CLAUSES = {
     'orbit radius':
-        'render_turnaround.py:757',
+        'render_turnaround.py:848',
     'render visibility':
-        'render_turnaround.py:907',
+        'render_turnaround.py:998',
 }
 
 

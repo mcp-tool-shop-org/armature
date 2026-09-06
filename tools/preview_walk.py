@@ -130,11 +130,30 @@ class PreviewWalkGate(GateFailure):
     gate = "PREVIEW"
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/preview_walk.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--spec", required=True)
-    ap.add_argument("--out", required=True)
+    ap = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--spec", required=True,
+                    help="the SHOT SPEC json -- the same camera, frames and fps the paid "
+                         "control sequence is rendered at; read only")
+    ap.add_argument("--out", required=True,
+                    help="the directory the shaded preview frames are written into. "
+                         "Compensator: delete it; owner: the executor session")
     ap.add_argument("--scale", type=float, default=0.5, help="fraction of shot resolution")
     return ap.parse_args(argv)
 
@@ -346,7 +365,10 @@ def main():
                 f"{os.path.basename(frame_path)}; it returned {_status!r}, and any file at "
                 f"that path is then the previous run's",
                 {"clause": "operator_status", "status": _status,
-                 "path": os.path.abspath(frame_path)})
+                 "path": os.path.abspath(frame_path),
+                 # F-d6042cf6: where the partial run is, and its named undo.
+                 "out": os.path.dirname(os.path.abspath(frame_path)),
+                 "compensator": "delete --out; owner: the executor session"})
         rc.require_render_target_moved(
             frame_path, _before, PreviewWalkGate,
             {"gate": PreviewWalkGate.gate, "sub_gate": "RENDER_TARGET",
@@ -371,7 +393,8 @@ def main():
             f"the preview is not complete: {len(missing)} of {count} frames were never "
             f"written {missing[:8]} and {len(empty)} are zero bytes {empty[:8]}",
             {"clause": "preview_is_incomplete", "out": os.path.abspath(a.out), "planned": count,
-             "missing": missing, "empty": empty, "unexpected_files_in_out_dir": strays})
+             "missing": missing, "empty": empty, "unexpected_files_in_out_dir": strays,
+             "compensator": "delete --out; owner: the executor session"})
     print("PREVIEW_WALK_OK " + json.dumps({
         "tool": "preview_walk", "blender": blender_scene.blender_provenance(),
         "out": os.path.abspath(a.out), "frames": len(planned), "resolution": [w, h],

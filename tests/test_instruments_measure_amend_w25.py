@@ -460,11 +460,24 @@ def test_every_frame_population_in_this_domain_goes_through_one_of_two_homes():
     # The remainder are listings that are NOT a frame population: an upload map's keys, a
     # download verification, a planned-vs-present sweep. Recorded so a new raw listing that
     # IS a population fails here.
+    #
+    # WAVE 28 (instruments, F-8b7f48a8): `render_turnaround`, `render_start_frame` and
+    # `preview_glb` join the recorded set for the SAME reason `preview_walk` and
+    # `render_performer` are already in it, and by the same derivation copied from them:
+    # `unexpected_files_in_out_dir` is the planned-vs-present sweep — `.png` compared
+    # case-INSENSITIVELY, MINUS the plan — and it is a DIAGNOSTIC that gates nothing. It is
+    # not a frame population: nothing downstream reads it as a sequence, and the population
+    # this run acts on is `planned`, which is derived from the flags, never from the
+    # directory. A refusal DOES sit beside it (`output_already_exists`), but it is about the
+    # PLAN colliding with what is on disk, not about a stray, which is why these three sit
+    # here rather than in `own`.
     assert set(raw) <= {"build_payload.py", "fetch_run.py", "fetch_t2v_run.py",
                         "preview_walk.py", "render_performer.py", "make_e13_sheet.py",
                         "make_lift_sheet.py", "measure_cascade_clip.py",
                         "sheet_compose.py", "make_identity_sheet.py",
-                        "make_crop_strip.py", "make_review_clip.py"}, sorted(raw)
+                        "make_crop_strip.py", "make_review_clip.py",
+                        "render_turnaround.py", "render_start_frame.py",
+                        "preview_glb.py"}, sorted(raw)
 
 
 # ===========================================================================

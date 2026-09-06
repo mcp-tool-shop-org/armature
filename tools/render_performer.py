@@ -157,18 +157,41 @@ class RenderGate(GateFailure):
     gate = "RENDER"
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/render_performer.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--glb", required=True)
+    ap = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--glb", required=True,
+                    help="the performer GLB carrying the action to render; read only")
     ap.add_argument("--motion", default=None,
                     help="an AUTHORED motion record (walk.motion.json) to frame against")
     ap.add_argument("--lift", default=None,
                     help="a SOLVED motion record (lift_clip/measure_lift output) to frame "
                          "against; used when there is no authored ground truth, as in B2")
-    ap.add_argument("--manifest", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--fps", type=int, default=16)
+    ap.add_argument("--manifest", required=True,
+                    help="the rig's own rig_manifest.json -- the landmark table the "
+                         "framing is solved against, never typed in")
+    ap.add_argument("--out", required=True,
+                    help="the directory the shaded frames, the empty plate and "
+                         "render_provenance.json are written into. Compensator: delete "
+                         "it; owner: the executor session")
+    ap.add_argument("--fps", type=int, default=16,
+                    help="frame rate the action is read at (default 16); glTF key times "
+                         "are SECONDS, so a mismatch renders a different span")
     ap.add_argument("--floor", type=int, default=1,
                     help="1 draws a ground plane; recorded either way")
     return ap.parse_args(argv)
@@ -478,7 +501,10 @@ def main():
                 f"{os.path.basename(p)}; it returned {_status!r}, and any file at "
                 f"that path is then the previous run's",
                 {"clause": "operator_status", "status": _status,
-                 "path": os.path.abspath(p)})
+                 "path": os.path.abspath(p),
+                 # F-d6042cf6: where the partial run is, and its named undo.
+                 "out": os.path.dirname(os.path.abspath(p)),
+                 "compensator": "delete --out; owner: the executor session"})
         rc.require_render_target_moved(
             p, _before, RenderGate,
             {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
@@ -516,7 +542,8 @@ def main():
             f"the performance is not complete: {len(missing)} of {count} frames were "
             f"never written {[os.path.basename(p) for p in missing[:8]]} and "
             f"{len(empty)} are zero bytes {[os.path.basename(p) for p in empty[:8]]}",
-            {"clause": "performance_is_incomplete", "out": out, "planned": count,
+            {"clause": "performance_is_incomplete", "out": os.path.abspath(out),
+             "compensator": "delete --out; owner: the executor session", "planned": count,
              "missing": [os.path.basename(p) for p in missing],
              "empty": [os.path.basename(p) for p in empty],
              "unexpected_files_in_out_dir": strays})
@@ -540,7 +567,10 @@ def main():
             f"{os.path.basename(empty_plate)}; it returned {_status!r}, and any file at "
             f"that path is then the previous run's",
             {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(empty_plate)})
+             "path": os.path.abspath(empty_plate),
+             # F-d6042cf6: where the partial run is, and its named undo.
+             "out": os.path.dirname(os.path.abspath(empty_plate)),
+             "compensator": "delete --out; owner: the executor session"})
     rc.require_render_target_moved(
         empty_plate, _before, RenderGate,
         {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
