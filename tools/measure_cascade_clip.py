@@ -26,6 +26,7 @@ width and height and then decoded with the *sources'* — the exact thing
 
 Compensator (NAMED_COMPENSATORS): writes JSON and PNGs under `outputs/`. Compensator:
 delete the directory; owner: the executor session.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -43,12 +44,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core import clipcompare as CC  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.parts import require_finite  # noqa: E402
-from encode_control import (  # noqa: E402
+from encode_control import (  # noqa: E402, runtime_provenance
     FFMPEG, decode, gate_ffmpeg_binary, run_ffmpeg, timeout_for_file,
 )
 
 TOOL_VERSION = "E13.1"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class ClipCountError(ArmatureError):
     """The decoded clip does not carry the number of frames that was submitted."""
@@ -230,7 +234,8 @@ def load_sources(frames_dir):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="decode a cascade-assembled clip and compare it to its sources on "
-                    "three separate questions: count, ORDER, fidelity")
+                    "three separate questions: count, ORDER, fidelity",
+        epilog=HALT_EPILOG)
     ap.add_argument("--clip", required=True,
                     help="the assembled clip to decode; its dimensions are READ off the "
                          "stream, never supplied")
@@ -306,6 +311,7 @@ def main(argv=None):
         record["verdict"] = "COUNT MISMATCH — per-frame numbers not computed"
         with open(os.path.join(out, "cascade_decode_compare.json"), "w",
                   encoding="utf-8") as fh:
+            record.update(runtime_provenance())
             json.dump(record, fh, indent=1)
         raise ClipCountError(
             f"{len(decoded)} decoded frame(s) and {len(sources)} source frame(s) against "
@@ -336,6 +342,7 @@ def main(argv=None):
 
     with open(os.path.join(out, "cascade_decode_compare.json"), "w",
               encoding="utf-8") as fh:
+        record.update(runtime_provenance())
         json.dump(record, fh, indent=1)
 
     o = record["order"]

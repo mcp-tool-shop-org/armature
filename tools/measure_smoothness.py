@@ -44,6 +44,7 @@ Compensator (NAMED_COMPENSATORS): writes one JSON under `outputs/`. Compensator:
 file; owner: the executor session. Both inputs are opened read-only.
 
 Prints `MEASURE_SMOOTHNESS_OK`.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -54,6 +55,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from encode_control import runtime_provenance  # noqa: E402
+
 from armature_core.errors import ArmatureError  # noqa: E402
 
 TOOL_VERSION = "E10.1"
@@ -63,6 +66,9 @@ TOOL_VERSION = "E10.1"
 #: than left implicit in a `range(len(series) - 2)` that silently yields nothing.
 MIN_FRAMES_FOR_SECOND_DIFFERENCE = 3
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class SmoothnessInputError(ArmatureError):
     """The two records do not describe the same population, so no ratio between them means
@@ -247,7 +253,8 @@ def _summarisable(block, what, label, record, path):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="how big a step the driving signal takes, per keypoint, per frame — "
-                    "the two records side by side")
+                    "the two records side by side",
+        epilog=HALT_EPILOG)
     ap.add_argument("--a", required=True, help="the baseline keypoints.json")
     ap.add_argument("--b", required=True, help="the densified keypoints.json")
     ap.add_argument("--out", required=True, help="the comparison JSON to write")
@@ -349,6 +356,7 @@ def main(argv=None):
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
+        payload.update(runtime_provenance())
         json.dump(payload, fh, indent=2)
 
     print("MEASURE_SMOOTHNESS_OK " + json.dumps(ok_line))

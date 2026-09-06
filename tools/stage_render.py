@@ -55,6 +55,7 @@ The only world-touching act is creating one new directory under `outputs/`.
 Compensator: `delete_output_dir(run_dir)`, below. Owner: the executor session that
 made the run. Source assets are opened read-only and never modified — `E:\\AI\\training`
 is not in git and has no revert, so nothing is written there, ever.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import json

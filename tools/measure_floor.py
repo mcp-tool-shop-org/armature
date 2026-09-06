@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """measure_floor — the provider's repeat variance, per frame index.
 
-    python tools/measure_floor.py --runs=A0r1,A0r2,A0r3 [--early=0-4] [--late=29-32]
+    <venv-python> tools/measure_floor.py --runs=A0r1,A0r2,A0r3 [--early=0-4] [--late=29-32]
 
 A0. Three identical submissions, same seed, same payload — so every difference between
 them is the provider, not us.
@@ -74,6 +74,7 @@ each end) when nothing is asked for, and refuses an explicit window naming a fra
 does not carry -- naming the request, `n`, and the out-of-range indices. `early_window` and
 `late_window` in the record are the REALISED lists, and `window_source` says of each whether
 it was derived or requested.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -82,11 +83,14 @@ import json
 import os
 import statistics as st
 import sys
+import time
 
 import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from encode_control import runtime_provenance  # noqa: E402
 
 from armature_core import shotspec  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
@@ -99,8 +103,41 @@ from armature_core.errors import ArmatureError  # noqa: E402
 WINDOW_FRACTION = 5.0 / 33.0
 
 
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
+
 class FloorError(ArmatureError):
     """The floor could not be measured over the population that was asked for."""
+
+
+def gate_floor_overwrite(out, overwrite):
+    """Refuse a silent replace of an existing floor record (F-a28128a4).
+
+    Same contract as wave-28's builders/instruments overwrite family: flag ``--overwrite``,
+    clause ``output_already_exists``, success keys ``out_dir_pre_existed`` / ``overwrote``.
+    No second helper home in armature_core (wave-28 seed 1) — spelled here, the one writer.
+    """
+    if not os.path.isfile(out):
+        return False, None
+    prior = None
+    try:
+        with open(out, encoding="utf-8") as fh:
+            prior = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        prior = None
+    if not overwrite:
+        prior_runs = prior.get("runs") if isinstance(prior, dict) else None
+        prior_n = prior.get("n_frames") if isinstance(prior, dict) else None
+        raise FloorError(
+            f"{os.path.abspath(out)}: already on disk from an earlier run "
+            f"(runs={prior_runs!r}, n_frames={prior_n}); this run would replace what is "
+            f"there. Pass --overwrite to replace it, or point --out at a path of its own",
+            {"clause": "output_already_exists", "out": os.path.abspath(out),
+             "already_present": [os.path.basename(out)],
+             "prior_runs": prior_runs, "prior_n_frames": prior_n,
+             "prior_mtime": os.path.getmtime(out), "flag": "--overwrite"},
+        )
+    return True, prior if isinstance(prior, dict) else None
 
 
 def check_runs(runs):
@@ -406,12 +443,14 @@ def pair_stats(A, B, big=8, names=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the provider's repeat variance per frame index — the noise floor "
-                    "every one-run gap has to be read against")
+                    "every one-run gap has to be read against",
+        epilog=HALT_EPILOG)
     ap.add_argument("--runs", required=True,
                     help="comma-separated run names to compare; at least two DISTINCT "
                          "names, since a floor needs repeats of the same request")
     ap.add_argument("--root", default="outputs/E02/runs",
-                    help="the directory the run names are resolved under")
+                    help="cwd-relative directory the run names are resolved under "
+                         "(default: outputs/E02/runs)")
     ap.add_argument("--early", default=None,
                     help="a-b, inclusive. Omitted, the window is derived from the run's "
                          "own frame count (argparse eats leading minus signs, so pass "
@@ -426,7 +465,13 @@ def main(argv=None):
                     help="the frame count the spec declares; every run's numbered frames "
                          "must be exactly shotspec.frame_names(expect, 'png')")
     ap.add_argument("--out", default="outputs/E02/floor.json",
-                    help="where the floor record is written")
+                    help="cwd-relative path the floor record is written to "
+                         "(default: outputs/E02/floor.json). An existing file is refused "
+                         "unless --overwrite is passed")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace an existing --out floor record. WITHOUT it the run "
+                         "REFUSES rather than overwriting, by name "
+                         "(clause output_already_exists), before any write")
     a = ap.parse_args(argv)
 
     # ---- ANDON, before a single PNG is opened: distinct runs, at least two of them.
@@ -551,10 +596,25 @@ def main(argv=None):
             "pct_samples_gt_big_mean": st.mean(allpct_samples),
         },
     }
+    # F-a28128a4: refuse a silent replace of the published floor; --overwrite says so.
+    prior_mtime = os.path.getmtime(a.out) if os.path.isfile(a.out) else None
+    pre_existed, prior = gate_floor_overwrite(a.out, a.overwrite)
+    payload["out_dir_pre_existed"] = pre_existed
+    payload["overwrote"] = [os.path.basename(a.out)] if pre_existed else []
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
+        payload.update(runtime_provenance())
         json.dump(payload, fh, indent=1)
-    print(f"\nwrote {a.out}")
+    if pre_existed and prior is not None:
+        when = (time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(prior_mtime))
+                if prior_mtime is not None else "UNKNOWN")
+        print(
+            f"\nwrote {a.out}  runs={runs}  n_frames={n}  "
+            f"replacing a record of runs={prior.get('runs')!r} "
+            f"n_frames={prior.get('n_frames')!r} written {when}"
+        )
+    else:
+        print(f"\nwrote {a.out}  runs={runs}  n_frames={n}")
     return payload
 
 

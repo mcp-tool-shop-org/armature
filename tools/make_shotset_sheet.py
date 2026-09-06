@@ -45,6 +45,7 @@ Metrics on the labels are diagnostics. The Director's eye judges the cells.
 Compensator (NAMED_COMPENSATORS): writes composited cells and one PNG under the `--out`
 directory. Compensator: delete that directory; owner: the executor session. The rendered
 masters and both manifests are opened read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -58,6 +59,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sheet_compose  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class ShotsetSheetError(ArmatureError):
     """The shot-set sheet cannot be composed as asked.
@@ -254,7 +258,8 @@ def _refuse_across_elevations(a, b, what):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the ortho shot-set as a sheet, and beside its perspective sibling or "
-                    "a second ortho set that differs only in where its scale came from")
+                    "a second ortho set that differs only in where its scale came from",
+        epilog=HALT_EPILOG)
     ap.add_argument("--ortho", required=True,
                     help="the ORTHO shot-set directory; the sheet's own subject")
     ap.add_argument("--persp", default=None,

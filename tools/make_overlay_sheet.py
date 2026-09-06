@@ -20,6 +20,7 @@ This requires the keypoints to have been projected through the SAME camera the r
 record that disagrees about any angle.
 
 Compensator: writes one PNG under `outputs/`; delete the file. Inputs are read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -34,6 +35,9 @@ import numpy as np  # noqa: E402
 from armature_core import aapose  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class OverlaySheetError(ArmatureError):
     """This overlay sheet cannot be produced as asked. One typed refusal for this tool.
@@ -63,7 +67,8 @@ class OverlaySheetError(ArmatureError):
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="draw the pose sticks over the render they claim to describe, so the "
-                    "driving signal is seen landing on the body or not")
+                    "driving signal is seen landing on the body or not",
+        epilog=HALT_EPILOG)
     ap.add_argument("--keypoints", required=True,
                     help="the projected keypoints record whose body points are drawn")
     ap.add_argument("--render", required=True, help="directory of NNNNN.png previz frames")

@@ -15,6 +15,7 @@ printed on the strip and written to a sidecar.
 
 Compensator (NAMED_COMPENSATORS): writes one PNG and one JSON under `outputs/`.
 Compensator: delete them; owner: the executor session.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -33,6 +34,9 @@ FG = (235, 235, 235)
 DIM = (140, 140, 150)
 LABEL_H = 16
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class CropStripError(ArmatureError):
     """The strip cannot be cut as asked, or could not be re-cut from what it recorded.
@@ -251,7 +255,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(
         description="named native-resolution crops across frames, in one strip, so "
                     "structure is judged at the Director's zoom rather than from a "
-                    "contact sheet")
+                    "contact sheet",
+        epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True,
                     help="directory of NNNNN.png frames the boxes are cut from")
     ap.add_argument("--out", required=True, help="the strip image to write")

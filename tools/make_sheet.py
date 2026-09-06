@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """make_sheet — the panel the Director reads the run off.
 
-    python tools/make_sheet.py --run=<run dir> --out=<sheet.png> [--frames=0,8,16,24]
+    <venv-python> tools/make_sheet.py --run=<run dir> --out=<sheet.png> [--frames=0,8,16,24]
 
 facet ran four arms and two gates before building its comparison sheet, and when the
 sheet finally existed the Director read the whole thesis off one panel. E01 generates
@@ -12,6 +12,7 @@ Sheets locate; full size decides. Every tile here is written at native resolutio
 no resampling, so what is on the sheet is what is in the file.
 
 Runs outside Blender (Pillow).
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import json

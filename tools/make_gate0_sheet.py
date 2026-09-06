@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """make_gate0_sheet — the control | output | reference | provenance panel.
 
-    python tools/make_gate0_sheet.py --run=<control dir> --frames-dir=<output frames>
+    <venv-python> tools/make_gate0_sheet.py --run=<control dir> --frames-dir=<output frames>
                                      --reference=<plate.png> --meta=<payload meta.json>
                                      --out=<sheet.png> [--frames=0,8,16,24]
 
@@ -27,6 +27,7 @@ assumed. The E11 report logged the third stale-label sighting and named this fix
 line now derives from the run's own record, and a value the record does not carry prints
 `NOT RECORDED` — the `make_startframe_sheet` convention, whose docstring records why it
 was born separate.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -52,6 +53,9 @@ FG = (235, 235, 235)
 DIM = (140, 140, 150)
 MISSING = "NOT RECORDED"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 def _rgb(path, plate=SHEET_PLATE):
     """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""
@@ -98,17 +102,33 @@ def reference_absent_lines(meta):
             + textwrap.wrap(f"reason: {_get(meta, 'reference_absent_reason')}", width=20))
 
 
-def provenance_lines(meta):
+def _sha_text(*candidates):
+    """First non-empty candidate, truncated; else NOT RECORDED (F-6f968906)."""
+    for c in candidates:
+        if c in (None, "", MISSING):
+            continue
+        return str(c)[:32]
+    return MISSING
+
+
+def provenance_lines(meta, output_sha=None, control_sha=None, reference_sha=None):
     """Every line of the provenance panel, derived from the run's record. A value the
     record does not carry prints `NOT RECORDED`. This panel used to bake E02-era
     literals — model, sampler line, a control denominator, a Gate R route claim and a
     bridge-fidelity note — the stale-label defect whose third sighting (E11) named this
-    fix."""
+    fix.
+
+    F-6f968906: also prints `output sha` and per-input `control sha` / `reference sha`,
+    the shape `make_e13_sheet.provenance_lines` already writes — from the record when
+    present, else `NOT RECORDED`, or from the optional overrides the caller measured.
+    """
     models = _get(meta, "models", default={})
     models = models if isinstance(models, dict) else {}
     ctl = meta.get("control")
     is_ctl = isinstance(ctl, dict)
     ctl_d = ctl if is_ctl else {}
+    ref = meta.get("reference_image")
+    ref_d = ref if isinstance(ref, dict) else {}
 
     def cv(key):
         return ctl_d.get(key, MISSING) if is_ctl else "-"
@@ -125,12 +145,15 @@ def provenance_lines(meta):
         f"sampler        {_get(meta, 'sampler_name')} / {_get(meta, 'scheduler')} / "
         f"{_get(meta, 'steps')} steps / cfg {_get(meta, 'cfg')}",
         f"payload sha256 {str(_get(meta, 'payload_sha256', default=''))[:32]}",
+        f"output sha     {_sha_text(output_sha, meta.get('output_sha256'), meta.get('clip_sha256'))}",
         "",
         f"control bridge {cv('bridge') if is_ctl else (str(ctl) if ctl else 'NONE - no control_video recorded')}",
         f"normalization  {cv('normalization')}",
         f"polarity       {cv('polarity')}",
         f"distinct imgs  {cv('distinct_images')} of {cv('total_images')}",
+        f"control sha    {_sha_text(control_sha, ctl_d.get('video_sha256'), ctl_d.get('source_frames_sha256'), meta.get('control_sha256'))}",
         f"reference      {meta.get('reference_image') or 'NONE (recorded absent)'}",
+        f"reference sha  {_sha_text(reference_sha, ref_d.get('sha256'), meta.get('reference_sha256'))}",
         "",
         f"Gate L         {_get(meta, 'gate_L', 'verdict')}",
         f"Gate B         {_get(meta, 'gate_B', default='NOT YET RUN')}",
@@ -245,7 +268,8 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the Gate 0 panel — control | output | reference | provenance — "
-                    "produced before any metric is quoted")
+                    "produced before any metric is quoted",
+        epilog=HALT_EPILOG)
     ap.add_argument("--run", required=True,
                     help="the control run directory; its channel frames are the control "
                          "column and its manifest supplies the azimuths")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """analyze_p3 — the sign and shape of the normalization difference.
 
-    python tools/analyze_p3.py --run=<run dir> --out=<p3_sign.json>
+    <venv-python> tools/analyze_p3.py --run=<run dir> --out=<p3_sign.json>
 
 `stage_render` records P3's magnitude. This records its **direction**: whether the
 per-shot window makes near surfaces darker and far surfaces lighter, and where the
@@ -10,6 +10,7 @@ crossover sits. Measured in the 8-bit space that actually ships, from the emitte
 conditioning image is an RGB PNG, hard-capped at 8 bits).
 
 Reports both normalizations. Chooses neither.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import json
@@ -20,6 +21,8 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from encode_control import runtime_provenance  # noqa: E402
 
 from armature_core.errors import ArmatureError  # noqa: E402
 from make_sheet import parse_argv  # noqa: E402
@@ -226,6 +229,7 @@ def main(argv=None):
     if "out" in args:
         os.makedirs(os.path.dirname(os.path.abspath(args["out"])), exist_ok=True)
         with open(args["out"], "w", encoding="utf-8") as fh:
+            report.update(runtime_provenance())
             json.dump(report, fh, indent=2)
     print("P3_SIGN " + json.dumps({
         k: report[k] for k in (

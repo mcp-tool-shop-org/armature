@@ -26,6 +26,7 @@ line up; the full-resolution frames stay on disk and are what the Director's eye
 
 Compensator (NAMED_COMPENSATORS): writes one PNG under `outputs/`. Compensator: delete it;
 owner: the executor session. Inputs are read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -42,6 +43,9 @@ from armature_core.errors import ArmatureError  # noqa: E402
 
 TOOL_VERSION = "E13.1"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class E13SheetError(ArmatureError):
     """This sheet cannot be built from what it was pointed at.
@@ -221,7 +225,8 @@ def _sample_indices(text):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description="E13's panel for the composed route: references | output | provenance")
+        description="E13's panel for the composed route: references | output | provenance",
+        epilog=HALT_EPILOG)
     ap.add_argument("--arm", required=True,
                     help="which arm this sheet shows (A1 = reference record, A2 = "
                          "reference clip); it selects the left column's source")

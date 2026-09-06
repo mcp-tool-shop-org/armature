@@ -32,6 +32,7 @@ The gates — all raise, in-process, before the manifest exists
 
 Compensator (NAMED_COMPENSATORS): writes PNGs and a manifest under `outputs/`. Compensator:
 delete the directory; owner: the executor session. The keypoint record is read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -57,6 +58,9 @@ TOOL_VERSION = "E08.1"
 CHANNEL_ORDER = "RGB"
 
 
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
+
 class SticksGate(GateFailure):
     gate = "STICKS"
 
@@ -64,7 +68,8 @@ class SticksGate(GateFailure):
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="draw the AAPose-20 driving frames to the pinned Wan convention — the "
-                    "control sequence a pose route is driven by")
+                    "control sequence a pose route is driven by",
+        epilog=HALT_EPILOG)
     ap.add_argument("--keypoints", required=True,
                     help="the projected keypoints record to draw")
     ap.add_argument("--out", required=True,

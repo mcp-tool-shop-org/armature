@@ -23,6 +23,7 @@ rather than a plausible default.
 
 Sheets locate; full size decides. Output tiles are the frames' own pixels scaled by one
 factor, and the scale is printed on the sheet.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -47,6 +48,9 @@ FG = (235, 235, 235)
 DIM = (140, 140, 150)
 MISSING = "NOT RECORDED"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 def _rgb(path, plate=SHEET_PLATE):
     """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""
@@ -198,7 +202,8 @@ def build(start_path, frame_paths, indices, meta, prompt_id=None, measurements=N
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Gate 0 for a route whose only conditioning is one image: the start "
-                    "frame beside what the model made of it, with provenance")
+                    "frame beside what the model made of it, with provenance",
+        epilog=HALT_EPILOG)
     ap.add_argument("--start", required=True,
                     help="the start frame the route actually submitted")
     ap.add_argument("--frames", required=True,

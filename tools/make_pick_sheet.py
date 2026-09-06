@@ -26,6 +26,7 @@ Sheets locate; full size decides. Tiles are the frames' own pixels at one printe
 
 Compensator (NAMED_COMPENSATORS): writes one PNG and one JSON. Compensator: delete them;
 owner: the executor session. Inputs are opened read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -53,6 +54,9 @@ CROP_INK = (255, 96, 96)
 BAND_INK = (96, 220, 255)
 MISSING = "NOT RECORDED"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class PickSheetError(ArmatureError):
     """This pick sheet cannot be built as asked.
@@ -333,7 +337,8 @@ def build(cands, rec, scale=0.6, title=None, per_row=3):
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="Gate PLATE's instrument: the candidate plates side by side, at the "
-                    "band the target frame actually shows, for the eye to pick from")
+                    "band the target frame actually shows, for the eye to pick from",
+        epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True,
                     help="the lossless frame directory the candidates are cut from")
     ap.add_argument("--at", required=True,

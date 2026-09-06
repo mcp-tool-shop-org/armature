@@ -26,6 +26,7 @@ Compensator (NAMED_COMPENSATORS): writes one JSON under `outputs/`. Compensator:
 the file; owner: the executor session. Frame directories are opened read-only.
 
 Prints `MEASURE_CLIP_OK`.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -35,6 +36,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from encode_control import runtime_provenance  # noqa: E402
+
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
@@ -43,6 +46,9 @@ from armature_core.errors import ArmatureError  # noqa: E402
 
 TOOL_VERSION = "E11.1"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 def frame_paths(directory):
     """The numbered frames of a directory, in index order.
@@ -115,7 +121,8 @@ def measure(frames, label, band=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the numbers a generated clip can be quoted by — diagnostics, all of "
-                    "them, and the Director's eye is the judge")
+                    "them, and the Director's eye is the judge",
+        epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True,
                     help="the lossless frame directory to measure")
     ap.add_argument("--out", required=True, help="the measurements JSON to write")
@@ -167,6 +174,7 @@ def main(argv=None):
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
+        record.update(runtime_provenance())
         json.dump(record, fh, indent=2)
 
     print("MEASURE_CLIP_OK " + json.dumps({"out": os.path.abspath(a.out),

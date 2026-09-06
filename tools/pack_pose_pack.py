@@ -40,6 +40,7 @@ pack 2026-08-12 on a model-free verification run (`LoadImage` -> `SaveImage`, pr
 
 Compensator (NAMED_COMPENSATORS): writes a WebP and a manifest under `outputs/`.
 Compensator: delete them; owner: the executor session. The frames are read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -52,12 +53,17 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from encode_control import runtime_provenance  # noqa: E402
+
 from armature_core import gates  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
 from composite_reference import (  # noqa: E402
     compose_over_named_plate, parse_plate)
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class PosePackError(ArmatureError):
     """The pack cannot be built honestly — the authored-RGBA law, chiefly.
@@ -83,7 +89,8 @@ MIN_FPS_EXCLUSIVE = 0
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="pack the pose-stick frames into ONE lossless animated file, the "
-                    "single artefact the pose route uploads")
+                    "single artefact the pose route uploads",
+        epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True, help="directory of NNNNN.png stick frames")
     ap.add_argument("--out", required=True,
                     help="directory for the packed animation and its record")
@@ -264,6 +271,7 @@ def main(argv=None):
     }
     mpath = os.path.join(out_dir, "pose_pack_manifest.json")
     with open(mpath, "w", encoding="utf-8") as fh:
+        manifest.update(runtime_provenance())
         json.dump(manifest, fh, indent=2)
 
     print("PACK_POSE_PACK_OK " + json.dumps({

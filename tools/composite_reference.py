@@ -32,6 +32,7 @@ Three andons, all raising in-tool, all before a byte is written:
 
 Compensator (NAMED_COMPENSATORS): writes PNG + JSON under `outputs/`. Compensator: delete
 the directory; owner: the executor session. The kit itself is read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -53,6 +54,9 @@ TOOL_VERSION = "E13.1"
 #: the Director's eye read the kit against.
 SURVEY_PLATE = (154, 154, 157)
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class ReferenceGate(GateFailure):
     """A reference plate is not the authored master it claims to be."""
@@ -244,7 +248,8 @@ def gate_flat(rgb, plate, label):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="composite authored RGBA masters onto the named RGB plates a hosted "
-                    "tier receives, and record which plate each one was composited over")
+                    "tier receives, and record which plate each one was composited over",
+        epilog=HALT_EPILOG)
     ap.add_argument("--kit", required=True, help="the turn_rgba directory")
     ap.add_argument("--views", required=True,
                     help="comma-separated stems IN SLOT ORDER, e.g. turn_0,turn_1,turn_2,"
@@ -334,7 +339,11 @@ def main(argv=None):
         "slot_order": [e["slot"] for e in entries],
         "views": entries,
     }
+    # Lazy import: encode_control imports this module at load time, so a top-level
+    # `from encode_control import runtime_provenance` is a circular import.
+    from encode_control import runtime_provenance  # noqa: E402
     with open(os.path.join(out, "A1-reference-record.json"), "w", encoding="utf-8") as fh:
+        record.update(runtime_provenance())
         json.dump(record, fh, indent=1)
 
     for e in entries:

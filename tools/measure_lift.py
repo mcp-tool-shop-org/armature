@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """measure_lift — the detector, then the solve, then the numbers. In that order.
 
-    python tools/measure_lift.py --render=<dir> --motion=<walk.motion.json>
+    <venv-python> tools/measure_lift.py --render=<dir> --motion=<walk.motion.json>
                                  --manifest=<rig_manifest.json> --model=<pose.task>
                                  --out=<dir>
 
@@ -55,6 +55,7 @@ number for both would make a detector look bad for a torso the model cannot repr
 a model look bad for a detector's noise.
 
 Nothing here judges whether any of it is good. That is the Director's, at the sheet.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -66,6 +67,8 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from encode_control import runtime_provenance  # noqa: E402
 
 import numpy as np
 
@@ -88,6 +91,9 @@ TRACKING_CONF = 0.5
 FACE_INDICES = (0, 1, 2, 3, 4, 5, 6, 9, 10)
 TORSO_INDICES = (11, 12, 23, 24)
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class DetectionGate(GateFailure):
     """The detector did not return a pose on every frame."""
@@ -238,7 +244,8 @@ def gate_listing_pairing(populations):
 def parse_args():
     ap = argparse.ArgumentParser(
         description="the detector, then the solve, then the numbers — in that order, "
-                    "against a motion record that IS the ground truth here")
+                    "against a motion record that IS the ground truth here",
+        epilog=HALT_EPILOG)
     ap.add_argument("--render", required=True,
                     help="the rendered frame directory the detector is run on")
     ap.add_argument("--motion", required=True,
@@ -744,6 +751,7 @@ def main():
     }
 
     with open(os.path.join(out, "measurement.json"), "w", encoding="utf-8") as fh:
+        record.update(runtime_provenance())
         json.dump(record, fh, indent=2)
     with open(os.path.join(out, "detection_raw.json"), "w", encoding="utf-8") as fh:
         json.dump({"frames": frame_files, "rows": rows}, fh)

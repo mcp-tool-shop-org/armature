@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """measure_tracking — the timing-correlation statistic, as an instrument.
 
-    python tools/measure_tracking.py --run=<frames_dir> --control=<frames_dir> \
+    <venv-python> tools/measure_tracking.py --run=<frames_dir> --control=<frames_dir> \
         --label=A1a --out=<report.json>
-    python tools/measure_tracking.py --anchor          # reproduce E02's published figures
+    <venv-python> tools/measure_tracking.py --anchor          # reproduce E02's published figures
 
 **Why this file exists.** E02 published +0.521 for A1a and +0.581 for A1b and left the
 0.060 gap unruled. Those numbers were computed inline during that session and were never
@@ -48,6 +48,7 @@ inverting every pixel negates every delta and `abs` undoes it. Measured on E02's
 control pair, the near-bright and near-dark profiles agree to **0.0 over all 32 deltas**.
 So both E04 conditions correlate against the *same* reference profile, and any difference
 between them lives entirely in the outputs.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -60,6 +61,8 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from encode_control import runtime_provenance  # noqa: E402
 
 from armature_core.errors import ArmatureError  # noqa: E402
 from sheet_compose import frames_by_number  # noqa: E402
@@ -109,6 +112,9 @@ ANCHOR_ABSENT_EXIT = 3
 # inheritance already gives them the two-argument shape, and a bare-message refusal from
 # either of them prints `"evidence": null` in its halt record, as the contract says it must.
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class TrackingError(ArmatureError):
     """The statistic could not be computed on what was handed to it."""
@@ -315,7 +321,8 @@ def anchor(e02_root="outputs/E02", tolerance=ANCHOR_TOLERANCE):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the timing-correlation statistic between an output and the control "
-                    "that drove it, as an instrument — a diagnostic, not a verdict")
+                    "that drove it, as an instrument — a diagnostic, not a verdict",
+        epilog=HALT_EPILOG)
     ap.add_argument("--run", help="directory of output frames (use the LOSSLESS tap)")
     ap.add_argument("--control", help="directory of control frames")
     ap.add_argument("--label",
@@ -388,6 +395,7 @@ def main(argv=None):
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, "w", encoding="utf-8") as fh:
+            rec.update(runtime_provenance())
             json.dump(rec, fh, indent=1)
         print(f"wrote {a.out}")
     return 0
