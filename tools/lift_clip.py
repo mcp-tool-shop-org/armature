@@ -77,12 +77,21 @@ class DetectionGate(GateFailure):
 
 
 def parse_args():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--frames", required=True)
-    ap.add_argument("--manifest", required=True)
-    ap.add_argument("--model", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--fps", type=int, default=16)
+    ap = argparse.ArgumentParser(
+        description="run a generated clip's frames through the detector and the solver. "
+                    "There is no ground truth here: every number is a diagnostic")
+    ap.add_argument("--frames", required=True,
+                    help="directory of NNNNN.png frames from the generated clip")
+    ap.add_argument("--manifest", required=True,
+                    help="the rig manifest the solve is against (rest landmarks)")
+    ap.add_argument("--model", required=True,
+                    help="the pose detector's weights, by path; recorded in the output so "
+                         "no number is quoted without the detector that produced it")
+    ap.add_argument("--out", required=True,
+                    help="directory for the detection and motion records")
+    ap.add_argument("--fps", type=int, default=16,
+                    help="the clip's sampling rate (default 16), written into the motion "
+                         "record so a later resample knows what it is resampling from")
     return ap.parse_args()
 
 

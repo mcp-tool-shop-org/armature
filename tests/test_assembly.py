@@ -898,7 +898,7 @@ def _traceback_frames(tb):
 # The `.PNG` map REFUSED, so nothing unsafe was admitted — but it refused through the wrong
 # clause, telling an operator their keys are not zero-padded frame names when they are, and
 # it made this gate's population rule disagree with every consumer of the same frames
-# (`encode_control.py:126` and `invert_frames.py:70` both `n.lower().endswith('.png')`) and
+# (`encode_control.py::frame_population` and `invert_frames.py:70` both `n.lower().endswith('.png')`) and
 # with both fetchers, whose EXTRA andon now lower-cases too.
 #
 # The shape classification takes each key's suffix VERBATIM rather than normalising it,

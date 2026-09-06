@@ -196,15 +196,22 @@ def build(start_path, frame_paths, indices, meta, prompt_id=None, measurements=N
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--start", required=True)
-    ap.add_argument("--frames", required=True)
-    ap.add_argument("--meta", required=True)
-    ap.add_argument("--out", required=True)
+    ap = argparse.ArgumentParser(
+        description="Gate 0 for a route whose only conditioning is one image: the start "
+                    "frame beside what the model made of it, with provenance")
+    ap.add_argument("--start", required=True,
+                    help="the start frame the route actually submitted")
+    ap.add_argument("--frames", required=True,
+                    help="the run's returned frames, the output column")
+    ap.add_argument("--meta", required=True,
+                    help="the run's payload record; every provenance line is read off it")
+    ap.add_argument("--out", required=True, help="the sheet image to write")
     ap.add_argument("--at", default="0,8,16,32,48,64",
                     help="frame indices (argparse eats leading minus signs: --at=0,8,16)")
-    ap.add_argument("--prompt-id", default=None)
-    ap.add_argument("--scale", type=float, default=0.5)
+    ap.add_argument("--prompt-id", default=None,
+                    help="the run this sheet shows, when --meta does not carry it")
+    ap.add_argument("--scale", type=float, default=0.5,
+                    help="how far each panel is scaled down for the sheet")
     ap.add_argument("--captions", default=None, help="idx=text,idx=text")
     ap.add_argument("--sheet-plate", default=",".join(str(v) for v in SHEET_PLATE),
                     help="R,G,B of the plate an RGBA tile is composited over before it "

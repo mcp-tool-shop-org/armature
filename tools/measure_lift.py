@@ -236,13 +236,24 @@ def gate_listing_pairing(populations):
 
 
 def parse_args():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--render", required=True)
-    ap.add_argument("--motion", required=True)
-    ap.add_argument("--manifest", required=True)
-    ap.add_argument("--model", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--fps", type=int, default=16)
+    ap = argparse.ArgumentParser(
+        description="the detector, then the solve, then the numbers — in that order, "
+                    "against a motion record that IS the ground truth here")
+    ap.add_argument("--render", required=True,
+                    help="the rendered frame directory the detector is run on")
+    ap.add_argument("--motion", required=True,
+                    help="the authored motion record the lift is measured against; this "
+                         "is the ground truth this tool has and lift_clip does not")
+    ap.add_argument("--manifest", required=True,
+                    help="the rig manifest the solve is against (rest landmarks)")
+    ap.add_argument("--model", required=True,
+                    help="the pose detector's weights, by path; recorded so no number is "
+                         "quoted without the detector that produced it")
+    ap.add_argument("--out", required=True,
+                    help="directory for the detection, motion and measurement records")
+    ap.add_argument("--fps", type=int, default=16,
+                    help="the render's sampling rate (default 16), written into the "
+                         "solved motion record")
     return ap.parse_args()
 
 

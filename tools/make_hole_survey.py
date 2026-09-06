@@ -228,13 +228,23 @@ def _fmt(rec, field):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--new", required=True)
-    ap.add_argument("--old", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--new-prefix", default="turn")
-    ap.add_argument("--old-prefix", default="armfinal")
-    ap.add_argument("--views", type=int, default=8)
+    ap = argparse.ArgumentParser(
+        description="the old turnaround beside the new one, per view, at full size — "
+                    "sheets locate, full size decides")
+    ap.add_argument("--new", required=True,
+                    help="the NEW side's view directory")
+    ap.add_argument("--old", required=True,
+                    help="the OLD side's view directory, the one being compared against")
+    ap.add_argument("--out", required=True,
+                    help="directory for one full-size sheet per view, plus the record")
+    ap.add_argument("--new-prefix", default="turn",
+                    help="filename stem of the new side's views (<prefix>_<n>.png)")
+    ap.add_argument("--old-prefix", default="armfinal",
+                    help="filename stem of the old side's views (<prefix>_<n>.png)")
+    ap.add_argument("--views", type=int, default=8,
+                    help="how many views to survey (default 8); must be at least 1, since "
+                         "a survey over zero views writes an empty record and prints OK "
+                         "beside it")
     ap.add_argument("--old-rgba", action="store_true",
                     help="the OLD side is an authored RGBA master too — composite and mask "
                          "it exactly as the new side. Absent, the flat-alpha reading runs "

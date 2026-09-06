@@ -469,13 +469,21 @@ def run(run_dir, joints_path, frames_dir=None, label=None, tol=12):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="where the arm is, frame by frame, in image space — a diagnostic that "
+                    "gates nothing")
     ap.add_argument("--run", required=True, help="control run dir (for camera + manifest)")
     ap.add_argument("--joints", required=True, help="the subject's .joints.json sidecar")
     ap.add_argument("--frames", default=None, help="image dir to MEASURE (control or output)")
-    ap.add_argument("--label", default=None)
-    ap.add_argument("--tol", type=int, default=12)
-    ap.add_argument("--out", default=None)
+    ap.add_argument("--label", default=None,
+                    help="what this measurement is OF, into the record; default: derived "
+                         "from --frames")
+    ap.add_argument("--tol", type=int, default=12,
+                    help="pixel tolerance the projected joint is matched to the mask "
+                         "within (default 12)")
+    ap.add_argument("--out", default=None,
+                    help="where to write the JSON report; omitted, none is written and the "
+                         "numbers only reach stdout")
     a = ap.parse_args(argv)
 
     res = run(a.run, a.joints, frames_dir=a.frames, label=a.label, tol=a.tol)

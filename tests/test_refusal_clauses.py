@@ -463,6 +463,17 @@ RECORDED_POPULATION = frozenset({
     # stream with nothing comparing them; two raise sites — an fps ffprobe could not
     # parse, and one outside tolerance (F-c397574b).
     "ClipRateError", "SheetInputError",
+    # Joined 2026-09-05 (wave 28, instruments-measure, F-18e31b77). `stage_render`'s
+    # `_UnreadablePath` crossed from ONE raise site to two when `main`'s single
+    # `except OSError` — which wrapped `_parse_argv`, the spec read, the `--asset` splice
+    # and `run_export`, and re-labelled all four `spec_or_asset_path_unreadable` — was
+    # split by cause. The class keeps the path-READING half at both of its sites: the spec
+    # read (unchanged clause word) and an OSError inside `run_export` on a path OUTSIDE
+    # `--out`, which is the asset or something the backend opens. The WRITE half went to
+    # `StageRenderError`, which was already policed, so the population gains exactly one
+    # name. MEASURED branch-local with this file's own derivation (126 -> 127); the
+    # coordinator re-measures at the merge and never sums.
+    "_UnreadablePath",
 })
 
 #: Re-derived 2026-09-04 and EMPTY. There is no class this census excuses: a class raised
@@ -645,7 +656,14 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # 'RigSheetComposeError']` with `RECORDED_POPULATION - POLICED` empty.
     # BRANCH-LOCAL — a COMPOSITION on the merged tree; the coordinator MEASURES, never sums.
     # WAVE-25 MERGE (coordinator, 2026-09-05): POLICED MEASURED on the merged tree, never summed.
-    assert len(POLICED) == 126, sorted(POLICED)
+    # WAVE 28 (instruments-measure, F-18e31b77): 126 -> 127, ONE name, MEASURED branch-local
+    # with this file's own derivation. `stage_render._UnreadablePath` crossed the two-site
+    # threshold when `main`'s single `except OSError` was split by cause; it is the only
+    # class this wave moves, because the WRITE half of that split raises `StageRenderError`,
+    # which was already policed. It leaves the single-site set in the same commit — see
+    # `test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed`, whose two
+    # derived counts move 22 -> 21 and 21 -> 20 for the same one reason.
+    assert len(POLICED) == 127, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -881,14 +899,21 @@ def test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed():
     the wrong number, which is the shape that put a 72 in a message asserting 69. Both counts
     are DERIVED below now rather than written in prose, so the sentence cannot fork from the
     assertion again; the 2026-09-04 figures stay as history, labelled as history.
+
+    WAVE 28 (instruments-measure, F-18e31b77): 22 -> 21 and 21 -> 20, ONE name and one
+    reason. `stage_render._UnreadablePath` gained a second raise site when `main`'s single
+    `except OSError` was split by cause, so it left this set and joined `POLICED` in the same
+    commit — the two counts move in opposite directions by one, which is this pair of
+    censuses doing exactly what it is for. MEASURED branch-local with this test's own
+    expression.
     """
     single = {n for n, s in RAISE_SITES.items() if len(s) == 1} & {
         n for n in RAISE_SITES if n not in POLICED}
     assert "QuadriflowDeclined" in single
     assert not (single & POLICED)
-    assert len(single) == 22, sorted(single)
+    assert len(single) == 21, sorted(single)
     family_here = single & _family_classes_defined_under_tools()
-    assert len(family_here) == 21, sorted(family_here)
+    assert len(family_here) == 20, sorted(family_here)
 
 
 def _family_classes_defined_under_tools():
@@ -1724,6 +1749,11 @@ RECORDED_CLAUSES = [
     'class_not_named_by_the_allowlist',
     'class_with_an_unreadable_measurement_date',
     'class_without_a_recorded_free_measurement',
+    # WAVE 28 (instruments-measure, F-79f38dd5): `extract_clip_frames`' three refusals
+    # carried no clause at all — the tool that turns a PAID run's returned clip into
+    # frames. Each now names its condition and its evidence carries `clip_bytes` and the
+    # directory the run created before it refused.
+    'clip_decoded_to_zero_frames',
     'clip_end_is_closer_than_the_subject',
     'clip_has_no_consecutive_pair',
     'clip_would_be_written_outside_out',
@@ -1744,6 +1774,10 @@ RECORDED_CLAUSES = [
     'conditioning_chain_loops',
     'conditioning_family_absent',
     'control_names_not_supplied',
+    # WAVE 28 (instruments-measure, F-18e31b77): the write half of `stage_render.main`'s
+    # former one-size `except OSError`. An out-of-space or locked write inside
+    # `run_export` used to reach the operator as `spec_or_asset_path_unreadable`.
+    'control_sequence_write_failed',
     'control_source_directory_holds_no_frames',
     'convention_nonconformance',
     'convention_pin_disagrees',
@@ -1814,11 +1848,20 @@ RECORDED_CLAUSES = [
     'experiment_has_no_seed_registry',
     'experts_read_different_positives',
     'export_incomplete',
+    # WAVE 28 (instruments-measure, F-18e31b77): the other half of the same split — an
+    # OSError inside `run_export` on a path OUTSIDE `--out` is a read of the asset or of
+    # something the backend opens, and calling it a write failure would be a second wrong
+    # label rather than a fix.
+    'export_input_path_unreadable',
     'extent_over_zero_points',
     'extraction_left_no_faces',
     'face_assigned_outside_the_registered_list',
     'face_assigned_to_nothing',
     'ffmpeg_binary_not_found',
+    # WAVE 28 (instruments-measure, F-594d4efc): one word for all three ffmpeg subprocess
+    # sites, which had no `timeout=` at all. The bound is DERIVED per call from the frame
+    # list or the file's byte size, and a bound that is reached is a refusal, never a retry.
+    'ffmpeg_exceeded_the_time_bound',
     'ffmpeg_refused_the_decode',
     'ffmpeg_refused_the_encode',
     'field_absent',
@@ -1994,6 +2037,9 @@ RECORDED_CLAUSES = [
     'no_valid_render_engine',
     'no_vertex_group_for_bone',
     'no_vertices_to_frame',
+    # WAVE 28 (instruments-measure, F-79f38dd5): `extract_clip_frames.probe`'s headline
+    # refusal, which carried a `stderr_tail` and no clause, no gate and no andon.
+    'no_video_stream_line',
     'no_views',
     'node_map_duplicate_id',
     'node_map_empty',
@@ -2200,6 +2246,9 @@ RECORDED_CLAUSES = [
     'stats_document_is_missing_a_key',
     'still_not_manifold_after_repair',
     'stray_png_in_the_frame_population',
+    # WAVE 28 (instruments-measure, F-79f38dd5): the second of the probe's two, which
+    # carried only `{"line": line}`.
+    'stream_line_carries_no_resolution',
     'stream_reported_no_rate',
     'strip_stride_not_positive',
     'subject_args',

@@ -252,14 +252,20 @@ def _refuse_across_elevations(a, b, what):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--ortho", required=True)
-    ap.add_argument("--persp", default=None)
+    ap = argparse.ArgumentParser(
+        description="the ortho shot-set as a sheet, and beside its perspective sibling or "
+                    "a second ortho set that differs only in where its scale came from")
+    ap.add_argument("--ortho", required=True,
+                    help="the ORTHO shot-set directory; the sheet's own subject")
+    ap.add_argument("--persp", default=None,
+                    help="--mode=compare: the perspective sibling to place beside it")
     ap.add_argument("--second", default=None,
                     help="--mode=scale: the other ORTHO set, differing only in where its "
                          "shared scale came from (S05)")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--mode", choices=("shotset", "compare", "scale"), default="shotset")
+    ap.add_argument("--out", required=True, help="directory for the sheet and its record")
+    ap.add_argument("--mode", choices=("shotset", "compare", "scale"), default="shotset",
+                    help="what the sheet shows: 'shotset' the ortho set alone, 'compare' "
+                         "it beside --persp, 'scale' it beside --second")
     a = ap.parse_args(argv)
 
     out_dir = os.path.abspath(a.out)

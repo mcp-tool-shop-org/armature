@@ -242,13 +242,20 @@ def gate_flat(rgb, plate, label):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="composite authored RGBA masters onto the named RGB plates a hosted "
+                    "tier receives, and record which plate each one was composited over")
     ap.add_argument("--kit", required=True, help="the turn_rgba directory")
     ap.add_argument("--views", required=True,
                     help="comma-separated stems IN SLOT ORDER, e.g. turn_0,turn_1,turn_2,"
                          "turn_4 (argparse eats leading minus signs: use --views=...)")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--plate", default=",".join(str(c) for c in SURVEY_PLATE))
+    ap.add_argument("--out", required=True,
+                    help="directory for the composited RGB views and their record")
+    ap.add_argument("--plate", default=",".join(str(c) for c in SURVEY_PLATE),
+                    help="R,G,B of the plate each RGBA view is composited over. The "
+                         "composite a route submits is a deliberate, recorded choice under "
+                         "the Director's 2026-08-12 alpha law, never a default nobody "
+                         "stated")
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)

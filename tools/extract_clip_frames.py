@@ -21,15 +21,17 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 import sys
+import time
 
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
-from encode_control import FFMPEG, decode, gate_ffmpeg_binary  # noqa: E402
+from encode_control import (  # noqa: E402
+    FFMPEG, decode, gate_ffmpeg_binary, run_ffmpeg, timeout_for_file,
+)
 
 TOOL_VERSION = "E13.1"
 
@@ -61,8 +63,25 @@ class ClipReadError(ArmatureError):
     gate = "CLIP_READ"
 
 
-def probe(path):
+def probe(path, out_dir=None):
     """Width, height, fps and the raw stream line, from ffmpeg's own report.
+
+    **The wait is BOUNDED** (F-594d4efc, wave 28). This probe had no `timeout=`, and its
+    realistic bad input is the one that produced the measurement in F-79f38dd5: a
+    truncated or 403 download from the hosted run. `encode_control.run_ffmpeg` is the one
+    home for the bound and for the named refusal, adopted by import exactly as
+    `gate_ffmpeg_binary` is; the ceiling is derived from the clip's own byte size rather
+    than fixed.
+
+    **`out_dir` is the directory the CALLER already created** (F-79f38dd5, wave 28). It is
+    carried into the refusal's evidence and named in its message, because
+    `os.makedirs(out)` runs above this call in `main` and an empty `outputs/<run>/frames/`
+    left behind by a refusal reads as a run that happened and produced nothing. The
+    ORDERING is not what changes here — `tests/test_instrument_write_ordering.py` holds
+    `extract_clip_frames` in `NOT_YET_MOVED` with the reason "extract_clip_frames probes
+    the clip after the frame directory exists", a recorded hold that is tests' to lift —
+    what changes is that the halt line now says the directory is an artefact of the
+    refusal and holds no frames.
 
     **The encoder is GATED before it is run** (F-a19ebe73, wave 25). `FFMPEG` is selected at
     import from `ARMATURE_FFMPEG` with a hard-coded `E:/AI-Models` fallback, and this module
@@ -84,38 +103,74 @@ def probe(path):
     argument defect. `main` parses and resolves `--out` above this call.
     """
     gate_ffmpeg_binary()
-    proc = subprocess.run([FFMPEG, "-hide_banner", "-i", path],
-                          capture_output=True, text=True)
+    proc = run_ffmpeg([FFMPEG, "-hide_banner", "-i", path],
+                      timeout_s=timeout_for_file(path), subject="stream probe",
+                      input_path=path, text=True)
+    clip_bytes = os.path.getsize(path) if os.path.isfile(path) else None
+    made = os.path.abspath(out_dir) if out_dir else None
     line = next((l.strip() for l in proc.stderr.splitlines()
                  if "Stream #" in l and "Video:" in l), None)
     if line is None:
         raise ClipReadError(
-            f"no video stream line in ffmpeg's report for {path}. Every number below this "
-            f"point would describe a decode nobody could check",
-            {"stderr_tail": proc.stderr[-800:]})
+            f"no video stream line in ffmpeg's report for {path} ({clip_bytes} bytes). "
+            f"Every number below this point would describe a decode nobody could check. A "
+            f"truncated download or an HTML error body saved under a .mp4 name is the "
+            f"usual cause, and the byte count above is what tells them apart"
+            + (f". {made} was created by this run before the clip was probed and holds NO "
+               f"frames — it is an artefact of this refusal, not a result" if made else ""),
+            {"gate": "CLIP_READ", "andon": "ClipReadError",
+             "clause": "no_video_stream_line", "clip": path,
+             "clip_bytes": clip_bytes, "created_empty_dir": made,
+             "stderr_tail": proc.stderr[-800:]})
     dim = DIM.search(line)
     fps = FPS.search(line)
     if not dim:
-        raise ClipReadError(f"no WxH in the stream line: {line!r}", {"line": line})
+        raise ClipReadError(
+            f"no WxH in the stream line: {line!r}"
+            + (f". {made} was created by this run before the clip was probed and holds NO "
+               f"frames — it is an artefact of this refusal, not a result" if made else ""),
+            {"gate": "CLIP_READ", "andon": "ClipReadError",
+             "clause": "stream_line_carries_no_resolution", "line": line,
+             "clip": path, "clip_bytes": clip_bytes, "created_empty_dir": made})
     duration = next((l.strip() for l in proc.stderr.splitlines() if "Duration:" in l), None)
     return {"line": line, "width": int(dim.group(1)), "height": int(dim.group(2)),
             "fps": float(fps.group(1)) if fps else None, "duration_line": duration}
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--clip", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--label", default=None)
+    ap = argparse.ArgumentParser(
+        description="turn a generated clip into lossless per-frame PNGs and record the "
+                    "stream facts every later measurement is read against")
+    ap.add_argument("--clip", required=True,
+                    help="the video a run returned; its dimensions are READ off the "
+                         "stream, never supplied, because supplying them is how a decode "
+                         "silently reshapes")
+    ap.add_argument("--out", required=True,
+                    help="directory for the NNNNN.png frames and frames.json. Created "
+                         "before the clip is probed, so a refusal leaves it empty and says "
+                         "so")
+    ap.add_argument("--label", default=None,
+                    help="the name this clip is quoted by in frames.json (default: the "
+                         "clip's own basename)")
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
-    stream = probe(a.clip)
+    stream = probe(a.clip, out_dir=out)
+    started = time.monotonic()
+    print(f"extract_clip_frames decode 0/?  elapsed 0.0s  "
+          f"bound {timeout_for_file(a.clip):.0f}s", file=sys.stderr, flush=True)
     frames = decode(a.clip, stream["width"], stream["height"])
     if not frames:
-        raise ClipReadError(f"{a.clip} decoded to zero frames", {"stream": stream})
+        raise ClipReadError(
+            f"{a.clip} decoded to zero frames. {out} was created by this run before the "
+            f"clip was decoded and holds NO frames — it is an artefact of this refusal, "
+            f"not a result",
+            {"gate": "CLIP_READ", "andon": "ClipReadError",
+             "clause": "clip_decoded_to_zero_frames", "clip": a.clip,
+             "clip_bytes": os.path.getsize(a.clip) if os.path.isfile(a.clip) else None,
+             "created_empty_dir": out, "stream": stream})
 
     hashes = {}
     for i, f in enumerate(frames):
@@ -123,6 +178,11 @@ def main(argv=None):
         Image.fromarray(f).save(os.path.join(out, name))
         hashes[name] = hashlib.sha256(
             open(os.path.join(out, name), "rb").read()).hexdigest()
+        # The wait says it is alive (F-3dc24905, wave 28): lowercase, stderr, not a
+        # sentinel — stdout carries this tool's one `EXTRACT_OK` line and nothing else.
+        print(f"extract_clip_frames write {i + 1}/{len(frames)}  "
+              f"elapsed {time.monotonic() - started:.1f}s  bound none",
+              file=sys.stderr, flush=True)
 
     with open(a.clip, "rb") as fh:
         clip_sha = hashlib.sha256(fh.read()).hexdigest()

@@ -199,7 +199,13 @@ def test_a_partial_trailing_frame_is_refused_rather_than_dropped(tmp_path, monke
         stdout = b"\x00" * (4 * 4 * 3 + 7)
         stderr = b""
 
-    monkeypatch.setattr(EC, "_run", lambda cmd, **kw: _Proc())
+    # WAVE 28 (instruments-measure, F-594d4efc): the private `_run` is now the public
+    # `run_ffmpeg`, because it is the one home for the ffmpeg BOUND and its two sibling
+    # consumers (`extract_clip_frames.probe`, `measure_cascade_clip.ffprobe_stream`) adopt
+    # it by import rather than spelling a second timeout. Keyed on the resolved name here,
+    # in the commit that resolves it — a fixture that pins a private spelling goes red on
+    # the commit that fixes the thing it exists to police.
+    monkeypatch.setattr(EC, "run_ffmpeg", lambda cmd, **kw: _Proc())
     with pytest.raises(EC.EncodeFailure) as e:
         EC.decode("nowhere.mkv", 4, 4)
     assert e.value.evidence["stride"] == 48

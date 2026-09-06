@@ -576,6 +576,17 @@ CORRECTED_ANCHORS = {
     # recorded here, which is what this set is for.
     ("lift_solve.py", "lift_clip.py", 275),
     ("lift_solve.py", "measure_lift.py", 481),
+    # WAVE 28 (instruments-measure, F-3ce0db92). The same paragraph's other two quoted-wrong
+    # anchors join this set, for the reason the block above gives. They carried a
+    # `(<symbol>)` qualifier, which is the form this census resolves — and giving
+    # `measure_lift`'s six silent flags their `help=` added twelve lines above both
+    # functions, so `:468 (summarise)` came to open a line inside `jitter` and the census
+    # correctly refused it. The qualifiers are dropped in `lift_solve`'s docstring and the
+    # NUMBERS ARE KEPT, because `test_lift_solve.py` asserts the correction record survives
+    # (`corrected <= mentioned`) — deleting them would have taken that census red instead,
+    # which is this repo's own rule about correcting in place rather than deleting.
+    ("lift_solve.py", "measure_lift.py", 334),
+    ("lift_solve.py", "measure_lift.py", 468),
     # WAVE-22 MERGE (coordinator, 2026-09-05): two more quoted-wrong anchors, each inside the sentence that
     # records it as wrong. `lift_solve.py`'s correction record quotes `lift_clip.py:276 (main)` as
     # what both docstrings used to say; instruments-measure's `--fps` bound moved that line into
@@ -585,9 +596,12 @@ CORRECTED_ANCHORS = {
     ("lift_solve.py", "lift_clip.py", 276),
     ("rig_gates.py", "lift_solve.py", 307),
     # `sitelist.py`'s own second correction (F-b3ff3a57) needs no new entry: the paragraph
-    # that corrected the three-caller claim quoted `project_pose_keypoints.py:229` as the
-    # one anchor that was right, and the wave-16 constructor deletions moved it — that line
-    # is now the middle of a `ProjectGate` refusal message. Its three anchors are already
+    # that corrected the three-caller claim quoted `project_pose_keypoints.py::span_stats`
+    # as the one anchor that was right, and the wave-16 constructor deletions moved it —
+    # that line was the middle of a `ProjectGate` refusal message, and wave 28's help-text
+    # work moved it again, off the end of the function entirely. Re-anchored on the symbol
+    # in the commit that moved it, which is what this census asks for. Its three anchors
+    # are already
     # recorded above; what changed is that the callers are cited by SYMBOL, the paragraph
     # carries the measurement that overturned it, and its reference to `lift_solve`'s
     # sibling fix names the FILE rather than a line, so it adds no citation of its own.
@@ -897,7 +911,8 @@ def _direct_callers_of(func_name, module_alias):
 def test_the_sitelist_refusal_states_the_caller_population_the_tree_has():
     """Derived, not typed: the docstring must name the symbols the AST finds.
 
-    Measured 2026-09-04 — `project_pose_keypoints.py:229` was right;
+    Measured 2026-09-04 — `project_pose_keypoints.py::span_stats` was right (cited by line
+    then; re-anchored on its symbol in wave 28, when the help-text work moved the line);
     `rig_character.py:1135` is a docstring line and the real call is inside
     `validate_sitelist`; `rig_parts.py:480` is `db = np.linalg.norm(...)` and
     `grep -n validate tools/rig_parts.py` returns ONE line, a call to the WRAPPER.
@@ -1235,13 +1250,23 @@ TESTS_STALE_ANCHORS_RECORDED = {
     #   ⚠ As the note above says: the reasons here name no `<file>.py:<n>`, deliberately.
     ('test_instruments_amend_w10', 'rig_repair.py', 157),
     ('test_render_visibility', 'preview_walk.py', 159),
+    # WAVE 28 (instruments-measure): THREE ROWS DELETED, in the commit that made them live
+    # again — this table's own stated rule, and the same shape core-gates and core-solvers
+    # each applied once in wave 25. The help-text work (F-3ce0db92) added lines to 36
+    # parsers and the progress callback plus the split OSError handler (F-3dc24905 /
+    # F-18e31b77) added lines to `stage_render`, so two anchors in `render_pose_sticks` and
+    # one in `stage_render` stopped opening blank lines and started opening real code — one
+    # of them a docstring line, which is worse than blank because it reads as a citation
+    # that resolves. All three citing sites are RE-ANCHORED ON THE SYMBOL
+    # (`render_pose_sticks.py::_written_frames`, and `test_render_visibility`'s note now
+    # carries no number at all), so nothing cites those lines and there is no row to keep.
+    # ⚠ The numbers are deliberately NOT spelled in this comment, for the reason the block
+    # above gives: a comment here that spells `<file>.py:<n>` becomes a citation FROM this
+    # module.
     ('test_refusal_clauses', 'analyze_p3.py', 173),
-    ('test_render_visibility', 'stage_render.py', 219),
     ('test_amend_w16_core_solvers', 'lift_solve.py', 307),
     ('test_assembly', 'test_amend_w12_core_solvers.py', 797),
-    ('test_donor_gate', 'render_pose_sticks.py', 178),
     ('test_instrument_exits', 'author_walk.py', 13),
-    ('test_instruments_amend_w10', 'render_pose_sticks.py', 178),
     ('test_instruments_amend_w10', 'test_check_relift.py', 44),
     # ROW DELETED, WAVE 25 (core-solvers), in the commit that made it live again — which is
     # this table's own stated rule. The row named a line in `blender_scene.py` cited by

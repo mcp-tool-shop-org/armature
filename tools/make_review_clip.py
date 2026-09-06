@@ -193,18 +193,30 @@ def clip_name(fps, source_fps, run=None):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--frames", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--detection", default=None)
+    ap = argparse.ArgumentParser(
+        description="the motion review and the stills where structure is hardest — a clip "
+                    "is judged in motion AND as frames")
+    ap.add_argument("--frames", required=True,
+                    help="the lossless frame directory to review")
+    ap.add_argument("--out", required=True,
+                    help="directory for the review clip and its stills")
+    ap.add_argument("--detection", default=None,
+                    help="a detector record; when given, the stills are cropped to where "
+                         "it says the structure is (hands, face turns)")
     ap.add_argument("--fps", type=int, default=8,
                     help="playback rate; 8 against a 16 fps source is 0.5x")
-    ap.add_argument("--source-fps", type=int, default=16)
+    ap.add_argument("--source-fps", type=int, default=16,
+                    help="the frames' own true rate (default 16); with --fps it is what "
+                         "makes the review's slow-motion factor a stated number rather "
+                         "than an impression. Must be positive")
     ap.add_argument("--run", default=None,
                     help="the run this review pass is OF; prefixed onto the clip's name so "
                          "a run-root sweep can bind its exemption to the run. Derived from "
                          "--frames' own run root when not given")
-    ap.add_argument("--stills", default="0,16,32,48,64")
+    ap.add_argument("--stills", default="0,16,32,48,64",
+                    help="the frame indices extracted as full-size stills (argparse eats "
+                         "leading minus signs: pass as --stills=0,16,32). Pick where "
+                         "structure is hardest: fast motion, occlusion, hands, face turns")
     ap.add_argument("--crop", type=int, default=224, help="still crop size, native pixels")
     a = ap.parse_args(argv)
 

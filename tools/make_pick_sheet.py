@@ -331,17 +331,22 @@ def build(cands, rec, scale=0.6, title=None, per_row=3):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--frames", required=True)
+    ap = argparse.ArgumentParser(
+        description="Gate PLATE's instrument: the candidate plates side by side, at the "
+                    "band the target frame actually shows, for the eye to pick from")
+    ap.add_argument("--frames", required=True,
+                    help="the lossless frame directory the candidates are cut from")
     ap.add_argument("--at", required=True,
                     help="candidate frame indices (argparse eats leading minus signs: "
                          "pass flags as --flag=value)")
     ap.add_argument("--target", required=True, help="the generation's frame, WxH")
     ap.add_argument("--visible-rows", required=True,
                     help="y0,y1 of the target frame that a plate actually shows in")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--scale", type=float, default=0.6)
-    ap.add_argument("--title", default=None)
+    ap.add_argument("--out", required=True, help="the pick sheet image to write")
+    ap.add_argument("--scale", type=float, default=0.6,
+                    help="how far each candidate panel is scaled for the sheet")
+    ap.add_argument("--title", default=None,
+                    help="the sheet's heading; default: derived from --frames")
     ap.add_argument("--source-record", default=None,
                     help="the payload record of the generation these frames came out of; "
                          "its prompt_id and seed are READ onto the sheet, never typed")

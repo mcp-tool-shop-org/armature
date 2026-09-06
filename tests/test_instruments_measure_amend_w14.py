@@ -718,11 +718,22 @@ def test_the_clip_read_refusal_carries_the_stream_line_it_could_not_parse(monkey
     # the subprocess (wave 25, F-a19ebe73), and that gate reads `encode_control.FFMPEG` — on a host with no
     # ffmpeg it refuses `ffmpeg_binary_not_found` before the stubbed report is ever parsed (measured on
     # ubuntu-latest). The subprocess is stubbed here, so an existing file stands in for the binary.
+    # WAVE 28 (instruments-measure, F-594d4efc): `probe` no longer calls `subprocess.run`
+    # itself — it goes through `encode_control.run_ffmpeg`, the one home for the ffmpeg
+    # bound and for the `ffmpeg_exceeded_the_time_bound` refusal, imported the same way
+    # `gate_ffmpeg_binary` is. The module no longer imports `subprocess` at all, so a
+    # fixture patching `ECF.subprocess.run` reads as an AttributeError rather than as a
+    # stub. Keyed on the resolved shape, in the commit that resolves it.
     monkeypatch.setattr(EC, "FFMPEG", sys.executable)
-    monkeypatch.setattr(ECF.subprocess, "run", lambda *a, **k: _Proc())
+    monkeypatch.setattr(ECF, "run_ffmpeg", lambda *a, **k: _Proc())
     with pytest.raises(ECF.ClipReadError) as exc:
         ECF.probe(str(tmp_path / "clip.mp4"))
     assert exc.value.evidence["line"].startswith("Stream #0:0"), exc.value.evidence
+    # F-79f38dd5, wave 28: the same refusal now carries the clause word a halt reader keys
+    # on and the clip's byte count, which is what separates a truncated download from a
+    # real clip.
+    assert exc.value.evidence["clause"] == "stream_line_carries_no_resolution", \
+        exc.value.evidence
 
 
 # ===========================================================================

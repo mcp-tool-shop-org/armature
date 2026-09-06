@@ -62,10 +62,17 @@ class SticksGate(GateFailure):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--keypoints", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--stickwidth-type", default="v2", choices=("v1", "v2"))
+    ap = argparse.ArgumentParser(
+        description="draw the AAPose-20 driving frames to the pinned Wan convention — the "
+                    "control sequence a pose route is driven by")
+    ap.add_argument("--keypoints", required=True,
+                    help="the projected keypoints record to draw")
+    ap.add_argument("--out", required=True,
+                    help="directory for the NNNNN.png stick frames and their record")
+    ap.add_argument("--stickwidth-type", default="v2", choices=("v1", "v2"),
+                    help="which pinned limb-width convention to draw with (default v2); "
+                         "recorded, because a route trained on one reads the other as a "
+                         "different signal")
     ap.add_argument("--hands", type=int, default=1,
                     help="1 draws the synthesised mitten hands; recorded either way")
     ap.add_argument("--strip", type=int, default=8,

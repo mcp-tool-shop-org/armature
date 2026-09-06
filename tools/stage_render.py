@@ -61,6 +61,7 @@ import json
 import os
 import shutil
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -301,7 +302,7 @@ def _sha256_dir(root, names):
     return {n: shotspec.sha256_file(os.path.join(root, n)) for n in names}
 
 
-def run_export(spec, out_dir, backend=None):
+def run_export(spec, out_dir, backend=None, progress=None):
     """Render a shot spec into `out_dir`. Returns the manifest dict.
 
     Raises GateFailure (G1/G2/G4/G5) or SpecError. Nothing is written before G1.
@@ -309,6 +310,29 @@ def run_export(spec, out_dir, backend=None):
     The only step that precedes G1 is filling the spec's defaults, which touches no
     filesystem — it exists so a caller handing over a raw dict gets a named SpecError
     instead of a KeyError from somewhere in the middle of the render loop.
+
+    **`progress` — the export says it is alive, and says how far it got** (F-3dc24905,
+    wave 28). `progress(stage, done, total)` is called once per frame of each of the two
+    loops that take the wall-clock time here: `"frames"` (render, write mask / normal /
+    edge) and `"depth"` (the pass that needs the whole shot's extent, so it cannot run
+    inside the first). MEASURED by AST census over this domain's 42 modules on `3380ae2`:
+    33 of the 42 contain exactly ONE `print` — the terminal success sentinel — and this
+    module is 768 lines with one, while `run_export` renders and writes `count` frames
+    under `blender -b -P`. An operator staging a long shot could not tell a live render
+    from a hung Blender, had no frame counter and no elapsed time, and when the per-frame
+    refusal at `depth_buffer_is_not_the_frame_size` fired it named a frame index with no
+    prior line to compare against.
+
+    The callback is the CALLER's, and `main` below is the only caller that supplies one:
+    the line it prints goes to **stderr** and is lowercase-led, because stdout carries
+    exactly one sentinel per tool and
+    `tests/test_instruments_amend_w10.py::test_every_blender_tool_prints_the_success_token_its_halt_token_pairs_with`
+    asserts exactly one UPPERCASE token per Blender tool. A progress line is not a
+    sentinel and must not look like one.
+
+    The same callback is what makes the write refusal in `main` honest: `frames_written`
+    in that refusal's evidence is the count this callback last reported, so the number in
+    the halt line is the number the operator watched go by.
     """
     spec = shotspec.normalise_spec(spec)
     width = spec["resolution"]["width"]
@@ -438,6 +462,8 @@ def run_export(spec, out_dir, backend=None):
         z_frames.append(z)
         mask_frames.append(mask)
         per_frame.append(rec)
+        if progress is not None:
+            progress("frames", i + 1, count)
 
     # ---- depth pass: needs the whole shot's extent, so it runs after the loop
     p3 = None
@@ -484,6 +510,8 @@ def run_export(spec, out_dir, backend=None):
                 per_frame[i]["z_range"] / p3["shot_z_range"] if p3["shot_z_range"] > 0 else None
             )
             p3["per_frame"].append(stats)
+            if progress is not None:
+                progress("depth", i + 1, count)
 
         weights = np.array([s["n_px"] for s in p3["per_frame"]], dtype=np.float64)
         means = np.array([s["mean_abs"] for s in p3["per_frame"]], dtype=np.float64)
@@ -710,25 +738,57 @@ def main(argv=None):
     FileNotFoundError escaped; `--out=x` alone -> SpecError escaped; `-spec=x` -> SpecError
     escaped. A PowerShell chain or CI step reading `$LASTEXITCODE` read "the control
     sequence was exported" and moved to the submission step.
+
+    **WAVE 28 (F-18e31b77): the ONE `except OSError` is SPLIT BY CAUSE.** It wrapped four
+    statements — `_parse_argv`, `shotspec.load_spec`, the `--asset` splice and
+    `run_export` — and re-labelled every one of them `spec_or_asset_path_unreadable` with
+    an evidence dict naming `spec` / `asset` / `out`. Its own comment stated the only case
+    it was written for ("the operator mistyped a flag"), but `run_export` is the half that
+    WRITES: `os.makedirs(out_dir)`, then every channel PNG inside `for i in range(count)`.
+    MEASURED on `3380ae2` with the repo venv — `run_export` patched to raise
+    `OSError(28, 'No space left on device', '<out>/depth/00040.png')` and `main` driven
+    with `--spec=whatever.json --out=<tmp>` — the operator got `_UnreadablePath`,
+    `clause: spec_or_asset_path_unreadable`, `gate: None`, and an evidence dict about
+    paths that were fine, while a partial control sequence sat in `--out` with no manifest
+    and neither the halt line nor the record said how many frames had been written.
+
+    Three statements, three fates now:
+
+    * `_parse_argv` raises only `SpecError` (measured: every one of its three refusals is
+      that class), so it needs no OSError handler at all and sits above both;
+    * the spec read and the `--asset` splice keep `_UnreadablePath` with the UNCHANGED
+      clause word `spec_or_asset_path_unreadable` — the census vocabulary does not move
+      under a fix to the sentence it names;
+    * `run_export` gets its own handler, classified by WHERE the failure happened rather
+      than by what a comment assumed: a path under `--out` (or a failure with no filename
+      after the export had begun writing) is `control_sequence_write_failed` on this
+      module's own andon class, carrying the frame reached, the total, and the statement
+      that `--out` holds a partial export; a path OUTSIDE `--out` — the GLB, a backend
+      read — is `export_input_path_unreadable`, because calling that a write failure would
+      be a second wrong label rather than a fix.
+
+    No new exception class: `StageRenderError` is the module's named andon and
+    `_UnreadablePath` already means "a path this tool was pointed at could not be opened",
+    so `RECORDED_ANDON_CLASSES` and the family-class pins do not move for a prose fix.
     """
+    if argv is None:
+        argv = (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv
+                else sys.argv[1:])
+    # WAVE-12 MERGE (coordinator, 2026-09-04): the former `GATE_FAILURE` / `GATE_EVIDENCE` lines are gone —
+    # the six-key `STAGE_RENDER_HALT` line carries the gate id and the evidence, and a second
+    # uppercase token per tool failed tests' success/halt pairing census (four test docstrings
+    # cite the old lines as history; nothing asserted on them). The six-key halt line is
+    # delivered by the `__main__` handler below, in the shape all 21 siblings carry (one
+    # handler, one line, exit 2). WAVE 28: the `except ArmatureError: raise` that used to
+    # stand here was a no-op re-raise whose only job was to let the OSError branch below run
+    # second; with the OSError handlers scoped to the statements that can raise one, a family
+    # refusal reaches that handler by propagating, which is what the re-raise did.
+    args = _parse_argv(argv)
+
     try:
-        if argv is None:
-            argv = (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv
-                    else sys.argv[1:])
-        args = _parse_argv(argv)
         spec = shotspec.load_spec(args["spec"])
         if "asset" in args:
             spec["asset"]["path"] = args["asset"]
-        manifest = run_export(spec, args["out"])
-    except ArmatureError as exc:
-        # WAVE-12 MERGE (coordinator, 2026-09-04): the former `GATE_FAILURE` / `GATE_EVIDENCE` lines are gone —
-        # the six-key `STAGE_RENDER_HALT` line carries the gate id and the evidence, and a second
-        # uppercase token per tool failed tests' success/halt pairing census (four test docstrings
-        # cite the old lines as history; nothing asserted on them).
-        # WAVE-12 MERGE (coordinator, 2026-09-04): the six-key halt line is delivered by the `__main__`
-        # handler below, in the shape all 21 siblings carry (one handler, one line, exit 2);
-        # re-raise so that handler sees the family exception.
-        raise
     except OSError as exc:
         # A spec path that is not there is a refusal, not a crash: the operator mistyped a
         # flag. It reached no gate, so it carries no gate id (`gate: None` is the receipt).
@@ -738,13 +798,65 @@ def main(argv=None):
         # carries the constructor now (wave-14 merge, `errors.py::ArmatureError.__init__`); the named class
         # stays because a halt record names the andon that pulled, never the family.
         raise _UnreadablePath(
-            f"{type(exc).__name__}: {exc}",
+            f"{type(exc).__name__}: {exc}. The spec this tool was pointed at could not be "
+            f"read, so nothing was staged and nothing was written: check --spec and "
+            f"--asset",
             {"gate": None, "andon": "_UnreadablePath",
              "clause": "spec_or_asset_path_unreadable",
-             # `args` is bound on every path that can reach an OSError: `_parse_argv`
-             # raises only `SpecError`, which the branch above catches.
              "spec": args.get("spec"), "asset": args.get("asset"),
-             "out": args.get("out")},
+             "out": args.get("out"), "path": getattr(exc, "filename", None),
+             "errno": getattr(exc, "errno", None),
+             "os_error": type(exc).__name__},
+        ) from exc
+
+    # The wait says it is alive (F-3dc24905, wave 28): a lowercase line per frame on
+    # stderr, and the last one it reported is the count the write refusal below quotes.
+    started = time.monotonic()
+    watch = {"stage": None, "done": 0, "total": None}
+
+    def _progress(stage, done, total):
+        watch["stage"], watch["done"], watch["total"] = stage, done, total
+        print(f"stage_render {stage} {done}/{total}  "
+              f"elapsed {time.monotonic() - started:.1f}s  bound none",
+              file=sys.stderr, flush=True)
+
+    try:
+        manifest = run_export(spec, args["out"], progress=_progress)
+    except OSError as exc:
+        # WAVE 28 (F-18e31b77). Classified by the path the OS named, not by assumption.
+        failed_path = getattr(exc, "filename", None)
+        out_abs = os.path.abspath(args["out"])
+        abs_failed = os.path.abspath(failed_path) if failed_path else None
+        under_out = bool(abs_failed) and (
+            abs_failed == out_abs or abs_failed.startswith(out_abs + os.sep))
+        began_writing = watch["stage"] is not None
+        if under_out or (failed_path is None and began_writing):
+            raise StageRenderError(
+                f"{type(exc).__name__}: {exc}. The control-sequence WRITE failed at "
+                f"{failed_path!r} after {watch['done']} of {watch['total']} frame(s) of "
+                f"the {watch['stage']!r} pass; --spec and --asset are not implicated. "
+                f"{out_abs} now holds a PARTIAL export with no manifest.json — a full "
+                f"disk, a locked path or a path-length limit all land here, and the "
+                f"compensator is delete_output_dir on that directory",
+                {"gate": None, "andon": "StageRenderError",
+                 "clause": "control_sequence_write_failed",
+                 "path": failed_path, "errno": getattr(exc, "errno", None),
+                 "os_error": type(exc).__name__, "out": out_abs,
+                 "stage": watch["stage"], "frames_written": watch["done"],
+                 "frame_count": watch["total"], "partial_export": True},
+            ) from exc
+        raise _UnreadablePath(
+            f"{type(exc).__name__}: {exc}. The export could not read {failed_path!r}, "
+            f"which is outside --out ({out_abs}) — the asset the spec names, or something "
+            f"the render backend opens. {watch['done']} frame(s) had been written when it "
+            f"failed",
+            {"gate": None, "andon": "_UnreadablePath",
+             "clause": "export_input_path_unreadable",
+             "path": failed_path, "errno": getattr(exc, "errno", None),
+             "os_error": type(exc).__name__, "out": out_abs,
+             "spec": args.get("spec"), "asset": args.get("asset"),
+             "stage": watch["stage"], "frames_written": watch["done"],
+             "frame_count": watch["total"], "partial_export": began_writing},
         ) from exc
     # WAVE-12 MERGE (coordinator, 2026-09-04): `STAGE_RENDER_OK` pairs with `STAGE_RENDER_HALT` (was `EXPORT_OK`).
     print("STAGE_RENDER_OK " + json.dumps({

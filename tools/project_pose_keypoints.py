@@ -96,14 +96,30 @@ class ProjectGate(GateFailure):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="project the rig's AAPose-20 keypoints into pixel space, per frame, "
+                    "for the control sequence a run is driven by")
     ap.add_argument("--motion", required=True,
                     help="a motion record: {frames: [{local: {bone: 3x3}, root: [x,y,z]}]}")
     ap.add_argument("--manifest", required=True, help="the rig manifest (rest landmarks)")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--width", type=int, default=832)
-    ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--fps", type=int, default=16)
+    ap.add_argument("--out", required=True,
+                    help="the keypoints JSON to write; the camera it solved (or reused) "
+                         "rides the same record")
+    # WAVE 28 (F-01f7eda9): the identical pair of silent defaults on the CONTROL side of
+    # the same frame the reference is fitted into. Same table, same rule.
+    ap.add_argument("--width", type=int, default=832,
+                    help="frame width the keypoints are projected into. The default 832 is "
+                         "E08's WanAnimate frame (832x480), not a universal legal size: "
+                         "the per-model rule is armature_core.gates.GENERATOR_PROFILES "
+                         "(divisible by 16 on both current profiles), enforced by "
+                         "gates.g1_generator_legality. It must match the frame the control "
+                         "sequence and the reference were built for")
+    ap.add_argument("--height", type=int, default=480,
+                    help="frame height the keypoints are projected into; the other half of "
+                         "E08's 832x480 frame. See --width for the legality table")
+    ap.add_argument("--fps", type=int, default=16,
+                    help="the authoring rate written into the record (default 16); it is "
+                         "the rate the drawn sticks are later encoded and played at")
     ap.add_argument("--camera-json", default=None,
                     help="reuse a PINNED camera instead of solving one (argparse eats "
                          "leading minus signs, so pass flags as --flag=value)")

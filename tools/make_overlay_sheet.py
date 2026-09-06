@@ -61,13 +61,18 @@ class OverlaySheetError(ArmatureError):
 
 
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--keypoints", required=True)
+    ap = argparse.ArgumentParser(
+        description="draw the pose sticks over the render they claim to describe, so the "
+                    "driving signal is seen landing on the body or not")
+    ap.add_argument("--keypoints", required=True,
+                    help="the projected keypoints record whose body points are drawn")
     ap.add_argument("--render", required=True, help="directory of NNNNN.png previz frames")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=True, help="the overlay sheet image to write")
     ap.add_argument("--frames", default="0,16,32,48,64",
                     help="comma-separated frame indices (argparse eats leading minus signs)")
-    ap.add_argument("--scale", type=float, default=0.5)
+    ap.add_argument("--scale", type=float, default=0.5,
+                    help="how far each panel is scaled down for the sheet; the markers are "
+                         "sized in SOURCE pixels, so this does not change what is drawn")
     ap.add_argument("--dot", type=int, default=5, help="marker radius in source pixels")
     return ap.parse_args(argv)
 

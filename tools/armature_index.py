@@ -233,7 +233,8 @@ def _dispatch(argv):
     ap = _cli.ContractParser(
         prog=_cli.prog_name(),
         description="the derived SQLite+FTS5 index over the armature record")
-    ap.add_argument("verb", choices=OWNED_VERBS)
+    ap.add_argument("verb", choices=OWNED_VERBS,
+                    help="what to do: build the index from the record, or report its health")
     ap.add_argument("--db", default=None,
                     help="the index to work against (default %s under the "
                          "record's root, or $%s)" % (DB_REL, DB_ENV))      # noqa: F821

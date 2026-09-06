@@ -67,11 +67,15 @@ SUB = (90, 90, 100)
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", required=True)
+    ap = argparse.ArgumentParser(
+        description="the cast survey the Director compares subjects on: one row per "
+                    "subject, four preview_glb panels and a stats label")
+    ap.add_argument("--dir", required=True,
+                    help="the directory holding each subject's preview_glb panels and "
+                         "<name>_stats.json sidecar")
     ap.add_argument("--names", required=True, help="comma-separated subject names, row order")
-    ap.add_argument("--title", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--title", required=True, help="the title drawn at the top of the sheet")
+    ap.add_argument("--out", required=True, help="the sheet image to write")
     args = ap.parse_args(argv)
 
     font_b = _font("arialbd.ttf", 30)

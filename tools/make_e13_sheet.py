@@ -220,16 +220,25 @@ def _sample_indices(text):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", required=True)
-    ap.add_argument("--seed", required=True)
+    ap = argparse.ArgumentParser(
+        description="E13's panel for the composed route: references | output | provenance")
+    ap.add_argument("--arm", required=True,
+                    help="which arm this sheet shows (A1 = reference record, A2 = "
+                         "reference clip); it selects the left column's source")
+    ap.add_argument("--seed", required=True,
+                    help="the seed this run was submitted with, drawn onto the provenance "
+                         "column")
     ap.add_argument("--frames", required=True, help="the extracted output frames dir")
-    ap.add_argument("--payload", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--payload", required=True,
+                    help="the run's payload record; the provenance column is read off it")
+    ap.add_argument("--out", required=True, help="the sheet image to write")
     ap.add_argument("--refs", default=None, help="A1: the reference record JSON")
     ap.add_argument("--ref-frames", default=None,
                     help="A2: the reference CLIP's frames dir (sampled)")
-    ap.add_argument("--prompt-id", default=None)
+    ap.add_argument("--prompt-id", default=None,
+                    help="the run this sheet shows, when the payload record does not "
+                         "carry it; a sheet naming another run's id is a placeholder "
+                         "shaped like evidence")
     ap.add_argument("--sample", default="0,37,75,112,149",
                     help="output frame indices (argparse eats leading minus signs)")
     a = ap.parse_args(argv)

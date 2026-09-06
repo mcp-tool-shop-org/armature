@@ -59,14 +59,20 @@ def _rgb(p, plate=SHEET_PLATE):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--control", required=True)
+    ap = argparse.ArgumentParser(
+        description="control vs controlled-output vs no-control-output in one panel — the "
+                    "sheet the whole thesis is read off")
+    ap.add_argument("--control", required=True,
+                    help="the control channel directory this run was driven by")
     ap.add_argument("--arms", required=True, help="LABEL:dir,LABEL:dir")
     ap.add_argument("--reference", required=True,
                     help="path to the reference plate, or the literal 'none'")
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--frames", default="0,8,16,24,32")
-    ap.add_argument("--tile-height", type=int, default=300)
+    ap.add_argument("--out", required=True, help="the sheet image to write")
+    ap.add_argument("--frames", default="0,8,16,24,32",
+                    help="the frame indices every row is sampled at (argparse eats leading "
+                         "minus signs: pass as --frames=0,8,16)")
+    ap.add_argument("--tile-height", type=int, default=300,
+                    help="height each tile is drawn at, in pixels")
     # DECLARED **and READ**. Measured 2026-09-04: `--meta` was parsed here and grep for
     # `meta` across the whole module returned this one line -- the value reached nothing,
     # and a path that does not exist was accepted in silence
@@ -79,8 +85,12 @@ def main(argv=None):
                     help="a payload/run record; its provenance is drawn as a fourth "
                          "column, every line from the record and NOT RECORDED where the "
                          "record does not carry it")
-    ap.add_argument("--title", default=None)
-    ap.add_argument("--control-label", default="CONTROL   depth, per-shot, near-bright")
+    ap.add_argument("--title", default=None,
+                    help="the sheet's heading; default: derived from the arms")
+    ap.add_argument("--control-label", default="CONTROL   depth, per-shot, near-bright",
+                    help="the heading over the control row. Change it when the control is "
+                         "not depth/per-shot/near-bright — a label asserting a channel the "
+                         "run did not use is a caption a reader has no reason to doubt")
     ap.add_argument("--captions", default=None,
                     help="'idx=text,idx=text' per-frame labels, replacing the frame index")
     # Azimuth is opt-in as of E14. It used to be the DEFAULT caption, computed as

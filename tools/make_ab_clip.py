@@ -262,14 +262,19 @@ def banner(im, text, height=22):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--a", required=True)
-    ap.add_argument("--b", required=True)
-    ap.add_argument("--a-fps", type=float, required=True)
-    ap.add_argument("--b-fps", type=float, required=True)
-    ap.add_argument("--a-label", default="A")
-    ap.add_argument("--b-label", default="B")
-    ap.add_argument("--out", required=True)
+    ap = argparse.ArgumentParser(
+        description="two clips side by side in one file, each played at its OWN true "
+                    "tempo, for the Director to judge in motion")
+    ap.add_argument("--a", required=True, help="the left clip's frame directory")
+    ap.add_argument("--b", required=True, help="the right clip's frame directory")
+    ap.add_argument("--a-fps", type=float, required=True,
+                    help="the LEFT clip's own true rate; it is played at this rate, never "
+                         "resampled to match the other side")
+    ap.add_argument("--b-fps", type=float, required=True,
+                    help="the RIGHT clip's own true rate")
+    ap.add_argument("--a-label", default="A", help="caption drawn over the left panel")
+    ap.add_argument("--b-label", default="B", help="caption drawn over the right panel")
+    ap.add_argument("--out", required=True, help="the A/B file to write")
     ap.add_argument("--lossless", type=int, default=1,
                     help="1 writes a lossless WebP; 0 writes quality 95. Recorded either "
                          "way — the measurement source is the PNGs, never this file")

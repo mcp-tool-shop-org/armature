@@ -588,6 +588,13 @@ SURVIVING_LINE_CITATIONS = {
     "blender_scene": {("probe_subject.py", 75), ("stage_render.py", 508)},
     # The correction record for the four stale anchors this pair used to carry, plus the two
     # LINE anchors retired this wave when the citations moved to the symbol form.
+    # WAVE 28 (instruments-measure, F-3ce0db92): the set is UNCHANGED and the reason is the
+    # measurement. Giving `measure_lift`'s six silent flags their `help=` added twelve lines
+    # above `detect` and `summarise`, so the `(summarise)` qualifier on `measure_lift.py:468`
+    # came to name `jitter` instead. The QUALIFIERS are dropped in `lift_solve`'s docstring
+    # and the numbers are kept — `test_lift_solve.py` asserts `corrected <= mentioned`, so
+    # deleting the correction record would take that census red — and both rows are recorded
+    # in `test_amend_w16_core_solvers.CORRECTED_ANCHORS`, which is what that set is for.
     "lift_solve": {("lift_clip.py", 275), ("lift_clip.py", 276), ("measure_lift.py", 334),
                    ("measure_lift.py", 468), ("measure_lift.py", 481)},
     "posearc": {("rig_character.py", 661)},
@@ -620,7 +627,7 @@ def test_no_prose_in_this_domain_makes_a_LIVE_claim_about_a_line_number():
     A census over all 17 `<file>.py:<line>` prose citations in the 21 modules resolved 14 to
     a non-blank line and found 3 pointing at blank lines, all three of which the surrounding
     prose ALREADY names as blank and re-anchors on the symbol. The one that did not:
-    `sitelist.py` read "Of the three line numbers, only `project_pose_keypoints.py:229` was
+    `sitelist.py` read "Of the three line numbers, only `project_pose_keypoints.py::span_stats` was
     right". MEASURED on `e8263a3`, that line is now the middle of a `ProjectGate` refusal
     message and `grep -n validate tools/project_pose_keypoints.py` returns exactly one line,
     which is not that one — the wave-16 constructor deletions moved it, so the wave-15

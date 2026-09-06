@@ -318,7 +318,7 @@ def test_a_stale_video_in_the_run_root_halts(tmp_path, stub_download, capsys):
 def test_a_stale_differently_cased_png_in_a_mapped_directory_halts(
         tmp_path, stub_download, capsys):
     """The suffix test was `os.path.splitext(name)[1] not in suffixes` — case SENSITIVE —
-    while both frame consumers match case-insensitively (`encode_control.py:126` and
+    while both frame consumers match case-insensitively (`encode_control.py::frame_population` and
     `invert_frames.py:70` both use `n.lower().endswith('.png')`). Measured with a stubbed
     run directory: a stale `00099.PNG` beside two planned frames gave `extra=[]` and the
     verdict "no unplanned file in 1 swept directory(s)", while the consumers' population
