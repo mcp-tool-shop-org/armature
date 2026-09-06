@@ -44,8 +44,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core import clipcompare as CC  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.parts import require_finite  # noqa: E402
-from encode_control import (  # noqa: E402, runtime_provenance
+from encode_control import (  # noqa: E402
     FFMPEG, decode, gate_ffmpeg_binary, run_ffmpeg, timeout_for_file,
+    runtime_provenance,
 )
 
 TOOL_VERSION = "E13.1"

@@ -521,11 +521,20 @@ def test_both_denominators_are_guarded_above_their_division():
     are in the population.
     """
     tree = _tree("rig_repair.py")
+    in_joined = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.JoinedStr):
+            for child in ast.walk(node):
+                if isinstance(child, ast.BinOp):
+                    in_joined.add(id(child))
     divisions = [n for n in ast.walk(tree)
-                 if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)]
+                 if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)
+                 and id(n) not in in_joined]
     counted = [n for n in divisions
                if "faces" in ast.dump(n.right) or "shell_faces" in ast.dump(n.right)]
-    assert len(counted) == 2, [ast.dump(n) for n in counted]
+    # WAVE 29: F-136d6860 interpolates `removed / shell_faces` into the TooMuchRemoved
+    # sentence; that third BinOp is still below the SourceHasNoFaces guards.
+    assert len(counted) == 3, [ast.dump(n) for n in counted]
     guards = [n.lineno for n in ast.walk(tree)
               if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
               and isinstance(n.exc.func, ast.Name)

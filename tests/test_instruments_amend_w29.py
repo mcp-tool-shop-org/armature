@@ -24,32 +24,7 @@ TESTS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TESTS)
 TOOLS = os.path.join(REPO, "tools")
 
-
-def source(rel):
-    with open(os.path.join(TOOLS, rel), encoding="utf-8") as fh:
-        return fh.read()
-
-
-def tree(rel):
-    return ast.parse(source(rel))
-
-
-def refusals_by_clause(rel):
-    """`{clause word: (message node, {evidence keys})}` for every `raise` whose
-    second argument is an evidence dict literal carrying `clause`."""
-    out = {}
-    for node in ast.walk(tree(rel)):
-        if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
-            continue
-        args = node.exc.args
-        if len(args) < 2 or not isinstance(args[1], ast.Dict):
-            continue
-        keys = {k.value: v for k, v in zip(args[1].keys, args[1].values)
-                if isinstance(k, ast.Constant) and isinstance(k.value, str)}
-        clause = keys.get("clause")
-        if isinstance(clause, ast.Constant) and isinstance(clause.value, str):
-            out[clause.value] = (args[0], set(keys))
-    return out
+from test_instruments_amend_w28 import source, tree, refusals_by_clause  # noqa: E402
 
 
 def message_names_number(msg):

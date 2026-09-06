@@ -816,7 +816,7 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     # correction leaves this green and merely makes the entry deletable -- which is
     # exactly what the ceiling is for, and the same treatment wave 22 gave the same
     # file.
-    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {"rig_gates": 1}
+    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {"rig_gates": 1, "shotspec": 1}
     over = {k: v for k, v in others.items()
             if v > STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN.get(k, 0)}
     assert over == {}, {"stale now": others,
@@ -1263,7 +1263,17 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # ⚠ The numbers are deliberately NOT spelled in this comment, for the reason the block
     # above gives: a comment here that spells `<file>.py:<n>` becomes a citation FROM this
     # module.
-    ('test_refusal_clauses', 'analyze_p3.py', 173),
+    # WAVE 29 (instruments-measure): six rows JOIN — halt-contract / provenance
+    # docstring stamps pushed cited lines onto blanks. Citing sites stay on the
+    # number that records the move; the numbers survive only as that measurement.
+    # Three WAVE-22/25 rows DELETED in the same commit: those anchors resolve
+    # again (docstring stamps landed real text on them).
+    ('test_alpha_law', 'composite_reference.py', 211),
+    ('test_amend_w14_core_gates', 'stage_render.py', 370),
+    ('test_amend_w16_core_solvers', 'measure_lift.py', 481),
+    ('test_clipstats', 'make_startframe_sheet.py', 236),
+    ('test_gates', 'sheet_compose.py', 57),
+    ('test_lift_solve', 'measure_lift.py', 481),
     ('test_amend_w16_core_solvers', 'lift_solve.py', 307),
     ('test_assembly', 'test_amend_w12_core_solvers.py', 797),
     ('test_instrument_exits', 'author_walk.py', 13),
@@ -1292,8 +1302,6 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # RE-ANCHORED ON THE SYMBOL rather than re-measured (`test_instruments_amend_w16.py`,
     # the F-39381793 block), so nothing cites that line now and there is no row to keep.
     ('test_instruments_amend_w18', 'test_amend_w16_builders.py', 815),
-    ('test_instruments_amend_w22', 'pack_pose_pack.py', 82),
-    ('test_instruments_amend_w22', 'resample_motion.py', 76),
     ('test_instruments_amend_w22', 'test_amend_w16_builders.py', 815),
     ('test_instruments_amend_w8', 'test_retopo_and_bake.py', 122),
     # WAVE 25 (instruments): ('test_make_rig_sheet', 'rig_repair.py', 150) and

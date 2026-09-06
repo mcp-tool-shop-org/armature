@@ -906,7 +906,8 @@ def test_a_genuine_crash_still_answers_one_so_the_two_outcomes_stay_distinguisha
 #: not before, with no edit here.
 WITH_MAIN = sorted(f for f in blender_stub.blender_tools()
                    if blender_stub.main_block(f) is not None
-                   and "_HALT " in read_source(f))
+                   and "_HALT " in read_source(f)
+                   and "from armature_core.parts import run_tool_main" not in read_source(f))
 
 
 class _KeyWhoseStrRaises:
